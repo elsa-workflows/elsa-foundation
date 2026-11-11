@@ -150,8 +150,11 @@ It forbids:
 The first two forbidden items stay until
 [ADR 0089](../../../docs/adr/0089-scripts-read-variables-by-name-and-publish-pins-them-as-declared-parameters.md)
 (proposed, decision D-7) is accepted. It lets `variables.X`, `variables['X']` and `getVariable('X')`
-read through publish-resolved declarations; a computed name (`variables[x]`, `getVariable(expr)`) is
-refused at publish.
+read through publish-resolved declarations, pinned at publish. A computed name (`variables[x]`,
+`getVariable(expr)`) or a read inside an opaque host function falls back to a run-time lookup: it is
+reported conservatively at publish, and its actual reads are recorded, protection-checked and part of
+the step's input snapshot. A computed name that resolves to nothing reads `undefined` with a warning,
+and the read is marked absent (ADR 0089 amendment, R3).
 
 A result of `undefined` is an error unless the workflow selects the undefined-as-null policy (ADR 0045 §2
 amendment, D-11). Under that policy, an `undefined` result and every `undefined`-valued object property
