@@ -14,7 +14,7 @@ namespace Elsa.Activities.Runtime.Tests;
 /// The completion projector and the input hydrator use the same JSON options, so a .NET object one activity
 /// returns hydrates the next activity's input with every member set (#3799).
 /// </summary>
-public sealed class ActivityValueJsonTests
+public sealed partial class ActivityValueJsonTests
 {
     private static readonly ValueTypeDescriptor OrderType = new("Shop.Order");
 
