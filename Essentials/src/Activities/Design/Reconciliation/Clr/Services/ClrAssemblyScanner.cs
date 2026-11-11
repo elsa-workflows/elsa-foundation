@@ -952,8 +952,40 @@ public sealed class ClrAssemblyScanner(
             return JsonSerializer.SerializeToElement(doubleValue);
         if (typeName == typeof(decimal).FullName && decimal.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var decimalValue))
             return JsonSerializer.SerializeToElement(decimalValue);
+        if (IsJsonType(valueType) && TryParseJson(value, out var jsonValue))
+            return jsonValue;
 
         return JsonSerializer.SerializeToElement(value);
+    }
+
+    // A JSON-typed input declares its default as JSON text (`DefaultValue = "{}"`). Read it as that JSON value,
+    // not as a JSON string holding the text: an unbound input compiles its default as a literal, so a string
+    // here would reach the activity as a string instead of an object (issue #3195).
+    private static bool IsJsonType(Type? valueType)
+    {
+        if (valueType is { IsGenericType: true } &&
+            StringComparer.Ordinal.Equals(valueType.GetGenericTypeDefinition().FullName, typeof(Nullable<>).FullName))
+            valueType = valueType.GetGenericArguments()[0];
+
+        return valueType?.FullName is "System.Text.Json.JsonElement"
+            or "System.Text.Json.Nodes.JsonNode"
+            or "System.Text.Json.Nodes.JsonObject"
+            or "System.Text.Json.Nodes.JsonArray";
+    }
+
+    private static bool TryParseJson(string value, out JsonElement element)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(value);
+            element = document.RootElement.Clone();
+            return true;
+        }
+        catch (JsonException)
+        {
+            element = default;
+            return false;
+        }
     }
 
     private sealed record ActivityInputMetadata(
