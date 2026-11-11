@@ -15,7 +15,7 @@
     {
       "name": "workflow_set_designer_position",
       "resultType": "workflows.layout-change",
-      "rendererId": "workflows.agent.layout-result",
+      "rendererId": "workflows.weaver.layout-result",
       "executionLocation": "clientWorkingState",
       "disclosureSourceId": "workflows.context"
     },

@@ -41,7 +41,7 @@ Decision: Sipke Schoorstra on 2026-11-10, recorded on [#4027](https://github.com
 
 What follows the type names: OpenAPI schema ids derived from the CLR type names, logger categories (`Elsa.Weaver...Weaver*`), source-generated JSON context member names, the contributor type name the permission catalog reports for the Weaver permissions (`WeaverPermissionContributor`, computed at startup), the CLR type names recorded in the EF migration designer and snapshot files, and exception text built from a type name (the record codecs' "A recorded `<type>` cannot be read" and the registration validator's contract names). None of these is read back from stored data.
 
-Unchanged in stage 1b: every persisted or wire identifier. Table and column names, the `Weaver` EF module and `ElsaWeaver` history, JSON property names (`agentScopes`, ...), enum member names (`AgentHarnessProvider`, `SubAgents`) and their wire values, routes, capability ids, error codes, permission keys, codecs, shell feature keys, Studio module ids, local-storage keys, CSS classes and test ids stay as stage 1 left them. Studio-internal file and function names that still say "agent" (`app/agent/`, `workflowAgent*.ts`, `registerWorkflowAgent`, the `workflows.agent.*` contribution ids) are not part of the SDK surface and are tracked on #4027. On the SDK surface two property names keep the word: `agentScopes` on a context attachment, which is a wire name, and `agent` on `StudioWeaverPromptRequest`, which asks for a named assistant other than Weaver.
+Unchanged in stage 1b: every persisted or wire identifier. Table and column names, the `Weaver` EF module and `ElsaWeaver` history, JSON property names (`agentScopes`, ...), enum member names (`AgentHarnessProvider`, `SubAgents`) and their wire values (renamed later, in stage 3c below), routes, capability ids, error codes, permission keys, codecs, shell feature keys, Studio module ids, local-storage keys, CSS classes and test ids stay as stage 1 left them. Studio-internal file and function names that still say "agent" (`app/agent/`, `workflowAgent*.ts`, `registerWorkflowAgent`, the `workflows.agent.*` contribution ids) are not part of the SDK surface and are tracked on #4027. On the SDK surface two property names keep the word: `agentScopes` on a context attachment, which is a wire name, and `agent` on `StudioWeaverPromptRequest`, which asks for a named assistant other than Weaver.
 
 Breaking for Studio module authors: a module that reads `api.agent`, imports a `StudioAgent*` type, calls `createAgentRegistry` or reads a `studioSlots.agent*` key must switch to `api.weaver`, `StudioWeaver*`, `createWeaverRegistry` and `studioSlots.weaver*` when it moves to this SDK version; there is no alias.
 
@@ -89,7 +89,7 @@ Not renamed: the branch name `agent/codex/3538-specialist-design` in the spec he
 
 Version line: [ADR 0094](../adr/0094-agent-definitions-own-authored-content-and-providers-publish-activities.md#amendment--2026-11-09-accepted) gives the rename one Minor bump of the single pre-GA version line, with this page as its release note. The bump is not part of this stage. It is one change of its own, `ElsaVersion` 4.0 → 4.1 in `VersionLines.props`, made after the last rename stage (3b, Weaver's own wording) has merged, so that every Line B package moves to the new minor once and the note it carries is the complete map. Until then the renamed ids are published on the current line (see the top of this page) and this ledger records the break.
 
-Weaver enum members and JSON property names that still say agent (`agentScopes`, `AgentHarnessProvider`, `SubAgents`) are wire names and stay until an owner decision; the analyzer checks type and namespace declarations only, so it does not flag them.
+Weaver enum members and JSON property names that still say agent (`agentScopes`, `AgentHarnessProvider`, `SubAgents`) are wire names and stay until an owner decision; the analyzer checks type and namespace declarations only, so it does not flag them. Stage 3c below renames them.
 
 ## 2026-11-11: Weaver's own words follow (stage 3b of the agent rename)
 
@@ -113,8 +113,29 @@ Three README corrections ride along, each checked against the code: the provider
 
 Not renamed, because each is a wire name, a persisted value or a different meaning of the word:
 
-- Weaver wire names: `agentScopes` / `AgentScopes`, `AgentHarnessProvider` / `"agent-harness-provider"`, `SubAgents`, the contribution ids `workflows.agent.layout-result`, `workflows.agent.page-revert` and `workflows.agent.batch-undo`, and the `agent` property of the SDK prompt request. Renaming them changes what clients and stored sessions exchange; that is an owner decision.
+- Weaver wire names: `agentScopes` / `AgentScopes`, `AgentHarnessProvider` / `"agent-harness-provider"`, `SubAgents`, the contribution ids `workflows.agent.layout-result`, `workflows.agent.page-revert` and `workflows.agent.batch-undo`, and the `agent` property of the SDK prompt request. Renaming them changes what clients and stored sessions exchange; that is an owner decision. The owner decided on 2026-11-11: stage 3c below renames all of them except the `agent` property.
 - The `foundationagent` environment-variable prefix the probe scrubs, and the removed placeholder type names (`IWorkflowAgentContextProvider`, `WorkflowAgentContext`, `WorkflowAgentPermissionSummary`) that the probe and `WorkflowWeaverNativeAuthorityTests` assert are gone. Those lists name types as they were shipped.
 - User-defined agents (`Elsa.Agent.*`, `elsa.agent`, `agent.manifest.*`), which are the product's agents and keep the word.
 - Runtime execution agents in `Elsa.Workflows.Runtime` (mailbox and `GetAgentAsync` wording) and coding agents (`AGENTS.md`, `.agents/`, `ready-for-agent`).
 - "Agent loop" and `User-Agent`, which are general terms.
+
+## 2026-11-11: Weaver's wire names follow (stage 3c of the agent rename)
+
+Decision: owner decision of 2026-11-11 on [#4027](https://github.com/elsa-workflows/elsa-foundation/issues/4027), which closes the point stages 1b, 3 and 3b left open: the Weaver wire names that still said agent are renamed before the version bump, so one release note covers the whole rename. This is the only stage that changes what a Weaver client and the server exchange.
+
+| Kind | Was | Is |
+|---|---|---|
+| JSON property of a context attachment (API request and response, stored session records, SDK type `StudioWeaverContextAttachment`) | `agentScopes` | `weaverScopes` |
+| .NET members | `WeaverContextAttachment.AgentScopes`, the `AgentScopes` parameter of `WeaverToolDescriptor`, the `AgentScopes` property of the API attachment response | `WeaverScopes` |
+| Provider kind | enum member `WeaverProviderKind.AgentHarnessProvider`, wire value `"agent-harness-provider"` | `WeaverProviderKind.WeaverHarnessProvider`, `"weaver-harness-provider"` (the glossary term is "Weaver harness provider") |
+| Harness capability flag | `WeaverHarnessCapabilities.SubAgents` | `WeaverHarnessCapabilities.Delegation`. The value (`1 << 4`) is unchanged and no harness sets it. `SubWeavers` would have been wrong: what a harness delegates to is not a Weaver |
+| Studio contribution ids | `workflows.agent.layout-result`, `workflows.agent.page-revert`, `workflows.agent.batch-undo` | `workflows.weaver.layout-result`, `workflows.weaver.page-revert`, `workflows.weaver.batch-undo` |
+
+What a consumer has to do:
+
+- A client that reads `agentScopes` from an attachment in a response must read `weaverScopes`. Nothing changes for requests: the server assigns the scopes itself and never accepted them from a client.
+- A client that compares the provider kind must compare with `"weaver-harness-provider"`.
+- A Studio module that registers a result renderer or control under a `workflows.agent.*` id, or a tool that names one in `ResultRendererId`, must use the `workflows.weaver.*` id. A renderer id the client does not know is not an error: the client falls back to matching a renderer by resource type and result type.
+- Stored Weaver sessions from before this stage are not migrated (pre-GA clean break, as in stage 1, which regenerated the Weaver migrations). Context attachments are stored as protected JSON under the old property name, so an attachment recorded earlier reads back with no scopes, and its canonical digest no longer matches. Start from an empty Weaver store.
+
+Kept: the `agent` property of the SDK prompt request (`StudioWeaverPromptRequest.agent`). It asks for a named agent other than Weaver, which is what "agent" means after this rename, so `weaver` would say the opposite. It never leaves the browser: the client refuses such a prompt because no other agent can be addressed yet.

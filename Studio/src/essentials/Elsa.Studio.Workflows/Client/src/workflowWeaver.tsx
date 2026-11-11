@@ -98,7 +98,7 @@ export function registerWorkflowWeaver(weaverRegistry: StudioWeaverRegistry): Wo
     displayName: "Move workflow activity", description: "Prepare a reviewed layout change to the exact working draft.",
     surfaces: ["/workflows"], contractVersion: "1", executionLocation: "clientWorkingState", risk: "review-required",
     inputSchema: { type: "object" }, resourceTargetSchema: { type: "object" }, resultSchema: { type: "object" },
-    invocationModes: ["proposal"], resultRendererIds: ["workflows.agent.layout-result"],
+    invocationModes: ["proposal"], resultRendererIds: ["workflows.weaver.layout-result"],
     async executeClient(invocation, signal) {
       if (!controller.execute) return { outcome: "refused", summary: "The originating workflow editor is unavailable." };
       return controller.execute(invocation, signal);
@@ -141,14 +141,14 @@ export function registerWorkflowWeaver(weaverRegistry: StudioWeaverRegistry): Wo
     });
   // The revert of an applied list or create-dialog change belongs to the module that owns those pages.
   weaverRegistry.resultControls?.add({
-    id: "workflows.agent.page-revert", moduleId: "Elsa.Studio.Workflows", displayName: "Revert page change",
+    id: "workflows.weaver.page-revert", moduleId: "Elsa.Studio.Workflows", displayName: "Revert page change",
     resultTypes: ["workflows.list-state", "workflows.create-dialog-prefill"], schemaVersions: ["1"],
     component: lazy(() => import("./workflowWeaverResult").then(module => ({
       default: (props: StudioWeaverResultRendererProps) => <module.WorkflowPageRevertControl {...props} controller={controller} />
     })))
   });
   weaverRegistry.resultRenderers.add({
-    id: "workflows.agent.layout-result", moduleId: "Elsa.Studio.Workflows", displayName: "Workflow layout change",
+    id: "workflows.weaver.layout-result", moduleId: "Elsa.Studio.Workflows", displayName: "Workflow layout change",
     resultTypes: ["workflows.layout-change"], schemaVersions: ["1"],
     component: lazy(() => import("./workflowWeaverResult").then(module => ({
       default: (props: StudioWeaverResultRendererProps) => <module.WorkflowLayoutResult {...props} controller={controller} />
@@ -157,7 +157,7 @@ export function registerWorkflowWeaver(weaverRegistry: StudioWeaverRegistry): Wo
   // The designer-history Undo of an applied batch belongs to the module that owns the designer. It is a result control:
   // the host shows it after whichever renderer presents the batch result (Weaver Workflows' card).
   weaverRegistry.resultControls?.add({
-    id: "workflows.agent.batch-undo", moduleId: "Elsa.Studio.Workflows", displayName: "Workflow batch Undo",
+    id: "workflows.weaver.batch-undo", moduleId: "Elsa.Studio.Workflows", displayName: "Workflow batch Undo",
     resultTypes: ["workflows.batch-result"], schemaVersions: ["1"],
     component: lazy(() => import("./workflowWeaverResult").then(module => ({
       default: (props: StudioWeaverResultRendererProps) => <module.WorkflowBatchUndoControl {...props} controller={controller} />

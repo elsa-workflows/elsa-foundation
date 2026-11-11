@@ -196,7 +196,7 @@ public sealed class WeaverAnthropicProviderTests
     {
         ModuleId = "independent.module", SchemaVersion = "7", Origin = WeaverContextOrigin.ClientSnapshot,
         Target = new("independent.module", "independent.resource", "envelope-only-resource", "envelope-only-revision"),
-        Client = new("private-client-binding", "private-generation"), AgentScopes = ["private-authority-scope"]
+        Client = new("private-client-binding", "private-generation"), WeaverScopes = ["private-authority-scope"]
     };
 
     private static async Task<string> ContextPrompt(WeaverContextAttachment attachment)

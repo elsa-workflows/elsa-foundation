@@ -19,7 +19,7 @@ public sealed partial class WeaverCumulativeDisclosureTests
         using var fixture = new Fixture(delegated, Script.Answer, services => AddBoundaryStores(services, new RecordingLogger()));
         fixture.Read.RequireScope = true;
         fixture.Source.OfferToolScope = true;
-        Assert.Equal("scope-s", Assert.Single(fixture.Read.Descriptor.AgentScopes));
+        Assert.Equal("scope-s", Assert.Single(fixture.Read.Descriptor.WeaverScopes));
         await fixture.Post("Explain the authorized resource using currently available tools");
         var store = fixture.Services.GetRequiredService<SessionBoundary>();
         store.HoldAssistantAt = 1;
@@ -42,7 +42,7 @@ public sealed partial class WeaverCumulativeDisclosureTests
             Assert.Equal(change == "unchanged", input.Tools.Contains(fixture.Read.Descriptor.Name, StringComparer.Ordinal));
             // Tool discovery uses current scopes; the provider still receives only the frozen,
             // authorized evidence whose provenance was checkpointed before the grant changed.
-            Assert.Contains(input.Context, item => item.AgentScopes.Contains("scope-s", StringComparer.Ordinal));
+            Assert.Contains(input.Context, item => item.WeaverScopes.Contains("scope-s", StringComparer.Ordinal));
             Assert.Contains(events, item => item.Content == DerivedText);
             Assert.Contains(events, item => item.Kind == WeaverStreamEventKind.Completed);
         }
