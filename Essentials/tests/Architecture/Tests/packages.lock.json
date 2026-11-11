@@ -2008,6 +2008,12 @@
           "Elsa.Secrets.Core": "[4.0.0-dev, )"
         }
       },
+      "elsa.integrations.sdk.testing": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Integrations.Sdk": "[4.0.0-dev, )"
+        }
+      },
       "elsa.locking.core": {
         "type": "Project"
       },

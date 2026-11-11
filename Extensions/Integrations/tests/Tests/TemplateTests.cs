@@ -14,6 +14,11 @@ public sealed class TemplateTests
 
         var project = File.ReadAllText(Path.GetFullPath(Path.Combine(RepoRoot(), "Extensions", "Integrations", "templates", "elsa-connector", "Company.Connector.csproj")));
         Assert.Contains("Version=\"4.0.*-*\"", project, StringComparison.Ordinal);
+        Assert.DoesNotContain("Elsa.Integrations.Sdk.Testing", project, StringComparison.Ordinal);
+
+        var tests = File.ReadAllText(Path.GetFullPath(Path.Combine(RepoRoot(), "Extensions", "Integrations", "templates", "elsa-connector", "Tests", "Company.Connector.Tests.csproj")));
+        Assert.Contains("Elsa.Integrations.Sdk.Testing", tests, StringComparison.Ordinal);
+        Assert.Contains("Version=\"4.0.*-*\"", tests, StringComparison.Ordinal);
     }
 
     private static string RepoRoot()

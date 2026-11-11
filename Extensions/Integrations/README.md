@@ -11,7 +11,8 @@ parallel secret store, no Elsa 3 shims. HTTP uses the foundation `http` connecti
 
 ```
 Extensions/Integrations/
-  src/Sdk/                         Elsa.Integrations.Sdk v1 (#2726 / #2825)
+  src/Sdk/Elsa.Integrations.Sdk/   Elsa.Integrations.Sdk v1 (#2726 / #2825)
+  src/Sdk/Testing/                 Elsa.Integrations.Sdk.Testing (ConnectorHarness)
   src/Connectors/OAuth2/           Generic OAuth2 scheme (#2727)
   src/Connectors/Slack/            Slack Web API activities (#3322)
   src/Connectors/Microsoft365/     Microsoft Graph v1.0 activities (#3330)
@@ -23,9 +24,11 @@ Extensions/Integrations/
 
 ## SDK
 
-`Elsa.Integrations.Sdk` is the packable connector activity base. `AddOAuth2Connector` calls
-`AddElsaIntegrationsRuntime` so the named `Elsa.Activities.Http` client and unbound applicator
-are registered when Connections is not composed.
+`Elsa.Integrations.Sdk` is the packable connector activity base. Connector tests reference
+`Elsa.Integrations.Sdk.Testing` for `ConnectorHarness` and the in-memory doubles; production
+packages do not. `AddOAuth2Connector` calls `AddElsaIntegrationsRuntime` so the named
+`Elsa.Activities.Http` client and unbound applicator are registered when Connections is not
+composed.
 
 ## OAuth2 scheme
 

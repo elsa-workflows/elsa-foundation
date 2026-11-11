@@ -15,7 +15,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\..\..\src\Connectors\Slack\Elsa.Integrations.Connectors.Slack.csproj" />
-    <ProjectReference Include="..\..\..\..\src\Sdk\Elsa.Integrations.Sdk.csproj" />
+    <ProjectReference Include="..\..\..\..\src\Sdk\Elsa.Integrations.Sdk\Elsa.Integrations.Sdk.csproj" />
+    <ProjectReference Include="..\..\..\..\src\Sdk\Testing\Elsa.Integrations.Sdk.Testing.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\Essentials\src\Connections\Core\Elsa.Connections.Core.csproj" />
   </ItemGroup>
 
