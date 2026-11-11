@@ -230,7 +230,9 @@ not publish successful values or outcomes through mutable execution-context `Set
 
   Unspecified and explicitly empty stay distinct through completion, parent and join handling, persistence and
   recovery. An explicitly empty selection ends this invocation's outgoing paths; it does not itself cancel other
-  running branches. It is a successful completion, so the step's pending engine-owned changes still commit. A parent
+  running branches. An empty selection sends a dead arrival on every outbound connection
+  ([ADR 0064](0064-flowchart-infers-joins-from-propagated-dead-paths.md)); a downstream join counts it as an arrival
+  and never waits on it. It is a successful completion, so the step's pending engine-owned changes still commit. A parent
   that does not route by outcomes (a sequence, the workflow root, a loop body) treats it like any other successful
   completion.
 - **The `Done` rule.** `Done` means "completed without choosing a branch". An activity whose completion may choose no
@@ -238,7 +240,8 @@ not publish successful values or outcomes through mutable execution-context `Set
   does not (an If with `True` and `False`, a Switch, a SendHttpRequest with expected status codes). `Done` is never
   selected together with a branch. An unspecified selection on a node without `Done` is a defect in the activity's
   code: it faults with `VF-ACT-006`, and the fault says that the activity completed without selecting an outcome and
-  declares no `Done`. This is the shape Elsa 4's activities already have. Elsa 3, where `Done` fired on every
+  declares no `Done`. Whether publication can also catch such an activity before run time is settled in the
+  implementing spec (S-3). This is the shape Elsa 4's activities already have. Elsa 3, where `Done` fired on every
   completion next to any branch, is converted by mapping its `Done` onto every branch (below).
 - **Selecting.** A C# activity returns the selection in its `Complete` transition.
   - A script selects by **returning an explicitly recognized completion/routing form** that carries the result and the
@@ -249,9 +252,13 @@ not publish successful values or outcomes through mutable execution-context `Set
   - **Routing and business data stay separate.** An ordinary returned value (a string, number, object, array or null)
     is the activity's result only and selects no outcome. A completion that selects outcomes does so only through the
     recognized form, which still carries the result on its own channel. This replaces RunJavaScript's routing by return
-    value (#1114, recorded in `docs/reports/elsa-4-activity-behavioural-drive-2026-08.md`) and its `Unmatched` outcome,
-    so returning data can no longer change the route by accident: "nothing selected" is `Done` (not a silent
-    `Unmatched`), an unknown name faults (not a silent `Unmatched`), and several outcomes are expressible.
+    value and its `Unmatched` outcome, so returning data can no longer change the route by accident: "nothing
+    selected" is `Done` (not a silent `Unmatched`), an unknown name faults (not a silent `Unmatched`), and several
+    outcomes are expressible.
+  - **Ending routing by return value is deliberate.** A plain returned value is data and never selects a route; only the
+    returned completion/routing form selects. A RunJavaScript workflow that relied on returning an outcome name changes
+    behavior, so the change is never silent: publication warns when a RunJavaScript script returns a string literal that
+    equals an outcome name connected on that node. The implementing spec (S-3) defines the diagnostic.
   - A selection takes effect only on successful completion. A fault or cancellation dispatches nothing, and a selection
     never dispatches a branch while the script is still running.
   - The returned selection is therefore part of the step's transaction (D-3): it is the completion's own data, carried
@@ -310,13 +317,15 @@ converter already does for If, Switch and DispatchWorkflow; SendHttpRequest with
 rule. A RunJavaScript with no selection completes with `Done`, in Elsa 3 and here. The converter's rule that maps
 Elsa 3's `Done` to `Unmatched` (spec 239 R8, spec 236 member map) existed only because of routing by return value; it
 becomes `Done` to `Done`. S-3 must prove this preserves routing through conversion, publication and execution,
-including the connected RunJavaScript cases behind #3295.
+including connected RunJavaScript nodes whose `Done` was converted to `Unmatched`.
 
 *Left to the implementing spec (S-3):*
 - the spelling, recognition and validation of the script's returned completion/routing form (result and selection on
   separate channels, no ambient `activity` object);
 - removing RunJavaScript's routing by return value and its `Unmatched` outcome, and the converter's R8 rule, with
   conversion, publication and execution evidence;
+- the publish warning for a RunJavaScript script that returns a string literal equal to a connected outcome name;
+- whether publication flags an activity without `Done` that can complete with no selection;
 - the supported derivations and declarations for faithful conversion of computed outcome selections;
 - the shape of the selection in the transition and in persisted completion records;
 - how a multi-outcome declaration appears in the activity contract and in Studio;
