@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { canonicalizeStateForWire, expandStateFromWire } from "../activityInputWire";
 import { readWrappedInput } from "../activityProperties";
-import type { ActivityNode, VariableDefinition, WorkflowDefinitionState } from "../workflowTypes";
+import { buildDraftFromJson, serializeDraftToJson } from "../workflowSerialization";
+import type { ActivityNode, VariableDefinition, WorkflowDefinitionState, WorkflowDraft } from "../workflowTypes";
 
 describe("activity input wire adapter", () => {
   it("folds a top-level wrapped input into the canonical inputs array", () => {
@@ -134,6 +135,65 @@ describe("activity input wire adapter", () => {
 
     expect(resaved.rootActivity?.inputs).toEqual([
       { referenceKey: "text", value: { value: definition, expressionType: "JavaScript" } }
+    ]);
+  });
+
+  it("keeps a whole activity-result binding structured through save, Code Apply and reopen", () => {
+    const binding = { producerNodeId: "get-customer", projectionKey: "$result", producerScopeId: "main", isOptional: false };
+    const authored: WorkflowDraft = {
+      id: "draft-1",
+      definitionId: "definition-1",
+      state: stateOf(writeLine("send-mail", { customer: wrapped(binding, "ActivityResult") })),
+      layout: [],
+      validationErrors: []
+    };
+    const expected = [{ referenceKey: "customer", value: { value: binding, expressionType: "ActivityResult" } }];
+
+    // Save: the binding is an object on the wire, never escaped JSON text.
+    const saved = canonicalizeStateForWire(authored.state);
+    expect(saved.rootActivity?.inputs).toEqual(expected);
+
+    // Code Apply: the Code view shows the same wire shape and applies it back unchanged.
+    const applied = buildDraftFromJson(serializeDraftToJson(authored), authored);
+    expect(applied.ok && canonicalizeStateForWire(applied.draft.state).rootActivity?.inputs).toEqual(expected);
+
+    // Reopen: the loaded draft holds the same identity and saves it again unchanged.
+    const reopened = expandStateFromWire(saved);
+    expect((reopened.rootActivity as ActivityNode & { customer: { expression: unknown } }).customer.expression)
+      .toEqual({ type: "ActivityResult", value: binding });
+    expect(canonicalizeStateForWire(reopened).rootActivity?.inputs).toEqual(expected);
+  });
+
+  it.each([
+    // A member read this client cannot author yet: its path segments are literal names, dots included.
+    ["ActivityResultMember", { producerNodeId: "get-customer", projectionKey: "$result", producerScopeId: "main", isOptional: false, memberPath: ["billing.address", ""] }],
+    ["WorkflowRequest", { memberKey: "order", path: null }],
+    // A source kind a later server adds, and a definition under a known language that is not a portable one.
+    ["FutureSource", { kind: "next", nested: { items: [1, "two", null] } }],
+    ["JavaScript", { language: "JavaScript", source: "args.x", dialect: 2 }],
+    ["FutureSource", ["a", { b: 1 }]]
+  ])("preserves an unknown %s definition as authored instead of turning it into JSON text", (expressionType, definition) => {
+    const seeded = stateOf({
+      ...writeLine("consumer", {}),
+      inputs: [{ referenceKey: "text", value: { value: definition, expressionType }, futureField: "kept" }]
+    });
+
+    const resaved = canonicalizeStateForWire(expandStateFromWire(seeded));
+
+    expect(resaved.rootActivity?.inputs).toEqual([
+      { referenceKey: "text", value: { value: definition, expressionType }, futureField: "kept" }
+    ]);
+  });
+
+  it("keeps Object and Secret values in the JSON-text form they are saved in", () => {
+    const state = stateOf(writeLine("consumer", {
+      config: wrapped({ enabled: true }, "Object"),
+      apiKey: wrapped({ name: "smtp" }, "Secret")
+    }));
+
+    expect(canonicalizeStateForWire(state).rootActivity?.inputs).toEqual([
+      { referenceKey: "config", value: { value: '{"enabled":true}', expressionType: "Object" } },
+      { referenceKey: "apiKey", value: { value: '{"name":"smtp"}', expressionType: "Secret" } }
     ]);
   });
 

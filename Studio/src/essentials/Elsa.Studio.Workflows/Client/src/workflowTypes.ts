@@ -105,6 +105,11 @@ export interface WorkflowDraft {
   layout: DesignMetadataRecord[];
   activityPresentation?: ActivityPresentationRecord[];
   validationErrors: ValidationError[];
+  /**
+   * The server's identity of this saved draft, returned by the draft endpoints. Only the copy the server acknowledged
+   * is a valid request base; a live draft edited since keeps an older value.
+   */
+  authoringRevision?: string;
 }
 
 export interface IncidentStrategyReference {
