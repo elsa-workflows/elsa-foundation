@@ -76,12 +76,16 @@ The board states which phase the initiative is in.
    written as if the ADRs it applies were agreed, so its plan and tasks test whether those ADRs work in the code (see
    *Provisional specs* below). Its formal approval needs the ADRs it depends on to be agreed. Each spec row on the board
    names the ADRs and decisions it needs.
-3. **Implementation.** Production implementation needs the approved spec and the decisions it applies, landed on
-   `main` (see *Landing* below). ADR and spec PRs both follow the final-commit agreement rule below.
+3. **Implementation.** Production implementation of a spec needs the approved spec and every ADR and decision it
+   applies, landed on `main`. ADR and spec PRs both follow the final-commit agreement rule below.
 
-Because the initiative branch lands as a whole, every spec is agreed before implementation of any of them starts. An
-initiative may agree further, stricter rules. Such a rule holds until the approvers change it. A bounded research experiment is allowed in any phase, but it
-never silently becomes production implementation.
+Phases apply **per spec**, not to the initiative as a whole. A spec advances to implementation as soon as its own
+dependencies are resolved: the spec is approved, and every ADR and decision it applies is agreed and merged into the
+initiative branch. It does not wait for the other specs. The coordinator then lands that spec early (see *Early
+landing of a spec* below), and its implementation follows the repository's normal rules on `main`. The board's phase
+line names the specs in implementation. An initiative may agree further, stricter rules, such as holding every
+implementation until all specs are agreed. Such a rule holds until the approvers change it. A bounded research
+experiment is allowed in any phase, but it never silently becomes production implementation.
 
 No activation by a program goal is needed for any phase.
 
@@ -385,8 +389,8 @@ imply; and the initiative's meeting agendas (`docs/initiatives/<n>/`), which lan
 log. It holds no production code. Because every proposal is checked against everything already on it, the branch is
 the initiative's shared, consistent knowledge base: what the initiative has decided so far, in one place. Everyone
 taking part works from it — authors cut their proposal branches from it, and reviewers and the coordinator check it
-out to see the agreed decisions a proposal builds on — not from `main`, which does not carry them until the
-initiative lands.
+out to see the agreed decisions a proposal builds on — not from `main`, which carries them only once they land
+(early, with a spec, or when the initiative lands).
 
 Work outside the initiative is unaffected. Every rule in this section applies only to **initiative proposals**: PRs
 whose base is an `initiative/*` branch, or the branch of a proposal stacked on one.
@@ -491,10 +495,32 @@ decision relies on. That fix is a **side track**:
 
 An ADR amendment on a topic on the board is never a side track: it goes through the initiative.
 
+### Early landing of a spec
+
+A spec whose dependencies are resolved does not wait for the rest of the initiative. Once the spec is approved and
+merged into the initiative branch, and every ADR and decision it applies is agreed and merged there, the coordinator
+lands it on `main` ahead of the branch:
+
+- The coordinator cuts a branch from `origin/main` and copies, unchanged from the initiative branch, the spec's folder
+  and the files of every ADR and amendment it applies (with the CONTEXT, glossary or constitution edits they imply).
+  A file goes over whole, so every decision in it must be agreed; if a file still holds an unagreed part, the spec is
+  not ready to land. Nothing else from the branch goes with it.
+- The coordinator runs the pre-merge gate's checks against `main` for those files and posts the evidence on the PR:
+  the spec and every ADR it applies agreed and merged on the branch, with their commits, and no open recheck,
+  collision or side track that blocks them.
+- One approver records in a PR comment that these files are the agreed text (an attestation, as at landing), and Code
+  Review approves and merges the PR through the normal [merge path](merging.md).
+- The spec's board row records the `main` merge commit and moves to implementation. Implementation then follows the
+  repository's normal rules on `main`: Speckit implement, review, and Code Review merges. It is not an initiative
+  proposal and does not target the initiative branch.
+- The next sync merges `main` into the initiative branch. The early-landed files are identical on both sides, so the
+  branch and `main` agree on them. A later change to them follows *Accepted text is amended in place*, and the
+  amendment also lands on `main` the same way before the implementation builds on it.
+
 ### Landing
 
-The initiative branch lands on `main` in one PR, once every board row is agreed and the initiative is ready for
-implementation:
+The initiative branch lands on `main` in one PR, once every board row is agreed. Specs that already landed early
+are part of it unchanged:
 
 - The coordinator runs the pre-merge gate against `main` one last time and posts the evidence on the landing PR:
   every row agreed and merged, no open side track, collision or recheck, and the gate comment.
@@ -504,8 +530,8 @@ implementation:
 - The coordinator tags the branch tip `archive/initiative/<n>-<slug>` and requests Code Review. Code Review approves
   and merges it through the normal [merge path](merging.md), with a merge commit so that `main` keeps the decision
   log. Every required check runs.
-- The coordinator moves the board to the implementation phase, and a repository admin deletes the branch, since the
-  ruleset blocks everyone else.
+- The coordinator moves the board's remaining specs to implementation, and a repository admin deletes the branch,
+  since the ruleset blocks everyone else.
 
 ## Size guard
 
@@ -529,7 +555,7 @@ Last synced <date> by the coordinator. Newer updates are in the comments below.
 
 # Initiative: <objective>
 
-**Phase:** analysis and decisions | specs | implementation
+**Phase:** analysis and decisions | specs | implementation (per spec: name the specs in implementation)
 
 **Coordinator:** @<assignee>. Delegate: <none, or @person for what and until when>.
 
