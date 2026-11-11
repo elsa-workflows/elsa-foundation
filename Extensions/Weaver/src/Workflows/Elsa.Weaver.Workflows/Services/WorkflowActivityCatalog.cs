@@ -107,7 +107,7 @@ internal static class WorkflowActivityCatalog
         return new(AttachmentId, "workflows.catalog", null, "Workflow activity catalog", ContentType, WeaverContextSensitivity.Internal,
             "catalog", summary, content, new Dictionary<string, string>())
         {
-            ModuleId = WorkflowWeaverSnapshot.ModuleId, SchemaVersion = "1", Origin = WeaverContextOrigin.AuthoritativeRead, AgentScopes = []
+            ModuleId = WorkflowWeaverSnapshot.ModuleId, SchemaVersion = "1", Origin = WeaverContextOrigin.AuthoritativeRead, WeaverScopes = []
         };
     }
 

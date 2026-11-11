@@ -21,7 +21,7 @@ internal sealed class WorkflowSetDesignerPositionTool(IWeaverToolAuthorizer auth
         ["workflows/design:manage"], ["/workflows"])
     {
         ModuleId = WorkflowWeaverSnapshot.ModuleId, ContractVersion = "1", ExecutionLocation = WeaverExecutionLocation.ClientWorkingState,
-        ResultType = ResultType, ResultSchemaVersion = "1", ResultRendererId = "workflows.agent.layout-result",
+        ResultType = ResultType, ResultSchemaVersion = "1", ResultRendererId = "workflows.weaver.layout-result",
         DisclosureSourceId = "workflows.context"
     };
 

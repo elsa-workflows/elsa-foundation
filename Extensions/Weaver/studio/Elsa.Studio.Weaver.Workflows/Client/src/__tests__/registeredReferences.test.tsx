@@ -3,11 +3,11 @@ import type { ElsaStudioModuleApi, StudioWeaverRegistry } from "@elsa-workflows/
 import { createWeaverRegistry } from "@elsa-workflows/studio-sdk";
 import { register } from "../module";
 // The Workflows module's own registration, composed beside this package's as the Studio host composes both.
-import { registerWorkflowAgent } from "../../../../../../../Studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflowAgent";
-import server from "./workflowAgentRegistrations.json";
+import { registerWorkflowWeaver } from "../../../../../../../Studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflowWeaver";
+import server from "./workflowWeaverRegistrations.json";
 
 // Spec 1193 SC-007 (FR-019): over the composed Studio contributions of both Workflows packages and the server registrations
-// of Elsa.Weaver.Workflows (workflowAgentRegistrations.json, which Elsa.Weaver.Tests holds equal to the composed server), every
+// of Elsa.Weaver.Workflows (workflowWeaverRegistrations.json, which Elsa.Weaver.Tests holds equal to the composed server), every
 // prompt, guidance text and renderer references only registered tools and result kinds, and each contribution is registered
 // under its own package's module identity.
 const workflowsModule = "Elsa.Studio.Workflows";
@@ -23,16 +23,16 @@ const contextKinds = new Set([...server.contextKinds, ...server.librarySource.co
 
 function compose() {
   const workflows = createWeaverRegistry();
-  registerWorkflowAgent(workflows);
+  registerWorkflowWeaver(workflows);
   const weaver = createWeaverRegistry();
   register({ weaver } as unknown as ElsaStudioModuleApi);
   return { workflows, weaver };
 }
 
-function contributions(agent: StudioWeaverRegistry) {
+function contributions(weaverRegistry: StudioWeaverRegistry) {
   return [
-    ...agent.promptActions.list(), ...agent.promptStarters.list(), ...agent.capabilities.list(), ...agent.contextProviders.list(),
-    ...agent.toolSlots.list(), ...agent.toolContracts.list(), ...agent.resultRenderers.list(), ...(agent.resultControls?.list() ?? [])
+    ...weaverRegistry.promptActions.list(), ...weaverRegistry.promptStarters.list(), ...weaverRegistry.capabilities.list(), ...weaverRegistry.contextProviders.list(),
+    ...weaverRegistry.toolSlots.list(), ...weaverRegistry.toolContracts.list(), ...weaverRegistry.resultRenderers.list(), ...(weaverRegistry.resultControls?.list() ?? [])
   ] as Array<{ id: string; moduleId: string }>;
 }
 

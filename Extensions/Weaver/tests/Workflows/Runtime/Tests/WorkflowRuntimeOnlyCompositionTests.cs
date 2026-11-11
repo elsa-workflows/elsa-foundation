@@ -102,7 +102,7 @@ public sealed class WorkflowRuntimeOnlyCompositionTests
     private static JsonObject Registrations([CallerFilePath] string source = "")
     {
         var root = Path.GetFullPath(Path.Combine(Path.GetDirectoryName(source)!, "..", "..", "..", "..", "..", ".."));
-        var path = Path.Combine(root, "Extensions", "Weaver", "studio", "Elsa.Studio.Weaver.Workflows", "Client", "src", "__tests__", "workflowAgentRegistrations.json");
+        var path = Path.Combine(root, "Extensions", "Weaver", "studio", "Elsa.Studio.Weaver.Workflows", "Client", "src", "__tests__", "workflowWeaverRegistrations.json");
         return JsonNode.Parse(File.ReadAllText(path))!.AsObject();
     }
 }

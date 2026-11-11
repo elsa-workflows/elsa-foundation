@@ -1,6 +1,6 @@
 # Package-only backend application
 
-`consumers.prepare_consumers(run)` replaces `__BACKEND_REFERENCES__` with exact PackageReferences from the retained candidate identities and `run.pin(...)` for public infrastructure. This baseline references both real provider adapters, the public Agent/Identity/Preferences contracts and native authoring services. Neither resource package nor the protocol fixture is an application reference. The actual protocol archive is staged in the native runtime feed.
+`consumers.prepare_consumers(run)` replaces `__BACKEND_REFERENCES__` with exact PackageReferences from the retained candidate identities and `run.pin(...)` for public infrastructure. This baseline references both real provider adapters, the public Weaver/Identity/Preferences contracts and native authoring services. Neither resource package nor the protocol fixture is an application reference. The actual protocol archive is staged in the native runtime feed.
 
 The application uses public CShells/Nuplane registration, native ModularityApi endpoints, normal Identity/SQLite module wiring and a separate application-owned SQLite/OpenIddict TokenDb. It contains no Workbench helpers or private management mapping. The root Nuplane ingress/coordinator/admin instances are shared into shell scopes. Native-loaded factories share the baseline provider implementation assemblies, in addition to Core/CShells contracts, so they replace the actual adapter's public factory interface.
 
@@ -32,7 +32,7 @@ The optional `Qualification:DiagnosticGateDirectory` pauses immediately before s
 `run.profiles["backend"]` exposes `published`, `assembly`, `env`, `audit`, `runtimeFeed`, `nativeStore`, `appsettings`, `shells`, `commandFile` and `traceFiles` to the integration driver. `freeze_consumer_baseline` runs after real startup and before resource installation. `capture_consumer_after` runs after final restored observations; it refuses changed/missing common DLL/browser files. Build/lock/asset/audit receipts remain separate from runtime case acceptance.
 
 The application also discovers `WeaverEntityFrameworkCore` and `Secrets` from their packages; the baseline shell
-does not select them. For the #3441 restart inventory, `consumers.enable_durable_agent_store(run, database, key)` adds both to
+does not select them. For the #3441 restart inventory, `consumers.enable_durable_weaver_store(run, database, key)` adds both to
 the runtime `shells.json` while the driver's own backend is stopped: SQLite over a new database file under the run's output
 root, a private Secrets key that is never returned or retained in a receipt, and the store's 15-second lease. The driver then
 starts a new generation of the same published application through `runtime.RestartableServer`.
@@ -77,7 +77,7 @@ the seam. The seam changes no product code.
 
 Spec 1193 slice F adds `Elsa.Weaver.Workflows.Runtime` to the packaged references and selects its shell feature
 `WeaverWorkflowsRuntime` in the baseline shell, beside `WeaverWorkflows`; its assembly is listed with the
-other agent assemblies. `inspection_journeys.py` adds no seam: it deselects each agent feature once, through the ordinary
+other Weaver assemblies. `inspection_journeys.py` adds no seam: it deselects each Weaver feature once, through the ordinary
 native feature apply, for its deployment-shape control and selects it again.
 
 `QualificationRunCapture.cs` is a test-only host feature for the spec 1193 workflow-run inventory (T045). No baseline shell

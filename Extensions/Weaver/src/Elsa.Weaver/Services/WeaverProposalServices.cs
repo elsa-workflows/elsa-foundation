@@ -285,7 +285,7 @@ internal sealed class InMemoryWeaverProposalService(
             try { await ReconcileGatedAsync(proposalId, cancellationToken); }
             catch (Exception failure) when (failure is not OperationCanceledException)
             {
-                logger?.LogError("An unsettled operation of agent session {SessionId} could not be settled yet ({FailureType}).", sessionId, failure.GetType().Name);
+                logger?.LogError("An unsettled operation of Weaver session {SessionId} could not be settled yet ({FailureType}).", sessionId, failure.GetType().Name);
             }
         }
     }
@@ -586,7 +586,7 @@ internal sealed class InMemoryWeaverProposalService(
     public async Task<WeaverResult<IReadOnlyList<WeaverActionProposal>>> ListAsync(string sessionId, CancellationToken cancellationToken = default)
     {
         if (_owner is not null && !await _owner.HydrateSessionAsync(sessionId, cancellationToken))
-            return WeaverResult<IReadOnlyList<WeaverActionProposal>>.Failure("weaver.session.not_found", $"Agent session '{sessionId}' was not found.", 404);
+            return WeaverResult<IReadOnlyList<WeaverActionProposal>>.Failure("weaver.session.not_found", $"Weaver session '{sessionId}' was not found.", 404);
         await ReconcileSessionAsync(sessionId, cancellationToken);
         var now = clock.GetUtcNow();
         foreach (var overdue in store.Proposals.Values.Where(x => x.SessionId == sessionId && x.Status == WeaverActionProposalStatus.AwaitingClient
@@ -913,7 +913,7 @@ internal sealed class InMemoryWeaverProposalService(
 /// this decision read it. The store refused the write and nothing was applied.
 /// </summary>
 internal sealed class WeaverProposalConflictException(string sessionId)
-    : InvalidOperationException($"A proposal of agent session '{sessionId}' changed after the decision read it; nothing was recorded.")
+    : InvalidOperationException($"A proposal of Weaver session '{sessionId}' changed after the decision read it; nothing was recorded.")
 {
     public const string Code = "weaver.proposal.conflict";
 }

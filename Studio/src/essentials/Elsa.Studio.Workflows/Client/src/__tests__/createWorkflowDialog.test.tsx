@@ -1,6 +1,6 @@
 import React from "react";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
-import { applyCreateDialogPrefill } from "../workflow-editor/workflowLibraryAgent";
+import { applyCreateDialogPrefill } from "../workflow-editor/workflowLibraryWeaver";
 import type { CreateWorkflowDraft } from "../workflow-editor/editorTypes";
 import * as templateApi from "../workflowTemplates";
 import type { WorkflowTemplate } from "../workflowTemplates";

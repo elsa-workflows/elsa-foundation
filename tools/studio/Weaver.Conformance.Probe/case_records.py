@@ -11,7 +11,7 @@ from pathlib import Path
 import re
 from urllib.parse import urlparse
 
-from agent_transport import _json as strict_json
+from weaver_transport import _json as strict_json
 from artifacts import check, sha
 from evidence import CONTROL_IDS, REQUIRED_CASES, UNCHANGED_CONTROLS
 from runtime import private_json
@@ -77,7 +77,7 @@ def _normalized_result(value):
     if result.get("receipt"):
         scope = result["receipt"]["scope"]
         # WeaverEffectScope declares ClientWorkingState=0, ServerPersisted=1.
-        # Agent API uses camelCase; SDK/ordinary JSON uses PascalCase or numbers.
+        # Weaver API uses camelCase; SDK/ordinary JSON uses PascalCase or numbers.
         if type(scope) is int and scope in (0, 1):
             canonical = scope
         elif type(scope) is str and scope in ("clientWorkingState", "ClientWorkingState", "serverPersisted", "ServerPersisted"):
@@ -112,7 +112,7 @@ def _native_results(output, requests):
     CDP preserves the response bytes and transport termination independently. A
     partial trailing frame is never treated as a native result.
     """
-    path = output / "agent-streams.json"
+    path = output / "weaver-streams.json"
     if not path.is_file():
         return []
     sessions = set()
@@ -160,7 +160,7 @@ def correlate_browser_protocol(transport, browser_output, provider, *, offset=0)
     commands = [json.loads(path.read_text()) for path in output.glob("command-*.json")]
     check(bool(commands) and len({item["commandId"] for item in commands}) == len(commands),
           "Actual distinct browser commands are required")
-    requests = json.loads((output / "agent-requests.json").read_text())
+    requests = json.loads((output / "weaver-requests.json").read_text())
     sessions = {urlparse(item["url"]).path.split("/")[-2] for item in requests
                 if urlparse(item["url"]).path.endswith("/messages")}
     check(bool(sessions), "The browser did not send a native message")

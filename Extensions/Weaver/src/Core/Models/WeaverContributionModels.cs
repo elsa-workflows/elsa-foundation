@@ -125,7 +125,7 @@ public sealed record WeaverContributionDiagnostic(string ContributorId, string C
     /// Preview: the owning module could not decide whether this context may be disclosed, as opposed to refusing it. A
     /// required diagnostic is still a refusal (fail closed). When every required diagnostic of a collection says so, the
     /// collection fails as unavailable (503) with the first one's <see cref="Code"/> and a fixed engine message, instead of
-    /// <c>agent.context.incomplete</c>; this diagnostic's <see cref="Message"/> is never forwarded.
+    /// <c>weaver.context.incomplete</c>; this diagnostic's <see cref="Message"/> is never forwarded.
     /// </summary>
     /// <remarks>
     /// Honoured only on a diagnostic an installed context source returns under its own descriptor id, which the engine records
@@ -134,7 +134,7 @@ public sealed record WeaverContributionDiagnostic(string ContributorId, string C
     /// also holds when the owner is asked about a retained lifecycle outcome (denied, refused or uncertain), so a paused
     /// continuation keeps its pause. The code must be the owner's dotted
     /// identifier (ASCII letters, digits, <c>.</c>, <c>_</c> or <c>-</c>, at most 128 characters) outside the reserved
-    /// <c>agent.</c> namespace; any other code keeps the ordinary incomplete-context failure. Omitted from the wire when unset.
+    /// <c>weaver.</c> namespace; any other code keeps the ordinary incomplete-context failure. Omitted from the wire when unset.
     /// </remarks>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public bool OwnerUnavailable { get; init; }

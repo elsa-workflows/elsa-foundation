@@ -81,7 +81,7 @@ internal sealed partial class EfWeaverSessionRecordStore
             || session.Title != row.Title || (int)session.Status != row.Status || session.UpdatedAt.UtcTicks != row.UpdatedAtUtcTicks
             || session.ExpiresAt?.UtcTicks != row.ExpiresAtUtcTicks || session.PolicyRevision != row.PolicyRevision || session.ContinuedFrom != row.ContinuedFrom
             || session.LimitReached != row.LimitReached)
-            throw new InvalidDataException("The agent session columns do not match the protected session record.");
+            throw new InvalidDataException("The Weaver session columns do not match the protected session record.");
 
         var messages = rows.Messages.Select(message =>
         {
@@ -89,7 +89,7 @@ internal sealed partial class EfWeaverSessionRecordStore
             var record = codec.Unprotect<WeaverMessageRecord>(WeaverRecordCodec.MessagePurpose, sessionId, message.MessageId, message.Payload);
             if (record.Message.Id != message.MessageId || (int)record.Message.Role != message.Role || (int)record.Message.Status != message.Status
                 || record.Message.StatusReason != message.StatusReason)
-                throw new InvalidDataException("An agent message's columns do not match its protected record.");
+                throw new InvalidDataException("A Weaver message's columns do not match its protected record.");
             return record;
         }).ToArray();
         var snapshots = rows.Snapshots.Select(snapshot =>
@@ -142,14 +142,14 @@ internal sealed partial class EfWeaverSessionRecordStore
     private static void Current(string schemaVersion)
     {
         if (schemaVersion != WeaverEfModule.SchemaVersion)
-            throw new InvalidDataException($"The agent record schema '{schemaVersion}' is not supported by this build.");
+            throw new InvalidDataException($"The Weaver record schema '{schemaVersion}' is not supported by this build.");
     }
 
     private static string Bounded(string value, int length, string name)
     {
         ArgumentNullException.ThrowIfNull(value, name);
         if (value.Length > length)
-            throw new ArgumentException($"The {name} exceeds the durable agent store's limit of {length} characters.", name);
+            throw new ArgumentException($"The {name} exceeds the durable Weaver store's limit of {length} characters.", name);
         return value;
     }
 

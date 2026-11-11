@@ -1,11 +1,11 @@
 namespace Elsa.Weaver.Core.Models;
 
 /// <summary>
-/// Thrown when more than one agent harness/provider is registered in a composition. Exactly one
+/// Thrown when more than one Weaver harness/provider is registered in a composition. Exactly one
 /// <see cref="Contracts.IWeaverProvider"/> may be enabled at a time.
 /// </summary>
 public sealed class WeaverHarnessConflictException(IReadOnlyCollection<string> providerIds)
-    : InvalidOperationException($"More than one agent harness is enabled: {string.Join(", ", providerIds)}. Enable exactly one.")
+    : InvalidOperationException($"More than one Weaver harness is enabled: {string.Join(", ", providerIds)}. Enable exactly one.")
 {
     public IReadOnlyCollection<string> ProviderIds { get; } = providerIds;
 }
@@ -64,7 +64,7 @@ public sealed class WeaverSessionUnavailableException : InvalidOperationExceptio
 
     /// <param name="innerException">The store or decoding failure that made the recorded state unavailable, if any.</param>
     public WeaverSessionUnavailableException(string sessionId, string reason, Exception? innerException)
-        : base($"The recorded state of agent session '{sessionId}' is unavailable ({reason}); nothing was changed.", innerException)
+        : base($"The recorded state of Weaver session '{sessionId}' is unavailable ({reason}); nothing was changed.", innerException)
     {
         SessionId = sessionId;
         Reason = reason;

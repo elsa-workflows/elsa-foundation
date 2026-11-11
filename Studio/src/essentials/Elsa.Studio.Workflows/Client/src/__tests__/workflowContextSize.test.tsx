@@ -3,7 +3,7 @@ import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { describe, expect, it } from "vitest";
 import { createWeaverRegistry } from "@elsa-workflows/studio-sdk";
-import { registerWorkflowAgent } from "../workflowAgent";
+import { registerWorkflowWeaver } from "../workflowWeaver";
 import { buildWorkflowSnapshotContent, useWorkflowContextBridge, workflowContextCandidateBudget, workflowSnapshotContentLimit } from "../workflow-editor/useWorkflowContextBridge";
 import { admittedSnapshotLength } from "../workflow-editor/workflowExplainContext";
 import type { ActivityCatalogItem, ActivityNode, WorkflowDefinitionDetails, WorkflowDraft } from "../workflowTypes";
@@ -32,12 +32,12 @@ function largeDraft(count: number, description = ""): WorkflowDraft {
 }
 
 function snapshotSizes(draft: WorkflowDraft) {
-  const agent = createWeaverRegistry();
-  const controller = registerWorkflowAgent(agent);
+  const weaverRegistry = createWeaverRegistry();
+  const controller = registerWorkflowWeaver(weaverRegistry);
   const catalogByVersion = new Map([versionedWriteLine, versionedFlowchart].map(item => [item.activityVersionId, item]));
   const details = { definition: { id: "definition", name: "Large workflow" } } as WorkflowDefinitionDetails;
   function Probe() {
-    useWorkflowContextBridge({ controller, clientId: agent.clientId, details, draft, selectedNode: null, selectedNodeId: null, selectedDescriptor: null,
+    useWorkflowContextBridge({ controller, clientId: weaverRegistry.clientId, details, draft, selectedNode: null, selectedNodeId: null, selectedDescriptor: null,
       inspectedNode: null, inspectedDescriptor: null, inspectedIsScopeOwner: false, catalogByVersion });
     return null;
   }
@@ -87,7 +87,7 @@ describe("workflow context snapshot size", () => {
   });
 
   it.each([126, 150])("cannot fit a %i-activity draft, whose structure-free projection exceeds the host's attachment budget", count => {
-    // A known limit, not a guarantee: such a draft is refused by the host (agent.context.budget_exceeded) whatever is left out.
+    // A known limit, not a guarantee: such a draft is refused by the host (weaver.context.budget_exceeded) whatever is left out.
     const content = buildWorkflowSnapshotContent(largeDraft(count), catalogByVersion, { header });
     expect(content).not.toHaveProperty("structure");
     expect(admittedSnapshotLength(content)).toBeGreaterThan(workflowContextCandidateBudget);

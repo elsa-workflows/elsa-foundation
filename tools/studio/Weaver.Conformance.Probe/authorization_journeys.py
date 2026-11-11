@@ -19,7 +19,7 @@ import threading
 import time
 import uuid
 
-from agent_transport import _json as strict_json
+from weaver_transport import _json as strict_json
 from artifacts import TOOL, check, sha
 from case_records import retained
 from journey_runtime import atomic_json, same

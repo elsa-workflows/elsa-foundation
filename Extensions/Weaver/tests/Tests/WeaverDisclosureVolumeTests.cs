@@ -183,7 +183,7 @@ public sealed class WeaverDisclosureVolumeTests(ITestOutputHelper output)
     /// <summary>
     /// A store that cannot answer right now (a pool timeout, an exhausted retry, a read that kept changing) has not shown
     /// the recorded state to be unreadable. Hydration gives the lease back and keeps the failure's own outcome, so the
-    /// owner sees a retryable failure instead of <c>agent.session.unavailable_state</c>, and a later read hydrates.
+    /// owner sees a retryable failure instead of <c>weaver.session.unavailable_state</c>, and a later read hydrates.
     /// </summary>
     [Theory]
     [InlineData("transient-invalid-operation")]
@@ -215,7 +215,7 @@ public sealed class WeaverDisclosureVolumeTests(ITestOutputHelper output)
         if (tampering == "transient-invalid-operation")
             throw new InvalidOperationException("Timeout expired before a pooled connection was available.");
         if (tampering == "transient-store")
-            throw new WeaverContributionException($"Agent session '{record.Session.Id}' kept changing while it was read; nothing was hydrated.");
+            throw new WeaverContributionException($"Weaver session '{record.Session.Id}' kept changing while it was read; nothing was hydrated.");
         var assistant = record.Messages.First(x => x.Message.Role == WeaverRole.Assistant && x.DisclosureDigests is { Count: > 1 });
         WeaverSessionRecord Replace(WeaverMessageRecord changed)
             => record with { Messages = record.Messages.Select(x => x.Message.Id == changed.Message.Id ? changed : x).ToArray() };

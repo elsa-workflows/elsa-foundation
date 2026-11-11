@@ -3,7 +3,7 @@ using Elsa.Foundation.Identity.Core.Authorization;
 
 namespace Elsa.Weaver.Api.Authorization;
 
-/// <summary>Contributes the Agent API's stable, module-owned permission vocabulary.</summary>
+/// <summary>Contributes the Weaver API's stable, module-owned permission vocabulary.</summary>
 public sealed class WeaverPermissionContributor : IPermissionContributor
 {
     public const string Owner = "Elsa.Weaver.Api";
@@ -14,9 +14,9 @@ public sealed class WeaverPermissionContributor : IPermissionContributor
 
     public IEnumerable<Permission> Contribute() =>
     [
-        Permission(WeaverPermissionKeys.Use, "Use agent API", "Use agent sessions, messages, feedback, and streams."),
-        Permission(WeaverPermissionKeys.Proposals, "Manage agent proposals", "Approve, deny, and execute agent action proposals."),
-        Permission(WeaverPermissionKeys.Audit, "Read agent audit", "Read agent audit events.")
+        Permission(WeaverPermissionKeys.Use, "Use Weaver API", "Use Weaver sessions, messages, feedback, and streams."),
+        Permission(WeaverPermissionKeys.Proposals, "Manage Weaver proposals", "Approve, deny, and execute Weaver action proposals."),
+        Permission(WeaverPermissionKeys.Audit, "Read Weaver audit", "Read Weaver audit events.")
     ];
 
     private Permission Permission(string key, string displayName, string description) =>
