@@ -1,7 +1,7 @@
 import { StudioPageHeader } from "@elsa-workflows/studio-ui";
 import React, { lazy, useCallback, useEffect, useState } from "react";
 import type { StudioWeaverRegistry, StudioEndpointContext, StudioWorkflowRunInputEditorContribution } from "@elsa-workflows/studio-sdk";
-import type { WorkflowAgentController } from "../workflowAgent";
+import type { WorkflowWeaverController } from "../workflowWeaver";
 import { WorkflowLazyBoundary } from "../WorkflowLazyBoundary";
 import {
   formatExecutableInspectorPageTitle,
@@ -10,7 +10,7 @@ import {
 
 const WorkflowExecutableInspectorWorkbench = lazy(() => import("./WorkflowExecutableInspector").then(module => ({ default: module.WorkflowExecutableInspectorWorkbench })));
 
-export function WorkflowExecutableInspectorPage({ context, ai, weaver, runInputEditors }: { context: StudioEndpointContext; ai: StudioWeaverRegistry; weaver?: WorkflowAgentController; runInputEditors: StudioWorkflowRunInputEditorContribution[] }) {
+export function WorkflowExecutableInspectorPage({ context, ai, weaver, runInputEditors }: { context: StudioEndpointContext; ai: StudioWeaverRegistry; weaver?: WorkflowWeaverController; runInputEditors: StudioWorkflowRunInputEditorContribution[] }) {
   const [location, setLocation] = useState(readExecutableInspectorLocation);
   const [identity, setIdentity] = useState<ExecutableInspectorIdentity | null>(null);
 

@@ -28,7 +28,7 @@ internal static class WorkflowVersionContext
     internal const string NotFoundMessage = "The workflow version is unavailable.";
     internal const string DeniedMessage = "Current workflow design read permission is required for the workflow version.";
     // Composition faults are reported as unavailable (503), so their codes are owner-namespaced: the engine honours the
-    // unavailable marker only outside its reserved agent. namespace. Slice A's agent.workflow.authority_unavailable keeps its
+    // unavailable marker only outside its reserved weaver. namespace. Slice A's weaver.workflow.authority_unavailable keeps its
     // established meaning (an ordinary denial of the draft tools) and is not used here.
     internal const string ReaderUnavailableCode = "workflow.version.reader_unavailable";
     internal const string StructureUnavailableCode = "workflow.version.structure_unavailable";

@@ -11,8 +11,8 @@ namespace Elsa.Weaver.Anthropic;
 [ManifestFeatureCategory("Provider")]
 [ShellFeature(
     name: "WeaverAnthropic",
-    DisplayName = "Anthropic (Claude) Agent Provider",
-    Description = "Registers the Anthropic Claude agent provider, driven by the host orchestrator over the shared tool currency. Enabling this excludes other agent harnesses (single active harness).",
+    DisplayName = "Anthropic (Claude) Weaver Provider",
+    Description = "Registers the Anthropic Claude Weaver provider, driven by the host orchestrator over the shared tool currency. Enabling this excludes other Weaver harnesses (single active harness).",
     DependsOn = new object[] { typeof(WeaverFeature) }
 )]
 public class WeaverAnthropicFeature : WeaverFeature

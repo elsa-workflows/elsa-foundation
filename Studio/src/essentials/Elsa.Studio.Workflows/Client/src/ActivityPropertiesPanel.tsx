@@ -805,7 +805,7 @@ function PropertyRow({
     apply();
     const observer = new MutationObserver(apply);
     const root = (rowRef.current?.ownerDocument ?? document).documentElement;
-    observer.observe(root, { attributes: true, attributeFilter: ["class", "style", "data-theme", "data-theme-material", "data-workspace-style"] });
+    observer.observe(root, { attributes: true, attributeFilter: [...workflowThemeRootAttributes] });
     if (source) observer.observe(source, { attributes: true, attributeFilter: ["class", "style"] });
     return () => observer.disconnect();
   }, [expanded]);
@@ -1429,6 +1429,16 @@ function expressionEditorReadsActivity(props: PropertyRowProps) {
 }
 
 const workflowThemeScopeSelector = ".wf-tokens, .wf-editor, .wf-page";
+const workflowThemeRootAttributes = [
+  "class",
+  "style",
+  "data-theme",
+  "data-theme-material",
+  "data-workspace-style",
+  "data-theme-mode",
+  "data-theme-appearance",
+  "data-color-scheme"
+] as const;
 
 function isCopiedThemeCustomProperty(name: string) {
   return name.startsWith("--wf-") || name.startsWith("--studio-") || name.startsWith("--xy-");
@@ -1526,11 +1536,21 @@ function ExpandedPropertyEditor({
     ? getExpressionEditorFallbackHint(expressionEditors, expressionContext)
     : null;
 
+  useLayoutEffect(() => {
+    const dialog = dialogRef.current;
+    if (!dialog || dialog.querySelector("[data-dialog-initial-focus]")) return;
+    const body = dialog.querySelector(".wf-property-editor-body");
+    const preferred = body?.querySelector<HTMLElement>(
+      "input:not([type='hidden']):not(:disabled), textarea:not(:disabled), select:not(:disabled), [contenteditable='true']"
+    );
+    preferred?.setAttribute("data-dialog-initial-focus", "");
+  }, []);
+
   useEffect(() => {
     if (!ExpressionEditorComponent) fallbackEditorRef.current?.focus();
   }, [ExpressionEditorComponent, syntax]);
 
-  useDialogFocus(dialogRef, onClose, false);
+  useDialogFocus(dialogRef, onClose);
 
   return (
     <div className="wf-property-editor-backdrop">
@@ -1603,6 +1623,7 @@ function ExpandedPropertyEditor({
                 disabled={disabled}
                 spellCheck={false}
                 ref={fallbackEditorRef}
+                data-dialog-initial-focus=""
                 onChange={event => onChange(event.target.value)}
               />
             </>

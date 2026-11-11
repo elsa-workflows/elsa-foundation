@@ -351,7 +351,7 @@ internal sealed class DefaultWorkflowWeaverContextProvider(
         if (ownerDecision is { Allowed: true } && (await authorizer.AuthorizeAsync(WorkflowApplyOperationBatchTool.Contract, session.ActorId, session.TenantId, target, cancellationToken)).Allowed
             && (await policies.EvaluateCapabilityAsync(session.Policy, WorkflowApplyOperationBatchTool.ToolName, cancellationToken)).Allowed)
             tools.Add(WorkflowApplyOperationBatchTool.ToolName);
-        // Capabilities are reported by their own ids under the session's capability policy, as the Agent API admits a
+        // Capabilities are reported by their own ids under the session's capability policy, as the Weaver API admits a
         // requested capability, independent of tool advertisement. Proposing a change is reported only with manage allowed,
         // which includes the host decision for the layout tool, so this is stricter than the API's admission.
         var capabilities = new List<string>();

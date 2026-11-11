@@ -15,7 +15,7 @@ import shutil
 import time
 import uuid
 
-from agent_transport import AgentTransport
+from weaver_transport import WeaverTransport
 from artifacts import TOOL, check, sha
 from case_records import retained, correlate_browser_protocol
 from consumers import PROTOCOL_FEATURES
@@ -127,7 +127,7 @@ def exact_refusal(response, status, code):
 
 @dataclass
 class Turn:
-    transport: AgentTransport
+    transport: WeaverTransport
     session: str
     command_id: str
     message: object
@@ -194,7 +194,7 @@ class JourneyRuntime:
     def studio(self): return Http(self.studio_origin, bearer=self.backend.bearer, opener=self.backend.opener)
 
     def transport(self, name, *, http=None):
-        return AgentTransport(http or self.backend, self.output(name), command_file=self.command_file,
+        return WeaverTransport(http or self.backend, self.output(name), command_file=self.command_file,
                               trace_file=self.run.profiles["backend"]["traceFiles"][self.provider])
 
     def snapshot(self, name, *, http=None, endpoint=HOME_PREFERENCES_PATH, host=None, expected=200):

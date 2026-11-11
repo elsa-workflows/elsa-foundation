@@ -40,7 +40,7 @@ public static class WeaverPersistenceSelection
             ServiceDescriptor.Singleton<IWeaverAuditSink>(provider => provider.GetRequiredService<TStore>()),
             ServiceDescriptor.Singleton<IWeaverAuditReader>(provider => provider.GetRequiredService<TStore>()),
             ServiceDescriptor.Singleton<IWeaverAuditOwnership>(provider => provider.GetRequiredService<TStore>())
-        ], descriptors => new(descriptors, true), "the agent audit store");
+        ], descriptors => new(descriptors, true), "the Weaver audit store");
         return services;
     }
 

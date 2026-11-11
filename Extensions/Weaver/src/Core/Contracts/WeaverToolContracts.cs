@@ -68,7 +68,7 @@ public sealed record WeaverToolDispatch(
     public static WeaverToolDispatch Denied(WeaverError error) => new(WeaverToolDispatchOutcome.Denied, null, null, error);
 }
 
-/// <summary>A server-side tool the agent can invoke during a turn.</summary>
+/// <summary>A server-side tool Weaver can invoke during a turn.</summary>
 public interface IWeaverTool
 {
     WeaverToolDescriptor Descriptor { get; }

@@ -22,7 +22,7 @@ namespace Elsa.Weaver.Tests;
 
 public sealed class WeaverCompositionTests
 {
-    private const string ShellName = "agent-composition";
+    private const string ShellName = "weaver-composition";
     private const string DefaultFeatureId = "Weaver";
 
     private static readonly Type[] DefaultContracts =
@@ -53,7 +53,7 @@ public sealed class WeaverCompositionTests
     [InlineData(typeof(WeaverAnthropicFeature))]
     public async Task A_leaf_discovers_and_activates_its_default_feature_through_the_type_dependency(Type leaf)
     {
-        // Only the leaf and Events assemblies are supplied. The default Agent assembly must be
+        // Only the leaf and Events assemblies are supplied. The default Weaver assembly must be
         // discovered through the leaf's Type dependency, as must the API capability feature for
         // the API leaf. Dependencies are not explicitly enabled.
         await using var root = BuildRoot([leaf]);
@@ -323,16 +323,16 @@ public sealed class WeaverCompositionTests
         public void ConfigureServices(IServiceCollection services) => AddSecond(services, contract);
     }
 
-    [ShellFeature("AgentDuplicateRecordStoreProbe", DependsOn = new object[] { typeof(WeaverFeature) })]
+    [ShellFeature("WeaverDuplicateRecordStoreProbe", DependsOn = new object[] { typeof(WeaverFeature) })]
     public sealed class DuplicateRecordStoreProbeFeature() : DuplicateRegistrationProbeFeature(typeof(IWeaverSessionRecordStore));
 
-    [ShellFeature("AgentDuplicateAuditSinkProbe", DependsOn = new object[] { typeof(WeaverFeature) })]
+    [ShellFeature("WeaverDuplicateAuditSinkProbe", DependsOn = new object[] { typeof(WeaverFeature) })]
     public sealed class DuplicateAuditSinkProbeFeature() : DuplicateRegistrationProbeFeature(typeof(IWeaverAuditSink));
 
-    [ShellFeature("AgentDuplicateAuditReaderProbe", DependsOn = new object[] { typeof(WeaverFeature) })]
+    [ShellFeature("WeaverDuplicateAuditReaderProbe", DependsOn = new object[] { typeof(WeaverFeature) })]
     public sealed class DuplicateAuditReaderProbeFeature() : DuplicateRegistrationProbeFeature(typeof(IWeaverAuditReader));
 
-    [ShellFeature("AgentDuplicateAuditOwnershipProbe", DependsOn = new object[] { typeof(WeaverFeature) })]
+    [ShellFeature("WeaverDuplicateAuditOwnershipProbe", DependsOn = new object[] { typeof(WeaverFeature) })]
     public sealed class DuplicateAuditOwnershipProbeFeature() : DuplicateRegistrationProbeFeature(typeof(IWeaverAuditOwnership));
 
     private static Task<WeaverSessionPolicyResult> ChangeAsync(IWeaverSessionPolicyService policy, WeaverSession session, WeaverAutonomyMode mode, long expectedRevision)
@@ -362,7 +362,7 @@ public sealed class WeaverCompositionTests
         protected abstract void Replace(IServiceCollection services);
     }
 
-    [ShellFeature("AgentParticipatingReplacementProbe", DependsOn = new object[] { typeof(WeaverFeature) })]
+    [ShellFeature("WeaverParticipatingReplacementProbe", DependsOn = new object[] { typeof(WeaverFeature) })]
     public sealed class ParticipatingReplacementProbeFeature : LifecycleReplacementProbeFeature
     {
         protected override void Replace(IServiceCollection services)
@@ -372,42 +372,42 @@ public sealed class WeaverCompositionTests
         }
     }
 
-    [ShellFeature("AgentForwardingSessionReplacementProbe", DependsOn = new object[] { typeof(WeaverFeature) })]
+    [ShellFeature("WeaverForwardingSessionReplacementProbe", DependsOn = new object[] { typeof(WeaverFeature) })]
     public sealed class ForwardingSessionReplacementProbeFeature : LifecycleReplacementProbeFeature
     {
         protected override void Replace(IServiceCollection services) => services.Replace(ServiceDescriptor.Singleton<IWeaverSessionService>(sp =>
             new WeaverSessionPolicyTests.ForwardingSessions(new InMemoryWeaverSessionService(sp.GetRequiredService<IWeaverAuditSink>(), sp.GetRequiredService<TimeProvider>()))));
     }
 
-    [ShellFeature("AgentForwardingOrchestratorReplacementProbe", DependsOn = new object[] { typeof(WeaverFeature) })]
+    [ShellFeature("WeaverForwardingOrchestratorReplacementProbe", DependsOn = new object[] { typeof(WeaverFeature) })]
     public sealed class ForwardingOrchestratorReplacementProbeFeature : LifecycleReplacementProbeFeature
     {
         protected override void Replace(IServiceCollection services) => services.Replace(ServiceDescriptor.Scoped<IWeaverStreamingService>(sp =>
             new WeaverSessionPolicyTests.ForwardingStreaming(ActivatorUtilities.CreateInstance<DefaultWeaverTurnOrchestrator>(sp))));
     }
 
-    [ShellFeature("AgentForwardingInvokerReplacementProbe", DependsOn = new object[] { typeof(WeaverFeature) })]
+    [ShellFeature("WeaverForwardingInvokerReplacementProbe", DependsOn = new object[] { typeof(WeaverFeature) })]
     public sealed class ForwardingInvokerReplacementProbeFeature : LifecycleReplacementProbeFeature
     {
         protected override void Replace(IServiceCollection services) => services.Replace(ServiceDescriptor.Scoped<IWeaverToolInvoker>(sp =>
             new WeaverSessionPolicyTests.ForwardingInvoker(ActivatorUtilities.CreateInstance<DefaultWeaverToolInvoker>(sp))));
     }
 
-    [ShellFeature("AgentForwardingProposalReplacementProbe", DependsOn = new object[] { typeof(WeaverFeature) })]
+    [ShellFeature("WeaverForwardingProposalReplacementProbe", DependsOn = new object[] { typeof(WeaverFeature) })]
     public sealed class ForwardingProposalReplacementProbeFeature : LifecycleReplacementProbeFeature
     {
         protected override void Replace(IServiceCollection services) => services.Replace(ServiceDescriptor.Scoped<IWeaverProposalService>(sp =>
             new WeaverSessionPolicyTests.ForwardingProposals(ActivatorUtilities.CreateInstance<InMemoryWeaverProposalService>(sp))));
     }
 
-    [ShellFeature("AgentCustomInvokerReplacementProbe", DependsOn = new object[] { typeof(WeaverFeature) })]
+    [ShellFeature("WeaverCustomInvokerReplacementProbe", DependsOn = new object[] { typeof(WeaverFeature) })]
     public sealed class CustomInvokerReplacementProbeFeature : LifecycleReplacementProbeFeature
     {
         protected override void Replace(IServiceCollection services) => services.Replace(ServiceDescriptor.Scoped<IWeaverToolInvoker>(_ => new WeaverTestToolInvoker()));
     }
 
     /// <summary>An undocumented additive registration: the last registration wins everywhere, so it cannot participate either.</summary>
-    [ShellFeature("AgentAdditiveInvokerProbe", DependsOn = new object[] { typeof(WeaverFeature) })]
+    [ShellFeature("WeaverAdditiveInvokerProbe", DependsOn = new object[] { typeof(WeaverFeature) })]
     public sealed class AdditiveInvokerProbeFeature : LifecycleReplacementProbeFeature
     {
         protected override void Replace(IServiceCollection services) => services.AddScoped<IWeaverToolInvoker>(sp =>

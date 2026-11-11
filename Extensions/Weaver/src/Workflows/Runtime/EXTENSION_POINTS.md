@@ -1,4 +1,4 @@
-# Workflow Runtime Agent extension points
+# Workflow Runtime Weaver extension points
 
 Owner project: `Elsa.Weaver.Workflows.Runtime`
 Domain: `Elsa.Weaver.Workflows.Runtime`
@@ -12,7 +12,7 @@ Runtime-only host; Design-side workflow contributions (drafts, versions, the lib
 
 ## Cross-domain contributions
 
-These contribute to [Agent foundation](../../Elsa.Weaver/EXTENSION_POINTS.md) through `Elsa.Weaver.Core`, under the Studio module
+These contribute to [Weaver foundation](../../Elsa.Weaver/EXTENSION_POINTS.md) through `Elsa.Weaver.Core`, under the Studio module
 identity `Elsa.Studio.Workflows`, whose Executable Inspector discloses the context.
 
 - `IWeaverContextProvider`: `WorkflowExecutableContextProvider`, source `workflows.executable-context`, kinds

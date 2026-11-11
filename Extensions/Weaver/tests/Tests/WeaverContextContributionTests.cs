@@ -131,7 +131,7 @@ public sealed class WeaverContextContributionTests
         var failure = await Assert.ThrowsAsync<WeaverContributionException>(() =>
             Collector(scope).CollectAsync(WeaverPolicy.Default, Request()));
 
-        Assert.Contains("Duplicate agent context source", failure.Message);
+        Assert.Contains("Duplicate Weaver context source", failure.Message);
         Assert.Equal(0, first.Calls);
         Assert.Equal(0, second.Calls);
     }

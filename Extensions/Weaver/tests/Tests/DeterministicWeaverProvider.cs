@@ -71,7 +71,7 @@ internal sealed class DeterministicWeaverProvider : IWeaverProvider
             yield break;
         }
 
-        yield return Delta("Deterministic agent provider response.");
+        yield return Delta("Deterministic Weaver provider response.");
     }
 
     public Task<WeaverToolApprovalResult> ApproveToolAsync(WeaverProviderToolApprovalRequest request, CancellationToken cancellationToken = default)

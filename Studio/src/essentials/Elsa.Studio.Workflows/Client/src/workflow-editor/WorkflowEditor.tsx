@@ -144,7 +144,7 @@ const HttpTestRequestDialog = React.lazy(() =>
 
 export { PublicationReviewDialog } from "./PublicationReviewDialog";
 
-import type { WorkflowAgentController } from "../workflowAgent";
+import type { WorkflowWeaverController } from "../workflowWeaver";
 
 export function WorkflowEditor({
   context,
@@ -172,7 +172,7 @@ export function WorkflowEditor({
   definitionId: string;
   documentAdapter?: WorkflowEditorDocumentAdapter;
   ai: StudioWeaverRegistry;
-  weaver?: WorkflowAgentController;
+  weaver?: WorkflowWeaverController;
   propertyEditors: StudioActivityPropertyEditorContribution[];
   expressionEditors: StudioExpressionEditorContribution[];
   runRelatedLinks?: StudioWorkflowRunRelatedLinkContribution[];
@@ -417,7 +417,7 @@ export function WorkflowEditor({
   const findRisksAction = findAiAction(ai, "weaver.workflows.find-draft-risks");
   const proposeUpdateAction = findAiAction(ai, "weaver.workflows.propose-update");
   const explainVersionAction = findAiAction(ai, "weaver.workflows.explain-version");
-  const versionAgent = useMemo(() => ({ ai, controller: weaver, explainAction: explainVersionAction }), [ai, explainVersionAction, weaver]);
+  const versionWeaver = useMemo(() => ({ ai, controller: weaver, explainAction: explainVersionAction }), [ai, explainVersionAction, weaver]);
   const aiProviderAvailable = useAiProviderAvailability(ai);
 
   // The React Flow canvas mirror and every graph interaction (add/drag/connect/splice/delete/auto-layout)
@@ -622,7 +622,7 @@ export function WorkflowEditor({
 
   // Module-owned reviewed edits use the native document comparison/transaction seam.
   useWorkflowGraphOperationBatch({ draft: editableDraft, details, catalog, document: editorDoc, controller: weaver, holdForReview, reviewHeld, canEdit: editorDoc.canEdit, setStatus, setError, history: batchHistory,
-    resourceType: documentAdapter?.agentResource?.resourceType });
+    resourceType: documentAdapter?.weaverResource?.resourceType });
 
   useEffect(() => {
     if (!draft?.state.rootActivity || catalog.length === 0) return;
@@ -649,7 +649,7 @@ export function WorkflowEditor({
 
   // Mirror the live design onto window for Weaver's out-of-band tooling.
   useWorkflowContextBridge({ controller: weaver, clientId: ai.clientId, details, draft, selectedNode, selectedNodeId, selectedDescriptor, inspectedNode, inspectedDescriptor, inspectedIsScopeOwner, catalogByVersion, historical: editorDoc.pinned, validationErrors: combinedValidationErrors,
-    agentResource: documentAdapter?.agentResource });
+    weaverResource: documentAdapter?.weaverResource });
 
   // Memoized so contributed panels get a stable context identity and can bail out of re-renders
   // (React.memo / effect deps) while the editor re-renders for unrelated reasons.
@@ -1643,7 +1643,7 @@ export function WorkflowEditor({
             <div className="wf-properties-view">
               <section className="wf-properties-section">
                 <h3>Versions</h3>
-                <WorkflowVersionHistory definitionId={details.definition.id} versions={details.versions ?? []} agent={documentAdapter ? undefined : versionAgent} />
+                <WorkflowVersionHistory definitionId={details.definition.id} versions={details.versions ?? []} weaver={documentAdapter ? undefined : versionWeaver} />
               </section>
             </div>
           ) : canvasView !== "designer" ? (

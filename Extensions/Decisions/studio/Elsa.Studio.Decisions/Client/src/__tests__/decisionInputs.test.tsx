@@ -144,6 +144,14 @@ describe("decision input helpers", () => {
 });
 
 describe("Evaluate Decision Inputs editor", () => {
+  it("moves initial focus to the first table field when requested", async () => {
+    const api = stubApi();
+    api.backend.http.getJson.mockImplementation(async path => path.endsWith("/versions/v1") ? published : { ...asset, publishedVersionId: "v1" });
+    const { host } = mount(<DecisionInputsEditor api={api} descriptor={descriptor} syntax="Literal" value={{}} initialFocus context={expressionContext(pin("approval@v1"))} onChange={vi.fn()} />);
+    await vi.waitFor(() => expect(host.querySelector('[aria-label="amount value kind"]')).not.toBeNull());
+    expect(document.activeElement).toBe(host.querySelector('[aria-label="amount value kind"]'));
+  });
+
   it("leaves amount unset until entered and commits typed values without JSON", async () => {
     const api = stubApi(), onChange = vi.fn();
     api.backend.http.getJson.mockImplementation(async path => path.endsWith("/versions/v1") ? published : { ...asset, publishedVersionId: "v1" });

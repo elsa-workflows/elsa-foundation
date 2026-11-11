@@ -105,11 +105,81 @@ public sealed partial class BpmnDirectExecutionTests
         Assert.Equal(0, sweep.DeletedReferenceCount);
     }
 
+    /// <summary>
+    /// Live race (not interrupt-and-retry): the same in-process BPMN publish continues after a GC sweep
+    /// of unreferenced material between the model save and the fenced source-reference mint. SQLite, one host.
+    /// Allowed outcomes are a clean refusal or a valid commit; a dangling reference is a correctness bug.
+    /// </summary>
+    [Fact]
+    public async Task Bpmn_live_publish_sweeps_unreferenced_material_between_save_and_reference_mint()
+    {
+        var grace = new WorkflowExecutableGarbageCollectionOptions().ArtifactCreationGracePeriod;
+        Assert.Equal(TimeSpan.FromMinutes(5), grace);
+
+        var caller = new BpmnModelCaller("operator", null);
+        var definition = JsonSerializer.Deserialize<BpmnModelDefinition>(Material().Definition, Web)!;
+        var race = new LiveBpmnPublicationGcRace();
+        await using var host = await OpenAsync(configure: services => WrapExecutableStoreWithLiveSweep(services, race));
+        await using var scope = await ScopeAsync(host);
+        var runtime = scope.ServiceProvider.GetRequiredService<IBpmnModelRuntime>();
+        race.Armed = true;
+
+        BpmnPublishedModel? published = null;
+        Exception? error = null;
+        try
+        {
+            published = await runtime.PublishAsync(definition, "live-gc-race", caller);
+        }
+        catch (Exception exception)
+        {
+            error = exception;
+        }
+
+        Assert.True(race.Fired, "The live sweep must run after the BPMN model material save.");
+        Assert.NotNull(race.ArtifactId);
+        Assert.NotNull(race.Sweep);
+        Assert.NotNull(race.BeforeSweep);
+        Assert.True(race.BeforeSweep.ArtifactPresent, "The live sweep must run after the BPMN model material is persisted.");
+        Assert.Empty(race.BeforeSweep.LiveSourceReferenceIds);
+        Assert.Equal(1, race.Sweep.DeletedArtifactCount);
+        Assert.Equal(0, race.Sweep.DeletedReferenceCount);
+        Assert.NotEqual(DateTimeOffset.MaxValue, race.CreatedAt);
+
+        var materials = scope.ServiceProvider.GetRequiredService<IWorkflowExecutableStore>();
+        var sources = scope.ServiceProvider.GetRequiredService<IWorkflowExecutableSourceReferenceStore>();
+        var after = await CaptureBpmnAsync(materials, sources, race.ArtifactId);
+        var outcome = ClassifyLive(after, error, published);
+        log.WriteLine(
+            "bpmn live-publication GC: grace={0} createdAt={1:o} sweepNow={2:o} deletedArtifacts={3} error={4} source={5} classification={6}",
+            grace, race.CreatedAt, race.SweepNow, race.Sweep.DeletedArtifactCount, error?.GetType().FullName, published?.SourceReferenceId, outcome);
+        log.WriteLine("before sweep: {0}", race.BeforeSweep.Describe());
+        log.WriteLine("after live publish: {0}", after.Describe());
+
+        Assert.NotEqual(BpmnLivePublicationGcOutcome.UnsafeCommit, outcome);
+        Assert.True(
+            outcome is BpmnLivePublicationGcOutcome.RaceRefused or BpmnLivePublicationGcOutcome.CommittedValid,
+            "The live race must refuse cleanly or commit a valid definition; never a dangling reference.");
+        if (outcome == BpmnLivePublicationGcOutcome.CommittedValid)
+        {
+            Assert.NotNull(published);
+            Assert.True(after.ArtifactPresent);
+            Assert.Contains(race.ArtifactId, after.LiveSourceReferenceArtifactIds);
+            Assert.Equal(race.ArtifactId, published.Executable.ArtifactId);
+        }
+    }
+
     private static void WrapExecutableStoreAfterModelSave(IServiceCollection services)
     {
         services.RemoveAll<IWorkflowExecutableStore>();
         services.AddScoped<IWorkflowExecutableStore>(provider =>
             new InterruptAfterModelSaveStore(provider.GetRequiredService<EfWorkflowExecutableStore>()));
+    }
+
+    private static void WrapExecutableStoreWithLiveSweep(IServiceCollection services, LiveBpmnPublicationGcRace race)
+    {
+        services.RemoveAll<IWorkflowExecutableStore>();
+        services.AddScoped<IWorkflowExecutableStore>(provider =>
+            new SweepAfterModelSaveStore(provider.GetRequiredService<EfWorkflowExecutableStore>(), provider, race));
     }
 
     private static WorkflowExecutableReferenceGarbageCollector CreateCollector(IServiceProvider services, TimeSpan grace) =>
@@ -165,6 +235,18 @@ public sealed partial class BpmnDirectExecutionTests
         return BpmnInterruptedPublicationGcOutcome.LossSafelyRefusedOrRetryable;
     }
 
+    private static BpmnLivePublicationGcOutcome ClassifyLive(
+        BpmnInterruptedPublicationWitness after,
+        Exception? error,
+        BpmnPublishedModel? published)
+    {
+        if (HasUnsafeCommit(after) || error is null && published is not null && !after.ArtifactPresent)
+            return BpmnLivePublicationGcOutcome.UnsafeCommit;
+        if (error is null && published is null)
+            return BpmnLivePublicationGcOutcome.UnsafeCommit;
+        return error is null ? BpmnLivePublicationGcOutcome.CommittedValid : BpmnLivePublicationGcOutcome.RaceRefused;
+    }
+
     private static bool HasUnsafeCommit(BpmnInterruptedPublicationWitness witness) =>
         !witness.ArtifactPresent && witness.LiveSourceReferenceArtifactIds.Count > 0;
 
@@ -191,6 +273,48 @@ public sealed partial class BpmnDirectExecutionTests
             throw new PublicationInterruptedAfterModelSaveException();
         }
     }
+
+    private sealed class SweepAfterModelSaveStore : WorkflowExecutableStoreDecorator, IWorkflowExecutableStore
+    {
+        private readonly IServiceProvider services;
+        private readonly LiveBpmnPublicationGcRace race;
+
+        public SweepAfterModelSaveStore(IWorkflowExecutableStore inner, IServiceProvider services, LiveBpmnPublicationGcRace race)
+            : base(inner)
+        {
+            this.services = services;
+            this.race = race;
+        }
+
+        bool IWorkflowExecutableStore.SupportsModelMaterial => Inner.SupportsModelMaterial;
+        IWorkflowExecutableStore IWorkflowExecutableStore.GetMaterialStore() => Inner.GetMaterialStore();
+
+        ValueTask<RuntimeExecutionMaterial?> IWorkflowExecutableStore.FindMaterialAsync(
+            string artifactId, CancellationToken cancellationToken) =>
+            Inner.FindMaterialAsync(artifactId, cancellationToken);
+
+        ValueTask<RuntimeStorePage<RuntimeExecutionMaterial>> IWorkflowExecutableStore.ListMaterialPageAsync(
+            RuntimeStorePageRequest request, CancellationToken cancellationToken) =>
+            Inner.ListMaterialPageAsync(request, cancellationToken);
+
+        async ValueTask IWorkflowExecutableStore.SaveModelAsync(RuntimeModelMaterial material, CancellationToken cancellationToken)
+        {
+            await Inner.SaveModelAsync(material, cancellationToken);
+            if (!race.Armed || Interlocked.Exchange(ref race.FiredFlag, 1) != 0)
+                return;
+
+            var saved = await Inner.FindMaterialAsync(material.Identity.ArtifactId, cancellationToken)
+                        ?? throw new InvalidOperationException("The live sweep could not read the staged BPMN material.");
+            var sources = services.GetRequiredService<IWorkflowExecutableSourceReferenceStore>();
+            var grace = new WorkflowExecutableGarbageCollectionOptions().ArtifactCreationGracePeriod;
+            race.ArtifactId = saved.Identity.ArtifactId;
+            race.CreatedAt = saved.CreatedAt;
+            race.BeforeSweep = await CaptureBpmnAsync(Inner, sources, saved.Identity.ArtifactId);
+            race.SweepNow = saved.CreatedAt + grace + TimeSpan.FromMinutes(1);
+            race.Sweep = await CreateCollector(services, grace).SweepAsync(race.SweepNow, cancellationToken);
+            race.Fired = true;
+        }
+    }
 }
 
 internal sealed record BpmnInterruptedPublicationWitness(
@@ -208,6 +332,25 @@ internal enum BpmnInterruptedPublicationGcOutcome
 {
     LossSafelyRefusedOrRetryable = 1,
     UnsafeCommit = 2
+}
+
+internal enum BpmnLivePublicationGcOutcome
+{
+    RaceRefused = 1,
+    CommittedValid = 2,
+    UnsafeCommit = 3
+}
+
+internal sealed class LiveBpmnPublicationGcRace
+{
+    public bool Armed;
+    public bool Fired;
+    public int FiredFlag;
+    public string? ArtifactId;
+    public DateTimeOffset CreatedAt;
+    public DateTimeOffset SweepNow;
+    public WorkflowExecutableReferenceSweepResult? Sweep;
+    public BpmnInterruptedPublicationWitness? BeforeSweep;
 }
 
 internal sealed class PublicationInterruptedAfterModelSaveException()

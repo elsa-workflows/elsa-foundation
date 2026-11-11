@@ -20,7 +20,7 @@ using Xunit;
 namespace Elsa.Weaver.Tests;
 
 // Spec 1193 SC-009 (FR-027), the started Design-only shape: a real CShells shell with the Workflows Design API and the
-// Design-side workflow agent package, no Runtime-side package. A version is read through the real Design API version reader
+// Design-side workflow Weaver package, no Runtime-side package. A version is read through the real Design API version reader
 // over the version store; the Executable journey is explicitly unavailable. The Runtime-only shape is proven, AppDomain-wide,
 // in Elsa.Weaver.Workflows.Runtime.Tests (WorkflowRuntimeOnlyHostTests).
 public sealed class WorkflowDesignOnlyHostTests : IAsyncDisposable
