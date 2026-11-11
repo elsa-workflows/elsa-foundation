@@ -272,30 +272,41 @@ change detection on top. It is needed for one feature only: changing a read obje
 saves nothing (decisions 1, 6 and 9, and D-3). Conflict policy per node stays (decision 7). What changes:
 
 - **C1. A read creates no write.** A read returns a value: in a script plain JavaScript values (ADR 0046 V9), in C# a
-  copy. A variable a script only read is found unchanged by the comparison of C2 and writes nothing. Actual reads are
+  copy. A variable a script only read writes nothing. Actual reads are
   still recorded in ADR 0092's read set, for protection and conflict checking; only tracking every read goes. Reading a variable again in the same step returns the step's current
   value, so read-your-writes stays. This replaces "A read returns a tracked instance", and every read becomes what
   decision 2 calls a read-only read.
 - **C2. A write is explicit.** A step changes a variable by assigning it: `variables.x = v`, `setVariable('x', v)`,
-  `context.Variables.Set(target, value)`. In a script, changing a read value (`variables.order.total = 1`,
-  `getVariable('o').x = 1`) is also an explicit write. After the script, each variable it read is compared with a
-  fresh conversion of its original JSON, JavaScript with JavaScript (copy, compare, patch, ADR 0046 V9, which
-  replaces an earlier JSON-backed view with a change layer), and each
-  changed path becomes part of the variable's intent. This is not the comparison this amendment rejects: both sides
-  went through the same conversion, so a read never looks like a change. The `variables` root records a whole
-  assignment (`variables.order = …`) itself, so a replace is told apart from a change to a member. Elsa 3's nested
-  mutation therefore still converts inside RunJavaScript. In C#, changing a copy without `Set` is not a write.
+  `context.Variables.Set(target, value)`. In a script, changing a member of a read value (`variables.order.total = 1`,
+  `getVariable('o').x = 1`) is also an explicit write, and a whole assignment (`variables.order = …`) is told apart
+  from a change to a member. Elsa 3's nested mutation therefore still converts inside RunJavaScript. In C#, changing a
+  copy without `Set` is not a write.
+  - **Behaviour, not mechanism.** This amendment requires the behaviour of C1–C4, not a particular way of finding a
+    script's changes. The expected approach is copy, compare, patch (ADR 0046 V9): after the script, each variable it
+    read is compared with a fresh conversion of its original JSON, JavaScript with JavaScript, and each changed path
+    becomes part of the variable's intent. That is not the comparison this amendment rejects: both sides went through
+    the same conversion, so a read never looks like a change. The implementing spec chooses the mechanism and
+    validates it against these behaviours.
   - **Visibility,** which comes with write-through in scripts. Publication and inspection show which
     variables a script step writes; decision 3 already works out the may-write set. A warning is recorded when a script
     changes a read value without assigning it (`variables.order.total = 1` with no `variables.order = …`), so such a
     write is never unnoticed. A script that only wants a local copy copies explicitly (`{...variables.order}`), and the
     documentation says so.
-- **C3. The write keeps what the step did not touch.** An intent is assembled as the base JSON plus the step's
-  changes, so untouched members keep their stored text. It is applied as one whole-value intent, as decision 6 says.
-  This is a change within one step, not the cross-branch field patch rejected under *Alternatives considered*.
+- **C3. The write keeps what the step did not touch.** An intent is assembled as the base value plus the step's
+  changes and applied as one whole-value intent, as decision 6 says. This is a change within one step, not the
+  cross-branch field patch rejected under *Alternatives considered*. What is kept is data, not notation (ADR 0091
+  decision 3): a variable the step did not change keeps its exact stored text. Once a value is changed and written
+  back, its formatting (whitespace, property order, escape spellings) may change, in its untouched members too, while
+  its data semantics are kept: property names and their casing, string contents, value types, array order, and a
+  missing member versus `null`. A known loss of numeric precision is not formatting: a value that lost precision and
+  reaches a write is refused unless the published conversion contract explicitly accepts the loss (ADR 0046 V9).
+  - **The array exception.** A changed array is written as a whole, so its untouched elements are rewritten from the
+    script's values as well. When that would lose precision, the write is refused with ADR 0046's whole-array
+    diagnostic, which names the array path, the elements that lost precision with their stored and written values,
+    and the remedy of passing integers beyond 2^53 as strings.
   - **Replace or partial update** (reconciliation row 11b). Assigning a whole value (`variables.x = v`,
     `setVariable('x', v)`, C# `Set(target, value)`) replaces it: the step said what the value is. Changing a member
-    in a script (`variables.order.total = 1`, found by the comparison of C2) is a partial update: base plus that change. A whole-value
+    in a script (`variables.order.total = 1`, C2) is a partial update: base plus that change. A whole-value
     write never loses members silently: when C# writes back a value read as a type that dropped members of the stored
     value (ADR 0046 V6's declared loss), a warning names the dropped members. A C# step that needs a partial update
     reads the value as JSON (`JsonNode`) instead of a narrower type.
@@ -304,6 +315,12 @@ saves nothing (decisions 1, 6 and 9, and D-3). Conflict policy per node stays (d
   (reconciliation row 11c): a read-then-write is checked against its base version (C5) before C4 drops a no-op, so a
   write that only looks like a no-op because another branch already wrote the same value is still a lost update
   (ADR 0092 decision 2).
+  - **Two equalities, on purpose.** C2 and C4 judge equality differently. An explicit whole assignment
+    (`variables.x = v`, `setVariable('x', v)`, C# `Set`) is the author stating what the value is, so it is judged by
+    C4's meaning in ADR 0091's canonical form: assigning `…992` over a stored `…993` is a write. A member change in a
+    script is inferred from what the script did with what it read, so it is judged JavaScript against JavaScript: a
+    value that looks equal to the one read (`…992` over a stored `…993`) is unchanged, and writing it as a string
+    forces the write. Without this difference the same intent would be dropped in one form and written in the other.
 - **C5. Read-then-write conflicts use versions.** Decision 7 checks the variable versions the step read, which
   ADR 0092 records in the read set, instead of comparing
   serialized values. Its digest, for the 0 → 1 → 0 case, compares meaning, not text.
@@ -334,15 +351,15 @@ This answers A-3's question: writing from scripts is a general capability, not c
 - Decision 8: host-interop mode is the separately named, host-selected profile for script activities of the ADR 0046
   amendment (V10); input-binding expressions never get it.
 - *Alternatives considered*: "Values: variables are immutable values, changed only by assigning" was rejected because
-  C# authors expect to mutate what they read. This amendment adopts it for C#, unless changing a read object without assigning it proves a must-have
-  for C#, and
-  keeps mutation in scripts through copy, compare, patch (C2).
+  C# authors expect to mutate what they read. This amendment adopts it for C# and keeps member mutation in scripts
+  (C2).
 - *Consequences*, cost: no serialization of read variables at commit; only written variables are serialized.
 - Open question 1 (a script read-only read) is gone: every read is read-only.
 
 **What it touches elsewhere.**
-- **ADR 0046 amendment, V9:** scripts get plain JavaScript values; copy, compare, patch finds their changes,
-  which leave the script only as explicit writes (C2).
+- **ADR 0046 amendment, V9:** scripts get plain JavaScript values; their changes leave the script only as explicit
+  writes (C2), found by the mechanism the implementing spec chooses, copy, compare, patch being the expected one. Its
+  precision rules and whole-array diagnostic apply to C3.
 - **ADR 0089 amendment, A3:** the recorded reads are what C5 checks against.
 - **ADR 0091:** decision 3 rules out comparing stored text; its canonical form gives the equality of C4 and
   the digest of C5.
@@ -425,10 +442,13 @@ variable. Rejected for now: array patches by index land in the wrong place after
 - Elsa 3 `setVariable`, `set<Name>()` and nested mutation convert inside RunJavaScript and stay refused in
   expressions.
 - Serialization cost is measured against a large payload.
-- Under the amendment (reconciliation row 11d): copy, compare, patch finds nested changes, including through an
-  alias, keeps untouched members' text, and reports a lost digit that reaches a write; publication lists each script step's written variables; a change
-  without assignment is warned about; a narrower C# type written back warns about the members it drops; a conflicted
-  write that would be a no-op is still reported as a lost update.
+- Under the amendment (reconciliation row 11d): the chosen mechanism finds nested changes, including through an
+  alias; a variable the step did not change keeps its exact stored text; a changed value keeps the data semantics of
+  its untouched members; a lost digit that reaches a write is refused unless the published conversion contract
+  accepts it, and a changed array that would lose precision is refused with the whole-array diagnostic; an explicit
+  whole assignment of `…992` over `…993` writes, while an equal-looking member change does not; publication lists each
+  script step's written variables; a change without assignment is warned about; a narrower C# type written back warns
+  about the members it drops; a conflicted write that would be a no-op is still reported as a lost update.
 
 ## Open questions
 
