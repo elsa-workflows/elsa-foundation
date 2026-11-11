@@ -210,6 +210,8 @@ export interface ActivityCatalogResponse {
 export interface ActivityCatalogItem {
   activityVersionId: string;
   activityTypeKey: string;
+  /** The runtime type a compiled node carries when the CLR activity declares one (e.g. `Elsa.HttpEndpoint`); absent otherwise. */
+  runtimeActivityType?: string | null;
   version: string;
   category: string;
   displayName: string;

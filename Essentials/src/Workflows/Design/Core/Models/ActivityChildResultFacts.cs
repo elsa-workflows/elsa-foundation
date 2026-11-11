@@ -18,7 +18,9 @@ public sealed record ActivityChildResultFacts(
     /// pass of a loop itself, never links one run of a child to an earlier one: <see langword="false"/>. A structure
     /// in which a completed child schedules the next one links every pass to the pass before it, so a child that
     /// can be reached again from itself answers <see langword="true"/>. Repetition of the whole structure by an
-    /// enclosing one is the enclosing structure's to report, as <see cref="IsCyclicBackEdge"/> for the same child.
+    /// enclosing one is the enclosing structure's to report: asked about its child with that same child as producer
+    /// and consumer, it answers whether one run of the child can lead to a later run of it. Every structure above the
+    /// one that holds both must answer <see langword="false"/> there for the binding to be admitted.
     /// </remarks>
     public bool? EarlierProducerRunCanReachConsumer { get; init; }
 

@@ -141,6 +141,46 @@ public sealed class FlowchartChildResultFactsTests : IDisposable
         var self = _structures.AssessChildResult(flow, "first", "first");
         Assert.True(self.IsCyclicBackEdge);
         Assert.Equal(ActivityChildResultAvailability.Unavailable, self.Availability);
+        Assert.True(self.EarlierProducerRunCanReachConsumer);
+    }
+
+    /// <summary>
+    /// Asked about one child with itself, the Flowchart says whether that child can run again within one run of the
+    /// Flowchart, which is what a structure nested in that child relies on. A Flowchart whose analysis cannot be built
+    /// says nothing.
+    /// </summary>
+    [Fact]
+    public void A_child_has_earlier_runs_behind_its_later_runs_exactly_when_it_is_on_a_cycle()
+    {
+        var flow = Flowchart(["start", "steps", "end"], [("start", "steps"), ("steps", "start"), ("steps", "end")]);
+
+        Assert.True(_structures.AssessChildResult(flow, "steps", "steps").EarlierProducerRunCanReachConsumer);
+        Assert.False(_structures.AssessChildResult(flow, "end", "end").EarlierProducerRunCanReachConsumer);
+        var unbuilt = _structures.AssessChildResult(Flowchart(["start", "steps"], [("start", "steps")], "not-a-child"), "steps", "steps");
+        Assert.Equal(ActivityChildResultAvailability.Unknown, unbuilt.Availability);
+        Assert.Null(unbuilt.EarlierProducerRunCanReachConsumer);
+    }
+
+    /// <summary>A definite result always comes with the occurrence fact, so a binding is never offered on availability alone.</summary>
+    [Fact]
+    public void A_definite_result_always_states_whether_an_earlier_producer_run_can_reach_the_reader()
+    {
+        string[] children = ["start", "left", "right", "merge", "end"];
+        var flows = new[]
+        {
+            Flowchart(children, [("start", "left"), ("start", "right"), ("left", "merge"), ("right", "merge"), ("merge", "end")]),
+            Flowchart(children, [("start", "left"), ("left", "merge"), ("merge", "start"), ("merge", "end"), ("right", "end")]),
+            Flowchart(children, [("start", "left"), ("left", "end")], null)
+        };
+
+        foreach (var flow in flows)
+        foreach (var producer in children)
+        foreach (var consumer in children)
+        {
+            var facts = _structures.AssessChildResult(flow, producer, consumer);
+            if (facts.Availability == ActivityChildResultAvailability.Definite)
+                Assert.NotNull(facts.EarlierProducerRunCanReachConsumer);
+        }
     }
 
     [Theory]
