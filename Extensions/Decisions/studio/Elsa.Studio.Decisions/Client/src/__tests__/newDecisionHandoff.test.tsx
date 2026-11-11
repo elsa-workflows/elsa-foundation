@@ -119,6 +119,30 @@ describe("New decision handoff to the Evaluate Decision picker", () => {
     expect(tabs.token(1)).not.toBe(tabs.token(0));
   });
 
+  it("keeps the author's pick even when they pick the original decision again", async () => {
+    const api = pickerApi(), tabs = workspaceTabs(), onValue = vi.fn();
+    const { host } = mount(<Workspace api={api} workflowVisible onValue={onValue} />);
+    await vi.waitFor(() => expect(picker(host).querySelector('option[value="other"]')).not.toBeNull());
+    click(button(host, "New decision")); select(picker(host), "other"); select(picker(host), "approval");
+    completeNewDecisionHandoff(tabs.token(), { id: "created", name: created.name });
+    await new Promise(resolve => setTimeout(resolve, 20));
+    expect(onValue).toHaveBeenCalledTimes(2); expect(picker(host).value).toBe("approval");
+  });
+
+  it("lists the selected decision after a late save, so it stays offered when the author picks another", async () => {
+    const api = pickerApi(), tabs = workspaceTabs(), onValue = vi.fn(); let saved = false;
+    api.backend.http.getJson.mockImplementation(async (path: string) => ({ items: path.endsWith("/decisions") ? saved ? [asset, other, created] : [asset, other] : [] }) as never);
+    const { host } = mount(<Workspace api={api} workflowVisible onValue={onValue} />);
+    await vi.waitFor(() => expect(picker(host).querySelector('option[value="other"]')).not.toBeNull());
+    click(button(host, "New decision"));
+    saved = true; completeNewDecisionHandoff(tabs.token(), { id: "created", name: created.name });
+    await vi.waitFor(() => expect(picker(host).value).toBe("created"));
+    await vi.waitFor(() => expect(api.backend.http.getJson.mock.calls.filter(([path]) => String(path).endsWith("/decisions")).length).toBe(2));
+    await new Promise(resolve => setTimeout(resolve, 20));
+    select(picker(host), "other");
+    expect(picker(host).querySelector('option[value="created"]')?.textContent).toBe(created.name);
+  });
+
   it("ends the flow when the author changes the version before saving", async () => {
     const api = pickerApi(), tabs = workspaceTabs(), onChange = vi.fn(), published = { id: "v1", assetId: asset.id, number: 1, name: asset.name, xml: asset.xml, sourceHash: "hash1", publishedAt: asset.createdAt };
     api.backend.http.getJson.mockImplementation(async (path: string) => ({ items: path.endsWith("/versions") ? [published] : [asset, other] }) as never);

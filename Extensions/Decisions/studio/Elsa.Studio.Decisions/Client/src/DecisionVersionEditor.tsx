@@ -16,7 +16,7 @@ export function DecisionVersionEditor({ api, value, disabled, onChange, onValida
   // never react. The flow belongs to this mounted picker: selecting another activity remounts it and ends
   // the flow by design, because the editor context does not identify the workflow to hand it back to.
   const handoff = useRef<{ token: string; baseline: string; armed: boolean } | null>(null);
-  const [created, setCreated] = useState<NewDecisionResult | null>(null);
+  const [created, setCreated] = useState<NewDecisionResult | null>(null), [listGeneration, setListGeneration] = useState(0);
   const current = useRef({ selected, disabled, onChange });
   current.current = { selected, disabled, onChange };
   // The author chose a value themselves: the flow may no longer select, but its token stays so the next
@@ -47,7 +47,8 @@ export function DecisionVersionEditor({ api, value, disabled, onChange, onValida
     handoff.current = null;
     const latest = current.current;
     if (!pending.armed || latest.disabled || latest.selected !== pending.baseline) return;
-    setCreated(result); setError("");
+    // The list may have reloaded before the save landed (the author returned early), so list it again.
+    setCreated(result); setError(""); setListGeneration(value => value + 1);
     latest.onChange(`${result.id}@latest`);
     // An action's result goes to the host's notifications (module UI guidance); its toast region also
     // announces it, which a region revealed together with the returning tab would not.
@@ -73,7 +74,7 @@ export function DecisionVersionEditor({ api, value, disabled, onChange, onValida
       setLoadingVersions(false);
     });
   }, [api]);
-  useEffect(() => { let active = true; void listDecisions(api).then(items => { if (active) setAssets(items); }, failure => { if (active) setError(failureMessage(failure)); }).finally(() => { if (active) setLoading(false); }); return () => { active = false; }; }, [api, freshness]);
+  useEffect(() => { let active = true; void listDecisions(api).then(items => { if (active) setAssets(items); }, failure => { if (active) setError(failureMessage(failure)); }).finally(() => { if (active) setLoading(false); }); return () => { active = false; }; }, [api, freshness, listGeneration]);
   useEffect(() => {
     if (!assetId) {
       versionsGeneration.current += 1;
