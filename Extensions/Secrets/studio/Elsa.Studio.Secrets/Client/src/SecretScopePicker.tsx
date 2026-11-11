@@ -1,4 +1,6 @@
 import React, { useId, useMemo, useState } from "react";
+import { StudioButton } from "@elsa-workflows/studio-ui";
+import { SecretFormField } from "./SecretFormField";
 import type { SecretScopeDescriptor } from "./secretTypes";
 
 const searchableScopeCount = 8;
@@ -19,7 +21,9 @@ export function SecretScopePicker({
   error = false,
   onChange,
   onRetry,
-  externalMatchingHintId
+  externalMatchingHintId,
+  compact = false,
+  disabled = false
 }: {
   value: string;
   options?: SecretScopeDescriptor[];
@@ -28,6 +32,8 @@ export function SecretScopePicker({
   onChange(value: string): void;
   onRetry?(): void;
   externalMatchingHintId?: string;
+  compact?: boolean;
+  disabled?: boolean;
 }) {
   const id = useId();
   const [customMode, setCustomMode] = useState(false);
@@ -52,33 +58,13 @@ export function SecretScopePicker({
   const selectedDescription = selectedScope?.description?.trim();
   const selectedSource = selectedScope?.source?.trim();
   const hintId = `scope-hint-${id}`;
+  const RefreshButton = compact ? StudioButton : "button";
   const describedBy = externalMatchingHintId ? `${externalMatchingHintId} ${hintId}` : hintId;
 
-  return (
-    <div className="secrets-scope-picker">
-      <div className="secrets-scope-heading">
-        <label htmlFor={`scope-select-${id}`}>Scope</label>
-        {onRetry ? (
-          <button type="button" onClick={onRetry} disabled={loading} aria-busy={loading}>
-            Refresh scope suggestions
-          </button>
-        ) : null}
-      </div>
-      {searchable ? (
-        <label htmlFor={`scope-search-${id}`}>
-          Search scopes
-          <input
-            id={`scope-search-${id}`}
-            type="search"
-            value={search}
-            onChange={event => setSearch(event.target.value)}
-            placeholder="Search suggested scopes"
-            autoComplete="off"
-          />
-        </label>
-      ) : null}
-      <select
-        id={`scope-select-${id}`}
+  function renderSelect(attributes: React.SelectHTMLAttributes<HTMLSelectElement>) {
+    return (<select
+        {...attributes}
+        disabled={disabled}
         value={selectValue}
         aria-describedby={describedBy}
         onChange={event => {
@@ -98,18 +84,40 @@ export function SecretScopePicker({
           <option key={option.name} value={option.name}>{option.displayName || option.name}</option>
         ))}
         {!isCustom ? <option value={customOptionValue}>Custom…</option> : null}
-      </select>
-      {isCustom ? (
+      </select>);
+  }
+
+  return (
+    <div className="secrets-scope-picker">
+      <div className="secrets-scope-heading">
+        {compact ? null : <label htmlFor={`scope-select-${id}`}>Scope</label>}
+        {onRetry ? (
+          <RefreshButton type="button" onClick={onRetry} disabled={loading || disabled} aria-busy={loading}>
+            Refresh scope suggestions
+          </RefreshButton>
+        ) : null}
+      </div>
+      {searchable ? compact ? (
+        <SecretFormField label="Search scopes" value={search} disabled={disabled}>
+          {attributes => <input {...attributes} type="search" value={search} placeholder=" " autoComplete="off" onChange={event => setSearch(event.target.value)} />}
+        </SecretFormField>
+      ) : (
+        <label htmlFor={`scope-search-${id}`}>
+          Search scopes
+          <input id={`scope-search-${id}`} type="search" value={search} disabled={disabled} onChange={event => setSearch(event.target.value)} placeholder="Search suggested scopes" autoComplete="off" />
+        </label>
+      ) : null}
+      {compact ? <SecretFormField label="Scope" controlId={`scope-select-${id}`} value={selectValue} raised disabled={disabled}>
+        {attributes => renderSelect(attributes)}
+      </SecretFormField> : renderSelect({ id: `scope-select-${id}` })}
+      {isCustom ? compact ? (
+        <SecretFormField label="Custom scope value" controlId={`scope-custom-${id}`} value={value} disabled={disabled}>
+          {attributes => <input {...attributes} value={value} aria-describedby={describedBy} placeholder=" " autoComplete="off" onChange={event => onChange(event.target.value)} />}
+        </SecretFormField>
+      ) : (
         <label htmlFor={`scope-custom-${id}`}>
           Custom scope value
-          <input
-            id={`scope-custom-${id}`}
-            value={value}
-            aria-describedby={describedBy}
-            onChange={event => onChange(event.target.value)}
-            placeholder="Enter a scope value"
-            autoComplete="off"
-          />
+          <input id={`scope-custom-${id}`} value={value} disabled={disabled} aria-describedby={describedBy} onChange={event => onChange(event.target.value)} placeholder="Enter a scope value" autoComplete="off" />
         </label>
       ) : null}
       <div id={hintId}>
@@ -126,7 +134,7 @@ export function SecretScopePicker({
         {error ? (
           <p className="secrets-field-hint" role="alert">
             Scope suggestions could not be refreshed. Existing scope values are still available.
-            {onRetry ? <> <button type="button" onClick={onRetry} disabled={loading}>Retry scope suggestions</button></> : null}
+            {onRetry ? <> <RefreshButton type="button" onClick={onRetry} disabled={loading || disabled}>Retry scope suggestions</RefreshButton></> : null}
           </p>
         ) : null}
       </div>

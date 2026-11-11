@@ -142,6 +142,24 @@ describe("Create dialog regression contract", () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
+  it("retains native label and invalid-help associations when validation reveals another tab", () => {
+    const { container, onSave } = renderDialog("create");
+    const name = fieldControl<HTMLInputElement>(container, "Technical name");
+    expect(name.labels?.[0]?.control).toBe(name);
+    change(name, "has spaces");
+    expect(name.getAttribute("aria-invalid")).toBe("true");
+    const help = document.getElementById(name.getAttribute("aria-describedby")!);
+    expect(help?.textContent).toContain("Use letters, numbers");
+    flushSync(() => editorTab(container, "Details").click());
+    submit(container);
+    expect(editorTab(container, "Secret").getAttribute("aria-selected")).toBe("true");
+    expect(document.activeElement).toBe(name);
+    expect(onSave).not.toHaveBeenCalled();
+    change(name, "DbConnectionString");
+    expect(name.hasAttribute("aria-invalid")).toBe(false);
+    expect(document.getElementById(name.getAttribute("aria-describedby")!)?.textContent).toContain("Casing is preserved");
+  });
+
   it("opens the store recovery section when a type has no compatible provider", () => {
     const { container, onSave } = renderDialog("create", { descriptors: unavailableStoreDescriptors });
     change(fieldControl(container, "Value"), "authored-value"); selectOption(fieldControl(container, "Type"), "JSON"); submit(container);
@@ -197,9 +215,19 @@ describe("Create dialog regression contract", () => {
     expect(editorTab(container, "Details").textContent).not.toContain("Private title");
     flushSync(() => editorTab(container, "Storage & lifetime").click());
     const scope = fieldControl<HTMLSelectElement>(container, "Scope");
-    const hints = scope.getAttribute("aria-describedby")!.split(/\s+/).map(id => document.getElementById(id)?.textContent).join(" ");
+    const descriptionIds = scope.getAttribute("aria-describedby")!.split(/\s+/);
+    expect(descriptionIds).toHaveLength(2);
+    expect(new Set(descriptionIds).size).toBe(2);
+    for (const id of descriptionIds) expect(document.getElementById(id)?.isConnected).toBe(true);
+    const hints = descriptionIds.map(id => document.getElementById(id)?.textContent).join(" ");
     expect(hints).toContain("Scope does not grant access.");
-    expect(panelFor(container, "Storage & lifetime").contains(document.getElementById(scope.getAttribute("aria-describedby")!.split(/\s+/)[0]))).toBe(true);
+    expect(panelFor(container, "Storage & lifetime").contains(document.getElementById(descriptionIds[0]))).toBe(true);
+    expect([...container.querySelectorAll("p")].filter(p => p.textContent?.includes("Scope does not grant access."))).toHaveLength(1);
+    selectOption(scope, "Custom…");
+    const custom = fieldControl<HTMLInputElement>(container, "Custom scope value");
+    expect(custom.getAttribute("aria-describedby")).toBe(scope.getAttribute("aria-describedby"));
+    change(custom, " Team:Production ");
+    expect(custom.value).toBe(" Team:Production ");
   });
 
   it("preserves Value and Configuration key through Store switching and remasks Value on Type change", () => {
@@ -304,13 +332,18 @@ describe("Create dialog regression contract", () => {
 
   it("can navigate to advisory option recovery and return without discarding the secret", () => {
     const retry = vi.fn(); const { container, render } = renderDialog("create", { descriptors: scopeDescriptors, onRetryScopeCatalog: retry });
-    change(fieldControl(container, "Value"), "material");
+    const value = fieldControl<HTMLInputElement>(container, "Value");
+    change(value, "material"); value.focus();
     render("create", { descriptors: scopeDescriptors, scopeCatalogError: true, onRetryScopeCatalog: retry });
+    expect(document.activeElement).toBe(value);
+    expect(editorTab(container, "Secret").getAttribute("aria-selected")).toBe("true");
+    expect(editorTab(container, "Storage & lifetime").textContent).toContain("needs attention");
     flushSync(() => editorTab(container, "Storage & lifetime").click());
     expect(panelFor(container, "Storage & lifetime").hidden).toBe(false);
     const button = [...container.querySelectorAll<HTMLButtonElement>("button")].find(b => b.textContent === "Retry secret options")!; flushSync(() => button.click());
     expect(retry).toHaveBeenCalledOnce();
     render("create", { descriptors: scopeDescriptors, scopeCatalogError: false, onRetryScopeCatalog: retry });
+    expect(editorTab(container, "Storage & lifetime").textContent).not.toContain("needs attention");
     flushSync(() => editorTab(container, "Secret").click());
     expect(fieldControl<HTMLInputElement>(container, "Value").value).toBe("material");
   });

@@ -3,6 +3,7 @@ import { Eye, EyeOff } from "lucide-react";
 import { useDialogFocus } from "@elsa-workflows/studio-sdk";
 import { StudioButton, StudioDialogFooter } from "@elsa-workflows/studio-ui";
 import type { CreateSecretRequest, RotateSecretRequest, SecretDescriptorsResponse, SecretMetadata } from "./secretTypes";
+import { SecretFormField } from "./SecretFormField";
 import { ScopeMatchingHint, SecretScopePicker } from "./SecretScopePicker";
 
 import { SecretEditorTabs, type SecretEditorSection, type SecretEditorState } from "./SecretEditorTabs";
@@ -49,6 +50,7 @@ export function CreateSecretForm({ descriptors, scopeCatalogLoading = false, sco
   const [error, setError] = useState("");
   const [active, setActive] = useState<SecretEditorSection>("secret");
   const [invalid, setInvalid] = useState("");
+  const [invalidField, setInvalidField] = useState("");
   const [focusRequest, setFocusRequest] = useState<{ field: string }>();
   const formRef = useRef<HTMLFormElement>(null);
   const initiallyFocused = useRef(false);
@@ -56,6 +58,8 @@ export function CreateSecretForm({ descriptors, scopeCatalogLoading = false, sco
   const errorRef = useRef<HTMLParagraphElement>(null);
   const descriptionInputId = useId();
   const scopeMatchingHintId = useId();
+  const trimmedName = name.trim();
+  const nameInvalid = trimmedName.length > 0 && !technicalNamePattern.test(trimmedName);
   const selectedType = descriptors.types.find(type => type.name === typeName);
   const supportedStores = useMemo(() => storesForType(descriptors, typeName), [descriptors, typeName]);
   const compatible = supportedStores.some(store => store.name === storeName);
@@ -64,17 +68,16 @@ export function CreateSecretForm({ descriptors, scopeCatalogLoading = false, sco
   useEffect(() => { onStateChange?.({ dirty, busy: submitting }); }, [dirty, submitting, onStateChange]);
   useLayoutEffect(() => { if (focusRequest) formRef.current?.querySelector<HTMLElement>(`[data-secret-field="${focusRequest.field}"]`)?.focus(); }, [focusRequest]);
   useEffect(() => { if (error) errorRef.current?.focus(); }, [error]);
-  function fail(section: SecretEditorSection, field: string, message: string) { setActive(section); setInvalid(message); setFocusRequest({ field }); }
+  function fail(section: SecretEditorSection, field: string, message: string) { setActive(section); setInvalid(message); setInvalidField(field); setFocusRequest({ field }); }
   async function submit(event: React.FormEvent) {
     event.preventDefault();
     if (submittingRef.current) return;
-    const trimmedName = name.trim();
     if (!trimmedName || !technicalNamePattern.test(trimmedName)) { fail("secret", "name", trimmedName ? "Use letters, numbers, dot, dash, underscore or colon." : "Enter a technical name."); return; }
     if (!selectedType) { fail("secret", "type", "No secret type is available. Refresh secret options."); return; }
     if (!compatible) { fail("storage", "store", "No compatible secret store is available. Refresh secret options or choose another type."); return; }
     if (usesConfigurationKey ? !configurationKey.trim() : !value) { fail("secret", usesConfigurationKey ? "configuration" : "value", usesConfigurationKey ? "Enter a configuration key." : "Enter a secret value."); return; }
     if (expiresAt && Number.isNaN(new Date(expiresAt).getTime())) { fail("storage", "expires", "Enter a valid expiry date."); return; }
-    submittingRef.current = true; setSubmitting(true); setError(""); setInvalid("");
+    submittingRef.current = true; setSubmitting(true); setError(""); setInvalid(""); setInvalidField("");
     try {
       await onSave({ name: trimmedName, displayName: displayName.trim() || trimmedName, description: description.trim() || undefined, typeName, storeName,
         scope: scope.length > 0 ? scope : undefined, tags: parseTags(tags), value: usesConfigurationKey ? undefined : value,
@@ -83,36 +86,49 @@ export function CreateSecretForm({ descriptors, scopeCatalogLoading = false, sco
     } catch (failure) { setError(failure instanceof Error ? failure.message : "Secret could not be created."); }
     finally { submittingRef.current = false; setSubmitting(false); }
   }
-  const fieldChanged = () => setInvalid("");
-  return <form ref={formRef} className="secrets-create-form secrets-tabbed-form" noValidate onSubmit={event => void submit(event)} onChange={fieldChanged}>
+  const fieldChanged = () => { setInvalid(""); setInvalidField(""); };
+  const fieldError = (field: string) => invalidField === field ? invalid : undefined;
+  return <form ref={formRef} className="secrets-create-form secrets-tabbed-form" aria-busy={submitting} noValidate onSubmit={event => void submit(event)} onChange={fieldChanged}>
     {error ? <p ref={errorRef} className="secrets-field-error" role="alert" tabIndex={-1}>{error}</p> : null}
     {invalid ? <p className="secrets-field-error" role="alert">{invalid}</p> : null}
     <fieldset className="secrets-editor-fields" disabled={submitting}>
     <SecretEditorTabs active={active} onSelect={setActive}
       detailsCount={[displayName.trim(), description.trim(), parseTags(tags).length].filter(Boolean).length}
-      storageCount={[scope, expiresAt, storeName !== defaultStoreNameForType(descriptors, typeName)].filter(Boolean).length}>
+      storageCount={[scope, expiresAt, storeName !== defaultStoreNameForType(descriptors, typeName)].filter(Boolean).length}
+      storageNeedsAttention={scopeCatalogError || !compatible || invalidField === "store" || invalidField === "expires"}>
       {{ secret: <>
-        <div className="secrets-editor-grid"><Field label="Technical name" value={name} onChange={setName} onBlur={() => setName(name.trim())} autoComplete="off" field="name" />
-          <label>Type<select data-secret-field="type" value={typeName} onChange={event => { const next = event.target.value; setTypeName(next); setStoreName(defaultStoreNameForType(descriptors, next)); }} disabled={submitting}>
+        <div className="secrets-editor-grid"><SecretFormField label="Technical name" value={name} disabled={submitting}
+          hint="Casing is preserved; names are matched case-insensitively. Use letters, numbers, dot, dash, underscore, or colon."
+          error={nameInvalid ? "Use letters, numbers, dot, dash, underscore, or colon." : fieldError("name")}>
+          {attributes => <input {...attributes} data-secret-field="name" data-dialog-initial-focus value={name} placeholder=" " autoComplete="off" onChange={event => setName(event.target.value)} onBlur={() => setName(trimmedName)} />}
+        </SecretFormField>
+          <SecretFormField label="Type" value={typeName} raised disabled={submitting} error={fieldError("type")}>
+          {attributes => <select {...attributes} data-secret-field="type" value={typeName} onChange={event => { const next = event.target.value; setTypeName(next); setStoreName(defaultStoreNameForType(descriptors, next)); }}>
             {descriptors.types.map(type => <option key={type.name} value={type.name}>{type.displayName || type.name}</option>)}
-          </select></label></div>
-        {usesConfigurationKey ? <Field label="Configuration key" value={configurationKey} onChange={setConfigurationKey} autoComplete="off" field="configuration" />
-          : <SecretValueField key={typeName} label="Value" value={value} typeName={typeName} editorHint={selectedType?.editorHint ?? null} onChange={setValue} />}
-        <p className="secrets-field-hint">Names preserve casing; references match without case sensitivity.</p>
+          </select>}
+          </SecretFormField></div>
+        {usesConfigurationKey ? <CompactTextField label="Configuration key" value={configurationKey} onChange={setConfigurationKey} autoComplete="off" field="configuration" disabled={submitting} error={fieldError("configuration")} />
+          : <SecretValueField key={typeName} label="Value" value={value} typeName={typeName} editorHint={selectedType?.editorHint ?? null} onChange={setValue} compact disabled={submitting} error={fieldError("value")} hint={typeName === "text" ? undefined : selectedType?.description ?? undefined} />}
       </>, details: <>
-        <div className="secrets-editor-grid"><Field label="Display name" value={displayName} onChange={setDisplayName} /><Field label="Tags" value={tags} onChange={setTags} placeholder="comma-separated" /></div>
-        <div className="secrets-description-field"><label htmlFor={descriptionInputId}>Description</label><textarea id={descriptionInputId} value={description} onChange={event => setDescription(event.target.value)} rows={3} /></div>
+        <div className="secrets-editor-grid"><CompactTextField label="Display name" value={displayName} onChange={setDisplayName} disabled={submitting} /><CompactTextField label="Tags" value={tags} onChange={setTags} hint="Separate tags with commas." disabled={submitting} /></div>
+        <SecretFormField label="Description" controlId={descriptionInputId} value={description} raised disabled={submitting}>
+          {attributes => <textarea {...attributes} value={description} onChange={event => setDescription(event.target.value)} rows={3} />}
+        </SecretFormField>
       </>, storage: <>
-        {supportedStores.length > 0 && (supportedStores.length > 1 || !compatible) ? <label>Store<select data-secret-field="store" value={storeName} onChange={event => setStoreName(event.target.value)} disabled={submitting}>
+        {supportedStores.length > 0 && (supportedStores.length > 1 || !compatible) ? <SecretFormField label="Store" value={storeName} raised disabled={submitting} error={fieldError("store")}>
+          {attributes => <select {...attributes} data-secret-field="store" value={storeName} onChange={event => setStoreName(event.target.value)}>
           {!compatible ? <option value={storeName} disabled>{storeName || "Selected store"} (unavailable)</option> : null}
           {supportedStores.map(store => <option key={store.name} value={store.name}>{store.displayName || store.name}</option>)}
-        </select></label> : null}
+        </select>}
+        </SecretFormField> : null}
         {!compatible ? <p data-secret-field="store" tabIndex={-1} className="secrets-field-error" role="alert">No compatible secret store is available for this type.</p> : null}
         {scopeCatalogError ? <p className="secrets-field-error" role="alert">Secret options could not be refreshed. Previously loaded options remain available.</p> : null}
         {(scopeCatalogError || !compatible) && onRetryScopeCatalog ? <StudioButton data-secret-field={!compatible ? "store" : undefined} onClick={onRetryScopeCatalog} disabled={scopeCatalogLoading}>Retry secret options</StudioButton> : null}
-        <SecretScopePicker value={scope} options={descriptors.scopes} loading={scopeCatalogLoading} error={scopeCatalogError} onChange={setScope} onRetry={onRetryScopeCatalog} externalMatchingHintId={scopeMatchingHintId} />
+        <SecretScopePicker value={scope} options={descriptors.scopes} loading={scopeCatalogLoading} error={scopeCatalogError} onChange={setScope} onRetry={onRetryScopeCatalog} externalMatchingHintId={scopeMatchingHintId} compact disabled={submitting} />
         <ScopeMatchingHint id={scopeMatchingHintId} concise />
-        <label>Expires <span className="secrets-field-hint">(optional)</span><input data-secret-field="expires" type="datetime-local" value={expiresAt} onChange={event => setExpiresAt(event.target.value)} /></label>
+        <SecretFormField label="Expires" value={expiresAt} raised disabled={submitting} error={fieldError("expires")}>
+          {attributes => <input {...attributes} data-secret-field="expires" type="datetime-local" value={expiresAt} onChange={event => setExpiresAt(event.target.value)} />}
+        </SecretFormField>
       </> }}
     </SecretEditorTabs>
     </fieldset>
@@ -214,10 +230,31 @@ function Field({
   );
 }
 
-function SecretValueField({ label, value, typeName, editorHint, onChange }: { label: string; value: string; typeName: string; editorHint?: string | null; onChange(value: string): void }) {
+function CompactTextField({ label, value, onChange, hint, disabled, autoComplete, field, error }: {
+  label: string; value: string; onChange(value: string): void; hint?: React.ReactNode; disabled?: boolean; autoComplete?: string; field?: string; error?: React.ReactNode;
+}) {
+  return <SecretFormField label={label} value={value} hint={hint} error={error} disabled={disabled}>
+    {attributes => <input {...attributes} data-secret-field={field} value={value} placeholder=" " autoComplete={autoComplete} onChange={event => onChange(event.target.value)} />}
+  </SecretFormField>;
+}
+
+function SecretValueField({ label, value, typeName, editorHint, onChange, compact = false, disabled, hint, error }: {
+  label: string; value: string; typeName: string; editorHint?: string | null; onChange(value: string): void;
+  compact?: boolean; disabled?: boolean; hint?: React.ReactNode; error?: React.ReactNode;
+}) {
   const inputId = useId();
   const [visible, setVisible] = useState(false);
   const multiline = editorHint === "multiline" || typeName === "rsa-key" || typeName === "x509-certificate";
+  if (compact) {
+    const toggle = multiline ? undefined : <button type="button" disabled={disabled} aria-label={visible ? "Hide value" : "Show value"} aria-pressed={visible} aria-controls={inputId} onClick={() => setVisible(current => !current)}>
+      {visible ? <EyeOff size={16} aria-hidden="true" /> : <Eye size={16} aria-hidden="true" />}
+    </button>;
+    return <SecretFormField label={label} controlId={inputId} value={value} hint={hint} error={error} raised={multiline} disabled={disabled} trailing={toggle}>
+      {attributes => multiline
+        ? <textarea {...attributes} data-secret-field="value" value={value} rows={6} autoComplete="new-password" spellCheck={false} onChange={event => onChange(event.target.value)} />
+        : <input {...attributes} data-secret-field="value" type={visible ? "text" : "password"} value={value} placeholder=" " autoComplete="new-password" spellCheck={false} onChange={event => onChange(event.target.value)} />}
+    </SecretFormField>;
+  }
   return (
     <div className="secrets-value-field">
       <label htmlFor={inputId}>{label}</label>

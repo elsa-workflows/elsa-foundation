@@ -3,6 +3,7 @@ import { useDialogFocus } from "@elsa-workflows/studio-sdk";
 import { StudioButton, StudioDialogFooter } from "@elsa-workflows/studio-ui";
 import { CopySecretNameButton } from "./CopySecretNameButton";
 import { ScopeMatchingHint } from "./SecretScopePicker";
+import { SecretFormField } from "./SecretFormField";
 import { SecretEditorTabs, type SecretEditorSection, type SecretEditorState } from "./SecretEditorTabs";
 import type { SecretDescriptorsResponse, SecretMetadata } from "./secretTypes";
 
@@ -57,7 +58,7 @@ function SecretMetadataForm({ secret, descriptors, busy = false, onSave, onClose
     catch (failure) { setError(failure instanceof Error ? failure.message : "Secret metadata could not be updated."); }
     finally { savingRef.current = false; setSaving(false); }
   }
-  return <form ref={formRef} className="secrets-edit-form secrets-tabbed-form" onSubmit={event => void submit(event)}>
+  return <form ref={formRef} className="secrets-edit-form secrets-tabbed-form" aria-busy={cannotClose} onSubmit={event => void submit(event)}>
     <p className="secrets-technical-name"><code>{secret.name}</code><CopySecretNameButton name={secret.name} /></p>
     {error ? <p ref={errorRef} className="secrets-field-error" role="alert" tabIndex={-1}>{error}</p> : null}
     <fieldset className="secrets-editor-fields" disabled={cannotClose}>
@@ -67,12 +68,18 @@ function SecretMetadataForm({ secret, descriptors, busy = false, onSave, onClose
           <div><dt>Status</dt><dd>{secret.status}</dd></div><div><dt>Current version</dt><dd>{secret.currentVersion ?? "none"}</dd></div></dl>
         <p className="secrets-field-hint">The existing value stays hidden. Rotate the secret to replace it.</p>
       </>, details: <>
-        <label>Display name<input data-dialog-initial-focus value={displayName} onChange={event => setDisplayName(event.target.value)} /></label>
-        <div className="secrets-description-field"><label htmlFor={descriptionInputId}>Description</label><textarea id={descriptionInputId} value={description} onChange={event => setDescription(event.target.value)} rows={3} /></div>
+        <SecretFormField label="Display name" value={displayName} disabled={cannotClose}>
+          {attributes => <input {...attributes} data-dialog-initial-focus value={displayName} placeholder=" " onChange={event => setDisplayName(event.target.value)} />}
+        </SecretFormField>
+        <SecretFormField label="Description" controlId={descriptionInputId} value={description} raised disabled={cannotClose}>
+          {attributes => <textarea {...attributes} value={description} onChange={event => setDescription(event.target.value)} rows={3} />}
+        </SecretFormField>
         <dl className="secrets-metadata-grid"><div><dt>Tags</dt><dd>{secret.tags.join(", ") || "None"}</dd></div><div><dt>Created</dt><dd>{formatDate(secret.createdAt)}</dd></div><div><dt>Updated</dt><dd>{formatDate(secret.updatedAt)}</dd></div></dl>
       </>, storage: <>
         <dl className="secrets-metadata-grid"><div><dt>Store</dt><dd>{store?.displayName ?? secret.storeName}</dd></div><div><dt>Expires</dt><dd>{secret.expiresAt ? formatDate(secret.expiresAt) : "Never"}</dd></div></dl>
-        <label htmlFor={scopeInputId}>Scope</label><input id={scopeInputId} value={secret.scope || "No scope"} readOnly aria-describedby={scopeHelpId} />
+        <SecretFormField label="Scope" controlId={scopeInputId} value={secret.scope || "No scope"} raised disabled={cannotClose}>
+          {attributes => <input {...attributes} value={secret.scope || "No scope"} readOnly aria-describedby={scopeHelpId} />}
+        </SecretFormField>
         <ScopeMatchingHint id={scopeHelpId} readOnly concise />
       </> }}
     </SecretEditorTabs>
