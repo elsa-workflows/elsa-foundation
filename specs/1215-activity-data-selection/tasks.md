@@ -97,6 +97,20 @@ controls, and refusal of a hand-built member executable at its reader on start, 
 pinning facts at publication (T013), selection at run time (T014, T015), the capability and local guards (T016), the
 compiler, admission and placement controls (T017). Design and evidence: [research](research.md#member-bindings-and-runtime-selection-4078-design-note).
 
+#4078 slice B receipt (not task completion; checkboxes stay open): runtime selection, still unreachable for authors
+because nothing publishes a member binding. T014: an exact-segment selector run after the unchanged whole-value
+resolution of the same role, with missing producer, absent member and null kept distinct. T015: inline and external
+selection in the input materializer and the intrinsic executor, an always-on fit check before the snapshot, the
+selected value recorded in the snapshot, and `VF-SEL-001`..`004` through one exception type with the code in the
+poisoned item's metadata. T016, capability and guards: `elsa.runtime.input-member-selection@1` advertised only while
+the built-in materializer is composed (decided from its service registration, so a factory, instance or decorator
+counts as replaced), and refusal through `IRuntimeRequirementChecker` at activity start, bookmark resume and a
+structural parent's re-materialization on child completion. T017, runtime part: selector table, materializer and intrinsic rows inline and external, real engine runs for
+all three roles in a Sequence and a top-level Flowchart, failure codes, occurrence parity, re-materialization after
+resume, protection and guard controls, and a pinned member fingerprint. Not done: pinning facts at publication and
+the compiler, analyzer, placement and linker work (slice C, T012/T013), the other families' authoring (slice D), and
+a real engine run with externally stored values (exercised at the materializer and intrinsic level only).
+
 - [ ] T018 [P] [US1] Add the language-neutral source client in `Studio/src/essentials/Elsa.Studio.Workflows/Client/src/` using existing capability discovery; integrate exact acknowledged autosave/current-snapshot acquisition with `workflow-editor/useWorkflowPersistence.ts` and `ActivityDefinitionDraftEditor.tsx`, discard late identities and preserve manual/held edits (depends T008).
 - [ ] T019 [P] [US1] Repair structured whole/result/member preservation in `Studio/src/essentials/Elsa.Studio.Workflows/Client/src/activityInputWire.ts` and add canonical save/Code Apply/reopen controls in `__tests__/activityInputWire.test.ts`; preserve unknown unsupported source definitions without JSON stringification.
 - [ ] T020 [US1] Build the shared Choose data/browser/reference contribution in `Studio/src/essentials/Elsa.Studio.Workflows/Client/src/` with existing Studio controls, stable authorized identities, readable provenance/navigation/replace/clear and keyboard/cancel/focus behavior; capability-gate member authoring while allowing #3094's qualified whole-output slice (depends T018–T019).

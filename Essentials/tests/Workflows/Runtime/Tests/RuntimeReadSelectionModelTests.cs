@@ -171,13 +171,16 @@ public sealed class RuntimeReadSelectionModelTests
         Assert.DoesNotContain(requirement, Template(WholeResult()).RuntimeRequirements);
     }
 
-    /// <summary>No composition advertises member selection in this slice, so the shared checker reports it missing.</summary>
+    /// <summary>
+    /// Since #4078 slice B the default runtime composition advertises member selection, so the shared checker reports it
+    /// available. (Slice A pinned the opposite; the no-capability composition is in MemberReadMaterializationTests.)
+    /// </summary>
     [Fact]
-    public void No_runtime_composition_advertises_member_selection_so_a_member_executable_is_not_runnable()
+    public void The_default_runtime_composition_advertises_member_selection_so_a_member_executable_is_runnable()
     {
         using var provider = new ServiceCollection().AddWorkflowRuntime().BuildServiceProvider();
         var capabilities = provider.GetServices<IRuntimeActivityConsumerCapability>().ToArray();
-        Assert.DoesNotContain(capabilities, capability => capability.ConsumerKey == RuntimeReadSelection.RequirementKey);
+        Assert.Contains(capabilities, capability => capability.ConsumerKey == RuntimeReadSelection.RequirementKey);
 
         var checker = new RuntimeRequirementChecker(capabilities,
             new RuntimeDurableValueStorageDriverRegistry([new JsonRuntimeDurableValueStorageDriver()]),
@@ -185,9 +188,8 @@ public sealed class RuntimeReadSelectionModelTests
             typeRegistry: null!, payloadSerializer: null!);
         var check = checker.Check(RuntimeRequirementCheckSubject.FromExecutable(Executable(Member("result", Deferred(["id"])))));
 
-        Assert.False(check.IsSatisfied);
         var entry = Assert.Single(check.Requirements, item => item.ConsumerKey == RuntimeReadSelection.RequirementKey);
-        Assert.Equal(("1", RuntimeRequirementStatus.Missing), (entry.SchemaVersion, entry.Status));
+        Assert.Equal(("1", RuntimeRequirementStatus.Available), (entry.SchemaVersion, entry.Status));
     }
 
     [Theory]
@@ -199,8 +201,8 @@ public sealed class RuntimeReadSelectionModelTests
         var exception = Assert.Throws<NotSupportedException>(() =>
             new RuntimeInputBindingResolver().Resolve(binding, new RuntimeInputBindingResolutionContext("workflow", "activity")));
 
-        Assert.Contains("does not support member selection", exception.Message, StringComparison.Ordinal);
-        Assert.Contains("elsa.runtime.input-member-selection@1", exception.Message, StringComparison.Ordinal);
+        // Since slice B the materializer selects members; the resolver contract stays whole values only.
+        Assert.Contains("resolves whole values only", exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]
