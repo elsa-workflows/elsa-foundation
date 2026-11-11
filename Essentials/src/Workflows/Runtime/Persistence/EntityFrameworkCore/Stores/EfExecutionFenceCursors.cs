@@ -1,7 +1,5 @@
 using System.Collections.Concurrent;
-using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
-using Elsa.Workflows.Runtime.Services.Executions;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 
@@ -12,8 +10,8 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 internal readonly record struct ExecutionFenceCursor(long Revision, DateTimeOffset AcquiredAt, DateTimeOffset ExpiresAt);
 
 /// <summary>
-/// The fence cursors of this process, one per lease that the runtime's own ownership service holds on an ownership
-/// row of the EF execution-liveness store. A fenced checkpoint commit reads its cursor to check the fence with one
+/// The fence cursors of this process, one per lease that an <see cref="EfExecutionLivenessStateStore"/> of this
+/// process wrote to an ownership row. A fenced checkpoint commit reads its cursor to check the fence with one
 /// conditional statement (<see cref="EfRuntimeCheckpointParticipantStaging.StageExecutionFenceAsync"/>).
 /// </summary>
 /// <remarks>
@@ -22,20 +20,19 @@ internal readonly record struct ExecutionFenceCursor(long Revision, DateTimeOffs
 /// commits in. Both have to reach the same cursor.
 /// </para>
 /// <para>
-/// Every cursor ever stored names a revision at which the row held exactly that lease: the ownership service
-/// reports one after its revision-conditioned write of the lease, and a commit reports one after its transaction
-/// committed. A revision of a row is never used twice, so a cursor is either the row as it is now or a revision the
-/// row has left. A cursor that is behind therefore only ever makes the conditional statement match no row. That
-/// is why writers do not need to coordinate: of two cursors for one lease the higher revision is kept, and a cursor
-/// that arrives late, is lost or is removed costs a read of the row and nothing else.
+/// Every cursor ever stored names a revision at which the row held exactly that lease: the liveness store records
+/// one after its own save of the row with that lease, and a commit records one after its transaction committed. A
+/// revision of a row is never used twice, so a cursor is either the row as it is now or a revision the row has left.
+/// A cursor that is behind therefore only ever makes the conditional statement match no row. That is why writers
+/// do not need to coordinate: of two cursors for one lease the higher revision is kept, and a cursor that arrives
+/// late, is lost or is removed costs a read of the row and nothing else.
 /// </para>
 /// <para>
-/// Only <see cref="Hold"/> creates an entry, and only the runtime's own ownership service over an undecorated
-/// <see cref="EfExecutionLivenessStateStore"/> calls it. A commit changes an entry that exists and never creates
-/// one, so a lease that some other ownership service or liveness store manages has no cursor.
+/// Only <see cref="Hold"/> creates an entry, and only the liveness store calls it. A commit changes an entry that
+/// exists and never creates one, so a lease written to the table by anything but that store has no cursor.
 /// </para>
 /// </remarks>
-internal sealed class EfExecutionFenceCursors(TimeProvider? timeProvider = null) : IOwnershipRevisionObserver
+internal sealed class EfExecutionFenceCursors(TimeProvider? timeProvider = null)
 {
     /// <summary>How many <see cref="Hold"/> calls pass between two removals of the cursors whose lease time ran out.</summary>
     internal const int SweepInterval = 1024;
@@ -58,7 +55,7 @@ internal sealed class EfExecutionFenceCursors(TimeProvider? timeProvider = null)
 
     public bool TryGet(Key key, out ExecutionFenceCursor cursor) => _cursors.TryGetValue(key, out cursor);
 
-    /// <summary>Stores a cursor the ownership service reports, creating the entry when there is none.</summary>
+    /// <summary>Stores a cursor the liveness store recorded, creating the entry when there is none.</summary>
     public void Hold(Key key, ExecutionFenceCursor cursor)
     {
         _cursors.AddOrUpdate(key, cursor, (_, current) => current.Revision >= cursor.Revision ? current : cursor);
@@ -97,16 +94,4 @@ internal sealed class EfExecutionFenceCursors(TimeProvider? timeProvider = null)
     }
 
     public void Remove(Key key) => _cursors.TryRemove(key, out _);
-
-    void IOwnershipRevisionObserver.LeaseHeld(IExecutionLivenessStateStore rows, RuntimeExecutionLease lease, long revision)
-    {
-        if (rows is EfExecutionLivenessStateStore store)
-            Hold(Key.For(store.OwnershipRowScope, lease), new(revision, lease.AcquiredAt, lease.ExpiresAt));
-    }
-
-    void IOwnershipRevisionObserver.LeaseEnded(IExecutionLivenessStateStore rows, RuntimeExecutionLease lease)
-    {
-        if (rows is EfExecutionLivenessStateStore store)
-            Remove(Key.For(store.OwnershipRowScope, lease));
-    }
 }

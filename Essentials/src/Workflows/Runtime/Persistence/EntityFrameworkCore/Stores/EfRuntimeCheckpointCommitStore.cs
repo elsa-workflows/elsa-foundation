@@ -258,6 +258,8 @@ public sealed class EfRuntimeCheckpointCommitStore(
             context.Database.GetEnlistedTransaction() is not null || System.Transactions.Transaction.Current is not null))
             throw new InvalidOperationException("Exact bookmark checkpoint admission requires a clean context and its own transaction.");
 
+        // True while an attempt has chosen its fence cursor and has not yet run the cursor's statement.
+        var fenceUnchecked = false;
         var pinned = commit.ModelState?.State.Executable ?? commit.StateChanges.WorkflowExecution?.State.PinnedExecutable;
         if (pinned is not null)
         {
@@ -326,11 +328,30 @@ public sealed class EfRuntimeCheckpointCommitStore(
                     EfRuntimeCheckpointParticipantStaging.IsFenceRenewalConflict(exception))
                 {
                 }
+                catch (Exception exception) when (fenceUnchecked && exception is not OperationCanceledException)
+                {
+                    // The attempt failed while staging, before its cursor's statement had checked the fence, and it
+                    // has rolled back. A commit that reads the row first never stages for a drain that lost its run:
+                    // it is refused as stale. So look at the row once before the staging failure leaves, and let a
+                    // lost run leave as stale here too. When the look itself fails, the staging failure leaves.
+                    fenceUnchecked = false;
+                    try
+                    {
+                        await EfRuntimeCheckpointParticipantStaging.EnsureExecutionFenceAsync(
+                            context, scope, commit.WorkflowExecutionId, commit.ExpectedFence!, _timeProvider, writeCancellationToken);
+                    }
+                    catch (Exception lookFailure) when (lookFailure is not RuntimeStaleFencingTokenException)
+                    {
+                    }
+
+                    throw;
+                }
             }
         }
 
         async ValueTask<RuntimeCheckpointCommitStoreResult> CommitNewAsync(CancellationToken writeCancellationToken, WorkflowExecutableIdentity? requiredExistingRoot = null)
         {
+            fenceUnchecked = false;
             var marker = ToEntity(commit, scope, id, fingerprint);
             var touchedTestScopes = new Dictionary<string, WorkflowTestScopeRecord>(StringComparer.Ordinal);
             var fenceKey = commit.ExpectedFence is null || FenceCursors is null
@@ -351,22 +372,26 @@ public sealed class EfRuntimeCheckpointCommitStore(
 
                 // Fence validation/touch is deliberately first. The workflow and scheduler rows then join the same
                 // transaction, and the immutable marker is added only after every supported participant is staged.
+                // A commit whose lease has a usable fence cursor does not read the row here. Its fence is checked by
+                // one conditional statement immediately before the save, which is where the read path bumps the row
+                // too, so both lock the ownership row for the same part of the transaction.
                 if (commit.ExpectedFence is { } expectedFence)
                 {
                     // Admitting background work reads the ownership row this step tracks (its deletion tombstone),
                     // and only the read path tracks it, so such a commit does not use its cursor.
-                    var known = fenceKey is { } key && commit.StateChanges.BackgroundActivityWork.Admissions.Count == 0 &&
-                                FenceCursors!.TryGet(key, out var cursor)
-                        ? cursor
-                        : default(ExecutionFenceCursor?);
-                    fenceAfterCommit = await EfRuntimeCheckpointParticipantStaging.StageExecutionFenceAsync(
-                        context,
-                        scope,
-                        commit.WorkflowExecutionId,
-                        expectedFence,
-                        _timeProvider,
-                        writeCancellationToken,
-                        known);
+                    fenceUnchecked = fenceKey is { } key && commit.StateChanges.BackgroundActivityWork.Admissions.Count == 0 &&
+                        FenceCursors!.TryGet(key, out var cursor) &&
+                        EfRuntimeCheckpointParticipantStaging.CanCheckFenceByCursor(context, scope, commit.WorkflowExecutionId, cursor, _timeProvider);
+                    if (!fenceUnchecked)
+                    {
+                        fenceAfterCommit = await EfRuntimeCheckpointParticipantStaging.StageExecutionFenceAsync(
+                            context,
+                            scope,
+                            commit.WorkflowExecutionId,
+                            expectedFence,
+                            _timeProvider,
+                            writeCancellationToken);
+                    }
                 }
 
                 await StageExactBookmarkResumeAsync(commit, scope, touchedTestScopes, writeCancellationToken);
@@ -460,6 +485,22 @@ public sealed class EfRuntimeCheckpointCommitStore(
                 if (commit.StateChanges.AlterationJobTerminalChange is { } terminalJob)
                     await EfRuntimeCheckpointAlterationJobParticipantStaging.StageAsync(
                         context, terminalJob, scope, commit.WorkflowExecutionId, writeCancellationToken);
+
+                // The fence of a commit that did not read the ownership row: the cursor's statement, and the read when
+                // it matches no row. It comes after every staging read and before any save, so nothing is saved for a
+                // drain that lost its run, and the row is locked no earlier than the read path locks it.
+                if (fenceUnchecked)
+                {
+                    fenceUnchecked = false;
+                    fenceAfterCommit = await EfRuntimeCheckpointParticipantStaging.StageExecutionFenceAsync(
+                        context,
+                        scope,
+                        commit.WorkflowExecutionId,
+                        commit.ExpectedFence!,
+                        _timeProvider,
+                        writeCancellationToken,
+                        FenceCursors!.TryGet(fenceKey!.Value, out var latest) ? latest : null);
+                }
 
                 // Flush all participant rows first, then add the immutable marker as the final write in this
                 // transaction. The marker is the durable commit proof, so it must never precede a participant failure.

@@ -424,7 +424,9 @@ internal static class EfRuntimeCheckpointParticipantStaging
     /// </summary>
     /// <param name="known">
     /// The cursor this process holds for the expected lease, when the caller may check the fence with one statement.
-    /// Without it the row is read, validated and bumped at save, as before cursors existed.
+    /// A caller that passes one calls this immediately before its save, after every read of its unit of work, so the
+    /// statement locks the row where the tracked bump of the read path locks it. Without a cursor the row is read,
+    /// validated and bumped at save, as before cursors existed.
     /// </param>
     public static async ValueTask<ExecutionFenceCursor> StageExecutionFenceAsync(
         RuntimeDbContext context,
@@ -443,17 +445,16 @@ internal static class EfRuntimeCheckpointParticipantStaging
         //   (EfExecutionFenceCursors). Every writer of an ownership row increases its revision and the runtime never
         //   deletes one, so a row still at that revision is unchanged and still holds that lease.
         // - The lease time is compared with the same clock the validator below uses, so an expired lease is not
-        //   admitted. It is compared first, as the validator compares it before the save.
+        //   admitted.
         // - The statement bumps the revision in this transaction, as the tracked save does, so an ownership
         //   change that commits first makes it match no row, and one that comes later waits and then fails its own
-        //   revision check. Unlike the read, the statement locks the row from here until the transaction ends.
+        //   revision check. The cursor's revision predates this transaction, so it does not matter that the
+        //   statement runs last: a change at any moment before it makes it match no row.
         // A cursor that is behind, lost or wrong about the row can only make the statement match no row. Then the row
         // is read and validated below, which also decides the reason a stale drain is refused with. The lease
         // columns in the predicate are not needed for that argument. They keep the statement from matching if the
         // row was ever removed and written again outside the runtime, which is the one way a revision could repeat.
-        // A tracked copy of the row is someone's pending change, and only the read below can take it into account.
-        if (known is { Revision: > 0 } cursor && cursor.ExpiresAt > timeProvider.GetUtcNow() &&
-            !context.ChangeTracker.Entries<ExecutionLivenessStateEntity>().Any(entry => entry.Entity.Id == id))
+        if (known is { } cursor && CanCheckFenceByCursor(context, scope, workflowExecutionId, cursor, timeProvider))
         {
             var rowId = id;
             var revision = cursor.Revision;
@@ -486,6 +487,42 @@ internal static class EfRuntimeCheckpointParticipantStaging
         row!.Revision = checked(row.Revision + 1);
         var lease = state!.ExecutionLease!;
         return new(row.Revision, lease.AcquiredAt, lease.ExpiresAt);
+    }
+
+    /// <summary>
+    /// Whether a fence can be checked with <paramref name="cursor"/>'s statement: its revision is known, its lease
+    /// time has not run out, and the context tracks no copy of the ownership row. A tracked copy is someone's pending
+    /// change, and only reading the row can take it into account.
+    /// </summary>
+    public static bool CanCheckFenceByCursor(
+        RuntimeDbContext context,
+        string scope,
+        string workflowExecutionId,
+        ExecutionFenceCursor cursor,
+        TimeProvider timeProvider)
+    {
+        var id = EfRuntimeOperationalStoreSupport.CompositeId(scope, workflowExecutionId, RuntimeExecutionOwnershipStateId.For(workflowExecutionId));
+        return cursor.Revision > 0 && cursor.ExpiresAt > timeProvider.GetUtcNow() &&
+            !context.ChangeTracker.Entries<ExecutionLivenessStateEntity>().Any(entry => entry.Entity.Id == id);
+    }
+
+    /// <summary>
+    /// Reads the ownership row and throws <see cref="RuntimeStaleFencingTokenException"/> unless it holds the expected
+    /// lease, unexpired. It writes nothing and tracks nothing.
+    /// </summary>
+    public static async ValueTask EnsureExecutionFenceAsync(
+        RuntimeDbContext context,
+        string scope,
+        string workflowExecutionId,
+        RuntimeExecutionFence expected,
+        TimeProvider timeProvider,
+        CancellationToken cancellationToken)
+    {
+        var operationalStateId = RuntimeExecutionOwnershipStateId.For(workflowExecutionId);
+        var row = await EfExecutionLivenessStateStore.WorkflowExecutionDeletionOwnershipRows(context, scope, workflowExecutionId)
+            .SingleOrDefaultAsync(cancellationToken);
+        var state = row is null ? null : EfExecutionLivenessStateStore.Read(row, scope, workflowExecutionId, operationalStateId);
+        RuntimeExecutionFenceValidator.EnsureCurrent(workflowExecutionId, expected, state, timeProvider.GetUtcNow());
     }
 
     /// <summary>How many times a fenced unit of work runs when each failure is a <see cref="IsFenceRenewalConflict"/>.</summary>

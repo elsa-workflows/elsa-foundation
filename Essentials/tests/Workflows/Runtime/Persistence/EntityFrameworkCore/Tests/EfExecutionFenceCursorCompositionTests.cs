@@ -16,9 +16,9 @@ using Xunit;
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
 
 /// <summary>
-/// #2564: which compositions give a lease a fence cursor. The runtime's own ownership service over the EF
-/// execution-liveness store does, in whatever service scope it runs. A decorated liveness store or another ownership
-/// service does not, and its commits read the ownership row as before.
+/// #2564: which compositions give a lease a fence cursor. A lease the EF execution-liveness store wrote has one, in
+/// whatever service scope and for whatever ownership service the store wrote it. A lease written to the table by a
+/// store that is not the EF store has none, and its commits read the ownership row as before.
 /// </summary>
 public sealed class EfExecutionFenceCursorCompositionTests
 {
@@ -27,7 +27,7 @@ public sealed class EfExecutionFenceCursorCompositionTests
     private static readonly PersistenceScope Partition = new("fence-cursor-tenant");
 
     [Fact]
-    public async Task The_ownership_service_holds_moves_and_removes_the_cursor_across_service_scopes()
+    public async Task The_registered_liveness_store_holds_moves_and_removes_the_cursor_across_service_scopes()
     {
         var clock = new FakeTimeProvider(Now);
         var capture = new CommandCaptureInterceptor();
@@ -70,28 +70,38 @@ public sealed class EfExecutionFenceCursorCompositionTests
     }
 
     [Theory]
-    [InlineData("decorated-liveness-store")]
-    [InlineData("replaced-ownership-service")]
-    public async Task A_lease_that_another_composition_manages_gets_no_cursor_and_its_commits_read_the_row(string composition)
+    [InlineData("liveness-store-that-delegates-to-the-ef-store", true)]
+    [InlineData("another-ownership-service-over-the-ef-store", true)]
+    [InlineData("liveness-store-that-writes-the-table-itself", false)]
+    public async Task A_lease_has_a_cursor_exactly_when_the_ef_liveness_store_wrote_it(string composition, bool writtenByTheEfStore)
     {
+        // The EF store records a cursor for what it saves, whoever asked it to. A store that writes the ownership
+        // table by other means is not seen, so its leases have no cursor and their commits read the row.
         var clock = new FakeTimeProvider(Now);
         var capture = new CommandCaptureInterceptor();
         await using var database = await SharedMemoryDatabase.CreateAsync();
         await using var provider = database.BuildProvider(clock, capture, services =>
         {
-            if (composition == "decorated-liveness-store")
+            switch (composition)
             {
-                services.RemoveAll<IExecutionLivenessStateStore>();
-                services.AddScoped<IExecutionLivenessStateStore>(serviceProvider =>
-                    new ForwardingLivenessStore(serviceProvider.GetRequiredService<EfExecutionLivenessStateStore>()));
-            }
-            else
-            {
-                services.Replace(ServiceDescriptor.Scoped<IRuntimeExecutionOwnershipService>(serviceProvider =>
-                    new ForwardingOwnershipService(new RuntimeExecutionOwnershipService(
-                        serviceProvider.GetRequiredService<IExecutionLivenessStateStore>(),
-                        serviceProvider.GetRequiredService<TimeProvider>(),
-                        serviceProvider.GetRequiredService<RuntimeExecutionOwnershipOptions>()))));
+                case "liveness-store-that-delegates-to-the-ef-store":
+                    services.RemoveAll<IExecutionLivenessStateStore>();
+                    services.AddScoped<IExecutionLivenessStateStore>(serviceProvider =>
+                        new ForwardingLivenessStore(serviceProvider.GetRequiredService<EfExecutionLivenessStateStore>()));
+                    break;
+                case "another-ownership-service-over-the-ef-store":
+                    services.Replace(ServiceDescriptor.Scoped<IRuntimeExecutionOwnershipService>(serviceProvider =>
+                        new ForwardingOwnershipService(new RuntimeExecutionOwnershipService(
+                            serviceProvider.GetRequiredService<IExecutionLivenessStateStore>(),
+                            serviceProvider.GetRequiredService<TimeProvider>(),
+                            serviceProvider.GetRequiredService<RuntimeExecutionOwnershipOptions>()))));
+                    break;
+                default:
+                    services.RemoveAll<IExecutionLivenessStateStore>();
+                    services.AddScoped<IExecutionLivenessStateStore>(serviceProvider => new ForeignLivenessStore(
+                        serviceProvider.GetRequiredService<RuntimeDbContext>(),
+                        serviceProvider.GetRequiredService<IPersistenceAccessContextAccessor>()));
+                    break;
             }
         });
         await database.CreateSchemaAsync(provider);
@@ -102,16 +112,16 @@ public sealed class EfExecutionFenceCursorCompositionTests
 
         var lease = await ownership.AcquireAsync(Run);
         Assert.True((await ownership.HeartbeatAsync(lease)).Succeeded);
-        Assert.Equal(0, cursors.Count);
+        Assert.Equal(writtenByTheEfStore, cursors.TryGet(EfExecutionFenceCursors.Key.For(Partition.Value, lease), out _));
 
         foreach (var commitId in new[] { "commit-1", "commit-2" })
         {
             var before = capture.Commands.Count;
             await store.CommitAsync(Commit(commitId, lease), new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate));
-            Assert.Equal((1, 1), OwnershipCommands(capture, before));
+            Assert.Equal(writtenByTheEfStore ? (0, 1) : (1, 1), OwnershipCommands(capture, before));
         }
 
-        Assert.Equal(0, cursors.Count);
+        Assert.Equal(writtenByTheEfStore ? 1 : 0, cursors.Count);
     }
 
     private static RuntimeCheckpointCommit Commit(string commitId, RuntimeExecutionLease lease) => new(
@@ -146,6 +156,44 @@ public sealed class EfExecutionFenceCursorCompositionTests
 
         public ValueTask<VersionedExecutionLivenessState?> FindVersionedAsync(string workflowExecutionId, string operationalStateId, CancellationToken cancellationToken = default) =>
             inner.FindVersionedAsync(workflowExecutionId, operationalStateId, cancellationToken);
+    }
+
+    /// <summary>
+    /// A liveness store that is not the EF store: it writes the same table through the context, with the same
+    /// revision compare-and-swap, and the EF store never sees its writes.
+    /// </summary>
+    private sealed class ForeignLivenessStore(RuntimeDbContext context, IPersistenceAccessContextAccessor accessor) : IExecutionLivenessStateStore
+    {
+        private string Scope => accessor.Current.RequireScope().Value;
+
+        public ValueTask<ExecutionLivenessState> SaveAsync(ExecutionLivenessState state, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public async ValueTask<ExecutionLivenessStateWriteResult> TrySaveAsync(ExecutionLivenessState state, long expectedRevision, CancellationToken cancellationToken = default)
+        {
+            context.ChangeTracker.Clear();
+            var id = EfRuntimeOperationalStoreSupport.CompositeId(Scope, state.WorkflowExecutionId, state.ExecutionLivenessStateId);
+            var row = await context.ExecutionLivenessStates.SingleOrDefaultAsync(candidate => candidate.Id == id, cancellationToken);
+            if (row is null != (expectedRevision == 0) || row is not null && row.Revision != expectedRevision)
+                return new(ExecutionLivenessStateWriteStatus.RevisionConflict, row?.Revision);
+            if (row is null)
+                context.ExecutionLivenessStates.Add(EfExecutionLivenessStateStore.ToEntity(state, Scope, 1));
+            else
+                EfExecutionLivenessStateStore.Copy(row, state, Scope, expectedRevision + 1);
+            await context.SaveChangesAsync(cancellationToken);
+            context.ChangeTracker.Clear();
+            return new(ExecutionLivenessStateWriteStatus.Saved, expectedRevision + 1);
+        }
+
+        public async ValueTask<ExecutionLivenessState?> FindAsync(string workflowExecutionId, string operationalStateId, CancellationToken cancellationToken = default) =>
+            (await FindVersionedAsync(workflowExecutionId, operationalStateId, cancellationToken))?.State;
+
+        public async ValueTask<VersionedExecutionLivenessState?> FindVersionedAsync(string workflowExecutionId, string operationalStateId, CancellationToken cancellationToken = default)
+        {
+            var id = EfRuntimeOperationalStoreSupport.CompositeId(Scope, workflowExecutionId, operationalStateId);
+            var row = await context.ExecutionLivenessStates.AsNoTracking().SingleOrDefaultAsync(candidate => candidate.Id == id, cancellationToken);
+            return row is null ? null : new(EfExecutionLivenessStateStore.Read(row, Scope, workflowExecutionId, operationalStateId), row.Revision);
+        }
     }
 
     private sealed class ForwardingOwnershipService(IRuntimeExecutionOwnershipService inner) : IRuntimeExecutionOwnershipService

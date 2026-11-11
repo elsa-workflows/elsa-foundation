@@ -77,9 +77,11 @@ internal static class RuntimeCheckpointFenceCursorProviderSmoke
         await using var secondConnection = createContext(fixture.ConnectionString, new OwnershipCommandCapture());
         var store = new EfRuntimeCheckpointCommitStore(context, new FixedAccessor(scope), clock) { FenceCursors = cursors };
 
-        var lease = await Node(context, scope, clock, "node-a").AcquireAsync(Run);
+        // This process's liveness store records the cursor. The other node's store, on the second connection, has none.
+        var lease = await Node(context, scope, clock, "node-a", cursors).AcquireAsync(Run);
         var key = EfExecutionFenceCursors.Key.For(scope, lease);
-        cursors.Hold(key, new(await RevisionAsync(secondConnection, scope), lease.AcquiredAt, lease.ExpiresAt));
+        Assert.True(cursors.TryGet(key, out var acquired));
+        Assert.Equal(new ExecutionFenceCursor(1, lease.AcquiredAt, lease.ExpiresAt), acquired);
 
         // A current cursor: one statement, no read.
         Assert.Equal((0, 1), await CommitAndCountAsync(store, capture, "commit-1", lease));
@@ -125,8 +127,9 @@ internal static class RuntimeCheckpointFenceCursorProviderSmoke
     private static async Task<long> RevisionAsync(RuntimeDbContext context, string scope) =>
         (await context.ExecutionLivenessStates.AsNoTracking().SingleAsync(row => row.ScopeKey == EfRelationalIdentity.Encode(scope))).Revision;
 
-    private static RuntimeExecutionOwnershipService Node(RuntimeDbContext context, string scope, TimeProvider clock, string ownerId) =>
-        new(new EfExecutionLivenessStateStore(context, new FixedAccessor(scope), new NoopContinuationCodec()), clock,
+    private static RuntimeExecutionOwnershipService Node(
+        RuntimeDbContext context, string scope, TimeProvider clock, string ownerId, EfExecutionFenceCursors? cursors = null) =>
+        new(new EfExecutionLivenessStateStore(context, new FixedAccessor(scope), new NoopContinuationCodec()) { FenceCursors = cursors }, clock,
             new RuntimeExecutionOwnershipOptions { OwnerId = ownerId, LeaseDuration = TimeSpan.FromMinutes(1) });
 
     private static RuntimeCheckpointCommit Commit(string commitId, RuntimeExecutionLease lease) => new(

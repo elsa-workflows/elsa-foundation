@@ -2,7 +2,6 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
-using Elsa.Workflows.Runtime.Services.Executions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -40,10 +39,9 @@ public static class RuntimeCheckpointCommitEntityFrameworkCoreRegistration
                 services.Remove(descriptor);
 
             // One set of fence cursors for the process: the lease heartbeat that moves a cursor runs in a service
-            // scope of its own, apart from the scope the drain commits in. The runtime's ownership service reports
-            // to it through IOwnershipRevisionObserver.
+            // scope of its own, apart from the scope the drain commits in. The EF execution-liveness store records
+            // them when it saves an ownership row, and it does so only when this registration has added them.
             services.TryAddSingleton(provider => new EfExecutionFenceCursors(provider.GetService<TimeProvider>()));
-            services.TryAddSingleton<IOwnershipRevisionObserver>(provider => provider.GetRequiredService<EfExecutionFenceCursors>());
             services.TryAddScoped(provider => new EfRuntimeCheckpointCommitStore(
                 provider.GetRequiredService<RuntimeDbContext>(),
                 provider.GetRequiredService<IPersistenceAccessContextAccessor>(),

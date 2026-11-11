@@ -109,7 +109,13 @@ public static class RuntimeOperationalStateEntityFrameworkCoreRegistration
             var durableConcrete = services.Last();
             services.AddScoped<EfSchedulerStateStore>();
             var schedulerConcrete = services.Last();
-            services.AddScoped<EfExecutionLivenessStateStore>();
+            // A factory only so the store can be handed the fence cursors, which exist when the EF checkpoint store
+            // is registered (AddRuntimeCheckpointCommitEntityFrameworkCore).
+            services.AddScoped(provider => new EfExecutionLivenessStateStore(
+                provider.GetRequiredService<RuntimeDbContext>(),
+                provider.GetRequiredService<IPersistenceAccessContextAccessor>(),
+                provider.GetRequiredService<IRuntimeRecoveryContinuationCodec>())
+            { FenceCursors = provider.GetService<EfExecutionFenceCursors>() });
             var livenessConcrete = services.Last();
             services.AddScoped<EfWorkflowHoldStateStore>();
             var holdConcrete = services.Last();

@@ -52,8 +52,8 @@ public sealed partial class EfRuntimeCheckpointCommitStoreTests
     [InlineData("lease-has-no-cursor")]
     public async Task Fenced_commit_without_a_cursor_reads_the_row_and_creates_no_cursor(string because)
     {
-        // A store built without cursors, or a lease nothing reported: one that another ownership service or a
-        // decorated liveness store manages. The commit never makes a cursor of its own for such a lease.
+        // A store built without cursors, or a lease no liveness store of this process wrote: one written by another
+        // node, or by a store that is not the EF store. The commit never makes a cursor of its own for such a lease.
         await using var database = await TestDatabase.CreateAsync();
         var clock = new FakeTimeProvider(OccurredAt);
         var cursors = new EfExecutionFenceCursors(clock);
@@ -417,21 +417,170 @@ public sealed partial class EfRuntimeCheckpointCommitStoreTests
         Assert.Equal((0, 1), await CommitAndCountAsync(store, capture, FencedCommit("commit-2", lease)));
     }
 
+    [Fact]
+    public async Task The_fence_statement_runs_after_the_staging_reads_and_immediately_before_the_save()
+    {
+        // The statement locks the ownership row. Running it last keeps that lock where the read path takes it, at
+        // the save, so the commit reads the run's root row before it holds the ownership row, never under it.
+        await using var database = await TestDatabase.CreateAsync();
+        var clock = new FakeTimeProvider(OccurredAt);
+        var cursors = new EfExecutionFenceCursors(clock);
+        await SeedWorkflowRowAsync(database, clock);
+        var lease = await AcquireWithCursorAsync(database, cursors, clock);
+        var capture = new CommandCaptureInterceptor();
+        await using var context = database.Open(CursorScope, capture);
+        var commit = FencedCommit("commit-order", lease) with
+        {
+            StateChanges = new(new(CursorRun, RuntimeStateChangeOperation.Upsert,
+                Execution(CursorRun, "tenant-a") with { SystemMetadata = new Dictionary<string, string> { ["business-value"] = "new" } },
+                new Dictionary<string, string>()), null, [], [], [], [], [])
+        };
+
+        await CursorStore(context, cursors, clock).CommitAsync(commit, Decision());
+
+        const string rootTable = "\"elsa_runtime_workflow_execution_state\"";
+        var commands = capture.Commands.ToArray();
+        var fence = Array.FindIndex(commands, command =>
+            command.StartsWith("UPDATE", StringComparison.Ordinal) && command.Contains(RuntimeOperationalStateEfModule.ExecutionLivenessTableName, StringComparison.Ordinal));
+        var rootRead = Array.FindIndex(commands, command =>
+            command.StartsWith("SELECT", StringComparison.Ordinal) && command.Contains(rootTable, StringComparison.Ordinal));
+        var rootWrite = Array.FindIndex(commands, command =>
+            command.StartsWith("UPDATE", StringComparison.Ordinal) && command.Contains(rootTable, StringComparison.Ordinal));
+        Assert.True(rootRead >= 0 && rootRead < fence, "The staging read of the root row must come before the fence statement.");
+        Assert.True(fence < rootWrite, "The save of the root row must come after the fence statement.");
+        Assert.DoesNotContain(commands.Skip(fence + 1).Take(rootWrite - fence), command => command.StartsWith("SELECT", StringComparison.Ordinal));
+        Assert.Equal((0, 1), OwnershipCommands(capture, 0));
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task A_commit_whose_staging_fails_before_the_fence_statement_leaves_as_stale_when_the_run_was_lost(bool runWasLost)
+    {
+        // The statement runs last, so staging comes first for a commit with a cursor. A commit that reads the row
+        // first never stages for a drain that lost its run. Before a staging failure leaves, the row is read once,
+        // so such a drain is still refused as stale and not with whatever staging made of its commit.
+        await using var database = await TestDatabase.CreateAsync();
+        var clock = new FakeTimeProvider(OccurredAt);
+        var cursors = new EfExecutionFenceCursors(clock);
+        var lease = await AcquireWithCursorAsync(database, cursors, clock);
+        if (runWasLost)
+        {
+            await using var other = database.Open(CursorScope);
+            await OwnershipNode(other, clock, "node-b").AcquireAsync(CursorRun);
+        }
+        var cursor = Cursor(cursors, lease);
+        var before = await OwnershipRevisionAsync(database);
+        var capture = new CommandCaptureInterceptor();
+        await using var context = database.Open(CursorScope, capture);
+        var commit = FencedCommit("commit-staging-fails", lease);
+        commit = commit with
+        {
+            // A work item that is not in the queue: consuming it is refused while staging.
+            StateChanges = commit.StateChanges.WithConsumedSchedulerWorkItems([new ConsumedSchedulerWorkItem(CursorRun, "work-missing", "worker-a", 1)])
+        };
+        Func<Task> act = () => CursorStore(context, cursors, clock).CommitAsync(commit, Decision()).AsTask();
+
+        if (runWasLost)
+            Assert.Equal(RuntimeFencingRejectionReason.StaleToken, (await Assert.ThrowsAsync<RuntimeStaleFencingTokenException>(act)).Reason);
+        else
+            await Assert.ThrowsAsync<RuntimeSchedulerWorkConsumeConflictException>(act);
+
+        // The statement was not reached. The one read is the look at the row after the rollback.
+        Assert.Equal((1, 0), OwnershipCommands(capture, 0));
+        Assert.Equal(cursor, Cursor(cursors, lease));
+        Assert.Equal(before, await OwnershipRevisionAsync(database));
+        Assert.Empty(context.ChangeTracker.Entries());
+        Assert.Null(context.Database.CurrentTransaction);
+        await using var read = database.Open(CursorScope);
+        Assert.Empty(await read.RuntimeCheckpointCommits.ToArrayAsync());
+    }
+
+    [Fact]
+    public async Task Liveness_store_records_the_lease_it_saved_and_drops_the_lease_that_save_replaced()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var clock = new FakeTimeProvider(OccurredAt);
+        var cursors = new EfExecutionFenceCursors(clock);
+        await using var context = database.Open(CursorScope);
+        await using var heartbeatContext = database.Open(CursorScope);
+
+        var first = await OwnershipNode(context, clock, "node-a", cursors).AcquireAsync(CursorRun);
+        Assert.Equal(new ExecutionFenceCursor(1, first.AcquiredAt, first.ExpiresAt), Cursor(cursors, first));
+
+        // A heartbeat through another context and another store, as the lease runner's own service scope has.
+        clock.Advance(TimeSpan.FromSeconds(20));
+        Assert.True((await OwnershipNode(heartbeatContext, clock, "node-a", cursors).HeartbeatAsync(first)).Succeeded);
+        Assert.Equal(new ExecutionFenceCursor(2, first.AcquiredAt, first.ExpiresAt.AddSeconds(20)), Cursor(cursors, first));
+
+        // A takeover written by a store of this process: the lease it replaced has no cursor any more.
+        var second = await OwnershipNode(context, clock, "node-b", cursors).AcquireAsync(CursorRun);
+        Assert.False(cursors.TryGet(CursorKey(first), out _));
+        Assert.Equal(new ExecutionFenceCursor(3, second.AcquiredAt, second.ExpiresAt), Cursor(cursors, second));
+
+        Assert.True((await OwnershipNode(context, clock, "node-b", cursors).ReleaseAsync(second)).Succeeded);
+        Assert.Equal(0, cursors.Count);
+
+        // The unconditional save records as well: the row holds the lease it wrote at the revision it wrote.
+        var saved = new RuntimeExecutionLease("lease-saved", CursorRun, "node-c", clock.GetUtcNow(), clock.GetUtcNow().AddMinutes(1), 3);
+        await new EfExecutionLivenessStateStore(context, new FixedAccessor(CursorScope), new NoopContinuationCodec()) { FenceCursors = cursors }
+            .SaveAsync(new(RuntimeExecutionOwnershipStateId.For(CursorRun), CursorRun, saved, null, null, null));
+        Assert.Equal(new ExecutionFenceCursor(await OwnershipRevisionAsync(database), saved.AcquiredAt, saved.ExpiresAt), Cursor(cursors, saved));
+    }
+
+    [Theory]
+    [InlineData("not-an-ownership-row")]
+    [InlineData("save-refused")]
+    [InlineData("save-inside-a-transaction")]
+    public async Task Liveness_store_records_no_cursor_for_a_save_that_does_not_make_one_true(string because)
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var clock = new FakeTimeProvider(OccurredAt);
+        var cursors = new EfExecutionFenceCursors(clock);
+        await using var context = database.Open(CursorScope);
+        var store = new EfExecutionLivenessStateStore(context, new FixedAccessor(CursorScope), new NoopContinuationCodec()) { FenceCursors = cursors };
+        var lease = new RuntimeExecutionLease("lease-a", CursorRun, "node-a", OccurredAt, OccurredAt.AddMinutes(1), 1);
+        var ownership = new ExecutionLivenessState(RuntimeExecutionOwnershipStateId.For(CursorRun), CursorRun, lease, null, null, null);
+
+        switch (because)
+        {
+            case "not-an-ownership-row":
+                // Another liveness row of the run that happens to carry a lease.
+                Assert.True((await store.TrySaveAsync(new ExecutionLivenessState("operational-1", CursorRun, lease, null, null, null), 0)).Succeeded);
+                break;
+            case "save-refused":
+                Assert.False((await store.TrySaveAsync(ownership, 7)).Succeeded);
+                break;
+            default:
+                // The save can still be rolled back, and then the row never held the lease at that revision.
+                await using (var transaction = await context.Database.BeginTransactionAsync())
+                {
+                    Assert.True((await store.TrySaveAsync(ownership, 0)).Succeeded);
+                    Assert.Equal(0, cursors.Count);
+                    await transaction.RollbackAsync();
+                }
+                break;
+        }
+
+        Assert.Equal(0, cursors.Count);
+    }
+
     /// <summary>
-    /// The runtime's ownership service over the EF store, as any node runs it. Built by hand it reports to no
-    /// cursors, so what it writes is what another node writes, or a report that never arrived.
+    /// The runtime's ownership service over the EF store, as any node runs it. With <paramref name="cursors"/> its
+    /// store records cursors, as a store of this process does. Without them what it writes is what another node
+    /// writes: nothing in this process hears of it.
     /// </summary>
-    private static RuntimeExecutionOwnershipService OwnershipNode(RuntimeDbContext context, TimeProvider clock, string ownerId) =>
-        new(new EfExecutionLivenessStateStore(context, new FixedAccessor(CursorScope), new NoopContinuationCodec()), clock,
+    private static RuntimeExecutionOwnershipService OwnershipNode(
+        RuntimeDbContext context, TimeProvider clock, string ownerId, EfExecutionFenceCursors? cursors = null) =>
+        new(new EfExecutionLivenessStateStore(context, new FixedAccessor(CursorScope), new NoopContinuationCodec()) { FenceCursors = cursors }, clock,
             new RuntimeExecutionOwnershipOptions { OwnerId = ownerId, LeaseDuration = TimeSpan.FromMinutes(1) });
 
-    /// <summary>Acquires the run as node-a and gives the lease the cursor the ownership service reports in a composed host.</summary>
+    /// <summary>Acquires the run as node-a through a store of this process, which records the lease's cursor.</summary>
     private static async Task<RuntimeExecutionLease> AcquireWithCursorAsync(TestDatabase database, EfExecutionFenceCursors cursors, TimeProvider clock)
     {
-        RuntimeExecutionLease lease;
-        await using (var context = database.Open(CursorScope))
-            lease = await OwnershipNode(context, clock, "node-a").AcquireAsync(CursorRun);
-        cursors.Hold(CursorKey(lease), new(await OwnershipRevisionAsync(database), lease.AcquiredAt, lease.ExpiresAt));
+        await using var context = database.Open(CursorScope);
+        var lease = await OwnershipNode(context, clock, "node-a", cursors).AcquireAsync(CursorRun);
+        Assert.True(cursors.TryGet(CursorKey(lease), out _));
         return lease;
     }
 

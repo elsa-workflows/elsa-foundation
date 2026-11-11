@@ -296,8 +296,7 @@ public static class RuntimeCoreServiceCollectionExtensions
             new RuntimeExecutionOwnershipService(
                 serviceProvider.GetRequiredService<IExecutionLivenessStateStore>(),
                 serviceProvider.GetRequiredService<TimeProvider>(),
-                serviceProvider.GetRequiredService<RuntimeExecutionOwnershipOptions>())
-            { RevisionObserver = serviceProvider.GetService<IOwnershipRevisionObserver>() });
+                serviceProvider.GetRequiredService<RuntimeExecutionOwnershipOptions>()));
         services.TryAddSingleton<InMemoryRuntimeCheckpointStoreState>();
         services.TryAddScoped<IBackgroundActivityWorkStore, InMemoryBackgroundActivityWorkStore>();
         services.TryAddSingleton<InMemoryWorkflowTestScopeStore>();

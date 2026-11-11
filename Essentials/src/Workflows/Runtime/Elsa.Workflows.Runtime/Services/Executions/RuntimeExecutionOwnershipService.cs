@@ -26,12 +26,6 @@ public sealed class RuntimeExecutionOwnershipService : IRuntimeExecutionOwnershi
     /// </summary>
     internal bool RequiresIsolatedHeartbeatScope => _operationalStateStore is not InMemoryExecutionLivenessStateStore;
 
-    /// <summary>
-    /// Is told the revision at which the ownership row holds a lease this service wrote, and when a lease is given
-    /// up. Null when nothing listens, which is the case unless the EF checkpoint store is registered.
-    /// </summary>
-    internal IOwnershipRevisionObserver? RevisionObserver { private get; init; }
-
     public RuntimeExecutionOwnershipService(IExecutionLivenessStateStore operationalStateStore)
         : this(operationalStateStore, TimeProvider.System, new RuntimeExecutionOwnershipOptions())
     {
@@ -96,7 +90,6 @@ public sealed class RuntimeExecutionOwnershipService : IRuntimeExecutionOwnershi
         {
             cancellationToken.ThrowIfCancellationRequested();
             var loaded = await FindVersionedOwnershipStateAsync(borrowed.WorkflowExecutionId, cancellationToken);
-            RevisionObserver?.LeaseEnded(_operationalStateStore, borrowed);
             if (loaded is null)
                 return Transition(RuntimeExecutionOwnershipTransitionStatus.NotFound, null);
 
@@ -164,10 +157,7 @@ public sealed class RuntimeExecutionOwnershipService : IRuntimeExecutionOwnershi
             var state = NewOwnershipState(workflowExecutionId, existing, lease, heartbeat, nextToken);
             var result = await _operationalStateStore.TrySaveAsync(state, loaded?.Revision ?? 0, cancellationToken);
             if (result.Succeeded)
-            {
-                LeaseHeld(lease, result);
                 return new ExecutionLeaseBorrow(lease, ownersExpiry);
-            }
             if (result.Status is not ExecutionLivenessStateWriteStatus.RevisionConflict and
                 not ExecutionLivenessStateWriteStatus.NotFound)
             {
@@ -213,10 +203,7 @@ public sealed class RuntimeExecutionOwnershipService : IRuntimeExecutionOwnershi
             var state = NewOwnershipState(lease.WorkflowExecutionId, existing, refreshedLease, heartbeat, highestToken);
             var result = await _operationalStateStore.TrySaveAsync(state, loaded.Revision, cancellationToken);
             if (result.Succeeded)
-            {
-                LeaseHeld(refreshedLease, result);
                 return Transition(RuntimeExecutionOwnershipTransitionStatus.Applied, highestToken);
-            }
             if (result.Status is not ExecutionLivenessStateWriteStatus.RevisionConflict and
                 not ExecutionLivenessStateWriteStatus.NotFound)
             {
@@ -235,7 +222,6 @@ public sealed class RuntimeExecutionOwnershipService : IRuntimeExecutionOwnershi
         {
             cancellationToken.ThrowIfCancellationRequested();
             var loaded = await FindVersionedOwnershipStateAsync(lease.WorkflowExecutionId, cancellationToken);
-            RevisionObserver?.LeaseEnded(_operationalStateStore, lease);
             if (loaded is null)
                 return Transition(RuntimeExecutionOwnershipTransitionStatus.NotFound, null);
 
@@ -297,13 +283,6 @@ public sealed class RuntimeExecutionOwnershipService : IRuntimeExecutionOwnershi
         }
         if (fencingToken != highestToken || existing.ExecutionLease.FencingToken != fencingToken)
             throw new RuntimeStaleFencingTokenException(workflowExecutionId, fencingToken, highestToken);
-    }
-
-    // The save was conditioned on the row's revision and wrote this lease, so the row holds it at the saved revision.
-    private void LeaseHeld(RuntimeExecutionLease lease, ExecutionLivenessStateWriteResult saved)
-    {
-        if (saved.Revision is { } revision)
-            RevisionObserver?.LeaseHeld(_operationalStateStore, lease, revision);
     }
 
     private RuntimeHeartbeat NewHeartbeat(string workflowExecutionId, RuntimeExecutionLease lease, DateTimeOffset now) =>
