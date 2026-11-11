@@ -99,7 +99,7 @@ never silent (V6).
 **V9. A script works on plain JavaScript values; Elsa finds its changes by comparing.** A script gets ordinary
 JavaScript objects and real arrays (today the objects are frozen). Changing them changes nothing outside the script by
 itself. Writing back is a general capability of script activities (A-3, ADR 0090 amendment), so S-a
-works; input-binding expressions never write (D-3). A write commits with the step and a fault discards it. A write of a
+works; input-binding expressions never write workflow state (D-3). A write commits with the step and a fault discards it. A write of a
 value the script read is a read-modify-write under ADR 0092.
 
 *Copy, compare, patch* (replaces an earlier JSON-backed view, which needed a custom Jint object for every value and
@@ -120,9 +120,24 @@ could not give real arrays; `BigInt` is no way out: `JSON.stringify` throws on i
   JavaScript number, written as JSON, differs from the original. When such a value reaches anything the step **writes**
   (copied, returned, or inside a replaced array), the write is **refused by default with a diagnostic** naming the path
   and both values; a warning alone is insufficient, because silent precision loss corrupts data. A designer who intends
-  the loss accepts it explicitly to allow the write (the implementing spec defines how). A script that only **computes**
-  with such a value, without writing it, still gets a warning — the engine cannot prevent a lossy computation
+  the loss accepts it explicitly to allow the write. That acceptance is a deliberate choice **recorded in the published
+  conversion contract**; the implementing spec defines the surface. A script that only **computes** with such a value,
+  without writing it, still gets a warning — the engine cannot prevent a lossy computation
   (`9007199254740993 + 1` is still `9007199254740992`), only its silent persistence.
+- **The refusal of a whole-array write says what was lost.** When a changed array is written as a whole and an element
+  in it lost precision, the refusal diagnostic:
+  - names the array path and says that the array was written as a whole;
+  - lists each element that lost precision, with its stored and its written value (for example `lines[2].qty`: stored
+    `9007199254740993`, written `9007199254740992`);
+  - gives the remedy: pass integers beyond 2^53 as strings, or avoid changing the array;
+  - fires only on a real loss: `10.50` → `10.5` is the same value and is no loss;
+  - is visible, as an instance diagnostic and in Studio, not only in a log.
+
+  The trade-off: an element the script did not touch can still lose precision when its array changes. That loss is
+  prevented by default, and accepting it is explicit, as above.
+- **Accepted gap.** Because the compare is JavaScript against JavaScript, a deliberate write of a value equal to the
+  converted read (for example setting `…992` over a stored `…993`) is treated as unchanged, and the stored text is
+  kept. The script cannot tell the two apart. Writing the value as a string forces the write.
 - **The cost is accepted by default.** Each variable the script reads is converted once and walked once at commit:
   linear in the data the script receives. Integrity comes before performance in the default; a faster implementation
   may come later through V12, only if it behaves identically.
@@ -136,8 +151,19 @@ exchange JSON (D-5). A host may opt in to exposing objects it explicitly registe
 attempt (V7). The opt-in is a separate script profile (ADR 0083, for example `binding-readonly-interop-v1`), not a
 host switch on the default profile, so one profile name always means one behaviour and a published executable records
 which one it uses. General access to .NET types (Jint's `AllowClr`) is a further, separately named profile that a
-host may select deliberately, for script activities only: never the default, and never in input-binding expressions,
-which stay read-only (D-3). This follows the platform principle: guardrails, not restrictions.
+host may enable deliberately; it is never the default. This follows the platform principle: guardrails and
+diagnostics, not restrictions.
+
+A host developer can also enable general .NET access for JavaScript input-binding expressions. The default for an
+input binding stays JSON. The opt-in comes with these guardrails:
+- **Opt-in at two levels.** The host enables a separately named binding profile, and an expression selects it. The
+  executable pins it like any profile, so one profile name never means different behaviour on different hosts.
+- **Visible.** The same publish warning and Studio marker as for general .NET access in script activities (ADR 0083).
+- **Effect boundary.** An expression that selects this profile is treated as possibly effectful: the engine commits
+  before and after its evaluation. Only expressions that opt in pay for this.
+- **Stored value.** A binding may use .NET objects while it evaluates. What it returns is a storable value under this
+  ADR, or it is refused. No live object enters the input snapshot (V7).
+- **Elsa state.** Direct writes to Elsa-owned workflow state stay blocked in input bindings (D-3).
 
 **V12. One seam for how values reach a script, with pinned profiles.** How a value enters a script and how its
 changes come back is one seam with named, pinned implementations (V3's rule: one name keeps one behaviour):
@@ -149,8 +175,11 @@ changes come back is one seam with named, pinned implementations (V3's rule: one
 
 - The engine sets the default, JSON out of the box, and a script activity may choose another profile (reconciliation
   row 17b).
-- Input-binding expressions always use JSON (row 17a).
-- Publication and Studio show a clear warning when a script uses .NET objects (row 17).
+- Input-binding expressions use JSON by default. A host may enable a separately named .NET profile for them, which an
+  expression selects, under V10's guardrails: possibly effectful with a commit before and after, a storable result or a
+  refusal, and no writes to Elsa-owned state; such a binding has no write-back (row 17a).
+- Publication and Studio show a clear warning when a script activity or an input-binding expression uses .NET objects
+  (row 17).
 - A faster implementation of the JSON profile, such as a view that converts each value only when it is read, may be
   added later if measurements ask for it, and only if it behaves identically. If it differs in any way, it is a new
   profile with its own name.
@@ -194,7 +223,7 @@ the opt-in.
 | Value | Today | Rule |
 |---|---|---|
 | Integer within ±2^53 | exact | Keep |
-| Integer beyond ±2^53, or a `Decimal` with more digits than a double holds | digits lost on the way in, also for values the script never touches: the whole input is converted into JavaScript values up front, and Jint holds every number as a double | Values the script does not change keep their exact text: only changed paths are written (V9). A number the script reads is a JavaScript number, a double (V6, stated), and a lost digit that reaches a write is refused by default with a diagnostic (V9), unless the designer explicitly accepts the loss. Elsa never turns numbers into strings by itself. A designer who needs exact digits holds them as a string, the usual JSON convention for integers beyond 2^53; exact money arithmetic goes to a .NET function (D-5) or an activity |
+| Integer beyond ±2^53, or a `Decimal` with more digits than a double holds | digits lost on the way in, also for values the script never touches: the whole input is converted into JavaScript values up front, and Jint holds every number as a double | Values the script does not change keep their exact text: only changed paths are written (V9). A number the script reads is a JavaScript number, a double (V6, stated), and a lost digit that reaches a write is refused by default with a diagnostic (V9), unless the designer explicitly accepts the loss, recorded in the published conversion contract. Elsa never turns numbers into strings by itself. A designer who needs exact digits holds them as a string, the usual JSON convention for integers beyond 2^53; exact money arithmetic goes to a .NET function (D-5) or an activity |
 | `0.1 + 0.2` | `0.30000000000000004` | Stated: script arithmetic is double arithmetic |
 | `2.0`, `1e21` | come back as `2`, `1e+21` | Stated: the notation may change, the number does not |
 | Dates | ISO 8601 strings | Stay strings; a JavaScript `Date` (once D-1 enables it) leaves as UTC (`…Z`) |
@@ -220,8 +249,12 @@ and ADR 0083 state only the engine's clock (UTC, from an injectable clock) and p
   out with `Z`. A value without an offset (`"2026-10-28T09:15:00"`) is **not silently read as UTC**: it needs an
   explicitly configured interpretation — a declared source time zone, or an explicit assume-UTC policy — before it
   becomes an instant. Without one, the conversion is refused with a diagnostic rather than guessing.
-- **`DateTimeOffset`** keeps its offset. A value without an offset gets `+00:00`. An activity that needs the offset
-  declares `DateTimeOffset`.
+- **`DateTimeOffset`** keeps its offset. A value without an offset follows the same rule as `DateTime`: it does not
+  silently get `+00:00`; it needs a source time zone or an explicit assume-UTC policy, and without one it is refused.
+  Choosing the type does not choose the zone. An activity that needs the offset declares `DateTimeOffset`.
+- **The interpretation is explicit and stable.** The source time zone or the assume-UTC policy is set on the
+  conversion and recorded in the published conversion contract, so a published executable reads the same value as the
+  same instant on every server.
 - **`DateOnly`** takes the date as written. A value with a time and an offset takes its date in UTC.
 - **Publish-time literals and variable defaults follow the same rule.** Today they pin the publishing server's offset
   (ADR 0091, Context).
@@ -237,7 +270,7 @@ parses with `DateTime.Parse` and no `DateTimeKind` handling. Tested on a UTC+1 s
 
 | Elsa 3 input | Into `DateTime` | Into `DateTimeOffset` | Under this rule |
 |---|---|---|---|
-| `"2026-10-28T09:15:00"` | 09:15, kind Unspecified, read as server time | 09:15 +01:00 | 09:15Z: a different instant on a non-UTC server |
+| `"2026-10-28T09:15:00"` | 09:15, kind Unspecified, read as server time | 09:15 +01:00 | Refused without a source time zone or assume-UTC policy; with assume-UTC, 09:15Z: a different instant on a non-UTC server |
 | `"2026-10-28T09:15:00Z"` | 10:15, kind Local | 09:15 +00:00 | Same instant; the wall-clock hour, the date near midnight and the text differ for `DateTime` and `DateOnly` |
 | `"2026-10-28T09:15:00+05:00"` | 05:15, kind Local | 09:15 +05:00 | As above |
 
@@ -296,6 +329,14 @@ today. Its date-heavy scripts are already refused.
   A script result inherits the strongest protection policy of what the script actually read. That needs the reads to be
   recorded, which the ADR 0089 amendment (A3) and
   ADR 0092 (decision 3) provide.
+
+### Alternatives considered
+
+- **General .NET access for script activities only, never in input-binding expressions.** Not chosen. A registered
+  function is already .NET code that a binding calls, so the restriction takes a capability away without keeping .NET
+  out of bindings. And under faithful-or-refuse, an Elsa 3 input expression that uses .NET access would have to be
+  refused at conversion. The guardrails of V10 keep the default plain and make the opt-in visible and bounded instead.
+- **A JSON-backed view of each value instead of copy, compare, patch.** Not chosen; see V9.
 
 ### What this settles
 
