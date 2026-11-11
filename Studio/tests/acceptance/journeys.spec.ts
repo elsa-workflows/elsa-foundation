@@ -534,5 +534,5 @@ test("tabbed Secrets authoring and metadata", async ({ page }, info) => {
 });
 
 test("compact runtime Inputs retain exact captured values and accessible technical details", async ({ page }, info) => {
-  await compactInputsJourney(page, info, capture);
+  await compactInputsJourney(page, info, capture, cleanup => { ownedCleanups.get(page)!.push(cleanup); });
 });

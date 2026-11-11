@@ -70,7 +70,8 @@
   flex-shrink: 0;
 }
 
-.wf-input-inspection-info.studio-button[aria-expanded="true"] {
+/* [data-variant] outranks the workspace styles' transparent ghost background, so the open state stays visible. */
+.wf-input-inspection-info.studio-button[data-variant][aria-expanded="true"] {
   background: var(--studio-accent-soft);
   color: var(--studio-accent);
 }
