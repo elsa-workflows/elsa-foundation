@@ -87,10 +87,16 @@ const manifest = JSON.parse(await readFile(resolve(outputRoot, ".vite/manifest.j
 // immediately visible; organization/catalog dialogs remain action-loaded. Canvas closure and
 // computed-style guards preserve authoring, Activity Definition, BPMN and read-only rendering.
 // All budget limits and the 16 deferred-entry guards remain unchanged.
+// Choose data for whole activity outputs (#3094) registers the ActivityResult reference editor in the module
+// entry. The registration holds no editor code (the chooser and reference stay in their own deferred chunk) but
+// must render a stored reference, with Clear, when that chunk fails to load. Against parent main 90d253fd2's
+// Definitions landing of 401.21 kB the branch measures 402.61 kB (entry 108.73 -> 110.10 kB); no other eager
+// code was found to move. Definitions gains 1.5 kB for this measured cost, keeping a ~0.9 kB landing margin;
+// the entry, stylesheet, upgrade, individual-chunk and deferred-surface guards are unchanged.
 const budgets = {
   entryJavaScript: 127_500,
   stylesheet: 185_000,
-  definitionsLandingTotal: 402_000,
+  definitionsLandingTotal: 403_500,
   upgradeLandingTotal: 379_000,
   individualChunk: 500_000
 };
