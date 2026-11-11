@@ -222,7 +222,9 @@ public sealed partial class EfRuntimeCheckpointCommitStoreTests
 
         await Assert.ThrowsAsync<DbUpdateException>(() => store.CommitAsync(FencedCommit("commit-failed", lease), Decision()).AsTask());
 
-        // The bump was rolled back with the rest, so the cursor still names the row.
+        // The bump was rolled back with the rest, so the cursor still names the row. The first save had returned, so
+        // the row had confirmed the fence and this failure is not looked into.
+        Assert.Equal((0, 1), OwnershipCommands(capture, 0));
         Assert.Equal(cursor, Cursor(cursors, lease));
         Assert.Equal(cursor.Revision, await OwnershipRevisionAsync(database));
         Assert.Empty(context.ChangeTracker.Entries());
@@ -535,7 +537,9 @@ public sealed partial class EfRuntimeCheckpointCommitStoreTests
             () => CursorStore(context, cursors, clock).CommitAsync(WorkflowRowCommit("commit-1", lease), Decision()).AsTask());
 
         Assert.True(rootChanges.Executed);
-        Assert.Equal((0, 1), OwnershipCommands(capture, 0));
+        // The bump was written and rolled back. The read is the look that follows any failed first save of a commit
+        // with a cursor: the lease is still held, so the conflict leaves.
+        Assert.Equal((1, 1), OwnershipCommands(capture, 0));
         Assert.Equal(cursor, Cursor(cursors, lease));
         Assert.Equal(cursor.Revision, await OwnershipRevisionAsync(database));
         Assert.Empty(context.ChangeTracker.Entries());
@@ -641,6 +645,117 @@ public sealed partial class EfRuntimeCheckpointCommitStoreTests
         Assert.Null(context.Database.CurrentTransaction);
         await using var read = database.Open(CursorScope);
         Assert.Empty(await read.RuntimeCheckpointCommits.ToArrayAsync());
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task A_commit_whose_save_fails_on_another_row_before_the_bump_leaves_as_stale_when_the_run_was_lost(bool runWasLost)
+    {
+        // The save writes its rows in table order, and the durable-value table comes before the ownership table. A
+        // failure there says nothing about the lease, and the bump has not run yet. A commit that reads the row
+        // first never saves for a drain that lost its run, so the row is looked at before the failure leaves.
+        await using var database = await TestDatabase.CreateAsync();
+        var clock = new FakeTimeProvider(OccurredAt);
+        var cursors = new EfExecutionFenceCursors(clock);
+        var lease = await AcquireWithCursorAsync(database, cursors, clock);
+        if (runWasLost)
+        {
+            await using var other = database.Open(CursorScope);
+            await OwnershipNode(other, clock, "node-b").AcquireAsync(CursorRun);
+        }
+        var cursor = Cursor(cursors, lease);
+        var capture = new CommandCaptureInterceptor();
+        var saveFails = new OnCommand(command => command.Transaction is not null &&
+            command.CommandText.StartsWith("INSERT", StringComparison.Ordinal) &&
+            command.CommandText.Contains(RuntimeOperationalStateEfModule.DurableValueTableName, StringComparison.Ordinal))
+        {
+            Then = () => throw new TimeoutException("Simulated failure of the save.")
+        };
+        await using var context = database.Open(CursorScope, capture, saveFails);
+        var commit = FencedCommit("commit-save-fails", lease) with
+        {
+            StateChanges = new(null, null, [], [],
+                [new("value-a", RuntimeStateChangeOperation.Upsert, DurableValue("value-a", "one"), new Dictionary<string, string>())], [], [])
+        };
+        Func<Task> act = () => CursorStore(context, cursors, clock).CommitAsync(commit, Decision()).AsTask();
+
+        if (runWasLost)
+            Assert.Equal(RuntimeFencingRejectionReason.StaleToken, (await Assert.ThrowsAsync<RuntimeStaleFencingTokenException>(act)).Reason);
+        else
+            Assert.IsType<TimeoutException>((await Assert.ThrowsAnyAsync<Exception>(act)).GetBaseException());
+
+        Assert.Equal(1, saveFails.Hits);
+        // The bump was not reached. The one read is the look after the rollback. The cursor was not found behind.
+        Assert.Equal((1, 0), OwnershipCommands(capture, 0));
+        Assert.Equal(cursor, Cursor(cursors, lease));
+        Assert.Empty(context.ChangeTracker.Entries());
+        await using var read = database.Open(CursorScope);
+        Assert.Empty(await read.DurableValueStates.ToArrayAsync());
+        Assert.Empty(await read.RuntimeCheckpointCommits.ToArrayAsync());
+    }
+
+    [Fact]
+    public async Task A_failed_marker_lookup_after_a_cursor_that_was_behind_leaves_and_the_commit_is_not_run_again()
+    {
+        // Only the conflict on the staged bump is answered with another run. A failure of what follows it, here the
+        // marker lookup after the rollback, leaves as it does for any failed save.
+        await using var database = await TestDatabase.CreateAsync();
+        var clock = new FakeTimeProvider(OccurredAt);
+        var cursors = new EfExecutionFenceCursors(clock);
+        var lease = await AcquireWithCursorAsync(database, cursors, clock);
+        await using (var other = database.Open(CursorScope))
+            Assert.True((await OwnershipNode(other, clock, "node-a").HeartbeatAsync(lease)).Succeeded);
+        var capture = new CommandCaptureInterceptor();
+        var lookupFails = new OnCommand(command => command.Transaction is null && capture.Commands.Any(IsOwnershipWrite))
+        {
+            Then = () => throw new TimeoutException("Simulated failure of the marker lookup.")
+        };
+        await using var context = database.Open(CursorScope, capture, lookupFails);
+
+        await Assert.ThrowsAsync<TimeoutException>(
+            () => CursorStore(context, cursors, clock).CommitAsync(FencedCommit("commit-1", lease), Decision()).AsTask());
+
+        Assert.Equal(1, lookupFails.Hits);
+        Assert.Equal((0, 1), OwnershipCommands(capture, 0));
+        await using var read = database.Open(CursorScope);
+        Assert.Empty(await read.RuntimeCheckpointCommits.ToArrayAsync());
+    }
+
+    [Fact]
+    public async Task A_required_root_lease_is_not_looked_into_as_a_failure()
+    {
+        // A commit that hoped to update its root without a lease and finds it needs one is not a failed commit: it
+        // takes the lease and commits again. That first pass must not cost a read of the ownership row.
+        await using var database = await TestDatabase.CreateAsync();
+        var lease = await SeedRetainedRootAsync(database);
+        var clock = new FixedTimeProvider(OccurredAt);
+        var cursors = new EfExecutionFenceCursors(clock);
+        string stamp;
+        await using (var read = database.Open(CursorScope))
+            stamp = (await read.ExecutionLivenessStates.AsNoTracking().SingleAsync()).SchemaVersion;
+        cursors.Hold(CursorKey(lease), new(await OwnershipRevisionAsync(database), lease.ExpiresAt, stamp));
+        var capture = new CommandCaptureInterceptor();
+        await using var context = database.Open(CursorScope, capture);
+        var sessions = new AsyncLocalRuntimeCoalescingSessionAccessor();
+        using var hint = sessions.Push(RootHint());
+        var manager = new PassThroughRootWriteLeaseManager();
+        var store = new EfRuntimeCheckpointCommitStore(context, new FixedAccessor(CursorScope), clock, manager)
+        { CoalescingSessions = sessions, FenceCursors = cursors };
+        // The pin differs from the stored root, so the update-only pass asks for the lease.
+        var commit = RetainedRootCommit(lease);
+        var state = commit.StateChanges.WorkflowExecution!.State;
+        commit = commit with
+        {
+            StateChanges = new(new(CursorRun, RuntimeStateChangeOperation.Upsert,
+                state with { PinnedExecutable = state.PinnedExecutable with { ArtifactHash = "another-hash" } }, new Dictionary<string, string>()),
+                null, [], [], [], [], [])
+        };
+
+        await store.CommitAsync(commit, Decision());
+
+        Assert.Single(manager.LeaseIds);
+        Assert.Equal((0, 1), OwnershipCommands(capture, 0));
     }
 
     [Theory]

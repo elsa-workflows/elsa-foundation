@@ -258,7 +258,7 @@ public sealed class EfRuntimeCheckpointCommitStore(
             context.Database.GetEnlistedTransaction() is not null || System.Transactions.Transaction.Current is not null))
             throw new InvalidOperationException("Exact bookmark checkpoint admission requires a clean context and its own transaction.");
 
-        // True while an attempt has chosen its fence cursor over reading the row and has not yet staged the bump.
+        // True while an attempt has chosen its fence cursor over reading the row and its first save has not returned.
         var fenceUnchecked = false;
         // True when an attempt's save found the row at another revision than its cursor named.
         var fenceCursorBehind = false;
@@ -318,21 +318,24 @@ public sealed class EfRuntimeCheckpointCommitStore(
         // An attempt may skip the read of the fence row when the lease has a usable fence cursor. Only a retryable
         // unit of work does, because a cursor that is behind the row makes the save conflict on that row, and then
         // the unit has to run again: it runs once more reading the row, which admits or refuses it as before. That
-        // extra run is not one of the renewal attempts.
+        // extra run is not one of the renewal attempts. An exact bookmark resume never uses its cursor: its conflict
+        // on the fence row is not retried but leaves as admission-unavailable, and a rerun would admit it instead.
         async ValueTask<RuntimeCheckpointCommitStoreResult> CommitFencedAsync(CancellationToken writeCancellationToken, WorkflowExecutableIdentity? requiredExistingRoot = null)
         {
             var retryable = commit.ExpectedFence is not null && !context.ChangeTracker.HasChanges() &&
                 context.Database.CurrentTransaction is null && context.Database.GetEnlistedTransaction() is null && Transaction.Current is null;
-            var mayUseFenceCursor = retryable;
+            var mayUseFenceCursor = retryable && commit.ExpectedBookmarkResume is null;
             for (var attempt = 1; ;)
             {
                 try
                 {
                     return await CommitNewAsync(writeCancellationToken, requiredExistingRoot, mayUseFenceCursor);
                 }
-                catch (Exception) when (fenceCursorBehind)
+                catch (DbUpdateConcurrencyException) when (fenceCursorBehind)
                 {
-                    // The attempt has rolled back and nothing of it was saved. Run it again, reading the row.
+                    // The attempt has rolled back and nothing of it was saved. Run it again, reading the row. Only
+                    // the conflict itself is answered this way: when the rollback or the marker lookup after it
+                    // fails, that failure leaves.
                     fenceCursorBehind = false;
                     mayUseFenceCursor = false;
                 }
@@ -343,14 +346,16 @@ public sealed class EfRuntimeCheckpointCommitStore(
                     attempt++;
                 }
                 catch (Exception exception) when (fenceUnchecked &&
+                    exception is not EfRuntimeCheckpointParticipantStaging.ExistingRootLeaseRequiredException &&
                     !(exception is OperationCanceledException && writeCancellationToken.IsCancellationRequested))
                 {
-                    // The attempt failed while staging, before its fence had been checked, and it has rolled back. A
-                    // commit that reads the row first never stages for a drain that lost its run: it is refused as
-                    // stale. So look at the row once before the staging failure leaves, and let a lost run leave as
-                    // stale here too. When the look itself fails, the staging failure leaves. A cancellation of this
-                    // call leaves as it is; an OperationCanceledException while the call is not cancelled is a
-                    // provider's timeout and is looked into like any failure.
+                    // The attempt failed while staging or in its first save, before the row had confirmed its fence,
+                    // and it has rolled back. A commit that reads the row first never stages or saves for a drain
+                    // that lost its run: it is refused as stale. So look at the row once before the failure leaves,
+                    // and let a lost run leave as stale here too. When the look itself fails, the failure leaves. A
+                    // cancellation of this call leaves as it is; an OperationCanceledException while the call is
+                    // not cancelled is a provider's timeout and is looked into like any failure. A required root
+                    // lease is not a failure: the caller takes the lease and commits again.
                     fenceUnchecked = false;
                     try
                     {
@@ -505,11 +510,12 @@ public sealed class EfRuntimeCheckpointCommitStore(
                         context, terminalJob, scope, commit.WorkflowExecutionId, writeCancellationToken);
 
                 // The fence of a commit that did not read the ownership row. The cursor is looked up again, because
-                // staging took time: a cursor that is no longer usable means the row is read here after all.
+                // staging took time: a cursor that is no longer usable means the row is read here after all. With
+                // the bump staged, the fence stays unconfirmed until the save has written it: the save writes other
+                // rows first, and a failure on one of those says nothing about the lease.
                 ExecutionLivenessStateEntity? fenceBump = null;
                 if (fenceUnchecked)
                 {
-                    fenceUnchecked = false;
                     if (FenceCursors!.TryGet(fenceKey!.Value, out var latest) && EfRuntimeCheckpointParticipantStaging.IsUsable(latest, _timeProvider))
                     {
                         fenceBump = EfRuntimeCheckpointParticipantStaging.StageExecutionFenceBump(context, scope, commit.WorkflowExecutionId, latest);
@@ -517,6 +523,7 @@ public sealed class EfRuntimeCheckpointCommitStore(
                     }
                     else
                     {
+                        fenceUnchecked = false;
                         fenceAfterCommit = await EfRuntimeCheckpointParticipantStaging.StageExecutionFenceAsync(
                             context, scope, commit.WorkflowExecutionId, commit.ExpectedFence!, _timeProvider, writeCancellationToken);
                     }
@@ -528,13 +535,16 @@ public sealed class EfRuntimeCheckpointCommitStore(
                 {
                     EnsureExactBookmarkDeadline(commit);
                     await context.SaveChangesAsync(writeCancellationToken);
+                    fenceUnchecked = false;
                 }
-                catch (DbUpdateConcurrencyException exception) when (fenceBump is not null && exception.Entries.Any(entry => ReferenceEquals(entry.Entity, fenceBump)))
+                catch (DbUpdateConcurrencyException exception) when (fenceBump is not null && exception.Entries.Count != 0 &&
+                    exception.Entries.All(entry => ReferenceEquals(entry.Entity, fenceBump)))
                 {
                     // The row is not at the cursor's revision. Whether the lease is still current is not known yet:
                     // the caller runs the unit again and reads the row.
                     FenceCursors!.Distrust(fenceKey!.Value);
                     fenceCursorBehind = true;
+                    fenceUnchecked = false;
                     throw;
                 }
                 finally

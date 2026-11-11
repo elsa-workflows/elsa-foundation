@@ -213,7 +213,7 @@ Every shell with the runtime API has this machinery: the runtime API feature cal
 
 **What is buffered:** writes to run, activity execution, durable value and scheduler state, and continuation intents (`EnqueueSchedulerWork`), which are consumed from the buffer within the segment so a folded segment does not save its own continuation.
 
-**What is never buffered:** lease, heartbeat and ownership writes go straight to the operational store. The folded commit still goes through the single checkpoint committer, which stamps the drain's ownership lease as `ExpectedFence` so a stale writer is refused before anything is saved. The EF store checks that fence in the commit's transaction: it reads the ownership row and validates the lease, or, with a usable [fence cursor](glossary/elsa.md), lets the save bump the row without reading it.
+**What is never buffered:** lease, heartbeat and ownership writes go straight to the operational store. The folded commit still goes through the single checkpoint committer, which stamps the drain's ownership lease as `ExpectedFence`, so nothing of a stale writer's commit is kept. The EF store checks that fence in the commit's transaction: it reads the ownership row and validates the lease, or, with a usable [fence cursor](glossary/elsa.md), lets the save bump the row without reading it.
 
 **Boundaries that always save.** These checkpoints are never folded away:
 

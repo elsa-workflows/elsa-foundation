@@ -478,7 +478,10 @@ internal static class EfRuntimeCheckpointParticipantStaging
     /// What this gives up: the bump cannot also compare the lease columns, so an ownership row that was deleted and
     /// inserted again outside the runtime, and has reached the cursor's revision under another lease, would pass
     /// while the cursor's lease time lasts. Nothing in the runtime deletes an ownership row: run deletion keeps it
-    /// as a tombstone.
+    /// as a tombstone. The same holds when the database loses a write it acknowledged, as after a failover to a
+    /// replica that lags or a restore under running nodes: the row can return to an earlier revision and reach the
+    /// cursor's revision again under another lease, and the bump would match. Reading the row does not have that
+    /// gap, because it compares the lease itself.
     /// </para>
     /// <para>
     /// The stand-in is not the row and must not outlive the save: the caller detaches it right after, on success
@@ -527,7 +530,8 @@ internal static class EfRuntimeCheckpointParticipantStaging
 
     /// <summary>
     /// Whether every entry a save conflicted on is an execution-liveness row. In a unit of work whose only write to
-    /// that table is the fence touch of <see cref="StageExecutionFenceAsync"/>, that means the fence row alone. The
+    /// that table is its fence bump, staged by <see cref="StageExecutionFenceAsync"/> or by
+    /// <see cref="StageExecutionFenceBump"/>, that means the fence row alone. The
     /// owner's lease heartbeat bumps that row's revision without changing the lease, so the unit of work can run
     /// again. The next attempt checks the fence again, so a real ownership change still fails as stale.
     /// </summary>

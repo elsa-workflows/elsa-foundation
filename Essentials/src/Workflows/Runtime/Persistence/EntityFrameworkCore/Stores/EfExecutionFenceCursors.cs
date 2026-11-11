@@ -25,8 +25,9 @@ internal readonly record struct ExecutionFenceCursor(long Revision, DateTimeOffs
 /// one after its own save of the row with that lease, and a commit records one after its transaction committed. A
 /// revision of a row is never used twice, so a cursor is either the row as it is now or a revision the row has left.
 /// A cursor that is behind therefore only ever makes the commit's bump match no row. That is why writers do not
-/// need to coordinate: of two cursors for one lease the higher revision is kept, and a cursor that arrives late, is
-/// lost or is removed costs a read of the row and nothing else.
+/// need to coordinate: of two cursors for one lease the higher revision is kept. A cursor that is lost or removed
+/// costs a read of the row. A cursor that is behind costs more: a save that is rolled back, and a second run of
+/// the commit that reads the row.
 /// </para>
 /// <para>
 /// Only <see cref="Hold"/> creates an entry, and only the liveness store calls it. A commit changes an entry that
