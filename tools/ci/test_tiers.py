@@ -361,7 +361,7 @@ def check_workflows(ci: str, ci_full: str) -> list[str]:
                 "if: ${{ !cancelled() }}",
                 "if: ${{ !cancelled() && (github.event_name != 'workflow_dispatch' || inputs.suite == 'ci') }}",
                 f"if: ${{{{ !cancelled() && {GATE_OPEN} && (github.event_name != 'workflow_dispatch' || inputs.suite == 'ci') }}}}")):
-            problems.append(f"{CI}: `Build & test` must run with `if: ${{{{ !cancelled() }}}}` so it always reports")
+            problems.append(f"{CI}: `Build & test` must run with `if: ${{{{ !cancelled() ... }}}}` (no other gate than the initiative gate's explicit false) so it always reports")
         needs = re.search(r"^    needs:\s*\[([^\]]*)\]", block, re.M)
         for job in ("plan-tiers", "pr-shard", "architecture-guards", "core-only", "plan-scope",
                     "studio-lint-and-test", "studio-browser-tests", "studio-dotnet-build-and-test", "studio-ux-acceptance"):
@@ -385,7 +385,7 @@ def check_workflows(ci: str, ci_full: str) -> list[str]:
                 "if: ${{ !cancelled() }}",
                 "if: ${{ !cancelled() && (github.event_name == 'pull_request' || github.event_name == 'merge_group') }}",
                 f"if: ${{{{ !cancelled() && {GATE_OPEN} && (github.event_name == 'pull_request' || github.event_name == 'merge_group') }}}}")):
-            problems.append(f"{CI_FULL}: the `Full tier` job must run with `if: ${{{{ !cancelled() }}}}` on pull requests "
+            problems.append(f"{CI_FULL}: the `Full tier` job must run with `if: ${{{{ !cancelled() ... }}}}` on pull requests "
                             f"and merge-queue entries")
         if "needs.plan-full.result != 'success'" not in _job_name(block) or 'PLAN" != success' not in block:
             problems.append(f"{CI_FULL}: the `Full tier` job must be named `Full tier` and fail when the plan did not succeed")
@@ -625,7 +625,7 @@ def _raises(action: Callable[[], object], error: type[Exception]) -> bool:
 def check_initiative_gate(ci: str) -> list[str]:
     """Docs-only PR to initiative/*: only the gate starts. Code PR to it: the PR and full tiers start, as on main.
     Any other run: the gate says run=true and the jobs start as they did before; only an explicit false skips, and a
-    gate that fails still starts every required context, which reports red."""
+    gate that fails still starts every required context, so none passes by being skipped."""
     problems = []
     trigger = ci.split("\njobs:\n", 1)[0]
     pull_request = re.search(r"^  pull_request:[ \t]*\n((?: {4,}.*\n)+)", trigger, re.M)
@@ -655,7 +655,7 @@ def check_initiative_gate(ci: str) -> list[str]:
         if missing:
             problems.append(f"{CI}: a ready PR that carries implementation does not start {', '.join(missing)}")
         # Only an explicit 'false' skips: a gate that reports nothing starts every job, and a gate that fails still
-        # starts every required context, which then reports red rather than passing as skipped.
+        # starts every required context, which then gives its own verdict rather than passing as skipped.
         for event in ("pull_request", "merge_group", "push", "schedule"):
             opened = simulate(ci, event, {GATE_JOB: {"run": "true"}, **_CODE_OUTPUTS})
             silent = simulate(ci, event, _CODE_OUTPUTS)
@@ -666,7 +666,7 @@ def check_initiative_gate(ci: str) -> list[str]:
             skipped = [job for job in required if not broken.get(job)]
             if skipped:
                 problems.append(f"{CI}: on {event}, a failed `{GATE_JOB}` skips {', '.join(skipped)}; a required check "
-                                f"must still start and report red")
+                                f"must still start and give its own verdict")
     except ExpressionError as error:
         problems.append(f"{CI}: cannot evaluate the job conditions: {error}")
     return problems
