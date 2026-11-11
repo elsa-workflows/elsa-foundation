@@ -216,11 +216,13 @@ prop to show the corresponding output or outcome mappings.
 
 Declare a purposeful `placement` for every top-level destination: `build`, `operate` or `integrations`. `main` is reserved for direct shell destinations such as Home. There is no default catch-all: an undeclared top-level workspace contribution is route-only. Children may omit placement to inherit their parent; explicit placement in a different group lifts the child into that group. Feature-area navigation forwards `parentId`, `childDisplay` and `viewLabel`.
 
+Migrating from earlier Studio builds: the `more` placement and `defaultStudioNavigationPlacement` are removed. A contribution that still declares `placement: "more"`, or none, is route-only and no longer appears in navigation; give it `build`, `operate` or `integrations`.
+
 Use `parentId` to join an existing resource surface. A parent with `childDisplay: "views"` presents its children as local route links instead of nested sidebar entries. Its optional `viewLabel` includes the parent's own route, such as Diagnostics' Overview. A parent without `viewLabel` links to its first accessible child and disappears when it has none. Modules still own their routes, components and backend requirements; navigation is discoverability, not an authorization boundary.
 
 The built-in homes are:
 
-- Build: Workflows (Definitions, Executables and available BPMN authoring), Agents, Library (Activity definitions, Templates), and installed authoring modules such as ETL.
+- Build: Workflows (Definitions, Executables and available BPMN authoring), Agents, Decisions, Library (Activity definitions, Templates), and installed authoring modules such as ETL.
 - Operate: Runs, User tasks, Diagnostics (Overview, Console, Structured logs, OpenTelemetry), and installed operational modules.
 - Integrations: Connections and Secrets.
 - Settings: `settings` for Studio preferences, `authoring` for Workflow authoring, `runtime` for Runtime, and `admin` for Administration. Only `admin` adds the host-control read gate; preserve each module's existing permission/backend gates.

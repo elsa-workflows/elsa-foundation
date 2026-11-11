@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 
 test.use({ viewport: { width: 1440, height: 1000 } });
 
-test("opens purpose groups and moves specialist destinations into local views", async ({ page }) => {
+test("opens purpose groups and moves domain destinations into local views", async ({ page }) => {
   await page.goto("/?mode=nav-placement");
   for (const name of ["Build", "Operate", "Integrations"]) await expect(page.getByRole("button", { name, exact: true })).toHaveAttribute("aria-expanded", "true");
   await expect(page.getByRole("link", { name: "User tasks", exact: true })).toBeVisible();

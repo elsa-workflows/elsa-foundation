@@ -262,7 +262,7 @@ class RestrictedIdentityTests(unittest.TestCase):
         self.assertEqual([], acceptance.decode_identity_set(role_permissions))
         self.assertEqual((before[2], before[5]), (password, status), 'Password hash and membership status are untouched')
         self.assertEqual({'tenant': 'default', 'subject': 'reader-id', 'userName': acceptance.RESTRICTED_USER}, {key: receipt[key] for key in ('tenant', 'subject', 'userName')})
-        self.assertFalse(receipt['passwordRecorded'])
+        self.assertFalse(receipt['passwordInReceipt'])
         self.assertNotIn('AQAAAA', json.dumps(receipt))
 
     def test_unexpected_store_shapes_fail_setup_without_writing(self):

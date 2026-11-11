@@ -296,7 +296,8 @@ def restrict_seeded_reader(root, user=RESTRICTED_USER, role=RESTRICTED_SEED_ROLE
         raise RuntimeError(f'Restricted grants did not persist: {after}')
     return {'tenant': tenant, 'subject': subject, 'userName': user, 'seedRole': role, 'before': before, 'after': after,
             'authority': 'real Workbench first-boot seeder, then grant columns narrowed in the owned store before the acceptance boot',
-            'passwordRecorded': False}
+            # The generated password stays out of this receipt and report.json; Playwright traces still record the sign-in.
+            'passwordInReceipt': False}
 
 
 def run(output, journey=None):

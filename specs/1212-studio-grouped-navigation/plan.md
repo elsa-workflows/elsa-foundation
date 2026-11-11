@@ -13,7 +13,7 @@ Spec review: the owner's approved hierarchy and theme request are encoded withou
 
 ## Constitution check
 
-Framework v6.1.0 and Elsa v6.3.0 apply. This is Studio-owned navigation composition and presentation; no new project, provider, dependency or admitted domain, persistence schema, backend lifecycle or draft constitutional assumption. Existing Studio slot, module feature and permission boundaries remain authoritative. Public TypeScript metadata changes require SDK/module documentation and composition/availability regressions. Follow §2.21 behavior preservation and §2.23 risk-based testing; do not assert on source text.
+Framework v6.1.0 and Elsa v6.5.0 apply. This is Studio-owned navigation composition and presentation; no new project, provider, dependency or admitted domain, persistence schema, backend lifecycle or draft constitutional assumption. Existing Studio slot, module feature and permission boundaries remain authoritative. Public TypeScript metadata changes require SDK/module documentation and composition/availability regressions. Follow §2.21 behavior preservation and §2.23 risk-based testing; do not assert on source text.
 
 ## Validation and review
 

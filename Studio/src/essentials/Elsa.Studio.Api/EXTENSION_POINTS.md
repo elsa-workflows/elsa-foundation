@@ -37,6 +37,13 @@ Studio API is the composition root for Studio.Core contracts. Frontend lifecycle
 - Register: return `shell` from `StudioModuleInstance`, or call `api.shell.add(contribution)` during registration. `registerStudioModuleInstances` aggregates instance contributions into each fresh registry.
 - Known implementations: Backends switcher, connection notice and recovery page (intra-domain, optional). Backend admission applies to normal contributions; recovery uses only original-host services and is available before a selected connection exists.
 
+### Navigation entries (SDK — Elsa.Studio.Hosting)
+
+- Kind: Contributor; additive sidebar, icon-rail and top navigation.
+- Signature: `api.navigation.add({ id, label, path, placement, order?, icon?, parentId?, requiresFeature?, requiresRole?, requiresPermission?, requiresBackend? })`; feature-area `nav` forwards `parentId`, `childDisplay` and `viewLabel`. `placement` is `main` (shell destinations such as Home), `build`, `operate` or `integrations`; Settings sections use `settings`, `authoring`, `runtime` or `admin`.
+- Register: during `register(api)`. A top-level entry without a known placement is route-only. Navigation is discoverability, not an authorization boundary; routes keep their own gates.
+- Known implementations: every first-party Studio module; homes are listed in [Navigation](../../../docs/module-ui.md#navigation).
+
 ### Workflow run related links (SDK — Elsa.Studio.Hosting)
 
 - Kind: Contributor; optional `workflow.run.related-links` slot (`api.workflowRunRelatedLinks`).
