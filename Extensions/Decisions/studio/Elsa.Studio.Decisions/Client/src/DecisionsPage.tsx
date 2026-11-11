@@ -7,8 +7,9 @@ import { decodeDecisionXml, newDecisionXml } from "./decisionXml";
 import { TableEditor } from "./TableEditor";
 import { CasePanel } from "./CasePanel";
 import { EvaluationPanel } from "./EvaluationPanel";
-export interface DecisionsPageProps { api: ElsaStudioModuleApi; navigate(path: string): void; assetId?: string | null; versionId?: string | null; isNew?: boolean }
-export function DecisionsPage({ api, navigate, assetId, versionId, isNew = false }: DecisionsPageProps) {
+import { completeNewDecisionHandoff } from "./newDecisionHandoff";
+export interface DecisionsPageProps { api: ElsaStudioModuleApi; navigate(path: string): void; assetId?: string | null; versionId?: string | null; isNew?: boolean; /** Set when an Evaluate Decision picker opened this editor and waits for the decision it creates. */ handoff?: string | null }
+export function DecisionsPage({ api, navigate, assetId, versionId, isNew = false, handoff }: DecisionsPageProps) {
   const [assets, setAssets] = useState<DecisionAsset[]>([]), [asset, setAsset] = useState<DecisionAsset | null>(null), [published, setPublished] = useState<DecisionVersion | undefined>(), [availableVersions, setAvailableVersions] = useState<DecisionVersion[]>([]);
   const [name, setName] = useState(""), [description, setDescription] = useState(""), [xml, setXml] = useState(""), [sensitive, setSensitive] = useState(false);
   const [loading, setLoading] = useState(true), [busy, setBusy] = useState(false), [error, setError] = useState(""), [notice, setNotice] = useState(""), [conflict, setConflict] = useState(false), [diagnostics, setDiagnostics] = useState<Diagnostic[]>([]), [search, setSearch] = useState("");
@@ -68,7 +69,7 @@ export function DecisionsPage({ api, navigate, assetId, versionId, isNew = false
     const input = { name: name.trim(), description, xml, isSensitive: sensitive };
     const next = asset ? await saveDecision(api, asset, input) : await createDecision(api, input);
     if (ticket !== generation.current) return; apply(next); dirtyRef.current = caseDirty; setNotice("Decision saved.");
-    if (!asset) savedNavigation(path(next.id));
+    if (!asset) { if (isNew && handoff) completeNewDecisionHandoff(handoff, { id: next.id, name: next.name }); savedNavigation(path(next.id)); }
   });
   const importDocument = async (file: File) => {
     if (file.size > 1024 * 1024) { setError("Decision documents must be at most 1 MiB."); return; }

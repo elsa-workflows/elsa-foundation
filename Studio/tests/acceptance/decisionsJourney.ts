@@ -169,7 +169,7 @@ export async function decisionsJourney(page: Page, info: TestInfo, capture: Capt
 
   /**
    * A workflow author starts a new decision from the Evaluate Decision picker, saves it in the tab that opens,
-   * and returns to the workflow with its unsaved pick intact and the new decision offered.
+   * and returns to the workflow to find the decision just created selected in the picker (#4086).
    */
   async function pickerShortcut(existingId: string, existingDecision: string) {
     await page.setViewportSize(info.project.use.viewport ?? { width: 1440, height: 1000 });
@@ -207,11 +207,12 @@ export async function decisionsJourney(page: Page, info: TestInfo, capture: Capt
       await part("decision-picker-new-tab", surface.getByLabel("Name", { exact: true }));
       expect(await opened.getAttribute("aria-label") ?? await opened.textContent()).not.toContain(workflowName);
       const created = `Picker-created policy ${suffix}`;
-      await surface.getByLabel("Name", { exact: true }).fill(created); await save();
-      // Back on the workflow: its unsaved pick survived, and the list reloaded with the decision just saved.
+      await surface.getByLabel("Name", { exact: true }).fill(created); const createdAsset = await save();
+      // Back on the workflow: the list reloaded and the picker took the decision this New decision flow saved.
       await page.getByRole("tab", { name: new RegExp(`^${workflowName}`) }).click();
-      await expect(picker).toBeVisible(); await expect(picker).toHaveValue(existingId);
-      await expect(picker.locator("option", { hasText: created })).toHaveCount(1);
+      await expect(picker).toBeVisible(); await expect(picker).toHaveValue(createdAsset.id);
+      expect(createdAsset.id).not.toBe(existingId);
+      await expect(picker.locator("option:checked")).toHaveText(created);
       await part("decision-picker-returned", picker);
     } catch (failure) {
       // Clean up best-effort without letting a cleanup failure replace the journey's own error.
