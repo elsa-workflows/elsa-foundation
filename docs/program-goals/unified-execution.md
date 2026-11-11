@@ -40,6 +40,16 @@ The target is support for native workflows, first-class and embedded BPMN, and E
 4. **Priority order for the remaining work** (as [revised on 9 November](https://github.com/elsa-workflows/elsa-foundation/issues/2892#issuecomment-6739699681)): native and BPMN journeys first; ETL and Rules native-parent restart witnesses; the PublicAPI opt-in; Agents native collaboration; ETL connectors last and only from the approved list below. Existing deferrals stand.
 5. **Working method tightened:** see [Working method](#working-method).
 
+## Owner decisions — 11 November 2026
+
+[Recorded on the program issue](https://github.com/elsa-workflows/elsa-foundation/issues/2892#issuecomment-6807409653).
+The runtime core is rebuilt under the [Journal-first runtime core](journal-core.md) program. For the switch to
+that core the break is clean: runs in flight are not migrated, which overrides the 29 October rule on
+persisted-state compatibility for that switch only. Authoring contracts, workflow definitions, the HTTP API and
+Studio keep working unchanged. [ADR 0098](../adr/0098-the-runtime-core-keeps-a-journal-per-run-and-derives-everything-else.md)
+proposes how the ports of the 9 November clarification change; until the owner accepts it, they stand as
+written above, and every rule of this program applies to work on the current core.
+
 ## Delivery sequence
 
 The active sequence is the smaller native/BPMN SQLite milestone above, then: ETL and Rules native-parent restart witnesses (in-process, then process-kill; Rules under its opt-in source-build identity; the agent rename of [#4027](https://github.com/elsa-workflows/elsa-foundation/issues/4027) lands before the agent-collaboration leaves), the PublicAPI analyzer opt-in for the port-declaring and consumed packages (#4008), Agents native collaboration, then the retained deferrals (managed-store qualification of the proven journeys, Studio affordances across models). A Decisions protocol driver is [not scheduled](https://github.com/elsa-workflows/elsa-foundation/issues/2892#issuecomment-6739699681): durable Decisions runs have no concrete requirement and no wait state, so the shared ports stay unlocked until a second real driver exists. ETL connector expansion comes last and only from the approved list. The historical wider sequence and its hosting, collaboration and Studio obligations remain backlog rather than prerequisites for the milestone. Preserve existing deferrals and compatibility gates. Small verified increments advance the existing issue/PR, with Project #62 reconciled at milestone transitions.

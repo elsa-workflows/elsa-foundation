@@ -1,6 +1,8 @@
 # Runtime Commits Append One Journal Row And The Per-Activity Tables Become Read Models
 
 Status: proposed (2026-10-12, numbers revised 2026-10-13 after #2585). Low priority by owner decision on #2564.
+[ADR 0098](0098-the-runtime-core-keeps-a-journal-per-run-and-derives-everything-else.md) (proposed 2026-11-11)
+supersedes the verdict below once it is accepted.
 
 Program: Runtime Efficiency, epic [#2564](https://github.com/elsa-workflows/elsa-foundation/issues/2564). Evidence:
 the measurement report posted on #2564, produced by `Essentials/tests/Activities/Http/CommandCost/Tests`. Constrained by
