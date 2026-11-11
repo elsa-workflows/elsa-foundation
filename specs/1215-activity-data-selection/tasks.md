@@ -98,8 +98,13 @@ handwritten source, including a real minimal host. Unknown literals and source f
 workflow drafts and stores the server's `ActivityResult` binding unchanged as one edit (T019 wire; whole-output
 parts of T018, T020, T021, T023). The source client covers both advertised relations; only the workflow editor
 uses it, so reusable-graph (T041), intrinsic/Switch (T042) and BPMN (T043) surfaces offer nothing yet. Member
-selection is not offered. Optional reads of conditional producers, other source families (T022) and the composed
-journeys/captures of T024–T025 remain open. Evidence is on the delivering PR.
+selection is not offered. Whole-output subset of T024–T025: the owned-host journey "choose data for activity
+outputs" in `Studio/tests/acceptance/journeys.spec.ts` and the runner's capture inventory cover Sequence and
+top-level Flowchart choice, reopen, publish and a run checking the consumer's committed input, a loop producer's
+shared reason with nothing stored, and keyboard choice with Replace and Clear, in the four standard profiles.
+Not covered: nested members, optional conditional reads, other source families, a minimal host, 320px captures,
+the `e2e-tests/` source-family/type-fit proof of T024 and independent review. Optional reads of conditional
+producers and other source families (T022) remain open. Evidence is on the delivering PR.
 
 **Checkpoint:** US1 passes actual persisted journeys; #3094 can close only on its narrower own evidence.
 Whole-output UI completion does not close nested binding/runtime obligations.
