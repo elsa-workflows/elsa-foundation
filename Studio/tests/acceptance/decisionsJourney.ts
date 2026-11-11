@@ -13,6 +13,9 @@ export async function decisionsJourney(page: Page, info: TestInfo, capture: Capt
   if (info.project.name.startsWith("narrow")) await page.setViewportSize({ width: 320, height: 1000 });
   const surface = page.locator(".decisions-page:visible");
   const button = (name: string) => surface.getByRole("button", { name, exact: true });
+  // Each Decisions workspace tab is named for what it holds, so several open tabs stay distinguishable.
+  const activeTab = page.getByRole("tablist", { name: "Open screens", exact: true }).getByRole("tab", { selected: true });
+  const tabTitle = (title: string) => expect(activeTab).toHaveAttribute("aria-label", title);
   const suffix = `${info.project.name}-${Date.now()}`;
   let caseCount = 0;
   async function part(name: string, locator: Locator) {
@@ -76,6 +79,7 @@ export async function decisionsJourney(page: Page, info: TestInfo, capture: Capt
 
   await page.goto("/decisions"); await expect(surface.locator("#decisions-title")).toHaveText("Decisions");
   await expect(surface.locator(".studio-skeleton-list")).toHaveCount(0); await part("decisions-list", surface.locator("#decisions-title"));
+  await tabTitle("Decisions");
   // The shared search shell draws the only border; the field inside it must not add a second one.
   const search = surface.getByRole("searchbox", { name: "Search decisions", exact: true });
   expect(await search.evaluate(element => { const style = getComputedStyle(element); return [style.borderTopWidth, style.backgroundColor, style.paddingLeft]; })).toEqual(["0px", "rgba(0, 0, 0, 0)", "0px"]);
@@ -91,8 +95,9 @@ export async function decisionsJourney(page: Page, info: TestInfo, capture: Capt
   }
   await button("New decision").click(); await expect(surface.getByRole("heading", { name: "New decision", exact: true })).toBeVisible();
   await expect(surface.getByText("Unsaved decision", { exact: true })).toBeVisible(); await expect(surface.getByText("Saved draft", { exact: true })).toHaveCount(0);
+  await tabTitle("New decision");
   await part("decision-create", surface.getByLabel("Name", { exact: true }));
-  await button("Back to decisions").click(); await expect(button("New decision")).toBeFocused();
+  await button("Back to decisions").click(); await expect(button("New decision")).toBeFocused(); await tabTitle("Decisions");
   await button("New decision").click(); await surface.getByLabel("Name", { exact: true }).fill(`Approval policy ${suffix}`);
   await surface.getByLabel("Description", { exact: true }).fill("Determine purchase approval requirements.");
   await surface.getByRole("textbox", { name: "Output 1 name", exact: true }).fill("approvalLevel");
@@ -104,7 +109,7 @@ export async function decisionsJourney(page: Page, info: TestInfo, capture: Capt
     await surface.getByRole("textbox", { name: `Rule ${index + 1}, input customerCategory`, exact: true }).fill(row[1]);
     await surface.getByRole("textbox", { name: `Rule ${index + 1}, output approvalLevel`, exact: true }).fill(row[2]);
   }
-  const asset = await save(); await button("Validate").click();
+  const asset = await save(); await tabTitle(`Approval policy ${suffix} · Draft`); await button("Validate").click();
   await expect(surface.getByText("The saved draft is valid for the supported DMN profile.", { exact: true })).toBeVisible();
   await page.reload(); await expect(surface.getByRole("textbox", { name: "Rule 4, output approvalLevel", exact: true })).toHaveValue('"Account owner"');
   await part("decision-table", surface.getByRole("heading", { name: "Decision table", exact: true }));
@@ -123,6 +128,7 @@ export async function decisionsJourney(page: Page, info: TestInfo, capture: Capt
   await button("Publish").click(); const publication = await publishing; expect(publication.ok(), await publication.text()).toBe(true);
   const published = await publication.json() as Version;
   await expect(button("Clone to draft")).toBeVisible(); await expect(surface.getByRole("textbox", { name: "Rule 1, input amount", exact: true })).toBeDisabled();
+  await tabTitle(`Approval policy ${suffix} · Version ${published.number}`);
   await part("decision-published", surface.locator("#decisions-title"));
   await surface.getByRole("textbox", { name: "Evaluate input amount", exact: true }).fill("9007199254740993");
   await surface.getByRole("textbox", { name: "Evaluate input customerCategory", exact: true }).fill("Standard");
@@ -204,14 +210,18 @@ export async function decisionsJourney(page: Page, info: TestInfo, capture: Capt
       const opened = page.getByRole("tablist", { name: "Open screens", exact: true }).getByRole("tab", { selected: true });
       await expect(surface.getByRole("heading", { name: "New decision", exact: true })).toBeVisible();
       await expect(surface.getByText("Unsaved decision", { exact: true })).toBeVisible();
+      await tabTitle("New decision");
       await part("decision-picker-new-tab", surface.getByLabel("Name", { exact: true }));
       expect(await opened.getAttribute("aria-label") ?? await opened.textContent()).not.toContain(workflowName);
       const created = `Picker-created policy ${suffix}`;
-      await surface.getByLabel("Name", { exact: true }).fill(created); await save();
+      await surface.getByLabel("Name", { exact: true }).fill(created); await tabTitle("New decision"); await save();
+      // Saving opens the decision in the same tab, which now carries its name rather than "New decision".
+      await tabTitle(`${created} · Draft`); await part("decision-picker-saved-tab", opened);
       // Back on the workflow: its unsaved pick survived, and the list reloaded with the decision just saved.
       await page.getByRole("tab", { name: new RegExp(`^${workflowName}`) }).click();
       await expect(picker).toBeVisible(); await expect(picker).toHaveValue(existingId);
       await expect(picker.locator("option", { hasText: created })).toHaveCount(1);
+      await expect(page.getByRole("tab", { name: `${created} · Draft`, exact: true })).toHaveCount(1);
       await part("decision-picker-returned", picker);
     } catch (failure) {
       // Clean up best-effort without letting a cleanup failure replace the journey's own error.
