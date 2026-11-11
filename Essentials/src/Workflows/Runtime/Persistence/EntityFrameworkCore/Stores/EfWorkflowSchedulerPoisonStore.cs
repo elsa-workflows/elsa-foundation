@@ -88,6 +88,10 @@ public sealed class EfWorkflowSchedulerPoisonStore(
     /// The context tracks a pending change to this run's ownership row. Nothing was written, and the pending change
     /// is left as it was.
     /// </exception>
+    /// <exception cref="InvalidDataException">
+    /// A poison row already stored for the record fails its read check. Nothing was written, as in
+    /// <see cref="RecordAsync"/>.
+    /// </exception>
     /// <exception cref="NotSupportedException"><see cref="CanRecordFenced"/> is <see langword="false"/>.</exception>
     public async ValueTask<RuntimeSchedulerPoisonRecord> RecordFencedAsync(
         RuntimeSchedulerPoisonRecord record,
