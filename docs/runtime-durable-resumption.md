@@ -87,7 +87,7 @@ Delivery is **at least once on both sides**: work can be added twice and taken t
   - *A plain commit reads it only after a failure.* It runs without reading the marker first. A replay cannot succeed, because the marker's key is taken: it fails at its marker insert at the latest and rolls back, and the read after the failure answers it. Every failure of such a commit is followed by a marker read before it leaves, also a failure outside the transaction, such as a refused root write lease. Three failures get no further read: one whose read already found no marker, one of an attempt that had asked its transaction to commit (its marker insert had succeeded, so it was no replay), and any failure of a call its caller has cancelled.
   - *These commits read it first*, before a transaction begins or a lease is taken: an exact bookmark resume, a model decision, a native worker or model child admission, and any commit on a context that holds pending changes or an open transaction.
 
-  So a plain commit that succeeds runs no marker read. A replay of a plain commit runs its attempt, which is rolled back, and when it writes a workflow row that needs a root write lease it takes and releases that lease first.
+  So a plain commit that succeeds at its first attempt runs no marker read. A replay of a plain commit runs its attempt, which is rolled back, and when it writes a workflow row that needs a root write lease it can take and release that lease before it is answered.
 
 ## Keeping the pump bounded
 
