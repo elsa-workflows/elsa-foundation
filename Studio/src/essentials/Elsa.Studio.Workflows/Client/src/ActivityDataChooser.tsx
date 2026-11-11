@@ -264,16 +264,21 @@ function ProducerGroup({ group, current, waitingFor, onChoose }: {
   onChoose(source: ActivityDataSourceFacts): void;
 }) {
   const labelId = useId();
+  // When every output is unavailable for one reason, say it once for the producer; each option still points at it.
+  const sharedReasonId = `${labelId}-reason`;
+  const shared = group.sharedUnavailableReason;
   return (
     <div role="group" aria-labelledby={labelId} className="wf-data-chooser-group">
       <div id={labelId} className="wf-data-chooser-group-label">
         {group.label}
         {group.disambiguation ? <span className="wf-data-chooser-group-id"> · {group.disambiguation}</span> : null}
       </div>
+      {shared ? <p id={sharedReasonId} className="wf-data-chooser-group-reason">{shared}</p> : null}
       {group.options.map(option => {
         const selected = current?.producerNodeId === option.producerNodeId && current.projectionKey === option.projectionKey;
         const binding = option.source.binding;
-        const reasonId = `${labelId}-${option.source.id}`;
+        const ownReason = shared ? null : option.unavailableReason;
+        const reasonId = shared ? sharedReasonId : `${labelId}-${option.source.id}`;
         return (
           <button
             key={option.source.id}
@@ -294,7 +299,7 @@ function ProducerGroup({ group, current, waitingFor, onChoose }: {
           >
             <span className="wf-data-chooser-option-label">{option.label}</span>
             {option.typeLabel ? <span className="wf-data-chooser-option-type">{option.typeLabel}</span> : null}
-            {option.unavailableReason ? <small id={reasonId}>{option.unavailableReason}</small> : null}
+            {ownReason ? <small id={reasonId}>{ownReason}</small> : null}
           </button>
         );
       })}

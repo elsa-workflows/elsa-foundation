@@ -81,6 +81,14 @@
   font-weight: 600;
 }
 
+.wf-data-chooser-group-reason {
+  margin: 0;
+  padding: 0 4px 2px;
+  color: var(--studio-text-muted);
+  font-size: 11px;
+  line-height: 1.3;
+}
+
 .wf-data-chooser-group-id {
   font-family: var(--studio-font-mono, ui-monospace, monospace);
   font-weight: 400;

@@ -96,6 +96,12 @@ const builtInPropertyEditorIds = new Set([
   "studio.property.multiselect"
 ]);
 
+/**
+ * The label of an activity's whole result. The spec 1215 contracts fix no label; they speak of the "whole value" and
+ * the producer's "whole result", and the delivery plan of the "whole output", which reads best beside named outputs.
+ */
+export const wholeOutputLabel = "Whole output";
+
 export interface ActivityDataSourceOption {
   source: ActivityDataSourceFacts;
   producerNodeId: string;
@@ -111,6 +117,11 @@ export interface ActivityDataProducerGroup {
   label: string;
   /** The node id, shown when another listed activity has the same label, so the two stay distinguishable. */
   disambiguation: string | null;
+  /**
+   * The reason, when none of the producer's listed outputs can be chosen and all for the same reason. It is shown once
+   * for the producer; each option's own `unavailableReason` still holds it for assistive technology.
+   */
+  sharedUnavailableReason: string | null;
   options: ActivityDataSourceOption[];
 }
 
@@ -129,7 +140,7 @@ export function groupActivityOutputSources(
     const producer = describeActivity(identity.producerNodeId);
     let group = groups.get(identity.producerNodeId);
     if (!group) {
-      group = { producerNodeId: identity.producerNodeId, label: producer?.label ?? identity.producerNodeId, disambiguation: null, options: [] };
+      group = { producerNodeId: identity.producerNodeId, label: producer?.label ?? identity.producerNodeId, disambiguation: null, sharedUnavailableReason: null, options: [] };
       groups.set(identity.producerNodeId, group);
     }
     group.options.push({
@@ -146,13 +157,19 @@ export function groupActivityOutputSources(
   for (const group of result) labelCounts.set(group.label, (labelCounts.get(group.label) ?? 0) + 1);
   for (const group of result) {
     if ((labelCounts.get(group.label) ?? 0) > 1 && group.label !== group.producerNodeId) group.disambiguation = group.producerNodeId;
+    const reasons = new Set(group.options.map(option => option.unavailableReason));
+    const [only] = reasons;
+    if (group.options.length > 1 && reasons.size === 1 && only) group.sharedUnavailableReason = only;
   }
   return result;
 }
 
-/** The whole result is the activity's own value; a declared output uses its declared display name. */
+/**
+ * The whole result (`$result`) is the activity's whole value, named so it cannot be mistaken for a declared output
+ * that happens to be called "Result"; a declared output uses its declared display name.
+ */
 export function describeOutput(projectionKey: string, producer: ActivityDataProducerDescription | null) {
-  if (projectionKey === "$result") return "Result";
+  if (projectionKey === "$result") return wholeOutputLabel;
   return producer?.outputLabels[projectionKey] || projectionKey;
 }
 

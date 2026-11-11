@@ -186,12 +186,12 @@ describe("Choose data for an activity input", () => {
 
     expect(trigger(container)?.getAttribute("aria-label")).toBe("Choose data for Customer ID");
     await openChooser(container);
-    await vi.waitFor(() => expect(option("Result", "Get customer")).toBeDefined());
+    await vi.waitFor(() => expect(option("Whole output", "Get customer")).toBeDefined());
     expect(dataHost.requests).toEqual([{ nodeId: "node-1", inputKey: "customerId" }]);
     // Only activity outputs are offered; the reported workflow input keeps its own editor.
     expect(chooser()?.textContent).not.toContain("Order ID");
 
-    flushSync(() => option("Result", "Get customer")!.click());
+    flushSync(() => option("Whole output", "Get customer")!.click());
 
     expect(changes).toHaveLength(1);
     const stored = changes[0]!.customerId as { expression: { type: string; value: unknown } };
@@ -200,19 +200,53 @@ describe("Choose data for an activity input", () => {
     expect(stored.expression.value).toEqual({ producerNodeId: "get-customer", projectionKey: "$result", isOptional: false });
     expect(document.querySelector(".wf-data-chooser")).toBeNull();
     await settle();
-    expect(container.querySelector(".wf-data-reference-source")?.textContent).toBe("Data from Get customer › , output Result");
+    expect(container.querySelector(".wf-data-reference-source")?.textContent).toBe("Data from Get customer › , output Whole output");
     expect(document.activeElement).toBe(container.querySelector(".wf-data-reference-replace"));
     // Choosing data opens no fixed-value chrome and needs no save: only the source request ran.
     expect(dataHost.requestSources).toHaveBeenCalledTimes(1);
+  });
+
+  it("says a reason shared by all of a producer's outputs once, and keeps differing reasons on their rows", async () => {
+    const loop = (projectionKey: string, reasonCode: string): ActivityDataSourceFacts => ({
+      ...source(`activity:loop-step:${projectionKey}`, null, reasonCode, null),
+      activityResultSource: { producerNodeId: "loop-step", projectionKey }
+    });
+    const mixed = (projectionKey: string, reasonCode: string): ActivityDataSourceFacts => ({
+      ...source(`activity:get-order:${projectionKey}`, null, reasonCode, null),
+      activityResultSource: { producerNodeId: "get-order", projectionKey }
+    });
+    const container = render({ dataHost: host({ requestSources: vi.fn(async () => answer("supported", { sources: [
+      loop("$result", "EarlierProducerRun"), loop("Line", "EarlierProducerRun"),
+      mixed("$result", "NoTypedResult"), mixed("Total", "ConditionalOccurrence")
+    ] })) }) });
+    await openChooser(container);
+    await vi.waitFor(() => expect(option("Whole output", "Loop step")).toBeDefined());
+
+    const loopGroup = option("Whole output", "Loop step")!.closest("[role='group']")!;
+    const shared = loopGroup.querySelector<HTMLElement>(".wf-data-chooser-group-reason")!;
+    expect(shared.textContent).toContain("more than once");
+    expect(loopGroup.querySelectorAll("[role='option'] small")).toHaveLength(0);
+    for (const blocked of loopGroup.querySelectorAll("[role='option']")) {
+      expect(blocked.getAttribute("aria-disabled")).toBe("true");
+      expect(blocked.getAttribute("aria-describedby")).toBe(shared.id);
+    }
+
+    const orderGroup = option("Whole output", "Get order")!.closest("[role='group']")!;
+    expect(orderGroup.querySelector(".wf-data-chooser-group-reason")).toBeNull();
+    const rowReasons = [...orderGroup.querySelectorAll("[role='option']")].map(row =>
+      document.getElementById(row.getAttribute("aria-describedby")!)?.textContent);
+    expect(rowReasons).toHaveLength(2);
+    expect(rowReasons[0]).toContain("doesn't declare an output value");
+    expect(rowReasons[1]).toContain("only on some paths");
   });
 
   it("shows sources that can't be chosen with their reason and never selects them", async () => {
     const changes: ActivityNode[] = [];
     const container = render({ onChange: next => changes.push(next) });
     await openChooser(container);
-    await vi.waitFor(() => expect(option("Result", "Loop step")).toBeDefined());
+    await vi.waitFor(() => expect(option("Whole output", "Loop step")).toBeDefined());
 
-    const blocked = option("Result", "Loop step")!;
+    const blocked = option("Whole output", "Loop step")!;
     expect(blocked.getAttribute("aria-disabled")).toBe("true");
     const reason = document.getElementById(blocked.getAttribute("aria-describedby")!);
     expect(reason?.textContent).toContain("more than once");
@@ -241,12 +275,12 @@ describe("Choose data for an activity input", () => {
     const changes: ActivityNode[] = [];
     const container = render({ onChange: next => changes.push(next) });
     await openChooser(container);
-    await vi.waitFor(() => expect(document.activeElement).toBe(option("Result", "Get customer")));
+    await vi.waitFor(() => expect(document.activeElement).toBe(option("Whole output", "Get customer")));
 
     flushSync(() => document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true })));
-    expect(document.activeElement).toBe(option("Result", "Get order"));
+    expect(document.activeElement).toBe(option("Whole output", "Get order"));
     flushSync(() => document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key: "End", bubbles: true })));
-    expect(document.activeElement).toBe(option("Result", "Loop step"));
+    expect(document.activeElement).toBe(option("Whole output", "Loop step"));
     flushSync(() => document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
 
     expect(document.querySelector(".wf-data-chooser")).toBeNull();
@@ -255,13 +289,13 @@ describe("Choose data for an activity input", () => {
 
     // Tab leaves the browser the same way, so focus never falls to the end of the document.
     await openChooser(container);
-    await vi.waitFor(() => expect(document.activeElement).toBe(option("Result", "Get customer")));
+    await vi.waitFor(() => expect(document.activeElement).toBe(option("Whole output", "Get customer")));
     flushSync(() => document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true })));
     expect(document.querySelector(".wf-data-chooser")).toBeNull();
     expect(document.activeElement).toBe(trigger(container));
 
     await openChooser(container);
-    await vi.waitFor(() => expect(document.activeElement).toBe(option("Result", "Get customer")));
+    await vi.waitFor(() => expect(document.activeElement).toBe(option("Whole output", "Get customer")));
     flushSync(() => document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true })));
     flushSync(() => document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })));
     expect(changes).toHaveLength(1);
@@ -304,7 +338,7 @@ describe("Choose data for an activity input", () => {
     flushSync(() => retry.click());
     expect(requestSources).toHaveBeenCalledTimes(2);
     release();
-    await vi.waitFor(() => expect(option("Result", "Get customer")).toBeDefined());
+    await vi.waitFor(() => expect(option("Whole output", "Get customer")).toBeDefined());
   });
 
   it("drops an answer for an older document and asks again for the current one", async () => {
@@ -336,7 +370,7 @@ describe("Choose data for an activity input", () => {
     const container = render({ dataHost: first, onChange: next => changes.push(next) });
     await openChooser(container);
     pending[0]!(answer("supported", { sources }));
-    await vi.waitFor(() => expect(document.activeElement).toBe(option("Result", "Get customer")));
+    await vi.waitFor(() => expect(document.activeElement).toBe(option("Whole output", "Get customer")));
     flushSync(() => document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true })));
     const focused = document.activeElement;
 
@@ -348,7 +382,7 @@ describe("Choose data for an activity input", () => {
     expect(chooser()?.textContent).toContain("Updating for your latest changes");
     flushSync(() => document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })));
     expect(changes).toHaveLength(0);
-    expect(option("Result", "Get order")?.getAttribute("aria-busy")).toBe("true");
+    expect(option("Whole output", "Get order")?.getAttribute("aria-busy")).toBe("true");
 
     // The newer answer carries a newer binding for the same source; that one is stored, never the older one.
     const fresh = { expressionType: "ActivityResult", value: { producerNodeId: "get-order", projectionKey: "$result", isOptional: false } };
@@ -365,13 +399,13 @@ describe("Choose data for an activity input", () => {
     const container = render({ dataHost: first, onChange: next => changes.push(next) });
     await openChooser(container);
     pending[0]!(answer("supported", { sources }));
-    await vi.waitFor(() => expect(option("Result", "Get order")).toBeDefined());
+    await vi.waitFor(() => expect(option("Whole output", "Get order")).toBeDefined());
     flushSync(() => setHost({ ...first, documentRevision: "rev-2" }));
     await vi.waitFor(() => expect(chooser()?.querySelector("[role='listbox']")?.getAttribute("aria-busy")).toBe("true"));
-    flushSync(() => option("Result", "Get order")!.click());
+    flushSync(() => option("Whole output", "Get order")!.click());
 
     pending[1]!(answer("supported", { documentRevision: "rev-2", sources: [sources[0]!, { ...sources[1]!, binding: null, reasonCode: "ConditionalOccurrence" }] }));
-    await vi.waitFor(() => expect(option("Result", "Get order")?.getAttribute("aria-disabled")).toBe("true"));
+    await vi.waitFor(() => expect(option("Whole output", "Get order")?.getAttribute("aria-disabled")).toBe("true"));
     await settle();
     expect(changes).toHaveLength(0);
     expect(document.querySelector(".wf-data-chooser")).not.toBeNull();
@@ -387,14 +421,14 @@ describe("Choose data for an activity input", () => {
     await vi.waitFor(() => expect(chooser()?.textContent).toContain("saved somewhere else"));
 
     flushSync(() => setHost({ ...first, baseRevision: "base-2" }));
-    await vi.waitFor(() => expect(option("Result", "Get customer")).toBeDefined());
+    await vi.waitFor(() => expect(option("Whole output", "Get customer")).toBeDefined());
     expect(requestSources).toHaveBeenCalledTimes(2);
   });
 
   it("closes and forgets sources when the sign-in session ends", async () => {
     const container = render();
     await openChooser(container);
-    await vi.waitFor(() => expect(option("Result", "Get customer")).toBeDefined());
+    await vi.waitFor(() => expect(option("Whole output", "Get customer")).toBeDefined());
     flushSync(() => window.dispatchEvent(new CustomEvent(authSessionEndedEvent)));
     expect(document.querySelector(".wf-data-chooser")).toBeNull();
   });
@@ -407,8 +441,8 @@ describe("Choose data for an activity input", () => {
         customerId: { typeName: "System.String", expression: { type: "Literal", value: "C-42" } } }
     });
     await openChooser(container);
-    await vi.waitFor(() => expect(option("Result", "Get customer")).toBeDefined());
-    flushSync(() => option("Result", "Get customer")!.click());
+    await vi.waitFor(() => expect(option("Whole output", "Get customer")).toBeDefined());
+    flushSync(() => option("Whole output", "Get customer")!.click());
 
     expect(changes).toHaveLength(0);
     const confirmation = container.querySelector<HTMLElement>("[role='alertdialog']")!;
@@ -418,8 +452,8 @@ describe("Choose data for an activity input", () => {
     expect(changes).toHaveLength(0);
 
     await openChooser(container);
-    await vi.waitFor(() => expect(option("Result", "Get customer")).toBeDefined());
-    flushSync(() => option("Result", "Get customer")!.click());
+    await vi.waitFor(() => expect(option("Whole output", "Get customer")).toBeDefined());
+    flushSync(() => option("Whole output", "Get customer")!.click());
     const replace = [...container.querySelectorAll<HTMLButtonElement>("[role='alertdialog'] button")].find(button => button.textContent === "Replace value")!;
     flushSync(() => replace.click());
     expect(changes).toHaveLength(1);
@@ -487,10 +521,10 @@ describe("a stored activity output", () => {
     await settle();
     const replace = container.querySelector<HTMLButtonElement>(".wf-data-reference-replace")!;
     flushSync(() => replace.click());
-    await vi.waitFor(() => expect(option("Result", "Get customer")?.getAttribute("aria-selected")).toBe("true"));
-    await vi.waitFor(() => expect(document.activeElement).toBe(option("Result", "Get customer")));
+    await vi.waitFor(() => expect(option("Whole output", "Get customer")?.getAttribute("aria-selected")).toBe("true"));
+    await vi.waitFor(() => expect(document.activeElement).toBe(option("Whole output", "Get customer")));
 
-    flushSync(() => option("Result", "Get order")!.click());
+    flushSync(() => option("Whole output", "Get order")!.click());
     expect(changes).toHaveLength(1);
     expect((changes[0]!.customerId as { expression: { type: string; value: unknown } }).expression).toEqual({
       type: "ActivityResult", value: orderBinding.value
