@@ -4,6 +4,7 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Diagnostics;
+using Elsa.Workflows.Runtime.Services.Checkpoints;
 using Elsa.Workflows.Runtime.Services.Executions;
 using Elsa.Workflows.Runtime.Services.Incidents;
 using Elsa.Workflows.Runtime.Services.Scheduler;
@@ -88,7 +89,7 @@ public sealed class WorkflowSchedulerFencedPoisonDrainTests
 
         Assert.False(result.StoppedOnFault);
         Assert.Equal(0, fixture.Ownership.EnsureCurrentCalls);
-        Assert.Equal(0, store.CapabilityReads);
+        Assert.Equal((0, 0, 0, 0), (store.CapabilityReads, store.Finds, store.FencedRecords, store.UnfencedRecords));
     }
 
     [Fact]
@@ -158,24 +159,27 @@ public sealed class WorkflowSchedulerFencedPoisonDrainTests
     }
 
     [Fact]
-    public async Task DrainAsync_WhenThePoisonStoreCannotSayWhetherItRecordsFenced_ThrowsBeforeTheStepIsAcknowledged()
+    public async Task DrainAsync_WhenThePoisonStoreCannotSayWhetherItRecordsFenced_HandlesTheFaultUnfencedAndTagsTheSpan()
     {
         // Asking a store whether it can record fenced runs its lookup of the ownership store, which can throw. That
-        // must happen before the acknowledgement, or the step would be gone with nothing recorded.
+        // says nothing about who owns the run, so it does not stop the fault path: the step is acknowledged and the
+        // record is written with no ownership check, as before there was a fence. The dispatch span says so.
+        using var spans = new SpanRecorder();
         var fixture = NewFixture();
         var store = new ThrowingCapabilityPoisonStore();
         using var scope = fixture.Accessor.Push(await fixture.NodeA.AcquireAsync(WorkflowExecutionId));
-        var drainer = fixture.NewDrainer(store);
+        var drainer = fixture.NewDrainer(store, tracer: spans.Tracer);
         await fixture.Queue.EnqueueAsync(NewWorkItem());
         fixture.Queue.ResetCounts();
 
-        var failure = await Assert.ThrowsAsync<InvalidOperationException>(
-            () => drainer.DrainAsync(new RuntimeSchedulerDrainRequest(WorkflowExecutionId)).AsTask());
+        var result = await drainer.DrainAsync(new RuntimeSchedulerDrainRequest(WorkflowExecutionId));
 
-        Assert.Equal(ThrowingCapabilityPoisonStore.Message, failure.Message);
-        Assert.Equal((0, 0, 0), (fixture.Queue.Completions, fixture.Queue.Enqueues, fixture.Queue.Releases));
-        Assert.Single(await fixture.Queue.Inner.ListAllAsync(new RuntimeSchedulerWorkQuery(WorkflowExecutionId)));
-        Assert.Equal(0, store.Records);
+        Assert.True(result.StoppedOnFault);
+        Assert.Equal(RuntimeSchedulerWorkItemResultStatus.Faulted, Assert.Single(result.Items).Status);
+        Assert.Equal(1, fixture.Queue.Completions);
+        Assert.Empty(await fixture.Queue.Inner.ListAllAsync(new RuntimeSchedulerWorkQuery(WorkflowExecutionId)));
+        Assert.Equal((0, 1), (store.FencedRecords, store.UnfencedRecords));
+        Assert.Equal(typeof(InvalidOperationException).FullName, spans.Dispatch.GetTagItem(WorkflowEngineTelemetry.PoisonFenceFallbackTag));
     }
 
     [Theory]
@@ -246,55 +250,101 @@ public sealed class WorkflowSchedulerFencedPoisonDrainTests
     public async Task DrainAsync_TagsTheDispatchSpanOnlyWhenTheRecordFellBackToTheUnfencedWrite(bool fencedWriteFails)
     {
         // A host whose fenced write keeps failing records every poison without the fence. The dispatch span says so,
-        // with the type of the failure.
-        using var activitySource = new ActivitySource(WorkflowEngineTelemetry.ActivitySourceName);
-        var recorded = new List<System.Diagnostics.Activity>();
-        using var listener = new ActivityListener
-        {
-            // ActivityListener is process-global; ignore same-name sources owned by parallel tests.
-            ShouldListenTo = source => ReferenceEquals(source, activitySource),
-            Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded,
-            ActivityStopped = recorded.Add
-        };
-        ActivitySource.AddActivityListener(listener);
+        // with the type of the innermost failure: a store that wraps provider failures would otherwise put its own
+        // exception type on every span.
+        using var spans = new SpanRecorder();
         var fixture = NewFixture();
         IWorkflowSchedulerPoisonStore store = fencedWriteFails
-            ? new FailingFencedPoisonStore(() => new TimeoutException("The fenced write timed out."))
+            ? new FailingFencedPoisonStore(() => new InvalidOperationException("The store failed.", new TimeoutException("The fenced write timed out.")))
             : fixture.FencedPoisonStore;
         using var scope = fixture.Accessor.Push(await fixture.NodeA.AcquireAsync(WorkflowExecutionId));
-        var drainer = fixture.NewDrainer(store, tracer: new ActivitySourceWorkflowEngineTracer(activitySource));
+        var drainer = fixture.NewDrainer(store, tracer: spans.Tracer);
         await fixture.Queue.EnqueueAsync(NewWorkItem());
 
         var result = await drainer.DrainAsync(new RuntimeSchedulerDrainRequest(WorkflowExecutionId));
 
         Assert.True(result.StoppedOnFault);
         Assert.Single(await store.ListAsync(WorkflowExecutionId));
-        var dispatch = Assert.Single(recorded, activity => activity.OperationName == WorkflowEngineTelemetry.DispatchSpanName);
         Assert.Equal(
             fencedWriteFails ? typeof(TimeoutException).FullName : null,
-            dispatch.GetTagItem(WorkflowEngineTelemetry.PoisonFenceFallbackTag));
+            spans.Dispatch.GetTagItem(WorkflowEngineTelemetry.PoisonFenceFallbackTag));
     }
 
     [Fact]
-    public async Task DrainAsync_WhenOwnershipCannotBeRead_ThrowsThatFailureBeforeAnythingOfTheFaultIsWritten()
+    public async Task DrainAsync_WhenOwnershipCannotBeRead_HandlesTheFaultUnfencedAndTagsTheSpan()
     {
-        // The ownership read is a provider read and can fail. If ownership cannot be confirmed, the fault arm writes
-        // nothing: the read's failure leaves the drain in place of the handler's own exception.
+        // The ownership read is a provider read and can fail. A failed read does not say the run was lost, and
+        // stopping on it would throw out of a drain that owns its run. So only a confirmed lost lease stops the fault
+        // path: here the step is acknowledged and re-enqueued as the retry policy asks, the record is written with no
+        // ownership check, and the dispatch span says the fence could not be applied.
+        using var spans = new SpanRecorder();
         var fixture = NewFixture();
         var store = new CountingFencedPoisonStore(fixture.FencedPoisonStore);
         using var scope = fixture.Accessor.Push(await fixture.NodeA.AcquireAsync(WorkflowExecutionId));
         fixture.Ownership.EnsureCurrentFailure = () => new IOException("The ownership store is unavailable.");
-        var drainer = fixture.NewDrainer(store, new StubRetryPolicy(new RuntimeDomainRetryDecision(RuntimeDomainRetryMode.RetryNow, null, "retry-now")));
+        var drainer = fixture.NewDrainer(
+            store,
+            new StubRetryPolicy(new RuntimeDomainRetryDecision(RuntimeDomainRetryMode.RetryNow, null, "retry-now")),
+            tracer: spans.Tracer);
         await fixture.Queue.EnqueueAsync(NewWorkItem());
         fixture.Queue.ResetCounts();
 
-        var failure = await Assert.ThrowsAsync<IOException>(
-            () => drainer.DrainAsync(new RuntimeSchedulerDrainRequest(WorkflowExecutionId)).AsTask());
+        var result = await drainer.DrainAsync(new RuntimeSchedulerDrainRequest(WorkflowExecutionId));
 
-        Assert.Equal("The ownership store is unavailable.", failure.Message);
-        Assert.Equal((0, 0, 0), (fixture.Queue.Completions, fixture.Queue.Enqueues, fixture.Queue.Releases));
-        Assert.Equal("work-1", Assert.Single(await fixture.Queue.Inner.ListAllAsync(new RuntimeSchedulerWorkQuery(WorkflowExecutionId))).WorkItemId);
-        Assert.Equal((0, 0, 0), (store.FencedRecords, store.UnfencedRecords, store.Finds));
+        Assert.True(result.StoppedOnFault);
+        Assert.Equal(RuntimeSchedulerWorkItemResultStatus.Faulted, Assert.Single(result.Items).Status);
+        Assert.Equal((1, 1, 0), (fixture.Queue.Completions, fixture.Queue.Enqueues, fixture.Queue.Releases));
+        Assert.Equal((0, 1), (store.FencedRecords, store.UnfencedRecords));
+        Assert.Equal(RuntimeSchedulerPoisonDisposition.RetryScheduled, Assert.Single(await store.ListAsync(WorkflowExecutionId)).Disposition);
+        Assert.Equal(typeof(IOException).FullName, spans.Dispatch.GetTagItem(WorkflowEngineTelemetry.PoisonFenceFallbackTag));
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task DrainAsync_HandlerFaultAfterTheDrainLostItsRun_LeavesNothingForTheOwnersObserverToProjectAsAnIncident(bool lostRun)
+    {
+        // What #4032 is about. A poison record becomes a blocking incident when the run's owner next drains to a
+        // fault and its observer lists the run's poison records. A drain that lost its run leaves no record, so that
+        // observer projects no incident. The control faults under a held lease and gets its incident.
+        var fixture = NewFixture();
+        using var scope = fixture.Accessor.Push(await fixture.NodeA.AcquireAsync(WorkflowExecutionId));
+        var drainer = fixture.NewDrainer(fixture.FencedPoisonStore, beforeFault: lostRun ? () => fixture.LoseRunAsync("taken-over") : null);
+        await fixture.Queue.EnqueueAsync(NewWorkItem());
+        if (lostRun)
+            await Assert.ThrowsAsync<RuntimeStaleFencingTokenException>(
+                () => drainer.DrainAsync(new RuntimeSchedulerDrainRequest(WorkflowExecutionId)).AsTask());
+        else
+            Assert.True((await drainer.DrainAsync(new RuntimeSchedulerDrainRequest(WorkflowExecutionId))).StoppedOnFault);
+
+        var incidents = new InMemoryIncidentStateStore();
+        var commitStore = new InMemoryRuntimeCheckpointCommitStore(
+            new InMemoryWorkflowExecutionStateStore(),
+            incidentStateStore: incidents,
+            rootWriteLeaseManager: PassThroughWorkflowExecutableRootWriteLeaseManager.Instance);
+        var committer = new RuntimeCheckpointCommitter(
+            new ImmediateRuntimeCheckpointPersistencePolicy(), commitStore, new AsyncLocalRuntimeExecutionOwnershipContextAccessor(), [], []);
+        var observer = new PoisonedSchedulerWorkIncidentObserver(fixture.FencedPoisonStore, incidents, committer, new FakeTimeProvider(_now));
+
+        // The owner's drain of the run stopped on a fault of that step.
+        await observer.OnDrainedAsync(NewEnvelope(), new RuntimeSchedulerDrainResult(WorkflowExecutionId, _now, _now,
+        [
+            new RuntimeSchedulerWorkItemResult(
+                workItemId: "work-1",
+                workflowExecutionId: WorkflowExecutionId,
+                commandKind: WorkflowExecutionCommandKind.RunSchedulerWork,
+                status: RuntimeSchedulerWorkItemResultStatus.Faulted,
+                handlerName: nameof(WorkflowSchedulerDrainer),
+                startedAt: _now,
+                completedAt: _now,
+                error: "System.InvalidOperationException: Handler crashed for work-1.")
+        ]));
+
+        var projected = await incidents.ListAsync(WorkflowExecutionId);
+        if (lostRun)
+            Assert.Empty(projected);
+        else
+            Assert.Equal(PoisonedSchedulerWorkIncidentObserver.IncidentId("work-1"), Assert.Single(projected).IncidentId);
     }
 
     [Fact]
@@ -352,6 +402,22 @@ public sealed class WorkflowSchedulerFencedPoisonDrainTests
     }
 
     private Fixture NewFixture() => new(new FakeTimeProvider(_now));
+
+    private WorkflowExecutionCommandEnvelope NewEnvelope() => new(
+        envelopeId: "envelope-1",
+        workflowExecutionId: WorkflowExecutionId,
+        command: new WorkflowExecutionCommand(
+            CommandId: "command-1",
+            WorkflowExecutionId: WorkflowExecutionId,
+            Kind: WorkflowExecutionCommandKind.RunSchedulerWork,
+            EnqueuedAt: _now,
+            Payload: null,
+            Metadata: new Dictionary<string, string>()),
+        idempotencyKey: $"{WorkflowExecutionId}:command-1",
+        deliveryMode: WorkflowExecutionCommandDeliveryMode.AtLeastOnce,
+        enqueuedAt: _now,
+        sequence: 1,
+        metadata: new Dictionary<string, string>());
 
     private RuntimeSchedulerWorkItem NewWorkItem(WorkflowExecutionCommandKind commandKind = WorkflowExecutionCommandKind.RunSchedulerWork)
     {
@@ -426,6 +492,38 @@ public sealed class WorkflowSchedulerFencedPoisonDrainTests
                 ownershipContextAccessor: Accessor,
                 ownershipService: withOwnershipService ? Ownership : null,
                 tracer: tracer);
+    }
+
+    // Records the spans of one traced drainer, through a source of its own.
+    private sealed class SpanRecorder : IDisposable
+    {
+        private readonly ActivitySource _source = new(WorkflowEngineTelemetry.ActivitySourceName);
+        private readonly ActivityListener _listener;
+        private readonly List<System.Diagnostics.Activity> _recorded = [];
+
+        public SpanRecorder()
+        {
+            _listener = new ActivityListener
+            {
+                // ActivityListener is process-global; ignore same-name sources owned by parallel tests.
+                ShouldListenTo = source => ReferenceEquals(source, _source),
+                Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded,
+                ActivityStopped = _recorded.Add
+            };
+            ActivitySource.AddActivityListener(_listener);
+            Tracer = new ActivitySourceWorkflowEngineTracer(_source);
+        }
+
+        public ActivitySourceWorkflowEngineTracer Tracer { get; }
+
+        public System.Diagnostics.Activity Dispatch =>
+            Assert.Single(_recorded, activity => activity.OperationName == WorkflowEngineTelemetry.DispatchSpanName);
+
+        public void Dispose()
+        {
+            _listener.Dispose();
+            _source.Dispose();
+        }
     }
 
     private sealed class TestSchedulerWorkHandler(Func<ValueTask>? beforeFault, bool faults) : IWorkflowSchedulerWorkHandler
@@ -597,7 +695,9 @@ public sealed class WorkflowSchedulerFencedPoisonDrainTests
     {
         public const string Message = "The ownership store cannot be resolved.";
         public int CapabilityReads { get; private set; }
-        public int Records { get; private set; }
+        public int Finds { get; private set; }
+        public int FencedRecords { get; private set; }
+        public int UnfencedRecords { get; private set; }
 
         public bool CanRecordFenced
         {
@@ -610,18 +710,22 @@ public sealed class WorkflowSchedulerFencedPoisonDrainTests
 
         public ValueTask<RuntimeSchedulerPoisonRecord> RecordFencedAsync(RuntimeSchedulerPoisonRecord record, RuntimeExecutionFence fence, CancellationToken cancellationToken = default)
         {
-            Records++;
+            FencedRecords++;
             return ValueTask.FromResult(record);
         }
 
         public ValueTask<RuntimeSchedulerPoisonRecord> RecordAsync(RuntimeSchedulerPoisonRecord record, CancellationToken cancellationToken = default)
         {
-            Records++;
+            UnfencedRecords++;
             return ValueTask.FromResult(record);
         }
 
-        public ValueTask<RuntimeSchedulerPoisonRecord?> FindAsync(string workflowExecutionId, string workItemId, CancellationToken cancellationToken = default) =>
-            ValueTask.FromResult<RuntimeSchedulerPoisonRecord?>(null);
+        public ValueTask<RuntimeSchedulerPoisonRecord?> FindAsync(string workflowExecutionId, string workItemId, CancellationToken cancellationToken = default)
+        {
+            Finds++;
+            return ValueTask.FromResult<RuntimeSchedulerPoisonRecord?>(null);
+        }
+
         public ValueTask<IReadOnlyCollection<RuntimeSchedulerPoisonRecord>> ListAsync(string workflowExecutionId, CancellationToken cancellationToken = default) =>
             ValueTask.FromResult<IReadOnlyCollection<RuntimeSchedulerPoisonRecord>>([]);
     }

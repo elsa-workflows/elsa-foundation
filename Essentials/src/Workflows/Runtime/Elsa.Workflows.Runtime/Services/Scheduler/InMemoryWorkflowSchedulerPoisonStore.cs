@@ -11,8 +11,8 @@ namespace Elsa.Workflows.Runtime.Services.Scheduler;
 /// <remarks>
 /// It can record under the run's ownership fence (<see cref="ISchedulerPoisonFenceCapability"/>) only when it is
 /// built with the in-memory ownership store, the one store whose lease it can check atomically. The runtime
-/// composition root gives it that store when it is the registered <see cref="IExecutionLivenessStateStore"/>. Built
-/// without it, <see cref="CanRecordFenced"/> is <see langword="false"/>.
+/// composition root gives it that store when it is the registered <see cref="IExecutionLivenessStateStore"/> and is
+/// registered as a singleton. Built without it, <see cref="CanRecordFenced"/> is <see langword="false"/>.
 /// </remarks>
 [RuntimeDefaultRegistration]
 public sealed class InMemoryWorkflowSchedulerPoisonStore : IWorkflowSchedulerPoisonStore, ISchedulerPoisonFenceCapability

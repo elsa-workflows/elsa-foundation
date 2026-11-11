@@ -63,7 +63,7 @@ the ingestion domain: nothing that could carry user payload or a security token 
 | `elsa.command.kind` | dispatch, activity.execute | The work item's command kind (e.g. `StartActivity`). |
 | `elsa.handler.name` | dispatch | The selected scheduler work handler's name. |
 | `elsa.outcome` | dispatch, activity.execute, checkpoint.commit | `completed` or `faulted`. |
-| `elsa.poison.fence_fallback` | dispatch | Present when a handler fault's poison record was written without the ownership fence because the fenced write failed for a reason other than ownership. The value is the type of that failure. |
+| `elsa.poison.fence_fallback` | dispatch | Present when the fault path could not apply the ownership fence to a handler fault: the ownership check could not be made, the poison store could not say whether it can check the lease, or the fenced write failed for a reason other than ownership. The poison record was then written with no ownership check. The value is the type of the failure that prevented it: its innermost exception, so a store that wraps provider failures reports the provider's type. |
 | `elsa.checkpoint.id` | checkpoint.commit | The committed checkpoint's id. |
 | `elsa.checkpoint.persistence_decision` | checkpoint.commit | What the persistence policy decided for the checkpoint: `Immediate`, `Deferred` or `Skip`. Not the run's persistence mode. |
 | `elsa.checkpoint.mandatory` | checkpoint.commit | Whether the checkpoint is mandatory. |

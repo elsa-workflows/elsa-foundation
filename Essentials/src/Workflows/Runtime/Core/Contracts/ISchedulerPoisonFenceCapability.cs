@@ -12,8 +12,9 @@ namespace Elsa.Workflows.Runtime.Core.Contracts;
 /// <para>
 /// A drain that lost its run keeps running until one of its own writes is refused. If a work handler throws in that
 /// time, its poison record would land on a run that another node now runs. The drainer checks the lease before it
-/// touches the faulted step; this capability closes the time between that check and the record, so the record
-/// cannot become an incident on the new owner's run.
+/// touches the faulted step; this capability covers the time between that check and the record. A record written
+/// through it cannot land on a run that changed owner in that time. It is not a guarantee for every record: when the
+/// fenced write fails for a reason other than ownership, the drainer writes the record without the fence.
 /// </para>
 /// <para>
 /// Implement it on the store object itself. The check and the write must be atomic: reading the lease first and

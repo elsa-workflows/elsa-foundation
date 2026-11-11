@@ -61,8 +61,9 @@ public sealed class EfWorkflowSchedulerPoisonStore(
     /// The fence check, the touch of the ownership row and the record are one transaction that this call opens
     /// itself. When the save conflicts on the ownership row alone, which is what the owner's own lease heartbeat
     /// causes, the transaction runs again, for <c>EfRuntimeCheckpointParticipantStaging.MaxFenceRenewalAttempts</c>
-    /// attempts in all, and each attempt checks the fence again. A conflict on that row that is not followed by
-    /// another attempt is checked once more before it leaves, so a takeover never leaves as a write failure. The
+    /// attempts in all, and each attempt checks the fence again. Before any provider failure leaves, the ownership
+    /// row is read once more, so a takeover leaves as <see cref="RuntimeStaleFencingTokenException"/> and not as a
+    /// write failure, whatever shape the provider gave it. When that read fails too, the first failure leaves. The
     /// drainer records without the fence when this call fails for a reason other than ownership.
     /// </remarks>
     /// <exception cref="RuntimeStaleFencingTokenException">The fence is not the run's current, unexpired lease. Nothing was written.</exception>
@@ -116,29 +117,36 @@ public sealed class EfWorkflowSchedulerPoisonStore(
                 {
                     return await RecordUnderFenceAsync();
                 }
-                catch (DbUpdateConcurrencyException exception) when (EfRuntimeCheckpointParticipantStaging.IsFenceRenewalConflict(exception))
+                catch (DbUpdateConcurrencyException exception) when (retryable &&
+                    attempt < EfRuntimeCheckpointParticipantStaging.MaxFenceRenewalAttempts &&
+                    EfRuntimeCheckpointParticipantStaging.IsFenceRenewalConflict(exception))
                 {
-                    if (retryable && attempt < EfRuntimeCheckpointParticipantStaging.MaxFenceRenewalAttempts)
-                        continue;
-
-                    // The conflict is about to leave without another attempt. It does not say who changed the
-                    // ownership row, and a caller that takes it for a failure that is not about ownership would
-                    // record without the fence. So look once more: a lease that is no longer this one leaves as
-                    // stale, and only the owner's own heartbeat leaves as the write failure.
-                    await EnsureFenceIsCurrentAsync();
-                    throw;
                 }
             }
         }
         catch (Exception exception) when (EfRelationalExceptionClassifier.IsStoreBoundaryFailure(exception))
         {
+            // A provider failure is about to leave. It does not say whether the run was taken: a conflict on the
+            // ownership row that was not retried, a serialization failure under a stricter isolation level and a
+            // lock timeout on that row all look like any other write failure. A caller that takes a takeover for a
+            // failure that is not about ownership would record without the fence. So look once more: a lease that
+            // is no longer this one leaves as stale. If that look fails as well, the failure that got here leaves.
+            try
+            {
+                await EnsureFenceIsCurrentAsync();
+            }
+            catch (Exception secondLookFailure) when (secondLookFailure is not RuntimeStaleFencingTokenException and not OperationCanceledException)
+            {
+            }
+
             // Provider exception types do not cross this boundary. What this method throws on purpose is not a
             // provider failure and is not caught here: the stale fence, cancellation, and the refusals above.
+            const string operation = "recording under the execution fence";
             var identity = $"{record.WorkflowExecutionId}/{record.WorkItemId}";
             throw new WorkflowSchedulerPoisonEntityFrameworkPersistenceException(
-                "recording under the execution fence",
+                operation,
                 identity,
-                $"The EF scheduler-poison store failed while recording under the execution fence scheduler poison '{identity}'.",
+                $"The EF scheduler-poison store failed while {operation} '{identity}'.",
                 exception);
         }
 

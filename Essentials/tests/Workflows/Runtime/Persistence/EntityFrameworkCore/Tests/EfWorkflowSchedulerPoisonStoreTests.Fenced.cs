@@ -205,6 +205,48 @@ public sealed partial class EfWorkflowSchedulerPoisonStoreTests
     }
 
     [Theory]
+    [InlineData("taken-over")]
+    [InlineData("still-owned")]
+    [InlineData("second-look-fails")]
+    public async Task Fenced_record_looks_at_the_ownership_row_again_before_any_provider_failure_leaves(string then)
+    {
+        // Not every takeover shows as a conflict on the ownership row. Under a stricter isolation level it is a
+        // serialization failure, and a lock timeout on that row has the same shape: a plain provider failure of the
+        // save. Left as a write failure, it would be recorded without the fence by the drainer. So the row is read
+        // once more before the failure leaves. A lease that is still this one leaves as the failure. When that read
+        // fails too, the first failure is the one that leaves.
+        await using var database = await TestDatabase.CreateAsync();
+        var failure = new ProviderSaveFailure();
+        await using var fixture = database.Open("tenant-a", failure);
+        await using var otherConnection = database.Open("tenant-a");
+        var clock = new FakeTimeProvider(Now);
+        var lease = await Node(fixture, "node-a", clock).AcquireAsync(OwnedWorkflow);
+        if (then == "taken-over")
+            failure.AfterRollback = async () => await Node(otherConnection, "node-b", clock).AcquireAsync(OwnedWorkflow);
+        failure.FailSecondLook = then == "second-look-fails";
+        failure.Armed = true;
+        var store = FencedStore(fixture, clock);
+
+        if (then == "taken-over")
+        {
+            Assert.Equal(RuntimeFencingRejectionReason.StaleToken, (await Assert.ThrowsAsync<RuntimeStaleFencingTokenException>(
+                () => store.RecordFencedAsync(Record(1), lease.ToFence()).AsTask())).Reason);
+        }
+        else
+        {
+            var wrapped = await Assert.ThrowsAsync<WorkflowSchedulerPoisonEntityFrameworkPersistenceException>(
+                () => store.RecordFencedAsync(Record(1), lease.ToFence()).AsTask());
+            Assert.IsType<DbUpdateException>(wrapped.InnerException);
+            Assert.Contains(ProviderSaveFailure.Message, wrapped.InnerException!.ToString());
+        }
+
+        Assert.Equal(then == "second-look-fails" ? 1 : 0, failure.FailedSecondLooks);
+        Assert.Empty(fixture.Context.ChangeTracker.Entries());
+        await using var read = database.Open("tenant-a");
+        Assert.Null(await read.Store.FindAsync(OwnedWorkflow, "work-1"));
+    }
+
+    [Theory]
     [InlineData(false)]
     [InlineData(true)]
     public async Task Fenced_record_that_loses_a_race_on_the_poison_row_fails_at_the_store_boundary_and_writes_nothing(bool rowExists)
@@ -479,6 +521,59 @@ public sealed partial class EfWorkflowSchedulerPoisonStoreTests
             await other.SaveChangesAsync(cancellationToken);
             return result;
         }
+    }
+
+    // A provider failure of the record's save that is not an optimistic-concurrency conflict, as a serialization failure
+    // or a lock timeout is. Another node's write can then land once the failed attempt has rolled back, and the
+    // store's next read of the ownership row can be made to fail as well.
+    private sealed class ProviderSaveFailure : DbCommandInterceptor, IDbTransactionInterceptor
+    {
+        public const string Message = "Simulated serialization failure.";
+        private bool failed;
+        private bool rolledBack;
+        public bool Armed { get; set; }
+        public bool FailSecondLook { get; set; }
+        public Func<Task>? AfterRollback { get; set; }
+        public int FailedSecondLooks { get; private set; }
+
+        public override ValueTask<InterceptionResult<int>> NonQueryExecutingAsync(DbCommand command, CommandEventData eventData, InterceptionResult<int> result, CancellationToken cancellationToken = default)
+        {
+            ThrowOnPoisonInsert(command);
+            return ValueTask.FromResult(result);
+        }
+
+        public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(DbCommand command, CommandEventData eventData, InterceptionResult<DbDataReader> result, CancellationToken cancellationToken = default)
+        {
+            ThrowOnPoisonInsert(command);
+            if (rolledBack && FailSecondLook && command.Transaction is null &&
+                command.CommandText.Contains(RuntimeOperationalStateEfModule.ExecutionLivenessTableName, StringComparison.OrdinalIgnoreCase))
+            {
+                FailedSecondLooks++;
+                throw new SimulatedReadFailure();
+            }
+            return ValueTask.FromResult(result);
+        }
+
+        public async Task TransactionRolledBackAsync(DbTransaction transaction, TransactionEndEventData eventData, CancellationToken cancellationToken = default)
+        {
+            if (!failed || rolledBack)
+                return;
+            rolledBack = true;
+            if (AfterRollback is not null)
+                await AfterRollback();
+        }
+
+        private void ThrowOnPoisonInsert(DbCommand command)
+        {
+            if (!Armed || failed ||
+                !command.CommandText.Contains("elsa_runtime_scheduler_poison", StringComparison.OrdinalIgnoreCase) ||
+                !command.CommandText.Contains("INSERT", StringComparison.OrdinalIgnoreCase))
+                return;
+            failed = true;
+            throw new DbUpdateException(Message);
+        }
+
+        private sealed class SimulatedReadFailure() : DbException("Simulated failure of the ownership read.");
     }
 
     private sealed class SaveCounter : ISaveChangesInterceptor
