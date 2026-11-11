@@ -107,9 +107,10 @@ red without the change.
   `null` (R-7). Check that the byte, depth and node limits still count the output
 - [ ] T023 [US4] Under `AsNull`, an `undefined` binding result materializes as `null` in
   `JintPortableJavaScriptEvaluator` for both binding forms; without it the ADR 0083 error stays
-- [ ] T024 [US4] Script activity with a bound result (R-8): refuse a script without a `return` statement at publication,
-  and fault the step in `JintJavaScriptScriptEvaluator` when the run produces `undefined`, both with a fix instruction;
-  `ExplicitNull` under the policy; an unbound result writes nothing
+- [ ] T024 [US4] Script with a consumed result (R-8): identify the function-body forms; refuse a function-body script
+  without a `return` statement at publication, never an expression script or completion value; fault the step in
+  `JintJavaScriptScriptEvaluator` when a consumed result is `undefined`, with a fix instruction; `ExplicitNull` under
+  the policy; an unconsumed result writes nothing
 - [ ] T025 [US4] Tests for each US4 acceptance scenario, including a `JSON.stringify` string that is not rewritten,
   `undefined` at depth three, and a script that returns on some paths only
 

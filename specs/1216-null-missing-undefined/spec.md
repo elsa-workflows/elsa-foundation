@@ -169,13 +169,17 @@ properties become `null` too (#3170, #3172).
    an element already `null` needs no diagnostic.
 6. **Given** the policy, **When** a script returns a string from `JSON.stringify`, **Then** that string is not
    rewritten.
-7. **Given** no policy and a script activity whose result is bound to a variable or output, **When** the script has no
-   `return` statement, **Then** publication refuses it with a fix instruction; **When** it ends on a path without a
-   value at run time, **Then** the step faults with the same instruction.
+7. **Given** no policy and a function-body script (its result is only what `return` gives) whose result is bound to a
+   variable or output, **When** the script has no `return` statement, **Then** publication refuses it with a fix
+   instruction; **When** any script form with a bound result produces `undefined` at run time, **Then** the step faults
+   with the same instruction.
 8. **Given** a script activity whose result is not bound, **When** it returns nothing, **Then** it completes and nothing
    is written.
-9. **Given** the policy and a bound result, **When** the script returns nothing, **Then** the result is `null` and the
-   binding writes it (what Elsa 3 did).
+9. **Given** the policy and a bound result, **When** the script produces `undefined`, **Then** the result is `null` and
+   the binding writes it (what Elsa 3 did).
+10. **Given** a bound result, **When** an expression script or a Script activity produces its value as a completion
+    value (for example a last expression statement `a + b`) without a `return` statement, **Then** publication accepts
+    it and the completion value is written; no `return` is required.
 
 ---
 
@@ -240,8 +244,10 @@ omitted; after resume, the first reads explicit null and the invocation record s
 - An explicit `null` for a nullable input that has a declared default stays `null`; defaults apply only to omission.
 - An input binding that produces `undefined` and a script activity that completes without returning a value are
   distinct cases (FR-019, FR-020).
-- A script that returns on some paths only (`if (x) return y;`) passes publication; the run-time check of FR-020
-  catches the path without a value.
+- A function-body script that returns on some paths only (`if (x) return y;`) passes publication; the run-time check
+  of FR-020 catches the path without a value.
+- An expression script or a Script activity whose result is its completion value never needs a `return` statement;
+  the undefined policy applies to the value it actually produces (FR-020).
 - The default-on-null policy applies to a `null` produced by any source: a literal, a variable, an expression, or a
   request member.
 - A required and nullable input accepts an explicit `null`; requiredness concerns presence, not value.
@@ -295,8 +301,9 @@ omitted; after resume, the first reads explicit null and the invocation record s
 - **FR-012**: A workflow MUST be able to select the default-on-null policy, as one workflow-level setting (Q1). A
   per-input setting is added only once a case needs it.
 - **FR-013**: Under the policy, a `null` for a non-nullable target MUST be replaced by the target type's default
-  (`default(T)` for value types and enums, Elsa 3's behaviour) (Q2), and the invocation record MUST show
-  that the value was substituted. A target type without a non-null default (FR-006) still fails with `VF-ACT-004`.
+  (`default(T)` for value types and enums, Elsa 3's behaviour) (Q2), independently of any declared default, and the
+  invocation record MUST show that the value was substituted. A target type without a non-null default (FR-006) still
+  fails with `VF-ACT-004`. Requiredness is checked before any default applies (FR-008).
 - **FR-014**: The policy MUST never replace a `null` for a nullable target.
 
 **`undefined` at the JavaScript boundary (D-11)**
@@ -308,11 +315,18 @@ omitted; after resume, the first reads explicit null and the invocation record s
   MUST materialize as `null`, and an `undefined`-valued property MUST be kept as `null` at every depth. The policy acts
   only at the boundary: it MUST NOT change JavaScript semantics or rewrite a string `JSON.stringify` produced.
 - **FR-019**: An input binding that produces no value MUST be governed by FR-015 and FR-018.
-- **FR-020**: A script activity whose result is bound to a variable or output MUST produce a value (Q3). Without
-  undefined-as-null, a script with no `return` statement MUST be refused at publication, and a run that ends without a
-  value (no `return`, or `return undefined`) MUST fault the step; both name the activity and say to return a value or
-  remove the binding. Under undefined-as-null the result MUST be `null`, which the binding writes. A script whose result
-  is not bound MAY return nothing, and nothing is written.
+- **FR-020**: A script whose result is consumed (bound to a variable or output) MUST produce a value (Q3), and the
+  undefined policy MUST apply to the value each script form actually produces. The forms differ:
+  - an **expression script** (a binding, governed by FR-015 and FR-018) and a **Script activity whose result is its
+    completion value** produce a value without a `return` statement, and MUST NOT be refused for lacking one;
+  - only a **function-body script** (its result is only what a `return` statement gives) whose result is consumed and
+    that has no `return` statement MUST be refused at publication.
+
+  In every form, a consumed result that is `undefined` at run time (a path without a value, `return undefined`, or a
+  completion value of `undefined`) MUST fault the step without undefined-as-null; under undefined-as-null it MUST be
+  `null`, which the binding writes. The publication refusal and the fault name the activity and say to produce a value
+  or remove the binding. A script whose result is not consumed MAY produce nothing, and nothing is written. No binding
+  is required to contain a `return` statement.
 
 **Policies recorded on the workflow (D-11)**
 - **FR-021**: Both policies MUST be recorded on the workflow definition, pinned in the executable, and part of its
@@ -357,15 +371,18 @@ omitted; after resume, the first reads explicit null and the invocation record s
 ## Open questions for the approvers
 
 ADR 0045 §2 leaves Q1 to Q4 to this spec; Q5 came from the code survey. Each has a proposal and @j03y-nxxbz's position.
-All three approvers answer them on the PR, and the PR's reconciliation table records the answers.
+All three approvers answer them on the PR, and the PR's reconciliation table records the answers. @sfmskywalker's
+answers were given on his behalf (delegated) on 5 Nov
+([comment](https://github.com/elsa-workflows/elsa-foundation/pull/3726#issuecomment-6646543334)), following his
+review of #3388; @j03y-nxxbz accepts them and the text applies them. @FransVanEk has not answered on this PR yet.
 
-| # | Question | Proposal | @j03y-nxxbz |
-|---|---|---|---|
-| Q1 | Where is default-on-null set: workflow, per input, or both? | Workflow only, until a case needs per input (simplest default, advanced later). | Agrees |
-| Q2 | Which default does it use: declared or type default? | Type default: it is what Elsa 3 did, and a declared default is about omission, not about a null value. | Agrees |
-| Q3 | A script activity whose result is bound returns nothing: what happens? | Refuse: at publication when there is no `return`, at run time on a path without a value, with a fix instruction. `null` under undefined-as-null. An unbound result may return nothing. | Proposed it (replaces "absent, the binding writes nothing") |
-| Q4 | Is the converter option on by default? | On, for workflows the converter produces only. Native Elsa 4 workflows always start with both policies off. | Agrees, with that scope |
-| Q5 | A `null` for an input that cannot hold null and has no type default (non-nullable `String`): what happens? | Refuse (`VF-ACT-004`) with guidance under any policy; declare the input nullable where an Elsa 4 activity handles `null`; audit the built-in activities. Rejected: substituting `""` (changes what Elsa 3 did) and passing `null` through (breaks the contract). | Agrees |
+| # | Question | Proposal (as applied) | @j03y-nxxbz | @sfmskywalker |
+|---|---|---|---|---|
+| Q1 | Where is default-on-null set: workflow, per input, or both? | Workflow only, until a case needs per input (simplest default, advanced later). | Agrees | Agrees: workflow-level |
+| Q2 | Which default does it use: declared or type default? | Type default, independently of declared defaults: it is what Elsa 3 did, and a declared default is about omission, not about a null value. A nullable target keeps explicit `null`; no usable type default means refusal; requiredness precedes defaults. | Agrees | Agrees, with those three conditions (applied in FR-013, FR-014) |
+| Q3 | A script whose result is consumed produces nothing: what happens? | Distinguish the forms. An expression script or a Script activity's completion value needs no `return`; only a function-body script with a consumed result and no `return` is refused at publication. The undefined policy applies to the value each form actually produces: a fault without undefined-as-null, `null` under it. An unconsumed result may produce nothing. | Accepts @sfmskywalker's answer (replaces "refuse any bound script without `return`") | Proposed the form distinction |
+| Q4 | Is the converter option on by default? | On, for workflows the converter produces only. Native Elsa 4 workflows always start with both policies off; the policies travel with the workflow and are pinned in its executable. | Agrees, with that scope | Agrees |
+| Q5 | A `null` for an input that cannot hold null and has no type default (non-nullable `String`): what happens? | Refuse (`VF-ACT-004`) with guidance under any policy; declare the input nullable where an Elsa 4 activity handles `null`; an omitted optional input without a usable type default needs a declared default (FR-006); audit the built-in activities. Rejected: substituting `""` (changes what Elsa 3 did) and passing `null` through (breaks the contract). | Agrees | Agrees |
 
 ## Success Criteria *(mandatory)*
 

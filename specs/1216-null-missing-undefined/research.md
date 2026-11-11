@@ -113,10 +113,16 @@
 
 ## R-8 Script activity without a return value
 
-- **Decision** (Q3): when the script activity's result is bound, publication refuses a script with no `return`
-  statement (the JavaScript analyzer already parses the body), and `JintJavaScriptScriptEvaluator` faults the step when
-  the run produces `undefined`. Both carry a fix instruction. Under undefined-as-null the result is `ExplicitNull`.
-  When the result is not bound, `undefined` produces no value and nothing is written.
+- **Decision** (Q3, as @sfmskywalker answered): the forms are distinguished. An expression script (a binding) and a
+  Script activity whose result is its completion value need no `return` statement and are never refused for lacking
+  one. Only a function-body script (its result is only what `return` gives) with a consumed result and no `return`
+  statement is refused at publication (the JavaScript analyzer already parses the body). For every form,
+  `JintJavaScriptScriptEvaluator` (or the binding evaluator) faults the step when a consumed result is `undefined`,
+  with a fix instruction; under undefined-as-null the result is `ExplicitNull`. When the result is not consumed,
+  `undefined` produces no value and nothing is written.
+- **Check in T024**: which activity forms are function bodies. Today `RunJavaScript` evaluates a program
+  (`PreparedJavaScript.Script`, `AllowReturnOutsideFunction`) whose result is a top-level `return` value or the
+  completion value, so it is a completion-value form unless the plan finds otherwise.
 - **Rationale**: a bound result that is never produced is a bug in the script; this matches ADR 0083's rule for
   bindings. Elsa 3's `Result = null` stays available through the policy.
 - **Alternatives**: an absent result that the binding skips (rejected in review: it silently keeps the old value);

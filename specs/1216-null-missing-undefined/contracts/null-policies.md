@@ -21,7 +21,7 @@ Omitted `nullHandling` means both `false`. The block round-trips through export 
 | `runtime.input.missing-required` | error | Admission: omitted required workflow input. Exists since #3731 (`WorkflowExecutableInputValidationReasonCodes.MissingRequired`, start refused with category `Input`, `400`); unchanged | input |
 | `VF-WF-REQ-002` | error | Admission: explicit `null` for a non-nullable workflow input without `DefaultOnNull`. New reason code in `WorkflowExecutableInputValidationReasonCodes`, refused the same way as #3731's | input |
 | `VF-VAL-NULL-DEFAULTED` | info | `DefaultOnNull` substituted a type default (recorded on the invocation) | node, input, default |
-| `JS-SCRIPT-NO-RESULT` | error | A script activity's result is bound and the script has no `return` (publication) or ends without a value (run time), without `UndefinedAsNull` | activity, bound target |
+| `JS-SCRIPT-NO-RESULT` | error | A function-body script's result is consumed and it has no `return` (publication), or any script form's consumed result is `undefined` at run time without `UndefinedAsNull`. Never raised for an expression script or completion value that lacks `return` | activity, bound target |
 | `JS-UNDEFINED-DROPPED` | warning | An `undefined` property was dropped (no `UndefinedAsNull`) | node, input, JSON path |
 | `JS-NONFINITE-NULL` | warning | `NaN` or `±Infinity` became `null` | node, input, JSON path |
 | `VAR-NOT-FOUND` | warning | A computed variable name matched nothing; read marked absent | node, variable name |

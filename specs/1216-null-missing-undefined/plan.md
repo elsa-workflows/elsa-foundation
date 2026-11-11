@@ -75,7 +75,7 @@ admission.
 | D-5 | Policies on `WorkflowStrategyOptions.NullHandling` | R-2. Compiled to `WorkflowExecutable.ValuePolicies`; undefined policy also pinned on each JavaScript binding. |
 | D-6 | Default-on-null = type default | R-6, Q2. Value types and enums only; other types keep `VF-ACT-004`. |
 | D-7 | Jint replacer | R-7. Warnings `js-undefined-dropped`, `js-nonfinite-null`; an `undefined` array element or sparse hole becomes a `null` placeholder (a path diagnostic, not dropped) so positions hold under either policy; policy turns `undefined` into `null`. |
-| D-8 | Script activity without a return | R-8, Q3. Bound result: refused at publication without `return`, step faults at run time without a value; `null` under the policy. Unbound: nothing written. |
+| D-8 | Script without a value | R-8, Q3. Expression scripts and completion-value Script activities need no `return`; only a function-body script with a consumed result and no `return` is refused at publication. A consumed `undefined` faults the step at run time; `null` under the policy. Unconsumed: nothing written. |
 | D-9 | Converter option | R-9, Q4. `Elsa3MappingOptions.ApplyElsa3NullPolicies`, default `true`. |
 | D-10 | Computed read miss | R-10. `undefined` plus `variable-not-found` warning; read set marks the name absent. |
 | D-12 | Inputs that cannot hold null | R-12, Q5. `VF-ACT-004` under any policy; audit built-in activities. |
