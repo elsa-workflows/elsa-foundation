@@ -69,7 +69,8 @@ written down:
 
 This ADR's representations (`TypedValue`, `StructuredValue`, `TextValue`, `FormattedContent`, `BinaryContent`,
 `DurableReference`, `TransientResource`) become the vocabulary of those contracts. Conversion plans are how adapters are
-implemented, and they stay pinned at publish. Every adapter serializes through ADR 0091's baseline.
+implemented, and they stay pinned at publish. Every adapter serializes through options derived from ADR 0091's
+baseline; conversion into a user type uses that type's scoped conversion contract (ADR 0091 decision 2).
 
 **An adapter rule never changes in place.** Any change to an adapter
 rule ships as a new, pinned conversion-plan or profile version, never as an edit of an existing one, so one name keeps
@@ -96,28 +97,28 @@ restart or retry it is rebuilt from the core value, never restored. Recovery run
 `undefined`-valued property that the default drops gives a diagnostic, and NaN and Infinity become null with a diagnostic, because a lossy conversion is declared,
 never silent (V6).
 
-**V9. A script works on plain JavaScript values; Elsa finds its changes by comparing.** A script gets ordinary
+**V9. A script works on plain JavaScript values; only what it changes is written.** A script gets ordinary
 JavaScript objects and real arrays (today the objects are frozen). Changing them changes nothing outside the script by
 itself. Writing back is a general capability of script activities (A-3, ADR 0090 amendment), so S-a
 works; input-binding expressions never write workflow state (D-3). A write commits with the step and a fault discards it. A write of a
 value the script read is a read-modify-write under ADR 0092.
 
-*Copy, compare, patch* (replaces an earlier JSON-backed view, which needed a custom Jint object for every value and
-could not give real arrays; `BigInt` is no way out: `JSON.stringify` throws on it, and mixing it with numbers throws):
-- **Convert per variable, on first read.** A variable is converted into JavaScript values, as a whole, when the script
-  first reads it (`variables.order`). A variable the script never reads is never converted.
-- **Compare JavaScript with JavaScript.** After the script, each converted variable is compared with a fresh
-  conversion of its original JSON, walking both trees and skipping identical subtrees. Both sides went through the same
-  conversion, so a number rounded on the way in is rounded on both sides and is not a change. No second copy is kept
-  in memory: the conversion is deterministic, so the walk converts the original again as it goes.
-- **Patch only what changed.** Each changed path is written into the original JSON (ADR 0090 amendment, C3), so
-  everything else keeps its exact text, large numbers included. Assigning a whole variable replaces it (ADR 0090
-  amendment, replace or partial update).
-- **Arrays are real JavaScript arrays.** A changed array is written as a whole for now. A later array compare that
-  matches unchanged elements to their original positions, as a text diff does, can write those elements from their
-  original text, without changing this rule.
-- **Lost precision at a write is refused, not just reported.** At conversion Elsa knows which numbers lost digits: the
-  JavaScript number, written as JSON, differs from the original. When such a value reaches anything the step **writes**
+This ADR states the behaviour. How the engine detects and writes a script's changes is left to the implementing spec
+(S-8), which chooses the mechanism and validates it against these behaviours, with evidence for member mutation, whole
+replacement and precision handling:
+- **A read never looks like a change.** Reading a variable, alone, never rewrites its stored value. A number rounded on
+  its way into JavaScript is not a change, and a variable the script never reads is never touched.
+- **A member change keeps the other members.** `variables.order.total = 20` changes that member, and the members the
+  script did not change keep their stored values, large numbers included (ADR 0090 amendment, C3).
+- **A whole assignment replaces.** `variables.order = { total: 20 }` replaces the value (ADR 0090 amendment, replace
+  or partial update).
+- **Write-back keeps the data's meaning** under the selected conversion contract. Its notation may change (`2.0` may
+  come back as `2`); its values do not, except under the precision rules below.
+- **Arrays are real JavaScript arrays.** A changed array is written as a whole for now. A later implementation may keep
+  unchanged elements as stored, without changing this rule.
+- **Lost precision at a write is refused, not just reported.** A number that lost digits on its way into JavaScript is
+  known as such: the JavaScript number, written as JSON, differs from the stored one. When such a value reaches
+  anything the step **writes**
   (copied, returned, or inside a replaced array), the write is **refused by default with a diagnostic** naming the path
   and both values; a warning alone is insufficient, because silent precision loss corrupts data. A designer who intends
   the loss accepts it explicitly to allow the write. That acceptance is a deliberate choice **recorded in the published
@@ -135,12 +136,12 @@ could not give real arrays; `BigInt` is no way out: `JSON.stringify` throws on i
 
   The trade-off: an element the script did not touch can still lose precision when its array changes. That loss is
   prevented by default, and accepting it is explicit, as above.
-- **Accepted gap.** Because the compare is JavaScript against JavaScript, a deliberate write of a value equal to the
-  converted read (for example setting `…992` over a stored `…993`) is treated as unchanged, and the stored text is
-  kept. The script cannot tell the two apart. Writing the value as a string forces the write.
-- **The cost is accepted by default.** Each variable the script reads is converted once and walked once at commit:
-  linear in the data the script receives. Integrity comes before performance in the default; a faster implementation
-  may come later through V12, only if it behaves identically.
+- **Accepted gap.** A deliberate write of a value equal to the JavaScript value the script read (for example setting
+  `…992` over a stored `…993`) is treated as unchanged, and the stored value is kept. The script cannot tell the two
+  apart. Writing the value as a string forces the write.
+- **The cost is accepted by default.** Finding a script's changes may cost time linear in the data the script reads.
+  Integrity comes before performance in the default; a faster implementation may come later through V12, only if it
+  behaves identically.
 
 This changes the frozen-value contract of spec 095
 (`specs/095-value-flow-redesign/contracts/expression-and-import-contract.md`, lines 105-107) and the note in ADR 0090
@@ -165,13 +166,21 @@ input binding stays JSON. The opt-in comes with these guardrails:
   ADR, or it is refused. No live object enters the input snapshot (V7).
 - **Elsa state.** Direct writes to Elsa-owned workflow state stay blocked in input bindings (D-3).
 
+**JSON values and .NET objects may coexist.** The default representation is a convenience, not an exclusive mode.
+Under an opt-in that allows .NET objects, a script or an input-binding expression may work with plain JavaScript
+values, host-exposed .NET objects, or both in the same script or expression, converting explicitly where needed.
+Enabling .NET interop does not turn every value into a .NET proxy. The implementing spec defines how an author obtains
+each representation. The boundaries above still apply: the host controls which .NET capabilities it exposes, durable
+values follow their conversion, persistence and write-back contracts, input bindings never write Elsa-owned workflow
+state, and a known precision loss at a write needs explicit acceptance (V9).
+
 **V12. One seam for how values reach a script, with pinned profiles.** How a value enters a script and how its
 changes come back is one seam with named, pinned implementations (V3's rule: one name keeps one behaviour):
 
 | Profile | The script sees | Changes come back by |
 |---|---|---|
-| JSON (default) | Plain JavaScript objects and real arrays | Copy, compare, patch (V9) |
-| .NET objects (opt-in) | Live .NET objects through Jint interop | Explicit write-back only (`variables.order = …`); changes to a live object are not observed |
+| JSON (default) | Plain JavaScript objects and real arrays | The changes the script makes (V9) |
+| .NET objects (opt-in) | Plain JavaScript values as in the default, alongside live .NET objects the host exposes through Jint interop | JSON values as in the default (V9); a live object only by explicit write-back (`variables.order = …`), because changes to a live object are not observed |
 
 - The engine sets the default, JSON out of the box, and a script activity may choose another profile (reconciliation
   row 17b).
@@ -184,12 +193,21 @@ changes come back is one seam with named, pinned implementations (V3's rule: one
   added later if measurements ask for it, and only if it behaves identically. If it differs in any way, it is a new
   profile with its own name.
 
-**V11. A kind is a JSON shape, not a .NET type.** A variable's type is a kind from the alias registry (ADR 0035): a
-JSON representation plus validation. `DateOnly` is an ISO 8601 string, not the .NET struct with its methods. Workflow
-engineers see and use kinds, in Studio and in scripts (JavaScript, Liquid, and C# scripting once it is added). The
-.NET type exists only inside the activity input and output adapter and inside registered functions (D-5).
-- Working with a value as a .NET object, with its properties and methods, is the opt-in of V10 and never the default.
-  A .NET engineer who opts in may also register their own aliases and expose their properties and methods to scripts.
+**V11. Workflow engineers work with kinds, not .NET types; custom types and typed access stay available.** A
+variable's declared type and the representation a particular script receives are separate choices. The declared type
+is a kind from the alias registry (ADR 0035): a JSON representation plus validation. `DateOnly` is an ISO 8601
+string, not the .NET struct with its methods. Workflow engineers see and use kinds, in Studio and in scripts
+(JavaScript, Liquid, and C# scripting once it is added). By default the .NET type is used only inside the activity
+input and output adapter and inside registered functions (D-5).
+- A custom registered type, such as `Order`, keeps its name and its data contract. It is stored as JSON under that
+  contract and does not force every consumer into .NET interop: JavaScript receives its JSON representation by
+  default.
+- Explicitly selected typed access stays available: working with a value as a .NET object, with its properties and
+  methods, through a host-enabled, pinned profile (V10, V12), never by default. It follows the explicit conversion,
+  persistence and write-back rules of this ADR. A .NET engineer may also register their own aliases and expose their
+  properties and methods to scripts.
+- This is not a rule that only JSON kinds exist across Studio and every scripting language; durable storage is
+  governed by the JSON data contract, and typed access is an explicit choice on top of it.
 - Code-first authors (`WorkflowBuilder.Variable<T>`) are .NET developers by definition. They may use .NET types in
   their own code; their values are still stored as core values (V7).
 
@@ -199,10 +217,14 @@ A company whose workflow engineers do know .NET can open those extension points,
 default stays plain. *Dates* shows what goes wrong otherwise: Elsa 3 exposed dates as .NET `DateTime` values, so the
 same workflow behaved differently on each server.
 
-**Defaults first, extensions defined.** The default implementations are kept simple and built now: JSON values, the
-kinds, registered functions. The extension points above (the object opt-in of V10, registered aliases with properties
-and methods) are defined in this ADR but not built until a real use case asks for them. S-8 builds the default, not
-the opt-in.
+**Defaults first, with a minimal explicit interop.** JSON stays the durable contract and the default JavaScript
+representation. S-8 builds the defaults (JSON values, the kinds, registered functions) and a minimal explicit .NET
+interop capability: the guarded opt-in of V10 for host-exposed .NET objects, in script activities and in input
+bindings, with the author's representation choice recorded in the published contract and explicit write-back for
+durable data. That interop follows the persistence, per-attempt materialization (V7), workflow-state write and
+external-effect rules above; selecting it gives no rollback or exactly-once execution for arbitrary .NET methods
+(V4). Unrestricted .NET type access (Jint's `AllowClr`) and broader conveniences, such as registered aliases with
+properties and methods, are defined in this ADR and built separately when a use case asks for them.
 
 ### Adapter rules
 
@@ -210,8 +232,8 @@ the opt-in.
 
 | Value | Today (tested or read) | Rule |
 |---|---|---|
-| `{"customerName":…}` into a class with `CustomerName` | property stays empty, no error | Matched exactly: `customerName` is `CustomerName`'s name under the baseline's camelCase policy. Any other name is mapped with `[JsonPropertyName]`. A key that matches no member gives a recorded warning, not a refusal, so nothing is lost silently; the Elsa 3 converter rewrites a literal key that differs only in case and refuses only ambiguous ones (ADR 0091 decision 2, reconciliation row 9) |
-| A .NET-typed result read into the next activity's input | written camelCased, read case-sensitively, so properties can be lost (inferred) | Both directions use the same baseline copy (ADR 0091 decision 5) |
+| `{"customerName":…}` into a class with `CustomerName` | property stays empty, no error | Matched under the user type's scoped conversion contract (ADR 0091 decision 2). The baseline's camelCase convention applies to Elsa's own contracts, not to user types. A user type uses a documented default conversion contract, with exact (case-sensitive) matching by default and scoped options for its naming policy, case-insensitive matching and explicit member mappings (or `[JsonPropertyName]`); the selected behaviour is recorded in the published conversion contract, and no host-wide option changes. A key that matches no member under the effective contract gives a recorded warning, not a refusal, so nothing is lost silently; the Elsa 3 converter rewrites a literal key that differs from the contract's name only in case and refuses only ambiguous ones (ADR 0091 decision 2, reconciliation row 9) |
+| A .NET-typed result read into the next activity's input | written camelCased, read case-sensitively, so properties can be lost (inferred) | Both directions use the same effective conversion contract for that type (ADR 0091 decisions 2 and 3) |
 | `"5"` into `Int32`, `"true"` into `Boolean`, `5.0` into `Int32` | refused with the defaults; `"5"` accepted where Web options are used | Refused everywhere: no text parsing or truthiness (R5) |
 | A 20-digit integer into `Int64` or `Decimal`, a 29-digit decimal into `Decimal` | exact at the input; ForEach turns every item number into a `double` (a defect found by A-1, a bug that can be fixed now) | Exact; no adapter narrows a number unless the target type asks for it |
 | Upper-case GUID | accepted, written lower case | Keep, stated |
@@ -223,7 +245,7 @@ the opt-in.
 | Value | Today | Rule |
 |---|---|---|
 | Integer within ±2^53 | exact | Keep |
-| Integer beyond ±2^53, or a `Decimal` with more digits than a double holds | digits lost on the way in, also for values the script never touches: the whole input is converted into JavaScript values up front, and Jint holds every number as a double | Values the script does not change keep their exact text: only changed paths are written (V9). A number the script reads is a JavaScript number, a double (V6, stated), and a lost digit that reaches a write is refused by default with a diagnostic (V9), unless the designer explicitly accepts the loss, recorded in the published conversion contract. Elsa never turns numbers into strings by itself. A designer who needs exact digits holds them as a string, the usual JSON convention for integers beyond 2^53; exact money arithmetic goes to a .NET function (D-5) or an activity |
+| Integer beyond ±2^53, or a `Decimal` with more digits than a double holds | digits lost on the way in, also for values the script never touches: the whole input is converted into JavaScript values up front, and Jint holds every number as a double | Values the script does not change keep their stored value: only what the script changes is written (V9). A number the script reads is a JavaScript number, a double (V6, stated), and a lost digit that reaches a write is refused by default with a diagnostic (V9), unless the designer explicitly accepts the loss, recorded in the published conversion contract. Elsa never turns numbers into strings by itself. A designer who needs exact digits holds them as a string, the usual JSON convention for integers beyond 2^53; exact money arithmetic goes to a .NET function (D-5) or an activity |
 | `0.1 + 0.2` | `0.30000000000000004` | Stated: script arithmetic is double arithmetic |
 | `2.0`, `1e21` | come back as `2`, `1e+21` | Stated: the notation may change, the number does not |
 | Dates | ISO 8601 strings | Stay strings; a JavaScript `Date` (once D-1 enables it) leaves as UTC (`…Z`) |
@@ -336,7 +358,11 @@ today. Its date-heavy scripts are already refused.
   function is already .NET code that a binding calls, so the restriction takes a capability away without keeping .NET
   out of bindings. And under faithful-or-refuse, an Elsa 3 input expression that uses .NET access would have to be
   refused at conversion. The guardrails of V10 keep the default plain and make the opt-in visible and bounded instead.
-- **A JSON-backed view of each value instead of copy, compare, patch.** Not chosen; see V9.
+- **Frozen or JSON-backed views of each value instead of plain JavaScript values.** Not chosen: a view needs a custom
+  Jint object for every value and cannot give real arrays. `BigInt` is no way out either: `JSON.stringify` throws on
+  it, and mixing it with numbers throws.
+- **Fixing the change-detection mechanism in this ADR.** Not chosen: the ADR states the behaviour of V9, and the
+  implementing spec chooses the mechanism and validates it against that behaviour.
 
 ### What this settles
 
@@ -358,21 +384,21 @@ today. Its date-heavy scripts are already refused.
 ### What it touches
 
 - **ADR 0035** alias registry: `Object` leaves, `DateOnly` and `TimeOnly` join.
-- **ADR 0091:** the serializer every adapter uses. Exact member reads, the diagnostic for unmatched keys and the data
-  rules are stated there.
+- **ADR 0091:** the serializer every adapter uses. The scoped conversion contracts for user types, exact member reads
+  by default, the diagnostic for unmatched keys and the data rules are stated there.
 - **Spec 264:** superseded in part (*Kinds*).
 - **Defects found by A-1:** numbers that lose digits silently in ForEach, JavaScript and diagnostic snapshots
   (V6). The ForEach and snapshot parts are plain bugs and are fixed without waiting for this amendment. The JavaScript
-  part is fixed by copy, compare, patch (V9). Nothing recorded decides that numbers become doubles: ADR 0036
+  part is fixed by writing only what a script changes (V9). Nothing recorded decides that numbers become doubles: ADR 0036
   chose `JsonNode` because it is lossless on numbers.
 - **Spec 095:** the frozen-value contract changes (V9).
 - **ADR 0090** (proposed, not yet reviewed) detects a change by serializing each tracked variable at commit and
   comparing it with its base (§2, §6). Every adapter in this ADR may lose detail (V6), so that comparison turns a read
   into a spurious write and corrupts untouched fields on a real write. Today a read cannot write: there is no
   tracking, and a test with a large number left the stored text and revision unchanged. The ADR 0090 amendment
-  replaces the comparison of stored text with explicit writes. In a script, a change found by comparing JavaScript with JavaScript is such a write (V9). That comparison differs from the rejected one: both sides
-  went through the same conversion, so a read never looks like a change.
+  replaces the comparison of stored text with explicit writes. In a script, a change the script makes is such a write (V9), and a read never looks
+  like a change.
 - **ADR 0036:** assumes Jint reads `JsonNode` through a `JsonElementConverter`; that converter is gone from main, and
-  the closed engine converts values itself. Converting per variable and patching only changed paths (V9) brings the
-  engine back in line with its intent.
+  the closed engine converts values itself. Writing only what a script changes (V9) brings the engine back in line
+  with its intent.
 - **Specs:** S-8 is defined against this amendment.
