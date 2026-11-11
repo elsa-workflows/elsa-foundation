@@ -88,15 +88,20 @@ public sealed partial class EfRuntimeCheckpointCommitStoreTests
                 .SetProperty(row => row.ScopeKey, EfRelationalIdentity.Encode("tenant-b")));
         }
 
-        var capture = new CommandCaptureInterceptor();
-        await using var context = database.Open("tenant-a", capture);
+        long seeded;
+        await using (var before = database.Open("tenant-a"))
+            seeded = (await before.Bookmarks.AsNoTracking().SingleAsync()).Revision;
+
+        await using var context = database.Open("tenant-a");
         await Assert.ThrowsAsync<InvalidDataException>(() =>
             new EfRuntimeCheckpointCommitStore(context, new FixedAccessor("tenant-a"))
                 .CommitAsync(commit, Decision()).AsTask());
-        Assert.DoesNotContain(capture.Commands, command => command.StartsWith("INSERT", StringComparison.OrdinalIgnoreCase) ||
-            command.StartsWith("UPDATE", StringComparison.OrdinalIgnoreCase));
-        Assert.Single(await context.RuntimeCheckpointCommits.ToArrayAsync());
-        Assert.Single(await context.Bookmarks.ToArrayAsync());
+        // A plain commit does not read its marker first: it runs, fails at its marker insert and rolls back, and the
+        // marker read after that failure finds the damaged row. So nothing of the attempt is kept.
+        Assert.Empty(context.ChangeTracker.Entries());
+        await using var read = database.Open("tenant-a");
+        Assert.Single(await read.RuntimeCheckpointCommits.ToArrayAsync());
+        Assert.Equal(seeded, (await read.Bookmarks.AsNoTracking().SingleAsync()).Revision);
     }
 
     [Fact]

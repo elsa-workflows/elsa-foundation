@@ -241,74 +241,117 @@ public sealed class EfRuntimeCheckpointCommitStore(
         }
         EfRuntimeAlterationCheckpointParticipationGate.Validate(context, commit, scope);
 
-        var existing = await FindMarkerAsync(scope, commit.CommitId, cancellationToken);
-        if (existing is not null)
-        {
-            var replay = ResolveReplay(commit, fingerprint, existing);
-            EfRuntimeAlterationCheckpointParticipationGate.MarkDurable(context, commit, scope);
-            return replay;
-        }
-
-        if (commit.StateChanges.WorkflowExecution?.State.ModelWorkOrigin is not null &&
-            commit.Checkpoint.Name == Elsa.Workflows.Runtime.Core.Constants.RuntimeCheckpointNames.WorkflowStarted &&
-            commit.ExpectedModelExecution is null)
-            throw new NotSupportedException("Initial native model work requires its authorizing model checkpoint condition.");
-
-        if ((commit.ExpectedBookmarkResume is not null || commit.ModelState is not null || commit.ExpectedModelExecution is not null) && (context.ChangeTracker.HasChanges() || context.Database.CurrentTransaction is not null ||
-            context.Database.GetEnlistedTransaction() is not null || System.Transactions.Transaction.Current is not null))
-            throw new InvalidOperationException("Exact bookmark checkpoint admission requires a clean context and its own transaction.");
+        // A commit whose marker is durable is a replay: it gets the stored result, or is refused when its fingerprint
+        // differs. The marker's key is the commit id, so such a commit cannot commit a second time. It fails at its
+        // marker insert at the latest and rolls back, and the marker read after a failure resolves it. So a plain
+        // commit does not read the marker before it runs: the read happens only after a failure.
+        //
+        // These commits read the marker first. A commit that carries an admission condition or a model decision:
+        // its staging compares rows it does not write, and its failures leave as admission-unavailable, so its
+        // replay is answered before either. A commit on a context with pending changes or an open transaction: a
+        // failed attempt clears the tracker, which would drop the caller's pending changes, and a write that fails
+        // inside a transaction this store does not own can end that transaction for its owner.
+        var readsMarkerFirst = commit.ExpectedBookmarkResume is not null || commit.ModelState is not null ||
+            commit.ExpectedModelExecution is not null || commit.ExpectedModelParentWait is not null ||
+            context.ChangeTracker.HasChanges() || context.Database.CurrentTransaction is not null ||
+            context.Database.GetEnlistedTransaction() is not null || Transaction.Current is not null;
+        if (readsMarkerFirst && await FindMarkerAsync(scope, commit.CommitId, cancellationToken) is { } existing)
+            return ReplayOf(existing);
 
         // True while an attempt has chosen its fence cursor over reading the row and its first save has not returned.
         var fenceUnchecked = false;
         // True when an attempt's save found the row at another revision than its cursor named.
         var fenceCursorBehind = false;
-        var pinned = commit.ModelState?.State.Executable ?? commit.StateChanges.WorkflowExecution?.State.PinnedExecutable;
-        if (pinned is not null)
+        // True when the marker read after an attempt's failure found no marker.
+        var markerAbsentAfterFailure = false;
+        // True once an attempt has asked its transaction to commit. Its marker insert had succeeded by then, so no
+        // marker existed before the attempt.
+        var transactionCommitRequested = false;
+        try
         {
-            if (rootWriteLeaseManager is null)
-                throw new InvalidOperationException(
-                    "A workflow execution checkpoint write requires IWorkflowExecutableRootWriteLeaseManager.");
+            if (commit.StateChanges.WorkflowExecution?.State.ModelWorkOrigin is not null &&
+                commit.Checkpoint.Name == Elsa.Workflows.Runtime.Core.Constants.RuntimeCheckpointNames.WorkflowStarted &&
+                commit.ExpectedModelExecution is null)
+                throw new NotSupportedException("Initial native model work requires its authorizing model checkpoint condition.");
 
-            // The session only hints that a root was persisted. The actual row must still exist with the exact
-            // same pin inside the fenced transaction, and its revision CAS must succeed. Never turn this path
-            // into an unprotected insert if retention, alteration or another writer changed that row.
-            if (commit.ModelState is null && commit.ExpectedModelExecution is null && commit.ExpectedModelParentWait is null &&
-                commit.StateChanges.WorkflowExecution?.State.ModelWorkOrigin is null && commit.ExpectedFence is not null &&
-                CoalescingSessions?.Current is { HasDurableRecord: true } session && session.WorkflowExecutionId == commit.WorkflowExecutionId &&
-                !context.ChangeTracker.HasChanges() && context.Database.CurrentTransaction is null &&
-                context.Database.GetEnlistedTransaction() is null && Transaction.Current is null)
+            if ((commit.ExpectedBookmarkResume is not null || commit.ModelState is not null || commit.ExpectedModelExecution is not null) && (context.ChangeTracker.HasChanges() || context.Database.CurrentTransaction is not null ||
+                context.Database.GetEnlistedTransaction() is not null || System.Transactions.Transaction.Current is not null))
+                throw new InvalidOperationException("Exact bookmark checkpoint admission requires a clean context and its own transaction.");
+
+            var pinned = commit.ModelState?.State.Executable ?? commit.StateChanges.WorkflowExecution?.State.PinnedExecutable;
+            if (pinned is not null)
             {
-                try
+                if (rootWriteLeaseManager is null)
+                    throw new InvalidOperationException(
+                        "A workflow execution checkpoint write requires IWorkflowExecutableRootWriteLeaseManager.");
+
+                // The session only hints that a root was persisted. The actual row must still exist with the exact
+                // same pin inside the fenced transaction, and its revision CAS must succeed. Never turn this path
+                // into an unprotected insert if retention, alteration or another writer changed that row.
+                if (commit.ModelState is null && commit.ExpectedModelExecution is null && commit.ExpectedModelParentWait is null &&
+                    commit.StateChanges.WorkflowExecution?.State.ModelWorkOrigin is null && commit.ExpectedFence is not null &&
+                    CoalescingSessions?.Current is { HasDurableRecord: true } session && session.WorkflowExecutionId == commit.WorkflowExecutionId &&
+                    !context.ChangeTracker.HasChanges() && context.Database.CurrentTransaction is null &&
+                    context.Database.GetEnlistedTransaction() is null && Transaction.Current is null)
                 {
-                    var updated = await CommitFencedAsync(cancellationToken, pinned);
-                    EfRuntimeAlterationCheckpointParticipationGate.MarkDurable(context, commit, scope);
-                    return updated;
+                    try
+                    {
+                        var updated = await CommitFencedAsync(cancellationToken, pinned);
+                        EfRuntimeAlterationCheckpointParticipationGate.MarkDurable(context, commit, scope);
+                        return updated;
+                    }
+                    catch (EfRuntimeCheckpointParticipantStaging.ExistingRootLeaseRequiredException)
+                    {
+                        // No SaveChanges occurred. Rollback/disposal completed before entering the ordinary leased path.
+                    }
                 }
-                catch (EfRuntimeCheckpointParticipantStaging.ExistingRootLeaseRequiredException)
-                {
-                    // No SaveChanges occurred. Rollback/disposal completed before entering the ordinary leased path.
-                }
+
+                RuntimeCheckpointCommitStoreResult? result = null;
+                async ValueTask ExecuteCheckpointAsync(CancellationToken leaseCancellationToken) =>
+                    result = await CommitFencedAsync(leaseCancellationToken);
+
+                // The lease is this attempt's alone (#2286). Two attempts of one commit (a retry that overlaps a slow first
+                // attempt) would otherwise share one lease, and the first to release it would leave the other's closure unfenced.
+                await rootWriteLeaseManager.ExecuteAsync(
+                    pinned,
+                    $"checkpoint:{commit.CommitId}:{Guid.NewGuid():N}",
+                    ExecuteCheckpointAsync,
+                    cancellationToken);
+                var completed = result ?? throw new InvalidOperationException("The checkpoint lease callback did not produce a result.");
+                EfRuntimeAlterationCheckpointParticipationGate.MarkDurable(context, commit, scope);
+                return completed;
             }
 
-            RuntimeCheckpointCommitStoreResult? result = null;
-            async ValueTask ExecuteCheckpointAsync(CancellationToken leaseCancellationToken) =>
-                result = await CommitFencedAsync(leaseCancellationToken);
-
-            // The lease is this attempt's alone (#2286). Two attempts of one commit (a retry that overlaps a slow first
-            // attempt) would otherwise share one lease, and the first to release it would leave the other's closure unfenced.
-            await rootWriteLeaseManager.ExecuteAsync(
-                pinned,
-                $"checkpoint:{commit.CommitId}:{Guid.NewGuid():N}",
-                ExecuteCheckpointAsync,
-                cancellationToken);
-            var completed = result ?? throw new InvalidOperationException("The checkpoint lease callback did not produce a result.");
+            var immediate = await CommitFencedAsync(cancellationToken);
             EfRuntimeAlterationCheckpointParticipationGate.MarkDurable(context, commit, scope);
-            return completed;
+            return immediate;
+        }
+        catch (Exception failure) when (!readsMarkerFirst && !markerAbsentAfterFailure && !transactionCommitRequested &&
+            !(failure is OperationCanceledException && cancellationToken.IsCancellationRequested))
+        {
+            // A failure is about to leave a commit that did not read its marker first, and no marker read followed
+            // it: it arose outside an attempt (the check above, the root write lease manager), or in an attempt on
+            // a path that reads no marker (a required root lease, a provider's timeout reported as a cancellation,
+            // a transaction that could not begin), or it is what the look at the ownership row put in place of the
+            // attempt's failure. A commit whose marker is durable must get its replay answer whatever else is true
+            // of it, for example when its drain has lost the run. So the marker is read once here. With a marker
+            // the commit is answered as a replay. Without one the failure leaves as it is. A failure of this read
+            // leaves in place of the first failure, as a failed marker read after an attempt does.
+            //
+            // The read is skipped in three cases. The marker read after the attempt's failure found no marker. The
+            // attempt had asked its transaction to commit: its marker insert had succeeded, so no marker was durable
+            // before it and there is no replay to answer. The failure is the cancellation of the caller's own token.
+            if (await FindMarkerAsync(scope, commit.CommitId, cancellationToken) is not { } durable)
+                throw;
+            return ReplayOf(durable);
         }
 
-        var immediate = await CommitFencedAsync(cancellationToken);
-        EfRuntimeAlterationCheckpointParticipationGate.MarkDurable(context, commit, scope);
-        return immediate;
+        RuntimeCheckpointCommitStoreResult ReplayOf(RuntimeCheckpointCommitEntity marker)
+        {
+            var replay = ResolveReplay(commit, fingerprint, marker);
+            EfRuntimeAlterationCheckpointParticipationGate.MarkDurable(context, commit, scope);
+            return replay;
+        }
 
         // The drain's own lease heartbeat bumps the fence row's revision without changing the lease, so a checkpoint
         // staged just before it would fail on a benign same-owner renewal. Retry only a conflict confined to that row,
@@ -383,6 +426,8 @@ public sealed class EfRuntimeCheckpointCommitStore(
         {
             fenceUnchecked = false;
             fenceCursorBehind = false;
+            markerAbsentAfterFailure = false;
+            transactionCommitRequested = false;
             var marker = ToEntity(commit, scope, id, fingerprint);
             var touchedTestScopes = new Dictionary<string, WorkflowTestScopeRecord>(StringComparer.Ordinal);
             var fenceKey = commit.ExpectedFence is null || FenceCursors is null
@@ -566,6 +611,7 @@ public sealed class EfRuntimeCheckpointCommitStore(
                 context.RuntimeCheckpointCommits.Add(marker);
                 await context.SaveChangesAsync(writeCancellationToken);
                 EnsureExactBookmarkDeadline(commit);
+                transactionCommitRequested = true;
                 try
                 {
                     await transaction.CommitAsync(writeCancellationToken);
@@ -593,6 +639,7 @@ public sealed class EfRuntimeCheckpointCommitStore(
                 var winner = await ReconcileMarkerAsync(exception, writeCancellationToken);
                 if (winner is not null)
                     return ResolveReplay(commit, fingerprint, winner);
+                markerAbsentAfterFailure = true;
                 if (commit.ExpectedBookmarkResume is not null || commit.ExpectedModelParentWait is not null)
                     throw new RuntimeSchedulerWorkUnavailableException("runtime.bookmark.admission-unavailable", "Exact bookmark admission changed concurrently.", exception);
                 throw;
@@ -611,6 +658,7 @@ public sealed class EfRuntimeCheckpointCommitStore(
                 var reconciled = await ReconcileMarkerAsync(exception, writeCancellationToken);
                 if (reconciled is not null)
                     return ResolveReplay(commit, fingerprint, reconciled);
+                markerAbsentAfterFailure = true;
                 if (commit.ExpectedBookmarkResume is not null && (exception is DbUpdateConcurrencyException or IOException ||
                     EfRelationalExceptionClassifier.IsProviderFailure(exception)))
                     throw new RuntimeSchedulerWorkUnavailableException("runtime.bookmark.admission-unavailable", "Exact bookmark admission is unavailable.", exception);
