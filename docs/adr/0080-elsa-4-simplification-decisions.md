@@ -43,16 +43,20 @@ Elsa 4 is an unreleased preview. The review measured where its complexity budget
 ### D0 — Focus
 
 **Owner amendment, 11 November 2026:** [Journal-first runtime core #4175](../program-goals/journal-core.md)
-is authorized for end-to-end delivery: design, a conformance suite, the new core built beside the current
-one, the switch of the default and the deletion of the old core, as
-[ADR 0098](0098-the-runtime-core-keeps-a-journal-per-run-and-derives-everything-else.md) sets out. The break
-is clean under D4: new tables and no migration of runs in flight. Sequencing: it runs beside the active
-programs with consolidation keeping priority one; it displaces the remaining slices of epic #2564 under
-[Runtime Efficiency](../program-goals/runtime-efficiency.md), whose 1 November boundary "no journal
-rewrite" it replaces; and it changes the ports named in the 9 November clarification of
-[Unified Execution](../program-goals/unified-execution.md) as ADR 0098 states. The switch of the default and
-the deletion of the old core each need the owner's go-ahead. No release, deployment or production credential
-is included.
+is authorized for end-to-end delivery by the owner's [goal of that day](https://github.com/elsa-workflows/elsa-foundation/issues/4175),
+with his decisions on [#2892](https://github.com/elsa-workflows/elsa-foundation/issues/2892#issuecomment-6807409653)
+and [#2564](https://github.com/elsa-workflows/elsa-foundation/issues/2564#issuecomment-6807592241): a design, a
+conformance suite, the new core built beside the current one, the switch of the default and the deletion of the
+old core. No code is written before the owner accepts
+[ADR 0098](0098-the-runtime-core-keeps-a-journal-per-run-and-derives-everything-else.md). The break is clean by
+that day's decision: new tables and no migration of runs in flight. Sequencing: it runs beside the active
+programs with consolidation keeping priority one, and it displaces the remaining slices of epic #2564 under
+[Runtime Efficiency](../program-goals/runtime-efficiency.md), whose 1 November boundary "no journal rewrite"
+it replaces. The ports named in the 9 November clarification of
+[Unified Execution](../program-goals/unified-execution.md) are unchanged. Its slices are merged by their author
+session after a clean independent review round with gate evidence posted, as the goal states. The switch of the
+default and the deletion of the old core each need the owner's go-ahead. No release, deployment or production
+credential is included.
 
 **Owner amendment, 9 November 2026 (triage review):** the owner recorded eight end-to-end delivery
 authorizations that were given in issue comments between 4 and 6 November and had not reached this ADR or the

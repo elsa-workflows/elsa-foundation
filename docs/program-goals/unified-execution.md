@@ -47,8 +47,10 @@ The runtime core is rebuilt under the [Journal-first runtime core](journal-core.
 that core the break is clean: runs in flight are not migrated, which overrides the 29 October rule on
 persisted-state compatibility for that switch only. Authoring contracts, workflow definitions, the HTTP API and
 Studio keep working unchanged. [ADR 0098](../adr/0098-the-runtime-core-keeps-a-journal-per-run-and-derives-everything-else.md)
-proposes how the ports of the 9 November clarification change; until the owner accepts it, they stand as
-written above, and every rule of this program applies to work on the current core.
+leaves the ports of the 9 November clarification unchanged: the new core is a second implementation behind the
+checkpoint commit port. Once the owner accepts it, the rule under "Approved scope and boundaries" to keep the
+existing EF checkpoint and outbox authority applies to the current core only. Every other rule of this program
+stands.
 
 ## Delivery sequence
 

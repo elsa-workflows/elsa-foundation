@@ -50,9 +50,10 @@ improve that implementation instead of assuming it must be introduced.
 - No timing CI gate, general benchmark service, production SLO, release or production deployment is introduced by
   this continuation.
 - **Owner amendment, 11 November 2026:** epic #2564 stops after #4166. Its remaining slices, its targets (32
-  SQLite commands and 16 PostgreSQL round trips for ten WriteLines under Balanced) and its method of proof move
-  to the [Journal-first runtime core](journal-core.md) program, which replaces the earlier boundary "no journal
-  rewrite". #2564 stays open until that program meets the targets or the owner closes it.
+  SQLite commands and 16 PostgreSQL round trips for ten WriteLines under Balanced) and its method of proof are
+  taken over by the [Journal-first runtime core](journal-core.md) program, which replaces the earlier boundary
+  "no journal rewrite". The remaining slices of #2564 are not built. #2564 stays open until that program meets
+  the targets or the owner closes it.
 - Choose the independent-host qualification fixture when implementation is ready to run. Record actual host and
   database placement; multiple processes or containers on one host are not independent-machine capacity evidence.
 
