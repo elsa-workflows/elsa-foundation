@@ -263,6 +263,22 @@ describe("Create dialog regression contract", () => {
     });
   });
 
+  it("keeps the type description with Configuration key and the store description only with Store", () => {
+    const described: SecretDescriptorsResponse = {
+      ...configurableDescriptors,
+      types: configurableDescriptors.types.map(type => ({ ...type, description: "Fixture type description." })),
+      stores: configurableDescriptors.stores.map(store => ({ ...store, description: "Fixture store description." }))
+    };
+    const { container } = renderDialog("create", { descriptors: described });
+    const dialog = container.querySelector<HTMLElement>("[role='dialog']")!;
+    const key = fieldControl<HTMLInputElement>(dialog, "Configuration key");
+
+    expect(document.getElementById(key.getAttribute("aria-describedby")!)?.textContent).toBe("Fixture type description.");
+    const storeDescriptions = [...dialog.querySelectorAll("p")].filter(paragraph => paragraph.textContent === "Fixture store description.");
+    expect(storeDescriptions).toHaveLength(1);
+    expect(storeDescriptions[0].closest(".secrets-compact-field")?.contains(fieldControl<HTMLSelectElement>(dialog, "Store"))).toBe(true);
+  });
+
   it("starts More options collapsed, keeps field context adjacent, and counts only authored optional configuration", () => {
     const { container } = renderDialog("create", { descriptors: scopeDescriptors });
     const dialog = container.querySelector<HTMLElement>("[role='dialog']")!;

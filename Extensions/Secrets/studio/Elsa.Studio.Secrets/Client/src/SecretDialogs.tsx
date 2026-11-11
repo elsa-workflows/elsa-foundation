@@ -115,7 +115,7 @@ export function CreateSecretDialog({
                 {attributes => <select {...attributes} value={typeName} onChange={event => changeType(event.target.value)}>{descriptors.types.map(type => <option key={type.name} value={type.name}>{type.displayName || type.name}</option>)}</select>}
               </SecretFormField>
               {usesConfigurationKey ? (
-                <CompactTextField label="Configuration key" value={configurationKey} onChange={setConfigurationKey} disabled={submitting} autoComplete="off" hint={selectedStore?.description ?? undefined} />
+                <CompactTextField label="Configuration key" value={configurationKey} onChange={setConfigurationKey} disabled={submitting} autoComplete="off" hint={selectedType?.description ?? undefined} />
               ) : (
                 <SecretValueField key={typeName} label="Value" value={value} typeName={typeName} editorHint={selectedType?.editorHint ?? null} onChange={setValue} compact disabled={submitting} hint={selectedType?.description ?? undefined} />
               )}
