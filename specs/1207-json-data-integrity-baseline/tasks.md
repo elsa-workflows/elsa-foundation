@@ -47,9 +47,9 @@ shows each new test failing without the change.
 - [ ] T007 Add the "Baseline deviations" register to `docs/serialization.md`, with the ADR 0091 decision 7 rows and
   every hash preimage from research R-1 (Q4). Generate `Baselines/json-optionless-calls.txt` from today's option-less
   calls, excluding the value-path sites of research R-10 (Q3)
-- [ ] T008 Add `CanonicalJson` (canonical preimage and equality: sorted members, fixed encoder, raw number text) in
-  `Serialization/Core/`, with unit tests that equal values with different escaping and whitespace are equal and hash
-  equal
+- [ ] T008 Add `SemanticJson` (semantic value comparison: member order, escaping and whitespace ignored, numbers by
+  value) in `Serialization/Core/`, with unit tests that equal values with different escaping and whitespace compare
+  equal. It is never used as an existing hash input (FR-021)
 
 ## Phase 3: User Story 1 - Names keep their casing (P1) 🎯 MVP
 
@@ -78,15 +78,20 @@ shows each new test failing without the change.
 ## Phase 4: User Story 3 - A .NET-typed value survives (P1)
 
 - [ ] T013 [US3] Keep #3801's `ActivityResultRoundTripTests` and `ActivityValueJsonTests` green through the move to
-  the data-boundary copy. Add a case for a key that differs only in case: it now gives `json-unmatched-member`, where
+  the default conversion contract. Add a case for a key that differs only in case: it now gives `json-unmatched-member`, where
   `ActivityValueJson.Options` filled the member (research R-10)
-- [ ] T014 [US3] Add `UnmatchedMemberScanner` in `Serialization/Core/` (Q1, research R-13) emitting
-  `json-unmatched-member` (contract). Unit tests: top-level and nested keys, arrays of objects, annotated names
-- [ ] T015 [US3] Add the UTC `DateTime` converter to `JsonBaseline.DataBoundary` (FR-016, ADR 0046 *Dates*, Q8)
-- [ ] T016 [US3] Move every value-path conversion of research R-10 to `JsonBaseline.DataBoundary`, calling the
-  scanner on reads:
+- [ ] T014 [US3] Add `UnmatchedMemberScanner` in `Serialization/Core/` (Q1, research R-13), contract-aware, emitting
+  the FR-005 codes (contract). Unit tests: top-level and nested keys, arrays of objects, annotated names, a scoped
+  case-insensitive contract, explicit mappings, dictionaries, extension data (not reported), a custom converter
+  (coverage unavailable, no false warnings), a strict contract (refused), a missing required member (fails)
+- [ ] T015 [US3] Add `JsonConversionContract` (default and scoped) in `Serialization/Core/` with its date/time
+  converter: offset used as given; no offset → the declared source time zone or explicit assume-UTC policy, else
+  `json-datetime-interpretation-missing`; never server-local or implicit UTC (FR-004, FR-016, Q8). Record the
+  selected contract with a version in the published conversion contract
+- [ ] T016 [US3] Move every value-path conversion of research R-10 to the target type's conversion contract, calling
+  the scanner on reads:
   - `ActivityValueJson.Options` (used by `ActivityCompletionProjector.cs` L61 and `ActivityInputHydrator.cs` L109):
-    replace it with the data-boundary copy, and delete it;
+    replace it with the default conversion contract, and delete it;
   - `RuntimeActivityInputMaterializer.cs` L316, L679, L702;
   - `RuntimeInputBindingCompiler.cs` L719, L788–806, L1019, L1042;
   - `WorkflowExecutableInputValidator.cs` L119 (since #3731 the admission check of every start);
@@ -100,9 +105,10 @@ shows each new test failing without the change.
   - `ObjectConverter.cs`;
   - `RuntimeWorkflowStateSeed.cs`, `ActivitySecretInputResolver.cs`, `ParentResumeExecutor.cs`.
 
-  Replace `Convert.ChangeType` at `RuntimeInputBindingCompiler.cs` L1044 with a data-boundary read
-- [ ] T017 [US3] Add tests for US3 scenarios 1–6. Scenario 4 (numbers through ForEach) is a regression test for #3424.
-  Scenario 5 (dates) runs under a non-UTC `TimeZoneInfo` at run time and in a publish-time literal
+  Replace `Convert.ChangeType` at `RuntimeInputBindingCompiler.cs` L1044 with a conversion-contract read
+- [ ] T017 [US3] Add tests for US3 scenarios 1–10. Scenario 4 (numbers through ForEach) is a regression test for #3424.
+  Scenario 5 (dates) runs under a non-UTC `TimeZoneInfo` at run time and in a publish-time literal, with and without
+  an offset, and with no interpretation, a source time zone and an explicit assume-UTC policy
 
 ## Phase 5: User Story 2 - Data comes back as sent (P1)
 
@@ -115,8 +121,10 @@ shows each new test failing without the change.
   store option sets (research R-9) from the baseline, registering `JsonStringEnumConverter` and
   `LosslessUtf16StringConverter` (FR-023)
 - [ ] T021 [US2] Add the runtime store's first byte-level golden fixture. A stored data value with escapes, `1.0` and
-  inner whitespace keeps its text through write and read on every provider. Document it in `docs/serialization.md`
-  next to the Distributed gate, together with the 4.0-on rule of FR-023 (Q7)
+  inner whitespace keeps its text through write and read on every provider. Add fixed serialized examples of old and
+  new rows and compatibility checks that old and new code read both with the same meaning; if they fail, make the
+  change a stamped format change (regenerated migrations, updated golden fixtures). Document the rule of FR-023 in
+  `docs/serialization.md` next to the Distributed gate (Q7)
 - [ ] T022 [US2] Add the round-trip tests of US2 scenarios 1, 2, 4 and 5, plus scenario 3 (suspend, restart, resume)
   on SQLite and PostgreSQL
 
@@ -124,8 +132,9 @@ shows each new test failing without the change.
 
 - [ ] T023 [US4] Make every R-1 hash preimage a register entry with its frozen options, and add a guard assertion
   that none derives from the baseline (FR-021, Q4)
-- [ ] T024 [US4] Move the direct text hashes and `Ordinal` comparisons of research R-1 to `CanonicalJson`, or
-  register them with a reason:
+- [ ] T024 [US4] List every direct-text hash and every check that compares serialized text (research R-1). Move each
+  equality check to `SemanticJson`; keep each direct-text hash as it is, registered with its input contract (changing
+  one is a separate decision, FR-021):
   - `EfWorkflowTriggerBindingStore.cs` L44, L68;
   - `EfDesignAtomicWrite.cs` L257;
   - `ActivitiesDesignDbContext.cs` L548;
@@ -136,9 +145,9 @@ shows each new test failing without the change.
   - `Elsa3ImportRecordCodec.cs` L199;
   - `ActivityForkMaterialFingerprint.cs`;
   - `AuthoringSchemaExporter.ComputeFingerprint`.
-- [ ] T025 [US4] Git: the exporter (`GitWorkflowExporter.cs` L153) indents with the baseline writer, and
-  `GitCanonicalJson.HashFile` uses `CanonicalJson`. Replace the invariant in `GitCanonicalJsonTests.cs` L14–24 with a
-  round trip (write files, read them back, compare hashes) that also asserts the data text in the file (FR-022, Q5)
+- [ ] T025 [US4] Git: the exporter (`GitWorkflowExporter.cs` L153) indents with a writer that writes `JsonElement`
+  raw; `GitCanonicalJson.HashFile` keeps its current input and is registered. Add a round trip (write files, read them
+  back, compare hashes) that also asserts the data text in the file (FR-022, Q5)
 - [ ] T026 [US4] Compare every hash recorded in T003 after the change (SC-004, US4 scenario 3)
 
 ## Phase 7: User Story 5 - Explicit nulls are kept (P2)
@@ -150,15 +159,17 @@ shows each new test failing without the change.
 ## Phase 8: User Story 6 - One output format, safe to serve (P2)
 
 - [ ] T028 [US6] Add `X-Content-Type-Options: nosniff` to every Elsa API group, in one place in the NativeEndpoints
-  composition. Register `HttpResponseInstructionDelivery` as author-owned (FR-010, Q6)
-- [ ] T029 [US6] Add tests for US6 scenarios 1 and 2: the same changed value has identical text from Runtime, Design
-  and Publishing; every data-carrying Elsa API response has both headers
+  composition. `HttpResponseInstructionDelivery` uses the author's content type; with none, text → `text/plain`,
+  anything else → `application/json` (FR-010, Q6)
+- [ ] T029 [US6] Add tests for US6 scenarios 1–3: the same changed value has identical text from Runtime, Design
+  and Publishing; every data-carrying Elsa API response has both headers; a workflow response keeps `text/html` when
+  authored, and defaults by body when not
 
 ## Phase 9: User Story 7 - Deviations are visible (P3)
 
 - [ ] T030 [US7] Run the guard over the migrated tree. For every remaining construction, either derive it from the
-  baseline or add a register row (the R-10 counts are the checklist). Option-less calls not on the value path stay
-  in the ratchet
+  baseline or add a register row (the R-10 counts are the checklist). Option-less calls on Elsa's own contracts
+  stay on the legacy list; no workflow-data path does
 - [ ] T031 [US7] Add tests for US7 scenario 3: a resolver describing a type its module does not own, and two
   overlapping resolvers
 
@@ -197,5 +208,5 @@ shows each new test failing without the change.
 ## Implementation strategy
 
 1. **MVP**: US1 (renames gone, host options owned by the host). It is ADR 0091's "first step" and stands alone.
-2. Then US3 and US2 together, since they share the data-boundary copy, with US4 in the same change as T018.
+2. Then US3 and US2 together, since they share the conversion contract, with US4 in the same change as T018.
 3. Then US5, US6, US7 and US8.

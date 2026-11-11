@@ -92,8 +92,12 @@ Under FR-018 both sides are written by the same serializer, so they agree (infer
 
 - **Decision**:
   - Every hash preimage keeps its own frozen options and is a register entry. It never derives from the baseline (Q4).
-  - Every direct text hash and every `Ordinal` comparison of serialized values moves to the canonical form of FR-021,
-    or gets a register entry explaining why text equality is meant.
+  - ~~Every direct text hash moves to a canonical form~~ (superseded, see *Reconciled* below). Every `Ordinal`
+    comparison of serialized values that decides equality moves to the semantic comparison of FR-021, or gets a
+    register entry explaining why text equality is meant.
+- **Reconciled 2026-11-11** (card 9): existing hash inputs, direct-text hashes included, stay frozen and registered;
+  changing one is a separate decision with its identity, versioning and migration consequences assessed. Only the
+  equality checks move, to a semantic comparison (FR-021).
 - **Rationale**: ADR 0091 decision 3 already says nothing that decides whether a value changed may compare stored
   text. These sites are where that rule bites.
 - **Alternatives**:
@@ -234,6 +238,9 @@ in every store. → **Finding F-1**, **Q5**.
   - The test invariant is replaced by "a Git round trip keeps every hash".
   - `EfDesignSupport` keeps its canonical fingerprint, registered as a hash preimage. `EfDesignSupport.Json` derives
     from the baseline.
+- **Reconciled 2026-11-11** (card 9): `HashFile` keeps its current input, registered. It already ignores escaping and
+  whitespace, so the raw exporter does not move it; making it a sorted canonical preimage would be a hash-input change
+  and needs its own explicit decision (FR-021, FR-022).
 - **Alternatives**: register Git files as a normalized rendering. That is cheaper, but Git is where users diff and
   review definitions, so a changed escape there is visible.
 
@@ -293,6 +300,8 @@ In the code, neither exists for this change. → **Finding F-4**, **Q7**.
     pinned from now on.
   - S-9 states the path from 4.0 on: a writer change that leaves every stored row readable by both versions needs no
     version bump; a change that alters what a row means is a new family version under spec 180.
+- **Reconciled 2026-11-11** (card 10, @FransVanEk): "readable both ways" is a claim S-9 must show with fixed
+  serialized examples and compatibility checks; if it fails, the change becomes a stamped format change (FR-023).
 - **Alternatives**:
   - Bump every runtime family's version now. Rejected: it adds upcasters with nothing to do.
   - Keep re-escaping as an exception. Rejected by question 6.
@@ -341,7 +350,7 @@ camelCase, strict numbers), at `ActivityCompletionProjector.cs` L61 and `Activit
 (`4c002dadb`, #3728) makes `WorkflowStartDispatcher` apply the input contract to every new start through
 `IWorkflowExecutableInputValidator`. The validator's type check (`WorkflowExecutableInputValidator.cs` L119,
 `input.Value.Deserialize(targetType)` with the defaults) therefore governs the API, trigger, BPMN and child starts. On
-the data-boundary copy it agrees with the activity's own read, so a start is never admitted with a value the activity
+the same conversion contract it agrees with the activity's own read, so a start is never admitted with a value the activity
 then refuses, or the reverse (FR-012, US3 scenario 6).
 
 **Scale** (all source roots: Essentials, Extensions, Studio; excluding migrations, `obj` and `bin`; approximate):
@@ -396,6 +405,11 @@ System.Text.Json has no "warn on unmapped member" mode. It ignores unmapped memb
   unmatched key, naming the key path and the target type. Then deserialize normally.
   - It lives in one helper in `Elsa.Serialization.Core` that every FR-012 conversion calls.
   - Its warnings reach the activity's invocation record through the diagnostics the conversion site already has.
+- **Reconciled 2026-11-11** (card 13, delegated Q1 selection): the pre-scan reads the **effective conversion
+  contract**, not `JsonTypeInfo` with hard-coded case-sensitive recursion: its naming policy, case sensitivity,
+  mappings, dictionaries and extension data. A custom converter supplies matching information, or the type is reported
+  as not covered (`json-unmatched-coverage-unavailable`), never with false warnings. Warn and continue by default; a
+  strict scoped contract refuses; a missing required member fails (FR-005).
 - **Rationale**: no change to what deserialization does, no extension-data members on user types, and the same rule
   at every conversion site.
 - **Alternatives**:

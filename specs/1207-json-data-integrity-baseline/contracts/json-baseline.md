@@ -11,7 +11,9 @@
 | A changed value or Elsa's own strings | default encoder (Runtime, Design) or relaxed (Publishing) | relaxed everywhere |
 | `IPayloadSerializer` output | nulls dropped | nulls kept |
 | Git definition files | data re-escaped through `JsonNode` | data text as received |
-| Elsa API responses | no `X-Content-Type-Options` | `X-Content-Type-Options: nosniff` |
+| Elsa API responses | no `X-Content-Type-Options` | `application/json` and `X-Content-Type-Options: nosniff` |
+| Workflow-authored HTTP responses | author's type, or inferred | author's type; with none, text → `text/plain`, anything else → `application/json` |
+| A date/time without an offset converted to an instant | System.Text.Json default or server offset | its contract's declared interpretation, else refused |
 
 Keys that start with a lowercase letter are byte-identical before and after.
 
@@ -19,7 +21,10 @@ Keys that start with a lowercase letter are byte-identical before and after.
 
 | Code | Severity | When | Names |
 |---|---|---|---|
-| `json-unmatched-member` | warning | A JSON key matches no member of the .NET target (FR-005) | key path, target type |
+| `json-unmatched-member` | warning | A JSON key matches no member under the effective conversion contract (FR-005) | key path, target type |
+| `json-unmatched-member-refused` | refusal | The same, under a scoped contract that selects strict handling (FR-005) | key path, target type |
+| `json-unmatched-coverage-unavailable` | info | A custom converter gives no matching information, so unmatched keys are not checked for that type (FR-005) | target type, converter |
+| `json-datetime-interpretation-missing` | refusal | A date/time value without an offset is converted to an instant and the contract declares no source time zone or assume-UTC policy (FR-016) | path, target type |
 | `ELS3-LITERAL-KEY-AMBIGUOUS` | refusal | An Elsa 3 literal has keys that differ only in case and both fit one member (FR-015) | node, input, the keys |
 | `ELS3-LITERAL-KEY-REWRITTEN` | info | An Elsa 3 literal key was rewritten to the exact JSON name (FR-015) | node, input, old and new key |
 

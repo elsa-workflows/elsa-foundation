@@ -25,18 +25,18 @@ applies the drafts on these PRs, at the heads named below, as if they were agree
 ADR, the version on `main` applies (ADR 0035, 0036 and 0038). The answers in *Open questions* hold only on that
 basis: if the drafts change, the answers are rechecked.
 
-| ADR PR | What this spec takes from it | Draft applied | State on 2026-11-04 |
+| ADR PR | What this spec takes from it | Draft applied | State on 2026-11-11 |
 |---|---|---|---|
-| [#3408](https://github.com/elsa-workflows/elsa-foundation/pull/3408), ADR 0091 (A-5) | Decisions 1–8: the baseline, no data transformation, raw passthrough, one encoder, JSON at every boundary, no host-option changes, the deviation register, nulls kept | `725bd63c5` | In review. @FransVanEk's answers are in the text (fe0bf8419); no approving review yet. Open questions 1–5 wait for @sfmskywalker; question 6 answered by all three |
-| [#3422](https://github.com/elsa-workflows/elsa-foundation/pull/3422), ADR 0046 amendment (A-1), *Dates* only | The `DateTime`-as-UTC rule that ADR 0091 decision 5 applies through the baseline copy (FR-016). A dependency because Q8 keeps it in S-9 | `680e3f9ee` | In review (copy, compare, patch and V12 proposed on 3 Nov) |
+| [#3408](https://github.com/elsa-workflows/elsa-foundation/pull/3408), ADR 0091 (A-5) | Decisions 1–8: the baseline, no data transformation, raw passthrough, one encoder, JSON at every boundary with scoped conversion contracts for user types, no host-option changes with staged enforcement, the deviation register with frozen hash inputs, nulls kept | `46c3a40eb` | In review. @sfmskywalker's cards 6–13 and @FransVanEk's review conditions reconciled at `46c3a40eb`; no approving review yet |
+| [#3422](https://github.com/elsa-workflows/elsa-foundation/pull/3422), ADR 0046 amendment (A-1), *Dates* only | The date/time interpretation rule (FR-016): an offset, or an explicit interpretation recorded in the published conversion contract (a source time zone or an explicit assume-UTC policy); never an implicit UTC or server-local default ([card 14](https://github.com/elsa-workflows/elsa-foundation/pull/3422#issuecomment-6644338442)). A dependency because S-9 implements it ([card 24](https://github.com/elsa-workflows/elsa-foundation/pull/3805#issuecomment-6645506583), Q8) | `680e3f9ee` plus card 14 | In review; the *Dates* section still states automatic UTC and is to be amended to card 14 |
 
 **Related, not blocking:**
 - [#3422](https://github.com/elsa-workflows/elsa-foundation/pull/3422) apart from *Dates*: the JavaScript adapter
   (copy, compare, patch, V9) keeps untouched values' text inside scripts. That is S-8's work; this spec covers the
   serializer only.
 - [#3425](https://github.com/elsa-workflows/elsa-foundation/pull/3425) (ADR 0090 review, C4) and ADR 0092
-  ([#3411](https://github.com/elsa-workflows/elsa-foundation/pull/3411)) use the canonical form of FR-021 for value
-  equality. They consume it; this spec defines it.
+  ([#3411](https://github.com/elsa-workflows/elsa-foundation/pull/3411)) use the semantic value comparison of FR-021
+  for value equality. They consume it; this spec defines it.
 - [#3726](https://github.com/elsa-workflows/elsa-foundation/pull/3726) (S-2, spec 1201) owns the null representation
   (ADR 0091 decision 8). This spec only requires that the serializer keeps it.
 
@@ -56,8 +56,8 @@ type-info modifiers that change or reorder data.
 **In scope**: every JSON serializer under the source roots (module contexts, API wire contexts, `IPayloadSerializer`,
 the host HTTP options, local option sets on the value path); data-to-.NET conversions at activity inputs, results,
 literals, defaults and stateful state; content hashes and fingerprints over serialized text; the runtime durable
-format (stamped migration); the Elsa 3 converter's rewrite of case-only key differences; the architecture test and
-the deviation register.
+format (a compatibility proof, else a stamped format change); the Elsa 3 converter's rewrite of case-only key
+differences; the architecture test, the legacy list and the deviation register.
 
 **Out of scope**:
 - The null representation for declared members (S-2, spec 1201). FR-018 only requires that it survives.
@@ -68,9 +68,9 @@ the deviation register.
 - Related, not a dependency: [#3799](https://github.com/elsa-workflows/elsa-foundation/issues/3799), a general Elsa 4
   defect, fixed on 2026-11-04 by #3801 (`4a81500f8`). The completion projector and the input hydrator now share one
   options instance, `ActivityValueJson.Options` (Web, camelCase, strict numbers), so a .NET-typed result keeps its
-  members on the next activity's input. S-9 replaces that instance with the data-boundary copy (FR-012), keeping
-  #3801's tests. One change follows from ADR 0091 decision 2: `ActivityValueJson.Options` reads member names
-  case-insensitively (Web), and the data-boundary copy reads them exactly. A key that differs only in case then gives
+  members on the next activity's input. S-9 replaces that instance with the default conversion contract (FR-012),
+  keeping #3801's tests. One change follows from ADR 0091 decision 2: `ActivityValueJson.Options` reads member names
+  case-insensitively (Web), and the default conversion contract reads them exactly. A key that differs only in case then gives
   the `json-unmatched-member` warning instead of filling the member.
 - Related, not a dependency: [#3728](https://github.com/elsa-workflows/elsa-foundation/issues/3728), fixed by #3731
   (`4c002dadb`). Every start now applies the input contract through `WorkflowExecutableInputValidator`, so that
@@ -121,7 +121,7 @@ default come back byte-identical.
 2. **Given** a variable default with capitalized keys, escaped characters, inner whitespace and `1.0`, **When** the
    definition is saved and read back, **Then** the default is byte-identical.
 3. **Given** a workflow that suspends with such a value in its state, **When** it is resumed after a restart,
-   **Then** the value reaches the next activity byte-identical (stamped migration, FR-023).
+   **Then** the value reaches the next activity byte-identical (FR-023).
 4. **Given** an indented writer, **When** it writes a received value, **Then** it does not re-indent that value.
 5. **Given** a value a script or an activity changed, **When** it is written, **Then** it uses the default output
    format (FR-009).
@@ -133,7 +133,7 @@ default come back byte-identical.
 An activity returns a .NET object; the next activity takes the same type as input. Every property arrives. Until
 #3801 the result was written camelCased and read back case-sensitively, so properties were lost silently (#3799).
 #3801 fixed that pair with one shared options instance. S-9 moves that pair, and every other conversion on the value
-path, onto one data-boundary copy.
+path, onto the conversion contract of the target type: the default one unless a scoped one is selected.
 
 **Why this priority**: it was the highest-risk finding of the value-path search, and the other conversions still use
 differing options.
@@ -145,23 +145,37 @@ set. #3801's `ActivityResultRoundTripTests` already covers this; it stays green.
 
 1. **Given** a .NET-typed activity result, **When** it is bound to the next activity's input of the same type,
    **Then** every property is set.
-2. **Given** `{"customerName":…}`, **When** it is read into a type with `CustomerName`, **Then** the property is set
-   (exact match under the baseline's naming policy).
-3. **Given** `{"CustomerName":…}` and no annotation, **When** it is read, **Then** the property stays unset, the step
-   runs, the stored JSON keeps the key, and a recorded warning names the key and the target type.
+2. **Given** `{"customerName":…}`, **When** it is read into a type with `CustomerName` under the default conversion
+   contract, **Then** the property is set (exact match under that contract's naming).
+3. **Given** `{"CustomerName":…}`, no annotation and the default contract, **When** it is read, **Then** the property
+   stays unset, the step runs, the stored JSON keeps the key, and a recorded warning names the key and the target type.
 4. **Given** a 20-digit integer and a 29-digit decimal, **When** they pass through ForEach and an activity input,
    **Then** their text is unchanged unless the target type narrows them.
-5. **Given** `"2026-10-28T09:15:00+05:00"` read into a `DateTime`, **When** it runs on a UTC and a non-UTC server, at
-   run time and in a publish-time literal, **Then** both give the same instant (ADR 0046 *Dates*).
+5. **Given** `"2026-10-28T09:15:00+05:00"` read into a `DateTime` or `DateTimeOffset`, **When** it runs on a UTC and a
+   non-UTC server, at run time and in a publish-time literal, **Then** both give the same instant (its own offset).
+   **Given** `"2026-10-28T09:15:00"` (no offset), **When** it is converted to an instant with no source time zone and
+   no assume-UTC policy in the conversion contract, **Then** the conversion is refused with guidance; with an explicit
+   assume-UTC policy it is UTC, and with a declared source time zone it is that zone's instant, on any server.
 6. **Given** `"5"` read into an `Int32`, **When** it is read on any path, **Then** every path gives the same result
    (numbers are never read from strings).
+7. **Given** a scoped conversion contract that selects case-insensitive matching or an explicit mapping, **When**
+   `{"CustomerName":…}` is read, **Then** the member is filled with no warning, a key consumed by a mapping, dictionary
+   or extension-data member is not reported, and no host-wide option changes.
+8. **Given** a scoped contract that selects strict unmatched-member handling, **When** a key is unmatched, **Then** the
+   conversion is refused; **Given** any contract, **When** a required member is missing, **Then** it fails.
+9. **Given** `id` and `ID` in one object under the default contract, **When** it is read, **Then** the matching key
+   fills the member and the other gets the unmatched-member warning.
+10. **Given** a target whose custom converter implements another shape, **When** it is read, **Then** the pre-scan
+    uses that converter's matching information or records that unmatched-key coverage is unavailable for the type;
+    it reports no false unmatched keys.
 
 ---
 
 ### User Story 4 - Content hashes stay stable (Priority: P2)
 
 A definition reconciled from Git, or stored in the design store, keeps its content hash after the serializer starts
-writing raw text and a different encoder. Equal values hash equal, whatever their escaping or whitespace.
+writing raw text and a different encoder. Every existing hash input stays frozen, and equal values compare equal,
+whatever their escaping or whitespace.
 
 **Why this priority**: without it, every definition read back from Git hashes as changed the moment US2 lands
 (intake check 7).
@@ -176,8 +190,8 @@ writing raw text and a different encoder. Equal values hash equal, whatever thei
    are still valid.
 3. **Given** any stored workflow executable or activity definition, **When** its hash is recomputed after this
    change, **Then** it is unchanged.
-4. **Given** two values that differ only in escaping or inner whitespace, **When** they are hashed or compared,
-   **Then** they are equal.
+4. **Given** two values that differ only in escaping or inner whitespace, **When** a check compares them for
+   equality, **Then** they are equal (semantic comparison, not text).
 
 ---
 
@@ -201,8 +215,9 @@ member.
 
 ### User Story 6 - One output format, safe to serve (Priority: P2)
 
-Every API and store writes Elsa's own strings and changed values with one encoder. Every response carrying raw or
-relaxed-encoded data is `application/json` and is never sniffed as HTML.
+Every API and store writes Elsa's own strings and changed values with one encoder. Every response of Elsa's own APIs
+carrying raw or relaxed-encoded data is `application/json` and is never sniffed as HTML. A workflow-authored HTTP
+response uses the content type its author selected.
 
 **Why this priority**: today the same value leaves Runtime and Publishing with different text; the relaxed encoder
 is only safe when responses are never rendered as HTML.
@@ -214,8 +229,11 @@ data-carrying response has `Content-Type: application/json` and `X-Content-Type-
 
 1. **Given** a changed value with `é`, `<` and `+`, **When** Runtime, Design and Publishing write it, **Then** the
    text is identical.
-2. **Given** any endpoint that returns data, **When** it responds, **Then** the headers are `application/json` and
-   `nosniff`.
+2. **Given** any Elsa API endpoint that returns data, **When** it responds, **Then** the headers are
+   `application/json` and `nosniff`.
+3. **Given** a workflow-authored HTTP response, **When** its author selected `text/html`, **Then** it stays
+   `text/html`; **When** none is selected, **Then** a text body such as `Hello` is `text/plain` and a JSON object is
+   `application/json`.
 
 ---
 
@@ -275,18 +293,40 @@ faithful-or-refuse.
 - **FR-002**: Every serializer under every source root (Q2) MUST derive from the baseline, as a copy
   (`new JsonSerializerOptions(baseline)`). That covers module serializer contexts, API wire contexts,
   `IPayloadSerializer`, the host HTTP options and the local option sets on the value path. A source-generated context
-  MUST be constructed with such a copy, and owner code MUST use that instance, not the context's `Default`. Hash
-  preimages are the exception: they keep frozen options (FR-021, Q4).
-- **FR-002a**: Serializer calls that pass neither options nor type info MUST be migrated on the value path. Elsewhere
-  they MUST be listed in a ratchet file that may only shrink (Q3).
+  MUST be constructed with such a copy, and owner code MUST use that instance, not the context's `Default`. Existing
+  hash inputs are the exception: they keep frozen options (FR-021, Q4). A user's selection of a supported scoped
+  conversion contract (FR-004) is configuration, not a deviation.
+- **FR-002a**: Enforcement MUST be staged (Q3, card 11). Every workflow-data and value conversion path MUST be fixed
+  in S-9, using the baseline or the applicable conversion contract; none is deferred. Existing calls that pass
+  neither options nor type info and handle only Elsa's own contracts MUST be tracked in a **legacy list** (a ratchet
+  file) that may only shrink: an entry leaves when its call is migrated, no entry is added, and the list never holds a
+  workflow-data path. A new call that is neither derived from the baseline, nor in the register, nor on the legacy
+  list MUST fail the architecture test. The legacy list is not the register: it holds calls still to migrate, not
+  justified deviations, which keep reasoned register entries.
 
 **No data transformation (decision 2)**
 - **FR-003**: The baseline MUST set no dictionary key policy and no number handling, MUST keep nulls, MUST have no
   converter that changes or reorders data, and MUST camelCase only the member names of Elsa's own types.
-- **FR-004**: Member reads MUST be exact: a JSON member fills a .NET member only when its name is the member's JSON
-  name (the naming policy's name, or an annotation's).
-- **FR-005**: A JSON key that matches no member MUST give a recorded warning naming the key and the target type; the
-  step runs and the stored JSON keeps the key. An activity MAY declare strict reads for itself.
+- **FR-004**: Conversion into a user type MUST use a **conversion contract** selected for that type or conversion
+  boundary, never host-wide options (decision 2, card 6). Elsa's own contracts keep the baseline's camelCase naming and
+  exact reads. S-9 documents a **default conversion contract**: camelCase naming (what activity results are written
+  with since #3801) and exact, case-sensitive matching, so a JSON member fills a .NET member only when its name is
+  exactly the name the contract gives that member (through its naming policy, an explicit mapping or an annotation).
+  Scoped options MUST be offered per user type or conversion boundary: the naming policy (for example CLR names,
+  camelCase or snake_case), exact or case-insensitive matching, explicit member mappings, and unmatched-member
+  handling. The selected behaviour MUST be explicit and stable in the published conversion contract and its version.
+  Matching never rewrites the stored JSON keys.
+- **FR-005**: A JSON member is unmatched only when the effective conversion contract (its naming policy, case
+  sensitivity, explicit mappings, dictionaries and extension-data handling) gives it no member. By default an
+  unmatched key MUST give a recorded warning naming the key path and the target type, and the conversion continues:
+  the step runs and the stored JSON keeps the key. A scoped contract MAY select stricter handling, which refuses. A
+  missing required member still fails (D-10). Detection is a **contract-aware pre-scan** before the conversion (Q1):
+  - it MUST inspect the effective contract, never hard-coded baseline naming or case-sensitive recursion for every
+    type, and MUST NOT report a key consumed by a mapping, a dictionary or an extension-data member;
+  - where a custom converter implements another shape, it MUST take matching information from that converter's
+    contract, or record that unmatched-key coverage is unavailable for that type; it MUST NOT emit false
+    unmatched-key warnings or claim full coverage;
+  - it MUST NOT add synthetic members to user types or deserialize twice to find unknown keys.
 - **FR-006**: Every `DictionaryKeyPolicy` setting under the source roots MUST be removed; the contract tests that
   assert camelCased keys MUST be inverted to assert verbatim keys.
 
@@ -298,25 +338,40 @@ faithful-or-refuse.
 **One output format (decision 4)**
 - **FR-009**: Everything FR-007 does not cover (Elsa's own strings and member names, created or changed values) MUST
   be written with one encoder in every API and store, `UnsafeRelaxedJsonEscaping` as ADR 0091 proposes (its open
-  question 2).
-- **FR-010**: Every response of Elsa's own APIs that carries data MUST have `Content-Type: application/json` and
-  `X-Content-Type-Options: nosniff`. A response a workflow composes (`WriteHttpResponse`) keeps the content type and
-  headers the workflow chose, as a register entry. When the workflow sets no content type, a structured body is
-  `application/json` and a text body is `text/plain`, as spec 256 already delivers (Q6).
+  question 2). Its safety argument rests on Elsa's own API responses only (FR-010).
+- **FR-010**: The content-type rule is scoped (Q6, card 8). Every response of Elsa's own JSON APIs that carries data
+  MUST have `Content-Type: application/json` and `X-Content-Type-Options: nosniff`. A workflow-authored HTTP response
+  (`WriteHttpResponse`) MUST use the content type its author selected, so explicitly authored HTML stays `text/html`.
+  When the author selects none, a text body MUST be `text/plain` and any other body `application/json`, as spec 256
+  already delivers. Its body serialization and delivery follow that activity's contract.
 
 **JSON at every boundary (decision 5)**
 - **FR-011**: At API, persistence and messaging boundaries, data MUST be held as `JsonElement` or `JsonNode`, never a
   .NET dictionary, `ExpandoObject` or POCO.
-- **FR-012**: Every conversion between data and a .NET type, in either direction, MUST use the same baseline copy:
-  activity inputs, expression results coerced to a declared type, publish-time literals and variable defaults,
-  workflow-input validation, activity results, stateful activity state, transitions, seeded values and code-first
-  literals.
+- **FR-012**: Every conversion between data and a given .NET type, in either direction, MUST use the same effective
+  conversion contract for that type (FR-004): a copy of the baseline with the naming and matching the contract
+  selects and the protected settings unchanged, so a value written by one activity reads back the same in the next.
+  This covers activity inputs, expression results coerced to a declared type, publish-time literals and variable
+  defaults, workflow-input validation, activity results, stateful activity state, transitions, seeded values and
+  code-first literals.
 - **FR-013**: No conversion MUST narrow a number to `long` or `double` unless the target type asks for it.
 - **FR-014**: No path MUST read a number from a string.
 - **FR-015**: The Elsa 3 converter MUST rewrite a literal key that differs from the exact JSON name only in case to
   that name, and MUST refuse with guidance when the rewrite is ambiguous.
-- **FR-016**: A `DateTime` MUST be read as UTC at every conversion of FR-012, at run time and in publish-time
-  literals, as ADR 0046 *Dates* states (see *Approval*).
+- **FR-016**: Converting a date/time value into an instant at a conversion of FR-012 (supported literals, inputs and
+  defaults, at run time and at publication) MUST NOT use an implicit assume-UTC or the server's local time zone (Q8,
+  cards 14 and 24):
+  - a value that carries an offset establishes its instant directly;
+  - a `DateTime` or `DateTimeOffset` value without an offset needs an explicit interpretation recorded in the
+    published conversion contract: a declared source time zone or an explicit assume-UTC policy. Without one, the
+    conversion MUST be refused with a diagnostic naming the path and target type and saying to add an offset or
+    declare the interpretation. Assume-UTC is never an implicit global default;
+  - normalizing to UTC after the instant is established is separate; a calendar-only value is not made an instant by
+    this rule; a raw JSON date string is carried unchanged until a conversion is requested;
+  - an Elsa 3 converted workflow follows its declared source interpretation, recorded in its conversion contract,
+    never an implicit server setting.
+
+  S-9 implements this contract at the JSON-to-.NET boundary; S-8 uses the same contract and adds no second rule.
 
 **Host options (decision 6)**
 - **FR-017**: A module MUST NOT change the host's naming, key policy, encoder, null handling or converters. It MAY add
@@ -330,26 +385,41 @@ faithful-or-refuse.
 - **FR-019**: `docs/serialization.md` MUST gain a "Baseline deviations" register listing, per deviation, the file,
   the setting, the reason and the approving ADR or issue. A deviation that touches data at an API boundary MUST cite
   an ADR.
-- **FR-020**: An architecture test MUST fail on any unregistered deviation. It MUST combine a source scan (option
-  constructions, `JsonSerializerOptions.Web` / `.Default`, source-generation attribute settings, serializer calls
-  without options or type info) with reflection over every module's constructed contexts and the composed host HTTP
-  options, including resolver overlap.
+- **FR-020**: An architecture test MUST fail on any unregistered deviation. It MUST combine a source scan over every
+  source root (Essentials, Extensions and Studio's C#: option constructions, `JsonSerializerOptions.Web` / `.Default`,
+  source-generation attribute settings, serializer calls without options or type info) with reflection over every
+  module's constructed contexts and the composed host HTTP options, including resolver overlap. It MUST fail on a new
+  option-less call that is not on the legacy list, pass when an entry is removed after its call is migrated, and fail
+  when the legacy list holds a workflow-data path (FR-002a).
 
-**Canonical hashing (decision 7)**
-- **FR-021**: Every content hash and fingerprint over JSON MUST hash a canonical re-serialization, never stored or
-  transmitted text. Each preimage MUST keep its own frozen options, as a register entry, so that no ADR 0038 artifact
-  hash or stored definition hash moves (Q4). Equality of values, including every `Ordinal` comparison of a stored
-  value with a fresh serialization, MUST use the canonical form.
-- **FR-022**: Git definition files MUST keep data text as received, and the Git reconciliation content hash MUST be
-  built on the canonical form, so a Git round trip keeps every hash (Q5). The design-store fingerprint is already
-  canonical and MUST stay so. No stored hash needs recomputing (research R-7).
+**Hash inputs and value equality (decisions 1, 3 and 7)**
+- **FR-021**: Every existing hash or fingerprint input MUST keep its current options and preimage, frozen, and MUST be
+  listed in the register with its input contract, so a baseline change never silently moves an ADR 0038 artifact
+  identity, a stored hash or a fingerprint (Q4, card 9). It never derives from the baseline. Changing a hash input is
+  a **separate, explicit decision** that assesses its identity, versioning and migration consequences; S-9 makes no
+  such change implicitly. S-9 MUST list every hash taken directly over serialized text and every check that compares
+  serialized text. A check that decides whether two values are equal (including every `Ordinal` comparison of a
+  stored value with a fresh serialization) MUST use one defined semantic comparison of the values, never stored or
+  freshly serialized text. A hash uses its own defined input, not that comparison.
+- **FR-022**: Git definition files MUST keep data text as received (Q5). The Git reconciliation content hash keeps its
+  current input (`GitCanonicalJson.HashFile`, a `JsonNode` re-emit that does not depend on the file's escaping or
+  whitespace, research R-7), frozen and registered, so a Git round trip keeps every hash. Any change to that input is
+  an explicit decision under FR-021, not part of adopting the baseline. The design-store fingerprint is already
+  canonical, is registered and MUST stay so. No stored hash is recomputed.
 
 **Runtime durable state (decision 7, question 6)**
-- **FR-023**: The runtime EF writers MUST adopt FR-007 and FR-018. The stored format stays readable by old and new
-  code, so this needs no migration and no change to a schema family's stamp. A byte-level golden fixture MUST pin a
-  stored data value's text. Before 4.0, state saved earlier is not read back (reset and republish). From 4.0 on, a
-  writer change that keeps every row readable both ways needs no new family version; a change to what a row means
-  is a new family version under spec 180 (Q7).
+- **FR-023**: The runtime EF writers MUST adopt FR-007 and FR-018 (Q7, card 10). Compatibility and meaning, not a
+  textual writer change, are the threshold:
+  - the change needs no format-version bump and no migration only when S-9 shows it compatible and
+    meaning-preserving: fixed serialized examples and compatibility checks show that old and new code read old and
+    new rows with the same meaning;
+  - if that proof fails, S-9 MUST make it a stamped format change through migrations and golden fixtures (before 4.0:
+    regenerated migrations and updated golden fixtures, not an upcaster);
+  - a change to what a row means, or to reader and writer compatibility, always takes the stamped path (a new family
+    version under spec 180).
+
+  A byte-level golden fixture MUST pin a stored data value's text. Hash-input contracts stay separately protected
+  (FR-021).
 
 **Docs and housekeeping**
 - **FR-024**: `docs/serialization.md` MUST state the baseline and the data rule, and its "HTTP boundary" exception
@@ -361,27 +431,33 @@ faithful-or-refuse.
 - **Baseline**: the one read-only options instance; every serializer is a copy of it.
 - **Deviation**: a serializer whose protected settings differ from the baseline; listed in the register.
 - **Baseline deviation register**: the section in `docs/serialization.md` the architecture test reads.
-- **Canonical preimage**: the fixed re-serialization a content hash or equality check is taken over.
+- **Conversion contract**: the naming, matching, member-mapping, unmatched-member and date/time-interpretation
+  settings for one user type or conversion boundary; a default one and scoped ones, recorded with a version.
+- **Semantic value comparison**: the defined comparison that decides whether two values are equal, independent of
+  their stored text. Never applied to an existing hash input.
+- **Legacy list**: the ratchet file of option-less calls on Elsa's own contracts still to migrate; it may only shrink.
 - **Durable format stamp**: the marker that identifies the runtime store's serialization format version.
 
 ## Open questions for the approvers
 
 ADR 0091 leaves Q1 to the spec, Q8 sits between ADR 0091 and ADR 0046, and the code survey added Q2 to Q7 (research
 R-0). Q3 to Q7 are also raised as review comments on #3408 (findings F-1 to F-5), because the code shows that ADR 0091
-is incomplete or wrong there. The requirements below follow the proposals. If #3408 decides otherwise, this spec
-follows #3408. Each question has a proposal and @j03y-nxxbz's answer. All three approvers answer them on the PR, and
-the PR's reconciliation table records the answers.
+is incomplete or wrong there. The requirements below follow the answers. If #3408 decides otherwise, this spec
+follows #3408. All three approvers answer them on the PR, and the PR's reconciliation table records the answers.
+@sfmskywalker's answers were recorded on his behalf on 4–5 Nov (cards 8–14 and 24 on #3408, #3422 and this PR, and
+the delegated Q1 selection); @j03y-nxxbz accepts them, and the text applies them as of 2026-11-11. @FransVanEk's
+conditions on #3408 (his 2026-11-10 review) are applied through ADR 0091 at `46c3a40eb`.
 
-| # | Question | Proposal | @j03y-nxxbz |
-|---|---|---|---|
-| Q1 | ADR 0091 decision 2 leaves to S-9 how an unmatched key is detected. How? | A pre-scan of the JSON keys against the target's `JsonTypeInfo` before every data-to-.NET conversion, with one `json-unmatched-member` warning per key in the invocation record (research R-13). Rejected: a synthetic extension-data member (changes user types), and deserializing twice with `Disallow` (two passes, first key only). | Agrees |
-| Q2 | Which source roots does "every serializer" (decision 1) and the architecture test cover? | Every source root: Essentials, Extensions and Studio's C#. Extension-internal options on their own contracts are register entries (R-10). | Agrees |
-| Q3 | About 267 serializer calls pass neither options nor type info (R-10). ADR 0091 counts 32 constructions and does not count these. List each one in the register, or migrate them all? | Migrate every value-path site (FR-012) in S-9. List the rest, which serialize Elsa's own contracts, in a ratchet file that may only shrink. The register keeps one row per reason, not one per call. Finding F-5 on #3408. | Agrees |
-| Q4 | Hash preimages: decision 1 makes every serializer derive from the baseline, but several hash preimages use other options, and the activity contract fingerprint feeds every ADR 0038 artifact hash (R-1). | Every hash preimage keeps its own frozen options and is a register entry; it never derives from the baseline. Direct text hashes and `Ordinal` comparisons of serialized values move to the canonical form (FR-021). Finding F-2 on #3408. | Agrees |
-| Q5 | Git files: ADR 0091 expects the Git hash to break, but it does not (R-7). Instead, Git files never hold data text as received, because the exporter re-emits them through `JsonNode`. | Git files keep data text (the exporter writes with the baseline), and the Git hash is built on the canonical form. Rejected: registering Git files as a normalized rendering (users diff them). Finding F-1 on #3408. | Agrees |
-| Q6 | Decision 4 relies on "every Elsa response is `application/json`", but workflow HTTP responses use the content type the workflow chose, and `nosniff` is set nowhere (R-12). | `application/json` plus `nosniff` on Elsa's own APIs; workflow HTTP responses keep the author's content type and headers, as a register entry. Finding F-3 on #3408. | A workflow response uses the content type the workflow sets. When none is set, it is `application/json`, except a text body, which stays `text/plain` as in Elsa 3 (spec 256). |
-| Q7 | The runtime durable state change (question 6): ADR 0091 says regenerated migrations and golden fixtures, but no model change and no runtime-row golden exist (R-9). | No migration and no stamp bump. The writers change, and S-9 adds the runtime store's first byte-level golden. From 4.0 on, a writer change that keeps every row readable both ways needs no new family version; a change to what a row means does (spec 180). Finding F-4 on #3408. | Agrees |
-| Q8 | Who implements "a `DateTime` is read as UTC": S-9, through the data-boundary copy, or S-8 with ADR 0046? | S-9, as a converter in the data-boundary copy, because ADR 0091 decision 5 applies it through that copy and lists its test. This makes #3422 *Dates* a dependency of S-9. | Agrees, with #3422 *Dates* as a dependency |
+| # | Question | Answer as applied | @j03y-nxxbz | @sfmskywalker |
+|---|---|---|---|---|
+| Q1 | ADR 0091 decision 2 leaves to S-9 how an unmatched key is detected. How? | A contract-aware pre-scan before every data-to-.NET conversion: judged against the effective conversion contract (naming, case sensitivity, mappings, dictionaries, extension data); custom converters supply their matching information or the type is reported as not covered; warn and continue by default, stricter handling through a scoped contract, a missing required member fails (FR-005, research R-13). Rejected: a synthetic extension-data member (changes user types), and deserializing twice with `Disallow` (two passes, first key only). | Accepts | Warn and continue, judged against the effective contract ([card 13](https://github.com/elsa-workflows/elsa-foundation/pull/3408#issuecomment-6644301401)); contract-aware pre-scan selected under delegation ([comment](https://github.com/elsa-workflows/elsa-foundation/pull/3805#issuecomment-6646544429)) |
+| Q2 | Which source roots does "every serializer" (decision 1) and the architecture test cover? | Every source root: Essentials, Extensions and Studio's C#, with staged enforcement (FR-002a, FR-020). Extension-internal options on their own contracts are register entries (R-10). | Agrees | Agrees ([card 11](https://github.com/elsa-workflows/elsa-foundation/pull/3408#issuecomment-6644185619)) |
+| Q3 | About 267 serializer calls pass neither options nor type info (R-10). ADR 0091 counts 32 constructions and does not count these. List each one in the register, or migrate them all? | Staged: every workflow-data path is fixed in S-9; option-less calls on Elsa's own contracts go on a legacy list that may only shrink and never holds a data path; a new unlisted call fails; justified deviations keep reasoned register entries (FR-002a). Finding F-5 on #3408. | Agrees | Agrees ([card 11](https://github.com/elsa-workflows/elsa-foundation/pull/3408#issuecomment-6644185619)) |
+| Q4 | Hash preimages: decision 1 makes every serializer derive from the baseline, but several hash preimages use other options, and the activity contract fingerprint feeds every ADR 0038 artifact hash (R-1). | Every existing hash input keeps its frozen options and is registered with its input contract; changing one is a separate decision with its identity, versioning and migration consequences assessed. Equality checks use the semantic comparison, never text (FR-021). Finding F-2 on #3408. | Accepts (replaces "direct text hashes move to the canonical form") | Agrees with that qualification ([card 9](https://github.com/elsa-workflows/elsa-foundation/pull/3408#issuecomment-6644084116)) |
+| Q5 | Git files: ADR 0091 expects the Git hash to break, but it does not (R-7). Instead, Git files never hold data text as received, because the exporter re-emits them through `JsonNode`. | Git files keep carried data text; the Git hash keeps its current, registered input; any change to it is an explicit FR-021 decision (FR-022). Rejected: registering Git files as a normalized rendering (users diff them). Finding F-1 on #3408. | Agrees | Exact carried text until edited, exports included ([card 7](https://github.com/elsa-workflows/elsa-foundation/pull/3408#issuecomment-6643745916)); Git/hash preimage changes need the explicit assessment |
+| Q6 | Decision 4 relies on "every Elsa response is `application/json`", but workflow HTTP responses use the content type the workflow chose, and `nosniff` is set nowhere (R-12). | `application/json` plus `nosniff` on Elsa's own JSON APIs; a workflow-authored response uses its author's content type; with none, text is `text/plain` and anything else `application/json` (FR-010). Finding F-3 on #3408. | Agrees | Agrees ([card 8](https://github.com/elsa-workflows/elsa-foundation/pull/3408#issuecomment-6644048963)) |
+| Q7 | The runtime durable state change (question 6): ADR 0091 says regenerated migrations and golden fixtures, but no model change and no runtime-row golden exist (R-9). | No format bump or migration if S-9 shows the writer change compatible and meaning-preserving with fixed serialized examples and compatibility checks; otherwise a stamped format change. A change to row meaning or compatibility always takes the stamped path (FR-023). Finding F-4 on #3408. | Accepts | Agrees ([card 10](https://github.com/elsa-workflows/elsa-foundation/pull/3408#issuecomment-6644124489)); @FransVanEk's condition on #3408 is the same |
+| Q8 | Who implements date/time conversion: S-9, at the JSON-to-.NET boundary, or S-8 with ADR 0046? | S-9 implements the agreed rule: an offset, or an explicit interpretation (source time zone or assume-UTC policy) in the published conversion contract, else refused; never implicit UTC (FR-016). S-8 uses the same contract. #3422 *Dates* is a dependency. | Accepts (replaces "a `DateTime` is read as UTC") | S-9 ([card 24](https://github.com/elsa-workflows/elsa-foundation/pull/3805#issuecomment-6645506583)) under the [card 14](https://github.com/elsa-workflows/elsa-foundation/pull/3422#issuecomment-6644338442) rule |
 
 ## Success Criteria *(mandatory)*
 
@@ -398,8 +474,8 @@ the PR's reconciliation table records the answers.
 
 ## Assumptions
 
-- Elsa 4 has no released runtime store, so before 4.0 a format change costs regenerated migrations and fixtures, not
-  an upcaster (ADR 0091 question 6).
+- Elsa 4 has no released runtime store, so before 4.0 a stamped format change, if FR-023's compatibility proof fails,
+  costs regenerated migrations and fixtures, not an upcaster (ADR 0091 decision 7).
 - Studio parses JSON and copies `errors` keys verbatim without mapping them to field paths, so no Studio change is
   needed (research R-3).
 - No client inside the repository depends on camelCased output names (research R-4). Clients outside it cannot be

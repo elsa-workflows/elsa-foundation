@@ -15,15 +15,16 @@ R-1 to R-13):
   `JsonElement` converter.
 - **API contexts derive from it.** Every owner context and API group context is constructed from a copy, and the two
   host-wide `Configure` calls become resolver-only insertions.
-- **Conversions derive from it.** Every data-to-.NET conversion on the value path uses one data-boundary copy, in both
-  directions. A pre-scan helper warns about unmatched keys, and `DateTime` values are read as UTC.
-- **Hash preimages stay frozen.** They keep their own options as register entries. Direct text hashes and `Ordinal`
-  comparisons of serialized values move to one canonical helper.
-- **Git files keep data text.** The Git hash becomes an explicit canonical preimage.
+- **Conversions derive from it.** Every data-to-.NET conversion on the value path uses the target type's conversion
+  contract (default or scoped), in both directions. A contract-aware pre-scan warns about unmatched keys, and a
+  date/time value without an offset needs an explicit interpretation in the contract, else it is refused.
+- **Hash inputs stay frozen.** They keep their own options as register entries; changing one is a separate decision.
+  Equality checks of serialized values move to one semantic comparison helper.
+- **Git files keep data text.** The Git hash keeps its current, registered input.
 - **The runtime store gets the baseline writer.** It gains a byte-level golden fixture. There is no version bump and
-  no migration, because the stored rows stay readable both ways.
+  no migration if fixed examples show old and new code read old and new rows the same; otherwise a stamped change.
 - **A guard reports deviations.** An architecture test combines a source scan with reflection, and reads the register
-  in `docs/serialization.md` plus a ratchet file for option-less calls outside the value path.
+  in `docs/serialization.md` plus a legacy list (ratchet file) for option-less calls on Elsa's own contracts.
 - **The Elsa 3 converter** rewrites literal keys that differ only in case.
 
 ## Technical Context
@@ -54,7 +55,7 @@ than today. The unmatched-key pre-scan is one pass over the keys of each convert
 
 **Scale/Scope**: R-10 counts 187 option constructions in 175 files, 32 source-generation attributes and about 267
 option-less serializer calls. The value path (about 25 sites, R-10) and the API contexts (about 30) migrate in this
-spec. The remaining option-less calls on Elsa's own contracts are listed in a ratchet file (Q3).
+spec. The remaining option-less calls on Elsa's own contracts are listed in the legacy list, which may only shrink (Q3).
 
 ## Constitution Check
 
@@ -67,7 +68,7 @@ spec. The remaining option-less calls on Elsa's own contracts are listed in a ra
 | §E2.2 Runtime takes no Design reference | PASS | The baseline is in `Elsa.Serialization.Core`, which Runtime.Core already references (R-11). |
 | §2.17 duplication beats dependency | PASS | The canonical helper and the pre-scan live once in `Elsa.Serialization.Core`; every caller already references it. |
 | §E2.6.1 executable-always-runs | PASS | An unmatched key is a warning, never a refusal (decision 2). Executable hashes do not move (R-1). |
-| §E5 / §4.2 versioning | PASS | Additive surface in `Elsa.Serialization.Core` (`JsonBaseline`, `CanonicalJson`, `UnmatchedMemberScanner`). The wire changes are fixes under matrix row 21, before GA. |
+| §E5 / §4.2 versioning | PASS | Additive surface in `Elsa.Serialization.Core` (`JsonBaseline`, `JsonConversionContract`, `SemanticJson`, `UnmatchedMemberScanner`). The wire changes are fixes under matrix row 21, before GA. |
 | §E7 CI tiers | PASS | The architecture guard runs in the Fast tier, as the other baseline guards do. |
 | §2.22 docs | ACTION | `docs/serialization.md` gains the baseline, the data rule, the register and the ratchet. Its FastEndpoints wording goes. The glossary gains *baseline* and *baseline deviation*. |
 | §2.23.1–§2.23.2 tests | PASS | One test per acceptance scenario, the guard's negative tests, and hash-stability tests. |
@@ -80,13 +81,13 @@ spec. The remaining option-less calls on Elsa's own contracts are listed in a ra
 |---|---|---|
 | P-1 | `JsonBaseline` in `Elsa.Serialization.Core` | FR-001 to FR-003, FR-007, FR-009. The baseline is built once and `MakeReadOnly()`; `JsonBaseline.CreateCopy()` returns a mutable copy. Its `RawJsonElementConverter` uses `WriteRawValue(GetRawText(), skipInputValidation: true)`. |
 | P-2 | API contexts derive from it | FR-002, FR-006, FR-017. Owner `WireContext`s and every `MapEndpointGroup` context get a constructed instance from a copy (R-5). Generated `.Default` instances are replaced by constructed ones. The `ConfigureHttpJsonOptions` calls insert resolvers only (R-6). |
-| P-3 | One data-boundary copy | FR-012 to FR-014, FR-016. `JsonBaseline.DataBoundary` adds the UTC `DateTime` converter. It is used at every R-10 site, in both directions. |
-| P-4 | Unmatched-key pre-scan | FR-005, Q1, R-13. `UnmatchedMemberScanner` runs against `JsonTypeInfo`; its warning code is `json-unmatched-member`. |
-| P-5 | Hash preimages frozen | FR-021, Q4, R-1. Each preimage keeps its options and gets a register entry. Direct text hashes and `Ordinal` comparisons of serialized values move to `CanonicalJson` (sorted members, fixed encoder). |
-| P-6 | Git files keep data text | FR-008, FR-022, Q5, R-7. The exporter indents with the baseline writer. `GitCanonicalJson.HashFile` is built on `CanonicalJson`. |
-| P-7 | Runtime durable writers | FR-023, Q7, R-9. `RuntimeArtifactJson` and the five store option sets derive from the baseline and register their frozen converters. There is a byte-level golden for one stored value, and no stamp bump. |
-| P-8 | Content type | FR-010, Q6, R-12. Elsa's APIs send `nosniff`. Workflow HTTP responses keep the author's content type, as a register entry. |
-| P-9 | Guard and register | FR-019, FR-020, Q2, Q3. `JsonBaselineArchitectureTests` scans every source root and reads the register table in `docs/serialization.md` and `Baselines/json-optionless-calls.txt` (ratchet: may only shrink). |
+| P-3 | Conversion contracts | FR-004, FR-012 to FR-014, FR-016. `JsonConversionContract` (default and scoped) builds a baseline copy with the contract's naming, matching, mappings and date/time interpretation; it is recorded with a version in the published conversion contract and used at every R-10 site, in both directions. The default is camelCase with exact matching. The date/time converter uses the value's offset or the contract's declared source time zone or assume-UTC policy, and refuses otherwise. |
+| P-4 | Unmatched-key pre-scan | FR-005, Q1, R-13. `UnmatchedMemberScanner` runs against the effective contract (naming, case sensitivity, mappings, dictionaries, extension data); a custom converter supplies matching information or the type is reported as not covered. Codes: `json-unmatched-member` (warning), `json-unmatched-member-refused` (strict contract), `json-unmatched-coverage-unavailable` (info). |
+| P-5 | Hash inputs frozen | FR-021, Q4, R-1. Each existing hash input keeps its options and preimage and gets a register entry with its input contract. Equality checks that compare serialized text move to `SemanticJson` (semantic comparison). Direct-text hashes are listed and stay as they are; changing one is a separate decision. |
+| P-6 | Git files keep data text | FR-008, FR-022, Q5, R-7. The exporter indents with a writer that writes `JsonElement` raw. `GitCanonicalJson.HashFile` keeps its current input and is registered. |
+| P-7 | Runtime durable writers | FR-023, Q7, R-9. `RuntimeArtifactJson` and the five store option sets derive from the baseline and register their frozen converters. Fixed serialized examples and compatibility checks show old and new code read old and new rows with the same meaning; then no stamp bump, otherwise a stamped format change. A byte-level golden pins one stored value. |
+| P-8 | Content type | FR-010, Q6, R-12. Elsa's JSON APIs send `application/json` and `nosniff`. A workflow-authored response uses its author's content type; with none, text is `text/plain`, anything else `application/json`. |
+| P-9 | Guard and register | FR-019, FR-020, Q2, Q3. `JsonBaselineArchitectureTests` scans every source root and reads the register table in `docs/serialization.md` and the legacy list `Baselines/json-optionless-calls.txt` (may only shrink, never a workflow-data path; a new unlisted call fails). |
 | P-10 | Elsa 3 case-only keys | FR-015. The rewrite happens at literal lowering in `Extensions/Elsa3`. The ambiguous case is refused with `ELS3-LITERAL-KEY-AMBIGUOUS`. |
 | P-11 | Diagnostics | [contracts/json-baseline.md](contracts/json-baseline.md). |
 
@@ -112,7 +113,7 @@ specs/1207-json-data-integrity-baseline/
 Essentials/src/Serialization/Core/
   ├── JsonBaseline.cs                      # new: baseline, CreateCopy, DataBoundary
   ├── RawJsonElementConverter.cs           # new
-  ├── CanonicalJson.cs                     # new: canonical preimage and equality
+  ├── SemanticJson.cs                      # new: semantic value comparison
   └── UnmatchedMemberScanner.cs            # new
 Essentials/src/Serialization/SystemText/Services/JsonPayloadSerializer.cs   # derive, keep nulls
 Essentials/src/Workflows/Runtime/Api/WorkflowsRuntimeJsonContext.cs         # no key policy
@@ -121,7 +122,7 @@ Essentials/src/Activities/Design/Api/ActivitiesDesign{JsonContext,ApiFeature}.cs
 Essentials/src/{Connections,Secrets}/Api/*                                   # no key policy
 Essentials/src/Workflows/Design/Api/Services/AuthoringSchemaExporter.cs
 Essentials/src/Activities/Runtime/Elsa.Activities.Runtime/Services/
-  ├── ActivityValueJson.cs                # replaced by the data-boundary copy (#3801)
+  ├── ActivityValueJson.cs                # replaced by the default conversion contract (#3801)
   └── ActivityInputHydrator.cs             # pre-scan
 Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Values/RuntimeActivityInputMaterializer.cs
 Essentials/src/Workflows/Publishing/Elsa.Workflows.Publishing/Services/RuntimeInputBindingCompiler.cs
