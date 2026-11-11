@@ -9,6 +9,7 @@ import workflow_scope as scope
 
 class WorkflowScopeTests(unittest.TestCase):
     patterns = json.loads(scope.PATHS.read_text())
+    ci_draft = {'draft': True, 'labels': [{'name': 'ci'}]}
 
     def selected(self, event='pull_request', paths=None, **payload):
         return scope.select(event, payload, paths, self.patterns)
@@ -17,7 +18,7 @@ class WorkflowScopeTests(unittest.TestCase):
         self.assertFalse(any(self.selected(paths=['docs/glossary/root.md']).values()))
 
     def test_studio_draft_runs_studio_without_weaver(self):
-        selected = self.selected(paths=['Studio/src/Feature.ts'], pull_request={'draft': True})
+        selected = self.selected(paths=['Studio/src/Feature.ts'], pull_request=self.ci_draft)
         self.assertTrue(selected['studio'])
         self.assertFalse(selected['weaver'])
 
@@ -27,7 +28,7 @@ class WorkflowScopeTests(unittest.TestCase):
                      'Essentials/apps/Elsa.Workbench/shells.json',
                      'Extensions/Agent/agents/Core/Manifest.cs']:
             with self.subTest(path=path):
-                self.assertTrue(self.selected(paths=[path], pull_request={'draft': True})['studio'])
+                self.assertTrue(self.selected(paths=[path], pull_request=self.ci_draft)['studio'])
 
     def test_ready_event_runs_every_proof_and_a_label_or_variable_restores_it_for_a_push(self):
         for paths in [['Studio/src/Feature.ts'], ['e2e-tests/Invoke-PlatformSourceJourney.ps1'],
@@ -77,11 +78,34 @@ class WorkflowScopeTests(unittest.TestCase):
         self.assertTrue(pushed['studio'] and pushed['studio-heavy'])
 
     def test_draft_skips_only_the_heavy_studio_proofs(self):
-        draft = self.selected(paths=['Studio/src/Feature.ts'], action='synchronize', pull_request={'draft': True})
+        draft = self.selected(paths=['Studio/src/Feature.ts'], action='synchronize', pull_request=self.ci_draft)
         ready = self.selected(paths=['Studio/src/Feature.ts'], action='ready_for_review', pull_request={'draft': False})
         self.assertTrue(draft['studio'] and not draft['studio-heavy'])
         self.assertTrue(ready['studio'] and ready['studio-heavy'])
         self.assertFalse(self.selected(paths=['docs/README.md'], action='ready_for_review', pull_request={'draft': False})['studio-heavy'])
+
+    def test_draft_skips_every_proof_unless_asked(self):
+        for paths in (['Studio/src/Feature.ts'], ['Essentials/src/Feature.cs'], ['docs/README.md']):
+            with self.subTest(paths=paths):
+                draft = self.selected(paths=paths, action='synchronize', pull_request={'draft': True})
+                self.assertFalse(any(draft.values()))
+                self.assertTrue(scope.skip_draft('pull_request', {'pull_request': {'draft': True}}, paths))
+        draft = {'pull_request': {'draft': True}}
+        self.assertTrue(scope.skip_draft('pull_request', draft, ['Essentials/src/Feature.cs']))
+
+    def test_draft_runs_with_the_ci_label_tier_changes_or_an_unreadable_diff(self):
+        draft = {'pull_request': {'draft': True}}
+        self.assertFalse(scope.skip_draft('pull_request', {'pull_request': self.ci_draft}, ['Essentials/src/Feature.cs']))
+        self.assertFalse(scope.skip_draft('pull_request', draft, ['tools/ci/test-tiers.json']))
+        self.assertFalse(scope.skip_draft('pull_request', draft, ['.github/workflows/ci.yml']))
+        self.assertFalse(scope.skip_draft('pull_request', draft, None))
+
+    def test_ready_manual_queue_and_push_runs_are_never_skipped(self):
+        for event_name, event in [('pull_request', {'pull_request': {'draft': False}}),
+                                  ('pull_request', {'action': 'ready_for_review', 'pull_request': {'draft': False}}),
+                                  ('workflow_dispatch', {'inputs': {'suite': 'ci'}}), ('merge_group', {}), ('push', {})]:
+            with self.subTest(event=event_name):
+                self.assertFalse(scope.skip_draft(event_name, event, ['Essentials/src/Feature.cs']))
 
     def test_platform_and_published_images_keep_their_triggers(self):
         self.assertTrue(self.selected(paths=['e2e-tests/Invoke-PlatformSourceJourney.ps1'])['backend-source'])
