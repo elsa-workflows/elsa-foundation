@@ -93,8 +93,9 @@ rules, including the loop weaknesses above. The code-first builder still writes 
 ## Member bindings and runtime selection (#4078 design note)
 
 **Status:** design note for T011–T017, written against `origin/main` at `a9771131c3` (11 Nov 2026). It decides how
-the change is cut, not new behaviour. Every claim about current behaviour was **read** from source at that commit;
-nothing was run for this note. The rules themselves are in the [binding contract](contracts/binding-contract.md),
+the change is cut, not new behaviour. Sections 1–10 were first written from source read at that commit; the open
+claims were then characterised by tests run on that commit (nine items, §11), and slice A has since been delivered
+on top of it (§10). Each claim says whether it was read or run. The rules themselves are in the [binding contract](contracts/binding-contract.md),
 the [data model](data-model.md#compiled-read-selection) and the [authoring contract](contracts/authoring-contract.md);
 this section does not restate them.
 
@@ -316,12 +317,14 @@ for `ActivityResultMember` drops "optional legacy `producerScopeId`".
 Old arms of every hash stay byte-identical; only new kinds add content.
 
 - **Node payload** (`WorkflowExecutableHasher.cs:123-146`). New arms, with prefixes no old arm uses:
-  `request-member:{memberKey}:{S}`, `variable-member:{scope}:{key}:{S}`,
-  `result-member:{producer}:{projection}:{isOptional}:{S}`. `S` is framed so delimiters inside names cannot
-  collide: `sel:1:{mode}:{n}:` then each segment as `{length}#{segment}`, then
-  `:{FormatType(selectedType) or empty}:{mayBeAbsent}:{mayBeNull}:{representation}:{profileRevision}`. The default
-  arm becomes a throw; today it is reachable only by a new kind (each old kind has an arm, and `Literal` always has
-  its payload).
+  `request-member:{F(memberKey)}:{S}`, `variable-member:{F(scope)}:{F(key)}:{S}`,
+  `result-member:{F(producer)}:{F(projection)}:{isOptional}:{S}`, where `F(v)` is `{length}#{v}`. **Every
+  variable-length field is framed**, not only the segments (design review, #4083): these bytes are new and can never
+  change later, so no member key, scope, producer, projection or segment may contain a delimiter that makes two reads
+  render alike. `S` is `sel:1:{mode}:{n}:` then `F(segment)` for each segment, then
+  `:{F(FormatType(selectedType)) or -}:{mayBeAbsent}:{mayBeNull}:{representation}:{F(profileRevision) or -}`; the
+  booleans and enum names are fixed vocabulary. The default arm is a throw; it is reachable only by an unknown kind
+  (each kind has an arm, and `Literal` always has its payload). Delivered in slice A.
 - **V2 behavioural payload** (`:375-380`): no code change; `selection` enters `contract` through the
   source-generated context. A per-field mutation test proves every selection field moves the hash, so a future
   `[JsonIgnore]` cannot drop one silently.
@@ -444,8 +447,8 @@ runtime can run: half-enabled and reachable.
 
 | Slice | Adds | Inert until the next slice because | Proving tests | Risk |
 |---|---|---|---|---|
-| A. Member-read model (T011; hashing part of T013; requirement derivation of T016; model and hash part of T017) | Enum members, `RuntimeReadSelection`, constructor overload and invariants, `Selection` serialization, hash arms with throwing default, fingerprint append, inspection view, derived requirement, PublicAPI. | Nothing compiles a member binding; the resolver throws for one; no capability is advertised, so preflight, import and placement report the requirement unmet. | Invariant rows; round trip; corpus goldens unchanged; distinct hashes for distinct paths, modes, types and delimiter-bearing names; old-reader controls (§11); requirement derived for member, absent for whole. | Low–medium: public shape and hash rendering. |
-| B. Runtime selection (T014, T015, capability and guards of T016, runtime part of T017) | Selector, materializer and intrinsic integration inline and external, fit before snapshot, reason codes, capability with composition check, front-door and drain guards. | Still no publication path emits member bindings; only hand-built executables reach it, and those now run correctly. | Unit rows for every outcome in §7, exact and literal names; inline/external parity; intrinsic; constructor counter and no snapshot commit on failure; retry reuse; real engine harness in a Sequence and a top-level Flowchart; guards refuse start, resume and queued work without the capability. | High: materialization order, external values, protection. |
+| A. Member-read model (T011; hashing part of T013; requirement derivation of T016; model and hash part of T017) | Enum members, `RuntimeReadSelection`, constructor overload and invariants, `Selection` serialization, hash arms with throwing default, fingerprint append, inspection view, derived requirement, PublicAPI. | Nothing compiles a member binding; the resolver throws for one; no capability is advertised, so preflight, import and placement report the requirement unmet. Locally there is no front-door guard until slice B: a hand-built member executable runs up to its reader, whose input read is refused before construction (run: `MemberReadRefusalTests`). | Invariant rows; round trip; corpus goldens unchanged; distinct hashes for distinct paths, modes, types and delimiter-bearing names; old-reader controls (§11); requirement derived for member, absent for whole. | Low–medium: public shape and hash rendering. Delivered (receipt in [tasks](tasks.md)). |
+| B. Runtime selection (T014, T015, capability and guards of T016, runtime part of T017) | Selector, materializer and intrinsic integration inline and external, fit before snapshot, reason codes (one dedicated exception type, `VF-SEL` code first), capability with composition check, front-door and drain guards, and the `RequiresActivityHistory` update so request and variable member reads stop fetching activity history (§7). | Still no publication path emits member bindings; only hand-built executables reach it, and those now run correctly. | Unit rows for every outcome in §7, exact and literal names; inline/external parity; intrinsic; constructor counter and no snapshot commit on failure; retry reuse; real engine harness in a Sequence and a top-level Flowchart; guards refuse start, resume and queued work without the capability. | High: materialization order, external values, protection. |
 | C. Publish result member reads (T012, T013, T017 for `ActivityResultMember`) | Authored parse, analyzer offer and admission, compiler branch and old-kind refusal, pin pass, linker on the selected type, remapper arms, contract text (§5). | Enables the feature for API clients; the Studio member picker (T022) stays gated in its own leaf. | Offer-equals-admission rows; refusal before any write through the real publish handler; template placement; real host publish → run in a Sequence and a top-level Flowchart, inline and external (acceptance 1). | Medium–high. |
 | D. Other families (T012, T013 for the rest) | `VariableMember`, `WorkflowRequestMember`, `InputMember` and its placement lowering. | Each kind refused until its row lands. | Deferred-fit rows; placement lowering keeps segments; reopen and publish. | Medium. |
 
