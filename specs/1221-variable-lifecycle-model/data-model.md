@@ -24,7 +24,7 @@ One actual, instrumented read.
 |---|---|
 | `VariableRef` | Scope + key of the variable read. |
 | `Version` | The version seen at read time. |
-| `Digest` | The digest seen at read time. |
+| `Digest` | The stored digest seen at read time. **Only for a node whose lost-update mode is `Fault`**; absent in the default mode (light tracking). |
 
 ## ReadSet (per invocation / per attempt)
 
@@ -35,29 +35,39 @@ One actual, instrumented read.
 
 - A visible-but-unread variable is absent. Only Elsa's instrumented access paths are covered.
 
+## LostUpdateMode (per node, pinned)
+
+| Value | Set by | Tracking | On a stale base |
+|---|---|---|---|
+| `Default` | — | light: version only | apply (last write wins) + lost-update warning |
+| `Fault` | activity type declaration, or per-node setting | exact: version, then stored digest on a mismatch | digests equal → apply + record mismatch; differ → fault |
+
+- Resolved at design time from the activity type and the node's setting, pinned in the published executable.
+
 ## Base
 
-Derived, not stored separately: for a write to X, the (version, digest) of X in the writer's read set (the entry the
-write was built on). Absent → blind write. Input bases are immutable per invocation; the invocation's own applied write
-advances its own base for X.
+Derived, not stored separately: for a write to X, the version of X in the writer's read set (plus its digest for a
+`Fault` node), from the entry the write was built on. Absent → blind write. Input bases are immutable per invocation;
+the invocation's own applied write advances its own base for X.
 
 ## WriteHistoryRecord
 
-One per applied write and per conflict. Mandatory metadata always; value and operational data conditional.
+One per applied write and per lost update. Mandatory metadata always; value and operational data conditional.
 
 | Field | Required? | Meaning |
 |---|---|---|
 | `VariableRef` | yes | Scope + key. |
 | `Writer` | yes | Node, invocation, attempt. |
 | `Source` | yes | capture / intrinsic / session change / alteration / background result. |
-| `BaseVersion`, `NewVersion` | yes where applicable | For ordering and conflict display. |
+| `BaseVersion`, `NewVersion` | yes where applicable | For ordering and lost-update display. |
 | `CommitOrder` | yes | Instance commit order. |
-| `Resolution` | yes for conflicts | `Fault` or `LastWins`. |
+| `LostUpdate` | yes for lost updates | Outcome `Warning` or `Fault`; the overwritten writer and the stale-base writer. |
 | `Value` | optional | Full historical value; configurable capture + retention; protected/redacted; omitted/redacted/expired distinguished from `null`. |
-| `OperationalData` | conditional | Base snapshot / rejected-completion data retained while an enabled merge or recovery needs it, independent of inspection-value settings. |
+| `OperationalData` | conditional | Rejected-completion data (`Fault`), and the value a lost-update warning overwrote, retained while required for recovery or repair, independent of inspection-value settings. |
 
 - Invariant: every intermediate write is preserved, including `0 → 1 → 0` within one buffered segment. Deriving from the
   final folded state only is insufficient. Physical storage is Open question B.
+- The lost-update warning is also an instance diagnostic shown in Studio; the write-history record is its durable form.
 - Feeds S-6 (#3290–#3292). Not ADR 0084's commit journal.
 
 ## InputSnapshot / Evaluation (changed)
@@ -73,14 +83,17 @@ For a write to X at commit:
 
 ```
 has base?
-├─ no  → apply (blind; D-8 last commit wins)            → write history (blind)
+├─ no  → apply (blind; D-8 last commit wins)                       → write history (blind)
 └─ yes → base.version == current.version?
-         ├─ yes → apply                                  → write history
-         └─ no  → base.digest == current.digest?
-                  ├─ yes → apply (value returned, 0→1→0) → write history (version mismatch)
-                  └─ no  → LOST UPDATE
-                           ├─ policy Fault    → incident (rejected completion recorded)
-                           └─ policy LastWins → apply     → write history (LastWins)
+         ├─ yes → apply                                             → write history
+         └─ no  → LOST UPDATE (stale base); node mode?
+                  ├─ Default → apply (last write wins, D-8)          → lost-update warning: instance diagnostic
+                  │                                                    + write history, both writers, overwritten
+                  │                                                    value kept (0→1→0 also warns)
+                  └─ Fault   → base.digest == current.digest?
+                               ├─ yes → apply (value returned)        → write history (version mismatch)
+                               └─ no  → fault → incident (rejected completion recorded)
+then, for an applied write: new.digest == current.digest → apply nothing, version unchanged
 ```
 
 Identical for frames and rows, inline and background, captures and session writes.
@@ -92,4 +105,4 @@ Identical for frames and rows, inline and background, captures and session write
 | Recovery (crash redelivery, resume) | kept | kept snapshot + read set | not re-run if durably completed |
 | Retry | kept | kept snapshot | new attempt runs |
 | Re-execute / reschedule | **new** | **fresh** materialization, new input read set | runs; effects repeat |
-| Accept recorded completion | kept | n/a | **not run**; recorded transition applied atomically after revalidation |
+| Accept recorded completion (after a `Fault` lost update) | kept | n/a | **not run**; recorded transition applied atomically after revalidation |

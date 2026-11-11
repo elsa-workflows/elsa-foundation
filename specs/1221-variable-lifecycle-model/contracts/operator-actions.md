@@ -14,8 +14,8 @@ because downstream scheduling was interrupted.
 
 - Keeps `InvocationId`, operation keys derived from it, and the committed input snapshot.
 - Starts a new attempt with no session reads.
-- After a lost-update fault, it reads the same base and faults again while the base stays stale and changed, unless the
-  node uses `LastWins`.
+- After a lost-update fault (a `Fault` node), it reads the same base and faults again while the base stays stale and
+  changed.
 - Use: transient failure (e.g. HTTP 503) where an external service deduplicates on the same idempotency key.
 
 ## Re-execute / reschedule (operator)
@@ -29,10 +29,10 @@ because downstream scheduling was interrupted.
 
 ## Accept recorded completion (operator)
 
-- For a step whose body succeeded but whose commit conflicted (a lost-update fault).
+- For a step whose body succeeded but whose commit conflicted (a lost-update fault on a `Fault` node).
 - Does **not** run the body. Revalidates current state, scope, pinned contracts and policies; applies the complete
   recorded transition (write intents, captures, output changes, outcomes) atomically and duplicate-safely, as a recorded
-  override like `LastWins`.
+  override.
 - Refuses a faulted body. A returned result alone is not enough; the completion data is retained under the existing
   protection rules. The original conflict and resolution stay in the history.
 - Repeated acceptance requests must not schedule downstream work twice. Does not silently refresh inputs.

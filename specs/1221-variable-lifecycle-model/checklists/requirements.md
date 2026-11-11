@@ -26,7 +26,7 @@
   reach the step, overhead within budget)
 - [x] All acceptance scenarios are defined
 - [x] Edge cases are identified
-- [x] Scope is clearly bounded — explicit *Out of scope* list naming S-5, S-6, S-11, the merge ADR and A-3
+- [x] Scope is clearly bounded — explicit *Out of scope* list naming S-5, S-6, S-11, a merge policy and A-3
 - [x] Dependencies and assumptions identified
 
 ## Feature Readiness
@@ -38,9 +38,9 @@
 
 ## Notes
 
-- **Provisional.** Formal approval waits on ADR 0092 (#3411 + #3778) being agreed; this is expected and allowed in the
+- **Provisional.** Formal approval waits on ADR 0092 (#3411 at `a356aa9cf`) being agreed; this is expected and allowed in the
   specs phase of the initiative.
 - Two *Open questions* (A: no-inline-gap feasibility for `External`; B: write-history physical storage) are intentional
   and ADR-delegated. They are recorded against the #3411 thread, not left as blockers.
-- Reviewer questions 3 and 8 are recorded as settled with the coordinator; the ADR text closes are to be applied on
-  #3411.
+- Reviewer questions 3 and 8 follow ADR 0092 at `a356aa9cf` (option C: last write wins with a warning by default,
+  `Fault` by opt-in; suspended keeps base).

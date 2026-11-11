@@ -33,20 +33,23 @@ carries logic) at the application cadence (§2.21.2). No new CI tier (existing F
 
 ---
 
-## Phase 3: User Story 1 — Parallel read-modify-write is caught (Priority: P1) 🎯 MVP
+## Phase 3: User Story 1 — Parallel read-modify-write is never silent (Priority: P1) 🎯 MVP
 
-**Goal**: a parallel input+capture `count++` either totals correctly or faults visibly, never silently loses an update.
-**Independent test**: the reproduction drive below fails before and faults after.
+**Goal**: a parallel input+capture `count++` either totals correctly (inline: `2`) or applies with a visible,
+repairable lost-update warning (background, suspension), never silently loses an update.
+**Independent test**: the reproduction drive below fails before and passes after. Run Phase 6's PoC (T025) first: the
+default of FR-011 depends on it (FR-013a).
 
-- [ ] T010 [US1] **(test-first)** Reproduction drive: `Parallel` of two `External` leaves taking `count` and capturing `count + 1`; assert silent `1` today, lost-update fault after. In `.../Tests/VariableLifecycle/ParallelLostUpdateTests.cs`.
-- [ ] T011 [P] [US1] **(test-first)** Drive: two branches read 0 and write 1 → second is a lost update, not a no-op.
+- [ ] T010 [US1] **(test-first)** Reproduction drive: `Parallel` of two inline `External` leaves taking `count` and capturing `count + 1`; assert silent `1` today, `2` after (with US4). In `.../Tests/VariableLifecycle/ParallelLostUpdateTests.cs`.
+- [ ] T010a [P] [US1] **(test-first)** Drive: the same with two background branches → `1` with a lost-update warning on the second commit (instance diagnostic + write-history entry naming both writers, overwritten value kept).
+- [ ] T011 [P] [US1] **(test-first)** Drive: two branches read 0 and write 1 → second is a lost update (warning), not a no-op; `0 → 1 → 0` in default mode warns.
 - [ ] T012 [US1] Capture the input read set during materialization in `Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/WorkHandlers/WorkflowStartActivitySchedulerWorkHandler.cs`; commit it with the input snapshot.
 - [ ] T013 [US1] Apply the commit rule and base at the capture site in `Essentials/src/Activities/Runtime/Elsa.Activities.Runtime/Services/RuntimeOutputCaptureProjection.cs`.
 - [ ] T014 [P] [US1] Apply the commit rule at the intrinsic site (Set/Merge/Reduce) in `Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Values/WorkflowIntrinsicExecutor.cs`.
 - [ ] T015 [US1] Record session reads per attempt in the variable session read path; implement base selection (immutable input bases; oldest-in-use tie-break) per data-model.md and R-4.
 - [ ] T016 [US1] Self-write handling: an invocation's applied write advances its own base for X (session change on suspend + capture on complete, ADR 0090 §6 order); test no self-conflict.
 
-**Checkpoint**: US1 reproduction passes; lost updates detected across `External`; blind writes unaffected.
+**Checkpoint**: US1 reproduction passes; lost updates are never silent across `External`; blind writes unaffected.
 
 ---
 
@@ -64,20 +67,22 @@ carries logic) at the application cadence (§2.21.2). No new CI tier (existing F
 
 ---
 
-## Phase 5: User Story 3 — Explicit last-wins (Priority: P2)
+## Phase 5: User Story 3 — Opt-in strict read-modify-write (Priority: P2)
 
-- [ ] T022 [US3] Add the `LastWins` policy: per activity type (attribute) and per node (setting) in the runtime policy resolution.
-- [ ] T023 [US3] Route the default `Fault` through the existing incident path with the diagnostic (variable, versions, writers); record the rejected completion. Reference `docs/runtime-fault-behavior.md`.
-- [ ] T024 [P] [US3] Behaviour tests: `LastWins` (type and node) applies a stale-changed write and records it; default faults through the incident strategy. In `.../Tests/VariableLifecycle/LostUpdatePolicyTests.cs`.
+- [ ] T021a [US1] Default lost-update warning: on a stale base the write applies and an instance diagnostic (Studio) plus a write-history entry is raised, naming the variable, base and current versions and both writers, keeping the overwritten value; versions only, no digest in the read set.
+- [ ] T022 [US3] Add the `Fault` opt-in: `LostUpdateMode` per activity type (attribute) and per node (setting) in the runtime policy resolution, pinned in the executable; `Fault` nodes record stored digests in their read sets and use the exact check.
+- [ ] T023 [US3] Route a `Fault` lost update through the existing incident path with the diagnostic (variable, versions, writers); record the rejected completion. Reference `docs/runtime-fault-behavior.md`.
+- [ ] T024 [P] [US3] Behaviour tests: default warns and applies (incl. `0 → 1 → 0`); `Fault` (type and node) applies `0 → 1 → 0` with a recorded mismatch and faults a real lost update through the incident strategy. In `.../Tests/VariableLifecycle/LostUpdatePolicyTests.cs`.
+- [ ] T024a [P] [US3] Point spec 266's unordered-writer publish warning to the `Fault` opt-in (FR-012a); coordinate with S-5 (#3286).
 
 ---
 
-## Phase 6: User Story 4 — No inline gap for `External` (Priority: P2) — Open question A
+## Phase 6: User Story 4 — No inline gap for `External` (Priority: P1) — Open question A (run T025 first)
 
 - [ ] T025 [US4] **(test-first / PoC)** Prove no other branch's work item runs between an `External` inline leaf's input materialization, body and transition commit, with claim/fence/durability intact and no DB transaction around user code. In `.../Tests/VariableLifecycle/InlineNoGapTests.cs`.
 - [ ] T026 [US4] Extend the single-work-item dispatch to `External` leaves in `Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/WorkHandlers/ReplaySafeFusionDriver.cs` (and the start path), keeping `ActivityAttemptClaimed` claim/flush as intermediate commits.
 - [ ] T027 [P] [US4] Parallel test for `ReplaySafe` leaves (already fused) confirming the same no-gap guarantee.
-- [ ] T028 [US4] **Flow finding back to #3411**: post the PoC result (feasible / not) as a comment on ADR 0092; if infeasible without weakening ADR 0032 R2, it reopens decision 10.
+- [ ] T028 [US4] **Flow finding back to #3411**: post the PoC result (feasible / not) as a comment on ADR 0092; if infeasible without weakening ADR 0032 R2, it reopens decision 10 and the default of decision 6 (FR-013a), before this spec is approved.
 
 ---
 
@@ -86,38 +91,38 @@ carries logic) at the application cadence (§2.21.2). No new CI tier (existing F
 - [ ] T029 [US5] Implement the admission refresh: compare input read set to current versions; on change, a new evaluation (same `InvocationId`, own sequence + idempotency keys) on the background admission path.
 - [ ] T030 [P] [US5] Per-node refresh opt-out; a stale base then handled at commit.
 - [ ] T031 [US5] Retain both snapshots linked with the reason; the worker's snapshot immutable thereafter; cover only Start→admission.
-- [ ] T032 [P] [US5] Tests: refresh on changed input; opt-out faults/LastWins at commit; superseded snapshot stays in history. In `.../Tests/VariableLifecycle/BackgroundRefreshTests.cs`.
+- [ ] T032 [P] [US5] Tests: refresh on changed input; opt-out meets the commit rule (warning by default, fault under `Fault`); superseded snapshot stays in history. In `.../Tests/VariableLifecycle/BackgroundRefreshTests.cs`.
 
 ---
 
 ## Phase 8: User Story 6 — Suspension keeps base (D-11) (Priority: P3)
 
-- [ ] T033 [US6] On resume: keep committed snapshot + input read set (own-write bases advanced), fresh session, no auto-refresh; fault only on an explicit stale-changed write.
-- [ ] T034 [P] [US6] `ModifyVariableAlterationHandler`: record the variable's version and apply only if unchanged (replace the root-frame revision check); a read alone never faults. In `.../Alterations/Handlers/ModifyVariableAlterationHandler.cs`.
-- [ ] T035 [P] [US6] Tests: resume keeps base; read-only change does not fault; stale-changed write faults. In `.../Tests/VariableLifecycle/SuspensionTests.cs`.
+- [ ] T033 [US6] On resume: keep committed snapshot + input read set (own-write bases advanced), fresh session, no auto-refresh; an explicit stale-base write meets the commit rule and the node's mode.
+- [ ] T034 [P] [US6] `ModifyVariableAlterationHandler`: record the variable's version and apply only if unchanged (replace the root-frame revision check); a later stale-base write keeps the operator's value in the warning; a read alone never produces a lost update. In `.../Alterations/Handlers/ModifyVariableAlterationHandler.cs`.
+- [ ] T035 [P] [US6] Tests: resume keeps base; read-only change produces no lost update; a stale-base write warns by default and faults under `Fault`. In `.../Tests/VariableLifecycle/SuspensionTests.cs`.
 
 ---
 
 ## Phase 9: User Story 7 — Write history data (D-13) (Priority: P3) — Open question B
 
-- [ ] T036 [US7] Record a `WriteHistoryRecord` at every applied write and conflict (metadata always; value opt-in + retention; operational data retained for enabled merge/recovery).
+- [ ] T036 [US7] Record a `WriteHistoryRecord` at every applied write and lost update (metadata always, with the outcome and both writers; value opt-in + retention; operational data — rejected completion, the value a warning overwrote — retained for recovery and repair).
 - [ ] T037 [US7] Preserve every intermediate write incl. `0→1→0` within one buffered segment; distinguish omitted/redacted/expired from `null`.
 - [ ] T038 [US7] **Measurement (Open question B)**: benchmark rows vs. derived-from-checkpoint under large payloads / hot loops; choose the physical storage; set the SC-005 overhead threshold. Post the result on #3411 (reviewer Q12).
-- [ ] T039 [P] [US7] Tests: required metadata present for each write source; intermediate writes survive folding; operational data available with inspection values off/expired. In `.../Tests/VariableLifecycle/WriteHistoryTests.cs`.
+- [ ] T039 [P] [US7] Tests: required metadata present for each write source; intermediate writes survive folding; operational data (rejected completion, overwritten value) available with inspection values off/expired; an overwritten value can be restored. In `.../Tests/VariableLifecycle/WriteHistoryTests.cs`.
 
 ---
 
 ## Phase 10: Polish & cross-cutting
 
-- [ ] T040 [P] Update `docs/runtime-fault-behavior.md` and the variable/lifecycle docs for the commit rule, policies and operator actions (§2.22).
+- [ ] T040 [P] Update `docs/runtime-fault-behavior.md` and the variable/lifecycle docs for the commit rule, the lost-update warning and the `Fault` opt-in, and the operator actions; document how to sequence branches or aggregate results, and when to opt in to `Fault` (§2.22).
 - [ ] T041 Confirm the full reproduction + evidence suite from the ADR's *Required evidence* list passes; cross-check against SC-001…SC-005.
-- [ ] T042 Coordinator closes: on #3411, apply the ADR text-closes for reviewer Q3 (strike strict-only framing in decision 6) and Q8 (strike the open framing in decision 11), per *Approval* in spec.md.
+- [ ] T042 Coordinator check: on #3411, confirm the agreed ADR 0092 text still says option C (decision 6) and the suspended-keeps-base contract (decision 11) as this spec applies them; recheck the spec if it changed.
 
 ## Dependencies & order
 
 - Phase 2 (foundational) blocks all user stories.
 - US1 and US2 are both P1 and largely independent (different sites: US1 at capture/intrinsic/input; US2 at successor staging). US1 is the MVP.
-- US3 depends on US1's commit machinery. US4 is independent (scheduling). US5 depends on US1's read sets. US6 depends on US1 + US2. US7 depends on US1 (writes to record).
+- T025 (US4 PoC) runs first: the default of FR-011 depends on it (FR-013a). US3 depends on US1's commit machinery. US4 is otherwise independent (scheduling). US5 depends on US1's read sets. US6 depends on US1 + US2. US7 depends on US1 (writes to record).
 - T028 (US4) and T038 (US7) are the provisional-spec feedback tasks to #3411.
 
 ## Parallel opportunities
@@ -128,5 +133,5 @@ carries logic) at the application cadence (§2.21.2). No new CI tier (existing F
 
 ## MVP
 
-User Story 1 alone (Phases 1–3) delivers the core: lost updates are detected and faulted, with versions, read sets and
-the commit rule in place. It is independently testable via the parallel reproduction drive.
+User Story 1 with the US4 PoC (Phases 1–3 plus T025) delivers the core: no silent lost updates, with versions, read
+sets, the commit rule and the default lost-update warning in place. It is independently testable via the parallel reproduction drive.
