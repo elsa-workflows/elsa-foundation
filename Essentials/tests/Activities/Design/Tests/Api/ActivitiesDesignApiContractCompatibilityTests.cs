@@ -260,7 +260,9 @@ public sealed class ActivitiesDesignApiContractCompatibilityTests
         // It moved for DesignFacets as an additive body init property, preserving the existing positional API.
         // #3750 adds node-presentation body init properties and thin wire envelopes. The existing
         // command constructors/deconstructors are retained and explicitly covered above.
-        Assert.Equal("4180874702ea7eac813efba4dc50a9b2463bab7970f125ecd4a06796db22730d", PublicShapeHash(ContractTypes));
+        // It moved for RuntimeActivityType as an additive body init property on ActivityAuthoringDescriptorView: the declared
+        // runtime type (e.g. Elsa.HttpEndpoint) a compiled node carries for a CLR activity whose catalog key is its CLR full name.
+        Assert.Equal("6413fb85c748296145925fb4272cacb8e4da10f83844d05e05c5da391c93e2ee", PublicShapeHash(ContractTypes));
     }
 
     [Fact]
