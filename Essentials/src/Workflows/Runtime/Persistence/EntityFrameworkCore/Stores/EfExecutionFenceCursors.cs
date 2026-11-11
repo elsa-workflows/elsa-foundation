@@ -4,15 +4,16 @@ using Elsa.Workflows.Runtime.Core.Models;
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 
 /// <summary>
-/// What this process last saw of one lease on a run's ownership row: a revision at which the row held the lease, and
-/// the lease times stored at that revision. Revision 0 means the revision is not known.
+/// What the stores of one service provider last saw of one lease on a run's ownership row: a revision at which the
+/// row held the lease, and the lease's expiry time and the row's schema stamp at that revision. Revision 0 means the
+/// revision is not known.
 /// </summary>
-internal readonly record struct ExecutionFenceCursor(long Revision, DateTimeOffset AcquiredAt, DateTimeOffset ExpiresAt);
+internal readonly record struct ExecutionFenceCursor(long Revision, DateTimeOffset ExpiresAt, string SchemaVersion);
 
 /// <summary>
-/// The fence cursors of this process, one per lease that an <see cref="EfExecutionLivenessStateStore"/> of this
-/// process wrote to an ownership row. A fenced checkpoint commit reads its cursor to check the fence with one
-/// conditional statement (<see cref="EfRuntimeCheckpointParticipantStaging.StageExecutionFenceAsync"/>).
+/// The fence cursors of one service provider, one per lease that an <see cref="EfExecutionLivenessStateStore"/>
+/// of that provider wrote to an ownership row. A fenced checkpoint commit uses its cursor to bump the row without
+/// reading it (<see cref="EfRuntimeCheckpointParticipantStaging.StageExecutionFenceBump"/>).
 /// </summary>
 /// <remarks>
 /// <para>
@@ -23,9 +24,9 @@ internal readonly record struct ExecutionFenceCursor(long Revision, DateTimeOffs
 /// Every cursor ever stored names a revision at which the row held exactly that lease: the liveness store records
 /// one after its own save of the row with that lease, and a commit records one after its transaction committed. A
 /// revision of a row is never used twice, so a cursor is either the row as it is now or a revision the row has left.
-/// A cursor that is behind therefore only ever makes the conditional statement match no row. That is why writers
-/// do not need to coordinate: of two cursors for one lease the higher revision is kept, and a cursor that arrives
-/// late, is lost or is removed costs a read of the row and nothing else.
+/// A cursor that is behind therefore only ever makes the commit's bump match no row. That is why writers do not
+/// need to coordinate: of two cursors for one lease the higher revision is kept, and a cursor that arrives late, is
+/// lost or is removed costs a read of the row and nothing else.
 /// </para>
 /// <para>
 /// Only <see cref="Hold"/> creates an entry, and only the liveness store calls it. A commit changes an entry that

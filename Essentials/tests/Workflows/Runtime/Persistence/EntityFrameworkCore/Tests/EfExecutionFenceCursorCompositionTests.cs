@@ -16,9 +16,9 @@ using Xunit;
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
 
 /// <summary>
-/// #2564: which compositions give a lease a fence cursor. A lease the EF execution-liveness store wrote has one, in
-/// whatever service scope and for whatever ownership service the store wrote it. A lease written to the table by a
-/// store that is not the EF store has none, and its commits read the ownership row as before.
+/// #2564: which compositions give a lease a fence cursor. A lease the registered EF execution-liveness store wrote
+/// has one, in whatever service scope and for whatever ownership service the store wrote it. A lease written by
+/// any other store has none, and its commits read the ownership row as before.
 /// </summary>
 public sealed class EfExecutionFenceCursorCompositionTests
 {
@@ -42,7 +42,7 @@ public sealed class EfExecutionFenceCursorCompositionTests
         var lease = await ownership.AcquireAsync(Run);
         var key = EfExecutionFenceCursors.Key.For(Partition.Value, lease);
         Assert.True(cursors.TryGet(key, out var acquired));
-        Assert.Equal(new ExecutionFenceCursor(1, lease.AcquiredAt, lease.ExpiresAt), acquired);
+        Assert.Equal(new ExecutionFenceCursor(1, lease.ExpiresAt, RuntimeOperationalStateEfModule.SchemaVersion), acquired);
 
         // The lease runner renews through a scope of its own, with its own context and ownership service.
         clock.Advance(TimeSpan.FromSeconds(20));
@@ -52,7 +52,7 @@ public sealed class EfExecutionFenceCursorCompositionTests
             Assert.True((await heartbeat.ServiceProvider.GetRequiredService<IRuntimeExecutionOwnershipService>().HeartbeatAsync(lease)).Succeeded);
         }
         Assert.True(cursors.TryGet(key, out var renewed));
-        Assert.Equal(new ExecutionFenceCursor(2, lease.AcquiredAt, lease.ExpiresAt.AddSeconds(20)), renewed);
+        Assert.Equal(new ExecutionFenceCursor(2, lease.ExpiresAt.AddSeconds(20), RuntimeOperationalStateEfModule.SchemaVersion), renewed);
 
         // The commit in the drain's scope finds the cursor the other scope moved.
         var store = drain.ServiceProvider.GetRequiredService<EfRuntimeCheckpointCommitStore>();
@@ -70,13 +70,15 @@ public sealed class EfExecutionFenceCursorCompositionTests
     }
 
     [Theory]
-    [InlineData("liveness-store-that-delegates-to-the-ef-store", true)]
-    [InlineData("another-ownership-service-over-the-ef-store", true)]
+    [InlineData("another-ownership-service-over-the-registered-store", true)]
+    [InlineData("liveness-store-that-delegates-to-the-ef-store", false)]
     [InlineData("liveness-store-that-writes-the-table-itself", false)]
-    public async Task A_lease_has_a_cursor_exactly_when_the_ef_liveness_store_wrote_it(string composition, bool writtenByTheEfStore)
+    public async Task A_lease_has_a_cursor_exactly_when_the_registered_liveness_store_wrote_it(string composition, bool writtenByTheRegisteredStore)
     {
-        // The EF store records a cursor for what it saves, whoever asked it to. A store that writes the ownership
-        // table by other means is not seen, so its leases have no cursor and their commits read the row.
+        // The registered EF store records a cursor for what it saves, whoever asked it to. It is handed the cursors
+        // when it is resolved as the liveness contract. A host that replaces that contract, with a store that
+        // delegates to the EF store or with one that writes the table itself, gets no cursors: its leases have none
+        // and their commits read the row.
         var clock = new FakeTimeProvider(Now);
         var capture = new CommandCaptureInterceptor();
         await using var database = await SharedMemoryDatabase.CreateAsync();
@@ -89,7 +91,7 @@ public sealed class EfExecutionFenceCursorCompositionTests
                     services.AddScoped<IExecutionLivenessStateStore>(serviceProvider =>
                         new ForwardingLivenessStore(serviceProvider.GetRequiredService<EfExecutionLivenessStateStore>()));
                     break;
-                case "another-ownership-service-over-the-ef-store":
+                case "another-ownership-service-over-the-registered-store":
                     services.Replace(ServiceDescriptor.Scoped<IRuntimeExecutionOwnershipService>(serviceProvider =>
                         new ForwardingOwnershipService(new RuntimeExecutionOwnershipService(
                             serviceProvider.GetRequiredService<IExecutionLivenessStateStore>(),
@@ -112,16 +114,16 @@ public sealed class EfExecutionFenceCursorCompositionTests
 
         var lease = await ownership.AcquireAsync(Run);
         Assert.True((await ownership.HeartbeatAsync(lease)).Succeeded);
-        Assert.Equal(writtenByTheEfStore, cursors.TryGet(EfExecutionFenceCursors.Key.For(Partition.Value, lease), out _));
+        Assert.Equal(writtenByTheRegisteredStore, cursors.TryGet(EfExecutionFenceCursors.Key.For(Partition.Value, lease), out _));
 
         foreach (var commitId in new[] { "commit-1", "commit-2" })
         {
             var before = capture.Commands.Count;
             await store.CommitAsync(Commit(commitId, lease), new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate));
-            Assert.Equal(writtenByTheEfStore ? (0, 1) : (1, 1), OwnershipCommands(capture, before));
+            Assert.Equal(writtenByTheRegisteredStore ? (0, 1) : (1, 1), OwnershipCommands(capture, before));
         }
 
-        Assert.Equal(writtenByTheEfStore ? 1 : 0, cursors.Count);
+        Assert.Equal(writtenByTheRegisteredStore ? 1 : 0, cursors.Count);
     }
 
     private static RuntimeCheckpointCommit Commit(string commitId, RuntimeExecutionLease lease) => new(

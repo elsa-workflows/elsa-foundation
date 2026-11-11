@@ -26,11 +26,12 @@ public sealed class EfExecutionLivenessStateStore(
         ReferenceEquals(context, candidateContext) && ReferenceEquals(accessContextAccessor, candidateAccessor);
 
     /// <summary>
-    /// The fence cursors of this process. With them the store records, after each save of an ownership row, the
-    /// revision at which the row now holds its lease, so the EF checkpoint store can check a commit's fence
-    /// against that revision without reading the row. Without them it records nothing.
+    /// The fence cursors of the service provider this store belongs to. With them the store records, after each
+    /// save of an ownership row, the revision at which the row now holds its lease, so the EF checkpoint store can
+    /// check a commit's fence against that revision without reading the row. Without them it records nothing. The
+    /// registration sets them when it resolves the store as <see cref="IExecutionLivenessStateStore"/>.
     /// </summary>
-    internal EfExecutionFenceCursors? FenceCursors { private get; init; }
+    internal EfExecutionFenceCursors? FenceCursors { private get; set; }
 
     public async ValueTask<ExecutionLivenessState> SaveAsync(ExecutionLivenessState state, CancellationToken cancellationToken = default)
     {
@@ -40,7 +41,7 @@ public sealed class EfExecutionLivenessStateStore(
         var entity = await LoadAsync(scope, state.WorkflowExecutionId, state.ExecutionLivenessStateId, tracking: true, cancellationToken);
         ExecutionLivenessState? replaced = null;
         if (entity is null)
-            context.ExecutionLivenessStates.Add(ToEntity(state, scope, 1));
+            context.ExecutionLivenessStates.Add(entity = ToEntity(state, scope, 1));
         else
         {
             replaced = Read(entity, scope, state.WorkflowExecutionId, state.ExecutionLivenessStateId);
@@ -50,11 +51,10 @@ public sealed class EfExecutionLivenessStateStore(
 
         try
         {
-            var revision = entity?.Revision ?? 1;
             var durable = SavesAreDurableAtOnce();
             await context.SaveChangesAsync(cancellationToken);
             if (durable)
-                RecordFenceCursor(scope, state, replaced, revision);
+                RecordFenceCursor(scope, state, replaced, entity);
             return state;
         }
         catch (DbUpdateConcurrencyException exception)
@@ -87,7 +87,7 @@ public sealed class EfExecutionLivenessStateStore(
         {
             if (entity is not null)
                 return new(ExecutionLivenessStateWriteStatus.RevisionConflict, entity.Revision);
-            context.ExecutionLivenessStates.Add(ToEntity(state, scope, 1));
+            context.ExecutionLivenessStates.Add(entity = ToEntity(state, scope, 1));
         }
         else
         {
@@ -107,7 +107,7 @@ public sealed class EfExecutionLivenessStateStore(
             var durable = SavesAreDurableAtOnce();
             await context.SaveChangesAsync(cancellationToken);
             if (durable)
-                RecordFenceCursor(scope, state, replaced, expectedRevision + 1);
+                RecordFenceCursor(scope, state, replaced, entity);
             return new(ExecutionLivenessStateWriteStatus.Saved, expectedRevision + 1);
         }
         catch (DbUpdateConcurrencyException)
@@ -130,10 +130,11 @@ public sealed class EfExecutionLivenessStateStore(
 
     /// <summary>
     /// Records what this store's own save made true: the ownership row of the run holds <paramref name="saved"/>'s
-    /// lease at <paramref name="revision"/>. The lease the row held before no longer has a cursor, unless it is the
-    /// same lease, as after a heartbeat. Rows that are not ownership rows have no cursor.
+    /// lease at the revision of <paramref name="row"/>, the row as it was written. The lease the row held before no
+    /// longer has a cursor, unless it is the same lease, as after a heartbeat. Rows that are not ownership rows have
+    /// no cursor.
     /// </summary>
-    private void RecordFenceCursor(string scope, ExecutionLivenessState saved, ExecutionLivenessState? replaced, long revision)
+    private void RecordFenceCursor(string scope, ExecutionLivenessState saved, ExecutionLivenessState? replaced, ExecutionLivenessStateEntity row)
     {
         if (!StringComparer.Ordinal.Equals(saved.ExecutionLivenessStateId, RuntimeExecutionOwnershipStateId.For(saved.WorkflowExecutionId)))
             return;
@@ -142,7 +143,7 @@ public sealed class EfExecutionLivenessStateStore(
         if (replaced?.ExecutionLease is { } previous && EfExecutionFenceCursors.Key.For(scope, previous) != held)
             FenceCursors!.Remove(EfExecutionFenceCursors.Key.For(scope, previous));
         if (held is { } key)
-            FenceCursors!.Hold(key, new(revision, saved.ExecutionLease!.AcquiredAt, saved.ExecutionLease.ExpiresAt));
+            FenceCursors!.Hold(key, new(row.Revision, saved.ExecutionLease!.ExpiresAt, row.SchemaVersion));
     }
 
     public async ValueTask<ExecutionLivenessState?> FindAsync(

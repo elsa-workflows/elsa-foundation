@@ -85,7 +85,15 @@ public static class RuntimeOperationalStateEntityFrameworkCoreRegistration
 
             var durableContract = ServiceDescriptor.Scoped<IDurableValueStateStore>(provider => provider.GetRequiredService<EfDurableValueStateStore>());
             var schedulerContract = ServiceDescriptor.Scoped<ISchedulerStateStore>(provider => provider.GetRequiredService<EfSchedulerStateStore>());
-            var livenessContract = ServiceDescriptor.Scoped<IExecutionLivenessStateStore>(provider => provider.GetRequiredService<EfExecutionLivenessStateStore>());
+            var livenessContract = ServiceDescriptor.Scoped<IExecutionLivenessStateStore>(provider =>
+            {
+                // The concrete store stays a plain type registration, as the other stores are. The contract is what
+                // the ownership service resolves, so this is where the store is handed the fence cursors. They
+                // exist when the EF checkpoint store is registered (AddRuntimeCheckpointCommitEntityFrameworkCore).
+                var store = provider.GetRequiredService<EfExecutionLivenessStateStore>();
+                store.FenceCursors = provider.GetService<EfExecutionFenceCursors>();
+                return store;
+            });
             var holdContract = ServiceDescriptor.Scoped<IWorkflowHoldStateStore>(provider => provider.GetRequiredService<EfWorkflowHoldStateStore>());
             var incidentContract = ServiceDescriptor.Scoped<IIncidentStateStore>(provider => provider.GetRequiredService<EfIncidentStateStore>());
             var attentionContract = ServiceDescriptor.Scoped<IWorkflowRuntimeAttentionQuery>(provider =>
@@ -109,13 +117,7 @@ public static class RuntimeOperationalStateEntityFrameworkCoreRegistration
             var durableConcrete = services.Last();
             services.AddScoped<EfSchedulerStateStore>();
             var schedulerConcrete = services.Last();
-            // A factory only so the store can be handed the fence cursors, which exist when the EF checkpoint store
-            // is registered (AddRuntimeCheckpointCommitEntityFrameworkCore).
-            services.AddScoped(provider => new EfExecutionLivenessStateStore(
-                provider.GetRequiredService<RuntimeDbContext>(),
-                provider.GetRequiredService<IPersistenceAccessContextAccessor>(),
-                provider.GetRequiredService<IRuntimeRecoveryContinuationCodec>())
-            { FenceCursors = provider.GetService<EfExecutionFenceCursors>() });
+            services.AddScoped<EfExecutionLivenessStateStore>();
             var livenessConcrete = services.Last();
             services.AddScoped<EfWorkflowHoldStateStore>();
             var holdConcrete = services.Last();

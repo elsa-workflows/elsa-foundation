@@ -110,7 +110,7 @@ public sealed class EfExecutionFenceCursorsTests
         Assert.Equal(1, cursors.Count);
     }
 
-    private static ExecutionFenceCursor At(long revision, int expiresInSeconds) => new(revision, Now, Now.AddSeconds(expiresInSeconds));
+    private static ExecutionFenceCursor At(long revision, int expiresInSeconds) => new(revision, Now.AddSeconds(expiresInSeconds), "1.0.0");
 
     private static ExecutionFenceCursor Get(EfExecutionFenceCursors cursors)
     {
