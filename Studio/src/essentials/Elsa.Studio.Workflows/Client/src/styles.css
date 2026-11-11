@@ -5466,14 +5466,17 @@ button.wf-reference-select {
   min-width: 0;
   border: 1px solid var(--wf-border);
   border-radius: var(--wf-radius);
-  background:
-    linear-gradient(color-mix(in srgb, var(--wf-bg) 58%, transparent) 0 0),
-    var(--wf-surface);
+  background-color: color-mix(in srgb, var(--wf-bg) 58%, var(--wf-panel-tone));
   color: var(--wf-text);
   font: inherit;
   font-size: 12px;
   outline: none;
   padding: 8px 9px;
+}
+
+.wf-property-row select:not([multiple]):not([size]),
+.wf-property-row select:not([multiple])[size="1"] {
+  padding-inline-end: 32px;
 }
 
 .wf-property-row select option {
