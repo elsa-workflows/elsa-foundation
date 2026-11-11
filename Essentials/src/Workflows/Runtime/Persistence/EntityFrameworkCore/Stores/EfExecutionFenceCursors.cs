@@ -25,6 +25,8 @@ internal readonly record struct ExecutionFenceCursor(long Revision, DateTimeOffs
 /// not known: the liveness store records
 /// one after its own save of the row with that lease, and a commit records one after its transaction committed. A
 /// revision of a row is never used twice, so a cursor is either the row as it is now or a revision the row has left.
+/// That rests on the database keeping every commit it acknowledged (owner decision on #2564; see
+/// <see cref="EfRuntimeCheckpointParticipantStaging.StageExecutionFenceBump"/>).
 /// A cursor that is behind therefore only ever makes the commit's bump match no row. That is why writers do not
 /// need to coordinate: of two cursors for one lease the higher revision is kept. A cursor that is lost or removed
 /// costs a read of the row. A cursor that is behind costs more: a save that is rolled back, and a second run of

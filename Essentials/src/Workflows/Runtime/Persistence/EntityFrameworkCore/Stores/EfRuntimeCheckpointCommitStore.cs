@@ -334,8 +334,9 @@ public sealed class EfRuntimeCheckpointCommitStore(
                 catch (DbUpdateConcurrencyException) when (fenceCursorBehind)
                 {
                     // The attempt has rolled back and nothing of it was saved. Run it again, reading the row. Only
-                    // the conflict itself is answered this way: when the rollback or the marker lookup after it
-                    // fails, that failure leaves.
+                    // the conflict itself is answered this way. A rollback that fails is swallowed, so the conflict
+                    // still arrives here and the commit runs again. When disposing the transaction or the marker
+                    // lookup after it fails, that failure leaves.
                     fenceCursorBehind = false;
                     mayUseFenceCursor = false;
                 }
@@ -351,18 +352,23 @@ public sealed class EfRuntimeCheckpointCommitStore(
                     // The attempt failed while staging or in its first save, before the row had confirmed its fence,
                     // and it has rolled back. A commit that reads the row first never stages or saves for a drain
                     // that had lost its run when the row was read: it is refused as stale. So look at the row once
-                    // before the failure leaves, and let a lost run leave as stale here too. When the look itself
-                    // fails, the failure leaves. The one thing not looked into is a cancellation of this call; an
-                    // OperationCanceledException while the call is not cancelled is a provider's timeout and is
-                    // looked into like any failure. A required root lease is looked into as well: it sends the
-                    // caller to take root write leases, which a drain that lost its run must not get to do.
+                    // before the failure leaves, and let a lost run leave as stale here too. The one thing not
+                    // looked into is a cancellation of this call; an OperationCanceledException while the call is
+                    // not cancelled is a provider's timeout and is looked into like any failure.
+                    //
+                    // When the look itself fails, there are two rules. After any failure but a required root lease,
+                    // the look's failure is swallowed and the first failure leaves. A required root lease is not
+                    // an end: it sends the caller to take root write leases, which a drain that lost its run must
+                    // not get to do, and a look that did not complete cannot say the run is still held. So after a
+                    // required root lease the look's own failure leaves, as a failed read of the row would.
                     fenceUnchecked = false;
                     try
                     {
                         await EfRuntimeCheckpointParticipantStaging.EnsureExecutionFenceAsync(
                             context, scope, commit.WorkflowExecutionId, commit.ExpectedFence!, _timeProvider, writeCancellationToken);
                     }
-                    catch (Exception lookFailure) when (lookFailure is not RuntimeStaleFencingTokenException)
+                    catch (Exception lookFailure) when (lookFailure is not RuntimeStaleFencingTokenException &&
+                        exception is not EfRuntimeCheckpointParticipantStaging.ExistingRootLeaseRequiredException)
                     {
                     }
 

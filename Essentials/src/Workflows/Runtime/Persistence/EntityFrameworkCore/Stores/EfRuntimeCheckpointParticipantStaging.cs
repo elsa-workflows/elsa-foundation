@@ -533,7 +533,8 @@ internal static class EfRuntimeCheckpointParticipantStaging
     /// <summary>
     /// Whether every entry a save conflicted on is an execution-liveness row. In a unit of work whose only write to
     /// that table is its fence bump, staged by <see cref="StageExecutionFenceAsync"/> or by
-    /// <see cref="StageExecutionFenceBump"/>, that means the fence row alone. The
+    /// <see cref="StageExecutionFenceBump"/>, that means the fence row alone. A conflict on the latter's bump never
+    /// reaches this filter: the commit store answers it first by running the commit again with a read of the row. The
     /// owner's lease heartbeat bumps that row's revision without changing the lease, so the unit of work can run
     /// again. The next attempt checks the fence again, so a real ownership change still fails as stale.
     /// </summary>

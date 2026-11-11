@@ -788,6 +788,56 @@ public sealed partial class EfRuntimeCheckpointCommitStoreTests
     }
 
     [Theory]
+    [InlineData("look-fails")]
+    [InlineData("call-cancelled")]
+    public async Task A_required_root_lease_whose_look_does_not_complete_leaves_with_the_looks_failure_and_the_root_lease_manager_is_not_asked(string how)
+    {
+        // A look that did not complete cannot say the run is still held. A commit that reads the ownership row first
+        // leaves with the failure of that read and never asks for a root write lease. So after a required root
+        // lease the look's own failure leaves, and the lease manager is not asked. The run here was deleted.
+        await using var database = await TestDatabase.CreateAsync();
+        var lease = await SeedRetainedRootAsync(database);
+        var clock = new FixedTimeProvider(OccurredAt);
+        var cursors = new EfExecutionFenceCursors(clock);
+        string stamp;
+        await using (var read = database.Open(CursorScope))
+            stamp = (await read.ExecutionLivenessStates.AsNoTracking().SingleAsync()).SchemaVersion;
+        cursors.Hold(CursorKey(lease), new(await OwnershipRevisionAsync(database), lease.ExpiresAt, stamp));
+        await using (var other = database.Open(CursorScope))
+            Assert.True(await new EfWorkflowExecutionStateStore(other, new FixedAccessor(CursorScope), new NoopContinuationCodec()).DeleteAsync(CursorRun));
+        using var call = new CancellationTokenSource();
+        // The look is the one read of the ownership row this commit makes outside its transaction.
+        var lookFails = new OnCommand(command => command.Transaction is null && IsOwnershipRead(command.CommandText))
+        {
+            Then = () => throw new InvalidOperationException("Simulated failure of the ownership read.")
+        };
+        // The pass that asks for the lease rolls back before the look. Cancelling there cancels between the two.
+        var cancelled = new OnRollback(call.Cancel);
+        var capture = new CommandCaptureInterceptor();
+        await using var context = how == "look-fails" ? database.Open(CursorScope, capture, lookFails) : database.Open(CursorScope, capture, cancelled);
+        var sessions = new AsyncLocalRuntimeCoalescingSessionAccessor();
+        using var hint = sessions.Push(RootHint());
+        var manager = new PassThroughRootWriteLeaseManager();
+        var store = new EfRuntimeCheckpointCommitStore(context, new FixedAccessor(CursorScope), clock, manager)
+        { CoalescingSessions = sessions, FenceCursors = cursors };
+        Func<Task> act = () => store.CommitAsync(RetainedRootCommit(lease), Decision(), call.Token).AsTask();
+
+        if (how == "look-fails")
+        {
+            Assert.Equal("Simulated failure of the ownership read.", (await Assert.ThrowsAsync<InvalidOperationException>(act)).Message);
+            Assert.Equal(1, lookFails.Hits);
+        }
+        else
+        {
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(act);
+            Assert.Equal(1, cancelled.Hits);
+        }
+
+        Assert.Empty(manager.LeaseIds);
+        Assert.Equal(0, OwnershipCommands(capture, 0).Writes);
+    }
+
+    [Theory]
     [InlineData("provider-timeout", true)]
     [InlineData("provider-timeout", false)]
     [InlineData("call-cancelled", true)]
@@ -1034,6 +1084,19 @@ public sealed partial class EfRuntimeCheckpointCommitStoreTests
                 Then();
             }
             return ValueTask.FromResult(result);
+        }
+    }
+
+    /// <summary>Runs <paramref name="then"/> once, after the first rollback of a transaction of the context.</summary>
+    private sealed class OnRollback(Action then) : DbTransactionInterceptor
+    {
+        public int Hits { get; private set; }
+
+        public override Task TransactionRolledBackAsync(DbTransaction transaction, TransactionEndEventData eventData, CancellationToken cancellationToken = default)
+        {
+            if (Hits++ == 0)
+                then();
+            return Task.CompletedTask;
         }
     }
 
