@@ -272,6 +272,29 @@ public sealed partial class EfWorkflowSchedulerPoisonStoreTests
     }
 
     [Fact]
+    public async Task Fenced_record_that_commits_marks_the_callers_other_changes_saved()
+    {
+        // The record's save also writes whatever else the caller had pending on the context, as the unfenced record
+        // does. The tracker accepts that save only after the commit. Once the commit has succeeded those changes are
+        // saved and must not be pending any more, or the caller's next save would write them a second time.
+        await using var database = await TestDatabase.CreateAsync();
+        await using var fixture = database.Open("tenant-a");
+        var clock = new FakeTimeProvider(Now);
+        var lease = await Node(fixture, "node-a", clock).AcquireAsync(OwnedWorkflow);
+        var sibling = SiblingRow();
+        fixture.Context.SchedulerStates.Add(sibling);
+
+        await FencedStore(fixture, clock).RecordFencedAsync(Record(1), lease.ToFence());
+
+        Assert.Equal(EntityState.Unchanged, fixture.Context.Entry(sibling).State);
+        Assert.Same(sibling, Assert.Single(fixture.Context.ChangeTracker.Entries()).Entity);
+        Assert.Equal(0, await fixture.Context.SaveChangesAsync());
+        await using var read = database.Open("tenant-a");
+        Assert.NotNull(await read.Store.FindAsync(OwnedWorkflow, "work-1"));
+        Assert.Single(await read.Context.SchedulerStates.ToArrayAsync());
+    }
+
+    [Fact]
     public async Task Fenced_record_whose_commit_fails_leaves_the_callers_other_changes_pending()
     {
         // The save inside the record's transaction would mark everything the caller had pending as saved. A commit

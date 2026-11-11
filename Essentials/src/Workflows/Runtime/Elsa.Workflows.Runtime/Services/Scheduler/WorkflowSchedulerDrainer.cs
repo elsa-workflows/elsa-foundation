@@ -418,9 +418,10 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
             // re-enqueues and records nothing. The step stays queued, unless a checkpoint commit earlier in this
             // dispatch already consumed its durable copy: outside a coalescing segment through the commit's own
             // consume (WasConsumedDurably), inside one through a boundary or cap-fold flush that advanced the durable
-            // queue. Then the item is gone and what the owner has is that commit. The check comes first, so a refusal costs one ownership read and no poison-store read or
-            // retry decision. Whether the poison store can record under the lease is settled here as well, before
-            // the acknowledgement. Without an ambient lease for this execution there is no check and no fence.
+            // queue. Then the item is gone and what the owner has is that commit. The check comes first, so a
+            // refusal costs one ownership read and no poison-store read or retry decision. Whether the poison store
+            // can record under the lease is settled here as well, before the acknowledgement. Without an ambient
+            // lease for this execution there is no check and no fence.
             var poisonFence = await EnsureOwnedAndResolvePoisonFenceAsync(workItem, activity, cancellationToken);
             var faultInfo = _faultCapturePolicy.Capture(exception);
             var innerFaultInfo = _faultCapturePolicy.CaptureInner(exception);
@@ -689,12 +690,14 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
         //
         // A fenced write that fails for any other reason says nothing about ownership: a write conflict the store
         // gave up on, a transaction it could not open, a capability that changed its answer. The drain owned the
-        // run when it was checked, so the record then goes the way it goes for a store without the capability, and
-        // an owning drain never ends with its step acknowledged and no record. The dispatch span is tagged with the
-        // type of the failure's cause, so a host whose fenced write keeps failing can see that its records are
-        // unfenced. The cancellation of this drain is let through as well; an OperationCanceledException raised
-        // while the drain's token is not cancelled is a failed write like any other. With no lease for this
-        // execution, or a store that cannot check it, the record is written unfenced.
+        // run when it was checked, so the record then goes the way it goes for a store without the capability. An
+        // owning drain therefore does not end with its step acknowledged and no record because the fenced write
+        // failed that way. It still can, as before, when its own token is cancelled here or when the unfenced
+        // RecordAsync fails as well. The dispatch span is tagged with the type of the failure's cause, so a host
+        // whose fenced write keeps failing can see that its records are unfenced. The cancellation of this drain is
+        // let through as well; an OperationCanceledException raised while the drain's token is not cancelled is a
+        // failed write like any other. With no lease for this execution, or a store that cannot check it, the
+        // record is written unfenced.
         if (poisonFence is { } fenced)
         {
             try

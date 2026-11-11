@@ -425,7 +425,9 @@ and records under the lease where the store can check it.
    Only a lost lease refuses the record. A fenced write that fails for any other reason, such as a write
    conflict the store did not retry or a transaction it could not open, says nothing about ownership. The drainer
    then writes the record through `RecordAsync`, as it does for a store without the capability, so a drain that
-   still owns its run never ends with its step acknowledged and no record. It tags the dispatch span with
+   still owns its run does not end with its step acknowledged and no record because the fenced write failed that
+   way. It can still end so, as before, when the drain's own token is cancelled at the record or when `RecordAsync`
+   itself fails. It tags the dispatch span with
    `elsa.poison.fence_fallback` and the type of the failure's innermost exception. That record is unfenced:
    if the lease was also lost since the check, it is written all the same, and what is left is what the second
    case above leaves. Cancellation of the drain is let through like the stale exception. An

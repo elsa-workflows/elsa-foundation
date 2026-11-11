@@ -11,9 +11,10 @@ namespace Elsa.Workflows.Runtime.Core.Contracts;
 /// <remarks>
 /// <para>
 /// A drain that lost its run keeps running until one of its own writes is refused. If a work handler throws in that
-/// time, its poison record would land on a run that another node now runs. The drainer checks the lease before it
-/// touches the faulted step; this capability covers the time between that check and the record. A record written
-/// through it cannot land on a run that changed owner in that time. It is not a guarantee for every record. The
+/// time, its poison record would land on a run that another node now runs. A drainer that has the ownership service
+/// checks the lease before it touches the faulted step; this capability covers the time between that check and the
+/// record, and the whole fault for a drainer without the service. A record written through it cannot land on a run
+/// that changed owner in that time. It is not a guarantee for every record. The
 /// drainer writes the record without the fence when no lease for the run is ambient, when the store lacks this
 /// capability or reports <see cref="CanRecordFenced"/> as <see langword="false"/>, when the store could not say
 /// whether it can check, and when the fenced write fails for a reason other than a lost lease.
@@ -51,8 +52,8 @@ public interface ISchedulerPoisonFenceCapability
     /// The drainer treats only <see cref="RuntimeStaleFencingTokenException"/> as a refusal of the record. After any
     /// other failure of this call, except the cancellation of <paramref name="cancellationToken"/>, it writes the
     /// record through <see cref="IWorkflowSchedulerPoisonStore.RecordAsync"/>, without the fence. An
-    /// <see cref="OperationCanceledException"/> raised while that token is not cancelled is such a failure. So a failure that could be a
-    /// lost lease, such as a write conflict on the ownership state, must leave as
+    /// <see cref="OperationCanceledException"/> raised while that token is not cancelled is such a failure. So a
+    /// failure that could be a lost lease, such as a write conflict on the ownership state, must leave as
     /// <see cref="RuntimeStaleFencingTokenException"/> when the lease is no longer the caller's.
     /// </remarks>
     /// <exception cref="RuntimeStaleFencingTokenException">

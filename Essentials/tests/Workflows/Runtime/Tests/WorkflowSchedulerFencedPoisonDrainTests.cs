@@ -138,11 +138,12 @@ public sealed class WorkflowSchedulerFencedPoisonDrainTests
     [InlineData(true)]
     public async Task DrainAsync_HandlerFaultWhenThePoisonStoreCannotCheckTheFence_RecordsPoisonUnfenced(bool hasCapability)
     {
-        // A decorator that does not forward the capability, and a store whose ownership state lives in another
-        // backend, both leave the record unfenced. The drain owns the run when it checks, and loses it while the
-        // step is acknowledged; the record is written all the same.
+        // Two stores that leave the record unfenced. One has the capability and says it cannot check: its ownership
+        // state lives in another backend. The other can check, behind a decorator that does not forward the
+        // capability. The drain owns the run when it checks, and loses it while the step is acknowledged; a fenced
+        // record would be refused then, and the record is written all the same.
         var fixture = NewFixture();
-        var inner = new InMemoryWorkflowSchedulerPoisonStore();
+        var inner = hasCapability ? new InMemoryWorkflowSchedulerPoisonStore() : fixture.FencedPoisonStore;
         IWorkflowSchedulerPoisonStore store = hasCapability ? new CountingFencedPoisonStore(inner) : new PlainPoisonStore(inner);
         using var scope = fixture.Accessor.Push(await fixture.NodeA.AcquireAsync(WorkflowExecutionId));
         var drainer = fixture.NewDrainer(store);
@@ -152,7 +153,7 @@ public sealed class WorkflowSchedulerFencedPoisonDrainTests
         var result = await drainer.DrainAsync(new RuntimeSchedulerDrainRequest(WorkflowExecutionId));
 
         Assert.True(result.StoppedOnFault);
-        Assert.False(inner.CanRecordFenced);
+        Assert.Equal(!hasCapability, inner.CanRecordFenced);
         Assert.Single(await inner.ListAsync(WorkflowExecutionId));
         if (store is CountingFencedPoisonStore counting)
             Assert.Equal((0, 1), (counting.FencedRecords, counting.UnfencedRecords));

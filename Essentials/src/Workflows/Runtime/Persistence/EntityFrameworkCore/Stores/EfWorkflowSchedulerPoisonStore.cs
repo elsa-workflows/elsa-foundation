@@ -68,7 +68,9 @@ public sealed class EfWorkflowSchedulerPoisonStore(
     /// accepted by the change tracker only after the commit succeeded, so after a failed commit whatever else the
     /// caller had pending on the context is still pending.
     /// </remarks>
-    /// <exception cref="RuntimeStaleFencingTokenException">The fence is not the run's current, unexpired lease. Nothing was written.</exception>
+    /// <exception cref="RuntimeStaleFencingTokenException">
+    /// The fence is not the run's current, unexpired lease. Nothing was written.
+    /// </exception>
     /// <exception cref="EfPoisonStoreException">
     /// A provider failure, with the provider's exception as its inner exception. That includes an
     /// <see cref="OperationCanceledException"/> raised while <paramref name="cancellationToken"/> is not cancelled,
