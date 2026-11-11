@@ -228,14 +228,16 @@ class RestrictedIdentityTests(unittest.TestCase):
         self.addCleanup(self.temporary.cleanup)
         self.root = Path(self.temporary.name)
         self.store = self.root / 'elsa.db'
-        encode = acceptance.encode_identity_set
+        # Stored the way the real converters write them: every text column through IdentityEntityFrameworkUtf16Codec,
+        # set columns as an IdentityApplicationSetCodec payload that is itself a text column.
+        encode, text = acceptance.encode_identity_set, acceptance.encode_identity_text
         with closing(sqlite3.connect(self.store)) as db, db:
             db.execute('create table identity_users (Id text primary key, TenantId text, UserId text, UserName text, RoleIdsJson text, DirectPermissionsJson text, PasswordHash text)')
             db.execute('create table identity_roles (Id text primary key, TenantId text, RoleId text, Name text, PermissionsJson text)')
             db.execute('create table identity_tenant_memberships (Id text primary key, TenantId text, UserId text, Status integer, RoleIdsJson text, DirectPermissionsJson text)')
-            db.execute('insert into identity_users values (?, ?, ?, ?, ?, ?, ?)', ('u-key', 'default', 'reader-id', acceptance.RESTRICTED_USER, encode(['role-id']), encode([]), 'AQAAAA-real-hash'))
-            db.execute('insert into identity_roles values (?, ?, ?, ?, ?)', ('r-key', 'default', 'role-id', acceptance.RESTRICTED_SEED_ROLE, encode(['*', 'identity/providers:read'])))
-            db.execute('insert into identity_tenant_memberships values (?, ?, ?, ?, ?, ?)', ('m-key', 'default', 'reader-id', 1, encode(['role-id']), encode([])))
+            db.execute('insert into identity_users values (?, ?, ?, ?, ?, ?, ?)', ('u-key', text('default'), text('reader-id'), text(acceptance.RESTRICTED_USER), encode(['role-id']), encode([]), text('AQAAAA-real-hash')))
+            db.execute('insert into identity_roles values (?, ?, ?, ?, ?)', ('r-key', text('default'), text('role-id'), text(acceptance.RESTRICTED_SEED_ROLE), encode(['*', 'identity/providers:read'])))
+            db.execute('insert into identity_tenant_memberships values (?, ?, ?, ?, ?, ?)', ('m-key', text('default'), text('reader-id'), 1, encode(['role-id']), encode([])))
         (self.root / 'other.db').write_bytes(b'')
         (self.root / 'not-sqlite.db').write_bytes(b'not a database file at all, just bytes' * 4)
 
@@ -245,11 +247,20 @@ class RestrictedIdentityTests(unittest.TestCase):
                               'from identity_users u, identity_tenant_memberships m, identity_roles r').fetchone()
 
     def test_set_codec_matches_the_identity_application_set_format(self):
-        self.assertEqual('[]', acceptance.encode_identity_set([]))
-        self.assertEqual('["YQA="]', acceptance.encode_identity_set(['a']))
+        self.assertEqual('[]', acceptance.identity_set_payload([]))
+        self.assertEqual('["YQA="]', acceptance.identity_set_payload(['a']))
         # System.Text.Json's default encoder writes '+' as \u002B; values are ordinal-sorted and de-duplicated.
-        self.assertEqual('["YQA=","\\u002BwA="]', acceptance.encode_identity_set(['\u00fb', 'a', 'a']))
+        self.assertEqual('["YQA=","\\u002BwA="]', acceptance.identity_set_payload(['\u00fb', 'a', 'a']))
         self.assertEqual(['a', '\u00fb'], acceptance.decode_identity_set(acceptance.encode_identity_set(['\u00fb', 'a'])))
+
+    def test_text_columns_match_a_real_workbench_store(self):
+        # Values read from a Workbench store the real seeder wrote: UserName 'admin', TenantId 'default', and the
+        # opening of a RoleIdsJson column whose payload is a JSON array of encoded role ids.
+        self.assertEqual('YQBkAG0AaQBuAA==', acceptance.encode_identity_text('admin'))
+        self.assertEqual('ZABlAGYAYQB1AGwAdAA=', acceptance.encode_identity_text('default'))
+        self.assertEqual('admin', acceptance.decode_identity_text('YQBkAG0AaQBuAA=='))
+        self.assertTrue(acceptance.encode_identity_set(['seed-role-1']).startswith('WwAiAGMAdwBCAGwAQQBHAFUAQQBaAEEAQQB0AEEA'))
+        self.assertNotEqual(acceptance.identity_set_payload([]), acceptance.encode_identity_set([]), 'A set column is not its bare payload')
 
     def test_reader_keeps_its_seeded_account_and_holds_exactly_the_three_grants(self):
         before = self.rows()
@@ -267,9 +278,9 @@ class RestrictedIdentityTests(unittest.TestCase):
 
     def test_unexpected_store_shapes_fail_setup_without_writing(self):
         cases = {
-            'second account': 'insert into identity_users values (\'a-key\', \'default\', \'admin-id\', \'admin\', \'[]\', \'[]\', null)',
+            'second account': f"insert into identity_users values ('a-key', '{acceptance.encode_identity_text('default')}', '{acceptance.encode_identity_text('admin-id')}', '{acceptance.encode_identity_text('admin')}', '{acceptance.encode_identity_set([])}', '{acceptance.encode_identity_set([])}', null)",
             'missing seed role': 'delete from identity_roles',
-            'unexpected role grant': 'update identity_users set RoleIdsJson = \'[]\'',
+            'unexpected role grant': f"update identity_users set RoleIdsJson = '{acceptance.encode_identity_set([])}'",
             'existing direct grant': f"update identity_users set DirectPermissionsJson = '{acceptance.encode_identity_set(['*'])}'",
             'missing membership': 'delete from identity_tenant_memberships',
         }

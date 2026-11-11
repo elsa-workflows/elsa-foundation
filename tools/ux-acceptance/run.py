@@ -237,14 +237,28 @@ def write_overlay(project, destination, studio_url, remove=(), seed=None):
     (destination / 'shells.json').write_text(json.dumps(compose_shells(shells, studio_url, remove, seed)))
 
 
-def encode_identity_set(values):
-    """Identity IAM set columns: an ordinal-sorted JSON array of base64 UTF-16LE values (IdentityApplicationSetCodec)."""
-    encoded = [base64.b64encode(value.encode('utf-16-le')).decode('ascii') for value in sorted(set(values))]
+def encode_identity_text(value):
+    """Every Identity IAM text column is stored as base64 UTF-16LE (IdentityEntityFrameworkUtf16Codec), never as plain text."""
+    return base64.b64encode(value.encode('utf-16-le')).decode('ascii')
+
+
+def decode_identity_text(text):
+    return base64.b64decode(text, validate=True).decode('utf-16-le')
+
+
+def identity_set_payload(values):
+    """IdentityApplicationSetCodec: an ordinal-sorted JSON array of base64 UTF-16LE values."""
+    encoded = [encode_identity_text(value) for value in sorted(set(values))]
     return json.dumps(encoded, separators=(',', ':')).replace('+', '\\u002B')
 
 
+def encode_identity_set(values):
+    """A set column's stored value: the set payload, itself stored through the text-column codec."""
+    return encode_identity_text(identity_set_payload(values))
+
+
 def decode_identity_set(text):
-    return sorted(base64.b64decode(value).decode('utf-16-le') for value in json.loads(text or '[]'))
+    return sorted(decode_identity_text(value) for value in json.loads(decode_identity_text(text)))
 
 
 def identity_store(root):
@@ -278,18 +292,20 @@ def restrict_seeded_reader(root, user=RESTRICTED_USER, role=RESTRICTED_SEED_ROLE
         with db:
             if db.execute('select count(*) from identity_users').fetchone()[0] != 1:
                 raise RuntimeError('The restricted reader must be the only account in a freshly seeded store')
-            key, tenant, subject, role_ids, direct = one(db, 'select Id, TenantId, UserId, RoleIdsJson, DirectPermissionsJson from identity_users where UserName = ?', (user,), 'seeded reader')
-            role_key, role_id = one(db, 'select Id, RoleId from identity_roles where TenantId = ? and Name = ?', (tenant, role), 'seed role')
+            # Lookups compare stored (encoded) values; tenant and subject are passed back exactly as stored.
+            key, tenant, subject, role_ids, direct = one(db, 'select Id, TenantId, UserId, RoleIdsJson, DirectPermissionsJson from identity_users where UserName = ?', (encode_identity_text(user),), 'seeded reader')
+            role_key, role_id = one(db, 'select Id, RoleId from identity_roles where TenantId = ? and Name = ?', (tenant, encode_identity_text(role)), 'seed role')
             member_key, member_roles, member_permissions = one(db, 'select Id, RoleIdsJson, DirectPermissionsJson from identity_tenant_memberships where TenantId = ? and UserId = ?', (tenant, subject), 'tenant membership')
             before = {'userRoleIds': decode_identity_set(role_ids), 'userDirectPermissions': decode_identity_set(direct),
                       'membershipRoleIds': decode_identity_set(member_roles), 'membershipDirectPermissions': decode_identity_set(member_permissions)}
+            role_id = decode_identity_text(role_id)
             if before != {'userRoleIds': [role_id], 'userDirectPermissions': [], 'membershipRoleIds': [role_id], 'membershipDirectPermissions': []}:
                 raise RuntimeError(f'The seeded reader does not have the seeder shape: {before}')
             db.execute('update identity_users set RoleIdsJson = ?, DirectPermissionsJson = ? where Id = ?', (encode_identity_set([]), encode_identity_set(permissions), key))
             db.execute('update identity_tenant_memberships set RoleIdsJson = ?, DirectPermissionsJson = ? where Id = ?', (encode_identity_set([]), encode_identity_set([]), member_key))
             # The framework UserRole link the seeder materialized stays, but its role can no longer grant anything.
             db.execute('update identity_roles set PermissionsJson = ? where Id = ?', (encode_identity_set([]), role_key))
-        _, _, _, role_ids, direct = one(db, 'select Id, TenantId, UserId, RoleIdsJson, DirectPermissionsJson from identity_users where UserName = ?', (user,), 'seeded reader')
+        _, _, _, role_ids, direct = one(db, 'select Id, TenantId, UserId, RoleIdsJson, DirectPermissionsJson from identity_users where Id = ?', (key,), 'seeded reader')
         _, member_roles, member_permissions = one(db, 'select Id, RoleIdsJson, DirectPermissionsJson from identity_tenant_memberships where Id = ?', (member_key,), 'tenant membership')
         (role_permissions,) = one(db, 'select PermissionsJson from identity_roles where Id = ?', (role_key,), 'seed role')
     after = {'userRoleIds': decode_identity_set(role_ids), 'userDirectPermissions': decode_identity_set(direct),
@@ -297,7 +313,7 @@ def restrict_seeded_reader(root, user=RESTRICTED_USER, role=RESTRICTED_SEED_ROLE
              'seedRolePermissions': decode_identity_set(role_permissions)}
     if after != {'userRoleIds': [], 'userDirectPermissions': sorted(permissions), 'membershipRoleIds': [], 'membershipDirectPermissions': [], 'seedRolePermissions': []}:
         raise RuntimeError(f'Restricted grants did not persist: {after}')
-    return {'tenant': tenant, 'subject': subject, 'userName': user, 'seedRole': role, 'before': before, 'after': after,
+    return {'tenant': decode_identity_text(tenant), 'subject': decode_identity_text(subject), 'userName': user, 'seedRole': role, 'before': before, 'after': after,
             'authority': 'real Workbench first-boot seeder, then grant columns narrowed in the owned store before the acceptance boot',
             # The generated password stays out of this receipt and report.json; Playwright traces still record the sign-in.
             'passwordInReceipt': False}
