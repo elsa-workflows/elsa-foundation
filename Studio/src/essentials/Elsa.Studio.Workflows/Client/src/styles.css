@@ -6918,7 +6918,11 @@ button.wf-reference-select {
   .wf-editor *::before,
   .wf-editor *::after,
   .wf-lazy-state,
-  .wf-lazy-state * {
+  .wf-lazy-state *,
+  .wf-tokens,
+  .wf-tokens *,
+  .wf-tokens *::before,
+  .wf-tokens *::after {
     animation-duration: 0.001ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.001ms !important;
