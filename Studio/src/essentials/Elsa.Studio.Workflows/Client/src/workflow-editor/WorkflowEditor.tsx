@@ -1143,6 +1143,7 @@ export function WorkflowEditor({
     enabled: !documentAdapter && !isBpmnDesigner,
     draft,
     persistedDraft,
+    saving,
     catalogByVersion,
     validationErrors: combinedValidationErrors,
     revealActivity: repairVariableReference

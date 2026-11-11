@@ -26,11 +26,22 @@ export const activityResultExpressionDescriptor: StudioExpressionDescriptor = {
   editingMode: "reference"
 };
 
+/**
+ * The syntax-picker entry that opens Choose data on an eligible input that holds something else. Picking it switches
+ * nothing: the input changes only once an output is chosen, so cancelling leaves it as it was.
+ */
+export const chooseActivityOutputDescriptor: StudioExpressionDescriptor = {
+  ...activityResultExpressionDescriptor,
+  displayName: "Activity output…"
+};
+
 /** What the host knows about an activity in the current document, for readable provenance. */
 export interface ActivityDataProducerDescription {
   label: string;
   /** Display names of the producer's declared outputs, by output reference key. */
   outputLabels: Readonly<Record<string, string>>;
+  /** True when another activity in the document has the same label, so the node id is shown beside it. */
+  sharesLabel?: boolean;
 }
 
 /** A server finding about one input of the last saved document. */
@@ -48,7 +59,10 @@ export interface ActivityDataSelectionHost {
   documentRevision: string;
   /** The acknowledged saved revision a request is checked against; a stale answer is asked again once it moves. */
   baseRevision: string;
-  requestSources(target: ActivityDataTarget, signal: AbortSignal): Promise<ActivityDataContextResult>;
+  /** True while the owner's own save is in flight: a stale answer then means "wait", not "changed elsewhere". */
+  saving: boolean;
+  /** One page of the sources for the current document, starting at `skip`. */
+  requestSources(target: ActivityDataTarget, signal: AbortSignal, skip: number): Promise<ActivityDataContextResult>;
   /** Null when the activity is not in the current document. */
   describeActivity(nodeId: string): ActivityDataProducerDescription | null;
   revealActivity?(nodeId: string): void;
@@ -79,9 +93,16 @@ export function readActivityResultReference(value: unknown): ActivityResultRefer
 export function offersActivityData(input: StudioActivityInputDescriptor, readOnly: boolean, propertyEditorId: string | undefined) {
   if (readOnly || input.isReadOnly === true || input.isWrapped === false) return false;
   if (acceptsOnlySecretReference(input) || input.isSensitive === true || input.uiHint?.toLowerCase() === "password") return false;
-  if (input.connectionType?.trim()) return false;
+  // Mirrors the server's connection rule: a declared connection type, or the connection reference type itself.
+  if (input.connectionType?.trim() || unqualifiedTypeName(input.typeName) === connectionReferenceType) return false;
   if (propertyEditorId && !builtInPropertyEditorIds.has(propertyEditorId)) return false;
   return readActivityInputOptionsProvider(input) == null;
+}
+
+const connectionReferenceType = "Elsa.Activities.Runtime.Core.Models.ConnectionReference";
+
+function unqualifiedTypeName(typeName: string | null | undefined) {
+  return (typeName ?? "").split(",", 1)[0]!.trim();
 }
 
 /** The host's general-purpose value editors; the masked editor is excluded with masked inputs above. */
@@ -102,6 +123,33 @@ const builtInPropertyEditorIds = new Set([
  */
 export const wholeOutputLabel = "Whole output";
 
+/** Pages of 100 are read until the server has no more or this many pages were read (1,000 sources). */
+export const sourcePageSize = 100;
+export const maximumSourcePages = 10;
+
+/**
+ * Reads the sources for one input page by page. The server lists workflow inputs and variables before activity
+ * outputs, so the first page can hold none of the outputs; reading on keeps a workflow with many inputs or variables
+ * from looking as if it had no outputs. Every page answers the same request identity; the first non-listing answer
+ * (stale, denied, …) or an aborted signal ends the read. A result still marked `hasMoreSources` stopped at the bound.
+ */
+export async function collectSourcePages(
+  requestPage: (skip: number) => Promise<ActivityDataContextResult>,
+  signal: AbortSignal
+): Promise<ActivityDataContextResult> {
+  let combined: ActivityDataContextResult | null = null;
+  for (let page = 0; page < maximumSourcePages; page++) {
+    const result = await requestPage(page * sourcePageSize);
+    if (signal.aborted) throw new DOMException("The request was aborted.", "AbortError");
+    if (result.state !== "supported" && result.state !== "empty") return result;
+    combined = combined
+      ? { ...result, target: combined.target ?? result.target, sources: [...combined.sources, ...result.sources] }
+      : result;
+    if (!result.hasMoreSources) break;
+  }
+  return { ...combined!, state: combined!.sources.length > 0 ? "supported" : "empty" };
+}
+
 export interface ActivityDataSourceOption {
   source: ActivityDataSourceFacts;
   producerNodeId: string;
@@ -115,7 +163,10 @@ export interface ActivityDataSourceOption {
 export interface ActivityDataProducerGroup {
   producerNodeId: string;
   label: string;
-  /** The node id, shown when another listed activity has the same label, so the two stay distinguishable. */
+  /**
+   * The node id, shown when another activity in the document or in the list has the same label, so the two stay
+   * distinguishable here and on the stored reference alike.
+   */
   disambiguation: string | null;
   /**
    * The reason, when none of the producer's listed outputs can be chosen and all for the same reason. It is shown once
@@ -140,7 +191,8 @@ export function groupActivityOutputSources(
     const producer = describeActivity(identity.producerNodeId);
     let group = groups.get(identity.producerNodeId);
     if (!group) {
-      group = { producerNodeId: identity.producerNodeId, label: producer?.label ?? identity.producerNodeId, disambiguation: null, sharedUnavailableReason: null, options: [] };
+      group = { producerNodeId: identity.producerNodeId, label: producer?.label ?? identity.producerNodeId,
+        disambiguation: producer?.sharesLabel ? identity.producerNodeId : null, sharedUnavailableReason: null, options: [] };
       groups.set(identity.producerNodeId, group);
     }
     group.options.push({
@@ -173,41 +225,48 @@ export function describeOutput(projectionKey: string, producer: ActivityDataProd
   return producer?.outputLabels[projectionKey] || projectionKey;
 }
 
+/**
+ * Where an author keeps a value from a run they cannot name directly: the producer's Outputs tab captures an output
+ * into a variable ("Capture into"), and a variable holds the latest value written to it.
+ */
+const variableAdvice = "To use its latest output, capture that output into a variable on the activity's Outputs tab.";
+
 /** Plain explanations for the authoring contract's reason codes, in its order. */
 export function describeUnavailableSource(reasonCode: string | null): string {
   switch (reasonCode) {
     case "ConditionalOccurrence":
-      return "Runs only on some paths to this input, so its output might be missing.";
+      return "This activity runs on only some paths to this input, so its output might be missing.";
     case "AvailabilityUnknown":
       return "Studio can't tell whether this activity always runs before this input.";
     case "UnavailableProducer":
-      return "This activity doesn't run before this input.";
+      return "This activity doesn't always run before this input.";
     case "EarlierProducerRun":
-      return "Can run more than once before this input, for example in a loop. Pass its output through a variable instead.";
+      return `This activity can run more than once before this input (for example in a loop), so Studio can't tell which run to use. ${variableAdvice}`;
     case "NoTypedResult":
-      return "This activity doesn't declare an output value.";
+      return "This activity doesn't produce a whole output.";
     default:
-      return "This output can't be chosen for this input.";
+      return "This output can't be used for this input.";
   }
 }
 
 /** Explains a server finding about a stored activity output; null for findings unrelated to its source. */
 export function describeReferenceFinding(finding: ActivityDataInputFinding): string | null {
   switch (finding.type) {
+    // The server reports a producer that is not certain to run first as UnavailableProducer, conditional or not.
     case "ValueFlow/UnavailableProducer":
-      return "The source activity doesn't run on every path to this input. Choose another output or clear it.";
+      return "The source activity doesn't always run before this input. Replace it or clear it.";
     case "ValueFlow/EarlierProducerRun":
-      return "The source activity can run more than once before this input. Choose another output or clear it.";
+      return "The source activity can run more than once before this input, so Studio can't tell which run to use. Replace it or clear it.";
     case "ValueFlow/CyclicBackEdge":
-      return "The source activity is reached again through a loop. Choose another output or clear it.";
+      return "The source activity is reached again through a loop. Replace it or clear it.";
     case "ValueFlow/ScopeBoundary":
-      return "The source activity is inside a container this input can't read from. Choose another output or clear it.";
+      return "The source activity is inside a container this input can't read from. Replace it or clear it.";
     case "ActivityData/UnknownProjection":
     case "ActivityData/UnknownProducerContract":
-      return "The source activity no longer declares this output. Choose another output or clear it.";
+      return "The source activity no longer has this output. Replace it or clear it.";
     default:
       return finding.type.startsWith("ValueFlow/") || finding.type.startsWith("ActivityData/")
-        ? finding.message || "This output can't be read here. Choose another output or clear it."
+        ? "This output can't be used here. Replace it or clear it."
         : null;
   }
 }

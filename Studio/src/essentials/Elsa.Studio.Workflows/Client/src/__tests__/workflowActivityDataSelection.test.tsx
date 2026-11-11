@@ -6,7 +6,7 @@ import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { canonicalizeStateForWire } from "../activityInputWire";
 import type { ActivityDataSelectionHost } from "../activityDataSelection";
 import { clearApiCapabilityCache } from "../api/capabilities";
-import { getDraftRevision } from "../workflow-editor/editorHelpers";
+import { getDraftContentRevision } from "../workflow-editor/editorHelpers";
 import { useWorkflowActivityDataSelection } from "../workflow-editor/useWorkflowActivityDataSelection";
 import type { ActivityCatalogItem, ActivityNode, ValidationError, WorkflowDraft } from "../workflowTypes";
 
@@ -48,6 +48,7 @@ function render(endpoint: StudioEndpointContext, initial: HarnessProps, revealAc
       enabled: props.enabled,
       draft: props.draft,
       persistedDraft: props.persistedDraft,
+      saving: false,
       catalogByVersion: catalog,
       validationErrors: props.validationErrors,
       revealActivity
@@ -119,9 +120,9 @@ describe("workflow Choose data host", () => {
     render(context, { draft: live, persistedDraft: saved, enabled: true, validationErrors: [] });
     await vi.waitFor(() => expect(current).not.toBeNull());
 
-    expect(current!.documentRevision).toBe(getDraftRevision(live));
+    expect(current!.documentRevision).toBe(getDraftContentRevision(live));
     expect(current!.baseRevision).toBe("base-2");
-    const result = await current!.requestSources({ nodeId: "consumer", inputKey: "customerId" }, new AbortController().signal);
+    const result = await current!.requestSources({ nodeId: "consumer", inputKey: "customerId" }, new AbortController().signal, 0);
 
     expect(result.state).toBe("empty");
     const body = postJson.mock.calls[0]![1];
@@ -129,7 +130,7 @@ describe("workflow Choose data host", () => {
       definitionId: "definition-1",
       draftId: "draft-1",
       expectedBaseRevision: "base-2",
-      documentRevision: getDraftRevision(live),
+      documentRevision: getDraftContentRevision(live),
       nodeId: "consumer",
       inputKey: "customerId",
       snapshot: canonicalizeStateForWire(live.state)
@@ -142,7 +143,7 @@ describe("workflow Choose data host", () => {
     render(context, { draft: draft("C-1"), persistedDraft: draft("C-1", { authoringRevision: "base-1" }), enabled: true, validationErrors: [] });
     await vi.waitFor(() => expect(current).not.toBeNull());
 
-    expect(current!.describeActivity("producer")).toEqual({ label: "Load the customer", outputLabels: { "customer-id": "Customer ID" } });
+    expect(current!.describeActivity("producer")).toEqual({ label: "Load the customer", outputLabels: { "customer-id": "Customer ID" }, sharesLabel: false });
     expect(current!.describeActivity("removed")).toBeNull();
   });
 
@@ -176,7 +177,7 @@ describe("workflow Choose data host", () => {
 
     flushSync(() => rerender({ enabled: true }));
     await vi.waitFor(() => expect(current).not.toBeNull());
-    await expect(current!.requestSources({ nodeId: "consumer", inputKey: "customerId" }, new AbortController().signal)).rejects.toThrow();
+    await expect(current!.requestSources({ nodeId: "consumer", inputKey: "customerId" }, new AbortController().signal, 0)).rejects.toThrow();
     expect(supported.postJson).not.toHaveBeenCalled();
   });
 });

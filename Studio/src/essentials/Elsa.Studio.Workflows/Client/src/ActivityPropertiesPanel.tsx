@@ -80,10 +80,12 @@ import type { ActivityDataBinding } from "./api/activityDataSelection";
 import {
   activityResultExpressionDescriptor,
   activityResultSyntax,
+  chooseActivityOutputDescriptor,
   offersActivityData,
   type ActivityDataSelectionHost
 } from "./activityDataSelection";
-import { ActivityDataSelectionProvider, ChooseDataButton } from "./ActivityDataChooser";
+import { ActivityDataSelectionProvider, ChooseDataButton, focusBeside, useActivityDataSelectionAvailable } from "./ActivityDataChooser";
+import { ActivityOutputIcon } from "./activityOutputIcon";
 
 const inlineTextEditorIds = new Set([
   "studio.property.singleline",
@@ -602,11 +604,18 @@ function PropertyRow({
   const editor = resolveEditor(editors, effectiveInput, context);
   const wrapped = input.isWrapped !== false ? readWrappedInput(activity, input) : null;
   const syntax = wrapped?.expression.type ?? (secretOnly ? secretSyntax : "Literal");
+  const dataSelectionAvailable = useActivityDataSelectionAvailable();
+  const offersChooseData = dataSelectionAvailable && wrapped != null && syntax !== activityResultSyntax &&
+    offersActivityData(input, readOnly, editor?.id);
   // A stored activity output is a reference the server's expression catalog does not list. Naming it lets the syntax
-  // picker show the current mode and keep the way back to a fixed value or an expression.
-  const rowDescriptors = syntax === activityResultSyntax && !expressionDescriptors.some(descriptor => descriptor.type === syntax)
+  // picker show the current mode and keep the way back to a fixed value or an expression. Where Choose data is
+  // offered, the picker also lists "Activity output…", which opens the chooser without switching anything yet.
+  const listsActivityOutput = expressionDescriptors.some(descriptor => descriptor.type === activityResultSyntax);
+  const rowDescriptors = syntax === activityResultSyntax && !listsActivityOutput
     ? [...expressionDescriptors, activityResultExpressionDescriptor]
-    : expressionDescriptors;
+    : offersChooseData && !listsActivityOutput
+      ? [...expressionDescriptors, chooseActivityOutputDescriptor]
+      : expressionDescriptors;
   const syntaxDescriptors = secretOnly
     ? rowDescriptors.filter(descriptor => descriptor.type === secretSyntax)
     : rowDescriptors;
@@ -771,6 +780,7 @@ function PropertyRow({
     replacesValue: boolean;
     discardedBindingCount: number;
   } | null>(null);
+  const [chooser, setChooser] = useState<{ nodeId: string; from: "trigger" | "syntax" } | null>(null);
   const rowRef = useRef<HTMLDivElement>(null);
   const portalThemeRef = useRef<HTMLDivElement>(null);
   const cancelTransitionRef = useRef<HTMLButtonElement>(null);
@@ -888,6 +898,8 @@ function PropertyRow({
 
   const getUnavailableReason = (descriptor: StudioExpressionDescriptor): string | null => {
     if (descriptor.editingMode === "literal" || descriptor.editingMode === "text") return null;
+    // Listed only where Choose data is offered; it opens the chooser rather than an editor of its own.
+    if (descriptor === chooseActivityOutputDescriptor) return null;
     const targetContext = makeExpressionContext(descriptor.type);
     const candidates = expressionEditors.filter(editor => editor.supports(targetContext));
     if (!candidates.some(editor => !!editor.surfaces.inline)) {
@@ -931,6 +943,11 @@ function PropertyRow({
 
   const setSyntax = (nextSyntax: string) => {
     if (!wrapped || nextSyntax === syntax) return;
+    // "Activity output…" opens the chooser; the input changes only once an output is chosen.
+    if (nextSyntax === activityResultSyntax && offersChooseData) {
+      setChooser({ nodeId: activity.nodeId, from: "syntax" });
+      return;
+    }
     const nextDescriptor = expressionDescriptors.find(descriptor => descriptor.type === nextSyntax);
     if (!nextDescriptor || getUnavailableReason(nextDescriptor)) return;
     const transitionValue = portableDefinition?.source ?? value;
@@ -971,8 +988,9 @@ function PropertyRow({
   // syntax switch does; an untouched input has nothing to lose.
   const chooseData = (binding: ActivityDataBinding) => {
     if (!wrapped) return;
-    const descriptor = rowDescriptors.find(candidate => candidate.type === binding.expressionType) ??
-      (binding.expressionType === activityResultSyntax ? activityResultExpressionDescriptor : null);
+    const descriptor = binding.expressionType === activityResultSyntax
+      ? expressionDescriptors.find(candidate => candidate.type === activityResultSyntax) ?? activityResultExpressionDescriptor
+      : expressionDescriptors.find(candidate => candidate.type === binding.expressionType);
     if (!descriptor) return;
     const untouched = !Object.prototype.hasOwnProperty.call(latestProperty.current.activity, getInputPropertyName(input));
     const replacesValue = !untouched && planInputSyntaxTransition(
@@ -990,11 +1008,25 @@ function PropertyRow({
     }
     applyTransition(descriptor, binding.value);
   };
-  const offersChooseData = wrapped != null && syntax !== activityResultSyntax && offersActivityData(input, readOnly, editor?.id);
+  // The chooser opens from the Choose data action or the syntax picker's "Activity output…" entry, for this activity
+  // only: showing another activity in the same row closes it, so a pending choice cannot land in that activity's input.
+  const chooserOpen = chooser?.nodeId === activity.nodeId;
+  const closeChooser = (focus: "opener" | "next" | "previous" | "none") => {
+    const from = chooser?.from;
+    setChooser(null);
+    if (focus === "none") return;
+    const opener = rowRef.current?.querySelector<HTMLElement>(from === "syntax" ? ".wf-syntax-picker-trigger" : ".wf-choose-data-trigger")
+      ?? rowRef.current?.querySelector<HTMLElement>(".wf-choose-data-trigger") ?? null;
+    if (focus === "opener") opener?.focus();
+    else focusBeside(opener, focus);
+  };
   const chooseDataButton = offersChooseData ? (
     <ChooseDataButton
       target={{ nodeId: activity.nodeId, inputKey: getInputPropertyName(input) }}
       inputLabel={input.displayName || input.name}
+      open={chooserOpen}
+      onToggle={() => (chooserOpen ? closeChooser("none") : setChooser({ nodeId: activity.nodeId, from: "trigger" }))}
+      onClose={closeChooser}
       onSelect={chooseData}
     />
   ) : null;
@@ -1970,6 +2002,8 @@ function syntaxIconFor(descriptor: StudioExpressionDescriptor | undefined): Luci
   if (syntax === "literal") return Type;
   if (syntax.includes("secret")) return KeyRound;
   if (syntax === "connection") return Cable;
+  // The same icon as the Choose data action and the stored reference, not the generic reference (Connection) icon.
+  if (syntax === activityResultSyntax.toLowerCase()) return ActivityOutputIcon;
   if (["input", "variable", "object", "json"].includes(syntax) || descriptor?.editingMode === "structured") return Braces;
   if (descriptor?.editingMode === "reference") return Cable;
   if (descriptor?.editingMode === "literal") return Type;

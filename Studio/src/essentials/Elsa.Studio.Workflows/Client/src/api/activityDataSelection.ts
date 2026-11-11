@@ -99,6 +99,8 @@ export interface WorkflowActivityDataRequest {
   target: ActivityDataTarget;
   /** The current canonical (wire-shaped) authored state; analyzed without being saved. */
   snapshot: WorkflowDefinitionState;
+  /** The first source of the page; pages are 100 sources. */
+  skip?: number;
 }
 
 export interface ActivityDefinitionDataRequest {
@@ -109,6 +111,8 @@ export interface ActivityDefinitionDataRequest {
   target: ActivityDataTarget;
   /** The current Activity Definition draft state envelope; analyzed without being saved. */
   currentSnapshot: unknown;
+  /** The first source of the page; pages are 100 sources. */
+  skip?: number;
 }
 
 /** Whether the backend can analyze workflow drafts for data selection; false on servers without the capability. */
@@ -131,7 +135,7 @@ export async function requestWorkflowActivityData(
     nodeId: request.target.nodeId,
     inputKey: request.target.inputKey,
     snapshot: request.snapshot,
-    query: wholeValueSourceQuery
+    query: { ...wholeValueSourceQuery, skip: request.skip ?? 0 }
   }, { signal });
   return readActivityDataContextResult(response, request.documentRevision);
 }
@@ -150,7 +154,7 @@ export async function requestActivityDefinitionActivityData(
     expectedBaseRevision: request.expectedBaseRevision,
     documentRevision: request.documentRevision,
     target: request.target,
-    query: wholeValueSourceQuery,
+    query: { ...wholeValueSourceQuery, skip: request.skip ?? 0 },
     currentSnapshot: request.currentSnapshot
   }, { signal });
   return readActivityDataContextResult(response, request.documentRevision);

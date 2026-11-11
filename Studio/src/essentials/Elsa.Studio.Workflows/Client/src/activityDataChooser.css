@@ -6,12 +6,13 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
-  border: 1px solid transparent;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--wf-border);
   border-radius: var(--wf-radius);
   background: none;
-  color: var(--wf-muted-text);
+  color: var(--wf-text);
   cursor: pointer;
   padding: 0;
 }
@@ -89,6 +90,11 @@
   line-height: 1.3;
 }
 
+.wf-data-reference-id {
+  color: var(--wf-muted-text);
+  font-family: var(--studio-font-mono, ui-monospace, monospace);
+}
+
 .wf-data-chooser-group-id {
   font-family: var(--studio-font-mono, ui-monospace, monospace);
   font-weight: 400;
@@ -110,11 +116,27 @@
   text-align: left;
 }
 
-.wf-data-chooser-option:hover,
-.wf-data-chooser-option:focus-visible {
+.wf-data-chooser-option:not([aria-disabled="true"]):hover,
+.wf-data-chooser-option:not([aria-disabled="true"]):focus-visible {
   background: var(--studio-accent-soft);
+}
+
+/* Every option shows keyboard focus; only those that can be chosen get the choosable fill. */
+.wf-data-chooser-option:focus-visible {
   outline: 2px solid color-mix(in srgb, var(--studio-accent) 55%, transparent);
   outline-offset: -2px;
+}
+
+.wf-data-chooser-option-tag {
+  grid-column: 2;
+  justify-self: end;
+  border: 1px solid var(--studio-border);
+  border-radius: 999px;
+  color: var(--studio-text-muted);
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 1.5;
+  padding: 0 6px;
 }
 
 .wf-data-chooser-option.selected {

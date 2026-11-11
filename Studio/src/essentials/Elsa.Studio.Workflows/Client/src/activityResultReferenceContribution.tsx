@@ -22,15 +22,30 @@ export function provideActivityResultReferenceEditor(editor: ComponentType<Studi
 
 function ActivityResultReferenceSurface(props: StudioExpressionEditorProps) {
   const [Editor, setEditor] = useState(() => loadedEditor);
+  const [failed, setFailed] = useState(false);
   useEffect(() => {
     if (Editor) return;
     let active = true;
-    void import("./ActivityDataChooser").then(module => {
-      if (active) setEditor(() => module.ActivityResultReferenceEditor);
-    });
+    import("./ActivityDataChooser").then(
+      module => { if (active) setEditor(() => module.ActivityResultReferenceEditor); },
+      error => {
+        console.error("[workflow.lazy-boundary] activity output reference failed.", error);
+        if (active) setFailed(true);
+      });
     return () => { active = false; };
   }, [Editor]);
-  return Editor ? <Editor {...props} /> : null;
+  if (Editor) return <Editor {...props} />;
+  if (!failed) return null;
+  // As WorkflowLazyBoundary does for a failed chunk: keep the stored value, say so, and offer a reload (or Clear).
+  const stored = props.value && typeof props.value === "object" ? props.value as Record<string, unknown> : {};
+  return (
+    <div className="wf-lazy-state error" role="alert">
+      <span>Studio couldn't load the activity output editor. The stored reference
+        {typeof stored.producerNodeId === "string" ? ` (${stored.producerNodeId} › ${String(stored.projectionKey ?? "")})` : ""} is kept.</span>
+      <button type="button" className="wf-lazy-reload" onClick={() => window.location.reload()}>Reload page</button>
+      {props.disabled ? null : <button type="button" onClick={() => props.onChange(null)}>Clear</button>}
+    </div>
+  );
 }
 
 export const activityResultReferenceContribution: StudioExpressionEditorContribution = {

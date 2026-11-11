@@ -11,6 +11,53 @@ import {
 import { clearApiCapabilityCache } from "../api/capabilities";
 import { updateDraft } from "../api/workflowDesign";
 import type { ActivityNode, WorkflowDefinitionState } from "../workflowTypes";
+import { collectSourcePages, maximumSourcePages } from "../activityDataSelection";
+import type { ActivityDataContextResult } from "../api/activityDataSelection";
+import { describeInferredSource } from "../conversionSource";
+
+function page(state: ActivityDataContextResult["state"], ids: string[], hasMoreSources: boolean): ActivityDataContextResult {
+  return {
+    state, code: null, documentRevision: "rev", baseRevision: "base", target: null, hasMoreSources,
+    sources: ids.map(id => ({ id, displayName: id, binding: null, reasonCode: null, availability: null, activityResultSource: null, type: null }))
+  };
+}
+
+describe("reading sources page by page", () => {
+  it("reads on while the server has more and joins the pages in order", async () => {
+    const skips: number[] = [];
+    const result = await collectSourcePages(async skip => {
+      skips.push(skip);
+      return skip === 0 ? page("supported", ["input:a"], true) : page("supported", ["activity:p:$result"], false);
+    }, new AbortController().signal);
+    expect(skips).toEqual([0, 100]);
+    expect(result.sources.map(source => source.id)).toEqual(["input:a", "activity:p:$result"]);
+    expect(result.hasMoreSources).toBe(false);
+  });
+
+  it("stops at the bound and keeps saying more exist", async () => {
+    const request = vi.fn(async (skip: number) => page("supported", [`source:${skip}`], true));
+    const result = await collectSourcePages(request, new AbortController().signal);
+    expect(request).toHaveBeenCalledTimes(maximumSourcePages);
+    expect(result.sources).toHaveLength(maximumSourcePages);
+    expect(result.hasMoreSources).toBe(true);
+  });
+
+  it("returns the first refusal and stops when cancelled", async () => {
+    const refusal = await collectSourcePages(async skip => skip === 0 ? page("supported", ["a"], true) : page("stale", [], false),
+      new AbortController().signal);
+    expect(refusal.state).toBe("stale");
+    const controller = new AbortController();
+    const request = vi.fn(async () => { controller.abort(); return page("supported", ["a"], true); });
+    await expect(collectSourcePages(request, controller.signal)).rejects.toThrow();
+    expect(request).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("conversion caption", () => {
+  it("names a stored activity output as such, not as an expression result", () => {
+    expect(describeInferredSource("ActivityResult", { producerNodeId: "p", projectionKey: "$result" }, "auto")).toBe("Activity output");
+  });
+});
 
 // The language-neutral source client (spec 1215 T018) and the structured wire it feeds (T019): one capability with a
 // relation per resource kind, metadata-only answers bound to the requested document, and a chosen binding that

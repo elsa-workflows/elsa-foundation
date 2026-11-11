@@ -77,7 +77,8 @@ function host(overrides: Partial<ActivityDataSelectionHost> = {}): ActivityDataS
     documentRevision: "rev-1",
     baseRevision: "base-1",
     requests,
-    requestSources: vi.fn(async (target: ActivityDataTarget) => {
+    saving: false,
+    requestSources: vi.fn(async (target: ActivityDataTarget, _signal: AbortSignal, _skip: number) => {
       requests.push(target);
       return answer("supported", { sources });
     }),
@@ -90,6 +91,7 @@ function host(overrides: Partial<ActivityDataSelectionHost> = {}): ActivityDataS
 
 let mounted: { root: Root; container: HTMLElement } | null = null;
 let setHost: (next: ActivityDataSelectionHost | null) => void = () => undefined;
+let setActivity: (next: ActivityNode) => void = () => undefined;
 
 afterEach(() => {
   if (mounted) {
@@ -125,6 +127,7 @@ function render(options: {
     const [current, setCurrent] = React.useState<ActivityNode>(options.activity ?? { nodeId: "node-1", activityVersionId: "invoice-1", inputs: [], outputs: [] });
     const [dataHost, setDataHost] = React.useState<ActivityDataSelectionHost | null>(options.dataHost === undefined ? host() : options.dataHost);
     setHost = setDataHost;
+    setActivity = setCurrent;
     return (
       <ActivityPropertiesPanel
         activity={current}
@@ -200,7 +203,7 @@ describe("Choose data for an activity input", () => {
     expect(stored.expression.value).toEqual({ producerNodeId: "get-customer", projectionKey: "$result", isOptional: false });
     expect(document.querySelector(".wf-data-chooser")).toBeNull();
     await settle();
-    expect(container.querySelector(".wf-data-reference-source")?.textContent).toBe("Data from Get customer › , output Whole output");
+    expect(container.querySelector(".wf-data-reference-source")?.textContent).toBe("Source: Get customer › , Whole output");
     expect(document.activeElement).toBe(container.querySelector(".wf-data-reference-replace"));
     // Choosing data opens no fixed-value chrome and needs no save: only the source request ran.
     expect(dataHost.requestSources).toHaveBeenCalledTimes(1);
@@ -236,8 +239,8 @@ describe("Choose data for an activity input", () => {
     const rowReasons = [...orderGroup.querySelectorAll("[role='option']")].map(row =>
       document.getElementById(row.getAttribute("aria-describedby")!)?.textContent);
     expect(rowReasons).toHaveLength(2);
-    expect(rowReasons[0]).toContain("doesn't declare an output value");
-    expect(rowReasons[1]).toContain("only on some paths");
+    expect(rowReasons[0]).toContain("doesn't produce a whole output");
+    expect(rowReasons[1]).toContain("runs on only some paths");
   });
 
   it("shows sources that can't be chosen with their reason and never selects them", async () => {
@@ -303,14 +306,14 @@ describe("Choose data for an activity input", () => {
   });
 
   it.each([
-    ["denied", answer("denied", { code: "activity-data.denied" }), "don't have access", false],
-    ["policy-unavailable", answer("unavailable", { code: "activity-data.metadata-policy-unavailable" }), "restricts data browsing", false],
+    ["denied", answer("denied", { code: "activity-data.denied" }), "don't have permission", false],
+    ["policy-unavailable", answer("unavailable", { code: "activity-data.metadata-policy-unavailable" }), "restricts browsing outputs", false],
     ["analysis-unavailable", answer("unavailable", { code: "activity-data.analysis-unavailable" }), "aren't available right now", true],
-    ["stale elsewhere", answer("stale", { code: "activity-data.base-changed" }), "saved somewhere else", true],
-    ["incompatible", answer("incompatible", { code: "activity-data.response-unreadable" }), "can't read", false],
-    ["invalid target", answer("invalid", { code: "activity-data.invalid-source-or-target" }), "can't take data", false],
-    ["empty", answer("empty"), "No earlier activity outputs", false],
-    ["only other roles", answer("supported", { sources: [sources[3]!] }), "No earlier activity outputs", false],
+    ["stale elsewhere", answer("stale", { code: "activity-data.base-changed" }), "changed somewhere else", false],
+    ["incompatible", answer("incompatible", { code: "activity-data.response-unreadable" }), "update Studio", false],
+    ["invalid target", answer("invalid", { code: "activity-data.invalid-source-or-target" }), "until its problems are fixed", true],
+    ["empty", answer("empty"), "No earlier activity has an output for this input", false],
+    ["only other roles", answer("supported", { sources: [sources[3]!] }), "No earlier activity has an output for this input", false],
     ["constrained", answer("supported", { sources, target: { displayName: "Customer ID", constraint: {
       owner: "Credential", allowedExpressionTypes: ["Secret"], message: "A credential input accepts only a secret reference." } } }), "accepts only a secret reference", false]
   ])("explains the %s state without offering a source", async (_name, result, text, retry) => {
@@ -329,10 +332,10 @@ describe("Choose data for an activity input", () => {
     }));
     const container = render({ dataHost: host({ requestSources }) });
     await openChooser(container);
-    expect(chooser()?.querySelector("[aria-label='Loading data sources']")).not.toBeNull();
+    expect(chooser()?.querySelector("[aria-label='Loading outputs']")).not.toBeNull();
 
     release();
-    await vi.waitFor(() => expect(chooser()?.textContent).toContain("couldn't be loaded"));
+    await vi.waitFor(() => expect(chooser()?.textContent).toContain("couldn't load the outputs"));
     const retry = [...chooser()!.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent === "Retry")!;
     fail = false;
     flushSync(() => retry.click());
@@ -359,7 +362,7 @@ describe("Choose data for an activity input", () => {
     expect(options()).toHaveLength(0);
 
     pending[1]!.resolve(answer("empty", { documentRevision: "rev-2" }));
-    await vi.waitFor(() => expect(chooser()?.textContent).toContain("No earlier activity outputs"));
+    await vi.waitFor(() => expect(chooser()?.textContent).toContain("No earlier activity has an output for this input"));
   });
 
   it("keeps the list in place while a newer revision is asked about, storing a choice made meanwhile from the new answer", async () => {
@@ -418,7 +421,7 @@ describe("Choose data for an activity input", () => {
     const first = host({ requestSources });
     const container = render({ dataHost: first });
     await openChooser(container);
-    await vi.waitFor(() => expect(chooser()?.textContent).toContain("saved somewhere else"));
+    await vi.waitFor(() => expect(chooser()?.textContent).toContain("changed somewhere else"));
 
     flushSync(() => setHost({ ...first, baseRevision: "base-2" }));
     await vi.waitFor(() => expect(option("Whole output", "Get customer")).toBeDefined());
@@ -583,3 +586,149 @@ function afterEachUnmount() {
   current.container.remove();
   mounted = null;
 }
+
+describe("Choose data after review round 1", () => {
+  it("lists Activity output… in the syntax picker, which opens the chooser and changes nothing until an output is chosen", async () => {
+    const changes: ActivityNode[] = [];
+    const container = render({ onChange: next => changes.push(next) });
+    const picker = container.querySelector<HTMLButtonElement>(".wf-syntax-picker-trigger")!;
+    flushSync(() => picker.click());
+    const entry = [...document.querySelectorAll<HTMLButtonElement>("[role='option']")].find(item => item.textContent === "Activity output…")!;
+    expect(entry.disabled).toBe(false);
+    flushSync(() => entry.click());
+    await vi.waitFor(() => expect(option("Whole output", "Get customer")).toBeDefined());
+    expect(changes).toHaveLength(0);
+    flushSync(() => document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+    expect(document.querySelector(".wf-data-chooser")).toBeNull();
+    expect(changes).toHaveLength(0);
+    expect(document.activeElement).toBe(picker);
+
+    flushSync(() => picker.click());
+    flushSync(() => [...document.querySelectorAll<HTMLButtonElement>("[role='option']")].find(item => item.textContent === "Activity output…")!.click());
+    await vi.waitFor(() => expect(option("Whole output", "Get customer")).toBeDefined());
+    flushSync(() => option("Whole output", "Get customer")!.click());
+    expect(changes).toHaveLength(1);
+    expect((changes[0]!.customerId as { expression: { type: string } }).expression.type).toBe("ActivityResult");
+  });
+
+  it("uses one icon for the action, the stored reference and its mode", async () => {
+    const container = render();
+    expect(trigger(container)?.querySelector("svg.lucide-corner-down-right")).not.toBeNull();
+    afterEachUnmount();
+    const stored = render({ activity: { nodeId: "node-1", activityVersionId: "invoice-1", inputs: [], outputs: [],
+      customerId: { typeName: "System.String", expression: { type: "ActivityResult", value: customerBinding.value } } } });
+    await settle();
+    expect(stored.querySelector(".wf-data-reference-source svg.lucide-corner-down-right")).not.toBeNull();
+    expect(stored.querySelector(".wf-syntax-picker-trigger svg.lucide-corner-down-right")).not.toBeNull();
+    expect(stored.querySelector(".wf-syntax-picker-trigger svg.lucide-cable")).toBeNull();
+  });
+
+  it("tells a stored reference to one of two same-named activities apart by its identity", async () => {
+    const container = render({
+      activity: { nodeId: "node-1", activityVersionId: "invoice-1", inputs: [], outputs: [],
+        customerId: { typeName: "System.String", expression: { type: "ActivityResult", value: customerBinding.value } } },
+      dataHost: host({ describeActivity: nodeId => labels[nodeId] ? { label: "Timer", outputLabels: {}, sharesLabel: true } : null })
+    });
+    await settle();
+    expect(container.querySelector(".wf-data-reference-source")?.textContent).toBe("Source: Timer · get-customer › , Whole output");
+  });
+
+  it("marks an output that can't be chosen without relying on colour, in its accessible name", async () => {
+    const container = render();
+    await openChooser(container);
+    await vi.waitFor(() => expect(option("Whole output", "Loop step")).toBeDefined());
+    const blocked = option("Whole output", "Loop step")!;
+    expect(blocked.querySelector(".wf-data-chooser-option-tag")?.textContent).toBe("Not available");
+    expect(blocked.textContent).toContain(", Not available");
+    expect(option("Whole output", "Get customer")!.textContent).toBe("Whole output, Customer");
+    // Group headings and shared reasons name and describe the options; they are not listbox content of their own.
+    for (const label of document.querySelectorAll(".wf-data-chooser-group-label")) expect(label.getAttribute("aria-hidden")).toBe("true");
+  });
+
+  it("waits out a stale answer while the editor's own save is in flight", async () => {
+    const requestSources = vi.fn()
+      .mockResolvedValueOnce(answer("stale", { code: "activity-data.base-changed" }))
+      .mockResolvedValueOnce(answer("supported", { sources }));
+    const first = host({ requestSources, saving: true });
+    const container = render({ dataHost: first });
+    await openChooser(container);
+    await vi.waitFor(() => expect(chooser()?.textContent).toContain("Updating for your latest changes"));
+    expect(chooser()?.textContent).not.toContain("changed somewhere else");
+    expect(requestSources).toHaveBeenCalledTimes(1);
+    flushSync(() => setHost({ ...first, saving: false, baseRevision: "base-2" }));
+    await vi.waitFor(() => expect(option("Whole output", "Get customer")).toBeDefined());
+  });
+
+  it("offers a reload when the workflow changed somewhere else", async () => {
+    const container = render({ dataHost: host({ requestSources: vi.fn(async () => answer("stale", { code: "activity-data.base-changed" })) }) });
+    await openChooser(container);
+    await vi.waitFor(() => expect(chooser()?.textContent).toContain("changed somewhere else"));
+    expect([...chooser()!.querySelectorAll("button")].map(button => button.textContent)).toEqual(["Reload workflow"]);
+  });
+
+  it("says so when a choice made while updating can no longer be used", async () => {
+    const changes: ActivityNode[] = [];
+    const pending: Array<(result: ActivityDataContextResult) => void> = [];
+    const first = host({ requestSources: vi.fn(() => new Promise<ActivityDataContextResult>(resolve => pending.push(resolve))) });
+    const container = render({ dataHost: first, onChange: next => changes.push(next) });
+    await openChooser(container);
+    pending[0]!(answer("supported", { sources }));
+    await vi.waitFor(() => expect(option("Whole output", "Get order")).toBeDefined());
+    flushSync(() => setHost({ ...first, documentRevision: "rev-2" }));
+    await vi.waitFor(() => expect(chooser()?.querySelector("[role='listbox']")?.getAttribute("aria-busy")).toBe("true"));
+    flushSync(() => option("Whole output", "Get order")!.click());
+    pending[1]!(answer("supported", { documentRevision: "rev-2", sources: [sources[0]!, { ...sources[1]!, binding: null, reasonCode: "ConditionalOccurrence" }] }));
+    await vi.waitFor(() => expect(chooser()?.querySelector(".wf-data-chooser-panel > [role='status']")?.textContent).toContain("can no longer be used"));
+    expect(changes).toHaveLength(0);
+  });
+
+  it("reads outputs listed after the first page and says where it stopped", async () => {
+    const inputsOnly = Array.from({ length: 100 }, (_, index) => ({ ...sources[3]!, id: `input:${index}` }));
+    const pages: number[] = [];
+    const container = render({ dataHost: host({ requestSources: vi.fn(async (_target: ActivityDataTarget, _signal: AbortSignal, skip: number) => {
+      pages.push(skip);
+      return skip === 0 ? answer("supported", { sources: inputsOnly, hasMoreSources: true }) : answer("supported", { sources: [sources[0]!] });
+    }) }) });
+    await openChooser(container);
+    await vi.waitFor(() => expect(option("Whole output", "Get customer")).toBeDefined());
+    expect(pages).toEqual([0, 100]);
+    expect(chooser()?.textContent).not.toContain("first 1,000");
+    afterEachUnmount();
+
+    const endless = render({ dataHost: host({ requestSources: vi.fn(async (_target: ActivityDataTarget, _signal: AbortSignal, skip: number) =>
+      answer("supported", { sources: skip === 0 ? [sources[0]!, ...inputsOnly.slice(1)] : inputsOnly, hasMoreSources: true })) }) });
+    await openChooser(endless);
+    await vi.waitFor(() => expect(chooser()?.textContent).toContain("Showing outputs from the first 1,000 data sources"));
+    expect(option("Whole output", "Get customer")).toBeDefined();
+  });
+
+  it("never stores a pending choice in another activity shown in the same row", async () => {
+    const changes: ActivityNode[] = [];
+    let resolve!: (result: ActivityDataContextResult) => void;
+    const container = render({
+      onChange: next => changes.push(next),
+      dataHost: host({ requestSources: vi.fn(() => new Promise<ActivityDataContextResult>(done => { resolve = done; })) })
+    });
+    await openChooser(container);
+    flushSync(() => setActivity({ nodeId: "node-2", activityVersionId: "invoice-1", inputs: [], outputs: [] }));
+    expect(document.querySelector(".wf-data-chooser")).toBeNull();
+    resolve(answer("supported", { sources }));
+    await settle();
+    expect(changes).toHaveLength(0);
+    expect(document.querySelector(".wf-data-chooser")).toBeNull();
+  });
+
+  it("does not offer Choose data on an input typed as a connection reference", () => {
+    const container = render({ inputs: [input("Connection", { typeName: "Elsa.Activities.Runtime.Core.Models.ConnectionReference, Elsa.Activities.Runtime.Core" })] });
+    expect(trigger(container)).toBeNull();
+  });
+
+  it("closes on Tab and keeps focus in the row", async () => {
+    const container = render();
+    await openChooser(container);
+    await vi.waitFor(() => expect(document.activeElement).toBe(option("Whole output", "Get customer")));
+    flushSync(() => document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", shiftKey: true, bubbles: true })));
+    expect(document.querySelector(".wf-data-chooser")).toBeNull();
+    expect(container.contains(document.activeElement)).toBe(true);
+  });
+});

@@ -5,9 +5,9 @@ import { indexActivityPresentation, resolveActivityLabel } from "../activityPres
 import type { ActivityDataInputFinding, ActivityDataProducerDescription, ActivityDataSelectionHost } from "../activityDataSelection";
 import { hasWorkflowActivityDataSelection, requestWorkflowActivityData, type ActivityDataTarget } from "../api/activityDataSelection";
 import { parseValidationErrorPath } from "../validationDiagnostics";
-import { findActivityNode } from "../workflowAdapter";
-import type { ActivityCatalogItem, ValidationError, WorkflowDraft } from "../workflowTypes";
-import { getDraftRevision, getDraftSignature } from "./editorHelpers";
+import { getChildSlots } from "../workflowAdapter";
+import type { ActivityCatalogItem, ActivityNode, ValidationError, WorkflowDraft } from "../workflowTypes";
+import { getDraftContentRevision, getDraftSignature } from "./editorHelpers";
 
 interface WorkflowActivityDataSelectionParams {
   context: StudioEndpointContext;
@@ -17,6 +17,8 @@ interface WorkflowActivityDataSelectionParams {
   draft: WorkflowDraft | null;
   /** The draft as the server last acknowledged it (useWorkflowPersistence). Its authoring revision is the request base. */
   persistedDraft: WorkflowDraft | null;
+  /** True while the save queue is writing; a stale answer is then waited out instead of reported. */
+  saving: boolean;
   catalogByVersion: Map<string, ActivityCatalogItem>;
   /** The editor's merged validation results; only those of the saved document are shown on a reference. */
   validationErrors: ValidationError[];
@@ -26,13 +28,15 @@ interface WorkflowActivityDataSelectionParams {
 /**
  * Choose data for a workflow draft. Each request analyzes the author's current document as a snapshot against the
  * acknowledged saved revision, so browsing never waits for, triggers or bypasses a save, and held or manual edits are
- * analyzed as they are. The answer belongs to the document revision it was asked for.
+ * analyzed as they are. The answer belongs to the document's SHA-256 content revision it was asked for. Nothing here
+ * serializes the draft while the feature is unavailable.
  */
 export function useWorkflowActivityDataSelection({
   context,
   enabled,
   draft,
   persistedDraft,
+  saving,
   catalogByVersion,
   validationErrors,
   revealActivity
@@ -53,12 +57,14 @@ export function useWorkflowActivityDataSelection({
     return () => { active = false; };
   }, [baseUrl, enabled]);
 
+  const on = available && enabled && draft != null;
   const latest = useRef({ draft, persistedDraft });
   latest.current = { draft, persistedDraft };
-  const documentRevision = draft ? getDraftRevision(draft) : "";
-  const baseRevision = acknowledgedRevision(draft, persistedDraft);
+  // The content revision is cached by signature, so the editor's other uses of it share the work.
+  const documentRevision = on ? getDraftContentRevision(draft!) : "";
+  const baseRevision = on ? acknowledgedRevision(draft, persistedDraft) : "";
 
-  const requestSources = useCallback((target: ActivityDataTarget, signal: AbortSignal) => {
+  const requestSources = useCallback((target: ActivityDataTarget, signal: AbortSignal, skip: number) => {
     const { draft: current, persistedDraft: saved } = latest.current;
     const base = acknowledgedRevision(current, saved);
     if (!current || !base) return Promise.reject(new Error("The draft has no acknowledged revision."));
@@ -66,27 +72,45 @@ export function useWorkflowActivityDataSelection({
       definitionId: current.definitionId,
       draftId: current.id,
       expectedBaseRevision: base,
-      documentRevision: getDraftRevision(current),
+      documentRevision: getDraftContentRevision(current),
       target,
-      snapshot: canonicalizeStateForWire(current.state)
+      snapshot: canonicalizeStateForWire(current.state),
+      skip
     }, signal);
   }, []);
 
-  const root = draft?.state.rootActivity;
-  const presentation = draft?.activityPresentation;
-  const describeActivity = useCallback((nodeId: string): ActivityDataProducerDescription | null => {
-    const node = root ? findActivityNode(root, nodeId, catalogByVersion) : null;
-    if (!node) return null;
-    const item = catalogByVersion.get(node.activityVersionId);
-    return {
-      label: resolveActivityLabel(indexActivityPresentation(presentation).get(nodeId), item, item?.activityTypeKey ?? node.activityVersionId),
-      outputLabels: readOutputLabels(item)
+  const root = on ? draft!.state.rootActivity : undefined;
+  const presentation = on ? draft!.activityPresentation : undefined;
+  // Labels for every activity in the document, so a reference can tell two same-named activities apart.
+  const labels = useMemo(() => {
+    const byNodeId = new Map<string, { node: ActivityNode; label: string }>();
+    if (!root) return { byNodeId, counts: new Map<string, number>() };
+    const presentationByNodeId = indexActivityPresentation(presentation);
+    const counts = new Map<string, number>();
+    const visit = (node: ActivityNode, depth: number) => {
+      if (depth > 100 || byNodeId.has(node.nodeId)) return;
+      const item = catalogByVersion.get(node.activityVersionId);
+      const label = resolveActivityLabel(presentationByNodeId.get(node.nodeId), item, item?.activityTypeKey ?? node.activityVersionId);
+      byNodeId.set(node.nodeId, { node, label });
+      counts.set(label, (counts.get(label) ?? 0) + 1);
+      for (const slot of getChildSlots(node, catalogByVersion)) for (const child of slot.activities) visit(child, depth + 1);
     };
+    visit(root, 0);
+    return { byNodeId, counts };
   }, [catalogByVersion, presentation, root]);
+  const describeActivity = useCallback((nodeId: string): ActivityDataProducerDescription | null => {
+    const entry = labels.byNodeId.get(nodeId);
+    if (!entry) return null;
+    return {
+      label: entry.label,
+      outputLabels: readOutputLabels(catalogByVersion.get(entry.node.activityVersionId)),
+      sharesLabel: (labels.counts.get(entry.label) ?? 0) > 1
+    };
+  }, [catalogByVersion, labels]);
 
   // Findings describe the document the server last validated: shown only while the live draft is that document.
-  const findingsCurrent = !!draft && !!persistedDraft && persistedDraft.id === draft.id &&
-    getDraftSignature(persistedDraft) === getDraftSignature(draft);
+  const findingsCurrent = on && !!persistedDraft && persistedDraft.id === draft!.id &&
+    getDraftSignature(persistedDraft) === getDraftSignature(draft!);
   const findingsFor = useCallback((target: ActivityDataTarget): ActivityDataInputFinding[] => {
     if (!findingsCurrent) return [];
     return validationErrors.flatMap(error => {
@@ -98,14 +122,15 @@ export function useWorkflowActivityDataSelection({
     });
   }, [findingsCurrent, validationErrors]);
 
-  return useMemo(() => available && enabled && draft ? {
+  return useMemo(() => on ? {
     documentRevision,
     baseRevision,
+    saving,
     requestSources,
     describeActivity,
     revealActivity,
     findingsFor
-  } : null, [available, baseRevision, describeActivity, documentRevision, draft, enabled, findingsFor, requestSources, revealActivity]);
+  } : null, [baseRevision, describeActivity, documentRevision, findingsFor, on, requestSources, revealActivity, saving]);
 }
 
 function acknowledgedRevision(draft: WorkflowDraft | null, saved: WorkflowDraft | null) {
