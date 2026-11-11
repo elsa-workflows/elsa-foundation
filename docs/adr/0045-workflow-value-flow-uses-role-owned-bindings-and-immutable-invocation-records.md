@@ -125,12 +125,11 @@ a visible policy, never through where it came from.
 - **An undeclared name is not an omitted optional member.** Reading a value no contract declares remains an error.
   The sentence above about missing dynamic values keeps applying to it. For names a script reads:
   - a name written literally in the script that resolves to nothing is a publication error that prevents publication;
-  - a computed name (`variables[name]`, `getVariable(expr)`): if computed reads are supported
-    ([ADR 0089](0089-scripts-read-variables-by-name-and-publish-pins-them-as-declared-parameters.md)), an unresolved
-    computed name reads `undefined` with a warning and the read is marked absent. Not `null`, which would erase the
-    difference between null and missing; if the `undefined` leaves the script, the boundary rule below applies
-    visibly. In Liquid a missing value is nil, and the recorded warning carries the difference. Under the current
-    ADR 0089, computed reads are refused at publish.
+  - a computed name (`variables[name]`, `getVariable(expr)`) is looked up at run time
+    ([ADR 0089](0089-scripts-read-variables-by-name-and-publish-pins-them-as-declared-parameters.md), R3). A computed
+    name that resolves to nothing reads `undefined` with a warning, and the read is marked absent. Not `null`, which
+    would erase the difference between null and missing; if the `undefined` leaves the script, the boundary rule below
+    applies visibly. In Liquid a missing value is nil, and the recorded warning carries the difference.
 - **`undefined`.** By default the JavaScript-to-workflow boundary keeps its standard materialization: a
   binding whose result is `undefined` is an error ([ADR 0083](0083-javascript-binding-grammar-is-pinned-at-publish.md)),
   and an object property whose value is `undefined` is dropped, with a diagnostic, because a lossy conversion is
