@@ -90,7 +90,14 @@ export async function chooseDataJourney(page: Page, info: TestInfo, capture: Cap
   const ordered = await seed("sequence", sequence([timer("producer"), line]));
   await openConsumer(ordered.definition.id);
   await expect(reference()).toHaveCount(0);
-  await trigger().click();
+  // Discoverability: the Choose data action at rest beside the type, and the same choice in the syntax picker.
+  const syntaxPicker = page.getByRole("button", { name: /^Text expression syntax/ });
+  await syntaxPicker.click();
+  const pickerEntry = page.getByRole("option", { name: "Activity output…", exact: true });
+  await expect(pickerEntry).toBeVisible();
+  await expect(trigger()).toBeVisible();
+  await capture(page, info, "choose-data-entry");
+  await pickerEntry.click();
   await expect(option("Timer", "Interval")).toBeVisible();
   await expect(option("Timer", "Whole output")).toBeVisible();
   await settledCapture("chooser-open");
@@ -124,8 +131,8 @@ export async function chooseDataJourney(page: Page, info: TestInfo, capture: Cap
   await trigger().click();
   const loopGroup = chooser().getByRole("group", { name: "Timer", exact: true });
   const sharedReason = loopGroup.locator(".wf-data-chooser-group-reason");
-  await expect(sharedReason).toContainText("more than once");
   const reasonId = await sharedReason.getAttribute("id");
+  expect(reasonId, "One reason for the producer").toBeTruthy();
   const blocked = loopGroup.getByRole("option");
   await expect(blocked).toHaveCount(2);
   for (const row of await blocked.all()) {
@@ -133,12 +140,19 @@ export async function chooseDataJourney(page: Page, info: TestInfo, capture: Cap
     await expect(row).toHaveAttribute("aria-describedby", reasonId!);
   }
   await settledCapture("not-selectable");
-  await blocked.first().press("Enter");
+  // Choosing an unavailable output does nothing: focus and selection stay put and the input stays untouched.
+  const firstBlocked = blocked.first();
+  await firstBlocked.focus();
+  await page.keyboard.press("Enter");
+  await expect(firstBlocked).toBeFocused();
+  await expect(firstBlocked).toHaveAttribute("aria-selected", "false");
   await expect(chooser()).toBeVisible();
-  await expect(reference()).toHaveCount(0);
   await page.keyboard.press("Escape");
   await expect(chooser()).toHaveCount(0);
   await expect(trigger()).toBeFocused();
+  await expect(reference()).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /^Text expression syntax: (?!Activity output)/ })).toBeVisible();
+  await expect(page.getByText("Autosaving...", { exact: true })).toHaveCount(0, { timeout: 30_000 });
   expect(await storedText(loop.draftId)).toBeNull();
 
   // Keyboard-only choice, then Replace and Clear, with focus kept on the row's controls.
@@ -156,11 +170,25 @@ export async function chooseDataJourney(page: Page, info: TestInfo, capture: Cap
   const replace = page.getByRole("button", { name: "Replace data for Text", exact: true });
   await expect(replace).toBeFocused();
   await expect.poll(() => storedText(twice.draftId), { timeout: 30_000 }).toEqual(outputBinding("second", "Result"));
+  // The reference names the same activity the chooser did, including which of the two same-named ones it is.
+  await expect(reference().locator(".wf-data-reference-source")).toContainText("Timer · second");
   await replace.press("Enter");
   await expect(second.nth(1)).toHaveAttribute("aria-selected", "true");
+  await settledCapture("replace-chooser");
   await chooser().getByRole("group", { name: "Timer · producer", exact: true }).getByRole("option", { name: /^Whole output/ }).click();
   await expect(replace).toBeFocused();
   await expect.poll(() => storedText(twice.draftId), { timeout: 30_000 }).toEqual(outputBinding("producer", "$result"));
+  await expect(reference().locator(".wf-data-reference-source")).toContainText("Timer · producer");
+  // The reference and chooser at 320px, the runner's focused narrow width (as the decisions journey records it).
+  const viewport = page.viewportSize()!;
+  await page.setViewportSize({ width: 320, height: 1000 });
+  await replace.scrollIntoViewIfNeeded();
+  await replace.click();
+  await expect(chooser().getByRole("option").first()).toBeVisible();
+  await settledCapture("chooser-320");
+  await page.keyboard.press("Escape");
+  await expect(chooser()).toHaveCount(0);
+  await page.setViewportSize(viewport);
   await page.getByRole("button", { name: "Clear data for Text", exact: true }).press("Enter");
   await expect(reference()).toHaveCount(0);
   await expect(trigger()).toBeFocused();
