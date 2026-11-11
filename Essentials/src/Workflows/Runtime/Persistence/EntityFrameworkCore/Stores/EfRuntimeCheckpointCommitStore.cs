@@ -16,9 +16,11 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 /// <remarks>
 /// The durable replay marker, supported participant projections, and execution fence share one transaction.
 /// Creating or changing an executable root runs inside its established write-lease boundary. An eligible unchanged
-/// native root can instead use an update-only check inside the fenced transaction; replay remains resolvable before
-/// a lease is required. Unsupported participants are rejected explicitly until their EF adapters
-/// can stage changes through this same context.
+/// native root can instead use an update-only check inside the fenced transaction. A commit whose marker is durable
+/// is answered as a replay. A plain commit on a clean context finds that out from the marker read after its attempt
+/// failed, which can be after a root write lease was taken; every other commit reads the marker before anything
+/// else. Unsupported participants are rejected explicitly until their EF adapters can stage changes through this
+/// same context.
 /// </remarks>
 public sealed class EfRuntimeCheckpointCommitStore(
     RuntimeDbContext context,
@@ -248,9 +250,10 @@ public sealed class EfRuntimeCheckpointCommitStore(
         //
         // These commits read the marker first. A commit that carries an admission condition or a model decision:
         // its staging compares rows it does not write, and its failures leave as admission-unavailable, so its
-        // replay is answered before either. A commit on a context with pending changes or an open transaction: a
-        // failed attempt clears the tracker, which would drop the caller's pending changes, and a write that fails
-        // inside a transaction this store does not own can end that transaction for its owner.
+        // replay is answered before either. A commit on a context with pending changes: a failed attempt clears
+        // the tracker, which would drop what the caller staged. A commit on a context with an open transaction: an
+        // attempt cannot begin a transaction of its own there, so it would only fail, after taking a root write
+        // lease when the commit needs one.
         var readsMarkerFirst = commit.ExpectedBookmarkResume is not null || commit.ModelState is not null ||
             commit.ExpectedModelExecution is not null || commit.ExpectedModelParentWait is not null ||
             context.ChangeTracker.HasChanges() || context.Database.CurrentTransaction is not null ||

@@ -189,12 +189,18 @@ public sealed partial class EfRuntimeCheckpointCommitStoreTests
         await using var context = database.Open("tenant-a", capture);
         await using var transaction = await context.Database.BeginTransactionAsync();
 
-        await new EfRuntimeCheckpointCommitStore(context, new FixedAccessor("tenant-a"), new FixedTimeProvider(OccurredAt), manager)
-            .CommitAsync(commit, Decision());
+        var store = new EfRuntimeCheckpointCommitStore(context, new FixedAccessor("tenant-a"), new FixedTimeProvider(OccurredAt), manager);
+
+        await store.CommitAsync(commit, Decision());
 
         Assert.Empty(manager.LeaseIds);
         Assert.True(IsMarkerRead(Assert.Single(capture.Commands)));
         Assert.Same(transaction, context.Database.CurrentTransaction);
+        // An attempt cannot run here: the context refuses to begin a second transaction. So a commit that is not
+        // durable fails after its marker read, and nothing is gained by running a replay's attempt before the read.
+        await Assert.ThrowsAsync<InvalidOperationException>(() => store.CommitAsync(Commit("commit-not-durable"), Decision()).AsTask());
+        Assert.Equal(2, capture.Commands.Count);
+        Assert.All(capture.Commands, command => Assert.True(IsMarkerRead(command)));
     }
 
     [Theory]
