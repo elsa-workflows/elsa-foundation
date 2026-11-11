@@ -94,6 +94,13 @@ handwritten source, including a real minimal host. Unknown literals and source f
 - [ ] T024 [US1] Run focused owning backend/Studio suites and a real catalog→save→publish→execute source-family/known/deferred/type-fit proof using the existing lifecycle in `e2e-tests/`; retain invalid-publication no-write and consumer-input/producer-completion evidence (depends T017, T023).
 - [ ] T025 [US1] Extend `Studio/tests/acceptance/journeys.spec.ts` and `tools/ux-acceptance/run.py` capture inventory for basic Sequence/Flowchart/current-draft selection; run normal/minimal owned hosts and retain canonical wire, real committed inputs and independently inspected exact-head captures under `specs/1215-activity-data-selection/quickstart.md` (depends T024).
 
+#3094 whole-output receipt (not task completion): Studio offers Choose data on eligible ordinary inputs of
+workflow drafts and stores the server's `ActivityResult` binding unchanged as one edit (T019 wire; whole-output
+parts of T018, T020, T021, T023). The source client covers both advertised relations; only the workflow editor
+uses it, so reusable-graph (T041), intrinsic/Switch (T042) and BPMN (T043) surfaces offer nothing yet. Member
+selection is not offered. Optional reads of conditional producers, other source families (T022) and the composed
+journeys/captures of T024–T025 remain open. Evidence is on the delivering PR.
+
 **Checkpoint:** US1 passes actual persisted journeys; #3094 can close only on its narrower own evidence.
 Whole-output UI completion does not close nested binding/runtime obligations.
 
