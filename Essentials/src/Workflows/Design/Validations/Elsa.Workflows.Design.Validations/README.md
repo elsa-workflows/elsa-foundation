@@ -51,7 +51,9 @@ portable-parameter failures are not collapsed by a blanket path/type deduplicati
 - `MemberReads` — default `false`. Whether a binding may read one member of an activity result
   (`ActivityResultMember`). While it is off the shared analyzer neither offers nor admits one
   (`ActivityData/UnsupportedMemberBinding`), so no publication, test run, template compilation, BPMN
-  publication or import can produce an executable that carries one.
+  publication or import can produce an executable that carries one. With it on, a read inside a reusable
+  activity's body is published untyped and its member is checked when the run reads it, so an explicit
+  conversion on such a read is refused at publication.
 
   **Upgrade rule.** An executable with a member read cannot be read by a runtime built before member reads
   existed: it reports the payload as corrupt, and without distributed placement the work item is poisoned and

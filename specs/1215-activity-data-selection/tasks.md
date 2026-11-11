@@ -120,12 +120,14 @@ every executable-producing path refuses before any write, as before. T012, resul
 (`ActivityData/UnknownMember`) and of a member looked up in a value without members
 (`ActivityData/MemberParentNotObject`), a compiler branch emitting a deferred selection, and the compiler's own
 refusal of a member path on a whole-value kind. T013, result member reads: a pin pass after the analysis in the
-workflow and template compilers upgrades typed reads to known, the linker plans conversion from the selected type
-and refuses an explicit conversion on a deferred read, and placement remaps the producer and keeps the selection.
-T017, result member reads: analyzer, compiler, pin, linker and remapper rows, publication through the real publish
-handler with the setting on and off, and real publish → run in a Sequence and a top-level Flowchart, typed and
-deferred. Not done: a full template placement → run with a member read in a reusable body (template admission is
-tested; placement is unit-tested in the remapper), the other families (slice D), and Studio.
+workflow compiler upgrades typed reads in the workflow's own body to known, the linker plans conversion from the
+selected type and refuses an explicit conversion on a deferred read, and placement remaps the producer and keeps the
+selection. A read inside a placed reusable body is published deferred and checked at run time (research §4). T017,
+result member reads: analyzer, compiler, pin, linker and remapper rows, publication through the real publish handler
+with the setting on and off, a reusable body compiled, placed and published (deferred, producer remapped, explicit
+conversion refused), and real publish → run in a Sequence and a top-level Flowchart, typed and deferred. Not done:
+pinning reads inside a placed body (follow-up), a run of a placed body's member read, the other families (slice D),
+and Studio.
 
 - [ ] T018 [P] [US1] Add the language-neutral source client in `Studio/src/essentials/Elsa.Studio.Workflows/Client/src/` using existing capability discovery; integrate exact acknowledged autosave/current-snapshot acquisition with `workflow-editor/useWorkflowPersistence.ts` and `ActivityDefinitionDraftEditor.tsx`, discard late identities and preserve manual/held edits (depends T008).
 - [ ] T019 [P] [US1] Repair structured whole/result/member preservation in `Studio/src/essentials/Elsa.Studio.Workflows/Client/src/activityInputWire.ts` and add canonical save/Code Apply/reopen controls in `__tests__/activityInputWire.test.ts`; preserve unknown unsupported source definitions without JSON stringification.

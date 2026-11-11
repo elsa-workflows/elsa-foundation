@@ -316,7 +316,16 @@ without a plan (`ExecutableNodeCompiler.cs:452`) and are checked by the intrinsi
   raises the same finding itself as an `ActivityDataSelectionRejectedException`; it also refuses a `memberPath` (and a
   `path` outside `WorkflowRequest`) on a whole-value kind as `ActivityData/UnsupportedMemberSelection`.
 - *Facts reach the pin pass* through `ActivityDataSelectionAnalysis.MemberReads`, one entry per admitted read, keyed by
-  the input path and matched on producer, projection and exact segments.
+  the input path and matched on producer, projection and exact segments; anything but exactly one matching fact leaves
+  the read deferred.
+- *Where the pin pass runs (corrects the recommendation above):* only in `WorkflowExecutableCompiler`, for reads in the
+  workflow's own body. A read inside a reusable activity's body is published `DeferredFit` and checked at run time. The
+  template providers (Graph and Agent) return no compiled member reads at template compilation: a Graph body is
+  compiled from its authored occurrences only when the template is placed, after the template's analysis, and the
+  workflow's analysis does not look inside a placed body; placed body nodes also carry their dependency's authored id,
+  not the body's. So the template compiler has no pin call. Placement still remaps the producer and keeps the segments,
+  and an explicit conversion on such a read is refused (`SelectedMemberContractUnknown`). Pinning at placement, with
+  facts keyed by occurrence id, is a follow-up.
 - *Intrinsics:* a result member read on an intrinsic input compiles with no source plan, like a whole result read, and
   is planned by the linker when its member is known.
 - *Linker:* an explicit conversion on a `DeferredFit` read is refused with the new
