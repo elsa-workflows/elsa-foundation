@@ -128,12 +128,15 @@ It forbids:
 - live .NET objects crossing into the expression. Scripts that may use objects the host explicitly
   registers use a separate profile (for example `binding-readonly-interop-v1`; analysis A-1 and the
   ADR 0046 amendment, V10). A host opt-in allows that profile, and it is pinned in the executable like any
-  profile, so this profile always forbids live objects. General .NET access is never available to a
-  binding; a host may allow it only for script activities, through a further, separately named profile.
-  Any workflow node that uses general .NET access, through that separately named profile or a per-script
-  .NET object option however it is finally spelled, gets a publish-time warning with a stable diagnostic
-  code and a marker on the node in Studio, so it is never switched on unnoticed (ADR 0046 amendment, V12,
-  gives the detail);
+  profile, so this profile always forbids live objects. A host may enable general .NET access for input
+  expressions through a further, separately named binding profile that an expression selects and the
+  executable pins. Under the ADR 0046 amendment's guardrails (V10), such an expression is possibly
+  effectful, so the engine commits before and after its evaluation; it returns a storable value or is
+  refused, and no live object enters the input snapshot; and it never writes Elsa-owned workflow state.
+  Any workflow node that uses general .NET access, whether a binding or a script activity, through a
+  separately named profile or a per-script .NET object option however it is finally spelled, gets a
+  publish-time warning with a stable diagnostic code and a marker on the node in Studio, so it is never
+  switched on unnoticed (ADR 0046 amendment, V12, gives the detail);
 - any change to engine-owned workflow state: variable mutation, workflow output publication,
   correlation or instance-name changes, and outcome selection;
 - functions not registered for this profile, added through evaluation events, filters,
