@@ -21,7 +21,8 @@ internal readonly record struct ExecutionFenceCursor(long Revision, DateTimeOffs
 /// commits in. Both have to reach the same cursor.
 /// </para>
 /// <para>
-/// Every cursor ever stored names a revision at which the row held exactly that lease: the liveness store records
+/// Every cursor ever stored names a revision at which the row held exactly that lease, or revision 0, which means
+/// not known: the liveness store records
 /// one after its own save of the row with that lease, and a commit records one after its transaction committed. A
 /// revision of a row is never used twice, so a cursor is either the row as it is now or a revision the row has left.
 /// A cursor that is behind therefore only ever makes the commit's bump match no row. That is why writers do not

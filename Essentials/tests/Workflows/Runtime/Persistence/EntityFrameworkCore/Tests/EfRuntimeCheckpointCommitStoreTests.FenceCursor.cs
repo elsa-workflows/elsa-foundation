@@ -615,8 +615,8 @@ public sealed partial class EfRuntimeCheckpointCommitStoreTests
     public async Task A_commit_whose_staging_fails_before_its_fence_is_checked_leaves_as_stale_when_the_run_was_lost(bool runWasLost)
     {
         // A commit with a cursor stages before its fence is checked. A commit that reads the row first never stages
-        // for a drain that lost its run. Before a staging failure leaves, the row is read once, so such a drain is
-        // still refused as stale and not with whatever staging made of its commit.
+        // for a drain that had lost its run when the row was read. Before a staging failure leaves, the row is read
+        // once, so such a drain is still refused as stale and not with whatever staging made of its commit.
         await using var database = await TestDatabase.CreateAsync();
         var clock = new FakeTimeProvider(OccurredAt);
         var cursors = new EfExecutionFenceCursors(clock);
@@ -654,7 +654,8 @@ public sealed partial class EfRuntimeCheckpointCommitStoreTests
     {
         // The save writes its rows in table order, and the durable-value table comes before the ownership table. A
         // failure there says nothing about the lease, and the bump has not run yet. A commit that reads the row
-        // first never saves for a drain that lost its run, so the row is looked at before the failure leaves.
+        // first never saves for a drain that had lost its run when the row was read, so the row is looked at before
+        // the failure leaves.
         await using var database = await TestDatabase.CreateAsync();
         var clock = new FakeTimeProvider(OccurredAt);
         var cursors = new EfExecutionFenceCursors(clock);
@@ -722,11 +723,15 @@ public sealed partial class EfRuntimeCheckpointCommitStoreTests
         Assert.Empty(await read.RuntimeCheckpointCommits.ToArrayAsync());
     }
 
-    [Fact]
-    public async Task A_required_root_lease_is_not_looked_into_as_a_failure()
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task A_required_root_lease_sends_only_a_run_that_is_still_held_to_the_root_lease_manager(bool runWasLost)
     {
-        // A commit that hoped to update its root without a lease and finds it needs one is not a failed commit: it
-        // takes the lease and commits again. That first pass must not cost a read of the ownership row.
+        // A commit that hoped to update its root without a lease, and finds it needs one, goes on to take root write
+        // leases. A commit that reads the ownership row first never gets there for a drain that had lost its run
+        // when the row was read. So the row is looked at before that pass ends: a lost run leaves as stale and the
+        // lease manager is never asked, and a held run takes the lease and commits.
         await using var database = await TestDatabase.CreateAsync();
         var lease = await SeedRetainedRootAsync(database);
         var clock = new FixedTimeProvider(OccurredAt);
@@ -735,6 +740,25 @@ public sealed partial class EfRuntimeCheckpointCommitStoreTests
         await using (var read = database.Open(CursorScope))
             stamp = (await read.ExecutionLivenessStates.AsNoTracking().SingleAsync()).SchemaVersion;
         cursors.Hold(CursorKey(lease), new(await OwnershipRevisionAsync(database), lease.ExpiresAt, stamp));
+        var commit = RetainedRootCommit(lease);
+        if (runWasLost)
+        {
+            // The run was deleted: its workflow row is gone and its ownership row is a tombstone. The cursor is
+            // still usable by this node's clock. The update-only pass finds no root and asks for the lease.
+            await using var other = database.Open(CursorScope);
+            Assert.True(await new EfWorkflowExecutionStateStore(other, new FixedAccessor(CursorScope), new NoopContinuationCodec()).DeleteAsync(CursorRun));
+        }
+        else
+        {
+            // The pin differs from the stored root, so the update-only pass asks for the lease.
+            var state = commit.StateChanges.WorkflowExecution!.State;
+            commit = commit with
+            {
+                StateChanges = new(new(CursorRun, RuntimeStateChangeOperation.Upsert,
+                    state with { PinnedExecutable = state.PinnedExecutable with { ArtifactHash = "another-hash" } }, new Dictionary<string, string>()),
+                    null, [], [], [], [], [])
+            };
+        }
         var capture = new CommandCaptureInterceptor();
         await using var context = database.Open(CursorScope, capture);
         var sessions = new AsyncLocalRuntimeCoalescingSessionAccessor();
@@ -742,20 +766,25 @@ public sealed partial class EfRuntimeCheckpointCommitStoreTests
         var manager = new PassThroughRootWriteLeaseManager();
         var store = new EfRuntimeCheckpointCommitStore(context, new FixedAccessor(CursorScope), clock, manager)
         { CoalescingSessions = sessions, FenceCursors = cursors };
-        // The pin differs from the stored root, so the update-only pass asks for the lease.
-        var commit = RetainedRootCommit(lease);
-        var state = commit.StateChanges.WorkflowExecution!.State;
-        commit = commit with
+
+        if (runWasLost)
         {
-            StateChanges = new(new(CursorRun, RuntimeStateChangeOperation.Upsert,
-                state with { PinnedExecutable = state.PinnedExecutable with { ArtifactHash = "another-hash" } }, new Dictionary<string, string>()),
-                null, [], [], [], [], [])
-        };
-
-        await store.CommitAsync(commit, Decision());
-
-        Assert.Single(manager.LeaseIds);
-        Assert.Equal((0, 1), OwnershipCommands(capture, 0));
+            var refusal = await Assert.ThrowsAsync<RuntimeStaleFencingTokenException>(() => store.CommitAsync(commit, Decision()).AsTask());
+            Assert.Equal(RuntimeFencingRejectionReason.NoActiveLease, refusal.Reason);
+            Assert.Empty(manager.LeaseIds);
+            Assert.Equal((1, 0), OwnershipCommands(capture, 0));
+            await using var read = database.Open(CursorScope);
+            Assert.Empty(await read.WorkflowExecutionStates.ToArrayAsync());
+        }
+        else
+        {
+            await store.CommitAsync(commit, Decision());
+            Assert.Single(manager.LeaseIds);
+            // One read for the look on the pass that asked for the lease. The commit under the lease used its cursor.
+            Assert.Equal((1, 1), OwnershipCommands(capture, 0));
+            await using var read = database.Open(CursorScope);
+            Assert.Single(await read.RuntimeCheckpointCommits.Where(row => row.CommitId == EfRelationalIdentity.Encode("retained-root-update")).ToArrayAsync());
+        }
     }
 
     [Theory]

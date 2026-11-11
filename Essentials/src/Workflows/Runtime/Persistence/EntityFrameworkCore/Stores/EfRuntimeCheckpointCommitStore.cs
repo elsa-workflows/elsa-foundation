@@ -346,16 +346,16 @@ public sealed class EfRuntimeCheckpointCommitStore(
                     attempt++;
                 }
                 catch (Exception exception) when (fenceUnchecked &&
-                    exception is not EfRuntimeCheckpointParticipantStaging.ExistingRootLeaseRequiredException &&
                     !(exception is OperationCanceledException && writeCancellationToken.IsCancellationRequested))
                 {
                     // The attempt failed while staging or in its first save, before the row had confirmed its fence,
                     // and it has rolled back. A commit that reads the row first never stages or saves for a drain
-                    // that lost its run: it is refused as stale. So look at the row once before the failure leaves,
-                    // and let a lost run leave as stale here too. When the look itself fails, the failure leaves. A
-                    // cancellation of this call leaves as it is; an OperationCanceledException while the call is
-                    // not cancelled is a provider's timeout and is looked into like any failure. A required root
-                    // lease is not a failure: the caller takes the lease and commits again.
+                    // that had lost its run when the row was read: it is refused as stale. So look at the row once
+                    // before the failure leaves, and let a lost run leave as stale here too. When the look itself
+                    // fails, the failure leaves. The one thing not looked into is a cancellation of this call; an
+                    // OperationCanceledException while the call is not cancelled is a provider's timeout and is
+                    // looked into like any failure. A required root lease is looked into as well: it sends the
+                    // caller to take root write leases, which a drain that lost its run must not get to do.
                     fenceUnchecked = false;
                     try
                     {
@@ -511,8 +511,8 @@ public sealed class EfRuntimeCheckpointCommitStore(
 
                 // The fence of a commit that did not read the ownership row. The cursor is looked up again, because
                 // staging took time: a cursor that is no longer usable means the row is read here after all. With
-                // the bump staged, the fence stays unconfirmed until the save has written it: the save writes other
-                // rows first, and a failure on one of those says nothing about the lease.
+                // the bump staged, the fence stays unconfirmed until the save has written it: the save can write
+                // other rows first, and a failure on one of those says nothing about the lease.
                 ExecutionLivenessStateEntity? fenceBump = null;
                 if (fenceUnchecked)
                 {
