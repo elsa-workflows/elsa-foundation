@@ -546,6 +546,36 @@ public sealed partial class EfRuntimeCheckpointCommitStoreTests
     }
 
     [Fact]
+    public async Task A_concurrency_failure_of_the_first_save_that_names_no_row_is_not_taken_for_a_cursor_that_is_behind()
+    {
+        // Only a conflict that names the staged bump, and nothing else, means the cursor was behind. A concurrency
+        // failure that names no row says nothing about the bump: the commit is not run again and its cursor stays.
+        await using var database = await TestDatabase.CreateAsync();
+        var clock = new FakeTimeProvider(OccurredAt);
+        var cursors = new EfExecutionFenceCursors(clock);
+        var lease = await AcquireWithCursorAsync(database, cursors, clock);
+        var cursor = Cursor(cursors, lease);
+        var capture = new CommandCaptureInterceptor();
+        var saves = new FirstSaveNamesNoRow();
+        await using var context = database.Open(CursorScope, capture, saves);
+        var store = CursorStore(context, cursors, clock);
+
+        var failure = await Assert.ThrowsAsync<DbUpdateConcurrencyException>(
+            () => store.CommitAsync(FencedCommit("commit-names-no-row", lease), Decision()).AsTask());
+
+        Assert.Empty(failure.Entries);
+        Assert.True(saves.BumpWasStaged);
+        Assert.Equal(1, saves.Saves);
+        // The save sent no command. The read is the look that follows a failed first save: the lease is still held,
+        // so the failure leaves.
+        Assert.Equal((1, 0), OwnershipCommands(capture, 0));
+        Assert.Equal(cursor, Cursor(cursors, lease));
+        Assert.Equal(cursor.Revision, await OwnershipRevisionAsync(database));
+        Assert.Empty(context.ChangeTracker.Entries());
+        Assert.Equal((0, 1), await CommitAndCountAsync(store, capture, FencedCommit("commit-next", lease)));
+    }
+
+    [Fact]
     public async Task A_commit_on_a_context_with_staged_changes_reads_the_row_so_a_cursor_that_is_behind_cannot_fail_it()
     {
         // Such a commit cannot run again: a rollback would lose what the caller staged. So it does not use its
@@ -1084,6 +1114,23 @@ public sealed partial class EfRuntimeCheckpointCommitStoreTests
                 Then();
             }
             return ValueTask.FromResult(result);
+        }
+    }
+
+    /// <summary>Fails the first save of the context with a concurrency exception that names no row, and counts the saves.</summary>
+    private sealed class FirstSaveNamesNoRow : SaveChangesInterceptor
+    {
+        public int Saves { get; private set; }
+        public bool BumpWasStaged { get; private set; }
+
+        public override ValueTask<InterceptionResult<int>> SavingChangesAsync(DbContextEventData eventData, InterceptionResult<int> result, CancellationToken cancellationToken = default)
+        {
+            if (Saves++ != 0)
+                return ValueTask.FromResult(result);
+            // Only a row that was read carries its content. The bump staged from a cursor does not.
+            BumpWasStaged = eventData.Context!.ChangeTracker.Entries<ExecutionLivenessStateEntity>()
+                .Any(entry => entry.State == EntityState.Modified && entry.Entity.ContentJson is null);
+            throw new DbUpdateConcurrencyException("Simulated concurrency failure that names no row.");
         }
     }
 
