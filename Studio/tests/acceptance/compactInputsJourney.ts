@@ -52,11 +52,14 @@ export async function compactInputsJourney(page: Page, info: TestInfo, capture: 
   // then delete the definition, so later journeys see no leftover workflow.
   registerCleanup(async () => {
     if (!runId) return;
-    const listed = await api<{ items: Array<{ id: string; workflowExecutionId: string; status: string; revision: number }> }>("/runtime/user-tasks?view=mine&limit=100");
-    for (const task of listed.items.filter(item => item.workflowExecutionId === runId && (item.status === "Open" || item.status === "Claimed"))) {
+    const openTasks = async () => (await api<{ items: Array<{ id: string; workflowExecutionId: string; status: string; revision: number }> }>("/runtime/user-tasks?view=mine&limit=100"))
+      .items.filter(item => item.workflowExecutionId === runId && (item.status === "Open" || item.status === "Claimed"));
+    for (const task of await openTasks()) {
       await api(`/runtime/user-tasks/${encodeURIComponent(task.id)}/complete`, "POST",
         { revision: task.revision, requestId: `acceptance-cleanup-${task.id}`, action: "Reject", data: { Note: "Closed by acceptance cleanup" } });
     }
+    // Completion is accepted (202) and applied asynchronously; the next journey starts from an empty inbox only once it has.
+    await expect.poll(async () => (await openTasks()).length, { timeout: 15_000, message: "The cleanup's task leaves the inbox" }).toBe(0);
   });
   registerCleanup(async () => { await api(`/design/workflows/definitions/${encodeURIComponent(submitted.definition.id)}`, "DELETE"); });
   const published = await api<{ artifactId: string; sourceReferenceId: string }>(`/publishing/workflows/${submitted.version.id}/publish`, "POST", {});
@@ -157,8 +160,12 @@ export async function compactInputsJourney(page: Page, info: TestInfo, capture: 
   await details.press("Enter");
   await expect(technical).toBeVisible();
   await technical.locator("summary").first().focus();
+  // At 320 px the wrapped run header leaves a shorter inspector, so focusing the summary scrolls it only to the
+  // bottom edge. Scroll the opened details to their start, as a reader would, without moving keyboard focus.
+  await technical.evaluate(element => element.scrollIntoView({ block: "start" }));
   await expect(technical.getByRole("heading", { name: "Authored source", exact: true })).toBeInViewport();
   await expect(technical.getByRole("heading", { name: "Capture details", exact: true })).toBeInViewport();
+  await expect(technical.locator("summary").first()).toBeFocused();
   expect(await titleRow.evaluate(element => element.scrollWidth - element.clientWidth)).toBeLessThanOrEqual(1);
   expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
   await capture(page, info, "technical-details-320");
