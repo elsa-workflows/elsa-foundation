@@ -60,7 +60,7 @@ public sealed class WeaverPolicyTests
         => Assert.Null(WeaverApiMapping.ParseAutonomyMode(wire));
 
     [Fact]
-    public async Task Policy_denies_requests_when_agent_is_disabled()
+    public async Task Policy_denies_requests_when_weaver_is_disabled()
     {
         var evaluator = new DefaultWeaverPolicyEvaluator();
         var decision = await evaluator.EvaluateAvailabilityAsync(WeaverPolicy.Default with { Enabled = false });
@@ -120,7 +120,7 @@ public sealed class WeaverPolicyTests
     }
 
     [Fact]
-    public void Agent_endpoint_actor_resolves_claim_owned_actor_and_tenant()
+    public void Weaver_endpoint_actor_resolves_claim_owned_actor_and_tenant()
     {
         var principal = new ClaimsPrincipal(new ClaimsIdentity(
         [
@@ -136,7 +136,7 @@ public sealed class WeaverPolicyTests
     }
 
     [Fact]
-    public void Agent_endpoint_actor_fails_closed_for_claimless_principals()
+    public void Weaver_endpoint_actor_fails_closed_for_claimless_principals()
     {
         // Issue #374: two distinct principals that both lack the identity/tenant claims must not
         // collide into a shared "anonymous"/"default" identity that grants cross-actor access.

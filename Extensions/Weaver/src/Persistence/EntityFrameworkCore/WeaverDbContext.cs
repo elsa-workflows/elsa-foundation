@@ -4,7 +4,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Elsa.Weaver.Persistence.EntityFrameworkCore;
 
-/// <summary>Agent-owned session, record and audit model; installing the mappings in a consumer context is also supported.</summary>
+/// <summary>Weaver-owned session, record and audit model; installing the mappings in a consumer context is also supported.</summary>
 public abstract class WeaverDbContext : DbContext
 {
     protected WeaverDbContext(DbContextOptions options) : base(options) { }

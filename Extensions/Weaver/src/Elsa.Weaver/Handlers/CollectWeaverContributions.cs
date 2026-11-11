@@ -24,7 +24,7 @@ internal sealed class CollectWeaverContext(IEnumerable<IWeaverContextProvider> s
         var registered = sources.ToList();
         var duplicate = registered.GroupBy(x => x.Descriptor.Id, StringComparer.Ordinal).FirstOrDefault(x => x.Count() > 1);
         if (duplicate is not null)
-            throw new WeaverContributionException($"Duplicate agent context source '{duplicate.Key}'.");
+            throw new WeaverContributionException($"Duplicate Weaver context source '{duplicate.Key}'.");
 
         if (request.Disclosure is { } disclosure)
         {
@@ -52,7 +52,7 @@ internal sealed class CollectWeaverContext(IEnumerable<IWeaverContextProvider> s
                     admittedInputs.Add(attachment with
                     {
                         Origin = WeaverContextOrigin.ClientSnapshot,
-                        AgentScopes = [],
+                        WeaverScopes = [],
                         // A caller's redaction claim is not evidence that its body is redacted.
                         Sensitivity = attachment.Sensitivity == WeaverContextSensitivity.SecretRedacted ? WeaverContextSensitivity.Secret : attachment.Sensitivity
                     });
@@ -191,7 +191,7 @@ internal sealed class CollectWeaverContext(IEnumerable<IWeaverContextProvider> s
                 Content = attachment.Content is null || attachment.Sensitivity == WeaverContextSensitivity.Secret
                     ? null : JsonSerializer.SerializeToElement(attachment.Content).Clone(),
                 References = new System.Collections.ObjectModel.ReadOnlyDictionary<string, string>(attachment.References.ToDictionary()),
-                AgentScopes = Array.AsReadOnly(attachment.AgentScopes.ToArray())
+                WeaverScopes = Array.AsReadOnly(attachment.WeaverScopes.ToArray())
             };
         }
         catch (Exception error) when (error is JsonException or NotSupportedException)
@@ -211,7 +211,7 @@ internal sealed class CollectWeaverCapabilities(IEnumerable<IWeaverCapabilityPro
                 domainEvent.Capabilities.Add(capability);
         var duplicate = domainEvent.Capabilities.GroupBy(x => x.Id, StringComparer.Ordinal).FirstOrDefault(x => x.Count() > 1);
         if (duplicate is not null)
-            throw new WeaverContributionException($"Duplicate agent capability '{duplicate.Key}'.");
+            throw new WeaverContributionException($"Duplicate Weaver capability '{duplicate.Key}'.");
     }
 }
 
@@ -231,7 +231,7 @@ internal sealed class CollectWeaverTools(IEnumerable<IWeaverTool> tools, IEnumer
             var owners = descriptors.Where(source => source.Id == descriptor.DisclosureSourceId).ToArray();
             if (string.IsNullOrWhiteSpace(descriptor.DisclosureSourceId) || owners.Length != 1
                 || owners[0].ModuleId != descriptor.ModuleId)
-                throw new WeaverContributionException($"Agent tool '{descriptor.Name}' requires one installed disclosure source '{descriptor.DisclosureSourceId ?? "(missing)"}' owned by module '{descriptor.ModuleId}'.");
+                throw new WeaverContributionException($"Weaver tool '{descriptor.Name}' requires one installed disclosure source '{descriptor.DisclosureSourceId ?? "(missing)"}' owned by module '{descriptor.ModuleId}'.");
         }
         foreach (var tool in installed)
             domainEvent.Tools.Add(tool);

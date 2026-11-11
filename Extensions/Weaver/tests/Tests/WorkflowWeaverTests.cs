@@ -50,7 +50,7 @@ public sealed class WorkflowWeaverTests
         var request = Snapshot() with
         {
             ContentType = "workflow.request", Target = null, Origin = WeaverContextOrigin.InstalledGuidance,
-            AgentScopes = ["/workflows"], Content = JsonSerializer.SerializeToElement(new
+            WeaverScopes = ["/workflows"], Content = JsonSerializer.SerializeToElement(new
             {
                 requestKind = "workflow-definition", referenceId = "wf-1", intent = "Explain my current draft", name = "My workflow",
                 description = new string('x', 2100), rootActivityVersionId = "root-version-1", providerToken = "secret-value", canDirectApply = true
@@ -62,7 +62,7 @@ public sealed class WorkflowWeaverTests
         Assert.Equal(WeaverContextOrigin.ClientSnapshot, admitted.Origin);
         Assert.Null(admitted.Target);
         Assert.Null(admitted.Client);
-        Assert.Empty(admitted.AgentScopes);
+        Assert.Empty(admitted.WeaverScopes);
         var data = Assert.IsType<JsonElement>(admitted.Content);
         Assert.Equal("Explain my current draft", data.GetProperty("intent").GetString());
         Assert.Equal(2000, data.GetProperty("description").GetString()!.Length);
@@ -139,7 +139,7 @@ public sealed class WorkflowWeaverTests
         Assert.Null(admitted.Content);
         Assert.Null(admitted.Target);
         Assert.Null(admitted.Client);
-        Assert.Empty(admitted.AgentScopes);
+        Assert.Empty(admitted.WeaverScopes);
         Assert.Empty(admitted.References);
         Assert.DoesNotContain(secret, JsonSerializer.Serialize(providerBound));
         Assert.Single(providerBound.Attachments, item => item.Origin == WeaverContextOrigin.InstalledGuidance);

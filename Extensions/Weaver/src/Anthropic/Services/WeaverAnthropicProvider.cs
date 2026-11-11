@@ -12,7 +12,7 @@ using Microsoft.Extensions.Options;
 namespace Elsa.Weaver.Anthropic.Services;
 
 /// <summary>
-/// A real, model-backed agent provider driven by the host orchestrator (NOT an <c>IWeaverHarness</c>). It maps the
+/// A real, model-backed Weaver provider driven by the host orchestrator (NOT an <c>IWeaverHarness</c>). It maps the
 /// orchestrator's accumulated <see cref="WeaverTurnContext"/> to Microsoft.Extensions.AI <see cref="ChatMessage"/>s,
 /// advertises the registry tools as declaration-only functions, and streams one step: assistant text becomes
 /// <see cref="WeaverStreamEventKind.MessageDelta"/> events and model tool calls become

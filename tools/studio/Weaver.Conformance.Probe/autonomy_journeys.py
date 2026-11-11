@@ -18,7 +18,7 @@ import re
 import shutil
 from urllib.parse import quote, urlparse
 
-from agent_transport import _json as strict_json
+from weaver_transport import _json as strict_json
 from artifacts import TOOL, check, sha
 from case_records import retained, correlate_browser_protocol, _normalized_result
 from disclosure_journeys import require_stored_result
@@ -173,7 +173,7 @@ def _owner(root, reference):
 
 
 def _frames(output, session, backend_origin):
-    path = Path(output) / "agent-streams.json"
+    path = Path(output) / "weaver-streams.json"
     streams = strict_json(path.read_text())
     check(isinstance(streams, list) and streams, "Native SSE is mandatory")
     frames = []
@@ -308,7 +308,7 @@ def require_size_owner_journey(output, observation, witness):
 
 
 def _messages(output, a, witness, before):
-    requests = strict_json((Path(output) / "agent-requests.json").read_text())
+    requests = strict_json((Path(output) / "weaver-requests.json").read_text())
     check(isinstance(requests, list), "Native requests were not retained")
     creates = [row for row in requests if urlparse(row["url"]).path == "/_elsa/weaver/sessions"]
     messages = [row for row in requests if urlparse(row["url"]).path.endswith("/messages")]
@@ -511,7 +511,7 @@ def _policy(value, message):
 def _request_kind(row, session, backend_origin):
     url = urlparse(row.get("url", ""))
     check(backend_origin == url.scheme + "://" + url.netloc and not url.query and not url.fragment,
-          "A native Agent request left the owned backend")
+          "A native Weaver request left the owned backend")
     base = "/_elsa/weaver/sessions"
     exact = {(base, "POST"): "create", (base + "/" + quote(session, safe="") + "/messages", "POST"): "message",
              (base + "/" + quote(session, safe="") + "/autonomy", "PUT"): "autonomy"}
@@ -519,7 +519,7 @@ def _request_kind(row, session, backend_origin):
     if kind is None and row.get("method") == "POST":
         match = re.fullmatch(r"/_elsa/weaver/proposals/[^/]+/(approve|execute)", url.path)
         kind = match[1] if match else None
-    check(kind is not None, "An unrecognized native Agent request is not part of this mode journey")
+    check(kind is not None, "An unrecognized native Weaver request is not part of this mode journey")
     return kind
 
 
@@ -652,7 +652,7 @@ def verify_mode_observation(output, observation, witness, provider, transport, *
     requests, session = _messages(output, a, witness, before)
     policy, policy_refs = require_policy_acknowledgement(output, a, requests, transport.http.base, owned_root)
     check(same(a.get("selectionRequests"), [row for row in requests if urlparse(row["url"]).path.endswith("/autonomy")]),
-          "The browser selection requests differ from the actual retained Agent requests")
+          "The browser selection requests differ from the actual retained Weaver requests")
     commands = _commands(output, a, witness)
     frames, sse = _frames(output, a["sameSessionId"], transport.http.base)
     trace = transport.protocol_trace(offset)

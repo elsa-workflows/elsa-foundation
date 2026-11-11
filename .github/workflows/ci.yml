@@ -151,7 +151,9 @@ jobs:
       - name: Exercise the tier tooling
         run: |
           python3 -m unittest discover -s tools/ci -p 'test_workflow_scope.py'
+          python3 -m unittest discover -s tools/ci -p 'test_run_shard_retry_policy.py'
           python3 tools/ci/test_tiers.py --self-test
+          python3 tools/ci/affected_tests.py --self-test
           python3 tools/ci/test_results.py --self-test
           python3 tools/ci/test_tiers.py check-workflows
           python3 tools/ci/test_tiers.py check-docs
@@ -187,8 +189,10 @@ jobs:
             workflow_dispatch) [[ "$DISPATCH_TIER" == pr ]] && tier="pr" || tier="nightly" ;;
             *) tier="push" ;;
           esac
+          # --event: on a pull request only the shards its changes can affect run (#3787); every other event, the
+          # merge queue included, runs them all. pr_count can be 0, and Build & test accepts skipped shards then.
           python3 tools/ci/test_tiers.py select --tier "$tier" ${BASE_SHA:+--base "$BASE_SHA" --head "$GITHUB_SHA"} \
-            --github-output "$GITHUB_OUTPUT" --summary "$GITHUB_STEP_SUMMARY"
+            --event "$GITHUB_EVENT_NAME" --github-output "$GITHUB_OUTPUT" --summary "$GITHUB_STEP_SUMMARY"
 
   # One shard of the PR tier. Each shard rebuilds the solution rather than downloading a shared build: the 4.2 GB
   # output takes about 6 minutes to download against a 3-minute build (spec 263 research R4).
@@ -288,6 +292,7 @@ jobs:
           PLAN: ${{ needs.plan-tiers.result }}
           DOCS_ONLY: ${{ needs.plan-tiers.outputs.docs_only }}
           SHARDS: ${{ needs.pr-shard.result }}
+          PR_COUNT: ${{ needs.plan-tiers.outputs.pr_count }}
           ARCHITECTURE: ${{ needs.architecture-guards.result }}
           CORE: ${{ needs.core-only.result }}
         run: |
@@ -296,6 +301,11 @@ jobs:
           fi
           if [[ "$DOCS_ONLY" == true ]]; then
             echo "Documentation-only change: the .NET build and tests were skipped (spec 257)."; exit 0
+          fi
+          # A pull request whose changes reach no PR-tier test selects no shard (#3787), and the shard job is skipped.
+          # Only an explicit count of 0 allows that; Architecture guards and Core-only still have to pass.
+          if [[ "$PR_COUNT" == 0 && "$SHARDS" == skipped ]]; then
+            echo "No PR-tier shard is affected by this change (see Plan tiers' summary)."; SHARDS=success
           fi
           failed=0
           for pair in "PR shards:$SHARDS" "Architecture guards:$ARCHITECTURE" "Core-only build & test:$CORE"; do
@@ -443,7 +453,7 @@ jobs:
             dotnet build "$project" -c Release --no-restore -p:WarningsNotAsErrors=NU1603
           done < "$RUNNER_TEMP/projects.txt"
 
-      - name: Test the suites, retrying each failure once
+      - name: Test the suites using their declared retry policy
         env:
           SHARD: ${{ toJSON(matrix) }}
           ELSA_SECRETS_EF_POSTGRESQL_TEST_CONNECTION_STRING: Host=127.0.0.1;Port=5432;Username=postgres;Database=postgres
@@ -945,8 +955,8 @@ jobs:
           set -euo pipefail
           # The spec's "Manifest change" edge case: a draft that changes the tiers runs both tiers.
           tier_change=$(git diff --name-only --no-renames "$BASE_SHA...$GITHUB_SHA" -- \
-            tools/ci/test-tiers.json tools/ci/test_tiers.py tools/ci/test_results.py tools/ci/run_shard.py \
-            .github/workflows/ci.yml tools/ci/workflow_scope.py tools/ci/workflow-paths.json | head -1)
+            tools/ci/test-tiers.json tools/ci/test_tiers.py tools/ci/affected_tests.py tools/ci/test_results.py \
+            tools/ci/run_shard.py .github/workflows/ci.yml tools/ci/workflow_scope.py tools/ci/workflow-paths.json | head -1)
           if [[ "$DOCS_ONLY" == true ]]; then
             run=false; reason="documentation only (spec 257)"
           elif [[ "$GITHUB_EVENT_NAME" == merge_group ]]; then
@@ -961,11 +971,17 @@ jobs:
           echo "run=$run" >> "$GITHUB_OUTPUT"
           printf '### Full tier\n\n%s\n' "$reason" >> "$GITHUB_STEP_SUMMARY"
 
+      # On a pull request only the integration units and EF suites its changes can affect run (#3787); both counts can
+      # be 0, and the shard jobs are then skipped by their count conditions. A merge-queue entry runs them all.
       - name: Select the full-tier shards
         id: select
+        env:
+          # The same switch check as Plan tiers runs when a change turns integrationLeavesPrTier on; gh needs a token.
+          GH_TOKEN: ${{ github.token }}
+          BASE_SHA: ${{ github.event_name == 'pull_request' && format('{0}^1', github.sha) || github.event_name == 'merge_group' && github.event.merge_group.base_sha || '' }}
         run: >-
-          python3 tools/ci/test_tiers.py select --tier full
-          --github-output "$GITHUB_OUTPUT" --summary "$GITHUB_STEP_SUMMARY"
+          python3 tools/ci/test_tiers.py select --tier full --base "$BASE_SHA" --head "$GITHUB_SHA"
+          --event "$GITHUB_EVENT_NAME" --github-output "$GITHUB_OUTPUT" --summary "$GITHUB_STEP_SUMMARY"
 
 
   full-tier:
@@ -1001,7 +1017,10 @@ jobs:
           if [[ ( "$INTEGRATION_COUNT" != 0 && "$INTEGRATION" != success ) || ( "$CONTAINER_COUNT" != 0 && "$CONTAINERS" != success ) ]]; then
             echo "::error::The full-tier shards did not succeed ($INTEGRATION, $CONTAINERS)."; exit 1
           fi
-          echo "Every integration shard and EF container shard passed."
+          if [[ "$INTEGRATION_COUNT" == 0 && "$CONTAINER_COUNT" == 0 ]]; then
+            echo "No full-tier shard is affected by this change (see Plan full tier's summary)."; exit 0
+          fi
+          echo "Every selected integration shard and EF container shard passed."
 
   studio-lint-and-test:
     needs: plan-scope

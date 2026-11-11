@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import type { StudioWeaverClientExecutionResult, StudioWeaverPreparedInvocation, StudioWeaverToolAvailability } from "@elsa-workflows/studio-sdk";
 import type { ActivityCatalogItem, WorkflowDefinitionDetails, WorkflowDraft } from "../workflowTypes";
-import type { WorkflowAgentController } from "../workflowAgent";
+import type { WorkflowWeaverController } from "../workflowWeaver";
 import {
   applyWorkflowDesignerPosition,
   applyWorkflowOperationBatch,
@@ -35,7 +35,7 @@ type Pending = {
 
 export function useWorkflowGraphOperationBatch({ draft, details, catalog, document, controller, holdForReview, reviewHeld, canEdit, setStatus, setError, history, resourceType }: {
   draft: WorkflowDraft | null; details: WorkflowDefinitionDetails | null; catalog: ActivityCatalogItem[];
-  document: WorkflowDocumentApi; controller?: WorkflowAgentController; holdForReview(held: boolean): boolean; reviewHeld: boolean;
+  document: WorkflowDocumentApi; controller?: WorkflowWeaverController; holdForReview(held: boolean): boolean; reviewHeld: boolean;
   canEdit?(): boolean; setStatus(value: string): void; setError(value: WorkflowErrorInput): void;
   /** The designer history an Operation Batch is recorded in and undone through; without it a batch is refused. */
   history?: WorkflowBatchHistory;
@@ -221,7 +221,7 @@ export function useWorkflowGraphOperationBatch({ draft, details, catalog, docume
     // The review card's whole-change Undo for a batch is designer-history Undo of the batch entry, so a later history
     // Undo can never apply the batch twice. It acts only while the batch entry is the current position.
     const batchIdOf = (token: string) => token.startsWith(batchUndoPrefix) ? token.slice(batchUndoPrefix.length) : null;
-    const batch: NonNullable<WorkflowAgentController["batch"]> = {
+    const batch: NonNullable<WorkflowWeaverController["batch"]> = {
       state(token) {
         const id = batchIdOf(token);
         const current = latest.current;

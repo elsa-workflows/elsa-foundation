@@ -55,10 +55,10 @@ internal sealed class WeaverRecordCodec(ISecretValueProtector protector)
         // A protector may be any Secrets implementation; whatever it throws for unauthenticated input is unreadable state.
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            throw new InvalidDataException("A protected agent record cannot be authenticated with the configured keys.", exception);
+            throw new InvalidDataException("A protected Weaver record cannot be authenticated with the configured keys.", exception);
         }
         if (envelope is null || envelope.Purpose != purpose || envelope.Owner != owner || envelope.Id != id || envelope.Value is null)
-            throw new InvalidDataException("A protected agent record does not belong to the row that holds it.");
+            throw new InvalidDataException("A protected Weaver record does not belong to the row that holds it.");
         return envelope.Value;
     }
 

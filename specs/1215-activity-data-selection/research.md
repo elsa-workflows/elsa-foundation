@@ -392,6 +392,30 @@ facts are trusted for planning, not for safety. The existing hydrator check stay
 reuse `ValidateAssignmentPayload` (`WorkflowIntrinsicExecutor.cs:721-729`); its external path (`:673-712`) and
 `HasExternalProjection` (`:741-743`) need the same selector.
 
+**As delivered in slice B (corrects the text above where they differ).**
+- One internal reader, `RuntimeMemberRead`, serves the materializer and the intrinsic executor; the selector is
+  `RuntimeReadSelector`. The whole-value binding is derived per read, not cached in `PreparedInputs`.
+- *Name matching* enumerates the object's members with `JsonProperty.NameEquals` (ordinal) and keeps the last match,
+  so duplicate-key behaviour does not depend on `TryGetProperty`'s handling of repeated names.
+- *Protection:* a source whose policy requires encryption is refused with `VF-SEL-003` rather than read, because the
+  runtime only ever holds such a value withheld; a withheld source is refused exactly as its whole-value read is; a
+  live resource is refused with `VF-SEL-003`. The selected member carries the binding policy combined with the
+  source's, so it is never less protected than the whole value.
+- *External sources* are read whole through `IExternalPayloadStore`. A named result projection on an external result
+  uses the existing external rule (dotted path, case-insensitive fallback) before the exact segments. The selected
+  member is stored through the input's normal destination storage with the source's storage profile as fallback; it
+  is not forced external.
+- *Codes:* `VF-SEL-001` absent (or an absent source) where the input is required or not nullable; `VF-SEL-002` null
+  source, prefix or member where the input is not nullable (an optional producer that did not run reads as a null
+  source, decision 8); `VF-SEL-003` a segment applied to an array, string, number or boolean, or an unselectable
+  source; `VF-SEL-004` a conversion failure or a member that does not deserialize into the input type. An optional and
+  nullable input reads an absent member as `Absent` and a null one as `ExplicitNull`. The one exception type is
+  internal, `RuntimeReadSelectionException`; the scheduler records its code as `runtime.inputFailureCode` and the input
+  as `runtime.inputKey` on the poisoned work item, beside the fault type and message. An intrinsic always refuses an
+  absent member and writes a null member as null.
+- *Fit* needs the type registry for a typed input; `Object`, `Elsa.Any` and `JsonElement` inputs accept any JSON.
+- `RequiresActivityHistory` now treats request and variable member reads as their whole-value roles.
+
 **Snapshots and retries.** The snapshot stores the selected, converted value. Retry successors copy the pinned
 snapshot values unchanged (`WR/Services/Alterations/ActivitySuccessorStaging.cs:64-66`), so a retry never
 re-selects. Composites that re-materialize inputs on child completion
@@ -428,6 +452,23 @@ caching the verdict with the burst-cached executable. In one new binary the guar
 removed the capability; across versions the enum fence (§3) and placement (`Unresolved`) do the work. An old
 runtime cannot be retrofitted; it refuses by failing to read.
 
+**As delivered in slice B (corrects the paragraph above).**
+- *Advertisement:* `InputMemberSelectionCapability` reports schema `1` only while the composed
+  `IRuntimeActivityInputMaterializer` is the built-in `RuntimeActivityInputMaterializer`; a host that replaces it
+  advertises nothing (`WR/Services/Values/InputMemberSelectionCapability.cs`). This replaces the composition check of
+  decision 10: a replaced materializer stays a valid host for every executable without member reads, instead of
+  failing startup.
+- *Guards:* `SchedulerWorkHandlerHelpers.EnsureMemberSelectionSupported` asks the one `IRuntimeRequirementChecker`
+  about the member-selection requirement only, and refuses when it is not `Available` or when no checker is composed.
+  It runs at every activity start (`WorkflowStartActivitySchedulerWorkHandler`, so the root never starts) and at
+  bookmark resume before the bookmark is consumed (`WorkflowResumeBookmarkSchedulerWorkHandler`). Every start,
+  dispatcher-made or queued, reaches the root's activity start, so the dispatchers and the drain read need no guard of
+  their own; guarding the shared drain read would also have turned distributed placement's precise "requirement
+  unmet" into "cannot be read". A refusal is a poisoned work item and a blocking incident naming the requirement; the
+  Start work item may already have written the execution's started checkpoint, but no activity runs. Other
+  requirement kinds keep their existing enforcement: checking them all here would refuse executables whose descriptor
+  consumers advertise no capability today.
+
 ### 9. Other source families
 
 | Kind | Differs from the result case | Shape facts |
@@ -448,7 +489,7 @@ runtime can run: half-enabled and reachable.
 | Slice | Adds | Inert until the next slice because | Proving tests | Risk |
 |---|---|---|---|---|
 | A. Member-read model (T011; hashing part of T013; requirement derivation of T016; model and hash part of T017) | Enum members, `RuntimeReadSelection`, constructor overload and invariants, `Selection` serialization, hash arms with throwing default, fingerprint append, inspection view, derived requirement, PublicAPI. | Nothing compiles a member binding; the resolver throws for one; no capability is advertised, so preflight, import and placement report the requirement unmet. Locally there is no front-door guard until slice B: a hand-built member executable runs up to its reader, whose input read is refused before construction (run: `MemberReadRefusalTests`). | Invariant rows; round trip; corpus goldens unchanged; distinct hashes for distinct paths, modes, types and delimiter-bearing names; old-reader controls (§11); requirement derived for member, absent for whole. | Low–medium: public shape and hash rendering. Delivered (receipt in [tasks](tasks.md)). |
-| B. Runtime selection (T014, T015, capability and guards of T016, runtime part of T017) | Selector, materializer and intrinsic integration inline and external, fit before snapshot, reason codes (one dedicated exception type, `VF-SEL` code first), capability with composition check, front-door and drain guards, and the `RequiresActivityHistory` update so request and variable member reads stop fetching activity history (§7). | Still no publication path emits member bindings; only hand-built executables reach it, and those now run correctly. | Unit rows for every outcome in §7, exact and literal names; inline/external parity; intrinsic; constructor counter and no snapshot commit on failure; retry reuse; real engine harness in a Sequence and a top-level Flowchart; guards refuse start, resume and queued work without the capability. | High: materialization order, external values, protection. |
+| B. Runtime selection (T014, T015, capability and guards of T016, runtime part of T017) | Selector, materializer and intrinsic integration inline and external, fit before snapshot, reason codes (one dedicated exception type, `VF-SEL` code first), capability with composition check, front-door and drain guards, and the `RequiresActivityHistory` update so request and variable member reads stop fetching activity history (§7). | Still no publication path emits member bindings; only hand-built executables reach it, and those now run correctly. | Unit rows for every outcome in §7, exact and literal names; inline/external parity; intrinsic; constructor counter and no snapshot commit on failure; retry reuse; real engine harness in a Sequence and a top-level Flowchart; guards refuse start, resume and queued work without the capability. | High: materialization order, external values, protection. Delivered: capability by composed materializer rather than a composition check, guards at activity start and bookmark resume (§8); receipt in [tasks](tasks.md). |
 | C. Publish result member reads (T012, T013, T017 for `ActivityResultMember`) | Authored parse, analyzer offer and admission, compiler branch and old-kind refusal, pin pass, linker on the selected type, remapper arms, contract text (§5). | Enables the feature for API clients; the Studio member picker (T022) stays gated in its own leaf. | Offer-equals-admission rows; refusal before any write through the real publish handler; template placement; real host publish → run in a Sequence and a top-level Flowchart, inline and external (acceptance 1). | Medium–high. |
 | D. Other families (T012, T013 for the rest) | `VariableMember`, `WorkflowRequestMember`, `InputMember` and its placement lowering. | Each kind refused until its row lands. | Deferred-fit rows; placement lowering keeps segments; reopen and publish. | Medium. |
 
@@ -465,7 +506,7 @@ runtime can run: half-enabled and reachable.
 | 7 | Contract identity in the hash | Profile revision only, not the metadata-asset revision. | A metadata re-scan that changed facts in a way the hashed fields miss would not change identity. |
 | 8 | Optional producer missing | Keep `ExplicitNull`, as whole-value reads. | The issue wants missing producer and null "reported distinctly"; here they differ only in diagnostics. |
 | 9 | Fit for `Known` reads | Always run the fit check before the snapshot. | A second deserialization per member read; whole-value reads do not pay it. |
-| 10 | Capability and replaced materializer | Fail composition when the capability is present but the materializer is replaced. | Blocks a custom materializer that delegates correctly to the built-in one. |
+| 10 | Capability and replaced materializer | Decided in slice B: advertise only while the built-in materializer is composed, so a replaced one advertises nothing and member executables are refused before they run (§8). Was: fail composition. | A custom materializer that delegates correctly to the built-in one cannot advertise; an explicit opt-in can come later. |
 | 11 | Path size bound | 64 segments (existing query bound) and 4 096 UTF-16 code units in total. | Arbitrary; a long dictionary key could exceed it where JSON itself would not. |
 | 12 | Name clash | Keep the code-first builder's `WorkflowRequestMember<T>` (`WorkflowValue.cs:28`), which writes the legacy dotted `WorkflowRequest` path (`WorkflowBuilder.cs:117-123`), and document it. | Same name, different wire meaning, in the same product as the new discriminant (ADR 0080 D5 plain names). |
 

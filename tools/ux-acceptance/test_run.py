@@ -38,9 +38,9 @@ class VerdictTests(unittest.TestCase):
     def test_inventory_adds_bounded_supplementary_cases(self):
         standard = {journey for journey, projects in acceptance.JOURNEY_PROJECTS.items() if projects == acceptance.PROJECTS}
         supplements = acceptance.JOURNEYS - standard
-        self.assertEqual(13, len(standard))
+        self.assertEqual(14, len(standard))
         self.assertEqual(set(acceptance.SUPPLEMENT_PROJECTS), supplements)
-        self.assertEqual(78, sum(len(acceptance.JOURNEY_PROJECTS[journey]) for journey in standard))
+        self.assertEqual(84, sum(len(acceptance.JOURNEY_PROJECTS[journey]) for journey in standard))
         self.assertEqual(9, sum(len(acceptance.JOURNEY_PROJECTS[journey]) for journey in supplements))
         self.assertEqual({f'touch-{width}-{mode}' for width in (360, 390, 1440) for mode in ('light', 'dark')},
                          acceptance.JOURNEY_PROJECTS['coarse pointer grouped navigation'])
@@ -60,6 +60,14 @@ class VerdictTests(unittest.TestCase):
         spec = next(row for row in report['suites'][0]['specs'] if row['title'] == 'coarse pointer grouped navigation')
         spec['tests'].append(copy.deepcopy(spec['tests'][0]) | {'projectName': 'narrow-light'})
         with self.assertRaises(ValueError): acceptance.verdict(report, self.root)
+
+    def test_compact_inputs_preserve_inherited_named_journeys(self):
+        required = {'collections and connection creation', 'agent authoring and navigation',
+                    'executable designer parity',
+                    'compact runtime Inputs retain exact captured values and accessible technical details'}
+        self.assertTrue(required <= acceptance.JOURNEYS)
+        self.assertEqual(['reference', 'compact-values', 'technical-details', 'nested-values', 'details-closed', 'technical-details-320', 'compact-values-320'],
+                         acceptance.CAPTURES['compact runtime Inputs retain exact captured values and accessible technical details'])
 
     def test_scoped_run_requires_every_project_and_rejects_extra_or_unknown_journeys(self):
         journey = 'feature filtering and settings dialogs'

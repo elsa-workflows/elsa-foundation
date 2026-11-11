@@ -3112,12 +3112,12 @@ html[data-nav-mode="top"] .topbar-actions .user-menu {
     flex-wrap: wrap;
   }
 
-  .topbar-actions > button.agent-launcher {
+  .topbar-actions > button.weaver-launcher {
     height: auto;
     min-height: 36px;
   }
 
-  .topbar-actions .agent-session-indicator {
+  .topbar-actions .weaver-session-indicator {
     flex-wrap: wrap;
     padding: 4px 0;
   }

@@ -213,7 +213,7 @@ Every shell with the runtime API has this machinery: the runtime API feature cal
 
 **What is buffered:** writes to run, activity execution, durable value and scheduler state, and continuation intents (`EnqueueSchedulerWork`), which are consumed from the buffer within the segment so a folded segment does not save its own continuation.
 
-**What is never buffered:** lease, heartbeat and ownership writes go straight to the operational store. The folded commit still goes through the single checkpoint committer, which stamps the drain's ownership lease as `ExpectedFence` so a stale writer is refused before anything is saved.
+**What is never buffered:** lease, heartbeat and ownership writes go straight to the operational store. The folded commit still goes through the single checkpoint committer, which stamps the drain's ownership lease as `ExpectedFence`, so nothing of a stale writer's commit is kept. The EF store checks that fence in the commit's transaction: it reads the ownership row and validates the lease, or, with a usable [fence cursor](glossary/elsa.md), lets the save bump the row without reading it.
 
 **Boundaries that always save.** These checkpoints are never folded away:
 
@@ -383,6 +383,7 @@ The two nested-invoke handlers are the exception: their commits go through a dyn
 | Timer and bookmark stores never buffered | `RuntimeCheckpointCoalescingTests.Coalescing_DoesNotDecorateDurableTimerOrBookmarkStores_SoDelaySuspensionStaysDurable` |
 | Every mode | `PersistenceModeFlushTests`: suspension, resume, fault, handler fault, cancellation and ownership loss |
 | Host-agnostic runtime | `RuntimeCoreCompositionRootTests` |
+| Fence check at commit | `EfRuntimeCheckpointCommitStoreTests` on SQLite: no read of the ownership row with a usable fence cursor; a read after a heartbeat, takeover, borrow, release or run deletion the stores did not hear of, and after lease expiry, with the refusal reason each gives; a failed commit and a commit of unknown outcome; the look at the row after a failed staging or first save, and before a required root lease is taken. `EfExecutionFenceCursorsTests`: out-of-order cursor writes, distrust, removal and the sweep. `EfExecutionFenceCursorCompositionTests`: which stores record a cursor, and the heartbeat's own service scope. The smoke tests in `EfRuntimeCheckpointFenceCursorProviderSmokeTests.cs` on PostgreSQL, SQL Server and MySQL: a takeover and a heartbeat through a second connection |
 
 ## Where this lives in the code
 

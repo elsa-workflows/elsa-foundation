@@ -1267,7 +1267,7 @@ export interface StudioWeaverContextAttachment {
   /** Caller values are input to installed backend admission, never self-asserted trust. */
   origin?: StudioWeaverContextOrigin;
   client?: StudioWeaverClientBinding | null;
-  agentScopes?: string[];
+  weaverScopes?: string[];
 }
 
 export interface StudioWeaverContributionDiagnostic {
@@ -1541,7 +1541,7 @@ export interface StudioWeaverPromptActionContribution<TContext = unknown> extend
   createPrompt(context: TContext): StudioWeaverPromptRequest | null;
 }
 
-/** Compatibility names for callers migrating to the canonical agent dispatcher. */
+/** Compatibility names for callers migrating to the canonical Weaver dispatcher. */
 export type StudioAiPromptRequest = StudioWeaverPromptRequest;
 export type StudioAiPromptResult = StudioWeaverPromptResult;
 export type StudioAiPromptActionContribution<TContext = unknown> = StudioWeaverPromptActionContribution<TContext>;
@@ -1746,7 +1746,7 @@ export type StudioAiPromptDispatcher = StudioWeaverPromptDispatcher;
 
 /**
  * Observable availability of the AI provider backing Weaver surfaces. The host reports the latest state
- * (from the agent bootstrap's provider status); modules subscribe to gate provider-dependent affordances
+ * (from the Weaver bootstrap's provider status); modules subscribe to gate provider-dependent affordances
  * — e.g. disabling an AI-only action with an explanatory tooltip when the provider is not configured.
  * Defaults to available so affordances stay enabled until the host reports otherwise.
  */

@@ -5,11 +5,12 @@ import { decisionsCapability } from "./decisionsApi";
 import { collectEvaluateDecisionValidation } from "./decisionDraftValidation";
 import { createDecisionInputsEditorContribution } from "./DecisionInputsEditor";
 import { DecisionVersionEditor } from "./DecisionVersionEditor";
+import { newDecisionHandoffParameter } from "./newDecisionHandoff";
 import "./styles.css";
 const Page = lazy(() => import("./DecisionsPage").then(module => ({ default: module.DecisionsPage })));
 function DecisionsRoute({ api, navigate }: { api: ElsaStudioModuleApi; navigate(path: string): void }) {
   const location = useStudioRouteLocation();
-  return <Suspense fallback={<p role="status">Loading decisions…</p>}><Page key={`${api.backend.baseUrl}:${api.runtime.identity?.tenantId}:${api.runtime.identity?.subject}`} api={api} navigate={navigate} assetId={location.searchParams.get("decision")} versionId={location.searchParams.get("version")} isNew={location.searchParams.has("new")} /></Suspense>;
+  return <Suspense fallback={<p role="status">Loading decisions…</p>}><Page key={`${api.backend.baseUrl}:${api.runtime.identity?.tenantId}:${api.runtime.identity?.subject}`} api={api} navigate={navigate} assetId={location.searchParams.get("decision")} versionId={location.searchParams.get("version")} isNew={location.searchParams.has("new")} handoff={location.searchParams.get(newDecisionHandoffParameter)} /></Suspense>;
 }
 export function register(api: ElsaStudioModuleApi) {
   api.featureAreas.add({ id: "decisions", title: "Decisions", description: "Reusable business policies, decision tables and saved cases.", navGroup: "Workspace", ownedPaths: ["/decisions"], required: false, defaultEnabled: true, order: 35,

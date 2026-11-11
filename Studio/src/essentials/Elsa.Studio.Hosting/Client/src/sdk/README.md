@@ -244,11 +244,11 @@ keeps retry IDs stable when a delivery response is uncertain.
 ## Weaver Contributions
 
 Studio modules can enrich Weaver through `api.weaver` without calling an external
-agent provider from the browser. Weaver is the visible assistant name and the
+AI provider from the browser. Weaver is the visible assistant name and the
 name of the SDK surface (`api.weaver`, `StudioWeaver*`, `createWeaverRegistry`,
-`studioSlots.weaver*`); `agent` remains only in the wire name `agentScopes`
-and in the prompt request's `agent` property, which asks for a named assistant
-other than Weaver. Provider
+`studioSlots.weaver*`) and of the wire names (`weaverScopes`,
+`workflows.weaver.*` ids). The prompt request's `agent` property is the one
+place that says agent: it asks for a named agent other than Weaver. Provider
 access, policy, redaction, approvals, execution, and audit stay in the
 Elsa.Server backend.
 

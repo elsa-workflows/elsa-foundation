@@ -1,4 +1,4 @@
-# Agent EF session record store
+# Weaver EF session record store
 
 `Elsa.Weaver.Persistence.EntityFrameworkCore` is the opt-in durable backing for Weaver sessions
 ([#3441](https://github.com/elsa-workflows/elsa-foundation/issues/3441),
@@ -15,12 +15,12 @@ depends on `Weaver` and `Secrets`), or register directly:
 services.AddWeaverEntityFrameworkCore(new()
 {
     Provider = "Sqlite",
-    ConnectionString = "Data Source=agent.db"
+    ConnectionString = "Data Source=weaver.db"
 });
 ```
 
 SQLite, SQL Server, Npgsql PostgreSQL and Oracle MySQL have separate context/migration sets under
-`Migrations/Agent/<Provider>/`. The module uses the shared EF startup policy, named connections,
+`Migrations/Weaver/<Provider>/`. The module uses the shared EF startup policy, named connections,
 schema selection and pooling. The stable history module is `ElsaWeaver`.
 
 ## Selection
@@ -98,11 +98,11 @@ kept as the inner exception); nothing is settled or changed. A provider failure 
 ## Tests
 
 `Extensions/Weaver/tests/Persistence/Tests` covers the store on SQLite with the actual migrations,
-including the Agent restart, deduplication, execution and ownership scenarios run over this store.
+including the Weaver restart, deduplication, execution and ownership scenarios run over this store.
 `Extensions/Weaver/tests/Persistence/ProviderTests` applies the migrations on PostgreSQL 16, SQL Server
 2022 and MySQL 8.4 through Testcontainers and exercises round-trips, fencing and competing writers. It
 skips without Docker unless `ELSA_REQUIRE_NATIVE_PROVIDER_MATRIX=1`.
 
 See [extension points](EXTENSION_POINTS.md). Regenerate the pre-GA Initial migrations with
-`bash tools/ef/generate-module-migrations.sh 'Agent.*DbContext'`; temporarily remove the generated
+`bash tools/ef/generate-module-migrations.sh 'Weaver.*DbContext'`; temporarily remove the generated
 migration API entries while their types are absent, then restore the API baseline and build normally.

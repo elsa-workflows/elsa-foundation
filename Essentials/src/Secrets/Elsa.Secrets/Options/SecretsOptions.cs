@@ -1,8 +1,17 @@
+using Elsa.Secrets.Core.Models;
+
 namespace Elsa.Secrets.Options;
 
 public sealed class SecretsOptions
 {
     public const string SectionName = "Elsa:Secrets";
+
+    /// <summary>
+    /// Name of the registered writable <c>ISecretStore</c> used for connection-owned field secrets
+    /// and OAuth grant and PKCE secrets. A host-provided store is selected by this name, not by
+    /// reusing <c>encrypted</c>. Defaults to <see cref="SecretStoreNames.Encrypted"/>.
+    /// </summary>
+    public string DefaultWritableStoreName { get; set; } = SecretStoreNames.Encrypted;
 
     /// <summary>
     /// Legacy single encryption key. When set it is added to the key-ring under the reserved id

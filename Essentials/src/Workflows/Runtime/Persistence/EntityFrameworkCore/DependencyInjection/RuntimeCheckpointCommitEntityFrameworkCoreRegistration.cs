@@ -38,12 +38,19 @@ public static class RuntimeCheckpointCommitEntityFrameworkCoreRegistration
             foreach (var descriptor in contracts)
                 services.Remove(descriptor);
 
+            // One set of fence cursors per service provider: the lease heartbeat that moves a cursor runs in a service
+            // scope of its own, apart from the scope the drain commits in. The EF execution-liveness store records
+            // them when it saves an ownership row, and it does so only when this registration has added them.
+            services.TryAddSingleton(provider => new EfExecutionFenceCursors(provider.GetService<TimeProvider>()));
             services.TryAddScoped(provider => new EfRuntimeCheckpointCommitStore(
                 provider.GetRequiredService<RuntimeDbContext>(),
                 provider.GetRequiredService<IPersistenceAccessContextAccessor>(),
                 provider.GetService<TimeProvider>(),
                 provider.GetService<IWorkflowExecutableRootWriteLeaseManager>())
-            { CoalescingSessions = provider.GetService<IRuntimeCoalescingSessionAccessor>() });
+            {
+                CoalescingSessions = provider.GetService<IRuntimeCoalescingSessionAccessor>(),
+                FenceCursors = provider.GetService<EfExecutionFenceCursors>()
+            });
             var concrete = services.Single(descriptor => descriptor.ServiceType == typeof(EfRuntimeCheckpointCommitStore));
             var contract = ServiceDescriptor.Scoped<IRuntimeCheckpointCommitStore>(provider =>
                 provider.GetRequiredService<EfRuntimeCheckpointCommitStore>());

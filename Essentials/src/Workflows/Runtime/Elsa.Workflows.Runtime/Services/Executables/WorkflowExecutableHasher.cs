@@ -167,7 +167,7 @@ public sealed class WorkflowExecutableHasher : IWorkflowExecutableHasher
     private static string Framed(string? value) =>
         value is null ? "-" : $"{value.Length}#{value}";
 
-    private static string FormatSelection(RuntimeReadSelection selection) =>
+    internal static string FormatSelection(RuntimeReadSelection selection) =>
         $"sel:{selection.SchemaVersion}:{selection.Mode}:{selection.Segments.Count}:{string.Concat(selection.Segments.Select(Framed))}" +
         $":{Framed(selection.SelectedType is null ? null : FormatType(selection.SelectedType))}:{selection.MayBeAbsent}:{selection.MayBeNull}" +
         $":{selection.Representation}:{Framed(selection.ProfileRevision)}";

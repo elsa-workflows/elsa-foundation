@@ -55,8 +55,8 @@ export function createStudioRegistry(
   const featureAreas = createFeatureAreaRegistry(navigation, routes);
   const dashboardWidgets = createDashboardWidgetRegistry({hostPolicy});
   // One dispatcher/availability instance serves both names during producer migration.
-  const agent = createWeaverRegistry({hostPolicy});
-  const ai = { dispatchPrompt: agent.dispatchPrompt, onPrompt: agent.onPrompt, publishPromptResult: agent.publishPromptResult, onPromptResult: agent.onPromptResult };
+  const weaverRegistry = createWeaverRegistry({hostPolicy});
+  const ai = { dispatchPrompt: weaverRegistry.dispatchPrompt, onPrompt: weaverRegistry.onPrompt, publishPromptResult: weaverRegistry.publishPromptResult, onPromptResult: weaverRegistry.onPromptResult };
 
   return {
     host: hostContext,
@@ -82,7 +82,7 @@ export function createStudioRegistry(
     workflowTestStimulusEditors: createContributionRegistry<RegistryItem<NonNullable<ElsaStudioModuleApi["workflowTestStimulusEditors"]>>>({ slot: studioSlots.workflowTestStimulusEditors,hostPolicy }),
     workflowRunRelatedLinks: createContributionRegistry<RegistryItem<NonNullable<ElsaStudioModuleApi["workflowRunRelatedLinks"]>>>({ slot: studioSlots.workflowRunRelatedLinks,hostPolicy }),
     settingEditors: createContributionRegistry<RegistryItem<NonNullable<ElsaStudioModuleApi["settingEditors"]>>>({ slot: studioSlots.settingEditors,hostPolicy }),
-    weaver: agent,
+    weaver: weaverRegistry,
     workflowDesigner: {
       nodeRenderers: createContributionRegistry({ slot: studioSlots.workflowDesignerNodeRenderers,hostPolicy }),
       toolboxItems: createContributionRegistry({ slot: studioSlots.workflowDesignerToolboxItems,hostPolicy }),

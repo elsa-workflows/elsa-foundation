@@ -14,7 +14,7 @@ using Xunit;
 
 namespace Elsa.Workflows.Runtime.Tests;
 
-public sealed class CanonicalRuntimeInputBindingResolverTests
+public sealed partial class CanonicalRuntimeInputBindingResolverTests
 {
     private static readonly ValueTypeDescriptor StringType = new("String");
     private readonly RuntimeInputBindingResolver _resolver = new();

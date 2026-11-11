@@ -106,8 +106,8 @@ import { WeaverSurface } from "./weaver";
 import "./styles.css";
 import "./themes/workspaceStyles.css";
 import "./navigation/navigation.css";
-import { AgentLauncher, createAgentClient, type AgentSessionIndicatorSession } from "./agent";
-import "./agent/agent.css";
+import { WeaverLauncher, createWeaverClient, type WeaverSessionIndicatorSession } from "./weaver";
+import "./weaver/weaverControls.css";
 import "./weaver/weaver.css";
 import { HostAuthContext } from "./auth/HostAuthContext";
 import { useWorkspaceTabs } from "./workspace/useWorkspaceTabs";
@@ -200,7 +200,7 @@ function AppContent({ authManager,backendSession,connections,modules,manifest }:
   const [themeCapabilities, setThemeCapabilities] = useState<ThemeStoreCapabilities>(defaultThemeStoreCapabilities);
   const [assistantOpen, setAssistantOpen] = useState(false);
   useNotificationScope(backendSession, notificationController, notificationStorage);
-  const [agentSessions, setAgentSessions] = useState<AgentSessionIndicatorSession[]>([]);
+  const [weaverSessions, setWeaverSessions] = useState<WeaverSessionIndicatorSession[]>([]);
   const [incomingPrompt, setIncomingPrompt] = useState<(StudioWeaverPromptRequest & { id: string }) | null>(null);
   const incomingPromptRef = useRef<(StudioWeaverPromptRequest & { id: string }) | null>(null);
   const contentRef = useRef<HTMLElement>(null);
@@ -246,7 +246,7 @@ function AppContent({ authManager,backendSession,connections,modules,manifest }:
     setIncomingPrompt(current => current?.id === id ? null : current);
   }, []);
 
-  // Probe the agent provider once so provider-gated affordances (e.g. the workflow "Risks" action) can be
+  // Probe the Weaver provider once so provider-gated affordances (e.g. the workflow "Risks" action) can be
   // disabled before the user opens the Weaver dock. "unavailable"/"disabled" mean the provider can deliver
   // nothing; a failed probe is treated the same. The Weaver dock refreshes this on its own bootstrap.
   useEffect(() => {
@@ -256,7 +256,7 @@ function AppContent({ authManager,backendSession,connections,modules,manifest }:
       api.weaver.providerAvailability.set(false);
       return;
     }
-    void createAgentClient(api.backend).bootstrap()
+    void createWeaverClient(api.backend).bootstrap()
       .then(result => {
         if (!disposed) api.weaver.providerAvailability.set(result.enabled && result.providerStatus !== "unavailable" && result.providerStatus !== "disabled");
       })
@@ -542,7 +542,7 @@ function AppContent({ authManager,backendSession,connections,modules,manifest }:
         backendBaseUrl={backendBaseUrl}
         backendAction={(api?.shell?.list().some(slot=>slot.placement==="connection") ?? modules.some(item=>item.instance.shell?.some(slot=>slot.placement==="connection"))) ? <ShellContributions api={api} modules={modules} placement="connection" navigate={navigateTo}/> : undefined}
         enabledFeatures={enabledFeatures}
-        assistantAction={evaluateBackendRequirements(backendSession,[{id:"elsa.api.weaver",contractVersion:"1"}]).state === "available" ? <AgentLauncher open={assistantOpen} sessions={agentSessions} onClick={() => setAssistantOpen(current => !current)} /> : null}
+        assistantAction={evaluateBackendRequirements(backendSession,[{id:"elsa.api.weaver",contractVersion:"1"}]).state === "available" ? <WeaverLauncher open={assistantOpen} sessions={weaverSessions} onClick={() => setAssistantOpen(current => !current)} /> : null}
         notificationAction={<NotificationCenter navigate={navigateTo} />}
         themeAction={themeCapabilities.pickerEnabled ? <ThemeSwitcher /> : null}
         accountAction={<UserMenu />}
@@ -579,7 +579,7 @@ function AppContent({ authManager,backendSession,connections,modules,manifest }:
         />
       </ShellFrame>
       {assistantOpen ? (
-        <WeaverSurface key={registryGeneration} api={api!} surface={{ route: path }} variant="dock" onClose={() => setAssistantOpen(false)} onSessionIndicatorChange={setAgentSessions} incomingPrompt={incomingPrompt} onPromptConsumed={consumeIncomingPrompt} />
+        <WeaverSurface key={registryGeneration} api={api!} surface={{ route: path }} variant="dock" onClose={() => setAssistantOpen(false)} onSessionIndicatorChange={setWeaverSessions} incomingPrompt={incomingPrompt} onPromptConsumed={consumeIncomingPrompt} />
       ) : null}
     </ThemeProvider>
   );
