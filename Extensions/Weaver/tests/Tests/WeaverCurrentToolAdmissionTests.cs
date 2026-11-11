@@ -251,7 +251,7 @@ public sealed class WeaverCurrentToolAdmissionTests
         private static WeaverContextAttachment Attachment(WeaverResourceTarget target, IReadOnlyCollection<string> scopes)
             => new("current-resource", Module, target.ResourceId, "Selected resource", "scope.resource", WeaverContextSensitivity.Internal,
                 "selection", "Bounded selected-resource data", new { target.ResourceId, target.Revision }, new Dictionary<string, string>())
-            { ModuleId = Module, Target = target, AgentScopes = scopes };
+            { ModuleId = Module, Target = target, WeaverScopes = scopes };
     }
 
     private sealed class PermissiveAuthority : IWeaverToolAuthorizer

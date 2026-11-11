@@ -52,7 +52,7 @@ internal sealed class CollectWeaverContext(IEnumerable<IWeaverContextProvider> s
                     admittedInputs.Add(attachment with
                     {
                         Origin = WeaverContextOrigin.ClientSnapshot,
-                        AgentScopes = [],
+                        WeaverScopes = [],
                         // A caller's redaction claim is not evidence that its body is redacted.
                         Sensitivity = attachment.Sensitivity == WeaverContextSensitivity.SecretRedacted ? WeaverContextSensitivity.Secret : attachment.Sensitivity
                     });
@@ -191,7 +191,7 @@ internal sealed class CollectWeaverContext(IEnumerable<IWeaverContextProvider> s
                 Content = attachment.Content is null || attachment.Sensitivity == WeaverContextSensitivity.Secret
                     ? null : JsonSerializer.SerializeToElement(attachment.Content).Clone(),
                 References = new System.Collections.ObjectModel.ReadOnlyDictionary<string, string>(attachment.References.ToDictionary()),
-                AgentScopes = Array.AsReadOnly(attachment.AgentScopes.ToArray())
+                WeaverScopes = Array.AsReadOnly(attachment.WeaverScopes.ToArray())
             };
         }
         catch (Exception error) when (error is JsonException or NotSupportedException)

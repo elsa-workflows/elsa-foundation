@@ -167,7 +167,7 @@ public sealed record WeaverContextAttachmentResponse(
     public WeaverResourceTarget? Target { get; init; }
     public WeaverContextOrigin Origin { get; init; }
     public WeaverClientBinding? Client { get; init; }
-    public IReadOnlyCollection<string> AgentScopes { get; init; } = [];
+    public IReadOnlyCollection<string> WeaverScopes { get; init; } = [];
     public string Summary { get; init; } = string.Empty;
     public IReadOnlyDictionary<string, string> References { get; init; } = new Dictionary<string, string>();
 }
@@ -409,7 +409,7 @@ public static class WeaverApiMapping
             Target = attachment.Target,
             Origin = attachment.Origin,
             Client = attachment.Client,
-            AgentScopes = attachment.AgentScopes,
+            WeaverScopes = attachment.WeaverScopes,
             Summary = attachment.Summary,
             References = attachment.References
         };
@@ -432,7 +432,7 @@ public static class WeaverApiMapping
             Target = attachment.Target,
             Client = attachment.Client,
             Origin = WeaverContextOrigin.ClientSnapshot,
-            AgentScopes = []
+            WeaverScopes = []
         };
 
     public static WeaverMessageViewModelResponse ToViewModel(this WeaverMessage message)
@@ -561,7 +561,7 @@ public static class WeaverApiMapping
     public static string ToContractString(this WeaverProviderKind kind) => kind switch
     {
         WeaverProviderKind.ProviderSdkBinding => "provider-sdk-binding",
-        WeaverProviderKind.AgentHarnessProvider => "agent-harness-provider",
+        WeaverProviderKind.WeaverHarnessProvider => "weaver-harness-provider",
         _ => kind.ToString().ToLowerInvariant()
     };
 

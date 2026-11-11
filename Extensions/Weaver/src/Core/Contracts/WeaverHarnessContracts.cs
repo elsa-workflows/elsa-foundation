@@ -14,7 +14,7 @@ public enum WeaverHarnessCapabilities
     Reasoning = 1 << 1,
     Usage = 1 << 2,
     Plan = 1 << 3,
-    SubAgents = 1 << 4,
+    Delegation = 1 << 4,
     Mcp = 1 << 5,
     Permissions = 1 << 6
 }

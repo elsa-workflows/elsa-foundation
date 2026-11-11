@@ -15,7 +15,7 @@ import type {
 
 export type WeaverProviderStatus = "available" | "unavailable" | "disabled" | "degraded";
 export type WeaverAutonomyMode = "manual" | "auto-read-only" | "full-auto";
-export type WeaverProviderKind = "provider-sdk-binding" | "agent-harness-provider" | string;
+export type WeaverProviderKind = "provider-sdk-binding" | "weaver-harness-provider" | string;
 export type WeaverProviderOperation = "chat" | "streaming" | "tool-approval" | "run-status" | "artifacts" | "skills" | "memory" | "file-upload" | string;
 export type WeaverProviderRiskProfile = "read-only" | "review-required" | "sandboxed-execution" | "privileged-execution" | string;
 export type WeaverSessionStatus = "active" | "completed" | "cancelled" | "failed" | "expired";

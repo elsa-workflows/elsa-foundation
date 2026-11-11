@@ -5,7 +5,7 @@ import { StudioHttpError, createHttpClient, type StudioEndpointContext } from ".
 describe("Weaver client", () => {
   it("transports the per-message surface and maps only server-admitted context metadata and opaque payload", async () => {
     const context = stubContext();
-    const admitted = { id: "owner-context", moduleId: "Sample", schemaVersion: "1", source: "Sample", sourceId: "one", label: "Owner snapshot", contentType: "sample", sensitivity: "Internal", scope: "screen", origin: "AuthoritativeRead", summary: "Authorized read", target: { moduleId: "Sample", resourceType: "sample", resourceId: "one", revision: "r2" }, content: { opaque: { value: 42 } }, references: { owner: "one" }, agentScopes: ["sample-read"] };
+    const admitted = { id: "owner-context", moduleId: "Sample", schemaVersion: "1", source: "Sample", sourceId: "one", label: "Owner snapshot", contentType: "sample", sensitivity: "Internal", scope: "screen", origin: "AuthoritativeRead", summary: "Authorized read", target: { moduleId: "Sample", resourceType: "sample", resourceId: "one", revision: "r2" }, content: { opaque: { value: 42 } }, references: { owner: "one" }, weaverScopes: ["sample-read"] };
     context.http.postJson = vi.fn(async () => ({ data: { message: { id: "message", status: "Pending", context: [admitted] }, warnings: [] } })) as typeof context.http.postJson;
     const activeSurface = { route: "/sample/one", resourceType: "sample", resourceId: "one", selection: { opaqueSelection: "selected" } };
     const result = await createWeaverClient(context).sendMessage("session", { message: "Inspect", mode: "explain", activeSurface, contextAttachments: [] });
@@ -212,7 +212,7 @@ describe("Weaver client", () => {
     expect(bootstrap.provider).toMatchObject({
       providerId: "deterministic-workflow-authoring",
       isAvailable: true,
-      providerKind: "agent-harness-provider",
+      providerKind: "weaver-harness-provider",
       riskProfile: "sandboxed-execution",
       supportedOperations: ["chat", "tool-approval"]
     });

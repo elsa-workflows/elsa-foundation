@@ -896,7 +896,7 @@ internal sealed class DefaultWeaverTurnOrchestrator(
         {
             item.Id, item.Source, item.SourceId, item.ContributorId, item.ModuleId, item.ContentType,
             item.SchemaVersion, item.Origin, item.Client, item.Sensitivity,
-            AgentScopes = item.AgentScopes.Distinct(StringComparer.Ordinal).OrderBy(scope => scope, StringComparer.Ordinal).ToArray()
+            WeaverScopes = item.WeaverScopes.Distinct(StringComparer.Ordinal).OrderBy(scope => scope, StringComparer.Ordinal).ToArray()
         }).Cast<object>().ToArray();
         var before = Ordered(left);
         var after = Ordered(right);
@@ -1251,11 +1251,11 @@ internal sealed class DefaultWeaverTurnOrchestrator(
         token.ThrowIfCancellationRequested();
         var tools = new List<IWeaverTool>();
         if (prepared.IsContinuation) return tools;
-        var scopes = prepared.Context.SelectMany(x => x.AgentScopes).ToHashSet(StringComparer.Ordinal);
+        var scopes = prepared.Context.SelectMany(x => x.WeaverScopes).ToHashSet(StringComparer.Ordinal);
         foreach (var tool in await toolRegistry.ListAsync(token))
         {
             var descriptor = tool.Descriptor;
-            if (descriptor.AgentScopes.Count > 0 && !descriptor.AgentScopes.Any(scopes.Contains)) continue;
+            if (descriptor.WeaverScopes.Count > 0 && !descriptor.WeaverScopes.Any(scopes.Contains)) continue;
             if (!(await policyEvaluator.EvaluateCapabilityAsync(session.Policy, descriptor.Name, token)).Allowed) continue;
             var targets = prepared.Context.Where(x => x.ModuleId == descriptor.ModuleId && x.Target is not null)
                 .Select(x => x.Target).Distinct().ToList();

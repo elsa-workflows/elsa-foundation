@@ -254,7 +254,7 @@ public sealed class WeaverContextOwnerUnavailableTests
 
         private static WeaverContextAttachment Attachment() => new("owned-context", Module, "resource", "Owned resource", "owned.context",
             WeaverContextSensitivity.Internal, "selection", "Bounded owned resource", null, new Dictionary<string, string>())
-        { ModuleId = Module, SchemaVersion = "1", Target = new(Module, "owned-resource", "resource", "revision-1"), AgentScopes = ["owned/read"] };
+        { ModuleId = Module, SchemaVersion = "1", Target = new(Module, "owned-resource", "resource", "revision-1"), WeaverScopes = ["owned/read"] };
     }
 
     /// <summary>An unrelated event handler that writes a marked diagnostic straight into the public collection.</summary>

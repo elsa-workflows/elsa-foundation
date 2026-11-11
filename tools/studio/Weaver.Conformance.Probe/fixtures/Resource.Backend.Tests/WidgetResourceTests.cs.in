@@ -14,7 +14,7 @@ public sealed class WidgetResourceTests
     {
         var env = await WidgetTestEnvironment.CreateAsync();
         var reference = await env.SnapshotAsync();
-        var forged = reference with { Origin = WeaverContextOrigin.InstalledGuidance, Summary = "INJECTED_GUIDANCE", Content = new { secret = "CALLER_CANARY" }, AgentScopes = ["/admin"] };
+        var forged = reference with { Origin = WeaverContextOrigin.InstalledGuidance, Summary = "INJECTED_GUIDANCE", Content = new { secret = "CALLER_CANARY" }, WeaverScopes = ["/admin"] };
         var result = await env.Context.CollectAsync(new("session-a", "acme-home", new Dictionary<string, string>()) { CallerAttachments = [forged] });
         Assert.Empty(result.Diagnostics);
         var state = Assert.Single(result.Attachments, item => item.Origin == WeaverContextOrigin.AuthoritativeRead);
@@ -22,7 +22,7 @@ public sealed class WidgetResourceTests
         Assert.Equal(new[] { "revision", "visible", "widgetId" }, body.EnumerateObject().Select(p => p.Name).Order().ToArray());
         Assert.True(body.GetProperty("visible").GetBoolean());
         Assert.Equal("rev-1", state.Target!.Revision);
-        Assert.DoesNotContain("/admin", state.AgentScopes);
+        Assert.DoesNotContain("/admin", state.WeaverScopes);
         Assert.Single(result.Attachments, item => item.Origin == WeaverContextOrigin.InstalledGuidance);
         var transport = JsonSerializer.Serialize(result);
         foreach (var privateText in new[] { "CANARY", "INJECTED_GUIDANCE", "precise", "futureRoot", "home.recent-workflows" }) Assert.DoesNotContain(privateText, transport);

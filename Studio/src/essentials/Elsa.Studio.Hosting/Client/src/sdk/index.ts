@@ -1264,7 +1264,7 @@ export interface StudioWeaverContextAttachment {
   /** Caller values are input to installed backend admission, never self-asserted trust. */
   origin?: StudioWeaverContextOrigin;
   client?: StudioWeaverClientBinding | null;
-  agentScopes?: string[];
+  weaverScopes?: string[];
 }
 
 export interface StudioWeaverContributionDiagnostic {

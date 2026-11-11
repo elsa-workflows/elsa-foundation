@@ -92,7 +92,7 @@ export function useWorkflowContextBridge({
     const attachment = {
       id: `${weaverResource ? "workflow-template" : "workflow"}:${details.definition.id}`, moduleId: "Elsa.Studio.Workflows", schemaVersion: "1", target,
       source: "workflow", sourceId: details.definition.id, label: details.definition.name, contentType: weaverResource?.contentType ?? "workflow.definition", sensitivity: "internal" as const,
-      scope: selectedNodeId ? "selection" : "screen", origin: "clientSnapshot" as const, client: { clientId, generationId: generation }, agentScopes: ["workflow-author"],
+      scope: selectedNodeId ? "selection" : "screen", origin: "clientSnapshot" as const, client: { clientId, generationId: generation }, weaverScopes: ["workflow-author"],
       summary: details.definition.name, references: { ...identity, revision: target.revision },
       content: buildWorkflowSnapshotContent(draft, catalogByVersion, {
         header: { ...identity, revision: target.revision, selectedNodeId,
