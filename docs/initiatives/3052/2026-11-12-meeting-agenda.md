@@ -115,7 +115,7 @@ restrictions. The simplest path is the default, and advanced options stay possib
 |---|---|---|
 | 1 | Bindings may opt in, behind five guardrails. A named profile is selected per expression and pinned by the executable. | [guardrails](https://github.com/elsa-workflows/elsa-foundation/pull/3422#issuecomment-6782921131) |
 | 2 | Script activities only. | final-round note: *to be linked* |
-| 3 | Bindings may opt in (position 1's guardrails). The shape is one replaceable engine strategy enabled by a feature; he finds per-expression profiles chaotic. | [#3422](https://github.com/elsa-workflows/elsa-foundation/pull/3422#issuecomment-6793731476) |
+| 3 | Bindings may opt in (position 1's guardrails). The shape is one replaceable engine strategy enabled by a feature; per-expression profiles are seen as chaotic. | [#3422](https://github.com/elsa-workflows/elsa-foundation/pull/3422#issuecomment-6793731476) |
 
 **Key question:** with a replaceable strategy, how does a published executable record that it needs .NET access, so it
 never runs silently on a host without it?
@@ -128,8 +128,8 @@ never runs silently on a host without it?
 | Position | Summary | Notes |
 |---|---|---|
 | 1 | A minimal explicit interop in S-8 (card 23). | [card 23](https://github.com/elsa-workflows/elsa-foundation/pull/3422#issuecomment-6645477643) |
-| 3 | Default only; the opt-in is built after the initiative (#4103), which anyone can pick up. | [#3422](https://github.com/elsa-workflows/elsa-foundation/pull/3422#issuecomment-6793731476) |
 | 2 | *to be linked* | |
+| 3 | Default only; the opt-in is built after the initiative (#4103), which anyone can pick up. | [#3422](https://github.com/elsa-workflows/elsa-foundation/pull/3422#issuecomment-6793731476) |
 
 **Framing for this item:** *the problem is file ingress, not proxies.* Settle this shared understanding first; the decision
 should follow from it.
@@ -156,6 +156,7 @@ should follow from it.
 |---|---|---|
 | 1 | Refuse: the engine itself changes the data. | [reply](https://github.com/elsa-workflows/elsa-foundation/pull/3422#issuecomment-6781247798) |
 | 2 | Originally a warning. | final-round note: *to be linked* |
+| 3 | Accepted position 1: refuse by default. | |
 
 **Key question:** the loss is caused by the engine, not built by the engineer. Is refusing it a guardrail or a
 restriction?
