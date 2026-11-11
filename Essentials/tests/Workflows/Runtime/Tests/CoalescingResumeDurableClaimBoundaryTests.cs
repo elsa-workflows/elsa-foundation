@@ -731,6 +731,67 @@ public sealed class CoalescingResumeDurableClaimBoundaryTests
     }
 
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task An_active_flush_drops_a_release_whose_durable_copy_was_lost_after_the_commit(bool heldBySuccessor)
+    {
+        // #3700: schedule-1's effect is buffered; invoke-1 faults without an effect and receives RetryAfter.
+        // Lose its durable copy only when the landed quiescence flush tries to persist that release.
+        var shared = new SharedPersistence(new FakeTimeProvider(Now));
+        RuntimeCoalescingSession? session = null;
+        IRuntimeCoalescingSessionAccessor? accessor = null;
+        var queue = new LoseCopyAtDeferredReleaseQueue(shared.Queue, heldBySuccessor, async () =>
+        {
+            Assert.Equal(1L, (await shared.SchedulerStateStore.FindAsync(WorkflowExecutionId))?.Version);
+            Assert.Equal("invoke-1", Assert.Single(await shared.Queue.ListAllAsync(
+                new RuntimeSchedulerWorkQuery(WorkflowExecutionId))).WorkItemId);
+        });
+        var probe = new ProbeRecorder(deferFirstResume: false, faultInvoke: true, scheduleEnqueuesInvoke: true,
+            beforeInvokeFault: () =>
+            {
+                session = Assert.IsType<RuntimeCoalescingSession>(accessor!.Current);
+                return ValueTask.CompletedTask;
+            });
+        await using var provider = BuildProvider(shared, probe, retryAfter: RetryDelay, queue: queue);
+        await shared.Queue.EnqueueAsync(ScheduleWork("schedule-1", 1));
+        await using var scope = provider.CreateAsyncScope();
+        accessor = scope.ServiceProvider.GetRequiredService<IRuntimeCoalescingSessionAccessor>();
+
+        var result = await scope.ServiceProvider.GetRequiredService<IWorkflowDrainOrchestrator>()
+            .DrainAsync(Envelope(), new RuntimeSchedulerDrainRequest(WorkflowExecutionId));
+
+        Assert.True(queue.Intervened);
+        Assert.Equal(RuntimeSchedulerDrainStopReason.Faulted, result.StopReason);
+        Assert.Equal(["schedule-1", "invoke-1"], result.Items.Select(item => item.WorkItemId));
+        Assert.True(Assert.Single(probe.InvokeSessionActive));
+        var flush = Assert.Single(InnerCommitStore(scope.ServiceProvider).ListCommits());
+        Assert.Equal(RuntimeCoalescingMetadataKeys.FlushCheckpointName, flush.Commit.Checkpoint.Name);
+        Assert.Equal(1L, flush.Commit.StateChanges.Scheduler?.State.Version);
+        var record = Assert.Single(await scope.ServiceProvider.GetRequiredService<IWorkflowSchedulerPoisonStore>()
+            .ListAsync(WorkflowExecutionId));
+        Assert.Equal(("invoke-1", RuntimeSchedulerPoisonDisposition.RetryScheduled, Now + RetryDelay),
+            (record.WorkItemId, record.Disposition, record.NextRetryAt));
+
+        var remaining = (await shared.Queue.ListWithVisibilityAsync(new RuntimeSchedulerWorkQuery(WorkflowExecutionId))).Items;
+        Assert.Equal(heldBySuccessor ? ["invoke-1", "sibling"] : ["sibling"], remaining.Select(entry => entry.Item.WorkItemId));
+        Assert.Equal(Now + TimeSpan.FromMinutes(2), Assert.Single(remaining, entry => entry.Item.WorkItemId == "sibling").VisibleAfter);
+        var beforeItems = JsonSerializer.Serialize(remaining);
+        var beforeClaims = JsonSerializer.Serialize(await shared.Queue.ListActiveClaimsAsync(WorkflowExecutionId, Now));
+        if (heldBySuccessor)
+            Assert.Equal("successor", Assert.Single(await shared.Queue.ListActiveClaimsAsync(WorkflowExecutionId, Now)).OwnerId);
+        else
+            Assert.Empty(await shared.Queue.ListActiveClaimsAsync(WorkflowExecutionId, Now));
+
+        // Repeating reconciliation must neither resurrect the deleted copy nor alter a successor's live claim.
+        Assert.NotNull(session);
+        await session.AdvanceInnerQueueAsync(consumeInFlightClaims: false, CancellationToken.None);
+        Assert.Equal(beforeItems, JsonSerializer.Serialize(
+            (await shared.Queue.ListWithVisibilityAsync(new RuntimeSchedulerWorkQuery(WorkflowExecutionId))).Items));
+        Assert.Equal(beforeClaims, JsonSerializer.Serialize(await shared.Queue.ListActiveClaimsAsync(WorkflowExecutionId, Now)));
+        Assert.Equal(1L, (await shared.SchedulerStateStore.FindAsync(WorkflowExecutionId))?.Version);
+    }
+
+    [Theory]
     [InlineData(PersistenceMode.Durable, "CoalescingProbe", "CoalescingProbe")]
     [InlineData(PersistenceMode.Balanced, RuntimeCheckpointNames.ActivitySuspended, RuntimeCheckpointNames.ActivitySuspended)]
     [InlineData(PersistenceMode.Balanced, "CoalescingProbe", RuntimeCoalescingMetadataKeys.FlushCheckpointName)]
@@ -1704,6 +1765,43 @@ public sealed class CoalescingResumeDurableClaimBoundaryTests
     {
         public ValueTask<RuntimeStorePage<RuntimeSchedulerWorkVisibility>> ListWithVisibilityAsync(RuntimeSchedulerWorkQuery query, CancellationToken token = default) =>
             inner.ListWithVisibilityAsync(query, token);
+    }
+
+    private sealed class LoseCopyAtDeferredReleaseQueue(
+        InMemoryWorkflowSchedulerWorkQueue inner,
+        bool heldBySuccessor,
+        Func<ValueTask> beforeLoss)
+        : QueueWithoutVisibility(inner), IWorkflowSchedulerWorkVisibilityReader, IWorkflowSchedulerWorkDeferral
+    {
+        public bool Intervened { get; private set; }
+
+        public ValueTask<RuntimeStorePage<RuntimeSchedulerWorkVisibility>> ListWithVisibilityAsync(RuntimeSchedulerWorkQuery query, CancellationToken token = default) =>
+            inner.ListWithVisibilityAsync(query, token);
+
+        public async ValueTask<bool> DeferAsync(string id, string workId, DateTimeOffset now, DateTimeOffset visibleAt, CancellationToken token = default)
+        {
+            if (workId == "invoke-1" && !Intervened)
+            {
+                Intervened = true;
+                await beforeLoss();
+                if (heldBySuccessor)
+                {
+                    var successor = Assert.IsType<RuntimeSchedulerWorkClaim>(await inner.ClaimAsync(
+                        new RuntimeSchedulerWorkClaimRequest(id, "successor", now, TimeSpan.FromMinutes(1)), token));
+                    Assert.Equal(workId, successor.Item.WorkItemId);
+                }
+                else
+                {
+                    Assert.True(await inner.DeleteAsync(id, workId, token));
+                }
+
+                await inner.EnqueueAsync(Work("sibling", WorkflowExecutionCommandKind.NotifyParentActivity, 3), token);
+                Assert.True(await inner.DeferAsync(id, "sibling", now, now + TimeSpan.FromMinutes(2), token));
+            }
+
+            // The real provider, rather than the wrapper, refuses the lost/foreign-claimed release.
+            return await inner.DeferAsync(id, workId, now, visibleAt, token);
+        }
     }
 
     // Fails the first targeted deletion after the boundary's durable commit, as a provider timeout would.
