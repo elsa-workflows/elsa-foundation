@@ -4,15 +4,15 @@ namespace Elsa.Integrations.Connectors.OAuth2;
 
 /// <summary>
 /// Well-known identifiers for the OAuth2 connector. The client name keys the named
-/// <see cref="System.Net.Http.HttpClient"/> that token, authorize, and revoke requests
-/// resolve from <see cref="System.Net.Http.IHttpClientFactory"/>.
+/// <see cref="System.Net.Http.HttpClient"/> that token-endpoint requests resolve from
+/// <see cref="System.Net.Http.IHttpClientFactory"/>.
 /// </summary>
 public static class OAuth2HttpClientNames
 {
     /// <summary>
     /// The <see cref="System.Net.Http.IHttpClientFactory"/> logical client name used for
     /// OAuth token-endpoint requests. Isolated from activity HTTP traffic so handlers
-    /// registered for <c>Elsa.Activities.Http</c> do not observe token, authorize, or revoke calls.
+    /// registered for <c>Elsa.Activities.Http</c> do not observe those calls.
     /// </summary>
     public const string HttpClientName = "Elsa.Connections.OAuth2";
 }

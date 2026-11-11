@@ -37,6 +37,8 @@ public sealed class MockOAuthServer : HttpMessageHandler
     public string IssuedTokenType { get; set; } = "Bearer";
     public object? TokenErrorBody { get; set; }
     public HttpStatusCode TokenErrorStatus { get; set; } = HttpStatusCode.OK;
+    public Uri? TokenRedirect { get; set; }
+    public int RequestCount { get; private set; }
     public int TokenRequestCount { get; private set; }
     public string? LastAuthorizationScheme { get; private set; }
     public string? LastAuthorizationHeader { get; private set; }
@@ -65,6 +67,7 @@ public sealed class MockOAuthServer : HttpMessageHandler
 
     protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
     {
+        RequestCount++;
         var path = request.RequestUri?.AbsolutePath.TrimEnd('/') ?? "";
         return Task.FromResult(path switch
         {
@@ -97,6 +100,14 @@ public sealed class MockOAuthServer : HttpMessageHandler
         LastTokenForm = form.AllKeys
             .Where(key => key is not null)
             .ToDictionary(key => key!, key => form[key] ?? "", StringComparer.Ordinal);
+        if (TokenRedirect is not null)
+        {
+            return new HttpResponseMessage(HttpStatusCode.TemporaryRedirect)
+            {
+                Headers = { Location = TokenRedirect }
+            };
+        }
+
         var grantType = form.Get("grant_type");
         var clientId = form.Get("client_id");
         var clientSecret = form.Get("client_secret");

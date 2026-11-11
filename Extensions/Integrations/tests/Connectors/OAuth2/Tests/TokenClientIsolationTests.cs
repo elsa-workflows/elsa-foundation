@@ -1,5 +1,7 @@
 using Elsa.Activities.Http.Constants;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Http;
+using Microsoft.Extensions.Logging;
 
 namespace Elsa.Integrations.Connectors.OAuth2.Tests;
 
@@ -76,6 +78,40 @@ public sealed class TokenClientIsolationTests
         Assert.Equal(
             new HashSet<string>(StringComparer.Ordinal) { "grant_type", "refresh_token", "client_id", "client_secret" },
             harness.Server.LastTokenForm.Keys.ToHashSet(StringComparer.Ordinal));
+    }
+
+    [Fact]
+    public void Token_client_disables_automatic_redirects()
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddOAuth2Connector();
+        using var provider = services.BuildServiceProvider();
+        var primary = (HttpMessageHandler)provider.GetRequiredService<IHttpMessageHandlerFactory>()
+            .CreateHandler(OAuth2HttpClientNames.HttpClientName);
+        while (primary is DelegatingHandler delegating && delegating.InnerHandler is not null)
+            primary = delegating.InnerHandler;
+
+        var http = Assert.IsType<HttpClientHandler>(primary);
+        Assert.False(http.AllowAutoRedirect);
+    }
+
+    [Fact]
+    public async Task Token_exchange_does_not_follow_a_307()
+    {
+        var preview = new MockOAuthServer();
+        await using var harness = await OAuth2TestSupport.StartAsync(
+            OAuth2TestSupport.ClientCredentialsScheme(preview),
+            configureServer: mock => mock.TokenRedirect = new Uri(mock.BaseAddress, "resource"));
+
+        var tokens = harness.Services.GetRequiredService<OAuth2TokenService>();
+        await using var connection = await OAuth2TestSupport.ResolveAsync(harness);
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await tokens.GetValidGrantAsync(connection));
+
+        Assert.Equal("Token endpoint returned 307.", error.Message);
+        Assert.Equal(1, harness.Server.TokenRequestCount);
+        Assert.Equal(1, harness.Server.RequestCount);
     }
 
     private static Action<IServiceCollection> Observe(List<ObservedRequest> activity, List<ObservedRequest> token) =>
