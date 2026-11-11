@@ -130,14 +130,14 @@ export async function chooseDataJourney(page: Page, info: TestInfo, capture: Cap
   await openConsumer(loop.definition.id);
   await trigger().click();
   const loopGroup = chooser().getByRole("group", { name: "Timer", exact: true });
-  const sharedReason = loopGroup.locator(".wf-data-chooser-group-reason");
-  const reasonId = await sharedReason.getAttribute("id");
-  expect(reasonId, "One reason for the producer").toBeTruthy();
   const blocked = loopGroup.getByRole("option");
   await expect(blocked).toHaveCount(2);
+  // Each unavailable output is described by a reason; the whole output's differs from the declared output's.
   for (const row of await blocked.all()) {
     await expect(row).toHaveAttribute("aria-disabled", "true");
-    await expect(row).toHaveAttribute("aria-describedby", reasonId!);
+    const reasonId = await row.getAttribute("aria-describedby");
+    expect(reasonId, "A reason for the unavailable output").toBeTruthy();
+    await expect(page.locator(`[id="${reasonId}"]`)).not.toBeEmpty();
   }
   await settledCapture("not-selectable");
   // Choosing an unavailable output does nothing: focus and selection stay put and the input stays untouched.
