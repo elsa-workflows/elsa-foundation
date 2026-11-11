@@ -32,6 +32,9 @@ restrictions. The simplest path is the default, and advanced options stay possib
   the opt-in built after the initiative. **Blocks** text only.
 - **D-17, precision loss** (ADR 0046 V9, #3422). *Only if it is still open after the final round.* Whether losing
   digits when a changed value is written back is refused by default or only warned about. **Blocks** S-8 and S-9.
+- **D-18, implementation per spec** (working agreement of 2026-10-26; initiatives guide *Early landing of a spec*).
+  Whether a spec may advance to implementation as soon as its own decisions are agreed, or every spec is still defined
+  before any implementation starts. **Blocks** when the first agreed spec can be built.
 - **Small questions** (only if time allows): *host argument*, *date parse*, *transient read*.
 
 **Confirm only (settled in writing):** **D-7, computed reads** (#3420): pinning plus a run-time fallback.
@@ -162,6 +165,29 @@ should follow from it.
 restriction?
 **Changes after the decision:** #3422, S-9 #3805.
 
+## D-18, implementation per spec
+
+**Decision to make:** does the initiative keep its stricter rule that every spec is defined before any implementation
+starts, or does each spec advance to implementation once it is approved and every ADR and decision it applies is
+agreed?
+**Already agreed around it:**
+- the working agreement of the [2026-10-26 meeting](https://github.com/elsa-workflows/elsa-foundation/issues/3052#issuecomment-6419640542):
+  all specs are defined before implementation starts, so a poor design shows up on paper, not in code others build on;
+- the initiatives guide now applies phases per spec by default (*Early landing of a spec*): the spec and the whole
+  files of the ADRs it applies land on `main` with an approver's attestation, and its implementation follows the
+  normal rules there. An initiative's own stricter rule holds until the approvers change it.
+
+| Position | Summary | Notes |
+|---|---|---|
+| 1 | Agreed the 26 Oct working agreement; current position to be asked. | |
+| 2 | Agreed the 26 Oct working agreement; current position to be asked. | |
+| 3 | Drop the stricter rule: a spec whose decisions are agreed lands early and is built. | [guide change](https://github.com/elsa-workflows/elsa-foundation/commit/c49bd3ebd) |
+
+**Key question:** does building an agreed spec early risk code that a later decision on another spec forces to change,
+and is the early-landing condition (every ADR file it applies fully agreed) enough to guard against that?
+**Possible middle ground:** per spec, but only for specs whose ADRs no open decision touches.
+**Changes after the decision:** the board's working agreement and phase line.
+
 ## Small questions *(if time allows)*
 
 - **Host argument** (#3422): does a lossy value passed to a host function count as a write? Proposed: warn.
@@ -186,5 +212,6 @@ restriction?
 | D-15, .NET bindings | |
 | D-16, S-8 interop | |
 | D-17, precision loss | |
+| D-18, implementation per spec | |
 | D-7, computed reads | |
 | Small questions | |
