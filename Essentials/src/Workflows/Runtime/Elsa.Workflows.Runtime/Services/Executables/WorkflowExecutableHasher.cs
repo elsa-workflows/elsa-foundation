@@ -49,6 +49,11 @@ public sealed class WorkflowExecutableHasher : IWorkflowExecutableHasher
         // V1 artifacts retain their original identities. Only verification may use the historical
         // rendering; every new publication uses V2 so it cannot deduplicate onto a stale V1 body.
         // Check V1 first so its verification does not depend on serializing fields it never covered.
+        // No V1 artifact can hold a member read, and V1 never rendered a selection, so one is never matched as V1.
+        if (ReadsAnyMember(executable))
+            return StringComparer.Ordinal.Equals(ComputeHash(executable.RootActivity, contract, executable.Dependencies,
+                executable.PersistenceMode, executable.WorkflowVariables, executable.IncidentStrategy), executable.Identity.ArtifactHash);
+
         var historical = ComputeBehavioralHash(executable.RootActivity, contract, executable.Dependencies,
             executable.PersistenceMode, executable.WorkflowVariables, executable.IncidentStrategy,
             includeInputContracts: false);
@@ -59,6 +64,10 @@ public sealed class WorkflowExecutableHasher : IWorkflowExecutableHasher
             executable.PersistenceMode, executable.WorkflowVariables, executable.IncidentStrategy);
         return StringComparer.Ordinal.Equals(current, executable.Identity.ArtifactHash);
     }
+
+    private static bool ReadsAnyMember(WorkflowExecutable executable) =>
+        executable.Nodes.SelectMany(node => node.InputBindings.Values).Any(binding => binding.Selection is not null) ||
+        executable.WorkflowVariables.Any(variable => variable.InitialBinding?.Selection is not null);
 
     private static string ComputeBehavioralHash(
         ExecutableNode rootActivity,
@@ -137,12 +146,31 @@ public sealed class WorkflowExecutableHasher : IWorkflowExecutableHasher
                 $"result:{input.Value.ActivityResult?.ProducerScopeId}:{input.Value.ActivityResult?.ProducerExecutableNodeId}:{input.Value.ActivityResult?.ProjectionKey}:{input.Value.ActivityResult?.IsOptional}",
             RuntimeInputBindingSource.Expression => FormatExpression(input.Value.Expression),
             RuntimeInputBindingSource.SecretRead => FormatSecret(input.Value.Secret),
-            _ => CanonicalJson(input.Value.LiteralValue)
+            RuntimeInputBindingSource.WorkflowRequestMember =>
+                $"request-member:{Framed(input.Value.WorkflowRequest!.MemberKey)}:{FormatSelection(input.Value.Selection!)}",
+            RuntimeInputBindingSource.VariableMember =>
+                $"variable-member:{Framed(input.Value.Variable!.DeclaringScopeId)}:{Framed(input.Value.Variable.VariableKey)}:{FormatSelection(input.Value.Selection!)}",
+            RuntimeInputBindingSource.ActivityResultMember =>
+                $"result-member:{Framed(input.Value.ActivityResult!.ProducerExecutableNodeId)}:{Framed(input.Value.ActivityResult.ProjectionKey)}:{input.Value.ActivityResult.IsOptional}:{FormatSelection(input.Value.Selection!)}",
+            // Every source has an arm. A source this hasher does not know must not hash as an absent literal, where
+            // two different bindings would share one identity.
+            _ => throw new ArgumentOutOfRangeException(nameof(input), input.Value.Source,
+                $"Input '{input.Key}' uses runtime input binding source '{input.Value.Source}', which the executable hasher does not render.")
         };
 
         var conversion = input.Value.ConversionPlan is null ? string.Empty : $":conversion={input.Value.ConversionPlan.Fingerprint}";
         return $"{input.Key}:{FormatType(input.Value.TargetType)}:{FormatPolicy(input.Value.EffectivePolicy)}={payload}[{metadata}]{conversion}";
     }
+
+    // Every variable-length field of a member read is framed as {length}#{value}, so no member key, scope, producer,
+    // projection or segment can contain a delimiter that makes two different reads render alike.
+    private static string Framed(string? value) =>
+        value is null ? "-" : $"{value.Length}#{value}";
+
+    private static string FormatSelection(RuntimeReadSelection selection) =>
+        $"sel:{selection.SchemaVersion}:{selection.Mode}:{selection.Segments.Count}:{string.Concat(selection.Segments.Select(Framed))}" +
+        $":{Framed(selection.SelectedType is null ? null : FormatType(selection.SelectedType))}:{selection.MayBeAbsent}:{selection.MayBeNull}" +
+        $":{selection.Representation}:{Framed(selection.ProfileRevision)}";
 
     private static string FormatEnvelope(ValueEnvelope envelope)
     {
