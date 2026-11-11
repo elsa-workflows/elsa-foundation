@@ -53,8 +53,13 @@ as amended, no longer requires bindings to be deterministic. `binding-pure-v1` f
 randomness and GUIDs by definition, so it is retired rather than redefined. A profile name must always mean the same
 behaviour.
 - **The new name says what still holds:** a binding reads, it never changes engine-owned workflow state.
-- **It allows** the current time (UTC, invariant culture, from an injectable clock (`TimeProvider`)), random values and GUIDs. Date and
-  time-zone rules are the ADR 0046 amendment's (*Dates*).
+- **It allows the native JavaScript intrinsics** `Date`, `Intl`, `Temporal` and `Math` (including `Math.random`),
+  besides the registered .NET functions below; it is not limited to host functions. So a binding may use the current
+  time, random values and GUIDs. Date and time-zone rules are the ADR 0046 amendment's (*Dates*).
+- **Time comes from the host clock; randomness does not.** Native `Date` and the current time run on the host's
+  injectable clock (`TimeProvider`), in UTC with the invariant culture, so a test can fix the time. The random source
+  behind `Math.random` is the script engine's own and cannot be injected, so no random sequence is controllable: tests
+  must not assume a fixed sequence.
 - **The name starts a new family at v1.** The succession from `binding-pure-v1` is recorded here, not in the version
   number.
 - **It also allows functions implemented in .NET** that are registered for the profile and exchange only JSON values

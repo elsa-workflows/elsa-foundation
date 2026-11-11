@@ -112,8 +112,12 @@ change engine-owned workflow state. They need not be deterministic.
 
 It permits:
 
-- the current time, random values and GUID generation. Evaluators run in UTC with the invariant culture, and
-  time comes from an injectable clock (`TimeProvider`);
+- the native JavaScript intrinsics `Date`, `Intl`, `Temporal` and `Math` (including `Math.random`), so the
+  current time, random values and GUID generation; the profile is not limited to host functions. Evaluators
+  run in UTC with the invariant culture. Native `Date` and the current time come from the host's injectable
+  clock (`TimeProvider`), so tests can fix the time. The random source behind `Math.random` is the script
+  engine's own (Jint creates it with `new Random()`) and cannot be injected, so tests MUST NOT assume a fixed
+  random sequence;
 - functions implemented in .NET that are registered for this profile and exchange only JSON values with
   the expression. A call is never refused or skipped because of what it does, and the workflow designer
   owns the idempotency of external effects (D-6). No function profile is required; a durability hint, if
