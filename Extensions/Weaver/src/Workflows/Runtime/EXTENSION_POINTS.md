@@ -1,4 +1,4 @@
-# Workflow Runtime Agent extension points
+# Workflow Runtime Weaver extension points
 
 Owner project: `Elsa.Weaver.Workflows.Runtime`
 Domain: `Elsa.Weaver.Workflows.Runtime`
@@ -12,10 +12,10 @@ Runtime-only host; Design-side workflow contributions (drafts, versions, the lib
 
 ## Cross-domain contributions
 
-These contribute to [Agent foundation](../../Elsa.Weaver/EXTENSION_POINTS.md) through `Elsa.Weaver.Core`, under the Studio module
+These contribute to [Weaver foundation](../../Elsa.Weaver/EXTENSION_POINTS.md) through `Elsa.Weaver.Core`, under the Studio module
 identity `Elsa.Studio.Workflows`, whose Executable Inspector discloses the context.
 
-- `IAgentContextProvider`: `WorkflowExecutableContextProvider`, source `workflows.executable-context`, kinds
+- `IWeaverContextProvider`: `WorkflowExecutableContextProvider`, source `workflows.executable-context`, kinds
   `workflows.executable` and `workflows.executable-guidance`, resource type `workflow-executable`. It admits the page's
   reference `workflows.executable` schema `1`, exactly `{ artifactId, artifactHash, sourceReferenceId? }`, targeted
   `workflow-executable` / artifact id / Artifact Hash (FR-005: an Executable's revision identity is its Artifact Hash). The
@@ -31,7 +31,7 @@ identity `Elsa.Studio.Workflows`, whose Executable Inspector discloses the conte
   Executable reference it contributes nothing. `AdmitDisclosureAsync` accepts only its own retained read, reads it again at
   the bound hash for the current turn, and withholds a retained context or `workflow_read_executable` result once the
   Executable is gone, changed or no longer readable.
-- `IAgentTool` with `IAgentToolAuthorization`: `WorkflowReadExecutableTool`, `workflow_read_executable` contract `1`,
+- `IWeaverTool` with `IWeaverToolAuthorization`: `WorkflowReadExecutableTool`, `workflow_read_executable` contract `1`,
   `ReadOnly`, `ExecutionLocation.Server`, `workflows/runtime:read`, result `workflows.executable` schema `1`, no renderer,
   disclosed by `workflows.executable-context`. Arguments `{ artifactId? }`, strict; the Executable is the only admitted
   Executable context or the one `artifactId` names. It reads the Executable again at the bound hash and returns its
@@ -48,7 +48,7 @@ identity `Elsa.Studio.Workflows`, whose Executable Inspector discloses the conte
   `weaver.workflow.executable_stale` (409), `weaver.workflow.executable_not_found` (404),
   `weaver.workflow.executable_arguments_invalid` (400), `weaver.workflow.permission_denied` (403) and
   `workflow.executable.inspection_unavailable` (503).
-- `IAgentCapabilityProvider`: `WorkflowRuntimeAgentCapabilityProvider` declares `workflow.executable-explain` (Answer,
+- `IWeaverCapabilityProvider`: `WorkflowRuntimeWeaverCapabilityProvider` declares `workflow.executable-explain` (Answer,
   ReadOnly, `workflows/runtime:read`, kind `workflows.executable`, mode `explain`).
 
 An Executable is immutable. The guidance tells the model to refuse any edit, run, delete or republish with zero effect and
@@ -56,7 +56,7 @@ to offer the source workflow's current draft instead (FR-015); this package offe
 
 ## Runs (spec 1193 slice G)
 
-- `IAgentContextProvider`: `WorkflowRunContextProvider`, source `workflows.run-context`, kinds `workflows.run` and
+- `IWeaverContextProvider`: `WorkflowRunContextProvider`, source `workflows.run-context`, kinds `workflows.run` and
   `workflows.run-guidance`, resource type `workflow-run`. It admits the run page's reference `workflows.run` schema `1`,
   exactly `{ workflowExecutionId, activityExecutionId? }`, targeted `workflow-run` / Workflow Instance id / revision (FR-005:
   the selected activity execution's id, or the instance id when none is selected; never "the latest run" of a definition).
@@ -75,7 +75,7 @@ to offer the source workflow's current draft instead (FR-015); this package offe
   a retained result (`weaver.workflow.run_access_changed`) once it discloses more than the actor's current run access covers:
   incident details read under value inspection, or released values read under payload resolution, that the actor no longer
   holds; a result whose disclosure cannot be read is treated as exceeding.
-- `IAgentTool` with `IAgentToolAuthorization`: `WorkflowReadRunTool`, `workflow_read_run` contract `1`, `ReadOnly`,
+- `IWeaverTool` with `IWeaverToolAuthorization`: `WorkflowReadRunTool`, `workflow_read_run` contract `1`, `ReadOnly`,
   `ExecutionLocation.Server`, `workflows/runtime:read`, result `workflows.run` schema `1`, no renderer, disclosed by
   `workflows.run-context`. Arguments `{ workflowExecutionId?, activityPageSize? (1–50), activityContinuationToken? }`, strict;
   no argument retargets the selection. It reads the bound Run twice: the first read resolves nothing and decides the bounds
@@ -96,7 +96,7 @@ to offer the source workflow's current draft instead (FR-015); this package offe
   (404), `weaver.workflow.run_activity_not_found` (404), `weaver.workflow.permission_denied` (403) and
   `weaver.workflow.run_inspection_unavailable` (503). Its authorization decides a concrete target by the Run's (and the
   selection's) current visibility.
-- `IAgentCapabilityProvider`: `WorkflowRuntimeAgentCapabilityProvider` also declares `workflow.run-explain` (Answer,
+- `IWeaverCapabilityProvider`: `WorkflowRuntimeWeaverCapabilityProvider` also declares `workflow.run-explain` (Answer,
   ReadOnly, `workflows/runtime:read`, kind `workflows.run`, mode `explain`).
 
 Weaver never changes a Run. The guidance tells the model to cite the Run's recorded incidents and activity executions, to

@@ -54,6 +54,19 @@ public sealed class PlacedReferenceRemapperTests
     }
 
     [Fact]
+    public void An_activity_result_without_a_scope_follows_the_placement_and_still_declares_none()
+    {
+        var node = NodeWith(Binding(
+            RuntimeInputBindingSource.ActivityResult,
+            activityResult: new RuntimeActivityResultReference("compute", "result", producerScopeId: null)));
+
+        var result = PlacedReferenceRemapper.Remap(node, PlacedIds, GraphScope).InputBindings["value"].ActivityResult!;
+
+        Assert.Equal("node-compute", result.ProducerExecutableNodeId);
+        Assert.Null(result.ProducerScopeId);
+    }
+
+    [Fact]
     public void Expression_parameters_follow_the_placement_and_keep_the_rest_of_the_expression()
     {
         var parameters = new Dictionary<string, ExpressionParameterBinding>(StringComparer.Ordinal)
@@ -105,6 +118,29 @@ public sealed class PlacedReferenceRemapperTests
         var node = NodeWith(Binding(RuntimeInputBindingSource.WorkflowRequest, workflowRequest: new RuntimeWorkflowRequestReference("a")));
 
         Assert.Same(node, PlacedReferenceRemapper.Remap(node, PlacedIds, GraphScope));
+    }
+
+    /// <summary>
+    /// A member read (#4078) would otherwise pass through unchanged and keep its template-local producer or scope. Until
+    /// placement remaps member reads (slice C), the remapper refuses one rather than return it as it was.
+    /// </summary>
+    [Theory]
+    [InlineData(RuntimeInputBindingSource.WorkflowRequestMember)]
+    [InlineData(RuntimeInputBindingSource.VariableMember)]
+    [InlineData(RuntimeInputBindingSource.ActivityResultMember)]
+    public void A_member_read_is_refused_rather_than_passed_through_unremapped(RuntimeInputBindingSource source)
+    {
+        var selection = new RuntimeReadSelection(1, ["id"], RuntimeReadSelectionMode.DeferredFit);
+        var binding = new RuntimeInputBinding("value", new ValueTypeDescriptor("Object"), ValueProtectionPolicy.InstanceInline, source, selection,
+            workflowRequest: source == RuntimeInputBindingSource.WorkflowRequestMember ? new RuntimeWorkflowRequestReference("customer") : null,
+            variable: source == RuntimeInputBindingSource.VariableMember ? new RuntimeVariableReference("total", "box") : null,
+            activityResult: source == RuntimeInputBindingSource.ActivityResultMember
+                ? new RuntimeActivityResultReference("compute", "$result", producerScopeId: null)
+                : null);
+
+        var exception = Assert.Throws<NotSupportedException>(() => PlacedReferenceRemapper.Remap(NodeWith(binding), PlacedIds, GraphScope));
+
+        Assert.Contains("publication does not compile member reads yet", exception.Message, StringComparison.Ordinal);
     }
 
     private static ExecutableNode NodeWith(RuntimeInputBinding binding) => new(

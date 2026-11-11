@@ -1,7 +1,7 @@
-# GitHub Copilot agent provider
+# GitHub Copilot Weaver provider
 
 `Elsa.Weaver.GitHubCopilot` is the provider SDK binding from Elsa's
-provider-neutral agent contracts to the GitHub Copilot SDK. It registers provider
+provider-neutral Weaver contracts to the GitHub Copilot SDK. It registers provider
 ID `github-copilot` and keeps all `GitHub.Copilot.SDK` references isolated in
 this package.
 
@@ -18,7 +18,7 @@ disabled until explicitly configured.
 ```json
 {
   "Elsa": {
-    "Agent": {
+    "Weaver": {
       "GitHubCopilot": {
         "Enabled": true,
         "GitHubTokenEnvironmentVariable": "COPILOT_GITHUB_TOKEN",
@@ -66,7 +66,7 @@ download the platform runtime into the project `obj` directory.
 
 ## Session lifecycle
 
-Elsa `AgentSession.Id` is used as the Copilot SDK session ID. Elsa stores only
+Elsa `WeaverSession.Id` is used as the Copilot SDK session ID. Elsa stores only
 provider-neutral session state. Copilot conversation/runtime state remains owned
 by the SDK under its configured base directory or external runtime.
 
@@ -80,7 +80,7 @@ state directory or runtime. That state is provider-owned, not Elsa's recorded st
   as accepted outcomes; only the receipts Elsa recorded are accepted.
 - The next turn resumes the Copilot session with the Elsa session ID (ADR 0022). If Copilot cannot resume it, the
   provider creates a new Copilot session with the same ID. For a session with earlier turns, this is an explicit
-  outcome: the stream carries a `Progress` event whose payload is an `AgentProviderNotice` with code
+  outcome: the stream carries a `Progress` event whose payload is a `WeaverProviderNotice` with code
   `weaver.provider.github_copilot.conversation_reset`, and the orchestrator records it on the turn's audit trail as a
   `ProviderDiagnostic` record with the code and turn ID. Earlier turns stay in Elsa's transcript, but the new Copilot
   conversation does not hold them. A first turn, which has no earlier conversation, is not a reset.
@@ -101,7 +101,7 @@ Copilot SDK permission requests are denied by this provider. Mutations must be r
 Elsa-owned proposals and executed through Elsa approval, revision validation,
 permission checks, and audit.
 
-This is deliberate: the current Elsa agent facade has proposal approval
+This is deliberate: the current Weaver facade has proposal approval
 semantics, but it does not yet have a durable provider-neutral pending SDK tool
 approval lifecycle. See `docs/adr/0021-copilot-provider-keeps-tool-mutation-elsa-owned.md`.
 

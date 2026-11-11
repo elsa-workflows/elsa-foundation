@@ -1,19 +1,19 @@
-# Workflow Agent extension points
+# Workflow Weaver extension points
 
 Owner project: `Elsa.Weaver.Workflows`
 Domain: `Elsa.Weaver.Workflows`
 
 ## Cross-domain contributions
 
-The module contributes to [Agent foundation](../../Elsa.Weaver/EXTENSION_POINTS.md) through contracts in `Elsa.Weaver.Core`.
+The module contributes to [Weaver foundation](../../Elsa.Weaver/EXTENSION_POINTS.md) through contracts in `Elsa.Weaver.Core`.
 
-- `IAgentContextProvider`: `DefaultWorkflowAgentContextProvider` (`internal sealed`) admits `workflow.definition` schema `1` for exact `workflow-definition` targets. It whitelists bounded activity identities, connections and positions, stamps caller material as `ClientSnapshot`, and emits installed guidance separately. Caller permission claims, arbitrary fields and every property value outside the selected activity's bounded property context are excluded; the designer's diagnostics and that property context are admitted strictly, as described under [Explain and troubleshoot](#explain-and-troubleshoot-spec-1193-slice-d). A separate `workflow.request` schema `1` admits only bounded intent/name/description/reference metadata with no target, client binding or tool scopes; it never supplies graph authority. Other workflow kinds and versions produce explicit diagnostics. With admitted workflow context it also contributes two server-produced kinds, described under [Truth seams](#truth-seams-spec-1193); a caller cannot supply either.
-- `IAgentCapabilityProvider`: `WorkflowAgentCapabilityProvider` (`internal sealed`) declares explanation of the admitted graph and a reviewed change journey (a position change or one Operation Batch, below). It does not advertise runtime investigation, save or publish.
-- `IAgentTool`: `WorkflowReadGraphTool` returns a typed `workflows.graph` result: the admitted snapshot plus each activity's scope-path address (slice D). `WorkflowSetDesignerPositionTool` prepares exact `activityId`, finite `x`/`y`, target revision and originating client generation; it requires current `workflows/design:manage` permission and explicit review even under FullAuto.
-- `IAgentClientTool`: the same layout tool admits the owning editor's observed result as `workflows.layout-change` schema `1`, renderer `workflows.agent.layout-result`. The receipt proves unsaved local state only. Native editor application and whole-batch undo remain module-owned; save and publish remain explicit.
-- `IAgentToolAuthorization`: both installed tools also implement this optional companion. The graph tool asks the owner `IWorkflowDefinitionAuthorizer.CanReadAsync`; layout asks `CanManageAsync`. Generic orchestration combines this with host authority during advertisement, prepared invocation admission, duplicate delivery and reviewed dispatch/completion. No second tool registry is installed. When the owner throws `WorkflowDefinitionAuthorizationException`, the tools and the context provider fail closed as unavailable with the Design API's code `workflow.authorization.unavailable`, distinct from `weaver.workflow.permission_denied`, and disclose no cause. The tools report an owner-unavailable violation, so dispatch reports 503. The context provider reports an owner-unavailable required diagnostic, so collection and turn admission, including the re-admission before each tool call, fail with that code and 503 instead of `weaver.context.incomplete`. A denial keeps `weaver.context.incomplete` with 400. `weaver.workflow.authority_unavailable` keeps its meaning: zero or several authorizers are composed.
+- `IWeaverContextProvider`: `DefaultWorkflowWeaverContextProvider` (`internal sealed`) admits `workflow.definition` schema `1` for exact `workflow-definition` targets. It whitelists bounded activity identities, connections and positions, stamps caller material as `ClientSnapshot`, and emits installed guidance separately. Caller permission claims, arbitrary fields and every property value outside the selected activity's bounded property context are excluded; the designer's diagnostics and that property context are admitted strictly, as described under [Explain and troubleshoot](#explain-and-troubleshoot-spec-1193-slice-d). A separate `workflow.request` schema `1` admits only bounded intent/name/description/reference metadata with no target, client binding or tool scopes; it never supplies graph authority. Other workflow kinds and versions produce explicit diagnostics. With admitted workflow context it also contributes two server-produced kinds, described under [Truth seams](#truth-seams-spec-1193); a caller cannot supply either.
+- `IWeaverCapabilityProvider`: `WorkflowWeaverCapabilityProvider` (`internal sealed`) declares explanation of the admitted graph and a reviewed change journey (a position change or one Operation Batch, below). It does not advertise runtime investigation, save or publish.
+- `IWeaverTool`: `WorkflowReadGraphTool` returns a typed `workflows.graph` result: the admitted snapshot plus each activity's scope-path address (slice D). `WorkflowSetDesignerPositionTool` prepares exact `activityId`, finite `x`/`y`, target revision and originating client generation; it requires current `workflows/design:manage` permission and explicit review even under FullAuto.
+- `IWeaverClientTool`: the same layout tool admits the owning editor's observed result as `workflows.layout-change` schema `1`, renderer `workflows.weaver.layout-result`. The receipt proves unsaved local state only. Native editor application and whole-batch undo remain module-owned; save and publish remain explicit.
+- `IWeaverToolAuthorization`: both installed tools also implement this optional companion. The graph tool asks the owner `IWorkflowDefinitionAuthorizer.CanReadAsync`; layout asks `CanManageAsync`. Generic orchestration combines this with host authority during advertisement, prepared invocation admission, duplicate delivery and reviewed dispatch/completion. No second tool registry is installed. When the owner throws `WorkflowDefinitionAuthorizationException`, the tools and the context provider fail closed as unavailable with the Design API's code `workflow.authorization.unavailable`, distinct from `weaver.workflow.permission_denied`, and disclose no cause. The tools report an owner-unavailable violation, so dispatch reports 503. The context provider reports an owner-unavailable required diagnostic, so collection and turn admission, including the re-admission before each tool call, fail with that code and 503 instead of `weaver.context.incomplete`. A denial keeps `weaver.context.incomplete` with 400. `weaver.workflow.authority_unavailable` keeps its meaning: zero or several authorizers are composed.
 
-The named context/capability/tool fan-in and generic review lifecycle are owned by Agent foundation. This module registers contributions, not additional aggregating handlers or provider loops.
+The named context/capability/tool fan-in and generic review lifecycle are owned by Weaver foundation. This module registers contributions, not additional aggregating handlers or provider loops.
 
 This is the accepted M1 workflow subset. The [76ec independent package witness](../../../../../specs/1174-weaver-package-witness/evidence/qualification-76ec58d00.json) executes the original and restored position/validation/whole-Undo/explicit-Save journeys through both actual provider adapters. [Final-head qualification/CI, independent review, merge and resulting-main verification](https://github.com/elsa-workflows/elsa-foundation/issues/3438#issuecomment-6539679143) completed through [#3497](https://github.com/elsa-workflows/elsa-foundation/pull/3497); Program M2–M5 and durable recovery remain open. Graph batches and activity creation are delivered by [draft authoring](#draft-authoring-spec-1193-slice-c), and explanation and troubleshooting of the draft by [slice D](#explain-and-troubleshoot-spec-1193-slice-d); expression authoring belongs to Expression Modules, none of which registers Weaver tools yet; a position-change receipt does not establish those journeys. Preview package/API migration is documented in the [canonical contribution contract](../../../../../specs/1018-weaver-module-contributions/contracts/contributions.md#preview-migration).
 
@@ -36,21 +36,21 @@ The module reads two owning domains through their `.Core` contracts only, and re
 - **Permissions.** `workflow.permissions` schema `1` (origin `AuthoritativeRead`) is contributed for each admitted exact
   `workflow-definition` target, with the snapshot's classification. `read` is `allowed` (the context was admitted on the
   owner's read decision); `manage` is `allowed`, `denied` or `unavailable` (the owner threw
-  `WorkflowDefinitionAuthorizationException`), from the host `IAgentToolAuthorizer` for the layout tool and the owning
+  `WorkflowDefinitionAuthorizationException`), from the host `IWeaverToolAuthorizer` for the layout tool and the owning
   `IWorkflowDefinitionAuthorizer.CanManageAsync`, the same decisions the engine uses to advertise tools. `tools` and
   `capabilities` follow: manage allowed adds `workflow_set_designer_position` and `workflow.propose-change`; otherwise
   the actor gets explanation only. `tools` follows the engine's advertisement rule for each tool: its own descriptor
-  through the host `IAgentToolAuthorizer`, its owner decision, and the session's capability policy for its name
-  (`IAgentPolicyEvaluator.EvaluateCapabilityAsync`, which applies `DeniedCapabilityIds`), so it names exactly what the
-  engine will offer. `capabilities` reports each capability by its own id under that policy, independent of the tools, as the Agent API
+  through the host `IWeaverToolAuthorizer`, its owner decision, and the session's capability policy for its name
+  (`IWeaverPolicyEvaluator.EvaluateCapabilityAsync`, which applies `DeniedCapabilityIds`), so it names exactly what the
+  engine will offer. `capabilities` reports each capability by its own id under that policy, independent of the tools, as the Weaver API
   admits a requested capability; `workflow.propose-change` is reported only when `manage` is `allowed`, which is stricter
   than the API's admission. `manage` combines the host decision for the layout tool with the owner's answer: when the host
-  `IAgentToolAuthorizer` refuses the layout tool the owner is not asked and `manage` is `denied`, so `denied` does not by
+  `IWeaverToolAuthorizer` refuses the layout tool the owner is not asked and `manage` is `denied`, so `denied` does not by
   itself mean the owner refused. A host that refuses `workflow_read_graph` withholds the whole workflow context with the
   required `weaver.workflow.permission_denied` (disclosure is admitted on the read tool's descriptor); a host cannot keep the
   workflow context while withholding only the read tool.
 
-Both server reads respect the session's host context policy. When `IAgentPolicyEvaluator.EvaluateContextAsync` does not
+Both server reads respect the session's host context policy. When `IWeaverPolicyEvaluator.EvaluateContextAsync` does not
 admit a kind (for example a policy whose `AllowedContextKinds` lists only the older workflow kinds), the module does not
 contribute it: no read is made, no required failure follows, and the optional diagnostic
 `weaver.workflow.server_read_withheld` says which kind was left out. Explanation and the reviewed layout change keep
@@ -69,7 +69,7 @@ revision and the client binding. No persisted revision is read in its place.
 
 ## Draft authoring (spec 1193 slice C)
 
-- `IAgentTool` / `IAgentClientTool` / `IAgentToolAuthorization`: `WorkflowApplyOperationBatchTool` (`internal sealed`),
+- `IWeaverTool` / `IWeaverClientTool` / `IWeaverToolAuthorization`: `WorkflowApplyOperationBatchTool` (`internal sealed`),
   `workflow_apply_operation_batch` contract `1`, execution location `ClientWorkingState`, result `workflows.batch-result`
   schema `1`, renderer `weaver.workflows.batch-result`, required permission `workflows/design:manage`, owner check
   `IWorkflowDefinitionAuthorizer.CanManageAsync` (unavailable stays `workflow.authorization.unavailable`, 503).
@@ -139,8 +139,8 @@ revision and the client binding. No persisted revision is read in its place.
   SHA-256 content revision; the 32-bit hash remains for change detection only. `Elsa.Studio.Weaver.Workflows` renders
   `workflows.batch-result` (`weaver.workflows.batch-result`) with each operation's risk label, registered under its own
   module identity with `resourceModuleIds: ["Elsa.Studio.Workflows"]`. The designer-history Undo and the live saved
-  state ("Persisted by your explicit save") are Studio Workflows' result control `workflows.agent.batch-undo`
-  (`api.agent.resultControls`), which the host renders after the renderer. Preparation and the applier share one case
+  state ("Persisted by your explicit save") are Studio Workflows' result control `workflows.weaver.batch-undo`
+  (`api.weaver.resultControls`), which the host renders after the renderer. Preparation and the applier share one case
   file, `Studio/src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/workflowBatchConformance.json`, run by
   `WorkflowBatchConformanceTests` and `workflowBatchConformance.test.ts`.
 
@@ -151,7 +151,7 @@ identity that consumers compare for equality only, so this is Minor.
 ## Explain and troubleshoot (spec 1193 slice D)
 
 `workflow.definition` schema `1` admits three further optional additions from the open editor, each read strictly by
-`WorkflowAgentExplainContext`: an unknown field, a wrong type or a bound exceeded refuses the whole snapshot with
+`WorkflowWeaverExplainContext`: an unknown field, a wrong type or a bound exceeded refuses the whole snapshot with
 `weaver.workflow.context_invalid`. All three are resource content (untrusted data, never guidance); the installed guidance
 says so.
 
@@ -190,7 +190,7 @@ says so.
   its `slot`; the root's path is empty. The addresses are bounded to 24 KiB, and `addressesTruncated` says when some were
   left out.
 - **Size.** Two bounds apply: this module's 64 KiB on the content the editor sends, and the host's 32 KiB on each
-  attachment's serialized admitted projection (`AgentContextServices`: `JsonSerializer.Serialize(content).Length`), which
+  attachment's serialized admitted projection (`WeaverContextServices`: `JsonSerializer.Serialize(content).Length`), which
   is the effective one. Studio's single snapshot builder (`buildWorkflowSnapshotContent`) estimates the host's measure of
   the admitted projection (`admittedSnapshotLength`: admitted fields only, the default encoder's escapes, the stamped
   interpretation) and, while it exceeds 32 KiB less 256 characters, leaves out the property context, then the diagnostics
@@ -207,7 +207,7 @@ says so.
   references, withheld values and unavailable interpretation, and marks workflow content as untrusted.
 - **Registered references** (FR-019, SC-007). The composed server registrations (context source and kinds, capabilities,
   tools with their result kinds, renderers and execution locations) are recorded in
-  `Extensions/Weaver/studio/Elsa.Studio.Weaver.Workflows/Client/src/__tests__/workflowAgentRegistrations.json`.
+  `Extensions/Weaver/studio/Elsa.Studio.Weaver.Workflows/Client/src/__tests__/workflowWeaverRegistrations.json`.
   `WorkflowExplainContextTests` holds it equal to the composed host and checks that the guidance, tool and capability
   texts name only registered tools and kinds; the Weaver Workflows Vitest `registeredReferences.test.tsx` composes both
   Workflows Studio packages and checks every prompt, starter, renderer, result control and client tool contract against
@@ -283,7 +283,7 @@ and the template editor's adapter applies it with the designer's history and aut
 page's reference `workflows.version` schema `1`, which names exactly a `definitionId` and a `versionId` (each at most 128
 characters, no other field) and is targeted `workflow-version` / version id / version id (FR-005: a persisted version's
 revision identity is its version identity). The server then reads that exact version itself, in this order: the host's
-`workflows/design:read` (the gate is a read descriptor through `IAgentToolAuthorizer`), the owning
+`workflows/design:read` (the gate is a read descriptor through `IWeaverToolAuthorizer`), the owning
 `IWorkflowDefinitionAuthorizer.CanReadAsync` for the named definition, and `IWorkflowVersionReader.ReadAsync` (Workflows
 Design Core, D4); the version must belong to that definition. It admits `workflows.version` (`AuthoritativeRead`) with the
 definition identity and name, the version identity and label, its activity count (`activitiesTruncated` when the walk stopped at its
@@ -334,7 +334,7 @@ installed handler projects is never read as empty: the reading and the compariso
 `incompleteReasons`. Input and output values are compared without being disclosed. Lists are bounded (at most 100 each,
 smaller when the result would exceed 24 KiB, well under the host's 32 KiB budget, #3710) and say when they were cut; a read
 that does not fit even its smallest bound is refused as `weaver.workflow.version_too_large` (413). Its
-`IAgentToolAuthorization` decides a concrete version target by its definition's owner read alone (the definition looked
+`IWeaverToolAuthorization` decides a concrete version target by its definition's owner read alone (the definition looked
 up by id, nothing else read). Refusals:
 `weaver.workflow.version_context_required` (409), `weaver.workflow.version_arguments_invalid` (400),
 `weaver.workflow.version_not_found` (404), `weaver.workflow.permission_denied` (403), `workflow.authorization.unavailable`
@@ -344,7 +344,7 @@ and `workflow.version.reader_unavailable` (503).
 with zero effect and to offer the current draft instead; no tool targets a version for a change, and
 `workflow_apply_operation_batch` binds only an admitted working-state snapshot, so it refuses a request that holds only a
 version (`weaver.workflow.snapshot_required`, FR-015). The capability `workflow.version-explain` (Answer, ReadOnly,
-`workflows/design:read`, kind `workflows.version`, mode `explain`) is declared by `WorkflowAgentCapabilityProvider`.
+`workflows/design:read`, kind `workflows.version`, mode `explain`) is declared by `WorkflowWeaverCapabilityProvider`.
 
 **Executables and Runs** live in the Runtime-side package [`Elsa.Weaver.Workflows.Runtime`](../Runtime/EXTENSION_POINTS.md),
 so this package keeps referencing Workflows Design only (FR-027, D2). In a Design-only host an Executable reference is
@@ -364,24 +364,24 @@ removed (spec 1193 D3): `IWorkflowAgentContextProvider`, `IWorkflowActivityCatal
 (`DefaultWorkflowGraphOperationBatchRiskClassifier`, direct apply) and `IWorkflowAuthoringAuditService`
 (`DefaultWorkflowAuthoringAuditService`), with `WorkflowAgentContext`, its permission, constraint, selection, diagnostic
 and catalog-item records, the operation-batch, risk, clarification, audit and proposal-request records. None had a
-production consumer. Their replacements: the catalog and permissions above; Agent's own tool-invocation review for
-proposals; Agent's tool-invocation audit for every workflow tool invocation and outcome; and, from slice C, an internal
-classifier that never grants direct apply. `WorkflowAgentGraph` and its activity and connection summaries stay.
+production consumer. Their replacements: the catalog and permissions above; Weaver's own tool-invocation review for
+proposals; Weaver's tool-invocation audit for every workflow tool invocation and outcome; and, from slice C, an internal
+classifier that never grants direct apply. `WorkflowWeaverGraph` and its activity and connection summaries stay.
 
-Placeholder absence (SC-003) is asserted in two places: `WorkflowAgentNativeAuthorityTests` checks the source-composed
+Placeholder absence (SC-003) is asserted in two places: `WorkflowWeaverNativeAuthorityTests` checks the source-composed
 host (no legacy type in this assembly or its registrations, the real `HttpActivityAuthoringCatalog` and
 `HttpWorkflowDefinitionAuthorizer`, and catalog entries equal to the designer's catalog route), and the conformance
 probe's `workflow-truth-seams` case checks the packaged consumer through its generation observation (the loaded package's
 type names and the one composed catalog).
 
-**SemVer: Major**, classed as pre-GA cleanup (constitution §4.2, ADR 0080 D4). `DefaultWorkflowAgentContextProvider`
-and `WorkflowAgentCapabilityProvider` are now `internal sealed` (ADR 0080 D3), also Major for any Preview consumer that
+**SemVer: Major**, classed as pre-GA cleanup (constitution §4.2, ADR 0080 D4). `DefaultWorkflowWeaverContextProvider`
+and `WorkflowWeaverCapabilityProvider` are now `internal sealed` (ADR 0080 D3), also Major for any Preview consumer that
 named them; hosts compose the feature instead. The new context kinds are Minor.
 
 
 ## Current disclosure ownership (#3439)
 
-`DefaultWorkflowAgentContextProvider` implements `AdmitDisclosureAsync` on the existing source
+`DefaultWorkflowWeaverContextProvider` implements `AdmitDisclosureAsync` on the existing source
 `workflows.context`. Initial collection and retained disclosure use the current native actor/tenant
 and the owning read descriptor's `workflows/design:read` permission against the exact target.
 An unsaved working-state revision is not compared with a persisted database revision. Both graph
@@ -389,7 +389,7 @@ and position tools declare `DisclosureSourceId=workflows.context`; result-only a
 checks the exact owning workflow target. Historical/receipt authority does not imply a fresh editor
 read. Receipt continuation omits the obsolete snapshot while retaining the truthful accepted result;
 no save, publish or effect replay is introduced. Generic failure/deadline/provenance rules belong to
-[Agent foundation](../../Elsa.Weaver/EXTENSION_POINTS.md#context-and-result-disclosure-3439-under-qualification).
+[Weaver foundation](../../Elsa.Weaver/EXTENSION_POINTS.md#context-and-result-disclosure-3439-under-qualification).
 
 Concrete context/history/results additionally require the owner domain's
 [`IWorkflowDefinitionAuthorizer`](../../../../../Essentials/src/Workflows/Design/Api/EXTENSION_POINTS.md#iworkflowdefinitionauthorizer-contract--elsaworkflowsdesigncore).
@@ -400,7 +400,7 @@ checks and acquire no concrete tool authority. Tool advertisement cannot infer r
 from guidance alone.
 
 Preview consumers must rebuild for the added optional owner-authorizer constructor parameter on
-`WorkflowReadGraphTool`; `DefaultWorkflowAgentContextProvider` is no longer public. A metadata-only
+`WorkflowReadGraphTool`; `DefaultWorkflowWeaverContextProvider` is no longer public. A metadata-only
 `new WorkflowReadGraphTool().Descriptor` remains source-compatible, while actual tool authorization
 fails closed without a concrete target and one current owner implementation. Workflow Design Core
 adds the two-method public owner contract; Workflow Design API supplies its default HTTP adapter.

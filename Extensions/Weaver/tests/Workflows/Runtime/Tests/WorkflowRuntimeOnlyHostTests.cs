@@ -13,12 +13,12 @@ using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using static Elsa.Weaver.Workflows.Runtime.Tests.WorkflowRuntimeAgentTestHost;
+using static Elsa.Weaver.Workflows.Runtime.Tests.WorkflowRuntimeWeaverTestHost;
 
 namespace Elsa.Weaver.Workflows.Runtime.Tests;
 
 // Spec 1193 SC-009 (FR-027), the started Runtime-only shape: a real CShells shell with the Workflows Runtime API and the
-// Runtime-side workflow agent package only. The Executable is read through the real Runtime API inspection over the
+// Runtime-side workflow Weaver package only. The Executable is read through the real Runtime API inspection over the
 // runtime's own executable stores; no Workflows Design assembly is composed or loaded; Design journeys are unavailable.
 public sealed class WorkflowRuntimeOnlyHostTests : IAsyncDisposable
 {
@@ -32,11 +32,11 @@ public sealed class WorkflowRuntimeOnlyHostTests : IAsyncDisposable
         services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
         services.AddCShells(shells => shells
             .WithAssemblies(typeof(EventsFeature).Assembly, typeof(ApiCapabilitiesFeature).Assembly, typeof(WorkflowsRuntimeApiFeature).Assembly,
-                typeof(WeaverWorkflowsRuntimeFeature).Assembly, typeof(TestAgentAuthorityFeature).Assembly)
+                typeof(WeaverWorkflowsRuntimeFeature).Assembly, typeof(TestWeaverAuthorityFeature).Assembly)
             .AddShell(ShellName, shell => shell
                 .WithFeature<WorkflowsRuntimeApiFeature>()
                 .WithFeature<WeaverWorkflowsRuntimeFeature>()
-                .WithFeature<TestAgentAuthorityFeature>()));
+                .WithFeature<TestWeaverAuthorityFeature>()));
         root = services.BuildServiceProvider();
     }
 
@@ -48,17 +48,17 @@ public sealed class WorkflowRuntimeOnlyHostTests : IAsyncDisposable
         await using var scope = shell.BeginScope();
         var services = scope.ServiceProvider;
         Assert.Equal("WorkflowExecutableInspection", Assert.Single(services.GetServices<IWorkflowExecutableInspection>()).GetType().Name);
-        var session = await services.GetRequiredService<IAgentSessionService>().CreateAsync(new("tenant-1", "actor-1", "conversation-1", "test-provider", "explain",
-            null, AgentPolicy.Default, new Dictionary<string, string>()));
+        var session = await services.GetRequiredService<IWeaverSessionService>().CreateAsync(new("tenant-1", "actor-1", "conversation-1", "test-provider", "explain",
+            null, WeaverPolicy.Default, new Dictionary<string, string>()));
 
-        var collected = await services.GetRequiredService<IAgentContextCollector>().CollectAsync(AgentPolicy.Default,
+        var collected = await services.GetRequiredService<IWeaverContextCollector>().CollectAsync(WeaverPolicy.Default,
             new(session.Id, "workflow-executable", new Dictionary<string, string>()) { CallerAttachments = [Reference("artifact-runtime-only", hash)] });
 
         Assert.True(collected.Succeeded, collected.Error?.Message);
         var admitted = Assert.Single(collected.Value!.Attachments, item => item.ContentType == "workflows.executable");
         Assert.Equal(["published-runtime-only"], ((JsonElement)admitted.Content!).GetProperty("sourceReferences").EnumerateArray()
             .Select(item => item.GetProperty("sourceReferenceId").GetString()));
-        var tool = services.GetServices<IAgentTool>().Single(item => item.Descriptor.Name == "workflow_read_executable");
+        var tool = services.GetServices<IWeaverTool>().Single(item => item.Descriptor.Name == "workflow_read_executable");
         var prepared = await tool.PrepareAsync(new("call-1", tool.Descriptor.Name, session.Id, session.ActorId, new Dictionary<string, object?>(),
             collected.Value.Attachments) { TenantId = session.TenantId });
         Assert.True(prepared.Succeeded, prepared.Error?.Message);
@@ -79,18 +79,18 @@ public sealed class WorkflowRuntimeOnlyHostTests : IAsyncDisposable
         var shell = await root.GetRequiredService<IShellRegistry>().GetOrActivateAsync(ShellName);
         await using var scope = shell.BeginScope();
         var services = scope.ServiceProvider;
-        var session = await services.GetRequiredService<IAgentSessionService>().CreateAsync(new("tenant-1", "actor-1", "conversation-1", "test-provider", "explain",
-            null, AgentPolicy.Default, new Dictionary<string, string>()));
-        var design = new AgentContextAttachment($"{kind}:1", "workflow", "resource-1", "Design context", kind, AgentContextSensitivity.Internal, "selection",
+        var session = await services.GetRequiredService<IWeaverSessionService>().CreateAsync(new("tenant-1", "actor-1", "conversation-1", "test-provider", "explain",
+            null, WeaverPolicy.Default, new Dictionary<string, string>()));
+        var design = new WeaverContextAttachment($"{kind}:1", "workflow", "resource-1", "Design context", kind, WeaverContextSensitivity.Internal, "selection",
             "Design context", JsonSerializer.SerializeToElement(new { definitionId = "definition-1", versionId = "resource-1" }), new Dictionary<string, string>())
-        { ModuleId = ModuleId, SchemaVersion = "1", Target = new(ModuleId, resourceType, "resource-1", "resource-1"), Origin = AgentContextOrigin.ClientSnapshot };
+        { ModuleId = ModuleId, SchemaVersion = "1", Target = new(ModuleId, resourceType, "resource-1", "resource-1"), Origin = WeaverContextOrigin.ClientSnapshot };
 
-        var collected = await services.GetRequiredService<IAgentContextCollector>().CollectAsync(AgentPolicy.Default,
+        var collected = await services.GetRequiredService<IWeaverContextCollector>().CollectAsync(WeaverPolicy.Default,
             new(session.Id, "workflow", new Dictionary<string, string>()) { CallerAttachments = [design] });
 
         Assert.False(collected.Succeeded);
         Assert.Equal("weaver.context.kind_unsupported", Assert.Single(collected.Value!.Diagnostics).Code);
-        var tools = (await services.GetRequiredService<IAgentToolRegistry>().ListAsync()).Select(tool => tool.Descriptor.Name);
+        var tools = (await services.GetRequiredService<IWeaverToolRegistry>().ListAsync()).Select(tool => tool.Descriptor.Name);
         Assert.Equal(["workflow_read_executable", "workflow_read_run"], tools.Where(name => name.StartsWith("workflow_", StringComparison.Ordinal)).Order());
     }
 
@@ -112,9 +112,9 @@ public sealed class WorkflowRuntimeOnlyHostTests : IAsyncDisposable
             WorkflowExecutionStatus.Faulted, null, now, now, now, now, null, null, null, new Dictionary<string, string>()));
         Assert.Null(await inspection.GetAsync(new("run-runtime-only")));
 
-        var session = await services.GetRequiredService<IAgentSessionService>().CreateAsync(new("tenant-1", "actor-1", "conversation-1", "test-provider", "explain",
-            null, AgentPolicy.Default, new Dictionary<string, string>()));
-        var collected = await services.GetRequiredService<IAgentContextCollector>().CollectAsync(AgentPolicy.Default,
+        var session = await services.GetRequiredService<IWeaverSessionService>().CreateAsync(new("tenant-1", "actor-1", "conversation-1", "test-provider", "explain",
+            null, WeaverPolicy.Default, new Dictionary<string, string>()));
+        var collected = await services.GetRequiredService<IWeaverContextCollector>().CollectAsync(WeaverPolicy.Default,
             new(session.Id, "workflow-run", new Dictionary<string, string>()) { CallerAttachments = [RunReference("run-runtime-only", null)] });
         Assert.False(collected.Succeeded);
         Assert.Equal("weaver.workflow.run_not_found", Assert.Single(collected.Value!.Diagnostics, item => item.Required).Code);
@@ -143,14 +143,14 @@ public sealed class WorkflowRuntimeOnlyHostTests : IAsyncDisposable
     }
 }
 
-/// <summary>The test host's permission decisions in place of the Agent API's HTTP authorizer: every permission is granted.</summary>
-[ShellFeature(name: "TestAgentAuthority", DisplayName = "Test agent authority", Description = "Grants every tool permission in composition tests.",
+/// <summary>The test host's permission decisions in place of the Weaver API's HTTP authorizer: every permission is granted.</summary>
+[ShellFeature(name: "TestWeaverAuthority", DisplayName = "Test Weaver authority", Description = "Grants every tool permission in composition tests.",
     DependsOn = new object[] { typeof(WeaverWorkflowsRuntimeFeature) })]
-public sealed class TestAgentAuthorityFeature : IShellFeature
+public sealed class TestWeaverAuthorityFeature : IShellFeature
 {
     public void ConfigureServices(IServiceCollection services)
     {
-        services.Replace(ServiceDescriptor.Scoped<IAgentToolAuthorizer>(_ => new WorkflowRuntimeAgentTestHost.Authorizer()));
+        services.Replace(ServiceDescriptor.Scoped<IWeaverToolAuthorizer>(_ => new WorkflowRuntimeWeaverTestHost.Authorizer()));
         // Without Identity the HTTP inspection authority cannot be built; this one admits no caller to any Run.
         services.Replace(ServiceDescriptor.Scoped<Elsa.Workflows.Runtime.Api.Contracts.IActivityInspectionContextAsync, NoRunInspectionAuthority>());
         services.Replace(ServiceDescriptor.Scoped<Elsa.Workflows.Runtime.Api.Contracts.IWorkflowRuntimeOperatorAccess, NoRunInspectionAuthority>());

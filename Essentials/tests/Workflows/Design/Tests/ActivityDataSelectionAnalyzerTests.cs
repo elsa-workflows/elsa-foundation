@@ -15,40 +15,159 @@ namespace Elsa.Workflows.Design.Tests;
 
 public sealed partial class ActivityDataSelectionAnalyzerTests
 {
+    /// <summary>
+    /// The server never invents a runtime scope. It returns a complete binding that declares none, and only where
+    /// publication admits that binding unchanged: where the producer definitely ran before the consumer and no earlier
+    /// run of it can also lead there. A supplied scope is echoed, never rewritten.
+    /// </summary>
     [Theory]
-    [InlineData("sequence")]
-    [InlineData("flowchart")]
-    [InlineData("flowchart-cycle")]
-    [InlineData("flowchart-in-for")]
-    public async Task Automatic_result_metadata_never_invents_a_runtime_scope_constraint(string placement)
+    [InlineData("sequence", null)]
+    [InlineData("flowchart", null)]
+    [InlineData("flowchart-cycle", "EarlierProducerRun")]
+    [InlineData("flowchart-in-for", null)]
+    public async Task Automatic_result_metadata_never_invents_a_runtime_scope_constraint(string placement, string? refusal)
     {
         using var provider = Provider();
-        var root = Sequence(Node("producer"), Node("consumer"));
-        if (placement != "sequence")
-        {
-            var edges = new List<Elsa.Activities.Flowchart.Models.FlowchartConnection> { new(new("producer"), new("consumer")) };
-            if (placement == "flowchart-cycle") edges.Add(new(new("consumer"), new("producer")));
-            root = new("chart", "test", [], [], new("elsa.flowchart.structure", "1.0.0",
-                JsonSerializer.SerializeToElement(new Elsa.Activities.Flowchart.Models.FlowchartAuthoredStructure(
-                    [Node("producer"), Node("consumer")], edges, "producer"), Web)));
-            if (placement == "flowchart-in-for")
-                root = new("loop", "test", [], [], new(Elsa.Activities.For.Activities.For.StructureKind, "1.0.0",
-                    JsonSerializer.SerializeToElement(new Elsa.Activities.ControlFlow.Loops.LoopAuthoredStructure(root), Web)));
-        }
+        var root = Placed(placement);
         var result = await Analyzer(provider).AnalyzeAsync(Document(root), new("consumer", "CustomerId"));
         Assert.Empty(result.Findings);
         var source = Assert.Single(result.Sources, source => source.Id == "activity:producer:$result");
         Assert.Equal(ActivityChildResultAvailability.Definite, source.Availability);
-        Assert.Null(source.Binding);
-        Assert.Equal("RuntimeScopeBindingUnavailable", source.ReasonCode);
+        Assert.Equal(refusal, source.ReasonCode);
         Assert.Equal(new ActivityResultExpressionParameterBinding("producer", "$result"), source.ActivityResultSource);
         Assert.NotNull(source.Shape);
+        if (refusal is null)
+        {
+            var binding = source.Binding!;
+            Assert.Equal("ActivityResult", binding.ExpressionType);
+            var payload = Assert.IsType<JsonElement>(binding.Value);
+            Assert.Equal(new[] { "producerNodeId", "projectionKey", "isOptional" }, payload.EnumerateObject().Select(property => property.Name));
+            Assert.Equal("producer", payload.GetProperty("producerNodeId").GetString());
+            Assert.Equal("$result", payload.GetProperty("projectionKey").GetString());
+            Assert.False(payload.GetProperty("isOptional").GetBoolean());
+        }
+        else
+            Assert.Null(source.Binding);
+
+        // What a client stores unchanged is what publication accepts, and a refused binding is refused there too.
+        var stored = await Analyzer(provider).AnalyzeAsync(Document(Placed(placement, Input(ScopeFreeResult("producer")))));
+        Assert.Equal(refusal is null ? Array.Empty<string>() : new[] { "ValueFlow/EarlierProducerRun" }, stored.Findings.Select(finding => finding.Type));
+
         var focused = await Analyzer(provider).AnalyzeAsync(Document(root), new("consumer", "CustomerId"),
             new() { Source = Result("producer", optional: true, scope: "opaque-scope:do-not-rewrite") });
         var supplied = Assert.Single(focused.Sources);
         Assert.Equal("opaque-scope:do-not-rewrite", Assert.IsType<JsonElement>(supplied.Binding!.Value).GetProperty("producerScopeId").GetString());
         Assert.True(supplied.ActivityResultSource!.IsOptional);
     }
+
+    /// <summary>
+    /// A producer and its reader inside a Sequence on a Flowchart cycle: the Sequence runs each child once, but the
+    /// Flowchart runs the Sequence again, and its earlier pass leads to the later one. Only the ancestor walk sees
+    /// that, through the Flowchart's fact for the Sequence with itself, so neither form is offered or admitted. A loop
+    /// between the Sequence and the Flowchart, which rules out an earlier run of its own body, does not hide the cycle.
+    /// </summary>
+    [Theory]
+    [InlineData(true, false)]
+    [InlineData(false, false)]
+    [InlineData(true, true)]
+    [InlineData(false, true)]
+    public async Task A_result_read_beside_its_producer_in_a_sequence_on_a_flowchart_cycle_is_refused_as_a_cyclic_back_edge(bool declaresScope, bool insideLoop)
+    {
+        using var provider = Provider();
+        ActivityNode Chart(ActivityNode consumer)
+        {
+            var steps = Sequence(Node("producer"), consumer) with { NodeId = "steps" };
+            var node = insideLoop ? Loop(Elsa.Activities.For.Activities.For.StructureKind, steps) : steps;
+            return Flowchart([Node("entry"), node], [("entry", node.NodeId), (node.NodeId, "entry")], "entry");
+        }
+
+        var browsed = await Analyzer(provider).AnalyzeAsync(Document(Chart(Node("consumer"))), new("consumer", "CustomerId"));
+        Assert.DoesNotContain(browsed.Sources, source => source.Id == "activity:producer:$result");
+
+        var stored = await Analyzer(provider).AnalyzeAsync(Document(Chart(Node("consumer",
+            Input(declaresScope ? Result("producer", scope: "scope:root") : ScopeFreeResult("producer"))))));
+        Assert.Equal(new[] { "ValueFlow/CyclicBackEdge" }, stored.Findings.Select(finding => finding.Type));
+    }
+
+    [Fact]
+    public async Task A_scope_free_result_binding_keeps_the_availability_and_projection_rules_of_a_scoped_one()
+    {
+        using var provider = Provider();
+        var later = await Analyzer(provider).AnalyzeAsync(Document(Sequence(Node("consumer", Input(ScopeFreeResult("producer"))), Node("producer"))));
+        Assert.Equal(new[] { "ValueFlow/UnavailableProducer" }, later.Findings.Select(finding => finding.Type));
+        var optionalLater = await Analyzer(provider).AnalyzeAsync(Document(Sequence(Node("consumer", Input(ScopeFreeResult("producer", optional: true))), Node("producer"))));
+        Assert.Empty(optionalLater.Findings);
+        var forged = await Analyzer(provider).AnalyzeAsync(Document(Sequence(Node("producer"), Node("consumer", Input(ScopeFreeResult("producer", "forged-output"))))));
+        Assert.Contains(forged.Findings, finding => finding.Type == "ActivityData/UnknownProjection");
+        var blank = await Analyzer(provider).AnalyzeAsync(Document(Sequence(Node("producer"), Node("consumer", Input(Result("producer", scope: " "))))));
+        Assert.Contains(blank.Findings, finding => finding.Type == "ActivityData/InvalidSource");
+    }
+
+    /// <summary>
+    /// A producer that runs on only some paths is browsed without a binding, because a required read of it is refused.
+    /// A client that wants an optional read asks for that source with <c>isOptional: true</c> and no scope, and gets a
+    /// binding back with the reason still attached; that binding publishes unchanged.
+    /// </summary>
+    [Fact]
+    public async Task A_focused_optional_query_returns_a_scope_free_binding_for_a_conditional_producer()
+    {
+        using var provider = Provider();
+        ActivityNode Chart(ActivityNode consumer) => Flowchart([Node("start"), Node("producer"), consumer],
+            [("start", "consumer"), ("producer", "consumer")], "start");
+
+        var browsed = await Analyzer(provider).AnalyzeAsync(Document(Chart(Node("consumer"))), new("consumer", "CustomerId"));
+        var listed = Assert.Single(browsed.Sources, source => source.Id == "activity:producer:$result");
+        Assert.Equal(ActivityChildResultAvailability.Conditional, listed.Availability);
+        Assert.Equal("ConditionalOccurrence", listed.ReasonCode);
+        Assert.Null(listed.Binding);
+
+        var focused = await Analyzer(provider).AnalyzeAsync(Document(Chart(Node("consumer"))), new("consumer", "CustomerId"),
+            new() { Source = ScopeFreeResult("producer", optional: true) });
+        Assert.Empty(focused.Findings);
+        var source = Assert.Single(focused.Sources);
+        Assert.Equal("ConditionalOccurrence", source.ReasonCode);
+        var binding = Assert.IsType<JsonElement>(source.Binding!.Value);
+        Assert.False(binding.TryGetProperty("producerScopeId", out _));
+        Assert.True(binding.GetProperty("isOptional").GetBoolean());
+
+        var stored = await Analyzer(provider).AnalyzeAsync(Document(Chart(Node("consumer", Input(source.Binding)))));
+        Assert.Empty(stored.Findings);
+    }
+
+    [Theory]
+    [InlineData("activity.shape.no-typed-result", "NoTypedResult")]
+    [InlineData("activity.shape.metadata-unavailable", null)]
+    public async Task A_browsed_whole_result_without_a_declared_type_is_listed_without_a_binding(string shapeReason, string? reasonCode)
+    {
+        using var provider = Provider(services => services.AddSingleton<IActivitySerializedShapeSource>(new MissingResultShape(shapeReason)));
+        var result = await Analyzer(provider).AnalyzeAsync(Document(Sequence(Node("producer"), Node("consumer"))), new("consumer", "CustomerId"));
+        var whole = Assert.Single(result.Sources, source => source.Id == "activity:producer:$result");
+        Assert.Equal(reasonCode, whole.ReasonCode);
+        Assert.Equal(reasonCode is null, whole.Binding is not null);
+        var named = Assert.Single(result.Sources, source => source.Id == "activity:producer:known");
+        Assert.Null(named.ReasonCode);
+        Assert.NotNull(named.Binding);
+    }
+
+    private static ActivityNode Placed(string placement, params ArgumentState[] consumerInputs)
+    {
+        if (placement == "sequence") return Sequence(Node("producer"), Node("consumer", consumerInputs));
+        var edges = new List<(string, string)> { ("producer", "consumer") };
+        if (placement == "flowchart-cycle") edges.Add(("consumer", "producer"));
+        var chart = Flowchart([Node("producer"), Node("consumer", consumerInputs)], edges, "producer");
+        return placement == "flowchart-in-for"
+            ? new("loop", "test", [], [], new(Elsa.Activities.For.Activities.For.StructureKind, "1.0.0",
+                JsonSerializer.SerializeToElement(new Elsa.Activities.ControlFlow.Loops.LoopAuthoredStructure(chart), Web)))
+            : chart;
+    }
+
+    private static ActivityNode Flowchart(ActivityNode[] children, IEnumerable<(string Source, string Target)> edges, string start) =>
+        new("chart", "test", [], [], new("elsa.flowchart.structure", "1.0.0",
+            JsonSerializer.SerializeToElement(new Elsa.Activities.Flowchart.Models.FlowchartAuthoredStructure(children,
+                edges.Select(edge => new Elsa.Activities.Flowchart.Models.FlowchartConnection(new(edge.Source), new(edge.Target))).ToList(), start), Web)));
+
+    private static ArgumentValue ScopeFreeResult(string producer, string projection = "$result", bool optional = false) => new(
+        JsonSerializer.SerializeToElement(new { producerNodeId = producer, projectionKey = projection, isOptional = optional }), "ActivityResult");
 
     [Theory]
     [InlineData("Workflow", "PublicName", "stable-key")]

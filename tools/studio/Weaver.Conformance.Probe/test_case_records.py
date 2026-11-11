@@ -8,7 +8,7 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock
 
-from agent_transport import AgentTransport
+from weaver_transport import WeaverTransport
 from case_records import CaseRecords, correlate_browser_protocol, retained
 from evidence import CONTROL_IDS, REQUIRED_CASES
 
@@ -112,7 +112,7 @@ class ProtocolCorrelationTests(unittest.TestCase):
                 *copy.deepcopy(rows[0]["data"]["messages"]), {"role": "tool", "contents": [copy.deepcopy(item)]}]),
                 row("continuation", results=[item])]
         trace = root / "trace.jsonl"
-        transport = AgentTransport(SimpleNamespace(bearer=None), root / "transport", trace_file=trace)
+        transport = WeaverTransport(SimpleNamespace(bearer=None), root / "transport", trace_file=trace)
         response = {"url": "http://127.0.0.1:49123/_elsa/weaver/proposals/proposal/execute", "status": 200,
                     "response": {"data": {"proposalId": "proposal", "executed": True, "toolResult": native}, "error": None}}
         event = {"id": "native-event", "kind": "contributedResult", "resultKind": "moduleResult", "error": None,
@@ -127,13 +127,13 @@ class ProtocolCorrelationTests(unittest.TestCase):
 
     def sync(self, fixture):
         (fixture.output / "command-one.json").write_text(json.dumps(fixture.command))
-        (fixture.output / "agent-requests.json").write_text(json.dumps([{"url": "http://127.0.0.1:49123/_elsa/weaver/sessions/session-a/messages"}]))
+        (fixture.output / "weaver-requests.json").write_text(json.dumps([{"url": "http://127.0.0.1:49123/_elsa/weaver/sessions/session-a/messages"}]))
         # Real browser runs retain successful owner HTTP sidecars alongside execute
-        # responses. Their status200 must not be mistaken for an Agent envelope.
+        # responses. Their status200 must not be mistaken for a Weaver envelope.
         (fixture.output / "owner-http.json").write_text(json.dumps({"status": 200, "rawBody": '{"owner":"synthetic"}'}))
         if not fixture.inline:
             (fixture.output / "execute.json").write_text(json.dumps(fixture.response))
-        (fixture.output / "agent-streams.json").write_text(json.dumps(fixture.streams))
+        (fixture.output / "weaver-streams.json").write_text(json.dumps(fixture.streams))
         fixture.trace.write_text("".join(json.dumps(row) + "\n" for row in fixture.rows))
 
     def correlate(self, fixture, provider="copilot"):
@@ -269,7 +269,7 @@ class ProtocolCorrelationTests(unittest.TestCase):
                     self.correlate(fixture, provider)
 
     def test_receipt_scope_matches_actual_numeric_and_named_wire_forms_for_both_scopes(self):
-        # AgentEffectScope: ClientWorkingState=0, ServerPersisted=1. The native
+        # WeaverEffectScope: ClientWorkingState=0, ServerPersisted=1. The native
         # API emits camelCase; Anthropic's real JSON string emits the number.
         for provider in ("copilot", "anthropic"):
             for numeric, camel, pascal in ((0, "clientWorkingState", "ClientWorkingState"),

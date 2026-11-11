@@ -64,7 +64,7 @@ internal static class WorkflowActivityCatalog
     }
 
     /// <summary>Whether a retained catalog attachment disclosed catalog entries; an unreadable one counts as disclosed (fail closed).</summary>
-    internal static bool DisclosedEntries(AgentContextAttachment attachment) =>
+    internal static bool DisclosedEntries(WeaverContextAttachment attachment) =>
         attachment.Content is not JsonElement { ValueKind: JsonValueKind.Object } content
         || !content.TryGetProperty("entries", out var entries) || entries.ValueKind != JsonValueKind.Array || entries.GetArrayLength() > 0;
 
@@ -72,7 +72,7 @@ internal static class WorkflowActivityCatalog
     /// The bounded attachment for one read. Entries keep the owner's order; when they do not fit the budget the attachment
     /// says so (<c>truncated</c>, with the total and included counts) instead of silently dropping entries.
     /// </summary>
-    internal static AgentContextAttachment Attachment(Read read)
+    internal static WeaverContextAttachment Attachment(Read read)
     {
         var entries = new List<object>();
         var size = 0;
@@ -104,10 +104,10 @@ internal static class WorkflowActivityCatalog
             Status.Denied => "The actor may not read the activity design catalog; no entries are disclosed.",
             _ => "The activity design catalog is unavailable; no entries are disclosed."
         };
-        return new(AttachmentId, "workflows.catalog", null, "Workflow activity catalog", ContentType, AgentContextSensitivity.Internal,
+        return new(AttachmentId, "workflows.catalog", null, "Workflow activity catalog", ContentType, WeaverContextSensitivity.Internal,
             "catalog", summary, content, new Dictionary<string, string>())
         {
-            ModuleId = WorkflowAgentSnapshot.ModuleId, SchemaVersion = "1", Origin = AgentContextOrigin.AuthoritativeRead, AgentScopes = []
+            ModuleId = WorkflowWeaverSnapshot.ModuleId, SchemaVersion = "1", Origin = WeaverContextOrigin.AuthoritativeRead, WeaverScopes = []
         };
     }
 

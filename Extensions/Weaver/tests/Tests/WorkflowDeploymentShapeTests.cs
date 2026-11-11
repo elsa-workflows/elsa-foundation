@@ -25,20 +25,20 @@ public sealed class WorkflowDeploymentShapeTests
         using var root = Compose(runtime: false);
         using var scope = root.CreateScope();
         var session = await SessionAsync(scope);
-        var collector = scope.ServiceProvider.GetRequiredService<IAgentContextCollector>();
+        var collector = scope.ServiceProvider.GetRequiredService<IWeaverContextCollector>();
 
-        var version = await collector.CollectAsync(AgentPolicy.Default, Request(session, WorkflowVersionAgentTests.Reference("definition-1", "v2")));
+        var version = await collector.CollectAsync(WeaverPolicy.Default, Request(session, WorkflowVersionWeaverTests.Reference("definition-1", "v2")));
         Assert.True(version.Succeeded, version.Error?.Message);
         Assert.Contains(version.Value!.Attachments, item => item.ContentType == "workflows.version");
 
-        var executable = await collector.CollectAsync(AgentPolicy.Default, Request(session, Executable()));
+        var executable = await collector.CollectAsync(WeaverPolicy.Default, Request(session, Executable()));
         Assert.False(executable.Succeeded);
         var refusal = Assert.Single(executable.Value!.Diagnostics, item => item.Required);
         Assert.Equal(("weaver.context.kind_unsupported", "No installed module admits the supplied context kind and owner."), (refusal.Code, refusal.Message));
         Assert.DoesNotContain(executable.Value.Attachments, item => item.ContentType == "workflows.executable");
 
         // Spec 1193 slice G (story 9 scenario 6): a Run reference is explicitly unavailable in the same way.
-        var run = await collector.CollectAsync(AgentPolicy.Default, Request(session, Run()));
+        var run = await collector.CollectAsync(WeaverPolicy.Default, Request(session, Run()));
         Assert.False(run.Succeeded);
         var runRefusal = Assert.Single(run.Value!.Diagnostics, item => item.Required);
         Assert.Equal(("weaver.context.kind_unsupported", "No installed module admits the supplied context kind and owner."), (runRefusal.Code, runRefusal.Message));
@@ -58,17 +58,17 @@ public sealed class WorkflowDeploymentShapeTests
         using var scope = root.CreateScope();
         var session = await SessionAsync(scope);
 
-        var collected = await scope.ServiceProvider.GetRequiredService<IAgentContextCollector>().CollectAsync(AgentPolicy.Default,
-            Request(session, WorkflowVersionAgentTests.Reference("definition-1", "v2"), Executable(), Run()));
+        var collected = await scope.ServiceProvider.GetRequiredService<IWeaverContextCollector>().CollectAsync(WeaverPolicy.Default,
+            Request(session, WorkflowVersionWeaverTests.Reference("definition-1", "v2"), Executable(), Run()));
 
         Assert.True(collected.Succeeded, collected.Error?.Message);
         Assert.Empty(collected.Value!.Diagnostics);
         var version = Assert.Single(collected.Value.Attachments, item => item.ContentType == "workflows.version");
         var executable = Assert.Single(collected.Value.Attachments, item => item.ContentType == "workflows.executable");
         Assert.Equal(("workflows.version-context", "workflows.executable-context"), (version.ContributorId, executable.ContributorId));
-        Assert.Equal(new AgentResourceTarget(Module, "workflow-executable", "artifact-1", "sha256:artifact"), executable.Target);
+        Assert.Equal(new WeaverResourceTarget(Module, "workflow-executable", "artifact-1", "sha256:artifact"), executable.Target);
         var run = Assert.Single(collected.Value.Attachments, item => item.ContentType == "workflows.run");
-        Assert.Equal(("workflows.run-context", new AgentResourceTarget(Module, "workflow-run", "run-1", "run-1")), (run.ContributorId, run.Target));
+        Assert.Equal(("workflows.run-context", new WeaverResourceTarget(Module, "workflow-run", "run-1", "run-1")), (run.ContributorId, run.Target));
         var tools = await Tools(scope);
         Assert.Contains("workflow_read_version", tools);
         Assert.Contains("workflow_read_executable", tools);
@@ -78,46 +78,46 @@ public sealed class WorkflowDeploymentShapeTests
         Assert.Contains("workflow.executable-explain", await Capabilities(scope));
     }
 
-    private static ServiceProvider Compose(bool runtime) => AgentTestServices.Create(services =>
+    private static ServiceProvider Compose(bool runtime) => WeaverTestServices.Create(services =>
     {
         new WeaverWorkflowsFeature().ConfigureServices(services);
-        services.AddSingleton<IWorkflowDefinitionAuthorizer>(new WorkflowVersionAgentTests.Owner("definition-1"));
-        services.AddSingleton<IWorkflowVersionReader>(new WorkflowVersionAgentTests.FixtureReader());
-        services.AddScoped<IActivityStructureService>(_ => new DefaultActivityStructureService([new WorkflowVersionAgentTests.FlowHandler()]));
+        services.AddSingleton<IWorkflowDefinitionAuthorizer>(new WorkflowVersionWeaverTests.Owner("definition-1"));
+        services.AddSingleton<IWorkflowVersionReader>(new WorkflowVersionWeaverTests.FixtureReader());
+        services.AddScoped<IActivityStructureService>(_ => new DefaultActivityStructureService([new WorkflowVersionWeaverTests.FlowHandler()]));
         if (!runtime) return;
         new WeaverWorkflowsRuntimeFeature().ConfigureServices(services);
         services.AddSingleton<IWorkflowExecutableInspection>(new Inspection());
         services.AddSingleton<IWorkflowRunInspection>(new RunInspection());
     });
 
-    private static async Task<AgentSession> SessionAsync(IServiceScope scope) =>
-        await scope.ServiceProvider.GetRequiredService<IAgentSessionService>().CreateAsync(new("tenant-1", "actor-1", "conversation-1", "test-provider", "explain", null,
-            AgentPolicy.Default, new Dictionary<string, string>()));
+    private static async Task<WeaverSession> SessionAsync(IServiceScope scope) =>
+        await scope.ServiceProvider.GetRequiredService<IWeaverSessionService>().CreateAsync(new("tenant-1", "actor-1", "conversation-1", "test-provider", "explain", null,
+            WeaverPolicy.Default, new Dictionary<string, string>()));
 
-    private static AgentContextRequest Request(AgentSession session, params AgentContextAttachment[] callers) =>
+    private static WeaverContextRequest Request(WeaverSession session, params WeaverContextAttachment[] callers) =>
         new(session.Id, "unbound", new Dictionary<string, string>()) { CallerAttachments = callers };
 
     private static async Task<string[]> Tools(IServiceScope scope) =>
-        (await scope.ServiceProvider.GetRequiredService<IAgentToolRegistry>().ListAsync()).Select(tool => tool.Descriptor.Name).ToArray();
+        (await scope.ServiceProvider.GetRequiredService<IWeaverToolRegistry>().ListAsync()).Select(tool => tool.Descriptor.Name).ToArray();
 
     private static async Task<string[]> Capabilities(IServiceScope scope)
     {
         var all = new List<string>();
-        foreach (var provider in scope.ServiceProvider.GetServices<IAgentCapabilityProvider>())
+        foreach (var provider in scope.ServiceProvider.GetServices<IWeaverCapabilityProvider>())
             all.AddRange((await provider.GetCapabilitiesAsync()).Select(item => item.Id));
         return [.. all];
     }
 
-    private static AgentContextAttachment Executable() =>
-        new("workflows.executable:artifact-1", "workflow-executable", "artifact-1", "Executable", "workflows.executable", AgentContextSensitivity.Internal, "screen",
+    private static WeaverContextAttachment Executable() =>
+        new("workflows.executable:artifact-1", "workflow-executable", "artifact-1", "Executable", "workflows.executable", WeaverContextSensitivity.Internal, "screen",
             "Workflow Executable", JsonSerializer.SerializeToElement(new { artifactId = "artifact-1", artifactHash = "sha256:artifact", sourceReferenceId = (string?)null }),
             new Dictionary<string, string>())
-        { ModuleId = Module, SchemaVersion = "1", Target = new(Module, "workflow-executable", "artifact-1", "sha256:artifact"), Origin = AgentContextOrigin.ClientSnapshot };
+        { ModuleId = Module, SchemaVersion = "1", Target = new(Module, "workflow-executable", "artifact-1", "sha256:artifact"), Origin = WeaverContextOrigin.ClientSnapshot };
 
-    private static AgentContextAttachment Run() =>
-        new("workflows.run:run-1", "workflow-run", "run-1", "Run", "workflows.run", AgentContextSensitivity.Internal, "screen", "Workflow Run",
+    private static WeaverContextAttachment Run() =>
+        new("workflows.run:run-1", "workflow-run", "run-1", "Run", "workflows.run", WeaverContextSensitivity.Internal, "screen", "Workflow Run",
             JsonSerializer.SerializeToElement(new { workflowExecutionId = "run-1", activityExecutionId = (string?)null }), new Dictionary<string, string>())
-        { ModuleId = Module, SchemaVersion = "1", Target = new(Module, "workflow-run", "run-1", "run-1"), Origin = AgentContextOrigin.ClientSnapshot };
+        { ModuleId = Module, SchemaVersion = "1", Target = new(Module, "workflow-run", "run-1", "run-1"), Origin = WeaverContextOrigin.ClientSnapshot };
 
     private sealed class RunInspection : IWorkflowRunInspection
     {

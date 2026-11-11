@@ -38,10 +38,10 @@ import time
 from urllib.parse import urlencode
 import uuid
 
-from agent_transport import AgentTransportError, _json as strict_json
+from weaver_transport import WeaverTransportError, _json as strict_json
 from artifacts import check
 from case_records import retained
-from consumers import DURABLE_STORE_DEPENDENCY, DURABLE_STORE_FEATURE, enable_durable_agent_store
+from consumers import DURABLE_STORE_DEPENDENCY, DURABLE_STORE_FEATURE, enable_durable_weaver_store
 from journey_runtime import atomic_json, same
 from lifecycle_journeys import (LifecycleCaseFailure, _executed, _exchange, _json_file, _open, _path, _provider, _proposal_path,
                                 _session, _session_path, _settle, _size_owner, _sse, _stored_once, _trace, _verify_continuation,
@@ -276,7 +276,7 @@ def _restart(root, o, expected):
          and record["stoppedAt"] <= record["startedAt"], "restart.process", "The stopped generation did not end as declared with empty runtime caches")
     if expected != ABRUPT:
         need(o.get("ownedElsewhereAttempts", 0) == 0 and not any(name.startswith("ownedElsewhere") for name in o["refs"]),
-             "restart.lease_not_released", "A graceful stop left its session lease held: the recovered request answered agent.session.owned_elsewhere")
+             "restart.lease_not_released", "A graceful stop left its session lease held: the recovered request answered weaver.session.owned_elsewhere")
     return record
 
 
@@ -754,7 +754,7 @@ def _engage_dispatched(runtime, state):
     def execute():
         try:
             outcome["response"] = t.execute(proposal["id"], revision=proposal["baseRevision"])
-        except AgentTransportError as error:
+        except WeaverTransportError as error:
             outcome["error"] = error
 
     thread = threading.Thread(target=execute, name="restart-dispatch", daemon=True)
@@ -801,7 +801,7 @@ def _prepare_in_progress(runtime, name):
                 holder["turnId"] = (frame.value.get("payload") or {}).get("turnId")
                 started.set()
                 stream.until(lambda item: False)  # Ends only when the killed host drops the connection.
-        except (AgentTransportError, RuntimeError) as error:
+        except (WeaverTransportError, RuntimeError) as error:
             holder["error"] = type(error).__name__
         finally:
             started.set()
@@ -837,7 +837,7 @@ def _prepare_owner_resolution(runtime, name):
                                                 for item in draft.get("layout", []) if item.get("nodeId") == activity]}
     attachment = {"id": "workflow:" + seed["definitionId"], "moduleId": WORKFLOW_MODULE, "schemaVersion": "1", "target": target,
                   "source": "workflow", "sourceId": seed["definitionId"], "label": "Restart witness workflow", "contentType": "workflow.definition",
-                  "sensitivity": "internal", "scope": "selection", "origin": "clientSnapshot", "client": binding, "agentScopes": ["workflow-author"],
+                  "sensitivity": "internal", "scope": "selection", "origin": "clientSnapshot", "client": binding, "weaverScopes": ["workflow-author"],
                   "summary": "Restart witness workflow", "content": content,
                   "references": {"workflowDefinitionId": seed["definitionId"], "draftId": seed["draftId"], "revision": revision}}
     t = runtime.transport(name)
@@ -1070,7 +1070,7 @@ def _restart_host(runtime, host, reason, phase, *, while_stopped=None):
 def _failed(runtime, provider, key, error, observation=None):
     precise = isinstance(error, (RestartCaseFailure, LifecycleCaseFailure))
     return {"id": provider + "-" + key, "provider": provider, "adapter": provider, "caseKey": key, "restart": RESTART_CASES[key],
-            "status": "failed", "cause": error.cause if precise else ("restart.native_transport" if isinstance(error, AgentTransportError) else "verification"),
+            "status": "failed", "cause": error.cause if precise else ("restart.native_transport" if isinstance(error, WeaverTransportError) else "verification"),
             "message": str(error)[:1000], "observation": getattr(error, "observation", None) or observation,
             "nativeEvidenceVerified": False, "qualified": False, "source": runtime.run.source}
 
@@ -1171,18 +1171,18 @@ def _control(runtime, host):
 
 def _enable_store(runtime, host):
     run = runtime.run
-    directory = run.root / "durable-agent-store"
+    directory = run.root / "durable-weaver-store"
     directory.mkdir(mode=0o700)
-    database = directory / "agent-records.db"
+    database = directory / "weaver-records.db"
     key = secrets.token_urlsafe(48)
     selected = {}
     restart = _restart_host(runtime, host, "enable-durable-store", GRACEFUL,
-                            while_stopped=lambda: selected.update(enable_durable_agent_store(run, database, key)) or {"configured": DURABLE_STORE_FEATURE})
+                            while_stopped=lambda: selected.update(enable_durable_weaver_store(run, database, key)) or {"configured": DURABLE_STORE_FEATURE})
     catalog, record = runtime.native.json(runtime.backend, "durable-store-catalog", "/modularity/features")
     features = {item["id"]: item for item in catalog["features"]}
     check(all(features.get(name, {}).get("enabled") is True and features[name].get("runtimeAvailable") is True
               for name in (DURABLE_STORE_FEATURE, DURABLE_STORE_DEPENDENCY)), "The restarted host does not run the packaged durable store")
-    bootstrap = runtime.transport("durable-store-agent").bootstrap().require_status(200)
+    bootstrap = runtime.transport("durable-store-weaver").bootstrap().require_status(200)
     check(bootstrap.json()["data"]["providerStatus"] == "available", "The durable store composition left the actual provider unavailable")
     return {**selected, "restart": restart["ref"], "catalog": record["receipt"], "bootstrap": bootstrap.receipt, "databaseObserved": False}
 

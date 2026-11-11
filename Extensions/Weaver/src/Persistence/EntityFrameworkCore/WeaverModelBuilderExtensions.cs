@@ -4,7 +4,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Elsa.Weaver.Persistence.EntityFrameworkCore;
 
-/// <summary>Installs only the agent session, record and audit entities in an ordinary consumer-owned context.</summary>
+/// <summary>Installs only the Weaver session, record and audit entities in an ordinary consumer-owned context.</summary>
 public static class WeaverModelBuilderExtensions
 {
     internal const int IdentityLength = 128;
@@ -15,11 +15,11 @@ public static class WeaverModelBuilderExtensions
 
     private static readonly Type[] Entities =
     [
-        typeof(AgentSessionRow), typeof(AgentMessageRow), typeof(AgentDisclosureSnapshotRow), typeof(AgentContextRow),
-        typeof(AgentProposalRow), typeof(AgentCallKeyRow), typeof(AgentAuditRow), typeof(AgentAuditOwnerRow), typeof(AgentAuditSequenceRow)
+        typeof(WeaverSessionRow), typeof(WeaverMessageRow), typeof(WeaverDisclosureSnapshotRow), typeof(WeaverContextRow),
+        typeof(WeaverProposalRow), typeof(WeaverCallKeyRow), typeof(WeaverAuditRow), typeof(WeaverAuditOwnerRow), typeof(WeaverAuditSequenceRow)
     ];
 
-    public static ModelBuilder AddAgentModel(this ModelBuilder modelBuilder, string providerName)
+    public static ModelBuilder AddWeaverModel(this ModelBuilder modelBuilder, string providerName)
     {
         ArgumentNullException.ThrowIfNull(modelBuilder);
         ArgumentException.ThrowIfNullOrWhiteSpace(providerName);
@@ -31,7 +31,7 @@ public static class WeaverModelBuilderExtensions
             _ => throw new ArgumentOutOfRangeException(nameof(providerName))
         };
 
-        modelBuilder.Entity<AgentSessionRow>(entity =>
+        modelBuilder.Entity<WeaverSessionRow>(entity =>
         {
             entity.ToTable(WeaverEfModule.SessionTableName);
             entity.HasKey(x => x.SessionId);
@@ -50,7 +50,7 @@ public static class WeaverModelBuilderExtensions
             // Owner first, then the list order and its cursor; the limit applies after both.
             entity.HasIndex(x => new { x.TenantId, x.ActorId, x.UpdatedAtUtcTicks, x.SessionId });
         });
-        modelBuilder.Entity<AgentMessageRow>(entity =>
+        modelBuilder.Entity<WeaverMessageRow>(entity =>
         {
             entity.ToTable(WeaverEfModule.MessageTableName);
             entity.HasKey(x => new { x.SessionId, x.MessageId });
@@ -59,9 +59,9 @@ public static class WeaverModelBuilderExtensions
             entity.Property(x => x.StatusReason).HasMaxLength(KindLength);
             entity.Property(x => x.SchemaVersion).HasMaxLength(SchemaVersionLength).IsRequired();
             entity.Property(x => x.Payload).HasColumnType(payloadType).IsRequired();
-            entity.HasOne<AgentSessionRow>().WithMany().HasForeignKey(x => x.SessionId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<WeaverSessionRow>().WithMany().HasForeignKey(x => x.SessionId).OnDelete(DeleteBehavior.Restrict);
         });
-        modelBuilder.Entity<AgentDisclosureSnapshotRow>(entity =>
+        modelBuilder.Entity<WeaverDisclosureSnapshotRow>(entity =>
         {
             entity.ToTable(WeaverEfModule.SnapshotTableName);
             entity.HasKey(x => new { x.SessionId, x.Digest });
@@ -69,9 +69,9 @@ public static class WeaverModelBuilderExtensions
             entity.Property(x => x.Digest).HasMaxLength(HashLength).IsRequired();
             entity.Property(x => x.SchemaVersion).HasMaxLength(SchemaVersionLength).IsRequired();
             entity.Property(x => x.Canonical).HasColumnType(payloadType).IsRequired();
-            entity.HasOne<AgentSessionRow>().WithMany().HasForeignKey(x => x.SessionId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<WeaverSessionRow>().WithMany().HasForeignKey(x => x.SessionId).OnDelete(DeleteBehavior.Restrict);
         });
-        modelBuilder.Entity<AgentContextRow>(entity =>
+        modelBuilder.Entity<WeaverContextRow>(entity =>
         {
             entity.ToTable(WeaverEfModule.ContextTableName);
             entity.HasKey(x => new { x.SessionId, x.AttachmentKey });
@@ -79,9 +79,9 @@ public static class WeaverModelBuilderExtensions
             entity.Property(x => x.AttachmentKey).HasMaxLength(HashLength).IsRequired();
             entity.Property(x => x.SchemaVersion).HasMaxLength(SchemaVersionLength).IsRequired();
             entity.Property(x => x.Payload).HasColumnType(payloadType).IsRequired();
-            entity.HasOne<AgentSessionRow>().WithMany().HasForeignKey(x => x.SessionId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<WeaverSessionRow>().WithMany().HasForeignKey(x => x.SessionId).OnDelete(DeleteBehavior.Restrict);
         });
-        modelBuilder.Entity<AgentProposalRow>(entity =>
+        modelBuilder.Entity<WeaverProposalRow>(entity =>
         {
             entity.ToTable(WeaverEfModule.ProposalTableName);
             entity.HasKey(x => x.ProposalId);
@@ -91,9 +91,9 @@ public static class WeaverModelBuilderExtensions
             entity.Property(x => x.SchemaVersion).HasMaxLength(SchemaVersionLength).IsRequired();
             entity.Property(x => x.Payload).HasColumnType(payloadType).IsRequired();
             entity.HasIndex(x => new { x.SessionId, x.Sequence });
-            entity.HasOne<AgentSessionRow>().WithMany().HasForeignKey(x => x.SessionId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<WeaverSessionRow>().WithMany().HasForeignKey(x => x.SessionId).OnDelete(DeleteBehavior.Restrict);
         });
-        modelBuilder.Entity<AgentCallKeyRow>(entity =>
+        modelBuilder.Entity<WeaverCallKeyRow>(entity =>
         {
             entity.ToTable(WeaverEfModule.CallKeyTableName);
             entity.HasKey(x => new { x.SessionId, x.Kind, x.KeyHash });
@@ -103,9 +103,9 @@ public static class WeaverModelBuilderExtensions
             entity.Property(x => x.Key).IsRequired();
             entity.Property(x => x.Value).IsRequired();
             entity.Property(x => x.SchemaVersion).HasMaxLength(SchemaVersionLength).IsRequired();
-            entity.HasOne<AgentSessionRow>().WithMany().HasForeignKey(x => x.SessionId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<WeaverSessionRow>().WithMany().HasForeignKey(x => x.SessionId).OnDelete(DeleteBehavior.Restrict);
         });
-        modelBuilder.Entity<AgentAuditRow>(entity =>
+        modelBuilder.Entity<WeaverAuditRow>(entity =>
         {
             entity.ToTable(WeaverEfModule.AuditTableName);
             entity.HasKey(x => x.Sequence);
@@ -119,14 +119,14 @@ public static class WeaverModelBuilderExtensions
             entity.HasIndex(x => new { x.SessionId, x.CreatedAtUtcTicks });
             entity.HasIndex(x => x.CreatedAtUtcTicks);
         });
-        modelBuilder.Entity<AgentAuditSequenceRow>(entity =>
+        modelBuilder.Entity<WeaverAuditSequenceRow>(entity =>
         {
             entity.ToTable(WeaverEfModule.AuditSequenceTableName);
             entity.HasKey(x => x.Id);
             entity.Property(x => x.Id).ValueGeneratedNever();
             entity.Property(x => x.SchemaVersion).HasMaxLength(SchemaVersionLength).IsRequired();
         });
-        modelBuilder.Entity<AgentAuditOwnerRow>(entity =>
+        modelBuilder.Entity<WeaverAuditOwnerRow>(entity =>
         {
             entity.ToTable(WeaverEfModule.AuditOwnerTableName);
             entity.HasKey(x => x.SessionId);
@@ -137,7 +137,7 @@ public static class WeaverModelBuilderExtensions
         });
         // Owner, workspace and identity columns compare and order ordinally, as the default store's StringComparer.Ordinal does.
         EfOrdinalCollation.ApplyToEntities(modelBuilder, providerName, Entities,
-            nameof(AgentSessionRow.Workspace), nameof(AgentSessionRow.OwnerToken), nameof(AgentSessionRow.SchemaVersion), nameof(AgentAuditRow.ActorId), nameof(AgentAuditOwnerRow.TenantId));
+            nameof(WeaverSessionRow.Workspace), nameof(WeaverSessionRow.OwnerToken), nameof(WeaverSessionRow.SchemaVersion), nameof(WeaverAuditRow.ActorId), nameof(WeaverAuditOwnerRow.TenantId));
         return modelBuilder;
     }
 }

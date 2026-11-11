@@ -69,6 +69,20 @@ const forEachActivity: ActivityCatalogItem = {
   }]
 };
 
+it("saves displayed required defaults on placement without replacing authored bindings or seeding credentials", () => {
+  const item = { ...writeLine, inputs: [
+    { referenceKey: "Actions", name: "Actions", isRequired: true, defaultValue: '["Approve","Reject"]', defaultSyntax: "Object" },
+    { referenceKey: "Title", name: "Title", isRequired: true, defaultValue: "User task", defaultSyntax: "Literal" },
+    { referenceKey: "Secret", name: "Secret", isRequired: true, defaultValue: "never-copy", isCredential: true }
+  ] };
+  const created = createActivityNode(item, "task");
+  expect(created.inputs).toContainEqual({ referenceKey: "Actions", value: { expressionType: "Object", value: '["Approve","Reject"]' } });
+  expect(created.inputs).toContainEqual({ referenceKey: "Title", value: { expressionType: "Literal", value: "User task" } });
+  expect(created.inputs).not.toEqual(expect.arrayContaining([expect.objectContaining({ referenceKey: "Secret" })]));
+  const authored = { ...created, inputs: [{ referenceKey: "Title", value: { expressionType: "Literal", value: "Authored title" } }] };
+  expect(createActivityNode({ ...item, authoringTemplate: authored }, "other").inputs).toContainEqual(authored.inputs[0]);
+});
+
 describe("workflow adapter", () => {
   it("uses friendly activity display names and falls back from fully-qualified names", () => {
     expect(getActivityDisplay(writeLine)).toBe("Write Line");

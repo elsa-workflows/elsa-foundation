@@ -37,6 +37,8 @@ public sealed class SequenceChildResultFactsTests : IDisposable
         Assert.False(facts.IsCyclicBackEdge);
         Assert.False(facts.MayRunConcurrently);
         Assert.False(facts.AreMutuallyExclusive);
+        // A Sequence runs each child once per run, so a result binding that names only the producer is unambiguous.
+        Assert.False(facts.EarlierProducerRunCanReachConsumer);
     }
 
     [Fact]

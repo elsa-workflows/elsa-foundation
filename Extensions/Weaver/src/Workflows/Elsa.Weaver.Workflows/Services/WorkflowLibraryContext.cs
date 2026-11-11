@@ -16,7 +16,7 @@ namespace Elsa.Weaver.Workflows.Services;
 /// </summary>
 internal static class WorkflowLibraryContext
 {
-    internal const string ModuleId = WorkflowAgentSnapshot.ModuleId;
+    internal const string ModuleId = WorkflowWeaverSnapshot.ModuleId;
     internal const string LibraryKind = "workflows.library";
     internal const string CreateDialogKind = "workflows.create-dialog";
     internal const string TemplateListKind = "workflows.template-list";
@@ -33,7 +33,7 @@ internal static class WorkflowLibraryContext
     internal static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     /// <summary>One admitted client context: its kind, exact target, client binding and the admitted projection.</summary>
-    internal sealed record Admitted(string Kind, AgentResourceTarget Target, AgentClientBinding Client, JsonElement Content);
+    internal sealed record Admitted(string Kind, WeaverResourceTarget Target, WeaverClientBinding Client, JsonElement Content);
 
     internal static string? ResourceTypeOf(string kind) => kind switch
     {
@@ -49,7 +49,7 @@ internal static class WorkflowLibraryContext
     };
 
     /// <summary>Reads a caller (or retained) client context strictly. False with a reason when anything is not as declared.</summary>
-    internal static bool TryRead(AgentContextAttachment attachment, [NotNullWhen(true)] out Admitted? admitted, out string error)
+    internal static bool TryRead(WeaverContextAttachment attachment, [NotNullWhen(true)] out Admitted? admitted, out string error)
     {
         try { return TryReadCore(attachment, out admitted, out error); }
         catch (InvalidOperationException)
@@ -60,7 +60,7 @@ internal static class WorkflowLibraryContext
         }
     }
 
-    private static bool TryReadCore(AgentContextAttachment attachment, [NotNullWhen(true)] out Admitted? admitted, out string error)
+    private static bool TryReadCore(WeaverContextAttachment attachment, [NotNullWhen(true)] out Admitted? admitted, out string error)
     {
         admitted = null;
         error = "The workflow library context requires its declared schema, an exact revision and a client binding.";
@@ -218,7 +218,7 @@ internal static class WorkflowLibraryContext
     }
 
     /// <summary>The server's read of the actor's library authority, as an authoritative attachment.</summary>
-    internal static AgentContextAttachment Organization(WorkflowLibraryCommandResult<WorkflowLibraryPermissionFlags>? result, string? reason)
+    internal static WeaverContextAttachment Organization(WorkflowLibraryCommandResult<WorkflowLibraryPermissionFlags>? result, string? reason)
     {
         var available = result is { Succeeded: true, Value: not null };
         var content = JsonSerializer.SerializeToElement(new
@@ -233,8 +233,8 @@ internal static class WorkflowLibraryContext
             ? "Workflow organization is available; the permission flags are the library's own answer for this actor."
             : $"Workflow organization is unavailable: {reason ?? result?.Message}. Ordinary list support remains.";
         return new("workflows:library-organization", "workflows.library", null, "Workflow library authority", OrganizationKind,
-            AgentContextSensitivity.Internal, "permissions", summary, content, new Dictionary<string, string>())
-        { ModuleId = ModuleId, SchemaVersion = "1", Origin = AgentContextOrigin.AuthoritativeRead, AgentScopes = [] };
+            WeaverContextSensitivity.Internal, "permissions", summary, content, new Dictionary<string, string>())
+        { ModuleId = ModuleId, SchemaVersion = "1", Origin = WeaverContextOrigin.AuthoritativeRead, WeaverScopes = [] };
     }
 
     /// <summary>The installed library commands, or why there is none to use.</summary>
@@ -250,7 +250,7 @@ internal static class WorkflowLibraryContext
         return current.Length == 1 ? current[0] : null;
     }
 
-    internal static string? Text(JsonElement body, string property) => WorkflowAgentSnapshot.Text(body, property);
+    internal static string? Text(JsonElement body, string property) => WorkflowWeaverSnapshot.Text(body, property);
 
     private static bool Only(JsonElement value, params string[] names) =>
         value.ValueKind == JsonValueKind.Object && value.EnumerateObject().All(property => names.Contains(property.Name, StringComparer.Ordinal));
@@ -260,7 +260,7 @@ internal static class WorkflowLibraryContext
     /// <summary>Absent, null, or a string within its bound; any other value refuses the context.</summary>
     private static bool OptionalText(JsonElement body, string property, int limit) =>
         !body.TryGetProperty(property, out var value) || value.ValueKind == JsonValueKind.Null
-        || value.ValueKind == JsonValueKind.String && WorkflowAgentSnapshot.String(value) is { } text && text.Length <= limit;
+        || value.ValueKind == JsonValueKind.String && WorkflowWeaverSnapshot.String(value) is { } text && text.Length <= limit;
 
     private static string? Bounded(string? value, int limit) => value is null ? null : value[..Math.Min(value.Length, limit)];
 
@@ -281,7 +281,7 @@ internal static class WorkflowLibraryContext
         var result = new List<string>();
         foreach (var item in array.EnumerateArray())
         {
-            if (WorkflowAgentSnapshot.String(item) is not { } text || !Valid(text, length) || result.Contains(text, StringComparer.Ordinal)) return false;
+            if (WorkflowWeaverSnapshot.String(item) is not { } text || !Valid(text, length) || result.Contains(text, StringComparer.Ordinal)) return false;
             result.Add(text);
         }
         values = result.ToArray();

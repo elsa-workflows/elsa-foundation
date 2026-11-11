@@ -74,6 +74,10 @@ internal static class PlacedReferenceRemapper
         IReadOnlyDictionary<string, string> placedNodeIds,
         string graphScopeId)
     {
+        // A member read would keep a template-local producer or scope here; refuse it until placement remaps it (#4078).
+        if (binding.Selection is not null)
+            throw PublishedMemberReadDiagnostics.Unsupported(null, binding);
+
         switch (binding.Source)
         {
             case RuntimeInputBindingSource.VariableRead when binding.Variable is { } variable:
@@ -86,7 +90,9 @@ internal static class PlacedReferenceRemapper
             case RuntimeInputBindingSource.ActivityResult when binding.ActivityResult is { } result:
             {
                 var producerId = placedNodeIds.GetValueOrDefault(result.ProducerExecutableNodeId, result.ProducerExecutableNodeId);
-                var producerScopeId = placedNodeIds.GetValueOrDefault(result.ProducerScopeId, result.ProducerScopeId);
+                var producerScopeId = result.ProducerScopeId is { } declaredScope
+                    ? placedNodeIds.GetValueOrDefault(declaredScope, declaredScope)
+                    : null;
                 if (StringComparer.Ordinal.Equals(producerId, result.ProducerExecutableNodeId) &&
                     StringComparer.Ordinal.Equals(producerScopeId, result.ProducerScopeId))
                     return binding;

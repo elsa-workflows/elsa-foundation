@@ -7,7 +7,7 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock, patch
 
-from agent_transport import AgentTransport
+from weaver_transport import WeaverTransport
 from authorization_journeys import (EXPECTED_CASES, SECTION, TURN_FRAMES, TURN_REFUSALS, UNAVAILABLE_CODE, authorization_manifest_gaps,
                                     qualify_workflow_authorization, require_denied_problem, require_turn_refusal,
                                     require_unavailable_problem, require_workflow_authorization, select_command, snapshot_attachment)
@@ -168,7 +168,7 @@ class SelectedCommandEvidenceTests(unittest.TestCase):
         self.command_file = self.root / "protocol" / "command.json"
 
     def transport(self, name):
-        return AgentTransport(SimpleNamespace(base="http://127.0.0.1:1", bearer=None), self.root / name, command_file=self.command_file)
+        return WeaverTransport(SimpleNamespace(base="http://127.0.0.1:1", bearer=None), self.root / name, command_file=self.command_file)
 
     def test_the_shared_command_file_reference_goes_stale_when_the_next_turn_selects_its_command(self):
         first = self.transport("tool-unavailable").set_command("command-unavailable", "workflow_read_graph", {})

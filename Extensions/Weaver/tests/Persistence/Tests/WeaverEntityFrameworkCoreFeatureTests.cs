@@ -21,7 +21,7 @@ namespace Elsa.Weaver.Persistence.Tests;
 public sealed class WeaverEntityFrameworkCoreFeatureTests
 {
     [Fact]
-    public void The_feature_is_an_opt_in_shell_feature_over_the_agent_and_secrets_features()
+    public void The_feature_is_an_opt_in_shell_feature_over_the_weaver_and_secrets_features()
     {
         var feature = typeof(WeaverEntityFrameworkCoreFeature).GetCustomAttribute<ShellFeatureAttribute>()!;
 
@@ -56,73 +56,73 @@ public sealed class WeaverEntityFrameworkCoreFeatureTests
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    public void The_feature_replaces_the_record_store_and_the_audit_trio_together_in_either_order(bool agentFirst)
+    public void The_feature_replaces_the_record_store_and_the_audit_trio_together_in_either_order(bool weaverFirst)
     {
         var services = new ServiceCollection();
         services.AddLogging();
         new EventsFeature().ConfigureServices(services);
-        if (agentFirst) services.AddWeaver();
-        services.AddAgentEntityFrameworkCore(new() { ConnectionString = "Data Source=:memory:" });
-        if (!agentFirst) services.AddWeaver();
+        if (weaverFirst) services.AddWeaver();
+        services.AddWeaverEntityFrameworkCore(new() { ConnectionString = "Data Source=:memory:" });
+        if (!weaverFirst) services.AddWeaver();
         AddSecrets(services);
 
-        Assert.Single(services, x => x.ServiceType == typeof(IAgentSessionRecordStore));
-        Assert.Single(services, x => x.ServiceType == typeof(IAgentAuditSink));
-        Assert.Single(services, x => x.ServiceType == typeof(IAgentAuditReader));
-        Assert.Single(services, x => x.ServiceType == typeof(IAgentAuditOwnership));
+        Assert.Single(services, x => x.ServiceType == typeof(IWeaverSessionRecordStore));
+        Assert.Single(services, x => x.ServiceType == typeof(IWeaverAuditSink));
+        Assert.Single(services, x => x.ServiceType == typeof(IWeaverAuditReader));
+        Assert.Single(services, x => x.ServiceType == typeof(IWeaverAuditOwnership));
         using var provider = services.BuildServiceProvider();
-        provider.GetRequiredService<AgentRegistrationValidator>().Validate();
-        Assert.True(Assert.IsType<EfAgentSessionRecordStore>(provider.GetRequiredService<IAgentSessionRecordStore>()).SupportsFencing);
-        var sink = Assert.IsType<EfAgentAuditStore>(provider.GetRequiredService<IAgentAuditSink>());
-        Assert.Same(sink, provider.GetRequiredService<IAgentAuditReader>());
-        Assert.Same(sink, provider.GetRequiredService<IAgentAuditOwnership>());
+        provider.GetRequiredService<WeaverRegistrationValidator>().Validate();
+        Assert.True(Assert.IsType<EfWeaverSessionRecordStore>(provider.GetRequiredService<IWeaverSessionRecordStore>()).SupportsFencing);
+        var sink = Assert.IsType<EfWeaverAuditStore>(provider.GetRequiredService<IWeaverAuditSink>());
+        Assert.Same(sink, provider.GetRequiredService<IWeaverAuditReader>());
+        Assert.Same(sink, provider.GetRequiredService<IWeaverAuditOwnership>());
         using var scope = provider.CreateScope();
         // The default owner is kept and backed by the durable store, so durable recovery stays supported.
-        Assert.IsType<InMemoryAgentSessionService>(scope.ServiceProvider.GetRequiredService<IAgentSessionService>());
-        Assert.Equal(AgentDurableRecoverySupport.Supported, scope.ServiceProvider.GetRequiredService<AgentDurableRecovery>().Evaluate());
+        Assert.IsType<InMemoryWeaverSessionService>(scope.ServiceProvider.GetRequiredService<IWeaverSessionService>());
+        Assert.Equal(WeaverDurableRecoverySupport.Supported, scope.ServiceProvider.GetRequiredService<WeaverDurableRecovery>().Evaluate());
     }
 
     [Fact]
     public void A_second_selection_or_a_selection_over_an_unowned_store_throws()
     {
         var twice = Composition();
-        twice.AddAgentEntityFrameworkCore(new());
-        Assert.Throws<InvalidOperationException>(() => twice.AddAgentEntityFrameworkCore(new()));
-        Assert.Throws<InvalidOperationException>(() => twice.SelectAgentSessionRecordStore(_ => throw new InvalidOperationException()));
+        twice.AddWeaverEntityFrameworkCore(new());
+        Assert.Throws<InvalidOperationException>(() => twice.AddWeaverEntityFrameworkCore(new()));
+        Assert.Throws<InvalidOperationException>(() => twice.SelectWeaverSessionRecordStore(_ => throw new InvalidOperationException()));
 
         var replaced = Composition();
-        replaced.Replace(ServiceDescriptor.Singleton<IAgentSessionRecordStore>(_ => throw new InvalidOperationException()));
-        Assert.Throws<InvalidOperationException>(() => replaced.AddAgentEntityFrameworkCore(new()));
+        replaced.Replace(ServiceDescriptor.Singleton<IWeaverSessionRecordStore>(_ => throw new InvalidOperationException()));
+        Assert.Throws<InvalidOperationException>(() => replaced.AddWeaverEntityFrameworkCore(new()));
 
         var auditReplaced = Composition();
-        auditReplaced.Replace(ServiceDescriptor.Singleton<IAgentAuditReader>(_ => throw new InvalidOperationException()));
-        Assert.Throws<InvalidOperationException>(() => auditReplaced.AddAgentStores<WeaverDbContext>());
+        auditReplaced.Replace(ServiceDescriptor.Singleton<IWeaverAuditReader>(_ => throw new InvalidOperationException()));
+        Assert.Throws<InvalidOperationException>(() => auditReplaced.AddWeaverStores<WeaverDbContext>());
     }
 
     [Fact]
     public async Task An_activated_shell_migrates_and_a_restarted_host_hydrates_the_session_and_its_audit_in_database_time()
     {
-        using var database = new AgentSqliteDatabase();
+        using var database = new WeaverSqliteDatabase();
         var connection = $"Data Source={Path.Combine(Path.GetDirectoryName(database.Path)!, Guid.NewGuid().ToString("N") + ".db")};Pooling=False";
-        AgentSession session;
+        WeaverSession session;
         await using (var first = await ActivateAsync(connection, database.Keys))
         {
-            var sessions = first.GetRequiredService<IAgentSessionService>();
-            session = await sessions.CreateAsync(new("tenant-1", "actor-1", "conversation-1", "provider", "explain", "Durable", AgentPolicy.Default,
+            var sessions = first.GetRequiredService<IWeaverSessionService>();
+            session = await sessions.CreateAsync(new("tenant-1", "actor-1", "conversation-1", "provider", "explain", "Durable", WeaverPolicy.Default,
                 new Dictionary<string, string>()) { Workspace = "workspace-1" });
-            await sessions.AddMessageAsync(session.Id, new(AgentRole.User, "hello", AgentMessageStatus.Pending, null, [], []));
+            await sessions.AddMessageAsync(session.Id, new(WeaverRole.User, "hello", WeaverMessageStatus.Pending, null, [], []));
             // A graceful shutdown gives back the leases this host holds, while its store can still reach the database.
             await ((IAsyncDisposable)sessions).DisposeAsync();
         }
 
         await using var second = await ActivateAsync(connection, database.Keys);
-        var restored = second.GetRequiredService<IAgentSessionService>();
+        var restored = second.GetRequiredService<IWeaverSessionService>();
         Assert.Equal(session.Id, (await restored.FindAsync(session.Id))!.Id);
         Assert.Equal(["hello"], (await restored.ListMessagesAsync(session.Id)).Select(x => x.Content));
         var listed = await restored.ListOwnedAsync(new("actor-1", "tenant-1", "workspace-1"));
         Assert.Equal([session.Id], listed.Page!.Items.Select(x => x.Id));
-        var audit = await second.GetRequiredService<IAgentAuditReader>().ListOwnedAsync(new("actor-1", "tenant-1", session.Id, 10));
-        Assert.Contains(audit.Events, x => x.Kind == AgentAuditEventKind.SessionCreated);
+        var audit = await second.GetRequiredService<IWeaverAuditReader>().ListOwnedAsync(new("actor-1", "tenant-1", session.Id, 10));
+        Assert.Contains(audit.Events, x => x.Kind == WeaverAuditEventKind.SessionCreated);
     }
 
     private static async Task<ServiceProvider> ActivateAsync(string connection, ISecretKeyRing keys)

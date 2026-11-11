@@ -20,7 +20,7 @@ public sealed class AsyncLocalRuntimeCoalescingSessionAccessor : IRuntimeCoalesc
         {
             parent.DisableDurableValuePageReuse();
             // While another scope is ambient, writes of the parent's rows no longer pass through the parent.
-            parent.EndEmptyBaselines();
+            parent.EndStoreObservations();
         }
 
         _current.Value = new Frame(session, prior);
@@ -43,7 +43,7 @@ public sealed class AsyncLocalRuntimeCoalescingSessionAccessor : IRuntimeCoalesc
 
             pushedSession?.DisableDurableValuePageReuse();
             // A flow that captured this frame keeps seeing the session after the pop.
-            pushedSession?.EndEmptyBaselines();
+            pushedSession?.EndStoreObservations();
             accessor._current.Value = prior;
             _disposed = true;
         }

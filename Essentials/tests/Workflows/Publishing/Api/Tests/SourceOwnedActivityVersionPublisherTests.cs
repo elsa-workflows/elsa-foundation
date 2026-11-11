@@ -343,12 +343,12 @@ public sealed class SourceOwnedActivityVersionPublisherTests
     public async Task Provider_backed_content_the_compiler_refuses_is_not_written()
     {
         var command = new RecordingCommand();
-        var compiler = new FakeTemplateCompiler { Diagnostic = Error("specialist.model.capability") };
+        var compiler = new FakeTemplateCompiler { Diagnostic = Error("agent.model.capability") };
 
         var result = await CreatePublisher(command, templateCompiler: compiler).PublishAsync(Definition(), ProviderVersion("version-1"));
 
         Assert.False(result.IsPublished);
-        Assert.Equal("specialist.model.capability", Assert.Single(result.Diagnostics).Code);
+        Assert.Equal("agent.model.capability", Assert.Single(result.Diagnostics).Code);
         Assert.Empty(command.Commits);
     }
 

@@ -21,10 +21,15 @@ public sealed class BpmnChildResultFactsTests
         Assert.Equal(ActivityChildResultAvailability.Definite, facts.Availability);
         Assert.False(facts.MayRunConcurrently);
         Assert.False(facts.IsCyclicBackEdge);
+        Assert.False(facts.EarlierProducerRunCanReachConsumer);
         Assert.Equal(["decision"], structures.ChildrenCompletedBefore(process, "capture"));
         Assert.Empty(structures.ChildrenCompletedBefore(process, "decision")!);
         Assert.Equal(ActivityChildResultAvailability.Unavailable, structures.AssessChildResult(process, "capture", "decision").Availability);
-        Assert.Equal(ActivityChildResultAvailability.Unavailable, structures.AssessChildResult(process, "decision", "decision").Availability);
+        // A task of the proven chain runs once per process run, so the process cannot run it again without running
+        // the whole process again, which is the enclosing structure's to say.
+        var self = structures.AssessChildResult(process, "decision", "decision");
+        Assert.Equal(ActivityChildResultAvailability.Unavailable, self.Availability);
+        Assert.False(self.EarlierProducerRunCanReachConsumer);
         Assert.Equal(ActivityChildResultAvailability.Unknown, structures.AssessChildResult(process, "Decision", "capture").Availability);
         Assert.Null(structures.ChildrenCompletedBefore(process, "missing"));
     }
@@ -64,7 +69,31 @@ public sealed class BpmnChildResultFactsTests
         var facts = structures.AssessChildResult(process, "decision", "capture");
         Assert.Equal(ActivityChildResultAvailability.Unknown, facts.Availability);
         Assert.Null(facts.MayRunConcurrently);
+        // Unproven occurrence semantics stay unstated, which refuses a result binding that names only the producer,
+        // here and in every structure the process encloses.
+        Assert.Null(facts.EarlierProducerRunCanReachConsumer);
+        Assert.Null(structures.AssessChildResult(process, "decision", "decision").EarlierProducerRunCanReachConsumer);
         Assert.Null(structures.ChildrenCompletedBefore(process, "capture"));
+    }
+
+    /// <summary>A definite result always comes with the occurrence fact, so a binding is never offered on availability alone.</summary>
+    [Theory]
+    [InlineData(null)]
+    [InlineData("cycle")]
+    [InlineData("fork")]
+    [InlineData("condition")]
+    public void A_definite_result_always_states_whether_an_earlier_producer_run_can_reach_the_reader(string? scenario)
+    {
+        using var provider = Provider();
+        var structures = new DefaultActivityStructureService(provider.GetServices<IActivityStructureHandler>());
+        var process = Process(scenario);
+        foreach (var producer in new[] { "decision", "capture" })
+        foreach (var consumer in new[] { "decision", "capture" })
+        {
+            var facts = structures.AssessChildResult(process, producer, consumer);
+            if (facts.Availability == ActivityChildResultAvailability.Definite)
+                Assert.NotNull(facts.EarlierProducerRunCanReachConsumer);
+        }
     }
 
     internal static ActivityNode Process(string? scenario = null, IReadOnlyCollection<ActivityNode>? children = null)

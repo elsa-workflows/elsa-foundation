@@ -112,6 +112,74 @@ public sealed class InterruptedPublicationGcTests : IAsyncLifetime
         Assert.Equal(0, sweep.DeletedReferenceCount);
     }
 
+    /// <summary>
+    /// Live race (not interrupt-and-retry): the same in-process native publish continues after a GC sweep
+    /// of unreferenced material between the artifact save and the source-reference mint. SQLite, one host.
+    /// Allowed outcomes are a clean refusal or a valid commit; a dangling reference is a correctness bug.
+    /// </summary>
+    [Fact]
+    public async Task Native_live_publish_sweeps_unreferenced_material_between_save_and_reference_mint()
+    {
+        var databases = new JournalDatabases(PublishingNativeProvider.Sqlite, publishing.ConnectionString, runtime.ConnectionString);
+        var grace = new WorkflowExecutableGarbageCollectionOptions().ArtifactCreationGracePeriod;
+        Assert.Equal(TimeSpan.FromMinutes(5), grace);
+
+        SweepAfterNativeSaveStore? hook = null;
+        await using var live = new PublicationJournalConvergence.PublishingNode(
+            databases,
+            wrapExecutables: inner => hook = new SweepAfterNativeSaveStore(inner));
+        Assert.NotNull(hook);
+
+        hook.OnAfterSave = async (executable, cancellationToken) =>
+        {
+            hook.ArtifactId = executable.Identity.ArtifactId;
+            hook.CreatedAt = executable.CreatedAt;
+            hook.BeforeSweep = await CaptureNativeAsync(live, executable.Identity.ArtifactId);
+            var sweepNow = executable.CreatedAt + grace + TimeSpan.FromMinutes(1);
+            hook.SweepNow = sweepNow;
+            hook.Sweep = await CreateCollector(live, grace).SweepAsync(sweepNow, cancellationToken);
+        };
+
+        string? publicationId = null;
+        Exception? error = null;
+        try
+        {
+            publicationId = (await live.PublishAsync("version-1")).PublicationId;
+        }
+        catch (Exception exception)
+        {
+            error = exception;
+        }
+
+        Assert.NotNull(hook.ArtifactId);
+        Assert.NotNull(hook.Sweep);
+        Assert.NotNull(hook.BeforeSweep);
+        Assert.True(hook.BeforeSweep.ArtifactPresent, "The live sweep must run after the native artifact is persisted.");
+        Assert.Empty(hook.BeforeSweep.LiveSourceReferenceIds);
+        Assert.Equal(1, hook.Sweep.DeletedArtifactCount);
+        Assert.Equal(0, hook.Sweep.DeletedReferenceCount);
+
+        var after = await CaptureNativeAsync(live, hook.ArtifactId);
+        output.WriteLine(
+            "native live-publication GC: grace={0} createdAt={1:o} sweepNow={2:o} deletedArtifacts={3} error={4} publicationId={5}",
+            grace, hook.CreatedAt, hook.SweepNow, hook.Sweep.DeletedArtifactCount, error?.GetType().FullName, publicationId);
+        output.WriteLine("before sweep: {0}", hook.BeforeSweep.Describe());
+        output.WriteLine("after live publish: {0}", after.Describe());
+
+        var outcome = ClassifyLive(after, error, publicationId);
+        output.WriteLine("live-outcome={0}", outcome);
+        Assert.NotEqual(LivePublicationGcOutcome.UnsafeCommit, outcome);
+        Assert.True(
+            outcome is LivePublicationGcOutcome.RaceRefused or LivePublicationGcOutcome.CommittedValid,
+            "The live race must refuse cleanly or commit a valid definition; never a dangling reference.");
+        if (outcome == LivePublicationGcOutcome.CommittedValid)
+        {
+            Assert.False(string.IsNullOrWhiteSpace(publicationId));
+            Assert.True(after.ArtifactPresent);
+            Assert.Contains(hook.ArtifactId, after.LiveSourceReferenceArtifactIds);
+        }
+    }
+
     private static WorkflowExecutableReferenceGarbageCollector CreateCollector(
         PublicationJournalConvergence.PublishingNode node,
         TimeSpan grace) =>
@@ -153,6 +221,18 @@ public sealed class InterruptedPublicationGcTests : IAsyncLifetime
         return InterruptedPublicationGcOutcome.LossSafelyRefusedOrRetryable;
     }
 
+    private static LivePublicationGcOutcome ClassifyLive(
+        InterruptedPublicationGcWitness after,
+        Exception? error,
+        string? publicationId)
+    {
+        if (HasUnsafeCommit(after) || error is null && !string.IsNullOrWhiteSpace(publicationId) && !after.ArtifactPresent)
+            return LivePublicationGcOutcome.UnsafeCommit;
+        if (error is null && string.IsNullOrWhiteSpace(publicationId))
+            return LivePublicationGcOutcome.UnsafeCommit;
+        return error is null ? LivePublicationGcOutcome.CommittedValid : LivePublicationGcOutcome.RaceRefused;
+    }
+
     private static bool HasUnsafeCommit(InterruptedPublicationGcWitness witness)
     {
         if (!witness.ArtifactPresent && witness.LiveSourceReferenceArtifactIds.Count > 0)
@@ -168,6 +248,26 @@ public sealed class InterruptedPublicationGcTests : IAsyncLifetime
         {
             await Inner.SaveAsync(executable, cancellationToken);
             throw new PublicationInterruptedAfterArtifactSaveException();
+        }
+    }
+
+    private sealed class SweepAfterNativeSaveStore(IWorkflowExecutableStore inner) : WorkflowExecutableStoreDecorator(inner)
+    {
+        private int fired;
+
+        public Func<WorkflowExecutable, CancellationToken, ValueTask>? OnAfterSave { get; set; }
+        public WorkflowExecutableReferenceSweepResult? Sweep { get; set; }
+        public string? ArtifactId { get; set; }
+        public DateTimeOffset CreatedAt { get; set; }
+        public DateTimeOffset SweepNow { get; set; }
+        public InterruptedPublicationGcWitness? BeforeSweep { get; set; }
+
+        public override async ValueTask SaveAsync(WorkflowExecutable executable, CancellationToken cancellationToken = default)
+        {
+            await Inner.SaveAsync(executable, cancellationToken);
+            if (OnAfterSave is null || Interlocked.Exchange(ref fired, 1) != 0)
+                return;
+            await OnAfterSave(executable, cancellationToken);
         }
     }
 }
@@ -187,6 +287,13 @@ internal enum InterruptedPublicationGcOutcome
 {
     LossSafelyRefusedOrRetryable = 1,
     UnsafeCommit = 2
+}
+
+internal enum LivePublicationGcOutcome
+{
+    RaceRefused = 1,
+    CommittedValid = 2,
+    UnsafeCommit = 3
 }
 
 internal sealed class PublicationInterruptedAfterArtifactSaveException()

@@ -114,6 +114,39 @@ public sealed class ActivityDataSelectionContextTests
         Assert.DoesNotContain("producerNodeId", json);
     }
 
+    /// <summary>
+    /// A browsed activity result in an activity definition's graph carries the complete binding the client stores,
+    /// without a runtime scope, where the owning structure states that no earlier producer run leads to the reader; a
+    /// structure that says one can is listed with a reason and no binding. The structure is test-local, because this
+    /// owner composes no activity module.
+    /// </summary>
+    [Theory]
+    [InlineData(false, null)]
+    [InlineData(true, "EarlierProducerRun")]
+    public async Task A_browsed_result_carries_a_scope_free_binding_only_where_its_structure_admits_one(bool repeats, string? reasonCode)
+    {
+        using var fixture = new Fixture(configure: services => services.AddSingleton<IActivityStructureHandler>(new StepsHandler()));
+        fixture.Store.Draft.State = StepsState(repeats);
+        var result = await fixture.Service.ResolveAsync(fixture.Request("consumer"), default);
+        Assert.Equal("supported", result.State);
+        Assert.Empty(result.Analysis!.Findings);
+        var source = Assert.Single(result.Analysis.Sources, source => source.Id == "activity:producer:$result");
+        Assert.Equal(ActivityChildResultAvailability.Definite, source.Availability);
+        Assert.Equal(reasonCode, source.ReasonCode);
+        var json = JsonSerializer.Serialize(result, ActivitiesDesignWire.Context.GetTypeInfo(typeof(ActivityDataSelectionContextResponse))!);
+        Assert.DoesNotContain("producerScopeId", json);
+        if (reasonCode is not null)
+        {
+            Assert.Null(source.Binding);
+            return;
+        }
+        Assert.Equal("ActivityResult", source.Binding!.ExpressionType);
+        var payload = Assert.IsType<JsonElement>(source.Binding.Value);
+        Assert.Equal("producer", payload.GetProperty("producerNodeId").GetString());
+        Assert.Equal("$result", payload.GetProperty("projectionKey").GetString());
+        Assert.False(payload.TryGetProperty("producerScopeId", out _));
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -394,6 +427,43 @@ public sealed class ActivityDataSelectionContextTests
     private static ActivityDefinitionDraftState State(string node) => new(new("1", [], [], [new("done", "Done", true)]),
         new(GraphActivityProvider.Key, "1", Element(new { rootActivity = new { nodeId = node, activityVersionId = "native-version", inputs = Array.Empty<object>(), outputs = Array.Empty<object>() },
             variables = Array.Empty<object>(), outputMappings = Array.Empty<object>() })), new Dictionary<string, string>());
+
+    private static ActivityDefinitionDraftState StepsState(bool repeats)
+    {
+        static object Leaf(string node) => new { nodeId = node, activityVersionId = "native-version", inputs = Array.Empty<object>(), outputs = Array.Empty<object>() };
+        return new(new("1", [], [], [new("done", "Done", true)]),
+            new(GraphActivityProvider.Key, "1", Element(new
+            {
+                rootActivity = new
+                {
+                    nodeId = "steps", activityVersionId = "native-version", inputs = Array.Empty<object>(), outputs = Array.Empty<object>(),
+                    structure = new { kind = StepsHandler.StructureKind, schemaVersion = "1", payload = new { steps = new[] { Leaf("producer"), Leaf("consumer") }, repeats } }
+                },
+                variables = Array.Empty<object>(), outputMappings = Array.Empty<object>()
+            })), new Dictionary<string, string>());
+    }
+
+    /// <summary>Runs its steps in order; whether a step's earlier runs lead to a later one is stated by the payload.</summary>
+    private sealed class StepsHandler : IActivityStructureHandler
+    {
+        internal const string StructureKind = "test.steps";
+        public string Kind => StructureKind;
+        public string SchemaVersion => "1";
+        public IReadOnlyCollection<ActivityChildProjection> ProjectChildren(ActivityNode activity) => [new("steps", Read(activity).Steps)];
+        public ActivityNode ReplaceChildren(ActivityNode activity, IReadOnlyCollection<ActivityChildProjection> childProjections) => activity;
+        public ActivityNodeStructure CompileExecutableStructure(ActivityNode activity) => throw new NotSupportedException();
+        public ActivityChildResultFacts AssessChildResult(ActivityNode activity, string producerChildNodeId, string consumerChildNodeId)
+        {
+            var steps = Read(activity);
+            var order = steps.Steps.Select(step => step.NodeId).ToList();
+            return new(order.IndexOf(producerChildNodeId) < order.IndexOf(consumerChildNodeId)
+                ? ActivityChildResultAvailability.Definite
+                : ActivityChildResultAvailability.Unavailable) { EarlierProducerRunCanReachConsumer = steps.Repeats };
+        }
+        private static StepsPayload Read(ActivityNode activity) =>
+            activity.Structure!.Payload.Deserialize<StepsPayload>(new JsonSerializerOptions(JsonSerializerDefaults.Web))!;
+        private sealed record StepsPayload(ActivityNode[] Steps, bool Repeats);
+    }
 
     private sealed class Fixture : IDisposable
     {

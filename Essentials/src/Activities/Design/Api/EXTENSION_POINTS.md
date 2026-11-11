@@ -41,8 +41,8 @@ These are single-owner seams. Replace them through DI; do not register competing
 `ListAsync` and `CanReadAsync` accept no principal, permission string or tenant. The default applies the designer's own
 gate: the normalized request principal must hold `activities/design:read` in its tenant, checked through
 `IPermissionAuthorizationService` with the current request (`HttpContext`) as the resource, as the catalog route's
-policy handler has: the same principal and tenant. During a Weaver turn the current request is the agent's own (for
-example its messages request), so a host `IPermissionResourceHandler` keyed on route or path sees the agent request,
+policy handler has: the same principal and tenant. During a Weaver turn the current request is Weaver's own (for
+example its messages request), so a host `IPermissionResourceHandler` keyed on route or path sees the Weaver request,
 not the catalog route. A missing request, an unnormalized
 principal or a refused permission is a denied result with no entries, and no catalog read. An allowed read is the
 designer's own `IActivityAuthoringCatalogReader` read with `Availability = All`, projected into Core models: every entry,
@@ -70,17 +70,17 @@ Foundation Identity Core, which this `.Core` does not reference. Duplicates are 
   configuration keeps one validator. `IWorkflowDefinitionAuthorizer`'s startup validator has the same Tasks condition.
 
 Consumers that resolve `IEnumerable<IActivityAuthoringCatalog>` must fail closed on zero or several implementations, as
-the Agent workflow context does by reporting the catalog unavailable. This enumerable consumer of a replacement contract
+the Weaver workflow context does by reporting the catalog unavailable. This enumerable consumer of a replacement contract
 is the accepted exception that `IWorkflowDefinitionAuthorizer` also uses, so a duplicate added after the Tasks-less
-configuration still cannot select an implementation; the Agent-wide gap for existing contracts is #3633. Adding the
+configuration still cannot select an implementation; the Weaver-wide gap for existing contracts is #3633. Adding the
 contract is **Minor**, additive.
 
 ## Provider contributors
 
 | Contract | Kind and registration | Consumer | Known implementation |
 |---|---|---|---|
-| `IActivityProvider` | Contributor keyed by stable provider identity. Provider features register implementations; `IActivityProviderRegistry` rejects duplicate keys and resolves exact provider/schema pairs. | Activity authoring, validation, migration, and capability projection services. | `GraphActivityProvider` *(cross-domain — Activities Graph Design)*; `SpecialistActivityProvider` *(cross-domain — Specialist Design)* |
-| `IActivityProviderDiagnosticCatalog.DiagnosticDescriptors : IReadOnlyList<ActivityProviderDiagnosticDescriptor>` | Optional interface on a registered provider, template compiler or dependency discoverer. Declare at most 128 static public code/message/remediation entries, with optional fixed JSON pointer and action label. Each registry snapshots declarations at registration; no extra DI registration is needed. | `ActivityProviderRegistry`, `ActivityTemplateProviderCompilerRegistry` and `ActivityTemplateDependencyDiscovererRegistry` project recognized codes through the shared sanitizer. | `SpecialistActivityProvider` *(cross-domain — Specialist Design)* |
+| `IActivityProvider` | Contributor keyed by stable provider identity. Provider features register implementations; `IActivityProviderRegistry` rejects duplicate keys and resolves exact provider/schema pairs. | Activity authoring, validation, migration, and capability projection services. | `GraphActivityProvider` *(cross-domain — Activities Graph Design)*; `AgentActivityProvider` *(cross-domain — Agent Design)* |
+| `IActivityProviderDiagnosticCatalog.DiagnosticDescriptors : IReadOnlyList<ActivityProviderDiagnosticDescriptor>` | Optional interface on a registered provider, template compiler or dependency discoverer. Declare at most 128 static public code/message/remediation entries, with optional fixed JSON pointer and action label. Each registry snapshots declarations at registration; no extra DI registration is needed. | `ActivityProviderRegistry`, `ActivityTemplateProviderCompilerRegistry` and `ActivityTemplateDependencyDiscovererRegistry` project recognized codes through the shared sanitizer. | `AgentActivityProvider` *(cross-domain — Agent Design)* |
 | `IActivityProviderReferenceRewriter` | Enumerable, provider/schema-aware contributor. Opaque manifests are never rewritten by universal JSON guessing. | Publishing upgrade-plan persistence invokes the matching provider rewriter for exact occurrence replacements. | `GraphActivityProviderReferenceRewriter` *(cross-domain — Activities Graph Design)* |
 | `IBuiltInAuthoringDescriptorProvider` | Enumerable. Contributes code-owned authoring-catalog descriptors that have no persisted CLR/JSON catalog row. The catalog handler always appends them and never gates them by availability policy. | `ListActivityAuthoringCatalog` merges the contributed descriptors into the available-activity list. | `IntrinsicAuthoringDescriptorProvider` — surfaces the Set Variable and Set Output engine intrinsics (ADR 0045) so the palette can author variable and output assignment. |
 

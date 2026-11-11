@@ -1,8 +1,8 @@
 import { StudioPageHeader } from "@elsa-workflows/studio-ui";
 import React, { lazy, useCallback, useEffect, useRef, useState } from "react";
 import { useStudioRouteLocation, useStudioWorkspaceTitle } from "@elsa-workflows/studio-sdk";
-import type { StudioBackendSession, StudioContributionAvailability, StudioActivityPropertyEditorContribution, StudioAgentRegistry, StudioEndpointContext, StudioExpressionEditorContribution, StudioExpressionToolingClient, StudioWorkflowDesignerPanelContribution, StudioWorkflowRunInputEditorContribution, StudioTestStimulusEditorContribution, StudioWorkflowRunRelatedLinkContribution } from "@elsa-workflows/studio-sdk";
-import type { WorkflowAgentController } from "../workflowAgent";
+import type { StudioBackendSession, StudioContributionAvailability, StudioActivityPropertyEditorContribution, StudioWeaverRegistry, StudioEndpointContext, StudioExpressionEditorContribution, StudioExpressionToolingClient, StudioWorkflowDesignerPanelContribution, StudioWorkflowRunInputEditorContribution, StudioTestStimulusEditorContribution, StudioWorkflowRunRelatedLinkContribution } from "@elsa-workflows/studio-sdk";
+import type { WorkflowWeaverController } from "../workflowWeaver";
 import { WorkflowLazyBoundary } from "../WorkflowLazyBoundary";
 import { updateWorkflowDefinitionIdInUrl } from "./workflowDefinitionUrl";
 import type { ExpressionToolingCacheIdentity } from "../expression-tooling/expressionToolingClient";
@@ -35,8 +35,8 @@ export function WorkflowManagementPage({
   context: StudioEndpointContext;
   backendSession?: StudioBackendSession;
   onOpenBpmnProcesses?(): void;
-  ai: StudioAgentRegistry;
-  weaver?: WorkflowAgentController;
+  ai: StudioWeaverRegistry;
+  weaver?: WorkflowWeaverController;
   propertyEditors: StudioActivityPropertyEditorContribution[];
   expressionEditors: StudioExpressionEditorContribution[];
   runRelatedLinks?: StudioWorkflowRunRelatedLinkContribution[];
@@ -97,7 +97,7 @@ export function WorkflowManagementPage({
     );
 }
 
-export function WorkflowExecutablesPage({ context, ai, runInputEditors, canBrowseDefinitions }: { context: StudioEndpointContext; ai: StudioAgentRegistry; runInputEditors: StudioWorkflowRunInputEditorContribution[]; canBrowseDefinitions?: boolean }) {
+export function WorkflowExecutablesPage({ context, ai, runInputEditors, canBrowseDefinitions }: { context: StudioEndpointContext; ai: StudioWeaverRegistry; runInputEditors: StudioWorkflowRunInputEditorContribution[]; canBrowseDefinitions?: boolean }) {
   const [definitionFilter, setDefinitionFilter] = useState(readExecutableDefinitionFilterFromUrl);
 
   useEffect(() => {
@@ -141,9 +141,9 @@ export function WorkflowInstancesPage({ context, navigate }: { context: StudioEn
 
 export function WorkflowInstanceDetailsPage({ context, ai, weaver, expressionEditors = [], backendSession, runRelatedLinks = [], navigate }: {
   context: StudioEndpointContext;
-  ai: StudioAgentRegistry;
-  /** The Workflows module's agent state: the run page contributes the exact Run and selected activity execution (spec 1193 FR-029). */
-  weaver?: WorkflowAgentController;
+  ai: StudioWeaverRegistry;
+  /** The Workflows module's Weaver state: the run page contributes the exact Run and selected activity execution (spec 1193 FR-029). */
+  weaver?: WorkflowWeaverController;
   expressionEditors?: StudioExpressionEditorContribution[];
   backendSession?: StudioBackendSession;
   runRelatedLinks?: StudioWorkflowRunRelatedLinkContribution[];

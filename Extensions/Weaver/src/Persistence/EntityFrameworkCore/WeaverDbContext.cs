@@ -4,15 +4,15 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Elsa.Weaver.Persistence.EntityFrameworkCore;
 
-/// <summary>Agent-owned session, record and audit model; installing the mappings in a consumer context is also supported.</summary>
+/// <summary>Weaver-owned session, record and audit model; installing the mappings in a consumer context is also supported.</summary>
 public abstract class WeaverDbContext : DbContext
 {
     protected WeaverDbContext(DbContextOptions options) : base(options) { }
-    internal DbSet<AgentSessionRow> Sessions => Set<AgentSessionRow>();
+    internal DbSet<WeaverSessionRow> Sessions => Set<WeaverSessionRow>();
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.HasElsaDefaultSchema(this);
-        modelBuilder.AddAgentModel(Database.ProviderName!);
+        modelBuilder.AddWeaverModel(Database.ProviderName!);
         modelBuilder.MapSchemaFinalization(WeaverEfModule.HistoryModuleName);
         ConfigureProvider(modelBuilder);
         modelBuilder.IndexSchemaVersionStamps();

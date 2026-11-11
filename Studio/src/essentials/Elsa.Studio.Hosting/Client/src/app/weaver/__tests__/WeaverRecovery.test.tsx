@@ -3,10 +3,10 @@ import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createStudioRegistry } from "../../registry";
-import { createEndpointContext, type StudioAgentPreparedInvocation, type StudioBackendSession, type StudioEndpointContext } from "../../../sdk";
-import { AgentApiError, createAgentClient, type AgentClient } from "../../agent/agentClient";
-import { subscribeAgentSessionStream } from "../../agent/agentStream";
-import type { AgentRecordedMessage, AgentRecordedProposal, AgentSessionDetailResponse, AgentSessionPolicy, AgentStreamEvent } from "../../agent/agentTypes";
+import { createEndpointContext, type StudioWeaverPreparedInvocation, type StudioBackendSession, type StudioEndpointContext } from "../../../sdk";
+import { WeaverApiError, createWeaverClient, type WeaverClient } from "../weaverClient";
+import { subscribeWeaverSessionStream } from "../weaverStream";
+import type { WeaverRecordedMessage, WeaverRecordedProposal, WeaverSessionDetailResponse, WeaverSessionPolicy, WeaverStreamEvent } from "../weaverTypes";
 import { WeaverSurface } from "../WeaverSurface";
 import { weaverSessionScope } from "../weaverSessionHint";
 
@@ -27,14 +27,14 @@ describe("Weaver session recovery", () => {
     server.setPolicy(sessionId, policy("full-auto", 2));
 
     const reloaded = mount(server, "ada");
-    await settle(() => expect(reloaded.container.querySelector(".agent-proposal")?.getAttribute("data-status")).toBe("awaiting-approval"));
+    await settle(() => expect(reloaded.container.querySelector(".weaver-proposal")?.getAttribute("data-status")).toBe("awaiting-approval"));
     expect(server.client.listSessions).toHaveBeenCalledWith({ workspace: "studio:primary", take: 20 });
     expect(server.client.getSession).toHaveBeenLastCalledWith(sessionId);
     expect(server.client.listProposals).toHaveBeenLastCalledWith(sessionId);
     expect(reloaded.subscribe).not.toHaveBeenCalled();
     expect(server.client.createSession).toHaveBeenCalledTimes(1);
     expect(reloaded.container.textContent).toContain("Hide the status card");
-    const proposal = reloaded.container.querySelector(".agent-proposal");
+    const proposal = reloaded.container.querySelector(".weaver-proposal");
     expect(proposal?.getAttribute("data-status")).toBe("awaiting-approval");
     expect(reloaded.container.querySelector(".weaver-auto-apply")?.getAttribute("data-autonomy-state")).toBe("acknowledged");
     expect(reloaded.container.querySelector<HTMLButtonElement>('[aria-label="Auto-apply mode"]')?.textContent).toBe("Autopilot");
@@ -177,13 +177,13 @@ describe("Weaver session recovery", () => {
     const server = fakeServer();
     let finishDelivery!: () => void;
     const tabA = readyApi("ada");
-    tabA.agent.toolContracts.add({ id: "sample_change", moduleId: "Sample", slotId: "sample", displayName: "Change", description: "Change", surfaces: ["*"], inputSchema: {}, resourceTargetSchema: {}, resultSchema: {}, risk: "review-required", invocationModes: ["proposal"], contractVersion: "1", executionLocation: "clientWorkingState",
+    tabA.weaver.toolContracts.add({ id: "sample_change", moduleId: "Sample", slotId: "sample", displayName: "Change", description: "Change", surfaces: ["*"], inputSchema: {}, resourceTargetSchema: {}, resultSchema: {}, risk: "review-required", invocationModes: ["proposal"], contractVersion: "1", executionLocation: "clientWorkingState",
       executeClient: () => new Promise(resolve => { finishDelivery = () => resolve({ outcome: "applied", summary: "Moved." }); }) });
     const sessionId = server.seed("ada", [], [clientProposal("prop_c", "approved")]);
     remember(sessionId);
     const a = mount(server, "ada", tabA);
     await settle(() => expect(buttonIn(proposalByTitle(a.container, "Move activity"), "Apply")?.disabled).toBe(false));
-    server.prepareClientDelivery(sessionId, "prop_c", tabA.agent.clientId);
+    server.prepareClientDelivery(sessionId, "prop_c", tabA.weaver.clientId);
     click(buttonIn(proposalByTitle(a.container, "Move activity"), "Apply"));
     await settle(() => expect(server.proposal(sessionId, "prop_c").status).toBe("awaiting-client"));
 
@@ -198,7 +198,7 @@ describe("Weaver session recovery", () => {
     finishDelivery();
     await settle(() => expect(server.proposal(sessionId, "prop_c").status).toBe("executed"));
     expect(server.client.acknowledgeClient).toHaveBeenCalledTimes(1);
-    expect(server.client.acknowledgeClient).toHaveBeenCalledWith(sessionId, "inv_prop_c", expect.objectContaining({ outcome: "applied", client: { clientId: tabA.agent.clientId, generationId: "generation" } }));
+    expect(server.client.acknowledgeClient).toHaveBeenCalledWith(sessionId, "inv_prop_c", expect.objectContaining({ outcome: "applied", client: { clientId: tabA.weaver.clientId, generationId: "generation" } }));
     expect(server.client.resolveClientInvocation).not.toHaveBeenCalled();
     expect(server.proposal(sessionId, "prop_c").status).toBe("executed");
     a.unmount(); b.unmount();
@@ -208,11 +208,11 @@ describe("Weaver session recovery", () => {
     const server = fakeServer();
     const api = readyApi("ada");
     const execute = vi.fn(async () => ({ outcome: "applied" as const, summary: "Moved." }));
-    api.agent.toolContracts.add({ id: "sample_change", moduleId: "Sample", slotId: "sample", displayName: "Change", description: "Change", surfaces: ["*"], inputSchema: {}, resourceTargetSchema: {}, resultSchema: {}, risk: "review-required", invocationModes: ["proposal"], contractVersion: "1", executionLocation: "clientWorkingState",
+    api.weaver.toolContracts.add({ id: "sample_change", moduleId: "Sample", slotId: "sample", displayName: "Change", description: "Change", surfaces: ["*"], inputSchema: {}, resourceTargetSchema: {}, resultSchema: {}, risk: "review-required", invocationModes: ["proposal"], contractVersion: "1", executionLocation: "clientWorkingState",
       executeClient: execute, clientTargetAvailability: () => ({ status: "unavailable", reason: "The editor that held this unsaved draft was closed." }) });
     const sessionId = server.seed("ada", [], [clientProposal("prop_c", "approved")]);
     // A reload gives the page a new client identity; a closed editor keeps the identity but loses its unsaved target.
-    if (cause === "closed editor") server.prepareClientDelivery(sessionId, "prop_c", api.agent.clientId);
+    if (cause === "closed editor") server.prepareClientDelivery(sessionId, "prop_c", api.weaver.clientId);
     remember(sessionId);
     const view = mount(server, "ada", api);
     await settle(() => expect(buttonIn(proposalByTitle(view.container, "Move activity"), "Apply")?.disabled).toBe(false));
@@ -284,7 +284,7 @@ describe("Weaver session recovery", () => {
     const server = fakeServer();
     const sessionId = server.seed("ada", [message("m1", "user", "Earlier question", "completed")]);
     localStorage.setItem(weaverSessionScope(readyApi("ada"))!.storageKey, sessionId);
-    server.client.getSession.mockRejectedValueOnce(new AgentApiError(409, "Another Studio host owns this session.", "weaver.session.owned_elsewhere", null, 12));
+    server.client.getSession.mockRejectedValueOnce(new WeaverApiError(409, "Another Studio host owns this session.", "weaver.session.owned_elsewhere", null, 12));
     const view = mount(server, "ada");
     await settle(() => expect(view.container.querySelector('[data-kind="owned-elsewhere"]')?.textContent).toContain("Try again in about 12 seconds."));
     expect(localStorage.getItem(weaverSessionScope(readyApi("ada"))!.storageKey)).toBe(sessionId);
@@ -385,14 +385,14 @@ describe("Weaver recovery with session autonomy", () => {
     let refuseResolution!: (error: unknown) => void;
     server.client.resolveClientInvocation.mockImplementationOnce(() => new Promise((_, reject) => { refuseResolution = reject; }));
     click(buttonIn(resolveGroup(view.container), "It was not applied"));
-    let acknowledge!: (value: AgentSessionPolicy) => void;
+    let acknowledge!: (value: WeaverSessionPolicy) => void;
     server.client.updateAutonomy.mockImplementationOnce(() => new Promise(resolve => { acknowledge = resolve; }));
     chooseMode(view.container, "Autopilot");
     expect(autonomyState(view.container)).toBe("pending");
     expect(server.client.updateAutonomy).toHaveBeenCalledWith(sessionId, { autonomyMode: "full-auto", expectedRevision: 1 });
 
     // The statement is refused, so the session is reread; the reread still shows revision 1.
-    refuseResolution(new AgentApiError(409, "Not uncertain.", "weaver.invocation.not_uncertain", null));
+    refuseResolution(new WeaverApiError(409, "Not uncertain.", "weaver.invocation.not_uncertain", null));
     await settle(() => expect(view.container.querySelector('[data-kind="action-refused"]')).not.toBeNull());
     expect(server.client.getSession).toHaveBeenCalledTimes(2);
     expect(autonomyState(view.container)).toBe("pending");
@@ -415,8 +415,8 @@ describe("Weaver recovery with session autonomy", () => {
     const view = mount(server, "ada");
     await settle(() => expect(resolveGroup(view.container)).not.toBeNull());
     // A refused statement rereads the session; that reread finds the session busy elsewhere and offers Try again.
-    server.client.resolveClientInvocation.mockRejectedValueOnce(new AgentApiError(409, "Not uncertain.", "weaver.invocation.not_uncertain", null));
-    server.client.getSession.mockRejectedValueOnce(new AgentApiError(409, "Another Studio host owns this session.", "weaver.session.owned_elsewhere", null, 5));
+    server.client.resolveClientInvocation.mockRejectedValueOnce(new WeaverApiError(409, "Not uncertain.", "weaver.invocation.not_uncertain", null));
+    server.client.getSession.mockRejectedValueOnce(new WeaverApiError(409, "Another Studio host owns this session.", "weaver.session.owned_elsewhere", null, 5));
     click(buttonIn(resolveGroup(view.container), "It was not applied"));
     await settle(() => expect(buttonIn(view.container.querySelector('[data-kind="owned-elsewhere"]'), "Try again")?.disabled).toBe(false));
     expect(buttonIn(messageItem(view.container, "m1"), "Withdraw")?.disabled).toBe(false);
@@ -459,7 +459,7 @@ describe("Weaver recovery with session autonomy", () => {
 });
 
 // One journey through the real client mapping and stream parser, over server-shaped JSON and an SSE body.
-describe("Weaver recovery through the real agent client", () => {
+describe("Weaver recovery through the real Weaver client", () => {
   it("lists, reopens and runs a session whose stream reports the session limit, all from wire shapes", async () => {
     const requests: string[] = [];
     const session = {
@@ -501,8 +501,8 @@ describe("Weaver recovery through the real agent client", () => {
       }
     }), { status: 200 }));
     const api = readyApi("ada");
-    const client = createAgentClient({ baseUrl: "https://primary.example/", http } as unknown as StudioEndpointContext);
-    const subscribe: typeof subscribeAgentSessionStream = (context, url, onEvent, onError, options) => subscribeAgentSessionStream(context, url, onEvent, onError, { ...options, fetch: fetch as typeof globalThis.fetch });
+    const client = createWeaverClient({ baseUrl: "https://primary.example/", http } as unknown as StudioEndpointContext);
+    const subscribe: typeof subscribeWeaverSessionStream = (context, url, onEvent, onError, options) => subscribeWeaverSessionStream(context, url, onEvent, onError, { ...options, fetch: fetch as typeof globalThis.fetch });
     const container = document.createElement("div");
     document.body.appendChild(container);
     const root = createRoot(container);
@@ -559,7 +559,7 @@ describe("Weaver recovery through the real agent client", () => {
       async postJson(path: string) { throw new Error(`Unexpected POST ${path}`); },
       async putJson(path: string) { throw new Error(`Unexpected PUT ${path}`); }
     };
-    const client = createAgentClient({ baseUrl: "https://primary.example/", http } as unknown as StudioEndpointContext);
+    const client = createWeaverClient({ baseUrl: "https://primary.example/", http } as unknown as StudioEndpointContext);
     expect((await client.bootstrap()).recovery).toBe(recovery);
     const container = document.createElement("div");
     document.body.appendChild(container);
@@ -593,8 +593,8 @@ describe("Weaver recovery through the real agent client", () => {
       async putJson(path: string) { throw new Error(`Unexpected PUT ${path}`); }
     };
     const fetch = vi.fn(async () => new Response(null, { status: 500 }));
-    const client = createAgentClient({ baseUrl: "https://primary.example/", http } as unknown as StudioEndpointContext);
-    const subscribe: typeof subscribeAgentSessionStream = (context, url, onEvent, onError, options) => subscribeAgentSessionStream(context, url, onEvent, onError, { ...options, fetch: fetch as typeof globalThis.fetch });
+    const client = createWeaverClient({ baseUrl: "https://primary.example/", http } as unknown as StudioEndpointContext);
+    const subscribe: typeof subscribeWeaverSessionStream = (context, url, onEvent, onError, options) => subscribeWeaverSessionStream(context, url, onEvent, onError, { ...options, fetch: fetch as typeof globalThis.fetch });
     const container = document.createElement("div");
     document.body.appendChild(container);
     const root = createRoot(container);
@@ -622,69 +622,69 @@ describe("Weaver recovery through the real agent client", () => {
   });
 });
 
-type Recorded = { owner: string; detail: AgentSessionDetailResponse; proposals: AgentRecordedProposal[] };
+type Recorded = { owner: string; detail: WeaverSessionDetailResponse; proposals: WeaverRecordedProposal[] };
 
 function fakeServer(options: { listUnsupported?: boolean } = {}) {
   const sessions = new Map<string, Recorded>();
   const writes: string[] = [];
   let next = 0;
-  const notFound = () => new AgentApiError(404, "Agent session was not found.", "weaver.session.not_found", null);
+  const notFound = () => new WeaverApiError(404, "Weaver session was not found.", "weaver.session.not_found", null);
   const owned = (id: string) => { const recorded = sessions.get(id); if (!recorded || recorded.owner !== "ada") throw notFound(); return recorded; };
-  const seed = (owner: string, messages: AgentRecordedMessage[] = [], proposals: AgentRecordedProposal[] = []) => {
+  const seed = (owner: string, messages: WeaverRecordedMessage[] = [], proposals: WeaverRecordedProposal[] = []) => {
     const id = `agt_${++next}`;
     sessions.set(id, { owner, detail: { sessionId: id, status: "active", title: "Studio assistant", policy: policy("manual", 1), messages }, proposals });
     return id;
   };
   const client = {
-    bootstrap: vi.fn<AgentClient["bootstrap"]>(async () => ({
+    bootstrap: vi.fn<WeaverClient["bootstrap"]>(async () => ({
       enabled: true, providerStatus: "available", modes: ["troubleshoot"],
       capabilities: [{ id: "weaver.test", displayName: "Weaver test", description: "", kind: "answer", risk: "read-only", surfaces: ["*"], requiredPermissions: [] }],
       provider: { providerId: "deterministic", isAvailable: true, status: "ok", providerKind: "provider-sdk-binding", supportedOperations: ["chat"], riskProfile: "read-only", metadata: {} },
       policy: { contextVisibility: true, defaultAutonomyMode: "manual", maxAutonomyMode: "full-auto", allowedAutonomyModes: ["manual", "auto-read-only", "full-auto"] }
     })),
-    createSession: vi.fn<AgentClient["createSession"]>(async request => {
+    createSession: vi.fn<WeaverClient["createSession"]>(async request => {
       const id = seed("ada"); writes.push("create");
       expect(request.workspace).toBe("studio:primary");
       return { sessionId: id, status: "active", contextAttachments: [], policy: policy("manual", 1) };
     }),
-    getSession: vi.fn<AgentClient["getSession"]>(async id => structuredClone(owned(id).detail)),
-    updateAutonomy: vi.fn<AgentClient["updateAutonomy"]>(),
-    sendMessage: vi.fn<AgentClient["sendMessage"]>(async (id, request) => {
+    getSession: vi.fn<WeaverClient["getSession"]>(async id => structuredClone(owned(id).detail)),
+    updateAutonomy: vi.fn<WeaverClient["updateAutonomy"]>(),
+    sendMessage: vi.fn<WeaverClient["sendMessage"]>(async (id, request) => {
       owned(id).detail.messages.push(message(`msg_${owned(id).detail.messages.length + 1}`, "user", request.message, "pending")); writes.push("send");
       return { messageId: "msg_1", status: "pending", streamUrl: `/_elsa/weaver/sessions/${id}/stream` };
     }),
-    approveProposal: vi.fn<AgentClient["approveProposal"]>(async proposalId => ({ proposalId, approvalStatus: "approved" })),
-    denyProposal: vi.fn<AgentClient["denyProposal"]>(async proposalId => ({ proposalId, approvalStatus: "denied" })),
-    executeProposal: vi.fn<AgentClient["executeProposal"]>(async proposalId => {
+    approveProposal: vi.fn<WeaverClient["approveProposal"]>(async proposalId => ({ proposalId, approvalStatus: "approved" })),
+    denyProposal: vi.fn<WeaverClient["denyProposal"]>(async proposalId => ({ proposalId, approvalStatus: "denied" })),
+    executeProposal: vi.fn<WeaverClient["executeProposal"]>(async proposalId => {
       const [id, recorded] = [...sessions].find(([, item]) => item.proposals.some(p => p.id === proposalId))!;
       const proposal = recorded.proposals.find(p => p.id === proposalId)!;
       proposal.status = "awaiting-client"; writes.push(`execute:${id}`);
       return { proposalId, approvalStatus: "awaiting-client", clientInvocation: proposal.preparedInvocation };
     }),
-    acknowledgeClient: vi.fn<AgentClient["acknowledgeClient"]>(async (id, invocationId, acknowledgement) => {
+    acknowledgeClient: vi.fn<WeaverClient["acknowledgeClient"]>(async (id, invocationId, acknowledgement) => {
       const proposal = owned(id).proposals.find(p => p.preparedInvocation?.invocationId === invocationId)!;
       proposal.status = acknowledgement.outcome === "applied" ? "executed" : acknowledgement.outcome === "refused" ? "failed" : "uncertain";
       return { proposalId: proposal.id, approvalStatus: proposal.status };
     }),
-    submitFeedback: vi.fn<AgentClient["submitFeedback"]>(async () => {}),
-    cancelTurn: vi.fn<AgentClient["cancelTurn"]>(async () => {}),
-    listSessions: vi.fn<AgentClient["listSessions"]>(async () => {
-      if (options.listUnsupported) throw new AgentApiError(409, "Unsupported.", "weaver.session.query_unsupported", null);
+    submitFeedback: vi.fn<WeaverClient["submitFeedback"]>(async () => {}),
+    cancelTurn: vi.fn<WeaverClient["cancelTurn"]>(async () => {}),
+    listSessions: vi.fn<WeaverClient["listSessions"]>(async () => {
+      if (options.listUnsupported) throw new WeaverApiError(409, "Unsupported.", "weaver.session.query_unsupported", null);
       return { items: [...sessions].filter(([, item]) => item.owner === "ada").reverse().map(([id, item]) => ({ id, title: item.detail.title, status: item.detail.status, updatedAt: "2026-11-02T10:00:00Z", pendingReviewCount: item.proposals.filter(p => p.status === "awaiting-approval").length })) };
     }),
-    listProposals: vi.fn<AgentClient["listProposals"]>(async id => structuredClone(owned(id).proposals)),
-    withdrawMessage: vi.fn<AgentClient["withdrawMessage"]>(async (id, messageId) => {
+    listProposals: vi.fn<WeaverClient["listProposals"]>(async id => structuredClone(owned(id).proposals)),
+    withdrawMessage: vi.fn<WeaverClient["withdrawMessage"]>(async (id, messageId) => {
       const recorded = owned(id).detail.messages.find(item => item.id === messageId);
-      if (!recorded) throw new AgentApiError(404, "Not found.", "weaver.message.not_found", null);
-      if (recorded.status !== "pending") throw new AgentApiError(409, "Not pending.", "weaver.message.not_pending", null);
+      if (!recorded) throw new WeaverApiError(404, "Not found.", "weaver.message.not_found", null);
+      if (recorded.status !== "pending") throw new WeaverApiError(409, "Not pending.", "weaver.message.not_pending", null);
       Object.assign(recorded, { status: "cancelled", statusReason: "withdrawn" }); writes.push("withdraw");
       return structuredClone(recorded);
     }),
-    resolveClientInvocation: vi.fn<AgentClient["resolveClientInvocation"]>(async (id, invocationId, claim) => {
+    resolveClientInvocation: vi.fn<WeaverClient["resolveClientInvocation"]>(async (id, invocationId, claim) => {
       const proposal = owned(id).proposals.find(p => p.preparedInvocation?.invocationId === invocationId);
-      if (!proposal) throw new AgentApiError(404, "Not found.", "weaver.invocation.not_found", null);
-      if (proposal.status !== "uncertain") throw new AgentApiError(409, "Not uncertain.", "weaver.invocation.not_uncertain", null);
-      if (proposal.ownerResolution && proposal.ownerResolution.claim !== claim) throw new AgentApiError(409, "Conflict.", "weaver.invocation.resolution_conflict", null);
+      if (!proposal) throw new WeaverApiError(404, "Not found.", "weaver.invocation.not_found", null);
+      if (proposal.status !== "uncertain") throw new WeaverApiError(409, "Not uncertain.", "weaver.invocation.not_uncertain", null);
+      if (proposal.ownerResolution && proposal.ownerResolution.claim !== claim) throw new WeaverApiError(409, "Conflict.", "weaver.invocation.resolution_conflict", null);
       proposal.ownerResolution = { claim, actorId: "ada" }; writes.push("resolve");
       return structuredClone(proposal);
     })
@@ -695,9 +695,9 @@ function fakeServer(options: { listUnsupported?: boolean } = {}) {
     calls: () => [...writes],
     lastSessionId: () => `agt_${next}`,
     proposal: (id: string, proposalId: string) => sessions.get(id)!.proposals.find(p => p.id === proposalId)!,
-    addProposal: (id: string, proposal: AgentRecordedProposal) => sessions.get(id)!.proposals.push(proposal),
-    setPolicy: (id: string, value: AgentSessionPolicy) => { sessions.get(id)!.detail.policy = value; },
-    setMessages: (id: string, messages: AgentRecordedMessage[]) => { sessions.get(id)!.detail.messages = messages; },
+    addProposal: (id: string, proposal: WeaverRecordedProposal) => sessions.get(id)!.proposals.push(proposal),
+    setPolicy: (id: string, value: WeaverSessionPolicy) => { sessions.get(id)!.detail.policy = value; },
+    setMessages: (id: string, messages: WeaverRecordedMessage[]) => { sessions.get(id)!.detail.messages = messages; },
     resolve: (id: string, proposalId: string, claim: "applied") => { sessions.get(id)!.proposals.find(p => p.id === proposalId)!.ownerResolution = { claim, actorId: "ada" }; },
     prepareClientDelivery: (id: string, proposalId: string, clientId: string) => {
       const proposal = sessions.get(id)!.proposals.find(p => p.id === proposalId)!;
@@ -706,20 +706,20 @@ function fakeServer(options: { listUnsupported?: boolean } = {}) {
   };
 }
 
-function policy(autonomyMode: AgentSessionPolicy["autonomyMode"], revision: number): AgentSessionPolicy {
+function policy(autonomyMode: WeaverSessionPolicy["autonomyMode"], revision: number): WeaverSessionPolicy {
   return { autonomyMode, maxAutonomyMode: "full-auto", allowedAutonomyModes: ["manual", "auto-read-only", "full-auto"], revision };
 }
 
-function message(id: string, role: string, content: string, status: string, statusReason?: AgentRecordedMessage["statusReason"]): AgentRecordedMessage {
+function message(id: string, role: string, content: string, status: string, statusReason?: WeaverRecordedMessage["statusReason"]): WeaverRecordedMessage {
   return { id, role, content, status, ...(statusReason ? { statusReason } : {}) };
 }
 
-function reviewProposal(id: string, status: AgentRecordedProposal["status"]): AgentRecordedProposal {
+function reviewProposal(id: string, status: WeaverRecordedProposal["status"]): WeaverRecordedProposal {
   return { id, status, title: "Change sample", summary: "Change the sample.", risk: "review-required", baseRevision: "r1", resourceTarget: { moduleId: "Sample", resourceType: "sample", resourceId: "one", revision: "r1" } };
 }
 
-function clientProposal(id: string, status: AgentRecordedProposal["status"]): AgentRecordedProposal {
-  const prepared: StudioAgentPreparedInvocation = { invocationId: `inv_${id}`, sessionId: "agt_1", turnId: "turn", toolCallId: "call", toolName: "sample_change", toolContractVersion: "1", moduleId: "Sample", actorId: "ada", tenantId: "tenant", target: { moduleId: "Sample", resourceType: "sample", resourceId: "one", revision: "r1" }, arguments: { value: 2 }, approvalDigest: "digest", risk: "reviewRequired", preview: { typeId: "sample.preview", schemaVersion: "1", data: { value: 2 } }, executionLocation: "clientWorkingState", requiresApproval: true, client: { clientId: "original-tab", generationId: "generation" }, expiresAt: new Date(Date.now() + 60000).toISOString() };
+function clientProposal(id: string, status: WeaverRecordedProposal["status"]): WeaverRecordedProposal {
+  const prepared: StudioWeaverPreparedInvocation = { invocationId: `inv_${id}`, sessionId: "agt_1", turnId: "turn", toolCallId: "call", toolName: "sample_change", toolContractVersion: "1", moduleId: "Sample", actorId: "ada", tenantId: "tenant", target: { moduleId: "Sample", resourceType: "sample", resourceId: "one", revision: "r1" }, arguments: { value: 2 }, approvalDigest: "digest", risk: "reviewRequired", preview: { typeId: "sample.preview", schemaVersion: "1", data: { value: 2 } }, executionLocation: "clientWorkingState", requiresApproval: true, client: { clientId: "original-tab", generationId: "generation" }, expiresAt: new Date(Date.now() + 60000).toISOString() };
   return { id, status, title: "Move activity", summary: "Move the activity.", risk: "review-required", baseRevision: "r1", preparedInvocation: prepared, resourceTarget: prepared.target! };
 }
 
@@ -735,21 +735,21 @@ function readyApi(subject: string, profile = "primary") {
     refreshCapabilities: async () => { throw new Error("unused"); }
   } as unknown as StudioBackendSession;
   const api = createStudioRegistry({ hostVersion: "1.0.0", sdkVersion: "1.0.0", ...createEndpointContext("https://studio.example/") }, { backendBaseUrl: `https://${profile}.example/`, backendSession });
-  api.agent.capabilities.add({ id: "weaver.test", displayName: "Weaver test", description: "Test capability.", kind: "answer", risk: "read-only", surfaces: ["*"] });
+  api.weaver.capabilities.add({ id: "weaver.test", displayName: "Weaver test", description: "Test capability.", kind: "answer", risk: "read-only", surfaces: ["*"] });
   return api;
 }
 
 function mount(server: ReturnType<typeof fakeServer>, subject: string, api = readyApi(subject)) {
-  const streams: ((event: AgentStreamEvent) => void)[] = [];
-  const subscribe = vi.fn(((_context, _url, emit) => { streams.push(emit); return { close() {} }; }) as typeof subscribeAgentSessionStream);
+  const streams: ((event: WeaverStreamEvent) => void)[] = [];
+  const subscribe = vi.fn(((_context, _url, emit) => { streams.push(emit); return { close() {} }; }) as typeof subscribeWeaverSessionStream);
   const container = document.createElement("div");
   document.body.appendChild(container);
   const root = createRoot(container);
-  flushSync(() => root.render(<WeaverSurface api={api} surface={{ route: "/sample" }} variant="dock" client={server.client as AgentClient} subscribeStream={subscribe} />));
+  flushSync(() => root.render(<WeaverSurface api={api} surface={{ route: "/sample" }} variant="dock" client={server.client as WeaverClient} subscribeStream={subscribe} />));
   return {
     container,
     subscribe,
-    emit: (event: AgentStreamEvent) => flushSync(() => streams[streams.length - 1](event)),
+    emit: (event: WeaverStreamEvent) => flushSync(() => streams[streams.length - 1](event)),
     unmount: () => { flushSync(() => root.unmount()); container.remove(); }
   };
 }
@@ -778,7 +778,7 @@ function messageItem(container: HTMLElement, id: string) {
 }
 
 function proposalByTitle(container: HTMLElement, title: string) {
-  return [...container.querySelectorAll<HTMLElement>(".agent-proposal")].find(item => item.querySelector("strong")?.textContent === title) ?? null;
+  return [...container.querySelectorAll<HTMLElement>(".weaver-proposal")].find(item => item.querySelector("strong")?.textContent === title) ?? null;
 }
 
 function buttonIn(container: Element | null | undefined, text: string) {

@@ -82,6 +82,108 @@ public sealed class BpmnDataSelectionPublicationTests
             finding.Type == (scenario == "nested-scope" ? "ValueFlow/ScopeBoundary" : "ValueFlow/UnavailableProducer"));
     }
 
+    /// <summary>
+    /// A result binding without a scope names only the producer. A linear process proves that each task runs once, so
+    /// the binding is offered and publishes. A process with a gateway proves nothing about its order, so a linear
+    /// subprocess placed on its loop does not get the binding, and a stored one is refused, although the subprocess
+    /// itself runs its children once per run.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task A_scope_free_result_binding_is_offered_and_published_only_when_no_enclosing_process_can_run_it_again(bool gatewayLoop)
+    {
+        using var fixture = new Fixture();
+        ActivityNode Root(ActivityNode capture)
+        {
+            var linear = BpmnChildResultFactsTests.Process(children: [capture, Decision()]);
+            if (!gatewayLoop) return linear;
+            return new("outer", "process-version", [], [], new("elsa.bpmn.structure", "1.0.0", JsonSerializer.SerializeToElement(
+                new BpmnAuthoredStructure([linear, Decision("gate")],
+                    [new("start", "startEvent"), new("task", "task", childNodeId: "process"), new("gateway", "exclusiveGateway", childNodeId: "gate", defaultFlowId: "exit"), new("end", "endEvent")],
+                    [new("f1", "start", "task"), new("f2", "task", "gateway"), new("again", "gateway", "task", conditionOutcome: "again"), new("exit", "gateway", "end", isDefault: true)]), Web)));
+        }
+
+        var browsed = await fixture.Analyzer.AnalyzeAsync(new("WorkflowDefinition", "definition", "revision", Root(Capture(read: null)), [], [], []),
+            new("capture", "value"));
+        var source = Assert.Single(browsed.Sources, source => source.Id == "activity:decision:$result");
+        Assert.Equal(ActivityChildResultAvailability.Definite, source.Availability);
+        Assert.Equal(gatewayLoop ? "EarlierProducerRun" : null, source.ReasonCode);
+        Assert.Equal(gatewayLoop, source.Binding is null);
+
+        var stored = Root(Capture(read: new { producerNodeId = "decision", projectionKey = "$result" }));
+        if (gatewayLoop)
+        {
+            var error = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(() => fixture.Compile(stored).AsTask());
+            var refusal = Assert.IsType<ActivityDataSelectionRejectedException>(error.InnerException);
+            Assert.Equal(new[] { ("capture/inputs/value", "ValueFlow/EarlierProducerRun") }, refusal.Findings.Select(finding => (finding.Path, finding.Type)));
+            return;
+        }
+        var executable = await fixture.Compile(stored);
+        var read = Assert.Single(executable.RootActivity.ChildSlots).Activities
+            .Single(child => child.AuthoredActivityId == "capture").InputBindings["value"].ActivityResult!;
+        Assert.Equal("decision", read.ProducerExecutableNodeId);
+        Assert.Null(read.ProducerScopeId);
+    }
+
+    /// <summary>
+    /// One workflow end to end: the binding the analyzer offers is stored unchanged, compiled by the publication
+    /// compiler and run by the engine, and the reader commits the value its producer returned.
+    /// </summary>
+    [Fact]
+    public async Task The_offered_scope_free_binding_publishes_unchanged_and_reads_the_producer_at_run_time()
+    {
+        using var fixture = new Fixture();
+        ActivityNode Process(ArgumentState[] readerInputs) => BpmnChildResultFactsTests.Process(children:
+            [new ActivityNode("capture", "read-version", readerInputs, []), Decision()]);
+        var browsed = await fixture.Analyzer.AnalyzeAsync(new("WorkflowDefinition", "definition", "revision", Process([]), [], [], []),
+            new("capture", "Value"));
+        var offered = Assert.Single(browsed.Sources, source => source.Id == "activity:decision:$result").Binding!;
+
+        var executable = await fixture.Compile(Process([new("Value", offered, null, null, null, null)]));
+        await using var runtime = await BpmnRuntimeFixture.CreateAsync(["process-exec", "decision-exec", "capture-exec"],
+            services => new Elsa.Serialization.SystemText.SerializationFeature().ConfigureServices(services));
+        var run = await runtime.RunAsync(executable);
+
+        run.AssertWorkflowCompleted();
+        var produced = run.AssertCompleted("decision").Completion!.Result.InlineValue!.Value;
+        var read = run.AssertCompleted("capture").InputSnapshot!.Values["Value"].InlineValue!.Value;
+        Assert.Equal("Done", read.GetProperty("outcome").GetString());
+        Assert.True(JsonElement.DeepEquals(produced, read));
+    }
+
+    /// <summary>
+    /// Characterises, on main before #4078: BPMN publication compiles through the workflow executable compiler, so the
+    /// shared analyzer refuses a reserved member-read kind, and a member path on a whole-value kind, before an
+    /// executable exists. Slice C of #4078 flips the <c>ActivityResultMember</c> row.
+    /// </summary>
+    [Theory]
+    [InlineData("ActivityResultMember", "ActivityData/UnsupportedMemberBinding")]
+    [InlineData("VariableMember", "ActivityData/UnsupportedMemberBinding")]
+    [InlineData("WorkflowRequestMember", "ActivityData/UnsupportedMemberBinding")]
+    [InlineData("InputMember", "ActivityData/UnsupportedMemberBinding")]
+    [InlineData("ActivityResult", "ActivityData/UnsupportedMemberSelection")]
+    public async Task Bpmn_publication_refuses_a_member_read_before_an_executable_exists(string kind, string finding)
+    {
+        using var fixture = new Fixture();
+        object read = kind switch
+        {
+            "VariableMember" => new { referenceKey = "customer", declaringScopeId = "workflow", memberPath = new[] { "outcome" } },
+            "WorkflowRequestMember" => new { memberKey = "customer", memberPath = new[] { "outcome" } },
+            "InputMember" => new { referenceKey = "customer", memberPath = new[] { "outcome" } },
+            _ => new { producerNodeId = "decision", projectionKey = "$result", memberPath = new[] { "outcome" } }
+        };
+        var capture = new ActivityNode("capture", "elsa.intrinsic.set-output@1",
+            [Input("name", "decisionResult"), Input("value", read, kind)], [])
+        { Intrinsic = new(AuthoredWorkflowIntrinsicKind.SetOutput, new TypeReference("Elsa.Any")) };
+
+        var error = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(() =>
+            fixture.Compile(BpmnChildResultFactsTests.Process(children: [capture, Decision()])).AsTask());
+
+        var refusal = Assert.IsType<ActivityDataSelectionRejectedException>(error.InnerException);
+        Assert.Contains(refusal.Findings, item => item.Path == "capture/inputs/value" && item.Type == finding);
+    }
+
     private static readonly JsonSerializerOptions Web = new(JsonSerializerDefaults.Web)
     { Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter(JsonNamingPolicy.CamelCase) } };
 
@@ -91,6 +193,9 @@ public sealed class BpmnDataSelectionPublicationTests
     private static ActivityNode Capture(string producer = "decision") => new("capture", "elsa.intrinsic.set-output@1",
         [Input("name", "decisionResult"), Input("value", new { producerNodeId = producer, producerScopeId = "process", projectionKey = "$result" }, "ActivityResult")], [])
     { Intrinsic = new(AuthoredWorkflowIntrinsicKind.SetOutput, new TypeReference("Elsa.Any")) };
+    private static ActivityNode Capture(object? read) => new("capture", "elsa.intrinsic.set-output@1",
+        read is null ? [Input("name", "decisionResult")] : [Input("name", "decisionResult"), Input("value", read, "ActivityResult")], [])
+    { Intrinsic = new(AuthoredWorkflowIntrinsicKind.SetOutput, new TypeReference("Elsa.Any")) };
 
     private sealed class Fixture : IDisposable
     {
@@ -98,6 +203,7 @@ public sealed class BpmnDataSelectionPublicationTests
         private readonly IServiceScope _scope;
         private readonly WorkflowExecutableCompiler _compiler;
         internal Catalog Catalog { get; }
+        internal IActivityDataSelectionAnalyzer Analyzer { get; }
 
         internal Fixture()
         {
@@ -110,7 +216,9 @@ public sealed class BpmnDataSelectionPublicationTests
                 DescriptorPayload = ClrConstruction.Payload(serializer, type), Inputs = inputs
             };
             Catalog = new([Version(typeof(BpmnProcess), "process-version"), Version(typeof(BpmnDecision), "decision-version",
-                new InputDefinition("Outcome", "Outcome", new TypeReference("String"), null, "Outcome", null, IsNullable: true))]);
+                new InputDefinition("Outcome", "Outcome", new TypeReference("String"), null, "Outcome", null, IsNullable: true)),
+                Version(typeof(ReadBack), "read-version",
+                    new InputDefinition("Value", "Value", new TypeReference("Elsa.Any"), null, "Value", null, IsNullable: true))]);
             var services = new ServiceCollection();
             services.AddOptions();
             new Elsa.Events.EventsFeature().ConfigureServices(services);
@@ -120,8 +228,8 @@ public sealed class BpmnDataSelectionPublicationTests
             _provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
             _scope = _provider.CreateScope();
             var structures = _scope.ServiceProvider.GetRequiredService<IActivityStructureService>();
-            var authority = _scope.ServiceProvider.GetRequiredService<IActivityDataSelectionAnalyzer>();
-            var registry = ClrConstruction.RegistryFor(typeof(BpmnProcess), typeof(BpmnDecision));
+            var authority = Analyzer = _scope.ServiceProvider.GetRequiredService<IActivityDataSelectionAnalyzer>();
+            var registry = ClrConstruction.RegistryFor(typeof(BpmnProcess), typeof(BpmnDecision), typeof(ReadBack));
             var inputs = new RuntimeInputBindingCompiler(registry);
             var outputs = new RuntimeOutputCaptureCompiler(new RuntimeDurableValueStorageDriverRegistry([new JsonRuntimeDurableValueStorageDriver()]));
             var unused = new UnusedReaders();
@@ -176,3 +284,14 @@ public sealed class BpmnDataSelectionPublicationTests
         public ValueTask<IReadOnlyCollection<string>> ListUnreferencedArtifactIdsAsync(WorkflowExecutableArtifactCandidateBatch candidates, DateTimeOffset now, CancellationToken ct = default) => throw new NotSupportedException();
     }
 }
+
+/// <summary>Completes with the value its input resolved to, so a test can see what a binding read.</summary>
+public sealed class ReadBack : Activity<ReadBackResult>
+{
+    [Elsa.Activities.Runtime.Core.Attributes.ActivityInput] public object? Value { get; set; }
+
+    protected override ValueTask<ActivityTransition<ReadBackResult>> ExecuteAsync(ActivityExecutionContext context) =>
+        ValueTask.FromResult(ActivityTransition.Complete(new ReadBackResult(Value)));
+}
+
+public sealed record ReadBackResult(object? Value);

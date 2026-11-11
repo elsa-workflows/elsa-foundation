@@ -18,7 +18,7 @@ namespace Elsa.Weaver.Api;
 [ShellFeature(
     name: "WeaverApi",
     DisplayName = "Weaver API",
-    Description = "Exposes the Weaver bootstrap, session, message, stream, proposal, feedback, and audit endpoints behind provider-neutral agent contracts.",
+    Description = "Exposes the Weaver bootstrap, session, message, stream, proposal, feedback, and audit endpoints behind provider-neutral Weaver contracts.",
     DependsOn = new object[] { typeof(WeaverFeature), typeof(ApiCapabilitiesFeature) }
 )]
 public class WeaverApiFeature : WeaverFeature, IWebShellFeature
@@ -36,5 +36,5 @@ public class WeaverApiFeature : WeaverFeature, IWebShellFeature
     }
 
     public void MapEndpoints(IEndpointRouteBuilder endpoints, IHostEnvironment? environment) =>
-        AgentApi.MapAgentApi(endpoints);
+        WeaverApi.MapWeaverApi(endpoints);
 }

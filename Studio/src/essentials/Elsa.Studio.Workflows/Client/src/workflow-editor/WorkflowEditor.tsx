@@ -3,7 +3,7 @@ import type { WorkflowEditorDocumentAdapter } from "./WorkflowEditorDocumentAdap
 import { activityPaletteNotice, getActivityPaletteContext, isActivityOfferedInContext } from "../graph-authoring/activityPaletteContext";
 import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { Boxes, Code2, Download, History, LogIn, LogOut, ListTree, Variable, Package, PackageOpen, Play, Plus, SlidersHorizontal, Sparkles, Upload, Workflow as WorkflowIcon } from "lucide-react";
-import { authSessionEndedEvent, authSessionStartedEvent, expressionEditorSessionEndedEvent, useStudioThemeLayout, useStudioWorkspaceTitle, type StudioActivityPropertyEditorContribution, type StudioAgentRegistry, type StudioEndpointContext, type StudioExpressionEditorContribution, type StudioExpressionToolingClient, type StudioWorkflowDesignerPanelContribution, type StudioWorkflowRunInputEditorContribution, type StudioTestStimulusEditorContribution, type StudioWorkflowRunRelatedLinkContribution } from "@elsa-workflows/studio-sdk";
+import { authSessionEndedEvent, authSessionStartedEvent, expressionEditorSessionEndedEvent, useStudioThemeLayout, useStudioWorkspaceTitle, type StudioActivityPropertyEditorContribution, type StudioWeaverRegistry, type StudioEndpointContext, type StudioExpressionEditorContribution, type StudioExpressionToolingClient, type StudioWorkflowDesignerPanelContribution, type StudioWorkflowRunInputEditorContribution, type StudioTestStimulusEditorContribution, type StudioWorkflowRunRelatedLinkContribution } from "@elsa-workflows/studio-sdk";
 import type { ActivityCatalogItem, ActivityNode, WorkflowDraft } from "../workflowTypes";
 import {
   collectActivityNodeIds,
@@ -90,6 +90,7 @@ import { forgetRemovedNodes, useWorkflowDocument } from "./workflowDocument";
 import { useWorkflowCanvas } from "./useWorkflowCanvas";
 import { useWorkflowGraphOperationBatch } from "./useWorkflowGraphOperationBatch";
 import { useWorkflowPersistence } from "./useWorkflowPersistence";
+import { useWorkflowActivityDataSelection } from "./useWorkflowActivityDataSelection";
 import { useWorkflowEditorData } from "./useWorkflowEditorData";
 import { useDefinitionMetadata } from "./useDefinitionMetadata";
 import { DirectBpmnPublishAction } from "./DirectBpmnPublishAction";
@@ -143,7 +144,7 @@ const HttpTestRequestDialog = React.lazy(() =>
 
 export { PublicationReviewDialog } from "./PublicationReviewDialog";
 
-import type { WorkflowAgentController } from "../workflowAgent";
+import type { WorkflowWeaverController } from "../workflowWeaver";
 
 export function WorkflowEditor({
   context,
@@ -170,8 +171,8 @@ export function WorkflowEditor({
   onOpenBpmnProcesses?(): void;
   definitionId: string;
   documentAdapter?: WorkflowEditorDocumentAdapter;
-  ai: StudioAgentRegistry;
-  weaver?: WorkflowAgentController;
+  ai: StudioWeaverRegistry;
+  weaver?: WorkflowWeaverController;
   propertyEditors: StudioActivityPropertyEditorContribution[];
   expressionEditors: StudioExpressionEditorContribution[];
   runRelatedLinks?: StudioWorkflowRunRelatedLinkContribution[];
@@ -416,7 +417,7 @@ export function WorkflowEditor({
   const findRisksAction = findAiAction(ai, "weaver.workflows.find-draft-risks");
   const proposeUpdateAction = findAiAction(ai, "weaver.workflows.propose-update");
   const explainVersionAction = findAiAction(ai, "weaver.workflows.explain-version");
-  const versionAgent = useMemo(() => ({ ai, controller: weaver, explainAction: explainVersionAction }), [ai, explainVersionAction, weaver]);
+  const versionWeaver = useMemo(() => ({ ai, controller: weaver, explainAction: explainVersionAction }), [ai, explainVersionAction, weaver]);
   const aiProviderAvailable = useAiProviderAvailability(ai);
 
   // The React Flow canvas mirror and every graph interaction (add/drag/connect/splice/delete/auto-layout)
@@ -621,7 +622,7 @@ export function WorkflowEditor({
 
   // Module-owned reviewed edits use the native document comparison/transaction seam.
   useWorkflowGraphOperationBatch({ draft: editableDraft, details, catalog, document: editorDoc, controller: weaver, holdForReview, reviewHeld, canEdit: editorDoc.canEdit, setStatus, setError, history: batchHistory,
-    resourceType: documentAdapter?.agentResource?.resourceType });
+    resourceType: documentAdapter?.weaverResource?.resourceType });
 
   useEffect(() => {
     if (!draft?.state.rootActivity || catalog.length === 0) return;
@@ -648,7 +649,7 @@ export function WorkflowEditor({
 
   // Mirror the live design onto window for Weaver's out-of-band tooling.
   useWorkflowContextBridge({ controller: weaver, clientId: ai.clientId, details, draft, selectedNode, selectedNodeId, selectedDescriptor, inspectedNode, inspectedDescriptor, inspectedIsScopeOwner, catalogByVersion, historical: editorDoc.pinned, validationErrors: combinedValidationErrors,
-    agentResource: documentAdapter?.agentResource });
+    weaverResource: documentAdapter?.weaverResource });
 
   // Memoized so contributed panels get a stable context identity and can bail out of re-renders
   // (React.memo / effect deps) while the editor re-renders for unrelated reasons.
@@ -1135,6 +1136,19 @@ export function WorkflowEditor({
     repairVariableReference(compensationValidationTarget(scope, path) ?? nodeId);
   }, [draft?.state.rootActivity, catalogByVersion, repairVariableReference]);
 
+  // Choose data on ordinary activity inputs of a server workflow draft. BPMN-owned canvases keep their own model
+  // contracts and are not offered it here.
+  const activityDataSelection = useWorkflowActivityDataSelection({
+    context,
+    enabled: !documentAdapter && !isBpmnDesigner,
+    draft,
+    persistedDraft,
+    saving,
+    catalogByVersion,
+    validationErrors: combinedValidationErrors,
+    revealActivity: repairVariableReference
+  });
+
   const togglePaletteCategory = (category: string) => {
     setExpandedPaletteCategories(current => {
       const next = new Set(current);
@@ -1338,6 +1352,7 @@ export function WorkflowEditor({
           descriptorStatus={descriptorStatus}
           onRetryExpressionDescriptors={() => { void reloadExpressionDescriptors(); }}
           scopedVariableAnalysis={scopedVariableAnalysis}
+          activityDataSelection={activityDataSelection}
           activeTabId={activeInspectorTabId}
           onActiveTabChange={setActiveInspectorTabId}
           onSelectedActivityChange={updateSelectedActivity}
@@ -1628,7 +1643,7 @@ export function WorkflowEditor({
             <div className="wf-properties-view">
               <section className="wf-properties-section">
                 <h3>Versions</h3>
-                <WorkflowVersionHistory definitionId={details.definition.id} versions={details.versions ?? []} agent={documentAdapter ? undefined : versionAgent} />
+                <WorkflowVersionHistory definitionId={details.definition.id} versions={details.versions ?? []} weaver={documentAdapter ? undefined : versionWeaver} />
               </section>
             </div>
           ) : canvasView !== "designer" ? (

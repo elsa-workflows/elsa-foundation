@@ -11,6 +11,10 @@ using System.Linq.Expressions;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Elsa.Expressions.Core.Models;
+using Elsa.Activities.Bpmn.Activities;
+using Elsa.Activities.Bpmn.Models;
+using Elsa.Activities.Compensation.Activities;
+using Elsa.Activities.Compensation.Models;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Flowchart;
@@ -202,6 +206,147 @@ public sealed partial class PublishWorkflowRequestHandlerTests
         Assert.Contains(refusal.Findings, finding => finding.Path == "consumer/inputs/Text" && finding.Type == "ValueFlow/UnavailableProducer");
         Assert.Equal(before, await CountPublishWritesAsync());
         Assert.Null(await _activationAuthority.FindAsync("definition-1", "default"));
+    }
+
+    /// <summary>
+    /// A result binding without a scope publishes where the owning structure states that no earlier producer run can
+    /// lead to the reader, and compiles to a reference without one. On a Flowchart cycle it is refused before any write.
+    /// A binding that declares a scope keeps today's rules there (#4056), so existing documents still publish.
+    /// </summary>
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task A_scope_free_result_binding_publishes_only_where_no_earlier_producer_run_can_reach_its_reader(bool cycle, bool declaresScope)
+    {
+        var read = new WorkflowArgumentState("Text", new ArgumentValue(declaresScope
+            ? JsonSerializer.SerializeToElement(new { producerNodeId = "producer", projectionKey = "$result", producerScopeId = "scope:root" })
+            : JsonSerializer.SerializeToElement(new { producerNodeId = "producer", projectionKey = "$result" }), "ActivityResult"), null, null, null, null);
+        List<FlowchartConnection> connections =
+        [
+            new(new FlowchartEndpoint("start", "Done"), new FlowchartEndpoint("producer", null)),
+            new(new FlowchartEndpoint("producer", "Done"), new FlowchartEndpoint("consumer", null))
+        ];
+        if (cycle)
+            connections.Add(new(new FlowchartEndpoint("consumer", "Done"), new FlowchartEndpoint("start", null)));
+        var registry = TestWellKnownTypeRegistry.Create();
+        registry.RegisterType(typeof(DefaultResultProducer), TypeAliasConvention.CanonicalAlias(typeof(DefaultResultProducer)));
+        var producer = SecretBindingCompilerFixture.ClrActivityVersion(typeof(DefaultResultProducer));
+        var version = WorkflowVersion(FlowchartNode("flowchart",
+            [Node("start", Text("start")), new ActivityNode("producer", producer.Id, [], []), Node("consumer", read)], connections, "start"));
+        var before = await CountPublishWritesAsync();
+        var versionStore = new FakeVersionStore(version);
+        var handler = Handler(null, TestCompiler.Create(versionStore,
+            new FakeActivityVersionStore([_writeLineActivity, _flowchartActivity, producer]), _activityStructureService, registry), versionStore);
+
+        if (cycle && !declaresScope)
+        {
+            var exception = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(() =>
+                handler.Handle(new PublishWorkflow(version.Id), CancellationToken.None));
+            var refusal = Assert.IsType<ActivityDataSelectionRejectedException>(exception.InnerException);
+            Assert.Contains(refusal.Findings, finding => finding.Path == "consumer/inputs/Text" && finding.Type == "ValueFlow/EarlierProducerRun");
+            Assert.Equal(before, await CountPublishWritesAsync());
+            Assert.Null(await _activationAuthority.FindAsync("definition-1", "default"));
+            return;
+        }
+
+        var publication = await handler.Handle(new PublishWorkflow(version.Id), CancellationToken.None);
+        var executable = await _store.FindAsync(publication.ArtifactId);
+        Assert.NotNull(executable);
+        var consumer = Assert.Single(executable.RootActivity.DescendantsAndSelf(), node => node.AuthoredActivityId == "consumer");
+        var reference = consumer.InputBindings["Text"].ActivityResult!;
+        Assert.Equal("producer", reference.ProducerExecutableNodeId);
+        Assert.Equal(declaresScope ? "scope:root" : null, reference.ProducerScopeId);
+    }
+
+    /// <summary>
+    /// Every structure above the one that holds a scope-free result read and its producer must rule out an earlier run
+    /// of the child that holds both. A BPMN process with a gateway cannot prove its order and says nothing, so a
+    /// Sequence on its loop is refused before any write. A producer that runs once before a looping Flowchart is
+    /// read by a node on the cycle, which publishes, and so does a compensation handler reading its own forward step.
+    /// </summary>
+    [Theory]
+    [InlineData("bpmn-gateway-loop")]
+    [InlineData("producer-before-cycling-flowchart")]
+    [InlineData("compensation-handler")]
+    public async Task A_scope_free_result_binding_publishes_only_where_no_enclosing_structure_can_run_its_reader_again(string shape)
+    {
+        var read = new WorkflowArgumentState("Text", new ArgumentValue(
+            JsonSerializer.SerializeToElement(new { producerNodeId = "producer", projectionKey = "$result" }), "ActivityResult"), null, null, null, null);
+        var registry = TestWellKnownTypeRegistry.Create();
+        foreach (var type in new[] { typeof(DefaultResultProducer), typeof(BpmnProcess), typeof(BpmnDecision), typeof(CompensationScope) })
+            registry.RegisterType(type, TypeAliasConvention.CanonicalAlias(type));
+        var producerVersion = SecretBindingCompilerFixture.ClrActivityVersion(typeof(DefaultResultProducer));
+        var processVersion = SecretBindingCompilerFixture.ClrActivityVersion(typeof(BpmnProcess));
+        var decisionVersion = SecretBindingCompilerFixture.ClrActivityVersion(typeof(BpmnDecision));
+        var scopeVersion = SecretBindingCompilerFixture.ClrActivityVersion(typeof(CompensationScope));
+        var producer = new ActivityNode("producer", producerVersion.Id, [], []);
+        var consumer = Node("consumer", read);
+        ActivityNode root;
+        if (shape == "bpmn-gateway-loop")
+        {
+            // start -> task -> gateway, gateway -(again)-> task, gateway -> end; the task runs Sequence(producer, consumer).
+            var decision = new ActivityNode("decision", decisionVersion.Id,
+                [new WorkflowArgumentState("Outcome", new ArgumentValue("again", "Literal"), null, null, null, null)], []);
+            var process = new ActivityNode("process", processVersion.Id, [], [], new ActivityNodeStructure("elsa.bpmn.structure", "1.0.0",
+                JsonSerializer.SerializeToElement(new BpmnAuthoredStructure(
+                    [SequenceNode("steps", [producer, consumer]), decision],
+                    [
+                        new BpmnElement("start", BpmnElementTypes.StartEvent),
+                        new BpmnElement("task", BpmnElementTypes.Task, childNodeId: "steps"),
+                        new BpmnElement("gateway", BpmnElementTypes.ExclusiveGateway, childNodeId: "decision", defaultFlowId: "exit"),
+                        new BpmnElement("end", BpmnElementTypes.EndEvent)
+                    ],
+                    [
+                        new BpmnSequenceFlow("enter", "start", "task"),
+                        new BpmnSequenceFlow("decide", "task", "gateway"),
+                        new BpmnSequenceFlow("again", "gateway", "task", conditionOutcome: "again"),
+                        new BpmnSequenceFlow("exit", "gateway", "end", isDefault: true)
+                    ]), new JsonSerializerOptions(JsonSerializerDefaults.Web))));
+            root = SequenceNode("root", [process]);
+        }
+        else if (shape == "compensation-handler")
+        {
+            // The guide's example: the Release handler reads the result of the Reserve step it undoes.
+            root = SequenceNode("root", [new ActivityNode("scope", scopeVersion.Id, [], [], new ActivityNodeStructure(
+                CompensationScope.StructureKind, CompensationScope.StructureSchemaVersion,
+                JsonSerializer.SerializeToElement(new CompensationScopeAuthoredStructure(
+                    [new CompensationScopeAuthoredStep("Reserve", producer, consumer)]), new JsonSerializerOptions(JsonSerializerDefaults.Web))))]);
+        }
+        else
+        {
+            root = SequenceNode("root", [producer, FlowchartNode("flowchart", [Node("entry", Text("entry")), consumer],
+            [
+                new(new FlowchartEndpoint("entry", "Done"), new FlowchartEndpoint("consumer", null)),
+                new(new FlowchartEndpoint("consumer", "Done"), new FlowchartEndpoint("entry", null))
+            ], "entry")]);
+        }
+        var version = WorkflowVersion(root);
+        var before = await CountPublishWritesAsync();
+        var versionStore = new FakeVersionStore(version);
+        var handler = Handler(null, TestCompiler.Create(versionStore, new FakeActivityVersionStore(
+            [_writeLineActivity, _sequenceActivity, _flowchartActivity, producerVersion, processVersion, decisionVersion, scopeVersion]),
+            _activityStructureService, registry), versionStore);
+
+        if (shape == "bpmn-gateway-loop")
+        {
+            var exception = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(() =>
+                handler.Handle(new PublishWorkflow(version.Id), CancellationToken.None));
+            var refusal = Assert.IsType<ActivityDataSelectionRejectedException>(exception.InnerException);
+            var finding = Assert.Single(refusal.Findings);
+            Assert.Equal(("consumer/inputs/Text", "ValueFlow/EarlierProducerRun"), (finding.Path, finding.Type));
+            Assert.Equal(before, await CountPublishWritesAsync());
+            Assert.Null(await _activationAuthority.FindAsync("definition-1", "default"));
+            return;
+        }
+
+        var publication = await handler.Handle(new PublishWorkflow(version.Id), CancellationToken.None);
+        var executable = await _store.FindAsync(publication.ArtifactId);
+        Assert.NotNull(executable);
+        var reference = Assert.Single(executable.RootActivity.DescendantsAndSelf(), node => node.AuthoredActivityId == "consumer")
+            .InputBindings["Text"].ActivityResult!;
+        Assert.Equal("producer", reference.ProducerExecutableNodeId);
+        Assert.Null(reference.ProducerScopeId);
     }
 
     [Theory]
@@ -1834,6 +1979,8 @@ public sealed partial class PublishWorkflowRequestHandlerTests
         new ActivitiesSequenceFeature().ConfigureServices(services);
         new ActivitiesFlowchartFeature().ConfigureServices(services);
         new Elsa.Activities.ControlFlow.ActivitiesControlFlowFeature().ConfigureServices(services);
+        new Elsa.Activities.Bpmn.Design.ActivitiesBpmnDesignFeature().ConfigureServices(services);
+        new Elsa.Activities.Compensation.ActivitiesCompensationFeature().ConfigureServices(services);
 
         return services.BuildServiceProvider().GetRequiredService<IActivityStructureService>();
     }

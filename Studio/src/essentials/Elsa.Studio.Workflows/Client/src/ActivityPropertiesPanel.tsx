@@ -76,6 +76,16 @@ import { ReportedPropertyEditor } from "./ReportedPropertyEditor";
 import { clearDictionaryEditorSessionScope } from "./dictionaryEditorSession";
 import { useDialogFocus } from "./workflow-editor/useDialogFocus";
 import { createActivityExpressionDocument } from "./activityExpressionDocument";
+import type { ActivityDataBinding } from "./api/activityDataSelection";
+import {
+  activityResultExpressionDescriptor,
+  activityResultSyntax,
+  chooseActivityOutputDescriptor,
+  offersActivityData,
+  type ActivityDataSelectionHost
+} from "./activityDataSelection";
+import { ActivityDataSelectionProvider, ChooseDataButton, focusBeside, useActivityDataSelectionAvailable } from "./ActivityDataChooser";
+import { ActivityOutputIcon } from "./activityOutputIcon";
 
 const inlineTextEditorIds = new Set([
   "studio.property.singleline",
@@ -118,6 +128,11 @@ export interface ActivityPropertiesPanelProps {
   showHeading?: boolean;
   /** Overrides the standalone empty-state copy when the panel is presented as activity inputs. */
   emptyLabel?: string;
+  /**
+   * The document owner's source analysis for Choose data. Only a surface that owns an analyzable document passes
+   * one; without it no input offers Choose data, and a stored activity output still renders as a reference.
+   */
+  activityDataSelection?: ActivityDataSelectionHost | null;
   onChange(activity: ActivityNode): void;
 }
 
@@ -142,6 +157,7 @@ export function ActivityPropertiesPanel({
   expressionEditorSessionScope,
   showHeading = true,
   emptyLabel = "This activity does not expose editable properties.",
+  activityDataSelection = null,
   onChange
 }: ActivityPropertiesPanelProps) {
   const generatedDictionarySessionScope = useId();
@@ -155,19 +171,18 @@ export function ActivityPropertiesPanel({
     latestActivity.current = activity;
     renderedActivity.current = activity;
   }
-  const commitInputChange = useCallback((nextActivity: ActivityNode, input: StudioActivityInputDescriptor) => {
+  const commitInputChange = useCallback((nextActivity: ActivityNode, input: StudioActivityInputDescriptor | StudioActivityInputDescriptor[]) => {
     if (latestReadOnly.current) return;
     const current = latestActivity.current;
     if (current.nodeId !== nextActivity.nodeId) {
       onChange(nextActivity);
       return;
     }
-    const propertyName = getInputPropertyName(input);
     const next = { ...current };
-    if (Object.prototype.hasOwnProperty.call(nextActivity, propertyName)) {
-      next[propertyName] = nextActivity[propertyName];
-    } else {
-      delete next[propertyName];
+    for (const item of Array.isArray(input) ? input : [input]) {
+      const propertyName = getInputPropertyName(item);
+      if (Object.prototype.hasOwnProperty.call(nextActivity, propertyName)) next[propertyName] = nextActivity[propertyName];
+      else delete next[propertyName];
     }
     latestActivity.current = next;
     onChange(next);
@@ -266,6 +281,7 @@ export function ActivityPropertiesPanel({
       status={scopeStatus}
       retry={scopeRetry}
     >
+    <ActivityDataSelectionProvider host={activityDataSelection}>
     <div className="wf-properties">
       {showHeading ? <span className="wf-section-label">Properties</span> : null}
       <ExpressionDescriptorStatus
@@ -288,6 +304,7 @@ export function ActivityPropertiesPanel({
         </AdvancedSection>
       ) : null}
     </div>
+    </ActivityDataSelectionProvider>
     </WorkflowReferenceAuthoringProvider>
   );
 }
@@ -486,7 +503,7 @@ type PropertyRowProps = {
   onDisclosureErrorChange(key: string, hasError: boolean): void;
   onDisclosureFailureChange(key: string, hasFailure: boolean): void;
   onDisclosureFallbackChange(key: string, shouldForceOpen: boolean): void;
-  onChange(activity: ActivityNode, input: StudioActivityInputDescriptor): void;
+  onChange(activity: ActivityNode, input: StudioActivityInputDescriptor | StudioActivityInputDescriptor[]): void;
 };
 
 function PropertyRow({
@@ -521,9 +538,6 @@ function PropertyRow({
   // editor and no conversion control, so no control on the row can write anything but a Secret Reference
   // or a clear (elsa-foundation spec 188, workflow secret safety).
   const secretOnly = acceptsOnlySecretReference(input);
-  const syntaxDescriptors = secretOnly
-    ? expressionDescriptors.filter(descriptor => descriptor.type === secretSyntax)
-    : expressionDescriptors;
   const dynamicOptions = useActivityInputOptions(endpointContext, workflowState, activity, activityDescriptor, input);
   const [failedOptionsScope, setFailedOptionsScope] = useState<string>();
   const reportedEditorSignals = useRef(new Set<string>());
@@ -570,11 +584,43 @@ function PropertyRow({
     uiSpecifications: { ...input.uiSpecifications, options: dynamicOptions.options }
   } : input;
   const editorDisabled = readOnly || (!!provider && dynamicOptions.status !== "ready");
-  const context: StudioActivityPropertyEditorContext = { activity, activityId: activity.nodeId, expressionDescriptors, readOnly: editorDisabled };
+  const context: StudioActivityPropertyEditorContext = {
+    activity, activityId: activity.nodeId, expressionDescriptors, readOnly: editorDisabled,
+    inputValues: readLiteralInputValues(activity, activityDescriptor),
+    setLiteralInputs: values => {
+      const current = latestProperty.current;
+      if (current.editorDisabled || current.activity.nodeId !== activity.nodeId) return;
+      let next = current.activity;
+      const changed: StudioActivityInputDescriptor[] = [];
+      for (const [key, value] of Object.entries(values)) {
+        const target = current.activityDescriptor.inputs.find(item => (item.referenceKey || item.name) === key);
+        if (!target || target.isReadOnly || isMaskedInput(target) || acceptsOnlySecretReference(target)) continue;
+        changed.push(target);
+        next = writeInputValue(next, target, target.isWrapped === false ? value : withExpression(readWrappedInput(next, target), "Literal", value));
+      }
+      current.onChange(next, changed);
+    }
+  };
   const editor = resolveEditor(editors, effectiveInput, context);
   const wrapped = input.isWrapped !== false ? readWrappedInput(activity, input) : null;
   const syntax = wrapped?.expression.type ?? (secretOnly ? secretSyntax : "Literal");
-  const expressionDescriptor = expressionDescriptors.find(descriptor => descriptor.type === syntax);
+  const dataSelectionAvailable = useActivityDataSelectionAvailable();
+  const offersChooseData = dataSelectionAvailable && wrapped != null && syntax !== activityResultSyntax &&
+    offersActivityData(input, readOnly, editor?.id);
+  // A stored activity output is a reference the server's expression catalog does not list. Naming it lets the syntax
+  // picker show the current mode and keep the way back to a fixed value or an expression. Where Choose data is
+  // offered, the picker also lists "Activity output…", which opens the chooser without switching anything yet.
+  const listsActivityOutput = expressionDescriptors.some(descriptor => descriptor.type === activityResultSyntax);
+  // Listed first (it sorts first by name too), so the entry is visible without scrolling the picker.
+  const rowDescriptors = syntax === activityResultSyntax && !listsActivityOutput
+    ? [activityResultExpressionDescriptor, ...expressionDescriptors]
+    : offersChooseData && !listsActivityOutput
+      ? [chooseActivityOutputDescriptor, ...expressionDescriptors]
+      : expressionDescriptors;
+  const syntaxDescriptors = secretOnly
+    ? rowDescriptors.filter(descriptor => descriptor.type === secretSyntax)
+    : rowDescriptors;
+  const expressionDescriptor = rowDescriptors.find(descriptor => descriptor.type === syntax);
   const editingMode = expressionDescriptor?.editingMode;
   // A masked input shows what it stores only under author code or a reference (showsMaskedValue); under any other
   // syntax, Literal and Object included, its value is masked. This flag is read, from the row's current state, by
@@ -735,6 +781,7 @@ function PropertyRow({
     replacesValue: boolean;
     discardedBindingCount: number;
   } | null>(null);
+  const [chooser, setChooser] = useState<{ nodeId: string; from: "trigger" | "syntax" } | null>(null);
   const rowRef = useRef<HTMLDivElement>(null);
   const portalThemeRef = useRef<HTMLDivElement>(null);
   const cancelTransitionRef = useRef<HTMLButtonElement>(null);
@@ -748,8 +795,8 @@ function PropertyRow({
   const conversionCaption = wrapped
     ? `${describeInferredSource(wrapped.expression.type, wrapped.expression.value, conversionMode)} → ${formatTypeName(input.typeName)}`
     : "";
-  const latestProperty = useRef({ activity, input, onChange });
-  latestProperty.current = { activity, input, onChange };
+  const latestProperty = useRef({ activity, input, onChange, activityDescriptor, editorDisabled });
+  latestProperty.current = { activity, input, onChange, activityDescriptor, editorDisabled };
 
   useLayoutEffect(() => {
     if (!expanded) return;
@@ -758,7 +805,7 @@ function PropertyRow({
     apply();
     const observer = new MutationObserver(apply);
     const root = (rowRef.current?.ownerDocument ?? document).documentElement;
-    observer.observe(root, { attributes: true, attributeFilter: ["class", "style", "data-theme", "data-theme-material", "data-workspace-style"] });
+    observer.observe(root, { attributes: true, attributeFilter: [...workflowThemeRootAttributes] });
     if (source) observer.observe(source, { attributes: true, attributeFilter: ["class", "style"] });
     return () => observer.disconnect();
   }, [expanded]);
@@ -802,6 +849,18 @@ function PropertyRow({
     return () => cancelAnimationFrame(frame);
   }, [conversionOpen]);
 
+  // A cleared activity output leaves the row untouched; once it renders that way, focus moves to its Choose data action
+  // (or, where none is offered, the syntax picker) instead of falling to the document with the removed reference.
+  const focusAfterClear = useRef(false);
+  useEffect(() => {
+    if (!focusAfterClear.current || syntax === activityResultSyntax) return;
+    focusAfterClear.current = false;
+    const frame = requestAnimationFrame(() => rowRef.current?.querySelector<HTMLButtonElement>(
+      ".wf-choose-data-trigger, .wf-syntax-picker-trigger"
+    )?.focus());
+    return () => cancelAnimationFrame(frame);
+  }, [syntax]);
+
   const closeConversion = () => {
     setConversionOpen(false);
     requestAnimationFrame(() => conversionToggleRef.current?.focus());
@@ -817,10 +876,14 @@ function PropertyRow({
       current.onChange(cleared, current.input);
       return;
     }
-    if (currentWrapped?.expression.type === "Connection" && nextValue === null) {
+    const clearsReference = nextValue === null &&
+      (currentWrapped?.expression.type === "Connection" || currentWrapped?.expression.type === activityResultSyntax);
+    if (clearsReference) {
+      // Clearing a reference unbinds the input, so it is untouched again rather than holding an empty reference.
       const unbound = { ...current.activity };
       delete unbound[getInputPropertyName(current.input)];
       current.onChange(unbound, current.input);
+      if (currentWrapped?.expression.type === activityResultSyntax) focusAfterClear.current = true;
       return;
     }
     const portableDefinition = currentWrapped
@@ -836,6 +899,8 @@ function PropertyRow({
 
   const getUnavailableReason = (descriptor: StudioExpressionDescriptor): string | null => {
     if (descriptor.editingMode === "literal" || descriptor.editingMode === "text") return null;
+    // Listed only where Choose data is offered; it opens the chooser rather than an editor of its own.
+    if (descriptor === chooseActivityOutputDescriptor) return null;
     const targetContext = makeExpressionContext(descriptor.type);
     const candidates = expressionEditors.filter(editor => editor.supports(targetContext));
     if (!candidates.some(editor => !!editor.surfaces.inline)) {
@@ -879,6 +944,11 @@ function PropertyRow({
 
   const setSyntax = (nextSyntax: string) => {
     if (!wrapped || nextSyntax === syntax) return;
+    // "Activity output…" opens the chooser; the input changes only once an output is chosen.
+    if (nextSyntax === activityResultSyntax && offersChooseData) {
+      setChooser({ nodeId: activity.nodeId, from: "syntax" });
+      return;
+    }
     const nextDescriptor = expressionDescriptors.find(descriptor => descriptor.type === nextSyntax);
     if (!nextDescriptor || getUnavailableReason(nextDescriptor)) return;
     const transitionValue = portableDefinition?.source ?? value;
@@ -914,6 +984,53 @@ function PropertyRow({
     }
     applyTransition(nextDescriptor, nextValue);
   };
+
+  // Stores the server's binding unchanged as one edit. Replacing authored content asks first, as any lossy
+  // syntax switch does; an untouched input has nothing to lose.
+  const chooseData = (binding: ActivityDataBinding) => {
+    if (!wrapped) return;
+    const descriptor = binding.expressionType === activityResultSyntax
+      ? expressionDescriptors.find(candidate => candidate.type === activityResultSyntax) ?? activityResultExpressionDescriptor
+      : expressionDescriptors.find(candidate => candidate.type === binding.expressionType);
+    if (!descriptor) return;
+    const untouched = !Object.prototype.hasOwnProperty.call(latestProperty.current.activity, getInputPropertyName(input));
+    const replacesValue = !untouched && planInputSyntaxTransition(
+      input,
+      editingMode ?? "structured",
+      descriptor.editingMode,
+      portableDefinition?.source ?? value,
+      binding.value
+    ).requiresConfirmation;
+    const discardedBindingCount = portableDefinition ? Object.keys(portableDefinition.parameters).length : 0;
+    if (replacesValue || discardedBindingCount > 0) {
+      setExpandRequested(false);
+      setPendingTransition({ descriptor, nextValue: binding.value, replacesValue, discardedBindingCount });
+      return;
+    }
+    applyTransition(descriptor, binding.value);
+  };
+  // The chooser opens from the Choose data action or the syntax picker's "Activity output…" entry, for this activity
+  // only: showing another activity in the same row closes it, so a pending choice cannot land in that activity's input.
+  const chooserOpen = chooser?.nodeId === activity.nodeId;
+  const closeChooser = (focus: "opener" | "next" | "previous" | "none") => {
+    const from = chooser?.from;
+    setChooser(null);
+    if (focus === "none") return;
+    const opener = rowRef.current?.querySelector<HTMLElement>(from === "syntax" ? ".wf-syntax-picker-trigger" : ".wf-choose-data-trigger")
+      ?? rowRef.current?.querySelector<HTMLElement>(".wf-choose-data-trigger") ?? null;
+    if (focus === "opener") opener?.focus();
+    else focusBeside(opener, focus);
+  };
+  const chooseDataButton = offersChooseData ? (
+    <ChooseDataButton
+      target={{ nodeId: activity.nodeId, inputKey: getInputPropertyName(input) }}
+      inputLabel={input.displayName || input.name}
+      open={chooserOpen}
+      onToggle={() => (chooserOpen ? closeChooser("none") : setChooser({ nodeId: activity.nodeId, from: "trigger" }))}
+      onClose={closeChooser}
+      onSelect={chooseData}
+    />
+  ) : null;
   // The whole collection concept resolves to a single node: a collection-scoped editor when one claims
   // the value (e.g. a multi-select for option sets), otherwise a repeater of per-element editors.
   const collectionEditor = collectionType
@@ -1007,6 +1124,7 @@ function PropertyRow({
         <label>{input.displayName || input.name}</label>
         <div className="wf-property-row-header-meta">
           <span>{formatTypeName(input.typeName)}</span>
+          {chooseDataButton}
           {wrapped && !useInlineSyntaxPicker && !useDictionarySyntaxPicker ? (
             <SyntaxPicker
               label={`${input.displayName || input.name} expression syntax`}
@@ -1234,9 +1352,8 @@ function PropertyRow({
 const MemoizedPropertyRow = memo(PropertyRow, arePropertyRowPropsEqual);
 
 /**
- * Input values are immutable bindings on the activity. Editing one must not make every unrelated
- * property editor rebuild (and, for code editors, reconfigure its language surface). Activity
- * metadata still participates in the comparison so a real activity-level change reaches every row.
+ * Reuse a row across a sibling input edit unless the row reads the activity: through a property editor or an
+ * expression editor contribution that opted into activity context (`readsActivityContext`).
  */
 function arePropertyRowPropsEqual(previous: PropertyRowProps, next: PropertyRowProps) {
   if (
@@ -1277,8 +1394,24 @@ function arePropertyRowPropsEqual(previous: PropertyRowProps, next: PropertyRowP
   const propertyName = getInputPropertyName(previous.input);
   if (!Object.is(previous.activity[propertyName], next.activity[propertyName])) return false;
   if (!hasSameActivityMetadata(previous.activity, next.activity, previous.activityDescriptor.inputs)) return false;
+  // Property editor contributions that opted into activity context read sibling inputs, such as FormId with FormVersion.
+  if (resolvesActivityContextEditor(previous) || resolvesActivityContextEditor(next)) return false;
   // Evaluate Decision Inputs (and similar) read sibling activity values such as the Decision pin.
-  return !expressionEditorReadsActivity(previous);
+  return !expressionEditorReadsActivity(previous) && !expressionEditorReadsActivity(next);
+}
+
+function hasSameActivityMetadata(
+  previous: ActivityNode,
+  next: ActivityNode,
+  inputs: StudioActivityInputDescriptor[]
+) {
+  const inputPropertyNames = new Set(inputs.map(getInputPropertyName));
+  const propertyNames = new Set([...Object.keys(previous), ...Object.keys(next)]);
+  for (const propertyName of propertyNames) {
+    if (inputPropertyNames.has(propertyName)) continue;
+    if (!Object.is(previous[propertyName], next[propertyName])) return false;
+  }
+  return true;
 }
 
 function expressionEditorReadsActivity(props: PropertyRowProps) {
@@ -1296,6 +1429,16 @@ function expressionEditorReadsActivity(props: PropertyRowProps) {
 }
 
 const workflowThemeScopeSelector = ".wf-tokens, .wf-editor, .wf-page";
+const workflowThemeRootAttributes = [
+  "class",
+  "style",
+  "data-theme",
+  "data-theme-material",
+  "data-workspace-style",
+  "data-theme-mode",
+  "data-theme-appearance",
+  "data-color-scheme"
+] as const;
 
 function isCopiedThemeCustomProperty(name: string) {
   return name.startsWith("--wf-") || name.startsWith("--studio-") || name.startsWith("--xy-");
@@ -1329,19 +1472,6 @@ function copyThemeCustomProperties(source: Element | null, target: HTMLElement |
   }
 }
 
-function hasSameActivityMetadata(
-  previous: ActivityNode,
-  next: ActivityNode,
-  inputs: StudioActivityInputDescriptor[]
-) {
-  const inputPropertyNames = new Set(inputs.map(getInputPropertyName));
-  const propertyNames = new Set([...Object.keys(previous), ...Object.keys(next)]);
-  for (const propertyName of propertyNames) {
-    if (inputPropertyNames.has(propertyName)) continue;
-    if (!Object.is(previous[propertyName], next[propertyName])) return false;
-  }
-  return true;
-}
 
 function ExpandedPropertyEditor({
   input,
@@ -1406,11 +1536,21 @@ function ExpandedPropertyEditor({
     ? getExpressionEditorFallbackHint(expressionEditors, expressionContext)
     : null;
 
+  useLayoutEffect(() => {
+    const dialog = dialogRef.current;
+    if (!dialog || dialog.querySelector("[data-dialog-initial-focus]")) return;
+    const body = dialog.querySelector(".wf-property-editor-body");
+    const preferred = body?.querySelector<HTMLElement>(
+      "input:not([type='hidden']):not(:disabled), textarea:not(:disabled), select:not(:disabled), [contenteditable='true']"
+    );
+    preferred?.setAttribute("data-dialog-initial-focus", "");
+  }, []);
+
   useEffect(() => {
     if (!ExpressionEditorComponent) fallbackEditorRef.current?.focus();
   }, [ExpressionEditorComponent, syntax]);
 
-  useDialogFocus(dialogRef, onClose, false);
+  useDialogFocus(dialogRef, onClose);
 
   return (
     <div className="wf-property-editor-backdrop">
@@ -1483,6 +1623,7 @@ function ExpandedPropertyEditor({
                 disabled={disabled}
                 spellCheck={false}
                 ref={fallbackEditorRef}
+                data-dialog-initial-focus=""
                 onChange={event => onChange(event.target.value)}
               />
             </>
@@ -1883,6 +2024,8 @@ function syntaxIconFor(descriptor: StudioExpressionDescriptor | undefined): Luci
   if (syntax === "literal") return Type;
   if (syntax.includes("secret")) return KeyRound;
   if (syntax === "connection") return Cable;
+  // The same icon as the Choose data action and the stored reference, not the generic reference (Connection) icon.
+  if (syntax === activityResultSyntax.toLowerCase()) return ActivityOutputIcon;
   if (["input", "variable", "object", "json"].includes(syntax) || descriptor?.editingMode === "structured") return Braces;
   if (descriptor?.editingMode === "reference") return Cable;
   if (descriptor?.editingMode === "literal") return Type;
@@ -1894,6 +2037,28 @@ function replacesGenericDictionaryEditor(
   syntax: string
 ) {
   return !!editor && editor.id !== objectExpressionEditorId && (syntax === "Object" || syntax === "Literal");
+}
+
+/** Literal values of the activity's other readable inputs, keyed as property editor contributions address them. */
+function readLiteralInputValues(activity: ActivityNode, activityDescriptor: StudioActivityDescriptor) {
+  return Object.fromEntries(activityDescriptor.inputs
+    .filter(item => !isMaskedInput(item) && !acceptsOnlySecretReference(item) && (item.isWrapped === false || ["Literal", "Object"].includes(readWrappedInput(activity, item).expression.type)))
+    .map(item => [item.referenceKey || item.name, getLiteralEditorValue(activity, item)]));
+}
+
+// The row resolves with its live dynamic options and editor-disabled state, which the comparator cannot see.
+// Any opted-in contribution that supports this input under either read-only state counts, so the row errs toward refreshing.
+function resolvesActivityContextEditor(props: PropertyRowProps) {
+  const contextual = props.editors.filter(editor => editor.readsActivityContext === true);
+  if (contextual.length === 0) return false;
+  const context = {
+    activity: props.activity,
+    activityId: props.activity.nodeId,
+    expressionDescriptors: props.expressionDescriptors,
+    inputValues: readLiteralInputValues(props.activity, props.activityDescriptor),
+    setLiteralInputs: () => undefined
+  };
+  return contextual.some(editor => editor.supports(props.input, { ...context, readOnly: false }) || editor.supports(props.input, { ...context, readOnly: true }));
 }
 
 function resolveEditor(

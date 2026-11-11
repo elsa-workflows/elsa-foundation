@@ -216,8 +216,8 @@ The EF command budgets file records what each reference workflow costs on the ru
 
 | Reference workflow | Durable | Balanced |
 |---|---:|---:|
-| Ten WriteLine activities | 249 commands | 70 commands |
-| 4-activity HTTP workflow | 165 commands | 91 commands |
+| Ten WriteLine activities | 233 commands | 65 commands |
+| 4-activity HTTP workflow | 155 commands | 85 commands |
 
 SQLite allows one writer, and at its default `synchronous=FULL` each commit is an fsync, so requests queue behind each other's fsyncs. When *Durable* still committed every scheduler hop (about 106 commits per request of the HTTP reference workflow), that workflow plateaued at two concurrent clients on a cloud VM disk, about one request per second. This was measured, not inferred: fsyncs were counted per request, and injecting 5 ms into every fsync locally reproduced the plateau ([#2553](https://github.com/elsa-workflows/elsa-foundation/issues/2553#issuecomment-6102950881)). The plateau has not been measured again for the per-activity *Durable*. Reducing the commit count further is tracked in epic [#2564](https://github.com/elsa-workflows/elsa-foundation/issues/2564).
 

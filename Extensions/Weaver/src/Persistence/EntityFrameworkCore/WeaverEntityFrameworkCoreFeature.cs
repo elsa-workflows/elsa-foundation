@@ -9,7 +9,7 @@ namespace Elsa.Weaver.Persistence.EntityFrameworkCore;
 [ManifestRuntimeKind(ElsaRuntimeKinds.Server)]
 [ManifestFeatureCategory("Weaver")]
 [ManifestFeatureCategory("Persistence")]
-[ShellFeature(name: "WeaverEntityFrameworkCore", DisplayName = "Foundation Agent Entity Framework Core Persistence",
+[ShellFeature(name: "WeaverEntityFrameworkCore", DisplayName = "Foundation Weaver Entity Framework Core Persistence",
     Description = "Opt-in durable Weaver sessions: the session record store and owner-scoped audit in a relational database, with owner, fence and database-time lease checks and protected payloads.",
     DependsOn = new object[] { "Weaver", "Secrets" })]
 [UsesEfModule("Weaver")]
@@ -28,7 +28,7 @@ public class WeaverEntityFrameworkCoreFeature : IShellFeature
     [ManifestSetting(DisplayName = "Lease seconds", Description = "How long a host keeps a session's work after its last write or renewal, in database time; 15 to 86400.", Category = "Runtime")]
     public int LeaseSeconds { get; set; } = 30;
 
-    public virtual void ConfigureServices(IServiceCollection services) => services.AddAgentEntityFrameworkCore(new()
+    public virtual void ConfigureServices(IServiceCollection services) => services.AddWeaverEntityFrameworkCore(new()
     {
         Provider = Provider, ConnectionString = ConnectionString, ConnectionName = ConnectionName, Schema = Schema, Pooling = Pooling,
         LeaseDuration = TimeSpan.FromSeconds(LeaseSeconds)
