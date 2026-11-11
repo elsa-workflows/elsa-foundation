@@ -1,3 +1,4 @@
+import { Scale } from "lucide-react";
 import React, { lazy, Suspense } from "react";
 import { useStudioRouteLocation, type ElsaStudioModuleApi } from "@elsa-workflows/studio-sdk";
 import { decisionsCapability } from "./decisionsApi";
@@ -12,7 +13,7 @@ function DecisionsRoute({ api, navigate }: { api: ElsaStudioModuleApi; navigate(
 }
 export function register(api: ElsaStudioModuleApi) {
   api.featureAreas.add({ id: "decisions", title: "Decisions", description: "Reusable business policies, decision tables and saved cases.", navGroup: "Workspace", ownedPaths: ["/decisions"], required: false, defaultEnabled: true, order: 35,
-    nav: { title: "Decisions", path: "/decisions", placement: "more", order: 35, requiresBackend: decisionsCapability, requiresPermission: ["decisions:read"] },
+    nav: { icon: Scale, title: "Decisions", path: "/decisions", placement: "more", order: 35, requiresBackend: decisionsCapability, requiresPermission: ["decisions:read"] },
     routes: [{ id: "decisions", path: "/decisions", label: "Decisions", requiresBackend: decisionsCapability, workspace: { resourceKey: location => { const id = location.searchParams.get("decision"); return id ? `decision:${id}:${location.searchParams.get("version") ?? "draft"}` : null; } }, component: ({ navigate }) => <DecisionsRoute api={api} navigate={navigate} /> }]
   });
   api.propertyEditors.add({ id: "decisions.version", requiresBackend: decisionsCapability, order: 50, supportsValidationReporting: true,

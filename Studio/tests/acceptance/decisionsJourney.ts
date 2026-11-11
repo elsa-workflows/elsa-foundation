@@ -76,6 +76,12 @@ export async function decisionsJourney(page: Page, info: TestInfo, capture: Capt
 
   await page.goto("/decisions"); await expect(surface.locator("#decisions-title")).toHaveText("Decisions");
   await expect(surface.locator(".studio-skeleton-list")).toHaveCount(0); await part("decisions-list", surface.locator("#decisions-title"));
+  // The shared search shell draws the only border; the field inside it must not add a second one.
+  const search = surface.getByRole("searchbox", { name: "Search decisions", exact: true });
+  expect(await search.evaluate(element => { const style = getComputedStyle(element); return [style.borderTopWidth, style.backgroundColor, style.paddingLeft]; })).toEqual(["0px", "rgba(0, 0, 0, 0)", "0px"]);
+  expect(await search.evaluate(element => getComputedStyle(element.closest(".studio-search")!).borderTopWidth)).toBe("1px");
+  await search.focus(); expect(await search.evaluate(element => getComputedStyle(element).outlineStyle)).toBe("none"); await part("decisions-search", search);
+  if (!info.project.name.startsWith("narrow")) await expect(page.locator('a[aria-label="Decisions"] svg.lucide-scale')).toHaveCount(1);
   await button("New decision").click(); await expect(surface.getByRole("heading", { name: "New decision", exact: true })).toBeVisible();
   await expect(surface.getByText("Unsaved decision", { exact: true })).toBeVisible(); await expect(surface.getByText("Saved draft", { exact: true })).toHaveCount(0);
   await part("decision-create", surface.getByLabel("Name", { exact: true }));
@@ -152,4 +158,42 @@ export async function decisionsJourney(page: Page, info: TestInfo, capture: Capt
   expect(await table.evaluate(element => element.scrollWidth > element.clientWidth)).toBe(true);
   await table.evaluate(element => { element.scrollLeft = element.scrollWidth; }); await part("decision-table-320-scrolled", table);
   await info.attach("decision-identities", { body: JSON.stringify({ assetId: asset.id, versionId: published.id }), contentType: "application/json" });
+  await pickerShortcut(`Approval policy ${suffix}`);
+
+  /** A workflow author reaches the new-decision editor from the Evaluate Decision picker without losing the workflow. */
+  async function pickerShortcut(existingDecision: string) {
+    await page.setViewportSize(info.project.use.viewport ?? { width: 1440, height: 1000 });
+    async function api<T>(path: string, method = "GET", data?: unknown): Promise<T> {
+      const response = await page.request.fetch(`${backend}${path}`, { method, data }); const text = await response.text();
+      expect(response.ok(), `${method} ${path}: ${response.status()} ${text}`).toBe(true); return text ? JSON.parse(text) as T : undefined as T;
+    }
+    async function head(key: string) {
+      const result = await api<{ items: { definition: { activityTypeKey: string; headVersionId: string } }[] }>(`/design/activities/definitions?search=${encodeURIComponent(key)}`);
+      const entry = result.items.find(item => item.definition.activityTypeKey === key); expect(entry, key).toBeTruthy(); return entry!.definition.headVersionId;
+    }
+    const [sequence, evaluate] = await Promise.all([head("Elsa.Activities.Sequence.Activities.Sequence"), head("Elsa.Decisions.Workflows.Runtime.Activities.EvaluateDecision")]);
+    const workflowName = `Decision picker ${suffix}`;
+    const submitted = await api<{ definition: { id: string } }>("/design/workflows/definitions/submit", "POST", { name: workflowName,
+      state: { inputs: [], outputs: [], variables: [], rootActivity: { nodeId: "root", activityVersionId: sequence, inputs: [], outputs: [],
+        structure: { kind: "elsa.sequence.structure", schemaVersion: "1.0.0", payload: { activities: [{ nodeId: "decide", activityVersionId: evaluate, inputs: [], outputs: [] }] } } } } });
+    try {
+      await page.goto(`/workflows/definitions?definition=${submitted.definition.id}&backend=legacy`);
+      await page.locator('.wf-sequence-step[data-id="decide"]').press("Enter");
+      const picker = page.getByRole("combobox", { name: "Business decision", exact: true });
+      await expect(picker.locator("option", { hasText: existingDecision })).toHaveCount(1);
+      const shortcut = page.getByRole("button", { name: "New decision", exact: true });
+      await part("decision-picker", shortcut);
+      await shortcut.focus(); await page.keyboard.press("Enter");
+      const opened = page.getByRole("tablist", { name: "Open screens", exact: true }).getByRole("tab", { selected: true });
+      await expect(surface.getByRole("heading", { name: "New decision", exact: true })).toBeVisible();
+      await expect(surface.getByText("Unsaved decision", { exact: true })).toBeVisible();
+      await part("decision-picker-new-tab", surface.getByLabel("Name", { exact: true }));
+      expect(await opened.getAttribute("aria-label") ?? await opened.textContent()).not.toContain(workflowName);
+      // The workflow stays open in its own tab with the inspector and picker as the author left them.
+      await page.getByRole("tab", { name: new RegExp(`^${workflowName}`) }).click();
+      await expect(picker).toBeVisible(); await expect(picker.locator("option", { hasText: existingDecision })).toHaveCount(1);
+    } finally {
+      await api(`/design/workflows/definitions/${submitted.definition.id}`, "DELETE");
+    }
+  }
 }
