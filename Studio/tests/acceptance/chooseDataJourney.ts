@@ -72,6 +72,13 @@ export async function chooseDataJourney(page: Page, info: TestInfo, capture: Cap
     // Selecting by keyboard works at every width, including when the narrow canvas is mostly covered.
     await consumer.press("Enter");
     await expect(page.locator(".wf-inspector-context h3")).toHaveText("Write Line");
+    // A freshly loaded draft may autosave its normalized form; let that settle so the chooser answers the saved draft.
+    await expect(page.getByText("Autosaving...", { exact: true })).toHaveCount(0, { timeout: 30_000 });
+  }
+  // The chooser keeps its list while it asks about a newer revision; capture only the settled answer.
+  async function settledCapture(name: string) {
+    await expect(chooser().getByRole("listbox")).not.toHaveAttribute("aria-busy", "true");
+    await capture(page, info, name);
   }
   const trigger = () => page.getByRole("button", { name: "Choose data for Text", exact: true });
   const chooser = () => page.getByRole("dialog", { name: "Choose data for Text", exact: true });
@@ -86,7 +93,7 @@ export async function chooseDataJourney(page: Page, info: TestInfo, capture: Cap
   await trigger().click();
   await expect(option("Timer", "Interval")).toBeVisible();
   await expect(option("Timer", "Whole output")).toBeVisible();
-  await capture(page, info, "chooser-open");
+  await settledCapture("chooser-open");
   await option("Timer", "Interval").click();
   await expect(chooser()).toHaveCount(0);
   await expect(reference().locator(".wf-data-reference-source")).toContainText("Timer");
@@ -125,7 +132,7 @@ export async function chooseDataJourney(page: Page, info: TestInfo, capture: Cap
     await expect(row).toHaveAttribute("aria-disabled", "true");
     await expect(row).toHaveAttribute("aria-describedby", reasonId!);
   }
-  await capture(page, info, "not-selectable");
+  await settledCapture("not-selectable");
   await blocked.first().press("Enter");
   await expect(chooser()).toBeVisible();
   await expect(reference()).toHaveCount(0);
