@@ -89,8 +89,9 @@ public sealed class EfWorkflowSchedulerPoisonStore(
     /// is left as it was.
     /// </exception>
     /// <exception cref="InvalidDataException">
-    /// A poison row already stored for the record fails its read check. Nothing was written, as in
-    /// <see cref="RecordAsync"/>.
+    /// A stored row this call has to read fails its read check: the poison row already stored for the record, as in
+    /// <see cref="RecordAsync"/>, or the run's ownership row. Nothing was written. This is not a provider failure,
+    /// so the ownership row is not looked at again.
     /// </exception>
     /// <exception cref="NotSupportedException"><see cref="CanRecordFenced"/> is <see langword="false"/>.</exception>
     public async ValueTask<RuntimeSchedulerPoisonRecord> RecordFencedAsync(

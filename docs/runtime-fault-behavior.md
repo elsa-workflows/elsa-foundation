@@ -291,10 +291,14 @@ took over, a lease that expired, and a lease that an alteration borrowed; it als
 was released or revoked. It does not refuse a run that never had an owner. The refusal is a
 `RuntimeStaleFencingTokenException`, and it leaves the drain as a refused commit does. None of the steps below
 runs: the step is not acknowledged, released or re-enqueued, the retry policy is not asked, and no poison record
-is written. The step stays queued, still claimed by the drain that stopped. Nothing releases that claim: it
-lapses after the scheduler claim's visibility timeout (`RuntimeSchedulerWorkClaimOptions.VisibilityTimeout`, one
-minute by default). The step runs again when the run is next drained after that: by the resumption sweep where
-the `Resumption` component is composed, otherwise by the next command for the run. The core composition has no
+is written. The step stays queued. Outside an active coalescing segment it is still claimed by the drain that
+stopped. Nothing releases that claim: it lapses after the scheduler claim's visibility timeout
+(`RuntimeSchedulerWorkClaimOptions.VisibilityTimeout`, one minute by default). In an active segment the drain's
+claim was only in the segment's overlay: a step that came from the durable queue is still there and is not
+claimed, and a step that existed only in the overlay is not durable, so the run replays from its last durable
+state. Either way the step runs again when the run is next drained, after the claim has lapsed where there is
+one: by the resumption sweep where the `Resumption` component is composed, otherwise by the next command for the
+run. The core composition has no
 sweep, so there the step waits for that command
 ([#4075](https://github.com/elsa-workflows/elsa-foundation/issues/4075)). On a queue without claims there is no
 lapse to wait for, and the rest is the same. A refused checkpoint commit leaves its step the same way. The
@@ -651,7 +655,7 @@ Changing the catalog default only affects workflows published afterwards.
 | temporarily unavailable work is released with its delay, or handled as a fault after a non-retaining checkpoint attempt | `WorkflowSchedulerDrainer.DispatchAsync` (`RuntimeSchedulerWorkUnavailableException` arm and its filter) |
 | a store's unavailable refusal withdraws that commit's attempt and no other | `RuntimeCheckpointCommitter.CommitAsync`, `RuntimeSchedulerDispatchFrame.CheckpointAttempt.Withdraw` |
 | the retry-mode ladder that turns the decision into a record | `WorkflowSchedulerDrainer.HandleHandlerCrashAsync` |
-| the poison store is required by construction, so an ack-deleted fault always leaves a record | `WorkflowSchedulerDrainer` constructor (`ArgumentNullException.ThrowIfNull(poisonStore)`) |
+| the poison store is required by construction, so a drainer always has a store to record an ack-deleted fault in | `WorkflowSchedulerDrainer` constructor (`ArgumentNullException.ThrowIfNull(poisonStore)`) |
 | the dispatch deadline is routed into the poison ladder on purpose | `WorkflowSchedulerDrainer.RenewClaimUntilStoppedAsync`, `RuntimeSchedulerDispatchDeadlineExceededException` |
 | the default retry policy returns an explicit `DoNotRetry` | `Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Incidents/NoopRuntimeDomainRetryPolicy.cs` |
 | poison records become blocking critical incidents with a `WaitForIntervention` outcome, idempotently and best-effort | `Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Incidents/PoisonedSchedulerWorkIncidentObserver.cs` |
@@ -674,7 +678,7 @@ Behavioral guards worth reading alongside the code:
 - `Essentials/tests/Workflows/Runtime/Tests/WorkflowSchedulerPoisonDrainTests.cs`: the retry-mode ladder,
   including that the default policy neither retries nor re-enqueues, and
   `DrainAsync_HandlerFaultWithNoRetryPolicyAtAll_StillLeavesADurableRecord`, which pins that an empty
-  queue after a fault is always paired with a poison record.
+  queue after a fault is paired with a poison record when the drain did not lose its run.
 - `Essentials/tests/Workflows/Runtime/Tests/RuntimeSchedulerDrainTests.cs`:
   `Constructor_RequiresThePoisonStore_SoAnAckDeletedFaultCannotVanish`.
 - `Essentials/tests/Workflows/Runtime/Tests/CoalescingResumeDurableClaimBoundaryTests.cs`: the
