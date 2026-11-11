@@ -18,8 +18,10 @@ export function DecisionsPage({ api, navigate, assetId, versionId, isNew = false
   const editor = !!assetId || isNew, readOnly = !!published || !can(api, "decisions:manage") || (!!assetId && asset?.xml === null);
   const dirty = editor && !published && (isNew ? !!name || !!description || sensitive || xml !== "" && xml !== initialXml.current : !!asset && (name !== asset.name || description !== (asset.description ?? "") || xml !== (asset.xml ?? "") || sensitive !== asset.isSensitive));
   const dirtyRef = useRef(false); dirtyRef.current = dirty || caseDirty;
-  // The tab follows the saved name. Until a decision arrives the host shows the route label; one that failed to load reads "Decision".
-  useStudioWorkspaceTitle(!editor ? "Decisions" : isNew ? "New decision" : asset?.name ?? (error && !loading ? "Decision" : null), asset && !isNew ? published ? `Version ${published.number}` : "Draft" : null);
+  // The tab names only what this route shows: the host keeps its route label while another decision or version is still loading,
+  // and "Decision" marks one whose own load finished without it.
+  const route = `${assetId ?? ""}|${versionId ?? ""}`, settledRoute = useRef<string | null>(null), shown = asset && asset.id === assetId && (published?.id ?? null) === (versionId ?? null) ? asset : null;
+  useStudioWorkspaceTitle(!editor ? "Decisions" : isNew ? "New decision" : shown ? shown.name : !loading && settledRoute.current === route ? "Decision" : null, shown && !isNew ? published ? `Version ${published.number}` : "Draft" : null);
   useEffect(() => { if (!caseDirty && !caseBusy) notifyStudioNavigationGuardReleased(); }, [caseDirty, caseBusy]);
   const apply = useCallback((next: DecisionAsset, candidate?: DecisionVersion) => {
     setAsset(next); setPublished(candidate); setName(next.name); setDescription(next.description ?? ""); setSensitive(candidate?.isSensitive ?? next.isSensitive); setXml(candidate?.xml ?? (candidate ? "" : next.xml ?? "")); setConflict(false); setDiagnostics([]);
@@ -38,7 +40,7 @@ export function DecisionsPage({ api, navigate, assetId, versionId, isNew = false
         const items = await listDecisions(api); if (ticket !== generation.current) return; setAssets(items); setXml(""); setName("");
       }
     } catch (failure) { if (ticket === generation.current) setError(failureMessage(failure)); }
-    finally { if (ticket === generation.current) { setLoading(false); requestAnimationFrame(() => isNew ? titleInput.current?.focus() : editor ? heading.current?.focus() : newButton.current?.focus()); } }
+    finally { if (ticket === generation.current) { settledRoute.current = `${assetId ?? ""}|${versionId ?? ""}`; setLoading(false); requestAnimationFrame(() => isNew ? titleInput.current?.focus() : editor ? heading.current?.focus() : newButton.current?.focus()); } }
   }, [api, assetId, versionId, isNew, apply, editor]);
   const invalidate = useCallback(() => { generation.current += 1; }, []);
   useEffect(() => { void load(); return invalidate; }, [load, invalidate]);

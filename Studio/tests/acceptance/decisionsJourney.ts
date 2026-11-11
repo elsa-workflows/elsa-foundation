@@ -112,6 +112,7 @@ export async function decisionsJourney(page: Page, info: TestInfo, capture: Capt
   const asset = await save(); await tabTitle(`Approval policy ${suffix} · Draft`); await button("Validate").click();
   await expect(surface.getByText("The saved draft is valid for the supported DMN profile.", { exact: true })).toBeVisible();
   await page.reload(); await expect(surface.getByRole("textbox", { name: "Rule 4, output approvalLevel", exact: true })).toHaveValue('"Account owner"');
+  await tabTitle(`Approval policy ${suffix} · Draft`);
   await part("decision-table", surface.getByRole("heading", { name: "Decision table", exact: true }));
 
   for (const values of [["1000", "Standard", "Automatic"], ["1000.01", "Standard", "Manager"], ["10000", "Standard", "Manager"], ["10000.01", "Standard", "Finance"], ["10000.01", "Strategic", "Account owner"], ["1234567890123456789012345678901234", "Standard", "Finance"]]) await addCase(values[0], values[1], values[2]);

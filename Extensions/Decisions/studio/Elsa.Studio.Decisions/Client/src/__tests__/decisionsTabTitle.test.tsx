@@ -6,9 +6,12 @@ import { asset, button, click, render, stubApi, type } from "./helpers";
 const disposals: Array<() => void> = [];
 afterEach(() => { disposals.splice(0).forEach(dispose => dispose()); });
 function mountInTab(props: Omit<DecisionsPageProps, "navigate">) {
-  const setTitle = vi.fn(), navigate = vi.fn();
-  const tab: StudioWorkspaceTabHandle = { id: "decisions-tab", active: true, location: "/decisions", isActive: () => true, markPendingWork: vi.fn(), setTitle };
-  const page = (next: Omit<DecisionsPageProps, "navigate">) => <StudioWorkspaceTabProvider value={tab}><DecisionsPage {...next} navigate={navigate} /></StudioWorkspaceTabProvider>;
+  const setTitle = vi.fn(), navigate = vi.fn(), markPendingWork = vi.fn();
+  // Like the host, each in-tab navigation hands the screen a new tab handle, which re-runs its title effect.
+  const page = (next: Omit<DecisionsPageProps, "navigate">) => {
+    const tab: StudioWorkspaceTabHandle = { id: "decisions-tab", active: true, location: `/decisions?${next.assetId ?? ""}|${next.versionId ?? ""}|${next.isNew ?? ""}`, isActive: () => true, markPendingWork, setTitle: value => setTitle(value) };
+    return <StudioWorkspaceTabProvider value={tab}><DecisionsPage {...next} navigate={navigate} /></StudioWorkspaceTabProvider>;
+  };
   const result = render(page(props)); disposals.push(result.dispose);
   return { ...result, setTitle, navigate, update: (next: Omit<DecisionsPageProps, "navigate">) => result.update(page(next)) };
 }
@@ -50,11 +53,42 @@ describe("Decisions workspace tab titles", () => {
     await vi.waitFor(() => expect(setTitle).toHaveBeenLastCalledWith({ title: "Approval", detail: "Draft" }));
     expect(setTitle).toHaveBeenCalledTimes(1);
   });
+  it("does not carry one version's name to another version while it loads in the same tab", async () => {
+    const api = stubApi(), first = { id: "v1", assetId: asset.id, number: 1, name: asset.name, xml: asset.xml, sourceHash: "hash1", publishedAt: asset.createdAt }, second = { ...first, id: "v2", number: 2 };
+    let release: (value: unknown) => void = () => undefined;
+    api.backend.http.getJson.mockImplementation(async (path: string) => path.endsWith("/versions") ? { items: [first, second] } : path.endsWith("/cases") || path.endsWith("/runs") ? { items: [] } : path.endsWith("/versions/v1") ? first : path.endsWith("/versions/v2") ? new Promise(resolve => { release = resolve; }) : asset);
+    const { host, setTitle, update } = mountInTab({ api, assetId: asset.id, versionId: "v1" });
+    await vi.waitFor(() => expect(setTitle).toHaveBeenLastCalledWith({ title: "Approval", detail: "Version 1" }));
+    setTitle.mockClear(); update({ api, assetId: asset.id, versionId: "v2" });
+    await vi.waitFor(() => expect(host.querySelector('[aria-label="Loading decisions"]')).not.toBeNull());
+    expect(setTitle).not.toHaveBeenCalled();
+    release(second);
+    await vi.waitFor(() => expect(setTitle).toHaveBeenLastCalledWith({ title: "Approval", detail: "Version 2" }));
+    expect(setTitle).toHaveBeenCalledTimes(1);
+  });
+  it("does not carry a draft's name and detail to the version it publishes while that loads", async () => {
+    const api = stubApi(), published = { id: "v1", assetId: asset.id, number: 1, name: asset.name, xml: asset.xml, sourceHash: "hash1", publishedAt: asset.createdAt };
+    const { setTitle, update } = mountInTab({ api, assetId: asset.id });
+    await vi.waitFor(() => expect(setTitle).toHaveBeenLastCalledWith({ title: "Approval", detail: "Draft" }));
+    api.backend.http.getJson.mockImplementation(async (path: string) => path.endsWith("/versions") ? { items: [published] } : path.endsWith("/cases") || path.endsWith("/runs") ? { items: [] } : path.endsWith("/versions/v1") ? new Promise(() => undefined) : asset);
+    setTitle.mockClear(); update({ api, assetId: asset.id, versionId: "v1" });
+    await new Promise(resolve => setTimeout(resolve, 20));
+    expect(setTitle).not.toHaveBeenCalled();
+  });
   it("names a published version after its decision with the version number as detail", async () => {
     const api = stubApi(), published = { id: "v1", assetId: asset.id, number: 3, name: asset.name, xml: asset.xml, sourceHash: "hash1", publishedAt: asset.createdAt };
     api.backend.http.getJson.mockImplementation(async (path: string) => path.endsWith("/versions") ? { items: [published] } : path.endsWith("/cases") || path.endsWith("/runs") ? { items: [] } : path.endsWith("/versions/v1") ? published : asset);
     const { setTitle } = mountInTab({ api, assetId: asset.id, versionId: "v1" });
     await vi.waitFor(() => expect(setTitle).toHaveBeenLastCalledWith({ title: "Approval", detail: "Version 3" }));
+  });
+  it("does not name a decision Decision while it opens from a list showing an error", async () => {
+    const api = stubApi(); api.backend.http.getJson.mockRejectedValue(new Error("Unavailable") as never);
+    const { host, setTitle, update } = mountInTab({ api });
+    await vi.waitFor(() => expect(host.textContent).toContain("Unavailable"));
+    api.backend.http.getJson.mockImplementation(async (path: string) => path.endsWith("/versions") || path.endsWith("/cases") || path.endsWith("/runs") ? { items: [] } : new Promise(() => undefined));
+    setTitle.mockClear(); update({ api, assetId: asset.id });
+    await vi.waitFor(() => expect(host.querySelector('[aria-label="Loading decisions"]')).not.toBeNull());
+    expect(setTitle).not.toHaveBeenCalled();
   });
   it("names a decision that could not be loaded Decision rather than the list", async () => {
     const api = stubApi(); api.backend.http.getJson.mockRejectedValue(new Error("Forbidden") as never);
