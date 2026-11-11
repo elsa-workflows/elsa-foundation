@@ -621,6 +621,9 @@ public sealed class WorkflowIntrinsicExecutor(
             variableEnvelopes: frameEnvelopes,
             visibleVariablesByName: RuntimeContainerScopeService.ProjectAmbientVisibleVariableEnvelopes(executable, visibleFrames, rootVariableNames),
             correlationId: projections.CorrelationId);
+        if (binding.Selection is not null)
+            return await MaterializeMemberAsync(binding, workflowState, intrinsicState, context, cancellationToken);
+
         var resolved = inputBindingResolver.Resolve(binding, context);
         if (resolved.Source == RuntimeInputBindingSource.Expression)
         {
@@ -712,6 +715,62 @@ public sealed class WorkflowIntrinsicExecutor(
             intrinsicState.InvocationId,
             binding.InputName,
             combined,
+            source.Policy,
+            combinedPolicy,
+            cancellationToken,
+            source.ExternalReference?.StorageProfile);
+    }
+
+    /// <summary>
+    /// A member read on an intrinsic input (#4078): the whole source is resolved as the whole-value read of its role
+    /// is, the member selected, and a present member always validated against the destination before it is written,
+    /// whether or not this input validates its whole-value payload. An intrinsic writes a value, so an absent member is
+    /// always refused; a null member is written as null, as a whole-value null is.
+    /// </summary>
+    private async ValueTask<ValueEnvelope> MaterializeMemberAsync(
+        RuntimeInputBinding binding,
+        WorkflowExecutionState workflowState,
+        ActivityExecutionState intrinsicState,
+        RuntimeInputBindingResolutionContext context,
+        CancellationToken cancellationToken)
+    {
+        var nodeId = intrinsicState.Execution.ExecutableNodeId;
+        var (source, selected) = await RuntimeMemberRead.ReadAsync(binding, nodeId, inputBindingResolver, context, externalPayloadStore, cancellationToken);
+        var combinedPolicy = ValuePolicyCombiner.Combine(
+            binding.EffectivePolicy,
+            source.Policy,
+            $"Intrinsic input '{binding.InputName}' on node '{nodeId}'");
+        ValueEnvelope value;
+        switch (selected.Outcome)
+        {
+            case RuntimeReadSelectionOutcome.Absent:
+                throw RuntimeReadSelectionException.Absent(binding, nodeId, selected.SegmentIndex);
+            case RuntimeReadSelectionOutcome.NotAnObject:
+                throw RuntimeReadSelectionException.NotAnObject(binding, nodeId, selected.SegmentIndex, selected.StoppedAt.ToString());
+            case RuntimeReadSelectionOutcome.Null:
+                value = ValueEnvelope.Null(binding.TargetType, combinedPolicy);
+                break;
+            default:
+                if (inputValidator is null)
+                    throw new InvalidOperationException($"Intrinsic member input '{binding.InputName}' on node '{nodeId}' requires an IWorkflowExecutableInputValidator.");
+                var member = ValueEnvelope.Inline(binding.ConversionPlan?.SourceType ?? binding.TargetType, selected.Value, combinedPolicy);
+                try
+                {
+                    value = binding.ConversionPlan is null ? member.Retype(binding.TargetType) : _valueConversionExecutor.Convert(member, binding.ConversionPlan);
+                    ValidateAssignmentPayload(binding, value, nodeId);
+                }
+                catch (Exception exception) when (exception is InvalidOperationException or ArgumentException or JsonException or FormatException)
+                {
+                    throw RuntimeReadSelectionException.DoesNotFit(binding, nodeId, exception);
+                }
+                break;
+        }
+
+        return await ApplyStorageAsync(
+            workflowState.WorkflowExecutionId,
+            intrinsicState.InvocationId,
+            binding.InputName,
+            value,
             source.Policy,
             combinedPolicy,
             cancellationToken,

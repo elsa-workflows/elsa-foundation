@@ -35,11 +35,14 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
         _inputBindingResolver is RuntimeInputBindingResolver && node.ActivityContract is not null &&
         node.InputBindings.Values.All(binding => binding.Source is RuntimeInputBindingSource.Literal or RuntimeInputBindingSource.SecretRead);
 
+    // A member read needs exactly what the whole-value read of its role needs: a request or variable member reads no
+    // activity history, an activity result member does.
     internal bool RequiresActivityHistory(ExecutableNode node) =>
         _inputBindingResolver is not RuntimeInputBindingResolver ||
         node.InputBindings.Values.Any(binding => binding.Source is not
             (RuntimeInputBindingSource.Literal or RuntimeInputBindingSource.SecretRead or
-             RuntimeInputBindingSource.WorkflowRequest or RuntimeInputBindingSource.VariableRead));
+             RuntimeInputBindingSource.WorkflowRequest or RuntimeInputBindingSource.VariableRead or
+             RuntimeInputBindingSource.WorkflowRequestMember or RuntimeInputBindingSource.VariableMember));
 
     public RuntimeActivityInputMaterializer(
         IRuntimeInputBindingResolver inputBindingResolver,
@@ -291,6 +294,11 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
         if (binding.Source == RuntimeInputBindingSource.SecretRead)
             return RuntimeInputBindingResolver.WithholdSecretRead(binding);
 
+        // A member read resolves its whole source exactly as a whole-value read of the same role would, then selects;
+        // the replaceable resolver never sees a member source (#4078).
+        if (binding.Selection is not null)
+            return await MaterializeMemberAsync(node, invocationId, input, binding, resolutionContext, cancellationToken);
+
         var resolved = _inputBindingResolver.Resolve(binding, resolutionContext);
         if (resolved.Source == RuntimeInputBindingSource.Expression)
         {
@@ -390,6 +398,98 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
             resolutionContext,
             cancellationToken);
     }
+
+    /// <summary>
+    /// Selects a member read's member and fits it to the input before the input snapshot and before the consumer is
+    /// constructed. Absence and null follow the input's own presence rules, with their own codes; a present member is
+    /// converted under the pinned plan and then always checked against the input's type with the activity-value
+    /// profile, whether its facts were pinned (<see cref="RuntimeReadSelectionMode.Known"/>) or deferred, because an
+    /// identity plan checks only a type label, never the payload. The snapshot records the selected value.
+    /// </summary>
+    private async ValueTask<ValueEnvelope> MaterializeMemberAsync(
+        ExecutableNode node,
+        string invocationId,
+        ActivityInputContract input,
+        RuntimeInputBinding binding,
+        RuntimeInputBindingResolutionContext resolutionContext,
+        CancellationToken cancellationToken)
+    {
+        var (source, selected) = await RuntimeMemberRead.ReadAsync(
+            binding, node.ExecutableNodeId, _inputBindingResolver, resolutionContext, _externalPayloadStore, cancellationToken);
+        var effectivePolicy = ValuePolicyCombiner.Combine(
+            binding.EffectivePolicy,
+            source.Policy,
+            $"Input '{input.Key}' on executable node '{node.ExecutableNodeId}'");
+
+        ValueEnvelope value;
+        switch (selected.Outcome)
+        {
+            case RuntimeReadSelectionOutcome.Absent:
+                if (input.IsRequired || !input.IsNullable)
+                    throw RuntimeReadSelectionException.Absent(binding, node.ExecutableNodeId, selected.SegmentIndex);
+                value = ValueEnvelope.Absent(binding.TargetType, effectivePolicy);
+                break;
+            case RuntimeReadSelectionOutcome.Null:
+                if (!input.IsNullable)
+                    throw RuntimeReadSelectionException.Null(binding, node.ExecutableNodeId, selected.SegmentIndex);
+                value = ValueEnvelope.Null(binding.TargetType, effectivePolicy);
+                break;
+            case RuntimeReadSelectionOutcome.NotAnObject:
+                throw RuntimeReadSelectionException.NotAnObject(binding, node.ExecutableNodeId, selected.SegmentIndex, DescribeKind(selected.StoppedAt));
+            default:
+                var member = ValueEnvelope.Inline(binding.ConversionPlan?.SourceType ?? binding.TargetType, selected.Value, effectivePolicy);
+                try
+                {
+                    value = binding.ConversionPlan is null ? member.Retype(binding.TargetType) : ApplyConversionPlan(binding, member);
+                }
+                catch (Exception exception) when (exception is InvalidOperationException or ArgumentException or JsonException or FormatException)
+                {
+                    throw RuntimeReadSelectionException.DoesNotFit(binding, node.ExecutableNodeId, exception);
+                }
+                FitSelectedMember(binding, value, node.ExecutableNodeId);
+                break;
+        }
+
+        return await ApplyDestinationStorageAsync(
+            invocationId,
+            input,
+            value,
+            source.Policy,
+            effectivePolicy,
+            resolutionContext,
+            cancellationToken,
+            source.ExternalReference?.StorageProfile);
+    }
+
+    // The activity-value profile is what hydration uses to construct the consumer's input, so a member that does not
+    // deserialize into the input's type under it is refused here, before the snapshot, rather than at construction.
+    private static readonly JsonSerializerOptions SelectedMemberFitOptions = Elsa.Activities.Runtime.Core.Serialization.ActivityValueJsonProfile.CreateOptions();
+
+    private void FitSelectedMember(RuntimeInputBinding binding, ValueEnvelope value, string nodeId)
+    {
+        if (value.Presence != ValuePresence.Present || value.InlineValue is not { } payload)
+            return;
+        var type = ResolveType(binding.TargetType, nodeId, binding.InputName);
+        if (type == typeof(object) || type == typeof(JsonElement) || type == typeof(JsonElement?))
+            return;
+        try
+        {
+            _ = payload.Deserialize(type, SelectedMemberFitOptions);
+        }
+        catch (Exception exception) when (exception is JsonException or NotSupportedException or InvalidOperationException or ArgumentException or FormatException or OverflowException)
+        {
+            throw RuntimeReadSelectionException.DoesNotFit(binding, nodeId, exception);
+        }
+    }
+
+    private static string DescribeKind(JsonValueKind kind) => kind switch
+    {
+        JsonValueKind.Array => "collection",
+        JsonValueKind.String => "string",
+        JsonValueKind.Number => "number",
+        JsonValueKind.True or JsonValueKind.False => "boolean",
+        _ => "value"
+    };
 
     private async ValueTask<ValueEnvelope> ApplyDestinationStorageAsync(
         string invocationId,
@@ -643,13 +743,15 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
         if (secrets.Length > 0)
             canonical += JsonSerializer.Serialize(secrets);
         // Read selections are appended only when present too, so every node without a member read keeps its fingerprint.
+        // They are rendered in the executable hasher's framed selection format, not by a serializer, so the fingerprint
+        // depends on no property name or enum rendering.
         var selections = node.InputBindings
             .Where(item => item.Value.Selection is not null)
             .OrderBy(item => item.Key, StringComparer.Ordinal)
-            .Select(item => new { key = item.Key, item.Value.Selection })
+            .Select(item => $"{item.Key.Length}#{item.Key}={Executables.WorkflowExecutableHasher.FormatSelection(item.Value.Selection!)}")
             .ToArray();
         if (selections.Length > 0)
-            canonical += JsonSerializer.Serialize(selections);
+            canonical += "|selections:" + string.Join('|', selections);
         return $"sha256:{Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(canonical))).ToLowerInvariant()}";
     }
 

@@ -19,6 +19,35 @@ public static class SchedulerWorkHandlerHelpers
     /// scheduled against. The exception message is keyed on <see cref="RuntimeSchedulerWorkItem.CommandKind"/>,
     /// which renders identically to the per-handler command label the local copies hard-coded.
     /// </summary>
+    /// <summary>
+    /// Refuses, before anything of it runs, a pinned executable whose member reads (#4078) this runtime cannot select:
+    /// one that derives <c>elsa.runtime.input-member-selection@1</c> while the shared
+    /// <see cref="Core.Contracts.IRuntimeRequirementChecker"/> does not report it available. A runtime without the checker
+    /// is refused too: absence of the check never means support. Every other requirement keeps its existing enforcement
+    /// (distributed placement, import and preflight), so an executable without member reads is never affected.
+    /// </summary>
+    public static void EnsureMemberSelectionSupported(WorkflowExecutable executable, IServiceProvider services)
+    {
+        ArgumentNullException.ThrowIfNull(executable);
+        ArgumentNullException.ThrowIfNull(services);
+        var requirement = new Activities.Runtime.Core.Models.RuntimeRequirement(
+            RuntimeReadSelection.RequirementKey,
+            RuntimeReadSelection.CurrentSchemaVersion.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        if (!executable.RuntimeRequirements.Contains(requirement))
+            return;
+
+        var checker = (Core.Contracts.IRuntimeRequirementChecker?)services.GetService(typeof(Core.Contracts.IRuntimeRequirementChecker));
+        var status = checker?.Check(new RuntimeRequirementCheckSubject(executable.Identity.ArtifactId, [requirement], [], []))
+            .Requirements.SingleOrDefault()?.Status;
+        if (status == RuntimeRequirementStatus.Available)
+            return;
+
+        throw new InvalidOperationException(
+            $"Workflow executable '{executable.Identity.ArtifactId}' reads members of activity inputs and requires " +
+            $"'{RuntimeReadSelection.RequirementKey}@{requirement.SchemaVersion}', which this runtime does not provide " +
+            $"({(checker is null ? "no runtime requirement checker is composed" : status?.ToString() ?? "unchecked")}); none of it runs here.");
+    }
+
     public static void ValidatePinnedExecutable(
         RuntimeSchedulerWorkItem workItem,
         WorkflowExecutableIdentity pinnedExecutable,
