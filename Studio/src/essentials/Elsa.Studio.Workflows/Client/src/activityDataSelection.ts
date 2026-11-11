@@ -72,14 +72,29 @@ export function readActivityResultReference(value: unknown): ActivityResultRefer
 
 /**
  * Whether an input offers Choose data. Secret-only, masked, connection and options-provider inputs keep their own
- * source contracts, and a read-only input cannot change. The server applies the input's declared constraints again.
+ * source contracts, and a read-only input cannot change. An input a module edits with its own control (a compensation
+ * target, a user-task assignee, a decision version) keeps that control's contract: its owner decides which sources it
+ * permits, so the generic chooser stays off. The server applies the input's declared constraints again.
  */
-export function offersActivityData(input: StudioActivityInputDescriptor, readOnly: boolean) {
+export function offersActivityData(input: StudioActivityInputDescriptor, readOnly: boolean, propertyEditorId: string | undefined) {
   if (readOnly || input.isReadOnly === true || input.isWrapped === false) return false;
   if (acceptsOnlySecretReference(input) || input.isSensitive === true || input.uiHint?.toLowerCase() === "password") return false;
   if (input.connectionType?.trim()) return false;
+  if (propertyEditorId && !builtInPropertyEditorIds.has(propertyEditorId)) return false;
   return readActivityInputOptionsProvider(input) == null;
 }
+
+/** The host's general-purpose value editors; the masked editor is excluded with masked inputs above. */
+const builtInPropertyEditorIds = new Set([
+  "studio.property.singleline",
+  "studio.property.multiline",
+  "studio.property.text-fallback",
+  "studio.property.number",
+  "studio.property.checkbox",
+  "studio.property.timespan",
+  "studio.property.dropdown",
+  "studio.property.multiselect"
+]);
 
 export interface ActivityDataSourceOption {
   source: ActivityDataSourceFacts;
@@ -94,6 +109,8 @@ export interface ActivityDataSourceOption {
 export interface ActivityDataProducerGroup {
   producerNodeId: string;
   label: string;
+  /** The node id, shown when another listed activity has the same label, so the two stay distinguishable. */
+  disambiguation: string | null;
   options: ActivityDataSourceOption[];
 }
 
@@ -112,7 +129,7 @@ export function groupActivityOutputSources(
     const producer = describeActivity(identity.producerNodeId);
     let group = groups.get(identity.producerNodeId);
     if (!group) {
-      group = { producerNodeId: identity.producerNodeId, label: producer?.label ?? identity.producerNodeId, options: [] };
+      group = { producerNodeId: identity.producerNodeId, label: producer?.label ?? identity.producerNodeId, disambiguation: null, options: [] };
       groups.set(identity.producerNodeId, group);
     }
     group.options.push({
@@ -124,7 +141,13 @@ export function groupActivityOutputSources(
       unavailableReason: source.binding ? null : describeUnavailableSource(source.reasonCode)
     });
   }
-  return [...groups.values()];
+  const result = [...groups.values()];
+  const labelCounts = new Map<string, number>();
+  for (const group of result) labelCounts.set(group.label, (labelCounts.get(group.label) ?? 0) + 1);
+  for (const group of result) {
+    if ((labelCounts.get(group.label) ?? 0) > 1 && group.label !== group.producerNodeId) group.disambiguation = group.producerNodeId;
+  }
+  return result;
 }
 
 /** The whole result is the activity's own value; a declared output uses its declared display name. */

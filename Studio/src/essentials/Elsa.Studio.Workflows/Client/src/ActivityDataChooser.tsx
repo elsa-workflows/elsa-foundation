@@ -14,7 +14,7 @@ import {
 import { AlertTriangle, Database, LocateFixed } from "lucide-react";
 import { AnchoredPopover, SkeletonRows } from "@elsa-workflows/studio-ui";
 import { authSessionEndedEvent, type StudioExpressionEditorProps } from "@elsa-workflows/studio-sdk";
-import type { ActivityDataBinding, ActivityDataContextResult, ActivityDataTarget } from "./api/activityDataSelection";
+import type { ActivityDataBinding, ActivityDataContextResult, ActivityDataSourceFacts, ActivityDataTarget } from "./api/activityDataSelection";
 import {
   activityResultSyntax,
   describeOutput,
@@ -48,12 +48,14 @@ export function useActivityDataSelectionHost() {
 type SourcesView =
   | { status: "loading" }
   | { status: "failed" }
-  | { status: "answered"; result: ActivityDataContextResult; requestedBase: string };
+  | { status: "answered"; result: ActivityDataContextResult; requestedBase: string; refreshing?: boolean };
 
 /**
  * Loads the sources for one input while the browser is open. A request answers one document revision and target: an
- * edit, a target switch or closing aborts it, and a late answer is dropped. A stale answer caused by a save the editor
- * has since acknowledged is asked again; nothing here saves.
+ * edit, a target switch or closing aborts it, and a late answer is dropped. While a newer revision is asked about, the
+ * previous list stays in place, marked as updating and not selectable, so focus and position survive a save that only
+ * normalized the document. A stale answer caused by a save the editor has since acknowledged is asked again; nothing
+ * here saves.
  */
 export function useActivityDataSources(host: ActivityDataSelectionHost | null, target: ActivityDataTarget, open: boolean) {
   const [view, setView] = useState<SourcesView>({ status: "loading" });
@@ -68,7 +70,9 @@ export function useActivityDataSources(host: ActivityDataSelectionHost | null, t
     if (!open || !requestSources) return;
     const controller = new AbortController();
     const requestedBase = hostRef.current?.baseRevision ?? "";
-    setView({ status: "loading" });
+    setView(previous => previous.status === "answered" && listsSources(previous.result)
+      ? { ...previous, refreshing: true }
+      : { status: "loading" });
     requestSources({ nodeId: target.nodeId, inputKey: target.inputKey }, controller.signal).then(
       result => { if (!controller.signal.aborted) setView({ status: "answered", result, requestedBase }); },
       () => { if (!controller.signal.aborted) setView({ status: "failed" }); }
@@ -101,9 +105,28 @@ export function ActivityDataBrowser({ host, target, inputLabel, anchorRef, open,
   const { view, retry } = useActivityDataSources(host, target, open);
   const panelRef = useRef<HTMLDivElement>(null);
   const headingId = useId();
-  const groups = view.status === "answered" && (view.result.state === "supported" || view.result.state === "empty")
+  const groups = view.status === "answered" && listsSources(view.result)
     ? groupActivityOutputSources(view.result.sources, nodeId => host.describeActivity(nodeId))
     : [];
+  // Facts for an older document are never stored. A choice made while the current document is being asked about
+  // waits for that answer and then stores the source's current binding, if it is still selectable.
+  const [waitingFor, setWaitingFor] = useState<string | null>(null);
+  const commit = useCallback((binding: ActivityDataBinding) => {
+    onSelect(binding);
+    onClose(true);
+  }, [onClose, onSelect]);
+  const choose = (source: ActivityDataSourceFacts) => {
+    if (view.status === "answered" && view.refreshing) setWaitingFor(source.id);
+    else if (source.binding) commit(source.binding);
+  };
+  useEffect(() => {
+    if (!waitingFor || view.status === "loading" || view.status === "answered" && view.refreshing) return;
+    setWaitingFor(null);
+    const current = view.status === "answered" && listsSources(view.result)
+      ? view.result.sources.find(source => source.id === waitingFor)
+      : undefined;
+    if (current?.binding) commit(current.binding);
+  }, [commit, view, waitingFor]);
 
   useEffect(() => {
     if (!open) return;
@@ -182,31 +205,30 @@ export function ActivityDataBrowser({ host, target, inputLabel, anchorRef, open,
           groups={groups}
           current={current}
           inputLabel={inputLabel}
+          waitingFor={waitingFor}
           onRetry={retry}
-          onSelect={binding => {
-            onSelect(binding);
-            onClose(true);
-          }}
+          onChoose={choose}
         />
       </div>
     </AnchoredPopover>
   );
 }
 
-function ActivityDataBrowserContent({ view, groups, current, inputLabel, onRetry, onSelect }: {
+function ActivityDataBrowserContent({ view, groups, current, inputLabel, waitingFor, onRetry, onChoose }: {
   view: SourcesView;
   groups: ActivityDataProducerGroup[];
   current: ActivityResultReference | null;
   inputLabel: string;
+  waitingFor: string | null;
   onRetry(): void;
-  onSelect(binding: ActivityDataBinding): void;
+  onChoose(source: ActivityDataSourceFacts): void;
 }) {
   if (view.status === "loading") return <SkeletonRows rows={3} label="Loading data sources" />;
   if (view.status === "failed") {
     return <ChooserNotice tone="danger" message="Data sources couldn't be loaded." onRetry={onRetry} />;
   }
   const { result } = view;
-  if (result.state !== "supported" && result.state !== "empty") {
+  if (!listsSources(result)) {
     const refusal = describeRefusal(result);
     return <ChooserNotice tone={refusal.retry ? "danger" : "info"} message={refusal.message} onRetry={refusal.retry ? onRetry : undefined} />;
   }
@@ -217,25 +239,37 @@ function ActivityDataBrowserContent({ view, groups, current, inputLabel, onRetry
   if (groups.length === 0) {
     return <ChooserNotice tone="info" message="No earlier activity outputs reach this input. Add an activity before this one, or use an expression." />;
   }
+  const refreshing = view.refreshing === true;
   return (
     <>
-      <div className="wf-data-chooser-list" role="listbox" aria-label="Activity outputs">
-        {groups.map(group => <ProducerGroup key={group.producerNodeId} group={group} current={current} onSelect={onSelect} />)}
+      <div className="wf-data-chooser-list" role="listbox" aria-label="Activity outputs" aria-busy={refreshing || undefined}>
+        {groups.map(group => (
+          <ProducerGroup key={group.producerNodeId} group={group} current={current} waitingFor={waitingFor} onChoose={onChoose} />
+        ))}
       </div>
+      {refreshing ? <p className="wf-data-chooser-note" role="status">Updating for your latest changes…</p> : null}
       {result.hasMoreSources ? <p className="wf-data-chooser-note">Showing the first 100 sources.</p> : null}
     </>
   );
 }
 
-function ProducerGroup({ group, current, onSelect }: {
+function listsSources(result: ActivityDataContextResult) {
+  return result.state === "supported" || result.state === "empty";
+}
+
+function ProducerGroup({ group, current, waitingFor, onChoose }: {
   group: ActivityDataProducerGroup;
   current: ActivityResultReference | null;
-  onSelect(binding: ActivityDataBinding): void;
+  waitingFor: string | null;
+  onChoose(source: ActivityDataSourceFacts): void;
 }) {
   const labelId = useId();
   return (
     <div role="group" aria-labelledby={labelId} className="wf-data-chooser-group">
-      <div id={labelId} className="wf-data-chooser-group-label">{group.label}</div>
+      <div id={labelId} className="wf-data-chooser-group-label">
+        {group.label}
+        {group.disambiguation ? <span className="wf-data-chooser-group-id"> · {group.disambiguation}</span> : null}
+      </div>
       {group.options.map(option => {
         const selected = current?.producerNodeId === option.producerNodeId && current.projectionKey === option.projectionKey;
         const binding = option.source.binding;
@@ -248,13 +282,14 @@ function ProducerGroup({ group, current, onSelect }: {
             tabIndex={-1}
             aria-selected={selected}
             aria-disabled={binding ? undefined : true}
+            aria-busy={waitingFor === option.source.id || undefined}
             aria-describedby={option.unavailableReason ? reasonId : undefined}
             className={["wf-data-chooser-option", selected ? "selected" : ""].filter(Boolean).join(" ")}
-            onClick={() => { if (binding) onSelect(binding); }}
+            onClick={() => { if (binding) onChoose(option.source); }}
             onKeyDown={event => {
               if (event.key !== "Enter" && event.key !== " ") return;
               event.preventDefault();
-              if (binding) onSelect(binding);
+              if (binding) onChoose(option.source);
             }}
           >
             <span className="wf-data-chooser-option-label">{option.label}</span>

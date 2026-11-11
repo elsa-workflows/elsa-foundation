@@ -25,11 +25,19 @@ const descriptors: StudioExpressionDescriptor[] = [
 ];
 
 const textEditor: StudioActivityPropertyEditorContribution = {
-  id: "test.text",
-  supports: () => true,
+  // The host's general single-line editor identity: an input it edits offers Choose data.
+  id: "studio.property.singleline",
+  supports: descriptor => !descriptor.uiHint?.startsWith("module-"),
   component: ({ descriptor, value, disabled, onChange }) => (
     <input aria-label={descriptor.name} value={String(value ?? "")} disabled={disabled} onChange={event => onChange(event.target.value)} />
   )
+};
+
+// A module-owned control, such as a compensation target or user-task assignee picker, keeps its own source contract.
+const moduleEditor: StudioActivityPropertyEditorContribution = {
+  id: "test.module-assignee",
+  supports: descriptor => descriptor.uiHint === "module-assignee",
+  component: ({ descriptor }) => <select aria-label={descriptor.name} />
 };
 
 const customerBinding = { expressionType: "ActivityResult", value: { producerNodeId: "get-customer", projectionKey: "$result", isOptional: false } };
@@ -121,7 +129,7 @@ function render(options: {
       <ActivityPropertiesPanel
         activity={current}
         descriptor={descriptor}
-        editors={[textEditor]}
+        editors={[textEditor, moduleEditor]}
         expressionEditors={[activityResultReferenceContribution]}
         expressionDescriptors={descriptors}
         expressionDescriptorStatus="ready"
@@ -212,6 +220,21 @@ describe("Choose data for an activity input", () => {
     flushSync(() => blocked.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })));
     expect(changes).toHaveLength(0);
     expect(document.querySelector(".wf-data-chooser")).not.toBeNull();
+  });
+
+  it("keeps two activities with the same name distinguishable by their identity", async () => {
+    const changes: ActivityNode[] = [];
+    const container = render({
+      onChange: next => changes.push(next),
+      dataHost: host({ describeActivity: nodeId => labels[nodeId] ? { label: "Timer", outputLabels: {} } : null })
+    });
+    await openChooser(container);
+    await vi.waitFor(() => expect(document.querySelectorAll(".wf-data-chooser-group-label")).toHaveLength(3));
+    expect([...document.querySelectorAll(".wf-data-chooser-group-label")].map(label => label.textContent))
+      .toEqual(["Timer · get-customer", "Timer · get-order", "Timer · loop-step"]);
+    const order = document.querySelector<HTMLElement>("[role='group'][aria-labelledby]:nth-child(2) [role='option']")!;
+    flushSync(() => order.click());
+    expect((changes[0]!.customerId as { expression: { value: unknown } }).expression.value).toBe(orderBinding.value);
   });
 
   it("operates by keyboard and returns focus to Choose data when cancelled", async () => {
@@ -305,6 +328,55 @@ describe("Choose data for an activity input", () => {
     await vi.waitFor(() => expect(chooser()?.textContent).toContain("No earlier activity outputs"));
   });
 
+  it("keeps the list in place while a newer revision is asked about, storing a choice made meanwhile from the new answer", async () => {
+    const changes: ActivityNode[] = [];
+    const pending: Array<(result: ActivityDataContextResult) => void> = [];
+    const requestSources = vi.fn(() => new Promise<ActivityDataContextResult>(resolve => pending.push(resolve)));
+    const first = host({ requestSources });
+    const container = render({ dataHost: first, onChange: next => changes.push(next) });
+    await openChooser(container);
+    pending[0]!(answer("supported", { sources }));
+    await vi.waitFor(() => expect(document.activeElement).toBe(option("Result", "Get customer")));
+    flushSync(() => document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true })));
+    const focused = document.activeElement;
+
+    // A save that only normalized the document changes its revision while the author is choosing.
+    flushSync(() => setHost({ ...first, documentRevision: "rev-2" }));
+    expect(pending).toHaveLength(2);
+    await vi.waitFor(() => expect(chooser()?.querySelector("[role='listbox']")?.getAttribute("aria-busy")).toBe("true"));
+    expect(document.activeElement).toBe(focused);
+    expect(chooser()?.textContent).toContain("Updating for your latest changes");
+    flushSync(() => document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })));
+    expect(changes).toHaveLength(0);
+    expect(option("Result", "Get order")?.getAttribute("aria-busy")).toBe("true");
+
+    // The newer answer carries a newer binding for the same source; that one is stored, never the older one.
+    const fresh = { expressionType: "ActivityResult", value: { producerNodeId: "get-order", projectionKey: "$result", isOptional: false } };
+    pending[1]!(answer("supported", { documentRevision: "rev-2", sources: [sources[0]!, { ...sources[1]!, binding: fresh }] }));
+    await vi.waitFor(() => expect(changes).toHaveLength(1));
+    expect((changes[0]!.customerId as { expression: { value: unknown } }).expression.value).toBe(fresh.value);
+    expect(document.querySelector(".wf-data-chooser")).toBeNull();
+  });
+
+  it("does not store a choice made meanwhile when the newer answer no longer offers it", async () => {
+    const changes: ActivityNode[] = [];
+    const pending: Array<(result: ActivityDataContextResult) => void> = [];
+    const first = host({ requestSources: vi.fn(() => new Promise<ActivityDataContextResult>(resolve => pending.push(resolve))) });
+    const container = render({ dataHost: first, onChange: next => changes.push(next) });
+    await openChooser(container);
+    pending[0]!(answer("supported", { sources }));
+    await vi.waitFor(() => expect(option("Result", "Get order")).toBeDefined());
+    flushSync(() => setHost({ ...first, documentRevision: "rev-2" }));
+    await vi.waitFor(() => expect(chooser()?.querySelector("[role='listbox']")?.getAttribute("aria-busy")).toBe("true"));
+    flushSync(() => option("Result", "Get order")!.click());
+
+    pending[1]!(answer("supported", { documentRevision: "rev-2", sources: [sources[0]!, { ...sources[1]!, binding: null, reasonCode: "ConditionalOccurrence" }] }));
+    await vi.waitFor(() => expect(option("Result", "Get order")?.getAttribute("aria-disabled")).toBe("true"));
+    await settle();
+    expect(changes).toHaveLength(0);
+    expect(document.querySelector(".wf-data-chooser")).not.toBeNull();
+  });
+
   it("asks again once a save it was waiting for is acknowledged", async () => {
     const requestSources = vi.fn()
       .mockResolvedValueOnce(answer("stale", { code: "activity-data.base-changed" }))
@@ -363,7 +435,8 @@ describe("Choose data for an activity input", () => {
     ["a connection input", input("Connection", { connectionType: "Smtp" })],
     ["an options-provider input", input("Field", { uiSpecifications: { optionsProvider: { key: "catalog.fields", dependsOn: [] } } })],
     ["a read-only input", input("Fixed", { isReadOnly: true })],
-    ["an unwrapped input", input("Literal", { isWrapped: false })]
+    ["an unwrapped input", input("Literal", { isWrapped: false })],
+    ["an input a module edits with its own control", input("Assignee", { uiHint: "module-assignee" })]
   ])("does not offer Choose data on %s", (_name, protectedInput) => {
     const container = render({ inputs: [protectedInput] });
     expect(trigger(container)).toBeNull();

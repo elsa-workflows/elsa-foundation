@@ -823,6 +823,18 @@ function PropertyRow({
     return () => cancelAnimationFrame(frame);
   }, [conversionOpen]);
 
+  // A cleared activity output leaves the row untouched; once it renders that way, focus moves to its Choose data action
+  // (or, where none is offered, the syntax picker) instead of falling to the document with the removed reference.
+  const focusAfterClear = useRef(false);
+  useEffect(() => {
+    if (!focusAfterClear.current || syntax === activityResultSyntax) return;
+    focusAfterClear.current = false;
+    const frame = requestAnimationFrame(() => rowRef.current?.querySelector<HTMLButtonElement>(
+      ".wf-choose-data-trigger, .wf-syntax-picker-trigger"
+    )?.focus());
+    return () => cancelAnimationFrame(frame);
+  }, [syntax]);
+
   const closeConversion = () => {
     setConversionOpen(false);
     requestAnimationFrame(() => conversionToggleRef.current?.focus());
@@ -845,11 +857,7 @@ function PropertyRow({
       const unbound = { ...current.activity };
       delete unbound[getInputPropertyName(current.input)];
       current.onChange(unbound, current.input);
-      if (currentWrapped?.expression.type === activityResultSyntax) {
-        requestAnimationFrame(() => rowRef.current?.querySelector<HTMLButtonElement>(
-          ".wf-choose-data-trigger, .wf-syntax-picker-trigger"
-        )?.focus());
-      }
+      if (currentWrapped?.expression.type === activityResultSyntax) focusAfterClear.current = true;
       return;
     }
     const portableDefinition = currentWrapped
@@ -967,7 +975,7 @@ function PropertyRow({
     }
     applyTransition(descriptor, binding.value);
   };
-  const offersChooseData = wrapped != null && syntax !== activityResultSyntax && offersActivityData(input, readOnly);
+  const offersChooseData = wrapped != null && syntax !== activityResultSyntax && offersActivityData(input, readOnly, editor?.id);
   const chooseDataButton = offersChooseData ? (
     <ChooseDataButton
       target={{ nodeId: activity.nodeId, inputKey: getInputPropertyName(input) }}

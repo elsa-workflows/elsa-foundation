@@ -81,6 +81,11 @@
   font-weight: 600;
 }
 
+.wf-data-chooser-group-id {
+  font-family: var(--studio-font-mono, ui-monospace, monospace);
+  font-weight: 400;
+}
+
 .wf-data-chooser-option {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
