@@ -11,6 +11,8 @@ public static class OAuth2ConnectorExtensions
     {
         ArgumentNullException.ThrowIfNull(services);
         services.AddElsaIntegrationsRuntime();
+        // Token-endpoint HTTP only. Do not add activity or connection handlers here.
+        services.AddHttpClient(OAuth2HttpClientNames.HttpClientName);
         services.TryAddScoped<OAuth2TokenService>();
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IAuthenticationSchemeProvider, OAuth2SchemeProvider>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IHttpRequestAuthenticator, OAuth2HttpRequestAuthenticator>());

@@ -2,7 +2,6 @@ using System.Globalization;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
-using Elsa.Activities.Http.Constants;
 using Elsa.Connections.Core.Contracts;
 using Elsa.Connections.Core.Exceptions;
 using Elsa.Connections.Core.Models;
@@ -299,7 +298,7 @@ internal sealed class OAuth2TokenService(
         CancellationToken cancellationToken)
     {
         var tokenUrl = RequiredSetting(connection, OAuth2SettingKeys.TokenUrl);
-        var client = httpClientFactory.CreateClient(HttpActivityConstants.HttpClientName);
+        var client = httpClientFactory.CreateClient(OAuth2HttpClientNames.HttpClientName);
         using var request = new HttpRequestMessage(HttpMethod.Post, tokenUrl)
         {
             Content = new FormUrlEncodedContent(form)
