@@ -56,7 +56,7 @@ Catalog listing `GET bpmn/publications` reads Published source references with `
 
 ### Pre-publication window (unchanged)
 
-Both paths persist content-addressed material **before** the first Published source reference. Protection of that gap is policy (`ArtifactCreationGracePeriod` default 5 minutes, `RootWriteLeaseDuration` default 1 minute, optional GC pump), not a durable non-runnable root. Spec 1220 / [#3951](https://github.com/elsa-workflows/elsa-foundation/issues/3951) enrollment is still absent on this pin. See §6.
+Both paths persist content-addressed material **before** the first Published source reference. Protection of that gap is policy (`ArtifactCreationGracePeriod` default 5 minutes, `RootWriteLeaseDuration` default 1 minute, optional GC pump), not a durable non-runnable root. Spec 1220 / [#3951](https://github.com/elsa-workflows/elsa-foundation/issues/3951) enrollment is still absent on this pin. Owner decision of 11 November 2026 (D1) accepts option (a) plus one live race test per engine; see §7 and [#4094](https://github.com/elsa-workflows/elsa-foundation/issues/4094).
 
 ---
 
@@ -205,7 +205,7 @@ The R3 preparation-store waiver (owner record on [#2892](https://github.com/elsa
 
 | Item | Status on `a9771131c` |
 |---|---|
-| **Pre-publication retention gap (S3)** | Native and direct-BPMN still save material before the Published source reference and do not enroll. EF material can be collected after grace if no live root exists. Goal §A requires an owner choice: (a) claim only post-publication execution-crash recovery and name the gap, or (b) run the interrupt-before/after-mint verification on both paths. **Owner decision pending.** No reviewed-candidate retention claim. |
+| **Pre-publication retention gap (S3)** | Owner decision 11 November 2026 (D1): option (a) plus one live race test per engine. **Retained claim:** interrupted publish is retry-safe (historical #3988, SHA `9812e60f5`); **no retention guarantee before publication.** Live race on SQLite / one host: both engines **refused** (no dangling reference). See §7 and [#4094](https://github.com/elsa-workflows/elsa-foundation/issues/4094). No reviewed-candidate retention claim. |
 | **G2.4 rows A2 / B2** | **OPEN.** No non-ETL business-error path. See [exec-core-g2-child-outcome-mapping.md](exec-core-g2-child-outcome-mapping.md): A2 (RunBpmn child business error) and B2 (callActivity → native-root child business error). Only first-party Completes-with-`BusinessError` activity is `RunEtl`; ETL [#3804](https://github.com/elsa-workflows/elsa-foundation/issues/3804)/[#3789](https://github.com/elsa-workflows/elsa-foundation/issues/3789) is out of this milestone. |
 | **SC-005** | Unauthorized / cross-tenant disclosure and read-only/source-owned editing. Spec 1184 / [#3650](https://github.com/elsa-workflows/elsa-foundation/issues/3650) remain open. **Not proved here.** Security behaviour is never implicitly deferred. |
 | **Narrow validated alteration** | Arbitrary alteration/live-instance migration stay out of scope (specs 1017/1006). The “narrowly validated alteration” in the #2892 BPMN journey has **no current-pin evidence** in this statement and **no owner deferral cited here**. **OPEN.** |
@@ -229,6 +229,25 @@ None that block this docs-only statement:
 
 Not claimed: a fresh `Legacy*` / Studio-family / FR-015 hosting re-run on `a9771131c`; G2.4 A2/B2; SC-005; pre-publication retention beyond grace; native admission-off.
 
+## 7. Live publication GC race (D1, 2026-11-11)
+
+Tests only. No production change. SQLite, one in-process host. Not PostgreSQL / SQL Server / MySQL, not multi-host, not the default Workbench GC pump (still off in `shells.json`). No duplicate of the #3988 interrupt-and-retry classification.
+
+**Retained claim:** an interrupted publish is retry-safe (historical [#3988](https://github.com/elsa-workflows/elsa-foundation/pull/3988): `InterruptedPublicationGcTests.Native_publish_interrupted_after_artifact_save_is_classified_against_host_grace_gc` and `BpmnDirectExecutionTests.Bpmn_publish_interrupted_after_model_save_is_classified_against_host_grace_gc`, SHA `9812e60f54`). **No retention guarantee before publication.** Limitation: [#4094](https://github.com/elsa-workflows/elsa-foundation/issues/4094).
+
+The added tests inject a grace-past GC sweep **in the same live publish** between the material save and the source-reference mint (reuse of the #3988 save-hook, without interrupt-and-retry). Asserted outcomes: clean refusal **or** a valid commit; never a committed definition/reference pointing at missing material.
+
+| Engine | Live-race outcome | Test | File | SHA |
+|---|---|---|---|---|
+| Native | **Race refused** (`WorkflowActivationException`). Failed journal candidate; no live source reference; slot empty; artifact collected. | `Native_live_publish_sweeps_unreferenced_material_between_save_and_reference_mint` | `Essentials/tests/Workflows/Publishing/Persistence/EntityFrameworkCore/Tests/InterruptedPublicationGcTests.cs` | `9a3c5fb7d0c93341fc1c8a31b4f4ebc6cb182f55` |
+| Direct BPMN | **Race refused** (`BpmnModelValidationException` at the post-save material read-back). No live source reference; artifact collected. | `Bpmn_live_publish_sweeps_unreferenced_material_between_save_and_reference_mint` | `Essentials/tests/Activities/Bpmn/Tests/BpmnDirectExecutionTests.InterruptedPublicationGc.cs` | `9a3c5fb7d0c93341fc1c8a31b4f4ebc6cb182f55` |
+
+**SHA:** `9a3c5fb7d0c93341fc1c8a31b4f4ebc6cb182f55` (this addendum's test/docs commit). Local run 2026-11-11: both tests passed on that tree.
+
+Native `RunSequenceAsync` still mints without re-reading the artifact. The live sweep is refused earlier: `WorkflowExecutableRootWriteLeaseManager.ExecuteAsync` loads the closure (`LoadClosureAsync`) before the mint; a missing artifact becomes `WorkflowActivationException`. `PublicationActivator` then fails the journal candidate. That is a clean refusal, not a dangling reference.
+
+BPMN's fenced re-read (`EfWorkflowExecutableSourceReferenceStore.RootWrites.cs:57–60`) was **not reached** in this injection window: sweeping from the save-hook makes `FindMaterialAsync` after `SaveModelAsync` fail first (`BpmnModelRuntime.PublishCoreAsync`). That is still a clean refusal on the live path. The fenced re-read remains a later gate on source.
+
 ## Out of scope (honoured)
 
-No production or test change. [#4038](https://github.com/elsa-workflows/elsa-foundation/issues/4038), ETL [#3804](https://github.com/elsa-workflows/elsa-foundation/issues/3804)/[#3789](https://github.com/elsa-workflows/elsa-foundation/issues/3789), [#3650](https://github.com/elsa-workflows/elsa-foundation/issues/3650), [#3204](https://github.com/elsa-workflows/elsa-foundation/issues/3204) untouched. No issue closed. No ApiCompat infrastructure added. `origin/main` at investigation included a later unrelated commit `ecf080a7a` (#4080); this statement is pinned to the green SHA above, not that commit.
+No production change. [#4038](https://github.com/elsa-workflows/elsa-foundation/issues/4038), ETL [#3804](https://github.com/elsa-workflows/elsa-foundation/issues/3804)/[#3789](https://github.com/elsa-workflows/elsa-foundation/issues/3789), [#3650](https://github.com/elsa-workflows/elsa-foundation/issues/3650), [#3204](https://github.com/elsa-workflows/elsa-foundation/issues/3204), [#3951](https://github.com/elsa-workflows/elsa-foundation/pull/3951) untouched. No issue closed. No ApiCompat infrastructure added. `origin/main` at investigation included a later unrelated commit `ecf080a7a` (#4080); this statement is pinned to the green SHA above, not that commit. The D1 live-race tests in §7 are additive on later main.
