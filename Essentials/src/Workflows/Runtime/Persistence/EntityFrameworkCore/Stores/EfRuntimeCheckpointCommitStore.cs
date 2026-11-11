@@ -250,12 +250,13 @@ public sealed class EfRuntimeCheckpointCommitStore(
         //
         // These commits read the marker first. A commit that carries an admission condition or a model decision:
         // its staging compares rows it does not write, and its failures leave as admission-unavailable, so its
-        // replay is answered before either. A commit on a context with pending changes: a failed attempt clears
+        // replay is answered before either. (A commit that names a model parent's wait always carries a model
+        // decision; EnsureModelParentAdmissionShape refused any other above.) A commit on a context with pending changes: a failed attempt clears
         // the tracker, which would drop what the caller staged. A commit on a context with an open transaction: an
         // attempt cannot begin a transaction of its own there, so it would only fail, after taking a root write
         // lease when the commit needs one.
         var readsMarkerFirst = commit.ExpectedBookmarkResume is not null || commit.ModelState is not null ||
-            commit.ExpectedModelExecution is not null || commit.ExpectedModelParentWait is not null ||
+            commit.ExpectedModelExecution is not null ||
             context.ChangeTracker.HasChanges() || context.Database.CurrentTransaction is not null ||
             context.Database.GetEnlistedTransaction() is not null || Transaction.Current is not null;
         if (readsMarkerFirst && await FindMarkerAsync(scope, commit.CommitId, cancellationToken) is { } existing)
