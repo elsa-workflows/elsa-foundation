@@ -84,6 +84,19 @@ export async function decisionsJourney(page: Page, info: TestInfo, capture: Capt
   await decisions.click();
   await expect(surface.locator("#decisions-title")).toHaveText("Decisions");
   await expect(surface.locator(".studio-skeleton-list")).toHaveCount(0); await part("decisions-list", surface.locator("#decisions-title"));
+  // The shared search shell draws the only border; the field inside it must not add a second one.
+  const search = surface.getByRole("searchbox", { name: "Search decisions", exact: true });
+  expect(await search.evaluate(element => { const style = getComputedStyle(element); return [style.borderTopWidth, style.backgroundColor, style.paddingLeft]; })).toEqual(["0px", "rgba(0, 0, 0, 0)", "0px"]);
+  expect(await search.evaluate(element => getComputedStyle(element.closest(".studio-search")!).borderTopWidth)).toBe("1px");
+  // Focused, the shell draws the one focus ring and the field draws none.
+  await search.focus();
+  expect(await search.evaluate(element => { const field = getComputedStyle(element); return [field.outlineStyle, field.boxShadow, getComputedStyle(element.closest(".studio-search")!).outlineStyle]; })).toEqual(["none", "none", "solid"]);
+  await part("decisions-search", search);
+  if ((info.project.use.viewport?.width ?? 0) >= 1440) {
+    const entry = page.getByRole("link", { name: "Decisions", exact: true });
+    if (!await entry.isVisible()) await page.getByRole("button", { name: /More tools/ }).click();
+    await expect(entry.locator("svg.lucide-scale")).toBeVisible();
+  }
   await button("New decision").click(); await expect(surface.getByRole("heading", { name: "New decision", exact: true })).toBeVisible();
   await expect(surface.getByText("Unsaved decision", { exact: true })).toBeVisible(); await expect(surface.getByText("Saved draft", { exact: true })).toHaveCount(0);
   await part("decision-create", surface.getByLabel("Name", { exact: true }));
@@ -160,4 +173,59 @@ export async function decisionsJourney(page: Page, info: TestInfo, capture: Capt
   expect(await table.evaluate(element => element.scrollWidth > element.clientWidth)).toBe(true);
   await table.evaluate(element => { element.scrollLeft = element.scrollWidth; }); await part("decision-table-320-scrolled", table);
   await info.attach("decision-identities", { body: JSON.stringify({ assetId: asset.id, versionId: published.id }), contentType: "application/json" });
+  await pickerShortcut(asset.id, `Approval policy ${suffix}`);
+
+  /**
+   * A workflow author starts a new decision from the Evaluate Decision picker, saves it in the tab that opens,
+   * and returns to the workflow with its unsaved pick intact and the new decision offered.
+   */
+  async function pickerShortcut(existingId: string, existingDecision: string) {
+    await page.setViewportSize(info.project.use.viewport ?? { width: 1440, height: 1000 });
+    async function api<T>(path: string, method = "GET", data?: unknown): Promise<T> {
+      const response = await page.request.fetch(`${backend}${path}`, { method, data }); const text = await response.text();
+      expect(response.ok(), `${method} ${path}: ${response.status()} ${text}`).toBe(true); return text ? JSON.parse(text) as T : undefined as T;
+    }
+    async function head(key: string) {
+      const result = await api<{ items: { definition: { activityTypeKey: string; headVersionId: string } }[] }>(`/design/activities/definitions?search=${encodeURIComponent(key)}`);
+      const entry = result.items.find(item => item.definition.activityTypeKey === key); expect(entry, key).toBeTruthy(); return entry!.definition.headVersionId;
+    }
+    const [sequence, evaluate] = await Promise.all([head("Elsa.Activities.Sequence.Activities.Sequence"), head("Elsa.Decisions.Workflows.Runtime.Activities.EvaluateDecision")]);
+    const workflowName = `Decision picker ${suffix}`;
+    const submitted = await api<{ definition: { id: string } }>("/design/workflows/definitions/submit", "POST", { name: workflowName,
+      state: { inputs: [], outputs: [], variables: [], rootActivity: { nodeId: "root", activityVersionId: sequence, inputs: [], outputs: [],
+        structure: { kind: "elsa.sequence.structure", schemaVersion: "1.0.0", payload: { activities: [{ nodeId: "decide", activityVersionId: evaluate, inputs: [], outputs: [] }] } } } } });
+    try {
+      await page.goto(`/workflows/definitions?definition=${submitted.definition.id}&backend=legacy`);
+      await expect(page.locator('.wf-sequence-step[data-id="decide"]')).toBeVisible();
+      // Autosave off, so the pick below stays an unsaved edit that only the open tab holds.
+      await page.getByRole("button", { name: "More workflow actions", exact: true }).click();
+      const autosave = page.getByRole("menuitemcheckbox", { name: /Autosave/ });
+      if (await autosave.getAttribute("aria-checked") === "true") await autosave.click();
+      await page.keyboard.press("Escape");
+      await page.locator('.wf-sequence-step[data-id="decide"]').press("Enter");
+      const picker = page.getByRole("combobox", { name: "Business decision", exact: true });
+      await expect(picker.locator("option", { hasText: existingDecision })).toHaveCount(1);
+      await picker.selectOption(existingId); await expect(picker).toHaveValue(existingId);
+      const shortcut = page.getByRole("button", { name: "New decision", exact: true });
+      await part("decision-picker", shortcut);
+      await shortcut.focus(); await page.keyboard.press("Enter");
+      const opened = page.getByRole("tablist", { name: "Open screens", exact: true }).getByRole("tab", { selected: true });
+      await expect(surface.getByRole("heading", { name: "New decision", exact: true })).toBeVisible();
+      await expect(surface.getByText("Unsaved decision", { exact: true })).toBeVisible();
+      await part("decision-picker-new-tab", surface.getByLabel("Name", { exact: true }));
+      expect(await opened.getAttribute("aria-label") ?? await opened.textContent()).not.toContain(workflowName);
+      const created = `Picker-created policy ${suffix}`;
+      await surface.getByLabel("Name", { exact: true }).fill(created); await save();
+      // Back on the workflow: its unsaved pick survived, and the list reloaded with the decision just saved.
+      await page.getByRole("tab", { name: new RegExp(`^${workflowName}`) }).click();
+      await expect(picker).toBeVisible(); await expect(picker).toHaveValue(existingId);
+      await expect(picker.locator("option", { hasText: created })).toHaveCount(1);
+      await part("decision-picker-returned", picker);
+    } catch (failure) {
+      // Clean up best-effort without letting a cleanup failure replace the journey's own error.
+      await page.request.delete(`${backend}/design/workflows/definitions/${submitted.definition.id}`).catch(() => undefined);
+      throw failure;
+    }
+    await api(`/design/workflows/definitions/${submitted.definition.id}`, "DELETE");
+  }
 }
