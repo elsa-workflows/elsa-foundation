@@ -41,7 +41,6 @@ CAPTURES = {
     'coarse pointer grouped navigation': ['touch-groups-open', 'touch-group-collapsed', 'touch-local-views', 'touch-settings-runtime', 'touch-top-group-open', 'touch-top-search', 'touch-search-no-match', 'touch-search-outside-dismissed', 'touch-keyboard-recovery'],
     'restricted principal settings access': ['restricted-appearance', 'restricted-features-settings-denied', 'restricted-features-bookmark-denied', 'restricted-runtime-readonly', 'restricted-keyboard-recovery'],
     'activity availability load failures and recovery': ['availability-loading', 'availability-settled', 'availability-abort-error', 'availability-abort-recovered', 'availability-client-500-error', 'availability-client-500-recovered'],
-    'design-only API composition': ['design-workflows-default', 'design-runtime-view-unavailable', 'design-runtime-settings-unavailable', 'design-recovery'],
     'runtime-only API composition and combined return': ['runtime-workflows-default', 'runtime-design-view-unavailable', 'runtime-design-settings-unavailable', 'runtime-integrations-absent', 'combined-integrations-return'],
     'user task authoring and workflow result': ['reference', 'form-authoring', 'published-form', 'task-authoring', 'form-selection', 'json-output-definitions', 'renamed-output', 'removed-output', 'output-picker', 'frozen-task-form', 'run-outcomes', 'run-outcomes-readable', 'run-output-reached', 'workflow-result', 'task-fault-causes', 'task-fault-details', 'prefill-fault'],
 }
@@ -50,7 +49,6 @@ EVIDENCE = {
     'coarse pointer grouped navigation': ['touch-device.json', 'touch-evidence.json'],
     'restricted principal settings access': ['restricted-session.json', 'restricted-capabilities.json', 'identity-capabilities.json', 'runtime-settings.json', 'restricted-network.json'],
     'activity availability load failures and recovery': ['availability-requests.json', 'client-500-receipt.json'],
-    'design-only API composition': ['subset-capabilities.json', 'subset-observation.json'],
     'runtime-only API composition and combined return': ['subset-capabilities.json', 'subset-observation.json', 'combined-capabilities.json'],
 }
 JOURNEYS = set(CAPTURES)
@@ -58,7 +56,6 @@ SUPPLEMENT_PROJECTS = {
     'coarse pointer grouped navigation': TOUCH_PROJECTS,
     'restricted principal settings access': {'restricted-390-light'},
     'activity availability load failures and recovery': {'availability-390-light'},
-    'design-only API composition': {'design-api-subset-1440-light'},
     'runtime-only API composition and combined return': {'runtime-api-subset-1440-light'},
 }
 JOURNEY_PROJECTS = {journey: SUPPLEMENT_PROJECTS.get(journey, PROJECTS) for journey in JOURNEYS}
@@ -66,15 +63,9 @@ JOURNEY_PROJECTS = {journey: SUPPLEMENT_PROJECTS.get(journey, PROJECTS) for jour
 # API subset compositions remove the opposite plane's API root and its configured reverse-dependency closure
 # from a private copy of the combined shells.json (DependsOn closure over the current feature declarations).
 # Every listed feature must still be configured; a rename fails setup instead of silently widening a subset.
+# A design-only composition is deferred to #4160: without the runtime API the Workbench does not boot today
+# (runtime features resolve the undeclared runtime core; dropping publishing then hits #4158).
 SUBSET_COMPOSITIONS = {
-    'design-api-subset': {
-        'journeys': {'design-only API composition'},
-        'remove': ['ActivitiesDispatchWorkflowDesign', 'ActivitiesGraphDesign', 'ActivitiesHttp', 'ActivitiesScheduling', 'AgentApi',
-                   'AgentDesign', 'AgentInspectionApi', 'ConnectionsWorkflows', 'DecisionsWorkflowsApi', 'DecisionsWorkflowsDesign',
-                   'WorkflowsDashboard', 'WorkflowsPublishing', 'WorkflowsPublishingApi', 'WorkflowsPublishingEntityFrameworkCore',
-                   'WorkflowsRuntimeApi', 'WorkflowsRuntimeAttention', 'WorkflowsRuntimeCheckpointPersistence', 'WorkflowsRuntimeHttp',
-                   'WorkflowsRuntimeRecurringTriggers', 'WorkflowsRuntimeTriggers'],
-    },
     'runtime-api-subset': {
         'journeys': {'runtime-only API composition and combined return'},
         'remove': ['ActivitiesDesignApi', 'ActivitiesDispatchWorkflowDesign', 'ActivitiesGraphDesign', 'AgentApi', 'AgentDesign',

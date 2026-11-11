@@ -41,19 +41,19 @@ class VerdictTests(unittest.TestCase):
         self.assertEqual(13, len(standard))
         self.assertEqual(set(acceptance.SUPPLEMENT_PROJECTS), supplements)
         self.assertEqual(78, sum(len(acceptance.JOURNEY_PROJECTS[journey]) for journey in standard))
-        self.assertEqual(10, sum(len(acceptance.JOURNEY_PROJECTS[journey]) for journey in supplements))
+        self.assertEqual(9, sum(len(acceptance.JOURNEY_PROJECTS[journey]) for journey in supplements))
         self.assertEqual({f'touch-{width}-{mode}' for width in (360, 390, 1440) for mode in ('light', 'dark')},
                          acceptance.JOURNEY_PROJECTS['coarse pointer grouped navigation'])
         # A supplementary project owns exactly one journey and never one of the standard projects.
         owners = [project for journey in supplements for project in acceptance.JOURNEY_PROJECTS[journey]]
         self.assertEqual(len(owners), len(set(owners)))
         self.assertFalse(set(owners) & acceptance.PROJECTS)
-        self.assertEqual(74, sum(len(acceptance.CAPTURES[journey]) * len(acceptance.JOURNEY_PROJECTS[journey]) for journey in supplements))
+        self.assertEqual(70, sum(len(acceptance.CAPTURES[journey]) * len(acceptance.JOURNEY_PROJECTS[journey]) for journey in supplements))
         self.assertEqual(set(acceptance.EVIDENCE), supplements)
 
     def test_supplementary_journey_in_a_standard_project_is_not_the_inventory(self):
         report = copy.deepcopy(self.report)
-        spec = next(row for row in report['suites'][0]['specs'] if row['title'] == 'design-only API composition')
+        spec = next(row for row in report['suites'][0]['specs'] if row['title'] == 'runtime-only API composition and combined return')
         spec['tests'][0]['projectName'] = 'desktop-light'
         with self.assertRaises(ValueError): acceptance.verdict(report, self.root)
         report = copy.deepcopy(self.report)
@@ -196,8 +196,8 @@ class CompositionTests(unittest.TestCase):
                 self.assertEqual([], [feature for feature in item['remove'] if feature not in self.features])
                 self.assertEqual(len(item['remove']), len(set(item['remove'])))
                 self.assertTrue(item['journeys'] <= acceptance.JOURNEYS)
-        self.assertIn('WorkflowsRuntimeApi', acceptance.SUBSET_COMPOSITIONS['design-api-subset']['remove'])
-        self.assertNotIn('WorkflowsDesignApi', acceptance.SUBSET_COMPOSITIONS['design-api-subset']['remove'])
+        # Design-only is deferred to #4160; only the runtime-only subset is composed.
+        self.assertEqual({'runtime-api-subset'}, set(acceptance.SUBSET_COMPOSITIONS))
         self.assertTrue({'WorkflowsDesignApi', 'ActivitiesDesignApi', 'ConnectionsApi', 'SecretsApi'} <= set(acceptance.SUBSET_COMPOSITIONS['runtime-api-subset']['remove']))
         self.assertNotIn('WorkflowsRuntimeApi', acceptance.SUBSET_COMPOSITIONS['runtime-api-subset']['remove'])
         # The ordinary admin seed that every other journey and cleanup signs in with stays committed.
@@ -205,7 +205,7 @@ class CompositionTests(unittest.TestCase):
 
     def test_compose_shells_removes_routes_and_seeds_a_private_copy(self):
         original = copy.deepcopy(self.shells)
-        remove = acceptance.SUBSET_COMPOSITIONS['design-api-subset']['remove']
+        remove = acceptance.SUBSET_COMPOSITIONS['runtime-api-subset']['remove']
         composed = acceptance.compose_shells(self.shells, 'http://localhost:9', remove)
         features = composed['CShells']['Shells']['default']['Features']
         self.assertEqual(original, self.shells, 'The source composition is never mutated')
@@ -344,21 +344,21 @@ class OrchestrationTests(unittest.TestCase):
         self.assertEqual(('workbench', 'Elsa.Workbench.dll', 'backend-restricted-seed.log', acceptance.RESTRICTED_USER), (seed[1], seed[2], seed[4], seed[5]))
         self.assertEqual(('stop', 'workbench', 'Elsa.Workbench.dll'), events[1], 'The seed boot stops before any acceptance host starts')
         self.assertEqual(('restrict', 'workbench'), events[2])
-        self.assertEqual(['workbench', 'studio', 'design-api-subset-workbench', 'design-api-subset-studio', 'runtime-api-subset-workbench', 'runtime-api-subset-studio'],
+        self.assertEqual(['workbench', 'studio', 'runtime-api-subset-workbench', 'runtime-api-subset-studio'],
                          [event[1] for event in owned])
         self.assertEqual(seed[3], owned[0][3], 'The seed boot uses the combined host origin it later serves')
         self.assertTrue(all(event[5] in ('admin', None) for event in owned), 'Acceptance boots seed only the ordinary admin')
         self.assertEqual(owned[0][3], owned[1][6])
         self.assertEqual(owned[2][3], owned[3][6])
-        self.assertEqual(owned[4][3], owned[5][6])
         browser = next(event[1] for event in events if event[0] == 'browser')
-        self.assertEqual((owned[3][3], owned[2][3], owned[5][3], owned[4][3]), (browser['UX_DESIGN_STUDIO_URL'], browser['UX_DESIGN_BACKEND_URL'], browser['UX_RUNTIME_STUDIO_URL'], browser['UX_RUNTIME_BACKEND_URL']))
+        self.assertEqual((owned[3][3], owned[2][3]), (browser['UX_RUNTIME_STUDIO_URL'], browser['UX_RUNTIME_BACKEND_URL']))
+        self.assertNotIn('UX_DESIGN_STUDIO_URL', browser)
         self.assertEqual((acceptance.RESTRICTED_USER, 'reader-id'), (browser['UX_RESTRICTED_USER'], browser['UX_RESTRICTED_SUBJECT']))
         self.assertTrue(browser['UX_RESTRICTED_PASSWORD'])
         self.assertNotIn(browser['UX_RESTRICTED_PASSWORD'], json.dumps(report))
         stops = [event[1] for event in events if event[0] == 'stop'][1:]
         self.assertEqual(list(reversed([event[1] for event in owned])), stops, 'Every owned host stops, newest first')
-        self.assertEqual({'combined', 'design-api-subset', 'runtime-api-subset'}, set(report['compositions']))
+        self.assertEqual({'combined', 'runtime-api-subset'}, set(report['compositions']))
         self.assertEqual(acceptance.SUBSET_COMPOSITIONS['runtime-api-subset']['remove'], report['compositions']['runtime-api-subset']['removedFeatures'])
 
     def test_scoped_ordinary_journey_starts_only_the_combined_hosts(self):

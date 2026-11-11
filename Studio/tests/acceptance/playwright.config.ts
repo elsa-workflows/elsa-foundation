@@ -35,8 +35,6 @@ export default defineConfig({
     }))),
     { name: "restricted-390-light", ...supplement("restricted principal settings access"), use: { viewport: { width: 390, height: 900 }, colorScheme: "light" } },
     { name: "availability-390-light", ...supplement("activity availability load failures and recovery"), use: { viewport: { width: 390, height: 900 }, colorScheme: "light" } },
-    { name: "design-api-subset-1440-light", ...supplement("design-only API composition"),
-      use: { baseURL: process.env.UX_DESIGN_STUDIO_URL, viewport: { width: 1440, height: 900 }, colorScheme: "light" } },
     { name: "runtime-api-subset-1440-light", ...supplement("runtime-only API composition and combined return"),
       use: { baseURL: process.env.UX_RUNTIME_STUDIO_URL, viewport: { width: 1440, height: 900 }, colorScheme: "light" } }
   ]

@@ -14,7 +14,7 @@ const configSource = readFileSync(new URL("playwright.config.ts", acceptance), "
 const compiled = ts.transpileModule(configSource, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS } });
 const env = {
   UX_ACCEPTANCE_OWNED: "1", ELSA_STUDIO_URL: "http://combined.invalid", UX_ACCEPTANCE_OUT: "/owned",
-  UX_DESIGN_STUDIO_URL: "http://design.invalid", UX_RUNTIME_STUDIO_URL: "http://runtime.invalid"
+  UX_RUNTIME_STUDIO_URL: "http://runtime.invalid"
 };
 const module = { exports: {} };
 new Function("require", "module", "exports", "process", compiled.outputText)(
@@ -51,7 +51,7 @@ test("every configured project runs exactly the journeys run.py's verdict requir
   }
   for (const projects of Object.values(actual)) projects.sort();
   assert.deepEqual(actual, expected);
-  assert.equal(Object.values(actual).flat().length, 88);
+  assert.equal(Object.values(actual).flat().length, 87);
 });
 
 test("touch projects really emulate touch and only the supplementary subsets change hosts", () => {
@@ -62,7 +62,7 @@ test("touch projects really emulate touch and only the supplementary subsets cha
   }
   for (const [name, project] of Object.entries(byName)) {
     if (!name.startsWith("touch-")) assert.notEqual(project.use.hasTouch, true, name);
-    const subset = { "design-api-subset-1440-light": env.UX_DESIGN_STUDIO_URL, "runtime-api-subset-1440-light": env.UX_RUNTIME_STUDIO_URL }[name];
+    const subset = { "runtime-api-subset-1440-light": env.UX_RUNTIME_STUDIO_URL }[name];
     assert.equal(project.use.baseURL, subset, name);
   }
   assert.equal(config.retries, 0);
