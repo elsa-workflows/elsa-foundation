@@ -33,8 +33,8 @@ Native controls, each a fresh session and turn:
 
 The packaged consumer cannot prune activity evidence (its in-memory runtime stores keep a Run's evidence for the process
 lifetime) and composes activity execution inspection as part of WorkflowsRuntimeApi, so a pruned execution and a backend
-without activity execution inspection are proven by WorkflowRunInspectionTests (Runtime API) and WorkflowRunAgentTests
-(Elsa.Agent.Workflows.Runtime.Tests); natively the Fault's state view is reported unavailable by reason and the Runtime-side
+without activity execution inspection are proven by WorkflowRunInspectionTests (Runtime API) and WorkflowRunWeaverTests
+(Elsa.Weaver.Workflows.Runtime.Tests); natively the Fault's state view is reported unavailable by reason and the Runtime-side
 deployment shape is deselected. The deselection reloads the shell, which empties the consumer's in-memory run stores, so it
 runs after the browser journey, last. The canary is searched, raw, in every disclosed payload, stream frame, adapter trace and
 retained evidence file of the case, and in the browser journey's own agent traffic. The Write Line writes its text to the
@@ -65,7 +65,7 @@ from explain_journeys import READ_FRAMES
 from authorization_journeys import select_command
 from inspection_journeys import (ADMISSION_REFUSAL, MUTATING_TOOLS, RUNTIME_AGENT_FEATURE, RUNTIME_DENIED, _completed, _frames, _kinds, _owned,
                                  _called_once, _offered, _refused_at_admission, _session, _without_feature, require_admissions, require_unchanged)
-from journey_runtime import BASE_GRANTS, same
+from journey_runtime import BASE_GRANTS, safe_browser_failure, same
 from owner_resources import owner_path, seed_faulted_run
 from runtime import RUNTIME_ENVIRONMENT, private_json
 from truth_seam_journeys import CAPABILITIES_READ, same_target
@@ -427,8 +427,17 @@ def _browser(runtime, name, seed, canary):
     offset = transport.trace_file.stat().st_size if transport.trace_file.exists() else 0
     node = shutil.which("node")
     check(node, "The actual browser driver needs Node")
-    runtime.run.run(name, [node, str(TOOL / "browser.mjs"), str(root / "config-private.json")], TOOL,
-                    env={key: value for key, value in os.environ.items() if key in RUNTIME_ENVIRONMENT})
+    try:
+        runtime.run.run(name, [node, str(TOOL / "browser.mjs"), str(root / "config-private.json")], TOOL,
+                        env={key: value for key, value in os.environ.items() if key in RUNTIME_ENVIRONMENT})
+    except RuntimeError:
+        try:
+            runtime.run.report["browserFailureDiagnostic"] = safe_browser_failure({
+                "failureDiagnostic": json.loads((output / "failure-diagnostic.json").read_text())})
+            runtime.run.save()
+        except Exception:
+            pass  # Optional diagnostics must never replace the original failed subprocess.
+        raise
     observation = output / "observation.json"
     observed = json.loads(observation.read_text())
     trace = transport.protocol_trace(offset)

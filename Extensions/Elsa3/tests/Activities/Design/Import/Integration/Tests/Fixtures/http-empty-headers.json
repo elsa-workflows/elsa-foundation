@@ -1,0 +1,115 @@
+{
+  "id": "http-empty-headers-v1",
+  "definitionId": "http-empty-headers",
+  "name": "http-empty-headers",
+  "description": "Test-owned flowchart (#3202): answers a POST to elsa3/empty-headers with status Created and the empty header map Elsa 3 saves.",
+  "createdAt": "1970-01-01T00:00:00Z",
+  "version": 1,
+  "toolVersion": "3.6.0",
+  "variables": [],
+  "inputs": [],
+  "outputs": [],
+  "outcomes": [],
+  "customProperties": {},
+  "isReadonly": false,
+  "isSystem": false,
+  "isLatest": true,
+  "isPublished": true,
+  "options": {
+    "usableAsActivity": false
+  },
+  "root": {
+    "id": "http-empty-headers-root",
+    "nodeId": "http-empty-headers-root",
+    "name": "http-empty-headers-root",
+    "type": "Elsa.Flowchart",
+    "version": 1,
+    "customProperties": {
+      "canStartWorkflow": false,
+      "runAsynchronously": false
+    },
+    "metadata": {},
+    "variables": [],
+    "activities": [
+      {
+        "id": "endpoint",
+        "nodeId": "endpoint",
+        "name": "endpoint",
+        "type": "Elsa.HttpEndpoint",
+        "version": 1,
+        "customProperties": {
+          "canStartWorkflow": true,
+          "runAsynchronously": false
+        },
+        "metadata": {},
+        "path": {
+          "typeName": "String",
+          "expression": {
+            "type": "Literal",
+            "value": "elsa3/empty-headers"
+          }
+        },
+        "supportedMethods": {
+          "typeName": "List<String>",
+          "expression": {
+            "type": "Object",
+            "value": "[\"POST\"]"
+          }
+        }
+      },
+      {
+        "id": "respond",
+        "nodeId": "respond",
+        "name": "respond",
+        "type": "Elsa.WriteHttpResponse",
+        "version": 1,
+        "customProperties": {
+          "canStartWorkflow": false,
+          "runAsynchronously": false
+        },
+        "metadata": {},
+        "content": {
+          "typeName": "String",
+          "expression": {
+            "type": "Literal",
+            "value": "Hello from http-empty-headers"
+          }
+        },
+        "contentType": {
+          "typeName": "String",
+          "expression": {
+            "type": "Literal",
+            "value": "text/plain"
+          }
+        },
+        "statusCode": {
+          "typeName": "System.Net.HttpStatusCode, System.Net.Primitives",
+          "expression": {
+            "type": "Literal",
+            "value": "Created"
+          }
+        },
+        "responseHeaders": {
+          "typeName": "HttpHeaders",
+          "expression": {
+            "type": "Literal",
+            "value": "{}"
+          }
+        }
+      }
+    ],
+    "connections": [
+      {
+        "source": {
+          "activity": "endpoint",
+          "port": "Done"
+        },
+        "target": {
+          "activity": "respond",
+          "port": "In"
+        },
+        "vertices": []
+      }
+    ]
+  }
+}

@@ -29,12 +29,26 @@ The illustration is decorative and the logo retains an empty alt beside the prod
 
 ## Parcel Room
 
-`parcel-room.jpg` is the default artwork. The owner selected the M2 felt-tip concept on
+`parcel-room.jpg` remains available as the M2 artwork. The owner selected the M2 felt-tip concept on
 4 November 2026: a warm illustrated sorting bench with branching paths for envelopes and parcels.
 An image-only derivative was produced with OpenAI's built-in imagegen tool, preserving the selected
 scene and removing the mock form, text and logo. The original generated PNG and extraction prompt
 remain in the session's design artifacts. This locally embedded 1254×1254 JPEG uses quality 82.
 
 The coordinated `parcel-room` layout and palette use white surfaces, a small standard Elsa logo,
-a restrained teal action and an uncropped illustration. These are the new options defaults;
+a restrained teal action and an uncropped illustration. These remain explicitly selectable;
 existing artwork, presentation choices and custom image/renderer overrides remain available.
+
+## Pocket Orchestra (P5)
+
+The owner selected P5 on 5 November 2026. `pocket-orchestra.jpg` is the default illustration:
+a quiet colored-pencil music room with instruments, plants and floating musical phrases.
+It uses the existing form-first `parcel-room` layout, the new light-only `pocket-orchestra`
+paper/teal palette, and the small standard Elsa mark. All earlier choices remain selectable.
+
+The built-in Image Gen tool extracted an illustration-only derivative from the approved
+P5 mockup, retaining its scene, paper texture and restrained blue/sage/ochre palette while
+removing the mock form, logo and UI lettering. The prompt asked for a complete, uncropped
+near-square scene with pale warm ivory edges (#faf8f5), with no new UI or branding.
+The original generated PNG remains in the session design artifacts. The embedded JPEG
+is 1254×1254, encoded at quality 88. Authentication actions remain real server-rendered HTML.

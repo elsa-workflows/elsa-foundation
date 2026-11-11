@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Threading.Channels;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.Executions;
@@ -163,6 +164,46 @@ public sealed partial class RuntimeInProcessAgentProviderTests
     }
 
     [Fact]
+    public async Task Cancellation_after_mailbox_acquisition_does_not_execute_or_consume_the_command()
+    {
+        var processor = new AdmissionCommandProcessor();
+        using var provider = new InProcessWorkflowExecutionActorProvider(processor);
+        var agent = await provider.GetAgentAsync(NewActivationRequest("wfexec-1"));
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var running = agent.EnqueueAsync(NewEnvelope(1), timeout.Token).AsTask();
+        await processor.Entered.Task.WaitAsync(timeout.Token);
+        using var cancelled = CancellationTokenSource.CreateLinkedTokenSource(timeout.Token);
+        using var continuations = new HeldAdmissionContext();
+        Task<WorkflowExecutionCommandDispatchResult> waiting;
+        var previous = SynchronizationContext.Current;
+        try
+        {
+            // Capture only this caller's await continuation, without changing the actor or semaphore.
+            SynchronizationContext.SetSynchronizationContext(continuations);
+            waiting = agent.EnqueueAsync(NewEnvelope(2), cancelled.Token).AsTask();
+        }
+        finally
+        {
+            SynchronizationContext.SetSynchronizationContext(previous);
+        }
+
+        processor.Release.TrySetResult();
+        await running.WaitAsync(timeout.Token);
+        // The mailbox has granted entry, but its continuation has not entered the executor yet.
+        await continuations.WaitForPostAsync(timeout.Token);
+        Assert.Equal(new[] { "envelope-1" }, processor.Executed.ToArray());
+        await cancelled.CancelAsync();
+        await continuations.ResumeUntilCompletedAsync(waiting, timeout.Token);
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => waiting);
+        Assert.Equal(new[] { "envelope-1" }, processor.Executed.ToArray());
+
+        // Cancellation must release the mailbox and leave the unprocessed idempotency key reusable.
+        Assert.Equal(WorkflowExecutionCommandDispatchStatus.Accepted,
+            (await agent.EnqueueAsync(NewEnvelope(2), timeout.Token)).Status);
+        Assert.Equal(new[] { "envelope-1", "envelope-2" }, processor.Executed.ToArray());
+    }
+
+    [Fact]
     public async Task A_redrive_still_waiting_for_the_mailbox_stops_quietly_when_the_provider_is_disposed()
     {
         var logger = new SignallingLogger();
@@ -181,7 +222,9 @@ public sealed partial class RuntimeInProcessAgentProviderTests
         // The withdrawn Cancel strands the yield and queues the re-drive; the provider is disposed before it can run.
         await waiterToken.CancelAsync();
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => waiting);
+        Assert.False(processor.Redriven.Task.IsCompleted);
         drain.Provider.Dispose();
+        Assert.False(processor.Redriven.Task.IsCompleted);
         processor.Gate.TrySetResult();
         await gated.WaitAsync(timeout.Token);
 
@@ -381,6 +424,47 @@ public sealed partial class RuntimeInProcessAgentProviderTests
         return new(id, "wfexec-1",
             new(id, "wfexec-1", WorkflowExecutionCommandKind.Cancel, now, null, new Dictionary<string, string>()),
             idempotencyKey, WorkflowExecutionCommandDeliveryMode.AtLeastOnce, now);
+    }
+
+    private sealed class AdmissionCommandProcessor : IWorkflowExecutionCommandExecutor
+    {
+        public TaskCompletionSource Entered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource Release { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public ConcurrentQueue<string> Executed { get; } = new();
+
+        public async ValueTask<WorkflowExecutionCommandProcessResult> ProcessAsync(WorkflowExecutionCommandEnvelope envelope, CancellationToken cancellationToken = default)
+        {
+            if (envelope.EnvelopeId == "envelope-1")
+            {
+                Entered.TrySetResult();
+                await Release.Task.WaitAsync(cancellationToken);
+            }
+            Executed.Enqueue(envelope.EnvelopeId);
+            return WorkflowExecutionCommandProcessResult.NoDrain;
+        }
+    }
+
+    private sealed class HeldAdmissionContext : SynchronizationContext, IDisposable
+    {
+        private readonly Channel<(SendOrPostCallback Callback, object? State)> callbacks =
+            Channel.CreateUnbounded<(SendOrPostCallback, object?)>();
+
+        public override void Post(SendOrPostCallback callback, object? state) => callbacks.Writer.TryWrite((callback, state));
+
+        public async Task WaitForPostAsync(CancellationToken cancellationToken) =>
+            Assert.True(await callbacks.Reader.WaitToReadAsync(cancellationToken));
+
+        public async Task ResumeUntilCompletedAsync(Task task, CancellationToken cancellationToken)
+        {
+            while (!task.IsCompleted)
+            {
+                await Task.WhenAny(task, callbacks.Reader.WaitToReadAsync(cancellationToken).AsTask()).WaitAsync(cancellationToken);
+                while (callbacks.Reader.TryRead(out var callback))
+                    callback.Callback(callback.State);
+            }
+        }
+
+        public void Dispose() => callbacks.Writer.TryComplete();
     }
 
     private sealed class SignallingLogger : ILogger

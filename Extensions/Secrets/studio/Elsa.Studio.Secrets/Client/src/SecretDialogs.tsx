@@ -97,25 +97,25 @@ export function CreateSecretForm({ descriptors, scopeCatalogLoading = false, sco
       storageCount={[scope, expiresAt, storeName !== defaultStoreNameForType(descriptors, typeName)].filter(Boolean).length}
       storageNeedsAttention={scopeCatalogError || !compatible || invalidField === "store" || invalidField === "expires"}>
       {{ secret: <>
-        <div className="secrets-editor-grid"><SecretFormField label="Technical name" value={name} disabled={submitting}
+        <div className="secrets-editor-grid"><SecretFormField label="Technical name" disabled={submitting}
           hint="Casing is preserved; names are matched case-insensitively. Use letters, numbers, dot, dash, underscore, or colon."
           error={nameInvalid ? "Use letters, numbers, dot, dash, underscore, or colon." : fieldError("name")}>
-          {attributes => <input {...attributes} data-secret-field="name" data-dialog-initial-focus value={name} placeholder=" " autoComplete="off" onChange={event => setName(event.target.value)} onBlur={() => setName(trimmedName)} />}
+          {attributes => <input {...attributes} data-secret-field="name" data-dialog-initial-focus value={name} autoComplete="off" onChange={event => setName(event.target.value)} onBlur={() => setName(trimmedName)} />}
         </SecretFormField>
-          <SecretFormField label="Type" value={typeName} raised disabled={submitting} error={fieldError("type")}>
+          <SecretFormField label="Type" disabled={submitting} error={fieldError("type")}>
           {attributes => <select {...attributes} data-secret-field="type" value={typeName} onChange={event => { const next = event.target.value; setTypeName(next); setStoreName(defaultStoreNameForType(descriptors, next)); }}>
             {descriptors.types.map(type => <option key={type.name} value={type.name}>{type.displayName || type.name}</option>)}
           </select>}
           </SecretFormField></div>
-        {usesConfigurationKey ? <CompactTextField label="Configuration key" value={configurationKey} onChange={setConfigurationKey} autoComplete="off" field="configuration" disabled={submitting} error={fieldError("configuration")} />
+        {usesConfigurationKey ? <CompactTextField label="Configuration key" value={configurationKey} onChange={setConfigurationKey} autoComplete="off" field="configuration" disabled={submitting} error={fieldError("configuration")} hint={typeName === "text" ? undefined : selectedType?.description ?? undefined} />
           : <SecretValueField key={typeName} label="Value" value={value} typeName={typeName} editorHint={selectedType?.editorHint ?? null} onChange={setValue} compact disabled={submitting} error={fieldError("value")} hint={typeName === "text" ? undefined : selectedType?.description ?? undefined} />}
       </>, details: <>
         <div className="secrets-editor-grid"><CompactTextField label="Display name" value={displayName} onChange={setDisplayName} disabled={submitting} /><CompactTextField label="Tags" value={tags} onChange={setTags} hint="Separate tags with commas." disabled={submitting} /></div>
-        <SecretFormField label="Description" controlId={descriptionInputId} value={description} raised disabled={submitting}>
+        <SecretFormField label="Description" controlId={descriptionInputId} disabled={submitting}>
           {attributes => <textarea {...attributes} value={description} onChange={event => setDescription(event.target.value)} rows={3} />}
         </SecretFormField>
       </>, storage: <>
-        {supportedStores.length > 0 && (supportedStores.length > 1 || !compatible) ? <SecretFormField label="Store" value={storeName} raised disabled={submitting} error={fieldError("store")}>
+        {supportedStores.length > 0 && (supportedStores.length > 1 || !compatible) ? <SecretFormField label="Store" disabled={submitting} error={fieldError("store")}>
           {attributes => <select {...attributes} data-secret-field="store" value={storeName} onChange={event => setStoreName(event.target.value)}>
           {!compatible ? <option value={storeName} disabled>{storeName || "Selected store"} (unavailable)</option> : null}
           {supportedStores.map(store => <option key={store.name} value={store.name}>{store.displayName || store.name}</option>)}
@@ -126,7 +126,7 @@ export function CreateSecretForm({ descriptors, scopeCatalogLoading = false, sco
         {(scopeCatalogError || !compatible) && onRetryScopeCatalog ? <StudioButton data-secret-field={!compatible ? "store" : undefined} onClick={onRetryScopeCatalog} disabled={scopeCatalogLoading}>Retry secret options</StudioButton> : null}
         <SecretScopePicker value={scope} options={descriptors.scopes} loading={scopeCatalogLoading} error={scopeCatalogError} onChange={setScope} onRetry={onRetryScopeCatalog} externalMatchingHintId={scopeMatchingHintId} compact disabled={submitting} />
         <ScopeMatchingHint id={scopeMatchingHintId} concise />
-        <SecretFormField label="Expires" value={expiresAt} raised disabled={submitting} error={fieldError("expires")}>
+        <SecretFormField label="Expires" disabled={submitting} error={fieldError("expires")}>
           {attributes => <input {...attributes} data-secret-field="expires" type="datetime-local" value={expiresAt} onChange={event => setExpiresAt(event.target.value)} />}
         </SecretFormField>
       </> }}
@@ -233,8 +233,8 @@ function Field({
 function CompactTextField({ label, value, onChange, hint, disabled, autoComplete, field, error }: {
   label: string; value: string; onChange(value: string): void; hint?: React.ReactNode; disabled?: boolean; autoComplete?: string; field?: string; error?: React.ReactNode;
 }) {
-  return <SecretFormField label={label} value={value} hint={hint} error={error} disabled={disabled}>
-    {attributes => <input {...attributes} data-secret-field={field} value={value} placeholder=" " autoComplete={autoComplete} onChange={event => onChange(event.target.value)} />}
+  return <SecretFormField label={label} hint={hint} error={error} disabled={disabled}>
+    {attributes => <input {...attributes} data-secret-field={field} value={value} autoComplete={autoComplete} onChange={event => onChange(event.target.value)} />}
   </SecretFormField>;
 }
 
@@ -246,13 +246,13 @@ function SecretValueField({ label, value, typeName, editorHint, onChange, compac
   const [visible, setVisible] = useState(false);
   const multiline = editorHint === "multiline" || typeName === "rsa-key" || typeName === "x509-certificate";
   if (compact) {
-    const toggle = multiline ? undefined : <button type="button" disabled={disabled} aria-label={visible ? "Hide value" : "Show value"} aria-pressed={visible} aria-controls={inputId} onClick={() => setVisible(current => !current)}>
+    const toggle = multiline ? undefined : <button type="button" disabled={disabled} aria-label={visible ? "Hide value" : "Show value"} aria-pressed={visible} aria-controls={inputId} title={visible ? "Hide value" : "Show value"} onClick={() => setVisible(current => !current)}>
       {visible ? <EyeOff size={16} aria-hidden="true" /> : <Eye size={16} aria-hidden="true" />}
     </button>;
-    return <SecretFormField label={label} controlId={inputId} value={value} hint={hint} error={error} raised={multiline} disabled={disabled} trailing={toggle}>
+    return <SecretFormField label={label} controlId={inputId} hint={hint} error={error} disabled={disabled} trailing={toggle}>
       {attributes => multiline
         ? <textarea {...attributes} data-secret-field="value" value={value} rows={6} autoComplete="new-password" spellCheck={false} onChange={event => onChange(event.target.value)} />
-        : <input {...attributes} data-secret-field="value" type={visible ? "text" : "password"} value={value} placeholder=" " autoComplete="new-password" spellCheck={false} onChange={event => onChange(event.target.value)} />}
+        : <input {...attributes} data-secret-field="value" type={visible ? "text" : "password"} value={value} autoComplete="new-password" spellCheck={false} onChange={event => onChange(event.target.value)} />}
     </SecretFormField>;
   }
   return (

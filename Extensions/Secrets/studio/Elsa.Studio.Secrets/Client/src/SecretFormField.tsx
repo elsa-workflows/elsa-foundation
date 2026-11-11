@@ -7,17 +7,18 @@ type ControlAttributes = {
   disabled?: boolean;
 };
 
-/** Module-local prototype. Exercise the contract here before promoting it to Studio UI. */
+/**
+ * Outlined Secret dialog field: one native control with a persistent label set into its border,
+ * and a single hint or error associated with the control. Module-local until another module needs it.
+ */
 export function SecretFormField({
-  label, value, hint, error, disabled, raised = false, trailing, controlId, children
+  label, hint, error, disabled, trailing, controlId, children
 }: {
   controlId?: string;
   label: string;
-  value: string;
   hint?: React.ReactNode;
   error?: React.ReactNode;
   disabled?: boolean;
-  raised?: boolean;
   trailing?: React.ReactNode;
   children(attributes: ControlAttributes): React.ReactNode;
 }) {
@@ -25,7 +26,7 @@ export function SecretFormField({
   const id = controlId ?? generatedId;
   const descriptionId = hint || error ? `${id}-help` : undefined;
   return (
-    <div className="secrets-compact-field" data-raised={raised || value.length > 0} data-invalid={!!error} data-disabled={!!disabled} data-long-label={label.length > 44}>
+    <div className="secrets-compact-field" data-invalid={!!error} data-disabled={!!disabled}>
       <div className={`secrets-compact-control${trailing ? " secrets-value-input" : ""}`} data-trailing={!!trailing}>
         {children({ id, "aria-describedby": descriptionId, "aria-invalid": error ? true : undefined, disabled })}
         <label htmlFor={id}>{label}</label>

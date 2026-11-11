@@ -17,6 +17,22 @@ describe("parseValidationErrorPath", () => {
     });
   });
 
+  it("parses Evaluate Decision input and pin paths used by the canvas footer", () => {
+    expect(parseValidationErrorPath("eval-1/inputs/Inputs")).toEqual({
+      nodeId: "eval-1",
+      isWorkflowScope: false,
+      bag: "inputs",
+      referenceKey: "Inputs"
+    });
+    expect(parseValidationErrorPath("eval-1/inputs/Decision")).toEqual({
+      nodeId: "eval-1",
+      isWorkflowScope: false,
+      bag: "inputs",
+      referenceKey: "Decision"
+    });
+    expect(parseValidationErrorPath("eval-1/Inputs")).toMatchObject({ bag: null, referenceKey: null });
+  });
+
   it("parses a workflow variable path", () => {
     expect(parseValidationErrorPath("$workflow/variables/Count")).toEqual({
       nodeId: null,

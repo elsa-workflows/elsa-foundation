@@ -98,8 +98,8 @@ export function SecretScopePicker({
         ) : null}
       </div>
       {searchable ? compact ? (
-        <SecretFormField label="Search scopes" value={search} disabled={disabled}>
-          {attributes => <input {...attributes} type="search" value={search} placeholder=" " autoComplete="off" onChange={event => setSearch(event.target.value)} />}
+        <SecretFormField label="Search scopes" disabled={disabled}>
+          {attributes => <input {...attributes} type="search" value={search} autoComplete="off" onChange={event => setSearch(event.target.value)} />}
         </SecretFormField>
       ) : (
         <label htmlFor={`scope-search-${id}`}>
@@ -107,12 +107,12 @@ export function SecretScopePicker({
           <input id={`scope-search-${id}`} type="search" value={search} disabled={disabled} onChange={event => setSearch(event.target.value)} placeholder="Search suggested scopes" autoComplete="off" />
         </label>
       ) : null}
-      {compact ? <SecretFormField label="Scope" controlId={`scope-select-${id}`} value={selectValue} raised disabled={disabled}>
+      {compact ? <SecretFormField label="Scope" controlId={`scope-select-${id}`} disabled={disabled}>
         {attributes => renderSelect(attributes)}
       </SecretFormField> : renderSelect({ id: `scope-select-${id}` })}
       {isCustom ? compact ? (
-        <SecretFormField label="Custom scope value" controlId={`scope-custom-${id}`} value={value} disabled={disabled}>
-          {attributes => <input {...attributes} value={value} aria-describedby={describedBy} placeholder=" " autoComplete="off" onChange={event => onChange(event.target.value)} />}
+        <SecretFormField label="Custom scope value" controlId={`scope-custom-${id}`} disabled={disabled}>
+          {attributes => <input {...attributes} value={value} aria-describedby={describedBy} autoComplete="off" onChange={event => onChange(event.target.value)} />}
         </SecretFormField>
       ) : (
         <label htmlFor={`scope-custom-${id}`}>

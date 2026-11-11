@@ -130,6 +130,40 @@ describe("Create dialog regression contract", () => {
     expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ name: "DbConnectionString", displayName: "DbConnectionString" }));
   });
 
+  it("disables field editing while pending and restores the draft after a failed save", async () => {
+    let rejectSave!: (error: Error) => void;
+    const { container, onSave } = renderDialog("create");
+    onSave.mockImplementation(() => new Promise<void>((_resolve, reject) => { rejectSave = reject; }));
+    const name = fieldControl<HTMLInputElement>(container, "Technical name");
+    const value = fieldControl<HTMLInputElement>(container, "Value");
+    change(name, "DbConnectionString");
+    change(value, "demonstration-value");
+    flushSync(() => container.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ name: "DbConnectionString", displayName: "DbConnectionString" }));
+    expect(name.disabled).toBe(true);
+    expect(value.disabled).toBe(true);
+    rejectSave(new Error("Demonstration failure"));
+    await waitFor(() => {
+      const alert = container.querySelector("[role='alert']");
+      expect(alert?.textContent).toBe("Demonstration failure");
+      expect(document.activeElement).toBe(alert);
+      expect(name.disabled).toBe(false);
+      expect(value.disabled).toBe(false);
+    });
+    expect(name.value).toBe("DbConnectionString");
+    expect(value.value).toBe("demonstration-value");
+  });
+
+  it("keeps a non-text type's description with Configuration key", () => {
+    const described: SecretDescriptorsResponse = {
+      ...configurableDescriptors,
+      types: [{ name: "json", displayName: "JSON", supportedStoreNames: ["configuration", "encrypted"], description: "Fixture type description." }]
+    };
+    const { container } = renderDialog("create", { descriptors: described });
+    const key = fieldControl<HTMLInputElement>(container, "Configuration key");
+    expect(document.getElementById(key.getAttribute("aria-describedby")!)?.textContent).toBe("Fixture type description.");
+  });
+
   it("uses descriptor defaults, hides a sole Store and focuses missing Value before sending the exact request", () => {
     const fetch = vi.fn(); vi.stubGlobal("fetch", fetch);
     const { container, onSave } = renderDialog("create");

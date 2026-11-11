@@ -25,6 +25,7 @@
     <ProjectReference Include="..\..\..\..\..\..\src\Activities\Design\Import\Elsa3.Activities.Design.Import\Elsa3.Activities.Design.Import.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Activities\Design\Import\Persistence\EntityFrameworkCore\Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Activities\Design\Import\Publishing\Elsa3.Activities.Design.Import.Publishing.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\src\Activities\Design\Import\Reconciliation\Elsa3.Activities.Design.Import.Reconciliation.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Mapping\Elsa3.Mapping.csproj" />
     <!-- The host's composition: the features its one shell enables, by assembly. -->
     <ProjectReference Include="..\..\..\..\..\..\..\..\Essentials\src\Activities\Http\Elsa.Activities.Http.csproj" />

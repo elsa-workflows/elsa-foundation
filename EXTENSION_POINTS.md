@@ -89,26 +89,26 @@ not automatic constitution violations.
 
 | Domain | Catalog |
 |---|---|
-| Agent foundation (sessions, policy, context, proposals, provider facade, audit, session record store and durable recovery) | [`Extensions/Agent/src/Elsa.Agent/EXTENSION_POINTS.md`](Extensions/Agent/src/Elsa.Agent/EXTENSION_POINTS.md) |
-| Agent EF session record store and durable audit (opt-in Weaver recovery) | [`Extensions/Agent/src/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md`](Extensions/Agent/src/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md) |
-| Specialist model providers | [`Extensions/Agent/src/Specialists/Core/EXTENSION_POINTS.md`](Extensions/Agent/src/Specialists/Core/EXTENSION_POINTS.md) |
-| Connection-backed specialist model contributors | [`Extensions/Agent/src/Specialists/Connections/EXTENSION_POINTS.md`](Extensions/Agent/src/Specialists/Connections/EXTENSION_POINTS.md) |
-| Specialist EF turn journal | [`Extensions/Agent/src/Specialists/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md`](Extensions/Agent/src/Specialists/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md) |
-| Anthropic specialist connections | [`Extensions/Agent/src/Specialists/Anthropic/EXTENSION_POINTS.md`](Extensions/Agent/src/Specialists/Anthropic/EXTENSION_POINTS.md) |
-| Azure OpenAI specialist connections | [`Extensions/Agent/src/Specialists/AzureOpenAI/EXTENSION_POINTS.md`](Extensions/Agent/src/Specialists/AzureOpenAI/EXTENSION_POINTS.md) |
-| OpenAI specialist connections | [`Extensions/Agent/src/Specialists/OpenAI/EXTENSION_POINTS.md`](Extensions/Agent/src/Specialists/OpenAI/EXTENSION_POINTS.md) |
-| Specialist authoring and immutable compilation | [`Extensions/Agent/src/Specialists/Design/EXTENSION_POINTS.md`](Extensions/Agent/src/Specialists/Design/EXTENSION_POINTS.md) |
-| Specialist native execution | [`Extensions/Agent/src/Specialists/Elsa.Agent.Specialists/EXTENSION_POINTS.md`](Extensions/Agent/src/Specialists/Elsa.Agent.Specialists/EXTENSION_POINTS.md) |
-| Specialist human review of agent output | [`Extensions/Agent/src/Specialists/Review/Elsa.Agent.Specialists.Review/EXTENSION_POINTS.md`](Extensions/Agent/src/Specialists/Review/Elsa.Agent.Specialists.Review/EXTENSION_POINTS.md) |
-| Specialist human review API | [`Extensions/Agent/src/Specialists/Review/Api/EXTENSION_POINTS.md`](Extensions/Agent/src/Specialists/Review/Api/EXTENSION_POINTS.md) |
-| Specialist authoring API | [`Extensions/Agent/src/Specialists/Api/EXTENSION_POINTS.md`](Extensions/Agent/src/Specialists/Api/EXTENSION_POINTS.md) |
-| Specialist inspection API | [`Extensions/Agent/src/Specialists/Inspection/Api/EXTENSION_POINTS.md`](Extensions/Agent/src/Specialists/Inspection/Api/EXTENSION_POINTS.md) |
+| Weaver foundation (sessions, policy, context, proposals, provider facade, audit, session record store and durable recovery) | [`Extensions/Weaver/src/Elsa.Weaver/EXTENSION_POINTS.md`](Extensions/Weaver/src/Elsa.Weaver/EXTENSION_POINTS.md) |
+| Weaver EF session record store and durable audit (opt-in Weaver recovery) | [`Extensions/Weaver/src/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md`](Extensions/Weaver/src/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md) |
+| Agent model providers | [`Extensions/Agent/src/Core/EXTENSION_POINTS.md`](Extensions/Agent/src/Core/EXTENSION_POINTS.md) |
+| Connection-backed agent model contributors | [`Extensions/Agent/src/Connections/EXTENSION_POINTS.md`](Extensions/Agent/src/Connections/EXTENSION_POINTS.md) |
+| Agent EF turn journal | [`Extensions/Agent/src/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md`](Extensions/Agent/src/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md) |
+| Anthropic agent connections | [`Extensions/Agent/src/Anthropic/EXTENSION_POINTS.md`](Extensions/Agent/src/Anthropic/EXTENSION_POINTS.md) |
+| Azure OpenAI agent connections | [`Extensions/Agent/src/AzureOpenAI/EXTENSION_POINTS.md`](Extensions/Agent/src/AzureOpenAI/EXTENSION_POINTS.md) |
+| OpenAI agent connections | [`Extensions/Agent/src/OpenAI/EXTENSION_POINTS.md`](Extensions/Agent/src/OpenAI/EXTENSION_POINTS.md) |
+| Agent authoring and immutable compilation | [`Extensions/Agent/src/Design/EXTENSION_POINTS.md`](Extensions/Agent/src/Design/EXTENSION_POINTS.md) |
+| Agent native execution | [`Extensions/Agent/src/Elsa.Agent/EXTENSION_POINTS.md`](Extensions/Agent/src/Elsa.Agent/EXTENSION_POINTS.md) |
+| Human review of agent output | [`Extensions/Agent/src/Review/Elsa.Agent.Review/EXTENSION_POINTS.md`](Extensions/Agent/src/Review/Elsa.Agent.Review/EXTENSION_POINTS.md) |
+| Agent human review API | [`Extensions/Agent/src/Review/Api/EXTENSION_POINTS.md`](Extensions/Agent/src/Review/Api/EXTENSION_POINTS.md) |
+| Agent authoring API | [`Extensions/Agent/src/Api/EXTENSION_POINTS.md`](Extensions/Agent/src/Api/EXTENSION_POINTS.md) |
+| Agent inspection API | [`Extensions/Agent/src/Inspection/Api/EXTENSION_POINTS.md`](Extensions/Agent/src/Inspection/Api/EXTENSION_POINTS.md) |
 | Foundation Identity (authentication providers, IAM contracts, permissions, ownership capabilities) | [`Essentials/src/Foundation/Identity/Core/EXTENSION_POINTS.md`](Essentials/src/Foundation/Identity/Core/EXTENSION_POINTS.md) |
 | Foundation Identity ASP.NET Core Identity EF adapter (opt-in framework stores, authentication, session invalidation, and seeding over the shared EF authority) | [`Essentials/src/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore/EXTENSION_POINTS.md`](Essentials/src/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore/EXTENSION_POINTS.md) |
 | Foundation Identity EF persistence (opt-in complete IAM authority and provider-configuration backend; OpenIddict boundary) | [`Essentials/src/Foundation/Identity/Persistence/EntityFrameworkCore/README.md`](Essentials/src/Foundation/Identity/Persistence/EntityFrameworkCore/README.md) |
 | Foundation Data Protection (the host's key ring: fixed application name, opt-in EF key store, certificate at rest, startup warnings) | [`Essentials/src/Foundation/DataProtection/EntityFrameworkCore/EXTENSION_POINTS.md`](Essentials/src/Foundation/DataProtection/EntityFrameworkCore/EXTENSION_POINTS.md) |
-| Workflow Agent (bounded graph explanation and reviewed designer position changes; broader authoring/troubleshooting tracked in #3442) | [`Extensions/Agent/src/Workflows/Elsa.Agent.Workflows/EXTENSION_POINTS.md`](Extensions/Agent/src/Workflows/Elsa.Agent.Workflows/EXTENSION_POINTS.md) |
-| Workflow Runtime Agent (read-only Executable and Run context and tools, Runtime-side; spec 1193 slices F and G) | [`Extensions/Agent/src/Workflows/Runtime/EXTENSION_POINTS.md`](Extensions/Agent/src/Workflows/Runtime/EXTENSION_POINTS.md) |
+| Weaver workflow agent (bounded graph explanation and reviewed designer position changes; broader authoring/troubleshooting tracked in #3442) | [`Extensions/Weaver/src/Workflows/Elsa.Weaver.Workflows/EXTENSION_POINTS.md`](Extensions/Weaver/src/Workflows/Elsa.Weaver.Workflows/EXTENSION_POINTS.md) |
+| Weaver workflow runtime agent (read-only Executable and Run context and tools, Runtime-side; spec 1193 slices F and G) | [`Extensions/Weaver/src/Workflows/Runtime/EXTENSION_POINTS.md`](Extensions/Weaver/src/Workflows/Runtime/EXTENSION_POINTS.md) |
 
 ### Integrations
 
@@ -164,7 +164,7 @@ not automatic constitution violations.
 | Activities design — CLR reconciliation source contribution | [`Essentials/src/Activities/Design/Reconciliation/Clr/EXTENSION_POINTS.md`](Essentials/src/Activities/Design/Reconciliation/Clr/EXTENSION_POINTS.md) |
 | Activities design — JSON reconciliation source contribution | [`Essentials/src/Activities/Design/Reconciliation/Json/EXTENSION_POINTS.md`](Essentials/src/Activities/Design/Reconciliation/Json/EXTENSION_POINTS.md) |
 | Activities design — persistence replacement (Entity Framework Core) | [`Essentials/src/Activities/Design/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md`](Essentials/src/Activities/Design/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md) |
-| Activities design API — catalog and availability services | [`Essentials/src/Activities/Design/Api/EXTENSION_POINTS.md`](Essentials/src/Activities/Design/Api/EXTENSION_POINTS.md) |
+| Activities design API — catalog, availability and static public provider diagnostics | [`Essentials/src/Activities/Design/Api/EXTENSION_POINTS.md`](Essentials/src/Activities/Design/Api/EXTENSION_POINTS.md) |
 | Activities graph design — authoring provider, compiler, dependency discovery, and reference rewriting | [`Essentials/src/Activities/Graph/Design/EXTENSION_POINTS.md`](Essentials/src/Activities/Graph/Design/EXTENSION_POINTS.md) |
 | Activities graph runtime — compiled graph activity consumer and transient activation | [`Essentials/src/Activities/Graph/Runtime/EXTENSION_POINTS.md`](Essentials/src/Activities/Graph/Runtime/EXTENSION_POINTS.md) |
 | Activities BPMN (released-semantics host adapter, direct model hosting and native RunBpmn) | [`Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/EXTENSION_POINTS.md`](Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/EXTENSION_POINTS.md) |
@@ -208,12 +208,26 @@ not automatic constitution violations.
 | Authoring API operations and host composition | [`Extensions/Etl/src/Design/Api/EXTENSION_POINTS.md`](Extensions/Etl/src/Design/Api/EXTENSION_POINTS.md) |
 | Studio authoring, inspection and published selection | [`Extensions/Etl/studio/Elsa.Studio.Etl/EXTENSION_POINTS.md`](Extensions/Etl/studio/Elsa.Studio.Etl/EXTENSION_POINTS.md) |
 
+### Decisions
+
+| Domain | Catalog |
+|---|---|
+| Decision compilation and evaluation | [Decisions evaluator](Extensions/Decisions/src/Elsa.Decisions/EXTENSION_POINTS.md) |
+| Decision persistence ports | [Decisions persistence](Extensions/Decisions/src/Persistence/Core/EXTENSION_POINTS.md) |
+| Decision authoring and completed tests | [Decisions design](Extensions/Decisions/src/Design/EXTENSION_POINTS.md) |
+| Decision API and permission contributions | [Decisions API](Extensions/Decisions/src/Api/EXTENSION_POINTS.md) |
+| Workflow publication | [Decisions workflow design](Extensions/Decisions/src/Workflows/Design/EXTENSION_POINTS.md) |
+| Workflow execution authority | [Decisions workflow runtime](Extensions/Decisions/src/Workflows/Runtime/EXTENSION_POINTS.md) |
+| Workflow disclosure | [Decisions workflow API](Extensions/Decisions/src/Workflows/Api/EXTENSION_POINTS.md) |
+| Studio authoring and version selection | [Decisions Studio](Extensions/Decisions/studio/Elsa.Studio.Decisions/EXTENSION_POINTS.md) |
+
 ### Legacy
 
 | Domain | Catalog |
 |---|---|
 | Elsa3 activities import (JSON source for legacy activity definitions) | [`Extensions/Elsa3/src/Activities/Design/Import/Elsa3.Activities.Design.Import/EXTENSION_POINTS.md`](Extensions/Elsa3/src/Activities/Design/Import/Elsa3.Activities.Design.Import/EXTENSION_POINTS.md) |
 | Elsa3 activities import publishing (adapter to the activity publisher) | [`Extensions/Elsa3/src/Activities/Design/Import/Publishing/EXTENSION_POINTS.md`](Extensions/Elsa3/src/Activities/Design/Import/Publishing/EXTENSION_POINTS.md) |
+| Elsa3 JSON reconciliation (folder import at engine start) | [`Extensions/Elsa3/src/Activities/Design/Import/Reconciliation/EXTENSION_POINTS.md`](Extensions/Elsa3/src/Activities/Design/Import/Reconciliation/EXTENSION_POINTS.md) |
 | Elsa3 mapping (workflow definition import boundary) | [`Extensions/Elsa3/src/Mapping/EXTENSION_POINTS.md`](Extensions/Elsa3/src/Mapping/EXTENSION_POINTS.md) |
 
 ### Diagnostics

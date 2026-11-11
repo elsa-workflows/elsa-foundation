@@ -5,7 +5,7 @@ import { applyCreateDialogPrefill, applyListStateChange, createDialogAttachment,
 import { useWorkflowPageAgent } from "./useWorkflowLibraryAgent";
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import { AlertCircle, Package, Plus, Trash2 } from "lucide-react";
-import { StudioHttpError, type StudioAgentRegistry, type StudioEndpointContext, type StudioNotificationInput } from "@elsa-workflows/studio-sdk";
+import { StudioHttpError, type StudioWeaverRegistry, type StudioEndpointContext, type StudioNotificationInput } from "@elsa-workflows/studio-sdk";
 import { CopyableIdentifier, OverflowMenu, StudioButton, type OverflowMenuItem, StudioPageHeader, StudioCollectionToolbar, StudioSearchInput } from "@elsa-workflows/studio-ui";
 import { createDefinition, deleteDefinition, deleteDefinitionPermanently, listDefinitions, restoreDefinition, workflowDefinitionFolderMovePath } from "../api/workflowDesign";
 import type { ActivityCatalogItem, DefinitionListState, WorkflowDefinitionDetails, WorkflowDefinitionSummary } from "../workflowTypes";
@@ -84,7 +84,7 @@ function canRetainBrowseSnapshot(previous: BrowseIdentity, next: BrowseIdentity)
 
 export function WorkflowDefinitions({ context, ai, weaver, onOpen, session, homeCreateRequestId = null, onHomeCreateRequestHandled }: {
   context: StudioEndpointContext;
-  ai: StudioAgentRegistry;
+  ai: StudioWeaverRegistry;
   /** The Workflows module's agent state: this page discloses its visible list and create dialog, and applies their reviewed changes. */
   weaver?: WorkflowAgentController;
   onOpen(id: string): void;

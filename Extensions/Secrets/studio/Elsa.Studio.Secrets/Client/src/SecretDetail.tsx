@@ -68,16 +68,16 @@ function SecretMetadataForm({ secret, descriptors, busy = false, onSave, onClose
           <div><dt>Status</dt><dd>{secret.status}</dd></div><div><dt>Current version</dt><dd>{secret.currentVersion ?? "none"}</dd></div></dl>
         <p className="secrets-field-hint">The existing value stays hidden. Rotate the secret to replace it.</p>
       </>, details: <>
-        <SecretFormField label="Display name" value={displayName} disabled={cannotClose}>
-          {attributes => <input {...attributes} data-dialog-initial-focus value={displayName} placeholder=" " onChange={event => setDisplayName(event.target.value)} />}
+        <SecretFormField label="Display name" disabled={cannotClose}>
+          {attributes => <input {...attributes} data-dialog-initial-focus value={displayName} onChange={event => setDisplayName(event.target.value)} />}
         </SecretFormField>
-        <SecretFormField label="Description" controlId={descriptionInputId} value={description} raised disabled={cannotClose}>
+        <SecretFormField label="Description" controlId={descriptionInputId} disabled={cannotClose}>
           {attributes => <textarea {...attributes} value={description} onChange={event => setDescription(event.target.value)} rows={3} />}
         </SecretFormField>
         <dl className="secrets-metadata-grid"><div><dt>Tags</dt><dd>{secret.tags.join(", ") || "None"}</dd></div><div><dt>Created</dt><dd>{formatDate(secret.createdAt)}</dd></div><div><dt>Updated</dt><dd>{formatDate(secret.updatedAt)}</dd></div></dl>
       </>, storage: <>
         <dl className="secrets-metadata-grid"><div><dt>Store</dt><dd>{store?.displayName ?? secret.storeName}</dd></div><div><dt>Expires</dt><dd>{secret.expiresAt ? formatDate(secret.expiresAt) : "Never"}</dd></div></dl>
-        <SecretFormField label="Scope" controlId={scopeInputId} value={secret.scope || "No scope"} raised disabled={cannotClose}>
+        <SecretFormField label="Scope" controlId={scopeInputId} disabled={cannotClose}>
           {attributes => <input {...attributes} value={secret.scope || "No scope"} readOnly aria-describedby={scopeHelpId} />}
         </SecretFormField>
         <ScopeMatchingHint id={scopeHelpId} readOnly concise />
