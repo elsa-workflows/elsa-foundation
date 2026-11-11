@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { autosaveDelayMs } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/constants";
 
 for (const theme of ["light", "dark"]) for (const width of [390, 1440]) {
   test(`separates workflow views and retains edited declarations (${theme}, ${width}px)`, async ({ page }, testInfo) => {
@@ -39,3 +40,28 @@ for (const theme of ["light", "dark"]) for (const width of [390, 1440]) {
     await page.screenshot({ path: testInfo.outputPath("workflow-view-tabs.png") });
   });
 }
+
+test("clears Autosaving when autosave is turned off during debounce", async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/?mode=activity-duplicate-editor&theme=light&autosave");
+  const toolbar = page.locator(".wf-editor-toolbar");
+  const status = toolbar.getByRole("status");
+  await expect(toolbar.getByRole("button", { name: "More workflow actions" })).toBeVisible();
+  await expect(status).not.toHaveText("Autosaving...", { timeout: 10_000 });
+
+  const views = page.getByRole("tablist", { name: "Editor view tabs" });
+  await views.getByRole("tab", { name: "Variables", exact: true }).click();
+  await page.getByRole("button", { name: "Add variable", exact: true }).click();
+  await page.getByRole("textbox", { name: "Variable name", exact: true }).fill("Customer");
+  await expect(status).toHaveText("Autosaving...");
+  await page.screenshot({ path: testInfo.outputPath("autosave-pending.png") });
+
+  await toolbar.getByRole("button", { name: "More workflow actions" }).click();
+  await page.getByRole("menuitemcheckbox", { name: /Autosave/ }).click();
+  await expect(status).toHaveText("Unsaved changes");
+  await expect(status).toHaveAttribute("data-unsaved", "true");
+  await expect(status).not.toHaveAttribute("data-pending", "true");
+  await page.waitForTimeout(autosaveDelayMs + 200);
+  await expect(status).toHaveText("Unsaved changes");
+  await page.screenshot({ path: testInfo.outputPath("autosave-cancelled.png") });
+});

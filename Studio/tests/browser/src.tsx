@@ -180,7 +180,7 @@ function WorkflowToolbarFixture() {
       {runStatus ? <WorkflowRuntimePanel testRun={toolbarTestRun(runStatus)} onOpenRun={selectAction("Open run")} /> : null}
       <section className="browser-toolbar-controls" aria-label="Toolbar test controls">
         <label>Save status<select aria-label="Save status" value={status} onChange={event => setStatus(event.target.value)}>
-          {["", "Autosaving...", "Autosaved", "Saving before review...", "Workflow organization updated", "Published to an unusually long publication channel"].map(value => <option key={value} value={value}>{value || "Empty"}</option>)}
+          {["", "Autosaving...", "Autosaved", "Unsaved changes", "Saving before review...", "Workflow organization updated", "Published to an unusually long publication channel"].map(value => <option key={value} value={value}>{value || "Empty"}</option>)}
         </select></label>
         <label>Test Run status<select aria-label="Test Run status" value={runStatus} onChange={event => setRunStatus(event.target.value)}>
           {["", "accepted", "rejected", "incidents", "runtime-issue", "stale"].map(value => <option key={value} value={value}>{value || "None"}</option>)}

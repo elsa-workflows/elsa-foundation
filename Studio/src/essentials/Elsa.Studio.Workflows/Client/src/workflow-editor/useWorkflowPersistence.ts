@@ -1,5 +1,5 @@
 import type { WorkflowEditorDocumentAdapter } from "./WorkflowEditorDocumentAdapter";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { studioNavigationRequestedEvent, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import type { WorkflowDraft } from "../workflowTypes";
 import { updateDraft } from "../api/workflowDesign";
@@ -17,7 +17,7 @@ interface WorkflowPersistenceParams {
   editDraft(recipe: WorkflowDraftRecipe): void;
   /** Reconcile an acknowledged live edit with history before adopting the server's normalized representation. */
   onSaveReconciled?(requested: WorkflowDraft, saved: WorkflowDraft): void;
-  setStatus(value: string): void;
+  setStatus: Dispatch<SetStateAction<string>>;
   setError(value: WorkflowErrorInput): void;
   /**
    * The designer-history autosave hold for reviewed Operation Batches (spec 1193 FR-010): autosave is skipped while the
@@ -45,6 +45,7 @@ export function useWorkflowPersistence({ context, draft, documentAdapter, autosa
   const holdForReview = useCallback((hold: boolean) => { const previous = reviewHoldRef.current; reviewHoldGenerationRef.current++; reviewHoldRef.current = hold; setReviewHeld(hold); return previous; }, []);
   const [saving, setSaving] = useState(false);
   const lastSavedDraftSignatureRef = useRef("");
+  const lastSettledStatusRef = useRef("");
   const [persistedDraft, setPersistedDraft] = useState<WorkflowDraft | null>(null);
   const saveRequestIdRef = useRef(0);
   const saveQueueRef = useRef<Promise<unknown>>(Promise.resolve());
@@ -74,6 +75,15 @@ export function useWorkflowPersistence({ context, draft, documentAdapter, autosa
     setPersistedDraft(savedDraft);
   }, []);
 
+  // When a debounce is cancelled, only replace a leftover "Autosaving..." so a newer publish/copy
+  // status is not clobbered. Dirty drafts report unsaved; matching signatures restore the last save.
+  const revertCancelledAutosaveStatus = useCallback(() => {
+    const current = latestDraftRef.current;
+    const dirty = Boolean(current && getDraftSignature(current) !== lastSavedDraftSignatureRef.current);
+    const restored = dirty ? "Unsaved changes" : lastSettledStatusRef.current;
+    setStatus(previous => previous === "Autosaving..." ? restored : previous);
+  }, [setStatus]);
+
   /**
    * Saves a snapshot. A caller that captured a snapshot of (or derived one from) the live draft declares the history line
    * it captured together with it in `options.lineage`; without one a save of anything but the live draft writes an
@@ -93,7 +103,10 @@ export function useWorkflowPersistence({ context, draft, documentAdapter, autosa
     const writtenLineage = options?.lineage ? [...options.lineage]
       : requestedLive && getDraftSignature(requestedLive) === requestedSignature ? [...(lineageHoldRef.current?.lineage() ?? [])] : null;
     const queuedSave = async () => {
-      if (savedStatus === "Autosaved" && (reviewHoldRef.current || lineageHoldRef.current?.isHeld())) return draftSnapshot;
+      if (savedStatus === "Autosaved" && (reviewHoldRef.current || lineageHoldRef.current?.isHeld())) {
+        revertCancelledAutosaveStatus();
+        return draftSnapshot;
+      }
       const requestId = ++saveRequestIdRef.current;
       setError("");
       inFlightSavesRef.current += 1;
@@ -119,10 +132,14 @@ export function useWorkflowPersistence({ context, draft, documentAdapter, autosa
             ? saved
             : { ...current, validationErrors: saved.validationErrors };
         });
-        if (requestId === saveRequestIdRef.current && coversLiveDraft && coversReviewGeneration) setStatus(savedStatus);
+        if (requestId === saveRequestIdRef.current && coversLiveDraft && coversReviewGeneration) {
+          lastSettledStatusRef.current = savedStatus;
+          setStatus(savedStatus);
+        }
         return saved;
       } catch (e) {
         if (requestId === saveRequestIdRef.current) {
+          lastSettledStatusRef.current = "";
           setStatus("");
           setError(describeWorkflowError(e, "Could not save the workflow draft."));
         }
@@ -136,7 +153,7 @@ export function useWorkflowPersistence({ context, draft, documentAdapter, autosa
     const queued = saveQueueRef.current.then(queuedSave, queuedSave).finally(() => { queuedSavesRef.current -= 1; });
     saveQueueRef.current = queued.catch(() => undefined);
     return queued;
-  }, [context, documentAdapter, editDraft, setStatus, setError]);
+  }, [context, documentAdapter, editDraft, revertCancelledAutosaveStatus, setStatus, setError]);
 
   // Settles pending persistence before a publish review: persists the latest draft when it has unsaved
   // edits (so the review captures the same state that will be saved), then awaits the whole save queue.
@@ -155,14 +172,22 @@ export function useWorkflowPersistence({ context, draft, documentAdapter, autosa
     const draftSignature = getDraftSignature(draft);
     if (draftSignature === lastSavedDraftSignatureRef.current) return;
 
+    let pending = true;
     setStatus("Autosaving...");
     const timeoutId = window.setTimeout(() => {
-      if (reviewHoldRef.current || lineageHoldRef.current?.isHeld()) return;
+      pending = false;
+      if (reviewHoldRef.current || lineageHoldRef.current?.isHeld()) {
+        revertCancelledAutosaveStatus();
+        return;
+      }
       void saveDraft(draft, "Autosaved").catch(() => undefined);
     }, autosaveDelayMs);
 
-    return () => window.clearTimeout(timeoutId);
-  }, [autosaveEnabled, autosavePaused, reviewHeld, lineageHeld, draft, saveDraft, setStatus]);
+    return () => {
+      window.clearTimeout(timeoutId);
+      if (pending) revertCancelledAutosaveStatus();
+    };
+  }, [autosaveEnabled, autosavePaused, reviewHeld, lineageHeld, draft, revertCancelledAutosaveStatus, saveDraft, setStatus]);
 
   return { persistedDraft, holdForReview, reviewHeld, saveDraft, flushPendingSave, saving, autosaveEnabled, setAutosaveEnabled, autosavePaused, setAutosavePaused, markSaved };
 }

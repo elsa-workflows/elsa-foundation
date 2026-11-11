@@ -86,7 +86,8 @@
   white-space: nowrap;
 }
 
-.wf-editor-save-status[data-pending] {
+.wf-editor-save-status[data-pending],
+.wf-editor-save-status[data-unsaved] {
   color: var(--studio-text-muted);
 }
 

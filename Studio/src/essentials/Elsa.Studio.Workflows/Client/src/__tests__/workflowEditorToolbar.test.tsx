@@ -64,6 +64,16 @@ describe("compact workflow toolbar", () => {
     buttons.forEach(click);
     Object.values(commands).forEach(command => expect(command).not.toHaveBeenCalled());
   });
+
+  it("reports unsaved changes without a pending spinner or saved check", () => {
+    const { container } = render({ status: "Unsaved changes" });
+    const status = container.querySelector<HTMLElement>("[role='status']")!;
+    expect(status.getAttribute("data-unsaved")).toBe("true");
+    expect(status.getAttribute("data-pending")).toBeNull();
+    expect(status.querySelector("svg")).toBeNull();
+    expect(status.textContent).toBe("Unsaved changes");
+  });
+
   it("explains unsupported publication and test-run operations",() => {
     const {container,commands} = render({publicationUnavailableReason:"Publishing is not supported by this backend.",canRun:false,runTitle:"Test runs are not supported by this backend."});
     const publish=container.querySelector<HTMLButtonElement>(".wf-publish-primary")!;

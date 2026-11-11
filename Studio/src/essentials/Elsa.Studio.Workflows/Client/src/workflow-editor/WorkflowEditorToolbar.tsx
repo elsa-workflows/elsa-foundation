@@ -47,6 +47,7 @@ export function WorkflowEditorToolbar(props: WorkflowEditorToolbarProps) {
   const openAtEndRef = useRef(false);
   const menuId = useId();
   const pending = props.saving || /^(Autosaving|Saving|Preparing|Starting|Exporting|Promoting|Publishing)/.test(props.status);
+  const unsaved = props.status === "Unsaved changes";
 
   const closeMenu = (restoreFocus = true) => {
     setOpen(false);
@@ -91,9 +92,9 @@ export function WorkflowEditorToolbar(props: WorkflowEditorToolbarProps) {
         </div>
       </div>
       <div className="wf-editor-metadata">
-        <span className="wf-editor-save-status" role="status" aria-live="polite" aria-atomic="true" title={props.status || undefined} data-pending={pending || undefined}>
+        <span className="wf-editor-save-status" role="status" aria-live="polite" aria-atomic="true" title={props.status || undefined} data-pending={pending || undefined} data-unsaved={unsaved || undefined}>
           {props.status ? <>
-            {pending ? <LoaderCircle size={12} aria-hidden="true" /> : <Check size={12} aria-hidden="true" />}
+            {pending ? <LoaderCircle size={12} aria-hidden="true" /> : unsaved ? null : <Check size={12} aria-hidden="true" />}
             <span>{props.status}</span>
           </> : null}
         </span>

@@ -54,7 +54,9 @@ function collectionFixtureCatalog(conditions = collectionSlotsFixture === "switc
   return catalog;
 }
 const staleValidationsFixture = new URLSearchParams(window.location.search).get("stale-validations");
+const autosaveFixture = new URLSearchParams(window.location.search).has("autosave");
 const persistFixture = Boolean(adaptivePorts || collectionSlotsFixture || bpmnDecisionFixture || staleValidationsFixture
+  || autosaveFixture
   || new URLSearchParams(window.location.search).has("runtime-summary"));
 const adaptiveStorageKey = `adaptive-ports:${window.location.search}`;
 
@@ -302,7 +304,7 @@ function ActivityDuplicateEditorFixtureContent() {
               expressionEditors={expressionEditors}
               runInputEditors={[]}
               workflowDesignerPanels={[]}
-              autosaveEnabledByDefault={Boolean(staleValidationsFixture)}
+              autosaveEnabledByDefault={Boolean(staleValidationsFixture) || autosaveFixture}
               onBack={() => undefined}
             />}
       </QueryClientProvider>

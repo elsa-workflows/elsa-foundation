@@ -1,6 +1,6 @@
 import { expect, test, type Locator } from "@playwright/test";
 
-const statusValues = ["Autosaving...", "Autosaved", "Saving before review...", "Workflow organization updated", "Published to an unusually long publication channel", ""];
+const statusValues = ["Autosaving...", "Autosaved", "Unsaved changes", "Saving before review...", "Workflow organization updated", "Published to an unusually long publication channel", ""];
 
 for (const width of [320, 768, 1024, 1440]) {
   test(`keeps workflow actions stationary through save status changes at ${width}px`, async ({ page }) => {
