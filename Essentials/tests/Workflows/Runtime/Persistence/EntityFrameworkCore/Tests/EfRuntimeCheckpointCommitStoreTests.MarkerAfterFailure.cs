@@ -20,8 +20,8 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
 /// #2564: a plain commit on a clean context does not read its marker before it runs. A commit whose marker is
 /// durable fails at its marker insert at the latest, and the marker is read after a failure, so a replay still gets
 /// the stored result or the replay conflict. A commit that carries an admission condition or a model decision, and
-/// a commit on a context with pending changes or an open transaction, read the marker first. Each test counts the
-/// reads of the marker table: a read is a SELECT.
+/// a commit on a context with pending changes or an open transaction, read the marker first. Where a test counts
+/// the reads of the marker table, a read is a SELECT.
 /// </summary>
 public sealed partial class EfRuntimeCheckpointCommitStoreTests
 {
@@ -248,8 +248,8 @@ public sealed partial class EfRuntimeCheckpointCommitStoreTests
     [InlineData(false)]
     public async Task Initial_native_model_work_without_its_condition_is_refused_only_after_one_marker_read_finds_no_other_answer(bool commitIdIsDurable)
     {
-        // The refusal is thrown before any attempt. A commit whose marker is durable gets its replay answer first,
-        // here the replay conflict of a commit id that was committed with other content.
+        // The refusal is thrown before any attempt. A commit whose marker is durable gets its replay answer in
+        // place of the refusal, here the replay conflict of a commit id that was committed with other content.
         await using var database = await TestDatabase.CreateAsync();
         if (commitIdIsDurable)
         {

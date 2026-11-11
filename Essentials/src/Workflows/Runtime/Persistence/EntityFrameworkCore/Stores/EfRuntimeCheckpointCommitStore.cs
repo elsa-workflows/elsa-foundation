@@ -17,8 +17,8 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 /// The durable replay marker, supported participant projections, and execution fence share one transaction.
 /// Creating or changing an executable root runs inside its established write-lease boundary. An eligible unchanged
 /// native root can instead use an update-only check inside the fenced transaction. A commit whose marker is durable
-/// is answered as a replay. A plain commit on a clean context finds that out from the marker read after its attempt
-/// failed, which can be after a root write lease was taken; every other commit reads the marker before a transaction
+/// is answered as a replay. A plain commit on a clean context finds that out from the marker read after a failure,
+/// which can be after a root write lease was taken; every other commit reads the marker before a transaction
 /// begins or a lease is taken. Unsupported participants are rejected explicitly until their EF adapters can stage
 /// changes through this same context.
 /// </remarks>
@@ -249,7 +249,7 @@ public sealed class EfRuntimeCheckpointCommitStore(
         // commit does not read the marker before it runs: the read happens only after a failure.
         //
         // These commits read the marker first. A commit that carries an admission condition or a model decision:
-        // its staging compares rows it does not write, and its failures leave as admission-unavailable, so its
+        // its staging compares rows it does not write, and its failures leave as temporarily unavailable work, so its
         // replay is answered before either. (A commit that names a model parent's wait always carries a model
         // decision; EnsureModelParentAdmissionShape refused any other above.) A commit on a context with pending
         // changes: a failed attempt clears the tracker, which would drop what the caller staged. A commit on a
