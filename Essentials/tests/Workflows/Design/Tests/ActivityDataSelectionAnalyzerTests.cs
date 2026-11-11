@@ -63,16 +63,23 @@ public sealed partial class ActivityDataSelectionAnalyzerTests
     /// <summary>
     /// A producer and its reader inside a Sequence on a Flowchart cycle: the Sequence runs each child once, but the
     /// Flowchart runs the Sequence again, and its earlier pass leads to the later one. Only the ancestor walk sees
-    /// that, through the Flowchart's fact for the Sequence with itself, so neither form is offered or admitted.
+    /// that, through the Flowchart's fact for the Sequence with itself, so neither form is offered or admitted. A loop
+    /// between the Sequence and the Flowchart, which rules out an earlier run of its own body, does not hide the cycle.
     /// </summary>
     [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public async Task A_result_read_beside_its_producer_in_a_sequence_on_a_flowchart_cycle_is_refused_as_a_cyclic_back_edge(bool declaresScope)
+    [InlineData(true, false)]
+    [InlineData(false, false)]
+    [InlineData(true, true)]
+    [InlineData(false, true)]
+    public async Task A_result_read_beside_its_producer_in_a_sequence_on_a_flowchart_cycle_is_refused_as_a_cyclic_back_edge(bool declaresScope, bool insideLoop)
     {
         using var provider = Provider();
-        ActivityNode Chart(ActivityNode consumer) => Flowchart([Node("entry"), Sequence(Node("producer"), consumer) with { NodeId = "steps" }],
-            [("entry", "steps"), ("steps", "entry")], "entry");
+        ActivityNode Chart(ActivityNode consumer)
+        {
+            var steps = Sequence(Node("producer"), consumer) with { NodeId = "steps" };
+            var node = insideLoop ? Loop(Elsa.Activities.For.Activities.For.StructureKind, steps) : steps;
+            return Flowchart([Node("entry"), node], [("entry", node.NodeId), (node.NodeId, "entry")], "entry");
+        }
 
         var browsed = await Analyzer(provider).AnalyzeAsync(Document(Chart(Node("consumer"))), new("consumer", "CustomerId"));
         Assert.DoesNotContain(browsed.Sources, source => source.Id == "activity:producer:$result");
@@ -94,6 +101,37 @@ public sealed partial class ActivityDataSelectionAnalyzerTests
         Assert.Contains(forged.Findings, finding => finding.Type == "ActivityData/UnknownProjection");
         var blank = await Analyzer(provider).AnalyzeAsync(Document(Sequence(Node("producer"), Node("consumer", Input(Result("producer", scope: " "))))));
         Assert.Contains(blank.Findings, finding => finding.Type == "ActivityData/InvalidSource");
+    }
+
+    /// <summary>
+    /// A producer that runs on only some paths is browsed without a binding, because a required read of it is refused.
+    /// A client that wants an optional read asks for that source with <c>isOptional: true</c> and no scope, and gets a
+    /// binding back with the reason still attached; that binding publishes unchanged.
+    /// </summary>
+    [Fact]
+    public async Task A_focused_optional_query_returns_a_scope_free_binding_for_a_conditional_producer()
+    {
+        using var provider = Provider();
+        ActivityNode Chart(ActivityNode consumer) => Flowchart([Node("start"), Node("producer"), consumer],
+            [("start", "consumer"), ("producer", "consumer")], "start");
+
+        var browsed = await Analyzer(provider).AnalyzeAsync(Document(Chart(Node("consumer"))), new("consumer", "CustomerId"));
+        var listed = Assert.Single(browsed.Sources, source => source.Id == "activity:producer:$result");
+        Assert.Equal(ActivityChildResultAvailability.Conditional, listed.Availability);
+        Assert.Equal("ConditionalOccurrence", listed.ReasonCode);
+        Assert.Null(listed.Binding);
+
+        var focused = await Analyzer(provider).AnalyzeAsync(Document(Chart(Node("consumer"))), new("consumer", "CustomerId"),
+            new() { Source = ScopeFreeResult("producer", optional: true) });
+        Assert.Empty(focused.Findings);
+        var source = Assert.Single(focused.Sources);
+        Assert.Equal("ConditionalOccurrence", source.ReasonCode);
+        var binding = Assert.IsType<JsonElement>(source.Binding!.Value);
+        Assert.False(binding.TryGetProperty("producerScopeId", out _));
+        Assert.True(binding.GetProperty("isOptional").GetBoolean());
+
+        var stored = await Analyzer(provider).AnalyzeAsync(Document(Chart(Node("consumer", Input(source.Binding)))));
+        Assert.Empty(stored.Findings);
     }
 
     [Theory]
