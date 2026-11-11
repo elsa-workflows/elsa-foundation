@@ -56,9 +56,14 @@ export function useWorkflowPersistence({ context, draft, documentAdapter, autosa
   // Keep the latest draft addressable so flushPendingSave can persist unsaved edits without a stale closure.
   const latestDraftRef = useRef<WorkflowDraft | null>(draft);
   latestDraftRef.current = draft;
-  // A scheduled autosave shows "Autosaving..." until its save settles. When it is dropped instead (cancelled before the
-  // debounce ends, or skipped under a hold), it gives that status back, unless another action has replaced it since.
-  const releaseAutosavingStatus = useCallback(() => setStatus(current => current === autosavingStatus ? "" : current), [setStatus]);
+  // Each scheduled autosave takes a token and shows "Autosaving..." until it ends. A save that ends reporting its own
+  // status replaces it; one that ends without (cancelled before the debounce, skipped under a hold, or a save whose
+  // result no longer covers the live draft or review) clears it, provided no newer autosave has been scheduled since and
+  // no other action has replaced the status.
+  const autosaveTokenRef = useRef(0);
+  const releaseAutosavingStatus = useCallback((token: number) => {
+    if (token === autosaveTokenRef.current) setStatus(current => current === autosavingStatus ? "" : current);
+  }, [setStatus]);
 
   useEffect(() => {
     const preventNavigation = (event: Event) => {
@@ -99,7 +104,7 @@ export function useWorkflowPersistence({ context, draft, documentAdapter, autosa
     const writtenLineage = options?.lineage ? [...options.lineage]
       : requestedLive && getDraftSignature(requestedLive) === requestedSignature ? [...(lineageHoldRef.current?.lineage() ?? [])] : null;
     const queuedSave = async () => {
-      if (savedStatus === "Autosaved" && (reviewHoldRef.current || lineageHoldRef.current?.isHeld())) { releaseAutosavingStatus(); return draftSnapshot; }
+      if (savedStatus === "Autosaved" && (reviewHoldRef.current || lineageHoldRef.current?.isHeld())) return draftSnapshot;
       const requestId = ++saveRequestIdRef.current;
       setError("");
       inFlightSavesRef.current += 1;
@@ -142,7 +147,7 @@ export function useWorkflowPersistence({ context, draft, documentAdapter, autosa
     const queued = saveQueueRef.current.then(queuedSave, queuedSave).finally(() => { queuedSavesRef.current -= 1; });
     saveQueueRef.current = queued.catch(() => undefined);
     return queued;
-  }, [context, documentAdapter, editDraft, setStatus, setError, releaseAutosavingStatus]);
+  }, [context, documentAdapter, editDraft, setStatus, setError]);
 
   // Settles pending persistence before a publish review: persists the latest draft when it has unsaved
   // edits (so the review captures the same state that will be saved), then awaits the whole save queue.
@@ -161,17 +166,19 @@ export function useWorkflowPersistence({ context, draft, documentAdapter, autosa
     const draftSignature = getDraftSignature(draft);
     if (draftSignature === lastSavedDraftSignatureRef.current) return;
 
+    const token = ++autosaveTokenRef.current;
+    const release = () => releaseAutosavingStatus(token);
     setStatus(autosavingStatus);
     let fired = false;
     const timeoutId = window.setTimeout(() => {
       fired = true;
-      if (reviewHoldRef.current || lineageHoldRef.current?.isHeld()) { releaseAutosavingStatus(); return; }
-      void saveDraft(draft, "Autosaved").catch(() => undefined);
+      if (reviewHoldRef.current || lineageHoldRef.current?.isHeld()) { release(); return; }
+      void saveDraft(draft, "Autosaved").then(release, release);
     }, autosaveDelayMs);
 
-    // Once the timer has fired the save owns the status; before that, cancelling drops the autosave. A new edit re-runs
-    // this effect, which shows "Autosaving..." again in the same commit.
-    return () => { window.clearTimeout(timeoutId); if (!fired) releaseAutosavingStatus(); };
+    // Before the timer fires, cancelling drops this autosave; after, its save settles and releases it. A new edit re-runs
+    // this effect, which takes a new token and shows "Autosaving..." again in the same commit.
+    return () => { window.clearTimeout(timeoutId); if (!fired) release(); };
   }, [autosaveEnabled, autosavePaused, reviewHeld, lineageHeld, draft, saveDraft, setStatus, releaseAutosavingStatus]);
 
   return { persistedDraft, holdForReview, reviewHeld, saveDraft, flushPendingSave, saving, autosaveEnabled, setAutosaveEnabled, autosavePaused, setAutosavePaused, markSaved };

@@ -213,7 +213,10 @@ export async function decisionsJourney(page: Page, info: TestInfo, capture: Capt
       const created = `Picker-created policy ${suffix}`;
       await surface.getByLabel("Name", { exact: true }).fill(created); await save();
       // Back on the workflow: its unsaved pick survived, and the list reloaded with the decision just saved.
-      await page.getByRole("tab", { name: new RegExp(`^${workflowName}`) }).click();
+      // The header stops claiming an autosave, yet the workflow still reads as unsaved: its tab carries the marker (#4085).
+      const workflowTab = page.getByRole("tab", { name: new RegExp(`^${workflowName}`) });
+      await expect(workflowTab).toHaveAccessibleName(/unsaved changes/);
+      await workflowTab.click();
       await expect(picker).toBeVisible(); await expect(picker).toHaveValue(existingId);
       await expect(picker.locator("option", { hasText: created })).toHaveCount(1);
       await expect(saveStatus).not.toContainText("Autosaving");
