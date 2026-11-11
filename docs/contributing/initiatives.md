@@ -108,7 +108,9 @@ merely amends — a status-only or supersession edit backfills nothing; whether 
 section is a judgement for the reviewers.
 
 **Review.** The PR requests every non-author approver in its plan, so GitHub notifies them at once. Small points are
-settled in PR comments and reviews. A topic that cannot be settled in comments goes to a meeting. If disagreement
+settled in PR comments and reviews. A topic that cannot be settled in comments goes to a meeting: see
+[Closing the review](#closing-the-review-final-round-and-resolution-meeting), which bounds written review to two
+rounds and lets any approver mark a point **resolve in call** at any time. If disagreement
 persists or an approver is unavailable, the coordinator brings the question to the role authorized under project
 governance to resolve it or arrange a delegation. Record any authorized change in the approval plan. Silence is
 never approval, and the coordinator cannot remove an approver merely to unblock a PR. An approver reviews an
@@ -283,12 +285,100 @@ participant left on `main` reads stale decision artifacts that predate the initi
 
 A new task is therefore visible to the person who needs to act, even before the next sync.
 
+## Closing the review: final round and resolution meeting
+
+Written review converges, or it loops. This phase bounds it: two review rounds, one final round, then one human
+meeting that decides what is left, and a coordinator session that turns the meeting into recorded decisions.
+
+**1. Review rounds (at most two).** A round is one pass in which every approver reviews a proposal PR and its author
+revises it. The board's decision rows note the round (`r1`, `r2`). After the second round, the coordinator calls the
+final round for the proposals still open.
+
+**2. Resolve in call (any time).** Any approver may mark a point **resolve in call** in any round: a PR comment headed
+`Resolve in call`, naming the decision ID. That point stops in writing at once and goes on the meeting list. This
+prevents a comment loop on a point where positions are clear and only a conversation will move them.
+
+**3. The final round (one pass).** Every approver, for every open proposal at the head the coordinator names:
+- **approves** the text they can agree with (an `APPROVED` review); or
+- **records a meeting item**: one PR comment headed `Meeting item`, in the approver's own words, with
+  - the point (one line, with the decision ID and the document section);
+  - their position (one or two sentences);
+  - what they cannot accept in the current text (one sentence);
+  - the evidence they will bring (a pointer, or "none yet").
+
+No new proposals, alternatives or prepared edits are made in the final round. An AI assistant may **format and
+fact-check** a person's own words (find the commit, quote the section) but never **drafts positions or
+counter-arguments** in the final round or after it. The coordinator sets a deadline; silence is not approval, so an
+approver who does not answer has their open points carried into the meeting.
+
+**4. The meeting agenda.** The coordinator prepares it on the initiative branch, at
+`docs/initiatives/<n>/<date>-meeting-agenda.md`, from the template below, so everyone reads it before the meeting. It
+has:
+- **a briefing** at the top: the minimum the meeting must resolve, one bullet per item with its context;
+- **one zoom-in section per item**, in impact order (the item that blocks the most specs first), with the decision to
+  make, each person's position, links to the item's `Meeting item` and `Resolve in call` comments, and evidence.
+
+Every item carries **one short spoken anchor**: the board's decision ID and a two-to-three word handle, for example
+*"D-6, effect flag"*. An item without a decision ID gets one on the board before the meeting. The agenda is a view on the
+board, never a second source of truth.
+
+**5. The meeting (human only).** The coordinator leads and guards the agenda:
+- opens and closes each item by saying its anchor aloud: these are the anchors in the transcript;
+- when the conversation drifts to another item, names it ("that is D-7, computed reads") and either decides it there
+  under its own anchor or parks it;
+- per item, asks each person for the restrictions and benefits of their view for the architecture, workflow users and
+  .NET Elsa developers, and for their evidence, then seeks the middle ground everyone agrees on;
+- ends with a **read-back**: every anchor with its outcome (decided as …, still open, new, reopened, obsolete).
+
+The meeting is recorded and transcribed.
+
+**6. After the meeting (a coordinator session).** The coordinator, not the authors, turns the transcript into recorded
+decisions:
+1. **Classify** every passage that states an outcome ("agreed", "we go with", "park it", "drop that") against the
+   agenda's anchors. Each decision lands in one bucket: **decided**, **still open**, **new**, **reopened** or
+   **obsolete**. An outcome with no anchor is a *new decision* candidate. Nothing without a clear outcome is closed.
+2. **Verify** the classification by grilling the coordinator: "the transcript says D-6 was decided as X; is that what
+   was agreed?" Only confirmed outcomes are applied.
+3. **Apply**: the coordinator writes each decision into its ADRs and specs (as the coordinator in that PR's scope),
+   updates the board (decided in the meeting, with the date), and creates, reopens or retires decision rows.
+4. **Verify only**: approvers check that each changed text matches what was decided. This is not a new review and
+   cannot reopen a decision; a mismatch is fixed by the coordinator. Agreement and merge then follow the normal rules
+   above.
+
+A meeting that cannot reach a decision follows the governance route in *Review* above.
+
+```markdown
+# Meeting agenda: <initiative> (#<n>), <date>
+
+**Led by:** @coordinator. **With:** @approver-one, @approver-two. **Recorded and transcribed.**
+
+## Briefing: the minimum to resolve
+- **D-6, effect flag** (ADR 0045 §5): which functions get the commit boundary. Blocks S-1, S-7.
+- **D-14, per-arrival join** (ADR 0045 §6): …
+
+## D-6, effect flag
+**Decision to make:** <one sentence>.
+**Already agreed around it:** <bullets>.
+| Person | Position | Notes |
+|---|---|---|
+| @approver-one | … | [meeting item](link) |
+**Ask each:** restrictions and benefits for the architecture, workflow users, .NET Elsa developers; evidence.
+**Evidence on file:** <links>. **Possible middle grounds:** <bullets>.
+**Changes after the decision:** <PRs>.
+
+## Parking lot
+## Read-back
+| Anchor | Outcome |
+|---|---|
+```
+
 ## The initiative branch
 
 Every initiative has one integration branch in this repository, `initiative/<n>-<slug>`, cut from `main` when the
 initiative starts and named in the board's header. It holds the initiative's **agreed decision artifacts** and nothing
-else: ADRs and ADR amendments; spec, plan and tasks; and the CONTEXT, glossary or constitution edits those decisions
-imply. It holds no production code. Because every proposal is checked against everything already on it, the branch is
+else: ADRs and ADR amendments; spec, plan and tasks; the CONTEXT, glossary or constitution edits those decisions
+imply; and the initiative's meeting agendas (`docs/initiatives/<n>/`), which land with it as part of the decision
+log. It holds no production code. Because every proposal is checked against everything already on it, the branch is
 the initiative's shared, consistent knowledge base: what the initiative has decided so far, in one place. Everyone
 taking part works from it — authors cut their proposal branches from it, and reviewers and the coordinator check it
 out to see the agreed decisions a proposal builds on — not from `main`, which does not carry them until the
@@ -453,8 +543,11 @@ Last synced <date> by the coordinator. Newer updates are in the comments below.
 |---|---|
 
 ## Decisions
-| Id | Decision | Status | Unblocks |
-|---|---|---|---|
+| Id | Handle | Decision | Status (round, or decided in the meeting of <date>) | Unblocks |
+|---|---|---|---|---|
+
+## Meeting
+<date, link to the agenda on the branch; after it, the read-back and the transcript-processing comment>.
 
 ## Analyses
 | Id | Question | Lead | Status (with links) | Blocks |
