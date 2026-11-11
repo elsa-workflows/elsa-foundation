@@ -253,3 +253,12 @@
     gap: 8px;
   }
 }
+
+.wf-instance-incident + .wf-instance-incident { margin-top: var(--studio-space-4); }
+.wf-instance-incident-summary { gap: var(--studio-space-3); padding: var(--studio-space-4); }
+.wf-instance-incident-actions { padding: 0 var(--studio-space-4) var(--studio-space-4); gap: var(--studio-space-2); }
+.wf-instance-incident-cause { line-height: 1.55; }
+
+.wf-workflow-output { grid-template-columns: minmax(0, 1fr); }
+.wf-workflow-output > header { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--studio-space-2) var(--studio-space-4); margin: 0; padding: 0; border: 0; background: transparent; }
+.wf-workflow-output > header :is(strong, small) { white-space: normal; overflow-wrap: anywhere; }

@@ -155,19 +155,18 @@ export function ActivityPropertiesPanel({
     latestActivity.current = activity;
     renderedActivity.current = activity;
   }
-  const commitInputChange = useCallback((nextActivity: ActivityNode, input: StudioActivityInputDescriptor) => {
+  const commitInputChange = useCallback((nextActivity: ActivityNode, input: StudioActivityInputDescriptor | StudioActivityInputDescriptor[]) => {
     if (latestReadOnly.current) return;
     const current = latestActivity.current;
     if (current.nodeId !== nextActivity.nodeId) {
       onChange(nextActivity);
       return;
     }
-    const propertyName = getInputPropertyName(input);
     const next = { ...current };
-    if (Object.prototype.hasOwnProperty.call(nextActivity, propertyName)) {
-      next[propertyName] = nextActivity[propertyName];
-    } else {
-      delete next[propertyName];
+    for (const item of Array.isArray(input) ? input : [input]) {
+      const propertyName = getInputPropertyName(item);
+      if (Object.prototype.hasOwnProperty.call(nextActivity, propertyName)) next[propertyName] = nextActivity[propertyName];
+      else delete next[propertyName];
     }
     latestActivity.current = next;
     onChange(next);
@@ -486,7 +485,7 @@ type PropertyRowProps = {
   onDisclosureErrorChange(key: string, hasError: boolean): void;
   onDisclosureFailureChange(key: string, hasFailure: boolean): void;
   onDisclosureFallbackChange(key: string, shouldForceOpen: boolean): void;
-  onChange(activity: ActivityNode, input: StudioActivityInputDescriptor): void;
+  onChange(activity: ActivityNode, input: StudioActivityInputDescriptor | StudioActivityInputDescriptor[]): void;
 };
 
 function PropertyRow({
@@ -570,7 +569,23 @@ function PropertyRow({
     uiSpecifications: { ...input.uiSpecifications, options: dynamicOptions.options }
   } : input;
   const editorDisabled = readOnly || (!!provider && dynamicOptions.status !== "ready");
-  const context: StudioActivityPropertyEditorContext = { activity, activityId: activity.nodeId, expressionDescriptors, readOnly: editorDisabled };
+  const context: StudioActivityPropertyEditorContext = {
+    activity, activityId: activity.nodeId, expressionDescriptors, readOnly: editorDisabled,
+    inputValues: readLiteralInputValues(activity, activityDescriptor),
+    setLiteralInputs: values => {
+      const current = latestProperty.current;
+      if (current.editorDisabled || current.activity.nodeId !== activity.nodeId) return;
+      let next = current.activity;
+      const changed: StudioActivityInputDescriptor[] = [];
+      for (const [key, value] of Object.entries(values)) {
+        const target = current.activityDescriptor.inputs.find(item => (item.referenceKey || item.name) === key);
+        if (!target || target.isReadOnly || isMaskedInput(target) || acceptsOnlySecretReference(target)) continue;
+        changed.push(target);
+        next = writeInputValue(next, target, target.isWrapped === false ? value : withExpression(readWrappedInput(next, target), "Literal", value));
+      }
+      current.onChange(next, changed);
+    }
+  };
   const editor = resolveEditor(editors, effectiveInput, context);
   const wrapped = input.isWrapped !== false ? readWrappedInput(activity, input) : null;
   const syntax = wrapped?.expression.type ?? (secretOnly ? secretSyntax : "Literal");
@@ -748,8 +763,8 @@ function PropertyRow({
   const conversionCaption = wrapped
     ? `${describeInferredSource(wrapped.expression.type, wrapped.expression.value, conversionMode)} → ${formatTypeName(input.typeName)}`
     : "";
-  const latestProperty = useRef({ activity, input, onChange });
-  latestProperty.current = { activity, input, onChange };
+  const latestProperty = useRef({ activity, input, onChange, activityDescriptor, editorDisabled });
+  latestProperty.current = { activity, input, onChange, activityDescriptor, editorDisabled };
 
   useLayoutEffect(() => {
     if (!expanded) return;
@@ -1234,9 +1249,8 @@ function PropertyRow({
 const MemoizedPropertyRow = memo(PropertyRow, arePropertyRowPropsEqual);
 
 /**
- * Input values are immutable bindings on the activity. Editing one must not make every unrelated
- * property editor rebuild (and, for code editors, reconfigure its language surface). Activity
- * metadata still participates in the comparison so a real activity-level change reaches every row.
+ * Reuse a row across a sibling input edit unless the row reads the activity: through a property editor or an
+ * expression editor contribution that opted into activity context (`readsActivityContext`).
  */
 function arePropertyRowPropsEqual(previous: PropertyRowProps, next: PropertyRowProps) {
   if (
@@ -1277,8 +1291,24 @@ function arePropertyRowPropsEqual(previous: PropertyRowProps, next: PropertyRowP
   const propertyName = getInputPropertyName(previous.input);
   if (!Object.is(previous.activity[propertyName], next.activity[propertyName])) return false;
   if (!hasSameActivityMetadata(previous.activity, next.activity, previous.activityDescriptor.inputs)) return false;
+  // Property editor contributions that opted into activity context read sibling inputs, such as FormId with FormVersion.
+  if (resolvesActivityContextEditor(previous) || resolvesActivityContextEditor(next)) return false;
   // Evaluate Decision Inputs (and similar) read sibling activity values such as the Decision pin.
-  return !expressionEditorReadsActivity(previous);
+  return !expressionEditorReadsActivity(previous) && !expressionEditorReadsActivity(next);
+}
+
+function hasSameActivityMetadata(
+  previous: ActivityNode,
+  next: ActivityNode,
+  inputs: StudioActivityInputDescriptor[]
+) {
+  const inputPropertyNames = new Set(inputs.map(getInputPropertyName));
+  const propertyNames = new Set([...Object.keys(previous), ...Object.keys(next)]);
+  for (const propertyName of propertyNames) {
+    if (inputPropertyNames.has(propertyName)) continue;
+    if (!Object.is(previous[propertyName], next[propertyName])) return false;
+  }
+  return true;
 }
 
 function expressionEditorReadsActivity(props: PropertyRowProps) {
@@ -1329,19 +1359,6 @@ function copyThemeCustomProperties(source: Element | null, target: HTMLElement |
   }
 }
 
-function hasSameActivityMetadata(
-  previous: ActivityNode,
-  next: ActivityNode,
-  inputs: StudioActivityInputDescriptor[]
-) {
-  const inputPropertyNames = new Set(inputs.map(getInputPropertyName));
-  const propertyNames = new Set([...Object.keys(previous), ...Object.keys(next)]);
-  for (const propertyName of propertyNames) {
-    if (inputPropertyNames.has(propertyName)) continue;
-    if (!Object.is(previous[propertyName], next[propertyName])) return false;
-  }
-  return true;
-}
 
 function ExpandedPropertyEditor({
   input,
@@ -1894,6 +1911,28 @@ function replacesGenericDictionaryEditor(
   syntax: string
 ) {
   return !!editor && editor.id !== objectExpressionEditorId && (syntax === "Object" || syntax === "Literal");
+}
+
+/** Literal values of the activity's other readable inputs, keyed as property editor contributions address them. */
+function readLiteralInputValues(activity: ActivityNode, activityDescriptor: StudioActivityDescriptor) {
+  return Object.fromEntries(activityDescriptor.inputs
+    .filter(item => !isMaskedInput(item) && !acceptsOnlySecretReference(item) && (item.isWrapped === false || ["Literal", "Object"].includes(readWrappedInput(activity, item).expression.type)))
+    .map(item => [item.referenceKey || item.name, getLiteralEditorValue(activity, item)]));
+}
+
+// The row resolves with its live dynamic options and editor-disabled state, which the comparator cannot see.
+// Any opted-in contribution that supports this input under either read-only state counts, so the row errs toward refreshing.
+function resolvesActivityContextEditor(props: PropertyRowProps) {
+  const contextual = props.editors.filter(editor => editor.readsActivityContext === true);
+  if (contextual.length === 0) return false;
+  const context = {
+    activity: props.activity,
+    activityId: props.activity.nodeId,
+    expressionDescriptors: props.expressionDescriptors,
+    inputValues: readLiteralInputValues(props.activity, props.activityDescriptor),
+    setLiteralInputs: () => undefined
+  };
+  return contextual.some(editor => editor.supports(props.input, { ...context, readOnly: false }) || editor.supports(props.input, { ...context, readOnly: true }));
 }
 
 function resolveEditor(
