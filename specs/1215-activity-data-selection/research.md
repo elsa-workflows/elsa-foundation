@@ -218,7 +218,7 @@ projection protection keep flowing as today (`RuntimeInputBindingResolver.cs:108
 | Artifact | Whole-value bytes before → after | What a member binding adds | Older reader |
 |---|---|---|---|
 | Authored document (`ArgumentValue`) | Identical: no field on old kinds. | New `expressionType` and `memberPath`. | Stored losslessly as an opaque value. Publication on any server since #3948 refuses `ActivityData/UnsupportedMemberBinding` before a write (§1). Before #3948 it compiles to an expression of language `ActivityResultMember`, which no evaluator runs (binding contract §6, not re-verified). |
-| Executable JSON (`EF/EfWorkflowExecutableStore.cs:82,1032`) | Identical: `Selection` omitted when null, like `Secret` (`RuntimeInputBinding.cs:82`) and a null `ProducerScopeId` (`:232`). | `"source":"ActivityResultMember"`, `"selection":{…}`, derived requirement in `runtimeRequirements`. | Unknown enum name: `JsonException`, nothing read. A numeric source (no store writes one) reaches `ValidateCanonical` and throws (`RuntimeInputBinding.cs:105-117`). |
+| Executable JSON (`EF/EfWorkflowExecutableStore.cs:82,1032`) | Identical: `Selection` omitted when null, like `Secret` (`RuntimeInputBinding.cs:82`) and a null `ProducerScopeId` (`:232`). | `"source":"ActivityResultMember"`, `"selection":{…}`, derived requirement in `runtimeRequirements`. | Unknown enum name: the store throws `InvalidDataException` "payload is corrupt" wrapping the converter's `JsonException` (`EF/EfWorkflowExecutableStore.cs:1038-1041`); nothing is returned. A numeric source (no store writes one) reaches `ValidateCanonical`, which throws, and the store wraps it the same way. Run: `EfRuntimeArtifactScopeTests.MemberSourceReads.cs`, which also shows a `selection` added to an old kind is dropped and the whole value read. |
 | Template envelope (`EF/EfExecutableActivityTemplateStore.cs:339,404-406`) | Identical, same options. | As above. | As above. |
 | Executable hash V2 (`WorkflowExecutableHasher.cs:375-380`) | Identical: the binding is serialized whole through the source-generated context, which honours `WhenWritingNull`. | `selection` inside `contract`. | Not a reader. |
 | Node-payload hash (`WorkflowExecutableHasher.cs:123-146`; used by `ComputeHash(node)` and draft test runs, `Essentials/src/Workflows/Publishing/Api/Services/ActivityDraftTestRunService.cs:286`) | Identical if old arms are untouched. | **Silent hazard:** a member kind falls to `_ => CanonicalJson(LiteralValue)` (`:140`), so two member reads differing only in path hash alike. The store keeps the first body for an equal hash and checks nothing but the hash (`EF/EfWorkflowExecutableStore.cs:140-144`), so a second test run would execute the first path. Closed by explicit arms and a throwing default (§6). | — |
@@ -229,8 +229,12 @@ projection protection keep flowing as today (`RuntimeInputBindingResolver.cs:108
 **Mixed versions.** In distributed placement an older member that cannot deserialize the pinned executable resolves
 the requirement as `Unresolved` and does not claim the execution; commands wait for a member that can run it
 (`Essentials/src/Workflows/Runtime/Distributed/Elsa.Workflows.Runtime.Distributed/Placement/ExecutionPlacementRequirementResolver.cs:57-59,78-85`;
-`ExecutionPlacementGate.cs:143-160`). Without the distributed module, an older runtime's start, resume or drain read
-throws; what then happens to the work item is not established (§11).
+`ExecutionPlacementGate.cs:143-160`). Without the distributed module the outcome is destructive, not a wait. A
+drain whose pinned executable read throws parks that work item as poisoned with no retry and raises one blocking
+`SchedulerWorkPoisoned` incident; a failed start or checkpoint item faults the run, a failed child schedule leaves it
+running and blocked (run: `InputReadFailureCharacterizationTests.A_drain_whose_pinned_executable_read_throws_poisons_that_work_item_without_a_retry`,
+with a throwing reader standing in for an older build). So where several non-distributed runtimes share one store,
+member bindings must not be published until every runtime is upgraded; slice C states this beside the preflight.
 
 **Every silent path found, and how it closes.** (a) Selection on an old kind ignored by an older reader: closed by
 new enum members (§2). (b) Node-payload hash collision: closed by explicit arms plus a throwing default. (c)
@@ -268,9 +272,11 @@ traversal is not depth-limited, only the subtree built below the leaf is: `ClrSe
 
 Today the reader reports a known-absent member as `Unknown` with a reason code (`ClrSerializedShapeReader.cs:59-60,279-284`);
 keying refusal on reason text is brittle (decision 5). Root nullability for `$result` is passed as `false`
-(`ClrActivitySerializedShapeSource.cs:137-141`). Whether a typed whole result can commit as null was not established,
-so runtime never trusts `Known` presence or nullability for safety: facts narrow publication and plan conversion;
-runtime re-checks (§7).
+(`ClrActivitySerializedShapeSource.cs:137-141`). That holds for CLR activities: completing a typed result with null
+faults the producer with VF-ACT-006 and its reader never runs (run:
+`InputReadFailureCharacterizationTests.A_typed_result_cannot_be_committed_as_null_so_its_reader_never_runs`). Runtime
+still never trusts `Known` presence or nullability for safety: facts narrow publication and plan conversion; runtime
+re-checks (§7).
 
 **Offer equals admission.** The same `Resolve` call decides a browsed member and a stored one, as for scope-free
 results (`ActivityDataSelectionAnalyzer.cs:276-312`). For a query with a path it must return the **member** binding,
@@ -355,11 +361,15 @@ already withheld and refuse at `RequireReadable`.
 
 **Traversal.** Ordinal `JsonElement.TryGetProperty` per segment, never the case-insensitive fallback
 (`RuntimeInputBindingResolver.cs:172-187`); a dot is part of a name; `"0"` is a key. Dictionaries are JSON objects,
-so they need nothing special.
+so they need nothing special. Run (`Essentials/tests/Activities/Runtime/Tests/ActivityValueJsonTests.MemberNameMatching.cs`):
+on a duplicate key both this lookup and input hydration take the last value; literal names with dots, digits, padding
+or no characters match as written. They differ on case: the activity-value profile hydrates case-insensitively, so a
+payload carrying `CustomerName` hydrates a whole DTO, while the exact segment `customerName` reads `Absent`.
+That is the contract's choice (exact names) and is what makes CLR-seeded request members fragile (§9).
 
 | Observation | Result | Surfaces as |
 |---|---|---|
-| Required producer missing or ambiguous | Existing `CausalActivityResultResolutionException` (`CausalActivityResultResolver.cs:85-91`). | Blocking incident, consumer stays `Scheduled` (existing test `Essentials/tests/Activities/Behavioral/Tests/ActivityResultOccurrenceTests.cs:450-461`). |
+| Required producer missing or ambiguous | Existing `CausalActivityResultResolutionException` (`CausalActivityResultResolver.cs:85-91`). | The StartActivity work item is poisoned (`DoNotRetry`); consumer stays `Scheduled` with no snapshot; run stays `Running`; one blocking incident of type `SchedulerWorkPoisoned` names the consumer, with the cause in its message and in `runtime.faultType`/`runtime.faultMessage` metadata (run: `InputReadFailureCharacterizationTests.A_failed_causal_input_read_blocks_the_reader_with_one_poison_incident_before_it_starts`). |
 | Optional producer missing | Root `ExplicitNull`, as whole-value reads (`RuntimeInputBindingResolver.cs:86-93`); destination rules decide (decision 8). | As today. |
 | Member absent | `Absent`, with failed segment index. | Accepted only for an optional nullable input (`RuntimeActivityInputMaterializer.cs:605-612`); otherwise new `VF-SEL-001`. |
 | Leaf null | `ExplicitNull`. | Nullable input accepts; otherwise `VF-SEL-002` naming the leaf. |
@@ -367,9 +377,11 @@ so they need nothing special.
 | Array or scalar before the last segment | Selection fails. | `VF-SEL-003`. |
 | Value that does not fit the target | Fails before snapshot. | `VF-SEL-004`. |
 
-All of these throw from input materialization before the snapshot commit and before construction, so they use the
-existing blocking-incident path; the producer's committed completion is untouched. Codes are in the message text,
-because incidents carry failures as text (comment at `ActivityResultOccurrenceTests.cs:463-464`).
+All of these throw from input materialization before the snapshot commit and before construction, so they take the
+same scheduler-poison path as the causal failures; the producer's committed completion is untouched. The incident
+type is always `SchedulerWorkPoisoned`, so a new failure is told apart only by its exception type in
+`runtime.faultType` and its code in the message text: the selector should throw one dedicated exception type whose
+message starts with the `VF-SEL` code.
 
 **Fit.** A bounded internal helper in Workflows Runtime, using the unchanged activity-value profile and the pinned
 target and nullability, runs before the snapshot for **every** member read, `Known` included (decision 9): `Known`
@@ -461,20 +473,43 @@ write (§1). Data model "Protection minimum" has no facts to pin (§2). Tasks T0
 runs only in the workflow compiler (§4), and list `ExecutableActivityTemplateBehaviorHasher` for edits it does not
 need (§6).
 
-**Not established by reading; characterise before implementation, as for #4053:**
+**Characterised on main (`a9771131c3`), after this note was first written.** Each item below was open; the tests
+named pass on main and pin current behaviour. Rows that slices A–C deliberately change carry a comment in the test.
 
-1. An actual baseline binary reading a member executable, by name and by number. Proposed control: run a build of
-   `a9771131c3` against a store written by slice A; a test-local enum mirror only proves the converter.
-2. What an older non-distributed runtime does with a work item whose executable fails to deserialize (incident,
-   poison under the ownership lease of #4063, or a retry loop).
-3. That a new selection exception surfaces as the same blocking incident as the causal failures.
-4. Whether a workflow-level `Input` binding publishes today, which decides where `InputMember` can appear.
-5. Whether a typed whole result can commit as null (the reader assumes not).
-6. `ValueConversionPlanResolver` with a dynamic or `Elsa.Any` source, and whether the conversion executor checks a
-   payload against an `Identity` plan's source type.
-7. `JsonElement.TryGetProperty` on duplicate keys (documented as last wins, matching deserialization; not run).
-8. Whether every executable-producing path (BPMN compile, import, workflow test run) runs the analyzer and so
-   refuses member kinds and old-kind paths before slice C.
+1. *Older binary reading a member executable.* Stand-in only: the current EF store, with its own options, refuses an
+   unknown source name or number as a corrupt payload, and silently drops a `selection` on an old kind
+   (`EfRuntimeArtifactScopeTests.MemberSourceReads.cs`). A real older build was not run; that stays open.
+2. *Older non-distributed runtime, unreadable executable.* Stand-in: a throwing executable reader. The work item is
+   poisoned without retry and the run blocked or faulted (§3). Destructive, so the upgrade rule in §3 applies.
+3. *How a failed input read surfaces.* Scheduler poison, `SchedulerWorkPoisoned` incident, cause only in text and
+   metadata (§7 table).
+4. *Workflow-level `Input`.* Publishes, but as an expression of language `Input`, not lowered to a request read
+   (`PublishWorkflowRequestHandlerTests.MemberReadAdmission.cs`, with the expression validator stubbed valid). No
+   runtime evaluator handles `Input`, so the run would fail (not run). The analyzer nonetheless offers `Input` for
+   workflow documents (`ActivityDataSelectionAnalyzer.cs:229-231`): an existing defect to file separately.
+   Consequence for slice D: `InputMember` belongs only in closed-scope graph bodies, lowered by placement; at workflow
+   level the analyzer emits `WorkflowRequestMember`.
+5. *Typed whole result as null.* Refused at completion (VF-ACT-006); the note's assumption holds (§4).
+6. *Conversion.* `Elsa.Any`, `Object` and `JsonElement` sources cannot be planned onto `String` (VF-COER); `Elsa.Any`
+   onto `Elsa.Any` is identity. An identity plan checks only the envelope's type label and passes a number, object or
+   array labelled `String` unchanged (`DynamicSourceConversionCharacterizationTests.cs`). This confirms that
+   `DeferredFit` gets no plan, and strengthens decision 9: without the fit check a wrong payload under a `Known` plan
+   reaches the snapshot.
+7. *Name matching.* Last wins on duplicates in both lookup and hydration; case differs (§7).
+8. *Every executable-producing path refuses before any write.* Workflow publish, version and draft-snapshot test
+   runs, reusable-activity template compilation (which activity-draft test runs call before saving,
+   `ActivityDraftTestRunService.cs:191,318`) and BPMN compilation all refuse every member kind and a member path on
+   an old kind in the shared analyzer (`PublishWorkflowRequestHandlerTests.MemberReadAdmission.cs`,
+   `WorkflowTestRunRequestHandlerTests.MemberReadAdmission.cs`, `BpmnDataSelectionPublicationTests.cs`). Elsa 3
+   import publishes through the same `PublishWorkflow` request (`Extensions/Elsa3/src/Activities/Design/Import/Reconciliation/Services/ImportedWorkflowPublisher.cs:95-96`;
+   read, not run). The binding compiler on its own still turns a member kind into an expression and drops a path on
+   an old kind; only the analyzer refuses. A test run's rejection reason carries only the generic "One or more
+   activity data references are invalid." and loses the finding code and path, unlike publication.
+9. *Node-payload hash default arm (§3).* Not expressible on main: no constructor or reader admits an unknown source,
+   so it is left to slice A's own hash tests.
+
+None of this changes a decision or a slice boundary. It adds two obligations: slice B throws one dedicated exception
+type with the `VF-SEL` code first (§7), and slice C states the shared-store upgrade rule (§3).
 
 ## Evidence and source seams
 
