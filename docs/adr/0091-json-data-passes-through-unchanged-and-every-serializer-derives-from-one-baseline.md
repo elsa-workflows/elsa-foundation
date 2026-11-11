@@ -20,7 +20,8 @@ Not decided here:
   That amendment defines the adapter at each boundary: what it accepts, produces and loses, including the rules for
   dates, numbers in scripts and property matching at activity inputs. This ADR is the serializer those adapters use,
   and it must agree with them (decisions 2 and 5). The two stay separate ADRs that refer to each other; rules that
-  appear in both (no key policy on data, exact member reads) are stated once, here.
+  appear in both (no key policy on data, the default member matching and its scoped conversion contracts) are stated
+  once, here.
 - The representation of null versus missing, in spec S-2 under decision D-10.
 
 This ADR only constrains how those serialize.
@@ -61,10 +62,12 @@ An analysis of `main` found:
 - **Explicit null and missing merge.**
   - `IPayloadSerializer` drops nulls on write (`DefaultIgnoreCondition = WhenWritingNull`).
   - `JsonElement?` and `object?` members read `{"x":null}` and `{}` the same.
-- **Every module builds its own options.** Under `src/` there are:
-  - about 32 `new JsonSerializerOptions` constructions in 29 files;
-  - 28 `[JsonSourceGenerationOptions]` attributes;
-  - several uses of `JsonSerializerOptions.Web` and `.Default`.
+- **Every module builds its own options.** Across all source roots (Essentials, Extensions and Studio's C# code) a
+  later survey counted:
+  - 187 option constructions in 175 files, 129 of them in Essentials;
+  - 32 `[JsonSourceGenerationOptions]` attributes;
+  - several uses of `JsonSerializerOptions.Web` and `.Default`;
+  - about 267 serializer calls with neither options nor type info.
 
   Nothing states which settings may differ, or why.
 
@@ -98,6 +101,10 @@ transformed. The risk sits where data becomes a .NET type and back:
 - **Data**: a JSON value Elsa carries but does not own: workflow inputs, outputs, variable values and defaults,
   literals, activity inputs and results, payloads and bodies.
 - **Own contract**: a JSON shape Elsa defines, such as DTOs, views, problem details and persisted envelopes.
+- **User type**: a .NET type that a user or extension defines and that data is converted into, such as an activity
+  input or a function parameter.
+- **Conversion contract**: the naming, matching and member-mapping settings used to convert data into one user type,
+  or at one conversion boundary. It is selected for that type or boundary, never through host-wide options.
 - **Name key**: a dictionary key that is an authored or stable name, such as an output, input, variable, parameter
   or node id, or a validation path built from them.
 - **Baseline**: the one read-only `JsonSerializerOptions` instance defined by this ADR.
@@ -115,6 +122,9 @@ transformed. The risk sits where data becomes a .NET type and back:
 - A source-generated context is constructed with such a copy. Its `[JsonSourceGenerationOptions]` attribute settings
   apply only to its `Default` instance, so owner code uses the constructed instance, not `Default`.
 - Any project that works with JSON may reference `Elsa.Serialization.Core`, as it would `System.Text.Json`.
+- **Existing hash inputs are the exception.** A serializer whose output feeds an existing hash or fingerprint keeps
+  its current options, frozen, and is listed in the deviation register (decision 7). A change to the baseline never
+  silently changes an artifact's identity or a stored hash.
 
 ### 2. The baseline transforms no data
 
@@ -127,24 +137,43 @@ The baseline:
 - camelCases only the member names of Elsa's own C# types (`PropertyNamingPolicy = CamelCase`). That shapes our own
   contract, not data.
 
-Member-name reads are exact (`PropertyNameCaseInsensitive = false`, unlike today's Web default). No read guesses
-which member a key was meant for. A JSON member fills a .NET member only when its name is exactly the member's JSON
-name: the name the baseline's naming policy gives it, or the name an annotation gives it
-(`[JsonPropertyName("customer_name")]`). Matching never changes data; it only decides which .NET member a JSON member
-fills.
-- **A JSON key that matches no member gives a recorded warning** that names the key and the target type, so a key is
-  never dropped silently. It is a warning, not a refusal: the step runs, and the stored JSON keeps the key. So
+**The baseline's naming and matching are the convention for Elsa's own contracts.** Their member-name reads are exact
+(`PropertyNameCaseInsensitive = false`, unlike today's Web default), and they keep the camelCase naming policy in both
+directions. That convention is not imposed on user types.
+
+**Conversion into a user type uses a scoped conversion contract.**
+- Elsa documents a default conversion contract and offers scoped options for a user type or a conversion boundary:
+  the naming policy (for example CLR names, camelCase or snake_case), exact or case-insensitive matching, and explicit
+  member mappings. A conversion never changes host-wide serializer options.
+- The default matching is exact (case-sensitive). No read guesses which member a key was meant for: a JSON member
+  fills a .NET member only when its name is exactly the name the effective contract gives that member, through its
+  naming policy, an explicit mapping or an annotation (`[JsonPropertyName("customer_name")]`). A scoped contract may
+  explicitly select case-insensitive matching instead.
+- The default naming policy for user types is stated by that contract, not inferred from Elsa's own wire format. The
+  implementing spec (S-9) states it, together with the import-rewrite details below.
+- The selected conversion behaviour is explicit and stable in the published conversion contract and its version.
+- Matching never changes data. It only decides which .NET member a JSON member fills; the stored JSON keeps its keys.
+  Reading a typed copy does not rewrite the stored JSON. Writing a narrower typed copy back as a replacement follows
+  the dropped-member rule of the ADR 0090 amendment.
+
+**An unmatched member gives a warning, judged against the effective contract.**
+- A JSON member is unmatched only when the selected conversion contract, with its naming policy, case sensitivity and
+  explicit mappings, gives it no member. A member handled through a mapping or an extension-data member is not
+  reported as unmatched.
+- By default the conversion records a warning that names each unmatched key and the target type, and continues, so a
+  key is never dropped silently. It is a warning, not a refusal: the step runs, and the stored JSON keeps the key. So
   System.Text.Json's `JsonUnmappedMemberHandling.Disallow`, which refuses, is not the default; how the warning is
-  detected is left to the implementing spec (S-9). An activity that wants strict reads declares that itself. A required
-  member that is missing still fails under D-10.
-- **Elsa 3 conversion rewrites case-only differences.** Elsa 3 read member names case-insensitively. The converter
-  rewrites a literal key that differs from the exact JSON name only in case to that name, which keeps Elsa 3's
-  behaviour (D-13, faithful). It refuses with guidance only when the rewrite is ambiguous, for example `Name` and
-  `NAME` in one object. Data that only arrives at run time gets the warning above.
-- Because the match is exact, two keys can no longer match one member (`id` and `ID`), so that ambiguity needs no
-  rule.
-- This applies to data becoming a .NET type (decision 5) and to Elsa's own contracts, which keep the camelCase naming
-  policy in both directions.
+  detected is left to S-9, and it honours the effective contract.
+- A scoped contract may explicitly select stricter handling of unmatched members. A required member that is missing
+  still fails under D-10.
+- Under exact matching two keys cannot both fill one member. With `id` and `ID` in one object, the key that matches
+  fills the member and the other gets the unmatched-member warning. A contract that selects case-insensitive matching
+  states how it treats such a pair.
+
+**Elsa 3 conversion rewrites case-only differences.** Elsa 3 read member names case-insensitively. The converter
+rewrites a literal key that differs from the exact name in the effective contract only in case to that name, which
+keeps Elsa 3's behaviour (D-13, faithful). It refuses with guidance only when the rewrite is ambiguous, for example
+`Name` and `NAME` in one object. Data that only arrives at run time gets the warning above.
 
 This replaces the case-insensitive reads this ADR first proposed.
 
@@ -155,19 +184,25 @@ skipInputValidation: true)`. Skipping validation is safe because a `JsonElement`
 a re-parse per value.
 
 - A value an endpoint accepted is stored and returned byte-identical: escaping, number text, key order, casing, and
-  the whitespace inside the value.
+  the whitespace inside the value. This holds on API, persistence and export paths that carry the value untouched.
+- The guarantee covers the carried JSON value, not the enclosing HTTP message or export document.
 - An indented writer does not re-indent such a value.
 - Validating that value is the job of the endpoint's request contract.
-- A value that a script or an activity changes is a new value and is written in the default format (decision 4).
+- A value that a script or an activity changes is a new value and is written in the default format (decision 4). Its
+  meaning is kept and any loss of precision is explicit, but its formatting may change: members inside an edited value
+  that the edit left alone do not keep their original formatting on their own account.
 - A value that passes through a script unchanged can change today: the adapter converts the whole input into
   JavaScript values up front, and Jint holds every number as a double, so an integer beyond ±2^53 or a long decimal
   loses digits (`IsolatedJintEngine.cs:168-169`). That loss is the JavaScript adapter's, not the
   serializer's. The ADR 0046 amendment fixes
-  it there with copy, compare, patch (V9): only the paths the script changed are written, so everything else keeps
-  its original text. Values the script changes or computes are new values and come back in the default format.
+  it there with copy, compare, patch (V9): only the paths the script changed are written, so values the script did
+  not change keep their original text. Values the script changes or computes are new values and come back in the
+  default format.
 - Because stored text keeps whatever notation arrived, two equal values can have different text. Nothing that decides
-  whether a value changed compares stored text: equality of values uses the canonical form of decision 7. That is
-  the no-op test of the ADR 0090 amendment (C4) and the value digest of ADR 0092.
+  whether two values are equal compares their stored or freshly serialized text: it uses a defined semantic comparison
+  of the values. That is the no-op test of the ADR 0090 amendment (C4) and the value digest of ADR 0092, and it covers
+  the stores that today compare a fresh serialization with stored text exactly. Hashing is a separate concern: a hash
+  uses its own defined input (decision 7).
 
 ### 4. One default output format
 
@@ -180,8 +215,13 @@ The proposed encoder is `JavaScriptEncoder.UnsafeRelaxedJsonEscaping`:
 
 - Publishing and Activities Design already use it.
 - It matches what decision 3 lets through: raw text bypasses any encoder.
-- Every Elsa response is `application/json`, so the HTML-sensitive characters this encoder leaves unescaped are
-  harmless as long as responses are never rendered as HTML. The implementing spec proves this (see Required evidence).
+- Elsa's own API responses are `application/json` with `X-Content-Type-Options: nosniff`, so the HTML-sensitive
+  characters this encoder leaves unescaped are harmless there: such a response is never rendered as HTML. The
+  implementing spec proves this (see Required evidence).
+
+That reasoning covers Elsa's own APIs only. A workflow-authored HTTP response uses the content type its author
+selected, so explicitly authored HTML stays `text/html`. When the author selects none, a text body is `text/plain`
+and any other body is `application/json`. Its body serialization and delivery follow that activity's contract.
 
 Today the Runtime and Design owner contexts use the default encoder. The same value therefore leaves them with
 different text than it leaves Publishing.
@@ -193,13 +233,15 @@ dictionary, an `ExpandoObject` or a POCO. The analysis in Context found no data 
 makes it a rule. Data is deserialized into .NET types only inside an activity or a function that asks for it
 (ADR 0046).
 
-That deserialization is a boundary too, and it uses a copy of the baseline like every other serializer, in both
-directions. Today it does not (see Context): activity inputs, expression-result coercion, publish-time literals and
-stateful activity state use System.Text.Json's defaults, while activity results are written with Web options. Every
-conversion between data and a .NET type, in or out, uses the same baseline copy, so a value written by one activity
-reads back the same in the next. The ADR 0046 amendment's adapter rules for these conversions (exact member matching with a diagnostic for
-unmatched keys, a `DateTime` read as UTC) are applied through that copy, not as special cases at each call site. A number is never narrowed to
-`long` or `double` on the way, unless the target type asks for it.
+That deserialization is a boundary too. It uses the conversion contract for the target type (decision 2), in both
+directions: a copy of the baseline whose naming and matching that contract selects, with the protected settings of
+decision 6 unchanged. Today it does not (see Context): activity inputs, expression-result coercion, publish-time
+literals and stateful activity state use System.Text.Json's defaults, while activity results are written with Web
+options. Every conversion between data and a given .NET type, in or out, uses the same effective contract, so a value
+written by one activity reads back the same in the next. The ADR 0046 amendment's adapter rules for these conversions
+(member matching with a warning for unmatched members, a `DateTime` read as UTC) are applied through that contract,
+not as special cases at each call site. A number is never narrowed to `long` or `double` on the way, unless the target
+type asks for it.
 
 ### 6. Modules never change host-wide options; deviations are a red flag, not a ban
 
@@ -211,8 +253,9 @@ unmatched keys, a `DateTime` read as UTC) are applied through that copy, not as 
 - **Protected settings** are `DictionaryKeyPolicy`, `NumberHandling`, `DefaultIgnoreCondition`, `Encoder`, and
   converters or type-info modifiers that change or reorder data.
 - **An architecture test finds deviations.** It combines a source scan and reflection:
-  - The scan covers `src/` for `new JsonSerializerOptions`, `JsonSerializerOptions.Web`/`.Default`,
-    `[JsonSourceGenerationOptions]` settings, and `JsonSerializer` calls without options or type info.
+  - The scan covers every source root (Essentials, Extensions and Studio's C# code) for `new JsonSerializerOptions`,
+    `JsonSerializerOptions.Web`/`.Default`, `[JsonSourceGenerationOptions]` settings, and `JsonSerializer` calls
+    without options or type info.
   - Reflection covers each module's constructed serializer contexts and the composed host HTTP options. It also
     checks that host resolvers do not overlap.
 
@@ -220,21 +263,27 @@ unmatched keys, a `DateTime` read as UTC) are applied through that copy, not as 
   "Baseline deviations" section in [docs/serialization.md](../serialization.md), listing the file, the setting, the
   reason and the approving ADR or issue. It sits beside the existing "Approved exceptions", which lists code that does
   not use `IPayloadSerializer` at all.
-- **The bar depends on what is touched.** A deviation that touches **data** at an API boundary needs an ADR. A
-  deviation in an internal serializer of our own contracts needs a register entry with its reason. This follows the
-  platform principle that Elsa gives guardrails and diagnostics, not restrictions.
+- **Enforcement is staged through a legacy list that may only shrink.**
+  - Every conversion path for workflow data is fixed in the implementing spec, using the baseline or the applicable
+    conversion contract. Workflow-data paths are never deferred to the legacy list.
+  - Existing option-less calls that handle only Elsa's own contracts are tracked in a legacy list. An entry leaves
+    the list when its call is migrated; no entry is added. A new call that is neither derived from the baseline, nor
+    in the register, nor on the list fails the test.
+  - The legacy list is not the register. It holds calls still to migrate, not justified deviations.
+- **The bar depends on what is touched.** A deviation that touches **data** at an API boundary needs an ADR as well as
+  its register entry. A deviation in an internal serializer of our own contracts needs a register entry with its
+  reason. This follows the platform principle that Elsa gives guardrails and diagnostics, not restrictions.
+- **A user's conversion contract is configuration, not a deviation.** Selecting the supported scoped naming, matching
+  or mapping options for a user type (decision 2) needs neither an ADR nor a register entry.
 
 ### 7. Expected entries in the baseline deviation register
 
 | Deviation | Why it is legitimate | Condition |
 |---|---|---|
 | `IPayloadSerializer` sorts dictionary keys (`DeterministicDictionaryConverter`) and object members (`SortObjectMembers`) | Persisted output must be byte-stable for hashing, and neither a .NET dictionary nor reflection gives a meaningful order | Applies only to our own types and maps. By decision 5 no data is a .NET dictionary, and a `JsonElement` is written raw (decision 3). Keys are written verbatim |
-| Canonical hashing: `DefaultActivityDefinitionHasher`, `GitCanonicalJson` (Git reconciliation content hash), the design-store fingerprints (`EfDesignSupport.Fingerprint`) | A content hash should treat equal values as equal whatever their escaping or whitespace | The hash preimage is a canonical re-serialization with fixed options, never the stored or transmitted text. Never on the wire |
-| Runtime EF Core durability options (frozen, see [serialization rule](../serialization.md)) | The durable format of suspended state changes only through migrations and golden fixtures | Decision 3 applies there too. S-9 adopts it as a stamped format change made through that process, so suspended state keeps data byte-identical like every other store. Before 4.0 that means regenerated migrations and updated golden fixtures, not an upcaster |
+| Hash inputs: every existing serializer whose output feeds a hash or fingerprint, for example the artifact hash and the activity contract fingerprint it includes, `DefaultActivityDefinitionHasher`, `GitCanonicalJson` (Git reconciliation content hash), the design-store fingerprints (`EfDesignSupport.Fingerprint`) and hashes taken directly over serialized text | A baseline change must not silently change an artifact's identity or a stored hash | Each keeps its current options, frozen, and its input contract is recorded in the register. Never on the wire. Changing a hash input is a separate, explicit decision that assesses its identity, versioning and migration consequences |
+| Runtime EF Core durability options (frozen, see [serialization rule](../serialization.md)) | The durable format of suspended state changes only through compatible writer changes or migrations and golden fixtures | Decision 3 applies there too. A writer change that is shown to be compatible and to keep the meaning, so old and new code read old and new rows with the same meaning, needs no format-version bump or migration. S-9 shows that with fixed serialized examples and compatibility checks; if that proof fails, S-9 makes the change a stamped format change through migrations and golden fixtures. A change to the meaning of rows, or to reader and writer compatibility, always takes that stamped path. Before 4.0 a stamped change means regenerated migrations and updated golden fixtures, not an upcaster |
 | Secrets `json`/`jsonb` columns | The database normalizes the text, not our serializer | Secret payloads are not workflow data |
-
-For runtime durable state, a reset and republish before 4.0 is enough: state saved before 4.0 needs no backward
-reads, as long as S-9 states the migration path from 4.0 on.
 
 ### 8. Explicit null is kept, and the value model must preserve it
 
@@ -256,17 +305,17 @@ whatever S-2 chooses.
   Studio parses JSON and reads `errors` maps by value, so no Studio change is expected. Clients that compare text, or
   look up camelCased output names, see the difference.
 - **Hashes and fingerprints.**
-  - `GitCanonicalJson` hashes the compact `IPayloadSerializer` output, then recomputes the hash from files through a
-    `JsonNode` re-emit with the default encoder. That only works while the serializer's output equals that re-emit.
-  - Decisions 3 and 4 break that assumption, as does the design-store fingerprint over serializer output. Every
-    definition read back from Git would hash as changed.
-  - These hashes therefore move to a canonical preimage (decision 7) in the same change that introduces the baseline.
-    Existing stored hashes are recomputed once.
+  - Existing hash inputs keep their frozen options and are listed in the register (decisions 1 and 7), so the
+    baseline moves no artifact identity, content hash or fingerprint, and no stored hash is recomputed.
+  - Equality checks that compare serialized text move to a semantic comparison of values (decision 3).
+  - Changing a hash input later is a separate, explicit decision with its identity, versioning and migration
+    consequences assessed.
 - **Stored data.** Rows written today were normalized when first written and stay as they are. New rows keep the
   received text and explicit nulls. Readers are unaffected, because a missing member still reads as null. Exported
   artifacts gain `null` members, so their bytes differ from earlier exports.
 - **Code.**
-  - The option constructions and attributes become either "derived from the baseline" or register entries.
+  - The option constructions and attributes become either "derived from the baseline" or register entries. Existing
+    option-less calls on Elsa's own contracts may instead stay on the legacy list until migrated (decision 6).
   - The `DictionaryKeyPolicy` settings and the two host-wide `Configure` calls are removed.
   - The unused Workbench `JsonSerializerOptionsCache` is deleted.
   - Two contract tests that assert camelCased keys are inverted, along with four assertions that pin
@@ -295,7 +344,9 @@ workarounds. Rejected in favour of a register: deviations stay possible, but eac
 ## Required evidence for the implementing spec (S-9)
 
 - **Architecture test.** It fails on an unregistered deviation of each kind it scans, passes with a register entry,
-  and covers the composed host HTTP options and resolver overlap.
+  and covers the composed host HTTP options and resolver overlap. It fails on a new option-less call that is not on
+  the legacy list, passes when an entry is removed from the list after its call is migrated, and the list holds no
+  workflow-data path.
 - **Runtime round trip.** An output `OrderTotal` holding
   `{"CustomerId":1,"Name":"Ren\u00e9","N":1.0}` comes back with the key `OrderTotal` and the value text
   byte-identical.
@@ -305,16 +356,30 @@ workarounds. Rejected in favour of a register: deviations stay possible, but eac
 - **Hash stability.**
   - A Git round trip (write files, read them back) keeps every content hash.
   - Design-store fingerprints stay valid.
-  - Stored hashes are recomputed once.
+  - Every registered hash input gives the same hash for the same input before and after the baseline is introduced.
+  - Each direct-text hash and each check that compares serialized text is listed, and each text comparison that
+    decides equality of values uses the semantic comparison.
+- **Runtime durable state.** Fixed serialized examples show that old and new code read old and new rows with the same
+  meaning. If they do not, the change is a stamped format change (decision 7).
 - **Nulls.** `IPayloadSerializer` keeps explicit nulls, and existing rows still read the same.
 - **.NET-typed values round trip.** A .NET-typed activity result bound to a .NET-typed input of the same type arrives
   with every property set. Test this first: it reproduces today's suspected loss (Context).
-- **Activity input matching and dates.** `{"customerName":…}` fills `CustomerName`; `id` and `ID` in one object fail
-  with a diagnostic; `"2026-10-28T09:15:00+05:00"` into `DateTime` gives the same instant on a UTC and a non-UTC server,
-  at run time and in publish-time literals.
+- **Activity input matching and dates.**
+  - Under the default contract, a key spelled exactly as the contract's name for `CustomerName` fills it; a key that
+    differs only in case does not, and gives the unmatched-member warning while the step continues.
+  - `id` and `ID` in one object: one fills the member and the other gives the warning.
+  - A scoped contract that selects case-insensitive matching or an explicit mapping fills the member without a
+    warning, and a member handled through a mapping or extension data is not reported.
+  - A scoped contract that selects strict handling refuses an unmatched member; a missing required member fails.
+  - Selecting a scoped contract changes no host-wide option.
+  - `"2026-10-28T09:15:00+05:00"` into `DateTime` gives the same instant on a UTC and a non-UTC server, at run time
+    and in publish-time literals.
 - **Numbers.** A 20-digit integer and a 29-digit decimal pass through ForEach and an activity input unchanged.
-- **Content type.** Every response carrying raw or relaxed-encoded data has `Content-Type: application/json` and
-  `X-Content-Type-Options: nosniff`.
+- **Content type.**
+  - Every Elsa API response carrying raw or relaxed-encoded data has `Content-Type: application/json` and
+    `X-Content-Type-Options: nosniff`.
+  - A workflow-authored response keeps the content type its author selected, for example `text/html`. With none
+    selected, a text body such as `Hello` is `text/plain` and a JSON object is `application/json`.
 - **S-9 intake checks:**
   - hash, digest and byte-comparison consumers;
   - producers of metadata and error keys;
@@ -324,4 +389,4 @@ workarounds. Rejected in favour of a register: deviations stay possible, but eac
   - the encoder the composed host options actually use;
   - Studio preference and structured-log responses after the host options change;
   - every data-to-.NET conversion on the value path found by the follow-up search (see Context), each moved to
-    the baseline copy or registered.
+    the baseline or its conversion contract, or registered.
