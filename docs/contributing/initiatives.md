@@ -77,13 +77,13 @@ The board states which phase the initiative is in.
    *Provisional specs* below). Its formal approval needs the ADRs it depends on to be agreed. Each spec row on the board
    names the ADRs and decisions it needs.
 3. **Implementation.** Production implementation of a spec needs the approved spec and every ADR and decision it
-   applies, landed on `main`. ADR and spec PRs both follow the final-commit agreement rule below.
+   applies, agreed and merged into the initiative branch. The implementation is built on that branch and lands on
+   `main` with the initiative (see *Implementing a spec on the branch* below). ADR and spec PRs both follow the
+   final-commit agreement rule below.
 
 Phases apply **per spec**, not to the initiative as a whole. A spec advances to implementation as soon as its own
 dependencies are resolved: the spec is approved, and every ADR and decision it applies is agreed and merged into the
-initiative branch. It does not wait for the other specs. The coordinator then lands that spec early (see *Early
-landing of a spec* below), and its implementation follows the repository's normal rules on `main`. The board's phase
-line names the specs in implementation. An initiative may agree further, stricter rules, such as holding every
+initiative branch. It does not wait for the other specs. The board's phase line names the specs in implementation. An initiative may agree further, stricter rules, such as holding every
 implementation until all specs are agreed. Such a rule holds until the approvers change it. A bounded research
 experiment is allowed in any phase, but it never silently becomes production implementation.
 
@@ -386,14 +386,16 @@ Every initiative has one integration branch in this repository, `initiative/<n>-
 initiative starts and named in the board's header. It holds the initiative's **agreed decision artifacts** and nothing
 else: ADRs and ADR amendments; spec, plan and tasks; the CONTEXT, glossary or constitution edits those decisions
 imply; and the initiative's meeting agendas (`docs/initiatives/<n>/`), which land with it as part of the decision
-log. It holds no production code. Because every proposal is checked against everything already on it, the branch is
-the initiative's shared, consistent knowledge base: what the initiative has decided so far, in one place. Everyone
-taking part works from it — authors cut their proposal branches from it, and reviewers and the coordinator check it
-out to see the agreed decisions a proposal builds on — not from `main`, which carries them only once they land
-(early, with a spec, or when the initiative lands).
+log. Once a spec's decisions are agreed, it also holds that spec's **implementation** (see *Implementing a spec on
+the branch* below), so the decisions and the code built on them land together. Because every proposal is checked
+against everything already on it, the branch is the initiative's shared, consistent knowledge base: what the
+initiative has decided so far, in one place. Everyone taking part works from it — authors cut their proposal branches
+from it, and reviewers and the coordinator check it out to see the agreed decisions a proposal builds on — not from
+`main`, which does not carry them until the initiative lands.
 
 Work outside the initiative is unaffected. Every rule in this section applies only to **initiative proposals**: PRs
-whose base is an `initiative/*` branch, or the branch of a proposal stacked on one.
+whose base is an `initiative/*` branch, or the branch of a proposal stacked on one. Implementation PRs on the branch
+follow their own subsection below where it differs.
 
 - **Proposal PRs target the branch.** An ADR, amendment or spec PR in the initiative's scope uses the initiative branch
   as its base from its first draft, so it is written and reviewed against what the initiative has already agreed.
@@ -403,12 +405,14 @@ whose base is an `initiative/*` branch, or the branch of a proposal stacked on o
   parent's branch. They are part of the parent: the **parent's author** merges an agreed child into their own branch
   before the parent's gate, and the change counts toward the parent's agreement under the materiality rule. A child
   still open when its parent merges is retargeted to the initiative branch and becomes a proposal of its own.
-- **No required CI.** Initiative proposals carry no required checks. Architecture is judged by agreement and the
-  pre-merge gate, not by builds and tests, which would only re-run unchanged code. The landing PR runs every required
-  check on `main`.
+- **No required CI for decision documents.** ADR, amendment and spec proposals carry no required checks.
+  Architecture is judged by agreement and the pre-merge gate, not by builds and tests, which would only re-run
+  unchanged code. Implementation PRs do run the full checks (see below), and the landing PR runs every required check
+  on `main`.
 - **The coordinator merges** proposals into the initiative branch, by squash, after agreement and a clean pre-merge
   gate. Code Review does not merge initiative proposals ([org review and merge rules][org-agents-review]). Each
-  accepted proposal is one squash commit, so the branch reads as a decision log. The coordinator also pushes the merges
+  accepted proposal is one squash commit, so the branch reads as a decision log. The coordinator also merges
+  implementation PRs, after Code Review's approval and green checks instead of the gate. The coordinator also pushes the merges
   of `main`, the ADR index updates and any renumbering of merged items; nobody else pushes to the branch. When the
   coordinator authored or committed to a proposal, the recorded delegate, or else a non-author approver, stands in:
   they run the gate, push what it needs and merge the proposal, because an author never merges their own PR. A stand-in
@@ -495,32 +499,35 @@ decision relies on. That fix is a **side track**:
 
 An ADR amendment on a topic on the board is never a side track: it goes through the initiative.
 
-### Early landing of a spec
+### Implementing a spec on the branch
 
 A spec whose dependencies are resolved does not wait for the rest of the initiative. Once the spec is approved and
 merged into the initiative branch, and every ADR and decision it applies is agreed and merged there, the coordinator
-lands it on `main` ahead of the branch:
+moves its board row to implementation, recording the branch commit it starts from:
 
-- The coordinator cuts a branch from `origin/main` and copies, unchanged from the initiative branch, the spec's folder
-  and the files of every ADR and amendment it applies (with the CONTEXT, glossary or constitution edits they imply).
-  A file goes over whole, so every decision in it must be agreed; if a file still holds an unagreed part, the spec is
-  not ready to land. Nothing else from the branch goes with it.
-- The coordinator runs the pre-merge gate's checks against `main` for those files and posts the evidence on the PR:
-  the spec and every ADR it applies agreed and merged on the branch, with their commits, and no open recheck,
-  collision or side track that blocks them.
-- One approver records in a PR comment that these files are the agreed text (an attestation, as at landing), and Code
-  Review approves and merges the PR through the normal [merge path](merging.md).
-- The spec's board row records the `main` merge commit and moves to implementation. Implementation then follows the
-  repository's normal rules on `main`: Speckit implement, review, and Code Review merges. It is not an initiative
-  proposal and does not target the initiative branch.
-- The next sync merges `main` into the initiative branch. The early-landed files are identical on both sides, so the
-  branch and `main` agree on them. A later change to them follows *Accepted text is amended in place*, and the
-  amendment also lands on `main` the same way before the implementation builds on it.
+- The implementer cuts a branch from `origin/initiative/<n>-<slug>` and implements the spec there (Speckit implement),
+  so the code is written against the decisions it applies. The implementation PR targets the initiative branch and
+  says `Part of #N`. It may be split into several PRs, each naming the spec and its tasks.
+- **It runs the full checks.** Unlike ADR and spec proposals, an implementation PR changes code, so it runs the
+  repository's CI tiers, the same checks a PR to `main` runs. Its author runs the local review loop on the draft,
+  marks it ready with the evidence, and requests Code Review.
+- **Code Review reviews, the coordinator merges.** Code Review reviews and approves it as it would a PR to `main`, but
+  does not merge it (the [org rule][org-agents-review] for `initiative/*` bases stands). The coordinator merges it
+  into the initiative branch once Code Review approved it and its checks pass. It changes no decision, so it needs
+  no architecture agreement and no pre-merge gate; if it would change a decision or a requirement, that change goes
+  through the spec or ADR as an amendment first.
+- An implementation that finds an agreed ADR or spec does not work in code follows *Provisional specs*: the finding
+  goes back to the document's PR as an amendment, and the implementation waits for it.
+- When the spec's tasks are done, its `**Status**` becomes `Implemented` in the last implementation PR, and the board
+  row records the merge commit.
+
+The initiative branch therefore carries code once implementation starts. The coordinator's syncs keep merging `main`
+in, so the code keeps building against current `main`.
 
 ### Landing
 
-The initiative branch lands on `main` in one PR, once every board row is agreed. Specs that already landed early
-are part of it unchanged:
+The initiative branch lands on `main` in one PR, with its decisions and the implementations built on them, once every
+board row is agreed and merged and every spec on it is implemented:
 
 - The coordinator runs the pre-merge gate against `main` one last time and posts the evidence on the landing PR:
   every row agreed and merged, no open side track, collision or recheck, and the gate comment.
@@ -530,8 +537,8 @@ are part of it unchanged:
 - The coordinator tags the branch tip `archive/initiative/<n>-<slug>` and requests Code Review. Code Review approves
   and merges it through the normal [merge path](merging.md), with a merge commit so that `main` keeps the decision
   log. Every required check runs.
-- The coordinator moves the board's remaining specs to implementation, and a repository admin deletes the branch,
-  since the ruleset blocks everyone else.
+- The coordinator closes the board, and a repository admin deletes the branch, since the ruleset blocks everyone
+  else.
 
 ## Size guard
 
