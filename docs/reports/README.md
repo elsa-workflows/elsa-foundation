@@ -4,6 +4,7 @@ Reports are point-in-time findings. They may become work units, but they are not
 
 ## Current reports
 
+- [Execution-core S8: native and direct-BPMN migration and rollback](exec-core-migration-rollback.md) - docs-only statement on `a9771131c`: publish stores/tables re-verified vs `60d28493`, zero Runtime/Bpmn migrations since that SHA, ApiCompat of last-published Runtime.Core / Bpmn.Core, FR-015/016/SC-004 status, and the named unsupported list. Does not complete Program #2892.
 - [G1 common-mechanism inventory (native engine adapter vs BPMN adapter)](exec-core-g1-mechanism-inventory.md) - docs-only source inventory on `0944325db`: dispatch, resume, incidents, cancellation, retry, lease/fence, checkpoint; identical / deliberately different / unknown; no extraction.
 - [G2.4 child-outcome mapping (native ↔ BPMN)](exec-core-g2-child-outcome-mapping.md) - explicit child→parent outcome table for RunBpmn and composite callActivity→native child (success, business error, technical failure, cancel); PROVEN/OPEN per row; SQLite Owned Workbench / one host.
 - [G3 persistence/coordination overhead on Root/SQLite G2 journeys](exec-core-g3-overhead-counts.md) - command/intent counts and step latency for the #4028 child-cancel journey and the remaining #3992/#3993/#3995 G2 journeys on SQLite Owned Workbench; no budget or throughput claim.
