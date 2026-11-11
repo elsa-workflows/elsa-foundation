@@ -30,6 +30,13 @@ test("workspace tabs keep the list title and name new and opened decisions", asy
   await expect(tabs.getByRole("tab", { selected: true })).toHaveAccessibleName("New decision");
   await capture(page, testInfo, "decision-tabs-new");
 
+  await visible(page).getByRole("button", { name: "Back to decisions", exact: true }).click();
+  await expect(visible(page).locator("#decisions-title")).toHaveText("Decisions");
+  await expect(tabs.getByRole("tab", { selected: true })).toHaveAccessibleName("Decisions");
+  await visible(page).getByRole("button", { name: "New decision", exact: true }).click();
+  await expect(visible(page).getByRole("heading", { name: "New decision", exact: true })).toBeVisible();
+  await expect(tabs.getByRole("tab", { selected: true })).toHaveAccessibleName("New decision");
+
   await visible(page).getByLabel("Name", { exact: true }).fill("Picker policy");
   await expect(tabs.getByRole("tab", { selected: true })).toHaveAccessibleName("Picker policy");
   await visible(page).getByRole("button", { name: "Save decision", exact: true }).click();

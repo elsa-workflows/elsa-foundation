@@ -96,6 +96,7 @@ export async function decisionsJourney(page: Page, info: TestInfo, capture: Capt
   await expect(surface.getByText("Unsaved decision", { exact: true })).toBeVisible(); await expect(surface.getByText("Saved draft", { exact: true })).toHaveCount(0);
   await part("decision-create", surface.getByLabel("Name", { exact: true }));
   await button("Back to decisions").click(); await expect(button("New decision")).toBeFocused();
+  await expect(workspaceTabs.getByRole("tab", { selected: true })).toHaveAccessibleName("Decisions");
   await button("New decision").click(); await surface.getByLabel("Name", { exact: true }).fill(`Approval policy ${suffix}`);
   await surface.getByLabel("Description", { exact: true }).fill("Determine purchase approval requirements.");
   await surface.getByRole("textbox", { name: "Output 1 name", exact: true }).fill("approvalLevel");

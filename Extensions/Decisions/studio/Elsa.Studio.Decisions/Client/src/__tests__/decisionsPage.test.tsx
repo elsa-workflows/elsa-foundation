@@ -4,6 +4,7 @@ import { DecisionsPage } from "../DecisionsPage";
 import { CasePanel } from "../CasePanel";
 import { DecisionVersionEditor } from "../DecisionVersionEditor";
 import { EvaluationPanel } from "../EvaluationPanel";
+import { register } from "../module";
 import { StudioWorkspaceTabProvider, studioNavigationRequestedEvent, studioWorkspaceTabRequestedEvent, type StudioWorkspaceTabHandle, type StudioWorkspaceTabRequest } from "@elsa-workflows/studio-sdk";
 import { editTable, newDecisionXml, parseTable } from "../decisionXml";
 import { asset, button, click, render, select, stubApi, type } from "./helpers";
@@ -26,6 +27,9 @@ describe("Decisions Studio journeys", () => {
     update(<DecisionsPage api={api} navigate={vi.fn()} isNew />);
     await vi.waitFor(() => expect(host.querySelector('input[aria-label="Input 1 name"]')).not.toBeNull());
     expect(lastTitle(setTitle)).toEqual({ title: "New decision", detail: undefined });
+    update(<DecisionsPage api={api} navigate={vi.fn()} />);
+    await vi.waitFor(() => expect(host.textContent).toContain("Purchase approval"));
+    expect(lastTitle(setTitle)).toEqual({ title: "New decision", detail: undefined });
     update(<DecisionsPage api={api} navigate={vi.fn()} assetId={asset.id} />);
     await vi.waitFor(() => expect(lastTitle(setTitle)).toEqual({ title: "Approval", detail: "Draft" }));
     type(Array.from(host.querySelectorAll<HTMLInputElement>("input")).find(input => input.parentElement?.textContent === "Name")!, "Renamed approval");
@@ -34,6 +38,15 @@ describe("Decisions Studio journeys", () => {
     api.backend.http.getJson.mockImplementation(async path => path.endsWith("/versions") ? { items: [published] } : path.endsWith("/versions/v1") ? published : path.endsWith("/cases") ? { items: [] } : asset);
     update(<DecisionsPage api={api} navigate={vi.fn()} assetId={asset.id} versionId="v1" />);
     await vi.waitFor(() => expect(lastTitle(setTitle)).toEqual({ title: "Approval", detail: "Version 3" }));
+  });
+  it("keys a new decision apart from the list so returning to the list restores Decisions", () => {
+    const api = stubApi();
+    register(api);
+    const key = (path: string) => (api.featureAreas.list()[0] as { routes?: Array<{ workspace?: { resourceKey?(location: URL): string | null | undefined } }> }).routes?.[0]?.workspace?.resourceKey?.(new URL(path, "https://studio.example/"));
+    expect(key("/decisions")).toBeNull();
+    expect(key("/decisions?new=1")).toBe("decision-editor:new");
+    expect(key("/decisions?decision=approval")).toBe("decision:approval:draft");
+    expect(key("/decisions?decision=approval&version=v1")).toBe("decision:approval:v1");
   });
   it("names a new decision's tab after save once the host opens the created resource", async () => {
     const api = stubApi(), navigate = vi.fn(), { host, setTitle, update } = mountInTab(<DecisionsPage api={api} navigate={navigate} isNew />);

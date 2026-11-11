@@ -48,7 +48,7 @@ const api = createApi();
 const resourceKeyOf = (location: string) => {
   const url = new URL(location, window.location.origin);
   const id = url.searchParams.get("decision");
-  return id ? `decision:${id}:${url.searchParams.get("version") ?? "draft"}` : null;
+  return id ? `decision:${id}:${url.searchParams.get("version") ?? "draft"}` : url.searchParams.has("new") ? "decision-editor:new" : null;
 };
 
 export function DecisionWorkspaceTabsFixture() {
