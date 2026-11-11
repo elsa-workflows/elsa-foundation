@@ -30,7 +30,7 @@ These are framework-level terms. Elsa-specific bindings live in [elsa.md](elsa.m
 | Extension point | A published surface where another feature or module may replace, contribute, subscribe, inherit, or otherwise extend behavior through an approved contract or cataloged mechanism. |
 | Dependency | A declared or actual requirement from one module/feature/project/package to another. Reason about dependencies at the smallest stable boundary. |
 | Compatibility | Whether a set of packages/features can coexist, based on public contracts and external/transitive package requirements. |
-| Shell | A composed host/application setup that activates selected features. |
+| Shell | A composed host/application setup that activates selected features. It is not a tenant and not a persistence scope. In CShells, one named shell is one service container; see [CShell](elsa.md#cshell). |
 | Work unit | A planned architecture or feature change with intent, acceptance criteria, tasks, and verification. |
 | Ratification | Formal acceptance of a constitutional decision by the named architecture decision makers. Draft decisions may guide work, but must remain visibly draft. |
 | Capability | Retired vocabulary. Use `feature`. |
