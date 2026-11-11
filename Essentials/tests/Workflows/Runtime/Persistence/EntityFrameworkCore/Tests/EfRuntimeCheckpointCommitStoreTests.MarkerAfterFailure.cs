@@ -403,6 +403,38 @@ public sealed partial class EfRuntimeCheckpointCommitStoreTests
     }
 
     [Fact]
+    public async Task A_replay_whose_marker_insert_fails_as_a_provider_timeout_reported_as_a_cancellation_gets_the_stored_result()
+    {
+        // The replay's attempt gets as far as its marker insert, which the provider ends as a timeout it reports as
+        // a cancellation. The attempt has not asked its transaction to commit: that is only said once the marker
+        // insert has returned. So the marker is read before the timeout leaves, and the read answers the replay.
+        await using var database = await TestDatabase.CreateAsync();
+        var commit = WithIntent(ValueCommit("commit-insert-times-out"), "intent-1");
+        RuntimeCheckpointCommitStoreResult stored;
+        await using (var seed = database.Open("tenant-a"))
+            stored = await new EfRuntimeCheckpointCommitStore(seed, new FixedAccessor("tenant-a")).CommitAsync(commit, Decision());
+        var capture = new CommandCaptureInterceptor();
+        var insertTimesOut = new MarkerInsertReportedAsCancelled();
+        await using var context = database.Open("tenant-a", capture, insertTimesOut);
+
+        var replay = await new EfRuntimeCheckpointCommitStore(context, new FixedAccessor("tenant-a")).CommitAsync(commit, Decision());
+
+        Assert.Single(replay.PendingPostCommitWorkIds);
+        Assert.Equal(stored.PendingPostCommitWorkIds, replay.PendingPostCommitWorkIds);
+        Assert.Equal(stored.ConsumedSchedulerWorkItemIds, replay.ConsumedSchedulerWorkItemIds);
+        Assert.Equal(1, insertTimesOut.Hits);
+        var commands = capture.Commands.ToArray();
+        Assert.Single(commands, IsMarkerInsert);
+        Assert.Single(commands, IsMarkerRead);
+        Assert.True(Array.FindIndex(commands, IsMarkerInsert) < Array.FindIndex(commands, IsMarkerRead));
+        Assert.Empty(context.ChangeTracker.Entries());
+        Assert.Null(context.Database.CurrentTransaction);
+        await using var read = database.Open("tenant-a");
+        Assert.Single(await read.RuntimeCheckpointCommits.ToArrayAsync());
+        Assert.Equal(1, (await read.DurableValueStates.AsNoTracking().SingleAsync()).Revision);
+    }
+
+    [Fact]
     public async Task A_cancelled_call_leaves_with_its_own_cancellation_and_no_marker_read()
     {
         await using var database = await TestDatabase.CreateAsync();
@@ -680,6 +712,34 @@ public sealed partial class EfRuntimeCheckpointCommitStoreTests
         using var result = JsonDocument.Parse("{\"outcome\":\"completed\"}");
         return new(null, ModelExecution(executionId),
             new(new("tenant-a"), executionId, "input-1", "test.input", "content-1", 1, OccurredAt, null, null, result.RootElement));
+    }
+
+    /// <summary>Fails every insert into the marker table the way a provider reports a timeout.</summary>
+    private sealed class MarkerInsertReportedAsCancelled : DbCommandInterceptor
+    {
+        public int Hits { get; private set; }
+
+        public override ValueTask<InterceptionResult<int>> NonQueryExecutingAsync(
+            DbCommand command, CommandEventData eventData, InterceptionResult<int> result, CancellationToken cancellationToken = default)
+        {
+            ThrowOnMarkerInsert(command);
+            return ValueTask.FromResult(result);
+        }
+
+        public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(
+            DbCommand command, CommandEventData eventData, InterceptionResult<DbDataReader> result, CancellationToken cancellationToken = default)
+        {
+            ThrowOnMarkerInsert(command);
+            return ValueTask.FromResult(result);
+        }
+
+        private void ThrowOnMarkerInsert(DbCommand command)
+        {
+            if (!IsMarkerInsert(command.CommandText))
+                return;
+            Hits++;
+            throw new TaskCanceledException("Simulated provider timeout at the marker insert.");
+        }
     }
 
     /// <summary>Fails the commit of every transaction of the context the way a provider reports a timeout.</summary>
