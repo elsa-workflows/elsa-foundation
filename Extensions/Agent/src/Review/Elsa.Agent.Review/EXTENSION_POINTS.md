@@ -5,9 +5,9 @@ Domain: `Elsa.Agent`
 
 Agents are user-defined: authors create and publish them through Studio or configuration, and compose them with
 ordinary workflow control flow. This package supplies one generic building block, specified by the
-[human review contract](../../../../../specs/1179-specialist-agents/contracts/human-review.md). `HumanReview` is a native wait
+[human review contract](../../../../../specs/1179-agents/contracts/human-review.md). `HumanReview` is a native wait
 that pins exact content, such as an agent's output, for a permitted person's decision. The Copywriter/Proofreader
-revision process in [spec1179's editorial contract](../../../../../specs/1179-specialist-agents/contracts/editorial.md)
+revision process in [spec1179's editorial contract](../../../../../specs/1179-agents/contracts/editorial.md)
 is a sample built from these blocks. It is not product code.
 
 The package adds no general task inbox, user-task platform, approval store or generic checkpoint API.

@@ -4,7 +4,7 @@ The pre-GA clean breaks that renamed published packages or persisted identifiers
 
 ## 2026-11-09: Weaver leaves the `Elsa.Agent` root (stage 1 of the agent rename)
 
-Decision: [ADR 0094 amendment](../adr/0094-agent-definitions-own-authored-content-and-providers-publish-activities.md#amendment--2026-11-09-accepted), plan and inventory on [#4027](https://github.com/elsa-workflows/elsa-foundation/issues/4027). Stage 2 is the entry below; the words stage follows.
+Decision: [ADR 0094 amendment](../adr/0094-agent-definitions-own-authored-content-and-providers-publish-activities.md#amendment--2026-11-09-accepted), plan and inventory on [#4027](https://github.com/elsa-workflows/elsa-foundation/issues/4027). Stages 1b, 2 and 3 are the entries below.
 
 | Kind | Was | Is |
 |---|---|---|
@@ -73,4 +73,20 @@ Decision: [ADR 0094 amendment](../adr/0094-agent-definitions-own-authored-conten
 
 Reused identifiers: `Elsa.Agent`, `Elsa.Agent.Core`, `Elsa.Agent.Api`, `Elsa.Agent.Anthropic` and `Elsa.Agent.Persistence.EntityFrameworkCore` were Weaver package ids until stage 1, as were the capability `elsa.api.agent` (v1) and the EF history `ElsaAgent`. Stage 2 reuses them on purpose for user-defined agents. The publish-state record is keyed by package id and is never removed, so the reused ids continue their version sequence above the Weaver-era `4.0.x-preview` versions instead of restarting; a consumer that pinned a Weaver-era `Elsa.Agent*` package moves to `Elsa.Weaver.*`, and a Studio module that required `elsa.api.agent` for the Weaver client now requires `elsa.api.weaver`.
 
-Frozen records keep the old words: dated reports, spec folders such as `specs/1179-specialist-agents`, ADR text and the consolidation ledgers describe what happened then.
+Frozen records keep the old words: dated reports, evidence folders, ADR text and the consolidation ledgers describe what happened then.
+
+## 2026-11-10: the agent spec and the docs take the new words (stage 3 of the agent rename)
+
+Decision: plan on [#4027](https://github.com/elsa-workflows/elsa-foundation/issues/4027). Documentation and enforcement only; no package, type, route or persisted identifier changes in this stage.
+
+| Kind | Was | Is |
+|---|---|---|
+| Spec folder | `specs/1179-specialist-agents` | `specs/1179-agents`; every link to it follows, including the links in ADR 0094 and in specs 002, 003 and 221 (their text is otherwise unchanged) |
+| Spec text | Specialist, `Elsa.Agent.Specialists.*`, `elsa.specialist.*`, `specialist-openai`, `Extensions/Agent/src/Specialists/...` | Agent and the stage 2 names, so the spec describes the code as it is. The spec's Terminology note records the old name |
+| Retired terms (`.editorconfig`, enforced by `Elsa.Architecture.Analyzers`) | none for these folders | `Specialist`, `Specialists` in type and namespace names under `Extensions/Agent/src`; `Agent`, `Agents` in type and namespace names under `Extensions/Weaver/src` |
+
+Not renamed: the branch name `agent/codex/3538-specialist-design` in the spec header (it is the branch the design was written on), other specs that mention specialists in their own history, and evidence files.
+
+Version line: [ADR 0094](../adr/0094-agent-definitions-own-authored-content-and-providers-publish-activities.md#amendment--2026-11-09-accepted) gives the rename one Minor bump of the single pre-GA version line, with this page as its release note. The bump is not part of this stage. It is one change of its own, `ElsaVersion` 4.0 → 4.1 in `VersionLines.props`, made after the last rename stage (3b, Weaver's own wording) has merged, so that every Line B package moves to the new minor once and the note it carries is the complete map. Until then the renamed ids are published on the current line (see the top of this page) and this ledger records the break.
+
+Weaver enum members and JSON property names that still say agent (`agentScopes`, `AgentHarnessProvider`, `SubAgents`) are wire names and stay until an owner decision; the analyzer checks type and namespace declarations only, so it does not flag them.

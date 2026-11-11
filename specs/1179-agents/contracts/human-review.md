@@ -1,7 +1,7 @@
 # Human review of agent output
 
-**Status**: M4 product contract, FR-007–FR-008/US2, Program A4/A5/A14. Delivered by T027 (`Elsa.Agent.Specialists.Review`)
-and T028 (Studio page, BPMN journeys). Specialists are user-defined agents (plan D10). The
+**Status**: M4 product contract, FR-007–FR-008/US2, Program A4/A5/A14. Delivered by T027 (`Elsa.Agent.Review`)
+and T028 (Studio page, BPMN journeys). Agents are user-defined (plan D10). The
 [editorial process](editorial.md) is a sample built from this contract.
 
 ## The wait

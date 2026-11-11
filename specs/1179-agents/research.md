@@ -1,4 +1,4 @@
-# Research and decisions: Specialist agents
+# Research and decisions: Agents
 
 **Status**: M1 design evidence; production recommendations remain subject to packet review.
 Sources were inspected on 31 October 2026. M0 receipts remain bounded research rather than product acceptance.
@@ -14,13 +14,13 @@ query correction rather than another catalog or a client-filtered collection.
 
 **Evidence**: `IActivityProvider` and `IActivityTemplateProviderCompiler` are exercised by the
 [M0 package witness](../../tools/agents/publication/README.md). The real reviewed publisher/EF
-command persisted an immutable specialist and its exact template. The native package consumer
+command persisted an immutable agent and its exact template. The native package consumer
 executed it without Design dependencies; the separate BPMN closure exposed existing coupling.
 
 `Essentials/src/Activities/Design/Persistence/EntityFrameworkCore/Stores/EfActivityDesignStores.cs`
 filters definition provider membership using published head/recommendation before count/paging.
 `EfActivityManagementProjectionWriter.cs` populates those fields from published versions, so a new
-unpublished specialist is omitted. Existing draft projection rows already carry DefinitionId,
+unpublished agent is omitted. Existing draft projection rows already carry DefinitionId,
 ProviderKey, status and validity sequences (`Entities/ActivityManagementProjectionEntities.cs`).
 The writer updates parent/draft projection revisions and watermark in the same transaction.
 
@@ -33,7 +33,7 @@ their actual exact identities; unrelated published provider metadata is not an a
 
 **Alternative rejected**: Parallel agent catalog duplicates publication authority; client-side page
 filtering loses unpublished rows and correct totals; a new membership store duplicates existing
-temporal facts. Source-only providers do not establish mutable specialist CRUD.
+temporal facts. Source-only providers do not establish mutable agent CRUD.
 
 The current generic lifecycle retires exact versions; ActivityDefinition has no archive flag.
 Initial archive behavior therefore uses explicit version retirement/recommendation, preserving history
@@ -41,7 +41,7 @@ and bindings. Definition-wide archive was an ambiguous draft phrase, not a reaso
 
 ## R2 — Domain, packages and MAF dependency graph
 
-**Decision**: Use `Elsa.Agent.Specialists` within `Extensions/Agent`. Separate contracts, Design
+**Decision**: Use `Elsa.Agent` within `Extensions/Agent`. Separate contracts, Design
 provider/compiler and runtime; retain MAF inside the first concrete runtime implementation.
 
 **Evidence**: Elsa constitution §E2.1 pins `Elsa.Agent`, not `Elsa.Agents`. Existing
@@ -50,7 +50,7 @@ single active Weaver harness. M0 pinned MAF 1.27.0 and demonstrated actual sourc
 but M0/M1 observed a repository MEAI abstractions pin of 10.5.1 while MAF requires 10.10.1.
 The normal central dependency enabler [#3544](https://github.com/elsa-workflows/elsa-foundation/issues/3544)
 now promotes 10.10.1 with affected locks and current Agent composition checks; this does not by itself
-qualify the later production specialist runtime/package closure.
+qualify the later production agent runtime/package closure.
 
 **Implementation consequence**: Review a normal central dependency upgrade, locks and nuspec graph;
 run existing Agent provider/turn/tool suites and normal CShells/Nuplane package composition. Core
@@ -90,7 +90,7 @@ or filtering package contents does not establish the required boundary.
 
 ## R4 — Durable conversation acceptance and native delivery
 
-**Decision**: Specialist-owned scoped journal plus existing native background work and outbox. A
+**Decision**: Agent-owned scoped journal plus existing native background work and outbox. A
 facade stages an encrypted journal request; a background-safe MAF leaf returns an opaque receipt
 handle. Its native typed result uses `IRuntimeActivityCheckpointParticipant.PrepareCompletionCheckpointAsync`;
 structural completion alone carries no typed business result. No new generic checkpoint transaction API.
@@ -113,7 +113,7 @@ Native `RuntimeEncryptionWithholding` currently replaces encryption-required val
 unrecoverable Withheld value; non-hydrating input preparation also refuses secret-reference inputs.
 Initial native support is therefore sensitivity/redaction with `RequiresEncryption=false`. Refuse
 encryption-required input/result/capture and secret-reference business bindings at publication/placement
-when known and again before dispatch for late-bound policy. Encrypted specialist journal storage is
+when known and again before dispatch for late-bound policy. Encrypted agent journal storage is
 a separate guarantee and cannot establish recoverable native encryption. See [execution](contracts/execution.md).
 
 **Implementation consequence**: Journal acceptance atomically replaces session/result/usage and
@@ -177,9 +177,9 @@ Top-level editor tabs and runtime activity-detail sections have no arbitrary pro
 `ActivityPalettePanel` uses exact catalog version IDs; `BpmnElementInspector` routes bound children
 through ordinary inspectors. `WorkflowActivityExecutionDetails` already has exact occurrence identity.
 
-**Implementation consequence**: Specialist form contributes settings; schema constraints remain
+**Implementation consequence**: Agent form contributes settings; schema constraints remain
 coherent with the public interface. Module-owned playground/evaluation/inspection routes reuse
-production runtime/candidate identity. Add only necessary owner links, not hardcoded specialist
+production runtime/candidate identity. Add only necessary owner links, not hardcoded agent
 branches in shared inspectors. Cover draft-only discovery, permissions, source-owned/read-only,
 save conflicts, undo/history boundaries, real picker refresh, BPMN bindings, keyboard and 320px layouts.
 
@@ -195,13 +195,13 @@ The [reviewed #2913 witness](../../docs/reports/unified-execution/witness-review
 contains bounded native/MAF semantic evidence, not production model/effect/host acceptance.
 
 **Alternative rejected**: A second workflow runtime or bespoke team graph is not required by the
-specialist product. A future MAF workflow adapter needs an explicit single checkpoint/retry owner
+agent product. A future MAF workflow adapter needs an explicit single checkpoint/retry owner
 and its own process-failure proof. A mandatory Azure control plane is not implied by inspiration.
 
 ## Research disposition
 
 The three planning research lenses inspected package/dependency ownership, runtime recovery and
-Studio/support source. The packet resolves the identified design questions with D1–D9, plus D10 for configuration-defined specialists (owner decision, 2 Nov 2026); implementation
+Studio/support source. The packet resolves the identified design questions with D1–D9, plus D10 for configuration-defined agents (owner decision, 2 Nov 2026); implementation
 must prove the choices. The [support contract](contracts/support.md) names the actual matrix and
 remaining evidence. No untested provider/store/host or generic background protection capability is
 silently declared supported.
@@ -213,7 +213,7 @@ actual evaluation tests. [Upstream basics](https://docs.json-everything.net/sche
 isolated build registries and explicit dialect selection; current upstream documentation also covers
 newer APIs, so the pinned package remains the compile/test authority.
 
-The initial `elsa.specialist.json/1` profile explicitly selects draft 2020-12. It accepts a finite
+The initial `elsa.agent.json/1` profile explicitly selects draft 2020-12. It accepts a finite
 primitive/object/array vocabulary and bounded acyclic local pointers, expands references before
 engine construction, and refuses remote/custom dialects, unknown keywords, regex/combinator/dynamic
 reference features and validation siblings on references. It applies byte/node/depth bounds, unique
@@ -240,7 +240,7 @@ failures before correction: direct and portable-expression reads selected nested
 an exact dotted member, and mishandled the whole-result `$` path. Both readers now preserve completion
 projection semantics for those cases while retaining ordinary nested traversal. The whole workflow
 runtime suite passed 3,062 tests on the earlier kernel baseline and 3,069 after integrating current
-main; the initial whole specialist suite passed 89 cases before review additions. Actual specialist execution also covers a dotted public output followed by a causal read.
+main; the initial whole agent suite passed 89 cases before review additions. Actual agent execution also covers a dotted public output followed by a causal read.
 
 The real MAF package graph additionally requires DI/logging/caching abstractions 10.0.12 and the
 latter's Primitives 10.0.12 dependency. Normal restore reproduced NU1109 against Foundation's 10.0.10
@@ -254,7 +254,7 @@ all three previous singleton registrations fails for the intended captive scoped
 stateless singleton contributors remain valid. No authoring persistence dependency enters Runtime.
 
 The existing operation-key resolver now delegates to computed, nonserialized properties on native
-activity state, so the specialist uses the same assigned/first-attempt/invocation fallback without a
+activity state, so the agent uses the same assigned/first-attempt/invocation fallback without a
 Runtime implementation dependency or a second resolver. The existing typed completion checkpoint
 participant is the facade's result boundary; structural completion alone is insufficient.
 
@@ -269,7 +269,7 @@ source/EF/deterministic evidence, not independent package or live-provider quali
 CLR reconciliation scans internal activity classes too. `Activity(IsDiscoverable=false)` excludes
 implementation-only facade/worker types from standalone catalog discovery while runtime alias
 registration remains available. The reflection-only scanner tests cover declared/inherited opt-out
-and an ordinary discoverable activity. User specialists remain generic provider-owned definitions.
+and an ordinary discoverable activity. User agents remain generic provider-owned definitions.
 
 The initial in-memory journal is an explicit development/test feature. It protects scoped request and
 result envelopes, fixes the operation deadline at first staging, admits one worker and fences dispatch
@@ -292,8 +292,8 @@ alias, including collection and dictionary values. Output names that could fall 
 member through native dotted-path projection are refused before publication. A dotted name with no
 conflicting output remains supported and has a causal native reader fixture.
 
-Authoring consumes `ISpecialistModelCapabilitiesSource`; execution consumes
-`ISpecialistModelClientFactory`. Metadata-only contributors no longer implement a throwing runtime
+Authoring consumes `IAgentModelCapabilitiesSource`; execution consumes
+`IAgentModelClientFactory`. Metadata-only contributors no longer implement a throwing runtime
 method. The shared JSON library is an internal helper with scoped registrations in each consuming
 feature, without a feature identity of its own. Journal authentication failures retain their original
 exception as the cause while exposing a fixed business message. The first correction suite passed
@@ -316,11 +316,11 @@ The runtime reads capture policies from the scoped committed root frame at entry
 native binding checks; encryption-required or withheld destinations refuse before opening a client.
 The model and descriptor parser wrappers retain their original JsonException causes.
 
-The whole specialist suite passes 116 cases. Added native cases establish ordinary sensitivity with
+The whole agent suite passes 116 cases. Added native cases establish ordinary sensitivity with
 redacted inspection evidence, secret business-input refusal, result/projection encryption-policy
 refusal and sensitive-versus-encryption-required root captures. Result-policy cases seed a changed
 runtime contract as an artifact backstop; the current generic authoring contract has no policy fields.
-These cases do not claim a new public specialist policy editor or the final support matrix. The
+These cases do not claim a new public agent policy editor or the final support matrix. The
 architecture suite passed all 592 checks after the new metadata interface was tracked; normal maps,
 locked restore and all 163 catalog links also passed. The first architecture run's sole untracked-link
 failure is retained separately. Final package qualification and independent review remain pending.
@@ -332,7 +332,7 @@ because the manual fixture enumerated serialization startup tasks without the Ev
 remains a failed qualification receipt. The runtime consumer now composes the ordinary CShells
 lifecycle with Tasks, Events, Serialization, Expressions and background/resumption dependencies, plus
 explicit filesystem locking and the development journal. The fixture's shell contributes ordinary
-runtime services and its deterministic provider; normal startup must register the specialist alias.
+runtime services and its deterministic provider; normal startup must register the agent alias.
 CShells and SQLite fixture versions derive from the archived producer's central pins. A new immutable
 run is required; this change is not yet a passed host-activation or package receipt.
 
@@ -354,7 +354,7 @@ now finalizes all caught qualification exceptions as Failed. Earlier receipts re
 MAF 1.27.0, Anthropic 12.32.0 and Azure OpenAI 2.1.0 chat-completion clients, with MEAI 10.10.1,
 OpenAI 2.14.0 and System.ClientModel 1.15.0. Normal and locked restores agree on the committed graph.
 It uses explicit fixture credentials and an injected HTTP handler; no sockets, live inference,
-production specialist connection, Elsa journal or durability is exercised.
+production agent connection, Elsa journal or durability is exercised.
 
 **Observed retry boundary:** HTTP 429 produces three Anthropic transport requests and four Azure
 requests by default. `MaxRetries = 0` and `ClientRetryPolicy(0)` respectively reduce the API-key
@@ -427,7 +427,7 @@ Streaming remains a host opt-in using MAF `RunStreamingAsync`; atomic responses 
 A qualified lease is required, and no partial JSON prefix is a business result. Bounds apply before
 MAF aggregation to projected SDK updates, not to the SDK HTTP/SSE parser. Studio partial display,
 provider-managed conversations and stream resume are separate capabilities. See the implementing
-[runtime contract](../../Extensions/Agent/src/Specialists/Elsa.Agent.Specialists/EXTENSION_POINTS.md#optional-streaming-responses).
+[runtime contract](../../Extensions/Agent/src/Elsa.Agent/EXTENSION_POINTS.md#optional-streaming-responses).
 
 
 ## R10 — Shared revision management, Orchard Core and Aster
@@ -451,7 +451,7 @@ provider-managed conversations and stream resume are separate capabilities. See 
 
 **Decision**: M6 production work (T042–T048, T050) consumes #2912's approved production carry-forward. It does not
 build a second decision, approval or effect engine inside the Agent extension. #2912 is not forked, reparented or
-completed here. The specialist runtime keeps tools refused until those contracts exist. The prerequisites below are the
+completed here. The agent runtime keeps tools refused until those contracts exist. The prerequisites below are the
 exact ones M6 waits for, task by task. T049 (team editor/publication) falls under the ADR 0094 hold and is to be
 re-planned against T064–T071 after agreement.
 
@@ -475,8 +475,8 @@ foreground conversations durable. Its FR-019 leaves workflow-runtime continuatio
 
 | Layer | Contracts | Fit for M6 |
 |---|---|---|
-| Weaver core (`Extensions/Agent/src/Core`, `Elsa.Agent`) | Tool registry/invoker/authorization; exact `AgentPreparedToolInvocation` with approval digest and policy revision; proposal service and executor; session-record decisions; `AgentEffectReceipt` and call keys; paused turns; audit sink and reader | Foreground only. Turns are coupled to their stream, defaults are in-memory, and durability exists only with the opt-in EF session store. The specialist runtime does not reference these packages. Their shapes (exact prepared invocation, approval digest, effect receipt) are evidence for #2912, not a workflow-runtime owner. |
-| Specialist runtime (`Extensions/Agent/src/Specialists`) | Per-turn model-request reservations; turn journal; accepted-versus-applied settlement on the native checkpoint enricher and post-commit intents; HumanReview as a generic bookmark wait guarded by `ActivityResumeValidating` | Reservations cover only model calls and output tokens. Tools are refused (`ChatToolMode.None`). HumanReview approves content, not tool effects (`contracts/human-review.md`). |
+| Weaver core (`Extensions/Weaver/src/Core`, `Extensions/Weaver/src/Elsa.Weaver`) | Tool registry/invoker/authorization; exact `WeaverPreparedToolInvocation` with approval digest and policy revision; proposal service and executor; session-record decisions; `WeaverEffectReceipt` and call keys; paused turns; audit sink and reader | Foreground only. Turns are coupled to their stream, defaults are in-memory, and durability exists only with the opt-in EF session store. The agent runtime does not reference these packages. Their shapes (exact prepared invocation, approval digest, effect receipt) are evidence for #2912, not a workflow-runtime owner. |
+| Agent runtime (`Extensions/Agent/src`) | Per-turn model-request reservations; turn journal; accepted-versus-applied settlement on the native checkpoint enricher and post-commit intents; HumanReview as a generic bookmark wait guarded by `ActivityResumeValidating` | Reservations cover only model calls and output tokens. Tools are refused (`ChatToolMode.None`). HumanReview approves content, not tool effects (`contracts/human-review.md`). |
 | Native runtime (Essentials) | Bookmarks and keyed resume; `ActivityResumeValidating`; incidents and resolution actions; background work claims and stable operation keys; keyed workflow start identity; structural child callbacks | Reusable for suspension, resume, incidents and an idempotent workflow-tool start. There is no generic external-effect receipt or idempotency store. |
 
 There is no knowledge, memory or versioned-observation contract anywhere. There is no MCP client or dependency. No tool
@@ -497,7 +497,7 @@ invokes a workflow.
 | T050 team proofs | T047–T049 | #2912 obligations 3 and 5 |
 
 **Consequences**: M6 implementation can begin only after #2912's owning hierarchy delivers obligations 1–3, or after a
-work unit that the owner authorizes for them. T045 also needs obligation 4, and T046 and T050 need obligation 5. Specialist work may add only typed adapters over those contracts. An MCP owner
+work unit that the owner authorizes for them. T045 also needs obligation 4, and T046 and T050 need obligation 5. Agent work may add only typed adapters over those contracts. An MCP owner
 must be chosen before T044. Knowledge and memory bindings follow obligation 1's scope/version/observation model and must
-not be invented in the specialist extension. Until then, tool-capable specialists are refused at capability preflight,
+not be invented in the agent extension. Until then, tool-capable agents are refused at capability preflight,
 as they are today.

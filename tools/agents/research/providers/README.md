@@ -143,4 +143,4 @@ Reasoning flattening applies only to the Anthropic thinking fixture.
 
 No live model, streaming, Responses API, hosted tool, model capability inventory, credential rotation,
 Elsa journal, restart/replay, production session codec or packaged/custom host is qualified here.
-Those remain M3 and later acceptance obligations in the [spec research](../../../../specs/1179-specialist-agents/research.md).
+Those remain M3 and later acceptance obligations in the [spec research](../../../../specs/1179-agents/research.md).

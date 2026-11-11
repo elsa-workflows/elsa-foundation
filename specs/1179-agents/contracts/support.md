@@ -1,8 +1,8 @@
 # Supported composition and qualification contract
 
-**Status**: Proposed finite release target. Every cell below is **unqualified for the specialist
+**Status**: Proposed finite release target. Every cell below is **unqualified for the agent
 product** until its implementation run is retained. Existing module support and M0 fixtures are not
-specialist acceptance. FR-023–FR-026 and Program A13–A15 own completion.
+agent acceptance. FR-023–FR-026 and Program A13–A15 own completion.
 
 **Proposed ownership qualification**: [ADR 0094](../../../docs/adr/0094-agent-definitions-own-authored-content-and-providers-publish-activities.md) adds W1–W8 in [agent-ownership.md](agent-ownership.md) to each affected source/store/host profile before it can qualify the new model. Existing matrix dimensions and baseline receipts are retained; none is recertified by a design edit. Use owned fresh stores for the new model. Include both Workflow/Agent adapters, unavailable source storage during artifact execution, independent-store publication repair, reference-pin retention and explicit clean initialization/republish after a pre-GA break. Old-schema adoption/rollback is not required.
 
@@ -11,23 +11,23 @@ specialist acceptance. FR-023–FR-026 and Program A13–A15 own completion.
 | Axis | Named target | Required evidence |
 |---|---|---|
 | Shared revision/publishing persistence through Workflow and Agent adapters | SQLite, PostgreSQL, SQL Server, MySQL | Shared CAS/snapshot/history/pin storage, publication reservation/repair, revision/release separation and clean-store readiness W1–W7 |
-| Activity/publication/runtime persistence | SQLite, PostgreSQL, SQL Server, MySQL | Existing real provider contexts/migrations plus exact specialist publication, runtime checkpoint and restart behavior |
-| Specialist journal/evaluation persistence | EF implementations for those same four providers | Tenant/CAS/fence/acceptance/receipt/protection/retention/recovery tests and actual native handoff |
+| Activity/publication/runtime persistence | SQLite, PostgreSQL, SQL Server, MySQL | Existing real provider contexts/migrations plus exact agent publication, runtime checkpoint and restart behavior |
+| Agent journal/evaluation persistence | EF implementations for those same four providers | Tenant/CAS/fence/acceptance/receipt/protection/retention/recovery tests and actual native handoff |
 | Connection metadata | New durable existing-repository implementation for those four providers | Restart, create/version-CAS/revoke/delete/transaction-rollback/secret-reference behavior; durable Secrets composed separately |
 | Model providers | Anthropic; Azure OpenAI | Official SDK protocol fixtures through actual MAF, verified capability profiles and authorized live editorial examples |
 | Assistant regressions | Existing Weaver Anthropic and GitHub Copilot | Existing turn/tool/session/provider suites and normal single-harness composition after MEAI upgrade |
 | Normal development/product journey | Elsa.Workbench + Elsa.Studio.Web | Real create/test/publish/use/evaluate/inspect, permissions and browser evidence |
 | Packaged backend host | Elsa.Foundation.Host, ordinary package-fed composition | Independent package installation/feature activation/tenant scope/readiness/runtime proof |
 | Independent custom consumer | Package-only authoring-only, runtime-only and combined hosts | Retained packages/locks, no product source/frontend tool shortcut, actual registration/execution |
-| Custom Studio host | Package-consumed Studio hosting + specialist module SDK output | Shared assets/import closure, authorized backend connection and real browser journey |
-| Native value profile | Sensitivity/redaction, RequiresEncryption=false; encrypted specialist journal is separate | Sensitive flow works end to end; encryption-required native values/captures and secret-bound business inputs are explicitly refused before dispatch |
+| Custom Studio host | Package-consumed Studio hosting + agent module SDK output | Shared assets/import closure, authorized backend connection and real browser journey |
+| Native value profile | Sensitivity/redaction, RequiresEncryption=false; encrypted agent journal is separate | Sensitive flow works end to end; encryption-required native values/captures and secret-bound business inputs are explicitly refused before dispatch |
 
 In-memory repositories are disposable deterministic/dev support. They do not qualify restart or durable
 connection support. No MongoDB/Dapper, other model provider, blanket Foundry service, arbitrary team
 runtime or all-existing-extension compatibility is implied.
 
 Native encryption-required values are not currently recoverable: existing runtime withholding is not
-an encryption codec. The initial specialist profile does not claim to repair that generic capability.
+an encryption codec. The initial agent profile does not claim to repair that generic capability.
 Refusal must be visible in publication/placement and late-bound admission, with no policy downgrade
 or model dispatch. Journal ciphertext/key rotation and native sensitivity/redaction have separate
 tests and documentation; broader native encryption requires an explicitly delivered/qualified dependency.
@@ -45,7 +45,7 @@ and the custom Studio package host. They must prove their own dependency envelop
 combined-host success. Authoring-only means no concrete model execution/runtime interpreter feature;
 Publishing may reference stable runtime contracts. Runtime-only native/BPMN closures contain zero
 Design/Publishing assemblies. The existing allow-listed Runtime.JavaScript Design dependency is not
-part of the specialist-only runtime profile and is not claimed repaired by this work.
+part of the agent-only runtime profile and is not claimed repaired by this work.
 
 Live-provider proof is two authorized provider/model deployments × native/BPMN editorial example:
 **four named live journeys** on the qualified durable normal host. Use the same adapters/contract as

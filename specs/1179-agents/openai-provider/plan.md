@@ -1,6 +1,6 @@
 # Plan
 
-1. Add `Elsa.Agent.Specialists.OpenAI`, with the official already-pinned OpenAI SDK and MEAI adapter. Register a scoped model owner and stateless singleton connection-type contributor; use the shared connection guard. Keep endpoint configuration an HTTPS origin and append `/v1` only inside the SDK factory.
+1. Add `Elsa.Agent.OpenAI`, with the official already-pinned OpenAI SDK and MEAI adapter. Register a scoped model owner and stateless singleton connection-type contributor; use the shared connection guard. Keep endpoint configuration an HTTPS origin and append `/v1` only inside the SDK factory.
 2. Include the feature in Workbench assembly discovery and default composition, plus the solution and generated filters.
 3. Extend existing composition, authorization, physical request, refusal, cancellation and streaming socket cases to direct OpenAI. Verify its Bearer header and request path/model.
 4. Create an authorized local connection and a typed example through normal APIs; publish and execute using the actual runtime. Document the resulting setup and evidence.
