@@ -197,6 +197,7 @@ class CompositionTests(unittest.TestCase):
                 self.assertEqual(len(item['remove']), len(set(item['remove'])))
                 self.assertTrue(item['journeys'] <= acceptance.JOURNEYS)
         self.assertIn('WorkflowsRuntimeApi', acceptance.SUBSET_COMPOSITIONS['design-api-subset']['remove'])
+        self.assertIn('ActivitiesDispatchWorkflowRuntime', acceptance.SUBSET_COMPOSITIONS['design-api-subset']['remove'])
         self.assertNotIn('WorkflowsDesignApi', acceptance.SUBSET_COMPOSITIONS['design-api-subset']['remove'])
         self.assertTrue({'WorkflowsDesignApi', 'ActivitiesDesignApi', 'ConnectionsApi', 'SecretsApi'} <= set(acceptance.SUBSET_COMPOSITIONS['runtime-api-subset']['remove']))
         self.assertNotIn('WorkflowsRuntimeApi', acceptance.SUBSET_COMPOSITIONS['runtime-api-subset']['remove'])

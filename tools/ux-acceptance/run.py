@@ -69,7 +69,7 @@ JOURNEY_PROJECTS = {journey: SUPPLEMENT_PROJECTS.get(journey, PROJECTS) for jour
 SUBSET_COMPOSITIONS = {
     'design-api-subset': {
         'journeys': {'design-only API composition'},
-        'remove': ['ActivitiesDispatchWorkflowDesign', 'ActivitiesGraphDesign', 'ActivitiesHttp', 'ActivitiesScheduling', 'AgentApi',
+        'remove': ['ActivitiesDispatchWorkflowDesign', 'ActivitiesDispatchWorkflowRuntime', 'ActivitiesGraphDesign', 'ActivitiesHttp', 'ActivitiesScheduling', 'AgentApi',
                    'AgentDesign', 'AgentInspectionApi', 'ConnectionsWorkflows', 'DecisionsWorkflowsApi', 'DecisionsWorkflowsDesign',
                    'WorkflowsDashboard', 'WorkflowsPublishing', 'WorkflowsPublishingApi', 'WorkflowsPublishingEntityFrameworkCore',
                    'WorkflowsRuntimeApi', 'WorkflowsRuntimeAttention', 'WorkflowsRuntimeCheckpointPersistence', 'WorkflowsRuntimeHttp',
