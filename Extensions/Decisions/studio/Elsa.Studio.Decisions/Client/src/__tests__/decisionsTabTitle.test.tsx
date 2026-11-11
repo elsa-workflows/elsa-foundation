@@ -38,6 +38,18 @@ describe("Decisions workspace tab titles", () => {
     const name = Array.from(host.querySelectorAll<HTMLInputElement>("input")).find(input => input.parentElement?.textContent === "Name")!;
     type(name, "Renamed approval"); expect(setTitle).toHaveBeenLastCalledWith({ title: "Approval", detail: "Draft" });
   });
+  it("leaves the tab unnamed while a decision opened from the list in the same tab is still loading", async () => {
+    const api = stubApi(), { host, setTitle, update } = mountInTab({ api });
+    await vi.waitFor(() => expect(host.textContent).toContain("Purchase approval"));
+    let release: (value: unknown) => void = () => undefined;
+    api.backend.http.getJson.mockImplementation(async (path: string) => path.endsWith("/versions") || path.endsWith("/cases") || path.endsWith("/runs") ? { items: [] } : new Promise(resolve => { release = resolve; }));
+    setTitle.mockClear(); update({ api, assetId: asset.id });
+    await vi.waitFor(() => expect(host.querySelector('[aria-label="Loading decisions"]')).not.toBeNull());
+    expect(setTitle).not.toHaveBeenCalled();
+    release(asset);
+    await vi.waitFor(() => expect(setTitle).toHaveBeenLastCalledWith({ title: "Approval", detail: "Draft" }));
+    expect(setTitle).toHaveBeenCalledTimes(1);
+  });
   it("names a published version after its decision with the version number as detail", async () => {
     const api = stubApi(), published = { id: "v1", assetId: asset.id, number: 3, name: asset.name, xml: asset.xml, sourceHash: "hash1", publishedAt: asset.createdAt };
     api.backend.http.getJson.mockImplementation(async (path: string) => path.endsWith("/versions") ? { items: [published] } : path.endsWith("/cases") || path.endsWith("/runs") ? { items: [] } : path.endsWith("/versions/v1") ? published : asset);

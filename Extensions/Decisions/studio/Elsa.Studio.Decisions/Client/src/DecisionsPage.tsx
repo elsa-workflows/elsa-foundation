@@ -18,8 +18,8 @@ export function DecisionsPage({ api, navigate, assetId, versionId, isNew = false
   const editor = !!assetId || isNew, readOnly = !!published || !can(api, "decisions:manage") || (!!assetId && asset?.xml === null);
   const dirty = editor && !published && (isNew ? !!name || !!description || sensitive || xml !== "" && xml !== initialXml.current : !!asset && (name !== asset.name || description !== (asset.description ?? "") || xml !== (asset.xml ?? "") || sensitive !== asset.isSensitive));
   const dirtyRef = useRef(false); dirtyRef.current = dirty || caseDirty;
-  // The tab follows the saved name; a decision still loading keeps the route label until it arrives.
-  useStudioWorkspaceTitle(!editor ? "Decisions" : isNew ? "New decision" : asset?.name ?? (loading ? null : "Decision"), asset && !isNew ? published ? `Version ${published.number}` : "Draft" : null);
+  // The tab follows the saved name. Until a decision arrives the host shows the route label; one that failed to load reads "Decision".
+  useStudioWorkspaceTitle(!editor ? "Decisions" : isNew ? "New decision" : asset?.name ?? (error && !loading ? "Decision" : null), asset && !isNew ? published ? `Version ${published.number}` : "Draft" : null);
   useEffect(() => { if (!caseDirty && !caseBusy) notifyStudioNavigationGuardReleased(); }, [caseDirty, caseBusy]);
   const apply = useCallback((next: DecisionAsset, candidate?: DecisionVersion) => {
     setAsset(next); setPublished(candidate); setName(next.name); setDescription(next.description ?? ""); setSensitive(candidate?.isSensitive ?? next.isSensitive); setXml(candidate?.xml ?? (candidate ? "" : next.xml ?? "")); setConflict(false); setDiagnostics([]);
