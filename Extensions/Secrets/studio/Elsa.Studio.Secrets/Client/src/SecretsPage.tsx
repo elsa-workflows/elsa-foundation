@@ -221,7 +221,13 @@ export function SecretsPage({ context, dialogs, navigate }: { context: StudioEnd
   useEffect(() => {
     if (loading || !focusKey || focused.current === focusKey || tab?.isActive() === false || (focusCreate && descriptorsLoading)) return;
     const button = focusCreate ? collectionRoot.current?.closest(".secrets-shell")?.querySelector<HTMLButtonElement>('button[aria-label="Create secret"]') : Array.from(collectionRoot.current?.querySelectorAll<HTMLButtonElement>("[data-secret-edit]") ?? []).find(element => element.dataset.secretEdit === focusName);
-    if (button) { button.focus(); focused.current = focusKey; }
+    if (button) {
+      // Row actions sit in the last column; on narrow tables keep the row's name in view instead of scrolling to them.
+      const row = focusCreate ? null : button.closest("tr");
+      button.focus(row ? { preventScroll: true } : undefined);
+      row?.scrollIntoView?.({ block: "nearest", inline: "start" });
+      focused.current = focusKey;
+    }
   }, [loading, descriptorsLoading, focusName, focusCreate, focusKey, filteredSecrets, tab]);
 
   return (
