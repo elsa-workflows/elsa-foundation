@@ -42,12 +42,24 @@ portable-parameter failures are not collapsed by a blanket path/type deduplicati
 
 ## Settings
 
-`WorkflowDesignValidatorOptions` (bound via the feature's `MaxRecursionDepth` property; default `100`).
+`WorkflowDesignValidatorOptions` (bound via the feature's `MaxRecursionDepth` and `MemberReads` properties).
 
 - `MaxRecursionDepth` — safety net for the iterative activity-tree walker. Validators that
   recurse through activity-owned structure (required-input, variable-expression
   resolver) stop descending past this depth. Iterative DFS internally, so the .NET call stack
   is never the actual risk — the bound guards against cyclic / malformed Draft data.
+- `MemberReads` — default `false`. Whether a binding may read one member of an activity result
+  (`ActivityResultMember`). While it is off the shared analyzer neither offers nor admits one
+  (`ActivityData/UnsupportedMemberBinding`), so no publication, test run, template compilation, BPMN
+  publication or import can produce an executable that carries one. With it on, a read inside a reusable
+  activity's body is published untyped and its member is checked when the run reads it, so an explicit
+  conversion on such a read is refused at publication.
+
+  **Upgrade rule.** An executable with a member read cannot be read by a runtime built before member reads
+  existed: it reports the payload as corrupt, and without distributed placement the work item is poisoned and
+  the run blocked. Where several runtimes share one store, upgrade every one of them, then turn `MemberReads`
+  on. With distributed placement an older member does not claim such an execution; it waits for one that can
+  run it.
 
 ## Contributor interfaces registered
 

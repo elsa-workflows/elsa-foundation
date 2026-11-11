@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Text.Json;
 using Elsa.Expressions.Core.Models;
 
@@ -18,6 +19,15 @@ internal sealed record ActivityDataReadBinding(
     /// binding without a <see cref="Scope"/> names only the producer.
     /// </summary>
     public bool IsDirect { get; init; }
+
+    /// <summary>The exact member segments of a member read; empty for a whole-value read.</summary>
+    public ImmutableArray<string> MemberPath { get; init; } = [];
+
+    /// <summary>Most segments a member path may have; the compiled read selection has the same bound.</summary>
+    public const int MaximumMemberSegments = 64;
+
+    /// <summary>Most characters a member path may have in total; the compiled read selection has the same bound.</summary>
+    public const int MaximumMemberPathLength = 4096;
 
     // Match the publication compiler's descriptor payload profile, including case-insensitive
     // properties, last-wins aliases and polymorphic metadata in canonicalized object order.
@@ -103,8 +113,10 @@ internal sealed record ActivityDataReadBinding(
     public static ActivityDataReadBinding Direct(string? role, object? value)
     {
         if (string.IsNullOrWhiteSpace(role)) return new("", Error: "InvalidSource");
-        if (IsMemberRole(role)) return new(role, Error: "UnsupportedMemberBinding");
         var json = value is JsonElement element ? element : default;
+        if (role.Equals("ActivityResultMember", StringComparison.OrdinalIgnoreCase))
+            return ResultMember(json);
+        if (IsMemberRole(role)) return new(role, Error: "UnsupportedMemberBinding");
         if (json.ValueKind == JsonValueKind.Object &&
             (json.TryGetProperty("memberPath", out _) ||
              (!role.Equals("WorkflowRequest", StringComparison.OrdinalIgnoreCase) && json.TryGetProperty("path", out _))))
@@ -132,6 +144,55 @@ internal sealed record ActivityDataReadBinding(
                     && optional.ValueKind == JsonValueKind.True };
         }
         return new(role, Error: "InvalidSource");
+    }
+
+    // A member read of an activity result names its producer by lineage alone, so it never declares a scope.
+    private static ActivityDataReadBinding ResultMember(JsonElement json)
+    {
+        const string role = "ActivityResultMember";
+        if (json.ValueKind != JsonValueKind.Object || json.TryGetProperty("path", out _) ||
+            json.TryGetProperty("producerScopeId", out var scope) && scope.ValueKind != JsonValueKind.Null)
+            return new(role, Error: "InvalidSource");
+        var binding = Required(role, String(json, "producerNodeId"), projection: String(json, "projectionKey"));
+        if (binding.Error is not null || string.IsNullOrWhiteSpace(binding.Projection))
+            return new(role, Error: "InvalidSource");
+        if (!TryReadMemberPath(json, out var memberPath))
+            return new(role, Error: "InvalidMemberPath");
+        return binding with
+        {
+            IsDirect = true,
+            MemberPath = memberPath,
+            IsOptional = json.TryGetProperty("isOptional", out var optional) && optional.ValueKind == JsonValueKind.True
+        };
+    }
+
+    /// <summary>
+    /// Reads a member path exactly as authored: a nonempty array of strings, kept unsplit and untrimmed, within the
+    /// segment and length bounds. Anything else is not a member path.
+    /// </summary>
+    internal static bool TryReadMemberPath(JsonElement json, out ImmutableArray<string> memberPath)
+    {
+        memberPath = [];
+        if (!json.TryGetProperty("memberPath", out var raw) || raw.ValueKind != JsonValueKind.Array)
+            return false;
+        var count = raw.GetArrayLength();
+        if (count is 0 or > MaximumMemberSegments)
+            return false;
+        var segments = ImmutableArray.CreateBuilder<string>(count);
+        var length = 0;
+        foreach (var item in raw.EnumerateArray())
+        {
+            if (item.ValueKind != JsonValueKind.String)
+                return false;
+            var segment = item.GetString()!;
+            length += segment.Length;
+            if (length > MaximumMemberPathLength)
+                return false;
+            segments.Add(segment);
+        }
+
+        memberPath = segments.MoveToImmutable();
+        return true;
     }
 
     private static ActivityDataReadBinding? Parameter(ExpressionParameterBinding binding) => binding switch

@@ -153,9 +153,9 @@ public sealed class BpmnDataSelectionPublicationTests
     }
 
     /// <summary>
-    /// Characterises, on main before #4078: BPMN publication compiles through the workflow executable compiler, so the
-    /// shared analyzer refuses a reserved member-read kind, and a member path on a whole-value kind, before an
-    /// executable exists. Slice C of #4078 flips the <c>ActivityResultMember</c> row.
+    /// BPMN publication compiles through the workflow executable compiler, so with member reads off (the default) the
+    /// shared analyzer refuses every member-read kind, a result member read included, and a member path on a
+    /// whole-value kind, before an executable exists.
     /// </summary>
     [Theory]
     [InlineData("ActivityResultMember", "ActivityData/UnsupportedMemberBinding")]
