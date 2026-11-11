@@ -1,13 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
 import { createStudioRegistry } from "../../registry";
-import { createEndpointContext, type StudioAgentPreparedInvocation } from "../../../sdk";
+import { createEndpointContext, type StudioWeaverPreparedInvocation } from "../../../sdk";
 import { createClientInvocationRunner } from "../clientInvocationRunner";
 
 function fixture() {
   const api = createStudioRegistry({ ...createEndpointContext("https://example.test/"), hostVersion: "1", sdkVersion: "1" });
   const execute = vi.fn(async () => ({ outcome: "applied" as const, summary: "Observed module effect.", result: { typeId: "sample.result", schemaVersion: "1", data: { value: 2 } } }));
-  api.agent.toolContracts.add({ id: "sample_change", moduleId: "Sample", slotId: "sample", displayName: "Change", description: "Change", surfaces: ["*"], inputSchema: {}, resourceTargetSchema: {}, resultSchema: {}, risk: "review-required", invocationModes: ["proposal"], contractVersion: "1", executionLocation: "clientWorkingState", executeClient: execute });
-  const invocation: StudioAgentPreparedInvocation = { invocationId: "i", sessionId: "s", turnId: "t", toolCallId: "tc", toolName: "sample_change", toolContractVersion: "1", moduleId: "Sample", actorId: "a", tenantId: "tenant", target: { moduleId: "Sample", resourceType: "sample", resourceId: "one", revision: "r" }, arguments: { value: 2 }, approvalDigest: "digest", risk: "reviewRequired", preview: { typeId: "sample.preview", schemaVersion: "1", data: {} }, executionLocation: "clientWorkingState", requiresApproval: true, client: { clientId: api.agent.clientId, generationId: "generation" }, expiresAt: new Date(Date.now() + 60000).toISOString() };
+  api.weaver.toolContracts.add({ id: "sample_change", moduleId: "Sample", slotId: "sample", displayName: "Change", description: "Change", surfaces: ["*"], inputSchema: {}, resourceTargetSchema: {}, resultSchema: {}, risk: "review-required", invocationModes: ["proposal"], contractVersion: "1", executionLocation: "clientWorkingState", executeClient: execute });
+  const invocation: StudioWeaverPreparedInvocation = { invocationId: "i", sessionId: "s", turnId: "t", toolCallId: "tc", toolName: "sample_change", toolContractVersion: "1", moduleId: "Sample", actorId: "a", tenantId: "tenant", target: { moduleId: "Sample", resourceType: "sample", resourceId: "one", revision: "r" }, arguments: { value: 2 }, approvalDigest: "digest", risk: "reviewRequired", preview: { typeId: "sample.preview", schemaVersion: "1", data: {} }, executionLocation: "clientWorkingState", requiresApproval: true, client: { clientId: api.weaver.clientId, generationId: "generation" }, expiresAt: new Date(Date.now() + 60000).toISOString() };
   return { api, execute, invocation, runner: createClientInvocationRunner(api) };
 }
 
@@ -40,13 +40,13 @@ describe("reviewed client delivery", () => {
 
 // Preview (#3441 T021): module-owned availability of the unsaved target, checked before dispatch.
 describe("module-owned client target availability", () => {
-  function withAvailability(availability: (invocation: StudioAgentPreparedInvocation, signal?: AbortSignal) => ReturnType<NonNullable<Parameters<ReturnType<typeof fixture>["api"]["agent"]["toolContracts"]["add"]>[0]["clientTargetAvailability"]>>) {
+  function withAvailability(availability: (invocation: StudioWeaverPreparedInvocation, signal?: AbortSignal) => ReturnType<NonNullable<Parameters<ReturnType<typeof fixture>["api"]["weaver"]["toolContracts"]["add"]>[0]["clientTargetAvailability"]>>) {
     const api = createStudioRegistry({ ...createEndpointContext("https://example.test/"), hostVersion: "1", sdkVersion: "1" });
     const execute = vi.fn(async () => ({ outcome: "applied" as const, summary: "Observed module effect." }));
     const check = vi.fn(availability);
-    api.agent.toolContracts.add({ id: "sample_change", moduleId: "Sample", slotId: "sample", displayName: "Change", description: "Change", surfaces: ["*"], inputSchema: {}, resourceTargetSchema: {}, resultSchema: {}, risk: "review-required", invocationModes: ["proposal"], contractVersion: "1", executionLocation: "clientWorkingState", executeClient: execute, clientTargetAvailability: check });
+    api.weaver.toolContracts.add({ id: "sample_change", moduleId: "Sample", slotId: "sample", displayName: "Change", description: "Change", surfaces: ["*"], inputSchema: {}, resourceTargetSchema: {}, resultSchema: {}, risk: "review-required", invocationModes: ["proposal"], contractVersion: "1", executionLocation: "clientWorkingState", executeClient: execute, clientTargetAvailability: check });
     const { invocation } = fixture();
-    invocation.client = { clientId: api.agent.clientId, generationId: "generation" };
+    invocation.client = { clientId: api.weaver.clientId, generationId: "generation" };
     return { runner: createClientInvocationRunner(api), execute, check, invocation };
   }
 

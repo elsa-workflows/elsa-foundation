@@ -241,8 +241,8 @@ test("keeps an active loaded scope visible when search returns a different scope
 });
 
 for (const source of [
-  { scenario: "default", label: "Value", wrapper: ".secrets-value-field" },
-  { scenario: "configuration", label: "Configuration key", wrapper: "label" }
+  { scenario: "default", label: "Value", wrapper: ".secrets-compact-field" },
+  { scenario: "configuration", label: "Configuration key", wrapper: ".secrets-compact-field" }
 ]) {
   test(`required source is visible at 1280x800: ${source.label}`, async ({ page }, testInfo) => {
     await page.setViewportSize({ width: 1280, height: 800 });
@@ -435,7 +435,7 @@ test("catalog refresh shows its loading state without clearing the selected scop
   await expect(scope).toHaveValue("Integration:Billing");
 });
 
-test("More options preserves authored choices and keeps context outside the fold", async ({ page }) => {
+test("More options preserves authored choices and keeps guidance with its field", async ({ page }) => {
   const { dialog } = await openCreateSecret(page);
   const optionalFields = [
     { label: "Display name", role: "textbox" },
@@ -451,10 +451,12 @@ test("More options preserves authored choices and keeps context outside the fold
   }
   const hint = dialog.getByText("Optional qualifier. A reference that specifies a scope must match it (ignoring case). Scope does not grant access.", { exact: true });
   await expect(hint).toHaveCount(1);
+  const hintId = await hint.getAttribute("id");
+  expect(hintId).toBeTruthy();
   await expect(hint).toBeVisible();
   const storeContext = dialog.getByText("Store: Encrypted", { exact: true });
   const expires = dialog.getByLabel("Expires", { exact: true });
-  await expect(storeContext).toBeVisible();
+  await expect(storeContext).toHaveCount(0);
   await expect(expires).toBeVisible();
   await fillRequiredMetadata(dialog, "folded.secret");
   await dialog.getByLabel("Expires", { exact: true }).fill("2027-01-15T10:30");
@@ -463,22 +465,37 @@ test("More options preserves authored choices and keeps context outside the fold
   expect(regionId).toBeTruthy();
   const region = dialog.locator(`[id="${regionId}"]`);
   for (const { label, role } of optionalFields) await expect(region.getByRole(role, { name: label, exact: true })).toBeVisible();
+  await expect(hint).toHaveCount(1);
+  await expect(hint).toBeVisible();
+  await expect(region.locator(`[id="${hintId}"]`)).toHaveCount(0);
   await expect(region.getByLabel("Expires", { exact: true })).toHaveCount(0);
   await expect(region.getByText("Store: Encrypted", { exact: true })).toHaveCount(0);
-  await expect(storeContext).toBeVisible();
+  await expect(storeContext).toHaveCount(0);
   await expect(expires).toBeVisible();
   await expect(more).not.toContainText("set");
   const scope = dialog.getByRole("combobox", { name: "Scope", exact: true });
   const descriptionIds = (await scope.getAttribute("aria-describedby"))?.split(/\s+/) ?? [];
-  expect(descriptionIds).toContain(await hint.getAttribute("id"));
+  expect(descriptionIds).toHaveLength(2);
+  expect(new Set(descriptionIds).size).toBe(2);
+  expect(descriptionIds).toContain(hintId);
+  for (const id of descriptionIds) await expect(page.locator(`[id="${id}"]`)).toHaveCount(1);
+  await expect(scope).toHaveAccessibleDescription(/Optional qualifier\..*Scope does not grant access\./);
+  await scope.selectOption({ label: "Custom…" });
+  const customScope = dialog.getByRole("textbox", { name: "Custom scope value", exact: true });
+  await expect(customScope).toBeVisible();
+  await expect(customScope).toHaveAttribute("aria-describedby", descriptionIds.join(" "));
+  await expect(customScope).toHaveAccessibleDescription(/Optional qualifier\..*Scope does not grant access\./);
   await dialog.getByLabel("Display name", { exact: true }).fill("Authored display name");
   await dialog.getByLabel("Description", { exact: true }).fill("Authored description");
   await dialog.getByLabel("Tags", { exact: true }).fill("retained");
   await expect(more).toContainText("3 set");
   await more.click();
   await expect(more).toHaveAttribute("aria-expanded", "false");
+  for (const { label, role } of optionalFields) await expect(dialog.getByRole(role, { name: label, exact: true, includeHidden: true })).toBeHidden();
+  await expect(customScope).toBeHidden();
+  await expect(hint).toHaveCount(1);
   await expect(hint).toBeVisible();
-  await expect(storeContext).toBeVisible();
+  await expect(storeContext).toHaveCount(0);
   await expect(expires).toBeVisible();
   await expect(more).not.toContainText(fixtureValue);
   await expect(more).not.toContainText("Authored display name");
@@ -487,6 +504,12 @@ test("More options preserves authored choices and keeps context outside the fold
   await expect(dialog.getByLabel("Description", { exact: true })).toHaveValue("Authored description");
   await expect(dialog.getByLabel("Tags", { exact: true })).toHaveValue("retained");
   await expect(dialog.getByLabel("Value", { exact: true })).toHaveValue(fixtureValue);
+  await expect(more).toHaveAttribute("aria-expanded", "true");
+  await expect(hint).toHaveCount(1);
+  await expect(hint).toBeVisible();
+  await expect(customScope).toBeVisible();
+  await expect(scope).toHaveAttribute("aria-describedby", descriptionIds.join(" "));
+  await expect(customScope).toHaveAttribute("aria-describedby", descriptionIds.join(" "));
 });
 
 test("Scope failure preserves focused custom input and stays disclosed after recovery", async ({ page }) => {

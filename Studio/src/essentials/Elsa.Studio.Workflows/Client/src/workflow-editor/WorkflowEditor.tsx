@@ -3,7 +3,7 @@ import type { WorkflowEditorDocumentAdapter } from "./WorkflowEditorDocumentAdap
 import { activityPaletteNotice, getActivityPaletteContext, isActivityOfferedInContext } from "../graph-authoring/activityPaletteContext";
 import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { Boxes, Code2, Download, History, LogIn, LogOut, ListTree, Variable, Package, PackageOpen, Play, Plus, SlidersHorizontal, Sparkles, Upload, Workflow as WorkflowIcon } from "lucide-react";
-import { authSessionEndedEvent, authSessionStartedEvent, expressionEditorSessionEndedEvent, useStudioThemeLayout, useStudioWorkspaceTitle, type StudioActivityPropertyEditorContribution, type StudioAgentRegistry, type StudioEndpointContext, type StudioExpressionEditorContribution, type StudioExpressionToolingClient, type StudioWorkflowDesignerPanelContribution, type StudioWorkflowRunInputEditorContribution, type StudioTestStimulusEditorContribution, type StudioWorkflowRunRelatedLinkContribution } from "@elsa-workflows/studio-sdk";
+import { authSessionEndedEvent, authSessionStartedEvent, expressionEditorSessionEndedEvent, useStudioThemeLayout, useStudioWorkspaceTitle, type StudioActivityPropertyEditorContribution, type StudioWeaverRegistry, type StudioEndpointContext, type StudioExpressionEditorContribution, type StudioExpressionToolingClient, type StudioWorkflowDesignerPanelContribution, type StudioWorkflowRunInputEditorContribution, type StudioTestStimulusEditorContribution, type StudioWorkflowRunRelatedLinkContribution } from "@elsa-workflows/studio-sdk";
 import type { ActivityCatalogItem, ActivityNode, WorkflowDraft } from "../workflowTypes";
 import {
   collectActivityNodeIds,
@@ -76,6 +76,11 @@ import { activateWorkflowCanvasNode } from "./workflowAccessibility";
 import { useDraftValidations } from "./useDraftValidations";
 import { useExecutableArtifactExport } from "./useExecutableArtifactExport";
 import { combineValidationErrors, detectStructuralValidationErrors } from "../draftValidation";
+import { useContributionDraftValidation } from "../useContributionDraftValidation";
+import {
+  collectContributionDraftValidation,
+  contributionDraftValidationCollectors
+} from "../contributionDraftValidation";
 import { createValidationActivityLabels, humanizeValidationErrors } from "../validationActivityLabels";
 import { WorkflowArtifactsPanel } from "./WorkflowExecutables";
 import { LazyWorkflowTestDrivePanel } from "./lazyTestDriveUi";
@@ -85,6 +90,7 @@ import { forgetRemovedNodes, useWorkflowDocument } from "./workflowDocument";
 import { useWorkflowCanvas } from "./useWorkflowCanvas";
 import { useWorkflowGraphOperationBatch } from "./useWorkflowGraphOperationBatch";
 import { useWorkflowPersistence } from "./useWorkflowPersistence";
+import { useWorkflowActivityDataSelection } from "./useWorkflowActivityDataSelection";
 import { useWorkflowEditorData } from "./useWorkflowEditorData";
 import { useDefinitionMetadata } from "./useDefinitionMetadata";
 import { DirectBpmnPublishAction } from "./DirectBpmnPublishAction";
@@ -165,7 +171,7 @@ export function WorkflowEditor({
   onOpenBpmnProcesses?(): void;
   definitionId: string;
   documentAdapter?: WorkflowEditorDocumentAdapter;
-  ai: StudioAgentRegistry;
+  ai: StudioWeaverRegistry;
   weaver?: WorkflowAgentController;
   propertyEditors: StudioActivityPropertyEditorContribution[];
   expressionEditors: StudioExpressionEditorContribution[];
@@ -387,13 +393,27 @@ export function WorkflowEditor({
   const structuralValidationErrors = useMemo(
     () => detectStructuralValidationErrors(draft?.state, activityLabels),
     [activityLabels, draft?.state]);
+  const localDraftValidation = useContributionDraftValidation(
+    draft?.state.rootActivity,
+    propertyEditors,
+    expressionEditors,
+    catalogByVersion
+  );
   const combinedValidationErrors = useMemo(
     () => humanizeValidationErrors(combineValidationErrors({
       draftErrors: draft?.validationErrors,
       serverErrors: draftValidations.available ? draftValidations.errors : null,
-      structuralErrors: structuralValidationErrors
+      structuralErrors: structuralValidationErrors,
+      localErrors: localDraftValidation.errors
     }), activityLabels),
-    [activityLabels, draft?.validationErrors, draftValidations.available, draftValidations.errors, structuralValidationErrors]);
+    [activityLabels, draft?.validationErrors, draftValidations.available, draftValidations.errors, localDraftValidation.errors, structuralValidationErrors]);
+  const collectLocalValidation = useCallback(async (snapshot: WorkflowDraft) => {
+    return collectContributionDraftValidation(
+      snapshot.state.rootActivity,
+      contributionDraftValidationCollectors(propertyEditors, expressionEditors),
+      catalogByVersion
+    );
+  }, [catalogByVersion, expressionEditors, propertyEditors]);
   const findRisksAction = findAiAction(ai, "weaver.workflows.find-draft-risks");
   const proposeUpdateAction = findAiAction(ai, "weaver.workflows.propose-update");
   const explainVersionAction = findAiAction(ai, "weaver.workflows.explain-version");
@@ -703,7 +723,8 @@ export function WorkflowEditor({
     setError,
     setActiveRightPanelId,
     setInspectorCollapsed,
-    setAutosavePaused
+    setAutosavePaused,
+    collectLocalValidation
   });
 
   // Workflow declaration edits (variables/inputs/outputs) flow through here. Routing them through an in-place
@@ -1115,6 +1136,19 @@ export function WorkflowEditor({
     repairVariableReference(compensationValidationTarget(scope, path) ?? nodeId);
   }, [draft?.state.rootActivity, catalogByVersion, repairVariableReference]);
 
+  // Choose data on ordinary activity inputs of a server workflow draft. BPMN-owned canvases keep their own model
+  // contracts and are not offered it here.
+  const activityDataSelection = useWorkflowActivityDataSelection({
+    context,
+    enabled: !documentAdapter && !isBpmnDesigner,
+    draft,
+    persistedDraft,
+    saving,
+    catalogByVersion,
+    validationErrors: combinedValidationErrors,
+    revealActivity: repairVariableReference
+  });
+
   const togglePaletteCategory = (category: string) => {
     setExpandedPaletteCategories(current => {
       const next = new Set(current);
@@ -1318,6 +1352,7 @@ export function WorkflowEditor({
           descriptorStatus={descriptorStatus}
           onRetryExpressionDescriptors={() => { void reloadExpressionDescriptors(); }}
           scopedVariableAnalysis={scopedVariableAnalysis}
+          activityDataSelection={activityDataSelection}
           activeTabId={activeInspectorTabId}
           onActiveTabChange={setActiveInspectorTabId}
           onSelectedActivityChange={updateSelectedActivity}
@@ -1767,6 +1802,7 @@ export function WorkflowEditor({
             onSelectNode={goToValidationNode}
             onSetAsStartNode={isFlowchartScope ? setStartNode : undefined}
             unavailable={draftValidations.available === false}
+            pending={localDraftValidation.pending && combinedValidationErrors.length === 0}
           />
           </>
           )}

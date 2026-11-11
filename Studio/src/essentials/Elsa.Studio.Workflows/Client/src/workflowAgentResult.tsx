@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from "react";
-import type { StudioAgentResultRendererProps } from "@elsa-workflows/studio-sdk";
+import type { StudioWeaverResultRendererProps } from "@elsa-workflows/studio-sdk";
 import type { WorkflowAgentController } from "./workflowAgent";
 
-export function WorkflowLayoutResult({ controller, preparedInvocation, toolResult }: StudioAgentResultRendererProps & { controller: WorkflowAgentController }) {
+export function WorkflowLayoutResult({ controller, preparedInvocation, toolResult }: StudioWeaverResultRendererProps & { controller: WorkflowAgentController }) {
   const [status, setStatus] = useState("");
   const [pending, setPending] = useState(false);
   const [undone, setUndone] = useState(false);
@@ -31,7 +31,7 @@ export function WorkflowLayoutResult({ controller, preparedInvocation, toolResul
  * own entry, so a later history Undo can never apply the batch twice. It acts only while that entry is the current
  * position; after a later edit it is disabled with the reason, and designer history remains the path.
  */
-export function WorkflowBatchUndoControl({ controller, toolResult }: StudioAgentResultRendererProps & { controller: WorkflowAgentController }) {
+export function WorkflowBatchUndoControl({ controller, toolResult }: StudioWeaverResultRendererProps & { controller: WorkflowAgentController }) {
   const data = toolResult?.payload?.data;
   const token = data && typeof data === "object" && typeof (data as Record<string, unknown>).undoToken === "string"
     ? (data as Record<string, unknown>).undoToken as string : null;
@@ -64,7 +64,7 @@ export function WorkflowBatchUndoControl({ controller, toolResult }: StudioAgent
 }
 
 /** Reverts a reviewed list or create-dialog change on its originating page (spec 1193 FR-020, FR-023); nothing was saved. */
-export function WorkflowPageRevertControl({ controller, toolResult }: StudioAgentResultRendererProps & { controller: WorkflowAgentController }) {
+export function WorkflowPageRevertControl({ controller, toolResult }: StudioWeaverResultRendererProps & { controller: WorkflowAgentController }) {
   const data = toolResult?.payload?.data;
   const token = data && typeof data === "object" && typeof (data as Record<string, unknown>).undoToken === "string" ? (data as Record<string, unknown>).undoToken as string : null;
   const [status, setStatus] = useState("");

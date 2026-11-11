@@ -28,7 +28,6 @@ public sealed class EfRuntimeCheckpointCommitStore(
 {
     internal IRuntimeCoalescingSessionAccessor? CoalescingSessions { private get; init; }
 
-    private const int MaxFenceRenewalAttempts = 3;
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private readonly TimeProvider _timeProvider = timeProvider ?? TimeProvider.System;
 
@@ -315,8 +314,9 @@ public sealed class EfRuntimeCheckpointCommitStore(
                 {
                     return await CommitNewAsync(writeCancellationToken, requiredExistingRoot);
                 }
-                catch (DbUpdateConcurrencyException exception) when (retryable && attempt < MaxFenceRenewalAttempts &&
-                    exception.Entries.Count != 0 && exception.Entries.All(entry => entry.Entity is ExecutionLivenessStateEntity))
+                catch (DbUpdateConcurrencyException exception) when (retryable &&
+                    attempt < EfRuntimeCheckpointParticipantStaging.MaxFenceRenewalAttempts &&
+                    EfRuntimeCheckpointParticipantStaging.IsFenceRenewalConflict(exception))
                 {
                 }
             }

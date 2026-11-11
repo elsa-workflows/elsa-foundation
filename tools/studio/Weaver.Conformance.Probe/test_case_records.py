@@ -113,11 +113,11 @@ class ProtocolCorrelationTests(unittest.TestCase):
                 row("continuation", results=[item])]
         trace = root / "trace.jsonl"
         transport = AgentTransport(SimpleNamespace(bearer=None), root / "transport", trace_file=trace)
-        response = {"url": "http://127.0.0.1:49123/_elsa/agent/proposals/proposal/execute", "status": 200,
+        response = {"url": "http://127.0.0.1:49123/_elsa/weaver/proposals/proposal/execute", "status": 200,
                     "response": {"data": {"proposalId": "proposal", "executed": True, "toolResult": native}, "error": None}}
         event = {"id": "native-event", "kind": "contributedResult", "resultKind": "moduleResult", "error": None,
                  "payload": copy.deepcopy(native)}
-        stream = {"url": "http://127.0.0.1:49123/_elsa/agent/sessions/session-a/stream", "status": 200,
+        stream = {"url": "http://127.0.0.1:49123/_elsa/weaver/sessions/session-a/stream", "status": 200,
                   "contentType": "text/event-stream", "termination": "loadingFailed", "canceled": True,
                   "errorText": "net::ERR_ABORTED", "captureError": None, "rawBody": "data: " + json.dumps(event) + "\n\n"}
         fixture = SimpleNamespace(output=output, command=command, rows=rows, trace=trace, transport=transport,
@@ -127,7 +127,7 @@ class ProtocolCorrelationTests(unittest.TestCase):
 
     def sync(self, fixture):
         (fixture.output / "command-one.json").write_text(json.dumps(fixture.command))
-        (fixture.output / "agent-requests.json").write_text(json.dumps([{"url": "http://127.0.0.1:49123/_elsa/agent/sessions/session-a/messages"}]))
+        (fixture.output / "agent-requests.json").write_text(json.dumps([{"url": "http://127.0.0.1:49123/_elsa/weaver/sessions/session-a/messages"}]))
         # Real browser runs retain successful owner HTTP sidecars alongside execute
         # responses. Their status200 must not be mistaken for an Agent envelope.
         (fixture.output / "owner-http.json").write_text(json.dumps({"status": 200, "rawBody": '{"owner":"synthetic"}'}))
@@ -176,7 +176,7 @@ class ProtocolCorrelationTests(unittest.TestCase):
                 with self.assertRaises(RuntimeError): self.correlate(fixture)
 
     def test_anthropic_source_shaped_json_string_result_correlates(self):
-        # AnthropicAgentProvider.ToolResults constructs FunctionResultContent with a
+        # WeaverAnthropicProvider.ToolResults constructs FunctionResultContent with a
         # serialized JSON string. This synthetic input tests that wire shape only.
         fixture = self.fixture("anthropic", serialized=True)
         self.assertIn("receipt", self.correlate(fixture, "anthropic"))
@@ -269,7 +269,7 @@ class ProtocolCorrelationTests(unittest.TestCase):
                     self.correlate(fixture, provider)
 
     def test_receipt_scope_matches_actual_numeric_and_named_wire_forms_for_both_scopes(self):
-        # AgentEffectScope: ClientWorkingState=0, ServerPersisted=1. The native
+        # WeaverEffectScope: ClientWorkingState=0, ServerPersisted=1. The native
         # API emits camelCase; Anthropic's real JSON string emits the number.
         for provider in ("copilot", "anthropic"):
             for numeric, camel, pascal in ((0, "clientWorkingState", "ClientWorkingState"),
@@ -421,7 +421,7 @@ for (const encoded of [false,true]) {
     return {body:encoded?Buffer.from(raw).toString('base64'):raw,base64Encoded:encoded};
   }};
   context={newCDPSession:async()=>cdp};const capture=await captureNativeStreams({});
-  handlers.get('Network.responseReceived')({requestId:'same-native-request',response:{url:backend+'/_elsa/agent/sessions/s1/stream',status:200,mimeType:'text/event-stream',charset:'',headers:{'Content-Type':'text/event-stream'}}});
+  handlers.get('Network.responseReceived')({requestId:'same-native-request',response:{url:backend+'/_elsa/weaver/sessions/s1/stream',status:200,mimeType:'text/event-stream',charset:'',headers:{'Content-Type':'text/event-stream'}}});
   handlers.get('Network.dataReceived')({requestId:'same-native-request',data:Buffer.from(raw.slice(0,8)).toString('base64')});
   handlers.get('Network.loadingFinished')({requestId:'same-native-request'});
   const [row]=await capture();
@@ -457,7 +457,7 @@ for(const scenario of ['aborted','open','non-sse','no-body','empty-body','body-e
     return {body:'',base64Encoded:false};
   }};
   context={newCDPSession:async()=>cdp};const capture=await captureNativeStreams({});
-  handlers.get('Network.responseReceived')({requestId:'native-request',response:{url:backend+'/_elsa/agent/sessions/s1/stream',status:scenario==='non-sse'?204:200,mimeType:'text/event-stream',charset:'',headers:scenario==='non-sse'?{}:{'Content-Type':'text/event-stream'}}});
+  handlers.get('Network.responseReceived')({requestId:'native-request',response:{url:backend+'/_elsa/weaver/sessions/s1/stream',status:scenario==='non-sse'?204:200,mimeType:'text/event-stream',charset:'',headers:scenario==='non-sse'?{}:{'Content-Type':'text/event-stream'}}});
   if(scenario==='stream-size-error')handlers.get('Network.dataReceived')({requestId:'native-request',data:Buffer.alloc(limit+1).toString('base64')});
   if(scenario==='combined-size-error')handlers.get('Network.dataReceived')({requestId:'native-request',data:Buffer.alloc(limit/2+1).toString('base64')});
   if(scenario==='aborted')handlers.get('Network.loadingFailed')({requestId:'native-request',errorText:'net::ERR_ABORTED',canceled:true});
@@ -478,7 +478,7 @@ const raw='data: {"id":"unit","kind":"contributedResult","payload":{"opaque":"ca
 const wire=Buffer.from(raw,'utf8'),legacy=new TextDecoder('windows-1252',{fatal:true,ignoreBOM:true});
 for(const mode of ['default-text','utf8-text','raw-base64']) {
   const headers={'Content-Type':mode==='utf8-text'?'text/event-stream; charset=utf-8':'text/event-stream'};
-  const response={url:backend+'/_elsa/agent/sessions/s1/stream',status:200,mimeType:'text/event-stream',charset:mode==='utf8-text'?'utf-8':'',headers};
+  const response={url:backend+'/_elsa/weaver/sessions/s1/stream',status:200,mimeType:'text/event-stream',charset:mode==='utf8-text'?'utf-8':'',headers};
   const body=mode==='default-text'?legacy.decode(wire):mode==='raw-base64'?wire.toString('base64'):raw;
   const handlers=new Map(),calls=[];
   const cdp={on:(kind,callback)=>handlers.set(kind,callback),send:async(kind,args)=>{
@@ -495,7 +495,7 @@ for(const mode of ['default-text','utf8-text','raw-base64']) {
   assert.equal(row.cdpBodySha256,await hash(Buffer.from(body,'utf8')));
   assert.equal(row.reconstructedBodySha256,await hash(wire));
   assert.equal(row.reportedCharset,response.charset);assert.equal(row.reportedMimeType,'text/event-stream');
-  assert.equal(row.bodyProfile,'native-agent-api-utf8-no-bom-data-lines');
+  assert.equal(row.bodyProfile,'native-weaver-api-utf8-no-bom-data-lines');
   assert.equal(row.encodingMethod,mode==='default-text'?'chromium-149-default-windows-1252-inverse':mode==='utf8-text'?'declared-utf8-text-roundtrip':'cdp-base64-bytes');
   assert.equal(calls.filter(call=>call.kind==='Network.getResponseBody').length,1);
 }
@@ -505,7 +505,7 @@ for(const mode of ['default-text','utf8-text','raw-base64']) {
         self.run_capture_controls(r'''
 const legacy=new TextDecoder('windows-1252',{fatal:true,ignoreBOM:true});
 for(const scenario of ['missing-charset','unknown-charset','unsupported-legacy','header-conflict','missing-mime','unmappable','lossy','surrogate','invalid-default-utf8','invalid-base64-utf8','bom']) {
-  const response={url:backend+'/_elsa/agent/sessions/s1/stream',status:200,mimeType:'text/event-stream',charset:'',headers:{'Content-Type':'text/event-stream'}};
+  const response={url:backend+'/_elsa/weaver/sessions/s1/stream',status:200,mimeType:'text/event-stream',charset:'',headers:{'Content-Type':'text/event-stream'}};
   let body='data: {}\n\n',encoded=false;
   if(scenario==='missing-charset')delete response.charset;
   if(scenario==='unknown-charset')response.charset='utf-16le';
@@ -541,7 +541,7 @@ for(const state of ['open','aborted','finished']) {
     assert.equal(kind,'Network.streamResourceContent');return {bufferedData:observed.toString('base64')};
   }};
   context={newCDPSession:async()=>cdp};const capture=await captureNativeStreams({});
-  handlers.get('Network.responseReceived')({requestId:'native',response:{url:backend+'/_elsa/agent/sessions/s1/stream',status:200,headers:{'Content-Type':'text/event-stream'}}});
+  handlers.get('Network.responseReceived')({requestId:'native',response:{url:backend+'/_elsa/weaver/sessions/s1/stream',status:200,headers:{'Content-Type':'text/event-stream'}}});
   if(state==='aborted')handlers.get('Network.loadingFailed')({requestId:'native',errorText:'net::ERR_ABORTED',canceled:true});
   if(state==='finished')handlers.get('Network.loadingFinished')({requestId:'native'});
   const [row]=await capture();
@@ -566,7 +566,7 @@ for(const state of ['open','aborted']) {
     if(kind==='Network.enable')return {};assert.equal(kind,'Network.streamResourceContent');return {bufferedData:observed.toString('base64')};
   }};
   context={newCDPSession:async()=>cdp};const capture=await captureNativeStreams({});
-  handlers.get('Network.responseReceived')({requestId:'native',response:{url:backend+'/_elsa/agent/sessions/s1/stream',status:200,headers:{'Content-Type':'text/event-stream'}}});
+  handlers.get('Network.responseReceived')({requestId:'native',response:{url:backend+'/_elsa/weaver/sessions/s1/stream',status:200,headers:{'Content-Type':'text/event-stream'}}});
   if(state==='aborted')handlers.get('Network.loadingFailed')({requestId:'native',errorText:'net::ERR_ABORTED',canceled:true});
   const [row]=await capture();assert.ok(row.captureError,state);assert.equal(row.rawBody,'');
   assert.equal(row.observedBodyBytes,observed.length);
@@ -593,7 +593,7 @@ const diagnosticUrl = value => { const url = new URL(value); return url.origin +
 const capture = await captureNativeStreams({});
 const raw = Buffer.from('data: {"id":"unit","payload":{"opaque":"café"}}\n\n');
 const split = raw.indexOf(Buffer.from("é")) + 1;
-const event = {requestId:"r1", response:{url:backend+"/_elsa/agent/sessions/s1/stream",status:200,
+const event = {requestId:"r1", response:{url:backend+"/_elsa/weaver/sessions/s1/stream",status:200,
   headers:{"Content-Type":"text/event-stream",Authorization:"private-header-never-retained"}}};
 handlers.get("Network.responseReceived")(event);
 handlers.get("Network.responseReceived")({...event, requestId:"foreign",response:{...event.response,url:event.response.url.replace("49123","49124")}});

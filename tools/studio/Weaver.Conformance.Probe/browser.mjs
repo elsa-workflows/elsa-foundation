@@ -106,7 +106,7 @@ page.on("request", request => {
   // Publish is an explicit boundary: a lifecycle journey records any attempt to cross it.
   if ((lifecycle || config.journey === "workflow-batch") && url.origin === backend && /publish/i.test(url.pathname) && request.method() !== "GET")
     publishAttempts.push({ url: diagnosticUrl(request.url()), method: request.method() });
-  if (url.origin !== backend || !url.pathname.startsWith("/_elsa/agent/") || !["POST", "PUT", "PATCH", "DELETE"].includes(request.method())) return;
+  if (url.origin !== backend || !url.pathname.startsWith("/_elsa/weaver/") || !["POST", "PUT", "PATCH", "DELETE"].includes(request.method())) return;
   requests.push({ url: request.url(), method: request.method(), body: request.postDataJSON() });
 });
 page.on("response", response => {
@@ -133,12 +133,12 @@ const agentTraffic = [], agentResponseReads = [];
 if (["workflow-explain", "workflow-run"].includes(config.journey)) {
   page.on("request", request => {
     const url = new URL(request.url());
-    if (url.origin === backend && url.pathname.startsWith("/_elsa/agent/"))
+    if (url.origin === backend && url.pathname.startsWith("/_elsa/weaver/"))
       agentTraffic.push({ method: request.method(), url: request.url(), body: request.postData() ?? "" });
   });
   page.on("response", response => {
     const url = new URL(response.url());
-    if (url.origin !== backend || !url.pathname.startsWith("/_elsa/agent/") || /event-stream/i.test(response.headers()["content-type"] ?? "")) return;
+    if (url.origin !== backend || !url.pathname.startsWith("/_elsa/weaver/") || /event-stream/i.test(response.headers()["content-type"] ?? "")) return;
     agentResponseReads.push(response.text().then(body => agentTraffic.push({ url: response.url(), status: response.status(), body }))
       .catch(error => agentTraffic.push({ url: response.url(), unreadable: error.message })));
   });
@@ -220,7 +220,7 @@ async function captureNativeStreams(target) {
   const hash = async value => Buffer.from(await globalThis.crypto.subtle.digest("SHA-256", value)).toString("hex");
   function sseText(value, allowTrailingIncomplete = false) {
     const text = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(value, { stream: allowTrailingIncomplete });
-    // This observer qualifies AgentApi.WriteEventAsync's UTF-8/no-BOM data lines,
+    // This observer qualifies WeaverApi.WriteEventAsync's UTF-8/no-BOM data lines,
     // not arbitrary SSE encodings or original compressed/network-wire bytes.
     if (text.startsWith("\ufeff") || text && !text.startsWith("data: "))
       throw new Error("Response bytes do not match the native Agent SSE framing profile.");
@@ -299,12 +299,12 @@ async function captureNativeStreams(target) {
   }
   function safeStreamUrl(value) {
     const url = new URL(value);
-    return url.origin === backend && /^\/_elsa\/agent\/sessions\/[^/]+\/stream$/.test(url.pathname)
+    return url.origin === backend && /^\/_elsa\/weaver\/sessions\/[^/]+\/stream$/.test(url.pathname)
       && !url.username && !url.password && !url.search && !url.hash ? url.href : null;
   }
   cdp.on("Network.requestWillBeSent", event => {
     const url = new URL(event.request.url);
-    if (url.origin !== backend || !/^\/_elsa\/agent\/sessions\/[^/]+\/stream$/.test(url.pathname)) return;
+    if (url.origin !== backend || !/^\/_elsa\/weaver\/sessions\/[^/]+\/stream$/.test(url.pathname)) return;
     requests.set(event.requestId, { rawUrl: event.request.url,
       count: (requests.get(event.requestId)?.count ?? 0) + 1,
       observation: { source: "Network.requestWillBeSent", requestId: event.requestId,
@@ -313,7 +313,7 @@ async function captureNativeStreams(target) {
   });
   cdp.on("Network.responseReceived", event => {
     const url = new URL(event.response.url);
-    if (url.origin !== backend || !/^\/_elsa\/agent\/sessions\/[^/]+\/stream$/.test(url.pathname)) return;
+    if (url.origin !== backend || !/^\/_elsa\/weaver\/sessions\/[^/]+\/stream$/.test(url.pathname)) return;
     const contentType = Object.entries(event.response.headers).find(([key]) => key.toLowerCase() === "content-type")?.[1] ?? "";
     const isSse = event.response.status === 200 && contentType.split(";", 1)[0].trim() === "text/event-stream";
     const request = requests.get(event.requestId);
@@ -324,7 +324,7 @@ async function captureNativeStreams(target) {
       responseObservationCount: (streams.get(event.requestId)?.responseObservationCount ?? 0) + 1,
       requestIdentityMatchesResponse: !!request && request.rawUrl === event.response.url && responseUrl !== null && request.observation.url === responseUrl,
       reportedCharset: event.response.charset ?? null, reportedMimeType: event.response.mimeType ?? null,
-      bodyProfile: "native-agent-api-utf8-no-bom-data-lines", bodyByteRepresentation: "response-body-after-content-decoding",
+      bodyProfile: "native-weaver-api-utf8-no-bom-data-lines", bodyByteRepresentation: "response-body-after-content-decoding",
       termination: "open", captureError: null, captureMethod: isSse ? "streamResourceContent" : "not-sse",
       streamResourceContentError: null, responseBodyError: null, captureValidationError: null, responseBodyAttempted: false,
       receivedDataBytes: 0, dataEventCount: 0, dataLengthMetadataError: null,
@@ -411,7 +411,7 @@ async function captureAutonomyExchanges(target) {
   const owned = value => {
     try {
       const url = new URL(value);
-      return url.origin === backend && /^\/_elsa\/agent\/sessions\/[^/]+\/autonomy$/.test(url.pathname) ? url : null;
+      return url.origin === backend && /^\/_elsa\/weaver\/sessions\/[^/]+\/autonomy$/.test(url.pathname) ? url : null;
     } catch { return null; }
   };
   const exact = url => url.username || url.password || url.search || url.hash ? null : url.href;
@@ -530,7 +530,7 @@ async function accepted(responsePromise, name) {
   return { response, value };
 }
 async function interceptAcknowledgement(mode) {
-  const pattern = backend + "/_elsa/agent/sessions/*/client-invocations/*/acknowledgements";
+  const pattern = backend + "/_elsa/weaver/sessions/*/client-invocations/*/acknowledgements";
   let resolveObservation;
   const completed = new Promise(resolve => { resolveObservation = resolve; });
   const timeout = setTimeout(() => resolveObservation({ error: new Error("No actual workflow ACK reached the interception boundary within 30 seconds.") }), 30000);
@@ -573,7 +573,7 @@ async function interceptAcknowledgement(mode) {
 }
 function observedLifecycle(ack, status, summary) {
   expect(ack.value).toMatchObject({ error: null, data: { executed: false, status, summary, toolResult: {
-    succeeded: false, content: summary, payload: { typeId: "agent.operation-outcome", schemaVersion: "1", data: { status } }, receipt: null
+    succeeded: false, content: summary, payload: { typeId: "weaver.operation-outcome", schemaVersion: "1", data: { status } }, receipt: null
   } } });
 }
 async function proposalFor(action, name) {
@@ -649,7 +649,7 @@ async function requireAcknowledgedSelector(mode, cause) {
   return observed;
 }
 async function changeEstablishedMode(sessionId, requestedMode, acknowledged) {
-  const updatePath = "/_elsa/agent/sessions/" + encodeURIComponent(sessionId) + "/autonomy";
+  const updatePath = "/_elsa/weaver/sessions/" + encodeURIComponent(sessionId) + "/autonomy";
   const offset = requests.length;
   await requireAcknowledgedSelector(acknowledged.autonomyMode, "autonomy.selector_unacknowledged");
   const selector = dock().locator(".weaver-auto-apply");
@@ -694,7 +694,7 @@ async function changeEstablishedMode(sessionId, requestedMode, acknowledged) {
 async function readTurnSettled(sessionId, messageId) {
   // Policy claims are released when the accepted message is terminal; read the owner without retaining polls.
   for (let attempt = 0; attempt < 20; attempt++) {
-    const response = await page.request.get(backend + "/_elsa/agent/sessions/" + encodeURIComponent(sessionId));
+    const response = await page.request.get(backend + "/_elsa/weaver/sessions/" + encodeURIComponent(sessionId));
     const value = response.status() === 200 ? await response.json() : null;
     if (value?.data?.messages?.find(item => item.id === messageId)?.status === "completed") return;
     await page.waitForTimeout(250);
@@ -726,7 +726,7 @@ async function autonomySize() {
   await expect(page.getByTestId("acme-home-size")).not.toHaveText("Not available");
   const before = await owner("size-owner-before", witness.sizeOwnerEndpoint);
   const layoutBefore = await owner("size-layout-before", "/_elsa/studio/preferences/home-layout", { "X-Elsa-Studio-Host-Id": witness.hostId });
-  const bootstrap = await owner("autonomy-native-bootstrap", "/_elsa/agent/bootstrap");
+  const bootstrap = await owner("autonomy-native-bootstrap", "/_elsa/weaver/bootstrap");
   const installedCapabilities = bootstrap.value.data?.capabilities;
   need(Array.isArray(installedCapabilities) && installedCapabilities.some(item => item.id === witness.sizeCapability && item.moduleId === witness.moduleId),
     "The actual backend must advertise the module's size capability before this journey.");
@@ -753,7 +753,7 @@ async function autonomySize() {
   await expect(dock()).toHaveAttribute("aria-busy", "false");
   expect((await owner("size-owner-after-read", witness.sizeOwnerEndpoint)).value).toEqual(before.value);
   await readTurnSettled(sessionId, read.value.data?.message?.id);
-  const initialSession = await owner("autonomy-session-before-selection", "/_elsa/agent/sessions/" + encodeURIComponent(sessionId));
+  const initialSession = await owner("autonomy-session-before-selection", "/_elsa/weaver/sessions/" + encodeURIComponent(sessionId));
   expect(initialSession.value.data?.sessionId).toBe(sessionId);
   autonomyNeed(canonical(initialSession.value.data?.policy) === canonical(createdPolicy), "autonomy.readback_mismatch",
     "Session detail does not read back the policy acknowledged at creation.");
@@ -767,7 +767,7 @@ async function autonomySize() {
   const selectionRequests = requests.slice(selectionOffset);
   autonomyNeed(selectionRequests.length === (update ? 1 : 0), update ? "autonomy.update_duplicated" : "autonomy.unexpected_update",
     "An unchanged control sends no autonomy request; a transition sends exactly one.");
-  const selectedSession = await owner("autonomy-session-after-selection", "/_elsa/agent/sessions/" + encodeURIComponent(sessionId));
+  const selectedSession = await owner("autonomy-session-after-selection", "/_elsa/weaver/sessions/" + encodeURIComponent(sessionId));
   autonomyNeed(selectedSession.value.data?.sessionId === sessionId && canonical(selectedSession.value.data?.policy) === canonical(effectivePolicy),
     "autonomy.readback_mismatch", "Session detail does not read back the acknowledged mode and revision.");
   const targetSize = before.value.size === "small" ? "medium" : "small";
@@ -777,7 +777,7 @@ async function autonomySize() {
   await page.getByRole("button", { name: "Resize with Weaver", exact: true }).click();
   const sent = await accepted(sizeMessage, "autonomy-size-message");
   expect(sent.value.data?.message?.sessionId).toBe(sessionId);
-  expect(new URL(sent.response.url()).pathname).toBe("/_elsa/agent/sessions/" + sessionId + "/messages");
+  expect(new URL(sent.response.url()).pathname).toBe("/_elsa/weaver/sessions/" + sessionId + "/messages");
   const sentBody = sent.response.request().postDataJSON();
   // The current host forwards its first active capability; the module prompt source
   // identifies the size action. Do not invent action-specific capability propagation.
@@ -830,10 +830,10 @@ async function autonomySize() {
   const after = await owner("size-owner-after", witness.sizeOwnerEndpoint);
   const layoutAfter = await owner("size-layout-after", "/_elsa/studio/preferences/home-layout", { "X-Elsa-Studio-Host-Id": witness.hostId });
   result.ownerAfter = after.receipt;
-  const finalSession = await owner("autonomy-session-after-outcome", "/_elsa/agent/sessions/" + encodeURIComponent(sessionId));
+  const finalSession = await owner("autonomy-session-after-outcome", "/_elsa/weaver/sessions/" + encodeURIComponent(sessionId));
   const finalData = finalSession.value.data;
   expect(finalData?.sessionId).toBe(sessionId);
-  expect(requests.filter(item => new URL(item.url).pathname === "/_elsa/agent/sessions")).toHaveLength(1);
+  expect(requests.filter(item => new URL(item.url).pathname === "/_elsa/weaver/sessions")).toHaveLength(1);
   expect(requests.filter(item => new URL(item.url).pathname.endsWith("/messages"))).toHaveLength(2);
   autonomyNeed(requests.filter(item => new URL(item.url).pathname.endsWith("/autonomy")).length === selectionRequests.length,
     update ? "autonomy.update_duplicated" : "autonomy.unexpected_update", "A later autonomy request changed the established policy.");
@@ -904,7 +904,7 @@ async function lifecycleFinish() {
   // The originating turn has already settled; read the owning conversation once, never retrying work.
   if (!lifecycle) return;
   need(result.lifecycle?.sessionId, "The lifecycle conversation was never acknowledged.");
-  const session = await owner("lifecycle-session-after", "/_elsa/agent/sessions/" + encodeURIComponent(result.lifecycle.sessionId));
+  const session = await owner("lifecycle-session-after", "/_elsa/weaver/sessions/" + encodeURIComponent(result.lifecycle.sessionId));
   need(session.value.data?.sessionId === result.lifecycle.sessionId, "The lifecycle conversation changed.");
   result.lifecycle.sessionAfter = session.receipt;
 }
@@ -1343,7 +1343,7 @@ async function consumedIntentRemount() {
   const capabilities = page.waitForResponse(response => new URL(response.url()).origin === backend
     && new URL(response.url()).pathname === "/capabilities");
   const registryBootstrap = page.waitForRequest(request => new URL(request.url()).origin === backend
-    && new URL(request.url()).pathname === "/_elsa/agent/bootstrap");
+    && new URL(request.url()).pathname === "/_elsa/weaver/bootstrap");
   await nativeEnter("remount-capability-refresh", page.getByRole("button", { name: "Refresh backend capabilities", exact: true }), "Refresh actual backend capabilities");
   need((await capabilities).status() === 200, "The real capability read failed.");
   await expect.poll(() => registryDock.evaluate(element => element.isConnected)).toBe(false);
@@ -1415,7 +1415,7 @@ async function consumedIntentRemount() {
   await expect(page).toHaveURL(studioRoute("/features"));
   await page.getByLabel("Search modules", { exact: true }).fill("");
   const bootstrap = page.waitForRequest(request => new URL(request.url()).origin === backend
-    && new URL(request.url()).pathname === "/_elsa/agent/bootstrap");
+    && new URL(request.url()).pathname === "/_elsa/weaver/bootstrap");
   await nativeEnter("remount-reopen-weaver", page.getByRole("button", { name: "Weaver", exact: true }), "Reopen Weaver in the new document");
   const bootstrapResponse = await (await bootstrap).response();
   need(bootstrapResponse?.status() === 200, "The remounted assistant bootstrap failed.");

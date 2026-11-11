@@ -3483,9 +3483,9 @@ Elsa.Workflows.Runtime.Core.Models.RoutingStructureMaterializationDiagnostics
 Elsa.Workflows.Runtime.Core.Models.RuntimeActivityResultReference
 Elsa.Workflows.Runtime.Core.Models.RuntimeActivityResultReference.IsOptional.get -> bool
 Elsa.Workflows.Runtime.Core.Models.RuntimeActivityResultReference.ProducerExecutableNodeId.get -> string!
-Elsa.Workflows.Runtime.Core.Models.RuntimeActivityResultReference.ProducerScopeId.get -> string!
+Elsa.Workflows.Runtime.Core.Models.RuntimeActivityResultReference.ProducerScopeId.get -> string?
 Elsa.Workflows.Runtime.Core.Models.RuntimeActivityResultReference.ProjectionKey.get -> string!
-Elsa.Workflows.Runtime.Core.Models.RuntimeActivityResultReference.RuntimeActivityResultReference(string! producerExecutableNodeId, string! projectionKey, string! producerScopeId, bool isOptional = false) -> void
+Elsa.Workflows.Runtime.Core.Models.RuntimeActivityResultReference.RuntimeActivityResultReference(string! producerExecutableNodeId, string! projectionKey, string? producerScopeId, bool isOptional = false) -> void
 Elsa.Workflows.Runtime.Core.Models.RuntimeActorEvictionOptions
 Elsa.Workflows.Runtime.Core.Models.RuntimeActorEvictionOptions.PassivateOnTerminal.get -> bool
 Elsa.Workflows.Runtime.Core.Models.RuntimeActorEvictionOptions.PassivateOnTerminal.set -> void
@@ -10344,3 +10344,9 @@ static Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionValue.operator ==
 Elsa.Workflows.Runtime.Core.Models.ActivityExecutionLayout.ActivityPresentation.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableActivityPresentationRecord!>!
 Elsa.Workflows.Runtime.Core.Models.ActivityExecutionLayout.ActivityPresentation.init -> void
 Elsa.Workflows.Runtime.Core.Contracts.IActivityStateViewProjector.DescriptorKind.get -> string?
+Elsa.Workflows.Runtime.Core.Contracts.IRunRowPresenceProbe
+Elsa.Workflows.Runtime.Core.Contracts.IRunRowPresenceProbe.HasAnyAsync(string! workflowExecutionId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>
+Elsa.Workflows.Runtime.Core.Contracts.IRunRowPresenceProbe.ResolveReadScope(string! workflowExecutionId, string! activityExecutionId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> string!
+Elsa.Workflows.Runtime.Core.Contracts.ISchedulerPoisonFenceCapability
+Elsa.Workflows.Runtime.Core.Contracts.ISchedulerPoisonFenceCapability.CanRecordFenced.get -> bool
+Elsa.Workflows.Runtime.Core.Contracts.ISchedulerPoisonFenceCapability.RecordFencedAsync(Elsa.Workflows.Runtime.Core.Models.RuntimeSchedulerPoisonRecord! record, Elsa.Workflows.Runtime.Core.Models.RuntimeExecutionFence! fence, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Models.RuntimeSchedulerPoisonRecord!>

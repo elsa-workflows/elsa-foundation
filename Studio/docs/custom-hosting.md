@@ -1,5 +1,7 @@
 # Build your own Studio host from packages
 
+This page is for **package consumers** who compose their own host from NuGet packages. To run the Studio source in this repository against a source-built Workbench, use [Run Studio from source](contributing/studio-source-quickstart.md).
+
 Use `Elsa.Studio.Hosting` for the common server pipeline and the prebuilt standard browser. Your application chooses its modules and configuration. It does not copy the private infrastructure from `Elsa.Studio.Web` or build the standard frontend.
 
 The [small runnable sample](../../tools/studio/PackageHost.Sample/) selects Dashboard. Its [Program.cs](../../tools/studio/PackageHost.Sample/Program.cs) is the complete composition root:

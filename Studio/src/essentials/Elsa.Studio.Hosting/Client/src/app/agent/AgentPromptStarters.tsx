@@ -1,12 +1,12 @@
 import React from "react";
-import type { StudioAgentPromptStarterContribution } from "../../sdk";
+import type { StudioWeaverPromptStarterContribution } from "../../sdk";
 
 export function AgentPromptStarters({
   prompts,
   disabled,
   onSelect
 }: {
-  prompts: StudioAgentPromptStarterContribution[];
+  prompts: StudioWeaverPromptStarterContribution[];
   disabled?: boolean;
   onSelect(prompt: string, capabilityId?: string): void;
 }) {

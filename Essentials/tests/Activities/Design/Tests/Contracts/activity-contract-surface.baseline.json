@@ -1100,7 +1100,7 @@
           "collectionKind": "Single",
           "isRequired": false,
           "isNullable": true,
-          "uiHint": null,
+          "uiHint": "user-task-form-version",
           "defaultValue": null,
           "defaultSyntax": null,
           "uiSpecifications": null

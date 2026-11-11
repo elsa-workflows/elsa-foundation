@@ -646,7 +646,10 @@ public sealed class RuntimeInputBindingCompiler(
         var payload = RequireObjectPayload(nodeId, inputDefinition, value, ActivityResultExpressionType);
         var producerNodeId = RequireStringProperty(nodeId, inputDefinition, payload, ActivityResultExpressionType, "producerNodeId");
         var projectionKey = RequireStringProperty(nodeId, inputDefinition, payload, ActivityResultExpressionType, "projectionKey");
-        var producerScopeId = RequireStringProperty(nodeId, inputDefinition, payload, ActivityResultExpressionType, "producerScopeId");
+        // A binding the server supplied declares no scope. One that an existing document declares must still be usable.
+        var producerScopeId = payload.TryGetProperty("producerScopeId", out var scope) && scope.ValueKind != JsonValueKind.Null
+            ? RequireStringProperty(nodeId, inputDefinition, payload, ActivityResultExpressionType, "producerScopeId")
+            : null;
         var isOptional = payload.TryGetProperty("isOptional", out var optionalElement) &&
                          optionalElement.ValueKind is JsonValueKind.True or JsonValueKind.False &&
                          optionalElement.GetBoolean();
@@ -843,6 +846,9 @@ public sealed class RuntimeInputBindingCompiler(
         if (string.IsNullOrWhiteSpace(value.ExpressionType))
             throw new ArgumentException($"Activity node '{nodeId}' input '{inputDefinition.ReferenceKey}' does not declare an expression type.");
 
+        if (value.Value is not null and not string and not JsonElement and not ExpressionDefinition)
+            throw new ArgumentException($"Activity node '{nodeId}' input '{inputDefinition.ReferenceKey}' has an unsupported CLR expression payload. Supply plain text, ExpressionDefinition or JsonElement.");
+
         if (TryReadPortableExpressionDefinition(value.Value, out var definition))
             return CompilePortableExpressionInput(nodeId, inputDefinition, value.ExpressionType, definition, effectivePolicy);
 
@@ -906,8 +912,7 @@ public sealed class RuntimeInputBindingCompiler(
             return true;
         }
 
-        var element = value as JsonElement? ?? (value is null ? null : JsonSerializer.SerializeToElement(value, DescriptorPayloadSerializer.Options));
-        if (element is not { ValueKind: JsonValueKind.Object } payload ||
+        if (value is not JsonElement { ValueKind: JsonValueKind.Object } payload ||
             !payload.TryGetProperty("language", out _) ||
             !payload.TryGetProperty("source", out _) ||
             !payload.TryGetProperty("capabilityProfile", out _))
