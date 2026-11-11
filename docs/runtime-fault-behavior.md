@@ -291,15 +291,16 @@ took over, a lease that expired, and a lease that an alteration borrowed; it als
 was released or revoked. It does not refuse a run that never had an owner. The refusal is a
 `RuntimeStaleFencingTokenException`, and it leaves the drain as a refused commit does. None of the steps below
 runs: the step is not acknowledged, released or re-enqueued, the retry policy is not asked, and no poison record
-is written. The step stays queued. Outside an active coalescing segment it is still claimed by the drain that
-stopped. Nothing releases that claim: it lapses after the scheduler claim's visibility timeout
-(`RuntimeSchedulerWorkClaimOptions.VisibilityTimeout`, one minute by default). In an active segment the drain's
-claim was only in the segment's overlay: a step that came from the durable queue is still there and is not
-claimed, and a step that existed only in the overlay is not durable, so the run replays from its last durable
-state. Either way the step runs again when the run is next drained, after the claim has lapsed where there is
-one: by the resumption sweep where the `Resumption` component is composed, otherwise by the next command for the
-run. The core composition has no
-sweep, so there the step waits for that command
+is written. A step that came from the durable queue is still there. Whether it is still claimed depends on
+where the drain took its claim, not on what the drain is doing when the fault arrives. A claim taken on the
+durable queue stays: nothing releases it, and it lapses after the scheduler claim's visibility timeout
+(`RuntimeSchedulerWorkClaimOptions.VisibilityTimeout`, one minute by default). A claim taken in a coalescing
+segment's overlay never reached the durable queue, so the step there is not claimed, also when that segment has
+ended since. A step that existed only in an overlay is not durable, and the run replays from its last durable
+state. The step runs again when a drain of the run next claims it, after the claim has lapsed where there is
+one. Nothing on this path starts that drain. It can be a drain of the run's new owner, the resumption sweep
+where the `Resumption` component is composed, or the next command for the run. The core composition has no
+sweep, so there, unless a drain of the new owner picks the step up, it waits for that command
 ([#4075](https://github.com/elsa-workflows/elsa-foundation/issues/4075)). On a queue without claims there is no
 lapse to wait for, and the rest is the same. A refused checkpoint commit leaves its step the same way. The
 exception is a step that a checkpoint commit earlier in the same dispatch already consumed, as in
@@ -404,9 +405,9 @@ and records under the lease where the store can check it.
 | `DoNotRetry`, `Fault`, or no policy | `Poisoned` | none |
 
    The record is written under the drain's ownership lease when the poison store can check that lease
-   in the same unit of work as the write (`ISchedulerPoisonFenceCapability`). The ownership check above
-   already turned away a drain that had lost its run, so this concerns only a lease lost since that check:
-   taken over, expired or borrowed in between. What that leaves depends on the composition:
+   in the same unit of work as the write (`ISchedulerPoisonFenceCapability`). Where the ownership check
+   above was made and passed, it already turned away a drain that had lost its run, so this concerns only a
+   lease lost since that check: taken over, expired or borrowed in between. What that leaves depends on the composition:
    - **A poison store that can check the lease** refuses the record. It throws
      `RuntimeStaleFencingTokenException`, nothing is recorded, and the drain ends with that exception. What
      step 3 and a `RetryNow` re-enqueue did is not undone. Outside an active coalescing segment those writes are
