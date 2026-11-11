@@ -40,7 +40,8 @@ internal static class TestSchedulerDrainer
         IRuntimeConsumedSchedulerWorkClaimAccessor? consumedWorkClaimAccessor = null,
         bool hasResumptionRedriver = false,
         IRuntimeExecutionOwnershipContextAccessor? ownershipContextAccessor = null,
-        IRuntimeExecutionOwnershipService? ownershipService = null) =>
+        IRuntimeExecutionOwnershipService? ownershipService = null,
+        Elsa.Workflows.Runtime.Core.Diagnostics.IWorkflowEngineTracer? tracer = null) =>
         new(
             schedulerWorkQueue,
             handlers,
@@ -51,6 +52,7 @@ internal static class TestSchedulerDrainer
             pipelineDispatcher,
             faultCapturePolicy,
             retryPolicy,
+            tracer,
             claimOptions: claimOptions,
             consumedWorkClaimAccessor: consumedWorkClaimAccessor)
         {

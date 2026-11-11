@@ -1,7 +1,9 @@
+using System.Diagnostics;
 using System.Text.Json;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Diagnostics;
 using Elsa.Workflows.Runtime.Services.Executions;
 using Elsa.Workflows.Runtime.Services.Incidents;
 using Elsa.Workflows.Runtime.Services.Scheduler;
@@ -218,11 +220,11 @@ public sealed class WorkflowSchedulerFencedPoisonDrainTests
     [Fact]
     public async Task DrainAsync_WhenTheFencedRecordFailsForAReasonOtherThanOwnership_RecordsUnfencedAndReturnsTheFault()
     {
-        // The drain owned the run when it checked. A fenced write that then fails for another reason, here a write
-        // conflict the store gave up on, must not leave the step acknowledged with no record: the record goes the way
-        // it goes for a store without the capability.
+        // The drain owned the run when it checked. A fenced write that then fails for another reason, here a
+        // persistence failure of the store, must not leave the step acknowledged with no record: the record goes the
+        // way it goes for a store without the capability.
         var fixture = NewFixture();
-        var store = new FailingFencedPoisonStore(() => new InvalidOperationException("The fenced write did not settle."));
+        var store = new FailingFencedPoisonStore(() => new InvalidOperationException("The store failed while recording under the execution fence."));
         using var scope = fixture.Accessor.Push(await fixture.NodeA.AcquireAsync(WorkflowExecutionId));
         var drainer = fixture.NewDrainer(store);
         await fixture.Queue.EnqueueAsync(NewWorkItem());
@@ -238,10 +240,68 @@ public sealed class WorkflowSchedulerFencedPoisonDrainTests
         Assert.Empty(await fixture.Queue.Inner.ListAllAsync(new RuntimeSchedulerWorkQuery(WorkflowExecutionId)));
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task DrainAsync_TagsTheDispatchSpanOnlyWhenTheRecordFellBackToTheUnfencedWrite(bool fencedWriteFails)
+    {
+        // A host whose fenced write keeps failing records every poison without the fence. The dispatch span says so,
+        // with the type of the failure.
+        using var activitySource = new ActivitySource(WorkflowEngineTelemetry.ActivitySourceName);
+        var recorded = new List<System.Diagnostics.Activity>();
+        using var listener = new ActivityListener
+        {
+            // ActivityListener is process-global; ignore same-name sources owned by parallel tests.
+            ShouldListenTo = source => ReferenceEquals(source, activitySource),
+            Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded,
+            ActivityStopped = recorded.Add
+        };
+        ActivitySource.AddActivityListener(listener);
+        var fixture = NewFixture();
+        IWorkflowSchedulerPoisonStore store = fencedWriteFails
+            ? new FailingFencedPoisonStore(() => new TimeoutException("The fenced write timed out."))
+            : fixture.FencedPoisonStore;
+        using var scope = fixture.Accessor.Push(await fixture.NodeA.AcquireAsync(WorkflowExecutionId));
+        var drainer = fixture.NewDrainer(store, tracer: new ActivitySourceWorkflowEngineTracer(activitySource));
+        await fixture.Queue.EnqueueAsync(NewWorkItem());
+
+        var result = await drainer.DrainAsync(new RuntimeSchedulerDrainRequest(WorkflowExecutionId));
+
+        Assert.True(result.StoppedOnFault);
+        Assert.Single(await store.ListAsync(WorkflowExecutionId));
+        var dispatch = Assert.Single(recorded, activity => activity.OperationName == WorkflowEngineTelemetry.DispatchSpanName);
+        Assert.Equal(
+            fencedWriteFails ? typeof(TimeoutException).FullName : null,
+            dispatch.GetTagItem(WorkflowEngineTelemetry.PoisonFenceFallbackTag));
+    }
+
+    [Fact]
+    public async Task DrainAsync_WhenOwnershipCannotBeRead_ThrowsThatFailureBeforeAnythingOfTheFaultIsWritten()
+    {
+        // The ownership read is a provider read and can fail. If ownership cannot be confirmed, the fault arm writes
+        // nothing: the read's failure leaves the drain in place of the handler's own exception.
+        var fixture = NewFixture();
+        var store = new CountingFencedPoisonStore(fixture.FencedPoisonStore);
+        using var scope = fixture.Accessor.Push(await fixture.NodeA.AcquireAsync(WorkflowExecutionId));
+        fixture.Ownership.EnsureCurrentFailure = () => new IOException("The ownership store is unavailable.");
+        var drainer = fixture.NewDrainer(store, new StubRetryPolicy(new RuntimeDomainRetryDecision(RuntimeDomainRetryMode.RetryNow, null, "retry-now")));
+        await fixture.Queue.EnqueueAsync(NewWorkItem());
+        fixture.Queue.ResetCounts();
+
+        var failure = await Assert.ThrowsAsync<IOException>(
+            () => drainer.DrainAsync(new RuntimeSchedulerDrainRequest(WorkflowExecutionId)).AsTask());
+
+        Assert.Equal("The ownership store is unavailable.", failure.Message);
+        Assert.Equal((0, 0, 0), (fixture.Queue.Completions, fixture.Queue.Enqueues, fixture.Queue.Releases));
+        Assert.Equal("work-1", Assert.Single(await fixture.Queue.Inner.ListAllAsync(new RuntimeSchedulerWorkQuery(WorkflowExecutionId))).WorkItemId);
+        Assert.Equal((0, 0, 0), (store.FencedRecords, store.UnfencedRecords, store.Finds));
+    }
+
     [Fact]
     public async Task DrainAsync_WhenTheFencedRecordIsCancelled_LetsTheCancellationThroughWithoutAnUnfencedRecord()
     {
-        // Cancellation is not a failed write to work around: writing the record another way would ignore it.
+        // An OperationCanceledException, whatever cancelled the write, is not a failed write to work around: writing
+        // the record another way would ignore it.
         var fixture = NewFixture();
         var store = new FailingFencedPoisonStore(() => new OperationCanceledException("The fenced write was cancelled."));
         using var scope = fixture.Accessor.Push(await fixture.NodeA.AcquireAsync(WorkflowExecutionId));
@@ -354,7 +414,8 @@ public sealed class WorkflowSchedulerFencedPoisonDrainTests
             Func<ValueTask>? beforeFault = null,
             bool withOwnershipService = true,
             bool faults = true,
-            bool hasResumptionRedriver = false) =>
+            bool hasResumptionRedriver = false,
+            Elsa.Workflows.Runtime.Core.Diagnostics.IWorkflowEngineTracer? tracer = null) =>
             TestSchedulerDrainer.Create(
                 Queue,
                 [new TestSchedulerWorkHandler(beforeFault, faults), new NoopWorkflowSchedulerWorkHandler()],
@@ -363,7 +424,8 @@ public sealed class WorkflowSchedulerFencedPoisonDrainTests
                 retryPolicy: retryPolicy ?? new NoopRuntimeDomainRetryPolicy(),
                 hasResumptionRedriver: hasResumptionRedriver,
                 ownershipContextAccessor: Accessor,
-                ownershipService: withOwnershipService ? Ownership : null);
+                ownershipService: withOwnershipService ? Ownership : null,
+                tracer: tracer);
     }
 
     private sealed class TestSchedulerWorkHandler(Func<ValueTask>? beforeFault, bool faults) : IWorkflowSchedulerWorkHandler
@@ -396,6 +458,7 @@ public sealed class WorkflowSchedulerFencedPoisonDrainTests
     private sealed class CountingOwnershipService(IRuntimeExecutionOwnershipService inner) : IRuntimeExecutionOwnershipService
     {
         public int EnsureCurrentCalls { get; private set; }
+        public Func<Exception>? EnsureCurrentFailure { get; set; }
 
         public ValueTask<RuntimeExecutionLease> AcquireAsync(string workflowExecutionId, CancellationToken cancellationToken = default) =>
             inner.AcquireAsync(workflowExecutionId, cancellationToken);
@@ -407,7 +470,9 @@ public sealed class WorkflowSchedulerFencedPoisonDrainTests
         public ValueTask EnsureCurrentAsync(string workflowExecutionId, long fencingToken, CancellationToken cancellationToken = default)
         {
             EnsureCurrentCalls++;
-            return inner.EnsureCurrentAsync(workflowExecutionId, fencingToken, cancellationToken);
+            return EnsureCurrentFailure is { } failure
+                ? ValueTask.FromException(failure())
+                : inner.EnsureCurrentAsync(workflowExecutionId, fencingToken, cancellationToken);
         }
     }
 

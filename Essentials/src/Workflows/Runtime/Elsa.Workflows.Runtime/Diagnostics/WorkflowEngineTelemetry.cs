@@ -66,6 +66,12 @@ public static class WorkflowEngineTelemetry
     /// <summary>The phase outcome (<c>completed</c> or <c>faulted</c>).</summary>
     public const string OutcomeTag = "elsa.outcome";
 
+    /// <summary>
+    /// Present on a dispatch span when a handler fault's poison record was written without the ownership fence because
+    /// the fenced write failed for a reason other than ownership. The value is the type of that failure.
+    /// </summary>
+    public const string PoisonFenceFallbackTag = "elsa.poison.fence_fallback";
+
     /// <summary>The committed checkpoint's id.</summary>
     public const string CheckpointIdTag = "elsa.checkpoint.id";
 

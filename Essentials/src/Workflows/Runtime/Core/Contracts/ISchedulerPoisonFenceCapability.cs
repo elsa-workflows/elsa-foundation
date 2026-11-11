@@ -40,13 +40,16 @@ public interface ISchedulerPoisonFenceCapability
     /// <summary>
     /// Inserts or replaces the poison record for its <c>(WorkflowExecutionId, WorkItemId)</c> key, only if
     /// <paramref name="fence"/> is the current, unexpired ownership lease of the record's workflow execution. The
-    /// check and the write are one atomic unit of work. A store may also let its own failures through, such as a
-    /// provider write failure it does not retry; it then has written nothing.
+    /// check and the write are one atomic unit of work. A store may also fail for reasons of its own, such as a
+    /// write failure it does not retry. It has then written nothing, unless the failure came from the commit
+    /// itself, which may still have been applied.
     /// </summary>
     /// <remarks>
     /// The drainer treats only <see cref="RuntimeStaleFencingTokenException"/> as a refusal of the record. After any
-    /// other failure of this call, except cancellation, it writes the record through
-    /// <see cref="IWorkflowSchedulerPoisonStore.RecordAsync"/>, without the fence.
+    /// other failure of this call, except an <see cref="OperationCanceledException"/>, it writes the record through
+    /// <see cref="IWorkflowSchedulerPoisonStore.RecordAsync"/>, without the fence. So a failure that could be a
+    /// lost lease, such as a write conflict on the ownership state, must leave as
+    /// <see cref="RuntimeStaleFencingTokenException"/> when the lease is no longer the caller's.
     /// </remarks>
     /// <exception cref="RuntimeStaleFencingTokenException">
     /// The execution has no ownership lease, the lease has expired, or another lease holds it. Nothing was written.

@@ -5,6 +5,7 @@ using Elsa.Workflows.Runtime.Extensions;
 using Elsa.Workflows.Runtime.Services.Executions;
 using Elsa.Workflows.Runtime.Services.Scheduler;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Time.Testing;
 using Xunit;
 
@@ -230,6 +231,37 @@ public sealed class InMemoryWorkflowSchedulerFencedPoisonStoreTests
 
         Assert.True(result.StoppedOnFault);
         Assert.Single(await poisonStore.ListAsync(WorkflowExecutionId));
+    }
+
+    [Fact]
+    public async Task AddWorkflowRuntime_WithAScopedInMemoryOwnershipStore_RecordsUnfencedSoAnOwningDrainKeepsItsRecord()
+    {
+        // A host that registers the in-memory ownership store scoped gets one per scope. The poison store is a
+        // singleton and cannot hold the drain scope's one; a copy of its own would hold no lease and refuse the record
+        // of a drain that owns its run, after the step was acknowledged. So it reports that it cannot record fenced.
+        var services = new ServiceCollection();
+        services.AddSingleton<IWorkflowSchedulerWorkHandler>(new FaultingInvokeActivityHandler());
+        // As in the foreign-store test: the default execution-state store resolves the ownership store from the root.
+        services.AddSingleton<IWorkflowExecutionStateStore>(new InMemoryWorkflowExecutionStateStore());
+        services.AddWorkflowRuntime();
+        services.AddLogging();
+        services.RemoveAll<IExecutionLivenessStateStore>();
+        services.AddScoped<IExecutionLivenessStateStore, InMemoryExecutionLivenessStateStore>();
+        await using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+        var poisonStore = provider.GetRequiredService<IWorkflowSchedulerPoisonStore>();
+        var queue = provider.GetRequiredService<IWorkflowSchedulerWorkQueue>();
+        await queue.EnqueueAsync(NewInvokeActivityWorkItem());
+        using var scope = provider.CreateScope();
+        using var owned = provider.GetRequiredService<IRuntimeExecutionOwnershipContextAccessor>()
+            .Push(await scope.ServiceProvider.GetRequiredService<IRuntimeExecutionOwnershipService>().AcquireAsync(WorkflowExecutionId));
+
+        var result = await scope.ServiceProvider.GetRequiredService<IWorkflowSchedulerDrainer>()
+            .DrainAsync(new RuntimeSchedulerDrainRequest(WorkflowExecutionId));
+
+        Assert.True(result.StoppedOnFault);
+        Assert.Single(await poisonStore.ListAsync(WorkflowExecutionId));
+        Assert.Empty((await queue.ListAsync(new RuntimeSchedulerWorkQuery(WorkflowExecutionId))).Items);
+        Assert.False(Assert.IsAssignableFrom<ISchedulerPoisonFenceCapability>(poisonStore).CanRecordFenced);
     }
 
     [Fact]

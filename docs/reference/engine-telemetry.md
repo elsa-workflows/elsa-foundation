@@ -63,6 +63,7 @@ the ingestion domain: nothing that could carry user payload or a security token 
 | `elsa.command.kind` | dispatch, activity.execute | The work item's command kind (e.g. `StartActivity`). |
 | `elsa.handler.name` | dispatch | The selected scheduler work handler's name. |
 | `elsa.outcome` | dispatch, activity.execute, checkpoint.commit | `completed` or `faulted`. |
+| `elsa.poison.fence_fallback` | dispatch | Present when a handler fault's poison record was written without the ownership fence because the fenced write failed for a reason other than ownership. The value is the type of that failure. |
 | `elsa.checkpoint.id` | checkpoint.commit | The committed checkpoint's id. |
 | `elsa.checkpoint.persistence_decision` | checkpoint.commit | What the persistence policy decided for the checkpoint: `Immediate`, `Deferred` or `Skip`. Not the run's persistence mode. |
 | `elsa.checkpoint.mandatory` | checkpoint.commit | Whether the checkpoint is mandatory. |

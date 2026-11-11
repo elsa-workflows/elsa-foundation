@@ -5,10 +5,12 @@ using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.DependencyInjection;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
+using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Exceptions;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 using Elsa.Workflows.Runtime.Services.Executions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Time.Testing;
 using Xunit;
@@ -46,7 +48,7 @@ public sealed partial class EfWorkflowSchedulerPoisonStoreTests
         Assert.Equal(2, (await read.Context.WorkflowSchedulerPoisonRecords.AsNoTracking().SingleAsync()).Revision);
         // Each fenced record touches the ownership row once.
         Assert.Equal(before + 2, await OwnershipRevisionAsync(database));
-        // The lease itself is unchanged, so the owner's next heartbeat and commit still pass.
+        // The lease itself is unchanged, so the owner's next heartbeat still passes.
         Assert.Equal(RuntimeExecutionOwnershipTransitionStatus.Applied, (await Node(fixture, "node-a", clock).HeartbeatAsync(lease)).Status);
     }
 
@@ -139,9 +141,14 @@ public sealed partial class EfWorkflowSchedulerPoisonStoreTests
         Assert.Equal(before + 1, await OwnershipRevisionAsync(database));
     }
 
-    [Fact]
-    public async Task Fenced_record_with_caller_staged_changes_does_not_hide_a_fence_conflict_behind_a_retry()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Fenced_record_with_caller_staged_changes_does_not_retry_a_fence_conflict_and_says_whether_the_run_was_taken(bool takenOver)
     {
+        // With other changes pending on the context the conflict is not retried. Before it leaves, the ownership row
+        // is read once more: the owner's own heartbeat leaves as the write failure, a takeover leaves as stale. A
+        // takeover that left as a write failure would be recorded without the fence by the drainer.
         await using var database = await TestDatabase.CreateAsync();
         var race = new OwnershipRowRace();
         await using var fixture = database.Open("tenant-a", race);
@@ -149,15 +156,82 @@ public sealed partial class EfWorkflowSchedulerPoisonStoreTests
         var clock = new FakeTimeProvider(Now);
         var lease = await Node(fixture, "node-a", clock).AcquireAsync(OwnedWorkflow);
         fixture.Context.SchedulerStates.Add(SiblingRow());
-        race.Change = async () => await Node(otherConnection, "node-a", clock).HeartbeatAsync(lease);
+        race.Change = takenOver
+            ? async () => await Node(otherConnection, "node-b", clock).AcquireAsync(OwnedWorkflow)
+            : async () => await Node(otherConnection, "node-a", clock).HeartbeatAsync(lease);
+        var store = FencedStore(fixture, clock);
 
-        await Assert.ThrowsAsync<DbUpdateConcurrencyException>(
-            () => FencedStore(fixture, clock).RecordFencedAsync(Record(1), lease.ToFence()).AsTask());
+        if (takenOver)
+            Assert.Equal(RuntimeFencingRejectionReason.StaleToken, (await Assert.ThrowsAsync<RuntimeStaleFencingTokenException>(
+                () => store.RecordFencedAsync(Record(1), lease.ToFence()).AsTask())).Reason);
+        else
+            Assert.IsType<DbUpdateConcurrencyException>((await Assert.ThrowsAsync<WorkflowSchedulerPoisonEntityFrameworkPersistenceException>(
+                () => store.RecordFencedAsync(Record(1), lease.ToFence()).AsTask())).InnerException);
 
         Assert.Equal(1, race.Races);
         await using var read = database.Open("tenant-a");
         Assert.Null(await read.Store.FindAsync(OwnedWorkflow, "work-1"));
         Assert.Empty(await read.Context.SchedulerStates.ToArrayAsync());
+    }
+
+    [Fact]
+    public async Task Fenced_record_refuses_as_stale_a_takeover_that_lands_under_the_last_attempt()
+    {
+        // The owner's heartbeat lands under the first two attempts and another node takes the run under the third.
+        // No attempt is left to read the fence again, so the conflict is checked before it leaves.
+        await using var database = await TestDatabase.CreateAsync();
+        var race = new OwnershipRowRace { MaxRaces = EfRuntimeCheckpointParticipantStaging.MaxFenceRenewalAttempts };
+        await using var fixture = database.Open("tenant-a", race);
+        await using var otherConnection = database.Open("tenant-a");
+        var clock = new FakeTimeProvider(Now);
+        var lease = await Node(fixture, "node-a", clock).AcquireAsync(OwnedWorkflow);
+        var changes = 0;
+        race.Change = async () =>
+        {
+            if (++changes < EfRuntimeCheckpointParticipantStaging.MaxFenceRenewalAttempts)
+                await Node(otherConnection, "node-a", clock).HeartbeatAsync(lease);
+            else
+                await Node(otherConnection, "node-b", clock).AcquireAsync(OwnedWorkflow);
+        };
+
+        var refusal = await Assert.ThrowsAsync<RuntimeStaleFencingTokenException>(
+            () => FencedStore(fixture, clock).RecordFencedAsync(Record(1), lease.ToFence()).AsTask());
+
+        Assert.Equal(RuntimeFencingRejectionReason.StaleToken, refusal.Reason);
+        Assert.Equal(EfRuntimeCheckpointParticipantStaging.MaxFenceRenewalAttempts, race.Races);
+        Assert.Empty(fixture.Context.ChangeTracker.Entries());
+        await using var read = database.Open("tenant-a");
+        Assert.Null(await read.Store.FindAsync(OwnedWorkflow, "work-1"));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Fenced_record_that_loses_a_race_on_the_poison_row_fails_at_the_store_boundary_and_writes_nothing(bool rowExists)
+    {
+        // Another writer of the same poison row: it replaced the row between this record's read and its save, or it
+        // inserted the row first. Neither is a conflict on the ownership row, so neither is retried or taken for a
+        // lost lease. Both leave as the store's persistence failure, around the provider's exception.
+        await using var database = await TestDatabase.CreateAsync();
+        var race = new PoisonRowRace();
+        await using var fixture = database.Open("tenant-a", race);
+        var clock = new FakeTimeProvider(Now);
+        var store = FencedStore(fixture, clock);
+        var lease = await Node(fixture, "node-a", clock).AcquireAsync(OwnedWorkflow);
+        if (rowExists)
+            await store.RecordFencedAsync(Record(1), lease.ToFence());
+        var before = await OwnershipRevisionAsync(database);
+        race.Armed = true;
+
+        var failure = await Assert.ThrowsAsync<WorkflowSchedulerPoisonEntityFrameworkPersistenceException>(
+            () => store.RecordFencedAsync(Record(1, "second", failureCount: 2), lease.ToFence()).AsTask());
+
+        Assert.Equal(rowExists ? typeof(DbUpdateConcurrencyException) : typeof(DbUpdateException), failure.InnerException!.GetType());
+        Assert.Equal($"{OwnedWorkflow}/work-1", failure.Identity);
+        Assert.Empty(fixture.Context.ChangeTracker.Entries());
+        await using var read = database.Open("tenant-a");
+        Assert.Equal(rowExists ? 1 : null, (await read.Store.FindAsync(OwnedWorkflow, "work-1"))?.FailureCount);
+        Assert.Equal(before, await OwnershipRevisionAsync(database));
     }
 
     [Theory]
@@ -166,7 +240,7 @@ public sealed partial class EfWorkflowSchedulerPoisonStoreTests
     public async Task Fenced_record_runs_at_most_the_attempt_limit_when_the_owners_heartbeat_keeps_landing(int heartbeats, bool recorded)
     {
         // The limit counts attempts, the first included. A heartbeat under each of the first two leaves the third to
-        // succeed; a heartbeat under every attempt ends the call with the conflict, as it ends a checkpoint commit.
+        // succeed; a heartbeat under every attempt ends the call with the conflict, wrapped at the store's boundary.
         await using var database = await TestDatabase.CreateAsync();
         var race = new OwnershipRowRace { MaxRaces = heartbeats };
         await using var fixture = database.Open("tenant-a", race);
@@ -179,7 +253,8 @@ public sealed partial class EfWorkflowSchedulerPoisonStoreTests
         if (recorded)
             await store.RecordFencedAsync(Record(1), lease.ToFence());
         else
-            await Assert.ThrowsAsync<DbUpdateConcurrencyException>(() => store.RecordFencedAsync(Record(1), lease.ToFence()).AsTask());
+            Assert.IsType<DbUpdateConcurrencyException>((await Assert.ThrowsAsync<WorkflowSchedulerPoisonEntityFrameworkPersistenceException>(
+                () => store.RecordFencedAsync(Record(1), lease.ToFence()).AsTask())).InnerException);
 
         Assert.Equal(Math.Min(heartbeats, EfRuntimeCheckpointParticipantStaging.MaxFenceRenewalAttempts), race.Races);
         Assert.Empty(fixture.Context.ChangeTracker.Entries());
@@ -191,7 +266,7 @@ public sealed partial class EfWorkflowSchedulerPoisonStoreTests
     public async Task Fenced_record_inside_a_caller_transaction_is_refused_and_writes_nothing()
     {
         // The fence check and the record are a transaction of the store's own, as a checkpoint commit is. EF Core
-        // does not begin one while the context has another.
+        // does not begin one while the context has another; that refusal leaves as the store's persistence failure.
         await using var database = await TestDatabase.CreateAsync();
         await using var fixture = database.Open("tenant-a");
         var clock = new FakeTimeProvider(Now);
@@ -201,7 +276,7 @@ public sealed partial class EfWorkflowSchedulerPoisonStoreTests
 
         await using (var transaction = await fixture.Context.Database.BeginTransactionAsync())
         {
-            await Assert.ThrowsAsync<InvalidOperationException>(() => store.RecordFencedAsync(Record(1), lease.ToFence()).AsTask());
+            await Assert.ThrowsAsync<WorkflowSchedulerPoisonEntityFrameworkPersistenceException>(() => store.RecordFencedAsync(Record(1), lease.ToFence()).AsTask());
             // Nothing is staged for the caller's commit to write.
             Assert.False(fixture.Context.ChangeTracker.HasChanges());
             await transaction.CommitAsync();
@@ -371,6 +446,39 @@ public sealed partial class EfWorkflowSchedulerPoisonStoreTests
     {
         public string Encode(string purpose, ReadOnlySpan<byte> payload) => Convert.ToBase64String(payload);
         public byte[] Decode(string purpose, string token) => Convert.FromBase64String(token);
+    }
+
+    // Another writer of the poison row. SQLite cannot run two write transactions at once, so neither race is a second
+    // connection's commit. A replaced row is modelled as a superseded revision in this save. A row inserted first is
+    // inserted for real, through a second context inside this record's own transaction, so the provider reports its
+    // unique-key violation.
+    private sealed class PoisonRowRace : ISaveChangesInterceptor
+    {
+        public bool Armed { get; set; }
+
+        public async ValueTask<InterceptionResult<int>> SavingChangesAsync(DbContextEventData eventData, InterceptionResult<int> result, CancellationToken cancellationToken = default)
+        {
+            var staged = eventData.Context!.ChangeTracker.Entries<WorkflowSchedulerPoisonEntity>().SingleOrDefault();
+            if (!Armed || staged is null)
+                return result;
+
+            Armed = false;
+            if (staged.State == EntityState.Modified)
+            {
+                staged.Property(row => row.Revision).OriginalValue = staged.Property(row => row.Revision).OriginalValue - 1;
+                return result;
+            }
+
+            var database = eventData.Context.Database;
+            await using var other = new RuntimeSqliteDbContext(
+                new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(database.GetDbConnection()).Options);
+            await other.Database.UseTransactionAsync(database.CurrentTransaction!.GetDbTransaction(), cancellationToken);
+            var first = new WorkflowSchedulerPoisonEntity();
+            other.Entry(first).CurrentValues.SetValues(staged.Entity);
+            other.WorkflowSchedulerPoisonRecords.Add(first);
+            await other.SaveChangesAsync(cancellationToken);
+            return result;
+        }
     }
 
     private sealed class SaveCounter : ISaveChangesInterceptor

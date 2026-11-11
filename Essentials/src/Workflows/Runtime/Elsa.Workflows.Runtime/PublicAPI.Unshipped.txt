@@ -1589,6 +1589,7 @@ const Elsa.Workflows.Runtime.Diagnostics.WorkflowEngineTelemetry.HandlerNameTag 
 const Elsa.Workflows.Runtime.Diagnostics.WorkflowEngineTelemetry.OutcomeCompleted = "completed" -> string!
 const Elsa.Workflows.Runtime.Diagnostics.WorkflowEngineTelemetry.OutcomeFaulted = "faulted" -> string!
 const Elsa.Workflows.Runtime.Diagnostics.WorkflowEngineTelemetry.OutcomeTag = "elsa.outcome" -> string!
+const Elsa.Workflows.Runtime.Diagnostics.WorkflowEngineTelemetry.PoisonFenceFallbackTag = "elsa.poison.fence_fallback" -> string!
 const Elsa.Workflows.Runtime.Diagnostics.WorkflowEngineTelemetry.WorkItemIdTag = "elsa.work_item.id" -> string!
 const Elsa.Workflows.Runtime.Diagnostics.WorkflowEngineTelemetry.WorkflowExecutionIdTag = "elsa.workflow.execution_id" -> string!
 const Elsa.Workflows.Runtime.Diagnostics.WorkflowExecutableCacheTelemetry.CancelledOutcome = "cancelled" -> string!

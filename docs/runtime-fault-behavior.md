@@ -297,7 +297,9 @@ step 2: its queue row is gone, so nothing runs again, and what the run's owner h
 
 At the same point the drainer asks the poison store whether it can record under the lease
 (`ISchedulerPoisonFenceCapability.CanRecordFenced`). If that question throws, the exception leaves the drain
-here as well, and the step is left the same way: queued, unless a commit of the dispatch already consumed it. A
+here as well, and the step is left the same way: queued, unless a commit of the dispatch already consumed it. The
+ownership read itself can fail, as any provider read can. That failure leaves the drain the same way too, in
+place of the handler's own exception: when ownership cannot be confirmed, the fault path writes nothing. A
 drainer with no ambient lease for the execution asks neither question, and one without the ownership service
 does not ask the first. Both then run the steps as before.
 
@@ -388,15 +390,26 @@ does not ask the first. Both then run the steps as before.
      durable segment.
    - **A poison store that cannot check the lease** writes the record without a check, as before. That is a
      custom store or decorator without the capability, or a poison store in another backend than the run's
-     ownership state (EF poison with in-memory ownership, or the reverse). A drain that lost its lease since the
-     check then leaves its queue writes and an unfenced record.
+     ownership state (EF poison with in-memory ownership, or the reverse). What a drain that lost its lease since
+     the check then leaves, as read from the code:
+     - Outside an active coalescing segment: its queue writes and the unfenced record, all durable.
+     - In an active coalescing segment the queue writes are in the drain's overlay, and the record is durable at
+       once, because the poison store is not part of the overlay. The drain returns a `Faulted` result and does
+       not throw, so the orchestrator flushes the segment. With checkpoints buffered, that flush is a commit
+       through the committer under the drain's lease. The lost lease refuses it, and the overlay's queue writes
+       are dropped with it. What is left is the record, with the step still in the durable queue if it came from
+       there. With nothing buffered, the flush applies the overlay's queue changes to the durable queue without a
+       commit, and so without a fence (#4043). That leaves the queue writes and the record.
    - **A drainer with no ambient lease for the execution** makes no check and writes the record without one.
 
    Only a lost lease refuses the record. A fenced write that fails for any other reason, such as a write
    conflict the store did not retry or a transaction it could not open, says nothing about ownership. The drainer
    then writes the record through `RecordAsync`, as it does for a store without the capability, so a drain that
-   still owns its run never ends with its step acknowledged and no record. That record is unfenced: if the lease
-   was also lost since the check, it is written all the same. Cancellation is let through.
+   still owns its run never ends with its step acknowledged and no record. It tags the dispatch span with
+   `elsa.poison.fence_fallback` and the type of the failure. That record is unfenced: if the lease was also lost
+   since the check, it is written all the same, and what is left is what the second case above leaves. An
+   `OperationCanceledException` from the fenced write is let through like the stale exception, whatever
+   cancelled the write.
 
 5. Returns a `Faulted` work-item result. `DrainAsync` breaks out of its loop, and the orchestrator's
    aggregate stop reason becomes `Faulted`.

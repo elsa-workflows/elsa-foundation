@@ -263,16 +263,20 @@ public static class RuntimeCoreServiceCollectionExtensions
         // #4032: the in-memory poison store can check a run's ownership fence only against the in-memory ownership store,
         // and only when that is the registered one. It looks when it is first asked whether it can record fenced, not
         // here: until then it needs nothing of the ownership store. A provider's ownership store is scoped, and this
-        // singleton must not resolve one from the root provider, so the lookup runs in a scope of its own. A store of
-        // another type is dropped with that scope, and the poison store records unfenced. An in-memory store is kept
-        // for the life of the poison store. Registered as a singleton, as it is above, it is the one the ownership
-        // service writes to. Registered scoped or transient it would be a copy that never holds a lease, and every fenced
-        // record would be refused as having no active lease.
+        // singleton must not resolve one from the root provider, so the lookup runs in scopes of its own. It keeps
+        // the store only when two scopes yield the same in-memory instance, which is the singleton the ownership
+        // service writes to, as registered above. A store of another type, and an in-memory store a host registered
+        // scoped or transient, are not kept: the poison store then records unfenced. A copy from a throwaway scope
+        // holds no lease, so checking against it would refuse the record of a drain that owns its run.
         services.TryAddSingleton<IWorkflowSchedulerPoisonStore>(serviceProvider => new InMemoryWorkflowSchedulerPoisonStore(
             () =>
             {
-                using var scope = serviceProvider.CreateScope();
-                return scope.ServiceProvider.GetService<IExecutionLivenessStateStore>() as InMemoryExecutionLivenessStateStore;
+                using var first = serviceProvider.CreateScope();
+                using var second = serviceProvider.CreateScope();
+                return first.ServiceProvider.GetService<IExecutionLivenessStateStore>() is InMemoryExecutionLivenessStateStore ownershipStateStore &&
+                       ReferenceEquals(ownershipStateStore, second.ServiceProvider.GetService<IExecutionLivenessStateStore>())
+                    ? ownershipStateStore
+                    : null;
             },
             serviceProvider.GetRequiredService<TimeProvider>()));
         services.TryAddSingleton<IRuntimeVolatileWaitPolicy, DefaultRuntimeVolatileWaitPolicy>();
