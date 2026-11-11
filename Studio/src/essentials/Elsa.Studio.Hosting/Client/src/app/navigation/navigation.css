@@ -91,6 +91,8 @@
   html[data-nav-mode="top"] .studio-shell .sidebar .nav-section a.nav-child,
   .studio-shell .sidebar .nav-group-toggle,
   .studio-view-navigation a { min-height: 44px; }
+  /* The search label is its input's hit target; keep it at the same coarse minimum as the destinations. */
+  .studio-shell .sidebar-search { min-height: 44px; }
 }
 
 html[data-nav-mode="top"] .sidebar .nav-search-results {
