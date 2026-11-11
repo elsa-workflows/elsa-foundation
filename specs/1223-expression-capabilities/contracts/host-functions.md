@@ -5,12 +5,12 @@ The capabilities and functions available to Elsa 4 JavaScript expressions under 
 ## C1 — One surface, two entry points
 
 - A single engine configuration serves input-binding expressions **and** `RunJavaScript` scripts. Any capability granted to one is granted to the other.
-- The surface is **read-only**: no engine-owned state mutation, no live .NET objects, no unregistered functions.
+- The surface is **read-only**: no engine-owned state mutation and no unregistered functions. While live-.NET-object proxies are disabled, no live .NET objects cross it.
 
 ## C2 — Native intrinsics
 
 - `Date`, `Temporal`, `Intl`, `Math` (incl. `Math.random`) are available and behave as standard JavaScript.
-- `new Date()` and `Date.now()` return the **host clock** time. The engine is configured `TimeZone = UTC`, `Culture = Invariant`; `Date` values therefore reflect UTC and format culture-independently.
+- `new Date()` and `Date.now()` return the **host clock** time. The engine is configured `TimeZone = UTC`, `Culture = Invariant`; `Date` values therefore reflect UTC and format culture-independently. A converted Elsa 3 expression with a recorded source time zone evaluates with that zone as its local time zone (conversion contract D1a).
 - `Math.random` uses the engine's native RNG. **No reproducibility guarantee** — callers and tests must not assume a fixed sequence.
 
 **Contract test cues**: with a controlled host `TimeProvider`, `new Date().toISOString()` and `Date.now()` reflect the provided instant in UTC; `Intl`/`Temporal` are defined (not `undefined`); two `Math.random()` calls are permitted to differ.
@@ -39,6 +39,10 @@ Calling any of these is refused (at conversion for imported workflows; see the c
 
 > Note: of the Base64 family, only the **string** pair (`stringToBase64`/`stringFromBase64`) is provided; the **bytes**/stream Base64 helpers are refused (binary data is not a JSON value).
 
-## C5 — No function metadata (D-6, provisional)
+## C5 — Effect declaration (D-6, provisional)
 
-No classification/metadata is attached to any function, and no classification governs whether a call runs. **Open (OQ-1):** rests on unsettled D-6; the optional-durability-hint counter-position would add descriptive metadata only, changing no behaviour in this contract.
+- A function registered without a declaration is **effect-free**: no commits are placed around an input evaluation because it calls one.
+- Registration takes one optional **effectful** flag. Only a function with it gets a commit before and after an input evaluation that calls it.
+- The flag never refuses, skips or deduplicates a call. The C3 functions are registered without it. No other metadata, no effect profiles.
+
+**Contract tests**: a function registered with the flag reports it on the registration; one registered without reports effect-free; a call runs exactly as often with or without the flag. **Open (OQ-1):** direction agreed by two approvers; the no-metadata position goes to the call if held.

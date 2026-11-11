@@ -2,7 +2,7 @@
 
 **Feature**: [spec.md](spec.md) | [plan.md](plan.md) | [data-model.md](data-model.md) | [research.md](research.md) | contracts: [host-functions](contracts/host-functions.md), [conversion-and-diagnostics](contracts/conversion-and-diagnostics.md) | [quickstart.md](quickstart.md)
 
-**Status**: Provisional (initiative #3052, S-1). Tasks implement the design on the agreed-as-if positions; D-6 (OQ-1) stays open. Test cadence: not greenfield, no TDD declared — tests are risk-based and may land with or after the implementation they cover (xUnit only; **no FluentAssertions**).
+**Status**: Provisional (initiative #3052, S-1). Tasks implement the design on the agreed-as-if positions; D-6 (OQ-1) has an agreed direction between two approvers, with the third position on the call list. Test cadence: not greenfield, no TDD declared — tests are risk-based and may land with or after the implementation they cover (xUnit only; **no FluentAssertions**).
 
 **Touched code**: `Essentials/src/Expressions/JavaScript/Jint/Services/IsolatedJintEngine.cs` (+ new host-function / `ITimeSystem` files); `Extensions/Elsa3/src/Mapping/Services/Elsa3ExpressionRewriter.cs`, `Internal/Elsa3JavaScriptNames.cs`, `Elsa3ImportDiagnosticCodes`, `README.md`; corresponding xUnit test projects.
 
@@ -26,6 +26,8 @@
 - [ ] T005 [US1] Implement a custom Jint `ITimeSystem` over the host `System.TimeProvider`; set `Options.TimeSystem`, `Options.TimeZone = UTC`, `Options.Culture = Invariant` on engine construction.
 - [ ] T006 [P] [US1] Register the GUID host functions (`newGuid`, `newGuidString`, `newShortGuid`, `getGuidString`, `getShortGuid`) returning JSON strings; `newShortGuid` reproduces the Elsa 3 short-GUID encoding (use the T001 fixture).
 - [ ] T007 [P] [US1] Register the `now()` host function returning an ISO-8601 UTC string from the injected clock.
+- [ ] T037 [P] [US1] Add the optional **effectful** flag to the host-function registration API (default: effect-free) and record it on the registration; register every S-1 built-in without it. Placing the commits is the execution-contract amendment's job, not this task (FR-012).
+- [ ] T038 [P] [US1] xUnit tests: a function registered with the flag reports effectful, one without reports effect-free; the flag never changes whether or how often a call runs (contract C5).
 - [ ] T008 [P] [US1] Register the Base64 string pair (`stringToBase64`, `stringFromBase64`) and `toJson` (canonical encoder, ADR 0091) host functions — registered here as the earliest story that needs them; their contract is verified in US4.
 - [ ] T009 [US1] xUnit behaviour tests: intrinsics restored (`Date`/`Intl`/`Temporal`/`Math.random` not `undefined`); clock reads a controlled `TimeProvider`; UTC + invariant formatting; `Math.random` permitted to differ (no fixed-sequence assertion) — quickstart A1–A4.
 - [ ] T010 [P] [US1] xUnit behaviour tests: GUID functions return strings; `newShortGuid` matches the parity fixture; `now()` equals the controlled clock — quickstart B6, B7, B9.
@@ -44,6 +46,9 @@
 **Independent test**: Convert representative/corpus workflows; faithful ones succeed, refused ones produce a guided refusal (quickstart C, D).
 
 - [ ] T013 [US2] In `Elsa3ExpressionRewriter.cs`, remove the `IsNondeterministicCall` refusal for `Math.random`/`Date.now` and the `new Date()`/`Date` globals refusal; admit them as faithful conversions.
+- [ ] T039 [US2] In `Elsa3ExpressionRewriter.cs`, classify `Date` usage (contract D1a): zone-independent converts; zone-dependent converts only with the converter's source time zone (ADR 0046 *Dates*) and is otherwise refused with a quoted diagnostic and guidance; a non-literal string parse converts with a behaviour warning when no zone is set (FR-021 to FR-024).
+- [ ] T040 [US2] Carry the source time zone into the converted expression's evaluator options so it evaluates with that zone as its local time zone (Jint `Options.TimeZone`); unconverted expressions stay UTC (FR-023).
+- [ ] T041 [P] [US2] xUnit tests for D1a: refusal without a zone; `Europe/Amsterdam` winter and summer results equal Elsa 3's; zone-independent usage converts in both modes; non-literal parse warning — quickstart C12a, C12b, SC-007.
 - [ ] T014 [US2] Move the GUID family, `stringToBase64`/`stringFromBase64` and `toJson` out of `RefusedHostFunctions` into resolved host-function calls.
 - [ ] T015 [US2] Verify and retain refusals for `Guid`/`DateTime` constructors and static access, `parseGuid`, byte/stream helpers, and `getConfig`/`getConfiguration`.
 - [ ] T016 [P] [US2] xUnit conversion tests (faithful): `new Date()`, `Date.now()`, `Math.random()`, GUID family, Base64 pair, `toJson` convert without refusal and preserve shape — quickstart C12–C14.
@@ -61,10 +66,11 @@
 - [ ] T022 [US3] Add the CLR-type deny catalog and the JS-global allow set (data-model §3) as data in the converter; include a small "returned a CLR object in Elsa 3" note-map for message enrichment.
 - [ ] T023 [US3] Extend `JavaScriptAnalyzer.VisitNode`: refuse PascalCase method invocations (and curated CLR methods) with `VF-IMP-010`, message quoting the offending expression (reconstructed from node `.Start`/`.End`).
 - [ ] T024 [US3] Extend the walker: refuse CLR-type identifier static access and `new T(...)` with `VF-IMP-010`; allow JS-global identifiers; allow property reads of any casing; do not classify computed/dynamic member invocation.
+- [ ] T042 [US3] Exempt invocations of members defined in the same script (object-literal keys, class members, `x.M = ...` assignments), collected in one pass before classification (FR-018).
 - [ ] T025 [US3] Register the detector only while `!ProxiesEnabled` (T003), and run the shared analysis pass at **publish** as well as convert.
 - [ ] T026 [P] [US3] Feature-registration test (logic-bearing wiring, §2.23.1): detector active when `ProxiesEnabled=false`, not registered when `true`.
 - [ ] T027 [P] [US3] Detector tests: PascalCase invocation refused with quoted snippet; CLR-type reference refused — quickstart E18, E19.
-- [ ] T028 [P] [US3] Detector tests: PascalCase property read allowed; native JS invocations and `new Date()` allowed; computed dispatch allowed — quickstart E20–E22.
+- [ ] T028 [P] [US3] Detector tests: PascalCase property read allowed; native JS invocations and `new Date()` allowed; computed dispatch allowed; `helpers.Format(x)` with `helpers` defined in the script allowed — quickstart E20–E22a.
 - [ ] T029 [P] [US3] Detector tests: runs at publish; inactive when proxies enabled; SC-002 — no proxy/CLR-dependent script reaches run time undetected — quickstart E23–E25.
 
 ## Phase 7: Polish & cross-cutting
@@ -76,7 +82,7 @@
 
 ## Phase 8: Governance surfaces (coordinator — non-code, external posts need Joey's OK)
 
-- [ ] T034 Post the D-6 no-metadata observation + future-attribute-path note on ADR 0045 §5's PR (#3384) — quickstart G29.
+- [ ] T034 Keep FR-012 in step with D-6 on ADR 0045 §5's PR (#3384) until it is agreed — quickstart G29.
 - [ ] T035 Post the two findings (native intrinsics admitted; Jint 4.9.1 RNG not injectable) on PR #3390 — quickstart G30.
 - [ ] T036 Open the draft PR against `initiative/3052-elsa3-to-elsa4-conversion` (body "Part of #3052", approval plan Sipke + Frans, request both) and add the pointer comment on #3052 — quickstart G31.
 

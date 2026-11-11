@@ -21,10 +21,12 @@ The finite set of checks that demonstrate S-1. All automated checks are **xUnit*
 
 ## C. Conversion — faithful (no refusal)
 
-12. Corpus/representative Elsa 3 expressions using `new Date()`, `Date.now()`, `Math.random()` convert without refusal.
+12. Corpus/representative Elsa 3 expressions using zone-independent `Date` usage (`Date.now()`, `getTime()`, `toISOString()`) and `Math.random()` convert without refusal, with or without a source time zone.
+12a. Zone-dependent usage (`getHours()`, `toLocaleString()`, `new Date('2026-10-28T09:15:00')`) is refused without a source time zone; with `Europe/Amsterdam` it converts and evaluates as Elsa 3 did on a server in that zone (winter and summer dates).
+12b. A non-literal parse (`new Date(input)`) converts with a behaviour warning without a source time zone, and without a warning with one.
 13. Expressions using the GUID family convert without refusal and preserve string shape.
 14. Expressions using `stringToBase64`/`stringFromBase64` and `toJson` convert without refusal.
-15. **SC-001 measure**: 100% of the available corpus workflows whose JS uses only faithful functions convert without refusal.
+15. **SC-001 measure**: 100% of the available corpus workflows whose JS uses only faithful functions and zone-independent `Date` usage convert without refusal; with a source time zone set, also those with zone-dependent usage. **SC-007**: none with zone-dependent usage converts without a source time zone.
 
 ## D. Conversion — refused (with guidance)
 
@@ -38,8 +40,9 @@ The finite set of checks that demonstrate S-1. All automated checks are **xUnit*
 20. A PascalCase **property read** (`payload.OrderId`) is **allowed**.
 21. Native JS invocations (`s.toUpperCase()`, `a.map(f)`, `JSON.stringify(o)`) and `new Date()` are **allowed**.
 22. A computed member invocation (`o[name]()`) is **allowed** (recorded gap).
+22a. An invocation of a member the script defines (`helpers.Format(x)` with `helpers` declared in the script) is **allowed**.
 23. The detector runs at **publish** as well as convert (same refusal on a hand-authored script).
-24. **With proxies enabled** (future setting simulated), the same proxy-using script is **not** refused by this detector.
+24. **With proxies enabled** (setting simulated), the same proxy-using script is **not** refused by this detector.
 25. **SC-002 measure**: no proxy-/CLR-dependent script reaches run time undetected — each is caught at convert or publish.
 
 ## F. Documentation & surfaces
@@ -50,6 +53,6 @@ The finite set of checks that demonstrate S-1. All automated checks are **xUnit*
 
 ## G. Governance / provisional surfaces (not code)
 
-29. D-6 no-metadata observation + future attribute path surfaced on ADR 0045 §5's PR (#3384).
+29. FR-012 follows D-6 as agreed by two approvers on ADR 0045 §5's PR (#3384); the third approver's no-metadata position is on the call list (OQ-1).
 30. The two #3390 findings (native intrinsics admitted; Jint RNG not injectable) posted on PR #3390.
 31. Draft PR opened against `initiative/3052-elsa3-to-elsa4-conversion`, body "Part of #3052", approval plan Sipke + Frans, both requested; pointer comment on #3052.

@@ -37,7 +37,7 @@ All registered as JSON-exchanging functions; all arguments and results are JSON 
 
 **Not provided (refused on use):** `parseGuid` (live .NET `Guid`), `bytesToString`/`bytesFromString`/`bytesToBase64`/`bytesFromBase64`/`streamToBytes`/`streamToBase64` (binary/stream, not JSON), `getConfig`/`getConfiguration` (host configuration — deferred).
 
-**No metadata** is attached to any function (D-6 no-metadata position; OQ-1).
+**Effect declaration (D-6; OQ-1)**: a function registered without a declaration is effect-free. A host may set one optional **effectful** flag when registering a function; only then are commits placed before and after an input evaluation that calls it. The flag never refuses, skips or deduplicates a call. All functions above are registered without it. No other metadata, no effect profiles.
 
 ## 3. Proxy-dependent-usage classification
 
@@ -53,6 +53,7 @@ Applied by the detector (extends `JavaScriptAnalyzer.VisitNode`) **only while `!
 | **CLR type** identifier — construction | `new Guid(...)`, `new DateTime(...)` | **Refuse** |
 | **JS global** identifier | `JSON.stringify(...)`, `Math.max(...)`, `new Date()` | Allow |
 | **Dynamic/computed** member invocation | `o[name]()` | Allow (recorded gap) |
+| Invocation of a member **defined in the same script** (object-literal key, class member, `x.M = ...`) | `helpers.Format(x)` with `const helpers = { Format: ... }` | Allow |
 
 **CLR-type deny catalog** (identifiers; excludes every JS global): `Guid`, `DateTime`, `DateTimeOffset`, `DateOnly`, `TimeOnly`, `TimeSpan`, `Convert`, `Encoding`, `Enumerable`, `Queryable`, `Regex`, `StringBuilder`, `CultureInfo`, `TimeZoneInfo`, `BitConverter`, `File`, `Directory`, `Path`, `Stream`, `Uri` (curated; extended as the corpus warrants).
 
@@ -66,7 +67,7 @@ Applied by the detector (extends `JavaScriptAnalyzer.VisitNode`) **only while `!
 |---|---|
 | Code | `VF-IMP-010` (added to `Elsa3ImportDiagnosticCodes`; distinct from `VF-IMP-009 LiveInstanceState`) |
 | Message | Quotes the offending expression (from node `.Start`/`.End`) and states that boundary values are JSON and live .NET objects (proxies) are disabled |
-| Guidance | How to rewrite to JSON/JS equivalents; note that enabling proxies is a separate, future capability |
+| Guidance | How to rewrite to JSON/JS equivalents; live .NET objects are disabled in this configuration |
 | Severity | Error (refusal) |
 | Path/metadata | Reuses the existing activity JSON-path + metadata the lowerer already attaches |
 
@@ -78,7 +79,9 @@ Updates the conversion table in `Extensions/Elsa3/src/Mapping/README.md`.
 
 | Elsa 3 construct | Current | S-1 disposition |
 |---|---|---|
-| `new Date()`, `Date.now()`, `Date` | Refused | **Faithful** (native `Date` restored, clock-backed) |
+| Zone-independent `Date` usage (`Date.now()`, `getTime()`, `toISOString()`, epoch arithmetic, UTC methods, parse with offset) | Refused | **Faithful** (native `Date` restored, clock-backed) |
+| Zone-dependent `Date` usage (local getters/setters, local formatting, local multi-argument constructor, offset-less literal parse) | Refused | **Faithful with a source time zone** (evaluated in that zone); refused without one |
+| `Date` string parse of a non-literal | Refused | Faithful with a source time zone; behaviour warning without one |
 | `Math.random()` | Refused | **Faithful** (native restored) |
 | `newGuid`, `newGuidString`, `newShortGuid`, `getGuidString`, `getShortGuid` | Refused | **Faithful** (host functions → strings) |
 | `stringToBase64`, `stringFromBase64` | Refused | **Faithful** (host functions) |

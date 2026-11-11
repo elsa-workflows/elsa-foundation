@@ -27,7 +27,7 @@ So the strip was a *defensible mechanism for the doctrine of its time*, not a mi
 
 **Alternatives considered**: Leave `Date` reading wall-clock `DateTimeOffset.UtcNow` directly (rejected — not injectable, tests can't control it, and ignores the host clock abstraction); add a `.NET` `now()` as the *only* time source and keep `Date` stripped (rejected per R-1). We still provide a small `now()` host function returning an ISO-8601 UTC string as a convenient import target and sugar, alongside native `Date`.
 
-Date/time **semantics** (arithmetic, parsing edge cases) are deferred to **ADR 0046** (#3422); S-1 wires the source and the UTC/invariant frame, not new date math.
+Date/time **semantics** (arithmetic, parsing edge cases) are deferred to **ADR 0046** (#3422); S-1 wires the source and the UTC/invariant frame, not new date math. Converted Elsa 3 scripts with a source time zone are the one exception to the UTC frame; see R-10.
 
 ---
 
@@ -50,19 +50,21 @@ Date/time **semantics** (arithmetic, parsing edge cases) are deferred to **ADR 0
 
 `newShortGuid` must reproduce Elsa 3's exact short-GUID encoding (URL-safe Base64 of the 16 GUID bytes, trimmed to 22 chars) — a faithfulness requirement verified during implementation against Elsa 3's `ShortGuid`.
 
+**Corpus cost of the refusals** (JTest, 36 definitions, counted as calls `name(` in the definition JSON, the same throwaway method as spec 247's measured baseline): `getConfig` 0; `getConfiguration` 1 use in 1 definition (`javascript-script-handler-functions`, `getConfiguration(key)[name]`; Elsa 3 has only `getConfig`, so it was unknown there too); `parseGuid` 1 use in 1 definition (`javascript-elsa-functions`, `parseGuid(text)`). Deferring costs at most 2 of 36 definitions.
+
 **Alternatives considered**: Provide `getConfig` now (rejected — pulls in host `IConfiguration` surface and secret-exposure questions beyond S-1's scope; deferred). Keep `toJson` refused (rejected — the original reasons no longer hold once values are JSON-only and the canonical encoder exists). Rename `toJson` to `toCanonicalJson` (considered for self-description; **decided to keep `toJson`** for faithful import and author familiarity).
 
 ---
 
-## R-5 — No function metadata / profiles (D-6 — unsettled) + future attribute path
+## R-5 — Function effect declaration (D-6)
 
-**Decision (provisional, no-metadata position)**: Attach **no** metadata or classification to .NET-implemented functions. No function profiles; whether a call runs never depends on a classification.
+**Decision (provisional, direction agreed by two approvers)**: A .NET-implemented function registered without a declaration is **effect-free**. The registration API takes one optional flag that declares a function **effectful**; only then does the engine commit before and after an input evaluation that calls it. The flag never refuses, skips or deduplicates a call. The built-ins of R-4 are registered without it. No effect profiles.
 
-**Rationale**: This is the Joey/Frans position on **D-6**. The only surviving use anyone proposed for function metadata was a *durability-boundary hint*, and the mechanism that would read or enforce such a hint does not exist. Inventing an attribute system now, with nowhere to consume it, adds surface and zero value. A future, attribute-driven durability path is conceivable — authors might one day annotate their .NET methods and the engine might read that at a durability boundary — but that belongs to whatever spec builds the boundary, not here.
+**Rationale**: Most functions called from expressions have no side effects, so the default is optimized for them. Treating every registered function as possibly effectful would make every step whose inputs call any function, `newGuid()` included, pay two commits with no way out. The boundary narrows the window for a repeated effect and does not close it, so the designer needs idempotency either way, and external business operations belong in activities. The flag has a consumer: it is what turns the commit-around-effects guarantee on for a function. Accepted cost: an effectful function registered without the flag gets no boundary, and after a crash its effect can repeat anywhere in the step. S-1 adds and records the flag; placing the commits belongs to the execution-contract details amendment (ADR 0045 §3, ADR 0032, ADR 0020).
 
-**Open / flow-back**: D-6 is **unsettled and on the approvers' call**. This observation (the no-metadata approach, and the deferred future attribute path) is surfaced on **ADR 0045 §5's PR (#3384)** for Sipke to counter or accept; Frans's position is expected unchanged. The counter-position (an optional durability *hint*, never a prohibition) would add descriptive metadata only and would not change any requirement in this spec; if D-6 settles toward it, only the "no metadata attached" clause of FR-012 changes.
+**Open**: OQ-1. One approver holds the no-metadata position; it goes to the approvers' call if held. ADR 0045 §5's text is on #3384.
 
-**Alternatives considered**: Adopt an optional effect classification now (rejected for S-1 — no consumer; premature); Sipke's earlier `functions.*` object idea (withdrawn by its proposer as adding no value).
+**Alternatives considered**: No metadata at all, every registered function possibly effectful (not chosen — two commits for every step whose inputs call any function); an optional durability *hint* that changes only where state is recorded (superseded by the effectful flag, which has a defined consumer); a richer effect classification or function profiles (rejected — no consumer); the earlier `functions.*` object idea (withdrawn by its proposer as adding no value).
 
 ---
 
@@ -89,10 +91,11 @@ Date/time **semantics** (arithmetic, parsing edge cases) are deferred to **ADR 0
 - **Refuse** a reference to a **CLR type** identifier (static access `T.Member`, or construction `new T(...)`) where `T` is in a curated CLR-type catalog that **excludes** JS globals (`String`, `Number`, `Array`, `Object`, `Date`, `Math`, `JSON`, …).
 - **Allow** property **reads** `x.P` (may be a legitimate JSON key, including PascalCase keys from .NET-serialized data).
 - **Allow** (do not classify) dynamic/computed member access `x[expr](...)` — a recorded gap.
+- **Allow** an invocation of a member the script defines itself: a property key of an object literal, a class method or field, or a member assignment `x.M = ...` anywhere in the same script (e.g. `helpers.Format(x)` with `helpers` declared in the script). The walker collects these names in one pass before classifying invocations. A script that defines `M` and also invokes a .NET `M` on a boundary value is not caught — a recorded gap.
 
 Emit a new diagnostic code **`VF-IMP-010`**; the message **quotes the offending expression** (reconstructed from the Acornima node's `.Start`/`.End` offsets against the source the rewriter already holds) and explains the JSON-only / proxies-off contract. Register the detector **only while proxies are disabled** (`!ProxiesEnabled`, A-1 default). Run it at **publish** as well as **convert** (shared pass).
 
-**Rationale**: "Proxy-dependent usage" is a *shape*, not a function list. JSON values carry only native JS prototype methods (camelCase) — so a PascalCase **invocation** can never be a valid native call and is an unambiguous proxy signal with near-zero false positives. .NET static types are not JS globals, so a reference to one is equally unambiguous. Property **reads** are the one case that overlaps with legitimate JSON (PascalCase keys are common in .NET-serialized data), so reads are allowed — the key false-positive guard. A full taint/dataflow engine would be more precise about *which value* is a proxy but is far heavier and can miss proxies from unknown sources; the syntactic net catches them regardless and degrades safely (over-refuses the genuinely weird, never silently passes a proxy call). Gating on `!ProxiesEnabled` keeps the migration unblocked now while preserving the seam: when a future initiative implements and enables proxies, CLR-member usage becomes valid again and the detector is simply not registered.
+**Rationale**: "Proxy-dependent usage" is a *shape*, not a function list. JSON values carry only native JS prototype methods (camelCase) — so a PascalCase **invocation** can never be a valid native call and is an unambiguous proxy signal with near-zero false positives. .NET static types are not JS globals, so a reference to one is equally unambiguous. Property **reads** are the one case that overlaps with legitimate JSON (PascalCase keys are common in .NET-serialized data), so reads are allowed — the key false-positive guard. A full taint/dataflow engine would be more precise about *which value* is a proxy but is far heavier and can miss proxies from unknown sources; the syntactic net catches them regardless and degrades safely (over-refuses the genuinely weird, never silently passes a proxy call). Gating on `!ProxiesEnabled` keeps the migration unblocked now while preserving the seam: if a setting enables proxies, CLR-member usage becomes valid again and the detector is simply not registered. The same-script exemption removes the one false positive the PascalCase rule has on hand-authored scripts that would otherwise have no override.
 
 **Alternatives considered**: Taint analysis (rejected — complexity the signal doesn't need; no existing dataflow infra); flag PascalCase property reads too (rejected — refuses legitimate JSON keys); refuse all dynamic dispatch (rejected — over-refuses faithful scripts); thread real line/column into the diagnostic (deferred — see R-8; quoting the snippet gives most of the value and quoting survives minified source better than a line number).
 
@@ -110,6 +113,18 @@ Emit a new diagnostic code **`VF-IMP-010`**; the message **quotes the offending 
 - There is **no structured return-type catalog** for built-ins (only prose in `RefusedHostFunctions` messages). The detector needs none (R-7 is value-agnostic); a tiny "returned a CLR object in Elsa 3" note-map is used only to enrich messages for the direct cases.
 
 **Rationale / alternative**: Building a parallel analysis component was rejected — the existing walker already has scope handling and the diagnostic pipeline; extension is lower-risk and keeps one source of truth for JS analysis.
+
+---
+
+## R-10 — Time zones in converted scripts
+
+**Decision**: Classify `Date` usage in a converted script as zone-independent or zone-dependent (FR-021, FR-022). Zone-independent usage converts faithfully. Zone-dependent usage converts only when the conversion has a source time zone (ADR 0046 *Dates*: an IANA ID set on the converter feature and recorded on the converted workflow and in the published conversion contract); a converted expression with a source time zone evaluates with that zone as the Jint engine's local time zone (`Options.TimeZone`), the clock instant unchanged. Without a source time zone, zone-dependent usage is refused with a quoted diagnostic. A non-literal string parse converts with a behaviour warning (FR-024).
+
+**Rationale**: Elsa 3 evaluated scripts in the server's time zone. `Date.now()`, `getTime()` and `toISOString()` give the same result on every server; `getHours()`, `toLocaleString()`, the local multi-argument constructor and an offset-less parse (`new Date('2026-10-28T09:15:00')`) do not. Running every converted script in UTC would silently change those on any workflow from a non-UTC server, which faithful-or-refuse forbids and which ADR 0046 removes for literals. The source time zone is the same option ADR 0046 defines for literals, so one setting covers a converted workflow. Jint takes the time zone per engine, so a converted expression can carry it as an evaluator option.
+
+**Non-literal parse**: the converter cannot see whether `new Date(input)` receives text with an offset. ADR 0046 gives a non-literal date expression a behaviour warning, and R-10 follows it rather than refusing (OQ-3). Corpus: 3 definitions parse non-literal strings (`javascript-date-methods`, `performance-minimal-baseline`, `composition-execute-workflow-root`); none uses a local-time getter, local formatting, the multi-argument constructor or an offset-less literal.
+
+**Alternatives considered**: Run every script in UTC and mark all `Date` usage faithful (rejected — silent behaviour change for non-UTC sources); refuse all `Date` usage without a source time zone (rejected — refuses the zone-independent majority for no reason); refuse non-literal parses without a source time zone (the stricter reading; open as OQ-3).
 
 ---
 

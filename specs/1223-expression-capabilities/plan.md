@@ -3,7 +3,7 @@
 **Branch**: `claude/3052-s1-expression-capabilities` | **Date**: 2026-11-10
 **Spec**: [spec.md](spec.md) | **Initiative**: [#3052](https://github.com/elsa-workflows/elsa-foundation/issues/3052) — spec **S-1** | **Issue**: [#3026](https://github.com/elsa-workflows/elsa-foundation/issues/3026)
 
-**Status**: **Provisional.** This plan is written as if S-1's dependency ADRs are agreed. Approval of the plan takes effect on PR merge into the initiative branch; it is approval of the semantic approach and contracts, not an implemented API or a passed production journey. The one unsettled dependency that shapes the design (D-6) is carried as an open question in the spec (OQ-1) and surfaced on ADR 0045 §5's PR (#3384).
+**Status**: **Provisional.** This plan is written as if S-1's dependency ADRs are agreed. Approval of the plan takes effect on PR merge into the initiative branch; it is approval of the semantic approach and contracts, not an implemented API or a passed production journey. D-6 (function effect declaration) has a direction agreed by two approvers; the third position is carried as an open question in the spec (OQ-1) and on ADR 0045 §5's PR (#3384).
 
 **Inspected baseline**: `initiative/3052-elsa3-to-elsa4-conversion` synced to main `f4760aa0c` (2026-11-10). Converter infrastructure inspected at the current worktree head.
 
@@ -15,7 +15,7 @@ Three moving parts, all in existing code:
 
 1. **Engine profile** — restore the native JavaScript intrinsics (`Date`, `Intl`, `Temporal`, `Math` incl. `Math.random`) that the isolated Jint engine currently strips, wire the native clock to the host time source (UTC, invariant), and give the read-only surface the name `binding-readonly-v1`. One engine serves both input bindings and `RunJavaScript` scripts.
 2. **Host functions** — register the JSON-exchanging .NET functions (`newGuid` family, `stringToBase64`/`stringFromBase64`, `now`, `toJson`) on that surface. Everything in and out is a JSON value.
-3. **Converter** — in the Elsa 3 → Elsa 4 rewriter, flip the faithful functions from "refused" to "converted", keep the genuinely unavailable ones refused, and add a **proxy-dependent-usage detector** that refuses, with a clear quoted diagnostic, any script that relied on a live .NET object (a proxy) while proxies are disabled — active only while proxies are off (A-1), and reused at publish as well as convert.
+3. **Converter** — in the Elsa 3 → Elsa 4 rewriter, flip the faithful functions from "refused" to "converted", keep the genuinely unavailable ones refused, convert `Date` usage by its time-zone dependence (zone-dependent usage needs the ADR 0046 source time zone, and then evaluates in that zone), and add a **proxy-dependent-usage detector** that refuses, with a clear quoted diagnostic, any script that relied on a live .NET object (a proxy) while proxies are disabled — active only while proxies are off (A-1), and reused at publish as well as convert.
 
 [Research](research.md) records the engine/Jint and converter findings and the decisions behind each choice. [Data model](data-model.md) defines the capability surface, the host-function catalog, and the detector's classification rules. [contracts/](contracts/) hold the host-function contract and the converter/diagnostic contract. [Quickstart](quickstart.md) is the verification inventory.
 
@@ -45,7 +45,7 @@ Loaded framework **v6.1.0** and Elsa **v6.4.0**, both Gate indexes, and the [rev
 | Framework §2.22, §2.25 | Update the owning feature docs and the Elsa3 mapping conversion table (`Extensions/Elsa3/src/Mapping/README.md`) and the research R-6 notes in spec 247 where this spec supersedes them (time/GUID/Base64/`toJson` move from refused to converted). No unrelated artifact retirement. |
 | Elsa §E2.8 (draft), §E2.9 | Not touched — no activity-versioning or triplet change. |
 
-**Provisional-governance note.** Accepted **ADR 0045** governs the execution contract; this spec implements its §5 expression-capability text (PR #3384, provisional). ADR 0046 (dates), ADR 0083 (`binding-readonly-v1`, PR #3390), ADR 0091 (encoder) and the A-1 proxy decision are depended on as stated in the spec; if implementation turns up a finding that contradicts one, it is flowed back to that ADR's PR as a comment and recorded as an open question — the scoped change stops for its governing process rather than quietly diverging. **D-6 is unsettled**; the plan builds the no-metadata position (no function profiles, no classification gating a call) and does not invent an attribute mechanism.
+**Provisional-governance note.** Accepted **ADR 0045** governs the execution contract; this spec implements its §5 expression-capability text (PR #3384, provisional). ADR 0046 (dates), ADR 0083 (`binding-readonly-v1`, PR #3390), ADR 0091 (encoder) and the A-1 proxy decision are depended on as stated in the spec; if implementation turns up a finding that contradicts one, it is flowed back to that ADR's PR as a comment and recorded as an open question — the scoped change stops for its governing process rather than quietly diverging. **D-6** follows the direction agreed by two approvers: undeclared functions are effect-free, and the registration API takes one optional effectful flag that never gates a call; no function profiles.
 
 ## Project Structure
 
@@ -77,4 +77,4 @@ tools/ci/test-tiers.json               # only if a new test project is introduce
 
 ## Complexity Tracking
 
-No constitutional violations to justify. The design deliberately avoids new complexity: no taint/dataflow engine (a syntactic heuristic over the existing walker), no function-metadata system (D-6 no-metadata position), no new project, and reuse of the existing diagnostic pipeline (one new code value).
+No constitutional violations to justify. The design deliberately avoids new complexity: no taint/dataflow engine (a syntactic heuristic over the existing walker), no function-metadata system beyond one optional effectful flag at registration (D-6), no new project, and reuse of the existing diagnostic pipeline (one new code value).
