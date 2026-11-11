@@ -339,7 +339,7 @@ def self_test() -> int:
     ]
     amended = "docs/adr/0045-a.md"
     timeless = [
-        ("added mention fails", ["Agreed with @sfmskywalker."], 1, 0),
+        ("added mention fails", ["Agreed with @some-reviewer."], 1, 0),
         ("mention in code or email passes", ["Use `@scope/pkg` or mail a@b.io."], 0, 0),
         ("issue link warns", ["This replaces routing by return value (#1114)."], 0, 1),
         ("pr url warns", ["See https://github.com/o/r/pull/3389."], 0, 1),
