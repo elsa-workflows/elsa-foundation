@@ -269,7 +269,7 @@ function SecretValueField({ label, value, typeName, editorHint, onChange, compac
   const [visible, setVisible] = useState(false);
   const multiline = editorHint === "multiline" || typeName === "rsa-key" || typeName === "x509-certificate";
   if (compact) {
-    const toggle = multiline ? undefined : <button type="button" disabled={disabled} aria-label={visible ? "Hide value" : "Show value"} aria-pressed={visible} aria-controls={inputId} onClick={() => setVisible(current => !current)}>
+    const toggle = multiline ? undefined : <button type="button" disabled={disabled} aria-label={visible ? "Hide value" : "Show value"} aria-pressed={visible} aria-controls={inputId} title={visible ? "Hide value" : "Show value"} onClick={() => setVisible(current => !current)}>
       {visible ? <EyeOff size={16} aria-hidden="true" /> : <Eye size={16} aria-hidden="true" />}
     </button>;
     return <SecretFormField label={label} controlId={inputId} hint={hint} disabled={disabled} trailing={toggle}>

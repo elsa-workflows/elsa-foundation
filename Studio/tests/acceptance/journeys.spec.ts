@@ -533,12 +533,15 @@ test("outlined Secret create journey", async ({ page }, info) => {
   await expect(technicalName).toBeFocused();
   await expect(dialog.getByRole("button", { name: "Create", exact: true })).toBeInViewport();
   await capture(page, info, "secret-empty");
+  // Value is filled first, so only the name can keep Create disabled.
+  await dialog.getByLabel("Value", { exact: true }).fill("disposable-outlined-acceptance-value");
   await technicalName.fill("invalid name");
   await expect(technicalName).toHaveAttribute("aria-invalid", "true");
   await expect(dialog.getByRole("button", { name: "Create", exact: true })).toBeDisabled();
   await capture(page, info, "secret-invalid");
   await technicalName.fill(name);
-  await dialog.getByLabel("Value", { exact: true }).fill("disposable-outlined-acceptance-value");
+  await expect(technicalName).not.toHaveAttribute("aria-invalid", "true");
+  await expect(dialog.getByRole("button", { name: "Create", exact: true })).toBeEnabled();
   await expect(dialog.getByLabel("Value", { exact: true })).toHaveAttribute("type", "password");
   await capture(page, info, "secret-filled");
   await dialog.getByRole("button", { name: /^More options/ }).click();
