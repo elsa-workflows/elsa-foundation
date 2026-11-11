@@ -321,7 +321,10 @@ has:
 Every item carries **one short spoken anchor**: the board's decision ID and a two-to-three word handle, for example
 *"D-6, effect flag"*. An item without a decision ID gets one on the board before the meeting. The agenda is a view on the
 board, never a second source of truth. Like an ADR, the **committed agenda carries no personal names**: positions are
-numbered and link to their comments, and the board maps them to people. A copy posted on the board may name people.
+numbered and link to their comments, and the board maps them to people. A copy posted on the board may name people. For
+the meeting itself, the coordinator generates a local copy with names,
+`python tools/initiatives/agenda_names.py <agenda> --initiative <n>`, which writes a git-ignored `*.named.md` next to
+the agenda for a Markdown preview; it is never committed.
 
 **5. The meeting (human only).** The coordinator leads and guards the agenda:
 - opens and closes each item by saying its anchor aloud: these are the anchors in the transcript;
