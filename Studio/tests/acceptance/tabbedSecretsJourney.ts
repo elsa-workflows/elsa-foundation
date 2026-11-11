@@ -9,13 +9,20 @@ async function section(editor: Locator, name: string) {
 }
 
 /** Uses the normal router, workspace, metadata APIs and disposable source-host persistence. */
-export async function tabbedSecretsJourney(page: Page, info: TestInfo, capture: Capture) {
+export async function tabbedSecretsJourney(page: Page, info: TestInfo, capture: Capture, registerCleanup: (cleanup: () => Promise<void>) => void) {
   const stamp = `${info.project.name}-${Date.now()}`;
   const name = `TabbedSecret-${stamp}`;
   const value = "disposable-tabbed-acceptance-material";
   const displayName = `Tabbed credentials ${stamp}`;
   const description = "Metadata survives switching sections and reopening the resource.";
   const customScope = "Org.Team-A/Case";
+  const base = process.env.ELSA_WORKBENCH_URL!;
+  expect(base, "Owned Workbench URL").toBeTruthy();
+  // Both secrets this journey creates are deleted afterwards, so reused hosts do not accumulate rows.
+  for (const owned of [name, `Configuration-${stamp}`]) registerCleanup(async () => {
+    const removed = await page.request.delete(`${base}/secrets/${encodeURIComponent(owned)}`, { timeout: 5_000 });
+    expect([204, 404], `Cleanup for owned secret ${owned}`).toContain(removed.status());
+  });
   await page.goto("/security/secrets");
   const create = page.getByRole("button", { name: "Create secret", exact: true }).first();
   await expect(create).toBeEnabled(); await create.press("Enter");
@@ -109,7 +116,8 @@ export async function tabbedSecretsJourney(page: Page, info: TestInfo, capture: 
   const configurationRow = page.getByRole("row").filter({ hasText: `Configuration-${stamp}` });
   await configurationRow.getByRole("button", { name: `Edit Configuration-${stamp}`, exact: true }).click();
   await expect(edit).not.toContainText("Logging:LogLevel:Default");
-  await section(edit, "Storage & lifetime"); await expect(edit).toContainText("Configuration");
+  await section(edit, "Storage & lifetime");
+  await expect(edit.locator(".secrets-metadata-grid div").filter({ has: page.locator("dt", { hasText: /^Store$/ }) }).locator("dd")).toHaveText(/Configuration/i);
   await capture(page, info, "configuration-metadata");
   await edit.getByRole("button", { name: "Cancel", exact: true }).click();
   await expect(configurationRow.getByRole("button", { name: `Edit Configuration-${stamp}`, exact: true })).toBeFocused();

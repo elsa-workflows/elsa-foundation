@@ -27,7 +27,7 @@ export function register(api: ElsaStudioModuleApi) {
     },
     routes: [
       ...["/security/secrets", "/secrets"].flatMap(prefix => [
-        { id: `${prefix}.create`, path: `${prefix}/new`, label: "Create secret", requiresBackend: [{ id: "elsa.api.secrets", contractVersion: "1" }], workspace: { resourceKey: () => "secret:create" }, component: ({ navigate }: { navigate(path: string): void }) => <SecretEditorPage key={api.backendSession?.key ?? api.backend.baseUrl} api={api} navigate={navigate} /> },
+        { id: `${prefix}.create`, path: `${prefix}/new`, label: "Create secret", requiresBackend: [{ id: "elsa.api.secrets", contractVersion: "1" }], workspace: { resourceKey: () => "secret-editor:new" }, component: ({ navigate }: { navigate(path: string): void }) => <SecretEditorPage key={api.backendSession?.key ?? api.backend.baseUrl} api={api} navigate={navigate} /> },
         { id: `${prefix}.edit`, path: `${prefix}/:name/edit`, label: "Edit secret", requiresBackend: [{ id: "elsa.api.secrets", contractVersion: "1" }], workspace: { resourceKey: (location: URL) => { try { return `secret:${decodeURIComponent(location.pathname.split("/").at(-2) ?? "").toLowerCase()}`; } catch { return null; } } }, component: ({ navigate }: { navigate(path: string): void }) => <SecretEditRoute api={api} navigate={navigate} /> }
       ]),
       {

@@ -223,6 +223,8 @@ test("collections and connection creation", async ({ page }, info) => {
   await expect(technicalName).toHaveValue(secretName.toUpperCase());
   await capture(page, info, "secret-duplicate");
   await secret.getByRole("button", { name: "Cancel", exact: true }).click();
+  // The failed duplicate leaves an unsaved draft, so leaving asks before discarding it.
+  await page.getByRole("dialog", { name: "Discard secret edits?", exact: true }).getByRole("button", { name: "Discard changes", exact: true }).click();
   await expect(secret).toBeHidden();
   await expect(page.getByRole("button", { name: "Create secret", exact: true }).first()).toBeFocused();
 
@@ -527,5 +529,5 @@ test("choose data for activity outputs", async ({ page }, info) => {
 });
 
 test("tabbed Secrets authoring and metadata", async ({ page }, info) => {
-  await tabbedSecretsJourney(page, info, capture);
+  await tabbedSecretsJourney(page, info, capture, cleanup => { ownedCleanups.get(page)!.push(cleanup); });
 });
