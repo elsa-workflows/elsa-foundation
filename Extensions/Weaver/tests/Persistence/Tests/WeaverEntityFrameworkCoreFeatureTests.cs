@@ -21,7 +21,7 @@ namespace Elsa.Weaver.Persistence.Tests;
 public sealed class WeaverEntityFrameworkCoreFeatureTests
 {
     [Fact]
-    public void The_feature_is_an_opt_in_shell_feature_over_the_agent_and_secrets_features()
+    public void The_feature_is_an_opt_in_shell_feature_over_the_weaver_and_secrets_features()
     {
         var feature = typeof(WeaverEntityFrameworkCoreFeature).GetCustomAttribute<ShellFeatureAttribute>()!;
 
@@ -56,14 +56,14 @@ public sealed class WeaverEntityFrameworkCoreFeatureTests
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    public void The_feature_replaces_the_record_store_and_the_audit_trio_together_in_either_order(bool agentFirst)
+    public void The_feature_replaces_the_record_store_and_the_audit_trio_together_in_either_order(bool weaverFirst)
     {
         var services = new ServiceCollection();
         services.AddLogging();
         new EventsFeature().ConfigureServices(services);
-        if (agentFirst) services.AddWeaver();
+        if (weaverFirst) services.AddWeaver();
         services.AddWeaverEntityFrameworkCore(new() { ConnectionString = "Data Source=:memory:" });
-        if (!agentFirst) services.AddWeaver();
+        if (!weaverFirst) services.AddWeaver();
         AddSecrets(services);
 
         Assert.Single(services, x => x.ServiceType == typeof(IWeaverSessionRecordStore));

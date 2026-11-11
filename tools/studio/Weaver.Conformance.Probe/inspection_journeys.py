@@ -20,8 +20,8 @@ workflow-versions
 - negative controls: an unknown version and a version of another definition are refused at admission as unavailable, a
   comparison against another definition's version is refused at preparation, and an actor without design read is refused
   at admission;
-- deployment shape: with the Design-side agent feature (WeaverWorkflows) deselected, a workflows.version reference is
-  explicitly unavailable (the engine's agent.context.kind_unsupported); the feature is selected again afterwards;
+- deployment shape: with the Design-side Weaver feature (WeaverWorkflows) deselected, a workflows.version reference is
+  explicitly unavailable (the engine's weaver.context.kind_unsupported); the feature is selected again afterwards;
 - in the actual packaged Studio (browser.mjs, workflow-version-history): the editor's version history discloses the selected
   version and its Explain action reads it.
 
@@ -32,12 +32,12 @@ workflow-executables
   completes, and the Executable reads back byte-equal;
 - negative controls: a bound hash that differs is stale, an unknown artifact is unavailable, and an actor without
   workflows/runtime:read is refused, each at admission;
-- deployment shape: with the Runtime-side agent feature (WeaverWorkflowsRuntime) deselected, a workflows.executable
+- deployment shape: with the Runtime-side Weaver feature (WeaverWorkflowsRuntime) deselected, a workflows.executable
   reference is explicitly unavailable; selected again afterwards;
 - in the actual packaged Studio (browser.mjs, workflow-executable-inspector): the Executable Inspector discloses the exact
   Executable and its Explain action reads it.
 
-The deployment-shape controls deselect one agent feature in the packaged combined host. The AppDomain-wide Design-only and
+The deployment-shape controls deselect one Weaver feature in the packaged combined host. The AppDomain-wide Design-only and
 Runtime-only shapes (no Elsa.Workflows.Design* assembly loaded) are proven by the C# composition tests, not by this probe.
 Frame orders are each adapter's own, pinned from earlier witnesses (explain_journeys.READ_FRAMES for a completed read,
 batch_journeys.REFUSED_FRAMES for a preparation refusal). Nothing is retried.
@@ -85,7 +85,7 @@ COMPUTED_BY = VERSION_TOOL
 MUTATING_TOOLS = frozenset({"workflow_apply_operation_batch", "workflow_set_designer_position", "workflow_library_assign_tags",
                             "workflow_library_set_favorite", "workflow_library_move_to_folder", "workflow_library_save_view",
                             "workflow_library_set_list_state", "workflow_create_dialog_prefill"})
-DESIGN_AGENT_FEATURE, RUNTIME_AGENT_FEATURE = "WeaverWorkflows", "WeaverWorkflowsRuntime"
+DESIGN_WEAVER_FEATURE, RUNTIME_WEAVER_FEATURE = "WeaverWorkflows", "WeaverWorkflowsRuntime"
 # Principals: the original "other" principal holds only the base Weaver grants (no workflows/design:read); the truth-seam
 # reader holds design read but not workflows/runtime:read.
 DESIGN_DENIED, RUNTIME_DENIED = 1, READER
@@ -102,8 +102,8 @@ TEXTS = {
 }
 ADMISSION_REFUSAL = {"code": "weaver.context.incomplete", "statusCode": 400}
 VERSION_NATIVE = ("explain", "compare", "edit-refused", "unknown-version", "other-definition", "compare-other-definition", "design-denied",
-                  "design-agent-absent")
-EXECUTABLE_NATIVE = ("explain", "edit-refused", "stale-hash", "unknown-artifact", "runtime-denied", "runtime-agent-absent")
+                  "design-weaver-absent")
+EXECUTABLE_NATIVE = ("explain", "edit-refused", "stale-hash", "unknown-artifact", "runtime-denied", "runtime-weaver-absent")
 VERSION_BROWSER, EXECUTABLE_BROWSER = "workflow-version-history", "workflow-executable-inspector"
 VERSION_OBSERVATIONS = {"versionSelected": True, "versionContext": True, "explainCompleted": True, "readOnly": True}
 EXECUTABLE_OBSERVATIONS = {"executableContext": True, "hashBound": True, "explainCompleted": True, "readOnly": True}
@@ -575,7 +575,7 @@ def _edit_refused(runtime, name, attachment, tool, capability, read, owner_paths
 
 
 def _without_feature(runtime, name, feature, control):
-    """Run control with one agent feature deselected in the packaged host, then select it again."""
+    """Run control with one Weaver feature deselected in the packaged host, then select it again."""
     catalog, ref = runtime.native.json(runtime.backend, name + "-features", "/modularity/features")
     original = next(item for item in catalog["features"] if item["id"] == feature)
     check(original["enabled"] is True, "The packaged host must select " + feature + " before its absence control")
@@ -632,14 +632,14 @@ def _version_native(runtime, name, seed, other):
                                           VERSION_CAPABILITY, TEXTS["version-denied"])
     records["design-denied"], evidence = {"control": "design-denied", **refusal}, evidence + refs
     runtime.sign_in()
-    # Without the Design-side agent feature, a version reference is explicitly unavailable. No capability is requested: the
+    # Without the Design-side Weaver feature, a version reference is explicitly unavailable. No capability is requested: the
     # absent module contributes none, and the context kind alone must be refused.
     def absent():
-        value, refs = _refused_at_admission(runtime, name + "-design-agent-absent", runtime.backend,
+        value, refs = _refused_at_admission(runtime, name + "-design-weaver-absent", runtime.backend,
                                             version_attachment(seed["definitionId"], v2["id"], v2["version"]), None, TEXTS["kind-unsupported"])
-        return {"control": "design-agent-absent", **value}, refs
-    record, refs = _without_feature(runtime, name + "-design-agent", DESIGN_AGENT_FEATURE, absent)
-    records["design-agent-absent"], evidence = record, evidence + refs
+        return {"control": "design-weaver-absent", **value}, refs
+    record, refs = _without_feature(runtime, name + "-design-weaver", DESIGN_WEAVER_FEATURE, absent)
+    records["design-weaver-absent"], evidence = record, evidence + refs
     return records, evidence
 
 
@@ -670,11 +670,11 @@ def _executable_native(runtime, name, seed):
     records["runtime-denied"], evidence = {"control": "runtime-denied", **refusal}, evidence + refs
     runtime.sign_in()
     def absent():
-        value, refs = _refused_at_admission(runtime, name + "-runtime-agent-absent", runtime.backend,
+        value, refs = _refused_at_admission(runtime, name + "-runtime-weaver-absent", runtime.backend,
                                             executable_attachment(seed["artifactId"], seed["artifactHash"]), None, TEXTS["kind-unsupported"])
-        return {"control": "runtime-agent-absent", **value}, refs
-    record, refs = _without_feature(runtime, name + "-runtime-agent", RUNTIME_AGENT_FEATURE, absent)
-    records["runtime-agent-absent"], evidence = record, evidence + refs
+        return {"control": "runtime-weaver-absent", **value}, refs
+    record, refs = _without_feature(runtime, name + "-runtime-weaver", RUNTIME_WEAVER_FEATURE, absent)
+    records["runtime-weaver-absent"], evidence = record, evidence + refs
     after, after_ref = runtime.native.json(runtime.backend, name + "-executable-after", seed["executablePath"])
     check(references_of(after["references"]) == references_of(executable["references"]) and after["artifactHash"] == executable["artifactHash"],
           "An inspection turn changed the Executable or its Source References")
@@ -840,7 +840,7 @@ def require_workflow_inspection(section, owned_root=None, *, source=None):
             native = observed.get("native") if isinstance(observed.get("native"), dict) else {}
             versions = row["id"].endswith("-workflow-versions")
             controls = VERSION_NATIVE if versions else EXECUTABLE_NATIVE
-            shape = "design-agent-absent" if versions else "runtime-agent-absent"
+            shape = "design-weaver-absent" if versions else "runtime-weaver-absent"
             check(observed.get("id") == row["id"] and observed.get("status") == "passed" and observed.get("adapter") == row["id"].split("-", 1)[0]
                   and sorted(native) == sorted(controls) and all((native.get(control) or {}).get("control") == control for control in controls)
                   and (native.get("edit-refused") or {}).get("unchanged") is True
@@ -858,7 +858,7 @@ def synthetic_native(case):
     versions = case.endswith("-workflow-versions")
     value = {control: {"control": control} for control in (VERSION_NATIVE if versions else EXECUTABLE_NATIVE)}
     value["edit-refused"].update(unchanged=True, offered=[VERSION_TOOL if versions else EXECUTABLE_TOOL])
-    value["design-agent-absent" if versions else "runtime-agent-absent"]["code"] = ADMISSION_REFUSAL["code"]
+    value["design-weaver-absent" if versions else "runtime-weaver-absent"]["code"] = ADMISSION_REFUSAL["code"]
     if versions: value["compare"]["comparison"] = {"added": ["c"]}
     return value
 

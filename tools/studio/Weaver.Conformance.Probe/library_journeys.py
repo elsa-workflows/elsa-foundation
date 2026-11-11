@@ -117,7 +117,7 @@ def library_principal(principals, new_identity):
     return [new_identity("witness-library-limited", principals[0]["tenant"], LIBRARY_LIMITED_GRANTS)]
 
 
-# ---- Attachments: the pages' own client contexts, as Studio builds them (workflowLibraryAgent.ts). ----
+# ---- Attachments: the pages' own client contexts, as Studio builds them (workflowLibraryWeaver.ts). ----
 
 def _client(prefix):
     return {"clientId": "qualification-" + prefix, "generationId": str(uuid.uuid4())}

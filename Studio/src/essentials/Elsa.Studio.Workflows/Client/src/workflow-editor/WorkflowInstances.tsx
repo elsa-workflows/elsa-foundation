@@ -60,7 +60,7 @@ import { CopyValueButton } from "./executableShared";
 import { useDialogFocus } from "./useDialogFocus";
 import { getDialogs } from "./dialogs";
 import { isTerminalExecution, readObservedExecution, useExecutionObservation, type ExecutionObservationStatus } from "./useExecutionObservation";
-import type { WorkflowAgentController } from "../workflowAgent";
+import type { WorkflowWeaverController } from "../workflowWeaver";
 import { useWorkflowInspectionContext } from "./useWorkflowInspectionContext";
 export { formatSnapshotPayload } from "./RuntimeValueEvidence";
 import type { InstanceInspectorTab, WorkflowEditorPanelTab, WorkflowInstanceInspectionData } from "./editorTypes";
@@ -847,8 +847,8 @@ const incidentActivityLookupBatchSize = 8;
 export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressionEditors = [], backendSession, runRelatedLinks = [], workflowExecutionId, initialActivityExecutionId = null, initialInspectorTab = "timeline", initialReturnTo = null, navigate }: {
   context: StudioEndpointContext;
   ai: StudioWeaverRegistry;
-  /** The Workflows module's agent state: the run page contributes the exact Run it shows and the selected activity execution (spec 1193 FR-029). */
-  weaver?: WorkflowAgentController;
+  /** The Workflows module's Weaver state: the run page contributes the exact Run it shows and the selected activity execution (spec 1193 FR-029). */
+  weaver?: WorkflowWeaverController;
   expressionEditors?: StudioExpressionEditorContribution[];
   backendSession?: StudioBackendSession;
   runRelatedLinks?: StudioWorkflowRunRelatedLinkContribution[];

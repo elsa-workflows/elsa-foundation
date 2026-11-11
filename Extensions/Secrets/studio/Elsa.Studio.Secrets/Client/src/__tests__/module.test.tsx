@@ -53,7 +53,7 @@ describe("secrets module", () => {
 
 function stubApi(): ElsaStudioModuleApi {
   const dashboardWidgets = createDashboardWidgetRegistry();
-  const agent = createWeaverRegistry();
+  const weaver = createWeaverRegistry();
   return {
     host: {
       ...createEndpointContext("https://studio.example/"),
@@ -76,13 +76,13 @@ function stubApi(): ElsaStudioModuleApi {
     workflowRunInputEditors: createContributionRegistry({ slot: studioSlots.workflowRunInputEditors }),
     workflowTestStimulusEditors: createContributionRegistry({ slot: studioSlots.workflowTestStimulusEditors }),
     settingEditors: createContributionRegistry({ slot: studioSlots.settingEditors }),
-    weaver: agent,
+    weaver,
     workflowDesigner: {
       nodeRenderers: createContributionRegistry({ slot: studioSlots.workflowDesignerNodeRenderers }),
       toolboxItems: createContributionRegistry({ slot: studioSlots.workflowDesignerToolboxItems }),
       panels: createContributionRegistry({ slot: studioSlots.workflowDesignerPanels })
     },
-    ai: agent,
+    ai: weaver,
     dialogs: createDialogController().api,
     diagnostics: createContributionRegistry({ slot: studioSlots.diagnostics })
   };

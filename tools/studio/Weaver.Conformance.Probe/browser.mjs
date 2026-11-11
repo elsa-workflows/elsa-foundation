@@ -125,22 +125,22 @@ if (config.journey === "workflow-read-only") page.on("response", response => {
   if (url.origin === backend && response.request().method() === "GET" && [401, 403].includes(response.status()))
     refusedReads.push({ path: url.pathname, status: response.status() });
 });
-// Spec 1193 T028: every exchange the page has with the agent API, raw and in memory only (never retained, so no redactor
+// Spec 1193 T028: every exchange the page has with the Weaver API, raw and in memory only (never retained, so no redactor
 // rewrites it): each request's URL and body, whatever its method, and each non-stream response body. Stream bodies are
 // the native SSE capture's own raw bytes. The explanation journey searches all of it for the typed canary.
-const agentTraffic = [], agentResponseReads = [];
-// Spec 1193 T045: the run journey searches the same raw agent traffic for its Run canary.
+const weaverTraffic = [], weaverResponseReads = [];
+// Spec 1193 T045: the run journey searches the same raw Weaver traffic for its Run canary.
 if (["workflow-explain", "workflow-run"].includes(config.journey)) {
   page.on("request", request => {
     const url = new URL(request.url());
     if (url.origin === backend && url.pathname.startsWith("/_elsa/weaver/"))
-      agentTraffic.push({ method: request.method(), url: request.url(), body: request.postData() ?? "" });
+      weaverTraffic.push({ method: request.method(), url: request.url(), body: request.postData() ?? "" });
   });
   page.on("response", response => {
     const url = new URL(response.url());
     if (url.origin !== backend || !url.pathname.startsWith("/_elsa/weaver/") || /event-stream/i.test(response.headers()["content-type"] ?? "")) return;
-    agentResponseReads.push(response.text().then(body => agentTraffic.push({ url: response.url(), status: response.status(), body }))
-      .catch(error => agentTraffic.push({ url: response.url(), unreadable: error.message })));
+    weaverResponseReads.push(response.text().then(body => weaverTraffic.push({ url: response.url(), status: response.status(), body }))
+      .catch(error => weaverTraffic.push({ url: response.url(), unreadable: error.message })));
   });
 }
 const dock = () => page.getByRole("region", { name: "Weaver assistant", exact: true });
@@ -223,7 +223,7 @@ async function captureNativeStreams(target) {
     // This observer qualifies WeaverApi.WriteEventAsync's UTF-8/no-BOM data lines,
     // not arbitrary SSE encodings or original compressed/network-wire bytes.
     if (text.startsWith("\ufeff") || text && !text.startsWith("data: "))
-      throw new Error("Response bytes do not match the native Agent SSE framing profile.");
+      throw new Error("Response bytes do not match the native Weaver SSE framing profile.");
     return text;
   }
   function bytes(body, encoded, allowEmpty = false) {
@@ -580,7 +580,7 @@ async function proposalFor(action, name) {
   const message = responseFor("/messages");
   await action();
   const sent = await accepted(message, name + "-message");
-  const proposal = dock().locator(".agent-proposal").last();
+  const proposal = dock().locator(".weaver-proposal").last();
   await expect(proposal).toHaveAttribute("data-status", "awaiting-approval");
   await expect(proposal.getByRole("button", { name: "Approve", exact: true })).toBeEnabled();
   result.evidence.push(retain(name + "-review", { text: await proposal.innerText(), status: await proposal.getAttribute("data-status") }));
@@ -794,13 +794,13 @@ async function autonomySize() {
   // A visible module preview/result distinguishes real review from real application; idle alone can race dispatch.
   await expect(dock().getByTestId("acme-home-size-result").last()).toBeVisible();
   await expect(dock()).toHaveAttribute("aria-busy", "false");
-  const pending = dock().locator('.agent-proposal[data-status="awaiting-approval"]').filter({ has: page.getByTestId("acme-home-size-result") });
+  const pending = dock().locator('.weaver-proposal[data-status="awaiting-approval"]').filter({ has: page.getByTestId("acme-home-size-result") });
   const pendingCount = await pending.count();
   need(pendingCount <= 1, "The single size request created duplicate review proposals.");
   const outcome = pendingCount === 1 ? "review" : "automatic";
   // Approval and application change data-status on the same card, so keep it by
   // its module result rather than by the status that classified the outcome.
-  const sizeProposal = dock().locator(".agent-proposal").filter({ has: page.getByTestId("acme-home-size-result") });
+  const sizeProposal = dock().locator(".weaver-proposal").filter({ has: page.getByTestId("acme-home-size-result") });
   const atDecision = await owner("size-owner-at-decision", witness.sizeOwnerEndpoint);
   const layoutAtDecision = await owner("size-layout-at-decision", "/_elsa/studio/preferences/home-layout", { "X-Elsa-Studio-Host-Id": witness.hostId });
   const expectedOutcome = requestedMode === "manual" ? "review" : "automatic";
@@ -1285,7 +1285,7 @@ async function incompatibleModule() {
   await page.getByRole("button", { name: /^Weaver/ }).click();
   await expect(dock().getByTestId("weaver-provider-status")).toBeVisible();
   await expect(dock().getByRole("button", { name: "Close assistant", exact: true })).toBeEnabled();
-  await expect(dock().locator(".agent-context-chip").filter({ hasText: "Acme status card" })).toHaveCount(0);
+  await expect(dock().locator(".weaver-context-chip").filter({ hasText: "Acme status card" })).toHaveCount(0);
   await expect(dock().getByTestId("acme-home-result")).toHaveCount(0);
   result.evidence.push(retain("common-studio-usable", { url: diagnosticUrl(page.url()), title: await page.locator(".topbar h1").innerText(),
     providerStatus: await dock().getByTestId("weaver-provider-status").innerText(), noPromptSubmitted: requests.length === 0 }));
@@ -1500,7 +1500,7 @@ async function workflowReadOnly() {
     return accepted(message, name + "-message");
   };
   const explained = await ask("workflow_read_graph", {}, "explain");
-  // The accepted message's admitted context, as Studio's agent client reads it: data.message.context.
+  // The accepted message's admitted context, as Studio's Weaver client reads it: data.message.context.
   const admitted = explained.value.data?.message?.context;
   need(Array.isArray(admitted), "The accepted message carries no admitted context.");
   const permissions = admitted.find(item => item.contentType === "workflow.permissions");
@@ -1509,7 +1509,7 @@ async function workflowReadOnly() {
     tools: ["workflow_read_graph"], capabilities: ["workflow.explain"] });
   expect(catalog?.content).toMatchObject({ status: "available" });
   need(Array.isArray(catalog.content.entries) && catalog.content.entries.length > 0, "The reader's catalog has no entries.");
-  await expect(dock().locator(".agent-context-chip", { hasText: "Workflow permissions" })).toBeVisible();
+  await expect(dock().locator(".weaver-context-chip", { hasText: "Workflow permissions" })).toBeVisible();
   const answer = dock().locator('.weaver-message[data-role="assistant"]').last();
   await expect(answer).toHaveAttribute("data-status", "completed");
   await expect(answer).toContainText("Tool outcome received");
@@ -1521,7 +1521,7 @@ async function workflowReadOnly() {
   const ended = page.locator('.weaver-alert, .weaver-message[data-role="assistant"][data-status="failed"]').first();
   await expect(ended).toBeVisible();
   result.evidence.push(retain("layout-outcome", { text: await ended.innerText(), acceptedMessageId: refused.value.data?.message?.id ?? null }));
-  await expect(dock().locator(".agent-proposal")).toHaveCount(0);
+  await expect(dock().locator(".weaver-proposal")).toHaveCount(0);
   await expect(activity).toHaveAttribute("style", position);
   const after = await owner("owner-after", definitionPath);
   result.ownerAfter = after.receipt;
@@ -1583,7 +1583,7 @@ async function workflowBatch() {
     const args = { operations: prepared.operations };
     const selected = command(BATCH_TOOL, args);
     commands[name] = selected.commandId;
-    const cards = dock().locator(".agent-proposal"), before = await cards.count();
+    const cards = dock().locator(".weaver-proposal"), before = await cards.count();
     await expect(dock().getByLabel("Ask Weaver", { exact: true })).toBeEnabled();
     await dock().getByLabel("Ask Weaver", { exact: true }).fill(JSON.stringify({ toolName: BATCH_TOOL, arguments: args }));
     const message = responseFor("/messages");
@@ -1726,7 +1726,7 @@ async function workflowBatch() {
     await expect(node(nodes.a, second)).toBeVisible();
     await second.getByRole("button", { name: /^Weaver/ }).click();
     const otherDock = second.getByRole("region", { name: "Weaver assistant", exact: true });
-    const card = otherDock.locator(".agent-proposal").last();
+    const card = otherDock.locator(".weaver-proposal").last();
     await expect(card).toHaveAttribute("data-status", "awaiting-approval");
     const approved = second.waitForResponse(response => new URL(response.url()).origin === backend && response.url().endsWith("/approve"));
     await card.getByRole("button", { name: "Approve", exact: true }).click();
@@ -1799,7 +1799,7 @@ async function workflowExplain() {
     const message = responseFor("/messages");
     await dock().getByRole("button", { name: "Send message", exact: true }).click();
     const sent = await accepted(message, name + "-message");
-    // The accepted message's admitted context, as Studio's agent client reads it: data.message.context.
+    // The accepted message's admitted context, as Studio's Weaver client reads it: data.message.context.
     const admitted = sent.value.data?.message?.context;
     need(Array.isArray(admitted), name + ": the accepted message carries no admitted context.");
     const drafts = admitted.filter(item => item.contentType === "workflow.definition");
@@ -1871,17 +1871,17 @@ async function workflowExplain() {
   const withheld = (maskedContent.selectedActivity.properties ?? []).find(item => item.referenceKey === explain.maskedProperty);
   need(withheld?.isSensitive === true && withheld.value?.kind === "withheld" && Object.keys(withheld.value).sort().join() === "expressionType,kind",
     "The typed masked value was not disclosed only as withheld: " + JSON.stringify(withheld?.value?.kind ?? null));
-  // In-page search, raw and unredacted: no request the page sent to the agent API (any method, URL and query included), no
-  // response body it read, and no byte of any agent stream it received carries the canary.
-  await Promise.all(agentResponseReads);
+  // In-page search, raw and unredacted: no request the page sent to the Weaver API (any method, URL and query included), no
+  // response body it read, and no byte of any Weaver stream it received carries the canary.
+  await Promise.all(weaverResponseReads);
   // An empty body proves nothing: every captured stream must have been captured without error, and at least one must be
-  // an actual agent event stream whose bytes were read, before its absence of the canary counts.
+  // an actual Weaver event stream whose bytes were read, before its absence of the canary counts.
   const captured = await streamCapture();
   need(captured.every(item => item.captureError == null && item.captureValidationError == null)
     && captured.some(item => item.captureMethod !== "not-sse" && typeof item.rawBody === "string" && item.rawBody.startsWith("data: ")),
-    "The in-page search has no complete, error-free agent stream capture to search.");
-  need(agentTraffic.some(item => item.method === "POST" && item.url.endsWith("/messages")), "The in-page search observed no agent message to search.");
-  need(!JSON.stringify(agentTraffic).includes(canary) && !captured.some(item => item.rawBody.includes(canary)) && !JSON.stringify(masked).includes(canary),
+    "The in-page search has no complete, error-free Weaver stream capture to search.");
+  need(weaverTraffic.some(item => item.method === "POST" && item.url.endsWith("/messages")), "The in-page search observed no Weaver message to search.");
+  need(!JSON.stringify(weaverTraffic).includes(canary) && !captured.some(item => item.rawBody.includes(canary)) && !JSON.stringify(masked).includes(canary),
     "The typed canary left the browser's working state.");
   need(owningWrites.length === writes, "The masked edit was saved although autosave was off.");
   const after = await owner("owner-after", definitionPath);
@@ -1902,7 +1902,7 @@ async function reviewedTool(toolName, args, name, commands) {
   await expect(dock()).toHaveAttribute("aria-busy", "false");
   const selected = command(toolName, args);
   commands[name] = selected.commandId;
-  const cards = dock().locator(".agent-proposal"), before = await cards.count();
+  const cards = dock().locator(".weaver-proposal"), before = await cards.count();
   await expect(dock().getByLabel("Ask Weaver", { exact: true })).toBeEnabled();
   await dock().getByLabel("Ask Weaver", { exact: true }).fill(JSON.stringify({ toolName, arguments: args }));
   const message = responseFor("/messages");
@@ -2050,7 +2050,7 @@ async function inspectionExplain(name, explainButton, toolName, args, kind, targ
   const message = responseFor("/messages");
   await nativeEnter(name + "-explain", explainButton, "Explain");
   const sent = await accepted(message, name + "-message");
-  // The accepted message's admitted context, as Studio's agent client reads it: data.message.context.
+  // The accepted message's admitted context, as Studio's Weaver client reads it: data.message.context.
   const admitted = (sent.value.data?.message?.context ?? []).filter(item => item.contentType === kind);
   need(admitted.length === 1 && ["authoritativeRead", "AuthoritativeRead"].includes(admitted[0].origin)
     && admitted[0].target?.resourceType === target.resourceType && admitted[0].target?.resourceId === target.resourceId
@@ -2125,7 +2125,7 @@ async function workflowExecutableInspector() {
   result.observations = { executableContext: true, hashBound: true, explainCompleted: true, readOnly: true };
 }
 // Spec 1193 T045: the run page discloses the exact Run and the activity execution selected on it; its Explain action reads it
-// with workflow_read_run. The page's own agent traffic (every request, every non-stream response) and every agent stream
+// with workflow_read_run. The page's own Weaver traffic (every request, every non-stream response) and every Weaver stream
 // byte are searched, raw, for the Run canary, which exists only in the seeded workflow's sensitive input.
 async function workflowRun() {
   const run = (config.workflow ?? {}).run ?? {};
@@ -2157,14 +2157,14 @@ async function workflowRun() {
     { resourceType: "workflow-run", resourceId: run.workflowExecutionId, revision: run.activityExecutionId }, commands);
   need(admitted.content?.workflowExecutionId === run.workflowExecutionId && admitted.content?.activityExecutionId === run.activityExecutionId,
     "The admitted Run is not the shown Run and selection.");
-  await Promise.all(agentResponseReads);
-  // As in the explain journey: only complete, error-free captures with a real agent event stream make an absent canary count.
+  await Promise.all(weaverResponseReads);
+  // As in the explain journey: only complete, error-free captures with a real Weaver event stream make an absent canary count.
   const captured = await streamCapture();
   need(captured.every(item => item.captureError == null && item.captureValidationError == null)
     && captured.some(item => item.captureMethod !== "not-sse" && typeof item.rawBody === "string" && item.rawBody.startsWith("data: ")),
-    "The in-page search has no complete, error-free agent stream capture to search.");
-  need(agentTraffic.some(item => item.method === "POST" && item.url.endsWith("/messages")), "The in-page search observed no agent message to search.");
-  need(!JSON.stringify(agentTraffic).includes(run.canary) && !captured.some(item => (item.rawBody ?? "").includes(run.canary)) && !JSON.stringify(admitted).includes(run.canary),
+    "The in-page search has no complete, error-free Weaver stream capture to search.");
+  need(weaverTraffic.some(item => item.method === "POST" && item.url.endsWith("/messages")), "The in-page search observed no Weaver message to search.");
+  need(!JSON.stringify(weaverTraffic).includes(run.canary) && !captured.some(item => (item.rawBody ?? "").includes(run.canary)) && !JSON.stringify(admitted).includes(run.canary),
     "The Run canary left the run page.");
   const after = await owner("owner-after", run.path);
   result.ownerAfter = after.receipt;
@@ -2221,10 +2221,10 @@ try {
   try { await screenshot("failure"); } catch { /* Retain the original failure if the browser has gone away. */ }
 } finally {
   result.completedAt = new Date().toISOString();
-  result.evidence.push(retain("agent-streams", await streamCapture()));
+  result.evidence.push(retain("weaver-streams", await streamCapture()));
   await Promise.all(pendingOwnerReads);
   result.evidence.push(retain("resource-dispatch-boundaries", { resourceInteractions, moduleOwnerReads }));
-  result.evidence.push(retain("agent-requests", requests));
+  result.evidence.push(retain("weaver-requests", requests));
   if (autonomyCapture) result.evidence.push(retain("autonomy-network", autonomyCapture()));
   if (lifecycle || config.journey === "workflow-batch") result.evidence.push(retain("publish-attempts", publishAttempts));
   result.evidence.push(retain("owning-write-attempts", owningWrites));

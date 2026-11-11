@@ -369,7 +369,7 @@ public sealed class WeaverAuditQueryRequest
 public static class WeaverApiMapping
 {
     public static WeaverProblemDetails ToProblem(this WeaverError error, string? title = null)
-        => new(title ?? "Agent request failed", error.Message, error.StatusCode, error.Code);
+        => new(title ?? "Weaver request failed", error.Message, error.StatusCode, error.Code);
 
     public static WeaverCapabilityResponse ToResponse(this WeaverCapability capability)
         => new(

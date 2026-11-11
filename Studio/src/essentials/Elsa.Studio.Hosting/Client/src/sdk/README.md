@@ -241,7 +241,7 @@ keeps retry IDs stable when a delivery response is uncertain.
 ## Weaver Contributions
 
 Studio modules can enrich Weaver through `api.weaver` without calling an external
-agent provider from the browser. Weaver is the visible assistant name and the
+AI provider from the browser. Weaver is the visible assistant name and the
 name of the SDK surface (`api.weaver`, `StudioWeaver*`, `createWeaverRegistry`,
 `studioSlots.weaver*`); `agent` remains only in the wire name `agentScopes`
 and in the prompt request's `agent` property, which asks for a named assistant

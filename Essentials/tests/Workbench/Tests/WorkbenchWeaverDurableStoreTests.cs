@@ -11,7 +11,7 @@ namespace Elsa.Workbench.Tests;
 /// <summary>
 /// #3441 on the stock Workbench: the durable Weaver session store is opt-in. The stock Development shell does not run it,
 /// and listing the feature with its provider in the shell configuration composes it with SQLite: the store's migrations
-/// create the configured database and the Agent API serves from it. Restart recovery itself is proved by the persistence
+/// create the configured database and the Weaver API serves from it. Restart recovery itself is proved by the persistence
 /// tests and the package witness's restart inventory.
 /// </summary>
 public sealed class WorkbenchWeaverDurableStoreTests : IDisposable
@@ -20,7 +20,7 @@ public sealed class WorkbenchWeaverDurableStoreTests : IDisposable
     private const string AdminUsername = "admin";
     private const string AdminPassword = "Password123!";
 
-    private readonly string _databaseFolder = Directory.CreateTempSubdirectory("workbench-agent-records-").FullName;
+    private readonly string _databaseFolder = Directory.CreateTempSubdirectory("workbench-weaver-records-").FullName;
 
     public void Dispose()
     {
@@ -41,7 +41,7 @@ public sealed class WorkbenchWeaverDurableStoreTests : IDisposable
     [Fact]
     public async Task Configured_sqlite_store_composes_migrates_and_serves_the_owner_list()
     {
-        var database = Path.Combine(_databaseFolder, "agent-records.db");
+        var database = Path.Combine(_databaseFolder, "weaver-records.db");
         await using var workbench = await WorkbenchProcess.StartAsync(WorkbenchShell.Development, EnableDurableStore(database));
 
         var catalog = (await workbench.ReadFeatureCatalogAsync()).ToDictionary(feature => feature.Id, StringComparer.Ordinal);

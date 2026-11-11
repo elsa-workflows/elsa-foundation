@@ -391,7 +391,7 @@ class CompleteWitnessTests(unittest.TestCase):
             "inspection-shape-control-missing": lambda r: r[INSPECTION_SECTION]["records"][0].update(record=self.base.write(
                 {"id": r[INSPECTION_SECTION]["records"][0]["id"], "status": "passed", "adapter": r[INSPECTION_SECTION]["records"][0]["id"].split("-", 1)[0],
                  "native": {key: value for key, value in synthetic_inspection_native(r[INSPECTION_SECTION]["records"][0]["id"]).items()
-                            if not key.endswith("-agent-absent")},
+                            if not key.endswith("-weaver-absent")},
                  "browser": synthetic_inspection_browser(r[INSPECTION_SECTION]["records"][0]["id"])})),
             "inspection-edit-changed": lambda r: r[INSPECTION_SECTION]["records"][0].update(record=self.base.write(
                 {"id": r[INSPECTION_SECTION]["records"][0]["id"], "status": "passed", "adapter": r[INSPECTION_SECTION]["records"][0]["id"].split("-", 1)[0],

@@ -24,7 +24,7 @@ internal sealed class EfWeaverAuditStore(IServiceScopeFactory scopes, Func<IServ
         cancellationToken.ThrowIfCancellationRequested();
         if (auditEvent.Id.Length > WeaverModelBuilderExtensions.IdentityLength || auditEvent.SessionId?.Length > WeaverModelBuilderExtensions.IdentityLength
             || auditEvent.ActorId?.Length > WeaverModelBuilderExtensions.PrincipalLength)
-            throw new ArgumentException("An audit record identity exceeds the durable agent store's limits.", nameof(auditEvent));
+            throw new ArgumentException("An audit record identity exceeds the durable Weaver store's limits.", nameof(auditEvent));
         await GuardAsync("append", async () =>
         {
             var payload = codec.Protect(WeaverRecordCodec.AuditPurpose, auditEvent.SessionId ?? "", auditEvent.Id, auditEvent);
@@ -48,7 +48,7 @@ internal sealed class EfWeaverAuditStore(IServiceScopeFactory scopes, Func<IServ
                 }
                 // Only the first append ever races to create the counter row; it and transient failures are retried.
                 catch (Exception exception) when (Retry.ShouldRetry(null, exception)) { return EfWriteAttempt<bool>.Retry(exception); }
-            }, conflict => throw new WeaverContributionException("The agent audit store could not append a record: the bounded store retries were exhausted.", conflict),
+            }, conflict => throw new WeaverContributionException("The Weaver audit store could not append a record: the bounded store retries were exhausted.", conflict),
                 cancellationToken);
         });
     }
@@ -67,7 +67,7 @@ internal sealed class EfWeaverAuditStore(IServiceScopeFactory scopes, Func<IServ
             var allocated = await counter.AsNoTracking().Where(x => x.Id == SequenceRowId).Select(x => new { x.Last, x.SchemaVersion }).SingleAsync(cancellationToken);
             // A counter a newer module version wrote reports skew; the update rolls back with the append.
             if (allocated.SchemaVersion != WeaverEfModule.SchemaVersion)
-                throw new InvalidDataException($"The agent audit sequence schema '{allocated.SchemaVersion}' is not supported by this build.");
+                throw new InvalidDataException($"The Weaver audit sequence schema '{allocated.SchemaVersion}' is not supported by this build.");
             return allocated.Last;
         }
         var next = (await db.Set<WeaverAuditRow>().MaxAsync(x => (long?)x.Sequence, cancellationToken) ?? 0) + 1;
@@ -125,7 +125,7 @@ internal sealed class EfWeaverAuditStore(IServiceScopeFactory scopes, Func<IServ
         cancellationToken.ThrowIfCancellationRequested();
         if (sessionId.Length > WeaverModelBuilderExtensions.IdentityLength || actorId.Length > WeaverModelBuilderExtensions.PrincipalLength
             || tenantId.Length > WeaverModelBuilderExtensions.PrincipalLength)
-            throw new ArgumentException("An audit ownership identity exceeds the durable agent store's limits.", nameof(sessionId));
+            throw new ArgumentException("An audit ownership identity exceeds the durable Weaver store's limits.", nameof(sessionId));
         return await GuardAsync("ownership association", () => Retry.RunUntilSettledAsync<bool>(null, async () =>
         {
             await using var scope = scopes.CreateAsyncScope();
@@ -143,7 +143,7 @@ internal sealed class EfWeaverAuditStore(IServiceScopeFactory scopes, Func<IServ
             // A competing first association committed; the next attempt reads and compares it.
             catch (Exception exception) when (Retry.ShouldRetry(null, exception)) { return EfWriteAttempt<bool>.Retry(exception); }
         }, conflict => throw new WeaverContributionException(
-            $"Agent session '{sessionId}' audit ownership could not be associated: the bounded store retries were exhausted.", conflict), cancellationToken).AsTask());
+            $"Weaver session '{sessionId}' audit ownership could not be associated: the bounded store retries were exhausted.", conflict), cancellationToken).AsTask());
     }
 
     /// <summary>
@@ -155,11 +155,11 @@ internal sealed class EfWeaverAuditStore(IServiceScopeFactory scopes, Func<IServ
     private WeaverAuditEvent Decode(WeaverAuditRow row)
     {
         if (row.SchemaVersion != WeaverEfModule.SchemaVersion)
-            throw new InvalidDataException($"The agent audit record schema '{row.SchemaVersion}' is not supported by this build.");
+            throw new InvalidDataException($"The Weaver audit record schema '{row.SchemaVersion}' is not supported by this build.");
         var value = codec.Unprotect<WeaverAuditEvent>(WeaverRecordCodec.AuditPurpose, row.SessionId ?? "", row.EventId, row.Payload);
         if (value.Id != row.EventId || (int)value.Kind != row.Kind || value.SessionId != row.SessionId || value.ActorId != row.ActorId
             || value.CreatedAt.UtcTicks != row.CreatedAtUtcTicks)
-            throw new InvalidDataException("An agent audit record's columns do not match its protected record.");
+            throw new InvalidDataException("A Weaver audit record's columns do not match its protected record.");
         return value;
     }
 
@@ -172,7 +172,7 @@ internal sealed class EfWeaverAuditStore(IServiceScopeFactory scopes, Func<IServ
         }
         catch (Exception exception) when (exception is not (OperationCanceledException or ObjectDisposedException or WeaverContributionException))
         {
-            throw new WeaverContributionException($"The agent audit store could not complete its {operation}; nothing was changed.", exception);
+            throw new WeaverContributionException($"The Weaver audit store could not complete its {operation}; nothing was changed.", exception);
         }
     }
 }

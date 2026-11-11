@@ -23,10 +23,10 @@ public sealed class WeaverAnthropicProviderTests
         new WeaverAnthropicFeature().ConfigureServices(services);
         using var provider = services.BuildServiceProvider();
 
-        var agentProvider = Assert.Single(provider.GetServices<IWeaverProvider>());
-        Assert.IsType<WeaverAnthropicProvider>(agentProvider);
+        var weaverProvider = Assert.Single(provider.GetServices<IWeaverProvider>());
+        Assert.IsType<WeaverAnthropicProvider>(weaverProvider);
 
-        var diagnostics = await agentProvider.GetDiagnosticsAsync();
+        var diagnostics = await weaverProvider.GetDiagnosticsAsync();
         Assert.Equal(WeaverProviderKind.ProviderSdkBinding, diagnostics.Kind);
         Assert.False(diagnostics.IsAvailable);
         Assert.Contains(WeaverProviderOperation.Streaming, diagnostics.SupportedOperations);

@@ -29,9 +29,9 @@ internal static class WeaverProposalAuthorization
 
         var owner = await sessions.FindOwnerAsync(sessionId, ct);
         if (owner is null)
-            return new("weaver.session.not_found", $"Agent session '{sessionId}' was not found.", 404);
+            return new("weaver.session.not_found", $"Weaver session '{sessionId}' was not found.", 404);
         if (!WeaverEndpointActor.CanAccess(owner.ActorId, owner.TenantId, user))
-            return new("weaver.proposal.forbidden", "The agent proposal is not available to the current principal.", 403);
+            return new("weaver.proposal.forbidden", "The Weaver proposal is not available to the current principal.", 403);
 
         return await proposals.FindAsync(proposalId, ct) is null ? NotFound(proposalId) : null;
     }

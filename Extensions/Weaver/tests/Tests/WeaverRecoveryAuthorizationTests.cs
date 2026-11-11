@@ -236,7 +236,7 @@ public sealed class WeaverRecoveryAuthorizationTests
     }
 }
 
-/// <summary>Calls one mapped Agent route in-process on a recovery host, as the given principal.</summary>
+/// <summary>Calls one mapped Weaver route in-process on a recovery host, as the given principal.</summary>
 internal static class WeaverRecoveryApi
 {
     public static ClaimsPrincipal Principal(string? actor, string? tenant)

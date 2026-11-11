@@ -144,7 +144,7 @@ def _bootstrap(runtime):
     runtime.native.json(runtime.backend, "baseline-health", "/health/live")
     registry, _ = runtime.native.json(runtime.studio, "baseline-registry", "/_elsa/module-management/registry")
     check(not any(item["id"] == runtime.witness["moduleId"] for item in registry["modules"]), "Resource manifest existed before native installation")
-    bootstrap = runtime.transport("baseline-agent").bootstrap().require_status(200)
+    bootstrap = runtime.transport("baseline-weaver").bootstrap().require_status(200)
     check(bootstrap.json()["data"]["providerStatus"] == "available", "Baseline actual provider is unavailable")
     seed_personal_layout(runtime.backend, runtime.output("admin-personal-seed") / "seed")
     for index in (0, 1, 2):
@@ -291,7 +291,7 @@ def _authority_controls(runtime, records):
         check((selected_identity["subject"] != identity["subject"] and selected_identity["tenantId"] == identity["tenantId"]) if name == "cross-user"
               else (selected_identity["subject"] == identity["subject"] and selected_identity["tenantId"] != identity["tenantId"]), "The cross-principal control did not isolate its intended identity boundary")
         response = runtime.execute(turn, transport=runtime.transport(name + "-foreign-principal", http=foreign))
-        expect_error(response, 403, "weaver.proposal.forbidden", message="The agent proposal is not available to the current principal.")
+        expect_error(response, 403, "weaver.proposal.forbidden", message="The Weaver proposal is not available to the current principal.")
         after, aref, aread = runtime.snapshot(name + "-owner-after", http=owner_http)
         runtime.record(records, name, bref, aref, [bread, aread, *turn.evidence, response.receipt], _unchanged(before, after),
             actual={"stage": "execute", "diagnostic": response.json()["error"]["code"]})
@@ -498,7 +498,7 @@ def _remove(runtime, records, deltas):
     checks = _unchanged(before, after)
     runtime.record(records, "pending-module-removed", bref, aref, evidence + [response.receipt, aread], checks,
         actual={"stage": "proposal-lookup", "diagnostic": value["error"]["code"]},
-        extra={"generationBoundRetention": "The native reload replaced shell-local in-memory Agent stores; the old proposal is absent and was never retargeted or replayed.",
+        extra={"generationBoundRetention": "The native reload replaced shell-local in-memory Weaver stores; the old proposal is absent and was never retargeted or replayed.",
                "originalProposalId": pending.proposal["id"], "nativeMembership": membership_transitions})
     bootstrap = current.bootstrap().require_status(200)
     check(bootstrap.json()["data"]["providerStatus"] == "available", "Removing the resource made the unrelated actual provider unavailable")
@@ -596,7 +596,7 @@ def _autonomy_preflight(runtime):
     atomic_json(runtime.gate_file, {"commandId": "not-an-active-command", "epoch": str(uuid.uuid4()), "state": "release"})
     runtime.sign_in()
     evidence = _active_resource(runtime, "autonomy-preflight")
-    bootstrap = runtime.transport("autonomy-preflight-agent").bootstrap().require_status(200)
+    bootstrap = runtime.transport("autonomy-preflight-weaver").bootstrap().require_status(200)
     check(bootstrap.json()["data"]["providerStatus"] == "available", "The restored package left the actual provider unavailable before the autonomy matrix")
     return {"gateReleased": True, "evidence": [*evidence, bootstrap.receipt]}
 
@@ -690,10 +690,10 @@ def qualify_distributions(run):
         # selects for the library inventory alone.
         qualify_workflow_library(runtime)
         # Spec 1193 T041: read-only versions (explain, compare, refused edits) and Executables (explain, stale hash, refused
-        # edits), with each agent feature deselected once for its deployment-shape control and selected again.
+        # edits), with each Weaver feature deselected once for its deployment-shape control and selected again.
         qualify_workflow_inspection(runtime)
         # Spec 1193 T045: one exact Run explained read-only (a fault with a sensitive canary input, an in-progress Run, a limited
-        # actor, refused run controls), with the Runtime-side agent feature deselected once and selected again, and a canary
+        # actor, refused run controls), with the Runtime-side Weaver feature deselected once and selected again, and a canary
         # search over every retained file.
         qualify_workflow_run(runtime)
         # The #3440 inventory is appended after the unchanged original sequence, in the same

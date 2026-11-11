@@ -20,13 +20,13 @@ namespace Elsa.Weaver.Persistence.Tests;
 /// </summary>
 internal sealed class WeaverSqliteDatabase : IDisposable
 {
-    private static readonly string Root = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "elsa-agent-ef-tests", Environment.ProcessId.ToString());
+    private static readonly string Root = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "elsa-weaver-ef-tests", Environment.ProcessId.ToString());
     private readonly ServiceProvider _contexts;
 
     public WeaverSqliteDatabase(ISecretKeyRing? keys = null)
     {
         Directory.CreateDirectory(Root);
-        Path = System.IO.Path.Combine(Root, $"agent-{Guid.NewGuid():N}.db");
+        Path = System.IO.Path.Combine(Root, $"weaver-{Guid.NewGuid():N}.db");
         ConnectionString = $"Data Source={Path};Pooling=False";
         Keys = keys ?? new TestKeyRing();
         _contexts = Contexts(ConnectionString);
@@ -56,7 +56,7 @@ internal sealed class WeaverSqliteDatabase : IDisposable
         return await db.Database.ExecuteSqlRawAsync(sql);
     }
 
-    /// <summary>Every text value of every row in every agent table, keyed by table and column.</summary>
+    /// <summary>Every text value of every row in every Weaver table, keyed by table and column.</summary>
     public async Task<IReadOnlyList<(string Table, string Column, string Value)>> ReadAllTextAsync()
     {
         var values = new List<(string, string, string)>();
@@ -122,7 +122,7 @@ internal sealed class TestKeyRing : ISecretKeyRing
     }
 }
 
-/// <summary>Runs the Agent restart, deduplication, execution and ownership scenarios over the EF store on SQLite.</summary>
+/// <summary>Runs the Weaver restart, deduplication, execution and ownership scenarios over the EF store on SQLite.</summary>
 internal static class EfRestartComposition
 {
 #pragma warning disable CA2255 // A test assembly selects the store its linked scenarios run over, once, at load.

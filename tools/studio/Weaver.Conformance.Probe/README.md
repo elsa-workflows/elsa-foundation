@@ -26,11 +26,11 @@ The separate `Acme.Home.Weaver` package contributes `WidgetContextSource`, `Widg
 
 `Acme.Home.Studio` uses the public SDK for the Home widget, settings route, context, prompt/tool declarations and review/result rendering. `Acme.Weaver.ProtocolFixtures` separately implements the public Copilot and Anthropic client factories. Both adapter artifacts are installed in the common baseline, and exactly one provider feature/profile is enabled at a time. The protocol fixture neither references the resource package nor interprets its payload; the real provider adapters and generic engine execute the journeys.
 
-These external packages are qualification fixtures, not shipped product modules. The M1 baseline's packed external tests comprised 78 resource and 21 protocol cases. The #3440 size extension preserves those 78 and adds 45 resource cases: compiled discovery and packed execution match all 123 in component qualification, with the separate Studio author typechecked/built/packed against the retained SDK. Its probe has 166 passing component checks, including distinct automatic SSE and reviewed HTTP receipt paths and exact preflight request provenance. This component evidence reuses source-bound product archives; final #3440 qualification is the complete package witness described below, and `qualify_autonomy.py` remains diagnostic. The [Agent catalog](../../../Extensions/Weaver/src/Elsa.Weaver/EXTENSION_POINTS.md) indexes their public seams; the [canonical M1 contract and preview migration](../../../specs/1018-weaver-module-contributions/contracts/contributions.md) own generic API meanings, removed surfaces and the supported workflow subset.
+These external packages are qualification fixtures, not shipped product modules. The M1 baseline's packed external tests comprised 78 resource and 21 protocol cases. The #3440 size extension preserves those 78 and adds 45 resource cases: compiled discovery and packed execution match all 123 in component qualification, with the separate Studio author typechecked/built/packed against the retained SDK. Its probe has 166 passing component checks, including distinct automatic SSE and reviewed HTTP receipt paths and exact preflight request provenance. This component evidence reuses source-bound product archives; final #3440 qualification is the complete package witness described below, and `qualify_autonomy.py` remains diagnostic. The [Weaver catalog](../../../Extensions/Weaver/src/Elsa.Weaver/EXTENSION_POINTS.md) indexes their public seams; the [canonical M1 contract and preview migration](../../../specs/1018-weaver-module-contributions/contracts/contributions.md) own generic API meanings, removed surfaces and the supported workflow subset.
 
 ## Evidence and control boundaries
 
-`browser.mjs` drives real resource review/readback and native workflow export, validation, whole Undo, explicit Save and reload. Controlled ACK faults alter or lose an actual exchange after the native browser edit. `owner_resources.py` seeds through native APIs; `agent_transport.py` retains actual HTTP/SSE/provider observations. Reads require matching native ContributedResult and provider payloads; execution requires the owning receipt. Transport success alone cannot establish an effect.
+`browser.mjs` drives real resource review/readback and native workflow export, validation, whole Undo, explicit Save and reload. Controlled ACK faults alter or lose an actual exchange after the native browser edit. `owner_resources.py` seeds through native APIs; `weaver_transport.py` retains actual HTTP/SSE/provider observations. Reads require matching native ContributedResult and provider payloads; execution requires the owning receipt. Transport success alone cannot establish an effect.
 
 Expected negative children stay Failed with separately recognized precise causes. Before-effect controls retain unchanged owner state; concurrent CAS preserves its actual winner, and post-dispatch uncertainty/confirmation retry cannot replay an accepted edit. The general private IAM setup uses normal persisted principals and predeclared grants, followed by normal sign-in. Module-owned CAS rendezvous and provider pre-call gates only coordinate real native operations; they do not replace stores or the engine or add product contracts.
 
@@ -50,7 +50,7 @@ never retried automatically. The original M1 cases and their recognized Failed c
 mandatory. This evidence is deterministic provider-protocol qualification, not a live-provider claim.
 
 Modules link tools to their exact disclosure source and own `AdmitDisclosureAsync`; see the
-[Agent catalog](../../../Extensions/Weaver/src/Elsa.Weaver/EXTENSION_POINTS.md#context-and-result-disclosure-3439-under-qualification).
+[Weaver catalog](../../../Extensions/Weaver/src/Elsa.Weaver/EXTENSION_POINTS.md#context-and-result-disclosure-3439-under-qualification).
 Session stores must preserve complete journal provenance before a result can be sent to a provider.
 
 ## Established-session autonomy (#3440)
@@ -155,7 +155,7 @@ definition and its draft, the activity catalog and expression descriptors). Othe
 executables or publishing profiles the reader is not granted, are retained as evidence only; layout absence is proven
 from the adapter trace, not from what the browser shows. The actor without `activities/design:read` must get a 403 from the designer catalog and a denied
 catalog with no entries from Weaver. The host's generation observation must report no placeholder type in the loaded
-Agent Workflows package and exactly `HttpActivityAuthoringCatalog`. Last, the reader runs the actual packaged Studio
+Weaver Workflows package and exactly `HttpActivityAuthoringCatalog`. Last, the reader runs the actual packaged Studio
 journey `workflow-read-only` in `browser.mjs`, with a fresh normal-login state of its own: the accepted message's
 context must carry `manage: denied` and only `workflow_read_graph`, explanation must complete, and a layout request
 must end without a proposal, node move, review or effect request, or owning write, with the stored draft unchanged.
@@ -226,9 +226,9 @@ server's draft validations later, and the snapshot discloses what the panel show
 credential canary into the password-hinted input's own masked field (Studio offers a credential input only the secret
 picker), as an unsaved edit, and the next read must disclose that input only as withheld; nothing is saved. The canary
 exists only in Studio's working state: it is searched for, in memory and unredacted, in every request the page sent to
-the agent API (any method, URL and query included), every non-stream response body it read and the raw bytes of every
-agent stream it received (counted only when every stream was captured without a capture or validation error and at
-least one agent event stream's bytes were read; the driver checks the retained capture the same way); then in the
+the Weaver API (any method, URL and query included), every non-stream response body it read and the raw bytes of every
+Weaver stream it received (counted only when every stream was captured without a capture or validation error and at
+least one Weaver event stream's bytes were read; the driver checks the retained capture the same way); then in the
 browser's evidence and adapter trace, and then in every retained evidence file of the case (frames,
 adapter traces, HTTP receipts, owner reads, browser captures), and must appear in none, so a regression in Studio's
 withholding fails the case. `require_workflow_explain` refuses a missing, failed, duplicated or changed
@@ -355,7 +355,7 @@ case evidence). The packaged Studio journey `workflow-run` opens the run page wi
 selected,
 waits until the page discloses that selection (`data-run-selection` on its Explain action), opens Weaver and uses Explain
 (the restored `weaver.workflows.explain-instance` prompt names `workflow_read_run`), checks the accepted message admitted the
-server's read of exactly that Run and selection, and searches, raw and in page, every agent request, non-stream response and
+server's read of exactly that Run and selection, and searches, raw and in page, every Weaver request, non-stream response and
 stream byte for the canary. The case's final canary search reads every retained evidence file. `require_workflow_run`
 refuses a missing, failed, duplicated or changed record; `witness_manifest()` counts the two cases.
 
@@ -367,7 +367,7 @@ The backend consumer references `Elsa.Weaver.Persistence.EntityFrameworkCore` an
 its common published baseline already contains them, but nothing selects them until this phase. The driver owns the backend
 through `runtime.RestartableServer`, one owned origin with a separate receipt, log and empty runtime caches for every
 generation. It first restarts the host on the in-memory default and requires the pending review to be lost
-(`restart-without-durable-store`). Then, while no generation runs, `consumers.enable_durable_agent_store` selects
+(`restart-without-durable-store`). Then, while no generation runs, `consumers.enable_durable_weaver_store` selects
 `WeaverEntityFrameworkCore` on SQLite over a new database under the run's output root. `restart_journeys.py` then runs
 three restarts per actual adapter: graceful, abrupt (the owned process group is killed while a write is held at the module's
 native rendezvous and a provider turn is held at the pre-call gate), and after-deadline (stopped before and started after the
