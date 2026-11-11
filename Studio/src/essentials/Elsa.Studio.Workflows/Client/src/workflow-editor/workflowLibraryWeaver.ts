@@ -109,7 +109,7 @@ function attachment(kind: string, resourceType: string, resourceId: string, cont
     id: `${kind}:${resourceId}`, moduleId: workflowsModuleId, schemaVersion: "1",
     target: { moduleId: workflowsModuleId, resourceType, resourceId, revision: content.revision },
     source: "workflow-library", sourceId: resourceId, label, contentType: kind, sensitivity: "internal", scope: "screen", origin: "clientSnapshot",
-    client, agentScopes: ["workflow-author"], summary: label, references: { revision: content.revision }, content
+    client, weaverScopes: ["workflow-author"], summary: label, references: { revision: content.revision }, content
   } as StudioWeaverContextAttachment;
 }
 

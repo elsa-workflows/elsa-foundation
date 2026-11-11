@@ -141,7 +141,7 @@ public enum WeaverResultKind
 public enum WeaverProviderKind
 {
     ProviderSdkBinding,
-    AgentHarnessProvider
+    WeaverHarnessProvider
 }
 
 public enum WeaverProviderOperation
@@ -342,7 +342,7 @@ public sealed record WeaverContextAttachment(
     public WeaverResourceTarget? Target { get; init; }
     public WeaverContextOrigin Origin { get; init; } = WeaverContextOrigin.ResourceData;
     public WeaverClientBinding? Client { get; init; }
-    public IReadOnlyCollection<string> AgentScopes { get; init; } = [];
+    public IReadOnlyCollection<string> WeaverScopes { get; init; } = [];
 }
 
 public sealed record WeaverActionChange(

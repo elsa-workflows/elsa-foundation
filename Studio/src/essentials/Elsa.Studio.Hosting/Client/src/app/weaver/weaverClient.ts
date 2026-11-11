@@ -671,7 +671,7 @@ export function mapAdmittedContextAttachment(attachment: Record<string, unknown>
     target: redacted || !target ? null : { moduleId: readString(target, "moduleId") ?? "", resourceType: readString(target, "resourceType") ?? "", resourceId: readString(target, "resourceId") ?? null, revision: readString(target, "revision") ?? null, displayName: readString(target, "displayName"), route: readString(target, "route") },
     origin,
     client: redacted || !client ? null : { clientId: readString(client, "clientId") ?? "", generationId: readString(client, "generationId") ?? "" },
-    agentScopes: redacted ? [] : readStringArray(attachment, "agentScopes")
+    weaverScopes: redacted ? [] : readStringArray(attachment, "weaverScopes")
   };
 }
 
@@ -722,7 +722,7 @@ function mapCapabilityRisk(risk: unknown, requiresApproval?: boolean): WeaverBoo
 function mapProviderKind(kind: unknown) {
   const value = normalizeEnum(kind);
   if (value === "provider-sdk-binding" || kind === 0) return "provider-sdk-binding";
-  if (value === "agent-harness-provider" || kind === 1) return "agent-harness-provider";
+  if (value === "weaver-harness-provider" || kind === 1) return "weaver-harness-provider";
   return value || "provider-sdk-binding";
 }
 

@@ -126,7 +126,7 @@ internal sealed class DefaultWorkflowWeaverContextProvider(
                     snapshot.Content, new Dictionary<string, string> { ["templateId"] = snapshot.Target.ResourceId!, ["templateRevision"] = snapshot.TemplateRevision!, ["revision"] = snapshot.Target.Revision! })
                 {
                     ModuleId = WorkflowWeaverSnapshot.ModuleId, SchemaVersion = "1", Target = snapshot.Target,
-                    Origin = WeaverContextOrigin.ClientSnapshot, Client = snapshot.Client, AgentScopes = ["/workflows"]
+                    Origin = WeaverContextOrigin.ClientSnapshot, Client = snapshot.Client, WeaverScopes = ["/workflows"]
                 }
                 : new($"workflow:{snapshot.Target.ResourceId}:{snapshot.Target.Revision}", "workflow.definition",
                 snapshot.Target.ResourceId, "Open workflow working state", "workflow.definition", AdmittedSensitivity(caller.Sensitivity),
@@ -134,7 +134,7 @@ internal sealed class DefaultWorkflowWeaverContextProvider(
                 snapshot.Content, new Dictionary<string, string> { ["workflowDefinitionId"] = snapshot.Target.ResourceId!, ["revision"] = snapshot.Target.Revision! })
             {
                 ModuleId = WorkflowWeaverSnapshot.ModuleId, SchemaVersion = "1", Target = snapshot.Target,
-                Origin = WeaverContextOrigin.ClientSnapshot, Client = snapshot.Client, AgentScopes = ["/workflows"]
+                Origin = WeaverContextOrigin.ClientSnapshot, Client = snapshot.Client, WeaverScopes = ["/workflows"]
             });
             workflowContext = true;
             if (!targets.Any(item => item.Target == snapshot.Target)) targets.Add((snapshot.Target, AdmittedSensitivity(caller.Sensitivity)));
@@ -402,7 +402,7 @@ internal sealed class DefaultWorkflowWeaverContextProvider(
                 ["revision"] = target.Revision ?? string.Empty
             })
         {
-            ModuleId = WorkflowWeaverSnapshot.ModuleId, SchemaVersion = "1", Target = target, Origin = WeaverContextOrigin.AuthoritativeRead, AgentScopes = []
+            ModuleId = WorkflowWeaverSnapshot.ModuleId, SchemaVersion = "1", Target = target, Origin = WeaverContextOrigin.AuthoritativeRead, WeaverScopes = []
         };
 
     private async Task<WeaverSession?> FindSessionAsync(string sessionId, CancellationToken cancellationToken)
@@ -465,7 +465,7 @@ internal sealed class DefaultWorkflowWeaverContextProvider(
             new Dictionary<string, string>())
         {
             ModuleId = WorkflowWeaverSnapshot.ModuleId, SchemaVersion = "1", Origin = WeaverContextOrigin.InstalledGuidance,
-            AgentScopes = []
+            WeaverScopes = []
         };
 
     // A caller classification can restrict module-owned data; it cannot certify prior redaction.
@@ -497,7 +497,7 @@ internal sealed class DefaultWorkflowWeaverContextProvider(
         admitted = new($"workflow:request:{caller.Id}", "workflow.request", reference, "Workflow request context", "workflow.request",
             AdmittedSensitivity(caller.Sensitivity), "request", "Module-admitted workflow request and reference metadata; this does not identify live working state.", data,
             new Dictionary<string, string>())
-        { ModuleId = WorkflowWeaverSnapshot.ModuleId, SchemaVersion = "1", Origin = WeaverContextOrigin.ClientSnapshot, Target = null, Client = null, AgentScopes = [] };
+        { ModuleId = WorkflowWeaverSnapshot.ModuleId, SchemaVersion = "1", Origin = WeaverContextOrigin.ClientSnapshot, Target = null, Client = null, WeaverScopes = [] };
         return true;
     }
 }

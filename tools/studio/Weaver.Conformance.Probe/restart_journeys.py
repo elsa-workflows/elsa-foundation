@@ -837,7 +837,7 @@ def _prepare_owner_resolution(runtime, name):
                                                 for item in draft.get("layout", []) if item.get("nodeId") == activity]}
     attachment = {"id": "workflow:" + seed["definitionId"], "moduleId": WORKFLOW_MODULE, "schemaVersion": "1", "target": target,
                   "source": "workflow", "sourceId": seed["definitionId"], "label": "Restart witness workflow", "contentType": "workflow.definition",
-                  "sensitivity": "internal", "scope": "selection", "origin": "clientSnapshot", "client": binding, "agentScopes": ["workflow-author"],
+                  "sensitivity": "internal", "scope": "selection", "origin": "clientSnapshot", "client": binding, "weaverScopes": ["workflow-author"],
                   "summary": "Restart witness workflow", "content": content,
                   "references": {"workflowDefinitionId": seed["definitionId"], "draftId": seed["draftId"], "revision": revision}}
     t = runtime.transport(name)

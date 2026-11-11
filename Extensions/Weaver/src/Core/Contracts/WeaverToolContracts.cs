@@ -26,7 +26,7 @@ public sealed record WeaverToolDescriptor(
     WeaverRisk Risk,
     string JsonSchema,
     IReadOnlyCollection<string> RequiredPermissions,
-    IReadOnlyCollection<string> AgentScopes)
+    IReadOnlyCollection<string> WeaverScopes)
 {
     public string ModuleId { get; init; } = string.Empty;
     public string ContractVersion { get; init; } = "1";

@@ -50,7 +50,7 @@ internal sealed class WidgetContextSource(WidgetResource resource, IWeaverSessio
                 new Dictionary<string, string>())
             {
                 ModuleId = WidgetContract.Module, SchemaVersion = "1", Target = WidgetContract.Target(state),
-                Origin = WeaverContextOrigin.AuthoritativeRead, AgentScopes = WidgetContract.Scopes
+                Origin = WeaverContextOrigin.AuthoritativeRead, WeaverScopes = WidgetContract.Scopes
             };
             return new([canonical, InstalledGuidance()], []);
         }
@@ -109,6 +109,6 @@ internal sealed class WidgetContextSource(WidgetResource resource, IWeaverSessio
         "Other widgets, options and default layouts are outside this contribution. An uncertain result must be reread and never replayed automatically.",
         null, new Dictionary<string, string>())
     {
-        ModuleId = WidgetContract.Module, SchemaVersion = "1", Origin = WeaverContextOrigin.InstalledGuidance, AgentScopes = []
+        ModuleId = WidgetContract.Module, SchemaVersion = "1", Origin = WeaverContextOrigin.InstalledGuidance, WeaverScopes = []
     };
 }
