@@ -37,6 +37,38 @@ public sealed class RuntimeArtifactJsonMemberBindingTests
         Assert.Equal(json, RuntimeArtifactJson.Serialize(RuntimeArtifactJson.Deserialize<RuntimeInputBinding>(json)));
     }
 
+    /// <summary>
+    /// A member read of each kind round-trips through the store options: its source by name, its role payload and its
+    /// selection. These bytes are new with #4078 slice A, so the stored form of the selection is pinned here.
+    /// </summary>
+    [Theory]
+    [InlineData("WorkflowRequestMember")]
+    [InlineData("VariableMember")]
+    [InlineData("ActivityResultMember")]
+    public void A_member_binding_round_trips_through_the_runtime_artifact_options(string kind)
+    {
+        var selection = new RuntimeReadSelection(1, ["customer", "a.b"], RuntimeReadSelectionMode.Known, Text, mayBeAbsent: true, mayBeNull: false,
+            ValueRepresentation.TextValue, "elsa.activity-value-json/1");
+        var binding = kind switch
+        {
+            "WorkflowRequestMember" => new RuntimeInputBinding("member", Text, ValueProtectionPolicy.InstanceInline, RuntimeInputBindingSource.WorkflowRequestMember,
+                selection, workflowRequest: new RuntimeWorkflowRequestReference("customer")),
+            "VariableMember" => new RuntimeInputBinding("member", Text, ValueProtectionPolicy.InstanceInline, RuntimeInputBindingSource.VariableMember,
+                selection, variable: new RuntimeVariableReference("customer", "workflow")),
+            _ => new RuntimeInputBinding("member", Text, ValueProtectionPolicy.InstanceInline, RuntimeInputBindingSource.ActivityResultMember,
+                selection, activityResult: new RuntimeActivityResultReference("producer", "$result", producerScopeId: null))
+        };
+
+        var json = RuntimeArtifactJson.Serialize(binding);
+        var restored = RuntimeArtifactJson.Deserialize<RuntimeInputBinding>(json);
+
+        Assert.Contains($"\"source\":\"{kind}\"", json, StringComparison.Ordinal);
+        Assert.EndsWith(""","selection":{"schemaVersion":1,"segments":["YwB1AHMAdABvAG0AZQByAA==","YQAuAGIA"],"mode":"Known","selectedType":{"alias":"UwB0AHIAaQBuAGcA","collectionKind":"Single","schema":null,"schemaVersion":null},"mayBeAbsent":true,"mayBeNull":false,"representation":"TextValue","profileRevision":"ZQBsAHMAYQAuAGEAYwB0AGkAdgBpAHQAeQAtAHYAYQBsAHUAZQAtAGoAcwBvAG4ALwAxAA=="}}""", json, StringComparison.Ordinal);
+        Assert.Equal(binding.Source, restored.Source);
+        Assert.Equal(["customer", "a.b"], restored.Selection!.Segments);
+        Assert.Equal(json, RuntimeArtifactJson.Serialize(restored));
+    }
+
     internal static RuntimeInputBinding WholeValue(string kind) => kind switch
     {
         "literal" => new("literal", Text, ValueProtectionPolicy.InstanceInline, RuntimeInputBindingSource.Literal,

@@ -74,6 +74,10 @@ internal static class PlacedReferenceRemapper
         IReadOnlyDictionary<string, string> placedNodeIds,
         string graphScopeId)
     {
+        // A member read would keep a template-local producer or scope here; refuse it until placement remaps it (#4078).
+        if (binding.Selection is not null)
+            throw PublishedMemberReadDiagnostics.Unsupported(null, binding);
+
         switch (binding.Source)
         {
             case RuntimeInputBindingSource.VariableRead when binding.Variable is { } variable:
