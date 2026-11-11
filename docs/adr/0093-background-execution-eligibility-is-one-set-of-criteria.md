@@ -4,7 +4,7 @@ Status: proposed. It follows from analysis A-2.
 
 It records the eligibility rules of spec 241
 ([native durable background activities](../../specs/241-native-durable-offload/spec.md)) as an architecture
-decision, adds three criteria, and requires the rules to live in one place. It depends on
+decision, adds four criteria, and requires the rules to live in one place. It depends on
 [ADR 0092](0092-variable-reads-and-writes-share-one-versioned-lifecycle.md) (proposed) for how a background step's
 reads and writes are protected.
 
@@ -80,6 +80,7 @@ hold. The **Check** column says who must guarantee it under this ADR; the **Toda
 | C7 | **Tolerates running more than once.** After a worker is lost the body runs again. Its external effects are idempotent, or keyed on the stable invocation identity (`InvocationId`), as D-2 requires of every external effect. | D | in spec 241, not on the attribute |
 | C8 | **Cancels cooperatively.** The body observes its cancellation token and stops. A body that ignores it cannot change the outcome (spec 241 FR-008), but it keeps a worker busy. | D | in spec 241, not on the attribute |
 | C9 | **Variables only through inputs and results.** The body does not read or write workflow variables. Variables reach it through its inputs, read on the coordinator; its result reaches variables through output captures, applied on the coordinator. Both are protected by the lost-update rule of ADR 0092. Enforced by refusing a background placement for an activity that reads variables by name (`IRuntimeScopedVariableReader`), and later for one with ADR 0090's `[AccessesUndeclaredVariables]` or a writable `VariableReference<T>` input. *Limit of today's support (below).* | E | **new**: true by construction, not enforced |
+| C10 | **Worker-bound inputs are supported.** Every input that travels to the worker has a supported durable representation, can be materialized on the worker from that representation, and keeps its required protection through storage, transport and diagnostics. Secret references resolve at worker activation; raw secret material does not enter ordinary persisted snapshots. An unsupported input is refused clearly before background admission. Existing snapshot checks are reused where they satisfy this criterion; the result-side exclusions are not copied to inputs, so a supported JSON or `Any` input can qualify while an `Any` result (C3) cannot. | E | **new**: only the general snapshot checks apply |
 
 **Limits of today's support.** C3, C5 and C9 do not ban a category for good. They hold because the support a
 background step would need does not exist yet, and they are refused clearly until it does, never by silently
@@ -99,7 +100,7 @@ capability, not blanket bans on sessions, `Any` or sensitive values.
 
 ### 3. The enforced criteria live in one place
 
-One eligibility component defines the enforced criteria (C1–C5 and C9 for publication and the run-time re-check, C6
+One eligibility component defines the enforced criteria (C1–C5, C9 and C10 for publication and the run-time re-check, C6
 for run time only), and both publication and the worker call it. A new criterion is one change. A publish-time check
 that needs design-time information (for example the CLR result type) and a run-time check that needs the activated
 object may be two methods of that one component, but not two separate lists. The component lives in
@@ -112,8 +113,8 @@ promise where they make it.
 
 ### 4. Which built-in activities are marked follows from the criteria
 
-The implementing spec applies C1–C9 to every built-in activity and marks those that qualify. An activity that meets C1–C6
-and C9 but whose author cannot promise C7 and C8 is not marked. A candidate that falls short of a criterion only
+The implementing spec applies C1–C10 to every built-in activity and marks those that qualify. An activity that meets
+C1–C6, C9 and C10 but whose author cannot promise C7 and C8 is not marked. A candidate that falls short of a criterion only
 because of how it is implemented gets an issue, not an exception.
 
 ### 5. Placement stays the workflow author's choice
@@ -121,6 +122,18 @@ because of how it is implemented gets an issue, not an exception.
 `[BackgroundExecutionSafe]` says an activity *may* run in the background; the workflow author decides per node whether
 it does. Publication refuses a background placement that breaks an enforced criterion, with VF-BG-001 naming the
 criterion.
+
+### 6. Background results keep causal order, not one order across providers
+
+Where the workflow defines no order between branches, persistence providers need not apply a background result in the
+same position relative to other queued work. Every provider preserves causal dependencies, completes each application
+atomically, applies the agreed conflict rules, and records the actual commit order so it can be inspected. Unordered
+plain writes keep the last-commit-wins rule (D-8); read-modify-write conflicts keep the protection of ADR 0092. A
+workflow that needs a particular order expresses it.
+
+*Why.* Requiring one order for work the workflow left unordered would constrain every provider without giving the
+workflow author anything they asked for; what they need is that causal order holds and that the order that happened
+can be seen.
 
 ## Consequences
 
@@ -137,10 +150,17 @@ criterion.
 - A background placement of an `IRuntimeScopedVariableReader` activity is refused (C9).
 - VF-BG-001 names the failed criterion.
 - `[BackgroundExecutionSafe]` documents C7 and C8.
-- The built-in activities are assessed against C1–C9, and the result is recorded in the spec.
-- Applying a background result happens in the same order relative to other queued work on every persistence provider.
-  The A-2 analysis found by reading code that it may not: the result work item keeps its admission time, which the EF
-  queue orders by and the in-memory queue does not. Not reproduced by a test yet.
+- A worker-bound input is refused before background admission, naming C10, when it has no supported durable
+  representation, cannot be materialized on the worker, or would lose its required protection in storage, transport or
+  diagnostics. A secret reference resolves at worker activation, and no raw secret material appears in a persisted
+  snapshot. A supported JSON or `Any` input is admitted.
+- The built-in activities are assessed against C1–C10, and the result is recorded in the spec.
+- On every persistence provider, applying a background result preserves causal dependencies, completes atomically,
+  follows the agreed conflict rules (last commit wins for unordered plain writes, ADR 0092 for read-modify-write), and
+  leaves an inspectable record of the actual commit order. No order is imposed between otherwise unordered branches.
+  The A-2 analysis found by reading code that the queues order differently (the result work item keeps its admission
+  time, which the EF queue orders by and the in-memory queue does not); that is allowed, and the evidence shows the
+  guarantees above hold on both.
 
 ## Alternatives considered
 
@@ -149,6 +169,9 @@ update, and nothing explains why an activity is on it. Rejected for the criteria
 
 **Let the engine prove C7 and C8.** No code can prove that an external effect is idempotent or that a body honours
 cancellation. They stay declarations, with documentation as the guardrail.
+
+**A universal maximum duration or a list of services a body may use.** Rejected. Neither is an eligibility question:
+operational timeouts and the capabilities a worker must offer can be specified separately.
 
 **Allow variable access from the worker now.** Waits for A-3 and ADR 0090. A worker reading variables would read
 state that can be older than the coordinator's; ADR 0092's lost-update rule would cover the write side, but the
