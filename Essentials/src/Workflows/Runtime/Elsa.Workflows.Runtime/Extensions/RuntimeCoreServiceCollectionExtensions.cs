@@ -265,8 +265,8 @@ public static class RuntimeCoreServiceCollectionExtensions
         // here: until then it needs nothing of the ownership store. A provider's ownership store is scoped, and this
         // singleton must not resolve one from the root provider, so the lookup runs in a scope of its own. A store of
         // another type is dropped with that scope, and the poison store records unfenced. An in-memory store is kept
-        // for the life of the poison store. Registered as a singleton, as below, it is the one the ownership service
-        // writes to. Registered scoped or transient it would be a copy that never holds a lease, and every fenced
+        // for the life of the poison store. Registered as a singleton, as it is above, it is the one the ownership
+        // service writes to. Registered scoped or transient it would be a copy that never holds a lease, and every fenced
         // record would be refused as having no active lease.
         services.TryAddSingleton<IWorkflowSchedulerPoisonStore>(serviceProvider => new InMemoryWorkflowSchedulerPoisonStore(
             () =>
@@ -473,11 +473,11 @@ public static class RuntimeCoreServiceCollectionExtensions
                 serviceProvider.GetRequiredService<RuntimeSchedulerWorkClaimOptions>(),
                 serviceProvider.GetRequiredService<IRuntimeConsumedSchedulerWorkClaimAccessor>(),
                 serviceProvider.GetService<RuntimeSchedulerDispatchDiagnostics>(),
-                serviceProvider.GetRequiredService<IRuntimeAdmissionLoadSignal>(),
-                serviceProvider.GetRequiredService<IRuntimeExecutionOwnershipContextAccessor>(),
-                serviceProvider.GetRequiredService<IRuntimeExecutionOwnershipService>())
+                serviceProvider.GetRequiredService<IRuntimeAdmissionLoadSignal>())
             { ModelProtocols = serviceProvider.GetService<RuntimeExecutionProtocolSelector>(),
                 DrainControls = serviceProvider.GetRequiredService<DrainControlContext>(),
+                OwnershipContextAccessor = serviceProvider.GetRequiredService<IRuntimeExecutionOwnershipContextAccessor>(),
+                OwnershipService = serviceProvider.GetRequiredService<IRuntimeExecutionOwnershipService>(),
                 HasResumptionRedriver = serviceProvider.GetServices<IWorkflowDispatchDurabilityEvidence>().Any(evidence =>
                     string.Equals(evidence.Component, WorkflowDispatchDurabilityComponents.Resumption, StringComparison.Ordinal)) });
         services.TryAddSingleton<IWorkflowSchedulerDrainPolicy, ImmediateWorkflowSchedulerDrainPolicy>();

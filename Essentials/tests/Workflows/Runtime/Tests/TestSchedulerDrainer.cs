@@ -52,10 +52,12 @@ internal static class TestSchedulerDrainer
             faultCapturePolicy,
             retryPolicy,
             claimOptions: claimOptions,
-            consumedWorkClaimAccessor: consumedWorkClaimAccessor,
-            ownershipContextAccessor: ownershipContextAccessor,
-            ownershipService: ownershipService)
-        { HasResumptionRedriver = hasResumptionRedriver };
+            consumedWorkClaimAccessor: consumedWorkClaimAccessor)
+        {
+            HasResumptionRedriver = hasResumptionRedriver,
+            OwnershipContextAccessor = ownershipContextAccessor,
+            OwnershipService = ownershipService
+        };
 
     // A real gate over an empty hold store: holds nothing, so it answers CanAdvance: true for every boundary.
     public static IWorkflowSchedulerPauseGate NewInertPauseGate(TimeProvider? timeProvider = null) =>

@@ -29,7 +29,7 @@ namespace Elsa.Workflows.Runtime.Core.Contracts;
 /// leaves the record unfenced.
 /// </para>
 /// </remarks>
-public interface IWorkflowSchedulerFencedPoisonStore
+public interface ISchedulerPoisonFenceCapability
 {
     /// <summary>
     /// Whether this store can check the ownership lease in the same unit of work as the record. It is
@@ -41,8 +41,13 @@ public interface IWorkflowSchedulerFencedPoisonStore
     /// Inserts or replaces the poison record for its <c>(WorkflowExecutionId, WorkItemId)</c> key, only if
     /// <paramref name="fence"/> is the current, unexpired ownership lease of the record's workflow execution. The
     /// check and the write are one atomic unit of work. A store may also let its own failures through, such as a
-    /// write conflict it does not retry; it then has written nothing.
+    /// provider write failure it does not retry; it then has written nothing.
     /// </summary>
+    /// <remarks>
+    /// The drainer treats only <see cref="RuntimeStaleFencingTokenException"/> as a refusal of the record. After any
+    /// other failure of this call, except cancellation, it writes the record through
+    /// <see cref="IWorkflowSchedulerPoisonStore.RecordAsync"/>, without the fence.
+    /// </remarks>
     /// <exception cref="RuntimeStaleFencingTokenException">
     /// The execution has no ownership lease, the lease has expired, or another lease holds it. Nothing was written.
     /// </exception>

@@ -177,30 +177,99 @@ public sealed class WorkflowSchedulerFencedPoisonDrainTests
     }
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task DrainAsync_WhenTheRunIsLostBetweenTheCheckAndTheRecord_LeavesTheQueueChangeAndNoRecord(bool retryNow)
+    [InlineData("acknowledged")]
+    [InlineData("retry-now")]
+    [InlineData("retry-after")]
+    public async Task DrainAsync_WhenTheRunIsLostBetweenTheCheckAndTheRecord_LeavesTheQueueChangeAndNoRecord(string queueChange)
     {
-        // The one window left: the drain owned the run when it checked, and lost it before the record. The fenced
-        // record is refused. The acknowledgement, and the re-enqueue for RetryNow, are not undone, as a process crash
-        // at that point would leave them.
+        // The drain owned the run when it checked, and lost it before the record. A store that can check the lease
+        // refuses the record. The acknowledgement, the re-enqueue for RetryNow and the release for an honored
+        // RetryAfter are not undone, as a process crash at that point would leave them.
         var fixture = NewFixture();
         using var scope = fixture.Accessor.Push(await fixture.NodeA.AcquireAsync(WorkflowExecutionId));
-        var retryPolicy = retryNow
-            ? new StubRetryPolicy(new RuntimeDomainRetryDecision(RuntimeDomainRetryMode.RetryNow, null, "retry-now"))
-            : null;
-        var drainer = fixture.NewDrainer(fixture.FencedPoisonStore, retryPolicy);
+        IRuntimeDomainRetryPolicy? retryPolicy = queueChange switch
+        {
+            "retry-now" => new StubRetryPolicy(new RuntimeDomainRetryDecision(RuntimeDomainRetryMode.RetryNow, null, "retry-now")),
+            "retry-after" => new StubRetryPolicy(new RuntimeDomainRetryDecision(RuntimeDomainRetryMode.RetryAfter, TimeSpan.FromMinutes(5), "retry-after")),
+            _ => null
+        };
+        var drainer = fixture.NewDrainer(fixture.FencedPoisonStore, retryPolicy, hasResumptionRedriver: true);
         fixture.Queue.OnCompleteClaim = () => fixture.LoseRunAsync("taken-over");
-        await fixture.Queue.EnqueueAsync(NewWorkItem());
+        fixture.Queue.OnReleaseClaim = () => fixture.LoseRunAsync("taken-over");
+        // A step kind whose claim can be released with a delay.
+        await fixture.Queue.EnqueueAsync(NewWorkItem(WorkflowExecutionCommandKind.InvokeActivity));
         fixture.Queue.ResetCounts();
 
         var refusal = await Assert.ThrowsAsync<RuntimeStaleFencingTokenException>(
             () => drainer.DrainAsync(new RuntimeSchedulerDrainRequest(WorkflowExecutionId)).AsTask());
 
         Assert.Equal(RuntimeFencingRejectionReason.StaleToken, refusal.Reason);
-        Assert.Equal((1, retryNow ? 1 : 0), (fixture.Queue.Completions, fixture.Queue.Enqueues));
-        Assert.Equal(retryNow ? 1 : 0, (await fixture.Queue.Inner.ListAllAsync(new RuntimeSchedulerWorkQuery(WorkflowExecutionId))).Count);
+        var expected = queueChange switch
+        {
+            "retry-now" => (Completions: 1, Enqueues: 1, Releases: 0, Queued: 1),
+            "retry-after" => (Completions: 0, Enqueues: 0, Releases: 1, Queued: 1),
+            _ => (Completions: 1, Enqueues: 0, Releases: 0, Queued: 0)
+        };
+        var queued = await fixture.Queue.Inner.ListAllAsync(new RuntimeSchedulerWorkQuery(WorkflowExecutionId));
+        Assert.Equal(expected, (fixture.Queue.Completions, fixture.Queue.Enqueues, fixture.Queue.Releases, queued.Count));
         Assert.Empty(await fixture.FencedPoisonStore.ListAsync(WorkflowExecutionId));
+    }
+
+    [Fact]
+    public async Task DrainAsync_WhenTheFencedRecordFailsForAReasonOtherThanOwnership_RecordsUnfencedAndReturnsTheFault()
+    {
+        // The drain owned the run when it checked. A fenced write that then fails for another reason, here a write
+        // conflict the store gave up on, must not leave the step acknowledged with no record: the record goes the way
+        // it goes for a store without the capability.
+        var fixture = NewFixture();
+        var store = new FailingFencedPoisonStore(() => new InvalidOperationException("The fenced write did not settle."));
+        using var scope = fixture.Accessor.Push(await fixture.NodeA.AcquireAsync(WorkflowExecutionId));
+        var drainer = fixture.NewDrainer(store);
+        await fixture.Queue.EnqueueAsync(NewWorkItem());
+        fixture.Queue.ResetCounts();
+
+        var result = await drainer.DrainAsync(new RuntimeSchedulerDrainRequest(WorkflowExecutionId));
+
+        Assert.True(result.StoppedOnFault);
+        Assert.Equal(RuntimeSchedulerWorkItemResultStatus.Faulted, Assert.Single(result.Items).Status);
+        Assert.Equal((1, 1), (store.FencedAttempts, store.UnfencedRecords));
+        Assert.Equal("work-1", Assert.Single(await store.ListAsync(WorkflowExecutionId)).WorkItemId);
+        Assert.Equal(1, fixture.Queue.Completions);
+        Assert.Empty(await fixture.Queue.Inner.ListAllAsync(new RuntimeSchedulerWorkQuery(WorkflowExecutionId)));
+    }
+
+    [Fact]
+    public async Task DrainAsync_WhenTheFencedRecordIsCancelled_LetsTheCancellationThroughWithoutAnUnfencedRecord()
+    {
+        // Cancellation is not a failed write to work around: writing the record another way would ignore it.
+        var fixture = NewFixture();
+        var store = new FailingFencedPoisonStore(() => new OperationCanceledException("The fenced write was cancelled."));
+        using var scope = fixture.Accessor.Push(await fixture.NodeA.AcquireAsync(WorkflowExecutionId));
+        var drainer = fixture.NewDrainer(store);
+        await fixture.Queue.EnqueueAsync(NewWorkItem());
+
+        await Assert.ThrowsAsync<OperationCanceledException>(
+            () => drainer.DrainAsync(new RuntimeSchedulerDrainRequest(WorkflowExecutionId)).AsTask());
+
+        Assert.Equal((1, 0), (store.FencedAttempts, store.UnfencedRecords));
+        Assert.Empty(await store.ListAsync(WorkflowExecutionId));
+    }
+
+    [Fact]
+    public async Task DrainAsync_WhenTheFencedRecordIsRefusedAsStale_WritesNoUnfencedRecord()
+    {
+        // Only a lost lease refuses the record, and nothing may write it another way then.
+        var fixture = NewFixture();
+        var store = new FailingFencedPoisonStore(() => new RuntimeStaleFencingTokenException(WorkflowExecutionId, 1, 2));
+        using var scope = fixture.Accessor.Push(await fixture.NodeA.AcquireAsync(WorkflowExecutionId));
+        var drainer = fixture.NewDrainer(store);
+        await fixture.Queue.EnqueueAsync(NewWorkItem());
+
+        await Assert.ThrowsAsync<RuntimeStaleFencingTokenException>(
+            () => drainer.DrainAsync(new RuntimeSchedulerDrainRequest(WorkflowExecutionId)).AsTask());
+
+        Assert.Equal((1, 0), (store.FencedAttempts, store.UnfencedRecords));
+        Assert.Empty(await store.ListAsync(WorkflowExecutionId));
     }
 
     [Fact]
@@ -224,14 +293,14 @@ public sealed class WorkflowSchedulerFencedPoisonDrainTests
 
     private Fixture NewFixture() => new(new FakeTimeProvider(_now));
 
-    private RuntimeSchedulerWorkItem NewWorkItem()
+    private RuntimeSchedulerWorkItem NewWorkItem(WorkflowExecutionCommandKind commandKind = WorkflowExecutionCommandKind.RunSchedulerWork)
     {
         using var document = JsonDocument.Parse("""{"workItemId":"work-1"}""");
         return new(
             workItemId: "work-1",
             workflowExecutionId: WorkflowExecutionId,
             commandId: "command-1",
-            commandKind: WorkflowExecutionCommandKind.RunSchedulerWork,
+            commandKind: commandKind,
             envelopeId: "envelope-1",
             idempotencyKey: $"{WorkflowExecutionId}:command-1:{Guid.NewGuid():N}",
             enqueuedAt: _now,
@@ -284,13 +353,15 @@ public sealed class WorkflowSchedulerFencedPoisonDrainTests
             IRuntimeDomainRetryPolicy? retryPolicy = null,
             Func<ValueTask>? beforeFault = null,
             bool withOwnershipService = true,
-            bool faults = true) =>
+            bool faults = true,
+            bool hasResumptionRedriver = false) =>
             TestSchedulerDrainer.Create(
                 Queue,
                 [new TestSchedulerWorkHandler(beforeFault, faults), new NoopWorkflowSchedulerWorkHandler()],
                 _clock,
                 poisonStore: poisonStore,
                 retryPolicy: retryPolicy ?? new NoopRuntimeDomainRetryPolicy(),
+                hasResumptionRedriver: hasResumptionRedriver,
                 ownershipContextAccessor: Accessor,
                 ownershipService: withOwnershipService ? Ownership : null);
     }
@@ -346,6 +417,7 @@ public sealed class WorkflowSchedulerFencedPoisonDrainTests
         private readonly IWorkflowSchedulerWorkQueue inner = queue;
         public InMemoryWorkflowSchedulerWorkQueue Inner => queue;
         public Func<ValueTask>? OnCompleteClaim { get; set; }
+        public Func<ValueTask>? OnReleaseClaim { get; set; }
         public int Completions { get; private set; }
         public int Enqueues { get; private set; }
         public int Releases { get; private set; }
@@ -378,10 +450,13 @@ public sealed class WorkflowSchedulerFencedPoisonDrainTests
             return result;
         }
 
-        public ValueTask<RuntimeSchedulerWorkClaimTransitionResult> ReleaseClaimAsync(RuntimeSchedulerWorkClaim claim, DateTimeOffset visibleAt, CancellationToken cancellationToken = default)
+        public async ValueTask<RuntimeSchedulerWorkClaimTransitionResult> ReleaseClaimAsync(RuntimeSchedulerWorkClaim claim, DateTimeOffset visibleAt, CancellationToken cancellationToken = default)
         {
             Releases++;
-            return inner.ReleaseClaimAsync(claim, visibleAt, cancellationToken);
+            var result = await inner.ReleaseClaimAsync(claim, visibleAt, cancellationToken);
+            if (OnReleaseClaim is not null)
+                await OnReleaseClaim();
+            return result;
         }
     }
 
@@ -397,7 +472,7 @@ public sealed class WorkflowSchedulerFencedPoisonDrainTests
     }
 
     // A decorator that forwards the capability and counts the calls the drainer made.
-    private sealed class CountingFencedPoisonStore(InMemoryWorkflowSchedulerPoisonStore inner) : IWorkflowSchedulerPoisonStore, IWorkflowSchedulerFencedPoisonStore
+    private sealed class CountingFencedPoisonStore(InMemoryWorkflowSchedulerPoisonStore inner) : IWorkflowSchedulerPoisonStore, ISchedulerPoisonFenceCapability
     {
         public int FencedRecords { get; private set; }
         public int UnfencedRecords { get; private set; }
@@ -426,8 +501,34 @@ public sealed class WorkflowSchedulerFencedPoisonDrainTests
             inner.ListAsync(workflowExecutionId, cancellationToken);
     }
 
+    // A store that says it can record fenced and whose fenced write then fails with the given exception.
+    private sealed class FailingFencedPoisonStore(Func<Exception> failure) : IWorkflowSchedulerPoisonStore, ISchedulerPoisonFenceCapability
+    {
+        private readonly InMemoryWorkflowSchedulerPoisonStore _inner = new();
+        public int FencedAttempts { get; private set; }
+        public int UnfencedRecords { get; private set; }
+        public bool CanRecordFenced => true;
+
+        public ValueTask<RuntimeSchedulerPoisonRecord> RecordFencedAsync(RuntimeSchedulerPoisonRecord record, RuntimeExecutionFence fence, CancellationToken cancellationToken = default)
+        {
+            FencedAttempts++;
+            return ValueTask.FromException<RuntimeSchedulerPoisonRecord>(failure());
+        }
+
+        public ValueTask<RuntimeSchedulerPoisonRecord> RecordAsync(RuntimeSchedulerPoisonRecord record, CancellationToken cancellationToken = default)
+        {
+            UnfencedRecords++;
+            return _inner.RecordAsync(record, cancellationToken);
+        }
+
+        public ValueTask<RuntimeSchedulerPoisonRecord?> FindAsync(string workflowExecutionId, string workItemId, CancellationToken cancellationToken = default) =>
+            _inner.FindAsync(workflowExecutionId, workItemId, cancellationToken);
+        public ValueTask<IReadOnlyCollection<RuntimeSchedulerPoisonRecord>> ListAsync(string workflowExecutionId, CancellationToken cancellationToken = default) =>
+            _inner.ListAsync(workflowExecutionId, cancellationToken);
+    }
+
     // A store whose lookup of the ownership store fails, so it cannot say whether it records fenced.
-    private sealed class ThrowingCapabilityPoisonStore : IWorkflowSchedulerPoisonStore, IWorkflowSchedulerFencedPoisonStore
+    private sealed class ThrowingCapabilityPoisonStore : IWorkflowSchedulerPoisonStore, ISchedulerPoisonFenceCapability
     {
         public const string Message = "The ownership store cannot be resolved.";
         public int CapabilityReads { get; private set; }

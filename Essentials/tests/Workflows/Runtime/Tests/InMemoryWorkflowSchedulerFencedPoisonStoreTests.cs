@@ -185,7 +185,7 @@ public sealed class InMemoryWorkflowSchedulerFencedPoisonStoreTests
         services.AddLogging();
         await using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
         var poisonStore = provider.GetRequiredService<IWorkflowSchedulerPoisonStore>();
-        Assert.True(Assert.IsAssignableFrom<IWorkflowSchedulerFencedPoisonStore>(poisonStore).CanRecordFenced);
+        Assert.True(Assert.IsAssignableFrom<ISchedulerPoisonFenceCapability>(poisonStore).CanRecordFenced);
         var queue = provider.GetRequiredService<IWorkflowSchedulerWorkQueue>();
         await queue.EnqueueAsync(NewInvokeActivityWorkItem());
         using var scope = provider.CreateScope();
@@ -219,7 +219,7 @@ public sealed class InMemoryWorkflowSchedulerFencedPoisonStoreTests
         services.AddLogging();
         await using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
         var poisonStore = provider.GetRequiredService<IWorkflowSchedulerPoisonStore>();
-        Assert.False(Assert.IsAssignableFrom<IWorkflowSchedulerFencedPoisonStore>(poisonStore).CanRecordFenced);
+        Assert.False(Assert.IsAssignableFrom<ISchedulerPoisonFenceCapability>(poisonStore).CanRecordFenced);
         await provider.GetRequiredService<IWorkflowSchedulerWorkQueue>().EnqueueAsync(NewInvokeActivityWorkItem());
         using var scope = provider.CreateScope();
         using var owned = provider.GetRequiredService<IRuntimeExecutionOwnershipContextAccessor>().Push(new RuntimeExecutionLease(

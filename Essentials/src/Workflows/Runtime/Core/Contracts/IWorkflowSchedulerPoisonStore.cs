@@ -9,7 +9,7 @@ namespace Elsa.Workflows.Runtime.Core.Contracts;
 /// </summary>
 /// <remarks>
 /// A store that can check the run's ownership lease in the same unit of work as the write also implements
-/// <see cref="IWorkflowSchedulerFencedPoisonStore"/>. The drainer then records through that capability.
+/// <see cref="ISchedulerPoisonFenceCapability"/>. The drainer then records through that capability.
 /// </remarks>
 public interface IWorkflowSchedulerPoisonStore
 {

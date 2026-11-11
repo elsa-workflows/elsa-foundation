@@ -17,7 +17,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 /// row revision as an optimistic compare-and-swap token and never fall back to an unconditional update.
 /// </para>
 /// <para>
-/// It can record under the run's ownership fence (<see cref="IWorkflowSchedulerFencedPoisonStore"/>) only when the
+/// It can record under the run's ownership fence (<see cref="ISchedulerPoisonFenceCapability"/>) only when the
 /// ownership row is in its own database: the registered <see cref="IExecutionLivenessStateStore"/> is the
 /// <see cref="EfExecutionLivenessStateStore"/> over the same context and access scope. Scheduler poison is
 /// registered separately from operational state, so a host can pair this store with ownership kept elsewhere; then
@@ -26,7 +26,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 /// </remarks>
 public sealed class EfWorkflowSchedulerPoisonStore(
     RuntimeDbContext context,
-    IPersistenceAccessContextAccessor accessContextAccessor) : IWorkflowSchedulerPoisonStore, IWorkflowSchedulerFencedPoisonStore
+    IPersistenceAccessContextAccessor accessContextAccessor) : IWorkflowSchedulerPoisonStore, ISchedulerPoisonFenceCapability
 {
     private static readonly EfWriteRetry Records = new(EfWriteRetry.DefaultMaxAttempts, EfWriteConflict.Concurrency | EfWriteConflict.UniqueKey);
     private const int ProviderPageSize = RuntimeStorePageRequest.MaximumLimit;
@@ -62,13 +62,16 @@ public sealed class EfWorkflowSchedulerPoisonStore(
     /// EF Core with an <see cref="InvalidOperationException"/> and nothing is written. When the save conflicts on the
     /// ownership row alone, which is what the owner's own lease heartbeat causes, the transaction runs again, for
     /// <c>EfRuntimeCheckpointParticipantStaging.MaxFenceRenewalAttempts</c> attempts in all, and each attempt checks
-    /// the fence again.
+    /// the fence again. Provider exceptions are let through as they are, as in the other Runtime EF stores (#4070).
+    /// The drainer records without the fence when this call fails for a reason other than ownership.
     /// </remarks>
     /// <exception cref="RuntimeStaleFencingTokenException">The fence is not the run's current, unexpired lease. Nothing was written.</exception>
-    /// <exception cref="DbUpdateConcurrencyException">
-    /// Nothing was written, because the ownership row changed under every attempt, because it changed once while the
-    /// context held other pending changes (the call then does not run again), or because the poison row itself
-    /// changed between the read and the save.
+    /// <exception cref="DbUpdateException">
+    /// A provider write failure; nothing was written. It is a <see cref="DbUpdateConcurrencyException"/> when the
+    /// ownership row changed under every attempt, when it changed once while the context held other pending changes
+    /// (the call then does not run again), and when another writer replaced the poison row between the read and the
+    /// save. It is a plain <see cref="DbUpdateException"/> when another writer inserted the poison row first, which
+    /// is a unique-key violation, and for any other failure the provider reports.
     /// </exception>
     /// <exception cref="InvalidOperationException">
     /// The context tracks a pending change to this run's ownership row, or already has a transaction. Nothing was
