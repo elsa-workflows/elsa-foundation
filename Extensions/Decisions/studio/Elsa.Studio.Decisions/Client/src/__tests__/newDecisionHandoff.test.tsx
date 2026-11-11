@@ -118,6 +118,48 @@ describe("New decision handoff to the Evaluate Decision picker", () => {
     await vi.waitFor(() => expect(picker(host).value).toBe("created"));
     expect(picker(host).querySelectorAll('option[value="created"]')).toHaveLength(1);
     expect(picker(host).selectedOptions[0].textContent).toBe(created.name);
+    // Listed once, then gone again (deleted, access lost): it reads as unavailable, not by the old name.
+    const listing = (items: unknown[]) => api.backend.http.getJson.mockImplementation(async (path: string) => (path.endsWith("/decisions") ? { items } : { items: [] }) as never);
+    const reloads = () => api.backend.http.getJson.mock.calls.filter(([path]) => String(path).endsWith("/decisions")).length;
+    const reload = async () => { const before = reloads(); window.dispatchEvent(new Event("focus")); await vi.waitFor(() => expect(reloads()).toBeGreaterThan(before)); await new Promise(resolve => setTimeout(resolve, 20)); };
+    listing([asset, other, created]); await reload();
+    listing([asset, other]); await reload();
+    await vi.waitFor(() => expect(picker(host).selectedOptions[0].textContent).toBe("Unavailable decision (created)"));
+  });
+
+  it("selects the decision when the author returns before the save completes", async () => {
+    const api = pickerApi(), tabs = workspaceTabs(), onValue = vi.fn();
+    let finish: (value: unknown) => void = () => undefined;
+    api.backend.http.postJson.mockImplementation(() => new Promise(resolve => { finish = resolve; }) as never);
+    // Both tabs stay mounted, as the host retains them; the editor tab is hidden while its save is in flight.
+    function Tabs({ workflowVisible, handoff }: { workflowVisible: boolean; handoff: string | null }) {
+      const [value, setValue] = useState("approval@latest");
+      return <>
+        <Activity mode={workflowVisible ? "visible" : "hidden"}><div data-tab="workflow"><DecisionVersionEditor api={api} descriptor={{ name: "Decision", typeName: "String" }} context={{} as never} value={value} disabled={false} onChange={next => { setValue(String(next)); onValue(String(next)); }} /></div></Activity>
+        {handoff ? <Activity mode={workflowVisible ? "hidden" : "visible"}><div data-tab="decision"><DecisionsPage api={api} navigate={vi.fn()} isNew handoff={handoff} /></div></Activity> : null}
+      </>;
+    }
+    const { host, update } = mount(<Tabs workflowVisible handoff={null} />);
+    await vi.waitFor(() => expect(picker(host).querySelector('option[value="other"]')).not.toBeNull());
+    click(button(host, "New decision")); const token = tabs.token();
+    update(<Tabs workflowVisible={false} handoff={token} />);
+    await saveNewDecision(host);
+    await vi.waitFor(() => expect(api.backend.http.postJson).toHaveBeenCalled());
+    update(<Tabs workflowVisible handoff={token} />);
+    finish(created);
+    await vi.waitFor(() => expect(onValue).toHaveBeenCalledWith("created@latest"));
+  });
+
+  it("keeps a value changed outside the picker after New decision", async () => {
+    const api = pickerApi(), tabs = workspaceTabs(), onChange = vi.fn();
+    const editor = (value: string) => <DecisionVersionEditor api={api} descriptor={{ name: "Decision", typeName: "String" }} context={{} as never} value={value} disabled={false} onChange={onChange} />;
+    const { host, update } = mount(editor("approval@latest"));
+    await vi.waitFor(() => expect(host.textContent).toContain("Other policy"));
+    click(button(host, "New decision"));
+    update(editor("other@latest")); // An undo or a draft reload, not this picker's selects.
+    completeNewDecisionHandoff(tabs.token(), { id: "created", name: created.name });
+    await new Promise(resolve => setTimeout(resolve, 20));
+    expect(onChange).not.toHaveBeenCalled();
   });
 
   it("leaves a read-only inspector unchanged", async () => {

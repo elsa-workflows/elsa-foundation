@@ -12,7 +12,8 @@ export function DecisionVersionEditor({ api, value, disabled, onChange, onValida
   const versionsGeneration = useRef(0);
   const observedAssetId = useRef<string | null>(null);
   // The New decision flow this picker started, and the value it showed then. Refs survive while the
-  // workflow's tab is hidden; only this picker holds the token, so other inspectors never react.
+  // workflow's tab is hidden; only this picker holds the token, so other inspectors never react. The flow
+  // belongs to this mounted picker: selecting another activity remounts it and ends the flow by design.
   const handoff = useRef<{ token: string; baseline: string } | null>(null);
   const [created, setCreated] = useState<NewDecisionResult | null>(null), [announcement, setAnnouncement] = useState("");
   const current = useRef({ selected, disabled, onChange });
@@ -47,6 +48,9 @@ export function DecisionVersionEditor({ api, value, disabled, onChange, onValida
     latest.onChange(`${result.id}@latest`);
   }, []);
   useEffect(() => { claimHandoff(); return subscribeNewDecisionHandoffs(claimHandoff); }, [claimHandoff, freshness]);
+  // The handed-off name only bridges the gap until the reloaded list lists the decision; after that, a
+  // decision that disappears again reads as unavailable like any other.
+  useEffect(() => { if (created && assets.some(item => item.id === created.id)) setCreated(null); }, [assets, created]);
   const unpublished = !loading && !loadingVersions && !error && !!assetId && choices.length === 0;
   const loadVersions = useCallback((id: string, indicate: boolean) => {
     const generation = ++versionsGeneration.current;

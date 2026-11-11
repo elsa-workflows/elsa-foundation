@@ -68,8 +68,10 @@ export function DecisionsPage({ api, navigate, assetId, versionId, isNew = false
   const save = () => work(async ticket => {
     const input = { name: name.trim(), description, xml, isSensitive: sensitive };
     const next = asset ? await saveDecision(api, asset, input) : await createDecision(api, input);
+    // The decision exists once the create returns, even if this tab was hidden meanwhile (which invalidates the ticket).
+    if (!asset && isNew && handoff) completeNewDecisionHandoff(handoff, { id: next.id, name: next.name });
     if (ticket !== generation.current) return; apply(next); dirtyRef.current = caseDirty; setNotice("Decision saved.");
-    if (!asset) { if (isNew && handoff) completeNewDecisionHandoff(handoff, { id: next.id, name: next.name }); savedNavigation(path(next.id)); }
+    if (!asset) savedNavigation(path(next.id));
   });
   const importDocument = async (file: File) => {
     if (file.size > 1024 * 1024) { setError("Decision documents must be at most 1 MiB."); return; }
