@@ -1,9 +1,9 @@
 # Meeting agenda: Elsa 3 → Elsa 4 conversion (#3052), 2026-11-12
 
-**Led by:** @j03y-nxxbz. **With:** @sfmskywalker, @FransVanEk. **Recorded and transcribed.**
+**Led by:** the coordinator. **With:** the approvers. **Recorded and transcribed.** Positions are numbered; the board maps them to people.
 
-**How the meeting runs.** We take the items in the order below and see how far we get. Joey opens and closes each item
-by saying its **anchor** aloud, for example *"D-6, effect flag"*. If the conversation moves to another item, Joey names
+**How the meeting runs.** We take the items in the order below and see how far we get. The coordinator opens and closes each item
+by saying its **anchor** aloud, for example *"D-6, effect flag"*. If the conversation moves to another item, the coordinator names
 that item's anchor; we either decide it there or park it. For each item, each of us says:
 - the restrictions and benefits of our view for **(a)** the architecture, **(b)** workflow users and **(c)** .NET Elsa
   developers;
@@ -16,9 +16,9 @@ restrictions. The simplest path is the default, and advanced options stay possib
 
 ## Briefing: the minimum to resolve
 
-- **D-8, lost updates** (ADR 0092, #3411). *Only if it is still open after Frans's final round.* When two parallel
+- **D-8, lost updates** (ADR 0092, #3411). *Only if it is still open after the final round.* When two parallel
   branches change the same variable: by default the last write wins with a warning, and a node can opt in to a strict
-  `Fault`. Sipke accepts this. Frans wanted no opt-in. **Blocks** S-10, S-5, S-6, S-7 and S-11.
+  `Fault`. One position accepts this; another wants no opt-in. **Blocks** S-10, S-5, S-6, S-7 and S-11.
 - **D-6, effect flag** (ADR 0045 §5, #3384; D-2, #3856). Which registered script functions get the commit before and
   after their call. One view: every function, because the engine can't know (no metadata). The other view: only
   functions the host declares effectful. **Blocks** S-1 and S-7.
@@ -30,7 +30,7 @@ restrictions. The simplest path is the default, and advanced options stay possib
   strategy. **Blocks** text only; the default (JSON, proxies off) goes ahead either way.
 - **D-16, S-8 interop** (ADR 0046, #3422; #4103). Whether S-8 ships a minimal .NET interop, or only the default, with
   the opt-in built after the initiative. **Blocks** text only.
-- **D-17, precision loss** (ADR 0046 V9, #3422). *Only if it is still open after Frans's final round.* Whether losing
+- **D-17, precision loss** (ADR 0046 V9, #3422). *Only if it is still open after the final round.* Whether losing
   digits when a changed value is written back is refused by default or only warned about. **Blocks** S-8 and S-9.
 - **Small questions** (only if time allows): *host argument*, *date parse*, *transient read*.
 
@@ -47,11 +47,11 @@ restrictions. The simplest path is the default, and advanced options stay possib
 - tracking is light by default;
 - the default depends on proving there is no gap for inline steps.
 
-| Person | Position | Notes |
+| Position | Summary | Notes |
 |---|---|---|
-| Sipke | Accepts C, with an opt-in `Fault` and four conditions. | [accept](https://github.com/elsa-workflows/elsa-foundation/pull/3411#issuecomment-6781246934) |
-| Frans | Warning only, no policy switch. | [position](https://github.com/elsa-workflows/elsa-foundation/pull/3411#issuecomment-6766994149) · final-round note: *to be linked* |
-| Joey | Proposed C. | [C](https://github.com/elsa-workflows/elsa-foundation/pull/3411#issuecomment-6772890570) |
+| 1 | Accepts C, with an opt-in `Fault` and four conditions. | [accept](https://github.com/elsa-workflows/elsa-foundation/pull/3411#issuecomment-6781246934) |
+| 2 | Warning only, no policy switch. | [position](https://github.com/elsa-workflows/elsa-foundation/pull/3411#issuecomment-6766994149) · final-round note: *to be linked* |
+| 3 | Proposed C. | [C](https://github.com/elsa-workflows/elsa-foundation/pull/3411#issuecomment-6772890570) |
 
 **Key question:** does an opt-in strict mode cost anyone anything if they don't use it?
 **Possible middle ground:** C as written; or ship `Fault` later as an opt-in, with the hook kept in the ADR.
@@ -66,11 +66,11 @@ restrictions. The simplest path is the default, and advanced options stay possib
 - the engine commits before and after an external effect;
 - the cost is measured as a commit count (#3856).
 
-| Person | Position | Notes |
+| Position | Summary | Notes |
 |---|---|---|
-| Sipke | Effect-free unless the host declares a function effectful at registration. | [counter](https://github.com/elsa-workflows/elsa-foundation/pull/3384#issuecomment-6781247439) |
-| Frans | No metadata: every function is possibly effectful, and a hint comes only after measurements. | [#3856 review](https://github.com/elsa-workflows/elsa-foundation/pull/3856#pullrequestreview-5842856223) · final-round note: *to be linked* |
-| Joey | Accepted Sipke's rule. | [#3856 review](https://github.com/elsa-workflows/elsa-foundation/pull/3856#pullrequestreview-5856671197) |
+| 1 | Effect-free unless the host declares a function effectful at registration. | [counter](https://github.com/elsa-workflows/elsa-foundation/pull/3384#issuecomment-6781247439) |
+| 2 | No metadata: every function is possibly effectful, and a hint comes only after measurements. | [#3856 review](https://github.com/elsa-workflows/elsa-foundation/pull/3856#pullrequestreview-5842856223) · final-round note: *to be linked* |
+| 3 | Accepted position 1. | [#3856 review](https://github.com/elsa-workflows/elsa-foundation/pull/3856#pullrequestreview-5856671197) |
 
 **Key questions:**
 - Built-ins such as `newGuid()` and `now()` are the most-called functions. Should they carry their own effect-free
@@ -80,7 +80,7 @@ restrictions. The simplest path is the default, and advanced options stay possib
 
 **Possible middle grounds:**
 - **(a)** Built-ins are declared effect-free by Elsa; host functions are possibly effectful unless declared effect-free.
-- **(b)** Sipke's rule, plus a publish diagnostic for undeclared host functions reached from inputs.
+- **(b)** Position 1, plus a publish diagnostic for undeclared host functions reached from inputs.
 
 **Changes after the decision:** #3384, #3856, S-1 #4046 FR-012.
 
@@ -91,11 +91,11 @@ restrictions. The simplest path is the default, and advanced options stay possib
 - the default join (ADR 0064) runs its target once per activation;
 - outcomes are chosen by returning a recognised form.
 
-| Person | Position | Notes |
+| Position | Summary | Notes |
 |---|---|---|
-| Sipke | Allow an explicit, visible per-arrival mode; S-3 proves it. | [card 17](https://github.com/elsa-workflows/elsa-foundation/pull/3389#issuecomment-6645085675) |
-| Frans | Take it out of the ADR; no second mode without evidence. | [review](https://github.com/elsa-workflows/elsa-foundation/pull/3763#issuecomment-6765743497) |
-| Joey | Take it out, keep one sentence, and park it as #4050, with Sipke's proofs as the bar it must clear. | [position](https://github.com/elsa-workflows/elsa-foundation/pull/3763#issuecomment-6772904779) |
+| 1 | Allow an explicit, visible per-arrival mode; S-3 proves it. | [card 17](https://github.com/elsa-workflows/elsa-foundation/pull/3389#issuecomment-6645085675) |
+| 2 | Take it out of the ADR; no second mode without evidence. | [review](https://github.com/elsa-workflows/elsa-foundation/pull/3763#issuecomment-6765743497) |
+| 3 | Take it out, keep one sentence, and park it as #4050, with position 1's proofs as the bar it must clear. | [position](https://github.com/elsa-workflows/elsa-foundation/pull/3763#issuecomment-6772904779) |
 
 **Key question:** which real workflow needs per-arrival behaviour today?
 **Changes after the decision:** #3389, #3763, S-3 #3810 FR-022.
@@ -111,11 +111,11 @@ restrictions. The simplest path is the default, and advanced options stay possib
 - general .NET access always comes with a publish warning and a Studio marker;
 - no live object enters stored state.
 
-| Person | Position | Notes |
+| Position | Summary | Notes |
 |---|---|---|
-| Sipke | Bindings may opt in, behind five guardrails. A named profile is selected per expression and pinned by the executable. | [guardrails](https://github.com/elsa-workflows/elsa-foundation/pull/3422#issuecomment-6782921131) |
-| Frans | Script activities only. | final-round note: *to be linked* |
-| Joey | Bindings may opt in (Sipke's guardrails). The shape is one replaceable engine strategy enabled by a feature; he finds per-expression profiles chaotic. | [#3422](https://github.com/elsa-workflows/elsa-foundation/pull/3422#issuecomment-6793731476) |
+| 1 | Bindings may opt in, behind five guardrails. A named profile is selected per expression and pinned by the executable. | [guardrails](https://github.com/elsa-workflows/elsa-foundation/pull/3422#issuecomment-6782921131) |
+| 2 | Script activities only. | final-round note: *to be linked* |
+| 3 | Bindings may opt in (position 1's guardrails). The shape is one replaceable engine strategy enabled by a feature; he finds per-expression profiles chaotic. | [#3422](https://github.com/elsa-workflows/elsa-foundation/pull/3422#issuecomment-6793731476) |
 
 **Key question:** with a replaceable strategy, how does a published executable record that it needs .NET access, so it
 never runs silently on a host without it?
@@ -125,13 +125,13 @@ never runs silently on a host without it?
 
 **Decision to make:** does S-8 ship a minimal .NET interop, or only the default?
 
-| Person | Position | Notes |
+| Position | Summary | Notes |
 |---|---|---|
-| Sipke | A minimal explicit interop in S-8 (card 23). | [card 23](https://github.com/elsa-workflows/elsa-foundation/pull/3422#issuecomment-6645477643) |
-| Joey | Default only; the opt-in is built after the initiative (#4103), which anyone can pick up. | [#3422](https://github.com/elsa-workflows/elsa-foundation/pull/3422#issuecomment-6793731476) |
-| Frans | *to be linked* | |
+| 1 | A minimal explicit interop in S-8 (card 23). | [card 23](https://github.com/elsa-workflows/elsa-foundation/pull/3422#issuecomment-6645477643) |
+| 3 | Default only; the opt-in is built after the initiative (#4103), which anyone can pick up. | [#3422](https://github.com/elsa-workflows/elsa-foundation/pull/3422#issuecomment-6793731476) |
+| 2 | *to be linked* | |
 
-**Joey's framing:** *the problem is file ingress, not proxies.* Settle this shared understanding first; the decision
+**Framing for this item:** *the problem is file ingress, not proxies.* Settle this shared understanding first; the decision
 should follow from it.
 
 **Evidence on file** (the 36-definition Elsa 3 corpus, and Jint 4.9.1):
@@ -152,10 +152,10 @@ should follow from it.
 - a five-part diagnostic;
 - accepting the loss is explicit and recorded in the conversion contract.
 
-| Person | Position | Notes |
+| Position | Summary | Notes |
 |---|---|---|
-| Sipke | Refuse: the engine itself changes the data. | [reply](https://github.com/elsa-workflows/elsa-foundation/pull/3422#issuecomment-6781247798) |
-| Frans | Originally a warning. | final-round note: *to be linked* |
+| 1 | Refuse: the engine itself changes the data. | [reply](https://github.com/elsa-workflows/elsa-foundation/pull/3422#issuecomment-6781247798) |
+| 2 | Originally a warning. | final-round note: *to be linked* |
 
 **Key question:** the loss is caused by the engine, not built by the engineer. Is refusing it a guardrail or a
 restriction?
@@ -170,7 +170,7 @@ restriction?
 
 ## Confirm only
 
-- **D-7, computed reads:** pinning plus a run-time fallback (#3420, #3388, spec 095, S-4). Frans confirms RQ3: the reads
+- **D-7, computed reads:** pinning plus a run-time fallback (#3420, #3388, spec 095, S-4). To confirm in the final round (RQ3): the reads
   are part of the step's input snapshot.
 
 ## Parking lot

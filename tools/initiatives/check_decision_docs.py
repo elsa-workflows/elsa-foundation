@@ -18,7 +18,8 @@ Errors (exit code 1):
     judges whether the alternatives are good, and it runs only on ADRs this branch adds, not on a pre-existing ADR it
     merely amends. A heading or list quoted inside a fenced code block does not count. Specs do not carry their own
     section: they refer to the alternatives in the ADRs they apply.
-  - timeless: a line this branch adds to an ADR @-mentions a person (`@login`). The document records the decision,
+  - timeless: a line this branch adds to an ADR, or to a committed meeting agenda under `docs/initiatives/`,
+    @-mentions a person (`@login`). The document records the decision,
     never who holds a position or must act; names and routing belong on the PR and the board.
 Warnings (exit code 0):
   - timeless: a line this branch adds to an ADR carries a PR or issue reference (`#1234`, a GitHub pull or issue
@@ -59,6 +60,7 @@ MENTION = re.compile(r"(?<![\w.`/])@(?P<login>[A-Za-z0-9][A-Za-z0-9-]{0,38})\b")
 ISSUE_REFERENCE = re.compile(r"(?<![\w&/])#\d{3,6}\b|github\.com/[\w.-]+/[\w.-]+/(?:pull|issues)/\d+")
 DATED_HEADING = re.compile(r"^#+\s.*\b20\d\d-\d\d-\d\d\b")
 OPEN_QUESTIONS_HEADING = re.compile(r"^#+\s.*\b(?:open questions|questions for (?:the )?reviewers)\b", re.IGNORECASE)
+MEETING_DIR = "docs/initiatives/"  # committed meeting agendas: name-free like ADRs
 STATUS_WINDOW = 25  # lines from the top of an ADR in which its status must appear
 REFERENCE_SCOPE = ("docs", "specs", "CONTEXT.md", ".specify/memory")
 
@@ -213,6 +215,9 @@ def check(tree: dict[str, str], changed: set[str], base_paths: list[str],
             error = spec_status_error(path, text)
             if error:
                 errors.append(error)
+        elif path.startswith(MEETING_DIR) and path.endswith(".md"):
+            # a committed meeting agenda is name-free like an ADR; it may link PRs, so only mentions fail
+            errors.extend(timeless_findings(path, (added or {}).get(path, []))[0])
         if path.endswith(".md"):
             warnings.extend(unresolved_references(path, text, adr_numbers))
     return errors, warnings
@@ -226,7 +231,7 @@ def git_lines(root: Path, *args: str) -> list[str]:
 def added_lines(root: Path, fork_point: str, untracked: list[str]) -> dict[str, list[str]]:
     """The lines this branch adds to each ADR since the fork point, including uncommitted and untracked ones."""
     added: dict[str, list[str]] = {}
-    result = subprocess.run(["git", "diff", "-U0", "--no-renames", fork_point, "--", "docs/adr"], cwd=root,
+    result = subprocess.run(["git", "diff", "-U0", "--no-renames", fork_point, "--", "docs/adr", MEETING_DIR], cwd=root,
                             capture_output=True, text=True, encoding="utf-8", errors="replace", check=True)
     path = None
     for line in result.stdout.splitlines():
@@ -235,7 +240,7 @@ def added_lines(root: Path, fork_point: str, untracked: list[str]) -> dict[str, 
         elif path and line.startswith("+"):
             added.setdefault(path, []).append(line[1:])
     for path in untracked:
-        if adr_number(path):
+        if adr_number(path) or (path.startswith(MEETING_DIR) and path.endswith(".md")):
             added[path] = (root / path).read_text(encoding="utf-8", errors="replace").splitlines()
     return added
 
@@ -343,6 +348,9 @@ def self_test() -> int:
         ("timeless prose passes", ["An empty selection sends a dead arrival on every outgoing connection."], 0, 0),
         ("fenced mention passes", ["```", "@example", "```"], 0, 0),
     ]
+    agenda = "docs/initiatives/3052/2026-11-12-meeting-agenda.md"
+    cases.append(("agenda mention fails", {agenda: "x"}, {agenda}, [], 1, 0, {agenda: ["**With:** @someone."]}))
+    cases.append(("agenda pr link passes", {agenda: "x"}, {agenda}, [], 0, 0, {agenda: ["See #3411 and position 1."]}))
     for name, lines, want_errors, want_warnings in timeless:
         cases.append((name, {amended: adr_ok}, {amended}, [amended], want_errors,
                       want_warnings, {amended: lines}))

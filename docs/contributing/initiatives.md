@@ -320,7 +320,8 @@ has:
 
 Every item carries **one short spoken anchor**: the board's decision ID and a two-to-three word handle, for example
 *"D-6, effect flag"*. An item without a decision ID gets one on the board before the meeting. The agenda is a view on the
-board, never a second source of truth.
+board, never a second source of truth. Like an ADR, the **committed agenda carries no personal names**: positions are
+numbered and link to their comments, and the board maps them to people. A copy posted on the board may name people.
 
 **5. The meeting (human only).** The coordinator leads and guards the agenda:
 - opens and closes each item by saying its anchor aloud: these are the anchors in the transcript;
@@ -350,7 +351,7 @@ A meeting that cannot reach a decision follows the governance route in *Review* 
 ```markdown
 # Meeting agenda: <initiative> (#<n>), <date>
 
-**Led by:** @coordinator. **With:** @approver-one, @approver-two. **Recorded and transcribed.**
+**Led by:** the coordinator. **With:** the approvers. **Recorded and transcribed.** Positions are numbered; the board maps them to people.
 
 ## Briefing: the minimum to resolve
 - **D-6, effect flag** (ADR 0045 §5): which functions get the commit boundary. Blocks S-1, S-7.
@@ -359,9 +360,9 @@ A meeting that cannot reach a decision follows the governance route in *Review* 
 ## D-6, effect flag
 **Decision to make:** <one sentence>.
 **Already agreed around it:** <bullets>.
-| Person | Position | Notes |
+| Position | Summary | Notes |
 |---|---|---|
-| @approver-one | … | [meeting item](link) |
+| 1 | … | [meeting item](link) |
 **Ask each:** restrictions and benefits for the architecture, workflow users, .NET Elsa developers; evidence.
 **Evidence on file:** <links>. **Possible middle grounds:** <bullets>.
 **Changes after the decision:** <PRs>.
