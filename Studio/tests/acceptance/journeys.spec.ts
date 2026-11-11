@@ -1,6 +1,7 @@
 import { tabbedSecretsJourney } from "./tabbedSecretsJourney";
 import { templateToastJourney } from "./templateToastJourney";
 import { executableDesignerJourney } from "./executableDesignerJourney";
+import { compactInputsJourney } from "./compactInputsJourney";
 import { writeFileSync } from "node:fs";
 import { expect, test, type APIRequestContext, type Page, type TestInfo } from "@playwright/test";
 import { userTaskAuthoringJourney } from "./userTaskAuthoringJourney";
@@ -530,4 +531,8 @@ test("choose data for activity outputs", async ({ page }, info) => {
 
 test("tabbed Secrets authoring and metadata", async ({ page }, info) => {
   await tabbedSecretsJourney(page, info, capture, cleanup => { ownedCleanups.get(page)!.push(cleanup); });
+});
+
+test("compact runtime Inputs retain exact captured values and accessible technical details", async ({ page }, info) => {
+  await compactInputsJourney(page, info, capture);
 });
