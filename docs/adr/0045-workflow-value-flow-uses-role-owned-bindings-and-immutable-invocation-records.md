@@ -323,8 +323,6 @@ before final agreement.
 The source directions are Sipke's [25 October follow-ups, points 1–3 and 6](https://github.com/elsa-workflows/elsa-foundation/issues/3052#issuecomment-6393239500),
 his [consolidated execution and lifecycle positions](https://github.com/elsa-workflows/elsa-foundation/issues/3052#issuecomment-6503893983)
 and the [confirmed link between the effect-boundary guarantee and this mechanism](https://github.com/elsa-workflows/elsa-foundation/pull/3384#issuecomment-6503654162).
-The [explicit input-binding interop direction](https://github.com/elsa-workflows/elsa-foundation/pull/3422#issuecomment-6643396876)
-also requires covering host-exposed properties, methods and adapters, not only registered functions.
 
 D-3 supplies the evaluation transaction. Variable versions, conflicts and resolution remain in
 [ADR 0092's proposal](https://github.com/elsa-workflows/elsa-foundation/pull/3411); background capability admission
@@ -348,8 +346,10 @@ unrecorded results need not be identical. A logical transition in memory is not 
 
 An action called retry must not silently mean re-execution with current values. Replacing committed inputs requires
 an explicit refresh contract recording the old/new snapshot relationship, new evaluation identity, dependencies and
-effect/idempotency consequences. "The body has not run yet" is insufficient: input evaluation may already have
-external effects. Recovery does not reacquire a recorded input merely to obtain a newer value.
+effect/idempotency consequences. ADR 0092's refresh of a stale base before background admission is such a contract,
+including its default and its opt-out. This contract adds no other refresh. "The body has not run yet" is
+insufficient: input evaluation may already have external effects. Recovery does not reacquire a recorded input merely
+to obtain a newer value.
 
 Objects, services and open resources remain local to an attempt. Restore supported data under its pinned contract,
 reacquire services and reopen resources from recoverable references. This preserves neither CLR instance identity
@@ -391,8 +391,9 @@ external idempotency contract; it does not establish one by itself.
 ### 3. Resolve durability for the whole evaluation
 
 Resolve the effective classification and its versioned contract for the applicable evaluation; neither read-only
-Elsa access nor the activity body's `ReplaySafe` marker proves that its inputs are repeatable. Getters, constructors,
-adapters, registered functions and opted-in .NET methods can have effects.
+Elsa access nor the activity body's `ReplaySafe` marker proves that its inputs are repeatable. A registered function
+can have effects. This contract covers the functions registered for the binding profile. A decision that admits
+another host call path into an evaluation states how that path is classified.
 
 **Not decided by this contract: how a registered function is classified.** This contract fixes what the engine does
 around a possibly effectful evaluation. Whether calling a registered function makes an input evaluation possibly
@@ -408,8 +409,7 @@ effectful belongs to the function-effect decision in this ADR's §5, which is no
   boundary, so after a crash its effect can repeat with the rest of the unflushed segment.
 
 Under either rule, classification never prohibits, skips or deduplicates a call; ordinary capability, access and
-value-contract validation still applies. The rest of this contract holds under both. A call path that is not a
-registered function and has no classification takes the conservative boundary.
+value-contract validation still applies. The rest of this contract holds under both.
 
 An evaluation classified as repeatable may be batched under the selected persistence mode. Where that classification
 rests on a declaration, the declaration covers its whole phase and is a host/author responsibility, not proof
@@ -461,8 +461,10 @@ Record unspecified, explicitly empty and named outcome selections distinctly, in
 node permits them. Record the complete selection with the result; ordinary business data never selects a route.
 The completion API and routing/join rules belong to S-3.
 
-For inline execution, remove scheduler-created interleaving between input materialization, body execution and
-transition acceptance for that evaluation. Preserve claim, fencing and required durability boundaries without a
+For inline execution, no other branch's work runs between input materialization, body execution and transition
+acceptance of an evaluation. This is ADR 0092's inline rule, with the same condition: the implementing spec must
+prove it for both `External` and `ReplaySafe` activities. Until then it is a requirement, not an established
+property. Preserve claim, fencing and required durability boundaries without a
 database transaction around user code. Background concurrency still uses guarded acceptance and the same read/write
 rules.
 
@@ -501,6 +503,8 @@ crash/redelivery tests and provider proofs appropriate to each path:
 | Staged background work, lost notification | No pre-commit claim; atomic state/admission publication; committed work remains discoverable. |
 | Long drain or wait for background results | Enforce a configured finite dispatch bound and flush before waiting without weakening atomicity. |
 | Persistence modes and protection | Mandatory effect boundaries survive every mode; pure segments may repeat; recovery data preserves protection and secret-reference contracts. |
+| Inline step, `External` and `ReplaySafe` | No other branch's work item runs between the input read and the transition commit; claim, fencing and durability boundaries stay in place. |
+| Cost of the effect boundary | A deterministic test counts the commits per iteration of a loop whose inputs call a function: once where the evaluation takes the boundary and once where it does not, in each persistence mode. The counts are reported before the boundary becomes mandatory. |
 
 S-1 must audit expression/inline evaluation sites and the input boundary. S-7/S-10 must align evaluation transactions,
 dependencies, retry/refresh and retained-completion resolution. S-11 must align admission/claim visibility and provider
@@ -508,8 +512,7 @@ precedence. Concrete record layouts, operation-key API, finite dispatch bound an
 those specs. Return gaps to this ADR. #3052's all-specs-defined-before-implementation agreement still applies.
 
 How a registered function is classified is not settled by this contract; section 3 states both proposed rules.
-Reconcile that rule, input-binding interop, route-by-return and the pending ADR 0092/0093 text before marking shared
-clauses agreed. No new constitutional gate or exception is proposed.
+Reconcile that rule, route-by-return and the pending ADR 0092/0093 text before marking shared clauses agreed. No new constitutional gate or exception is proposed.
 
 ## Reconciliation with existing work units
 

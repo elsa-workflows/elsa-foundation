@@ -15,10 +15,10 @@ The accepted status above does not ratify this proposal.
   The historical phrases "durable-once" and "idempotency keys make the redelivered span safe" do not guarantee
   exactly-once external effects. A call can succeed before its result is committed and may then repeat.
 - Assess input materialization separately from activity activation/body. A body's `ReplaySafe` declaration does not
-  classify its inputs, adapters or opted-in host calls. Before a possibly effectful evaluation, flush its logical
-  identity and recovery cause. Flush successful results/read dependencies before advancing; on fault/cancellation
-  persist the applicable recovery record. The before/after boundaries for a possibly effectful activity evaluation
-  are mandatory too. No persistence mode can defer or skip those boundaries.
+  classify its inputs. Before a possibly effectful evaluation, flush its logical identity and recovery cause. Flush
+  successful results/read dependencies before advancing; on fault/cancellation persist the applicable recovery
+  record. The before/after boundaries for a possibly effectful activity evaluation are mandatory too. No persistence
+  mode can defer or skip those boundaries.
 - How a registered function is classified is not decided by this amendment: either every registered function is
   possibly effectful, or only a function its host declares effectful is. ADR 0045's proposed contract states both
   rules. Under either, classification never prohibits, skips or deduplicates a call. Repeatable evaluations may be
