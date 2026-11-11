@@ -20,6 +20,10 @@ public sealed class EfExecutionLivenessStateStore(
     private const string GlobalCursorPurpose = "ef-runtime-liveness-global-v1";
     private const string WorkflowCursorPurpose = "ef-runtime-liveness-workflow-v1";
 
+    /// <summary>Whether this store reads and writes ownership rows through the given context, in the given access scope.</summary>
+    internal bool UsesSameBackingStore(RuntimeDbContext candidateContext, IPersistenceAccessContextAccessor candidateAccessor) =>
+        ReferenceEquals(context, candidateContext) && ReferenceEquals(accessContextAccessor, candidateAccessor);
+
     public async ValueTask<ExecutionLivenessState> SaveAsync(ExecutionLivenessState state, CancellationToken cancellationToken = default)
     {
         ValidateState(state);

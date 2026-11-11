@@ -445,4 +445,17 @@ internal static class EfRuntimeCheckpointParticipantStaging
         // lease transition fail the whole checkpoint instead of allowing state and marker rows to commit together.
         row!.Revision = checked(row.Revision + 1);
     }
+
+    /// <summary>How many times a fenced unit of work runs when each failure is a <see cref="IsFenceRenewalConflict"/>.</summary>
+    public const int MaxFenceRenewalAttempts = 3;
+
+    /// <summary>
+    /// Whether every entry a save conflicted on is an execution-liveness row. In a unit of work whose only write to
+    /// that table is the fence touch of <see cref="StageExecutionFenceAsync"/>, that means the fence row alone. The
+    /// owner's lease heartbeat bumps that row's revision without changing the lease, so the unit of work can run
+    /// again. The next attempt reads the row and validates the fence again, so a real ownership change still fails
+    /// as stale.
+    /// </summary>
+    public static bool IsFenceRenewalConflict(DbUpdateConcurrencyException exception) =>
+        exception.Entries.Count != 0 && exception.Entries.All(entry => entry.Entity is ExecutionLivenessStateEntity);
 }
