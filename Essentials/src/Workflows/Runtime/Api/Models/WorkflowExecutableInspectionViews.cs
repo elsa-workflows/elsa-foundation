@@ -134,7 +134,12 @@ public sealed record WorkflowExecutableInputBindingView(
     RuntimeActivityResultReference? ActivityResult = null,
     ValueConversionPlan? ConversionPlan = null,
     IReadOnlyDictionary<string, string>? Metadata = null,
-    RuntimeSecretReference? Secret = null);
+    RuntimeSecretReference? Secret = null)
+{
+    /// <summary>The member a member read selects inside its source; <see langword="null"/> for a whole-value read.</summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public RuntimeReadSelection? Selection { get; init; }
+}
 
 public sealed record WorkflowExecutableOutputCaptureView(
     string OutputName,

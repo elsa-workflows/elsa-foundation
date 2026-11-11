@@ -642,6 +642,14 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
             .ToArray();
         if (secrets.Length > 0)
             canonical += JsonSerializer.Serialize(secrets);
+        // Read selections are appended only when present too, so every node without a member read keeps its fingerprint.
+        var selections = node.InputBindings
+            .Where(item => item.Value.Selection is not null)
+            .OrderBy(item => item.Key, StringComparer.Ordinal)
+            .Select(item => new { key = item.Key, item.Value.Selection })
+            .ToArray();
+        if (selections.Length > 0)
+            canonical += JsonSerializer.Serialize(selections);
         return $"sha256:{Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(canonical))).ToLowerInvariant()}";
     }
 

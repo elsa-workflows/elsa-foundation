@@ -624,6 +624,27 @@ public sealed class WorkflowExecutableInspectorTests
         Assert.Null(structural.Secret);
     }
 
+    /// <summary>
+    /// A member read (#4078) is shown as its source followed by each exact member, with its selection, so inspection never
+    /// presents it as a read of the whole source.
+    /// </summary>
+    [Fact]
+    public async Task InputSourcesShowAMemberReadByItsSourceAndExactMemberPath()
+    {
+        var selection = new RuntimeReadSelection(1, ["customer", "a.b"], RuntimeReadSelectionMode.DeferredFit);
+        var binding = new RuntimeInputBinding("text", StringType, ValueProtectionPolicy.InstanceInline,
+            RuntimeInputBindingSource.ActivityResultMember, selection,
+            activityResult: new RuntimeActivityResultReference("producer", "$result", producerScopeId: null));
+        await _executableStore.SaveAsync(Executable(_now, inputBindings: new Dictionary<string, RuntimeInputBinding> { ["text"] = binding }));
+        await _referenceStore.SaveAsync(Reference("source-member", WorkflowExecutableReferenceScope.Published, _now, "1.0.0"));
+
+        var compiled = Assert.Single((await _inspector.GetInputSourcesAsync("artifact-1", "source-member"))!.CompiledInputs);
+
+        Assert.Equal(nameof(RuntimeInputBindingSource.ActivityResultMember), compiled.Binding.Source);
+        Assert.Equal("$result → \"customer\" → \"a.b\"", compiled.Binding.Summary);
+        Assert.Same(selection, compiled.Binding.Selection);
+    }
+
     [Fact]
     public async Task InputSourcesSummarizeASecretReadWhosePolicyIsNotSensitiveByItsReference()
     {

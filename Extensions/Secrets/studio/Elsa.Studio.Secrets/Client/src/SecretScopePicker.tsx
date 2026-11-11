@@ -6,10 +6,10 @@ import type { SecretScopeDescriptor } from "./secretTypes";
 const searchableScopeCount = 8;
 export const SECRET_SCOPE_MATCHING_HINT = "Optional qualifier. A reference that specifies a scope must match it (ignoring case). Scope does not grant access.";
 
-export function ScopeMatchingHint({ readOnly = false, id }: { readOnly?: boolean; id?: string }) {
+export function ScopeMatchingHint({ readOnly = false, id, concise = false }: { readOnly?: boolean; id?: string; concise?: boolean }) {
   return (
     <p id={id} className="secrets-field-hint">
-      {SECRET_SCOPE_MATCHING_HINT}{readOnly ? " Scope is read-only in this editor." : ""}
+      {concise ? "References must match this scope (ignoring case). Scope does not grant access." : SECRET_SCOPE_MATCHING_HINT}{readOnly ? " Scope is read-only in this editor." : ""}
     </p>
   );
 }

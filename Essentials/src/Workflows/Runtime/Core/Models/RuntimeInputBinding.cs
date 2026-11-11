@@ -11,7 +11,6 @@ namespace Elsa.Workflows.Runtime.Core.Models;
 /// </summary>
 public sealed class RuntimeInputBinding
 {
-    [JsonConstructor]
     public RuntimeInputBinding(
         string inputKey,
         ValueTypeDescriptor targetType,
@@ -26,13 +25,41 @@ public sealed class RuntimeInputBinding
         ValueConversionPlan? conversionPlan = null,
         RuntimeValueConversionRequest? conversionRequest = null,
         RuntimeSecretReference? secret = null)
+        : this(inputKey, targetType, effectivePolicy, source, selection: null, literal, workflowRequest, variable, activityResult,
+            expression, metadata, conversionPlan, conversionRequest, secret)
+    {
+    }
+
+    /// <summary>
+    /// Creates a binding that may read one member inside its source: <paramref name="selection"/> is required for a
+    /// member source (<see cref="RuntimeInputBindingSource.WorkflowRequestMember"/>,
+    /// <see cref="RuntimeInputBindingSource.VariableMember"/>, <see cref="RuntimeInputBindingSource.ActivityResultMember"/>)
+    /// and refused for every other source.
+    /// </summary>
+    [JsonConstructor]
+    public RuntimeInputBinding(
+        string inputKey,
+        ValueTypeDescriptor targetType,
+        ValueProtectionPolicy effectivePolicy,
+        RuntimeInputBindingSource source,
+        RuntimeReadSelection? selection,
+        ValueEnvelope? literal = null,
+        RuntimeWorkflowRequestReference? workflowRequest = null,
+        RuntimeVariableReference? variable = null,
+        RuntimeActivityResultReference? activityResult = null,
+        RuntimeExpressionBinding? expression = null,
+        IReadOnlyDictionary<string, string>? metadata = null,
+        ValueConversionPlan? conversionPlan = null,
+        RuntimeValueConversionRequest? conversionRequest = null,
+        RuntimeSecretReference? secret = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(inputKey);
         ArgumentNullException.ThrowIfNull(targetType);
         ArgumentNullException.ThrowIfNull(effectivePolicy);
-        ValidateCanonical(source, literal, workflowRequest, variable, activityResult, expression, secret);
+        ValidateCanonical(source, selection, literal, workflowRequest, variable, activityResult, expression, secret);
 
         InputName = inputKey;
+        Selection = selection;
         TargetType = targetType;
         EffectivePolicy = effectivePolicy;
         Source = source;
@@ -82,8 +109,16 @@ public sealed class RuntimeInputBinding
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public RuntimeSecretReference? Secret { get; }
 
+    /// <summary>
+    /// The member a member source reads inside its source value, or <see langword="null"/> for every other source.
+    /// Omitted when null so bindings of every other source serialize and hash exactly as before member reads existed.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RuntimeReadSelection? Selection { get; }
+
     private static void ValidateCanonical(
         RuntimeInputBindingSource source,
+        RuntimeReadSelection? selection,
         ValueEnvelope? literal,
         RuntimeWorkflowRequestReference? workflowRequest,
         RuntimeVariableReference? variable,
@@ -110,12 +145,30 @@ public sealed class RuntimeInputBinding
             RuntimeInputBindingSource.ActivityResult => activityResult is not null,
             RuntimeInputBindingSource.Expression => expression is not null,
             RuntimeInputBindingSource.SecretRead => secret is not null,
+            RuntimeInputBindingSource.WorkflowRequestMember => workflowRequest is not null,
+            RuntimeInputBindingSource.VariableMember => variable is not null,
+            RuntimeInputBindingSource.ActivityResultMember => activityResult is not null,
             _ => false
         };
 
         if (!valid)
             throw new ArgumentException($"Runtime input binding source '{source}' does not match its canonical payload.");
+
+        var readsMember = IsMemberSource(source);
+        if (readsMember && selection is null)
+            throw new ArgumentException($"Runtime input binding source '{source}' reads a member and requires a read selection.");
+        if (!readsMember && selection is not null)
+            throw new ArgumentException($"Runtime input binding source '{source}' reads a whole value and cannot carry a read selection.");
+        if (source == RuntimeInputBindingSource.WorkflowRequestMember && workflowRequest!.Path is not null)
+            throw new ArgumentException("A workflow request member read selects its member through its read selection and cannot carry a legacy request path.");
+        if (source == RuntimeInputBindingSource.ActivityResultMember && activityResult!.ProducerScopeId is not null)
+            throw new ArgumentException("An activity result member read is identified by causal lineage and cannot declare a producer scope.");
     }
+
+    internal static bool IsMemberSource(RuntimeInputBindingSource source) =>
+        source is RuntimeInputBindingSource.WorkflowRequestMember
+            or RuntimeInputBindingSource.VariableMember
+            or RuntimeInputBindingSource.ActivityResultMember;
 
 }
 
@@ -137,7 +190,16 @@ public enum RuntimeInputBindingSource
     /// A stored secret, by reference. Only activation may resolve it: the persisted input snapshot records a withheld
     /// envelope (<see cref="ValuePresence.Withheld"/>) instead of the value.
     /// </summary>
-    SecretRead
+    SecretRead,
+
+    /// <summary>One member inside a workflow request member; carries the request payload and a read selection.</summary>
+    WorkflowRequestMember = 6,
+
+    /// <summary>One member inside a variable's value; carries the variable payload and a read selection.</summary>
+    VariableMember = 7,
+
+    /// <summary>One member inside an activity result projection; carries the result payload and a read selection.</summary>
+    ActivityResultMember = 8
 }
 
 /// <summary>
