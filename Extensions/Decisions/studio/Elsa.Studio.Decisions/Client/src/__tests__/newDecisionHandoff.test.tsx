@@ -81,6 +81,42 @@ describe("New decision handoff to the Evaluate Decision picker", () => {
     expect(onValue).toHaveBeenCalledTimes(1); expect(picker(host).value).toBe("other");
   });
 
+  it("keeps the flow when the author clicks New decision again before saving, so the host focuses the same tab", async () => {
+    const api = pickerApi(), tabs = workspaceTabs(), onValue = vi.fn();
+    const { host } = mount(<Workspace api={api} workflowVisible onValue={onValue} />);
+    await vi.waitFor(() => expect(picker(host).querySelector('option[value="other"]')).not.toBeNull());
+    click(button(host, "New decision")); click(button(host, "New decision"));
+    expect(tabs.requests).toHaveLength(2); expect(tabs.requests[1].path).toBe(tabs.requests[0].path);
+    completeNewDecisionHandoff(tabs.token(0), { id: "created", name: created.name });
+    await vi.waitFor(() => expect(onValue).toHaveBeenCalledWith("created@latest"));
+    click(button(host, "New decision"));
+    expect(tabs.token(2)).not.toBe(tabs.token(0));
+  });
+
+  it("ends the flow when the author changes the version before saving", async () => {
+    const api = pickerApi(), tabs = workspaceTabs(), onChange = vi.fn(), published = { id: "v1", assetId: asset.id, number: 1, name: asset.name, xml: asset.xml, sourceHash: "hash1", publishedAt: asset.createdAt };
+    api.backend.http.getJson.mockImplementation(async (path: string) => ({ items: path.endsWith("/versions") ? [published] : [asset, other] }) as never);
+    // The value stays fixed, so only the cancellation (not the click-time comparison) can keep the pick.
+    const { host } = mount(<DecisionVersionEditor api={api} descriptor={{ name: "Decision", typeName: "String" }} context={{} as never} value="approval@latest" disabled={false} onChange={onChange} />);
+    await vi.waitFor(() => expect(host.textContent).toContain("Version 1"));
+    click(button(host, "New decision"));
+    select(host.querySelector<HTMLSelectElement>('[aria-label="Business decision version"]')!, "v1"); expect(onChange).toHaveBeenLastCalledWith("approval@v1");
+    completeNewDecisionHandoff(tabs.token(), { id: "created", name: created.name });
+    await new Promise(resolve => setTimeout(resolve, 20));
+    expect(onChange).toHaveBeenCalledTimes(1);
+  });
+
+  it("names the selected decision before the reloaded list includes it", async () => {
+    const api = pickerApi(), tabs = workspaceTabs(), onValue = vi.fn();
+    const { host } = mount(<Workspace api={api} workflowVisible onValue={onValue} />);
+    await vi.waitFor(() => expect(picker(host).querySelector('option[value="other"]')).not.toBeNull());
+    click(button(host, "New decision"));
+    completeNewDecisionHandoff(tabs.token(), { id: "created", name: created.name });
+    await vi.waitFor(() => expect(picker(host).value).toBe("created"));
+    expect(picker(host).querySelectorAll('option[value="created"]')).toHaveLength(1);
+    expect(picker(host).selectedOptions[0].textContent).toBe(created.name);
+  });
+
   it("leaves a read-only inspector unchanged", async () => {
     const api = pickerApi(), tabs = workspaceTabs(), onValue = vi.fn();
     const { host, update } = mount(<Workspace api={api} workflowVisible onValue={onValue} />);

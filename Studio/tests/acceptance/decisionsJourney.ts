@@ -213,7 +213,10 @@ export async function decisionsJourney(page: Page, info: TestInfo, capture: Capt
       await expect(picker).toBeVisible(); await expect(picker).toHaveValue(createdAsset.id);
       expect(createdAsset.id).not.toBe(existingId);
       await expect(picker.locator("option:checked")).toHaveText(created);
-      await part("decision-picker-returned", picker);
+      // A fresh decision has no published version yet, and the picker says so beside the new selection.
+      const pickerPanel = page.locator(".decision-version-picker");
+      await expect(pickerPanel.getByRole("alert").filter({ hasText: "This decision has no published version." })).toBeVisible();
+      await part("decision-picker-returned", pickerPanel);
     } catch (failure) {
       // Clean up best-effort without letting a cleanup failure replace the journey's own error.
       await page.request.delete(`${backend}/design/workflows/definitions/${submitted.definition.id}`).catch(() => undefined);

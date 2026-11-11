@@ -29,6 +29,11 @@ export function beginNewDecisionHandoff() {
   return value;
 }
 
+/** Whether a handoff is still waiting for its editor to save. */
+export function isNewDecisionHandoffPending(value: string) {
+  return entries.has(value) && entries.get(value) === null;
+}
+
 /** Drops a handoff, finished or not, so a later save cannot reach the picker that began it. */
 export function cancelNewDecisionHandoff(value: string) {
   entries.delete(value);

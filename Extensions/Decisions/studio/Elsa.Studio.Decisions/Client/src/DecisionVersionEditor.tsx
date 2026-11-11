@@ -4,7 +4,7 @@ import { openStudioWorkspaceTab, qualifyStudioBackendPath, type ElsaStudioModule
 import { StudioAlert, StudioButton } from "@elsa-workflows/studio-ui";
 import { can, failureMessage, listDecisions, versions, type DecisionAsset, type DecisionVersion } from "./decisionsApi";
 import { useForegroundGeneration } from "./decisionFreshness";
-import { beginNewDecisionHandoff, cancelNewDecisionHandoff, newDecisionHandoffParameter, subscribeNewDecisionHandoffs, takeNewDecisionHandoff, type NewDecisionResult } from "./newDecisionHandoff";
+import { beginNewDecisionHandoff, cancelNewDecisionHandoff, isNewDecisionHandoffPending, newDecisionHandoffParameter, subscribeNewDecisionHandoffs, takeNewDecisionHandoff, type NewDecisionResult } from "./newDecisionHandoff";
 export function DecisionVersionEditor({ api, value, disabled, onChange, onValidationChange }: StudioActivityPropertyEditorProps & { api: ElsaStudioModuleApi }) {
   const selected = typeof value === "string" ? value : "", split = selected.lastIndexOf("@"), assetId = split >= 0 ? selected.slice(0, split) : "", selection = split >= 0 ? selected.slice(split + 1) : "";
   const [assets, setAssets] = useState<DecisionAsset[]>([]), [choices, setChoices] = useState<DecisionVersion[]>([]), [loading, setLoading] = useState(true), [loadingVersions, setLoadingVersions] = useState(false), [error, setError] = useState("");
@@ -24,8 +24,11 @@ export function DecisionVersionEditor({ api, value, disabled, onChange, onValida
    * decision saved there. A browser-tab fallback is another document, so it only refreshes the list.
    */
   const openNewDecision = useCallback(() => {
-    dropHandoff();
-    const token = beginNewDecisionHandoff();
+    // A flow still waiting keeps its token, so the same address focuses the editor tab already open
+    // (and any work typed there) instead of opening a second, blank one.
+    const waiting = handoff.current && isNewDecisionHandoffPending(handoff.current.token) ? handoff.current.token : null;
+    if (!waiting) dropHandoff();
+    const token = waiting ?? beginNewDecisionHandoff();
     handoff.current = { token, baseline: current.current.selected };
     if (openStudioWorkspaceTab(qualifyStudioBackendPath(`/decisions?new=1&${newDecisionHandoffParameter}=${encodeURIComponent(token)}`))) return;
     dropHandoff();
