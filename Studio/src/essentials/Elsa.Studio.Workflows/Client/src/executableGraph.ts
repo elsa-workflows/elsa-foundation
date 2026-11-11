@@ -137,6 +137,7 @@ export function buildExecutableActivityGraph(
         !inputBindings.some(binding => (binding.inputKey ?? binding.inputName) === input.inputKey && binding.isSensitive)
       ).map(input => ({ referenceKey: input.inputKey, value: { expressionType: input.expressionType ?? "Literal", value: input.value } })),
       outputs: [],
+      executableOutcomes: node.outcomes,
       structure: synthesizeStructure(node, catalogItem, adapt, nodeIdsByExecutableId)
     };
   };

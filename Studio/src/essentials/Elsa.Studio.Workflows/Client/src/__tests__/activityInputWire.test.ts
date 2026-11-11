@@ -524,6 +524,19 @@ describe("argument collection wire adapter", () => {
     expect("isReadOnly" in input).toBe(false);
   });
 
+  it("sends required output nullability for new, reopened and legacy definitions without changing explicit values", () => {
+    const rows = [
+      { referenceKey: "missing", name: "Missing", type: { alias: "String", collectionKind: "Single" } },
+      { referenceKey: "nullable", name: "Nullable", type: { alias: "String", collectionKind: "Single" }, isNullable: true },
+      { referenceKey: "legacy", name: "Legacy", type: { alias: "String", collectionKind: "Single" }, IsNullable: false }
+    ];
+    for (const state of [canonicalizeStateForWire({ outputs: rows }), expandStateFromWire({ outputs: rows })]) {
+      const outputs = state.outputs as Record<string, unknown>[];
+      expect(outputs.map(row => row.isNullable)).toEqual([false, true, false]);
+      expect(outputs.every(row => !("IsNullable" in row))).toBe(true);
+    }
+  });
+
   it("defaults missing input nullability without overriding explicit booleans", () => {
     const state: WorkflowDefinitionState = {
       inputs: [

@@ -318,7 +318,8 @@ public sealed class WorkflowExecutableInspector(
                 .OrderBy(capture => capture.OutputName, StringComparer.Ordinal)
                 .Select(OutputCapture)
                 .ToArray(),
-            ProjectBpmnStructure(node));
+            ProjectBpmnStructure(node),
+            node.ActivityContract?.Outcomes.ToArray());
 
     private static WorkflowExecutableOutputCaptureView OutputCapture(RuntimeOutputCapture capture) =>
         new(

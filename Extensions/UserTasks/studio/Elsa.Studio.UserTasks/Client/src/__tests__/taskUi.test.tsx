@@ -5,7 +5,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { StudioHttpError, type StudioActivityPropertyEditorContribution, type ElsaStudioModuleApi } from "@elsa-workflows/studio-sdk";
 import { register } from "../module";
-import { ActionsEditor, AssignmentEditor } from "../PropertyEditors";
+import { ActionsEditor, AssignmentEditor, FormEditor } from "../PropertyEditors";
 import { BasicTaskForm } from "../TaskForm";
 import { FormsPage } from "../FormsPage";
 import { TasksPage, TaskDetail } from "../TasksPage";
@@ -248,6 +248,52 @@ it("serializes target paging and retries a failed page before advancing", async 
   expect([...container.querySelectorAll("option")].map(x => x.value)).toEqual(["", "first", "middle", "last"]);
 });
 
+describe("assignee and group assignment rule", () => {
+  const targetsPage = () => vi.fn().mockResolvedValue({ users: [{ id: "alice", name: "Alice" }], groups: [{ id: "buyers", name: "Buyers" }], moreUsers: false, moreGroups: false });
+  async function renderAssignment(group: boolean, inputValues: Record<string, unknown> | undefined) {
+    const validation = vi.fn();
+    await act(async () => root.render(<AssignmentEditor api={api(targetsPage())} group={group} value={null} onChange={vi.fn()} onValidationChange={validation}
+      descriptor={{ name: group ? "GroupId" : "AssigneeId", typeName: "String" }} context={{ activity: {}, expressionDescriptors: [], inputValues }} />));
+    return validation;
+  }
+  const alerts = () => [...container.querySelectorAll('[role="alert"]')].map(item => item.textContent);
+
+  it("accepts exactly one of an assignee or a group", async () => {
+    const validation = await renderAssignment(false, { AssigneeId: "alice", GroupId: "" });
+    expect(validation).toHaveBeenLastCalledWith(false);
+    expect(alerts()).toEqual([]);
+    expect(container.querySelector("select")!.getAttribute("aria-invalid")).toBe("false");
+  });
+
+  it("asks to clear one side when both an assignee and a group are set", async () => {
+    const validation = await renderAssignment(false, { AssigneeId: "alice", GroupId: "buyers" });
+    expect(validation).toHaveBeenLastCalledWith(true);
+    expect(alerts()).toEqual(["Choose either an assignee or a group; clear the other assignment."]);
+    expect(container.querySelector("select")!.getAttribute("aria-invalid")).toBe("true");
+  });
+
+  it("asks for an assignee or a group when neither is set, treating whitespace as unset", async () => {
+    const validation = await renderAssignment(false, { AssigneeId: "  ", GroupId: "" });
+    expect(validation).toHaveBeenLastCalledWith(true);
+    expect(alerts()).toEqual(["Select an assignee or a group for this task."]);
+  });
+
+  it("reports the rule from the group row without repeating the message", async () => {
+    const validation = await renderAssignment(true, { AssigneeId: "", GroupId: "" });
+    expect(validation).toHaveBeenLastCalledWith(true);
+    expect(alerts()).toEqual([]);
+  });
+
+  it("does not judge the rule while either side is an expression rather than a literal", async () => {
+    // Expression-valued inputs are absent from inputValues; their runtime value is unknown at design time.
+    const validation = await renderAssignment(false, { AssigneeId: "" });
+    expect(validation).toHaveBeenLastCalledWith(false);
+    expect(alerts()).toEqual([]);
+    await act(async () => root.unmount()); root = createRoot(container);
+    expect(await renderAssignment(false, undefined)).toHaveBeenLastCalledWith(false);
+  });
+});
+
 it("renders an explicit external integration and submits its nested case-sensitive response", async () => {
   const custom = { ...task(), form: { id: "external", version: "immutable-1", name: "External", provider: "acme.forms/1", fields: [] } };
   const post = vi.fn().mockResolvedValue({ ...custom, status: "CompletionPending", revision: 2 });
@@ -271,4 +317,104 @@ it("selects task assignment and form contributions before the generic scalar edi
     await act(async () => root.render(<Component descriptor={descriptor} context={propertyContext} value={null} onChange={vi.fn()} />));
     expect(container.querySelector("select")).toBeTruthy();
   }
+});
+
+
+it("pins the latest published form across all pages in one atomic draft change", async () => {
+  const version = (id: string, v: string, at: string) => ({ form: { id, version: v, name: "Purchase" }, createdAt: at });
+  const get = vi.fn(async (path: string) => path.includes("after=") ? { items: [version("purchase", "2", "2026-11-03T10:00:00Z")] } : { items: [version("purchase", "1", "2026-11-02T10:00:00Z")], next: "later" });
+  const setLiteralInputs = vi.fn(); const onChange = vi.fn();
+  await act(async () => root.render(<FormEditor api={api(get)} descriptor={{ name: "FormId", typeName: "String", uiHint: "user-task-form" }} value={null} context={{ activity: {}, expressionDescriptors: [], setLiteralInputs }} onChange={onChange} />));
+  await vi.waitFor(() => expect(container.querySelector<HTMLSelectElement>("select")!.disabled).toBe(false));
+  await act(async () => { const select = container.querySelector("select")!; select.value = "purchase"; select.dispatchEvent(new Event("change", { bubbles: true })); });
+  expect(get).toHaveBeenCalledTimes(2); expect(setLiteralInputs).toHaveBeenCalledWith({ FormId: "purchase", FormVersion: "2" }); expect(onChange).not.toHaveBeenCalled();
+});
+
+it("keeps pinned selections through a form-load failure and lets authors retry", async () => {
+  const get = vi.fn().mockRejectedValueOnce(new Error("Read failed")).mockResolvedValue({ items: [{ form: { id: "purchase", version: "1", name: "Purchase" }, createdAt: "2026-11-02T10:00:00Z" }] });
+  const onChange = vi.fn(); const validation = vi.fn();
+  await act(async () => root.render(<FormEditor api={api(get)} descriptor={{ name: "FormId", typeName: "String", uiHint: "user-task-form" }} value="purchase" context={{ activity: {}, expressionDescriptors: [] }} onChange={onChange} onValidationChange={validation} />));
+  expect(container.querySelector<HTMLSelectElement>("select")!.value).toBe("purchase");
+  await click("Retry loading forms");
+  await vi.waitFor(() => expect(container.querySelector<HTMLSelectElement>("select")!.disabled).toBe(false));
+  expect(container.textContent).not.toContain("Read failed"); expect(onChange).not.toHaveBeenCalled();
+});
+
+it("uses the older host's literal FormId and preserves expression-based form version authoring", async () => {
+  const get = vi.fn().mockResolvedValue({ items: [{ form: { id: "purchase", version: "2", name: "Purchase" }, createdAt: "2026-11-02T10:00:00Z" }] });
+  const context = api(get); const onChange = vi.fn();
+  const descriptor = { name: "FormVersion", typeName: "String", uiHint: "user-task-form-version" };
+  await act(async () => root.render(<FormEditor api={context} descriptor={descriptor} value="2" context={{ activity: { FormId: { expression: { type: "Literal", value: "purchase" } } }, expressionDescriptors: [] }} onChange={onChange} />));
+  await vi.waitFor(() => expect(container.querySelector<HTMLSelectElement>("select")!.disabled).toBe(false));
+  expect(container.querySelector("select")!.value).toBe("2"); expect(container.textContent).not.toContain("unavailable");
+  await act(async () => root.render(<FormEditor api={context} descriptor={descriptor} value="2" context={{ activity: { FormId: { expression: { type: "JavaScript", value: "getForm()" } } }, expressionDescriptors: [] }} onChange={onChange} />));
+  expect(container.querySelector("select")).toBeNull(); expect(container.querySelector("input")!.value).toBe("2");
+  expect(container.textContent).toContain("form ID is an expression"); expect(container.textContent).not.toContain("unavailable");
+});
+
+it("recovers an immutable-version collision without discarding the authored fields", async () => {
+  let latest = 1;
+  const get = vi.fn(async (path: string) => path.includes("identity") ? { ...identity, canManageForms: true, canReadForms: true } : { items: [{ form: { id: "purchase", version: String(latest), name: "Purchase", provider: "elsa.basic-forms/1", fields: [] }, createdAt: "2026-11-02T10:00:00Z" }] });
+  const post = vi.fn().mockImplementationOnce(async () => { latest = 2; throw new StudioHttpError(409, "Version exists"); }).mockResolvedValue({});
+  await act(async () => root.render(<FormsPage api={api(get, post)} />));
+  await click("Create next version");
+  const field = (label: string) => [...container.querySelectorAll("label")].find(item => item.textContent?.startsWith(label))!.querySelector("input")!;
+  await input(field("Name"), "Edited purchase"); await click("Publish form version");
+  await click("Use next available version");
+  expect(field("Version").value).toBe("3"); expect(field("Name").value).toBe("Edited purchase");
+  await click("Publish form version"); expect(post.mock.calls[1][1]).toMatchObject({ name: "Edited purchase", version: "3" });
+});
+
+it("distinguishes published forms that share a display name", async () => {
+  const get = vi.fn().mockResolvedValue({ items: ["purchase", "expense"].map(id => ({ form: { id, version: "1", name: "Approval" }, createdAt: "2026-11-02T10:00:00Z" })) });
+  await act(async () => root.render(<FormEditor api={api(get)} descriptor={{ name: "FormId", typeName: "String", uiHint: "user-task-form" }} value={null} context={{ activity: {}, expressionDescriptors: [] }} onChange={vi.fn()} />));
+  await vi.waitFor(() => expect(container.querySelector<HTMLSelectElement>("select")!.disabled).toBe(false));
+  expect([...container.querySelectorAll("option")].map(item => item.textContent)).toEqual(["No form", "Approval (purchase)", "Approval (expense)"]);
+});
+
+it("does not steal a form row's keyboard focus when publication restores the list", async () => {
+  const frames: FrameRequestCallback[] = [];
+  const frame = vi.spyOn(globalThis, "requestAnimationFrame").mockImplementation(callback => { frames.push(callback); return frames.length; });
+  try {
+    let form = { id: "purchase", version: "1", name: "Purchase", provider: "elsa.basic-forms/1", fields: [] };
+    const get = vi.fn(async (path: string) => path.includes("identity") ? { ...identity, canManageForms: true, canReadForms: true } : { items: [{ form, createdAt: "2026-11-02T10:00:00Z" }] });
+    const post = vi.fn(async (_path: string, value: typeof form) => { form = value; return {}; });
+    await act(async () => root.render(<FormsPage api={api(get, post)} />));
+    await click("Create next version"); await click("Publish form version");
+    const row = container.querySelector<HTMLButtonElement>("tbody button.user-task-link")!;
+    expect(row).toBeTruthy(); expect(frames.length).toBeGreaterThan(0);
+    row.focus(); frames.splice(0).forEach(callback => callback(0));
+    expect(document.activeElement).toBe(row);
+  } finally { frame.mockRestore(); }
+});
+
+it("keeps focus moved outside the editor while publication is pending", async () => {
+  const frames: FrameRequestCallback[] = [];
+  const frame = vi.spyOn(globalThis, "requestAnimationFrame").mockImplementation(callback => { frames.push(callback); return frames.length; });
+  let release!: () => void; const pending = new Promise<void>(resolve => { release = resolve; });
+  try {
+    let form = { id: "purchase", version: "1", name: "Purchase", provider: "elsa.basic-forms/1", fields: [] };
+    const get = vi.fn(async (path: string) => path.includes("identity") ? { ...identity, canManageForms: true, canReadForms: true } : { items: [{ form, createdAt: "2026-11-02T10:00:00Z" }] });
+    const post = vi.fn(async (_path: string, value: typeof form) => { await pending; form = value; return {}; });
+    await act(async () => root.render(<FormsPage api={api(get, post)} />));
+    await click("Create next version"); await click("Publish form version");
+    const inbox = container.querySelector<HTMLAnchorElement>("a")!; inbox.focus();
+    await act(async () => release()); await vi.waitFor(() => expect(frames.length).toBeGreaterThan(0));
+    frames.splice(0).forEach(callback => callback(0)); expect(document.activeElement).toBe(inbox);
+  } finally { release(); frame.mockRestore(); }
+});
+
+it.each([false, true])("prevents competing local navigation while resolving the next version (preview=%s)", async preview => {
+  const form = { id: "purchase", version: "1", name: "Purchase", provider: "elsa.basic-forms/1", fields: [] };
+  const page = { items: [{ form, createdAt: "2026-11-02T10:00:00Z" }] };
+  let release!: (value: typeof page) => void; const pending = new Promise<typeof page>(resolve => { release = resolve; }); let waiting = false;
+  const get = vi.fn(async (path: string) => path.includes("identity") ? { ...identity, canManageForms: true, canReadForms: true } : waiting ? pending : page);
+  await act(async () => root.render(<FormsPage api={api(get)} />));
+  if (preview) await click("Purchase");
+  waiting = true; await click("Create next version");
+  try {
+    const competing = [...container.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent === (preview ? "Back to forms" : "Create form version"))!;
+    expect(competing.disabled).toBe(true);
+    if (!preview) expect(container.querySelector<HTMLButtonElement>("tbody button.user-task-link")!.disabled).toBe(true);
+  } finally { await act(async () => release(page)); }
 });

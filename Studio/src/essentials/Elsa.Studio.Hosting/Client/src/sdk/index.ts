@@ -695,6 +695,10 @@ export interface StudioActivityPropertyEditorContext {
   activity: unknown;
   /** The node id of the activity being edited, so an editor can tell one activity from the next. Absent on older hosts. */
   activityId?: string | null;
+  /** Current literal input values keyed by descriptor reference key. Masked inputs are excluded. */
+  inputValues?: Record<string, unknown>;
+  /** Atomically update related literal inputs in one authoring change. Unavailable on older hosts. */
+  setLiteralInputs?: (values: Record<string, unknown>) => void;
   expressionDescriptors: StudioExpressionDescriptor[];
   readOnly?: boolean;
   scope?: StudioActivityPropertyEditorScope;
@@ -748,6 +752,11 @@ export interface StudioActivityPropertyEditorContribution extends StudioBackendA
    * Review & publish. Omission means this contribution does not add draft-validation issues.
    */
   collectDraftValidation?(activity: unknown, context?: StudioDraftValidationContext): StudioDraftValidationIssue[] | Promise<StudioDraftValidationIssue[]>;
+  /**
+   * When true, this contribution reads other inputs of the activity (`context.activity`, `inputValues`).
+   * The properties panel then refreshes its row when a sibling input changes; other rows keep their memo.
+   */
+  readsActivityContext?: true;
   supports(descriptor: StudioActivityInputDescriptor, context: StudioActivityPropertyEditorContext): boolean;
   component: ComponentType<StudioActivityPropertyEditorProps>;
 }
