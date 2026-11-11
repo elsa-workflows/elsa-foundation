@@ -1098,6 +1098,7 @@ jobs:
       - name: Verify acceptance tooling and gate failure controls
         run: |
           python3 -m unittest discover -s tools/ux-acceptance -p 'test_*.py'
+          node --test tools/ux-acceptance/*.test.mjs
           python3 -m unittest discover -s tools/ci -p 'test_studio_gate.py'
       - name: Exercise real composed hosts with disposable stores
         env:
