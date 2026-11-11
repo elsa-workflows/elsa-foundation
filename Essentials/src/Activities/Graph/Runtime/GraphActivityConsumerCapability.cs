@@ -7,9 +7,8 @@ namespace Elsa.Activities.Graph.Runtime;
 /// Advertises that this engine can activate graph-backed nodes (<see cref="WellKnownRuntimeActivityConsumers.GraphActivity"/>).
 /// </summary>
 /// <remarks>
-/// Its own type for the same reason as <c>ClrActivityConsumerCapability</c>: <c>TryAddEnumerable</c>
-/// de-duplicates by implementation type, so two capabilities sharing one generic class silently collapse into
-/// whichever composed first. See that type's remarks for the defect this shape prevents.
+/// Retained for consumers constructing this public capability directly. Feature authors should use
+/// <c>AddRuntimeActivityConsumerCapability</c> to register by consumer key and supported schemas.
 /// </remarks>
 public sealed class GraphActivityConsumerCapability : IRuntimeActivityConsumerCapability
 {

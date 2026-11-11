@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Elsa.Activities.Runtime.Core.Contracts;
+using Elsa.Activities.Runtime.Core.Extensions;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Primitives.Models;
 using Elsa.Serialization.Core;
@@ -45,6 +46,51 @@ public sealed class RuntimeRequirementCheckerTests
             entry => Assert.Equal(("sample.driver", RuntimeRequirementStatus.Available), (entry.DriverKey, entry.Status)),
             entry => Assert.Equal(("sample.missing-driver", RuntimeRequirementStatus.Missing), (entry.DriverKey, entry.Status)));
         Assert.Empty(result.ActivityTypes);
+    }
+
+    [Fact]
+    public void Capability_registration_deduplicates_identical_declarations_and_unions_versions_by_ordinal_key()
+    {
+        var services = new ServiceCollection();
+        services.AddRuntimeActivityConsumerCapability("sample.consumer", ["2", "1"]);
+        services.AddRuntimeActivityConsumerCapability("sample.consumer", ["1", "2", "2"]);
+        services.AddRuntimeActivityConsumerCapability("sample.consumer", ["2", "3"]);
+        services.AddRuntimeActivityConsumerCapability("sample.consumer", ["4"]);
+        services.AddRuntimeActivityConsumerCapability("Sample.consumer", ["1"]);
+        services.AddRuntimeActivityConsumerCapability("sample.other", ["7"]);
+
+        using var provider = services.BuildServiceProvider();
+        var capabilities = provider.GetServices<IRuntimeActivityConsumerCapability>().ToArray();
+        Assert.Equal(5, capabilities.Length);
+
+        var checker = Checker(capabilities, []);
+        var subject = new RuntimeRequirementCheckSubject(
+            "artifact-capabilities",
+            [
+                new RuntimeRequirement("sample.consumer", "1"),
+                new RuntimeRequirement("sample.consumer", "1"),
+                new RuntimeRequirement("sample.consumer", "2"),
+                new RuntimeRequirement("sample.consumer", "3"),
+                new RuntimeRequirement("sample.consumer", "4"),
+                new RuntimeRequirement("sample.consumer", "5"),
+                new RuntimeRequirement("Sample.consumer", "1"),
+                new RuntimeRequirement("sample.other", "7")
+            ],
+            [],
+            []);
+
+        var result = checker.Check(subject);
+
+        Assert.False(result.IsSatisfied);
+        Assert.Collection(
+            result.Requirements,
+            entry => AssertRequirement(entry, "Sample.consumer", "1", RuntimeRequirementStatus.Available, ["1"]),
+            entry => AssertRequirement(entry, "sample.consumer", "1", RuntimeRequirementStatus.Available, ["1", "2", "3", "4"]),
+            entry => AssertRequirement(entry, "sample.consumer", "2", RuntimeRequirementStatus.Available, ["1", "2", "3", "4"]),
+            entry => AssertRequirement(entry, "sample.consumer", "3", RuntimeRequirementStatus.Available, ["1", "2", "3", "4"]),
+            entry => AssertRequirement(entry, "sample.consumer", "4", RuntimeRequirementStatus.Available, ["1", "2", "3", "4"]),
+            entry => AssertRequirement(entry, "sample.consumer", "5", RuntimeRequirementStatus.UnsupportedSchema, ["1", "2", "3", "4"]),
+            entry => AssertRequirement(entry, "sample.other", "7", RuntimeRequirementStatus.Available, ["7"]));
     }
 
     [Fact]

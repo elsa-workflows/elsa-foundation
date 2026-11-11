@@ -17,8 +17,8 @@ namespace Elsa.Workflows.Runtime.Services.Values;
 /// </para>
 /// <para>
 /// It is registered beside the executor it speaks for, so a runtime that can run the nodes also advertises the
-/// consumer. It is its own type for the reason <c>ClrActivityConsumerCapability</c> gives: <c>TryAddEnumerable</c>
-/// de-duplicates by implementation type.
+/// consumer through <c>AddRuntimeActivityConsumerCapability</c>. This public type remains available to
+/// consumers constructing the capability directly; a distinct implementation type is no longer required.
 /// </para>
 /// </remarks>
 public sealed class IntrinsicActivityConsumerCapability : IRuntimeActivityConsumerCapability

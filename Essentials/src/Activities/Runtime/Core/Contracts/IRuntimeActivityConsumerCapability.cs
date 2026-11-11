@@ -5,6 +5,10 @@ namespace Elsa.Activities.Runtime.Core.Contracts;
 /// This is capability evidence only; activity instances are still created through the transient
 /// activation seam.
 /// </summary>
+/// <remarks>
+/// Register static capability evidence with <c>AddRuntimeActivityConsumerCapability</c>. Consumers
+/// combine supported schemas by ordinal <see cref="ConsumerKey"/>; implementation type is not identity.
+/// </remarks>
 public interface IRuntimeActivityConsumerCapability
 {
     string ConsumerKey { get; }

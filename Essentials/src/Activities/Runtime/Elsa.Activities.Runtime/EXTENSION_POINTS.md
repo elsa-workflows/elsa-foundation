@@ -8,6 +8,16 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Activities.Runtim
 
 ## Implementable contributor interfaces
 
+### `IRuntimeActivityConsumerCapability` *(Core)*
+
+Activity-family features advertise their consumer key and supported descriptor schemas with
+`services.AddRuntimeActivityConsumerCapability(key, versions)` from
+`Elsa.Activities.Runtime.Core.Extensions`. The helper registers static singleton evidence using
+`RuntimeActivityConsumerCapability`; different keys may share that type. Exact repeated declarations
+are ignored after ordinal schema normalization. Additional schema declarations for one key remain
+additive, and runtime requirement checking and runnability reports union their versions.
+Do not use implementation-type-based `TryAddEnumerable` for these value-identified declarations.
+
 ### `WorkflowInvokeActivitySchedulerWorkHandler` *(Activities Runtime — `Elsa.Activities.Runtime`)*
 - **Kind:** Scheduler work contributor.
 - **Register:** `ActivitiesRuntimeFeature` registers it as an `IWorkflowSchedulerWorkHandler`.
