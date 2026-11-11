@@ -60,11 +60,13 @@ Inverse of `#3993` / A3: a **NATIVE** child under a BPMN composite `callActivity
 
 SQLite Owned Workbench, **one in-process host**, Root. Not dual-model retry admission. Direct-plane `CallActivity` is refused at publish.
 
+**G-b is closed** for native-under-BPMN with that scope (SQLite, one host, Root). The proven CompensationScope handler-retry mapping is the closing case.
+
 | Case | Status | Test |
 |---|---|---|
 | CompensationScope handler retry (fail-then-succeed HTTP; first handler fault survives; second attempt Completes) → dispatch `Completed` / parent `Completed` via normal outbound, no parent incident | **PROVEN** | `CallActivityNativeChildHeldRetryTests.A_retried_native_CompensationScope_handler_under_callActivity_maps_Completed_to_the_BPMN_parent` in `Essentials/tests/Activities/Bpmn/Hosting/Tests/CallActivityNativeChildHeldRetryTests.cs` |
-| Operator `RetryFaultedActivity/1` of a native child under callActivity | **OPEN** | Not this proof. Native operator retry is a different admission from BPMN `RetryServiceAsync`. First-party `Fault` always faults; `SendHttpRequest` never faults on HTTP 500. Fail-then-succeed here re-schedules the Flowchart handler from the start (new invocation), like `#3993`'s new worker. |
-| BPMN `HoldForRetry` / `RetryServiceAsync` on the composite callActivity plane | **OPEN** | No product path on this plane (G1: outbox sweep only). Do not merge with A3. |
+| Operator `RetryFaultedActivity/1` of a native child under callActivity | **LIMITATION** | A different mechanism from BPMN `RetryServiceAsync`. Belongs with the deferred D3 'narrowly validated alteration' work. Not pursued in this milestone. |
+| BPMN `HoldForRetry` / `RetryServiceAsync` on the composite callActivity plane | **LIMITATION** | No product path on that plane. Not pursued. |
 
 Immediate native `Fault` under callActivity (no hold) remains **B3** (`Test-BpmnCallActivity.ps1` Scenario B). This section does not re-prove B3.
 
@@ -79,6 +81,8 @@ Immediate native `Fault` under callActivity (no hold) remains **B3** (`Test-Bpmn
 | Row | Record |
 |---|---|
 | B2 callActivity native business error | **No product path, needs design.** Nothing carries a business outcome from a native-root child across `DispatchWorkflow`. `AuthoredFailureCode` is BPMN-root only (`BpmnProcessRuntime.cs:137`). Not an untested shipped path. |
+| G-b operator `RetryFaultedActivity/1` of a native child under callActivity | **LIMITATION.** Different mechanism from BPMN `RetryServiceAsync`. Belongs with the deferred D3 'narrowly validated alteration' work. Not pursued in this milestone. G-b itself is closed for native-under-BPMN (SQLite, one host, Root). |
+| G-b BPMN `HoldForRetry` / `RetryServiceAsync` on the composite callActivity plane | **LIMITATION.** No product path on that plane. Not pursued. |
 
 ## Deliberate non-merges
 
