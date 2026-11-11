@@ -5,6 +5,7 @@ import { expect, test, type APIRequestContext, type Page, type TestInfo } from "
 import { userTaskAuthoringJourney } from "./userTaskAuthoringJourney";
 import { userTasksJourney } from "./userTasksJourney";
 import { decisionsJourney } from "./decisionsJourney";
+import { chooseDataJourney } from "./chooseDataJourney";
 
 async function capture(page: Page, info: TestInfo, name: string) {
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
@@ -819,4 +820,8 @@ test("workflow template metadata defaults", async ({ page }, info) => {
 
 test("executable designer parity", async ({ page }, info) => {
   await executableDesignerJourney(page, info, capture, id => designerDefinitions.get(page)!.push(id));
+});
+
+test("choose data for activity outputs", async ({ page }, info) => {
+  await chooseDataJourney(page, info, capture, cleanup => { ownedCleanups.get(page)!.push(cleanup); });
 });
