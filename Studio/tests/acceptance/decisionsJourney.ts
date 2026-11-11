@@ -190,10 +190,14 @@ export async function decisionsJourney(page: Page, info: TestInfo, capture: Capt
       await page.goto(`/workflows/definitions?definition=${submitted.definition.id}&backend=legacy`);
       await expect(page.locator('.wf-sequence-step[data-id="decide"]')).toBeVisible();
       // Autosave off, so the pick below stays an unsaved edit that only the open tab holds.
+      const saveStatus = page.locator(".wf-editor-save-status");
+      await info.attach("save-status-before-autosave-off", { body: await saveStatus.textContent() ?? "", contentType: "text/plain" });
       await page.getByRole("button", { name: "More workflow actions", exact: true }).click();
       const autosave = page.getByRole("menuitemcheckbox", { name: /Autosave/ });
       if (await autosave.getAttribute("aria-checked") === "true") await autosave.click();
       await page.keyboard.press("Escape");
+      // Turning autosave off drops a pending autosave, so the header stops claiming one (#4085).
+      await expect(saveStatus).not.toContainText("Autosaving");
       await page.locator('.wf-sequence-step[data-id="decide"]').press("Enter");
       const picker = page.getByRole("combobox", { name: "Business decision", exact: true });
       await expect(picker.locator("option", { hasText: existingDecision })).toHaveCount(1);
@@ -212,6 +216,7 @@ export async function decisionsJourney(page: Page, info: TestInfo, capture: Capt
       await page.getByRole("tab", { name: new RegExp(`^${workflowName}`) }).click();
       await expect(picker).toBeVisible(); await expect(picker).toHaveValue(existingId);
       await expect(picker.locator("option", { hasText: created })).toHaveCount(1);
+      await expect(saveStatus).not.toContainText("Autosaving");
       await part("decision-picker-returned", picker);
     } catch (failure) {
       // Clean up best-effort without letting a cleanup failure replace the journey's own error.
