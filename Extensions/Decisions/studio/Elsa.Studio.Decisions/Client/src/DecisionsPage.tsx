@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Plus, RefreshCw, Upload } from "lucide-react";
-import { notifyStudioNavigationGuardReleased, qualifyStudioBackendPath, studioNavigationRequestedEvent, type ElsaStudioModuleApi, type StudioNavigationRequest } from "@elsa-workflows/studio-sdk";
+import { notifyStudioNavigationGuardReleased, qualifyStudioBackendPath, studioNavigationRequestedEvent, useStudioWorkspaceTitle, type ElsaStudioModuleApi, type StudioNavigationRequest } from "@elsa-workflows/studio-sdk";
 import { SkeletonRows, StudioAlert, StudioButton, StudioCollectionToolbar, StudioPage, StudioPageHeader, StudioResultState, StudioSearchInput, StudioTableContainer } from "@elsa-workflows/studio-ui";
 import { can, cloneVersion, createDecision, exportDecision, failureMessage, getDecision, isConflict, listDecisions, publishDecision, saveDecision, validateDecision, version, versions, type DecisionAsset, type DecisionVersion, type Diagnostic } from "./decisionsApi";
 import { decodeDecisionXml, newDecisionXml } from "./decisionXml";
@@ -17,6 +17,7 @@ export function DecisionsPage({ api, navigate, assetId, versionId, isNew = false
   const generation = useRef(0), writing = useRef(false), initialXml = useRef(""), importFile = useRef<HTMLInputElement>(null), titleInput = useRef<HTMLInputElement>(null), heading = useRef<HTMLHeadingElement>(null), newButton = useRef<HTMLButtonElement>(null);
   const editor = !!assetId || isNew, readOnly = !!published || !can(api, "decisions:manage") || (!!assetId && asset?.xml === null);
   const dirty = editor && !published && (isNew ? !!name || !!description || sensitive || xml !== "" && xml !== initialXml.current : !!asset && (name !== asset.name || description !== (asset.description ?? "") || xml !== (asset.xml ?? "") || sensitive !== asset.isSensitive));
+  useStudioWorkspaceTitle(editor ? name.trim() || (isNew ? "New decision" : asset?.name) : null, published ? `Version ${published.number}` : editor && !isNew ? "Draft" : undefined);
   const dirtyRef = useRef(false); dirtyRef.current = dirty || caseDirty;
   useEffect(() => { if (!caseDirty && !caseBusy) notifyStudioNavigationGuardReleased(); }, [caseDirty, caseBusy]);
   const apply = useCallback((next: DecisionAsset, candidate?: DecisionVersion) => {

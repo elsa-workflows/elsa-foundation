@@ -74,7 +74,9 @@ export async function decisionsJourney(page: Page, info: TestInfo, capture: Capt
   const capabilities = await page.request.get(`${backend}/capabilities`); expect(capabilities.ok()).toBe(true);
   expect((await capabilities.json()).capabilities).toEqual(expect.arrayContaining([expect.objectContaining({ id: "elsa.api.decisions", contractVersion: "1" })]));
 
+  const workspaceTabs = page.getByRole("tablist", { name: "Open screens", exact: true });
   await page.goto("/decisions"); await expect(surface.locator("#decisions-title")).toHaveText("Decisions");
+  await expect(workspaceTabs.getByRole("tab", { selected: true })).toHaveAccessibleName("Decisions");
   await expect(surface.locator(".studio-skeleton-list")).toHaveCount(0); await part("decisions-list", surface.locator("#decisions-title"));
   // The shared search shell draws the only border; the field inside it must not add a second one.
   const search = surface.getByRole("searchbox", { name: "Search decisions", exact: true });
@@ -90,6 +92,7 @@ export async function decisionsJourney(page: Page, info: TestInfo, capture: Capt
     await expect(entry.locator("svg.lucide-scale")).toBeVisible();
   }
   await button("New decision").click(); await expect(surface.getByRole("heading", { name: "New decision", exact: true })).toBeVisible();
+  await expect(workspaceTabs.getByRole("tab", { selected: true })).toHaveAccessibleName("New decision");
   await expect(surface.getByText("Unsaved decision", { exact: true })).toBeVisible(); await expect(surface.getByText("Saved draft", { exact: true })).toHaveCount(0);
   await part("decision-create", surface.getByLabel("Name", { exact: true }));
   await button("Back to decisions").click(); await expect(button("New decision")).toBeFocused();
@@ -104,7 +107,9 @@ export async function decisionsJourney(page: Page, info: TestInfo, capture: Capt
     await surface.getByRole("textbox", { name: `Rule ${index + 1}, input customerCategory`, exact: true }).fill(row[1]);
     await surface.getByRole("textbox", { name: `Rule ${index + 1}, output approvalLevel`, exact: true }).fill(row[2]);
   }
-  const asset = await save(); await button("Validate").click();
+  const asset = await save();
+  await expect(workspaceTabs.getByRole("tab", { selected: true })).toHaveAccessibleName(`Approval policy ${suffix} · Draft`);
+  await button("Validate").click();
   await expect(surface.getByText("The saved draft is valid for the supported DMN profile.", { exact: true })).toBeVisible();
   await page.reload(); await expect(surface.getByRole("textbox", { name: "Rule 4, output approvalLevel", exact: true })).toHaveValue('"Account owner"');
   await part("decision-table", surface.getByRole("heading", { name: "Decision table", exact: true }));
@@ -122,6 +127,7 @@ export async function decisionsJourney(page: Page, info: TestInfo, capture: Capt
   const publishing = page.waitForResponse(value => value.request().method() === "POST" && new URL(value.url()).pathname.endsWith("/publish"));
   await button("Publish").click(); const publication = await publishing; expect(publication.ok(), await publication.text()).toBe(true);
   const published = await publication.json() as Version;
+  await expect(workspaceTabs.getByRole("tab", { selected: true })).toHaveAccessibleName(`Approval policy ${suffix} · Version ${published.number}`);
   await expect(button("Clone to draft")).toBeVisible(); await expect(surface.getByRole("textbox", { name: "Rule 1, input amount", exact: true })).toBeDisabled();
   await part("decision-published", surface.locator("#decisions-title"));
   await surface.getByRole("textbox", { name: "Evaluate input amount", exact: true }).fill("9007199254740993");
@@ -204,10 +210,12 @@ export async function decisionsJourney(page: Page, info: TestInfo, capture: Capt
       const opened = page.getByRole("tablist", { name: "Open screens", exact: true }).getByRole("tab", { selected: true });
       await expect(surface.getByRole("heading", { name: "New decision", exact: true })).toBeVisible();
       await expect(surface.getByText("Unsaved decision", { exact: true })).toBeVisible();
+      await expect(opened).toHaveAccessibleName("New decision");
       await part("decision-picker-new-tab", surface.getByLabel("Name", { exact: true }));
       expect(await opened.getAttribute("aria-label") ?? await opened.textContent()).not.toContain(workflowName);
       const created = `Picker-created policy ${suffix}`;
       await surface.getByLabel("Name", { exact: true }).fill(created); await save();
+      await expect(page.getByRole("tablist", { name: "Open screens", exact: true }).getByRole("tab", { name: created })).toBeVisible();
       // Back on the workflow: its unsaved pick survived, and the list reloaded with the decision just saved.
       await page.getByRole("tab", { name: new RegExp(`^${workflowName}`) }).click();
       await expect(picker).toBeVisible(); await expect(picker).toHaveValue(existingId);

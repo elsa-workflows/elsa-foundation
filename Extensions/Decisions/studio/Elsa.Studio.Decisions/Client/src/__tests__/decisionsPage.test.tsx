@@ -4,13 +4,48 @@ import { DecisionsPage } from "../DecisionsPage";
 import { CasePanel } from "../CasePanel";
 import { DecisionVersionEditor } from "../DecisionVersionEditor";
 import { EvaluationPanel } from "../EvaluationPanel";
-import { studioNavigationRequestedEvent, studioWorkspaceTabRequestedEvent, type StudioWorkspaceTabRequest } from "@elsa-workflows/studio-sdk";
+import { StudioWorkspaceTabProvider, studioNavigationRequestedEvent, studioWorkspaceTabRequestedEvent, type StudioWorkspaceTabHandle, type StudioWorkspaceTabRequest } from "@elsa-workflows/studio-sdk";
 import { editTable, newDecisionXml, parseTable } from "../decisionXml";
 import { asset, button, click, render, select, stubApi, type } from "./helpers";
 const disposals: Array<() => void> = [];
 afterEach(() => { disposals.splice(0).forEach(dispose => dispose()); });
 function mount(content: React.ReactNode) { const result = render(content); disposals.push(result.dispose); return result; }
+function mountInTab(content: React.ReactNode) {
+  const setTitle = vi.fn();
+  const tab: StudioWorkspaceTabHandle = { id: "decisions", active: true, location: "/decisions", isActive: () => true, markPendingWork: vi.fn(), setTitle };
+  const wrap = (node: React.ReactNode) => <StudioWorkspaceTabProvider value={tab}>{node}</StudioWorkspaceTabProvider>;
+  const result = mount(wrap(content));
+  return { ...result, setTitle, update: (node: React.ReactNode) => result.update(wrap(node)) };
+}
+function lastTitle(setTitle: ReturnType<typeof vi.fn>) { return setTitle.mock.calls.at(-1)?.[0]; }
 describe("Decisions Studio journeys", () => {
+  it("leaves the list tab untitled so the host keeps Decisions, and names new, draft, renamed and published tabs", async () => {
+    const api = stubApi(), { host, setTitle, update } = mountInTab(<DecisionsPage api={api} navigate={vi.fn()} />);
+    await vi.waitFor(() => expect(host.textContent).toContain("Purchase approval"));
+    expect(setTitle).not.toHaveBeenCalled();
+    update(<DecisionsPage api={api} navigate={vi.fn()} isNew />);
+    await vi.waitFor(() => expect(host.querySelector('input[aria-label="Input 1 name"]')).not.toBeNull());
+    expect(lastTitle(setTitle)).toEqual({ title: "New decision", detail: undefined });
+    update(<DecisionsPage api={api} navigate={vi.fn()} assetId={asset.id} />);
+    await vi.waitFor(() => expect(lastTitle(setTitle)).toEqual({ title: "Approval", detail: "Draft" }));
+    type(Array.from(host.querySelectorAll<HTMLInputElement>("input")).find(input => input.parentElement?.textContent === "Name")!, "Renamed approval");
+    await vi.waitFor(() => expect(lastTitle(setTitle)).toEqual({ title: "Renamed approval", detail: "Draft" }));
+    const published = { id: "v1", assetId: asset.id, number: 3, name: asset.name, xml: asset.xml, sourceHash: "hash1", publishedAt: asset.createdAt };
+    api.backend.http.getJson.mockImplementation(async path => path.endsWith("/versions") ? { items: [published] } : path.endsWith("/versions/v1") ? published : path.endsWith("/cases") ? { items: [] } : asset);
+    update(<DecisionsPage api={api} navigate={vi.fn()} assetId={asset.id} versionId="v1" />);
+    await vi.waitFor(() => expect(lastTitle(setTitle)).toEqual({ title: "Approval", detail: "Version 3" }));
+  });
+  it("names a new decision's tab after save once the host opens the created resource", async () => {
+    const api = stubApi(), navigate = vi.fn(), { host, setTitle, update } = mountInTab(<DecisionsPage api={api} navigate={navigate} isNew />);
+    api.backend.http.postJson.mockResolvedValue(asset as never);
+    await vi.waitFor(() => expect(host.querySelector('input[aria-label="Input 1 name"]')).not.toBeNull());
+    type(Array.from(host.querySelectorAll<HTMLInputElement>("input")).find(input => input.parentElement?.textContent === "Name")!, "Purchase approval");
+    await vi.waitFor(() => expect(lastTitle(setTitle)).toEqual({ title: "Purchase approval", detail: undefined }));
+    click(button(host, "Save decision"));
+    await vi.waitFor(() => expect(navigate).toHaveBeenCalledWith("/decisions?decision=approval"));
+    update(<DecisionsPage api={api} navigate={navigate} assetId={asset.id} />);
+    await vi.waitFor(() => expect(lastTitle(setTitle)).toEqual({ title: "Approval", detail: "Draft" }));
+  });
   it("distinguishes a populated collection, an unmatched search and an empty collection", async () => {
     const api = stubApi(), navigate = vi.fn(), { host, update } = mount(<DecisionsPage api={api} navigate={navigate} />);
     await vi.waitFor(() => expect(host.textContent).toContain("Purchase approval"));
