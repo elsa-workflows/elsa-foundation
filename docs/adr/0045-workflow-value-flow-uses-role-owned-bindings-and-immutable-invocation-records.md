@@ -196,7 +196,8 @@ beginning or from a point midway (an activity rescheduled or scheduled through a
 a re-execution: a new invocation that reads fresh inputs, while retrying the same invocation keeps its inputs
 (ADR 0092 decision 8). Code that copies the old input snapshot on a reschedule does not meet this rule. Idempotency of external effects belongs to
 the workflow designer; the engine supplies stable invocation identities to build idempotency keys from. Around an
-external effect the engine commits right before and right after it, so the effect lies between two recorded points.
+external effect it knows of (D-6 and D-5 say which) the engine commits right before and right after it, so the effect lies
+between two recorded points.
 This sentence states the guarantee only: how the engine provides it is the execution-contract details amendment of
 §3, ADR 0032 and ADR 0020 (see *Follow-ups* below). §3 already provides the part that matters here: a committed input snapshot is reused on retry and resumption,
 so a value an expression produced, once committed, does not change.
@@ -215,9 +216,19 @@ so a value an expression produced, once committed, does not change.
     repeated evaluation, such as a loop condition on each pass, produces fresh values.
 - **D-5: functions implemented in .NET.** A host may install functions into an expression engine whose
   implementation is .NET code, as `getVariable` already is. By default only JSON values cross the boundary between
-  the script and such a function. Live .NET objects do not cross it by default. A host may opt in through a separate script profile for objects it registers, and through a
-  further, separately named profile for general .NET access in script activities only. Input-binding expressions never
-  get live objects. The ADR 0046 amendment (V10) states the rule.
+  the script and such a function. Live .NET objects do not cross it by default. A host may opt in through a separate
+  script profile for objects it registers, and through a further, separately named profile for general .NET access in
+  script activities. The ADR 0046 amendment (V10) states the rule.
+  - **Input-binding expressions.** By default input-binding expressions get no live objects. A host may enable general
+    .NET access for input expressions through a separately named binding profile; an expression selects it, and the
+    executable pins it like any profile, so one profile name never means different behaviour on different hosts.
+    - Such an expression is treated as possibly effectful: the engine commits before and after its evaluation. Only
+      expressions that select the profile pay for this.
+    - It may use .NET objects while it evaluates, but what it returns is a storable value under ADR 0046, or the
+      evaluation is refused. No live object enters the input snapshot.
+    - Direct writes to Elsa-owned workflow state stay blocked, as for every input-binding expression.
+    - The publish warning and the Studio marker that ADR 0083 defines for general .NET access in script activities
+      apply to such a binding in the same way.
   - **Names.** Installed functions follow one naming rule, modelled on the type alias registry (ADR 0035):
     - reserved: the read roots (`variables`, `input`, `activities`, `workflow`, `args`) and Elsa's built-in functions;
     - module and host functions use a namespace prefix, and a duplicate registration fails at startup instead of
@@ -226,10 +237,19 @@ so a value an expression produced, once committed, does not change.
 - **D-6: idempotency belongs to the designer.** An effect outside Elsa's own state, such as an HTTP call or a .NET
   service call, cannot be rolled back by Elsa. The engine supplies stable invocation identities; the workflow designer
   owns idempotency (see *Why*). A call is never refused or skipped because of what it does.
-  - Functions carry no effect metadata — no profile, and not even an optional durability hint. The durability
-    boundary of input evaluation treats every registered .NET function as possibly effectful. A hint is reconsidered
-    only if measurements later show its cost matters, and even then it would only change where state is recorded,
-    never whether a call runs: a recorded step is not run again at all, and an unrecorded one runs again completely.
+  - **Undeclared functions are effect-free.** A registered function without a declaration is treated as effect-free:
+    no commits are placed around an input evaluation because it calls one. Elsa's built-in functions, such as
+    `newGuid()`, carry no declaration.
+  - **The effectful declaration.** A host may declare a function effectful when it registers it. Only then does the
+    engine place a commit before and after an input evaluation that calls it. This is one optional flag for the host
+    developer; workflow engineers never see it. It is the only effect metadata a function carries: there are no
+    effect profiles.
+  - The declaration never refuses, skips or deduplicates a call. It narrows the window in which an effect can repeat
+    and does not close it: a call can succeed before its result is committed and then run again. Idempotency stays
+    with the designer either way.
+  - *Accepted cost.* An effectful function registered without the declaration gets no boundary: after a crash its
+    effect can repeat anywhere in the step. External business operations belong in activities, not in functions
+    called from input bindings.
 
 *Unchanged by this amendment:*
 - the canonical serialized definition;
@@ -242,7 +262,7 @@ so a value an expression produced, once committed, does not change.
 *Follow-ups owned elsewhere:*
 - **ADR 0083 and spec 095's expression contract:** a new capability-profile name or version. `binding-pure-v1` still
   forbids time and randomness and is replaced there. The function effect profiles of spec 095 (R115 to R119) go with
-  it (D-6), in the same amendment.
+  it, in the same amendment; the single effectful declaration of D-6 replaces them.
 - **The execution-contract details of §3, ADR 0032 and ADR 0020.** They define how the engine keeps the guarantee
   stated in *Why*, that it commits right before and right after an external effect:
   - a stable identity for an input evaluation that may have effects;
@@ -474,6 +494,15 @@ making the definition object runtime state.
 Rejected as the preferred facade. The method-call experience is worth a tightly contained
 authoring-only carrier. The explicit foundational builder remains available for infrastructure and
 dynamic authoring.
+
+### Treat every registered function as possibly effectful (no function metadata)
+
+Considered for the §5 amendment (D-6) and not chosen. With no metadata at all, the durability boundary of input
+evaluation would have to treat every registered .NET function as possibly effectful. Every step whose inputs call
+any function, including built-ins such as `newGuid()`, would then pay two commits, with no way to opt out, although
+most functions called from expressions have no side effects. The boundary would still not make an effect
+exactly-once, so the designer needs idempotency either way. An optional effectful declaration keeps the default
+cheap and gives the commit-around-effects guarantee a consumer: it is what turns the guarantee on for a function.
 
 ### Keep obsolete memory interfaces as forwarding shims
 
