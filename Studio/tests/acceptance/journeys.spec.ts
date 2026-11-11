@@ -1,3 +1,4 @@
+import { tabbedSecretsJourney } from "./tabbedSecretsJourney";
 import { templateToastJourney } from "./templateToastJourney";
 import { executableDesignerJourney } from "./executableDesignerJourney";
 import { writeFileSync } from "node:fs";
@@ -209,7 +210,7 @@ test("collections and connection creation", async ({ page }, info) => {
   await page.goto("/security/secrets");
   const secretName = `DbConnectionString-${stamp}`;
   await page.getByRole("button", { name: "Create secret", exact: true }).first().click();
-  const secret = page.getByRole("dialog", { name: "Create secret", exact: true });
+  const secret = page.getByRole("region", { name: "Create secret", exact: true });
   const technicalName = secret.getByLabel("Technical name", { exact: true });
   await technicalName.fill(` ${secretName} `);
   await technicalName.press("Tab");
@@ -226,10 +227,10 @@ test("collections and connection creation", async ({ page }, info) => {
   await secretRow.getByRole("button", { name: `Copy technical name ${secretName}`, exact: true }).click();
   await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(secretName);
   await secretRow.getByRole("button", { name: `Edit ${secretName}`, exact: true }).click();
-  const editor = page.getByRole("dialog", { name: "Edit secret", exact: true });
+  const editor = page.getByRole("region", { name: "Edit secret", exact: true });
   await expect(editor.locator("code")).toHaveText(secretName);
   await capture(page, info, "secret-detail");
-  await editor.getByRole("button", { name: "Close editor", exact: true }).click();
+  await editor.getByRole("button", { name: "Back to secrets", exact: true }).click();
   await page.getByRole("button", { name: "Create secret", exact: true }).first().click();
   await technicalName.fill(secretName.toUpperCase());
   await secret.getByLabel("Value", { exact: true }).fill("disposable-duplicate-value");
@@ -238,6 +239,8 @@ test("collections and connection creation", async ({ page }, info) => {
   await expect(technicalName).toHaveValue(secretName.toUpperCase());
   await capture(page, info, "secret-duplicate");
   await secret.getByRole("button", { name: "Cancel", exact: true }).click();
+  // The failed duplicate leaves an unsaved draft, so leaving asks before discarding it.
+  await page.getByRole("dialog", { name: "Discard secret edits?", exact: true }).getByRole("button", { name: "Discard changes", exact: true }).click();
   await expect(secret).toBeHidden();
   await expect(page.getByRole("button", { name: "Create secret", exact: true }).first()).toBeFocused();
 
@@ -818,66 +821,14 @@ test("workflow template metadata defaults", async ({ page }, info) => {
   await capture(page, info, "template-persisted");
 });
 
-test("outlined Secret create journey", async ({ page }, info) => {
-  const name = `outlined-${info.project.name}-${Date.now()}`;
-  const base = process.env.ELSA_WORKBENCH_URL!;
-  expect(base, "Owned Workbench URL").toBeTruthy();
-  ownedCleanups.get(page)!.push(async () => {
-    const removed = await page.request.delete(`${base}/secrets/${encodeURIComponent(name)}`, { timeout: 5_000 });
-    expect([204, 404], `Cleanup for owned secret ${name}`).toContain(removed.status());
-  });
-  await page.goto("/security/secrets");
-  const open = page.getByRole("button", { name: "Create secret", exact: true }).first();
-  await expect(open).toBeEnabled();
-  await open.press("Enter");
-  const dialog = page.getByRole("dialog", { name: "Create secret", exact: true });
-  const technicalName = dialog.getByLabel("Technical name", { exact: true });
-  await expect(technicalName).toBeFocused();
-  await expect(dialog.getByRole("button", { name: "Create", exact: true })).toBeInViewport();
-  await capture(page, info, "secret-empty");
-  // Value is filled first, so only the name can keep Create disabled.
-  await dialog.getByLabel("Value", { exact: true }).fill("disposable-outlined-acceptance-value");
-  await technicalName.fill("invalid name");
-  await expect(technicalName).toHaveAttribute("aria-invalid", "true");
-  await expect(dialog.getByRole("button", { name: "Create", exact: true })).toBeDisabled();
-  await capture(page, info, "secret-invalid");
-  await technicalName.fill(name);
-  await expect(technicalName).not.toHaveAttribute("aria-invalid", "true");
-  await expect(dialog.getByRole("button", { name: "Create", exact: true })).toBeEnabled();
-  await expect(dialog.getByLabel("Value", { exact: true })).toHaveAttribute("type", "password");
-  await capture(page, info, "secret-filled");
-  await dialog.getByRole("button", { name: /^More options/ }).click();
-  await dialog.getByLabel("Display name", { exact: true }).fill(`Outlined ${info.project.name}`);
-  await dialog.getByLabel("Description", { exact: true }).fill("Metadata retained through creation and reopening.");
-  await dialog.getByLabel("Scope", { exact: true }).selectOption({ label: "Custom…" });
-  await dialog.getByLabel("Custom scope value", { exact: true }).fill("Team:Outlined");
-  await dialog.getByLabel("Scope", { exact: true }).scrollIntoViewIfNeeded();
-  await capture(page, info, "secret-options");
-  await dialog.getByRole("button", { name: "Create", exact: true }).click();
-  await expect(dialog).toHaveCount(0);
-  await expect(open).toBeFocused();
-  const edit = page.getByRole("button", { name: `Edit ${name}`, exact: true });
-  await expect(edit).toBeVisible();
-  await capture(page, info, "secret-list");
-  await edit.click();
-  const editor = page.getByRole("dialog", { name: "Edit secret", exact: true });
-  await expect(editor.getByLabel("Display name", { exact: true })).toHaveValue(`Outlined ${info.project.name}`);
-  await expect(editor.getByLabel("Description", { exact: true })).toHaveValue("Metadata retained through creation and reopening.");
-  await expect(editor.getByLabel("Scope", { exact: true })).toHaveValue("Team:Outlined");
-  await capture(page, info, "secret-reopened");
-  await editor.getByRole("button", { name: "Cancel", exact: true }).click();
-  await open.press("Enter");
-  await dialog.getByLabel("Technical name", { exact: true }).fill("cancelled-draft");
-  await page.keyboard.press("Escape");
-  await expect(dialog).toHaveCount(0);
-  await expect(open).toBeFocused();
-  await capture(page, info, "secret-cancelled");
-});
-
 test("executable designer parity", async ({ page }, info) => {
   await executableDesignerJourney(page, info, capture, id => designerDefinitions.get(page)!.push(id));
 });
 
 test("choose data for activity outputs", async ({ page }, info) => {
   await chooseDataJourney(page, info, capture, cleanup => { ownedCleanups.get(page)!.push(cleanup); });
+});
+
+test("tabbed Secrets authoring and metadata", async ({ page }, info) => {
+  await tabbedSecretsJourney(page, info, capture, cleanup => { ownedCleanups.get(page)!.push(cleanup); });
 });
