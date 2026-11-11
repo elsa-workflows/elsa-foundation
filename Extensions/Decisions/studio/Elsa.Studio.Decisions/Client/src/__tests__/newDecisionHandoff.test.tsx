@@ -23,14 +23,14 @@ function workspaceTabs() {
 }
 
 function pickerApi() {
-  const api = stubApi(); let listed = [asset, other];
+  const api = Object.assign(stubApi(), { notifications: { notify: vi.fn() } }); let listed = [asset, other];
   api.backend.http.getJson.mockImplementation(async (path: string) => (path.endsWith("/decisions") ? { items: listed } : { items: [] }) as never);
   api.backend.http.postJson.mockImplementation(async () => { listed = [asset, other, created]; return created as never; });
   return api;
 }
 
 /** A workflow tab holding the picker, retained like a hidden workspace tab, beside the tab that edits the new decision. */
-function Workspace({ api, initial = "approval@latest", handoff, workflowVisible, disabled = false, onValue }: { api: ReturnType<typeof stubApi>; initial?: string; handoff?: string | null; workflowVisible: boolean; disabled?: boolean; onValue(value: string): void }) {
+function Workspace({ api, initial = "approval@latest", handoff, workflowVisible, disabled = false, onValue }: { api: ReturnType<typeof pickerApi>; initial?: string; handoff?: string | null; workflowVisible: boolean; disabled?: boolean; onValue(value: string): void }) {
   const [value, setValue] = useState(initial);
   const change = (next: string) => { setValue(next); onValue(next); };
   return <>
@@ -65,9 +65,8 @@ describe("New decision handoff to the Evaluate Decision picker", () => {
     await vi.waitFor(() => expect(picker(host).value).toBe("created"));
     expect(picker(host).selectedOptions[0].textContent).toBe(created.name);
     expect(host.textContent).toContain("This decision has no published version");
-    expect(host.querySelector('[data-tab="workflow"] [role="status"]')?.textContent).toBe(`Selected ${created.name}, the decision you just created.`);
-    select(picker(host), "other");
-    expect(host.querySelector('[data-tab="workflow"] [role="status"]')?.textContent).toBe("");
+    expect(api.notifications.notify).toHaveBeenCalledTimes(1);
+    expect(api.notifications.notify).toHaveBeenCalledWith({ level: "success", title: "Decision selected", message: `${created.name} is now used by this Evaluate Decision activity.` });
   });
 
   it("keeps a decision the author picked after starting New decision", async () => {
@@ -94,6 +93,30 @@ describe("New decision handoff to the Evaluate Decision picker", () => {
     await vi.waitFor(() => expect(onValue).toHaveBeenCalledWith("created@latest"));
     click(button(host, "New decision"));
     expect(tabs.token(2)).not.toBe(tabs.token(0));
+  });
+
+  it("re-arms a flow the author interrupted, so New decision again focuses the same editor tab", async () => {
+    const api = pickerApi(), tabs = workspaceTabs(), onValue = vi.fn();
+    const { host } = mount(<Workspace api={api} workflowVisible onValue={onValue} />);
+    await vi.waitFor(() => expect(picker(host).querySelector('option[value="other"]')).not.toBeNull());
+    click(button(host, "New decision")); select(picker(host), "other");
+    click(button(host, "New decision"));
+    expect(tabs.requests[1].path).toBe(tabs.requests[0].path);
+    completeNewDecisionHandoff(tabs.token(0), { id: "created", name: created.name });
+    await vi.waitFor(() => expect(onValue).toHaveBeenLastCalledWith("created@latest"));
+    expect(api.notifications.notify).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not select for an interrupted flow, and starts a fresh one once its editor has saved", async () => {
+    const api = pickerApi(), tabs = workspaceTabs(), onValue = vi.fn();
+    const { host } = mount(<Workspace api={api} workflowVisible onValue={onValue} />);
+    await vi.waitFor(() => expect(picker(host).querySelector('option[value="other"]')).not.toBeNull());
+    click(button(host, "New decision")); select(picker(host), "other");
+    completeNewDecisionHandoff(tabs.token(0), { id: "created", name: created.name });
+    await new Promise(resolve => setTimeout(resolve, 20));
+    expect(onValue).toHaveBeenCalledTimes(1); expect(picker(host).value).toBe("other"); expect(api.notifications.notify).not.toHaveBeenCalled();
+    click(button(host, "New decision"));
+    expect(tabs.token(1)).not.toBe(tabs.token(0));
   });
 
   it("ends the flow when the author changes the version before saving", async () => {

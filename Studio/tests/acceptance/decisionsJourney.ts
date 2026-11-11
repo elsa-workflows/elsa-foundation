@@ -169,7 +169,7 @@ export async function decisionsJourney(page: Page, info: TestInfo, capture: Capt
 
   /**
    * A workflow author starts a new decision from the Evaluate Decision picker, saves it in the tab that opens,
-   * and returns to the workflow to find the decision just created selected in the picker (#4086).
+   * and returns to the workflow to find the decision just created selected in the picker, with a toast saying so (#4086).
    */
   async function pickerShortcut(existingId: string, existingDecision: string) {
     await page.setViewportSize(info.project.use.viewport ?? { width: 1440, height: 1000 });
@@ -211,6 +211,10 @@ export async function decisionsJourney(page: Page, info: TestInfo, capture: Capt
       // Back on the workflow: the list reloaded and the picker took the decision this New decision flow saved.
       await page.getByRole("tab", { name: new RegExp(`^${workflowName}`) }).click();
       await expect(picker).toBeVisible(); await expect(picker).toHaveValue(createdAsset.id);
+      // The host's success toast says what changed while the workflow tab was in the background.
+      const selectedToast = page.getByRole("group", { name: "Decision selected", exact: true });
+      await expect(selectedToast).toContainText(`${created} is now used by this Evaluate Decision activity.`); await selectedToast.hover();
+      await part("decision-picker-selected-toast", selectedToast);
       expect(createdAsset.id).not.toBe(existingId);
       await expect(picker.locator("option:checked")).toHaveText(created);
       // A fresh decision has no published version yet, and the picker says so beside the new selection.
