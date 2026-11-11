@@ -45,10 +45,10 @@ internal static partial class WorkflowOperationBatch
     internal sealed record Failure(string Code, string Message, int Status);
 
     /// <summary>The frozen batch, its review preview and its highest operation risk.</summary>
-    internal sealed record Prepared(JsonElement Arguments, JsonElement Preview, AgentRisk Risk, IReadOnlyList<FrozenOperation> Operations);
+    internal sealed record Prepared(JsonElement Arguments, JsonElement Preview, WeaverRisk Risk, IReadOnlyList<FrozenOperation> Operations);
 
     /// <summary>One frozen operation: its kind, its exact target node (if any), its risk and the frozen JSON the editor applies.</summary>
-    internal sealed record FrozenOperation(int Index, string Kind, string? NodeId, AgentRisk Risk, JsonObject Json, string Summary,
+    internal sealed record FrozenOperation(int Index, string Kind, string? NodeId, WeaverRisk Risk, JsonObject Json, string Summary,
         IReadOnlyList<string> Reasons);
 
     /// <summary>The tool's input schema, as advertised to providers. Strict: every object refuses additional properties.</summary>
@@ -66,7 +66,7 @@ internal static partial class WorkflowOperationBatch
     internal sealed record SetRootOperation(int Index, ActivityReference Activity) : Operation(Index, "set-root");
     internal sealed record PositionOperation(int Index, ActivityReference Activity, double X, double Y) : Operation(Index, "position");
     internal sealed record SetPropertyOperation(int Index, ActivityReference Activity, string Property, JsonElement? Literal,
-        WorkflowAgentSecretReference? Secret) : Operation(Index, "set-property");
+        WorkflowWeaverSecretReference? Secret) : Operation(Index, "set-property");
     internal sealed record UpdateOperation(int Index, ActivityReference Activity, string? DisplayName, string? Description, bool? CanStartWorkflow)
         : Operation(Index, "update");
     internal sealed record RemoveOperation(int Index, ActivityReference Activity) : Operation(Index, "remove");
@@ -104,7 +104,7 @@ internal static partial class WorkflowOperationBatch
     private static (Operation?, Failure?) ParseOperation(int index, JsonElement item)
     {
         if (item.ValueKind != JsonValueKind.Object) return (null, Schema(index, null, "Each operation must be an object."));
-        var kind = WorkflowAgentSnapshot.Text(item, "kind");
+        var kind = WorkflowWeaverSnapshot.Text(item, "kind");
         if (kind is null) return (null, Schema(index, null, "The operation has no string 'kind'."));
         string? error;
         switch (kind)
@@ -279,7 +279,7 @@ internal static partial class WorkflowOperationBatch
     }
 
     private static string? Bounded(JsonElement value, string property)
-        => WorkflowAgentSnapshot.Text(value, property) is { Length: > 0 and <= 256 } text && !string.IsNullOrWhiteSpace(text) ? text : null;
+        => WorkflowWeaverSnapshot.Text(value, property) is { Length: > 0 and <= 256 } text && !string.IsNullOrWhiteSpace(text) ? text : null;
 
     private static bool OptionalBounded(JsonElement value, string property, out string? text)
     {
@@ -290,7 +290,7 @@ internal static partial class WorkflowOperationBatch
     }
 
     private static bool Coordinate(JsonElement value, string property, out double number)
-        => WorkflowAgentSnapshot.Number(value, property, out number) && Math.Abs(number) <= MaxCoordinate;
+        => WorkflowWeaverSnapshot.Number(value, property, out number) && Math.Abs(number) <= MaxCoordinate;
 
     // ---- Validation, resolution and freezing ---------------------------------------------------------------------
 
@@ -306,7 +306,7 @@ internal static partial class WorkflowOperationBatch
         public string? ParentId { get; } = parentId;
         public string? Slot { get; } = slot;
         public bool Added { get; } = added;
-        public IReadOnlyList<WorkflowAgentSlot>? Slots { get; init; }
+        public IReadOnlyList<WorkflowWeaverSlot>? Slots { get; init; }
         public ActivityAuthoringCatalogEntry? Entry { get; init; }
     }
 
@@ -316,7 +316,7 @@ internal static partial class WorkflowOperationBatch
     /// Validates the parsed operations in order against the snapshot and (when needed) the owning catalog, and freezes the
     /// resolved batch. <paramref name="catalog"/> is null only when <see cref="NeedsCatalog"/> is false.
     /// </summary>
-    internal static (Prepared? Prepared, Failure? Failure) Validate(IReadOnlyList<Operation> operations, WorkflowAgentSnapshot snapshot,
+    internal static (Prepared? Prepared, Failure? Failure) Validate(IReadOnlyList<Operation> operations, WorkflowWeaverSnapshot snapshot,
         WorkflowActivityCatalog.Read? catalog)
     {
         if (snapshot.WorkingState != "draft")
@@ -447,7 +447,7 @@ internal static partial class WorkflowOperationBatch
             var node = new Node(add.Ref, entry.DisplayName, entry.ActivityVersionId, parentId, parentId is null ? null : add.Slot, true) { Entry = entry };
             nodes[add.Ref] = node;
             refs[add.Ref] = add;
-            var json = Op(add.Index, "add", AgentRisk.ReviewRequired);
+            var json = Op(add.Index, "add", WeaverRisk.ReviewRequired);
             json["nodeId"] = add.Ref;
             json["activityVersionId"] = entry.ActivityVersionId;
             json["activityTypeKey"] = entry.ActivityTypeKey;
@@ -456,7 +456,7 @@ internal static partial class WorkflowOperationBatch
             json["slot"] = add.Slot;
             json["position"] = add.Position is { } point ? new JsonObject { ["x"] = point.X, ["y"] = point.Y } : null;
             var where = parentId is null ? "as a root candidate" : $"into {ScopePath(parentId)} / {add.Slot}";
-            return (Frozen(add.Index, "add", add.Ref, AgentRisk.ReviewRequired, json, $"Add {entry.DisplayName} ({entry.ActivityTypeKey} {entry.Version}) as '{add.Ref}' {where}.", ["ordinary-edit"]), null);
+            return (Frozen(add.Index, "add", add.Ref, WeaverRisk.ReviewRequired, json, $"Add {entry.DisplayName} ({entry.ActivityTypeKey} {entry.Version}) as '{add.Ref}' {where}.", ["ordinary-edit"]), null);
         }
 
         (FrozenOperation?, Failure?) SetRoot(SetRootOperation setRoot)
@@ -474,7 +474,7 @@ internal static partial class WorkflowOperationBatch
                     removed.Add(node.Id);
             if (root is not null) connections.Clear();
             root = reference;
-            var risk = replaces ? AgentRisk.Destructive : AgentRisk.ReviewRequired;
+            var risk = replaces ? WeaverRisk.Destructive : WeaverRisk.ReviewRequired;
             var json = Op(setRoot.Index, "set-root", risk);
             json["nodeId"] = reference;
             json["replacesRoot"] = replaces;
@@ -487,11 +487,11 @@ internal static partial class WorkflowOperationBatch
         {
             var (node, problem) = Resolve(position.Index, "position", position.Activity);
             if (problem is not null) return (null, problem);
-            var json = Op(position.Index, "position", AgentRisk.ReviewRequired);
+            var json = Op(position.Index, "position", WeaverRisk.ReviewRequired);
             json["nodeId"] = node!.Id;
             json["x"] = position.X;
             json["y"] = position.Y;
-            return (Frozen(position.Index, "position", node.Id, AgentRisk.ReviewRequired, json,
+            return (Frozen(position.Index, "position", node.Id, WeaverRisk.ReviewRequired, json,
                 $"Move {Label(node)} to ({Format(position.X)}, {Format(position.Y)}).", ["ordinary-edit"]), null);
         }
 
@@ -528,13 +528,13 @@ internal static partial class WorkflowOperationBatch
                 value = new JsonObject { ["secretReference"] = new JsonObject { ["name"] = match.Name, ["typeName"] = match.TypeName, ["scope"] = match.Scope } };
                 summary = $"Bind {input.Name} of {Label(node)} to the Secret Reference '{match.Name}'.";
             }
-            var json = Op(property.Index, "set-property", AgentRisk.ReviewRequired);
+            var json = Op(property.Index, "set-property", WeaverRisk.ReviewRequired);
             json["nodeId"] = node.Id;
             json["property"] = input.ReferenceKey;
             json["inputName"] = input.Name;
             json["typeName"] = input.Type;
             json["value"] = value;
-            return (Frozen(property.Index, "set-property", node.Id, AgentRisk.ReviewRequired, json, summary, ["ordinary-edit"]), null);
+            return (Frozen(property.Index, "set-property", node.Id, WeaverRisk.ReviewRequired, json, summary, ["ordinary-edit"]), null);
         }
 
         (FrozenOperation?, Failure?) Update(UpdateOperation update)
@@ -556,12 +556,12 @@ internal static partial class WorkflowOperationBatch
             if (update.DisplayName is not null) fields["displayName"] = update.DisplayName;
             if (update.Description is not null) fields["description"] = update.Description;
             if (update.CanStartWorkflow is { } canStart) fields["canStartWorkflow"] = canStart;
-            var json = Op(update.Index, "update", AgentRisk.ReviewRequired);
+            var json = Op(update.Index, "update", WeaverRisk.ReviewRequired);
             json["nodeId"] = node!.Id;
             json["fields"] = fields;
             json["startInput"] = startInput;
             var changed = string.Join(", ", fields.Select(field => field.Key));
-            return (Frozen(update.Index, "update", node.Id, AgentRisk.ReviewRequired, json, $"Update {changed} of {Label(node)}.", ["ordinary-edit"]), null);
+            return (Frozen(update.Index, "update", node.Id, WeaverRisk.ReviewRequired, json, $"Update {changed} of {Label(node)}.", ["ordinary-edit"]), null);
         }
 
         (FrozenOperation?, Failure?) Remove(RemoveOperation remove)
@@ -577,10 +577,10 @@ internal static partial class WorkflowOperationBatch
             var subtree = Subtree(node.Id);
             foreach (var id in subtree) removed.Add(id);
             connections.RemoveAll(edge => subtree.Contains(edge.Source) || subtree.Contains(edge.Target));
-            var json = Op(remove.Index, "remove", AgentRisk.Destructive);
+            var json = Op(remove.Index, "remove", WeaverRisk.Destructive);
             json["nodeId"] = node.Id;
             var nested = subtree.Count - 1;
-            return (Frozen(remove.Index, "remove", node.Id, AgentRisk.Destructive, json,
+            return (Frozen(remove.Index, "remove", node.Id, WeaverRisk.Destructive, json,
                 $"Remove {Label(node)} from {ScopePath(node.ParentId)}" + (nested > 0 ? $", with the {nested} activit{(nested == 1 ? "y" : "ies")} inside it." : ".") + " Its connections are removed too.",
                 ["destructive"]), null);
         }
@@ -603,14 +603,14 @@ internal static partial class WorkflowOperationBatch
             if (connections.Any(edge => edge.Source == source.Id && edge.Target == target.Id && edge.SourcePort == port))
                 return (null, Reference(connect.Index, "connect", $"{Label(source)} is already connected to {Label(target)} from '{port}'."));
             connections.Add(new(source.Id, target.Id, port, connect.TargetPort));
-            var json = Op(connect.Index, "connect", AgentRisk.ReviewRequired);
+            var json = Op(connect.Index, "connect", WeaverRisk.ReviewRequired);
             json["source"] = source.Id;
             json["target"] = target.Id;
             json["sourcePort"] = port;
             json["targetPort"] = connect.TargetPort;
             json["scopeOwnerId"] = owner.Id;
             json["slot"] = source.Slot;
-            return (Frozen(connect.Index, "connect", source.Id, AgentRisk.ReviewRequired, json, $"Connect {Label(source)} ('{port}') to {Label(target)}.", ["ordinary-edit"]), null);
+            return (Frozen(connect.Index, "connect", source.Id, WeaverRisk.ReviewRequired, json, $"Connect {Label(source)} ('{port}') to {Label(target)}.", ["ordinary-edit"]), null);
         }
 
         (FrozenOperation?, Failure?) Disconnect(DisconnectOperation disconnect)
@@ -626,11 +626,11 @@ internal static partial class WorkflowOperationBatch
             if (matches.Length > 1)
                 return (null, Clarify(disconnect.Index, "disconnect", $"{Label(source!)} is connected to {Label(target!)} from {matches.Length} ports ({string.Join(", ", matches.Select(edge => $"'{edge.SourcePort}'"))}). Ask which connection is meant."));
             connections.Remove(matches[0]);
-            var json = Op(disconnect.Index, "disconnect", AgentRisk.Destructive);
+            var json = Op(disconnect.Index, "disconnect", WeaverRisk.Destructive);
             json["source"] = source!.Id;
             json["target"] = target!.Id;
             json["sourcePort"] = matches[0].SourcePort;
-            return (Frozen(disconnect.Index, "disconnect", source.Id, AgentRisk.Destructive, json,
+            return (Frozen(disconnect.Index, "disconnect", source.Id, WeaverRisk.Destructive, json,
                 $"Disconnect {Label(source)} ('{matches[0].SourcePort}') from {Label(target)}.", ["destructive"]), null);
         }
 
@@ -711,16 +711,16 @@ internal static partial class WorkflowOperationBatch
 
     // ---- Helpers ------------------------------------------------------------------------------------------------
 
-    private static FrozenOperation Frozen(int index, string kind, string? nodeId, AgentRisk risk, JsonObject json, string summary, IReadOnlyList<string> reasons)
+    private static FrozenOperation Frozen(int index, string kind, string? nodeId, WeaverRisk risk, JsonObject json, string summary, IReadOnlyList<string> reasons)
         => new(index, kind, nodeId, risk, json, summary, reasons);
 
-    private static JsonObject Op(int index, string kind, AgentRisk risk) => new() { ["index"] = index, ["kind"] = kind, ["risk"] = RiskName(risk) };
+    private static JsonObject Op(int index, string kind, WeaverRisk risk) => new() { ["index"] = index, ["kind"] = kind, ["risk"] = RiskName(risk) };
 
-    internal static string RiskName(AgentRisk risk) => risk switch
+    internal static string RiskName(WeaverRisk risk) => risk switch
     {
-        AgentRisk.ReadOnly => "readOnly",
-        AgentRisk.ReviewRequired => "reviewRequired",
-        AgentRisk.Destructive => "destructive",
+        WeaverRisk.ReadOnly => "readOnly",
+        WeaverRisk.ReviewRequired => "reviewRequired",
+        WeaverRisk.Destructive => "destructive",
         _ => "admin"
     };
 

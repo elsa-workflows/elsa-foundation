@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import type { StudioAgentRegistry, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import type { StudioWeaverRegistry, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { ThemeProvider } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/components/ThemeProvider";
 import { writeAppearancePreferences } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/themes/appearance";
 import { WorkflowInstances } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowInstances";
@@ -39,7 +39,7 @@ const context = {
     postJson: async () => ({ definition: { definitionId: "agent-new" }, draft: { draftId: "draft-new" } })
   }
 } as unknown as StudioEndpointContext;
-const ai = { promptActions: { list: () => [] }, dispatchPrompt() {} } as unknown as StudioAgentRegistry;
+const ai = { promptActions: { list: () => [] }, dispatchPrompt() {} } as unknown as StudioWeaverRegistry;
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 function Fixture() {
   const [filter, setFilter] = useState<string | null>(null);

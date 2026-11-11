@@ -76,7 +76,7 @@ def _normalized_result(value):
     result = copy.deepcopy(value)
     if result.get("receipt"):
         scope = result["receipt"]["scope"]
-        # AgentEffectScope declares ClientWorkingState=0, ServerPersisted=1.
+        # WeaverEffectScope declares ClientWorkingState=0, ServerPersisted=1.
         # Agent API uses camelCase; SDK/ordinary JSON uses PascalCase or numbers.
         if type(scope) is int and scope in (0, 1):
             canonical = scope

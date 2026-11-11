@@ -292,7 +292,7 @@ describe("agent stream recovery outcomes", () => {
   it("keeps a provider notice and a refusal's code instead of treating them as transient progress or bare text", async () => {
     const events: AgentStreamEvent[] = [];
     const fetch = vi.fn(async () => new Response(streamFrom([
-      // The server's AgentProviderNotice(Code, Label); the label is the notice's text even without event content.
+      // The server's WeaverProviderNotice(Code, Label); the label is the notice's text even without event content.
       `data: ${JSON.stringify({ kind: "progress", payload: { code: "weaver.provider.github_copilot.conversation_reset", label: "GitHub Copilot could not resume this session's earlier conversation." } })}\n\n`,
       `data: ${JSON.stringify({ Kind: "progress", Content: "Reading context" })}\n\n`,
       `data: ${JSON.stringify({ Kind: "error", Error: { Code: "weaver.context.disclosure_budget_exceeded", Message: "Session limit reached." } })}\n\n`

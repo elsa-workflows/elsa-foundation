@@ -2,7 +2,7 @@ import React from "react";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { authSessionEndedEvent, authSessionStartedEvent, createAgentRegistry, type StudioAgentPreparedInvocation, type StudioAgentToolResult, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import { authSessionEndedEvent, authSessionStartedEvent, createWeaverRegistry, type StudioWeaverPreparedInvocation, type StudioWeaverToolResult, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { registerWorkflowAgent } from "../workflowAgent";
 import { WorkflowLayoutResult } from "../workflowAgentResult";
 import { useWorkflowDocument, type WorkflowDocumentApi } from "../workflow-editor/workflowDocument";
@@ -18,9 +18,9 @@ vi.mock("../api/workflowDesign", async importOriginal => ({ ...await importOrigi
 const draft: WorkflowDraft = { id: "draft", definitionId: "definition", state: { rootActivity: { nodeId: "write", activityVersionId: writeLine.activityVersionId, inputs: [{ name: "Password", value: "secret-property-value" } as never], outputs: [] } }, layout: [], validationErrors: [] };
 const details = { definition: { id: "definition", name: "Test workflow" } } as WorkflowDefinitionDetails;
 const noop = () => {};
-let agent: ReturnType<typeof createAgentRegistry>, controller: ReturnType<typeof registerWorkflowAgent>, doc: WorkflowDocumentApi;
+let agent: ReturnType<typeof createWeaverRegistry>, controller: ReturnType<typeof registerWorkflowAgent>, doc: WorkflowDocumentApi;
 let editingAllowed: boolean;
-let layoutResult: StudioAgentToolResult | undefined;
+let layoutResult: StudioWeaverToolResult | undefined;
 let persistence: ReturnType<typeof useWorkflowPersistence>, root: Root, container: HTMLDivElement;
 let operations: ReturnType<typeof useWorkflowOperations>;
 let probeLifetime: object;
@@ -35,7 +35,7 @@ function Probe() {
   useWorkflowContextBridge({ controller, clientId: agent.clientId, details, draft: doc.state.draft, selectedNode: null, selectedNodeId: doc.state.selectedNodeId, selectedDescriptor: null, inspectedNode: null, inspectedDescriptor: null, inspectedIsScopeOwner: false, catalogByVersion: new Map([[writeLine.activityVersionId, writeLine]]) });
   return <><output>{JSON.stringify(doc.state.draft?.layout)}</output>{layoutResult ? <WorkflowLayoutResult controller={controller} proposal={null} result={layoutResult.payload?.data} toolResult={layoutResult} /> : null}</>;
 }
-function request(): StudioAgentPreparedInvocation {
+function request(): StudioWeaverPreparedInvocation {
   return { invocationId: "invocation", sessionId: "session", turnId: "turn", toolCallId: "call", toolName: "workflow_set_designer_position", toolContractVersion: "1", moduleId: "Elsa.Studio.Workflows", actorId: "actor", tenantId: "tenant", target: controller.snapshot!.target!, arguments: { activityId: "write", x: 150, y: 250 }, approvalDigest: "digest", risk: "reviewRequired", preview: { typeId: "workflows.layout-change", schemaVersion: "1", data: {} }, executionLocation: "clientWorkingState", requiresApproval: true, client: controller.snapshot!.client!, expiresAt: new Date(Date.now() + 60000).toISOString() };
 }
 beforeEach(() => {
@@ -43,7 +43,7 @@ beforeEach(() => {
   publicationGet.mockReset().mockRejectedValue(new Error("Publication reads must not start after a failed covering save."));
   publicationPost.mockReset().mockRejectedValue(new Error("Publication mutations must not start after a failed covering save."));
   publicationError.mockReset();
-  vi.useFakeTimers(); editingAllowed = true; layoutResult = undefined; agent = createAgentRegistry(); controller = registerWorkflowAgent(agent);
+  vi.useFakeTimers(); editingAllowed = true; layoutResult = undefined; agent = createWeaverRegistry(); controller = registerWorkflowAgent(agent);
   container = document.createElement("div"); document.body.append(container); root = createRoot(container);
   flushSync(() => root.render(<Probe />)); flushSync(() => { doc.loadDraft(structuredClone(draft)); persistence.markSaved(draft); });
 });
@@ -135,9 +135,9 @@ describe("native reviewed workflow effect", () => {
     const old = request(); const previousController = controller; const previousLifetime = probeLifetime;
     if (replacement === "controller") {
       // A custom host withdraws the old contribution registry without remounting its editor or browser client.
-      agent = { ...createAgentRegistry(), clientId: agent.clientId };
+      agent = { ...createWeaverRegistry(), clientId: agent.clientId };
       controller = registerWorkflowAgent(agent);
-    } else agent = { ...agent, clientId: createAgentRegistry().clientId };
+    } else agent = { ...agent, clientId: createWeaverRegistry().clientId };
     flushSync(() => root.render(<Probe />));
     expect(probeLifetime).toBe(previousLifetime);
     expect(controller.snapshot?.target).toEqual(old.target);
@@ -183,7 +183,7 @@ describe("native reviewed workflow effect", () => {
     flushSync(() => doc.editDraft(current => ({ ...current.draft!, layout: [...current.draft!.layout] })));
     expect(controller.snapshot).toBeNull();
     expect((await controller.execute!(old)).outcome).toBe("refused");
-    agent = { ...createAgentRegistry(), clientId: agent.clientId }; controller = registerWorkflowAgent(agent);
+    agent = { ...createWeaverRegistry(), clientId: agent.clientId }; controller = registerWorkflowAgent(agent);
     flushSync(() => root.render(<Probe />));
     expect(probeLifetime).toBe(previousLifetime);
     expect.soft(controller.snapshot).not.toBeNull();

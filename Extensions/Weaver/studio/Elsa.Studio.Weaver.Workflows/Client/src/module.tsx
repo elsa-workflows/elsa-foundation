@@ -1,8 +1,8 @@
 import React from "react";
 import type {
   ElsaStudioModuleApi,
-  StudioAgentContextAttachment,
-  StudioAgentResultRendererProps
+  StudioWeaverContextAttachment,
+  StudioWeaverResultRendererProps
 } from "@elsa-workflows/studio-sdk";
 import { workflowExecutableAttachment, workflowRunAttachment, workflowVersionAttachment } from "@elsa-workflows/studio-workflows";
 
@@ -14,7 +14,7 @@ import { workflowExecutableAttachment, workflowRunAttachment, workflowVersionAtt
 const moduleId = "Elsa.Studio.Weaver.Workflows";
 
 export function register(api: ElsaStudioModuleApi) {
-  api.agent.promptActions.add({
+  api.weaver.promptActions.add({
     id: "weaver.workflows.suggest-create-metadata",
     label: "Suggest name and description",
     description: "Ask Weaver to propose a workflow display name and description for the draft being created.",
@@ -45,7 +45,7 @@ export function register(api: ElsaStudioModuleApi) {
     }
   });
 
-  api.agent.promptActions.add({
+  api.weaver.promptActions.add({
     id: "weaver.workflows.explain-definition",
     label: "Explain workflow",
     description: "Ask Weaver to explain the selected workflow definition.",
@@ -63,7 +63,7 @@ export function register(api: ElsaStudioModuleApi) {
   // An Executable is read-only (spec 1193 story 8, FR-028). The page that contributes its own workflows.executable context
   // (the Executable Inspector) dispatches with attached: true, so this prompt never duplicates it; elsewhere (the executables
   // list) the prompt attaches the exact identity itself, bound to its Artifact Hash.
-  api.agent.promptActions.add({
+  api.weaver.promptActions.add({
     id: "weaver.workflows.explain-executable",
     label: "Explain executable",
     description: "Ask Weaver to explain a workflow Executable read-only: its identity, Artifact Hash, graph and Source References.",
@@ -87,7 +87,7 @@ export function register(api: ElsaStudioModuleApi) {
   // One exact Run, read-only (spec 1193 story 9, FR-029). The run page contributes its own workflows.run context (the Run and
   // the selected activity execution) and dispatches with attached: true, so this prompt never duplicates it; elsewhere the
   // prompt attaches the exact identity itself. Never "the latest run" of a definition.
-  api.agent.promptActions.add({
+  api.weaver.promptActions.add({
     id: "weaver.workflows.explain-instance",
     label: "Explain run",
     description: "Ask Weaver to explain one exact workflow run read-only: why it faulted, where it waits and what the selected activity execution recorded.",
@@ -113,7 +113,7 @@ export function register(api: ElsaStudioModuleApi) {
   });
 
   // A persisted workflow definition version is read-only (spec 1193 story 8, FR-026).
-  api.agent.promptActions.add({
+  api.weaver.promptActions.add({
     id: "weaver.workflows.explain-version",
     label: "Explain version",
     description: "Ask Weaver to explain one exact workflow version read-only, or compare it with another version of the same workflow.",
@@ -136,7 +136,7 @@ export function register(api: ElsaStudioModuleApi) {
     }
   });
 
-  api.agent.promptActions.add({
+  api.weaver.promptActions.add({
     id: "weaver.workflows.find-draft-risks",
     label: "Find draft risks",
     description: "Ask Weaver to inspect draft validation errors and graph structure for likely runtime issues.",
@@ -151,7 +151,7 @@ export function register(api: ElsaStudioModuleApi) {
     })
   });
 
-  api.agent.promptActions.add({
+  api.weaver.promptActions.add({
     id: "weaver.workflows.propose-update",
     label: "Propose update",
     description: "Ask Weaver for one reviewed Operation Batch for the open draft instead of applying mutations directly.",
@@ -168,26 +168,26 @@ export function register(api: ElsaStudioModuleApi) {
 
   // Contributed by this package for the Workflows module's results; the host matches the result's resource module
   // against resourceModuleIds. The designer-history Undo is Studio Workflows' own result control, shown after this card.
-  api.agent.resultRenderers.add({
+  api.weaver.resultRenderers.add({
     id: "weaver.workflows.batch-result", moduleId, resourceModuleIds: ["Elsa.Studio.Workflows"],
     displayName: "Workflow change", resultTypes: ["workflows.batch-result"], schemaVersions: ["1"],
-    component: (props: StudioAgentResultRendererProps) => <WorkflowBatchResult {...props} />
+    component: (props: StudioWeaverResultRendererProps) => <WorkflowBatchResult {...props} />
   });
   // Spec 1193 slice E: the library's reviewed writes (per-target outcomes), and the library pages' own working-state changes.
-  api.agent.resultRenderers.add({
+  api.weaver.resultRenderers.add({
     id: "weaver.workflows.library-result", moduleId, resourceModuleIds: ["Elsa.Studio.Workflows"],
     displayName: "Workflow library change", resultTypes: ["workflows.library-result"], schemaVersions: ["1"],
-    component: (props: StudioAgentResultRendererProps) => <WorkflowLibraryResult {...props} />
+    component: (props: StudioWeaverResultRendererProps) => <WorkflowLibraryResult {...props} />
   });
-  api.agent.resultRenderers.add({
+  api.weaver.resultRenderers.add({
     id: "weaver.workflows.list-state-result", moduleId, resourceModuleIds: ["Elsa.Studio.Workflows"],
     displayName: "Workflow list change", resultTypes: ["workflows.list-state"], schemaVersions: ["1"],
-    component: (props: StudioAgentResultRendererProps) => <WorkflowPageChangeResult {...props} label="Workflow list change" />
+    component: (props: StudioWeaverResultRendererProps) => <WorkflowPageChangeResult {...props} label="Workflow list change" />
   });
-  api.agent.resultRenderers.add({
+  api.weaver.resultRenderers.add({
     id: "weaver.workflows.create-dialog-result", moduleId, resourceModuleIds: ["Elsa.Studio.Workflows"],
     displayName: "New workflow values", resultTypes: ["workflows.create-dialog-prefill"], schemaVersions: ["1"],
-    component: (props: StudioAgentResultRendererProps) => <WorkflowPageChangeResult {...props} label="New workflow values" />
+    component: (props: StudioWeaverResultRendererProps) => <WorkflowPageChangeResult {...props} label="New workflow values" />
   });
 }
 
@@ -202,7 +202,7 @@ const libraryStatusLabel: Record<string, string> = {
  * A reviewed library write (spec 1193 FR-021, SC-008): one line per workflow with its own outcome, the tag creations it
  * makes first, and an overall outcome that says "partial" whenever some workflows were not changed; never "done" for those.
  */
-export function WorkflowLibraryResult({ proposal, preparedInvocation, toolResult }: StudioAgentResultRendererProps) {
+export function WorkflowLibraryResult({ proposal, preparedInvocation, toolResult }: StudioWeaverResultRendererProps) {
   const data = recordOf(toolResult?.payload?.data) ?? recordOf(preparedInvocation?.preview.data) ?? {};
   const targets = Array.isArray(data.targets) ? data.targets.filter(isRecord) as LibraryTargetOutcome[] : [];
   const status = typeof data.status === "string" ? data.status : "proposed";
@@ -223,7 +223,7 @@ export function WorkflowLibraryResult({ proposal, preparedInvocation, toolResult
 }
 
 /** A reviewed change to a library page's own working state: applied there only, revertible, and never saved. */
-export function WorkflowPageChangeResult({ toolResult, preparedInvocation, label }: StudioAgentResultRendererProps & { label: string }) {
+export function WorkflowPageChangeResult({ toolResult, preparedInvocation, label }: StudioWeaverResultRendererProps & { label: string }) {
   const data = recordOf(toolResult?.payload?.data) ?? recordOf(preparedInvocation?.preview.data) ?? {};
   return (
     <section aria-label={label} className="weaver-workflow-page-change">
@@ -241,7 +241,7 @@ interface BatchOperationLabel { index?: number; kind?: string; summary?: string;
  * label, the batch's highest risk and complexity label, what applying clears, the outcome in product words, and the
  * outcome in product words. The whole-change Undo and the saved state are Studio Workflows' result control, shown after it.
  */
-export function WorkflowBatchResult({ proposal, preparedInvocation, toolResult }: StudioAgentResultRendererProps) {
+export function WorkflowBatchResult({ proposal, preparedInvocation, toolResult }: StudioWeaverResultRendererProps) {
   const data = recordOf(toolResult?.payload?.data) ?? recordOf(preparedInvocation?.preview.data) ?? {};
   const operations = Array.isArray(data.operations) ? data.operations.filter(isRecord) as BatchOperationLabel[] : [];
   const risk = typeof data.risk === "string" ? data.risk : preparedInvocation?.risk;
@@ -268,7 +268,7 @@ export function WorkflowBatchResult({ proposal, preparedInvocation, toolResult }
   );
 }
 
-function batchOutcome(proposal: unknown, toolResult: StudioAgentResultRendererProps["toolResult"]) {
+function batchOutcome(proposal: unknown, toolResult: StudioWeaverResultRendererProps["toolResult"]) {
   // The receipt's own fact. Whether the user has since saved it is the owning module's live state, in its result control.
   if (toolResult?.succeeded && toolResult.receipt?.scope === "clientWorkingState") return "Applied locally to the working draft as one Undo step";
   const status = isRecord(proposal) && typeof proposal.status === "string" ? proposal.status : "";
@@ -289,7 +289,7 @@ function recordOf(value: unknown): Record<string, unknown> | null {
   return isRecord(value) ? value : null;
 }
 
-function createAttachment(kind: string, referenceId: string | null, reference: unknown): StudioAgentContextAttachment {
+function createAttachment(kind: string, referenceId: string | null, reference: unknown): StudioWeaverContextAttachment {
   const record = isRecord(reference) ? reference : {};
   const definition = isRecord(record.definition) ? record.definition : record;
   const draft = isRecord(record.draft) ? record.draft : record;

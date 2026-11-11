@@ -15,9 +15,9 @@ namespace Elsa.Weaver.Workflows.Tools;
 /// Nothing is ever changed: a version is immutable.
 /// </summary>
 internal sealed class WorkflowReadVersionTool(
-    IAgentToolAuthorizer authorizer,
+    IWeaverToolAuthorizer authorizer,
     IServiceProvider services,
-    IEnumerable<IWorkflowDefinitionAuthorizer>? owners = null) : IAgentTool, IAgentToolAuthorization
+    IEnumerable<IWorkflowDefinitionAuthorizer>? owners = null) : IWeaverTool, IWeaverToolAuthorization
 {
     // Resolved only when the tool is used, so listing the installed tools never builds the design read path.
     private IEnumerable<IWorkflowVersionReader> readers => services.GetServices<IWorkflowVersionReader>();
@@ -29,22 +29,22 @@ internal sealed class WorkflowReadVersionTool(
     /// <summary>The result's bound on its JSON text, well under the host's 32 KiB per-attachment budget (#3710).</summary>
     internal const int ResultBudget = 24 * 1024;
 
-    internal static readonly AgentToolDescriptor Contract = new(ToolName, "Read workflow version",
+    internal static readonly WeaverToolDescriptor Contract = new(ToolName, "Read workflow version",
         "Returns one exact, immutable workflow version named by an admitted workflows.version context (its versionId, or the only one): its activities by scope " +
         "path with their input names (never values) and its connections. With compareToVersionId, another version of the same definition, it also returns the " +
         "tool's own structural comparison of the two exact versions: activities added, removed and changed, and connections added, removed and changed " +
         "(connectionsChanged: the same connection rewired or with other metadata). Read-only.",
-        AgentToolMutability.ReadOnly, AgentRisk.ReadOnly,
+        WeaverToolMutability.ReadOnly, WeaverRisk.ReadOnly,
         """{"type":"object","properties":{"versionId":{"type":"string","minLength":1,"maxLength":128},"compareToVersionId":{"type":"string","minLength":1,"maxLength":128}},"additionalProperties":false}""",
         ["workflows/design:read"], ["/workflows"])
     {
-        ModuleId = WorkflowVersionContext.ModuleId, ContractVersion = "1", ExecutionLocation = AgentExecutionLocation.Server,
+        ModuleId = WorkflowVersionContext.ModuleId, ContractVersion = "1", ExecutionLocation = WeaverExecutionLocation.Server,
         ResultType = ResultType, ResultSchemaVersion = "1", DisclosureSourceId = WorkflowVersionContext.ContextSourceId
     };
 
-    public AgentToolDescriptor Descriptor => Contract;
+    public WeaverToolDescriptor Descriptor => Contract;
 
-    public async ValueTask<AgentPolicyDecision> AuthorizeAsync(string actorId, string tenantId, AgentResourceTarget? target, CancellationToken cancellationToken = default)
+    public async ValueTask<WeaverPolicyDecision> AuthorizeAsync(string actorId, string tenantId, WeaverResourceTarget? target, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
         if (WorkflowVersionContext.Reader(readers, out var reason) is null)
@@ -67,7 +67,7 @@ internal sealed class WorkflowReadVersionTool(
         };
     }
 
-    public async Task<AgentResult<AgentToolPreparation>> PrepareAsync(AgentToolInvocation invocation, CancellationToken cancellationToken = default)
+    public async Task<WeaverResult<WeaverToolPreparation>> PrepareAsync(WeaverToolInvocation invocation, CancellationToken cancellationToken = default)
     {
         JsonElement arguments;
         try { arguments = JsonSerializer.SerializeToElement(invocation.Arguments, JsonOptions); }
@@ -83,7 +83,7 @@ internal sealed class WorkflowReadVersionTool(
             if (property.Name == "versionId") versionId = value; else compareTo = value;
         }
         // The version is bound to an admitted version context: the only one, or the one that names it.
-        var contexts = invocation.Context.Where(item => item.ContentType == WorkflowVersionContext.VersionKind && item.Origin == AgentContextOrigin.AuthoritativeRead)
+        var contexts = invocation.Context.Where(item => item.ContentType == WorkflowVersionContext.VersionKind && item.Origin == WeaverContextOrigin.AuthoritativeRead)
             .Select(item => WorkflowVersionContext.TryRead(item, out var reference, out _) ? reference : null).OfType<WorkflowVersionContext.Reference>().ToArray();
         var bound = versionId is null ? contexts.Length == 1 ? contexts[0] : null : contexts.FirstOrDefault(item => item.VersionId == versionId);
         if (bound is null)
@@ -124,12 +124,12 @@ internal sealed class WorkflowReadVersionTool(
         // Nothing unbounded is returned: if even the smallest reading does not fit, the read is refused.
         if (fitted is not { } bounded)
             return Failure("weaver.workflow.version_too_large", "The workflow version's read does not fit the context budget even at its smallest bound; nothing was read.", 413);
-        return AgentResult<AgentToolPreparation>.Success(new(WorkflowVersionContext.Target(version.VersionId), bounded, AgentRisk.ReadOnly,
+        return WeaverResult<WeaverToolPreparation>.Success(new(WorkflowVersionContext.Target(version.VersionId), bounded, WeaverRisk.ReadOnly,
             new(ResultType, "1", bounded), RequiresApproval: false));
     }
 
-    public Task<AgentResult<AgentToolResult>> ExecuteAsync(AgentPreparedToolInvocation invocation, CancellationToken cancellationToken = default) =>
-        Task.FromResult(AgentResult<AgentToolResult>.Success(new(invocation.ToolCallId, Descriptor.Name, true,
+    public Task<WeaverResult<WeaverToolResult>> ExecuteAsync(WeaverPreparedToolInvocation invocation, CancellationToken cancellationToken = default) =>
+        Task.FromResult(WeaverResult<WeaverToolResult>.Success(new(invocation.ToolCallId, Descriptor.Name, true,
             "Read the exact workflow version through the workflow design service; nothing was changed.", new(ResultType, "1", invocation.Arguments))));
 
     private static object Section(string versionId, string version, IReadOnlyDictionary<string, DateTimeOffset> created, object described)
@@ -141,7 +141,7 @@ internal sealed class WorkflowReadVersionTool(
         return body;
     }
 
-    private static AgentResult<AgentToolPreparation>? Refused(WorkflowVersionContext.Outcome outcome, string? reason) => outcome switch
+    private static WeaverResult<WeaverToolPreparation>? Refused(WorkflowVersionContext.Outcome outcome, string? reason) => outcome switch
     {
         WorkflowVersionContext.Outcome.Read => null,
         WorkflowVersionContext.Outcome.Denied => Failure("weaver.workflow.permission_denied", WorkflowVersionContext.DeniedMessage, 403),
@@ -151,6 +151,6 @@ internal sealed class WorkflowReadVersionTool(
         _ => Failure(WorkflowVersionContext.ReaderUnavailableCode, reason ?? "Workflow versions are unavailable.", 503)
     };
 
-    private static AgentResult<AgentToolPreparation> Failure(string code, string message, int status) =>
-        AgentResult<AgentToolPreparation>.Failure(code, message, status);
+    private static WeaverResult<WeaverToolPreparation> Failure(string code, string message, int status) =>
+        WeaverResult<WeaverToolPreparation>.Failure(code, message, status);
 }

@@ -38,11 +38,11 @@ public class AcmeHomeWidgetFeature : IWebShellFeature
                 gate is null ? native : new WidgetRendezvousPreferences(native, gate, http),
                 provider.GetRequiredService<WidgetHost>());
         });
-        services.TryAddEnumerable(ServiceDescriptor.Scoped<IAgentContextProvider, WidgetContextSource>());
-        services.TryAddEnumerable(ServiceDescriptor.Scoped<IAgentCapabilityProvider, WidgetCapabilities>());
-        services.TryAddEnumerable(ServiceDescriptor.Scoped<IAgentTool, ReadWidgetTool>());
-        services.TryAddEnumerable(ServiceDescriptor.Scoped<IAgentTool, SetWidgetVisibilityTool>());
-        services.TryAddEnumerable(ServiceDescriptor.Scoped<IAgentTool, SetWidgetSizeTool>());
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IWeaverContextProvider, WidgetContextSource>());
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IWeaverCapabilityProvider, WidgetCapabilities>());
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IWeaverTool, ReadWidgetTool>());
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IWeaverTool, SetWidgetVisibilityTool>());
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IWeaverTool, SetWidgetSizeTool>());
     }
 
     public virtual void MapEndpoints(IEndpointRouteBuilder endpoints, IHostEnvironment? environment)

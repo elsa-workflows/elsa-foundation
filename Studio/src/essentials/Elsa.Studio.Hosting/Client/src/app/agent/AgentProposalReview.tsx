@@ -1,6 +1,6 @@
 import React, { Suspense } from "react";
 import { AlertTriangle, Check, Loader2, Play, X } from "lucide-react";
-import { presentsResourceModule, type StudioAgentResultControlContribution, type StudioAgentResultRendererContribution, type StudioAgentResultRendererProps } from "../../sdk";
+import { presentsResourceModule, type StudioWeaverResultControlContribution, type StudioWeaverResultRendererContribution, type StudioWeaverResultRendererProps } from "../../sdk";
 import { AgentResultBoundary } from "./AgentResultBoundary";
 import type { AgentActionProposal, AgentOwnerResolutionClaim } from "./agentTypes";
 
@@ -32,9 +32,9 @@ export function AgentProposalReview({
   proposals: AgentActionProposal[];
   disabled?: boolean;
   pendingProposalIds?: ReadonlySet<string>;
-  resultRenderers?: StudioAgentResultRendererContribution[];
+  resultRenderers?: StudioWeaverResultRendererContribution[];
   /** The resource-owning modules' controls for a result type, rendered after its renderer. */
-  resultControls?: StudioAgentResultControlContribution[];
+  resultControls?: StudioWeaverResultControlContribution[];
   onApprove(proposal: AgentActionProposal): void;
   onDeny(proposal: AgentActionProposal): void;
   onExecute(proposal: AgentActionProposal): void;
@@ -118,10 +118,10 @@ export function AgentProposalReview({
   );
 }
 
-function ProposalPresentation({ proposal, renderers, controls = [] }: { proposal: AgentActionProposal; renderers: StudioAgentResultRendererContribution[]; controls?: StudioAgentResultControlContribution[] }) {
+function ProposalPresentation({ proposal, renderers, controls = [] }: { proposal: AgentActionProposal; renderers: StudioWeaverResultRendererContribution[]; controls?: StudioWeaverResultControlContribution[] }) {
   const renderer = findResultRenderer(proposal, renderers);
   const Component = renderer?.component;
-  const props: StudioAgentResultRendererProps = { proposal, resourceTarget: proposal.resourceTarget, result: proposal.result, resultType: proposal.resultType,
+  const props: StudioWeaverResultRendererProps = { proposal, resourceTarget: proposal.resourceTarget, result: proposal.result, resultType: proposal.resultType,
     preparedInvocation: proposal.preparedInvocation, toolResult: proposal.toolResult };
   const presentation = Component ? <div className="agent-proposal-result" aria-label={renderer.displayName}><Suspense fallback={<div><p>Loading module presentation…</p><GenericResultFallback proposal={proposal} /></div>}><Component {...props} /></Suspense></div> : <GenericResultFallback proposal={proposal} />;
   const payload = proposal.toolResult?.payload ?? proposal.preparedInvocation?.preview;
@@ -130,7 +130,7 @@ function ProposalPresentation({ proposal, renderers, controls = [] }: { proposal
 
 /** Every control the resource-owning module contributes for this result type, after the renderer, each isolated. */
 export function ResultControls({ controls, props, resourceModuleId, typeId, schemaVersion }: {
-  controls: StudioAgentResultControlContribution[]; props: StudioAgentResultRendererProps; resourceModuleId?: string | null; typeId?: string; schemaVersion?: string;
+  controls: StudioWeaverResultControlContribution[]; props: StudioWeaverResultRendererProps; resourceModuleId?: string | null; typeId?: string; schemaVersion?: string;
 }) {
   const matching = controls.filter(control => !!typeId && control.resultTypes.includes(typeId) && presentsResourceModule(control, resourceModuleId)
     && (!control.schemaVersions || control.schemaVersions.includes(schemaVersion ?? "")))
@@ -143,7 +143,7 @@ export function ResultControls({ controls, props, resourceModuleId, typeId, sche
 
 function findResultRenderer(
   proposal: AgentActionProposal,
-  renderers: StudioAgentResultRendererContribution[]
+  renderers: StudioWeaverResultRendererContribution[]
 ) {
   const props = {
     proposal,

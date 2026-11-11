@@ -269,7 +269,7 @@ class ProtocolCorrelationTests(unittest.TestCase):
                     self.correlate(fixture, provider)
 
     def test_receipt_scope_matches_actual_numeric_and_named_wire_forms_for_both_scopes(self):
-        # AgentEffectScope: ClientWorkingState=0, ServerPersisted=1. The native
+        # WeaverEffectScope: ClientWorkingState=0, ServerPersisted=1. The native
         # API emits camelCase; Anthropic's real JSON string emits the number.
         for provider in ("copilot", "anthropic"):
             for numeric, camel, pascal in ((0, "clientWorkingState", "ClientWorkingState"),

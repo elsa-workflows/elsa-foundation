@@ -328,7 +328,7 @@ describe("workflows module", () => {
     const dispatchPrompt = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
     const { api, container, unmount } = await renderRegisteredRoute("/workflows/definitions", testApi => {
-      testApi.agent.promptActions.add({
+      testApi.weaver.promptActions.add({
         id: "weaver.workflows.explain-definition",
         label: "Explain workflow definition",
         placement: "selection",
@@ -339,7 +339,7 @@ describe("workflows module", () => {
           attachments: [{ id: "definition-context", source: "workflow", label: "Definition", contentType: "workflow.definition", sensitivity: "internal", scope: "selection", sourceId: (context as { id: string }).id }]
         })
       });
-      testApi.agent.dispatchPrompt = dispatchPrompt;
+      testApi.weaver.dispatchPrompt = dispatchPrompt;
     });
 
     await waitForText(container, "Latest version");
@@ -3171,7 +3171,7 @@ describe("workflows module", () => {
     const dispatchPrompt = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
     const { container, unmount } = await renderRegisteredRoute("/workflows/executables", api => {
-      api.agent.promptActions.add({
+      api.weaver.promptActions.add({
         id: "weaver.workflows.explain-executable",
         label: "Explain executable",
         placement: "selection",
@@ -3182,7 +3182,7 @@ describe("workflows module", () => {
           attachments: [{ id: "executable-context", source: "workflow", label: "Executable", contentType: "workflow.executable", sensitivity: "internal", scope: "selection", sourceId: (context as { artifactId: string }).artifactId }]
         })
       });
-      api.agent.dispatchPrompt = dispatchPrompt;
+      api.weaver.dispatchPrompt = dispatchPrompt;
     });
 
     await waitForText(container, "artifact-1");
@@ -3607,19 +3607,19 @@ describe("workflows module", () => {
     }));
     const dispatchPrompt = vi.fn();
     const { api, container, unmount } = await renderRegisteredRoute("/workflows/instances/wfexec-1", configured => {
-      configured.agent.promptActions.add({ id: "weaver.workflows.explain-instance", label: "Explain run", placement: "selection", contextKind: "workflow-instance",
+      configured.weaver.promptActions.add({ id: "weaver.workflows.explain-instance", label: "Explain run", placement: "selection", contextKind: "workflow-instance",
         createPrompt: context => ({ message: "Explain", mode: "enqueue", attachments: [], context } as never) });
-      configured.agent.dispatchPrompt = dispatchPrompt;
+      configured.weaver.dispatchPrompt = dispatchPrompt;
     });
     const runContext = async () => {
-      const provider = api.agent.contextProviders.list().find(item => item.id === "workflows.run-inspector")!;
+      const provider = api.weaver.contextProviders.list().find(item => item.id === "workflows.run-inspector")!;
       const result = await provider.collect({ surface: { route: "/workflows" }, mode: "explain" } as never);
       return Array.isArray(result) ? result : result.attachments;
     };
     await vi.waitFor(async () => expect(await runContext()).toHaveLength(1));
     const [attachment] = await runContext();
     // One exact Workflow Instance, never "the latest run"; with nothing selected its revision is the instance identity.
-    expect(attachment).toMatchObject({ id: "workflows.run:wfexec-1", contentType: "workflows.run", client: { clientId: api.agent.clientId },
+    expect(attachment).toMatchObject({ id: "workflows.run:wfexec-1", contentType: "workflows.run", client: { clientId: api.weaver.clientId },
       target: { moduleId: "Elsa.Studio.Workflows", resourceType: "workflow-run", resourceId: "wfexec-1", revision: "wfexec-1" },
       content: { workflowExecutionId: "wfexec-1", activityExecutionId: null } });
     await click(container.querySelector('button[aria-label="More run actions"]'));
@@ -5526,14 +5526,14 @@ async function openCreateDialogWithSuggest() {
 
   const captured: { requestId?: string } = {};
   const rendered = await renderRegisteredRoute("/workflows/definitions", api => {
-    api.agent.promptActions.add({
+    api.weaver.promptActions.add({
       id: "weaver.workflows.suggest-create-metadata",
       label: "Suggest name and description",
       placement: "field-adornment",
       contextKind: "workflow-create-draft",
       createPrompt: () => ({ message: "suggest", mode: "enqueue", attachments: [] })
     });
-    api.agent.dispatchPrompt = request => { captured.requestId = request.requestId; };
+    api.weaver.dispatchPrompt = request => { captured.requestId = request.requestId; };
   });
 
   await waitForText(rendered.container, "Hello World");
@@ -5544,7 +5544,7 @@ async function openCreateDialogWithSuggest() {
 
   const publishSuggestion = async (result: { text: string; status?: "completed" | "cancelled" | "failed"; autoApply?: boolean }) => {
     expect(captured.requestId).toBeTruthy();
-    flushSync(() => rendered.api.agent.publishPromptResult({ requestId: captured.requestId!, status: "completed", ...result }));
+    flushSync(() => rendered.api.weaver.publishPromptResult({ requestId: captured.requestId!, status: "completed", ...result }));
     await flushPromises();
   };
 

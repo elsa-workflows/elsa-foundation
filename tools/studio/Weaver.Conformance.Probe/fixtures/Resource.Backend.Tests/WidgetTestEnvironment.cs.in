@@ -56,21 +56,21 @@ internal sealed class WidgetTestEnvironment
         return env;
     }
 
-    internal AgentToolInvocation Invocation(string name, IReadOnlyDictionary<string, object?>? arguments = null, AgentContextAttachment[]? context = null) =>
+    internal WeaverToolInvocation Invocation(string name, IReadOnlyDictionary<string, object?>? arguments = null, WeaverContextAttachment[]? context = null) =>
         new("call-a", name, "session-a", "actor-a", arguments ?? new Dictionary<string, object?>(), context ?? []) { TenantId = "tenant-a", TurnId = "turn-a" };
 
-    internal async Task<AgentContextAttachment> SnapshotAsync() => Assert.Single((await Context.CollectAsync(new("session-a", "acme-home", new Dictionary<string, string>()))).Attachments,
+    internal async Task<WeaverContextAttachment> SnapshotAsync() => Assert.Single((await Context.CollectAsync(new("session-a", "acme-home", new Dictionary<string, string>()))).Attachments,
         attachment => attachment.ContentType == WidgetContract.ContextType);
 
-    internal async Task<AgentResult<AgentToolPreparation>> PrepareAsync(bool visible = false) => await Write.PrepareAsync(Invocation(WidgetContract.WriteTool,
+    internal async Task<WeaverResult<WeaverToolPreparation>> PrepareAsync(bool visible = false) => await Write.PrepareAsync(Invocation(WidgetContract.WriteTool,
         new Dictionary<string, object?> { ["visible"] = visible }, [await SnapshotAsync()]));
 
-    internal async Task<AgentResult<AgentToolPreparation>> PrepareSizeAsync(string size = "small") => await Size.PrepareAsync(Invocation(WidgetContract.SizeTool,
+    internal async Task<WeaverResult<WeaverToolPreparation>> PrepareSizeAsync(string size = "small") => await Size.PrepareAsync(Invocation(WidgetContract.SizeTool,
         new Dictionary<string, object?> { ["size"] = size }, [await SnapshotAsync()]));
 
-    internal static AgentPreparedToolInvocation Freeze(AgentToolPreparation preparation, string name = WidgetContract.WriteTool) => new(
+    internal static WeaverPreparedToolInvocation Freeze(WeaverToolPreparation preparation, string name = WidgetContract.WriteTool) => new(
         "invocation-a", "session-a", "turn-a", "call-a", name, "1", WidgetContract.Module, "actor-a", "tenant-a", preparation.Target,
-        preparation.Arguments, "engine-owned-digest", preparation.Risk, preparation.Preview, AgentExecutionLocation.Server,
+        preparation.Arguments, "engine-owned-digest", preparation.Risk, preparation.Preview, WeaverExecutionLocation.Server,
         preparation.RequiresApproval, preparation.Client, DateTimeOffset.UtcNow.AddMinutes(5));
 
     internal async Task<StudioPreferenceDocument> DocumentAsync() => (await Store.FindAsync(Key))!;
@@ -144,17 +144,17 @@ internal sealed class FakePermissions : IPermissionAuthorizationService
     }
 }
 
-internal sealed class FakeSessions : IAgentSessionService
+internal sealed class FakeSessions : IWeaverSessionService
 {
-    internal AgentSession? Session = new("session-a", "Fixture", "tenant-a", "actor-a", "conversation-a", "provider-a", "build", AgentPolicy.Default,
-        AgentSessionStatus.Active, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow, null, new Dictionary<string, string>());
-    public Task<AgentSession?> FindAsync(string sessionId, CancellationToken cancellationToken = default) => Task.FromResult(Session?.Id == sessionId ? Session : null);
-    public Task<AgentSession> CreateAsync(AgentSessionCreateRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-    public Task<AgentMessage> AddMessageAsync(string sessionId, AgentMessageCreateRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-    public Task<IReadOnlyCollection<AgentMessage>> ListMessagesAsync(string sessionId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-    public Task<AgentMessage?> FindMessageAsync(string sessionId, string messageId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-    public Task<AgentMessage?> FindLatestMessageAsync(string sessionId, AgentRole? role = null, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-    public Task SetMessageStatusAsync(string sessionId, string messageId, AgentMessageStatus status, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-    public Task AddContextAsync(string sessionId, IReadOnlyCollection<AgentContextAttachment> attachments, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-    public Task<IReadOnlyCollection<AgentContextAttachment>> ListContextAsync(string sessionId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    internal WeaverSession? Session = new("session-a", "Fixture", "tenant-a", "actor-a", "conversation-a", "provider-a", "build", WeaverPolicy.Default,
+        WeaverSessionStatus.Active, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow, null, new Dictionary<string, string>());
+    public Task<WeaverSession?> FindAsync(string sessionId, CancellationToken cancellationToken = default) => Task.FromResult(Session?.Id == sessionId ? Session : null);
+    public Task<WeaverSession> CreateAsync(WeaverSessionCreateRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task<WeaverMessage> AddMessageAsync(string sessionId, WeaverMessageCreateRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task<IReadOnlyCollection<WeaverMessage>> ListMessagesAsync(string sessionId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task<WeaverMessage?> FindMessageAsync(string sessionId, string messageId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task<WeaverMessage?> FindLatestMessageAsync(string sessionId, WeaverRole? role = null, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task SetMessageStatusAsync(string sessionId, string messageId, WeaverMessageStatus status, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task AddContextAsync(string sessionId, IReadOnlyCollection<WeaverContextAttachment> attachments, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task<IReadOnlyCollection<WeaverContextAttachment>> ListContextAsync(string sessionId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
 }
