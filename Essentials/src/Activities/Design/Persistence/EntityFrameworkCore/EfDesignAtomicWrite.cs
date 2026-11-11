@@ -7,7 +7,6 @@ using Elsa.Workflows.Design.Persistence.Core.Exceptions;
 using Elsa.Workflows.Design.Persistence.Core.Models;
 using Microsoft.EntityFrameworkCore;
 using Elsa.Workflows.Runtime.Core.Contracts;
-using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore;
 
@@ -115,12 +114,8 @@ public sealed class EfDesignAtomicWrite(
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(stage);
         cancellationToken.ThrowIfCancellationRequested();
-        var access = accessContextAccessor?.Current;
-        var ordinaryScoped = access is { AccessPolicy: PersistenceAccessPolicy.Ordinary, AcrossScopes: false, Scope: not null };
-        // Ordinary scoped access may stage host-wide (null) catalog rows. Keep a null request tenant
-        // as global for the operation marker; do not substitute the bound scope.
-        var tenantId = ordinaryScoped ? request.TenantId : request.TenantId ?? access?.Scope?.Value;
-        access?.EnsureTenantScope(tenantId);
+        var tenantId = request.TenantId ?? accessContextAccessor?.Current.Scope?.Value;
+        accessContextAccessor?.Current.EnsureTenantScope(tenantId);
         var markerId = MarkerId(request.Operation, tenantId);
         var operationKindIdentityHash = ExactIdentityHash(request.Operation.OperationKind);
         var operationKeyIdentityHash = ExactIdentityHash(request.Operation.OperationKey);
@@ -157,20 +152,9 @@ public sealed class EfDesignAtomicWrite(
                 .Select(entry => entry.Entity.TenantId)
                 .Distinct(StringComparer.Ordinal)
                 .ToArray();
-            if (ordinaryScoped)
-            {
-                var boundTenantId = access!.Scope!.Value;
-                if (stagedTenantIds.Any(stagedTenantId =>
-                        stagedTenantId is not null &&
-                        !StringComparer.Ordinal.Equals(stagedTenantId, boundTenantId)))
-                    throw new InvalidDataException("An EF design operation staged an entity owned by a different tenant.");
-            }
-            else
-            {
-                var enforceStagedTenant = tenantId is not null || access?.AcrossScopes == true || access?.IsGlobal == true;
-                if (enforceStagedTenant && stagedTenantIds.Any(stagedTenantId => !StringComparer.Ordinal.Equals(stagedTenantId, tenantId)))
-                    throw new InvalidDataException("An EF design operation staged an entity owned by a different tenant.");
-            }
+            var enforceStagedTenant = tenantId is not null || accessContextAccessor?.Current.AcrossScopes == true || accessContextAccessor?.Current.IsGlobal == true;
+            if (enforceStagedTenant && stagedTenantIds.Any(stagedTenantId => !StringComparer.Ordinal.Equals(stagedTenantId, tenantId)))
+                throw new InvalidDataException("An EF design operation staged an entity owned by a different tenant.");
             if (!staged.IsAccepted)
             {
                 await EfPersistenceCleanup.RollbackQuietlyAsync(transaction);

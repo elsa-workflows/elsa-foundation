@@ -9,6 +9,8 @@ using Elsa.Workflows.Design.Reconciliation.Git;
 using Elsa.Workflows.Design.Reconciliation.Git.Contracts;
 using Elsa.Workflows.Design.Reconciliation.Json;
 using Elsa.Workflows.Design.Reconciliation.Options;
+using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Elsa.Workflows.Design.Reconciliation.Git.Startup;
@@ -35,11 +37,33 @@ public sealed class NodeLocalReconcilerStartupTaskTests
     public async Task The_activity_version_reconciler_runs_while_another_node_holds_every_lock()
     {
         var reconciler = new SpyReconciler();
+        await using var provider = StartupServices(reconciler);
 
-        await _executor.ExecuteTaskAsync(new ActivityVersionReconcilerStartupTask(reconciler), CancellationToken.None);
+        await _executor.ExecuteTaskAsync(
+            new ActivityVersionReconcilerStartupTask(provider.GetRequiredService<IServiceScopeFactory>()),
+            CancellationToken.None);
 
         Assert.Equal(1, reconciler.Passes);
         Assert.Equal(0, _locks.Attempts);
+    }
+
+    [Fact]
+    public async Task The_activity_version_reconciler_binds_privileged_global_access_in_a_dedicated_scope()
+    {
+        var reconciler = new SpyReconciler();
+        var binder = new RecordingBinder();
+        await using var provider = StartupServices(reconciler, binder);
+
+        await _executor.ExecuteTaskAsync(
+            new ActivityVersionReconcilerStartupTask(provider.GetRequiredService<IServiceScopeFactory>()),
+            CancellationToken.None);
+
+        Assert.Equal(1, reconciler.Passes);
+        Assert.NotNull(binder.Bound);
+        Assert.True(binder.Bound.IsGlobal);
+        Assert.Equal(PersistenceAccessPolicy.Privileged, binder.Bound.AccessPolicy);
+        Assert.False(binder.Bound.AcrossScopes);
+        Assert.Equal("activity-version-reconciliation", binder.Bound.Purpose?.Value);
     }
 
     [Fact]
@@ -91,6 +115,23 @@ public sealed class NodeLocalReconcilerStartupTaskTests
         Assert.Equal(1, reconcilerRegistrations);
         Assert.Single(services, x => x.ServiceType == typeof(IOptions<WorkflowVersionReconcilerOptions>));
         Assert.Same(features[0].ReconcilerOptions, provider.GetRequiredService<IOptions<WorkflowVersionReconcilerOptions>>().Value);
+    }
+
+    private static ServiceProvider StartupServices(
+        IActivityVersionReconciler reconciler,
+        IPersistenceAccessContextBinder? binder = null)
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton(reconciler);
+        services.AddSingleton(binder ?? new RecordingBinder());
+        return services.BuildServiceProvider();
+    }
+
+    private sealed class RecordingBinder : IPersistenceAccessContextBinder
+    {
+        public PersistenceAccessContext? Bound { get; private set; }
+
+        public void Bind(PersistenceAccessContext context) => Bound = context;
     }
 
     private sealed class SpyReconciler : IActivityVersionReconciler, IWorkflowVersionReconciler, IGitWorkflowExporter
