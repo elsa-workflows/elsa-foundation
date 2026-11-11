@@ -10,7 +10,9 @@ public sealed class EfPoisonStoreException(
     string message,
     Exception innerException) : InvalidOperationException(message, innerException)
 {
+    /// <summary>What the store was doing when the provider failed, as a phrase that completes "failed while".</summary>
     public string Operation { get; } = operation;
 
+    /// <summary>The record the operation was for, as <c>WorkflowExecutionId/WorkItemId</c>.</summary>
     public string Identity { get; } = identity;
 }

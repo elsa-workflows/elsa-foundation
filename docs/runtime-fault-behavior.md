@@ -291,8 +291,14 @@ took over, a lease that expired, and a lease that an alteration borrowed; it als
 was released or revoked. It does not refuse a run that never had an owner. The refusal is a
 `RuntimeStaleFencingTokenException`, and it leaves the drain as a refused commit does. None of the steps below
 runs: the step is not acknowledged, released or re-enqueued, the retry policy is not asked, and no poison record
-is written. The step stays queued and runs again once its claim lapses (on a queue without claims, on the next
-drain). The exception is a step that a checkpoint commit earlier in the same dispatch already consumed, as in
+is written. The step stays queued, still claimed by the drain that stopped. Nothing releases that claim: it
+lapses after the scheduler claim's visibility timeout (`RuntimeSchedulerWorkClaimOptions.VisibilityTimeout`, one
+minute by default). The step runs again when the run is next drained after that: by the resumption sweep where
+the `Resumption` component is composed, otherwise by the next command for the run. The core composition has no
+sweep, so there the step waits for that command
+([#4075](https://github.com/elsa-workflows/elsa-foundation/issues/4075)). On a queue without claims there is no
+lapse to wait for, and the rest is the same. A refused checkpoint commit leaves its step the same way. The
+exception is a step that a checkpoint commit earlier in the same dispatch already consumed, as in
 step 2: its queue row is gone, so nothing runs again, and what the run's owner has is that commit. That happens
 outside a coalescing segment, where the commit consumes the step itself, and inside one, where a boundary flush
 or a cap-fold flush earlier in the dispatch removes the in-flight step's durable copy.
@@ -415,11 +421,16 @@ and records under the lease where the store can check it.
      - Outside an active coalescing segment: its queue writes and the unfenced record, all durable.
      - In an active coalescing segment the queue writes are in the drain's overlay, and the record is durable at
        once, because the poison store is not part of the overlay. The drain returns a `Faulted` result and does
-       not throw, so the orchestrator flushes the segment. With checkpoints buffered, that flush is a commit
-       through the committer under the drain's lease. The lost lease refuses it, and the overlay's queue writes
-       are dropped with it. What is left is the record, with the step still in the durable queue if it came from
-       there. With nothing buffered, the flush applies the overlay's queue changes to the durable queue without a
-       commit, and so without a fence (#4043). That leaves the queue writes and the record.
+       not throw, so the orchestrator flushes the segment. What that flush is depends on the segment
+       (`FlushAtQuiescenceAsync` in `RuntimeCoalescingDrainScopeFactory`):
+       - **When the flush is a commit.** That is when the segment has buffered changes, when an earlier cap flush
+         left durably persisted outbox items whose overlay outcome the durable store does not have yet, or when an
+         earlier call of this flush already prepared its commit. The flush goes through the committer under the
+         drain's lease. The lost lease refuses it, and the overlay's queue writes are dropped with it. What is
+         left is the record, with the step still in the durable queue if it came from there.
+       - **When it is a plain queue reconciliation.** That is when none of the three holds. The flush applies the
+         overlay's queue changes to the durable queue without a commit, and so without a fence (#4043). That
+         leaves the queue writes and the record.
    - **A drainer with no ambient lease for the execution** makes no check and writes the record without one.
 
    Only a lost lease refuses the record. A fenced write that fails for any other reason, such as a write

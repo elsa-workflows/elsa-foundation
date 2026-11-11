@@ -94,6 +94,42 @@ public sealed partial class EfWorkflowSchedulerPoisonStoreTests
     }
 
     [Fact]
+    public async Task Fenced_record_over_a_stored_row_that_fails_its_read_check_fails_closed_and_writes_nothing()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        await using var fixture = database.Open("tenant-a");
+        var clock = new FakeTimeProvider(Now);
+        var store = FencedStore(fixture, clock);
+        var lease = await Node(fixture, "node-a", clock).AcquireAsync(OwnedWorkflow);
+        await store.RecordFencedAsync(Record(1), lease.ToFence());
+        // The stored row no longer agrees with its own identity, as in the unfenced projection-drift test.
+        var row = await fixture.Context.WorkflowSchedulerPoisonRecords.SingleAsync();
+        row.WorkItemIdOrderKey = "corrupt";
+        await fixture.Context.SaveChangesAsync();
+        fixture.Context.ChangeTracker.Clear();
+        var content = row.ContentJson;
+        var before = await OwnershipRevisionAsync(database);
+
+        await Assert.ThrowsAsync<InvalidDataException>(
+            () => store.RecordFencedAsync(Record(1, "replaced", failureCount: 2), lease.ToFence()).AsTask());
+
+        Assert.Empty(fixture.Context.ChangeTracker.Entries());
+        Assert.Null(fixture.Context.Database.CurrentTransaction);
+        // The unfenced record fails the same way over the same row.
+        await Assert.ThrowsAsync<InvalidDataException>(
+            () => fixture.Store.RecordAsync(Record(1, "replaced", failureCount: 2)).AsTask());
+        // A later participant on the same context writes its own row and nothing of the failed record.
+        fixture.Context.SchedulerStates.Add(SiblingRow());
+        Assert.Equal(1, await fixture.Context.SaveChangesAsync());
+        await using var read = database.Open("tenant-a");
+        var stored = await read.Context.WorkflowSchedulerPoisonRecords.AsNoTracking().SingleAsync();
+        Assert.Equal("corrupt", stored.WorkItemIdOrderKey);
+        Assert.Equal(content, stored.ContentJson);
+        Assert.Equal(1, stored.Revision);
+        Assert.Equal(before, await OwnershipRevisionAsync(database));
+    }
+
+    [Fact]
     public async Task Fenced_record_is_retried_when_the_owners_heartbeat_lands_between_the_fence_read_and_the_save()
     {
         await using var database = await TestDatabase.CreateAsync();

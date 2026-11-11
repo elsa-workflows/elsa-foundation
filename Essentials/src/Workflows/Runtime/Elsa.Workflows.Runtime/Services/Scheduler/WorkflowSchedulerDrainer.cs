@@ -76,9 +76,8 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
     /// and nothing is recorded. Only that answer stops the fault path, and the cancellation of the drain's own
     /// token. When the service cannot answer, because its read failed, the fault path goes on as it does without the
     /// service: the step is acknowledged or released, and the record is still written under the lease where the
-    /// poison store can check it. Without the service the drainer does
-    /// not ask, and only a fenced poison record checks the lease. It is not used without
-    /// <see cref="OwnershipContextAccessor"/>.
+    /// poison store can check it. Without the service the drainer does not ask, and only a fenced poison record
+    /// checks the lease. It is not used without <see cref="OwnershipContextAccessor"/>.
     /// </summary>
     public IRuntimeExecutionOwnershipService? OwnershipService { private get; init; }
     private readonly IWorkflowSchedulerWorkQueue _schedulerWorkQueue;
@@ -693,12 +692,12 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
         // gave up on, a transaction it could not open, a capability that changed its answer. So the record then
         // goes the way it goes for a store without the capability. That record is unfenced: if the lease was in
         // fact lost, it is written all the same. An owning drain therefore does not end with its step acknowledged
-        // and no record because the fenced write failed that way. It still can, as before, when its own token is cancelled here or when the unfenced
-        // RecordAsync fails as well. The dispatch span is tagged with the type of the failure's cause, so a host
-        // whose fenced write keeps failing can see that its records are unfenced. The cancellation of this drain is
-        // let through as well; an OperationCanceledException raised while the drain's token is not cancelled is a
-        // failed write like any other. With no lease for this execution, or a store that cannot check it, the
-        // record is written unfenced.
+        // and no record because the fenced write failed that way. It still can, as before, when its own token is
+        // cancelled here or when the unfenced RecordAsync fails as well. The dispatch span is tagged with the type
+        // of the failure's cause, so a host whose fenced write keeps failing can see that its records are unfenced.
+        // The cancellation of this drain is let through as well; an OperationCanceledException raised while the
+        // drain's token is not cancelled is a failed write like any other. With no lease for this execution, or a
+        // store that cannot check it, the record is written unfenced.
         if (poisonFence is { } fenced)
         {
             try

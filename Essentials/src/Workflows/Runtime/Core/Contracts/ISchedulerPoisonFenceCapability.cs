@@ -12,12 +12,14 @@ namespace Elsa.Workflows.Runtime.Core.Contracts;
 /// <para>
 /// A drain that lost its run keeps running until one of its own writes is refused. If a work handler throws in that
 /// time, its poison record would land on a run that another node now runs. A drainer that has the ownership service
-/// checks the lease before it touches the faulted step; this capability covers the time between that check and the
-/// record, and the whole fault for a drainer without the service. A record written through it cannot land on a run
-/// that changed owner in that time. It is not a guarantee for every record. The drainer writes the record without
-/// the fence when it was built without its ownership accessor, when no lease for the run is ambient, when the store
-/// lacks this capability or reports <see cref="CanRecordFenced"/> as <see langword="false"/>, when the store could not say
-/// whether it can check, and when the fenced write fails for a reason other than a lost lease.
+/// checks the lease before it touches the faulted step; this capability covers the record, for a lease lost between
+/// that check and the write. For a drainer without the service it is the only check, and it is still a check of the
+/// record alone: that drainer acknowledges, releases or re-enqueues the step with no ownership check. A record
+/// written through it cannot land on a run that changed owner before the write. It is not a guarantee for every
+/// record. The drainer writes the record without the fence when it was built without its ownership accessor, when no
+/// lease for the run is ambient, when the store lacks this capability or reports <see cref="CanRecordFenced"/> as
+/// <see langword="false"/>, when the store could not say whether it can check, and when the fenced write fails for a
+/// reason other than a lost lease.
 /// </para>
 /// <para>
 /// Implement it on the store object itself. The check and the write must be atomic: reading the lease first and
