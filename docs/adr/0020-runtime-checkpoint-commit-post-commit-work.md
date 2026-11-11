@@ -39,8 +39,7 @@ and every composition whose queue does not share that unit of work, keeps the ou
 
 ## Proposed D-2 amendment
 
-**Status: proposed (2026-11-05), part of [#3052](https://github.com/elsa-workflows/elsa-foundation/issues/3052).**
-This extends atomic recording to background admissions. The accepted status above does not accept this amendment.
+**Status: proposed.** This extends atomic recording to background admissions. The accepted status above does not accept this amendment.
 Identity/retry semantics belong to [ADR 0045](0045-workflow-value-flow-uses-role-owned-bindings-and-immutable-invocation-records.md#proposed-d-2-execution-contract);
 flush cadence belongs to [ADR 0032](0032-runtime-checkpoint-cadence-is-policy-driven-per-workflow.md#proposed-d-2-amendment).
 
@@ -50,7 +49,7 @@ admission exist together. A separate state commit followed by a visible enqueue 
 this rule.
 
 When the background queue shares the checkpoint unit of work, recording its work item in that transaction is the
-recording already allowed by the 11 October clarification. When delivery crosses stores, atomically record an outbox
+recording already allowed by the clarification above. When delivery crosses stores, atomically record an outbox
 intent with workflow state and deliver background work after commit. Delivery/claim handling tolerates duplicates
 under stable work identity. If the composition cannot provide atomic recording and recoverable delivery, reject
 unsupported placement with a clear diagnostic rather than offer best-effort durability. Neither case dispatches

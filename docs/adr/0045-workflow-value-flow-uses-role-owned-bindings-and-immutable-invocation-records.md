@@ -2,10 +2,9 @@
 
 Status: accepted (2026-07-16; ratified through an architect grilling session)
 
-**D-2 amendment proposed (2026-11-05; initiative [#3052](https://github.com/elsa-workflows/elsa-foundation/issues/3052)).**
-The [proposed execution contract](#proposed-d-2-execution-contract) below refines §3–§6. Its status is **proposed**,
-separately from the accepted decision above. It records Sipke's directions for review, not collective agreement or
-implementation.
+**Amendment proposed (decision D-2).** The [proposed execution contract](#proposed-d-2-execution-contract) below
+refines §3–§6. Its status is **proposed**, separately from the accepted decision above. It is neither agreed nor
+implemented.
 
 Elsa's canonical workflow and activity model will not use `IMemoryBlock`,
 `IMemoryBlockReference`, a memory register, or a universal runtime value-reference interface.
@@ -313,22 +312,16 @@ in an explicitly named compatibility module with a retirement plan, consistent w
 
 ## Proposed D-2 execution contract
 
-**Status: proposed (2026-11-05).** If accepted, this section supersedes conflicting execution/recovery wording in
-§3–§6, including the issue #977 assertion that re-materializing inputs on redelivery is deterministic. It does not
-choose the script completion API or adopt the other open ADR amendments. Their authors must reconcile shared text
-before final agreement.
+**Status: proposed.** If accepted, this section supersedes conflicting execution/recovery wording in §3–§6,
+including the earlier assertion that re-materializing inputs on redelivery is deterministic. It does not choose the
+script completion API or adopt the other proposed ADR amendments. Shared text is reconciled with those amendments
+before this section is accepted.
 
-### Basis and scope
+### Scope
 
-The source directions are Sipke's [25 October follow-ups, points 1–3 and 6](https://github.com/elsa-workflows/elsa-foundation/issues/3052#issuecomment-6393239500),
-his [consolidated execution and lifecycle positions](https://github.com/elsa-workflows/elsa-foundation/issues/3052#issuecomment-6503893983)
-and the [confirmed link between the effect-boundary guarantee and this mechanism](https://github.com/elsa-workflows/elsa-foundation/pull/3384#issuecomment-6503654162).
-
-D-3 supplies the evaluation transaction. Variable versions, conflicts and resolution remain in
-[ADR 0092's proposal](https://github.com/elsa-workflows/elsa-foundation/pull/3411); background capability admission
-remains in [ADR 0093's proposal](https://github.com/elsa-workflows/elsa-foundation/pull/3412). Outcome selection remains
-subject to the [route-by-return reframe](https://github.com/elsa-workflows/elsa-foundation/pull/3389#issuecomment-6642477464).
-These dependencies are not accepted by being referenced here.
+Decision D-3 supplies the evaluation transaction. Variable versions, conflicts and resolution remain in ADR 0092;
+background capability admission remains in ADR 0093. Outcome selection remains subject to the route-by-return
+proposal for outcomes. These dependencies are not accepted by being referenced here.
 
 ### 1. Recover durable progress; distinguish retry from new work
 
@@ -441,12 +434,12 @@ identity and triggering child completion/fault, notification or resume cause. Re
 recorded snapshot instead of reading whatever frame is now current. Before its result is recorded, the classification
 and durability rules above apply.
 
-This replaces #977's premise that transient re-reads reproduce the same value on redelivery. Clock, randomness,
+This replaces the earlier premise that transient re-reads reproduce the same value on redelivery. Clock, randomness,
 host calls and intervening writes invalidate that premise. Hydrating a fresh CLR object from a snapshot must not
 secretly evaluate bindings again. Publication/validation probes must not execute effectful bindings; a runtime probe
 must not construct a throwaway activity just to discover a contract flag. Audit all evaluation sites, including
-structural reactivation and inline execution, for duplicate evaluation/activation. This draft does not claim that
-audit or fixes are complete.
+structural reactivation and inline execution, for duplicate evaluation/activation. This proposal does not include
+that audit or its fixes.
 
 ### 5. Accept one complete transition
 
@@ -459,7 +452,7 @@ existing bookmarks.
 
 Record unspecified, explicitly empty and named outcome selections distinctly, including multiple names where the
 node permits them. Record the complete selection with the result; ordinary business data never selects a route.
-The completion API and routing/join rules belong to S-3.
+The completion API and routing/join rules belong to the implementing spec.
 
 For inline execution, no other branch's work runs between input materialization, body execution and transition
 acceptance of an evaluation. This is ADR 0092's inline rule, with the same condition: the implementing spec must
@@ -506,10 +499,10 @@ crash/redelivery tests and provider proofs appropriate to each path:
 | Inline step, `External` and `ReplaySafe` | No other branch's work item runs between the input read and the transition commit; claim, fencing and durability boundaries stay in place. |
 | Cost of the effect boundary | A deterministic test counts the commits per iteration of a loop whose inputs call a function: once where the evaluation takes the boundary and once where it does not, in each persistence mode. The counts are reported before the boundary becomes mandatory. |
 
-S-1 must audit expression/inline evaluation sites and the input boundary. S-7/S-10 must align evaluation transactions,
-dependencies, retry/refresh and retained-completion resolution. S-11 must align admission/claim visibility and provider
-precedence. Concrete record layouts, operation-key API, finite dispatch bound and checkpoint integration belong to
-those specs. Return gaps to this ADR. #3052's all-specs-defined-before-implementation agreement still applies.
+The implementing specs must audit expression/inline evaluation sites and the input boundary; align evaluation
+transactions, dependencies, retry/refresh and retained-completion resolution; and align admission/claim visibility
+and provider precedence. Concrete record layouts, operation-key API, finite dispatch bound and checkpoint integration
+belong to those specs. Return gaps to this ADR. All specs are defined before implementation starts.
 
 How a registered function is classified is not settled by this contract; section 3 states both proposed rules.
 Reconcile that rule, route-by-return and the pending ADR 0092/0093 text before marking shared clauses agreed. No new constitutional gate or exception is proposed.
