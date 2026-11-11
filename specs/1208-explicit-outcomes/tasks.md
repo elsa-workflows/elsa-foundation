@@ -87,15 +87,20 @@ draft. If the call adds an explicitly recognized returned completion value, only
 ## Phase 5: User Story 3 - An unknown outcome name is caught (P1)
 
 - [ ] T017 [US3] In `Activities/Runtime/Elsa.Activities.Runtime/Services/ActivityCompletionProjector.cs` L55 (on `main` after #3801): check
-  every selected name against the node's pinned set and the multi-outcome flag, apply an activity-declared fallback
-  (Q6), and fault with the `VF-ACT-006` code on the fault record instead of a message prefix; same in
+  every selected name against the node's pinned set and the multi-outcome flag (no node-level fallback, Q6), and
+  fault with the `VF-ACT-006` code on the fault record instead of a message prefix; same in
   `BackgroundActivityCompletionCodec.ValidateOutcome`. Update `ActivityCompletionContractTests.cs` L46 and
   `WorkflowParentActivityCompletionSchedulerWorkHandlerTests.cs` L30 to assert the code
 - [ ] T018 [US3] *(API)* Add `ScriptOutcomeLiteralValidator` in `Workflows/Publishing/Elsa.Workflows.Publishing/Services/`:
   parse RunJavaScript scripts with Acornima, find calls of the script outcome API with literal arguments, and report
   `VF-AUTH-010` for names outside the node's set; tests for literal, array literal, computed (no diagnostic) and
   template-literal arguments
-- [ ] T019 [US3] Tests for US3 scenarios 2–4: computed unknown name, fallback, several names on a single-outcome node
+- [ ] T019 [US3] Tests for US3 scenarios 2–4: computed unknown name, an activity-declared catch-all, several names on a
+  single-outcome node
+- [ ] T019a [US3] Publication checks: `VF-AUTH-013` for a node without `Done` whose activity cannot guarantee a
+  selection (FR-002b), with conformance tests that If, Switch and SendHttpRequest with expected codes select on every
+  completion; `VF-AUTH-012` warning for a RunJavaScript that returns a string literal equal to a connected outcome
+  name (FR-008a); tests for US1 scenario 7 and US3 scenario 5
 
 ## Phase 6: User Story 4 - Several outcomes run as an inclusive fork (P2)
 
@@ -126,13 +131,17 @@ draft. If the call adds an explicitly recognized returned completion value, only
   declares the flag; tests
 - [ ] T027 [US5] *(API)* Convert `setOutcome` / `setOutcomes` instead of refusing them: remove them from
   `RefusedHostFunctions` in `Extensions/Elsa3/src/Mapping/Services/Elsa3ExpressionRewriter.cs` L510–522, rewrite to the
-  script outcome API, and derive the converted node's set per Q7 (refuse with guidance when it cannot); update
+  script outcome API, and preserve routing per Q7: the known set from `PossibleOutcomes`, literals and connected
+  ports, plus a converter-declared catch-all with no connection that the script selects for any other name, with
+  Elsa 3 `Done` mapped onto it; refuse with guidance when no faithful route exists or `PossibleOutcomes` is empty and
+  the name is computed; no warning-only conversion; update
   `Elsa3JavaScriptHostFunctionTests.cs` L183–184 and `Elsa3JavaScriptConversionTests.cs` L118
 - [ ] T028 [US5] Convert Switch `MatchAny` in `Elsa3SwitchValueSynthesisRewrite.cs` L26–38 and Complete with several
   literal outcomes in `Elsa3TerminalPlacementRewrite.cs` L101–107 (an expression outcome stays refused)
 - [ ] T029 [US5] Remove `ELS3-BEHAVIOUR-SCRIPT-OUTCOME-ROUTING` (`Elsa3ActivityDiagnosticCodes.cs` L128–129,
   `Elsa3ActivityNormalizer.cs` L1049, `Elsa3ConversionDiagnosticsTests.cs` L250–251)
-- [ ] T030 [US5] Convert-publish-run fixtures for each construct (US5 scenarios 1–4, FR-030)
+- [ ] T030 [US5] Convert-publish-run fixtures for each construct (US5 scenarios 1–5, FR-030), including a computed name
+  outside the known set that ends the path without a fault
 
 ## Phase 8: User Story 6 - Ports are known at design time (P3)
 

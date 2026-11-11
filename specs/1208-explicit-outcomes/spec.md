@@ -107,6 +107,9 @@ with a connection on each; run it once per selection below and check which succe
    result is `"Approved"` and the activity completes with `Done`.
 6. **Given** a script that selects `Approved` and then faults, **When** the step ends, **Then** no successor runs and
    the selection is discarded.
+7. **Given** a script that returns the string literal `'Approved'` on a node with a connection on `Approved`, **When**
+   the workflow is published, **Then** publication warns that return values are data and that routing needs the
+   returned completion form, naming the node and the outcome; it still publishes (FR-008a).
 
 ---
 
@@ -152,10 +155,16 @@ the step faults with `VF-ACT-006`.
    publication reports a diagnostic that names the node, the name and the node's outcome set.
 2. **Given** a computed outcome name outside the node's pinned set, **When** the step completes, **Then** it faults
    with `VF-ACT-006` as a fault code, and no successor runs.
-3. **Given** a node with a valid fallback outcome configured (Q6), **When** a computed name is unknown, **Then** the
-   activity completes with the fallback outcome.
+3. **Given** an activity whose contract maps unfamiliar business data to a declared catch-all (SendHttpRequest's
+   unmatched status code, CreateUserTask's `Unmatched`, or a script that deliberately selects its declared `Review`),
+   **When** the data is unfamiliar, **Then** the activity selects that catch-all. **Given** any node, **When** a
+   computed outcome name is outside the pinned set, **Then** the step faults with `VF-ACT-006`; no node setting turns
+   it into another outcome (Q6).
 4. **Given** a selection of several names on a node whose outcome set does not allow several, **When** the step
    completes, **Then** it faults with `VF-ACT-006`.
+5. **Given** a node whose outcome set has no `Done` and whose activity cannot guarantee a selection on every
+   successful completion, **When** the workflow is published, **Then** publication reports it, naming the node and
+   saying to declare `Done` or select on every path (FR-002b).
 
 ---
 
@@ -197,12 +206,17 @@ with several outcomes. They convert and run with the same routing, or are refuse
 
 1. **Given** an Elsa 3 script that calls `setOutcome('Approved')`, **When** it is converted, **Then** the converted
    script selects `Approved` through the script outcome API, and `Approved` is in the node's outcome set.
-2. **Given** an Elsa 3 script that calls `setOutcome` with a computed name, **When** the converter cannot establish
-   the possible names (Q7), **Then** it refuses with guidance that names the node and how to declare the outcomes.
+2. **Given** an Elsa 3 script that calls `setOutcome` with a computed name and `PossibleOutcomes` is empty, **When**
+   it is converted, **Then** it refuses with guidance that names the node and how to declare the outcomes (Q7).
 3. **Given** an Elsa 3 Switch in "match any" mode, **When** it is converted and run, **Then** every matching case's
    connection is followed.
 4. **Given** an Elsa 3 Complete with several outcomes, **When** it is converted and run, **Then** the parent sees all
    of them.
+5. **Given** an Elsa 3 script that calls `setOutcome` with a computed name and a non-empty `PossibleOutcomes`, **When**
+   it is converted and run with a name inside the known set, **Then** that outcome's connections run; **When** run
+   with a name outside it, **Then** the converted script selects the converter-declared catch-all, which has no
+   connection of its own, so the path ends without a fault, as in Elsa 3, and Elsa 3 `Done` behaviour is kept
+   (FR-027). No warning stands in for this.
 
 ---
 
@@ -253,6 +267,13 @@ pins exactly those ports, and a connection on a port the node does not declare i
 - **FR-002a**: An unspecified selection on a node whose outcome set has no `Done` MUST fault with `VF-ACT-006`, and the
   fault MUST say that the activity completed without selecting an outcome and declares no `Done`, so it points at the
   activity's code.
+- **FR-002b**: Publication MUST check every node whose pinned outcome set has no `Done`: its activity's contract MUST
+  guarantee a selection on every successful completion (an activity type declares the guarantee; for configurable
+  activities it is derived from the node's configuration). A node whose activity cannot guarantee it MUST be reported
+  at publication (`VF-AUTH-013`), naming the node and saying to declare `Done` or select on every path. The run-time
+  fault of FR-002a stays as the backstop where the guarantee cannot be checked statically. The built-in activities
+  without `Done` (If, Switch, SendHttpRequest with expected codes) get a conformance test that every completion
+  selects (@FransVanEk, #3389 point 3).
 - **FR-003**: Unspecified and explicitly empty MUST stay distinct through the activity transition, the completion
   record, parent and join handling, background completion, persistence, recovery and inspection.
 - **FR-004**: An explicitly empty selection MUST follow no outgoing connection, MUST still commit the activity's result
@@ -269,6 +290,10 @@ pins exactly those ports, and a connection on a port the node does not declare i
   unspecified selection when it returns ordinary data or selects nothing.
 - **FR-008**: A script's ordinary returned value (a string, number, object, array or null) MUST be the activity's
   result only. Its content MUST NOT select an outcome.
+- **FR-008a**: Publication MUST warn (`VF-AUTH-012`, a warning, not a refusal) when a RunJavaScript script returns a
+  string literal equal to an outcome name connected on that node. The diagnostic MUST name the node and the outcome
+  and say that return values are data and that routing needs the returned completion form (FR-007), so an existing
+  workflow that relied on routing by return value (#1114) is not changed silently (@FransVanEk, #3389).
 - **FR-009**: RunJavaScript's routing by return value (#1114) and its `Unmatched` outcome MUST be removed: from the
   activity, its contract and its outcome set, from Studio's ports, and from the activity surface baseline.
 
@@ -289,12 +314,15 @@ pins exactly those ports, and a connection on a port the node does not declare i
 
 - **FR-015**: A literal outcome name in a script that is not in the node's outcome set MUST be a publication
   diagnostic that names the node, the name and the set. Which call forms count as literal follows the API chosen in Q1.
-- **FR-016**: A selected name outside the node's pinned set MUST fault the step with `VF-ACT-006`, carried as the fault
-  code, unless a valid fallback applies (Q6).
+- **FR-016**: A selected name outside the node's pinned declared set MUST fault the step with `VF-ACT-006`, carried as
+  the fault code (Q6). No node-level setting turns an invalid outcome name into another outcome.
 - **FR-017**: A selection of several names on a node whose set does not allow several MUST fault the step with
   `VF-ACT-006`.
-- **FR-018**: A fallback outcome, where one is allowed (Q6), MUST be in the node's pinned set, and MUST NOT excuse an
-  undeclared result projection.
+- **FR-018**: S-3 MUST NOT add a generic node-level fallback; generic per-node fallbacks are deferred until a concrete
+  use case justifies them (Q6). An activity or a script MAY deliberately map unfamiliar business data to an ordinary
+  declared catch-all outcome in its contract (SendHttpRequest's unmatched status code, CreateUserTask's `Unmatched`, a
+  script's declared `Review`). That is explicit routing: the catch-all MUST be in the node's pinned set, and it MUST NOT
+  excuse an invalid outcome name or an undeclared result projection, which remain errors.
 - **FR-019**: Publication MUST refuse a Flowchart connection whose source port is not in its source node's pinned
   outcome set (Q9).
 - **FR-020**: A declared outcome with no connection MUST be valid; selecting it ends that path.
@@ -315,15 +343,31 @@ pins exactly those ports, and a connection on a port the node does not declare i
 **Persistence**
 
 - **FR-025**: The completion record, background completion receipts and recovery MUST keep the selection's state and
-  every selected name. Records written before this change MUST read as a named selection of their one outcome (Q11).
+  every selected name, and the completion document's version MUST go up (Q11). A supported legacy record with one
+  recorded outcome MUST read as `Named([its recorded key])`; no unspecified or empty history that was never recorded is
+  invented. Before 4.0 the recorded reset-and-republish policy applies, so no in-place data migration is needed; any
+  backward-reader path that is claimed MUST have a fixed legacy-record fixture. S-9's writer-compatibility rule does
+  not waive the version for this changed shape and meaning.
 
 **Elsa 3 conversion**
 
 - **FR-026**: The converter MUST map Elsa 3 RunJavaScript `Done` to Elsa 4 `Done`, whether or not possible outcomes
   are set. Spec 239's R8 rule (`Done` → `Unmatched`) MUST be removed. This fixes #3295.
 - **FR-027**: The converter MUST convert Elsa 3 `setOutcome` / `setOutcomes` to the recognized returned completion
-  form (per Q1) — Elsa 3 setters are conversion inputs, never native Elsa 4 host functions — and MUST derive the
-  converted node's outcome set as Q7 decides, or refuse with guidance.
+  form (per Q1) — Elsa 3 setters are conversion inputs, never native Elsa 4 host functions — and MUST **preserve the
+  original routing or refuse with guidance** (Q7). A warning does not make changed routing faithful, so it MUST NOT be
+  used to convert a case whose routing would change.
+  - `PossibleOutcomes`, the literal names in the script and the connected ports are evidence for the converted
+    outcome set, not proof that every computed name is covered.
+  - **Faithful route for a computed name**: the converter declares an explicit catch-all outcome on the converted
+    node, in its pinned set and with no connection of its own, and the converted script selects it for any name
+    outside the known set. That path then ends without a fault, as an unknown name did in Elsa 3 (FR-020). Where Elsa
+    3's always-firing `Done` is connected, it maps onto the catch-all as onto every other branch (FR-029a), so `Done`
+    behaviour is kept. This is ordinary explicit routing in the converted script, not a generic fallback (FR-018).
+  - A case with no faithful route is refused with guidance; refusal stays for a computed name with an empty
+    `PossibleOutcomes`.
+  - A behaviour-changing conversion exception needs a separate, explicit, approved and documented decision; S-3 adds
+    none.
 - **FR-028**: The converter MUST convert an Elsa 3 Switch in "match any" mode to an Elsa 4 Switch in "match any" mode.
 - **FR-029**: The converter MUST convert an Elsa 3 Complete with several literal outcomes to a completion that selects
   all of them. An outcome given by an expression stays refused.
@@ -351,7 +395,8 @@ pins exactly those ports, and a connection on a port the node does not declare i
   completion.
 - **Outcome set**: per node, the declared outcome names plus the multi-outcome flag, derived at design time and pinned
   at publication.
-- **Fallback outcome**: an optional declared outcome taken when a computed name is unknown (Q6).
+- **Activity-declared catch-all**: an ordinary declared outcome that an activity or script deliberately selects for
+  unfamiliar business data (Q6); never a repair for an invalid outcome name.
 
 ## Open questions for the approvers
 
@@ -369,12 +414,20 @@ answers.
 | Q3 | What does a parent that does not route by outcomes (Sequence, the workflow root, a loop body) do with an explicitly empty selection? | It treats it like any other successful completion: a Sequence goes on, the root completes. Only parents that route by outcomes (Flowchart, the graph boundary) read the selection. Applied to #3389 in `18cccb00b`. | Agrees |
 | Q4 | Two selected outcomes whose connections lead to the same node. The engine faults today on duplicate targets. | Each taken connection is an arrival at the target. **By default** the target's synchronizing implicit join (ADR 0064, dead-path join) accounts for one activation's arrivals and runs it once, after both arrivals (two arrivals, one run). An explicit per-arrival mode may instead run the target per arrival; it must be visible in authoring and pinned in the published contract. Loop re-entry and independent activations stay distinct executions either way (@sfmskywalker, [card 17](https://github.com/elsa-workflows/elsa-foundation/pull/3389#issuecomment-6645085675)). Applied to #3389 in `9c2cc3894`. | Agrees |
 | Q5 | Adopt @sfmskywalker's non-API amendments in #3763 into #3389? They are: an empty selection does not cancel other branches; the runtime rejects several names when not allowed; the fallback is in the pinned set and never excuses a result projection; the `VF-ACT-006` wording; computed-name derivation left to S-3; `Done` → `Done` proven by execution. | Adopt all six into #3389 (applied in `18cccb00b`). They fit D-4 and are in FR-004, FR-017, FR-018, FR-016, FR-027 and FR-030. | Agrees: adopt all six |
-| Q6 | The fallback outcome: who may configure one? | No node-level fallback in S-3: an unknown computed name faults. Activities that already map unknown values to a declared catch-all keep it as their activity-declared fallback (SendHttpRequest's unmatched status code, CreateUserTask's `Unmatched`). RunJavaScript declares none. | Agrees |
-| Q7 | Elsa 3 computed `setOutcome(x)`: which names form the converted node's set? | Elsa 3 `PossibleOutcomes` plus the literal names in the script plus the ports connected in the Elsa 3 graph plus `Done`. Refuse when the script computes a name and `PossibleOutcomes` is empty. Warn that an unlisted name now faults where Elsa 3 ended the path. The corpus has no `setOutcome` call (spec 247). | Agrees |
+| Q6 | The fallback outcome: who may configure one? | **Fault on unknown names; activity-defined catch-alls only; generic per-node fallbacks deferred** (FR-016, FR-018). An activity or script may deliberately map unfamiliar business data to a declared catch-all (SendHttpRequest's unmatched status code, CreateUserTask's `Unmatched`, a script's `Review`); no node setting repairs an invalid name. | Accepts @sfmskywalker's answer ([card 18](https://github.com/elsa-workflows/elsa-foundation/pull/3389#issuecomment-6645186613)) |
+| Q7 | Elsa 3 computed `setOutcome(x)`: how is it converted? | **Preserve or refuse; a warning is not faithful** (FR-027). `PossibleOutcomes`, literal names and connected ports are evidence, not proof. Faithful route: a converter-declared catch-all with no connection, selected for names outside the known set, so the path ends as in Elsa 3, with `Done` mapped onto it like every branch. Refuse when no faithful route exists, and when the name is computed and `PossibleOutcomes` is empty. Behaviour-changing exceptions need a separate approved decision. The corpus has no `setOutcome` call (spec 247). | Accepts @sfmskywalker's ([card 19](https://github.com/elsa-workflows/elsa-foundation/pull/3389#issuecomment-6645285238)) and @FransVanEk's ([condition](https://github.com/elsa-workflows/elsa-foundation/pull/3810#issuecomment-6765435979)) rule; replaces "convert and warn" |
 | Q8 | Elsa 3 SendHttpRequest fires `Done` next to the status-code outcome. Elsa 4 with expected codes completes with a code or the unmatched status code, never `Done`, yet declares `Done` statically, so its `Done` port is dead; the converter maps `Done` → `Done` and only warns (`ELS3-BEHAVIOUR-HTTP-OUTCOME-SINGLE`), so the path is lost. | Follows Q2 (model A), without multi-outcome: with expected codes, SendHttpRequest has no `Done` (FR-012a), and the converter maps Elsa 3 `Done` onto every response outcome (FR-029a). Whether Elsa 3's `Done` also fired on "Failed to connect" and "Timeout" is checked in the Elsa 3 source. | Agrees, with Q2 |
 | Q9 | Publication does not check connection ports today. A connection on an undeclared port publishes and never fires. | Publication refuses it (FR-019). The general defect gets its own issue; S-3 fixes it if it is still open. Applied to #3389 in `18cccb00b`. | Agrees |
 | Q10 | #3389 says the activity contract declares multi-outcome completion. A Switch allows several only in "match any" mode, which is per node. | The flag is per node, derived at design time and pinned with the outcome set; an activity type provides it statically or through a provider. Applied to #3389 in `18cccb00b`. | Agrees |
-| Q11 | The persisted shape of the selection. | The completion record stores the state and the names; its document version goes up. A record from before reads as a named selection of its one outcome. No data migration before 4.0, as in S-9 Q7. | Agrees |
+| Q11 | The persisted shape of the selection. | The completion record stores the state and the names; its document version goes up. A legacy one-outcome record reads as `Named([its recorded key])`; no unrecorded empty or unspecified history is invented. No in-place data migration before 4.0 (reset-and-republish policy); a claimed backward-reader path needs a fixed legacy-record fixture. S-9's writer-compatibility rule does not waive the version (FR-025). | Accepts @sfmskywalker's delegated answer ([comment](https://github.com/elsa-workflows/elsa-foundation/pull/3810#issuecomment-6646547680)) |
+
+**Answers recorded on this PR and #3389** (accepted by @j03y-nxxbz, applied 2026-11-11): @sfmskywalker Q2
+([agreed](https://github.com/elsa-workflows/elsa-foundation/pull/3810#issuecomment-6644734617)), Q4 (card 17, already
+applied in FR-022; the per-arrival part is on the call agenda and unchanged here), Q6 (card 18), Q7 (card 19), Q11
+(delegated); @FransVanEk Q7 ([condition](https://github.com/elsa-workflows/elsa-foundation/pull/3810#issuecomment-6765435979))
+and, from his [#3389 re-review](https://github.com/elsa-workflows/elsa-foundation/pull/3389#pullrequestreview-5842388196),
+the publish warning for a returned string that equals a connected outcome (FR-008a) and the publish-time `Done` check
+(FR-002b).
 
 ## Success Criteria *(mandatory)*
 
@@ -387,8 +440,11 @@ answers.
   name faults with `VF-ACT-006`.
 - **SC-004**: A selection of several outcomes reaches a downstream join exactly once, after every taken path.
 - **SC-005**: Unspecified, named and empty selections survive a restart unchanged.
-- **SC-006**: Zero converter refusals remain for Elsa 3 `setOutcome` / `setOutcomes` with derivable names, Switch
-  "match any", and Complete with several literal outcomes.
+- **SC-006**: Zero converter refusals remain for Elsa 3 `setOutcome` / `setOutcomes` with a non-empty
+  `PossibleOutcomes` or literal names, Switch "match any", and Complete with several literal outcomes; every converted
+  computed selection runs the same paths as in Elsa 3, including names outside the known set.
+- **SC-007**: Every fixture script that returns a string literal equal to a connected outcome name gets the FR-008a
+  warning at publication.
 
 ## Assumptions
 
@@ -398,7 +454,7 @@ answers.
   publication) must be fixed first, #3287 for the fixtures that read variables (research R-7). The requirements do
   not depend on them.
 - Elsa 4 has no released runtime store, so the completion record's shape can change with a version bump and a read of
-  older records, without a data migration (as S-9 Q7).
+  older records, without an in-place data migration (reset-and-republish before 4.0; Q11).
 - The Flowchart engine already accepts several outcome names and routes untaken connections dead (research R-3), so
   multi-outcome scheduling needs declarations and a duplicate-target rule, not a new engine.
 - The Elsa 3 corpus has no `setOutcome` / `setOutcomes` call (spec 247), so Q7 matters for workflows outside it.

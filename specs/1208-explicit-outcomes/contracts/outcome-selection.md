@@ -30,7 +30,10 @@ value, this section adds its shape and the precedence rule.
 |---|---|---|
 | `VF-AUTH-010` | A literal outcome name in a script is not in the node's outcome set | publication |
 | `VF-AUTH-011` | A Flowchart connection's source port is not in its source node's pinned outcome set | publication |
-| `VF-ACT-006` | A selected name is outside the pinned set and no valid fallback applies; or several names on a node that does not allow several; or an undeclared result projection | run time, fault code |
+| `VF-AUTH-012` | Warning: a RunJavaScript script returns a string literal equal to an outcome name connected on that node; return values are data, routing needs the returned completion form (FR-008a) | publication |
+| `VF-AUTH-013` | A node whose pinned set has no `Done` and whose activity cannot guarantee a selection on every successful completion (FR-002b) | publication |
+| `VF-ACT-006` | A selected name is outside the pinned set (no node-level fallback); or several names on a node that does not allow several; or an unspecified selection without `Done`; or an undeclared result projection | run time, fault code |
+| `ELS3-SCRIPT-OUTCOME-CATCHALL` | Info: the converter declared a catch-all outcome with no connection for computed `setOutcome` names outside the known set (FR-027) | conversion |
 
 Removed: `ELS3-BEHAVIOUR-SCRIPT-OUTCOME-ROUTING`, and the `VF-IMP-005` refusals of `setOutcome` / `setOutcomes`.
 Narrowed: `ELS3-ACTIVITY-UNSUPPORTED-MODE` no longer covers Switch `MatchAny` or Complete with several literal
