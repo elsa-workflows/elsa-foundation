@@ -11387,6 +11387,11 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Activities.Http",
+          "path": "Essentials/src/Activities/Http/Elsa.Activities.Http.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Events",
           "path": "Essentials/src/Events/Elsa.Events/Elsa.Events.csproj"
         },
@@ -11394,6 +11399,11 @@
           "type": "internal",
           "id": "Elsa.Workflows.Design.Validations",
           "path": "Essentials/src/Workflows/Design/Validations/Elsa.Workflows.Design.Validations/Elsa.Workflows.Design.Validations.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Serialization.Testing",
+          "path": "Essentials/tests/Serialization/Testing/Elsa.Serialization.Testing.csproj"
         },
         {
           "type": "internal",
