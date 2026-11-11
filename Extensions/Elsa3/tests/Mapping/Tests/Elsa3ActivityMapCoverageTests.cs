@@ -197,10 +197,10 @@ public sealed class Elsa3ActivityMapCoverageTests
 
     /// <summary>
     /// #3297: a <see cref="Elsa3NullRule.NoBinding"/> row claims that Elsa 4's default for the input equals what Elsa 3
-    /// ran with (spec 267's per-member table), so a converted null runs as before. The claim is checked twice: the
-    /// contract's declared default, when there is one, and the value the unbound input runs with (the activity's
-    /// property on a fresh instance). If an Elsa 4 default changes, this fails instead of converted workflows changing
-    /// behaviour silently. The Elsa 3 values are spec 267's "what Elsa 3 ran with" column, as JSON.
+    /// ran with (spec 267's per-member table), so a converted null runs as before. The value an unbound input runs with
+    /// is the one publication pins for it (<see cref="UnboundValue"/>). If an Elsa 4 default changes, this fails instead
+    /// of converted workflows changing behaviour silently. The Elsa 3 values are spec 267's "what Elsa 3 ran with"
+    /// column, as JSON.
     /// </summary>
     [Fact]
     public async Task Every_unbound_null_runs_with_the_value_elsa3_ran_with()
@@ -241,13 +241,14 @@ public sealed class Elsa3ActivityMapCoverageTests
 
             var expected = JsonDocument.Parse(elsa3RanWith[name]).RootElement;
             var input = (await catalog.GetVersion(catalog.VersionIdOf(typeKey))).Inputs.Single(input => input.ReferenceKey == rule.Elsa4Key);
-            if (input.DefaultValue is { } declared && !JsonElement.DeepEquals(declared, expected))
-                mismatches.Add($"'{name}': Elsa 3 ran with {expected}, but '{typeKey}.{input.ReferenceKey}' declares the default {declared}.");
-
-            var property = InputProperty(typeKey, input);
-            var runsWith = JsonSerializer.SerializeToElement(property.GetValue(FreshInstance(property.DeclaringType!)), property.PropertyType);
-            if (!JsonElement.DeepEquals(runsWith, expected))
-                mismatches.Add($"'{name}': Elsa 3 ran with {expected}, but '{typeKey}.{input.ReferenceKey}' runs unbound with {runsWith}.");
+            var problem = UnboundValue(input, InputProperty(typeKey, input).PropertyType) switch
+            {
+                (null, var refusal) => refusal,
+                ({ } runsWith, _) when !JsonElement.DeepEquals(runsWith, expected) => $"runs unbound with {runsWith}",
+                _ => null
+            };
+            if (problem is not null)
+                mismatches.Add($"'{name}': Elsa 3 ran with {expected}, but '{typeKey}.{input.ReferenceKey}' {problem}.");
         }
 
         Assert.True(mismatches.Count == 0, string.Join(Environment.NewLine, mismatches));
@@ -357,33 +358,58 @@ public sealed class Elsa3ActivityMapCoverageTests
 
     /// <summary>
     /// Whether <paramref name="value"/>, bound as the normalizer binds an emitted null value (a JSON array or object stays
-    /// JSON, anything else is text), reads as <paramref name="clrType"/>. Text reads as a number, as a literal does.
+    /// JSON, anything else is text), converts to <paramref name="clrType"/> the way publication converts a literal
+    /// (<c>RuntimeInputBindingCompiler.ConvertLiteral</c>): JSON deserializes with default options, text parses as an
+    /// enum name or converts invariantly. Publication's comma-list coercion of text into a collection is not modelled, so
+    /// an emitted collection must be written as a JSON array.
     /// </summary>
     private static bool EmittedValueFits(string? value, Type clrType)
     {
         if (value is null)
             return false;
 
-        var literal = value.TrimStart() is ['[' or '{', ..] ? JsonDocument.Parse(value).RootElement : JsonSerializer.SerializeToElement(value);
+        var target = Nullable.GetUnderlyingType(clrType) ?? clrType;
         try
         {
-            literal.Deserialize(clrType, JsonSerializerOptions.Web);
+            if (value.TrimStart() is ['[' or '{', ..])
+                JsonDocument.Parse(value).RootElement.Deserialize(target);
+            else if (target.IsEnum)
+                return Enum.TryParse(target, value, ignoreCase: true, out _);
+            else if (target != typeof(string) && !target.IsInstanceOfType(value))
+            {
+                if (typeof(IConvertible).IsAssignableFrom(target))
+                    Convert.ChangeType(value, target, System.Globalization.CultureInfo.InvariantCulture);
+                else
+                    JsonSerializer.SerializeToElement(value).Deserialize(target);
+            }
+
             return true;
         }
-        catch (JsonException)
+        catch (Exception exception) when (exception is JsonException or FormatException or InvalidCastException or OverflowException or NotSupportedException)
         {
             return false;
         }
     }
 
     /// <summary>
-    /// A fresh activity instance, so its property initializers run. Services an activity takes (DispatchWorkflow's
-    /// primary constructor) are only used when it executes, so null stands in for each.
+    /// The value an unbound input runs with, as publication pins it (<c>RuntimeInputBindingCompiler.CompileUnbound</c>):
+    /// its declared default; else, for an optional input, null when it accepts null and its CLR type's default when that
+    /// is a value type. The activity's property initializer is never used, because hydration sets every input. Returns
+    /// the refusal instead when publication refuses the input unbound.
     /// </summary>
-    private static object FreshInstance(Type activityType)
+    private static (JsonElement? RunsWith, string? Refusal) UnboundValue(InputDefinition input, Type propertyType)
     {
-        var constructor = activityType.GetConstructors().OrderBy(constructor => constructor.GetParameters().Length).First();
-        return constructor.Invoke(new object?[constructor.GetParameters().Length]);
+        if (input.DefaultValue is { } declared)
+            return (declared, null);
+        if (input.IsRequired)
+            return (null, "is required with no declared default, so publication refuses it unbound");
+        if (input.IsNullable)
+            return (JsonSerializer.SerializeToElement<object?>(null), null);
+
+        var clrType = Nullable.GetUnderlyingType(propertyType) ?? propertyType;
+        return clrType.IsValueType
+            ? (JsonSerializer.SerializeToElement(Activator.CreateInstance(clrType), clrType), null)
+            : (null, "has no declared default and a non-nullable reference type, so publication refuses it unbound");
     }
 
     /// <summary>The CLR types of the aliases the intrinsic contracts declare.</summary>
@@ -395,7 +421,7 @@ public sealed class Elsa3ActivityMapCoverageTests
     };
 
     /// <summary>The CLR property behind a catalog input: the activity type key is the CLR type name, the input name the property.</summary>
-    private static PropertyInfo InputProperty(string activityTypeKey, Elsa.Activities.Design.Core.Models.InputDefinition input)
+    private static PropertyInfo InputProperty(string activityTypeKey, InputDefinition input)
     {
         var type = RealActivityCatalog.Anchors
             .Select(anchor => anchor.Assembly).Distinct()
