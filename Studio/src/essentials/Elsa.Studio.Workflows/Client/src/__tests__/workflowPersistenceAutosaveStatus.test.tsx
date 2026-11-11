@@ -75,6 +75,46 @@ describe("cancelled autosave status", () => {
     expect(saveDraftApi).toHaveBeenCalledTimes(1);
     expect(displayedStatus()).toBe("Autosaved");
   });
+
+  it("restores Autosaved after undo to the last save while Autosave is off", async () => {
+    await mount();
+    await editLayout();
+    await advance(autosaveDelayMs);
+    expect(displayedStatus()).toBe("Autosaved");
+    const saved = currentDraft!;
+
+    await editLayout(40);
+    await advance(autosaveDelayMs - 1);
+    expect(displayedStatus()).toBe("Autosaving...");
+
+    flushSync(() => persistence!.setAutosaveEnabled(false));
+    await settle();
+    expect(displayedStatus()).toBe("Unsaved changes");
+
+    flushSync(() => setDraft(() => saved));
+    await settle();
+    expect(displayedStatus()).toBe("Autosaved");
+    expect(saveDraftApi).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows unsaved changes for further edits while Autosave is already off", async () => {
+    await mount();
+    await editLayout();
+    await advance(autosaveDelayMs);
+    expect(displayedStatus()).toBe("Autosaved");
+
+    flushSync(() => persistence!.setAutosaveEnabled(false));
+    await settle();
+    expect(displayedStatus()).toBe("Autosaved");
+
+    await editLayout(40);
+    expect(displayedStatus()).toBe("Unsaved changes");
+    expect(saveDraftApi).toHaveBeenCalledTimes(1);
+
+    await advance(autosaveDelayMs + 1);
+    expect(saveDraftApi).toHaveBeenCalledTimes(1);
+    expect(displayedStatus()).toBe("Unsaved changes");
+  });
 });
 
 async function mount() {

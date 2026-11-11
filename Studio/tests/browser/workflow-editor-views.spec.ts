@@ -52,7 +52,12 @@ test("clears Autosaving when autosave is turned off during debounce", async ({ p
   const views = page.getByRole("tablist", { name: "Editor view tabs" });
   await views.getByRole("tab", { name: "Variables", exact: true }).click();
   await page.getByRole("button", { name: "Add variable", exact: true }).click();
-  await page.getByRole("textbox", { name: "Variable name", exact: true }).fill("Customer");
+  const variableName = page.getByRole("textbox", { name: "Variable name", exact: true });
+  await variableName.fill("Customer");
+  await expect(status).toHaveText("Autosaving...");
+  await expect(status).toHaveText("Autosaved", { timeout: 10_000 });
+
+  await variableName.fill("Customer2");
   await expect(status).toHaveText("Autosaving...");
   await page.screenshot({ path: testInfo.outputPath("autosave-pending.png") });
 
@@ -64,4 +69,8 @@ test("clears Autosaving when autosave is turned off during debounce", async ({ p
   await page.waitForTimeout(autosaveDelayMs + 200);
   await expect(status).toHaveText("Unsaved changes");
   await page.screenshot({ path: testInfo.outputPath("autosave-cancelled.png") });
+
+  await toolbar.getByRole("button", { name: "Undo", exact: true }).click();
+  await expect(variableName).toHaveValue("Customer");
+  await expect(status).toHaveText("Autosaved");
 });

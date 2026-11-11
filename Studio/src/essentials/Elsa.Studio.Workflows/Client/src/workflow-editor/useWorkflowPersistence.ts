@@ -72,17 +72,25 @@ export function useWorkflowPersistence({ context, draft, documentAdapter, autosa
     reviewHoldGenerationRef.current++;
     reviewHoldRef.current = false; setReviewHeld(false);
     lastSavedDraftSignatureRef.current = savedDraft ? getDraftSignature(savedDraft) : "";
+    // A load/reload is a saved baseline, not an autosave. Record Saved so a later idle restore cannot
+    // revive an older Autosaved label from a previous snapshot.
+    lastSettledStatusRef.current = savedDraft ? "Saved" : "";
     setPersistedDraft(savedDraft);
   }, []);
 
-  // When a debounce is cancelled, only replace a leftover "Autosaving..." so a newer publish/copy
-  // status is not clobbered. Dirty drafts report unsaved; matching signatures restore the last save.
-  const revertCancelledAutosaveStatus = useCallback(() => {
+  // While idle (Autosave off, a cancelled debounce, or a matching signature), derive the chip from the
+  // draft vs last-saved signature. Leave a newer manual save/publish/copy status alone.
+  const applyIdlePersistenceStatus = useCallback(() => {
     const current = latestDraftRef.current;
     const dirty = Boolean(current && getDraftSignature(current) !== lastSavedDraftSignatureRef.current);
     const restored = dirty ? "Unsaved changes" : lastSettledStatusRef.current;
-    setStatus(previous => previous === "Autosaving..." ? restored : previous);
-  }, [setStatus]);
+    setStatus(previous => {
+      if (previous === restored) return previous;
+      const owned = previous === "Autosaving..." || previous === "Unsaved changes" || previous === "Saved" || previous === "Autosaved"
+        || (!autosaveEnabled && !previous);
+      return owned ? restored : previous;
+    });
+  }, [autosaveEnabled, setStatus]);
 
   /**
    * Saves a snapshot. A caller that captured a snapshot of (or derived one from) the live draft declares the history line
@@ -104,7 +112,7 @@ export function useWorkflowPersistence({ context, draft, documentAdapter, autosa
       : requestedLive && getDraftSignature(requestedLive) === requestedSignature ? [...(lineageHoldRef.current?.lineage() ?? [])] : null;
     const queuedSave = async () => {
       if (savedStatus === "Autosaved" && (reviewHoldRef.current || lineageHoldRef.current?.isHeld())) {
-        revertCancelledAutosaveStatus();
+        applyIdlePersistenceStatus();
         return draftSnapshot;
       }
       const requestId = ++saveRequestIdRef.current;
@@ -153,7 +161,7 @@ export function useWorkflowPersistence({ context, draft, documentAdapter, autosa
     const queued = saveQueueRef.current.then(queuedSave, queuedSave).finally(() => { queuedSavesRef.current -= 1; });
     saveQueueRef.current = queued.catch(() => undefined);
     return queued;
-  }, [context, documentAdapter, editDraft, revertCancelledAutosaveStatus, setStatus, setError]);
+  }, [context, documentAdapter, editDraft, applyIdlePersistenceStatus, setStatus, setError]);
 
   // Settles pending persistence before a publish review: persists the latest draft when it has unsaved
   // edits (so the review captures the same state that will be saved), then awaits the whole save queue.
@@ -167,27 +175,26 @@ export function useWorkflowPersistence({ context, draft, documentAdapter, autosa
   }, [saveDraft]);
 
   useEffect(() => {
-    if (!autosaveEnabled || autosavePaused || reviewHeld || lineageHeld || !draft) return;
-
-    const draftSignature = getDraftSignature(draft);
-    if (draftSignature === lastSavedDraftSignatureRef.current) return;
-
-    let pending = true;
-    setStatus("Autosaving...");
-    const timeoutId = window.setTimeout(() => {
-      pending = false;
-      if (reviewHoldRef.current || lineageHoldRef.current?.isHeld()) {
-        revertCancelledAutosaveStatus();
-        return;
-      }
-      void saveDraft(draft, "Autosaved").catch(() => undefined);
-    }, autosaveDelayMs);
-
-    return () => {
-      window.clearTimeout(timeoutId);
-      if (pending) revertCancelledAutosaveStatus();
-    };
-  }, [autosaveEnabled, autosavePaused, reviewHeld, lineageHeld, draft, revertCancelledAutosaveStatus, saveDraft, setStatus]);
+    if (!draft) return;
+    const canAutosave = autosaveEnabled && !autosavePaused && !reviewHeld && !lineageHeld;
+    if (canAutosave && getDraftSignature(draft) !== lastSavedDraftSignatureRef.current) {
+      let pending = true;
+      setStatus("Autosaving...");
+      const timeoutId = window.setTimeout(() => {
+        pending = false;
+        if (reviewHoldRef.current || lineageHoldRef.current?.isHeld()) {
+          applyIdlePersistenceStatus();
+          return;
+        }
+        void saveDraft(draft, "Autosaved").catch(() => undefined);
+      }, autosaveDelayMs);
+      return () => {
+        window.clearTimeout(timeoutId);
+        if (pending) applyIdlePersistenceStatus();
+      };
+    }
+    applyIdlePersistenceStatus();
+  }, [autosaveEnabled, autosavePaused, reviewHeld, lineageHeld, draft, applyIdlePersistenceStatus, saveDraft, setStatus]);
 
   return { persistedDraft, holdForReview, reviewHeld, saveDraft, flushPendingSave, saving, autosaveEnabled, setAutosaveEnabled, autosavePaused, setAutosavePaused, markSaved };
 }
