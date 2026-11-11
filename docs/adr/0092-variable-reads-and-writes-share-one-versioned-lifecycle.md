@@ -8,8 +8,9 @@ amends
 [ADR 0045](0045-workflow-value-flow-uses-role-owned-bindings-and-immutable-invocation-records.md) §3 and §4,
 [ADR 0048](0048-container-output-captures-resolve-through-producer-visible-variable-frames.md) §4, and the proposed
 [ADR 0090](0090-activities-change-variables-as-a-unit-of-work-committed-with-the-step.md) §2, §6 and §7. It keeps
-the transaction model of D-3. It narrows decision D-8 of the initiative (unordered writes get a warning, last commit wins)
-to **blind** writes: a write that is based on a stale read is handled by decision 6 instead.
+the transaction model of D-3. It keeps decision D-8 of the initiative (unordered writes get a warning, last commit wins)
+for every write, blind or based on a stale read. A write on a stale base also raises a lost-update warning, and a node
+may opt in to a strict mode that faults instead (decision 6).
 
 ## Context
 
@@ -89,16 +90,18 @@ record.
   variable's value digest is computed once per applied write and stored beside the version. The digest is taken over
   ADR 0091's canonical form (decision 7 there), so it compares meaning, not the stored text: two writers that write
   the same value with different escaping or notation produce the same digest.
-- **Read set**: the variables an invocation actually read, each with the version and stored digest it saw. It has two
-  parts:
+- **Read set**: the variables an invocation actually read, each with the version it saw, and, for a node that opts in
+  to `Fault` (decision 6), also the stored digest it saw. It has two parts:
   - the **input read set**: reads made while the inputs were materialized, committed with the input snapshot;
   - the **session reads**: reads made by the body through the variable session (ADR 0090), recorded per attempt.
-- **Base**: for a write to variable X, the version and digest of X in the writer's read set. A write to a variable the
-  invocation did not read has no base.
+- **Base**: for a write to variable X, the version of X in the writer's read set (with its digest where `Fault` is
+  opted in). A write to a variable the invocation did not read has no base.
 - **Blind write**: a write without a base.
-- **Lost update**: a write with a base whose version is no longer current *and* whose value has since changed. The
-  writer built its value on data that another writer has replaced.
-- **Write history**: the record of every applied write, and of every lost update and how it was resolved.
+- **Stale base**: a base whose version is no longer current when the write commits.
+- **Lost update**: a write on a stale base. The writer built its value on data that another writer may have replaced.
+  Which check decides it, and what follows, depends on the node's mode (decisions 5 and 6).
+- **Write history**: the record of every applied write, and of every lost update with its outcome: the warning raised,
+  or the fault.
 - **Step**: as in ADR 0090: one invocation attempt, from invoke or resume to its next transition. Each evaluation of a
   structural activity is its own step (D-3).
 - **Invocation**: one logical execution of a node, with one `InvocationId` and one input snapshot, across all its
@@ -135,18 +138,19 @@ mechanisms.
 Each variable has its own version, independent of other variables in the same frame or scope, stored in the frame or
 row with a digest of its value. Both are computed once, when a write is applied.
 
-The commit rule (decision 5) runs first. Only a write that passed it, or a blind write, is then compared with the
+The commit rule (decision 5) runs first. Only a write that it applies, or a blind write, is then compared with the
 current value: if their digests are equal, the write applies nothing and the version stays. So two branches that both
 read 0 and both write 1 do not hide the second write as a no-op; the second is a lost update.
 
 *Why.* The frame revision counts writes to every variable in the frame, so using it would report conflicts between
 unrelated variables, while conflict handling must concern the variable in question. Storing the digest at
-write time means a read records two stored values and hashes nothing, and the commit rule (decision 5) never has to
+write time means a read records stored values and hashes nothing, and the exact check of decision 5 never has to
 serialize a value it did not just write. The version also gives the write history its order for free.
 
 ### 3. A step records what it actually read
 
-The read set records each variable the invocation read, with its stored version and digest:
+The read set records each variable the invocation read, with its stored version, and with its stored digest where the
+node opts in to `Fault` (decision 6):
 
 - During input materialization, the engine records every variable an input binding or input expression actually read:
   the input read set. Once D-7 is written into ADR 0089 (computed names fall back to a run-time lookup), this includes
@@ -174,13 +178,13 @@ session write.
 
 A newer session read must not erase an older input dependency that the invocation still relies on. For example, an
 input reads `count = 0`, another branch writes 10, and a session then reads 10; a capture calculated from the original
-input still writes against the older dependency. The newer read cannot make that stale calculation pass the commit
+input still writes against the older dependency. The newer read cannot hide that stale calculation from the commit
 rule. The implementing spec defines how it represents and advances bases while preserving dependencies still in use.
 
 *Why.* In neither surface can the engine see whether the written value depends on the read. A script can read `count`
 only to log it, and then write an unrelated value. ADR 0090 §7 already treats "read, then changed" as a read-modify-write;
 this applies the same rule to both surfaces. The conservative choice is correct here: a missed lost update is silent,
-while a false one is visible and can be overridden (decision 6).
+while a false one costs a warning by default (decision 6).
 
 **A read alone never produces a write.** Only an explicit write enters this rule: a capture, a `Set`, or a session write
 (an assignment, or in a script a change found by comparing JavaScript with JavaScript, ADR 0046 V9). The ADR 0090 amendment (C1 and C2) never turns a read into a write, so a step that only read X has
@@ -197,45 +201,61 @@ order within one commit (session changes first, captures last).
 
 When a step commits a write to variable X:
 
-1. **No base (blind write):** the write applies. Between unordered branches the last commit wins (D-8, which now
-   covers blind writes only; see below), and draft validation warns about unordered writes (spec 266).
+1. **No base (blind write):** the write applies. Between unordered branches the last commit wins (D-8), and draft
+   validation warns about unordered writes (spec 266).
 2. **Base equals the current version:** the write applies.
-3. **Base is older, but the current value's digest equals the base digest:** the value moved and came back (for
-   example 0 → 1 → 0). Nothing the writer relied on was lost. The write applies, and the write history records the
-   version mismatch.
-4. **Base is older and the value differs:** this is a **lost update**. The step's lost-update policy decides
-   (decision 6).
+3. **Stale base:** the write is a **lost update**, and the tracking follows the node's mode (decision 6):
+   - **Default, light check.** The base version and the current version decide alone. The write applies, the last
+     commit wins (D-8), and a lost-update warning is raised. A value that changed and returned to its base (for
+     example 0 → 1 → 0) also raises the warning; no digest is compared.
+   - **`Fault` opted in, exact check.** The current value's stored digest is compared with the base digest. If they
+     are equal, the value moved and came back; nothing the writer relied on was lost. The write applies, and the write
+     history records the version mismatch. If they differ, the step faults.
 
 The rule is the same for inline and background steps, for captures and session writes, and for frames and rows (D-9).
 
-*Why.* Versions alone would fault on 0 → 1 → 0, where nothing was lost. Comparing serialized values at every check
-(ADR 0090 §7) costs a serialization each time. Versions first, with a comparison of two stored digests only on a
-mismatch, avoids both the false fault and the cost.
+D-8 holds for every write: an unordered write applies and the last commit wins, whether it is blind or based on a
+stale read. A stale base adds the lost-update warning, unless the node opted in to `Fault`.
 
-This narrows D-8 to blind writes. Before, every unordered write to one variable was "last commit wins". Now a write
-that is based on a stale read is a lost update, even when the other write was blind.
+*Why.* The light check needs only the version a read saw and the version at commit, so the default stores no digest in
+the read set and compares nothing. A false alarm, such as 0 → 1 → 0, costs little as a warning and a lot as a fault, so
+the exact check runs only where a fault is the outcome. There, versions alone would fault on 0 → 1 → 0, where nothing
+was lost, and comparing serialized values at every check (ADR 0090 §7) costs a serialization each time. Versions
+first, with a comparison of two stored digests only on a mismatch, avoids both the false fault and the cost.
 
-### 6. Lost-update policy: fault by default, last-wins by explicit choice
+### 6. Lost-update handling: last write wins with a warning by default, `Fault` by opt-in
 
-- **Default: `Fault`.** The step faults with a diagnostic that names the variable, the base version, the current
-  version and the writers. The faulted step's pending workflow changes do not apply (D-3); the incident and conflict
-  records are retained under decisions 7 and 13.
-- **Override: `LastWins`.** The write applies anyway. An activity type may declare it as its default (for example an
-  aggregator), and the workflow author may set it per node. A `LastWins` overwrite is always recorded in the write
-  history and shown in inspection. It is never silent.
-- No other policies in this baseline; decision 14 plans an opt-in merge policy separately. A "warn and continue"
-  policy is not offered: with the write history, `LastWins` is already visible, so a third option would add choice
-  without adding information.
+- **Default: last write wins, with a warning.** The write applies and the step continues. The engine raises a
+  lost-update **warning**: an instance diagnostic shown in Studio and recorded in the write history (decision 13), not
+  only a log line. It names the variable, the base version, the current version and both writers, the one whose value
+  was overwritten and the one that wrote on the stale base, and it keeps the overwritten value so that it can be
+  restored.
+- **Opt-in: `Fault`.** A node or an activity type may opt in to `Fault` for strict read-modify-write: an activity type
+  may declare it, and the workflow author may set it per node. Only these nodes use the exact check (decision 5). On a
+  lost update the step faults with a diagnostic that names the variable, the base version, the current version and
+  the writers. The faulted step's pending workflow changes do not apply (D-3); the incident and conflict records are
+  retained under decisions 7 and 13.
+- No other modes in this baseline. A merge policy is not part of this decision.
 
-*Why.* A lost update is almost never what the author meant, so stopping before the wrong value spreads is the safer
-default (Sipke's position, agreed by Joey). Some designs genuinely accept last-wins; they say so explicitly.
+**Condition of the default.** The default holds only if decision 10 is proven for `External` and `ReplaySafe`
+activities. If that proof fails, inline steps meet stale bases through Elsa's own hop structure, the plain two-branch
+`count + 1` of Context item 1 gives 1 in ordinary inline workflows, and this default is reopened.
+
+**Design-time pointer.** The publish-time warning for unordered writers (spec 266, ADR 0048 as amended) points the
+author to the `Fault` opt-in for a step whose read-modify-write must be strict.
+
+*Why.* Elsa runs what the engineer builds and gives guardrails and diagnostics, not restrictions: the simplest path is
+the default, and advanced options stay possible. When branches run unordered, how they interfere is the workflow
+author's design; the engine's job by default is to make an overwrite visible and repairable, which the warning and
+the kept value do. Where a read-modify-write must never lose an update, the author opts in, and the step stops before
+the wrong value spreads.
 
 ### 7. A fault goes through the existing incident path
 
-A lost-update fault is an ordinary activity fault. It becomes an incident and the workflow's incident strategy decides
-what happens (`FaultWorkflow`, `ContinueWithIncidents` or `WaitForIntervention`; see `docs/runtime-fault-behavior.md`).
-Recovery uses the operator actions of decision 8: retry, re-execute, or accept the recorded completion. No other
-recovery mechanism is introduced.
+A lost-update fault, on a node that opted in to `Fault` (decision 6), is an ordinary activity fault. It becomes an
+incident and the workflow's incident strategy decides what happens (`FaultWorkflow`, `ContinueWithIncidents` or
+`WaitForIntervention`; see `docs/runtime-fault-behavior.md`). Recovery uses the operator actions of decision 8:
+retry, re-execute, or accept the recorded completion. No other recovery mechanism is introduced.
 
 A lost-update fault is detected at commit, so the step's body has already run, and its external effects have already
 happened. Rerunning the body repeats them; idempotency of external effects belongs to the workflow designer (D-2).
@@ -255,7 +275,7 @@ Recovery and operator actions are kept apart:
 - **Retry** is an operator action on the same invocation. It keeps the `InvocationId`, the operation keys derived from
   it and the committed input snapshot, and starts a new attempt. It suits a transient failure, such as an HTTP 503,
   where an external service can deduplicate on the same idempotency key. After a lost-update fault a retry reads the
-  same base and faults again while it remains stale and changed, unless the node uses `LastWins`.
+  same base and faults again while it remains stale and changed.
 - **Re-execute** is an operator action that creates a new invocation: a new `InvocationId`, inputs materialized again
   from current committed state, and a new input read set, as Set, Merge and Reduce successors already do. Its external
   effects repeat on purpose. A reschedule through the alterations API
@@ -264,7 +284,7 @@ Recovery and operator actions are kept apart:
 - **Accept recorded completion** is an operator action for a step whose body succeeded but whose commit conflicted
   (a lost-update fault). It does not run the body again. It revalidates the current state, scope, contracts and
   policies, then applies the complete recorded transition (write intents, captures, output changes and outcomes)
-  atomically and duplicate-safely, as a recorded override like `LastWins`. The original conflict and its resolution
+  atomically and duplicate-safely, as a recorded override. The original conflict and its resolution
   stay in the history. It does not apply to a body that faulted, and a returned result alone is not enough: the
   completion data it needs is retained under the existing protection rules.
 
@@ -305,9 +325,9 @@ outdated values. A refresh follows this contract:
 It covers only the gap between Start and admission. The long gap while the worker runs is covered by the commit rule
 (decision 5). Inline steps do not need it once decision 10 holds.
 
-*Why.* It prevents lost-update faults that can be seen coming. It is not free of effects, because input evaluation
-can call effectful functions, so the contract makes the repetition explicit and lets a node
-refuse it.
+*Why.* It prevents lost updates that can be seen coming: a warning by default, a fault where `Fault` is opted in. It
+is not free of effects, because input evaluation can call effectful functions, so the contract makes the repetition
+explicit and lets a node refuse it.
 
 ### 10. An inline step does not leave a gap between its reads and its body
 
@@ -319,7 +339,8 @@ fencing and durability checkpoints stay in
 place. Several commits within one work item are allowed; the requirement is that no other branch's work item runs
 between reading the inputs and committing the transition. No database transaction is held open while user code runs.
 An inline step's bases are then current when its body runs, and inline steps meet the lost-update rule only through
-suspension. The implementing spec must prove this sequence for both `External` and `ReplaySafe` activities.
+suspension. The implementing spec must prove this sequence for both `External` and `ReplaySafe` activities. The
+default of decision 6 depends on this proof.
 
 *Why.* Today's inline lost update (Context, item 1) is a gap created by Elsa's own hop structure, not by the author's
 design, and today it depends on the side-effect profile and persistence mode. Warnings about it would teach authors to
@@ -331,31 +352,32 @@ An invocation that suspends and later resumes keeps its committed snapshot and i
 writes advanced). The resumed step starts a fresh session with no session reads. Suspension does not automatically
 refresh inputs or discard dependencies because time passed.
 
-On resume, decision 5 applies to explicit writes: a write whose base is stale and whose current value differs from
-that base is a lost update. A read alone produces no write and no lost-update fault. A value that changed and returned
-to its base still follows decision 5, and the invocation's own writes still follow decision 4. Long waits may make
-conflicts frequent; they do not introduce a different commit rule.
+On resume, decision 5 applies to explicit writes: a write whose base is stale is a lost update, handled by the node's
+mode (decision 6). A read alone produces no write and no lost update. The invocation's own writes still follow
+decision 4. Long waits may make lost updates frequent; they do not introduce a different commit rule.
 
 ### 12. Operator alterations use per-variable versions
 
 `ModifyVariable` records the variable's version when the operator requests the change, and applies only if it is
 unchanged, replacing today's root-frame revision check. Today it can change workflow (root-frame) variables only;
 whether it should reach container variables is outside this ADR. A later step that explicitly writes the same
-variable against a stale, changed base sees a lost update under decision 5. Reading the variable alone does not
-fault. The operator's correction is therefore protected from being silently overwritten.
+variable against a stale base is a lost update under decision 5: by default the write applies with a warning that
+keeps the operator's value so it can be restored, and under `Fault` the step faults. Reading the variable alone
+produces no lost update. The operator's correction is therefore never silently overwritten.
 
 ### 13. Every write is recorded in the write history
 
 Durable metadata is required for every applied write and conflict: the variable (scope and key), the writer (node,
 invocation and attempt), the source (capture, intrinsic, session change, alteration or background result), the base
-and new versions where applicable, the instance commit order and the conflict resolution (`Fault` or `LastWins`).
+and new versions where applicable, the instance commit order and the lost-update outcome (warning or `Fault`).
 
 Full historical values for inspection have configurable capture and retention under the existing protection and
 redaction rules. Inspection distinguishes omitted, redacted and expired values from `null`.
 
-Operational base snapshots and rejected-completion data are retained while required for enabled merge or recovery,
-independently of optional inspection-value capture and its retention settings. Turning inspection values off must
-not remove data still needed to accept a recorded completion or perform an enabled merge.
+Operational data is retained while required for recovery or repair, independently of optional inspection-value
+capture and its retention settings: rejected-completion data, and the value a lost-update warning overwrote (decision
+6). Turning inspection values off must not remove data still needed to accept a recorded completion or restore an
+overwritten value.
 
 This is the data source for variable write history in inspection, the commit-ordered journal and instance
 comparison, and the runtime trace of overwrites, that is, spec S-6. It is not the persistence journal
@@ -366,19 +388,13 @@ intermediate write, including 0 → 1 → 0 within one buffered segment. Derivin
 is insufficient. The implementing spec chooses the physical storage through measurements of large payloads and hot
 loops under ADR 0032. Optional full-value capture does not make the durable metadata optional.
 
-### 14. A variable is the unit
+### 14. The whole variable is the unit of a write
 
 A write replaces the whole value of a variable. Two branches that change different fields of one object both write the
-whole object, so the second is a lost update under decision 5. The guidance for authors is to keep independent data in
-separate variables.
+whole object, so the second is a lost update under decision 5 (a warning by default). The guidance for authors is to
+keep independent data in separate variables.
 
-A conservative JSON-object merge is a **planned explicit opt-in policy**. It
-keeps the base snapshot and the read dependencies, combines only compatible field changes, treats arrays atomically,
-keeps null and absence apart, validates the complete merged value, and commits it atomically. Where independence
-cannot be established it is a normal conflict: disjoint writes alone do not prove independence, because one
-calculation may have read a field the other changed. It needs the base value retained, which a version and a digest
-cannot rebuild. Its design follows in a follow-up ADR, once this lifecycle is agreed and the storage cost is measured.
-Until then the whole variable is the unit.
+A merge policy is not part of this decision.
 
 ## Consequences
 
@@ -394,17 +410,25 @@ Until then the whole variable is the unit.
   ADR 0089 amendment; decision 3 follows whatever that amendment allows.
 - **ADR 0048 §4.** Commits stay totally ordered per execution (as amended with spec 266). Each variable gets its own
   version beside the frame revision. Captures write against the invocation's read set.
-- **ADR 0090.** The session is the second surface over this mechanism (decision 1). Its base becomes version plus
-  digest (decision 5), its check covers input reads too (decision 4), and its `[VariableConflictPolicy]` becomes the
-  lost-update policy of decision 6. The A-3 amendment of ADR 0090 proposes transactional writes from script and C# activity bodies as a general capability for native and imported
-  workflows, rather than an Elsa 3 compatibility mode. This lifecycle holds for bindings and captures independently
+- **ADR 0090.** The session is the second surface over this mechanism (decision 1). Its base becomes the version,
+  plus the digest where `Fault` is opted in (decision 5), its check covers input reads too (decision 4), and its
+  `[VariableConflictPolicy]` becomes the lost-update mode of decision 6: a warning by default, with ADR 0090 §7's
+  detect-and-fault as the `Fault` opt-in. The A-3 amendment of ADR 0090 proposes transactional writes from script and
+  C# activity bodies as a general capability for native and imported workflows, rather than an Elsa 3 compatibility
+  mode. This lifecycle holds for bindings and captures independently
   of which direct-access capabilities are enabled. Background-session capability requirements stay with ADR 0093.
-- **Spec 266 (S-5).** Its publish-time warning covers all unordered writes, captures included, and stays as it
-  is. At run time, D-8's last-commit-wins now applies to blind writes only. A follow-up may add a stronger publish-time
-  diagnostic for an unordered step that reads and writes the same variable.
+- **Spec 266 (S-5).** Its publish-time warning covers all unordered writes, captures included, and points the author
+  to the `Fault` opt-in (decision 6). At run time, D-8's last-commit-wins holds for every write; a stale base adds the
+  lost-update warning.
+- **The two-branch `count + 1`.** With inline steps gap-free (decision 10), two parallel inline branches give 2. Where
+  two unordered branches still read a stale base, for example background steps or a suspension between read and
+  write, each reading `count` and writing `count + 1` gives 1 with a lost-update warning. This is documented
+  behaviour: the documentation says how to sequence the branches or aggregate their results, and when to opt in to
+  `Fault`.
 - **Merge and Reduce** still overwrite like Set. Giving them real semantics is separate work.
-- **Cost.** One digest per applied write; a version and digest per variable read (stored values, no hashing); one
-  digest comparison on a version mismatch; the write history. The read set enlarges every activity row, multiplied by
+- **Cost.** One digest per applied write; a version per variable read, plus the stored digest for nodes that opt in
+  to `Fault` (stored values, no hashing); one digest comparison on a version mismatch under `Fault` only; the write
+  history, including the overwritten value a warning keeps. The read set enlarges every activity row, multiplied by
   loop iterations, and versions change the frame's content and the checkpoint fold. The spec measures all of this
   against large payloads and long loops.
 
@@ -412,24 +436,28 @@ Until then the whole variable is the unit.
 
 - A test that reproduces today's inline lost update with `External` leaves (Context, item 1), failing before the change
   and passing after.
-- Two branches that read 0 and both write 1: the second is a lost update, not a no-op.
+- Two branches that read 0 and both write 1: the second is a lost update (a warning by default), not a silent no-op.
 - An invocation that writes X on suspension and captures X on completion does not conflict with itself.
 - Read sets contain actual reads only, including computed names; an unread visible variable never causes a conflict.
 - An input reads X at an older version, a session later reads a newer version, and a capture still uses the older
   input: the older dependency is retained and the stale write is detected. Tracking guarantees cover Elsa's
   instrumented access paths, not arbitrary host access.
 - Across suspension, committed inputs and dependencies stay fixed and the resumed step gets a fresh session. A
-  read-only step does not fault because a read variable changed; explicit writes follow decision 5, including the
-  value-return rule and the invocation's own-write handling.
+  read-only step produces no lost update because a read variable changed; explicit writes follow decision 5 and the
+  node's mode, and the invocation's own writes follow decision 4.
 - A blind write follows D-8; an unchanged value writes nothing and keeps the version.
-- 0 → 1 → 0 applies without a fault and is recorded; a real lost update faults by default.
-- `LastWins` per activity type and per node, always recorded and visible.
+- By default a stale-base write applies, the last write wins, and the lost-update warning is an instance diagnostic in
+  Studio and an entry in the write history that names the variable and both writers and keeps the overwritten value,
+  which can be restored. The default uses the version check only and also warns on 0 → 1 → 0.
+- `Fault` opted in per activity type and per node: 0 → 1 → 0 applies without a fault and is recorded; a real lost
+  update faults.
+- Spec 266's publish-time warning for unordered writers points to the `Fault` opt-in.
 - The rule is identical for inline and background steps, captures and session writes, frames and rows.
 - A retry keeps the `InvocationId` and snapshot; a re-execution and a reschedule materialize fresh inputs with a new
   id; crash redelivery and resume keep the snapshot. A successor that now goes through Start again does not activate
   its owned frames a second time.
 - `ModifyVariable` then re-execute uses the corrected value; a step explicitly writing the same variable against a
-  stale, changed base follows decision 5. Reading the changed variable alone does not fault.
+  stale base follows decision 5. Reading the changed variable alone produces no lost update.
 - Accept recorded completion applies the whole recorded transition atomically without running the body, revalidates
   first, is duplicate-safe, refuses a faulted body, and keeps the conflict and resolution in the history.
 - The implementing spec defines and tests acceptance against the current invocation state, including cancellation,
@@ -438,11 +466,12 @@ Until then the whole variable is the unit.
   acceptance requests cannot schedule downstream work twice. Acceptance does not silently refresh inputs.
 - A stale base is refreshed before background admission as a new evaluation with its own idempotency keys; the
   superseding snapshot is what the worker sees, the first stays in the history linked with the reason, and a node
-  with refresh turned off faults or applies `LastWins` at commit instead.
+  with refresh turned off meets the commit rule instead (a warning by default, a fault where `Fault` is opted in).
 - A lost-update incident records the rejected result.
 - Inline steps have no branch interleaving from input materialization through body execution and transition commit
   (decision 10), for `External` and `ReplaySafe` activities, with required claim, fencing and durability checkpoints
-  kept. No database transaction is held open while user code runs.
+  kept. No database transaction is held open while user code runs. This proof is the condition of decision 6's
+  default.
 - The write history feeds spec S-6 under the existing protection rules. Durable metadata and intermediate writes
   survive checkpoint folding; inspection distinguishes omitted, redacted and expired values from `null`; required
   operational bases and completion data remain available with inspection-value capture disabled or expired.
@@ -456,7 +485,20 @@ Not enough on its own. The general script/C# write capability proposed in the AD
 background-session capability requirements stay with ADR 0093.
 
 **Detect stale read-modify-write by value comparison only (ADR 0090 §7 as proposed).** Covers session reads only and
-costs a serialization per checked variable. Its idea, detect and fault with an override, is kept.
+costs a serialization per checked variable. Its idea, detect and fault, is kept as the `Fault` opt-in.
+
+**Fault by default, with a `LastWins` override.** Stops every lost update before the wrong value spreads. Not chosen
+as the default: it turns the workflow author's design of unordered branches into a run-time failure, contradicts D-8
+(a warning, never a refusal; last commit wins) and the principle of guardrails and diagnostics rather than
+restrictions, and needs the exact check everywhere, where every false alarm costs a fault. It is kept as the `Fault`
+opt-in.
+
+**Last write wins with a warning, without an opt-in.** One behaviour and light tracking only. Not chosen: it drops a
+strict read-modify-write mode that has real value, for example for a counter or a balance that must never lose an
+update, while the opt-in costs the default nothing, because the exact check runs only where it is opted in.
+
+The chosen design (decisions 5 and 6) gives guardrails and diagnostics by default and keeps the strict option
+possible as an advanced choice.
 
 **Per-variable locking or serialization.** Prevents lost updates by making later readers wait. Needs exact read and
 write sets in advance (computed names make them "everything"), adds lease and deadlock handling, and removes the
@@ -471,5 +513,5 @@ operations Elsa understands. A natural later step for Merge and Reduce; not a ge
 **Field-level patches.** Rejected in ADR 0090: array patches by index land in the wrong place after another branch
 changed the array, and merged values must be validated again.
 
-**Three-way merge on conflict.** Now a planned opt-in policy (decision 14), designed in a follow-up ADR. The base
-digest and version identify the base, but do not rebuild it, so the policy also retains the base value.
+**Three-way merge on conflict.** Not part of this decision (decision 14). The base digest and version identify the
+base, but do not rebuild it, so such a policy would also have to retain the base value.
