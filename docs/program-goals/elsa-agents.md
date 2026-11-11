@@ -7,7 +7,7 @@
 - **Project:** [Elsa Agents #66 — Kanban](https://github.com/orgs/elsa-workflows/projects/66/views/1), [complete hierarchy](https://github.com/orgs/elsa-workflows/projects/66/views/3).
 - **Activation and sequencing:** [ADR 0080 D0](../adr/0080-elsa-4-simplification-decisions.md#d0--focus), 31 October Elsa Agents amendment.
 
-**Shared revision delivery**: Owner-agreed [ADR 0094](../adr/0094-agent-definitions-own-authored-content-and-providers-publish-activities.md) / merged [#3783](https://github.com/elsa-workflows/elsa-foundation/pull/3783) governs Agent-owned source and shared revision mechanics. The owner authorized [#3790](https://github.com/elsa-workflows/elsa-foundation/issues/3790) on 4 November 2026 as the one active source-storage implementation leaf (T065 and storage T069), alongside the existing independent review lane. [Spec 1179's plan](../../specs/1179-specialist-agents/plan.md#3790-source-slice-placement-and-transition) records package placement, the temporary publication boundary and the clean-store break. No live database reset is part of that leaf. T066–T071 and full W1–W8 acceptance remain open; historical M0–M5 receipts do not qualify the amendment. No new Program or competing runtime/ETL lane is introduced.
+**Shared revision delivery**: Owner-agreed [ADR 0094](../adr/0094-agent-definitions-own-authored-content-and-providers-publish-activities.md) / merged [#3783](https://github.com/elsa-workflows/elsa-foundation/pull/3783) governs Agent-owned source and shared revision mechanics. The owner authorized [#3790](https://github.com/elsa-workflows/elsa-foundation/issues/3790) on 4 November 2026 as the one active source-storage implementation leaf (T065 and storage T069), alongside the existing independent review lane. [Spec 1179's plan](../../specs/1179-agents/plan.md#3790-source-slice-placement-and-transition) records package placement, the temporary publication boundary and the clean-store break. No live database reset is part of that leaf. T066–T071 and full W1–W8 acceptance remain open; historical M0–M5 receipts do not qualify the amendment. No new Program or competing runtime/ETL lane is introduced.
 
 ## Purpose
 
@@ -109,7 +109,7 @@ M0 is complete after fresh SDK/package/lifecycle receipts and core/Studio CI on 
 normal MEAI 10.10.1 graph while the remaining agent runtime/package work stays open.
 
 [M1 design leaf #3538](https://github.com/elsa-workflows/elsa-foundation/issues/3538) delivers
-[spec 1179](../../specs/1179-specialist-agents/spec.md), its reviewed architecture/state/support/UX
+[spec 1179](../../specs/1179-agents/spec.md), its reviewed architecture/state/support/UX
 packet and ordered M2–M7 tasks through [PR #3540](https://github.com/elsa-workflows/elsa-foundation/pull/3540).
 The design is approved to implement; neither the packet nor the illustrative wireframe establishes
 implemented product acceptance. Public signatures remain proposed until their first implementing slice.

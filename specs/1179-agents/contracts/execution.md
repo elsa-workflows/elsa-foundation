@@ -1,15 +1,15 @@
-# Specialist execution, resources and recovery contract
+# Agent execution, resources and recovery contract
 
 **Status**: Proposed. Owning requirements FR-003–FR-019/FR-022–FR-025; see [state model](../data-model.md).
 No C# signature or unqualified provider behavior is frozen by this document.
 
-**Ownership amendment**: [ADR 0094](../../../docs/adr/0094-agent-definitions-own-authored-content-and-providers-publish-activities.md), [shared revisions](revision-management.md) and [Agent ownership](agent-ownership.md) propose Agent-owned source backed by shared mechanics. Runtime keeps exact artifact/journal guarantees within a supported deployment. Pre-GA breaking delivery may reset affected stores and rename Specialist descriptors without legacy readers. This draft performs no reset and adds no execution engine or direct model-call path.
+**Ownership amendment**: [ADR 0094](../../../docs/adr/0094-agent-definitions-own-authored-content-and-providers-publish-activities.md), [shared revisions](revision-management.md) and [Agent ownership](agent-ownership.md) propose Agent-owned source backed by shared mechanics. Runtime keeps exact artifact/journal guarantees within a supported deployment. Pre-GA breaking delivery may reset affected stores and rename descriptors without legacy readers; the Specialist descriptors were renamed to Agent this way under [#4027](https://github.com/elsa-workflows/elsa-foundation/issues/4027). This draft performs no reset and adds no execution engine or direct model-call path.
 
 ## Immutable invocation and authority
 
 The native facade receives the published runtime contract/descriptor and committed input snapshot.
 It reads dynamic user member values through Runtime Core's execution/input snapshot/value ports,
-not reflected CLR properties generated per specialist. The activation strategy has the correct
+not reflected CLR properties generated per agent. The activation strategy has the correct
 hydration policy for that dynamic contract. The worker has a fixed empty business-input contract;
 its opaque request reference travels through persisted native scheduling metadata.
 No runtime dependency on draft/catalog persistence is introduced.
@@ -18,7 +18,7 @@ The facade's custom strategy uses no reflected hydration for dynamic user member
 Runtime Core input snapshot through normal value/protection ports. Its compiled worker child needs
 no dynamic business-input override. `ScheduleChildActivity` can carry an opaque request reference in
 native scheduling metadata; the worker resolves persisted child/provenance through Runtime Core and
-verifies its exact specialist parent/artifact/journal association. The reference is not authority.
+verifies its exact agent parent/artifact/journal association. The reference is not authority.
 This uses existing scheduling/state ports, not an assumed child-input injection API. An internal worker
 placed directly under an unrelated parent must refuse before model dispatch.
 
@@ -34,10 +34,10 @@ without restoring that operation's older session over later conversation history
 
 ## Model connection and capabilities
 
-Concrete provider leaves contribute model connection type/client/capability sources through specialist
+Concrete provider leaves contribute model connection type/client/capability sources through agent
 Core and existing Connections contracts. One named registry/aggregation path owns discovery; the runtime
 does not depend on a concrete provider feature. Construct clients at point of use with authorized resolved
-credentials and host policy, and dispose the operation lease. A selected specialist model is independent
+credentials and host policy, and dispose the operation lease. A selected agent model is independent
 of Weaver's one active assistant harness.
 
 Deliver durable connection documents/auth state and preserve existing TryAdd/version-CAS Save/conditional
@@ -47,7 +47,7 @@ sampling/effort, output/context limits, modalities and usage. Unknown and config
 are distinct from authoritative/tested support. Validate schema constructs against the provider's actual
 supported subset; never silently downgrade a published output mode or discard unsupported settings.
 
-The first named specialist providers are Anthropic and Azure OpenAI via their official client bindings
+The first named agent providers are Anthropic and Azure OpenAI via their official client bindings
 and MAF, each qualified separately. Exact deployment/model identities come from the authorized connection;
 do not hardcode a fashionable model name or claim an entire provider catalog is supported. Connection
 tests disclose whether they call a model. No production test consumes paid access without authorization.
@@ -63,7 +63,7 @@ Validate materialized JSON inputs against the compiled input schema. Validate re
 properties, types, constraints and undeclared fields against the exact compiled result schema before
 acceptance. Provider format support is not validation. Do not coerce malformed output into success or
 ask a second model call to repair it outside the declared budget/policy. Refusal, invalid/truncated JSON
-and schema mismatch become normalized specialist faults with safe diagnostics; no invalid output is
+and schema mismatch become normalized agent faults with safe diagnostics; no invalid output is
 committed as the business result.
 
 Record observable result, model/capability/resource identities, permitted messages/calls, timing and
@@ -108,7 +108,7 @@ a separately delivered/qualified runtime capability; journal encryption/opaque h
 
 Journal acceptance and native process application are separate. Crash after journal acceptance causes
 receipt/result replay, never another model request. Native process cancellation commits the existing
-background cancellation and a specialist cancellation outbox intent together. Durable exact-source
+background cancellation and an agent cancellation outbox intent together. Durable exact-source
 handlers settle the journal separately and retain pre-admission cancellation tombstones. The journal
 first writer decides whether a turn accepted or cancelled; native checkpoints decide whether a result
 applies to the process. Surface completed/not-applied when those decisions differ. No time-of-check
@@ -125,7 +125,7 @@ is best effort and must be reported honestly.
 
 Fresh invocation is default. Explicit continuation supplies conversation ID and expected revision;
 the module derives tenant/owner/version/codec authority. Concurrent stale requests conflict; there
-is no hidden queue that reinterprets them against a later history revision. A new specialist version
+is no hidden queue that reinterprets them against a later history revision. A new agent version
 starts fresh; older conversations remain tied to retained readers and may be inspected under policy.
 
 Accepted journal revision follows turn acceptance, independently of later process application.
@@ -163,7 +163,7 @@ reservation. Token hard limits are claimed only with a provider/input-accounting
 actually enforces them. Exceeding an enforceable limit prevents further dispatch and creates an
 explicit nonretryable exhausted domain outcome/incident, not an incomplete successful business result.
 
-Initial reusable team patterns: sequential specialists; concurrent complete-cohort review; bounded
+Initial reusable team patterns: sequential agents; concurrent complete-cohort review; bounded
 refinement. Native composition owns participant/message IDs, intended cohort membership, barriers,
 bounded feedback, cancellation and one logical parent result. Private/shared conversation, knowledge
 and memory policies are explicit and distinct. No MAF Workflows checkpoint runtime or custom graph

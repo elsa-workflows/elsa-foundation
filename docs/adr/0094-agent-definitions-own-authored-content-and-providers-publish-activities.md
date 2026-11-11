@@ -13,7 +13,7 @@ Spec 1179 currently authors a user-defined Agent as a generic activity definitio
 
 First-class source ownership must not introduce another independently implemented draft/version subsystem. Workflows and reusable activities already have separate draft/version entities and promotion commands, while sharing activity publication contracts. Agent identity, editable state, reviewed input and published behavior are necessary responsibilities; separate Agent-specific tables, repositories and lifecycle engines for each are not.
 
-Orchard Core and Aster demonstrate reusable revision mechanics with different editing semantics. [Research R10](../../specs/1179-specialist-agents/research.md#r10--shared-revision-management-orchard-core-and-aster) compares them. The [revision contract](../../specs/1179-specialist-agents/contracts/revision-management.md) maps both Workflow and Agent operations, records the extraction decision and gives a failed-publication recovery example.
+Orchard Core and Aster demonstrate reusable revision mechanics with different editing semantics. [Research R10](../../specs/1179-agents/research.md#r10--shared-revision-management-orchard-core-and-aster) compares them. The [revision contract](../../specs/1179-agents/contracts/revision-management.md) maps both Workflow and Agent operations, records the extraction decision and gives a failed-publication recovery example.
 
 ## Decision
 
@@ -49,7 +49,7 @@ Persist an immutable source snapshot, then a shared publication operation refere
 
 Review tokens bind that exact revision and environment. Final admission reserves source authority and publication heads through CAS. Ownership/lifecycle/cancellation races serialize against that reservation or return conflict/pending; later draft saves cannot change its snapshot. Shared publication commits the immutable catalog version, template/reference and receipt. That receipt is the sole successful executable-publication authority. Source-side release/status indexes are repairable associations to it, not a second publication engine.
 
-Retries retain operation identity and exact material. A lost reply or failed index update is reconciled from the original receipt. Unknown outcomes remain pending; they cannot release/reuse a version claim or cause a different publication. Definite validation failure leaves the revision unpublished; editing creates a new snapshot and reviewed operation. The [shared protocol](../../specs/1179-specialist-agents/contracts/revision-management.md#publication-and-failed-publication-recovery) applies to both domains without assuming a distributed transaction.
+Retries retain operation identity and exact material. A lost reply or failed index update is reconciled from the original receipt. Unknown outcomes remain pending; they cannot release/reuse a version claim or cause a different publication. Definite validation failure leaves the revision unpublished; editing creates a new snapshot and reviewed operation. The [shared protocol](../../specs/1179-agents/contracts/revision-management.md#publication-and-failed-publication-recovery) applies to both domains without assuming a distributed transaction.
 
 ### D6 — Release selection and runtime stay exact
 
@@ -80,7 +80,7 @@ The target reduces repeated authoring mechanics but retains necessary source-to-
 
 ## Agreement, propagation and implementation hold
 
-This ADR, the [revision contract](../../specs/1179-specialist-agents/contracts/revision-management.md) and [spec 1179](../../specs/1179-specialist-agents/spec.md) are proposed together. Workflow mappings describe required future adapters, not an amendment already implemented or approved across other specs. Prior delivery receipts remain historical evidence, not acceptance of this model. Future delivery must reconcile owning Workflow/activity specs and dependencies before changing them.
+This ADR, the [revision contract](../../specs/1179-agents/contracts/revision-management.md) and [spec 1179](../../specs/1179-agents/spec.md) are proposed together. Workflow mappings describe required future adapters, not an amendment already implemented or approved across other specs. Prior delivery receipts remain historical evidence, not acceptance of this model. Future delivery must reconcile owning Workflow/activity specs and dependencies before changing them.
 
 PR #3783 merged and the owner subsequently authorized #3790 implementation through reviewed PRs. T064–T071 remain delivery tasks; this decision is not a claim they are implemented. Reconcile owning Workflow/activity specifications as their code is adapted. Missing foundational execution work under #2892 is a wait condition, not authority to duplicate its runtime or take over its active lane. Production changes require normal scoped review/test/CI evidence. No database reset, release or deployment is implied. No constitution text is amended or provisional versioning/Model X provision ratified.
 
