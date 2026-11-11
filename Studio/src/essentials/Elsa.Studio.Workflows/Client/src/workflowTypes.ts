@@ -210,6 +210,8 @@ export interface ActivityCatalogResponse {
 export interface ActivityCatalogItem {
   activityVersionId: string;
   activityTypeKey: string;
+  /** The runtime type a compiled node carries when the CLR activity declares one (e.g. `Elsa.HttpEndpoint`); absent otherwise. */
+  runtimeActivityType?: string | null;
   version: string;
   category: string;
   displayName: string;
@@ -504,6 +506,7 @@ export interface WorkflowOutput {
   description: string;
   category: string;
   [key: string]: unknown;
+  isNullable: boolean;
 }
 
 // A selectable argument element type from the Expressions domain's variable-types capability.
@@ -757,6 +760,8 @@ export interface WorkflowExecutableNode {
   childSlots: WorkflowExecutableChildSlot[];
   connections?: WorkflowExecutableConnection[];
   outputCaptures?: WorkflowExecutableOutputCapture[] | null;
+  /** Outcomes pinned in the executable, independent of the current authoring catalog. */
+  outcomes?: string[] | null;
   bpmnStructure?: WorkflowExecutableBpmnStructure | null;
 }
 
@@ -888,8 +893,18 @@ export interface WorkflowInstanceSummary {
   blockingIncidentCount?: number | null;
 }
 
+export interface WorkflowOutputValue {
+  value: unknown;
+  isRedacted: boolean;
+  redactionReason?: string | null;
+  capturedAt: string;
+  captureMode?: string | null;
+}
+
 export interface WorkflowInstanceDetails {
   instance: WorkflowInstanceSummary;
+  /** Missing on older hosts; an empty collection means no captured outputs. */
+  outputs?: Record<string, WorkflowOutputValue>;
   activities: ActivityExecutionStateSummary[];
   /** Present when Runtime bounded the activity summaries and another page is available. */
   activityNextContinuationToken?: string | null;

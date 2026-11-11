@@ -9,7 +9,8 @@
 - `AssessChildResult` and `ChildrenCompletedBefore` supply order for a single fully connected,
   acyclic, unconditional ordinary start → bound `task` chain → ordinary end. They use sequence-flow
   order, not the authored activity array. Such a chain runs each task once, so it states
-  `EarlierProducerRunCanReachConsumer = false`; unproven shapes leave the fact unset. Shared source
+  `EarlierProducerRunCanReachConsumer = false`; unproven shapes leave the fact unset, which also refuses a
+  scope-free result read inside a child the process may run again. Shared source
   analysis and mandatory headless publication consume these facts. Other task families, branches, multiple entries, events/listeners, loops,
   compensation, transactions and subprocess/call boundaries remain unknown; no generic admission
   rule or runtime occurrence semantics are relaxed.

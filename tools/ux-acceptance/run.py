@@ -41,6 +41,7 @@ CAPTURES = {
     'activity availability load failures and recovery': ['availability-loading', 'availability-settled', 'availability-abort-error', 'availability-abort-recovered', 'availability-client-500-error', 'availability-client-500-recovered'],
     'design-only API composition': ['design-workflows-default', 'design-runtime-view-unavailable', 'design-runtime-settings-unavailable', 'design-recovery'],
     'runtime-only API composition and combined return': ['runtime-workflows-default', 'runtime-design-view-unavailable', 'runtime-design-settings-unavailable', 'runtime-integrations-absent', 'combined-integrations-return'],
+    'user task authoring and workflow result': ['reference', 'form-authoring', 'published-form', 'task-authoring', 'form-selection', 'json-output-definitions', 'renamed-output', 'removed-output', 'output-picker', 'frozen-task-form', 'run-outcomes', 'run-outcomes-readable', 'run-output-reached', 'workflow-result', 'task-fault-causes', 'task-fault-details', 'prefill-fault'],
 }
 # Structured receipts each supplementary journey must retain beside its screenshots, accessibility snapshots and trace.
 EVIDENCE = {

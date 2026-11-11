@@ -1,4 +1,4 @@
-# Specialist validation guide
+# Agent validation guide
 
 **Status**: M1 design/qualification recipe. Only the M0 commands and wireframe exist today;
 production commands/routes below are acceptance targets to deliver, not a claim they already work.
@@ -14,8 +14,8 @@ Use .NET 10 and Python 3.12+, a new absolute directory outside the checkout and 
 bash tools/agents/research/run.sh
 bash tools/agents/research/run.sh --foundation-compatibility
 python3 tools/agents/publication/qualify.py \
-  --output /absolute/new-specialist-research \
-  --version 4.0.0-specialist.local1
+  --output /absolute/new-agent-research \
+  --version 4.0.0-agent.local1
 ```
 
 The first command proves bounded SDK behavior (17 checks plus a separate-process session check).
@@ -31,8 +31,8 @@ the tabs and test 320px page overflow. This is design verification, not producti
 
 ## Product prerequisites to implement and qualify
 
-- Install the named normal host and specialist runtime/Design/API/Studio/provider packages, with
-  durable generic stores, specialist journal, Connections metadata and Secrets/key-ring configuration.
+- Install the named normal host and agent runtime/Design/API/Studio/provider packages, with
+  durable generic stores, agent journal, Connections metadata and Secrets/key-ring configuration.
 - Use private qualification databases and normal tenant/user/service identities with explicit grants.
   No existing developer database, credentials or running user host is silently modified.
 - Select a supported connection/model capability profile. Deterministic/protocol fixtures require no
@@ -63,7 +63,7 @@ Use [the editorial contract](contracts/editorial.md), built on the [human review
 next writer call, maximum three total rounds; exhaustion takes an explicit process branch. Restart
 at the exact human wait, approve/deny in separate runs, and replay/alter/late-deliver decisions to
 prove one continuation and no approval after denial. BPMN executes these same cases.
-Place the same exact specialist versions in BPMN service-task bound children and corresponding routing.
+Place the same exact agent versions in BPMN service-task bound children and corresponding routing.
 Save/reload both, then run with the same brief. Prove the committed article reaches Proofreader, the
 validated verdict controls routing, and parent continuation is accepted once under duplicate/late delivery.
 

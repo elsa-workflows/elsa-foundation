@@ -1,7 +1,8 @@
 import { templateToastJourney } from "./templateToastJourney";
 import { executableDesignerJourney } from "./executableDesignerJourney";
 import { writeFileSync } from "node:fs";
-import { expect, test, type Page, type TestInfo } from "@playwright/test";
+import { expect, test, type APIRequestContext, type Page, type TestInfo } from "@playwright/test";
+import { userTaskAuthoringJourney } from "./userTaskAuthoringJourney";
 import { userTasksJourney } from "./userTasksJourney";
 import { decisionsJourney } from "./decisionsJourney";
 
@@ -32,48 +33,63 @@ async function signIn(page: Page) {
 }
 
 const browserErrors = new WeakMap<Page, string[]>();
+type CreatedWorkflow = { url: string; authorization?: string; id: string };
+const createdWorkflows = new WeakMap<Page, CreatedWorkflow[]>();
 const ownedCleanups = new WeakMap<Page, Array<() => Promise<void>>>();
-const createdWorkflows = new WeakMap<Page, Array<{ url: string; authorization: string; id: string }>>();
 const designerDefinitions = new WeakMap<Page, string[]>();
 
 test("user tasks inbox and response", async ({ page }, info) => userTasksJourney(page, info, capture));
+test("user task authoring and workflow result", async ({ page }, info) => {
+  const creations: CreatedWorkflow[] = [];
+  createdWorkflows.set(page, creations);
+  await userTaskAuthoringJourney(page, info, capture, id => {
+    creations.push({ url: `${process.env.UX_BACKEND_URL}/design/workflows/definitions`, id });
+  }, cleanup => { ownedCleanups.get(page)!.push(cleanup); });
+});
 test("business decisions authoring and explanations", async ({ page }, info) => decisionsJourney(page, info, capture));
 
-test.afterEach(async ({ page, request }, info) => {
-  // The request fixture and teardown budget are independent of a timed-out page journey.
+test.afterEach(async ({ page, playwright }, info) => {
+  const creations = createdWorkflows.get(page) ?? [];
   const designerIds = designerDefinitions.get(page) ?? [];
   const base = process.env.ELSA_WORKBENCH_URL!;
-  const receipts: Array<{ id: string; status?: number; error?: string }> = [];
-  if (designerIds.length) {
-    try {
-      const login = await request.post(`${base}/_elsa/identity/login`, {
-        data: { username: "admin", password: "Password123!" }, timeout: 5_000
-      });
-      if (!login.ok()) receipts.push({ id: "cleanup-login", status: login.status() });
-    } catch {
-      receipts.push({ id: "cleanup-login", error: "request-failed" });
-    }
-  }
-  const owned: Array<{ id: string; url: string; headers: Record<string, string> }> = [
-    ...(createdWorkflows.get(page) ?? []).map(item => ({ ...item, headers: { Authorization: item.authorization } })),
-    ...designerIds.map(id => ({ id, url: `${base}/design/workflows/definitions`, headers: {} }))
+  const owned: CreatedWorkflow[] = [
+    ...creations,
+    ...designerIds.map(id => ({ id, url: `${base}/design/workflows/definitions` }))
   ];
-  // Attempt every exact owned ID; one error must not prevent the other cleanup requests.
-  await Promise.all(owned.map(async item => {
-    try {
-      const removed = await request.delete(`${item.url}/${encodeURIComponent(item.id)}`, { headers: item.headers, timeout: 5_000 });
-      receipts.push({ id: item.id, status: removed.status() });
-    } catch {
-      receipts.push({ id: item.id, error: "request-failed" });
-    }
-  }));
-  const cleanupFailures: string[] = [];
+  const failures: string[] = [];
+  // Close journey-owned records before deleting their workflow definitions.
   for (const cleanup of ownedCleanups.get(page) ?? []) {
-    try { await cleanup(); } catch { cleanupFailures.push("request-failed"); }
+    try { await cleanup(); } catch { failures.push("request-failed"); }
   }
-  await info.attach("owned-definition-cleanup", { body: JSON.stringify({ ownedIds: owned.map(item => item.id), receipts }), contentType: "application/json" });
-  expect(receipts.filter(item => item.error || !item.status || item.status < 200 || item.status >= 300), "Every owned definition cleanup and login succeeds").toEqual([]);
-  expect(cleanupFailures, "Journey cleanup").toEqual([]);
+  const receipts: Array<{ id: string; status?: number; error?: string }> = [];
+  let context: APIRequestContext | undefined;
+  try {
+    if (owned.length) context = await playwright.request.newContext({ storageState: await page.context().storageState(), timeout: 5_000 });
+    for (const item of owned) {
+      try {
+        const removed = await context!.delete(`${item.url}/${encodeURIComponent(item.id)}`, {
+          timeout: 5_000,
+          headers: item.authorization ? { Authorization: item.authorization } : undefined
+        });
+        receipts.push({ id: item.id, status: removed.status() });
+      } catch {
+        receipts.push({ id: item.id, error: "request-failed" });
+      }
+    }
+  } catch {
+    receipts.push(...owned.map(item => ({ id: item.id, error: "request-failed" })));
+  } finally {
+    if (context) {
+      try { await context.dispose(); } catch { failures.push("request-failed"); }
+    }
+  }
+  try {
+    await info.attach("owned-definition-cleanup", { body: JSON.stringify({ ownedIds: owned.map(item => item.id), receipts }), contentType: "application/json" });
+  } catch {
+    failures.push("receipt-attachment-failed");
+  }
+  expect(receipts.filter(item => item.error || !item.status || item.status < 200 || item.status >= 300), "Every owned definition cleanup succeeds").toEqual([]);
+  expect(failures, "Journey cleanup").toEqual([]);
   expect(browserErrors.get(page), "Uncaught browser errors").toEqual([]);
 });
 

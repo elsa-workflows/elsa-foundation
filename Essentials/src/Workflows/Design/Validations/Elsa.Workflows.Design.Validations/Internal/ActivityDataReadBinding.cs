@@ -100,7 +100,7 @@ internal sealed record ActivityDataReadBinding(
         }
     }
 
-    public static ActivityDataReadBinding Direct(string? role, object? value, bool portable = false)
+    public static ActivityDataReadBinding Direct(string? role, object? value)
     {
         if (string.IsNullOrWhiteSpace(role)) return new("", Error: "InvalidSource");
         if (IsMemberRole(role)) return new(role, Error: "UnsupportedMemberBinding");
@@ -111,13 +111,9 @@ internal sealed record ActivityDataReadBinding(
             return new(role, Error: "UnsupportedMemberSelection");
 
         if (role.Equals("Variable", StringComparison.OrdinalIgnoreCase))
-        {
-            if (portable && json.ValueKind == JsonValueKind.Object)
-                return Required("Variable", String(json, "variableKey"), String(json, "declaringScopeNodeId"));
             return VariableReference.TryParse(value, out var reference) && reference is not null
                 ? Required("Variable", reference.ReferenceKey, reference.DeclaringScopeId)
                 : new("Variable", Error: "InvalidSource");
-        }
         if (role.Equals("Input", StringComparison.OrdinalIgnoreCase))
             return VariableReference.TryParse(value, out var reference) && reference is not null
                 ? Required("Input", reference.ReferenceKey, reference.DeclaringScopeId)
@@ -132,7 +128,7 @@ internal sealed record ActivityDataReadBinding(
                 && scope.ValueKind != JsonValueKind.Null;
             return binding.Error is null && (string.IsNullOrWhiteSpace(binding.Projection) || (declaresScope && string.IsNullOrWhiteSpace(binding.Scope)))
                 ? binding with { Error = "InvalidSource" }
-                : binding with { IsDirect = !portable, IsOptional = json.ValueKind == JsonValueKind.Object && json.TryGetProperty("isOptional", out var optional)
+                : binding with { IsDirect = true, IsOptional = json.ValueKind == JsonValueKind.Object && json.TryGetProperty("isOptional", out var optional)
                     && optional.ValueKind == JsonValueKind.True };
         }
         return new(role, Error: "InvalidSource");

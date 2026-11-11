@@ -10,8 +10,8 @@ namespace Elsa.Workflows.Publishing.Api.Tests;
 
 /// <summary>
 /// An activity-result reference that declares a scope serializes, hashes as an executable and hashes as a template
-/// behaviour exactly as it did before a scope became optional (#4053). The expected values were computed on the
-/// commit before that change, so existing documents keep their bytes and their artifact and template identities.
+/// behaviour exactly as it did when every reference had to declare one. The expected values were computed on the
+/// commit before the scope became optional, so existing documents keep their bytes and their artifact and template identities.
 /// </summary>
 public sealed class ScopedActivityResultHashTests
 {
