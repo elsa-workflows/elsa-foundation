@@ -382,7 +382,7 @@ public sealed partial class EfRuntimeCheckpointCommitStoreTests
     }
 
     [Fact]
-    public async Task A_commit_that_fails_after_asking_its_transaction_to_commit_is_not_followed_by_a_marker_read()
+    public async Task A_transaction_commit_that_fails_as_a_provider_timeout_reported_as_a_cancellation_is_not_followed_by_a_marker_read()
     {
         // The marker insert had succeeded, so no marker was durable before this attempt and there is no replay to
         // answer. The provider reports its timeout as a cancellation, which is the failure no marker read follows

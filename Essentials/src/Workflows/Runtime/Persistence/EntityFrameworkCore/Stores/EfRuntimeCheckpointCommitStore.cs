@@ -337,7 +337,7 @@ public sealed class EfRuntimeCheckpointCommitStore(
             // found nothing followed it. It arose outside an attempt: the refusal of initial model work without its
             // condition, the missing root write lease manager, a failure of that manager, or a lease callback that
             // produced no result. Or it arose in an attempt on a path that reads no marker: a provider's timeout
-            // reported as a cancellation, a transaction that could not begin or roll back. Or it is what the
+            // reported as a cancellation, a transaction that could not begin or be disposed. Or it is what the
             // look at the ownership row put in place of the attempt's failure, or what the marker read after the
             // attempt threw. A commit whose marker is durable must get its replay answer whatever else is true of
             // it, for example when its drain has lost the run. So the marker is read once here. With a marker the
