@@ -105,8 +105,8 @@ The validation compares `.claude/skills/elsa-*/SKILL.md` against this catalog an
         - one zoom-in per item in impact order (most specs blocked first), with the decision to make, each position, links to the notes, evidence and middle grounds;
         - a parking lot and a read-back table at the end.
      4. Gather facts as evidence before the meeting (corpus counts, measurements) with subagents.
-     5. Commit the agenda to the branch, name-free (numbered positions), and link it from the board's *Meeting* section, which maps the position numbers to people.
-     6. Generate the coordinator's local copy with names for the meeting: `python tools/initiatives/agenda_names.py <agenda> --initiative <n>` (optionally `--name login=Name`). It writes a git-ignored `*.named.md` to open in a Markdown preview.
+     5. Commit the agenda to the branch, name-free (numbered positions), and link it from the board's *Meeting* section, which maps each position number to a name and login (`**1** = Name (@login)`).
+     6. Generate the coordinator's local copy with names for the meeting: `python tools/initiatives/agenda_names.py <agenda> --initiative <n>`. It takes the names from the board's mapping (`**1** = Name (@login)`) and writes a git-ignored `*.named.md` to open in a Markdown preview.
    - **Process the meeting transcript** (coordinator).
      1. Read the transcript against the agenda's anchors and classify every stated outcome as **decided**, **still open**, **new**, **reopened** or **obsolete**. An outcome without an anchor is a new-decision candidate. Nothing without a clear outcome is closed.
      2. Grill the coordinator (the `grilling` skill) to confirm each classification before applying anything.
