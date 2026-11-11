@@ -71,7 +71,7 @@ export function WorkflowTemplatesPage(props: Props) {
   useEffect(() => { const sync = () => setTemplateId(new URLSearchParams(window.location.search).get("template")); window.addEventListener("popstate", sync); return () => window.removeEventListener("popstate", sync); }, []);
   const open = (id: string | null) => { setTemplateId(id); navigate(`/workflows/templates${id ? `?template=${encodeURIComponent(id)}` : ""}`); if (!id) void reload(); };
   const begin = (kind: "template" | "workflow", template?: WorkflowTemplate, starter?: "http") => {
-    setError(""); setDialog({ kind, draft: { name: template ? `${template.name}${kind === "template" ? " copy" : ""}` : starter ? "HTTP request and response" : "", description: template?.description ?? "", rootActivityVersionId: null, starter,
+    setError(""); setDialog({ kind, draft: { name: template ? `${template.name}${kind === "template" ? " copy" : ""}` : starter ? "HTTP request and response" : "", description: template?.description ?? (starter ? builtInWorkflowTemplates.find(item => item.id === starter)!.description : ""), rootActivityVersionId: null, starter,
       ...(template ? { templateId: template.id, templateContent: structuredClone(template.content) } : {}) } });
   };
   const submit = async () => {
@@ -145,7 +145,7 @@ export function WorkflowTemplatesPage(props: Props) {
 
 
 export function WorkflowTemplatesRoute({ api, navigate, weaver }: { api: ElsaStudioModuleApi; navigate(path: string): void; weaver?: Props["weaver"] }) {
-  return <WorkflowTemplatesPage key={`${api.backend.baseUrl}:${api.runtime.identity?.tenantId}:${api.runtime.identity?.subject}`} context={api.backend} ai={api.agent} weaver={weaver} propertyEditors={api.propertyEditors.list()} expressionEditors={api.expressionEditors.list()}
+  return <WorkflowTemplatesPage key={`${api.backend.baseUrl}:${api.runtime.identity?.tenantId}:${api.runtime.identity?.subject}`} context={api.backend} ai={api.weaver} weaver={weaver} propertyEditors={api.propertyEditors.list()} expressionEditors={api.expressionEditors.list()}
     runInputEditors={api.workflowRunInputEditors?.list() ?? []} testStimulusEditors={api.workflowTestStimulusEditors?.list() ?? []}
     workflowDesignerPanels={api.workflowDesigner.panels.list()} navigate={navigate} />;
 }

@@ -94,25 +94,26 @@ binds `Identity:Login` without a dependency on Studio:
 }
 ```
 
-An unconfigured identity host uses **Parcel Room**: a small Elsa mark and clear credential form on
-white, with a complete felt-tip illustration of routing envelopes and parcels. Its palette stays
+An unconfigured identity host uses **Pocket Orchestra (P5)**: a small Elsa mark and clear credential form on
+warm white paper, beside a colored-pencil music room with instruments and floating musical phrases. Its palette stays
 light under an OS dark preference. The illustration is decorative; the real form retains the
 provider's username/password fields and supported actions.
 
-To select the coordinated appearance explicitly, set `Layout`, `Palette` and `Artwork` to
-`parcel-room`. Existing explicit host choices continue to win. Layout, palette and artwork are independent:
+To select P5 explicitly, set `Layout` to `parcel-room`, and `Palette` and `Artwork` to
+`pocket-orchestra`. Set all three to `parcel-room` to use the earlier M2 marker illustration. Existing explicit host choices continue to win. Layout, palette and artwork are independent:
 
 | Setting | Choices |
 |---|---|
 | Layout | `parcel-room` (default; form left, full illustration right), `split` (image left), `reverse` (image right), `immersive` (full image and opaque form card), `editorial` (arched image), `field-guide` (form left, contained illustration right) |
-| Palette | `parcel-room` (default; white and teal, light only), `linen` (copper), `tidal` (blue), `daybreak` (rose), `canopy` (green), `field-guide` (paper and sage, light only) |
-| Artwork | `parcel-room` (default); see the choices below |
+| Palette | `pocket-orchestra` (default; warm paper and teal, light only), `parcel-room` (white and teal, light only), `linen` (copper), `tidal` (blue), `daybreak` (rose), `canopy` (green), `field-guide` (paper and sage, light only) |
+| Artwork | `pocket-orchestra` (default); see the choices below |
 
 The bundled artwork directions are available independently of the selected layout and palette:
 
 | Artwork value | Direction |
 |---|---|
-| `parcel-room` | Warm marker illustration of sorting envelopes and parcels (default) |
+| `pocket-orchestra` | Colored-pencil orchestra room with piano, cello, trumpet and a conductor’s score (default) |
+| `parcel-room` | Warm marker illustration of sorting envelopes and parcels |
 | `river-to-sea` | Aerial waterways opening into a sunlit coastline |
 | `open-architecture` | Terracotta archway and a continuing coastal path |
 | `flowing-ribbons` | Copper, cream and teal ribbons weaving through space |
@@ -125,7 +126,7 @@ The bundled artwork directions are available independently of the selected layou
 | `unfolding-map` | Illustrated landscape with connecting paths and settlements |
 
 The earlier `ember`, `tidal`, `daybreak` and `canopy` artwork values remain supported. Omitted,
-empty or unrecognized artwork values use `parcel-room`. A valid `ImageUrl` takes precedence over
+empty or unrecognized artwork values use `pocket-orchestra`. A valid `ImageUrl` takes precedence over
 `Artwork`; remove an existing `ImageUrl` override to activate bundled artwork.
 
 Configure the **identity backend host** using appsettings JSON as above, an environment variable such

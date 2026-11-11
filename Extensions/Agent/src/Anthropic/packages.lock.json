@@ -29,49 +29,19 @@
         "resolved": "0.0.1-preview.8",
         "contentHash": "2oIY7sSleqZv2y1wfBPZxa4GcaR3+PVsxuo3Pd2bXMRpsUAWzAMYf83eAKrzp3FIX6OE5e89lawTaiALKT8/hQ=="
       },
-      "Microsoft.Extensions.AI.Abstractions": {
+      "Microsoft.CodeAnalysis.PublicApiAnalyzers": {
         "type": "Direct",
-        "requested": "[10.10.1, )",
-        "resolved": "10.10.1",
-        "contentHash": "Kz6ezQfRb9x2TkIWyaXkVAfpvyoAlEDfC59klPrdr2XD5WM4HNw+PREAZ+Fo43GPldtX+E0i1aYzMFQ/zXYMLg=="
+        "requested": "[5.6.0, )",
+        "resolved": "5.6.0",
+        "contentHash": "W4kJGezNIKLzo0Ak5FAQDFvkMf2U7DtGL4THmHyRSApfKsKt5V+eX/bU0ZLKAt/uf9Bb2o1bi0YDKj/GRB/vYQ=="
       },
-      "Microsoft.Extensions.Configuration.Abstractions": {
+      "Microsoft.Extensions.DependencyInjection": {
         "type": "Direct",
         "requested": "[10.0.10, )",
         "resolved": "10.0.10",
-        "contentHash": "5Vnd2I75DmZCVEjSynIdJ/0EGafgnLQwgR3t2C2/fkjx/nRG+cLwxLLdInoHeCEpkD5K4Ov/g9ZCRYrl4TRsaA==",
+        "contentHash": "ANyvsgkNBRvcJh2XLgn8veGmajf+8m0AbKK+HPWdRL1yraSNVVSmQhFntLtdz/C795jxqqup+k05cs/3jZQPOA==",
         "dependencies": {
-          "Microsoft.Extensions.Primitives": "10.0.10"
-        }
-      },
-      "Microsoft.Extensions.Logging": {
-        "type": "Direct",
-        "requested": "[10.0.10, )",
-        "resolved": "10.0.10",
-        "contentHash": "Tf6z5HsL0VDYRTfvsoNrTGHGheCwkTsZBA2FFh5ATJUbkAwug+FFNISJK2gjpUNemlAOoWllAK52HOWCjto3EQ==",
-        "dependencies": {
-          "Microsoft.Extensions.DependencyInjection": "10.0.10",
-          "Microsoft.Extensions.Logging.Abstractions": "10.0.10",
-          "Microsoft.Extensions.Options": "10.0.10"
-        }
-      },
-      "Microsoft.Extensions.Logging.Abstractions": {
-        "type": "Direct",
-        "requested": "[10.0.12, )",
-        "resolved": "10.0.12",
-        "contentHash": "+24lC4plfbEDNfLAdTV/SWKS7dW+16X4HdydO3R++134kSNTzcbYA4KpR1Hdh6uWisB8Za3AzwyOn+K+NxWIug==",
-        "dependencies": {
-          "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.12"
-        }
-      },
-      "Microsoft.Extensions.Options": {
-        "type": "Direct",
-        "requested": "[10.0.10, )",
-        "resolved": "10.0.10",
-        "contentHash": "srnhnk7nE8krBiIXp71LvBmKBtraBONWSRzdjJgRv1Ko9Mp8IVNqv4vIS9hGeVteBig8aQkva9ZG+sC+o5sVcA==",
-        "dependencies": {
-          "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.10",
-          "Microsoft.Extensions.Primitives": "10.0.10"
+          "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.10"
         }
       },
       "JetBrains.Annotations": {
@@ -79,24 +49,34 @@
         "resolved": "2025.2.4",
         "contentHash": "TwbgxAkXxY+vNEhNVx/QXjJ4vqxmepOjsgRvvImQPbHkHMMb4W+ahL3laMsxXKtNT7iMy+E1B3xkqao2hf1n3A=="
       },
-      "elsa.agent": {
+      "elsa.activities.runtime.core": {
         "type": "Project",
         "dependencies": {
-          "CShells.Abstractions": "[0.0.31, )",
-          "Elsa.Agent.Core": "[4.0.0-dev, )",
           "Elsa.Events.Core": "[4.0.0-dev, )",
-          "Microsoft.Extensions.DependencyInjection.Abstractions": "[10.0.12, )",
-          "Microsoft.Extensions.Logging.Abstractions": "[10.0.12, )",
-          "Microsoft.Extensions.Options": "[10.0.10, )"
+          "Elsa.Expressions.Core": "[4.0.0-dev, )",
+          "Elsa.Primitives": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.agent.connections": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Agent.Core": "[4.0.0-dev, )",
+          "Elsa.Connections.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
         }
       },
       "elsa.agent.core": {
         "type": "Project",
         "dependencies": {
-          "Elsa.Events.Core": "[4.0.0-dev, )",
           "Elsa.Primitives": "[4.0.0-dev, )",
           "Microsoft.Extensions.AI.Abstractions": "[10.10.1, )",
-          "Microsoft.Extensions.Configuration.Abstractions": "[10.0.10, )"
+          "Microsoft.Extensions.DependencyInjection.Abstractions": "[10.0.12, )"
+        }
+      },
+      "elsa.connections.core": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Primitives": "[4.0.0-dev, )"
         }
       },
       "elsa.events.core": {
@@ -104,6 +84,12 @@
         "dependencies": {
           "Elsa.Pipelines.Core": "[4.0.0-dev, )",
           "Microsoft.Extensions.DependencyInjection.Abstractions": "[10.0.12, )"
+        }
+      },
+      "elsa.expressions.core": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Primitives": "[4.0.0-dev, )"
         }
       },
       "elsa.pipelines.core": {
@@ -115,6 +101,30 @@
       "elsa.primitives": {
         "type": "Project"
       },
+      "elsa.serialization.core": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Events.Core": "[4.0.0-dev, )",
+          "Elsa.Primitives": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.workflows.runtime.core": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Activities.Runtime.Core": "[4.0.0-dev, )",
+          "Elsa.Expressions.Core": "[4.0.0-dev, )",
+          "Elsa.Primitives": "[4.0.0-dev, )",
+          "Elsa.Serialization.Core": "[4.0.0-dev, )",
+          "Microsoft.Extensions.DependencyInjection.Abstractions": "[10.0.12, )",
+          "Microsoft.Extensions.Logging.Abstractions": "[10.0.12, )"
+        }
+      },
+      "Microsoft.Extensions.AI.Abstractions": {
+        "type": "CentralTransitive",
+        "requested": "[10.10.1, )",
+        "resolved": "10.10.1",
+        "contentHash": "Kz6ezQfRb9x2TkIWyaXkVAfpvyoAlEDfC59klPrdr2XD5WM4HNw+PREAZ+Fo43GPldtX+E0i1aYzMFQ/zXYMLg=="
+      },
       "Microsoft.Extensions.Configuration": {
         "type": "CentralTransitive",
         "requested": "[10.0.10, )",
@@ -125,13 +135,13 @@
           "Microsoft.Extensions.Primitives": "10.0.10"
         }
       },
-      "Microsoft.Extensions.DependencyInjection": {
+      "Microsoft.Extensions.Configuration.Abstractions": {
         "type": "CentralTransitive",
         "requested": "[10.0.10, )",
         "resolved": "10.0.10",
-        "contentHash": "ANyvsgkNBRvcJh2XLgn8veGmajf+8m0AbKK+HPWdRL1yraSNVVSmQhFntLtdz/C795jxqqup+k05cs/3jZQPOA==",
+        "contentHash": "5Vnd2I75DmZCVEjSynIdJ/0EGafgnLQwgR3t2C2/fkjx/nRG+cLwxLLdInoHeCEpkD5K4Ov/g9ZCRYrl4TRsaA==",
         "dependencies": {
-          "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.10"
+          "Microsoft.Extensions.Primitives": "10.0.10"
         }
       },
       "Microsoft.Extensions.DependencyInjection.Abstractions": {
@@ -139,6 +149,25 @@
         "requested": "[10.0.12, )",
         "resolved": "10.0.12",
         "contentHash": "9/qymSh7hVDMGTGwrLz8MRp5zRyXy9adGDOs4HwRdnLil3oZGYuWeZjbmHgCQ9BL1qBroVfgUK3U/nb61617Cw=="
+      },
+      "Microsoft.Extensions.Logging.Abstractions": {
+        "type": "CentralTransitive",
+        "requested": "[10.0.12, )",
+        "resolved": "10.0.12",
+        "contentHash": "+24lC4plfbEDNfLAdTV/SWKS7dW+16X4HdydO3R++134kSNTzcbYA4KpR1Hdh6uWisB8Za3AzwyOn+K+NxWIug==",
+        "dependencies": {
+          "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.12"
+        }
+      },
+      "Microsoft.Extensions.Options": {
+        "type": "CentralTransitive",
+        "requested": "[10.0.10, )",
+        "resolved": "10.0.10",
+        "contentHash": "srnhnk7nE8krBiIXp71LvBmKBtraBONWSRzdjJgRv1Ko9Mp8IVNqv4vIS9hGeVteBig8aQkva9ZG+sC+o5sVcA==",
+        "dependencies": {
+          "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.10",
+          "Microsoft.Extensions.Primitives": "10.0.10"
+        }
       },
       "Microsoft.Extensions.Primitives": {
         "type": "CentralTransitive",

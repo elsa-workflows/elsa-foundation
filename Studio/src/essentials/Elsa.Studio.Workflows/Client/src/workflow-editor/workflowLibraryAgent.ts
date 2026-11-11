@@ -1,7 +1,8 @@
-import type { StudioAgentClientExecutionResult, StudioAgentContextAttachment, StudioAgentPreparedInvocation } from "@elsa-workflows/studio-sdk";
+import type { StudioWeaverClientExecutionResult, StudioWeaverContextAttachment, StudioWeaverPreparedInvocation } from "@elsa-workflows/studio-sdk";
 import { sha256Hex } from "../sha256";
 import type { WorkflowDefinitionBrowseLocation } from "./workflowDefinitionBrowseLocation";
 import type { CreateWorkflowDraft } from "./editorTypes";
+import { getCreateMetadataEdits } from "./createWorkflowMetadata";
 
 /**
  * The workflow library's client contexts and page working-state changes (spec 1193 FR-020, FR-023, FR-024): the visible
@@ -103,13 +104,13 @@ function canonical(value: unknown): string {
 }
 
 function attachment(kind: string, resourceType: string, resourceId: string, content: { revision: string } & Record<string, unknown>, client: { clientId: string; generationId: string },
-  label: string): StudioAgentContextAttachment {
+  label: string): StudioWeaverContextAttachment {
   return {
     id: `${kind}:${resourceId}`, moduleId: workflowsModuleId, schemaVersion: "1",
     target: { moduleId: workflowsModuleId, resourceType, resourceId, revision: content.revision },
     source: "workflow-library", sourceId: resourceId, label, contentType: kind, sensitivity: "internal", scope: "screen", origin: "clientSnapshot",
     client, agentScopes: ["workflow-author"], summary: label, references: { revision: content.revision }, content
-  } as StudioAgentContextAttachment;
+  } as StudioWeaverContextAttachment;
 }
 
 export function libraryAttachment(input: LibraryContextInput, client: { clientId: string; generationId: string }) {
@@ -209,7 +210,10 @@ export function applyCreateDialogPrefill(draft: CreateWorkflowDraft, change: unk
   if (Object.keys(value).some(key => !["name", "description", "rootActivityVersionId", "templateId"].includes(key)) || typeof value.name !== "string" || !value.name.trim()) return null;
   if (value.description !== undefined && typeof value.description !== "string") return null;
   if (value.rootActivityVersionId !== undefined && value.templateId !== undefined) return null;
-  const next: CreateWorkflowDraft = { ...draft, name: value.name, ...(typeof value.description === "string" ? { description: value.description } : {}) };
+  const metadataEdited = getCreateMetadataEdits(draft);
+  metadataEdited.name = true;
+  if (typeof value.description === "string") metadataEdited.description = true;
+  const next: CreateWorkflowDraft = { ...draft, metadataEdited, name: value.name, ...(typeof value.description === "string" ? { description: value.description } : {}) };
   if (typeof value.rootActivityVersionId === "string") { next.rootActivityVersionId = value.rootActivityVersionId; delete next.templateId; delete next.templateContent; delete next.starter; }
   if (typeof value.templateId === "string") {
     const template = templates.find(item => item.id === value.templateId);
@@ -220,7 +224,7 @@ export function applyCreateDialogPrefill(draft: CreateWorkflowDraft, change: unk
 }
 
 /** The binding check every page handler makes first: the exact page binding and the revision the change was reviewed at. */
-export function pageBindingProblem(invocation: StudioAgentPreparedInvocation, snapshot: StudioAgentContextAttachment | null | undefined, resourceType: string): string | null {
+export function pageBindingProblem(invocation: StudioWeaverPreparedInvocation, snapshot: StudioWeaverContextAttachment | null | undefined, resourceType: string): string | null {
   if (!snapshot) return "The originating page is no longer open, so nothing was applied.";
   if (!invocation.client || snapshot.client?.clientId !== invocation.client.clientId || snapshot.client?.generationId !== invocation.client.generationId)
     return "The originating page was reloaded or reopened, so this change is stale. Nothing was applied.";
@@ -232,7 +236,7 @@ export function pageBindingProblem(invocation: StudioAgentPreparedInvocation, sn
 }
 
 /** The receipt a page returns: the after revision and exactly the approved change, with a revert token. */
-export function pageReceipt(invocation: StudioAgentPreparedInvocation, typeId: string, afterRevision: string, undoToken: string, summary: string): StudioAgentClientExecutionResult {
+export function pageReceipt(invocation: StudioWeaverPreparedInvocation, typeId: string, afterRevision: string, undoToken: string, summary: string): StudioWeaverClientExecutionResult {
   const args = invocation.arguments as { baseRevision?: string; change?: unknown } | null;
   return {
     outcome: "applied", summary, after: { ...invocation.target!, revision: afterRevision },

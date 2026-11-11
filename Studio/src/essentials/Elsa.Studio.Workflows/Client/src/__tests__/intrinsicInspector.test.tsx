@@ -193,7 +193,7 @@ describe("IntrinsicInspector", () => {
     flushSync(() => active!.root.render(renderState([], changed)));
     expect(container.querySelector<HTMLSelectElement>(".wf-property-row select")!.disabled).toBe(true);
     expect(container.textContent).toContain("This output is no longer defined.");
-    expect(container.textContent).toContain("Add a workflow output in Properties → Outputs");
+    expect(container.textContent).toContain("Add a workflow output in the editor's Outputs tab");
     expect(onChange).toHaveBeenCalledTimes(1);
   });
 

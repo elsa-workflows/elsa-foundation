@@ -109,6 +109,9 @@ public sealed class ActivityProviderRegistry : IActivityProviderRegistry
 
     private sealed class GuardedActivityProvider(IActivityProvider inner) : IActivityProvider
     {
+        private readonly IReadOnlyList<ActivityProviderDiagnosticDescriptor> _diagnosticDescriptors =
+            (inner as IActivityProviderDiagnosticCatalog)?.DiagnosticDescriptors.Take(128).ToArray() ?? [];
+
         public string ProviderKey => inner.ProviderKey;
         public IReadOnlySet<string> SupportedManifestSchemas => inner.SupportedManifestSchemas;
         public ActivityProviderAuthoringCapabilities AuthoringCapabilities => inner.AuthoringCapabilities;
@@ -120,7 +123,7 @@ public sealed class ActivityProviderRegistry : IActivityProviderRegistry
             try
             {
                 var result = await inner.ProposeContractAsync(request, cancellationToken);
-                return result with { Diagnostics = ActivityProviderDiagnosticSanitizer.Sanitize(result.Diagnostics, ProviderKey) };
+                return result with { Diagnostics = ActivityProviderDiagnosticSanitizer.Sanitize(result.Diagnostics, ProviderKey, _diagnosticDescriptors) };
             }
             catch (Exception exception) when (ShouldWrap(exception, cancellationToken))
             {
@@ -137,7 +140,7 @@ public sealed class ActivityProviderRegistry : IActivityProviderRegistry
             {
                 return ActivityProviderDiagnosticSanitizer.Sanitize(
                     await inner.ValidateAsync(manifest, contract, cancellationToken),
-                    ProviderKey);
+                    ProviderKey, _diagnosticDescriptors);
             }
             catch (Exception exception) when (ShouldWrap(exception, cancellationToken))
             {
@@ -152,7 +155,7 @@ public sealed class ActivityProviderRegistry : IActivityProviderRegistry
             try
             {
                 var result = await inner.MigrateAsync(request, cancellationToken);
-                return result with { Diagnostics = ActivityProviderDiagnosticSanitizer.Sanitize(result.Diagnostics, ProviderKey) };
+                return result with { Diagnostics = ActivityProviderDiagnosticSanitizer.Sanitize(result.Diagnostics, ProviderKey, _diagnosticDescriptors) };
             }
             catch (Exception exception) when (ShouldWrap(exception, cancellationToken))
             {

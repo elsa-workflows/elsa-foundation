@@ -4,6 +4,12 @@ Reports are point-in-time findings. They may become work units, but they are not
 
 ## Current reports
 
+- [G1 common-mechanism inventory (native engine adapter vs BPMN adapter)](exec-core-g1-mechanism-inventory.md) - docs-only source inventory on `0944325db`: dispatch, resume, incidents, cancellation, retry, lease/fence, checkpoint; identical / deliberately different / unknown; no extraction.
+- [G2.4 child-outcome mapping (native ↔ BPMN)](exec-core-g2-child-outcome-mapping.md) - explicit child→parent outcome table for RunBpmn and composite callActivity→native child (success, business error, technical failure, cancel); PROVEN/OPEN per row; SQLite Owned Workbench / one host.
+- [G3 persistence/coordination overhead on Root/SQLite G2 journeys](exec-core-g3-overhead-counts.md) - command/intent counts and step latency for the #4028 child-cancel journey and the remaining #3992/#3993/#3995 G2 journeys on SQLite Owned Workbench; no budget or throughput claim.
+- [Native and direct-BPMN: migration and rollback](native-bpmn-migration-and-rollback.md) - operator-facing note: separate native journal vs BPMN fenced-write publish, interrupted-publication GC classification on SQLite, and rollback without consolidating the two pipelines. Does not complete Program #2892.
+- [Activity Data Selection M1 customer proof](activity-data-selection-m1.md) - actual composed customer experiment, persisted runtime controls and precise UI/binding/source/publication seams for M2; no production contract adopted.
+
 - [Studio hosting reuse qualification](studio-hosting-reuse.md) - M0 adopt/adapt/keep/remove decisions and the bounded shared CShells/Nuplane lifecycle probe.
 - [Studio browser asset delivery qualification](studio-browser-asset-delivery.md) - actual archive/publish/HTTP/browser and custom-frontend ownership evidence behind the prebuilt Hosting payload.
 - [Studio package-store qualification](studio-package-store-qualification.md) - native store/admission and admitted-reader protection boundaries, including refused profiles.

@@ -2,10 +2,14 @@
 .wf-execution-navigator { display: flex; gap: 0.25rem; align-items: center; }
 .wf-execution-navigator > button { display: inline-flex; gap: 0.5rem; align-items: center; justify-content: center; min-height: 2rem; padding: 0.4rem; border: 1px solid var(--studio-border); border-radius: var(--studio-radius); background: var(--studio-surface); color: var(--studio-text); }
 .wf-execution-navigator > button:nth-child(2) { flex: 1; min-width: 0; }
+.wf-execution-choice-copy { display: flex; flex-direction: column; min-width: 0; flex: 1; text-align: left; }
+.wf-execution-context { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--studio-text-muted); font-size: var(--studio-label-size); }
+.wf-execution-position { flex-shrink: 0; color: var(--studio-text-muted); font-size: var(--studio-label-size); font-variant-numeric: tabular-nums; }
 .wf-execution-browser button:focus-visible, .wf-execution-children button:focus-visible, .wf-execution-scope button:focus-visible { outline: 2px solid var(--studio-focus); outline-offset: 2px; }
 .wf-execution-browser button:disabled { opacity: 0.45; }
 .wf-execution-list { padding: 0; margin: 0; list-style: none; max-height: 19rem; overflow: auto; }
-.wf-execution-list-container { margin-top: 0.75rem; }
+.wf-execution-list-container { margin-top: 0.75rem; max-height: 24rem; overflow: auto; box-sizing: border-box; }
+.wf-execution-list-container .wf-execution-list { max-height: none; overflow: visible; }
 .wf-execution-row { border-bottom: 1px solid var(--studio-border); }
 .wf-execution-row > button:first-child { display: grid; gap: 0.4rem; width: 100%; padding: 0.65rem; text-align: left; border: 0; color: var(--studio-text); background: transparent; border-radius: var(--studio-radius); }
 .wf-execution-row[data-selected] > button:first-child { background: var(--studio-accent-soft); }
@@ -37,8 +41,7 @@
 .wf-execution-scope-occurrence { position: relative; }
 .wf-execution-scope-occurrence .wf-execution-list-container { position: absolute; inset-block-start: calc(100% + 0.4rem); inset-inline-end: 0; z-index: 10; width: 22rem; max-width: calc(100vw - 2rem); padding: 0.5rem; background: var(--studio-surface); border: 1px solid var(--studio-border); border-radius: var(--studio-radius-md); box-shadow: var(--studio-shadow-sm); }
 
-.wf-execution-scope-occurrence .wf-execution-list-container { overflow: auto; box-sizing: border-box; margin-top: 0; }
-.wf-execution-scope-occurrence .wf-execution-list { max-height: none; overflow: visible; }
+.wf-execution-scope-occurrence .wf-execution-list-container { margin-top: 0; }
 
 .wf-execution-transition { min-height: 2.5rem; padding: 0.4rem 1rem; color: var(--studio-text-muted); font-size: var(--studio-label-size); box-sizing: border-box; }
 .wf-execution-transition button { margin-inline-start: 0.5rem; }

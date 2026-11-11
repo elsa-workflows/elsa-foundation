@@ -26,7 +26,7 @@ from runtime import Http, normal_sign_in, private_json, RUNTIME_ENVIRONMENT
 HOME_PREFERENCES_PATH = "/_elsa/studio/preferences/home-layout"
 NATIVE_HOME = "/_elsa/studio/home-layout"
 HOST_HEADER = "X-Elsa-Studio-Host-Id"
-BASE_GRANTS = ["agent:use", "agent/proposals:manage", "agent/audit:read", "studio/preferences:read", "studio/preferences:write"]
+BASE_GRANTS = ["weaver:use", "weaver/proposals:manage", "weaver/audit:read", "studio/preferences:read", "studio/preferences:write"]
 
 
 def atomic_json(path, value):
@@ -41,7 +41,7 @@ def same(left, right):
 
 
 # The client receives only the public session-policy shape (effective mode, ceiling, allowed modes and an
-# opaque revision; specs/1186-weaver-effects/data-model.md). These domain AgentPolicy members never reach it.
+# opaque revision; specs/1186-weaver-effects/data-model.md). These domain WeaverPolicy members never reach it.
 PRIVATE_POLICY_KEYS = frozenset({"deniedCapabilityIds", "allowedContextKinds", "maxContextSensitivity", "retentionLabel",
                                  "contextVisibility", "requiresApprovalForMutations"})
 

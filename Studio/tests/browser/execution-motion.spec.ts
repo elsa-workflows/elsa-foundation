@@ -109,6 +109,6 @@ for (const theme of ["light", "dark"]) {
     await page.getByRole("button", { name: "Test Run", exact: true }).click();
     await page.getByRole("button", { name: "Start Test Run", exact: true }).click();
     await expect(page.getByLabel("Workflow canvas", { exact: true }).locator('[data-execution-pulse="activity"]')).toHaveCount(2);
-    await expect(page.getByRole("group", { name: "Attached Test Run", exact: true }).getByText("Completed", { exact: true })).toBeVisible();
+    await expect(page.getByRole("region", { name: "Test run summary", exact: true }).getByText("Completed", { exact: true })).toBeVisible();
   });
 }

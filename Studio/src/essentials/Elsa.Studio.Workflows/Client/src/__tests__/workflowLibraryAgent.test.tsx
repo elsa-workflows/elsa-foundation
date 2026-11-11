@@ -2,8 +2,8 @@ import React, { useState } from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { describe, expect, it } from "vitest";
-import type { StudioAgentClientExecutionResult, StudioAgentPreparedInvocation } from "@elsa-workflows/studio-sdk";
-import { createAgentRegistry } from "@elsa-workflows/studio-sdk";
+import type { StudioWeaverClientExecutionResult, StudioWeaverPreparedInvocation } from "@elsa-workflows/studio-sdk";
+import { createWeaverRegistry } from "@elsa-workflows/studio-sdk";
 import { registerWorkflowAgent } from "../workflowAgent";
 import { useWorkflowContextBridge } from "../workflow-editor/useWorkflowContextBridge";
 import { useWorkflowPageAgent } from "../workflow-editor/useWorkflowLibraryAgent";
@@ -123,7 +123,7 @@ describe("page working-state changes (spec 1193 FR-020, FR-023)", () => {
   it("prefills the create dialog with a root activity or a listed template, never creating anything", () => {
     const draft: CreateWorkflowDraft = { name: "", description: "", rootActivityVersionId: null };
     expect(applyCreateDialogPrefill(draft, { name: "Onboard", description: "New hires", rootActivityVersionId: "flowchart-v1" }, []))
-      .toEqual({ name: "Onboard", description: "New hires", rootActivityVersionId: "flowchart-v1" });
+      .toEqual({ name: "Onboard", description: "New hires", rootActivityVersionId: "flowchart-v1", metadataEdited: { name: true, description: true } });
     const templates = [{ id: "template-1", name: "Approval", revision: "t-r3", content: { state: { rootActivity: null }, layout: [], activityPresentation: [] } as never }];
     expect(applyCreateDialogPrefill(draft, { name: "Onboard", templateId: "template-1" }, templates)).toMatchObject({ templateId: "template-1", rootActivityVersionId: null });
     expect(applyCreateDialogPrefill(draft, { name: "Onboard", templateId: "template-9" }, templates)).toBeNull();
@@ -132,8 +132,8 @@ describe("page working-state changes (spec 1193 FR-020, FR-023)", () => {
 
   it("refuses a change bound to another page binding or an older revision", () => {
     const snapshot = libraryAttachment(input(), { clientId: "client-1", generationId: "generation-1" });
-    const invocation = (overrides: Partial<StudioAgentPreparedInvocation> = {}) => ({ invocationId: "i-1", client: { clientId: "client-1", generationId: "generation-1" },
-      target: snapshot.target, expiresAt: new Date(Date.now() + 60_000).toISOString(), arguments: {}, ...overrides }) as StudioAgentPreparedInvocation;
+    const invocation = (overrides: Partial<StudioWeaverPreparedInvocation> = {}) => ({ invocationId: "i-1", client: { clientId: "client-1", generationId: "generation-1" },
+      target: snapshot.target, expiresAt: new Date(Date.now() + 60_000).toISOString(), arguments: {}, ...overrides }) as StudioWeaverPreparedInvocation;
     expect(pageBindingProblem(invocation(), snapshot, "workflow-library")).toBeNull();
     expect(pageBindingProblem(invocation({ client: { clientId: "client-1", generationId: "other" } }), snapshot, "workflow-library")).toContain("stale");
     expect(pageBindingProblem(invocation({ target: { ...snapshot.target!, revision: "sha256:old" } }), snapshot, "workflow-library")).toContain("changed after review");
@@ -141,7 +141,7 @@ describe("page working-state changes (spec 1193 FR-020, FR-023)", () => {
   });
 
   it("applies an approved list change on its own page, returns the exact change in the receipt and reverts it", async () => {
-    const agent = createAgentRegistry();
+    const agent = createWeaverRegistry();
     const controller = registerWorkflowAgent(agent);
     let state: WorkflowDefinitionBrowseLocation = location;
     function Page() {
@@ -160,8 +160,8 @@ describe("page working-state changes (spec 1193 FR-020, FR-023)", () => {
     const contract = agent.toolContracts.list().find(item => item.id === "workflow_library_set_list_state")!;
     const change = { search: "invoice" };
     const invocation = { invocationId: "i-1", client: snapshot.client, target: snapshot.target, expiresAt: new Date(Date.now() + 60_000).toISOString(),
-      arguments: { baseRevision: snapshot.target!.revision, change } } as unknown as StudioAgentPreparedInvocation;
-    let result: StudioAgentClientExecutionResult | undefined;
+      arguments: { baseRevision: snapshot.target!.revision, change } } as unknown as StudioWeaverPreparedInvocation;
+    let result: StudioWeaverClientExecutionResult | undefined;
     await new Promise<void>(resolve => flushSync(() => { void contract.executeClient!(invocation).then(value => { result = value; resolve(); }); }));
     flushSync(() => undefined);
     expect(result!.outcome).toBe("applied");
@@ -183,7 +183,7 @@ describe("page working-state changes (spec 1193 FR-020, FR-023)", () => {
 
 describe("two mounted pages of one kind (spec 1193 FR-023)", () => {
   it("keep their own contexts and handlers: unmounting one never removes the other's", async () => {
-    const agent = createAgentRegistry();
+    const agent = createWeaverRegistry();
     const controller = registerWorkflowAgent(agent);
     const states: Record<string, CreateWorkflowDraft> = {};
     function Dialog({ id }: { id: string }) {
@@ -206,8 +206,8 @@ describe("two mounted pages of one kind (spec 1193 FR-023)", () => {
     expect(dialogs()).toEqual([libraryDialog]);
     const contract = agent.toolContracts.list().find(item => item.id === "workflow_create_dialog_prefill")!;
     const invocation = { invocationId: "i-2", client: libraryDialog.client, target: libraryDialog.target, expiresAt: new Date(Date.now() + 60_000).toISOString(),
-      arguments: { baseRevision: libraryDialog.target!.revision, change: { name: "Onboard" } } } as unknown as StudioAgentPreparedInvocation;
-    let result: StudioAgentClientExecutionResult | undefined;
+      arguments: { baseRevision: libraryDialog.target!.revision, change: { name: "Onboard" } } } as unknown as StudioWeaverPreparedInvocation;
+    let result: StudioWeaverClientExecutionResult | undefined;
     await new Promise<void>(resolve => flushSync(() => { void contract.executeClient!(invocation).then(value => { result = value; resolve(); }); }));
     flushSync(() => undefined);
     expect(result!.outcome).toBe("applied");
@@ -218,7 +218,7 @@ describe("two mounted pages of one kind (spec 1193 FR-023)", () => {
 
 describe("template editor working state (spec 1193 FR-024)", () => {
   it("is disclosed as its own resource with its persisted revision, never as a workflow definition", () => {
-    const agent = createAgentRegistry();
+    const agent = createWeaverRegistry();
     const controller = registerWorkflowAgent(agent);
     const draft = { id: "template-1", definitionId: "template-1", state: { rootActivity: { nodeId: "root", activityVersionId: flowchartActivity.activityVersionId, inputs: [], outputs: [] } },
       layout: [], activityPresentation: [], validationErrors: [] } as unknown as WorkflowDraft;

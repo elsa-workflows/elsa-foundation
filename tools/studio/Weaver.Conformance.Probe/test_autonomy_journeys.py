@@ -26,7 +26,7 @@ class AutonomyEvidenceTests(unittest.TestCase):
 
     @staticmethod
     def stream(body, identity="native-get-1", *, method="GET", resource_type="Fetch"):
-        url = "http://127.0.0.1:52001/_elsa/agent/sessions/session-1/stream"
+        url = "http://127.0.0.1:52001/_elsa/weaver/sessions/session-1/stream"
         size = len(body.encode())
         return {"requestId": identity, "url": url, "status": 200 if method == "GET" else 204,
                 "requestObservation": {"source": "Network.requestWillBeSent", "requestId": identity, "method": method,
@@ -54,7 +54,7 @@ class AutonomyEvidenceTests(unittest.TestCase):
 
     @staticmethod
     def domain_policy(mode):
-        """The whole domain AgentPolicy (camelCase enums) that must never reach the client."""
+        """The whole domain WeaverPolicy (camelCase enums) that must never reach the client."""
         names = {"manual": "manual", "full-auto": "fullAuto"}
         return {"id": "default", "enabled": True, "contextVisibility": True, "maxContextSensitivity": "sensitive",
                 "allowedContextKinds": ["*"], "autonomyMode": names[mode], "maxAutonomyMode": "fullAuto",
@@ -117,10 +117,10 @@ class AutonomyEvidenceTests(unittest.TestCase):
         write("autonomy-native-bootstrap", {"status": 200, "value": {"data": {"capabilities": [
             {"id": "acme.home.read", "moduleId": w["moduleId"]}, {"id": w["sizeCapability"], "moduleId": w["moduleId"]}]}}})
         create_body = {"autonomyMode": initial}
-        write("autonomy-create-session", {"url": base + "/_elsa/agent/sessions", "status": 200, "request": create_body,
+        write("autonomy-create-session", {"url": base + "/_elsa/weaver/sessions", "status": 200, "request": create_body,
             "response": {"data": {"sessionId": "session-1", "status": "active", "policy": created}, "error": None}})
-        requests = [{"url": base + "/_elsa/agent/sessions", "method": "POST", "body": create_body}]
-        update_url = base + "/_elsa/agent/sessions/session-1/autonomy"
+        requests = [{"url": base + "/_elsa/weaver/sessions", "method": "POST", "body": create_body}]
+        update_url = base + "/_elsa/weaver/sessions/session-1/autonomy"
         update_ref, network, selection = None, [], []
         details = {}
         for label, identity, policy, mode in (("read", "message-read", created, initial), ("size", "message-size", effective, effective["autonomyMode"])):
@@ -144,20 +144,20 @@ class AutonomyEvidenceTests(unittest.TestCase):
                 "acceptedPolicy": copy.deepcopy(policy)}
             write("autonomy-" + label + "-message", {"status": 200, "request": body, "response": {"data": {"message": message}, "error": None}})
             details[label] = {"id": identity, "role": "user", "content": "", "status": "completed", "acceptedPolicyRevision": policy["revision"]}
-            requests.append({"url": base + "/_elsa/agent/sessions/session-1/messages", "method": "POST", "body": body})
+            requests.append({"url": base + "/_elsa/weaver/sessions/session-1/messages", "method": "POST", "body": body})
         tool = {"id": "message-tool", "role": "tool", "status": "completed", "content": json.dumps(result), "acceptedPolicyRevision": effective["revision"]}
         if outcome == "review":
-            url = base + "/_elsa/agent/proposals/proposal-1/execute"
+            url = base + "/_elsa/weaver/proposals/proposal-1/execute"
             request = {"actorId": "studio", "revision": "rev-1"} # Native API resolves the actual actor; this field grants no authority.
             response = {"data": {"proposalId": "proposal-1", "executed": True, "status": "executed", "resourceType": w["resourceType"],
                                  "resourceId": w["widgetId"], "toolResult": result}, "error": None}
-            requests.append({"url": base + "/_elsa/agent/proposals/proposal-1/approve", "method": "POST", "body": {"revision": "rev-1"}})
+            requests.append({"url": base + "/_elsa/weaver/proposals/proposal-1/approve", "method": "POST", "body": {"revision": "rev-1"}})
             requests.append({"url": url, "method": "POST", "body": request})
             write("autonomy-size-execute", {"url": url, "status": 200, "request": request, "response": response})
             write("autonomy-size-execute-http", {"url": url, "status": 200, "rawBody": json.dumps(response)})
         write("agent-requests", requests)
         write("autonomy-network", network)
-        detail = lambda name, policy, messages: write(name, {"status": 200, "url": base + "/_elsa/agent/sessions/session-1",
+        detail = lambda name, policy, messages: write(name, {"status": 200, "url": base + "/_elsa/weaver/sessions/session-1",
             "value": {"data": {"sessionId": "session-1", "status": "active", "policy": policy, "messages": messages}}})
         session_before = detail("session-before", created, [details["read"]])
         session_selected = detail("session-selected", effective, [details["read"]])
@@ -387,10 +387,10 @@ class AutonomyEvidenceTests(unittest.TestCase):
                     else:
                         data = response["response"]["data"]
                         if mutation == "bad-status": response["status"] = http["status"] = 403
-                        elif mutation == "error": response["response"]["error"] = {"code": "agent.proposal.forbidden"}
+                        elif mutation == "error": response["response"]["error"] = {"code": "weaver.proposal.forbidden"}
                         elif mutation == "executed": data["executed"] = False
                         elif mutation == "outcome-status": data["status"] = "uncertain"
-                        elif mutation == "foreign-url": response["url"] = http["url"] = "http://127.0.0.1:52002/_elsa/agent/proposals/proposal-1/execute"
+                        elif mutation == "foreign-url": response["url"] = http["url"] = "http://127.0.0.1:52002/_elsa/weaver/proposals/proposal-1/execute"
                         elif mutation == "wrong-proposal": data["proposalId"] = "another"
                         elif mutation == "stale-request": response["request"]["revision"] = "rev-0"
                         elif mutation == "wrong-call": data["toolResult"]["toolCallId"] = "another-call"
@@ -467,7 +467,7 @@ class AutonomyEvidenceTests(unittest.TestCase):
                     path = output / "agent-streams.json"; streams = json.loads(path.read_text())
                     if mutation == "sse-http": streams[0]["status"] = 401
                     elif mutation == "sse-capture": streams[0]["captureError"] = "unavailable"
-                    elif mutation == "sse-error": streams[0]["rawBody"] += 'data: {"id":"error","kind":"error","error":{"code":"agent.turn.busy"}}\n\n'
+                    elif mutation == "sse-error": streams[0]["rawBody"] += 'data: {"id":"error","kind":"error","error":{"code":"weaver.turn.busy"}}\n\n'
                     elif mutation == "truncated-proposal": streams[0]["rawBody"] = streams[0]["rawBody"].split('data: {"id": "event-proposal"')[0]
                     else: streams[0]["rawBody"] += streams[0]["rawBody"].split("\n\n")[0] + "\n\n"
                     path.write_text(json.dumps(streams))
@@ -518,7 +518,7 @@ class AutonomyEvidenceTests(unittest.TestCase):
     def test_automatic_mode_never_issues_extra_execute_to_obtain_proof(self):
         fixture = self.fixture(); output = fixture[0]
         path = output / "agent-requests.json"; value = json.loads(path.read_text())
-        value.append({"method": "POST", "url": "http://127.0.0.1:52001/_elsa/agent/proposals/extra/execute", "body": {}})
+        value.append({"method": "POST", "url": "http://127.0.0.1:52001/_elsa/weaver/proposals/extra/execute", "body": {}})
         path.write_text(json.dumps(value))
         with self.assertRaises(RuntimeError): self.verify(fixture)
 
@@ -643,8 +643,8 @@ class AutonomyEvidenceTests(unittest.TestCase):
                             else: changed["actorId"] = "caller-selected"
                         requests(body); exchange(body)
                     elif mutation == "foreign-session": requests(lambda value: value[2].update(url=value[2]["url"].replace("session-1", "session-2")))
-                    elif mutation == "busy-409": exchange(lambda value: value.update(status=409, response={"data": None, "error": {"code": "agent.session.busy"}}))
-                    elif mutation == "error-envelope": exchange(lambda value: value["response"].update(error={"code": "agent.session.policy_stale"}))
+                    elif mutation == "busy-409": exchange(lambda value: value.update(status=409, response={"data": None, "error": {"code": "weaver.session.busy"}}))
+                    elif mutation == "error-envelope": exchange(lambda value: value["response"].update(error={"code": "weaver.session.policy_stale"}))
                     elif mutation == "raw-mismatch": self.edit(output, "autonomy-mode-update-http", lambda value: value.update(rawBody="{}"))
                     elif mutation == "ack-revision": exchange(lambda value: value["response"]["data"].update(revision=2))
                     elif mutation == "ack-mode": exchange(lambda value: value["response"]["data"].update(autonomyMode="auto-read-only"))
@@ -659,7 +659,7 @@ class AutonomyEvidenceTests(unittest.TestCase):
                 with self.subTest(key=key, mutation=mutation):
                     fixture = self.fixture("copilot", key); output, observation, _, _ = fixture
                     initial = MODE_CASES[key][0]
-                    url = "http://127.0.0.1:52001/_elsa/agent/sessions/session-1/autonomy"
+                    url = "http://127.0.0.1:52001/_elsa/weaver/sessions/session-1/autonomy"
                     put = {"url": url, "method": "PUT", "body": {"autonomyMode": initial, "expectedRevision": 0}}
                     if mutation == "put":
                         self.edit(output, "agent-requests", lambda value: value.insert(2, put))
@@ -804,7 +804,7 @@ for(const scenario of ['valid','missing-request','method-conflict','url-conflict
   return {bufferedData:Buffer.from(raw).toString('base64')};
  }};
  context={newCDPSession:async()=>cdp};const capture=await captureNativeStreams({});
- const url=backend+'/_elsa/agent/sessions/session-1/stream';
+ const url=backend+'/_elsa/weaver/sessions/session-1/stream';
  const query=scenario==='query'?'?access_token=private-query-value':'';
  if(scenario!=='missing-request')handlers.get('Network.requestWillBeSent')({requestId:'native-preflight',
   type:scenario==='resource-missing'?undefined:'Preflight',initiator:{type:'preflight'},
@@ -907,7 +907,7 @@ class AutonomyManifestTests(unittest.TestCase):
         def mode(section, key="reviewed-size-control"):
             return next(row for row in section["cases"] if row["caseKey"] == key)
         mutations = {
-            "lifecycle-wrong-cause": lambda s: lifecycle(s)["outcome"].update(execute="agent.proposal.approval_required"),
+            "lifecycle-wrong-cause": lambda s: lifecycle(s)["outcome"].update(execute="weaver.proposal.approval_required"),
             "lifecycle-wrong-adapter": lambda s: lifecycle(s).update(adapter="anthropic" if lifecycle(s)["provider"] == "copilot" else "copilot"),
             "lifecycle-no-correlation": lambda s: lifecycle(s)["correlation"].pop("invocationId"),
             "lifecycle-no-trace": lambda s: lifecycle(s)["correlation"].pop("providerTrace"),
