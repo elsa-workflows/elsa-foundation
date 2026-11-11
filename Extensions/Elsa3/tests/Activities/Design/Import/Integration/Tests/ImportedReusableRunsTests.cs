@@ -190,8 +190,7 @@ public sealed class ImportedReusableRunsTests(ImportedApprovalFixture fixture) :
 /// <summary>
 /// An imported Elsa 3 reusable whose body reads its own input converts, publishes and runs,
 /// reading the value its caller passed. Result reads and captures are converted (mapping tests)
-/// but not run here: any converted RunJavaScript, reusable or not, faults on its default arguments, and its Object
-/// result cannot feed a Boolean input without a conversion.
+/// but not run here: a converted RunJavaScript's Object result cannot feed a Boolean input without a conversion.
 /// </summary>
 public sealed class ImportedReusableValueReadTests
 {
