@@ -291,7 +291,7 @@ class CompleteWitnessTests(unittest.TestCase):
             "replaced-by-other-adapter": lambda r: r[MATRIX_QUALIFICATION]["cases"].__setitem__(
                 r[MATRIX_QUALIFICATION]["cases"].index(autonomy(r)), copy.deepcopy(autonomy(r, provider="copilot"))),
             "wrong-adapter": lambda r: autonomy(r).update(adapter="copilot"),
-            "wrong-cause": lambda r: autonomy(r)["outcome"].update(execute="agent.proposal.forbidden"),
+            "wrong-cause": lambda r: autonomy(r)["outcome"].update(execute="weaver.proposal.forbidden"),
             "wrong-mode-cause": lambda r: autonomy(r, "automatic-to-manual").update(outcomeAtDecision="automatic"),
             "failed-case": lambda r: autonomy(r).update(status="failed", cause="lifecycle.refusal_cause"),
             "no-evidence": lambda r: autonomy(r).update(evidence=[]),

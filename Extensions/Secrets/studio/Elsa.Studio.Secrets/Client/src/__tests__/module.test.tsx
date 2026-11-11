@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  createAgentRegistry,
+  createWeaverRegistry,
   createContributionRegistry,
   createDashboardWidgetRegistry,
   createDialogController,
@@ -38,11 +38,22 @@ describe("secrets module", () => {
     expect(contribution.supports(context)).toBe(true);
     expect(contribution.createDefaultValue?.(context)).toBeNull();
   });
+
+  it("keys editor tabs case-insensitively by secret, apart from the Create page", () => {
+    const api = stubApi();
+    register(api);
+    const routes = api.featureAreas.list().flatMap(area => area.routes ?? []);
+    const key = (id: string, path: string) => routes.find(route => route.id === id)?.workspace?.resourceKey?.(new URL(path, "https://studio.example/"));
+    const createKey = key("/security/secrets.create", "/security/secrets/new");
+    expect(key("/security/secrets.edit", "/security/secrets/Db%3AConnection/edit")).toBe("secret:db:connection");
+    expect(key("/security/secrets.edit", "/security/secrets/db%3Aconnection/edit")).toBe("secret:db:connection");
+    for (const name of ["create", "Create", "new"]) expect(key("/security/secrets.edit", `/security/secrets/${name}/edit`)).not.toBe(createKey);
+  });
 });
 
 function stubApi(): ElsaStudioModuleApi {
   const dashboardWidgets = createDashboardWidgetRegistry();
-  const agent = createAgentRegistry();
+  const agent = createWeaverRegistry();
   return {
     host: {
       ...createEndpointContext("https://studio.example/"),
@@ -65,7 +76,7 @@ function stubApi(): ElsaStudioModuleApi {
     workflowRunInputEditors: createContributionRegistry({ slot: studioSlots.workflowRunInputEditors }),
     workflowTestStimulusEditors: createContributionRegistry({ slot: studioSlots.workflowTestStimulusEditors }),
     settingEditors: createContributionRegistry({ slot: studioSlots.settingEditors }),
-    agent,
+    weaver: agent,
     workflowDesigner: {
       nodeRenderers: createContributionRegistry({ slot: studioSlots.workflowDesignerNodeRenderers }),
       toolboxItems: createContributionRegistry({ slot: studioSlots.workflowDesignerToolboxItems }),

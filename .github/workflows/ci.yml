@@ -151,6 +151,7 @@ jobs:
       - name: Exercise the tier tooling
         run: |
           python3 -m unittest discover -s tools/ci -p 'test_workflow_scope.py'
+          python3 -m unittest discover -s tools/ci -p 'test_run_shard_retry_policy.py'
           python3 tools/ci/test_tiers.py --self-test
           python3 tools/ci/affected_tests.py --self-test
           python3 tools/ci/test_results.py --self-test
@@ -452,7 +453,7 @@ jobs:
             dotnet build "$project" -c Release --no-restore -p:WarningsNotAsErrors=NU1603
           done < "$RUNNER_TEMP/projects.txt"
 
-      - name: Test the suites, retrying each failure once
+      - name: Test the suites using their declared retry policy
         env:
           SHARD: ${{ toJSON(matrix) }}
           ELSA_SECRETS_EF_POSTGRESQL_TEST_CONNECTION_STRING: Host=127.0.0.1;Port=5432;Username=postgres;Database=postgres

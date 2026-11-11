@@ -2,8 +2,9 @@
 
 **Input:** [spec.md](spec.md), [plan.md](plan.md), [research.md](research.md), [data-model.md](data-model.md),
 [binding](contracts/binding-contract.md) and [authoring](contracts/authoring-contract.md) contracts.
-**Status:** Reviewed M2 task plan; approval takes effect on M2 merge. All boxes are unexecuted. M1 research
-is closed; M2 merge and resulting-main qualification precede production dispatch. No pending CI is a pass.
+**Status:** Approved M2 task plan. M1 research and M2 closeout are complete; #3922 has begun the shared
+foundation implementation. Checked setup items have receipts below. Source changes alone do not complete
+test-bearing tasks or accept product journeys. No pending CI is a pass.
 
 Use existing projects and separate worker worktrees. Paths below are repository-relative; named new files
 are proposed locations within the plan's fixed package ownership. Coordinate shared files serially.
@@ -18,11 +19,21 @@ existing all-feature composition test. No tests assert these documents' text.
 
 ## Phase 1: Setup and gates
 
-- [ ] T001 Revalidate M1 closeout, the exact prerequisite heads and open main-red trackers; record the authorized production start and current dependency graph on #3882/#3885 using `docs/contributing/merging.md` and `docs/program-goals/activity-data-selection.md`.
-- [ ] T002 Review and adopt the M2 spec→plan→tasks sequence; create only the next executable native children/dependencies under #3882, reuse #3094 unchanged in scope, and record worker/file ownership in `specs/1215-activity-data-selection/tasks.md`.
+- [x] T001 Revalidate M1 closeout, the exact prerequisite heads and open main-red trackers; record the authorized production start and current dependency graph on #3882/#3885 using `docs/contributing/merging.md` and `docs/program-goals/activity-data-selection.md`. Receipt: [M2 qualification/closeout](https://github.com/elsa-workflows/elsa-foundation/issues/3885#issuecomment-6676152380), qualified f6; fresh tracker/claim checks clear. Newer fd0 integration is not qualified by that receipt.
+- [x] T002 Review and adopt the M2 spec→plan→tasks sequence; create only the next executable native children/dependencies under #3882, reuse #3094 unchanged in scope, and record worker/file ownership in `specs/1215-activity-data-selection/tasks.md`. Native child [#3922](https://github.com/elsa-workflows/elsa-foundation/issues/3922), closed blocker #3885, winning [claim6676170172](https://github.com/elsa-workflows/elsa-foundation/issues/3922#issuecomment-6676170172); no Ready promotion/assignment.
 - [ ] T003 Establish the finite criterion/evidence ledger from `specs/1215-activity-data-selection/quickstart.md`, including all M1 failures, exact host/head ownership and nine journey families; allocate disposable owned stores/ports before any product proof.
 
 **Checkpoint:** M1 and M2 merge/resulting-main receipts exist; workers have concrete claims and boundaries.
+
+Current #3922 ownership: one implementation worker owns the integrating Foundation leaf; the coordinator
+sequences qualification and review. Shared Core contracts precede dependent code. The bounded owned
+Azure development run is closed; see its [build and retained-failure receipt](https://github.com/elsa-workflows/elsa-foundation/pull/3948#issuecomment-6728243018).
+Approved local qualification runs owning whole projects sequentially after fresh capacity checks, using
+two processors, preserving the build-slot wrapper when present and unchanged stock retry/hang guards;
+see the [source-bound qualification receipt](https://github.com/elsa-workflows/elsa-foundation/pull/3948#issuecomment-6728799519).
+T003 remains open until its owned proof-host/store allocation obligations are met. T004–T010, M1 journey
+failures and downstream acceptance remain open; protected CI, formal review and resulting-main
+qualification remain required.
 
 ## Phase 2: Shared analysis and static admission
 
@@ -40,6 +51,27 @@ of optional expression languages. This phase blocks production story integration
 **Checkpoint:** Real authorized API and headless publication agree; no optional validation fallback remains.
 Update owning extension-point catalogs with the new analysis port in the same delivery slice.
 
+#3922 / PR #3948 foundation-leaf receipt (this branch; not task completion): source on
+`agent/codex/3922-data-selection-analysis` implements T004–T010 shared analysis/static admission
+and CLR whole-`$result` metadata, including Evaluate Decision's typed `DecisionEvaluation` result
+(`status`/`result`/`trace`, Result as `activity.shape.dynamic-json`, outcomes Done/NoMatch/Refused,
+automatic producer still `binding: null` / `RuntimeScopeBindingUnavailable`). Tasks stay unchecked
+until owned proof-host qualification and resulting-main. This leaf does not add runtime member
+binding (T011–T017) or Studio chooser/inspector work (T018–T026).
+
+#4053 receipt (not task completion): the analyzer returns the complete scope-free `ActivityResult` binding
+wherever publication admits it unchanged, and every first-party structure handler states
+`EarlierProducerRunCanReachConsumer`. Rule: [binding contract](contracts/binding-contract.md#1-authored-wire);
+reason codes: [authoring contract](contracts/authoring-contract.md#source-identity-members-and-compatibility);
+design and evidence: [research](research.md#activity-result-bindings-without-a-scope); delivered in PR #4055.
+
+#4059 receipt (not task completion): admission of a scope-free binding now also requires every structure above
+the one holding producer and consumer to state the fact `false` for its child holding both, so a Sequence on a
+BPMN gateway loop, in an unbuildable Flowchart or in a third-party structure is no longer offered or admitted.
+Evidence: analyzer, BPMN compiler and publish-handler no-write rows; a real BPMN loop run showing the Ambiguous
+read; per-handler answers for a child with itself; one offer → publication compiler → run round trip. Scoped
+bindings and portable parameters are unchanged (#4056).
+
 ## Phase 3: User Story 1 — Choose earlier data at an input (P1)
 
 **Independent test:** Quickstart journeys 1, 7 and 8: untouched pre-run Sequence/Flowchart inputs choose
@@ -53,6 +85,32 @@ handwritten source, including a real minimal host. Unknown literals and source f
 - [ ] T015 [US1] Integrate inline/external selection and admitted target fit before snapshot/consumer construction in `Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Values/RuntimeActivityInputMaterializer.cs` and `Services/Values/WorkflowIntrinsicExecutor.cs`; reuse bounded alias/fit logic with the unchanged profile, reject unsupported opaque targets and preserve destination externalization/conversion (depends T014).
 - [ ] T016 [US1] Advertise schema-1 member-selection support and propagate template/runtime requirements; reuse `IRuntimeRequirementChecker` before execution in `Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Executions/WorkflowStartDispatcher.cs`, `Services/Bookmarks/BookmarkResumeDispatcher.cs`, pinned queued/start work and `Essentials/src/Activities/Runtime/Elsa.Activities.Runtime/Services/WorkflowResumeBookmarkSchedulerWorkHandler.cs` (depends T015).
 - [ ] T017 [US1] Add focused role/model/compiler/hash/fit/admission controls in `Essentials/tests/Workflows/Publishing/Api/Tests/RoleOwnedInputBindingContractTests.cs`, `ActivityTemplatePlacementTests.cs` and `Essentials/tests/Workflows/Runtime/Tests/`; prove old named/numeric readers refuse new kinds, old bytes/hashes remain, nullable/optional prefixes compose, invalid deferred data reaches neither consumer constructor nor committed snapshot, and local/resume/recovery requirements fail closed (depends T016).
+#4078 slice A receipt (not task completion; checkboxes stay open): the member-read model only, inert. T011: the three
+appended member sources with fixed names and numbers (`WorkflowRequestMember = 6`, `VariableMember = 7`,
+`ActivityResultMember = 8`), `RuntimeReadSelection`, `RuntimeInputBinding.Selection` (left out when null), a new
+constructor overload beside the unchanged one, and the invariants and path bounds. T013, hashing part only: framed
+member arms in the node-payload hash with a throwing default, selection covered by the behavioural, template and
+input-snapshot fingerprints, and whole-value bytes and hashes pinned unchanged against the commit before. T016,
+derivation part only: executables and templates holding a member read derive `elsa.runtime.input-member-selection@1`;
+nothing advertises it. T017, model part only: invariant, serialization, hash, requirement and old-reader stand-in
+controls, and refusal of a hand-built member executable at its reader on start, resume and queued work. Not done:
+pinning facts at publication (T013), selection at run time (T014, T015), the capability and local guards (T016), the
+compiler, admission and placement controls (T017). Design and evidence: [research](research.md#member-bindings-and-runtime-selection-4078-design-note).
+
+#4078 slice B receipt (not task completion; checkboxes stay open): runtime selection, still unreachable for authors
+because nothing publishes a member binding. T014: an exact-segment selector run after the unchanged whole-value
+resolution of the same role, with missing producer, absent member and null kept distinct. T015: inline and external
+selection in the input materializer and the intrinsic executor, an always-on fit check before the snapshot, the
+selected value recorded in the snapshot, and `VF-SEL-001`..`004` through one exception type with the code in the
+poisoned item's metadata. T016, capability and guards: `elsa.runtime.input-member-selection@1` advertised only while
+the built-in materializer is composed (decided from its service registration, so a factory, instance or decorator
+counts as replaced), and refusal through `IRuntimeRequirementChecker` at activity start, bookmark resume and a
+structural parent's re-materialization on child completion. T017, runtime part: selector table, materializer and intrinsic rows inline and external, real engine runs for
+all three roles in a Sequence and a top-level Flowchart, failure codes, occurrence parity, re-materialization after
+resume, protection and guard controls, and a pinned member fingerprint. Not done: pinning facts at publication and
+the compiler, analyzer, placement and linker work (slice C, T012/T013), the other families' authoring (slice D), and
+a real engine run with externally stored values (exercised at the materializer and intrinsic level only).
+
 - [ ] T018 [P] [US1] Add the language-neutral source client in `Studio/src/essentials/Elsa.Studio.Workflows/Client/src/` using existing capability discovery; integrate exact acknowledged autosave/current-snapshot acquisition with `workflow-editor/useWorkflowPersistence.ts` and `ActivityDefinitionDraftEditor.tsx`, discard late identities and preserve manual/held edits (depends T008).
 - [ ] T019 [P] [US1] Repair structured whole/result/member preservation in `Studio/src/essentials/Elsa.Studio.Workflows/Client/src/activityInputWire.ts` and add canonical save/Code Apply/reopen controls in `__tests__/activityInputWire.test.ts`; preserve unknown unsupported source definitions without JSON stringification.
 - [ ] T020 [US1] Build the shared Choose data/browser/reference contribution in `Studio/src/essentials/Elsa.Studio.Workflows/Client/src/` with existing Studio controls, stable authorized identities, readable provenance/navigation/replace/clear and keyboard/cancel/focus behavior; capability-gate member authoring while allowing #3094's qualified whole-output slice (depends T018–T019).
@@ -61,6 +119,18 @@ handwritten source, including a real minimal host. Unknown literals and source f
 - [ ] T023 [US1] Add behavior tests beside `Studio/src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/activityInputOptionsUi.test.tsx` and `workflowInputPersistence.test.ts` for untouched selection, structured wire, one-edit history, literal escaping, stale/canceled/revoked requests, no hidden save, loading/empty/error/Retry and preserved protected values (depends T022).
 - [ ] T024 [US1] Run focused owning backend/Studio suites and a real catalog→save→publish→execute source-family/known/deferred/type-fit proof using the existing lifecycle in `e2e-tests/`; retain invalid-publication no-write and consumer-input/producer-completion evidence (depends T017, T023).
 - [ ] T025 [US1] Extend `Studio/tests/acceptance/journeys.spec.ts` and `tools/ux-acceptance/run.py` capture inventory for basic Sequence/Flowchart/current-draft selection; run normal/minimal owned hosts and retain canonical wire, real committed inputs and independently inspected exact-head captures under `specs/1215-activity-data-selection/quickstart.md` (depends T024).
+
+#3094 whole-output receipt (not task completion): Studio offers Choose data on eligible ordinary inputs of
+workflow drafts and stores the server's `ActivityResult` binding unchanged as one edit (T019 wire; whole-output
+parts of T018, T020, T021, T023). The source client covers both advertised relations; only the workflow editor
+uses it, so reusable-graph (T041), intrinsic/Switch (T042) and BPMN (T043) surfaces offer nothing yet. Member
+selection is not offered. Whole-output subset of T024–T025: the owned-host journey "choose data for activity
+outputs" in `Studio/tests/acceptance/journeys.spec.ts` and the runner's capture inventory cover Sequence and
+top-level Flowchart choice, reopen, publish and a run checking the consumer's committed input, a loop producer's
+shared reason with nothing stored, and keyboard choice with Replace and Clear, in the four standard profiles.
+Not covered: nested members, optional conditional reads, other source families, a minimal host, 320px captures,
+the `e2e-tests/` source-family/type-fit proof of T024 and independent review. Optional reads of conditional
+producers and other source families (T022) remain open. Evidence is on the delivering PR.
 
 **Checkpoint:** US1 passes actual persisted journeys; #3094 can close only on its narrower own evidence.
 Whole-output UI completion does not close nested binding/runtime obligations.

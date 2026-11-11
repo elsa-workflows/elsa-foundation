@@ -1,17 +1,17 @@
 # Elsa Agents
 
 - **Status:** Paused by owner decision on 6 November 2026, confirmed in the 9 November triage review. Program #3519 and its open epics #3524–#3527 are parked; the 31 October end-to-end authorization resumes only on a new owner instruction. Product acceptance remains open.
-- **Area:** User-defined specialists, immutable publication, model execution, native/BPMN composition, Studio and bounded teams.
+- **Area:** User-defined agents, immutable publication, model execution, native/BPMN composition, Studio and bounded teams.
 - **Steward:** Sipke Schoorstra; one active implementation leaf with independent review support.
 - **Charter, complete plan and acceptance:** [Program #3519](https://github.com/elsa-workflows/elsa-foundation/issues/3519).
 - **Project:** [Elsa Agents #66 — Kanban](https://github.com/orgs/elsa-workflows/projects/66/views/1), [complete hierarchy](https://github.com/orgs/elsa-workflows/projects/66/views/3).
 - **Activation and sequencing:** [ADR 0080 D0](../adr/0080-elsa-4-simplification-decisions.md#d0--focus), 31 October Elsa Agents amendment.
 
-**Shared revision delivery**: Owner-agreed [ADR 0094](../adr/0094-agent-definitions-own-authored-content-and-providers-publish-activities.md) / merged [#3783](https://github.com/elsa-workflows/elsa-foundation/pull/3783) governs Agent-owned source and shared revision mechanics. The owner authorized [#3790](https://github.com/elsa-workflows/elsa-foundation/issues/3790) on 4 November 2026 as the one active source-storage implementation leaf (T065 and storage T069), alongside the existing independent review lane. [Spec 1179's plan](../../specs/1179-specialist-agents/plan.md#3790-source-slice-placement-and-transition) records package placement, the temporary publication boundary and the clean-store break. No live database reset is part of that leaf. T066–T071 and full W1–W8 acceptance remain open; historical M0–M5 receipts do not qualify the amendment. No new Program or competing runtime/ETL lane is introduced.
+**Shared revision delivery**: Owner-agreed [ADR 0094](../adr/0094-agent-definitions-own-authored-content-and-providers-publish-activities.md) / merged [#3783](https://github.com/elsa-workflows/elsa-foundation/pull/3783) governs Agent-owned source and shared revision mechanics. The owner authorized [#3790](https://github.com/elsa-workflows/elsa-foundation/issues/3790) on 4 November 2026 as the one active source-storage implementation leaf (T065 and storage T069), alongside the existing independent review lane. [Spec 1179's plan](../../specs/1179-agents/plan.md#3790-source-slice-placement-and-transition) records package placement, the temporary publication boundary and the clean-store break. No live database reset is part of that leaf. T066–T071 and full W1–W8 acceptance remain open; historical M0–M5 receipts do not qualify the amendment. No new Program or competing runtime/ETL lane is introduced.
 
 ## Purpose
 
-Users define reusable specialists such as Copywriter and Proofreader, test them, publish immutable
+Users define reusable agents such as Copywriter and Proofreader ("specialist" was the historical name, renamed under [#4027](https://github.com/elsa-workflows/elsa-foundation/issues/4027)), test them, publish immutable
 versions and use them as discoverable activities in native Elsa workflows and Elsa-powered BPMN.
 Explicit input/output contracts make their results usable by the enclosing process. Fresh calls are
 the default; conversation continuity is an explicit optional capability, distinct from cross-run memory.
@@ -30,10 +30,10 @@ Coordinate shared changes through owning issues and valid claims.
 - [Unified Execution #2892](unified-execution.md) and [#2912](https://github.com/elsa-workflows/elsa-foundation/issues/2912)
   retain production collaboration, durable decision/approval, budget and recovery obligations. Integrate
   that work without reparenting it, changing its current queue or treating completed research #2913 as
-  production acceptance. Independent specialist catalog/design work can proceed; shared runtime work
+  production acceptance. Independent agent catalog/design work can proceed; shared runtime work
   waits for or is delivered through the owning leaf.
 - [Weaver #3428](weaver-across-studio.md) owns the assistant helping users work in Studio. This Program
-  owns specialists participating in authored processes. Preserve existing assistant behavior and the
+  owns agents participating in authored processes. Preserve existing assistant behavior and the
   single-active-provider default; justify reuse at the contract boundary.
 - Connections, secrets, identity, knowledge, persistence, diagnostics and BPMN retain their domain
   authority. Elsa owns the enclosing process; a selected team runtime owns bounded internal coordination.
@@ -53,9 +53,9 @@ are the roadmap; each next implementation leaf is elaborated when its inputs are
 | [M0 #3520](https://github.com/elsa-workflows/elsa-foundation/issues/3520) | Establishment and pinned research spikes | Reproducible SDK probes and current-source integration matrix; explicit limitations |
 | [M1 #3521](https://github.com/elsa-workflows/elsa-foundation/issues/3521) | Product, UX and architecture design | Reviewed PRD, journeys/wireframes, state transitions, decisions and implementation specs/tasks |
 | [M2 #3522](https://github.com/elsa-workflows/elsa-foundation/issues/3522) | Catalog and immutable publication | Authorized drafts/versions, generated activity contracts and packaged-consumer proof |
-| [M3 #3523](https://github.com/elsa-workflows/elsa-foundation/issues/3523) | Specialist execution | Validated results, capability-aware model connections, optional continuity and recovery |
+| [M3 #3523](https://github.com/elsa-workflows/elsa-foundation/issues/3523) | Agent execution | Validated results, capability-aware model connections, optional continuity and recovery |
 | [M4 #3524](https://github.com/elsa-workflows/elsa-foundation/issues/3524) | Native and BPMN composition | Editorial process on both surfaces, exact references and correct parent continuation |
-| [M5 #3525](https://github.com/elsa-workflows/elsa-foundation/issues/3525) | Studio, configuration and evaluations | Real create/test/publish/use/inspect journeys for Studio-authored and configuration-defined specialists (FR-027; the #3519 A1 and #3525 exit amendments are recorded as issue comments), saved cases and version comparison |
+| [M5 #3525](https://github.com/elsa-workflows/elsa-foundation/issues/3525) | Studio, configuration and evaluations | Real create/test/publish/use/inspect journeys for Studio-authored and configuration-defined agents (FR-027; the #3519 A1 and #3525 exit amendments are recorded as issue comments), saved cases and version comparison |
 | [M6 #3526](https://github.com/elsa-workflows/elsa-foundation/issues/3526) | Tools, knowledge and bounded teams | Authorized tool effects, scoped context, exact approvals, budgets and team lifecycle |
 | [M7 #3527](https://github.com/elsa-workflows/elsa-foundation/issues/3527) | Integrated qualification | Complete acceptance, supported provider/store/host evidence, docs, reviewed CI and resulting main |
 
@@ -77,7 +77,7 @@ configuration is the initial designer; a bespoke free-form graph needs evidence 
 4. M3 [#3523](https://github.com/elsa-workflows/elsa-foundation/issues/3523) is complete through
    [PR #3594](https://github.com/elsa-workflows/elsa-foundation/pull/3594), reviewed at `4f3a920836` and
    merged as `8dcbf2345`. Required reviewed-head CI and Studio passed; fresh resulting-main source
-   (780 Specialists, 3 required provider cases, 607 Architecture), affected browser (22), normal package
+   (780 Agent tests, 3 required provider cases, 607 Architecture), affected browser (22), normal package
    recovery (49 packages/73 stages) and three host controls passed. Hosted main CI and Studio also completed
    successfully under their configured policies; a passing job does not turn REST quarantine #3261 or opt-in screenshot skips
    into passing tests. Connections prerequisite #3578 delivered T014–T015 through PR #3591.
@@ -99,22 +99,22 @@ The initial umbrella research is split into the SDK/source-compatibility spike #
 The latter preserves the remaining M0 gates; SDK success alone cannot advance M1 or freeze contracts.
 
 [M0 publication/lifecycle PR #3537](https://github.com/elsa-workflows/elsa-foundation/pull/3537)
-merged with the bounded research disposition: specialist/native packages are Design-free; existing
+merged with the bounded research disposition: agent/native packages are Design-free; existing
 BPMN package coupling remains a production obligation. M1 must resolve the package split before
 contract freeze, and M4 must implement/qualify it. Resulting-main qualification remains distinct from
 the merged research receipt.
 
 M0 is complete after fresh SDK/package/lifecycle receipts and core/Studio CI on main `45b5347`.
 [Dependency enabler #3544](https://github.com/elsa-workflows/elsa-foundation/issues/3544) promotes the
-normal MEAI 10.10.1 graph while the remaining specialist runtime/package work stays open.
+normal MEAI 10.10.1 graph while the remaining agent runtime/package work stays open.
 
 [M1 design leaf #3538](https://github.com/elsa-workflows/elsa-foundation/issues/3538) delivers
-[spec 1179](../../specs/1179-specialist-agents/spec.md), its reviewed architecture/state/support/UX
+[spec 1179](../../specs/1179-agents/spec.md), its reviewed architecture/state/support/UX
 packet and ordered M2–M7 tasks through [PR #3540](https://github.com/elsa-workflows/elsa-foundation/pull/3540).
 The design is approved to implement; neither the packet nor the illustrative wireframe establishes
 implemented product acceptance. Public signatures remain proposed until their first implementing slice.
 [M2 draft discovery #3541](https://github.com/elsa-workflows/elsa-foundation/issues/3541) merged through
-[PR #3543](https://github.com/elsa-workflows/elsa-foundation/pull/3543). Native specialist kernel #3548
+[PR #3543](https://github.com/elsa-workflows/elsa-foundation/pull/3543). Native agent kernel #3548
 is complete; M3 #3523 and #3578 are complete; #3524 is the sole active implementation unit.
 
 ## Completion

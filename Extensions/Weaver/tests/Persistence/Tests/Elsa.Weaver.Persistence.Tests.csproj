@@ -1,0 +1,47 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <IsTestProject>true</IsTestProject>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="CShells" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" PrivateAssets="all" />
+    <PackageReference Include="coverlet.collector" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../../src/Persistence/EntityFrameworkCore/Elsa.Weaver.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="../../../src/Elsa.Weaver/Elsa.Weaver.csproj" />
+    <ProjectReference Include="../../../src/Core/Elsa.Weaver.Core.csproj" />
+    <ProjectReference Include="../../../src/Api/Elsa.Weaver.Api.csproj" />
+    <ProjectReference Include="../../../../../Essentials/src/Events/Elsa.Events/Elsa.Events.csproj" />
+    <ProjectReference Include="../../../../../Essentials/src/Secrets/Elsa.Secrets/Elsa.Secrets.csproj" />
+    <ProjectReference Include="../../../../../Essentials/tests/Testing/Elsa.Testing.csproj" />
+  </ItemGroup>
+
+  <!-- The Agent restart scenarios (T009-T014), compiled unchanged and run over the EF store on SQLite. -->
+  <ItemGroup>
+    <Compile Include="../../Tests/WeaverRestartHarness.cs" Link="Restart/WeaverRestartHarness.cs" />
+    <Compile Include="../../Tests/WeaverRecoveryRestartTests.cs" Link="Restart/WeaverRecoveryRestartTests.cs" />
+    <Compile Include="../../Tests/WeaverRecoveryDeduplicationTests.cs" Link="Restart/WeaverRecoveryDeduplicationTests.cs" />
+    <Compile Include="../../Tests/WeaverRecoveryExecutionTests.cs" Link="Restart/WeaverRecoveryExecutionTests.cs" />
+    <Compile Include="../../Tests/WeaverSessionOwnershipTests.cs" Link="Restart/WeaverSessionOwnershipTests.cs" />
+    <Compile Include="../../Tests/WeaverSessionSummaryTests.cs" Link="Restart/WeaverSessionSummaryTests.cs" />
+    <Compile Include="../../Tests/WeaverRecoveryAuditTests.cs" Link="Restart/WeaverRecoveryAuditTests.cs" />
+    <Compile Include="../../Tests/WeaverTestServices.cs" Link="Restart/WeaverTestServices.cs" />
+    <Compile Include="../../Tests/WeaverTestTools.cs" Link="Restart/WeaverTestTools.cs" />
+    <Compile Include="../../Tests/WeaverProposalFixtures.cs" Link="Restart/WeaverProposalFixtures.cs" />
+    <Compile Include="../../Tests/DeterministicWeaverProvider.cs" Link="Restart/DeterministicWeaverProvider.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+</Project>

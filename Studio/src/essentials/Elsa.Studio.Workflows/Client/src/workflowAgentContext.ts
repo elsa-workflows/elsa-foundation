@@ -1,11 +1,11 @@
-import type { StudioAgentClientBinding, StudioAgentContextAttachment } from "@elsa-workflows/studio-sdk";
+import type { StudioWeaverClientBinding, StudioWeaverContextAttachment } from "@elsa-workflows/studio-sdk";
 
 /**
  * The read-only page contexts of spec 1193 stories 8 and 9, as caller attachments the server admits strictly: one exact
- * Executable (`workflows.executable`, bound to its Artifact Hash, admitted by Elsa.Agent.Workflows.Runtime), one exact
- * persisted workflow version (`workflows.version`, bound to its version identity, admitted by Elsa.Agent.Workflows) and one
+ * Executable (`workflows.executable`, bound to its Artifact Hash, admitted by Elsa.Weaver.Workflows.Runtime), one exact
+ * persisted workflow version (`workflows.version`, bound to its version identity, admitted by Elsa.Weaver.Workflows) and one
  * exact Run (`workflows.run`, bound to its Workflow Instance identity and the selected activity execution, admitted by
- * Elsa.Agent.Workflows.Runtime). Each carries only identity; the server reads the content itself through the owning
+ * Elsa.Weaver.Workflows.Runtime). Each carries only identity; the server reads the content itself through the owning
  * services. A context missing an identity field is never built, so no malformed attachment is sent.
  */
 const moduleId = "Elsa.Studio.Workflows";
@@ -14,7 +14,7 @@ export interface WorkflowExecutableIdentity { artifactId?: unknown; artifactHash
 export interface WorkflowVersionIdentity { definitionId?: unknown; versionId?: unknown; version?: unknown }
 export interface WorkflowRunIdentity { workflowExecutionId?: unknown; activityExecutionId?: unknown }
 
-export function workflowExecutableAttachment(identity: unknown, client?: StudioAgentClientBinding | null): StudioAgentContextAttachment | null {
+export function workflowExecutableAttachment(identity: unknown, client?: StudioWeaverClientBinding | null): StudioWeaverContextAttachment | null {
   if (!isRecord(identity)) return null;
   const artifactId = boundedId(identity.artifactId);
   const artifactHash = boundedId(identity.artifactHash, 256);
@@ -30,7 +30,7 @@ export function workflowExecutableAttachment(identity: unknown, client?: StudioA
   };
 }
 
-export function workflowVersionAttachment(identity: unknown, client?: StudioAgentClientBinding | null): StudioAgentContextAttachment | null {
+export function workflowVersionAttachment(identity: unknown, client?: StudioWeaverClientBinding | null): StudioWeaverContextAttachment | null {
   if (!isRecord(identity)) return null;
   const definitionId = boundedId(identity.definitionId);
   const versionId = boundedId(identity.versionId);
@@ -51,7 +51,7 @@ export function workflowVersionAttachment(identity: unknown, client?: StudioAgen
  * of a definition. Its revision identity is the selected activity execution's, or the instance's when none is selected
  * (spec 1193 FR-005).
  */
-export function workflowRunAttachment(identity: unknown, client?: StudioAgentClientBinding | null): StudioAgentContextAttachment | null {
+export function workflowRunAttachment(identity: unknown, client?: StudioWeaverClientBinding | null): StudioWeaverContextAttachment | null {
   if (!isRecord(identity)) return null;
   const workflowExecutionId = boundedId(identity.workflowExecutionId, 256);
   if (!workflowExecutionId) return null;

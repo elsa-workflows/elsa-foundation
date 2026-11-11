@@ -25,7 +25,7 @@ class WorkflowScopeTests(unittest.TestCase):
         for path in ['tools/ux-acceptance/run.py', 'tools/ci/studio_gate.py',
                      'Studio/tests/acceptance/journeys.spec.ts',
                      'Essentials/apps/Elsa.Workbench/shells.json',
-                     'Extensions/Agent/specialists/Core/Manifest.cs']:
+                     'Extensions/Agent/agents/Core/Manifest.cs']:
             with self.subTest(path=path):
                 self.assertTrue(self.selected(paths=[path], pull_request={'draft': True})['studio'])
 

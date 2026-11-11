@@ -3,8 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import type { ReactFlowInstance } from "@xyflow/react";
-import type { StudioAgentRegistry, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
-import { WorkflowInstanceDetailsWorkbench } from "../workflow-editor/WorkflowInstances";
+import type { StudioWeaverRegistry, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import { getIncidentRootCause, WorkflowInstanceDetailsWorkbench } from "../workflow-editor/WorkflowInstances";
 import type { ActivityExecutionBrowsePage } from "../api/runtime";
 import type {
   ActivityExecutionInspection,
@@ -445,7 +445,7 @@ describe("workflow run workbench incident navigation", () => {
     click(container.querySelector<HTMLButtonElement>("[data-tab-id='issues']"));
     click(buttonByText(container, "View input evidence"));
     await vi.waitFor(() => expect(container.querySelector("[data-tab-id='activity']")?.getAttribute("aria-selected")).toBe("true"));
-    await vi.waitFor(() => expect(container.querySelector<HTMLDetailsElement>(".wf-input-inspection-row details")?.open).toBe(true));
+    await vi.waitFor(() => expect(container.querySelector(".wf-input-inspection-info")?.getAttribute("aria-expanded")).toBe("true"));
   });
 
   it("reframes and refocuses the same affected activity on each explicit activation", async () => {
@@ -670,7 +670,7 @@ describe("workflow run workbench incident navigation", () => {
     renderWorkbench();
     await vi.waitFor(() => expect(container.querySelector(".wf-instance-detail-workbench")).toBeTruthy());
     click(buttonByText(container, "View input evidence"));
-    await vi.waitFor(() => expect(container.querySelector<HTMLDetailsElement>(".wf-input-inspection-row details")?.open).toBe(true));
+    await vi.waitFor(() => expect(container.querySelector(".wf-input-inspection-info")?.getAttribute("aria-expanded")).toBe("true"));
 
     click(container.querySelector<HTMLButtonElement>("[data-tab-id='issues']"));
     click([...container.querySelectorAll<HTMLButtonElement>(".wf-instance-incident-summary")]
@@ -678,8 +678,8 @@ describe("workflow run workbench incident navigation", () => {
     click(container.querySelector<HTMLButtonElement>("[data-tab-id='activity']"));
 
     await vi.waitFor(() => expect(container.textContent).toContain("execution-second"));
-    await vi.waitFor(() => expect(container.querySelector(".wf-input-inspection-row details")).toBeTruthy());
-    expect(container.querySelector<HTMLDetailsElement>(".wf-input-inspection-row details")?.open).toBe(false);
+    await vi.waitFor(() => expect(container.querySelector(".wf-input-inspection-info")).toBeTruthy());
+    expect(container.querySelector(".wf-input-inspection-info")?.getAttribute("aria-expanded")).toBe("false");
   });
 
   it("clears a denied incident lookup message when a healthy activity is selected", async () => {
@@ -1178,7 +1178,7 @@ function renderWorkbench(
 ) {
   flushSync(() => root.render(<WorkflowInstanceDetailsWorkbench
     context={{} as StudioEndpointContext}
-    ai={{ promptActions: { list: () => [] } } as unknown as StudioAgentRegistry}
+    ai={{ promptActions: { list: () => [] } } as unknown as StudioWeaverRegistry}
     workflowExecutionId="run-1"
     initialActivityExecutionId={initialActivityExecutionId}
     initialInspectorTab={initialInspectorTab}
@@ -1386,6 +1386,34 @@ function bookmarkSummary(bookmarkId: string): ActivityExecutionInspection["bookm
   };
 }
 
+
+it("shows the short flowchart cause while retaining the original technical message", () => {
+  const message = "Flowchart faulted because child node 'review-purchase' faulted: a faulted child cannot complete, so its execution path — and any downstream join that requires it — can no longer proceed.";
+  const row = incident({ failureType: "ActivityFaulted", message });
+  expect(getIncidentRootCause(row)).toBe("Activity 'review-purchase' failed. Review its incident to correct the cause.");
+  expect(row.message).toBe(message);
+  expect(getIncidentRootCause(incident({ message: "Other failure", metadata: { "runtime.faultInnerMessage": "Select a task assignee or a group." } }))).toBe("Select a task assignee or a group.");
+});
+
+it("shows workflow outputs in run details while preserving payload format and redaction", async () => {
+  api.getWorkflowInstance.mockResolvedValue({ ...workflowDetails(), outputs: {
+    ReviewData: { value: { kind: "object", properties: [{ name: "Note", value: { kind: "string", preview: "Approved" } }] }, captureMode: "DiagnosticSnapshot", isRedacted: false, capturedAt: "2026-11-04T10:00:00Z" },
+    Payload: { value: { kind: "object", Note: "Raw payload" }, captureMode: "Payload", isRedacted: false, capturedAt: "2026-11-04T10:00:00Z" },
+    Secret: { value: "must-never-render", isRedacted: true, redactionReason: "Hidden by policy", capturedAt: "2026-11-04T10:00:00Z" }
+  } });
+  renderWorkbench("details");
+  await vi.waitFor(() => expect(container.querySelector('[aria-label="Workflow outputs"]')?.textContent).toContain("Approved"));
+  const outputs = container.querySelector('[aria-label="Workflow outputs"]')!;
+  expect(outputs.textContent).toContain("ReviewData"); expect(outputs.textContent).toContain("Note");
+  expect(outputs.textContent).toContain('"kind": "object"'); expect(outputs.textContent).toContain("Raw payload");
+  expect(outputs.textContent).toContain("Hidden by policy"); expect(outputs.textContent).not.toContain("must-never-render");
+});
+
+it.each([undefined, {}])("distinguishes unavailable workflow output evidence from no captured outputs (%s)", async outputs => {
+  api.getWorkflowInstance.mockResolvedValue({ ...workflowDetails(), outputs });
+  renderWorkbench("details");
+  await vi.waitFor(() => expect(container.querySelector('[aria-label="Workflow outputs"]')?.textContent).toContain(outputs ? "No workflow outputs have been captured." : "Workflow output inspection is unavailable on this host."));
+});
 
 it.each(["chooser", "arrow", "ambiguous", "denied401", "denied403", "missing404", "failed"])("preserves exact scope evidence and deliberate focus during %s navigation", async mode => {
   api.supportsActivityExecutionBrowsing.mockResolvedValue(true);

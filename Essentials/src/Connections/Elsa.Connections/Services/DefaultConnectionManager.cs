@@ -5,7 +5,9 @@ using Elsa.Connections.Http;
 using Elsa.Secrets.Core.Contracts;
 using Elsa.Secrets.Core.Exceptions;
 using Elsa.Secrets.Core.Models;
+using Elsa.Secrets.Core.Options;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace Elsa.Connections.Services;
 
@@ -74,6 +76,7 @@ internal sealed class DefaultConnectionManager(
     IAuthenticationSchemeRegistry schemes,
     IConnectionResolver resolver,
     ISecretManager secretManager,
+    IOptions<WritableSecretStoreOptions> writableSecretStore,
     IConnectionPermissionGate permissionGate,
     TimeProvider timeProvider,
     ILogger<DefaultConnectionManager> logger) : IConnectionManager
@@ -740,7 +743,7 @@ internal sealed class DefaultConnectionManager(
             Name = secretName,
             DisplayName = $"{connectionName} {fieldName}",
             TypeName = SecretTypeNames.Text,
-            StoreName = SecretStoreNames.Encrypted,
+            StoreName = DefaultWritableSecretStore.ResolveName(writableSecretStore.Value.DefaultWritableStoreName),
             Value = value,
             Tags = ["owned-by-connection", connectionName]
         }, cancellationToken);

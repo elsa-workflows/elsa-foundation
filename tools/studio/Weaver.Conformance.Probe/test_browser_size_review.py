@@ -42,8 +42,8 @@ async function decide(path,status,text){
  if(text)article.querySelector('[data-testid="acme-home-size-result"]').textContent=text;
  if(status==='approved'){buttons[0].disabled=true;buttons[1].disabled=false;}
 }
-buttons[0]?.addEventListener('click',()=>decide('/_elsa/agent/proposals/p1/approve','approved'));
-buttons[1]?.addEventListener('click',()=>decide('/_elsa/agent/proposals/p1/execute','executed','Acme independently confirmed the saved size'));
+buttons[0]?.addEventListener('click',()=>decide('/_elsa/weaver/proposals/p1/approve','approved'));
+buttons[1]?.addEventListener('click',()=>decide('/_elsa/weaver/proposals/p1/execute','executed','Acme independently confirmed the saved size'));
 </script>`;
 const posts=[];
 const server=createServer((request,response)=>{
@@ -81,7 +81,7 @@ try {
   assert.equal(decision.mismatch,false);
   const status=await page.locator('.agent-proposal').getAttribute('data-status');
   assert.equal(status,'executed');
-  assert.deepEqual(posts,OUTCOME==="review"?['/_elsa/agent/proposals/p1/approve','/_elsa/agent/proposals/p1/execute']:[]);
+  assert.deepEqual(posts,OUTCOME==="review"?['/_elsa/weaver/proposals/p1/approve','/_elsa/weaver/proposals/p1/execute']:[]);
   observed={status:'passed',outcome:decision.outcome,posts,finalStatus:status,nativeStudioQualification:false,browserVersion:browser.version()};
  }
 } finally {

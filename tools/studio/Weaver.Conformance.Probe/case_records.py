@@ -76,7 +76,7 @@ def _normalized_result(value):
     result = copy.deepcopy(value)
     if result.get("receipt"):
         scope = result["receipt"]["scope"]
-        # AgentEffectScope declares ClientWorkingState=0, ServerPersisted=1.
+        # WeaverEffectScope declares ClientWorkingState=0, ServerPersisted=1.
         # Agent API uses camelCase; SDK/ordinary JSON uses PascalCase or numbers.
         if type(scope) is int and scope in (0, 1):
             canonical = scope
@@ -118,12 +118,12 @@ def _native_results(output, requests):
     sessions = set()
     for request in requests:
         url = urlparse(request["url"])
-        match = re.fullmatch(r"/_elsa/agent/sessions/([^/]+)/messages", url.path)
+        match = re.fullmatch(r"/_elsa/weaver/sessions/([^/]+)/messages", url.path)
         if match: sessions.add((url.scheme, url.netloc, match[1]))
     results = []
     for stream in strict_json(path.read_text()):
         url = urlparse(stream["url"])
-        match = re.fullmatch(r"/_elsa/agent/sessions/([^/]+)/stream", url.path)
+        match = re.fullmatch(r"/_elsa/weaver/sessions/([^/]+)/stream", url.path)
         if (not match or (url.scheme, url.netloc, match[1]) not in sessions or stream.get("status") != 200
                 or stream.get("contentType", "").split(";", 1)[0].strip() != "text/event-stream"
                 or stream.get("captureError")):

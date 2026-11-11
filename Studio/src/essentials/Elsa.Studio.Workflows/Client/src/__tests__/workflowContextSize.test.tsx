@@ -2,7 +2,7 @@ import React from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { describe, expect, it } from "vitest";
-import { createAgentRegistry } from "@elsa-workflows/studio-sdk";
+import { createWeaverRegistry } from "@elsa-workflows/studio-sdk";
 import { registerWorkflowAgent } from "../workflowAgent";
 import { buildWorkflowSnapshotContent, useWorkflowContextBridge, workflowContextCandidateBudget, workflowSnapshotContentLimit } from "../workflow-editor/useWorkflowContextBridge";
 import { admittedSnapshotLength } from "../workflow-editor/workflowExplainContext";
@@ -32,7 +32,7 @@ function largeDraft(count: number, description = ""): WorkflowDraft {
 }
 
 function snapshotSizes(draft: WorkflowDraft) {
-  const agent = createAgentRegistry();
+  const agent = createWeaverRegistry();
   const controller = registerWorkflowAgent(agent);
   const catalogByVersion = new Map([versionedWriteLine, versionedFlowchart].map(item => [item.activityVersionId, item]));
   const details = { definition: { id: "definition", name: "Large workflow" } } as WorkflowDefinitionDetails;
@@ -68,7 +68,7 @@ describe("workflow context snapshot size", () => {
     expect(sizes.structured).toBe(false);
   });
 
-  // The host admits at most 32 KiB of one attachment's admitted projection (AgentContextServices), tighter than the
+  // The host admits at most 32 KiB of one attachment's admitted projection (WeaverContextServices), tighter than the
   // module's 64 KiB bound, so the guard measures that projection. Measured on this chained flowchart: 100 activities admit
   // 27,136 characters with structure and 120 admit 32,496; from 121 the structure is left out (31,695 without it) and the
   // draft is still explained up to 125 (32,735); from 126 (32,995) even the structure-free projection exceeds the budget.
