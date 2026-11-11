@@ -82,7 +82,7 @@ export async function decisionsJourney(page: Page, info: TestInfo, capture: Capt
   expect(await search.evaluate(element => getComputedStyle(element.closest(".studio-search")!).borderTopWidth)).toBe("1px");
   // Focused, the shell draws the one focus ring and the field draws none.
   await search.focus();
-  expect(await search.evaluate(element => [getComputedStyle(element).outlineStyle, getComputedStyle(element.closest(".studio-search")!).outlineStyle])).toEqual(["none", "solid"]);
+  expect(await search.evaluate(element => { const field = getComputedStyle(element); return [field.outlineStyle, field.boxShadow, getComputedStyle(element.closest(".studio-search")!).outlineStyle]; })).toEqual(["none", "none", "solid"]);
   await part("decisions-search", search);
   if ((info.project.use.viewport?.width ?? 0) >= 1440) {
     const entry = page.getByRole("link", { name: "Decisions", exact: true });
@@ -213,8 +213,11 @@ export async function decisionsJourney(page: Page, info: TestInfo, capture: Capt
       await expect(picker).toBeVisible(); await expect(picker).toHaveValue(existingId);
       await expect(picker.locator("option", { hasText: created })).toHaveCount(1);
       await part("decision-picker-returned", picker);
-    } finally {
-      await api(`/design/workflows/definitions/${submitted.definition.id}`, "DELETE");
+    } catch (failure) {
+      // Clean up best-effort without letting a cleanup failure replace the journey's own error.
+      await page.request.delete(`${backend}/design/workflows/definitions/${submitted.definition.id}`).catch(() => undefined);
+      throw failure;
     }
+    await api(`/design/workflows/definitions/${submitted.definition.id}`, "DELETE");
   }
 }

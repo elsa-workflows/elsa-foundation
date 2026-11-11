@@ -422,11 +422,12 @@
   padding: 0;
 }
 
-/* The shell's :focus-within ring is the field's focus indicator. Page rules that outline every focused
-   input (collection toolbars at 0,2,0, module pages at 0,2,1) must not draw a second ring inside it,
-   so this reset ranks above them (0,3,0). */
+/* The shell's :focus-within ring is the field's focus indicator. Rules that ring every focused input
+   (the global input:focus halo, collection toolbars at 0,2,0, module pages at 0,2,1) must not draw a
+   second ring inside it, so this reset ranks above them (0,3,0). */
 .studio-search > .studio-search-input:is(:focus, :focus-visible) {
   outline: none;
+  box-shadow: none;
 }
 
 .studio-search-input::placeholder {
