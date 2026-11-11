@@ -121,13 +121,12 @@ public sealed class PlacedReferenceRemapperTests
     }
 
     /// <summary>
-    /// A member read (#4078) would otherwise pass through unchanged and keep its template-local producer or scope. Until
-    /// placement remaps member reads (slice C), the remapper refuses one rather than return it as it was.
+    /// A request or variable member read would otherwise pass through unchanged and keep its template-local scope.
+    /// Until placement remaps those, the remapper refuses one rather than return it as it was.
     /// </summary>
     [Theory]
     [InlineData(RuntimeInputBindingSource.WorkflowRequestMember)]
     [InlineData(RuntimeInputBindingSource.VariableMember)]
-    [InlineData(RuntimeInputBindingSource.ActivityResultMember)]
     public void A_member_read_is_refused_rather_than_passed_through_unremapped(RuntimeInputBindingSource source)
     {
         var selection = new RuntimeReadSelection(1, ["id"], RuntimeReadSelectionMode.DeferredFit);
@@ -141,6 +140,38 @@ public sealed class PlacedReferenceRemapperTests
         var exception = Assert.Throws<NotSupportedException>(() => PlacedReferenceRemapper.Remap(NodeWith(binding), PlacedIds, GraphScope));
 
         Assert.Contains("publication does not compile member reads yet", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_result_member_read_moves_with_its_producer_and_keeps_its_selection()
+    {
+        var selection = new RuntimeReadSelection(1, ["address", "a.b", ""], RuntimeReadSelectionMode.Known, new ValueTypeDescriptor("String"),
+            mayBeAbsent: true, mayBeNull: false, ValueRepresentation.TextValue, "elsa.activity-value-json/1");
+        var plan = ValueConversionPlan.Identity(new ValueTypeDescriptor("String"), ValueRepresentation.TextValue);
+        var binding = new RuntimeInputBinding("value", new ValueTypeDescriptor("String"), ValueProtectionPolicy.InstanceInline,
+            RuntimeInputBindingSource.ActivityResultMember, selection,
+            activityResult: new RuntimeActivityResultReference("compute", "$result", producerScopeId: null, isOptional: true),
+            metadata: new Dictionary<string, string> { ["input.meta"] = "kept" }, conversionPlan: plan);
+
+        var remapped = PlacedReferenceRemapper.Remap(NodeWith(binding), PlacedIds, GraphScope).InputBindings["value"];
+
+        Assert.Equal(RuntimeInputBindingSource.ActivityResultMember, remapped.Source);
+        Assert.Equal("node-compute", remapped.ActivityResult!.ProducerExecutableNodeId);
+        Assert.Null(remapped.ActivityResult.ProducerScopeId);
+        Assert.True(remapped.ActivityResult.IsOptional);
+        Assert.Same(selection, remapped.Selection);
+        Assert.Same(plan, remapped.ConversionPlan);
+        Assert.Equal("kept", remapped.Metadata["input.meta"]);
+    }
+
+    [Fact]
+    public void A_result_member_read_of_a_producer_outside_the_placement_is_returned_unchanged()
+    {
+        var node = NodeWith(new RuntimeInputBinding("value", new ValueTypeDescriptor("Object"), ValueProtectionPolicy.InstanceInline,
+            RuntimeInputBindingSource.ActivityResultMember, new RuntimeReadSelection(1, ["id"], RuntimeReadSelectionMode.DeferredFit),
+            activityResult: new RuntimeActivityResultReference("elsewhere", "$result", producerScopeId: null)));
+
+        Assert.Same(node, PlacedReferenceRemapper.Remap(node, PlacedIds, GraphScope));
     }
 
     private static ExecutableNode NodeWith(RuntimeInputBinding binding) => new(

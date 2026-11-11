@@ -186,9 +186,10 @@ internal static class TestCompiler
     // Direct compiler tests compose the real authority against their real fixture catalog and structures.
     // A fresh operation scope prevents request-local catalog/visibility caches from leaking between compiles.
     internal static IActivityDataSelectionAnalyzer SourceAuthority(
-        IActivityDefinitionVersionStore versions, IActivityStructureService structures) => new TestSourceAuthority(versions, structures);
+        IActivityDefinitionVersionStore versions, IActivityStructureService structures, bool memberReads = false) =>
+        new TestSourceAuthority(versions, structures, memberReads);
 
-    private sealed class TestSourceAuthority(IActivityDefinitionVersionStore versions, IActivityStructureService structures)
+    private sealed class TestSourceAuthority(IActivityDefinitionVersionStore versions, IActivityStructureService structures, bool memberReads)
         : IActivityDataSelectionAnalyzer
     {
         public async ValueTask<ActivityDataSelectionAnalysis> AnalyzeAsync(ActivityDataSelectionDocument document,
@@ -198,7 +199,7 @@ internal static class TestCompiler
             var services = new ServiceCollection();
             services.AddOptions();
             new Elsa.Events.EventsFeature().ConfigureServices(services);
-            new WorkflowDesignValidationsFeature().ConfigureServices(services);
+            new WorkflowDesignValidationsFeature { MemberReads = memberReads }.ConfigureServices(services);
             services.AddSingleton(structures);
             services.AddSingleton<IActivityDefinitionLookup>(new TestSourceCatalog(versions));
             await using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });

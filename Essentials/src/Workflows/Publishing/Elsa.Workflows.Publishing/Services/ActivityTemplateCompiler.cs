@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Text.Json;
 using Elsa.Primitives.Models;
 using RuntimeActivityInputContract = Elsa.Activities.Runtime.Core.Models.ActivityInputContract;
@@ -93,7 +94,7 @@ public sealed class ActivityTemplateCompiler(
         ActivityTemplateCompilerRequest request,
         CancellationToken cancellationToken)
     {
-        var document = await ValidateDataSelectionAsync(request, cancellationToken);
+        var (document, memberReads) = await ValidateDataSelectionAsync(request, cancellationToken);
         var projected = document is not null;
         var subject = Subject(request);
         var diagnostics = new List<ActivityDiagnostic>();
@@ -273,6 +274,8 @@ public sealed class ActivityTemplateCompiler(
             resolved,
             provider.CompilerFingerprint) { SubjectKind = request.Candidate.SubjectKind }, cancellationToken);
         diagnostics.AddRange(compilation.Diagnostics);
+        if (compilation.ExecutableRoot is not null)
+            compilation = compilation with { ExecutableRoot = MemberReadSelectionPinner.Pin(compilation.ExecutableRoot, memberReads) };
         if (!projected && compilation.Occurrences.Count != 0)
             throw new ActivityDataSelectionRejectedException([new("$activity", "ActivityDataSelection/ProviderProjectionMissing",
                 "The activity provider must expose its authored graph for source-read validation.")]);
@@ -517,7 +520,8 @@ public sealed class ActivityTemplateCompiler(
         };
     }
 
-    private async ValueTask<ActivityDataSelectionDocument?> ValidateDataSelectionAsync(ActivityTemplateCompilerRequest request, CancellationToken cancellationToken)
+    private async ValueTask<(ActivityDataSelectionDocument? Document, ImmutableArray<ActivityDataMemberReadFacts> MemberReads)> ValidateDataSelectionAsync(
+        ActivityTemplateCompilerRequest request, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         if (dataAnalyzer is null)
@@ -542,14 +546,14 @@ public sealed class ActivityTemplateCompiler(
             document = candidate;
         }
         if (document is null)
-            return null;
+            return (null, []);
         var analysis = await dataAnalyzer.AnalyzeAsync(document, cancellationToken: cancellationToken);
         if (!StringComparer.Ordinal.Equals(analysis.ContractRevision, revision))
             throw new InvalidOperationException("Activity data selection analysis does not match the actual candidate.");
         var errors = analysis.Findings.Where(x => StringComparer.Ordinal.Equals(x.Severity, ValidationSeverities.Error)).ToArray();
         if (errors.Length != 0)
             throw new ActivityDataSelectionRejectedException(errors);
-        return document;
+        return (document, analysis.MemberReads);
     }
 
     private static bool TryReadDeclaredStructure(
