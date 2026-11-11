@@ -3,7 +3,7 @@
 Point-in-time statement for execution-core milestone slice D2 / goal §C SC-005 (owner decision 11 November 2026, section 2: HTTP-level real-host tests now; Studio half deferred). Tests and this report only. No production change.
 
 **Pinned main SHA at branch:** `e81b0da15`  
-**This slice HEAD:** *filled after the landing commit*  
+**This slice HEAD:** `560532749`  
 **Limit:** SQLite Owned Workbench, **one in-process host**, Root composition with `directBpmn: true` and `authoredDirectPublication: true`. No PostgreSQL, SQL Server or MySQL cell. No second tenant on this host.
 
 **Status vocabulary:** **PROVED** (hosted HTTP on this slice HEAD); **EXPLICITLY DEFERRED** (owner record: this slice); **unit** (existing component tests, not hosted).
@@ -54,7 +54,7 @@ Sources: `Essentials/src/Activities/Bpmn/Api/Endpoints/BpmnHostingApi.cs`, `Bpmn
 
 - Test: `Signed_in_user_without_bpmn_permissions_is_refused_on_every_bpmn_endpoint`
 - File: `Essentials/tests/Activities/Bpmn/Hosting/Tests/BpmnHostingAuthorizationTests.cs`
-- SHA: *this slice HEAD*
+- SHA: `560532749`
 - Setup: second real user seeded through `SeedAdministratorAsync("operator")`; IAM user and tenant-membership roles cleared; `user-tasks:read` kept so the subject remains a signed-in non-BPMN caller (`GET /runtime/user-task-identity` 200). Administrator `GET /bpmn/admission` remains 200.
 - Expected refusal: HTTP 401 or 403 as `[RequirePermission]` / `[RequireAnyPermission]` document, **or** the hosted cookie Forbid redirect to `AccessDenied` (302/303/307). BPMN endpoints do not call `DisableCookieRedirect` (unlike Decisions and Structured Logs). Following that redirect lands on an unmapped path (404); the test disables auto-redirect so the first hop is the refusal. Unauthenticated Challenge remains 401 (`DirectBpmnWorkbenchTests`).
 - Private payload: refusal bodies must not carry execution `payload` or `authoredInputs`.
