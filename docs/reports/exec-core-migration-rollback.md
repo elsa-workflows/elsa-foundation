@@ -237,12 +237,12 @@ Tests only. No production change. SQLite, one in-process host. Not PostgreSQL / 
 
 The added tests inject a grace-past GC sweep **in the same live publish** between the material save and the source-reference mint (reuse of the #3988 save-hook, without interrupt-and-retry). Asserted outcomes: clean refusal **or** a valid commit; never a committed definition/reference pointing at missing material.
 
-| Engine | Live-race outcome | Test | File |
-|---|---|---|---|
-| Native | **Race refused** (`WorkflowActivationException`). Failed journal candidate; no live source reference; slot empty; artifact collected. | `Native_live_publish_sweeps_unreferenced_material_between_save_and_reference_mint` | `Essentials/tests/Workflows/Publishing/Persistence/EntityFrameworkCore/Tests/InterruptedPublicationGcTests.cs` |
-| Direct BPMN | **Race refused** (`BpmnModelValidationException` at the post-save material read-back). No live source reference; artifact collected. | `Bpmn_live_publish_sweeps_unreferenced_material_between_save_and_reference_mint` | `Essentials/tests/Activities/Bpmn/Tests/BpmnDirectExecutionTests.InterruptedPublicationGc.cs` |
+| Engine | Live-race outcome | Test | File | SHA |
+|---|---|---|---|---|
+| Native | **Race refused** (`WorkflowActivationException`). Failed journal candidate; no live source reference; slot empty; artifact collected. | `Native_live_publish_sweeps_unreferenced_material_between_save_and_reference_mint` | `Essentials/tests/Workflows/Publishing/Persistence/EntityFrameworkCore/Tests/InterruptedPublicationGcTests.cs` | `9a3c5fb7d0c93341fc1c8a31b4f4ebc6cb182f55` |
+| Direct BPMN | **Race refused** (`BpmnModelValidationException` at the post-save material read-back). No live source reference; artifact collected. | `Bpmn_live_publish_sweeps_unreferenced_material_between_save_and_reference_mint` | `Essentials/tests/Activities/Bpmn/Tests/BpmnDirectExecutionTests.InterruptedPublicationGc.cs` | `9a3c5fb7d0c93341fc1c8a31b4f4ebc6cb182f55` |
 
-**SHA:** recorded on the landing commit of this addendum (see git history of this file). Local run 2026-11-11: both tests passed on this tree.
+**SHA:** `9a3c5fb7d0c93341fc1c8a31b4f4ebc6cb182f55` (this addendum's test/docs commit). Local run 2026-11-11: both tests passed on that tree.
 
 Native `RunSequenceAsync` still mints without re-reading the artifact. The live sweep is refused earlier: `WorkflowExecutableRootWriteLeaseManager.ExecuteAsync` loads the closure (`LoadClosureAsync`) before the mint; a missing artifact becomes `WorkflowActivationException`. `PublicationActivator` then fails the journal candidate. That is a clean refusal, not a dangling reference.
 
