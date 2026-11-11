@@ -131,6 +131,45 @@ describe("Create dialog regression contract", () => {
     expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ name: "DbConnectionString", displayName: "DbConnectionString" }));
   });
 
+  it("associates compact name validation and guidance with the input and clears the error after recovery", () => {
+    const { container } = renderDialog("create");
+    const name = fieldControl<HTMLInputElement>(container, "Technical name");
+    change(name, "has spaces");
+    expect(name.getAttribute("aria-invalid")).toBe("true");
+    expect(document.getElementById(name.getAttribute("aria-describedby")!)?.textContent).toBe("Use letters, numbers, dot, dash, underscore, or colon.");
+    change(name, "valid.name");
+    expect(name.hasAttribute("aria-invalid")).toBe(false);
+    expect(document.getElementById(name.getAttribute("aria-describedby")!)?.textContent).toContain("Casing is preserved; names are matched case-insensitively.");
+  });
+
+  it("disables field editing while pending and restores the draft after a failed save", async () => {
+    let rejectSave!: (error: Error) => void;
+    const { container, onSave } = renderDialog("create");
+    onSave.mockImplementation(() => new Promise<void>((_resolve, reject) => { rejectSave = reject; }));
+    const name = fieldControl<HTMLInputElement>(container, "Technical name");
+    const value = fieldControl<HTMLInputElement>(container, "Value");
+    change(name, " DbConnectionString ");
+    change(value, "demonstration-value");
+    flushSync(() => container.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
+    expect(container.querySelector("form")?.getAttribute("aria-busy")).toBe("true");
+    expect(name.disabled).toBe(true);
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ name: "DbConnectionString", displayName: "DbConnectionString" }));
+    expect(value.disabled).toBe(true);
+    rejectSave(new Error("Demonstration failure"));
+    await waitFor(() => {
+      const alert = container.querySelector("[role='alert']");
+      expect(alert?.textContent).toBe("Demonstration failure");
+      expect(document.activeElement).toBe(alert);
+      expect(name.disabled).toBe(false);
+      expect(value.disabled).toBe(false);
+      expect(container.querySelector("form")?.getAttribute("aria-busy")).toBe("false");
+      expect(name.value).toBe("DbConnectionString");
+    });
+    expect(value.value).toBe("demonstration-value");
+    expect(name.value).toBe("DbConnectionString");
+    expect(container.querySelector("form")?.getAttribute("aria-busy")).toBe("false");
+  });
+
   it("uses descriptor defaults, gates submission on Value, and submits the exact default request without reading stored values", () => {
     const fetch = vi.fn();
     vi.stubGlobal("fetch", fetch);
@@ -224,7 +263,23 @@ describe("Create dialog regression contract", () => {
     });
   });
 
-  it("starts More options collapsed, keeps required fields and context direct, and counts only authored optional configuration", () => {
+  it("keeps the type description with Configuration key and the store description only with Store", () => {
+    const described: SecretDescriptorsResponse = {
+      ...configurableDescriptors,
+      types: configurableDescriptors.types.map(type => ({ ...type, description: "Fixture type description." })),
+      stores: configurableDescriptors.stores.map(store => ({ ...store, description: "Fixture store description." }))
+    };
+    const { container } = renderDialog("create", { descriptors: described });
+    const dialog = container.querySelector<HTMLElement>("[role='dialog']")!;
+    const key = fieldControl<HTMLInputElement>(dialog, "Configuration key");
+
+    expect(document.getElementById(key.getAttribute("aria-describedby")!)?.textContent).toBe("Fixture type description.");
+    const storeDescriptions = [...dialog.querySelectorAll("p")].filter(paragraph => paragraph.textContent === "Fixture store description.");
+    expect(storeDescriptions).toHaveLength(1);
+    expect(storeDescriptions[0].closest(".secrets-compact-field")?.contains(fieldControl<HTMLSelectElement>(dialog, "Store"))).toBe(true);
+  });
+
+  it("starts More options collapsed, keeps field context adjacent, and counts only authored optional configuration", () => {
     const { container } = renderDialog("create", { descriptors: scopeDescriptors });
     const dialog = container.querySelector<HTMLElement>("[role='dialog']")!;
     const options = moreOptionsButton(dialog);
@@ -247,9 +302,9 @@ describe("Create dialog regression contract", () => {
     expect(name.compareDocumentPosition(type) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(type.compareDocumentPosition(value) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(expires.parentElement?.textContent).toContain("Expires");
-    expect(textNodeOutside(dialog, "Store: Encrypted", body)).not.toBeNull();
+    expect(textNodeOutside(dialog, "Store: Encrypted", body)).toBeNull();
     expect(textNodeOutside(dialog, "Fixture type description.", body)).not.toBeNull();
-    expect(textNodeOutside(dialog, "Fixture store description.", body)).not.toBeNull();
+    expect(fieldControl<HTMLSelectElement>(dialog, "Store").closest(".secrets-compact-field")?.textContent).toContain("Fixture store description.");
 
     const scopeHint = [...dialog.querySelectorAll<HTMLParagraphElement>("p")].filter(paragraph => paragraph.textContent?.trim() === SECRET_SCOPE_MATCHING_HINT);
     expect(scopeHint).toHaveLength(1);

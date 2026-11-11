@@ -29,6 +29,7 @@ CAPTURES = {
     'feature filtering and settings dialogs': ['reference', 'features-server-no-matches', 'features-server-populated', 'features-studio-no-matches', 'features-studio-populated', 'feature-settings-dialog', 'feature-impact-dialog'],
     'collections and connection creation': ['reference', 'no-matches', 'connections-list', 'secret-create', 'secret-list', 'secret-detail', 'secret-duplicate', 'invalid-name', 'completed', 'library-initial'],
     'grouped navigation and moved destinations': ['reference', 'groups', 'executables-list', 'tags-list', 'tags-create', 'tags-edit', 'library', 'workflow-authoring-settings', 'runtime-settings', 'diagnostic-views', 'search', 'features-navigation', 'completed', 'top-search', 'top-search-no-match', 'top-search-no-match-dismissed', 'top-search-query-edited', 'top-search-query-returned', 'top-search-tab-dismissed', 'top-search-shift-tab-dismissed', 'top-navigation', 'high-contrast'],
+    'outlined Secret create journey': ['reference', 'secret-empty', 'secret-invalid', 'secret-filled', 'secret-options', 'secret-list', 'secret-reopened', 'secret-cancelled'],
     'publication blockers explain how to correct agent settings': ['reference', 'blocked', 'instructions-focused', 'model-blocked', 'model-focused', 'completed'],
     'save template toast': ['reference', 'save-form', 'saved-toast', 'template-list', 'reopened-template'],
     'workflow template metadata defaults': ['reference', 'template-defaults', 'template-edits', 'template-catalog-entry', 'template-persisted'],

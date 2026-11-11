@@ -38,9 +38,9 @@ class VerdictTests(unittest.TestCase):
     def test_inventory_adds_bounded_supplementary_cases(self):
         standard = {journey for journey, projects in acceptance.JOURNEY_PROJECTS.items() if projects == acceptance.PROJECTS}
         supplements = acceptance.JOURNEYS - standard
-        self.assertEqual(12, len(standard))
+        self.assertEqual(13, len(standard))
         self.assertEqual(set(acceptance.SUPPLEMENT_PROJECTS), supplements)
-        self.assertEqual(72, sum(len(acceptance.JOURNEY_PROJECTS[journey]) for journey in standard))
+        self.assertEqual(78, sum(len(acceptance.JOURNEY_PROJECTS[journey]) for journey in standard))
         self.assertEqual(10, sum(len(acceptance.JOURNEY_PROJECTS[journey]) for journey in supplements))
         self.assertEqual({f'touch-{width}-{mode}' for width in (360, 390, 1440) for mode in ('light', 'dark')},
                          acceptance.JOURNEY_PROJECTS['coarse pointer grouped navigation'])
