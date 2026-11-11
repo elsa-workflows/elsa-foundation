@@ -3,11 +3,11 @@
 **Status**: M4 sample, FR-007–FR-008/US2, Program A4/A5/A14. The product contract is [human review](human-review.md).
 This example precedes M6 reusable [team patterns](teams.md) and protected tool approval.
 
-**Owner clarification (2 Nov 2026):** specialists are user-defined agents. Authors define them through Studio or
+**Owner clarification (2 Nov 2026):** agents are user-defined. Authors define them through Studio or
 configuration, in the spirit of Azure AI Foundry agents. Copywriter and Proofreader are only an example of what a
 user might define. The product therefore ships no editorial-specific activity, permission, endpoint or page. It
 ships a generic native `HumanReview` wait for any content, typically an agent's output, plus its permission-gated
-decision path. The revision loop below is a sample, built from user-authored specialists and ordinary control flow;
+decision path. The revision loop below is a sample, built from user-authored agents and ordinary control flow;
 any routing helper it uses is sample code. The sections below keep their editorial wording as the sample's
 acceptance scenario. Read "article" as the reviewed content, and "round/article hash" as the content hash of the
 exact pinned wait.
@@ -17,12 +17,12 @@ exact pinned wait.
 Copywriter accepts Brief and optional PreviousArticle/ReviewComments, returning article.
 Proofreader accepts Article, returning verdict (`approved` or `changes_requested`) and comments.
 Publish exact contracts/versions; native Sequence/Flowchart and BPMN bind the same activities and ports.
-Ordinary Elsa control flow owns the loop. No model prose, hidden session or specialist runtime chooses
+Ordinary Elsa control flow owns the loop. No model prose, hidden session or agent runtime chooses
 the next branch.
 
 Round1 writes from Brief. A changes_requested verdict passes that round's accepted article and comments
 back to Copywriter. The next review receives only the new accepted article. MaxRounds3 includes the
-initial attempt: at most two rewrites, six specialist calls. Check remaining budget/deadline before
+initial attempt: at most two rewrites, six agent calls. Check remaining budget/deadline before
 each call; no inferred budget reset per rewrite. At the third rejection, take an explicit Exhausted
 process branch with the latest article/review available to a permitted person; do not report approval.
 Invalid reviewer output faults before routing. Cancellation, model failure and unknown outcome retain
@@ -37,7 +37,7 @@ new model turn. An author may later start a distinct, explicitly requested revis
 
 ## Required implementation receipts
 
-In M4 the native and BPMN runs are composed executables over really published specialists, and the BPMN form also
+In M4 the native and BPMN runs are composed executables over really published agents, and the BPMN form also
 crosses export, an import that refuses unbound work, and a rebinding compiled through the BPMN structure handler. Saving, reloading and publishing the
 process as a workflow definition is proved in M5 (T036). Binding-preserving interchange (T063) replaces that rebinding in M5:
 export carries each task's exact version and literal inputs, import proposes them, and the author's confirmation binds them. Both forms must force one rejected model review, carry the

@@ -1,4 +1,4 @@
-# Specification Quality Checklist: Specialist agents
+# Specification Quality Checklist: Agents
 
 **Purpose**: Review product completeness before implementation planning.
 **Created**: 2026-10-31

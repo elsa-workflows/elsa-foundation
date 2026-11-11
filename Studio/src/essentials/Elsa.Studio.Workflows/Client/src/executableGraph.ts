@@ -62,6 +62,10 @@ export function buildExecutableActivityGraph(
   const catalogByType = new Map<string, ActivityCatalogItem[]>();
   for (const item of catalog) {
     catalogByType.set(item.activityTypeKey, [...(catalogByType.get(item.activityTypeKey) ?? []), item]);
+    // A CLR activity that declares a runtime type (e.g. Elsa.HttpEndpoint) stamps that type on its nodes, not its catalog key.
+    if (item.runtimeActivityType && item.runtimeActivityType !== item.activityTypeKey) {
+      catalogByType.set(item.runtimeActivityType, [...(catalogByType.get(item.runtimeActivityType) ?? []), item]);
+    }
     // Compiled intrinsics use engine identities, while the catalog uses friendly activity type keys.
     const intrinsic = readIntrinsicDescriptor(item);
     if (intrinsic) {

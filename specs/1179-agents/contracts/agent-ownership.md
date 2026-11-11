@@ -38,7 +38,7 @@ Inspection links source revision/release to publication/native identities and le
 
 ## Pre-GA breaking delivery
 
-Use the [reset boundary](revision-management.md#pre-ga-reset-boundary). No legacy ID association, import/backfill, mixed-schema writer transfer, old codec/API aliases or cross-break rollback support is required. Implementation may cleanly rename Specialist identifiers to Agent while updating providers/consumers together. Keep the pinned `Elsa.Agent` root. Existing demo stores are untouched by this delivery.
+Use the [reset boundary](revision-management.md#pre-ga-reset-boundary). No legacy ID association, import/backfill, mixed-schema writer transfer, old codec/API aliases or cross-break rollback support is required. The Specialist identifiers were renamed to Agent under [#4027](https://github.com/elsa-workflows/elsa-foundation/issues/4027), with providers and consumers updated together. Keep the pinned `Elsa.Agent` root. Existing demo stores are untouched by this delivery.
 
 A future delivery records reset scope, host stop/drain, incompatible-binary exclusion, coordinated schema/package initialization and explicit source recreation/republish. No automatic reset on publication or startup failure is allowed. Normal immutable-binding, scope and crash/replay guarantees continue for all material admitted by the new deployment.
 

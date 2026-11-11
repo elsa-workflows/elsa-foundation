@@ -8,7 +8,7 @@
 
 ## Summary
 
-Implement specialists inside the existing `Elsa.Agent` domain, separately from Weaver. Own typed Agent content over shared Workflow/Agent revision mechanics and derive read-only activity publications through the existing provider and shared publication boundaries. Reuse native/BPMN execution. MAF executes admitted model turns; existing Elsa background work owns delivery; a specialist journal owns scoped conversation acceptance. Module-owned Studio routes provide discovery, playground, evaluation and inspection. Implementation is staged; the source slice below does not deliver the later publication, Studio or runtime witnesses.
+Implement agents inside the existing `Elsa.Agent` domain, separately from Weaver. Own typed Agent content over shared Workflow/Agent revision mechanics and derive read-only activity publications through the existing provider and shared publication boundaries. Reuse native/BPMN execution. MAF executes admitted model turns; existing Elsa background work owns delivery; an agent journal owns scoped conversation acceptance. Module-owned Studio routes provide discovery, playground, evaluation and inspection. Implementation is staged; the source slice below does not deliver the later publication, Studio or runtime witnesses.
 
 ## Technical Context
 
@@ -28,13 +28,13 @@ Implement specialists inside the existing `Elsa.Agent` domain, separately from W
 
 **Constraints**: Artifact-only execution; one checkpoint/effect owner; exact trusted tenant/owner/version scope; no credentials/private reasoning in observable evidence; retained codecs/readers for admitted artifacts; one implementation leaf plus review lane.
 
-**Scale/Scope**: Specialists and sequential/concurrent-cohort/bounded-refinement teams; finite A1–A15. No free-form team graph, mandatory cloud control plane, arbitrary SDK-object persistence or replacement of Weaver's single assistant harness.
+**Scale/Scope**: Agents and sequential/concurrent-cohort/bounded-refinement teams; finite A1–A15. No free-form team graph, mandatory cloud control plane, arbitrary SDK-object persistence or replacement of Weaver's single assistant harness.
 
 ## Constitution Check
 
 | Gate | Design disposition |
 |---|---|
-| Framework §2.1/§2.2; Elsa §E2.1 | Use `Elsa.Agent.Specialists` beneath pinned `Elsa.Agent`, never a new `Elsa.Agents` root. Core has contracts/models/lightweight dependencies; SDK/EF logic stays in features |
+| Framework §2.1/§2.2; Elsa §E2.1 | Agent packages sit directly beneath the pinned `Elsa.Agent` root (`Elsa.Agent` and `Elsa.Agent.*`), never a new `Elsa.Agents` root. Core has contracts/models/lightweight dependencies; SDK/EF logic stays in features |
 | Framework §2.6/§2.7/§2.20 | Consume cross-domain Core ports and existing named contribution/outbox seams. No empty umbrella or unrelated concrete-feature dependency |
 | Elsa §E2.2/§E2.6 | Execute immutable artifacts. Resolve BPMN's existing Design.Core coupling; preserve Design-only/runtime-only/combined shapes |
 | Framework §2.9/§2.10 | CQS persistence, scoped CAS, consumer-owned DbContext and domain-wrapped infrastructure failures |
@@ -57,7 +57,7 @@ Agent source owns stable typed input/result keys, names, null/default/required b
 
 ### D3 — Durable model connections
 
-Deliver durable Connections metadata before relying on restart; Secrets EF alone is insufficient. Add model type/capability contributions, resolve grants/credentials at point of use and validate saved settings against an identified capability snapshot. Unknown options are not supported. First specialist provider: official Anthropic IChatClient; second: Azure OpenAI through MAF, separately qualified. Concrete provider leaves implement specialist Core contributions; the runtime never references them. A few duplicated SDK factory lines are preferable to depending on Weaver's concrete provider feature or enabling its harness. Weaver Anthropic/Copilot remain regression targets; no multiple assistant harnesses are enabled.
+Deliver durable Connections metadata before relying on restart; Secrets EF alone is insufficient. Add model type/capability contributions, resolve grants/credentials at point of use and validate saved settings against an identified capability snapshot. Unknown options are not supported. First agent provider: official Anthropic IChatClient; second: Azure OpenAI through MAF, separately qualified. Concrete provider leaves implement agent Core contributions; the runtime never references them. A few duplicated SDK factory lines are preferable to depending on Weaver's concrete provider feature or enabling its harness. Weaver Anthropic/Copilot remain regression targets; no multiple assistant harnesses are enabled.
 
 ### D4 — Native facade and background turn leaf
 
@@ -65,7 +65,7 @@ A native facade stages the exact scoped turn and schedules an existing backgroun
 
 ### D5 — Conversation journal
 
-The specialist journal owns scoped turn CAS/lease fencing and atomic accepted session/result/usage/receipt. Stable OperationKey deduplicates logical work; matching replays return the original result without rewinding a newer conversation revision. Persist the provider-dispatch marker before the request. Expiry after dispatch does not authorize a new request: expose OutcomeUnknown unless an authoritative provider continuation/idempotency capability resolves it. Fresh is default; continuity is explicit and exact-version-bound. A different version creates a fresh conversation; history migration is not implicit. [Data model](data-model.md).
+The agent journal owns scoped turn CAS/lease fencing and atomic accepted session/result/usage/receipt. Stable OperationKey deduplicates logical work; matching replays return the original result without rewinding a newer conversation revision. Persist the provider-dispatch marker before the request. Expiry after dispatch does not authorize a new request: expose OutcomeUnknown unless an authoritative provider continuation/idempotency capability resolves it. Fresh is default; continuity is explicit and exact-version-bound. A different version creates a fresh conversation; history migration is not implicit. [Data model](data-model.md).
 
 ### D6 — Separate turn acceptance and process application
 
@@ -83,7 +83,7 @@ Separate model turns, human approval waits and protected effects into native ope
 
 The Agent module owns `/agents` discovery, authoring/public-contract editing, source revision/conflict/history and publication-intent APIs/permissions. Reuse existing UI controls and shared publication preflight/receipt mechanics through adapters without exposing a generic activity definition as the editable source. Generic activity pages recognize read-only Agent projections and navigate to the source. Playground/evaluation/inspection use exact candidate/version identity and the existing runtime path; internal model-turn handles remain diagnostic references. No compatibility-route transfer is required. Draft controls use shared revision callbacks through the Agent adapter. [Studio contract](contracts/studio.md).
 
-### D10 — Configuration-defined specialists
+### D10 — Configuration-defined agents
 
 Configuration and Studio authoring produce the same immutable Agent candidate/public contract, with explicit source ownership. Configuration versions are operator-declared and read-only in Studio; authorized copy/fork creates a new Agent source. One invalid source entry yields a scoped actionable diagnostic while other entries reconcile. Same-version/different-content remains a conflict.
 
@@ -93,7 +93,7 @@ The shared source-owned publication bridge must be extended beyond its current s
 
 Select mutable working copies plus immutable boundary snapshots, extracting a small reusable capability from current Elsa mechanics. Compare Orchard Core/Aster in [research R10](research.md#r10--shared-revision-management-orchard-core-and-aster); adopting their full content/resource model is outside this unit. Review real Workflow/Agent adapters and reusable-activity fit before API/package freeze. Reconcile owning Workflow/activity specs in the separately authorized delivery unit.
 
-Agent is canonical; keep the pinned `Elsa.Agent` root. Pre-GA implementation may rename Specialist code/API/package/schema identifiers without shims, old readers or import/backfill. Planned store recreation needs a declared scope, stopped/drained hosts, incompatible-profile rejection, clean initialization and explicit source recreation/republish. Ordinary artifact, scope, retention-pin and crash/replay guarantees remain within the admitted deployment. W1–W8 qualify the new model; this draft changes no live stores.
+Agent is canonical; keep the pinned `Elsa.Agent` root. Pre-GA implementation may rename code/API/package/schema identifiers without shims, old readers or import/backfill, as the Specialist-to-Agent rename under [#4027](https://github.com/elsa-workflows/elsa-foundation/issues/4027) did. Planned store recreation needs a declared scope, stopped/drained hosts, incompatible-profile rejection, clean initialization and explicit source recreation/republish. Ordinary artifact, scope, retention-pin and crash/replay guarantees remain within the admitted deployment. W1–W8 qualify the new model; this draft changes no live stores.
 
 ## Project Structure
 
@@ -107,20 +107,20 @@ Agent is canonical; keep the pinned `Elsa.Agent` root. Pre-GA implementation may
 
 | Path | Responsibility |
 |---|---|
-| Extensions/Agent/src/Specialists/Core/ | Elsa.Agent.Specialists.Core contracts/descriptors |
-| Extensions/Agent/src/Specialists/Design/ | Provider, schema/contract validation and compiler |
-| Extensions/Agent/src/Specialists/Elsa.Agent.Specialists/ | Runtime facade/worker/journal orchestration and sole concrete MAF integration |
-| Extensions/Agent/src/Specialists/Anthropic/ and AzureOpenAI/ | Actual model connection/client/capability contributors, not a new assistant harness |
-| Extensions/Agent/src/Specialists/Persistence/EntityFrameworkCore/ | Real conversation/turn/evaluation persistence |
-| Extensions/Agent/src/Specialists/Api/ | Authoring reads, kept composable without the runtime |
-| Extensions/Agent/src/Specialists/Inspection/Api/ | Playground/evaluation/inspection evidence endpoints over the runtime and generic draft Test Runs, a separate project so authoring and runtime composition stay deliberate |
-| Extensions/Agent/studio/Elsa.Studio.Agent.Specialists/ | Module-owned Studio surfaces |
-| Extensions/Agent/tests/Specialists/ | Behavior/provider/host/recovery tests |
+| Extensions/Agent/src/Core/ | Elsa.Agent.Core contracts/descriptors |
+| Extensions/Agent/src/Design/ | Provider, schema/contract validation and compiler |
+| Extensions/Agent/src/Elsa.Agent/ | Runtime facade/worker/journal orchestration and sole concrete MAF integration |
+| Extensions/Agent/src/Anthropic/ and AzureOpenAI/ | Actual model connection/client/capability contributors, not a new assistant harness |
+| Extensions/Agent/src/Persistence/EntityFrameworkCore/ | Real conversation/turn/evaluation persistence |
+| Extensions/Agent/src/Api/ | Authoring reads, kept composable without the runtime |
+| Extensions/Agent/src/Inspection/Api/ | Playground/evaluation/inspection evidence endpoints over the runtime and generic draft Test Runs, a separate project so authoring and runtime composition stay deliberate |
+| Extensions/Agent/studio/Elsa.Studio.Agent/ | Module-owned Studio surfaces |
+| Extensions/Agent/tests/ | Behavior/provider/host/recovery tests |
 | Essentials/src/Connections/Persistence/EntityFrameworkCore/ | Existing repository's durable implementation |
 | Essentials/src/Activities/Bpmn/Core/ and Design/ | Actual runtime/authoring package separation |
 | tools/agents/conformance/ | Independent packaged qualification |
 
-Shared revision storage and coordinator placement follow the owning Core/persistence boundary demonstrated by Workflow and Agent adapters, not a new eagerly created project tree. The paths above describe current implementation inputs; Specialist naming need not survive a pre-GA clean break.
+Shared revision storage and coordinator placement follow the owning Core/persistence boundary demonstrated by Workflow and Agent adapters, not a new eagerly created project tree. The paths above describe current implementation inputs under the Agent names that replaced the Specialist ones in [#4027](https://github.com/elsa-workflows/elsa-foundation/issues/4027).
 
 No empty adapter hierarchy: extract a MAF provider package only when optional composition or another real implementation warrants it. A focused JsonSchema helper may earn a lightweight identity if Design and Runtime cannot share validation without an unlawful feature reference; name its actual consumers/dependency boundary. EF/API projects appear with real logic, not placeholders.
 
@@ -135,7 +135,7 @@ Each leaf owns code, meaningful tests, catalogs/APIs/locks, host proof and revie
 | Choice | Why needed | Alternative rejected |
 |---|---|---|
 | Shared revision capability | Workflow and Agent need the same CAS/snapshot/history/retention mechanics | A third independently versioned Agent subsystem |
-| Specialist Core/Design/runtime | Real package boundary and runtime-only deployment | Mixed package repeats BPMN coupling |
+| Agent Core/Design/runtime | Real package boundary and runtime-only deployment | Mixed package repeats BPMN coupling |
 | Facade + background leaf | Protected result transport and approval suspension are unsupported in one background leaf | Blocking actor or inventing another scheduler |
 | Conversation journal + native receipts | Cross-workflow CAS and accepted session/result are absent today | Process-local Weaver state or false cross-store atomicity |
 | BPMN Core + Design | Shared graph vocabulary needs independent deployment | Design coupled to concrete runtime |
@@ -154,7 +154,7 @@ The provider-neutral `Elsa.Persistence.Core` owns only source scope, working-cop
 
 Workflow keeps definition metadata, its domain commands, locks, operation replay, validation and separate layout rows. Draft source content now lives once in the shared row; `StateSource` is an unmapped domain view. Existing whole-draft last-writer-wins submission semantics in spec 003 remain: the command stages CAS against the revision read under its existing lock. This does not add a client expected-revision field to Workflow editing. Capture/history use exact shared snapshots and preserve case-insensitive Workflow definition lookup. Workflow discard retires its shared copy while retaining snapshots/pins. Initial collection requires a retired copy with no pins: active-copy snapshots retain operation replay identity, and a retired copy cannot recapture a collected ID. Activity-upgrade commands stage shared source CAS in their existing atomic transaction.
 
-Agent source content/permissions remain Agent-owned. `EfAgentSources<TContext>` composes the same engine in an ordinary consumer-owned context. The `/agent/definitions` API exposes unpublished typed copies, bounded discovery/history, expected-revision save, capture, fork and discard. Trusted scope comes from the host accessor, never JSON. The initial Agent policy permits one copy per source; Workflow retains multiple copies. `AgentSourcesEntityFrameworkCore` provides authoring storage without `SpecialistsRuntime`; the existing journal persistence composition also installs the source ports.
+Agent source content/permissions remain Agent-owned. `EfAgentSources<TContext>` composes the same engine in an ordinary consumer-owned context. The `/agent/definitions` API exposes unpublished typed copies, bounded discovery/history, expected-revision save, capture, fork and discard. Trusted scope comes from the host accessor, never JSON. The initial Agent policy permits one copy per source; Workflow retains multiple copies. `AgentSourcesEntityFrameworkCore` provides authoring storage without `AgentRuntime`; the existing journal persistence composition also installs the source ports.
 
 Reusable-activity authoring was assessed as the third existing consumer: its typed state, `Revision` CAS, provider authority fence and atomic Design/publication mutations fit the shared save/capture responsibilities. Replacing that store now would also replace its publication state machine and violate this leaf's T066 boundary. It therefore remains the graph-backed Activity authoring owner; generated Agent publications remain read-only through its existing provider-source guard. An independent typed test consumer exercises the new neutral ports before their surface is frozen.
 
@@ -162,7 +162,7 @@ Temporary boundary: the existing activity-backed Agent editor/provider publicati
 
 ### Breaking deployment boundary
 
-Affected stores are Workflow Design (`elsa_workflow_sources_*`, changed Workflow draft payload mapping) and Specialists (`elsa_agent_sources_*` beside unchanged turn/conversation/operation rows). Four-provider incremental migration artifacts preserve the existing chains, including #2898's retained Workflow history. Dropping the old draft payload column is intentionally breaking: no backfill or mixed-profile writer support is supplied. Do not apply this delivery to populated running stores. A coordinated T067 deployment must stop affected authoring/combined hosts, exclude old binaries, recreate the affected owned databases, initialize all composing modules, recreate source and explicitly republish before readiness. If stores share a database, inventory all modules in that database before recreation. Runtime/checkpoint/hosting/ETL schemas and #2892's lane are not changed by this slice. This delivery performs no live reset, host restart or migration execution against a demo store.
+Affected stores are Workflow Design (`elsa_workflow_sources_*`, changed Workflow draft payload mapping) and Agents (`elsa_agent_sources_*` beside unchanged turn/conversation/operation rows). Four-provider incremental migration artifacts preserve the existing chains, including #2898's retained Workflow history. Dropping the old draft payload column is intentionally breaking: no backfill or mixed-profile writer support is supplied. Do not apply this delivery to populated running stores. A coordinated T067 deployment must stop affected authoring/combined hosts, exclude old binaries, recreate the affected owned databases, initialize all composing modules, recreate source and explicitly republish before readiness. If stores share a database, inventory all modules in that database before recreation. Runtime/checkpoint/hosting/ETL schemas and #2892's lane are not changed by this slice. This delivery performs no live reset, host restart or migration execution against a demo store.
 
 
 ## T066 shared Publishing contracts (independent preparation)
@@ -175,7 +175,7 @@ This slice prepares T066 under [ADR 0094](../../docs/adr/0094-agent-definitions-
 
 The source-reader increment exposes one metadata-only Agent directory entry per source identity, including identities whose draft was discarded. It prefers an active copy for navigation and uses a stable retained copy when none is active; this representative is neither a selected source revision nor a publication claim. Shared source-scoped history and exact snapshot reads span retained and replacement copies, return the original copy identity, and verify both source-copy and snapshot schema/content identity. Snapshot ordering is stable by identity; copy-local CAS revisions are not presented as a global chronological sequence. SQL Server's padded equality is handled by consistent non-space-terminated source comparisons before count, selection and pagination, preserving case and valid trailing-space identities.
 
-The Agent-owned `elsa.api.agent-definitions` v1 capability declares directory and retained-revision reads. The existing specialist capability declares model discovery only. No release/publication link is advertised before its endpoint is delivered. Reads use Agent permissions and trusted selected source scope; generated activity authority, mutable source behavior and schema storage are unchanged. This isolated increment is extracted from the preserved local candidate without its operation/reservation/Runtime infrastructure. It adds no migration or live reset. Qualification and independent review are pending at this source checkpoint; historical candidate receipts do not certify this extracted head. T066–T071 and complete W1–W8 remain open, including Runtime-owned preparation retention and actual composed Studio/OpenAI acceptance.
+The Agent-owned `elsa.api.agent-definitions` v1 capability declares directory and retained-revision reads. The existing `elsa.api.agent` capability declares model discovery only. No release/publication link is advertised before its endpoint is delivered. Reads use Agent permissions and trusted selected source scope; generated activity authority, mutable source behavior and schema storage are unchanged. This isolated increment is extracted from the preserved local candidate without its operation/reservation/Runtime infrastructure. It adds no migration or live reset. Qualification and independent review are pending at this source checkpoint; historical candidate receipts do not certify this extracted head. T066–T071 and complete W1–W8 remain open, including Runtime-owned preparation retention and actual composed Studio/OpenAI acceptance.
 
 Independent source-read review round 1 at `53a46ebf0` found a consequential SQL Server authority edge: the scope hash deliberately excludes authority, while raw padded SQL equality could admit a foreign authority before history/directory count and paging. The correction applies exact terminated authority comparison in the existing shared scoped query, without changing identity hashes or schema. The native witness includes a padded foreign authority with its own copy/snapshot, exact-read exclusion, owned count/paging and directory-search exclusion. Causal native execution and fresh whole-project qualification remain pending; no historical result is relabelled as proof of this correction.
 

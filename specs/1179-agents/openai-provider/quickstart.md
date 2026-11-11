@@ -1,6 +1,6 @@
 # Try a direct OpenAI agent in Studio
 
-Run a Workbench containing `Elsa.Agent.Specialists.OpenAI` and enable `OpenAISpecialists`.
+Run a Workbench containing `Elsa.Agent.OpenAI` and enable `OpenAIAgents`.
 The stock Workbench includes that provider; a custom host also adds its assembly to feature discovery.
 For connections that survive restart, select `ConnectionsEntityFrameworkCore` with the host's database;
 Workbench makes that feature available without selecting it by default. Use Secrets persistence and a
@@ -19,7 +19,7 @@ In Connections, create a connection with these values. The provider's capability
 |---|---|
 | Name | `openai-demo` |
 | Display name | OpenAI demo — GPT-4.1 mini |
-| Type | `specialist-openai` |
+| Type | `agent-openai` |
 | Authentication | `api-key` |
 | HTTPS endpoint | `https://api.openai.com` |
 | Allowed hosts | `api.openai.com` |

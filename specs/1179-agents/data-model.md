@@ -38,12 +38,12 @@ The generated provider manifest is derived publication input, not another editor
 
 | Record | Identity and principal fields | Invariants |
 |---|---|---|
-| SpecialistConversation | Opaque ID; exact tenant + trusted owner/run-as + specialist version; revision; active operation/generation; accepted session codec/reference; retention policy | No caller-authored tenant/owner authority; one admitted turn at a revision; version changes create a fresh conversation |
-| SpecialistTurn | Stable logical OperationKey; canonical request fingerprint; conversation/base revision; admission generation; lease/fence/expiry; immutable artifact/source invocation; protected input/session references; dispatch marker/provider continuation identity; state | Same operation + same fingerprint replays; changed arguments conflict; lease expiry after dispatch never permits a blind provider request |
+| AgentConversation | Opaque ID; exact tenant + trusted owner/run-as + agent version; revision; active operation/generation; accepted session codec/reference; retention policy | No caller-authored tenant/owner authority; one admitted turn at a revision; version changes create a fresh conversation |
+| AgentTurn | Stable logical OperationKey; canonical request fingerprint; conversation/base revision; admission generation; lease/fence/expiry; immutable artifact/source invocation; protected input/session references; dispatch marker/provider continuation identity; state | Same operation + same fingerprint replays; changed arguments conflict; lease expiry after dispatch never permits a blind provider request |
 | AcceptedTurn | Exact operation/generation and receipt ID/hash; validated result; accepted SDK session; usage status; model/capability/resource references; accepted revision/time | Result/session/usage/receipt and conversation revision advance in one journal transaction; immutable accepted content |
 | TurnDelivery | Exact workflow/artifact/parent invocation/child work association; accepted receipt; native source commit/intent; process application/cancellation disposition | Delivery facts do not rewrite accepted conversation history; duplicate/conflicting notifications are explicitly reconciled |
 | CancellationTombstone | Exact scope + logical operation + admission generation/source; canonical cancellation intent; settlement status | Exists even before admission; never targets whichever newer operation currently occupies a conversation |
-| EvaluationSet/Case | Tenant/owner, specialist definition, revision; named input and explicit assertions/rubrics | Case content is versioned; no credentials; source/permission checks before execution |
+| EvaluationSet/Case | Tenant/owner, agent definition, revision; named input and explicit assertions/rubrics | Case content is versioned; no credentials; source/permission checks before execution |
 | EvaluationRun/CaseResult | Exact candidate/version/hash and set revision; runtime execution/turn references; observed results/usage/status | Repeatable identity, no overwriting earlier evidence, distinct contract/quality/incomplete outcomes |
 | ModelCapabilitySnapshot | Connection type/provider/model, revision/hash and observed/configured source; supported modes/options/ranges/limits | Unknown is distinct from supported; no secret values; snapshot is evidence, not a future service guarantee |
 
@@ -88,8 +88,8 @@ it does not convert the uncertain operation to failed-with-no-effect.
 
 ```mermaid
 sequenceDiagram
-    participant F as Native specialist facade
-    participant J as Specialist journal
+    participant F as Native agent facade
+    participant J as Agent journal
     participant R as Elsa checkpoint/background work
     participant W as Background-safe MAF leaf
     participant M as Model provider
@@ -132,7 +132,7 @@ The [revision contract](contracts/revision-management.md) owns shared snapshot/c
 
 | Boundary | Atomic facts | Crash/retry behavior |
 |---|---|---|
-| Generic publication | Existing ordered runtime/design/receipt guarantees | Reuse its review/idempotency protocol; no specialist write side effect |
+| Generic publication | Existing ordered runtime/design/receipt guarantees | Reuse its review/idempotency protocol; no agent write side effect |
 | Journal staging/admission | Exact request/operation, scope/revision reservation and journal fence | Matching retry resumes/replays; different fingerprint conflicts |
 | Journal acceptance | Validated result, accepted SDK session, usage/receipt and conversation revision | Return accepted result without another model request |
 | Native background checkpoint | Fenced worker receipt acceptance, activity/process changes and outbox responsibility | Existing runtime replay/fencing owns delivery |
@@ -161,7 +161,7 @@ unaccepted session. Clients can inspect process-application disposition separate
 ## Protection, retention and compatibility
 
 Use the existing Secrets Core protection/key-ring boundary for journal payloads, wrapping infrastructure
-failures as specialist-domain failures. Protected content includes a canonical scope/type/codec envelope
+failures as agent-domain failures. Protected content includes a canonical scope/type/codec envelope
 that is checked after unprotection; ciphertext relocation cannot become another tenant's session.
 Use durable configured keys in durable hosts; missing/retired keys must not silently create fresh history.
 No raw key, credential, private reasoning or unredacted SDK object enters observable execution evidence.
@@ -173,7 +173,7 @@ tombstone for at least the associated execution/recovery retention window. A pur
 produces an explicit unavailable/retained-marker outcome; it never authorizes a new model call for an
 old OperationKey. Administrative deletion is authorized/audited and reconciles active work first.
 
-Pin specialist version, adapter identity, session format/version and resource observations. Retain old
+Pin agent version, adapter identity, session format/version and resource observations. Retain old
 artifact/session/receipt readers and required keys during supported upgrades/disable operations.
 Disable new admission independently of in-flight workers/readers. Schema/key/codec migration is explicit;
 rollback cannot read a newer format unless that compatibility is qualified. [Support contract](contracts/support.md).
@@ -189,7 +189,7 @@ Observe accepted journal/session revisions and native parent completion/effect c
 ## M3 implementation boundary: workflow-owned conversation admission
 
 Draft PR #3594 adds a conversation row to the existing turn journal, with the same scoped backend
-selection. The first owner profile derives tenant, partition, workflow execution and exact specialist
+selection. The first owner profile derives tenant, partition, workflow execution and exact agent
 version/template from verified native provenance. It does not infer a user principal or grant
 cross-workflow access. Claim reserves the expected revision and fence in the same transaction as the
 turn claim. Acceptance advances one revision and points at the immutable accepted turn receipt;
@@ -198,7 +198,7 @@ release the revision; unknown outcomes retain the active reference and block con
 an older accepted turn returns its original receipt without changing current conversation state.
 
 **M5 second owner profile (T032): the playground's draft candidate workspace.** Each playground run is its own
-workflow execution, so the workflow-owned profile cannot span runs. The root specialist of an activity draft Test Run
+workflow execution, so the workflow-owned profile cannot span runs. The root agent of an activity draft Test Run
 gets a different owner: one whose runtime-pinned source has kind `ActivityDraftTestRun` under run kind `TestRun`. That
 owner replaces the workflow execution with the workspace `activity-draft:{draftId}`. It still binds the tenant, the
 partition, the exact candidate version (one per saved draft revision) and the template hash.
@@ -252,14 +252,14 @@ settlement or tombstone/retention policy. The later application increment is des
 
 ### Implemented native application settlement increment (T021 remains open)
 
-A completed specialist facade contributes `elsa.specialist.applied/1` in its native checkpoint.
+A completed agent facade contributes `elsa.agent.applied/1` in its native checkpoint.
 Final enrichment validation requires the exact deterministic responsibility. The handler requires a
 physically committed ordinary-scope outbox source, current delivery claim, canonical payload, matching
 completed native parent/child/artifact and authenticated accepted receipt. It rechecks the physical
 claim after receipt reads and before the metadata-only journal write. Source context alone and an
 overlay/intent-only read are insufficient.
 
-`SpecialistTurnApplication` records identity, child, native completion time and source ID/fingerprint.
+`AgentTurnApplication` records identity, child, native completion time and source ID/fingerprint.
 The optional copied Applications collection is bounded to64 exact native deliveries, including the
 original legacy delivery. Equivalent notifications are idempotent; source conflicts refuse. Accepted
 request/result/session, budget/usage and conversation ownership/revision are unchanged. No relational
@@ -268,7 +268,7 @@ retention and complete durable runtime/outbox package qualification remain open.
 
 ### Implemented cancellation/operation-gate increment (M3 remains open)
 
-`elsa_specialist_operations` retains full logical pins and up to64 exact-parent cancellation decisions,
+`elsa_agent_operations` retains full logical pins and up to64 exact-parent cancellation decisions,
 including pre-admission tombstones with no fake protected turn. Memory uses its existing lock; EF Stage,
 Claim and Cancel serialize on this row before changing the turn. Confirmed gate CAS/insert conflicts can
 retry; an uncertain commit cannot. Turn CAS decides acceptance versus cancellation. A cancelled old

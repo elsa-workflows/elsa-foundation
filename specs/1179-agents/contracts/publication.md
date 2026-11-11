@@ -1,13 +1,13 @@
-# Specialist authoring and publication contract
+# Agent authoring and publication contract
 
 **Status**: Draft ownership amendment under [ADR 0094](../../../docs/adr/0094-agent-definitions-own-authored-content-and-providers-publish-activities.md); design-only for human review. Proposed public signatures still require independent consumer proof.
-Owning requirements: FR-001–FR-009, FR-021, FR-023, FR-027 and Program A1–A5/A12–A13. Configuration-defined specialists ([plan D10](../plan.md#d10--configuration-defined-specialists)) are source-owned versions compiled through the same provider compiler and preflight.
+Owning requirements: FR-001–FR-009, FR-021, FR-023, FR-027 and Program A1–A5/A12–A13. Configuration-defined agents ([plan D10](../plan.md#d10--configuration-defined-agents)) are source-owned versions compiled through the same provider compiler and preflight.
 
 ## Resource and provider identity
 
 Agent owns typed content over the shared source/working-copy/snapshot capability. A candidate is an exact revision referenced by a shared publication operation. The [revision contract](revision-management.md) defines common mechanics, Workflow/Agent mapping and recovery; [Agent ownership](agent-ownership.md) defines permissions and projections. The provider derives source-owned, read-only activity publications using the existing catalog/template system. Agent-facing CRUD/permissions own source; generic activity writes cannot bypass that owner. No second activity catalog or publication engine is introduced.
 
-Pre-GA implementation may cleanly rename `elsa.specialist` and related provider/consumer/schema identities with coordinated store recreation; old-format aliases/readers are not required. Display-name changes never change identity or bindings. A new Agent version has one primary activity projection with the same user-facing version, while each representation retains its own content/provenance hash. Teams receive their own provider/schema only through their reviewed composition contract.
+Pre-GA implementation may cleanly rename provider/consumer/schema identities with coordinated store recreation; old-format aliases/readers are not required. `elsa.specialist` became `elsa.agent` this way under [#4027](https://github.com/elsa-workflows/elsa-foundation/issues/4027). Display-name changes never change identity or bindings. A new Agent version has one primary activity projection with the same user-facing version, while each representation retains its own content/provenance hash. Teams receive their own provider/schema only through their reviewed composition contract.
 
 ## One public interface, derived JSON
 
@@ -25,7 +25,7 @@ Pre-GA implementation may cleanly rename `elsa.specialist` and related provider/
   authoring resource limits. The schema preview is generated, not a separately edited source of truth.
 - Published schemas and constraints, schema dialect/engine profile and exact fingerprints enter the
   immutable artifact. Defaults/conversion happen through normal compiled input bindings before validation.
-- Initial specialist completion is `Done`; workflows branch on validated structured result members.
+- Initial agent completion is `Done`; workflows branch on validated structured result members.
   Other declared emitted outcomes are refused until a real mapping contract is implemented. Model text
   cannot select arbitrary engine outcomes. Domain faults/cancellation retain their own native semantics.
 
@@ -48,10 +48,10 @@ The Agent collection queries Agent source/draft state under one authorized tempo
 ## Test and publication
 
 Playground test first commits/identifies the exact candidate snapshot and reuses the production
-specialist runtime with a nonpublished candidate artifact scope. Record draft ID/revision/hash and
+agent runtime with a nonpublished candidate artifact scope. Record draft ID/revision/hash and
 connection/model/capability identity. No path reads a changing draft while the model is running.
 The Agent test adapter reuses the existing candidate/runtime dispatch, idempotency/status/reconcile/cancel boundary;
-the specialist module adds conversation/usage/evaluation evidence rather than another execution loop.
+the agent module adds conversation/usage/evaluation evidence rather than another execution loop.
 
 Publish preflight validates public/schema/provider/model/resource/runtime/storage requirements, exact
 dependencies and compatibility floor. Publication uses the accepted review token and idempotency key.
@@ -74,7 +74,7 @@ retirement or deletion is implied. The collection shows actual lifecycle and exa
 
 Normal catalog discovery supplies the exact version and usable business/control ports. Sequence,
 Flowchart and a BPMN bound child retain that identity on save/reload. The BPMN inspector edits the
-ordinary bound activity; pure routing remains BPMN-owned. Native/BPMN use the same specialist descriptor,
+ordinary bound activity; pure routing remains BPMN-owned. Native/BPMN use the same agent descriptor,
 facade, journal and worker. Import/export support must retain exact bindings or fail explicitly.
 
 Preflight and placement enforce the initial native value profile: sensitivity/redaction is supported
