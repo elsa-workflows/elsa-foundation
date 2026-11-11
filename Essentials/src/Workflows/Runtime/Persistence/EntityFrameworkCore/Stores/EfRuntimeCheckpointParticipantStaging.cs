@@ -481,7 +481,9 @@ internal static class EfRuntimeCheckpointParticipantStaging
     /// as a tombstone. The same holds when the database loses a write it acknowledged, as after a failover to a
     /// replica that lags or a restore under running nodes: the row can return to an earlier revision and reach the
     /// cursor's revision again under another lease, and the bump would match. Reading the row does not have that
-    /// gap, because it compares the lease itself.
+    /// gap, because it compares the lease itself. By owner decision on #2564 the EF runtime needs a database that
+    /// keeps every commit it acknowledged. The gap lasts at most until the lease time in the cursor passes: a
+    /// cursor is renewed only by a save of the row with that lease, and such a save reads the row.
     /// </para>
     /// <para>
     /// The stand-in is not the row and must not outlive the save: the caller detaches it right after, on success
