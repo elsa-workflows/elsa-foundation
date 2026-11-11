@@ -65,6 +65,9 @@ describe("New decision handoff to the Evaluate Decision picker", () => {
     await vi.waitFor(() => expect(picker(host).value).toBe("created"));
     expect(picker(host).selectedOptions[0].textContent).toBe(created.name);
     expect(host.textContent).toContain("This decision has no published version");
+    expect(host.querySelector('[data-tab="workflow"] [role="status"]')?.textContent).toBe(`Selected ${created.name}, the decision you just created.`);
+    select(picker(host), "other");
+    expect(host.querySelector('[data-tab="workflow"] [role="status"]')?.textContent).toBe("");
   });
 
   it("keeps a decision the author picked after starting New decision", async () => {
