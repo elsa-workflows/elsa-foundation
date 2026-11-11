@@ -483,7 +483,8 @@ internal static class EfRuntimeCheckpointParticipantStaging
     /// cursor's revision again under another lease, and the bump would match. Reading the row does not have that
     /// gap, because it compares the lease itself. By owner decision on #2564 the EF runtime needs a database that
     /// keeps every commit it acknowledged. The gap lasts at most until the lease time in the cursor passes: a
-    /// cursor is renewed only by a save of the row with that lease, and such a save reads the row.
+    /// cursor is renewed only by a save of the row with that lease, and such a save reads the row. Both cases
+    /// are read from the code; no test runs them.
     /// </para>
     /// <para>
     /// The stand-in is not the row and must not outlive the save: the caller detaches it right after, on success

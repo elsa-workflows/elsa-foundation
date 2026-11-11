@@ -353,8 +353,10 @@ public sealed class EfRuntimeCheckpointCommitStore(
                     // and it has rolled back. A commit that reads the row first never stages or saves for a drain
                     // that had lost its run when the row was read: it is refused as stale. So look at the row once
                     // before the failure leaves, and let a lost run leave as stale here too. The one thing not
-                    // looked into is a cancellation of this call; an OperationCanceledException while the call is
-                    // not cancelled is a provider's timeout and is looked into like any failure.
+                    // looked into is a cancellation of the token this commit runs under: the caller's, or under a
+                    // root write lease the lease manager's, which is also cancelled when that lease is lost. An
+                    // OperationCanceledException while that token is not cancelled is a provider's timeout and is
+                    // looked into like any failure.
                     //
                     // When the look itself fails, there are two rules. After any failure but a required root lease,
                     // the look's failure is swallowed and the first failure leaves. A required root lease is not

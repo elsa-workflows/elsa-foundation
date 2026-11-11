@@ -66,7 +66,7 @@ internal sealed class EfExecutionFenceCursors(TimeProvider? timeProvider = null)
         _cursors.AddOrUpdate(key, cursor, (_, current) => current.Revision >= cursor.Revision ? current : cursor);
 
         // A lease that is never released leaves its entry behind. Its lease time runs out, and a cursor past its
-        // lease time is never used, so removing those bounds the registry without changing any answer.
+        // lease time is never used, so removing those bounds the registry without changing any admission.
         if (Interlocked.Increment(ref _holds) % SweepInterval == 0)
         {
             var now = _timeProvider.GetUtcNow();
