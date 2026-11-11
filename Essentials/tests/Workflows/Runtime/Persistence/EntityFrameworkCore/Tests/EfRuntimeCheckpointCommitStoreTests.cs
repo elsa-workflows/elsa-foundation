@@ -96,8 +96,8 @@ public sealed partial class EfRuntimeCheckpointCommitStoreTests
         await Assert.ThrowsAsync<InvalidDataException>(() =>
             new EfRuntimeCheckpointCommitStore(context, new FixedAccessor("tenant-a"))
                 .CommitAsync(commit, Decision()).AsTask());
-        // A plain commit does not read its marker first: it runs, fails at its marker insert and rolls back, and the
-        // marker read after that failure finds the damaged row. So nothing of the attempt is kept.
+        // A plain commit does not read its marker first: it runs, fails at its marker insert at the latest and rolls
+        // back, and the marker read after that failure finds the damaged row. So nothing of the attempt is kept.
         Assert.Empty(context.ChangeTracker.Entries());
         await using var read = database.Open("tenant-a");
         Assert.Single(await read.RuntimeCheckpointCommits.ToArrayAsync());

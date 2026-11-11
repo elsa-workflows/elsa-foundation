@@ -18,9 +18,9 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 /// Creating or changing an executable root runs inside its established write-lease boundary. An eligible unchanged
 /// native root can instead use an update-only check inside the fenced transaction. A commit whose marker is durable
 /// is answered as a replay. A plain commit on a clean context finds that out from the marker read after its attempt
-/// failed, which can be after a root write lease was taken; every other commit reads the marker before anything
-/// else. Unsupported participants are rejected explicitly until their EF adapters can stage changes through this
-/// same context.
+/// failed, which can be after a root write lease was taken; every other commit reads the marker before a transaction
+/// begins or a lease is taken. Unsupported participants are rejected explicitly until their EF adapters can stage
+/// changes through this same context.
 /// </remarks>
 public sealed class EfRuntimeCheckpointCommitStore(
     RuntimeDbContext context,
@@ -251,10 +251,10 @@ public sealed class EfRuntimeCheckpointCommitStore(
         // These commits read the marker first. A commit that carries an admission condition or a model decision:
         // its staging compares rows it does not write, and its failures leave as admission-unavailable, so its
         // replay is answered before either. (A commit that names a model parent's wait always carries a model
-        // decision; EnsureModelParentAdmissionShape refused any other above.) A commit on a context with pending changes: a failed attempt clears
-        // the tracker, which would drop what the caller staged. A commit on a context with an open transaction: an
-        // attempt cannot begin a transaction of its own there, so it would only fail, after taking a root write
-        // lease when the commit needs one.
+        // decision; EnsureModelParentAdmissionShape refused any other above.) A commit on a context with pending
+        // changes: a failed attempt clears the tracker, which would drop what the caller staged. A commit on a
+        // context with an open transaction: an attempt cannot begin a transaction of its own there, so it would
+        // only fail, after taking a root write lease when the commit needs one.
         var readsMarkerFirst = commit.ExpectedBookmarkResume is not null || commit.ModelState is not null ||
             commit.ExpectedModelExecution is not null ||
             context.ChangeTracker.HasChanges() || context.Database.CurrentTransaction is not null ||
@@ -330,21 +330,24 @@ public sealed class EfRuntimeCheckpointCommitStore(
             EfRuntimeAlterationCheckpointParticipationGate.MarkDurable(context, commit, scope);
             return immediate;
         }
-        catch (Exception failure) when (!readsMarkerFirst && !markerAbsentAfterFailure && !transactionCommitRequested &&
-            !(failure is OperationCanceledException && cancellationToken.IsCancellationRequested))
+        catch when (!readsMarkerFirst && !markerAbsentAfterFailure && !transactionCommitRequested &&
+            !cancellationToken.IsCancellationRequested)
         {
-            // A failure is about to leave a commit that did not read its marker first, and no marker read followed
-            // it: it arose outside an attempt (the check above, the root write lease manager), or in an attempt on
-            // a path that reads no marker (a required root lease, a provider's timeout reported as a cancellation,
-            // a transaction that could not begin), or it is what the look at the ownership row put in place of the
-            // attempt's failure. A commit whose marker is durable must get its replay answer whatever else is true
-            // of it, for example when its drain has lost the run. So the marker is read once here. With a marker
-            // the commit is answered as a replay. Without one the failure leaves as it is. A failure of this read
+            // A failure is about to leave a commit that did not read its marker first, and no marker read that
+            // found nothing followed it. It arose outside an attempt: the refusal of initial model work without its
+            // condition, the missing root write lease manager, a failure of that manager, or a lease callback that
+            // produced no result. Or it arose in an attempt on a path that reads no marker: a required root lease, a
+            // provider's timeout reported as a cancellation, a transaction that could not begin. Or it is what the
+            // look at the ownership row put in place of the attempt's failure, or what the marker read after the
+            // attempt threw. A commit whose marker is durable must get its replay answer whatever else is true of
+            // it, for example when its drain has lost the run. So the marker is read once here. With a marker the
+            // commit is answered as a replay. Without one the failure leaves as it is. A failure of this read
             // leaves in place of the first failure, as a failed marker read after an attempt does.
             //
             // The read is skipped in three cases. The marker read after the attempt's failure found no marker. The
             // attempt had asked its transaction to commit: its marker insert had succeeded, so no marker was durable
-            // before it and there is no replay to answer. The failure is the cancellation of the caller's own token.
+            // before it and there is no replay to answer. The caller has cancelled: then whatever failure was raised
+            // leaves as it is.
             if (await FindMarkerAsync(scope, commit.CommitId, cancellationToken) is not { } durable)
                 throw;
             return ReplayOf(durable);

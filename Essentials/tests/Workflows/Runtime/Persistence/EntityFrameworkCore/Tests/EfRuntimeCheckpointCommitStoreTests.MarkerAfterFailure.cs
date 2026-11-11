@@ -214,20 +214,26 @@ public sealed partial class EfRuntimeCheckpointCommitStoreTests
         // commit id that is durable with other content is refused as a replay conflict, and otherwise the refusal
         // leaves as it is.
         await using var database = await TestDatabase.CreateAsync();
+        RuntimeCheckpointCommitStoreResult? stored = null;
         if (committed != "not-committed")
         {
             await using var seed = database.Open("tenant-a");
-            await new EfRuntimeCheckpointCommitStore(seed, new FixedAccessor("tenant-a"), new FixedTimeProvider(OccurredAt), new PassThroughRootWriteLeaseManager())
-                .CommitAsync(WorkflowRootCommit("commit-refused", committed == "same-content" ? "one" : "two"), Decision());
+            stored = await new EfRuntimeCheckpointCommitStore(seed, new FixedAccessor("tenant-a"), new FixedTimeProvider(OccurredAt), new PassThroughRootWriteLeaseManager())
+                .CommitAsync(WithIntent(WorkflowRootCommit("commit-refused", committed == "same-content" ? "one" : "two"), "intent-1"), Decision());
         }
         var capture = new CommandCaptureInterceptor();
         var manager = new PassThroughRootWriteLeaseManager { FailFirstAttempt = true };
         await using var context = database.Open("tenant-a", capture);
-        Func<Task> act = () => new EfRuntimeCheckpointCommitStore(context, new FixedAccessor("tenant-a"), new FixedTimeProvider(OccurredAt), manager)
-            .CommitAsync(WorkflowRootCommit("commit-refused", "one"), Decision()).AsTask();
+        Func<Task<RuntimeCheckpointCommitStoreResult>> act = () => new EfRuntimeCheckpointCommitStore(context, new FixedAccessor("tenant-a"), new FixedTimeProvider(OccurredAt), manager)
+            .CommitAsync(WithIntent(WorkflowRootCommit("commit-refused", "one"), "intent-1"), Decision()).AsTask();
 
         if (committed == "same-content")
-            await act();
+        {
+            var replay = await act();
+            Assert.Single(replay.PendingPostCommitWorkIds);
+            Assert.Equal(stored!.PendingPostCommitWorkIds, replay.PendingPostCommitWorkIds);
+            Assert.Equal(stored.ConsumedSchedulerWorkItemIds, replay.ConsumedSchedulerWorkItemIds);
+        }
         else if (committed == "other-content")
             await Assert.ThrowsAsync<RuntimeCheckpointReplayConflictException>(act);
         else
@@ -402,7 +408,7 @@ public sealed partial class EfRuntimeCheckpointCommitStoreTests
         await using var database = await TestDatabase.CreateAsync();
         using var call = new CancellationTokenSource();
         var capture = new CommandCaptureInterceptor();
-        var manager = new CancellingRootWriteLeaseManager(call);
+        var manager = new CancellingRootWriteLeaseManager(call, token => new OperationCanceledException(token));
         await using var context = database.Open("tenant-a", capture);
 
         var cancellation = await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
@@ -411,6 +417,74 @@ public sealed partial class EfRuntimeCheckpointCommitStoreTests
 
         Assert.Same(manager.Thrown, cancellation);
         Assert.Empty(capture.Commands);
+    }
+
+    [Fact]
+    public async Task A_failure_that_is_not_a_cancellation_leaves_as_it_is_and_no_marker_read_runs_when_the_caller_has_cancelled()
+    {
+        // The root write lease manager refuses while the caller's token is cancelled. A marker read with that token
+        // could only end as a cancellation, so none runs and the refusal itself leaves.
+        await using var database = await TestDatabase.CreateAsync();
+        using var call = new CancellationTokenSource();
+        var capture = new CommandCaptureInterceptor();
+        var manager = new CancellingRootWriteLeaseManager(call, _ => new WorkflowExecutableRootWriteLeaseUnavailableException("artifact-workflow-a", "lease"));
+        await using var context = database.Open("tenant-a", capture);
+
+        var refusal = await Assert.ThrowsAsync<WorkflowExecutableRootWriteLeaseUnavailableException>(() =>
+            new EfRuntimeCheckpointCommitStore(context, new FixedAccessor("tenant-a"), new FixedTimeProvider(OccurredAt), manager)
+                .CommitAsync(WorkflowRootCommit("commit-refused-and-cancelled"), Decision(), call.Token).AsTask());
+
+        Assert.Same(manager.Thrown, refusal);
+        Assert.True(call.IsCancellationRequested);
+        Assert.Empty(capture.Commands);
+    }
+
+    [Theory]
+    [InlineData("saved-with-other-content")]
+    [InlineData("damaged")]
+    public async Task A_replay_answer_the_look_at_the_ownership_row_replaced_with_a_stale_refusal_comes_back_from_a_second_marker_read(string marker)
+    {
+        // The commit id is durable. The drain that commits it again has lost its run and still holds a usable fence
+        // cursor, so it stages before its fence is checked, and staging fails on a consumed work item that is gone.
+        // The marker read after that failure throws the replay answer: a replay conflict, or the failure of reading
+        // a damaged marker. The look at the ownership row then puts a stale refusal in its place. A commit that
+        // reads its marker first would have left with the replay answer, so the marker is read again and it does.
+        await using var database = await TestDatabase.CreateAsync();
+        var clock = new FakeTimeProvider(OccurredAt);
+        var cursors = new EfExecutionFenceCursors(clock);
+        var lease = await AcquireWithCursorAsync(database, cursors, clock);
+        var capture = new CommandCaptureInterceptor();
+        await using var context = database.Open(CursorScope, capture);
+        var store = CursorStore(context, cursors, clock);
+        await store.CommitAsync(ValueCommit("commit-saved", "one") with { ExpectedFence = lease.ToFence() }, Decision());
+        await using (var other = database.Open(CursorScope))
+        {
+            await OwnershipNode(other, clock, "node-b").AcquireAsync(CursorRun);
+            if (marker == "damaged")
+                await other.RuntimeCheckpointCommits.ExecuteUpdateAsync(setters => setters
+                    .SetProperty(row => row.ScopeKey, EfRelationalIdentity.Encode("tenant-b")));
+        }
+        Assert.True(EfRuntimeCheckpointParticipantStaging.IsUsable(Cursor(cursors, lease), clock));
+        var again = ValueCommit("commit-saved", marker == "damaged" ? "one" : "two") with { ExpectedFence = lease.ToFence() };
+        again = again with
+        {
+            StateChanges = again.StateChanges.WithConsumedSchedulerWorkItems([new ConsumedSchedulerWorkItem(CursorRun, "work-missing", "worker-a", 1)])
+        };
+        var before = capture.Commands.Count;
+        Func<Task> act = () => store.CommitAsync(again, Decision()).AsTask();
+
+        if (marker == "damaged")
+            await Assert.ThrowsAsync<InvalidDataException>(act);
+        else
+            await Assert.ThrowsAsync<RuntimeCheckpointReplayConflictException>(act);
+
+        // One marker read in the attempt's catch arm and one before the stale refusal would have left. The one read
+        // of the ownership row is the look; no bump was staged.
+        Assert.Equal(2, capture.Commands.Skip(before).Count(IsMarkerRead));
+        Assert.Equal((1, 0), OwnershipCommands(capture, before));
+        Assert.Empty(context.ChangeTracker.Entries());
+        await using var read = database.Open(CursorScope);
+        Assert.Equal(1, (await read.DurableValueStates.AsNoTracking().SingleAsync()).Revision);
     }
 
     [Theory]
@@ -422,11 +496,12 @@ public sealed partial class EfRuntimeCheckpointCommitStoreTests
         // provider's timeout, and the marker is read once before it leaves: a commit that is durable gets its
         // stored result.
         await using var database = await TestDatabase.CreateAsync();
-        var commit = ValueCommit("commit-timeout");
+        var commit = WithIntent(ValueCommit("commit-timeout"), "intent-1");
+        RuntimeCheckpointCommitStoreResult? stored = null;
         if (committedBefore)
         {
             await using var seed = database.Open("tenant-a");
-            await new EfRuntimeCheckpointCommitStore(seed, new FixedAccessor("tenant-a")).CommitAsync(commit, Decision());
+            stored = await new EfRuntimeCheckpointCommitStore(seed, new FixedAccessor("tenant-a")).CommitAsync(commit, Decision());
         }
         var capture = new CommandCaptureInterceptor();
         var stagingTimesOut = new OnCommand(command => command.Transaction is not null && IsRead(command.CommandText, DurableValueTable))
@@ -434,10 +509,15 @@ public sealed partial class EfRuntimeCheckpointCommitStoreTests
             Then = () => throw new TaskCanceledException("Simulated provider timeout.")
         };
         await using var context = database.Open("tenant-a", capture, stagingTimesOut);
-        Func<Task> act = () => new EfRuntimeCheckpointCommitStore(context, new FixedAccessor("tenant-a")).CommitAsync(commit, Decision()).AsTask();
+        Func<Task<RuntimeCheckpointCommitStoreResult>> act = () =>
+            new EfRuntimeCheckpointCommitStore(context, new FixedAccessor("tenant-a")).CommitAsync(commit, Decision()).AsTask();
 
         if (committedBefore)
-            await act();
+        {
+            var replay = await act();
+            Assert.Single(replay.PendingPostCommitWorkIds);
+            Assert.Equal(stored!.PendingPostCommitWorkIds, replay.PendingPostCommitWorkIds);
+        }
         else
             await Assert.ThrowsAnyAsync<OperationCanceledException>(act);
 
@@ -510,16 +590,19 @@ public sealed partial class EfRuntimeCheckpointCommitStoreTests
         var store = new EfRuntimeCheckpointCommitStore(context, new FixedAccessor(CursorScope), clock, manager)
         { CoalescingSessions = sessions, FenceCursors = cursors };
         // Each of these two commits changes the root's pin, so each takes a root write lease.
-        var repinned = Pinning("commit-repinned", "another-hash");
-        await store.CommitAsync(repinned, Decision());
+        var repinned = WithIntent(Pinning("commit-repinned", "another-hash"), "intent-1");
+        var stored = await store.CommitAsync(repinned, Decision());
         await store.CommitAsync(Pinning("commit-pinned-back", original.PinnedExecutable.ArtifactHash), Decision());
         Assert.Equal(2, manager.LeaseIds.Count);
         await using (var other = database.Open(CursorScope))
             await OwnershipNode(other, clock, "node-b").AcquireAsync(CursorRun);
         var before = capture.Commands.Count;
 
-        await store.CommitAsync(repinned, Decision());
+        var replay = await store.CommitAsync(repinned, Decision());
 
+        Assert.Single(replay.PendingPostCommitWorkIds);
+        Assert.Equal(stored.PendingPostCommitWorkIds, replay.PendingPostCommitWorkIds);
+        Assert.Equal(stored.ConsumedSchedulerWorkItemIds, replay.ConsumedSchedulerWorkItemIds);
         Assert.Equal(2, manager.LeaseIds.Count);
         // The one read of the ownership row is the look. No bump was staged.
         Assert.Equal((1, 0), OwnershipCommands(capture, before));
@@ -569,6 +652,20 @@ public sealed partial class EfRuntimeCheckpointCommitStoreTests
             Execution("workflow-a", "tenant-a") with { SystemMetadata = new Dictionary<string, string> { ["business-value"] = value } },
             new Dictionary<string, string>()), null, [], [], [], [], [])
     };
+
+    /// <summary>Adds one pending post-commit intent, so the commit's stored result names one outbox id.</summary>
+    private static RuntimeCheckpointCommit WithIntent(RuntimeCheckpointCommit commit, string intentId)
+    {
+        var intent = new RuntimePostCommitIntent(intentId, "workflow-a", "test.intent", OccurredAt, null, null, null);
+        var id = RuntimePostCommitOutboxIdentity.CreateLogicalValue(commit.CommitId, intentId);
+        var item = new RuntimePostCommitOutboxItem(id, intent, RuntimePostCommitOutboxStatus.Pending, OccurredAt, OccurredAt);
+        return commit with
+        {
+            PostCommitIntents = [intent],
+            StateChanges = commit.StateChanges.WithPostCommitOutbox([
+                new RuntimeStateChange<RuntimePostCommitOutboxItem>(id, RuntimeStateChangeOperation.Upsert, item, new Dictionary<string, string>())])
+        };
+    }
 
     private static RuntimeModelExecutionState ModelExecution(string executionId)
     {
@@ -635,15 +732,15 @@ public sealed partial class EfRuntimeCheckpointCommitStoreTests
         }
     }
 
-    /// <summary>Cancels the call and leaves with that cancellation, before the commit's callback runs.</summary>
-    private sealed class CancellingRootWriteLeaseManager(CancellationTokenSource call) : IWorkflowExecutableRootWriteLeaseManager
+    /// <summary>Cancels the call and leaves with the given failure, before the commit's callback runs.</summary>
+    private sealed class CancellingRootWriteLeaseManager(CancellationTokenSource call, Func<CancellationToken, Exception> failure) : IWorkflowExecutableRootWriteLeaseManager
     {
-        public OperationCanceledException? Thrown { get; private set; }
+        public Exception? Thrown { get; private set; }
 
         public ValueTask ExecuteAsync(string artifactId, string leaseId, Func<CancellationToken, ValueTask> write, CancellationToken cancellationToken = default)
         {
             call.Cancel();
-            throw Thrown = new OperationCanceledException(call.Token);
+            throw Thrown = failure(call.Token);
         }
     }
 }
