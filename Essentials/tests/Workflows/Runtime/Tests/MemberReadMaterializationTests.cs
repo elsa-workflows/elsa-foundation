@@ -84,6 +84,8 @@ public sealed class MemberReadMaterializationTests
         Assert.StartsWith(code + ": ", exception.Message, StringComparison.Ordinal);
         Assert.Equal("message", exception.InputKey);
         Assert.DoesNotContain("c-1", exception.Message, StringComparison.Ordinal);
+        if (segments is ["customerId", "length"])
+            Assert.Contains("is looked up in a string, which has no members", exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -170,6 +172,75 @@ public sealed class MemberReadMaterializationTests
         Assert.Equal(RuntimeInputBindingSource.WorkflowRequest, seen.Source);
         Assert.Null(seen.Selection);
         Assert.Null(seen.WorkflowRequest!.Path);
+        // The derived whole-value read is of the source, so it carries the neutral Elsa.Any, not the member's type.
+        Assert.Equal(new ValueTypeDescriptor("Elsa.Any"), seen.TargetType);
+    }
+
+    [Theory]
+    [InlineData(new[] { "tags" }, null)]
+    [InlineData(new[] { "customerId" }, "VF-SEL-004")]
+    [InlineData(new[] { "address" }, "VF-SEL-004")]
+    public async Task A_member_read_into_an_Elsa_Any_collection_is_fitted_before_the_snapshot(string[] segments, string? code)
+    {
+        var anyList = new ValueTypeDescriptor("Elsa.Any", CollectionKind.List);
+        var binding = Member("variable", segments, inputType: anyList);
+
+        if (code is null)
+        {
+            var snapshot = await MaterializeAsync(binding, Context("variable", external: false), Store(), inputType: anyList);
+            Assert.Equal(JsonValueKind.Array, snapshot.Values["message"].InlineValue!.Value.ValueKind);
+            return;
+        }
+
+        var exception = await Assert.ThrowsAsync<RuntimeReadSelectionException>(() =>
+            MaterializeAsync(binding, Context("variable", external: false), Store(), inputType: anyList).AsTask());
+        Assert.Equal(code, exception.Code);
+    }
+
+    [Fact]
+    public void One_fit_failure_predicate_classifies_every_conversion_failure_and_nothing_else()
+    {
+        Assert.All(
+            new Exception[] { new JsonException(), new NotSupportedException(), new InvalidOperationException(), new ArgumentException(), new FormatException(), new OverflowException() },
+            exception => Assert.True(RuntimeReadSelectionException.IsFitFailure(exception), exception.GetType().Name));
+        Assert.False(RuntimeReadSelectionException.IsFitFailure(new OperationCanceledException()));
+        Assert.False(RuntimeReadSelectionException.IsFitFailure(new IOException()));
+    }
+
+    [Fact]
+    public async Task A_member_read_into_a_single_Elsa_Any_accepts_any_member()
+    {
+        var any = new ValueTypeDescriptor("Elsa.Any");
+
+        var snapshot = await MaterializeAsync(Member("variable", ["address"], inputType: any), Context("variable", external: false), Store(), inputType: any);
+
+        Assert.Equal("Main", snapshot.Values["message"].InlineValue!.Value.GetProperty("street").GetString());
+    }
+
+    [Theory]
+    [InlineData(true, false, false, null)]
+    [InlineData(false, false, true, null)]
+    [InlineData(false, true, false, "VF-SEL-001")]
+    [InlineData(false, false, false, "VF-SEL-002")]
+    public async Task An_absent_or_null_source_that_requires_encryption_reports_as_absent_or_null(bool absent, bool required, bool nullable, string? code)
+    {
+        // Parity with the whole-value read: an absent or null source has no member, so its protection does not turn
+        // it into VF-SEL-003; only a source holding a value is refused for requiring encryption.
+        var encrypted = new ValueProtectionPolicy(DurableValueLifecycle.Instance, DurableValueStorage.Inline, isSensitive: true, requiresEncryption: true);
+        var source = absent || required ? ValueEnvelope.Absent(Customer, encrypted) : ValueEnvelope.Null(Customer, encrypted);
+        var context = new RuntimeInputBindingResolutionContext("workflow", "invocation-1",
+            variableEnvelopes: new Dictionary<RuntimeVariableValueAddress, ValueEnvelope> { [new("workflow", "customer")] = source });
+
+        if (code is null)
+        {
+            var snapshot = await MaterializeAsync(Member("variable", ["customerId"]), context, Store(), required: false, nullable: true);
+            Assert.Equal(absent ? ValuePresence.Absent : ValuePresence.ExplicitNull, snapshot.Values["message"].Presence);
+            return;
+        }
+
+        var exception = await Assert.ThrowsAsync<RuntimeReadSelectionException>(() =>
+            MaterializeAsync(Member("variable", ["customerId"]), context, Store(), required, nullable).AsTask());
+        Assert.Equal(code, exception.Code);
     }
 
     /// <summary>The fingerprint renders selections in the hasher's framed format; these bytes are new and pinned.</summary>
@@ -202,6 +273,57 @@ public sealed class MemberReadMaterializationTests
     {
         Assert.Equal(["1"], Capability(replaceMaterializer: false));
         Assert.Empty(Capability(replaceMaterializer: true));
+    }
+
+    public static TheoryData<string> Replacements => new() { "type", "factory", "instance", "decorator" };
+
+    /// <summary>
+    /// The decision is read from the registration: a factory, an instance or a decorator counts as replaced, even one
+    /// that produces the built-in materializer, because what it produces is unknown without running it.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(Replacements))]
+    public void A_replaced_materializer_registration_advertises_nothing(string replacement)
+    {
+        var services = Services();
+        switch (replacement)
+        {
+            case "type":
+                services.AddScoped<IRuntimeActivityInputMaterializer, HostMaterializer>();
+                break;
+            case "factory":
+                services.AddScoped<IRuntimeActivityInputMaterializer>(provider => ActivatorUtilities.CreateInstance<RuntimeActivityInputMaterializer>(provider));
+                break;
+            case "instance":
+                services.AddSingleton<IRuntimeActivityInputMaterializer>(new HostMaterializer());
+                break;
+            case "decorator":
+                services.AddScoped<IRuntimeActivityInputMaterializer>(provider =>
+                    new DecoratingMaterializer(ActivatorUtilities.CreateInstance<RuntimeActivityInputMaterializer>(provider)));
+                break;
+        }
+
+        using var provider = services.BuildServiceProvider();
+        Assert.Empty(MemberSelection(provider).SupportedSchemaVersions);
+    }
+
+    [Fact]
+    public void Reading_the_capability_resolves_nothing()
+    {
+        var resolutions = 0;
+        var services = Services();
+        services.AddScoped<IRuntimeActivityInputMaterializer>(_ =>
+        {
+            resolutions++;
+            throw new InvalidOperationException("The capability must not construct the materializer.");
+        });
+
+        using var provider = services.BuildServiceProvider();
+        Assert.Empty(MemberSelection(provider).SupportedSchemaVersions);
+        Assert.Equal(0, resolutions);
+
+        // And the built-in registration is advertised from the registrations alone, with no provider at all.
+        Assert.Equal(["1"], new InputMemberSelectionCapability(Services()).SupportedSchemaVersions);
     }
 
     [Theory]
@@ -238,19 +360,27 @@ public sealed class MemberReadMaterializationTests
     private static IReadOnlyCollection<string> Capability(bool replaceMaterializer)
     {
         using var provider = Provider(replaceMaterializer);
-        return provider.GetServices<IRuntimeActivityConsumerCapability>()
-            .Single(capability => capability.ConsumerKey == RuntimeReadSelection.RequirementKey).SupportedSchemaVersions;
+        return MemberSelection(provider).SupportedSchemaVersions;
     }
 
+    private static IRuntimeActivityConsumerCapability MemberSelection(IServiceProvider provider) =>
+        provider.GetServices<IRuntimeActivityConsumerCapability>().Single(capability => capability.ConsumerKey == RuntimeReadSelection.RequirementKey);
+
     private static ServiceProvider Provider(bool replaceMaterializer)
+    {
+        var services = Services();
+        if (replaceMaterializer)
+            services.AddScoped<IRuntimeActivityInputMaterializer, HostMaterializer>();
+        return services.BuildServiceProvider();
+    }
+
+    private static IServiceCollection Services()
     {
         var services = new ServiceCollection().AddWorkflowRuntime();
         services.AddLogging();
         services.AddSingleton<IWellKnownTypeRegistry, TypeRegistry>();
         services.AddSingleton<IPayloadSerializer, NoPayloadSerializer>();
-        if (replaceMaterializer)
-            services.AddScoped<IRuntimeActivityInputMaterializer, HostMaterializer>();
-        return services.BuildServiceProvider();
+        return services;
     }
 
     private static ValueTask<ActivityInputSnapshot> MaterializeAsync(
@@ -328,6 +458,13 @@ public sealed class MemberReadMaterializationTests
         public ValueTask<ActivityInputSnapshot> MaterializeSnapshotAsync(ExecutableNode node, string invocationId,
             RuntimeInputBindingResolutionContext resolutionContext, DateTimeOffset materializedAt, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException("A host materializer is never asked to read a member.");
+    }
+
+    private sealed class DecoratingMaterializer(IRuntimeActivityInputMaterializer inner) : IRuntimeActivityInputMaterializer
+    {
+        public ValueTask<ActivityInputSnapshot> MaterializeSnapshotAsync(ExecutableNode node, string invocationId,
+            RuntimeInputBindingResolutionContext resolutionContext, DateTimeOffset materializedAt, CancellationToken cancellationToken = default) =>
+            inner.MaterializeSnapshotAsync(node, invocationId, resolutionContext, materializedAt, cancellationToken);
     }
 
     private sealed class RecordingExternalPayloadStore(IReadOnlyDictionary<string, JsonElement> payloads) : IExternalPayloadStore

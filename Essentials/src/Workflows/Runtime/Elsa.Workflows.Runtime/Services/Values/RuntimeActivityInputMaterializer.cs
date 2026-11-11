@@ -435,14 +435,14 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
                 value = ValueEnvelope.Null(binding.TargetType, effectivePolicy);
                 break;
             case RuntimeReadSelectionOutcome.NotAnObject:
-                throw RuntimeReadSelectionException.NotAnObject(binding, node.ExecutableNodeId, selected.SegmentIndex, DescribeKind(selected.StoppedAt));
+                throw RuntimeReadSelectionException.NotAnObject(binding, node.ExecutableNodeId, selected.SegmentIndex, selected.StoppedAt);
             default:
                 var member = ValueEnvelope.Inline(binding.ConversionPlan?.SourceType ?? binding.TargetType, selected.Value, effectivePolicy);
                 try
                 {
                     value = binding.ConversionPlan is null ? member.Retype(binding.TargetType) : ApplyConversionPlan(binding, member);
                 }
-                catch (Exception exception) when (exception is InvalidOperationException or ArgumentException or JsonException or FormatException)
+                catch (Exception exception) when (RuntimeReadSelectionException.IsFitFailure(exception))
                 {
                     throw RuntimeReadSelectionException.DoesNotFit(binding, node.ExecutableNodeId, exception);
                 }
@@ -469,27 +469,22 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
     {
         if (value.Presence != ValuePresence.Present || value.InlineValue is not { } payload)
             return;
-        var type = ResolveType(binding.TargetType, nodeId, binding.InputName);
+        // A single Elsa.Any accepts any value. A collection of Elsa.Any still has a shape to fit, as the intrinsic path
+        // checks it: Object is its CLR element type, as it is in the type registry.
+        var type = binding.TargetType is { Alias: "Elsa.Any", CollectionKind: not CollectionKind.Single }
+            ? TypeReferenceFactory.Resolve(new TypeReference("Object", binding.TargetType.CollectionKind), _ => typeof(object))
+            : ResolveType(binding.TargetType, nodeId, binding.InputName);
         if (type == typeof(object) || type == typeof(JsonElement) || type == typeof(JsonElement?))
             return;
         try
         {
             _ = payload.Deserialize(type, SelectedMemberFitOptions);
         }
-        catch (Exception exception) when (exception is JsonException or NotSupportedException or InvalidOperationException or ArgumentException or FormatException or OverflowException)
+        catch (Exception exception) when (RuntimeReadSelectionException.IsFitFailure(exception))
         {
             throw RuntimeReadSelectionException.DoesNotFit(binding, nodeId, exception);
         }
     }
-
-    private static string DescribeKind(JsonValueKind kind) => kind switch
-    {
-        JsonValueKind.Array => "collection",
-        JsonValueKind.String => "string",
-        JsonValueKind.Number => "number",
-        JsonValueKind.True or JsonValueKind.False => "boolean",
-        _ => "value"
-    };
 
     private async ValueTask<ValueEnvelope> ApplyDestinationStorageAsync(
         string invocationId,
@@ -527,12 +522,8 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
             throw new InvalidOperationException($"VF-ACT-005: Input '{input.Key}' on executable node '{node.ExecutableNodeId}' requires an IExternalPayloadStore for projection.");
 
         var payload = await ReadExternalPayloadAsync(node, input, source, cancellationToken);
-        var path = ResolveProjectionPath(binding, resolutionContext);
-        foreach (var segment in path.Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-        {
-            if (payload.ValueKind != JsonValueKind.Object || !TryGetProperty(payload, segment, out payload))
-                throw new InvalidOperationException($"VF-ACT-004: External source path '{path}' for input '{input.Key}' on executable node '{node.ExecutableNodeId}' is unavailable.");
-        }
+        var path = ResolveProjectionPath(binding, node.ExecutableNodeId, resolutionContext);
+        payload = RuntimeExternalProjection.Apply(payload, path, input.Key, node.ExecutableNodeId);
 
         if (payload.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
             return ValueEnvelope.Null(binding.ConversionPlan?.TargetType ?? binding.TargetType, effectivePolicy);
@@ -618,25 +609,9 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
     private static bool RequiresExternalConversion(RuntimeInputBinding binding) =>
         binding.ConversionPlan is { Operation: not ValueConversionOperation.Identity and not ValueConversionOperation.NullableCompatibility };
 
-    private static bool TryGetProperty(JsonElement value, string name, out JsonElement property)
-    {
-        if (value.TryGetProperty(name, out property))
-            return true;
-        foreach (var candidate in value.EnumerateObject())
-        {
-            if (StringComparer.OrdinalIgnoreCase.Equals(candidate.Name, name))
-            {
-                property = candidate.Value;
-                return true;
-            }
-        }
-
-        property = default;
-        return false;
-    }
-
     private static string ResolveProjectionPath(
         RuntimeInputBinding binding,
+        string nodeId,
         RuntimeInputBindingResolutionContext resolutionContext)
     {
         if (binding.Source == RuntimeInputBindingSource.WorkflowRequest)
@@ -647,11 +622,7 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
             return string.Join('.', segments.Skip(offset));
         }
 
-        var resultReference = binding.ActivityResult!;
-        var producer = resolutionContext.Executable?.NodesById.GetValueOrDefault(resultReference.ProducerExecutableNodeId)
-            ?? throw new InvalidOperationException($"External activity result input '{binding.InputName}' requires the pinned producer executable contract.");
-        return producer.ActivityContract?.Result.Projections.GetValueOrDefault(resultReference.ProjectionKey)?.Path
-            ?? throw new InvalidOperationException($"Producer node '{resultReference.ProducerExecutableNodeId}' has no result projection '{resultReference.ProjectionKey}'.");
+        return RuntimeExternalProjection.ResultPath(binding.ActivityResult!, binding.InputName, nodeId, resolutionContext.Executable);
     }
 
     private static void ValidateCompleteBindingSet(ExecutableNode node, ActivityContract contract)

@@ -4,6 +4,7 @@ using Elsa.Activities.Flowchart;
 using Elsa.Activities.Flowchart.Models;
 using Elsa.Activities.Runtime.Core.Abstractions;
 using Elsa.Activities.Runtime.Core.Attributes;
+using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Sequence;
 using Elsa.Activities.Testing;
@@ -245,6 +246,63 @@ public sealed class MemberReadRunTests
         Assert.Equal(["Main"], seen.Values);
         var incident = Assert.Single(await harness.Services.GetRequiredService<IIncidentStateStore>().ListAsync(WorkflowExecutionHarness.WorkflowExecutionId));
         Assert.Contains("elsa.runtime.input-member-selection@1", incident.Message, StringComparison.Ordinal);
+        // The refused resume consumed nothing: the bookmark is still there to resume once the runtime selects members.
+        Assert.NotNull(await harness.Services.GetRequiredService<IBookmarkStateStore>()
+            .FindAsync(WorkflowExecutionHarness.WorkflowExecutionId, Assert.Single(wait.BookmarkIds)));
+    }
+
+    /// <summary>
+    /// A structural parent that re-materializes its inputs when its child completes (as <c>While</c> does) reads its
+    /// member again there, so that read is guarded too: when the runtime stops selecting members while the child runs,
+    /// the parent's child-completion evaluation is refused rather than handing the read to the materializer.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task A_rematerializing_parent_is_refused_on_child_completion_without_the_capability(bool disableDuringChild)
+    {
+        var checker = new SwitchableChecker();
+        var reads = new SeenValues();
+        await using var harness = NewHarness(services =>
+        {
+            services.AddSingleton(checker);
+            services.AddSingleton(reads);
+            services.AddSingleton(new DisableMemberSelection(disableDuringChild));
+            services.AddScoped<IRuntimeRequirementChecker>(provider =>
+                checker.Wrap(ActivatorUtilities.CreateInstance<Elsa.Workflows.Runtime.Services.Executables.RuntimeRequirementChecker>(provider)));
+        });
+        var read = new RuntimeInputBinding(Key, Text, ValueProtectionPolicy.InstanceInline, RuntimeInputBindingSource.WorkflowRequestMember,
+            Selection(["display_name"], known: false), workflowRequest: new RuntimeWorkflowRequestReference("customer"));
+        var parent = new ExecutableNode(
+            executableNodeId: "node-parent",
+            authoredActivityId: "authored-node-parent",
+            activityType: typeof(RematerializingMemberParent).FullName!,
+            activityTypeVersion: "1.0.0",
+            descriptorType: "test",
+            descriptorPayload: JsonSerializer.SerializeToElement(new { }),
+            inputBindings: new Dictionary<string, RuntimeInputBinding> { [Key] = read },
+            metadata: new Dictionary<string, string>(),
+            childSlots: [new ExecutableChildSlot("Children", [Leaf("node-child", typeof(CapabilityTogglingChild))])]);
+
+        var run = await harness.RunAsync(WorkflowExecutionHarness.NewExecutable(parent), allowPendingWorkOnTerminalCompletion: true,
+            inputs: new Dictionary<string, JsonElement> { ["customer"] = CustomerJson }, allowAcceptedButFaulted: true);
+
+        run.AssertCompleted("node-child");
+        var incidents = await harness.Services.GetRequiredService<IIncidentStateStore>().ListAsync(WorkflowExecutionHarness.WorkflowExecutionId);
+        if (!disableDuringChild)
+        {
+            run.AssertWorkflowCompleted();
+            Assert.Equal(["Ann", "Ann"], reads.Values);
+            Assert.Empty(incidents);
+            return;
+        }
+
+        Assert.Equal(["Ann"], reads.Values);
+        Assert.NotEqual(ActivityExecutionStatus.Completed, run.State("node-parent").Status);
+        var incident = Assert.Single(incidents);
+        Assert.True(incident.IsBlocking);
+        Assert.Contains("elsa.runtime.input-member-selection@1", incident.Message, StringComparison.Ordinal);
+        Assert.Contains("none of it runs here", incident.Message, StringComparison.Ordinal);
     }
 
     private static WorkflowExecutable Waiting(string resumeTarget) => new(WorkflowExecutionHarness.Identity,
@@ -408,8 +466,47 @@ public sealed class MemberReadRunTests
         }
     }
 
+    public sealed record DisableMemberSelection(bool Enabled);
+
+    /// <summary>A child that, when asked to, makes the runtime stop reporting member selection while it runs.</summary>
+    public sealed class CapabilityTogglingChild(SwitchableChecker checker, DisableMemberSelection disable) : Activity<Echo>
+    {
+        protected override ValueTask<ActivityTransition<Echo>> ExecuteAsync(ActivityExecutionContext context)
+        {
+            if (disable.Enabled)
+                checker.MemberSelectionAvailable = false;
+            return ValueTask.FromResult(ActivityTransition.Complete(new Echo(context.InvocationId)));
+        }
+    }
+
+    /// <summary>
+    /// A structural parent with a member-read input that re-materializes its inputs on child completion. It records
+    /// the input when it starts and again when its child completes, then completes.
+    /// </summary>
+    public sealed class RematerializingMemberParent(SeenValues reads) : StructuralActivity,
+        IRuntimeStructuralActivity,
+        IRuntimeActivityChildCompletionHandler,
+        IRuntimeRematerializeInputsOnChildCompletion
+    {
+        [ActivityInput] public string Value { get; set; } = null!;
+
+        public ValueTask<RuntimeStructuralContinuation> ExecuteStructureAsync(IRuntimeActivityExecutionContext context)
+        {
+            reads.Values.Add(Value);
+            var child = Assert.Single(Assert.Single(context.ExecutableNode.ChildSlots).Activities);
+            context.ScheduleChildActivity(child.ExecutableNodeId, context.ActivityExecutionState.InvocationId);
+            return ValueTask.FromResult(RuntimeStructuralContinuation.Defer);
+        }
+
+        public ValueTask<RuntimeStructuralContinuation> OnChildCompletedAsync(ActivityChildCompletedContext context)
+        {
+            reads.Values.Add(Value);
+            return ValueTask.FromResult(RuntimeStructuralContinuation.Complete());
+        }
+    }
+
     /// <summary>Wraps the real checker and can report member selection unavailable, as a runtime without it would.</summary>
-    private sealed class SwitchableChecker
+    public sealed class SwitchableChecker
     {
         public bool MemberSelectionAvailable { get; set; } = true;
 

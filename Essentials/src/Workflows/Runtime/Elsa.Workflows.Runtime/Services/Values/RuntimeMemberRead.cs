@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -20,13 +21,18 @@ namespace Elsa.Workflows.Runtime.Services.Values;
 /// </remarks>
 internal static class RuntimeMemberRead
 {
+    // The type of the source, not of the selected member: the input's type describes the member, so the derived
+    // whole-value read is labelled with the neutral Elsa.Any. The built-in resolver uses the type only as the label of
+    // the envelope it returns, and the member read never relies on that label.
+    private static readonly ValueTypeDescriptor SourceType = new("Elsa.Any");
+
     public static RuntimeInputBinding WholeValueBinding(RuntimeInputBinding binding) => binding.Source switch
     {
-        RuntimeInputBindingSource.WorkflowRequestMember => new(binding.InputName, binding.TargetType, binding.EffectivePolicy,
+        RuntimeInputBindingSource.WorkflowRequestMember => new(binding.InputName, SourceType, binding.EffectivePolicy,
             RuntimeInputBindingSource.WorkflowRequest, workflowRequest: binding.WorkflowRequest, metadata: binding.Metadata),
-        RuntimeInputBindingSource.VariableMember => new(binding.InputName, binding.TargetType, binding.EffectivePolicy,
+        RuntimeInputBindingSource.VariableMember => new(binding.InputName, SourceType, binding.EffectivePolicy,
             RuntimeInputBindingSource.VariableRead, variable: binding.Variable, metadata: binding.Metadata),
-        RuntimeInputBindingSource.ActivityResultMember => new(binding.InputName, binding.TargetType, binding.EffectivePolicy,
+        RuntimeInputBindingSource.ActivityResultMember => new(binding.InputName, SourceType, binding.EffectivePolicy,
             RuntimeInputBindingSource.ActivityResult, activityResult: binding.ActivityResult, metadata: binding.Metadata),
         _ => throw new ArgumentOutOfRangeException(nameof(binding), binding.Source, "Only a member source has a whole-value read to select from.")
     };
@@ -47,10 +53,9 @@ internal static class RuntimeMemberRead
             throw SecretBindingDiagnostics.WithheldBindingNotResolved(binding);
         if (source.TransientResource is not null || source.Policy.Lifecycle == DurableValueLifecycle.None)
             throw RuntimeReadSelectionException.Unselectable(binding, nodeId, "its source is a live resource, not a value with members");
-        if (source.Policy.RequiresEncryption)
-            throw RuntimeReadSelectionException.Unselectable(binding, nodeId,
-                "its source requires encryption, and a member is never read out of a value the runtime only holds withheld");
 
+        // An absent or null source has no member to read, whatever its protection, so it is reported as absent or null
+        // just as the whole-value read reports it; only a source holding a value is refused for requiring encryption.
         switch (source.Presence)
         {
             case ValuePresence.Absent:
@@ -58,6 +63,10 @@ internal static class RuntimeMemberRead
             case ValuePresence.ExplicitNull:
                 return (source, RuntimeReadSelector.Select(null, selection.Segments));
         }
+
+        if (source.Policy.RequiresEncryption)
+            throw RuntimeReadSelectionException.Unselectable(binding, nodeId,
+                "its source requires encryption, and a member is never read out of a value the runtime only holds withheld");
 
         if (source.InlineValue is { } inline)
             return (source, RuntimeReadSelector.Select(inline, selection.Segments));
@@ -82,47 +91,14 @@ internal static class RuntimeMemberRead
                 exception);
         }
 
-        // An external result envelope is the whole result: apply its declared projection with the existing rule first.
+        // An external result envelope is the whole result: apply its declared projection first, with the same rule the
+        // whole-value read of an external result uses, so only the selection after it is exact.
         if (binding.ActivityResult is { } result && !StringComparer.Ordinal.Equals(result.ProjectionKey, "$result"))
-            payload = Project(binding, nodeId, result, context, payload);
+        {
+            var path = RuntimeExternalProjection.ResultPath(result, binding.InputName, nodeId, context.Executable);
+            payload = RuntimeExternalProjection.Apply(payload, path, binding.InputName, nodeId);
+        }
 
         return (source, RuntimeReadSelector.Select(payload.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined ? null : payload, selection.Segments));
-    }
-
-    // The existing whole-value projection rule for an external result (RuntimeActivityInputMaterializer's external
-    // projection): the dotted path, with case-insensitive fallbacks. It is kept as is so a member read projects exactly
-    // as the whole read of the same external result does; only the selection after it is exact.
-    private static JsonElement Project(RuntimeInputBinding binding, string nodeId, RuntimeActivityResultReference result,
-        RuntimeInputBindingResolutionContext context, JsonElement payload)
-    {
-        var path = context.Executable?.NodesById.GetValueOrDefault(result.ProducerExecutableNodeId)?.ActivityContract?.Result.Projections
-                       .GetValueOrDefault(result.ProjectionKey)?.Path
-                   ?? throw new InvalidOperationException($"Producer node '{result.ProducerExecutableNodeId}' has no result projection '{result.ProjectionKey}'.");
-        if (StringComparer.Ordinal.Equals(path, "$"))
-            return payload;
-        foreach (var segment in path.Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-        {
-            if (payload.ValueKind != JsonValueKind.Object || !TryGetPropertyIgnoringCase(payload, segment, out payload))
-                throw new InvalidOperationException($"VF-ACT-004: External source path '{path}' for input '{binding.InputName}' on executable node '{nodeId}' is unavailable.");
-        }
-
-        return payload;
-    }
-
-    private static bool TryGetPropertyIgnoringCase(JsonElement value, string name, out JsonElement property)
-    {
-        if (value.TryGetProperty(name, out property))
-            return true;
-        foreach (var candidate in value.EnumerateObject())
-        {
-            if (StringComparer.OrdinalIgnoreCase.Equals(candidate.Name, name))
-            {
-                property = candidate.Value;
-                return true;
-            }
-        }
-
-        property = default;
-        return false;
     }
 }

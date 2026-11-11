@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Runtime.Services.Values;
@@ -46,9 +47,9 @@ internal sealed class RuntimeReadSelectionException : InvalidOperationException
                 : $"member {Segment(binding, segmentIndex)} before the selected member is null") +
         "; the input does not accept null.");
 
-    public static RuntimeReadSelectionException NotAnObject(RuntimeInputBinding binding, string nodeId, int segmentIndex, string found) => new(NotSelectable, binding.InputName,
+    public static RuntimeReadSelectionException NotAnObject(RuntimeInputBinding binding, string nodeId, int segmentIndex, JsonValueKind found) => new(NotSelectable, binding.InputName,
         $"Input '{binding.InputName}' on node '{nodeId}' reads {Describe(binding)}, but member {Segment(binding, segmentIndex)} is looked up in " +
-        $"a {found}, which has no members.");
+        $"a {DescribeKind(found)}, which has no members.");
 
     public static RuntimeReadSelectionException Unselectable(RuntimeInputBinding binding, string nodeId, string reason) => new(NotSelectable, binding.InputName,
         $"Input '{binding.InputName}' on node '{nodeId}' reads {Describe(binding)}, but {reason}.");
@@ -56,6 +57,23 @@ internal sealed class RuntimeReadSelectionException : InvalidOperationException
     public static RuntimeReadSelectionException DoesNotFit(RuntimeInputBinding binding, string nodeId, Exception? innerException = null) => new(Mismatch, binding.InputName,
         $"Input '{binding.InputName}' on node '{nodeId}' reads {Describe(binding)}, and the selected member does not fit '{binding.TargetType.Alias}'.",
         innerException);
+
+    /// <summary>
+    /// Whether <paramref name="exception"/>, raised while a present member is converted or checked against the input's
+    /// type, means the member does not fit (<see cref="Mismatch"/>). One predicate for every member-read consumer, so
+    /// the activity and intrinsic paths classify the same failures alike.
+    /// </summary>
+    public static bool IsFitFailure(Exception exception) =>
+        exception is JsonException or NotSupportedException or InvalidOperationException or ArgumentException or FormatException or OverflowException;
+
+    private static string DescribeKind(JsonValueKind kind) => kind switch
+    {
+        JsonValueKind.Array => "collection",
+        JsonValueKind.String => "string",
+        JsonValueKind.Number => "number",
+        JsonValueKind.True or JsonValueKind.False => "boolean",
+        _ => "value"
+    };
 
     private static string Describe(RuntimeInputBinding binding) => binding.Source switch
     {

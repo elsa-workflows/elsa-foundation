@@ -103,8 +103,9 @@ resolution of the same role, with missing producer, absent member and null kept 
 selection in the input materializer and the intrinsic executor, an always-on fit check before the snapshot, the
 selected value recorded in the snapshot, and `VF-SEL-001`..`004` through one exception type with the code in the
 poisoned item's metadata. T016, capability and guards: `elsa.runtime.input-member-selection@1` advertised only while
-the built-in materializer is composed, and refusal through `IRuntimeRequirementChecker` at activity start and bookmark
-resume. T017, runtime part: selector table, materializer and intrinsic rows inline and external, real engine runs for
+the built-in materializer is composed (decided from its service registration, so a factory, instance or decorator
+counts as replaced), and refusal through `IRuntimeRequirementChecker` at activity start, bookmark resume and a
+structural parent's re-materialization on child completion. T017, runtime part: selector table, materializer and intrinsic rows inline and external, real engine runs for
 all three roles in a Sequence and a top-level Flowchart, failure codes, occurrence parity, re-materialization after
 resume, protection and guard controls, and a pinned member fingerprint. Not done: pinning facts at publication and
 the compiler, analyzer, placement and linker work (slice C, T012/T013), the other families' authoring (slice D), and

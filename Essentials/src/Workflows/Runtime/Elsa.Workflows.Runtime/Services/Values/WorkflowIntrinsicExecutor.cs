@@ -746,7 +746,7 @@ public sealed class WorkflowIntrinsicExecutor(
             case RuntimeReadSelectionOutcome.Absent:
                 throw RuntimeReadSelectionException.Absent(binding, nodeId, selected.SegmentIndex);
             case RuntimeReadSelectionOutcome.NotAnObject:
-                throw RuntimeReadSelectionException.NotAnObject(binding, nodeId, selected.SegmentIndex, selected.StoppedAt.ToString());
+                throw RuntimeReadSelectionException.NotAnObject(binding, nodeId, selected.SegmentIndex, selected.StoppedAt);
             case RuntimeReadSelectionOutcome.Null:
                 value = ValueEnvelope.Null(binding.TargetType, combinedPolicy);
                 break;
@@ -759,7 +759,7 @@ public sealed class WorkflowIntrinsicExecutor(
                     value = binding.ConversionPlan is null ? member.Retype(binding.TargetType) : _valueConversionExecutor.Convert(member, binding.ConversionPlan);
                     ValidateAssignmentPayload(binding, value, nodeId);
                 }
-                catch (Exception exception) when (exception is InvalidOperationException or ArgumentException or JsonException or FormatException)
+                catch (Exception exception) when (RuntimeReadSelectionException.IsFitFailure(exception))
                 {
                     throw RuntimeReadSelectionException.DoesNotFit(binding, nodeId, exception);
                 }

@@ -39,6 +39,16 @@ public sealed partial class WorkflowIntrinsicAssignmentConversionTests
         Assert.Equal(0, (await _workflowStore.FindAsync(WorkflowExecutionId))!.RootVariableFrame!.Values["counter"].InlineValue!.Value.GetInt32());
     }
 
+    [Fact]
+    public async Task Set_refuses_a_member_looked_up_in_a_non_object_in_the_wording_the_activity_path_uses()
+    {
+        var exception = await Assert.ThrowsAsync<RuntimeReadSelectionException>(() =>
+            ExecuteAsync(MemberNode("variable", ["count", "x"]), 7, external: false).AsTask());
+
+        Assert.Equal(RuntimeReadSelectionException.NotSelectable, exception.Code);
+        Assert.Contains("is looked up in a number, which has no members", exception.Message, StringComparison.Ordinal);
+    }
+
     private static ExecutableNode MemberNode(string source, string[] segments)
     {
         var selection = new RuntimeReadSelection(1, segments, RuntimeReadSelectionMode.DeferredFit);

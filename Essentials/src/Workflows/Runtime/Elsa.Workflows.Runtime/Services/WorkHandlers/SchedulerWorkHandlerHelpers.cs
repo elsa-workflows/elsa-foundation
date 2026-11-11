@@ -15,11 +15,6 @@ namespace Elsa.Workflows.Runtime.Services.WorkHandlers;
 public static class SchedulerWorkHandlerHelpers
 {
     /// <summary>
-    /// Guards that the loaded executable artifact matches the pinned snapshot the work item was
-    /// scheduled against. The exception message is keyed on <see cref="RuntimeSchedulerWorkItem.CommandKind"/>,
-    /// which renders identically to the per-handler command label the local copies hard-coded.
-    /// </summary>
-    /// <summary>
     /// Refuses, before anything of it runs, a pinned executable whose member reads (#4078) this runtime cannot select:
     /// one that derives <c>elsa.runtime.input-member-selection@1</c> while the shared
     /// <see cref="Core.Contracts.IRuntimeRequirementChecker"/> does not report it available. A runtime without the checker
@@ -48,6 +43,11 @@ public static class SchedulerWorkHandlerHelpers
             $"({(checker is null ? "no runtime requirement checker is composed" : status?.ToString() ?? "unchecked")}); none of it runs here.");
     }
 
+    /// <summary>
+    /// Guards that the loaded executable artifact matches the pinned snapshot the work item was
+    /// scheduled against. The exception message is keyed on <see cref="RuntimeSchedulerWorkItem.CommandKind"/>,
+    /// which renders identically to the per-handler command label the local copies hard-coded.
+    /// </summary>
     public static void ValidatePinnedExecutable(
         RuntimeSchedulerWorkItem workItem,
         WorkflowExecutableIdentity pinnedExecutable,
