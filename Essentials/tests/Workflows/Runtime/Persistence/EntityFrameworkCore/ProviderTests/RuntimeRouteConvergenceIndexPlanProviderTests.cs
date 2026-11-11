@@ -8,6 +8,7 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests;
 
@@ -30,7 +31,7 @@ public sealed class RuntimeRouteConvergenceIndexPlanSqliteTests : IAsyncDisposab
 }
 
 [Collection(RuntimeBookmarksPostgreSqlFixture.CollectionName)]
-public sealed class RuntimeRouteConvergenceIndexPlanPostgreSqlTests(RuntimeBookmarksPostgreSqlFixture fixture)
+public sealed class RuntimeRouteConvergenceIndexPlanPostgreSqlTests(RuntimeBookmarksPostgreSqlFixture fixture, ITestOutputHelper output)
 {
     [SkippableFact]
     public Task PostgreSql_convergence_projections_are_index_only_scans_of_their_covering_indexes()
@@ -39,8 +40,10 @@ public sealed class RuntimeRouteConvergenceIndexPlanPostgreSqlTests(RuntimeBookm
         return RuntimeRouteConvergenceIndexPlans.RunAsync(
             interceptor => new RuntimePostgreSqlDbContext(new DbContextOptionsBuilder<RuntimePostgreSqlDbContext>()
                 .UseNpgsql(fixture.ConnectionString).AddInterceptors(interceptor).Options),
-            RuntimeRouteConvergenceIndexPlans.PostgreSqlPlanAsync,
-            (plan, index) => Assert.Contains($"Index Only Scan using \"{index}\"", plan));
+            (connection, query, table) => RuntimeRouteConvergenceIndexPlans.PostgreSqlPlanAsync(connection, query, table, output.WriteLine),
+            (plan, index) => Assert.True(
+                plan.Contains($"Index Only Scan using \"{index}\"", StringComparison.Ordinal),
+                $"The plan is not an index-only scan of {index}:{Environment.NewLine}{plan}"));
     }
 }
 
@@ -67,8 +70,9 @@ public sealed class RuntimeRouteConvergenceIndexPlanSqlServerTests(RuntimeBookma
 /// The HTTP route-table convergence check (#2190) runs both projections on every node every interval, so each must be
 /// answered from its covering index alone, never from the rows behind it. The SQL each store sends is captured and its
 /// plan read back from the engine. Most rows belong to another stimulus type, so the index has a range to seek.
-/// PostgreSQL is vacuumed so the planner may count on an index-only scan, and steered off sequential and bitmap scans,
-/// which a table this small would otherwise win. SQLite and SQL Server are left to choose.
+/// PostgreSQL is vacuumed until every page of the table is all-visible, so the planner may count on an index-only scan,
+/// and steered off sequential and bitmap scans, which a table this small would otherwise win. SQLite and SQL Server
+/// are left to choose.
 /// </summary>
 internal static class RuntimeRouteConvergenceIndexPlans
 {
@@ -106,9 +110,9 @@ internal static class RuntimeRouteConvergenceIndexPlans
     public static async Task<string> SqlitePlanAsync(DbConnection connection, CapturedQuery query, string table) =>
         string.Join(Environment.NewLine, await ReadAllAsync(connection, "EXPLAIN QUERY PLAN " + query.Inline(literal => $"'{literal}'")));
 
-    public static async Task<string> PostgreSqlPlanAsync(DbConnection connection, CapturedQuery query, string table)
+    public static async Task<string> PostgreSqlPlanAsync(DbConnection connection, CapturedQuery query, string table, Action<string> report)
     {
-        await ExecuteAsync(connection, $"VACUUM ANALYZE \"{table}\"");
+        await MakeAllVisibleAsync(connection, table, report);
         await ExecuteAsync(connection, "SET enable_seqscan = off; SET enable_bitmapscan = off");
         try
         {
@@ -118,6 +122,60 @@ internal static class RuntimeRouteConvergenceIndexPlans
         {
             await ExecuteAsync(connection, "RESET enable_seqscan; RESET enable_bitmapscan");
         }
+    }
+
+    /// <summary>
+    /// Analyzes the table and vacuums it until every page is all-visible. The planner prices an index-only scan by the
+    /// share of all-visible pages; with none it prices the scan like a plain index scan and may pick another index.
+    /// A vacuum cannot mark a page all-visible while a row on it is committed but that commit is not yet flushed to the
+    /// write-ahead log. The server the fixture starts commits asynchronously (SHOW synchronous_commit returns off), so
+    /// the rows seeded a moment ago are often not flushed. The test therefore commits once synchronously before it
+    /// vacuums: the ANALYZE runs first with synchronous_commit on, and its commit flushes the log through every earlier
+    /// commit. The ANALYZE stays outside the repeat, because it commits a transaction of its own each time. The plain
+    /// VACUUM is repeated, up to a bound, as a safety net for what a short wait cures, such as another session that
+    /// holds an older snapshot for a moment.
+    /// </summary>
+    private static async Task MakeAllVisibleAsync(DbConnection connection, string table, Action<string> report)
+    {
+        const int maxVacuums = 40;
+        var pause = TimeSpan.FromMilliseconds(250);
+        await ExecuteAsync(connection, "SET synchronous_commit = on");
+        try
+        {
+            await ExecuteAsync(connection, $"ANALYZE \"{table}\"");
+        }
+        finally
+        {
+            await ExecuteAsync(connection, "RESET synchronous_commit");
+        }
+
+        for (var vacuums = 1; ; vacuums++)
+        {
+            await ExecuteAsync(connection, $"VACUUM \"{table}\"");
+            var (pages, allVisible) = await ReadPageCountsAsync(connection, table);
+            if (allVisible == pages)
+            {
+                report($"{table}: all {pages} pages are all-visible after {vacuums - 1} vacuum retries.");
+                return;
+            }
+
+            Assert.True(
+                vacuums < maxVacuums,
+                $"{maxVacuums} vacuums, {pause.TotalMilliseconds:0} ms apart, left {allVisible} of the {pages} pages of {table} all-visible. " +
+                "The planner prices an index-only scan by the share of all-visible pages, so the plan read next would depend on timing. " +
+                "The log is flushed before the first vacuum, so an unflushed commit of this test is not the cause. " +
+                "Look for another session of this database that holds a snapshot older than the rows.");
+            await Task.Delay(pause);
+        }
+    }
+
+    private static async Task<(int Pages, int AllVisible)> ReadPageCountsAsync(DbConnection connection, string table)
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText = $"SELECT relpages, relallvisible FROM pg_class WHERE oid = '\"{table}\"'::regclass";
+        await using var reader = await command.ExecuteReaderAsync();
+        Assert.True(await reader.ReadAsync());
+        return (reader.GetInt32(0), reader.GetInt32(1));
     }
 
     public static async Task<string> SqlServerPlanAsync(DbConnection connection, CapturedQuery query, string table)
