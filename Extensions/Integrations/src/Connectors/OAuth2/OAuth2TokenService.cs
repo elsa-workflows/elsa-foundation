@@ -10,6 +10,7 @@ using Elsa.Connections.Options;
 using Elsa.Secrets.Core.Contracts;
 using Elsa.Secrets.Core.Exceptions;
 using Elsa.Secrets.Core.Models;
+using Elsa.Secrets.Core.Options;
 using Microsoft.Extensions.Options;
 
 namespace Elsa.Integrations.Connectors.OAuth2;
@@ -21,6 +22,7 @@ internal sealed class OAuth2TokenService(
     IConnectionGrantWriter grants,
     IHttpClientFactory httpClientFactory,
     IOptions<ConnectionsOptions> connectionsOptions,
+    IOptions<WritableSecretStoreOptions> writableSecretStore,
     TimeProvider timeProvider)
 {
     public static readonly TimeSpan ExpirySkew = TimeSpan.FromSeconds(60);
@@ -284,12 +286,11 @@ internal sealed class OAuth2TokenService(
         }
     }
 
-    private void EnsureGrantStoreWritable()
-    {
-        if (!stores.TryGet(SecretStoreNames.Encrypted, out var store) || store is null)
-            throw new InvalidOperationException("OAuth2 grants require a writable secret store.");
-        OAuth2GrantStorePolicy.EnsureWritable(store.Descriptor);
-    }
+    private string GrantStoreName =>
+        DefaultWritableSecretStore.ResolveName(writableSecretStore.Value.DefaultWritableStoreName);
+
+    private void EnsureGrantStoreWritable() =>
+        DefaultWritableSecretStore.GetRequiredWritable(stores, writableSecretStore.Value.DefaultWritableStoreName);
 
     private async ValueTask<OAuth2Grant> ExchangeAsync(
         IResolvedConnection connection,
@@ -361,7 +362,8 @@ internal sealed class OAuth2TokenService(
                 {
                     Name = name,
                     Value = SerializeGrant(grant),
-                    TypeName = SecretTypeNames.Text
+                    TypeName = SecretTypeNames.Text,
+                    StoreName = GrantStoreName
                 }, cancellationToken);
                 return grant with { Version = created.CurrentVersion ?? 1 };
             }
@@ -408,6 +410,7 @@ internal sealed class OAuth2TokenService(
             Name = name,
             Value = value,
             TypeName = SecretTypeNames.Text,
+            StoreName = GrantStoreName,
             ExpiresAt = expiresAt
         }, cancellationToken);
     }

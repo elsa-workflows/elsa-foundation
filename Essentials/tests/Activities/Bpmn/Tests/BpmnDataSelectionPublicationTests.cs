@@ -152,6 +152,38 @@ public sealed class BpmnDataSelectionPublicationTests
         Assert.True(JsonElement.DeepEquals(produced, read));
     }
 
+    /// <summary>
+    /// Characterises, on main before #4078: BPMN publication compiles through the workflow executable compiler, so the
+    /// shared analyzer refuses a reserved member-read kind, and a member path on a whole-value kind, before an
+    /// executable exists. Slice C of #4078 flips the <c>ActivityResultMember</c> row.
+    /// </summary>
+    [Theory]
+    [InlineData("ActivityResultMember", "ActivityData/UnsupportedMemberBinding")]
+    [InlineData("VariableMember", "ActivityData/UnsupportedMemberBinding")]
+    [InlineData("WorkflowRequestMember", "ActivityData/UnsupportedMemberBinding")]
+    [InlineData("InputMember", "ActivityData/UnsupportedMemberBinding")]
+    [InlineData("ActivityResult", "ActivityData/UnsupportedMemberSelection")]
+    public async Task Bpmn_publication_refuses_a_member_read_before_an_executable_exists(string kind, string finding)
+    {
+        using var fixture = new Fixture();
+        object read = kind switch
+        {
+            "VariableMember" => new { referenceKey = "customer", declaringScopeId = "workflow", memberPath = new[] { "outcome" } },
+            "WorkflowRequestMember" => new { memberKey = "customer", memberPath = new[] { "outcome" } },
+            "InputMember" => new { referenceKey = "customer", memberPath = new[] { "outcome" } },
+            _ => new { producerNodeId = "decision", projectionKey = "$result", memberPath = new[] { "outcome" } }
+        };
+        var capture = new ActivityNode("capture", "elsa.intrinsic.set-output@1",
+            [Input("name", "decisionResult"), Input("value", read, kind)], [])
+        { Intrinsic = new(AuthoredWorkflowIntrinsicKind.SetOutput, new TypeReference("Elsa.Any")) };
+
+        var error = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(() =>
+            fixture.Compile(BpmnChildResultFactsTests.Process(children: [capture, Decision()])).AsTask());
+
+        var refusal = Assert.IsType<ActivityDataSelectionRejectedException>(error.InnerException);
+        Assert.Contains(refusal.Findings, item => item.Path == "capture/inputs/value" && item.Type == finding);
+    }
+
     private static readonly JsonSerializerOptions Web = new(JsonSerializerDefaults.Web)
     { Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter(JsonNamingPolicy.CamelCase) } };
 

@@ -147,6 +147,34 @@ function propertyLabels(container: HTMLElement) {
   return [...container.querySelectorAll(".wf-property-row-header label")].map(label => label.textContent);
 }
 
+it("commits related literal inputs atomically and refreshes contributed editors after a sibling edit", () => {
+  const onChange = vi.fn();
+  const editors: StudioActivityPropertyEditorContribution[] = [{ id: "form-pair", supportsValidationReporting: true, readsActivityContext: true,
+    supports: descriptor => descriptor.name === "FormId", component: props => <button type="button" aria-label="Pin form" onClick={() => props.context.setLiteralInputs?.({ FormId: "purchase", FormVersion: "2" })}>{String(props.context.inputValues?.FormVersion ?? "unset")}</button>
+  }];
+  const container = renderPanel([input("FormId", { referenceKey: "FormId", isWrapped: true }), input("FormVersion", { referenceKey: "FormVersion", isWrapped: true })], { activity: activity(), editors, onChange });
+  const button = container.querySelector<HTMLButtonElement>('button[aria-label="Pin form"]')!;
+  flushSync(() => button.click());
+  expect(onChange).toHaveBeenCalledTimes(1);
+  expect(onChange.mock.calls[0][0].FormId.expression.value).toBe("purchase");
+  expect(onChange.mock.calls[0][0].FormVersion.expression.value).toBe("2");
+  expect([...container.querySelectorAll("button")].some(item => item.textContent === "2")).toBe(true);
+});
+
+it("refreshes a contributed editor when only a sibling literal input changes", async () => {
+  const editors: StudioActivityPropertyEditorContribution[] = [{ id: "form-pair", supportsValidationReporting: true, readsActivityContext: true,
+    supports: descriptor => descriptor.name === "FormId", component: props => <output aria-label="Pinned version">{String(props.context.inputValues?.FormVersion ?? "unset")}</output>
+  }];
+  const literal = (value: string) => ({ typeName: "System.String", expression: { type: "Literal", value } });
+  const current = activity({ FormId: literal("purchase"), FormVersion: literal("1") });
+  const container = renderPanel([input("FormId", { referenceKey: "FormId", isWrapped: true }), input("FormVersion", { referenceKey: "FormVersion", isWrapped: true })], { activity: current, editors });
+  await nextFrame();
+  expect(container.querySelector('[aria-label="Pinned version"]')?.textContent).toBe("1");
+  flushSync(() => replaceActivity({ ...current, FormVersion: literal("2") }));
+  await nextFrame();
+  expect(container.querySelector('[aria-label="Pinned version"]')?.textContent).toBe("2");
+});
+
 describe("activity property organization", () => {
   it("binds a selected workflow input into JavaScript args and preserves the expression source", async () => {
     const changes: ActivityNode[] = [];
@@ -1085,16 +1113,23 @@ describe("activity property organization", () => {
     expect(container.querySelector(".wf-expression-expand-button")).toBeNull();
     const expand = container.querySelector<HTMLButtonElement>("button[aria-label='Open expanded Inputs editor']");
     expect(expand?.textContent).toContain("Open expanded editor");
+    expand!.focus();
     flushSync(() => expand!.click());
     await nextFrame();
     const dialog = document.querySelector<HTMLElement>("[role='dialog']");
     expect(dialog).not.toBeNull();
     expect(dialog?.querySelector("[aria-label='amount expanded']")).not.toBeNull();
     expect(container.querySelector("[aria-label='amount']")).not.toBeNull();
+    expect(dialog!.contains(document.activeElement)).toBe(true);
+    const focusable = dialogFocusable(dialog!);
+    focusable[0].focus();
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", shiftKey: true, bubbles: true, cancelable: true }));
+    expect(document.activeElement).toBe(focusable.at(-1));
     flushSync(() => document.querySelector<HTMLButtonElement>("button[aria-label='Close Inputs editor']")!.click());
     await nextFrame();
     expect(document.querySelector("[role='dialog']")).toBeNull();
     expect(container.querySelector("[aria-label='amount']")).not.toBeNull();
+    expect(document.activeElement).toBe(expand);
   });
 
   it("does not rebuild an unrelated JavaScript row when a sibling input that opted into activity context changes", async () => {
@@ -1139,6 +1174,72 @@ describe("activity property organization", () => {
           supports: context => context.syntax === "JavaScript",
           surfaces: { inline: ScriptEditor }
         }
+      ],
+      activity: current
+    });
+    await nextFrame();
+    const scriptRendersAfterMount = scriptRenders;
+    flushSync(() => replaceActivity({ ...current, Inputs: inputsValue("951") }));
+    await nextFrame();
+    expect(scriptRenders).toBe(scriptRendersAfterMount);
+
+    flushSync(() => replaceActivity({
+      ...current,
+      Decision: { typeName: "System.String", expression: { type: "Literal", value: "scoring@v1" } },
+      Inputs: inputsValue("951")
+    }));
+    await nextFrame();
+    expect(scriptRenders).toBe(scriptRendersAfterMount);
+  });
+
+  it("keeps that JavaScript row memoized while property editor contributions are registered but not resolved for it", async () => {
+    let scriptRenders = 0;
+    const ScriptEditor: StudioExpressionEditorContribution["surfaces"]["inline"] = ({ value }) => {
+      scriptRenders += 1;
+      return <textarea aria-label="script" data-renders={String(scriptRenders)} defaultValue={String(value ?? "")} />;
+    };
+    const InputsEditor: StudioExpressionEditorContribution["surfaces"]["inline"] = ({ value }) => {
+      const record = value && typeof value === "object" ? value as Record<string, { value?: string }> : {};
+      return <output aria-label="amount">{record.amount?.value ?? ""}</output>;
+    };
+    const inputsValue = (amount: string) => ({
+      typeName: "Elsa.Decisions.Core.DecisionValue",
+      expression: { type: "Object", value: { amount: { kind: "number", value: amount } } }
+    });
+    const templateValue = { typeName: "System.String", expression: { type: "JavaScript", value: "return 1;" } };
+    const current = activity({
+      Decision: { typeName: "System.String", expression: { type: "Literal", value: "approval@latest" } },
+      Inputs: inputsValue("950"),
+      template: templateValue
+    });
+    renderPanel([
+      input("Decision", { referenceKey: "Decision", isWrapped: true, defaultSyntax: "Literal", uiHint: "decision-version" }),
+      input("Inputs", {
+        referenceKey: "Inputs",
+        typeName: "Elsa.Decisions.Core.DecisionValue",
+        isWrapped: true,
+        defaultSyntax: "Object"
+      }),
+      input("Template", { isWrapped: true, defaultSyntax: "JavaScript" })
+    ], {
+      expressionEditors: [
+        {
+          id: "decisions.inputs",
+          readsActivityContext: true,
+          supports: context => context.descriptor.name === "Inputs" && (context.syntax === "Object" || context.syntax === "Literal"),
+          surfaces: { inline: InputsEditor }
+        },
+        {
+          id: "test.javascript",
+          supports: context => context.syntax === "JavaScript",
+          surfaces: { inline: ScriptEditor }
+        }
+      ],
+      // Real hosts register the built-in editors, whose text fallback supports every input. Only a contribution that opted
+      // into activity context and supports this row may defeat the memo.
+      editors: [
+        ...builtInPropertyEditors,
+        { id: "test.unrelated-property-editor", readsActivityContext: true, supports: descriptor => descriptor.uiHint === "test-unrelated", component: () => null }
       ],
       activity: current
     });
@@ -1956,11 +2057,65 @@ describe("activity property organization", () => {
     expect(portalRoot!.style.getPropertyValue("--wf-panel")).toBe("rgb(210, 220, 230)");
     container.style.setProperty("--wf-text", "rgb(9, 8, 7)");
     container.style.removeProperty("--wf-panel");
-    document.documentElement.setAttribute("data-theme", "dark");
+    document.documentElement.setAttribute("data-theme-mode", "dark");
+    document.documentElement.setAttribute("data-theme-appearance", "dark");
+    document.documentElement.setAttribute("data-color-scheme", "classic");
     return vi.waitFor(() => {
       expect(portalRoot!.style.getPropertyValue("--wf-text")).toBe("rgb(9, 8, 7)");
       expect(portalRoot!.style.getPropertyValue("--wf-panel")).toBe("");
-    }).finally(() => document.documentElement.removeAttribute("data-theme"));
+    }).finally(() => {
+      document.documentElement.removeAttribute("data-theme-mode");
+      document.documentElement.removeAttribute("data-theme-appearance");
+      document.documentElement.removeAttribute("data-color-scheme");
+    });
+  });
+
+  it("disconnects the portal theme observer on close and watches appearance attributes", () => {
+    const Original = window.MutationObserver;
+    const disconnect = vi.fn();
+    const filters: Array<readonly string[] | undefined> = [];
+    vi.stubGlobal("MutationObserver", class {
+      inner: MutationObserver;
+      constructor(callback: MutationCallback) {
+        this.inner = new Original(callback);
+      }
+      observe(target: Node, options?: MutationObserverInit) {
+        filters.push(options?.attributeFilter);
+        this.inner.observe(target, options);
+      }
+      disconnect() {
+        disconnect();
+        this.inner.disconnect();
+      }
+      takeRecords() {
+        return this.inner.takeRecords();
+      }
+    });
+    onTestFinished(() => {
+      vi.unstubAllGlobals();
+    });
+
+    const container = renderPanel([input("Payload", { typeName: "System.Object", isWrapped: true })], {
+      expressionDescriptors: [
+        { type: "Literal", displayName: "Literal", editingMode: "literal" },
+        { type: "Object", displayName: "Object", editingMode: "structured" }
+      ],
+      expressionEditors: [createObjectExpressionEditorContribution(() => [])],
+      activity: activity({
+        payload: { typeName: "System.Object", expression: { type: "Object", value: { first: 1 } } }
+      })
+    });
+    const expand = container.querySelector<HTMLButtonElement>("button[aria-label='Open expanded Payload editor']")!;
+    expand.focus();
+    flushSync(() => expand.click());
+    expect(filters.some(filter =>
+      ["data-theme-mode", "data-theme-appearance", "data-color-scheme"].every(name => filter?.includes(name))
+    )).toBe(true);
+
+    flushSync(() => document.querySelector<HTMLButtonElement>("button[aria-label='Close Payload editor']")!.click());
+    expect(document.body.querySelector(".wf-property-editor-dialog")).toBeNull();
+    expect(disconnect).toHaveBeenCalled();
+    expect(document.activeElement).toBe(expand);
   });
 });
 
@@ -2462,6 +2617,12 @@ function openAndSelect(scope: ParentNode, label: string) {
 
 async function nextFrame() {
   await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+}
+
+function dialogFocusable(dialog: HTMLElement) {
+  return [...dialog.querySelectorAll<HTMLElement>(
+    "button, input:not([type='hidden']), textarea, select, [href], [contenteditable='true'], [tabindex]"
+  )].filter(element => (!element.hasAttribute("tabindex") || element.tabIndex >= 0) && !element.closest("[hidden], [aria-hidden='true']"));
 }
 
 function changeTextArea(input: HTMLTextAreaElement, value: string) {

@@ -441,6 +441,8 @@ public sealed class ExecutableNodeCompiler(
         IReadOnlyCollection<VariableDefinition> workflowVariables,
         IReadOnlyCollection<InputDefinition> workflowInputs)
     {
+        if (binding.Selection is not null)
+            throw PublishedMemberReadDiagnostics.Unsupported(nodeId, binding);
         TypeReference? sourceType = binding.Source switch
         {
             RuntimeInputBindingSource.VariableRead => ResolveIntrinsicVariableType(nodeId,

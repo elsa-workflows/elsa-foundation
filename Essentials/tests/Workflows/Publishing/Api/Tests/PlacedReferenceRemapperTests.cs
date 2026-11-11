@@ -120,6 +120,29 @@ public sealed class PlacedReferenceRemapperTests
         Assert.Same(node, PlacedReferenceRemapper.Remap(node, PlacedIds, GraphScope));
     }
 
+    /// <summary>
+    /// A member read (#4078) would otherwise pass through unchanged and keep its template-local producer or scope. Until
+    /// placement remaps member reads (slice C), the remapper refuses one rather than return it as it was.
+    /// </summary>
+    [Theory]
+    [InlineData(RuntimeInputBindingSource.WorkflowRequestMember)]
+    [InlineData(RuntimeInputBindingSource.VariableMember)]
+    [InlineData(RuntimeInputBindingSource.ActivityResultMember)]
+    public void A_member_read_is_refused_rather_than_passed_through_unremapped(RuntimeInputBindingSource source)
+    {
+        var selection = new RuntimeReadSelection(1, ["id"], RuntimeReadSelectionMode.DeferredFit);
+        var binding = new RuntimeInputBinding("value", new ValueTypeDescriptor("Object"), ValueProtectionPolicy.InstanceInline, source, selection,
+            workflowRequest: source == RuntimeInputBindingSource.WorkflowRequestMember ? new RuntimeWorkflowRequestReference("customer") : null,
+            variable: source == RuntimeInputBindingSource.VariableMember ? new RuntimeVariableReference("total", "box") : null,
+            activityResult: source == RuntimeInputBindingSource.ActivityResultMember
+                ? new RuntimeActivityResultReference("compute", "$result", producerScopeId: null)
+                : null);
+
+        var exception = Assert.Throws<NotSupportedException>(() => PlacedReferenceRemapper.Remap(NodeWith(binding), PlacedIds, GraphScope));
+
+        Assert.Contains("publication does not compile member reads yet", exception.Message, StringComparison.Ordinal);
+    }
+
     private static ExecutableNode NodeWith(RuntimeInputBinding binding) => new(
         "node", "node", "local", "1", new("local", "1", JsonSerializer.SerializeToElement(new { })),
         new Dictionary<string, RuntimeInputBinding> { [binding.InputName] = binding },

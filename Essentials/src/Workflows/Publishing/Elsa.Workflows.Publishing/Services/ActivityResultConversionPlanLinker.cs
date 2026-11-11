@@ -54,6 +54,8 @@ public sealed class ActivityResultConversionPlanLinker(ValueConversionPlanResolv
         RuntimeInputBinding binding,
         IReadOnlyDictionary<string, ExecutableNode> nodesById)
     {
+        if (binding.Selection is not null)
+            throw PublishedMemberReadDiagnostics.Unsupported(consumer.ExecutableNodeId, binding);
         if (binding.Source != RuntimeInputBindingSource.ActivityResult || binding.ConversionPlan is not null)
             return binding;
 
