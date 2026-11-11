@@ -34,7 +34,7 @@ public sealed class PackageVersionBuildCheckTests : IDisposable
         var (exitCode, output) = MsBuildFixture.Run("Fixture.LineB", ShowVersion, repositoryRoot: root);
 
         Assert.True(exitCode == 0, $"build failed with exit {exitCode}:\n{output}");
-        Assert.Contains("PackageVersion=4.0.0-dev Version= RepositoryCommit=. AssemblyVersion=4.0.0.0.", output);
+        Assert.Contains("PackageVersion=4.1.0-dev Version= RepositoryCommit=. AssemblyVersion=4.0.0.0.", output);
     }
 
     /// <summary>
@@ -65,7 +65,7 @@ public sealed class PackageVersionBuildCheckTests : IDisposable
         Assert.True(exitCode == 0, $"build failed with exit {exitCode}:\n{output}");
         if (versioned)
         {
-            Assert.Contains("PackageVersion=4.0.0-dev", output);
+            Assert.Contains("PackageVersion=4.1.0-dev", output);
             Assert.Contains("AssemblyVersion=4.0.0.0.", output);
         }
         else
@@ -77,7 +77,7 @@ public sealed class PackageVersionBuildCheckTests : IDisposable
 
     /// <summary>
     /// MSBuild consumes the same line properties the calculator reads: a Line A project takes ElsaContractsVersion and a
-    /// Line B project ElsaVersion, for its dev version and for its assembly version's major alike. Both are 4.0 today, so
+    /// Line B project ElsaVersion, for its dev version and for its assembly version's major alike. Line A is 4.0 and Line B 4.1 today;
     /// a copy of the root build files with the lines apart, majors included, tells them apart.
     /// </summary>
     [Theory]
@@ -86,7 +86,7 @@ public sealed class PackageVersionBuildCheckTests : IDisposable
     public void The_dev_version_and_the_assembly_version_come_from_the_projects_own_line(bool lineA, string expected, string assemblyVersion)
     {
         var linesApart = MsBuildFixture.CopyRootBuildFiles(scratch.CreateSubdirectory("lines-apart").FullName, versionLines => versionLines
-            .Replace("<ElsaVersion>4.0</ElsaVersion>", "<ElsaVersion>5.1</ElsaVersion>", StringComparison.Ordinal)
+            .Replace("<ElsaVersion>4.1</ElsaVersion>", "<ElsaVersion>5.1</ElsaVersion>", StringComparison.Ordinal)
             .Replace("<ElsaContractsVersion>4.0</ElsaContractsVersion>", "<ElsaContractsVersion>4.3</ElsaContractsVersion>", StringComparison.Ordinal));
 
         var (exitCode, output) = MsBuildFixture.Run(
@@ -105,10 +105,10 @@ public sealed class PackageVersionBuildCheckTests : IDisposable
     public void Computed_input_sets_the_versions_and_the_repository_commit()
     {
         var (exitCode, output) = MsBuildFixture.Run(
-            "Fixture.LineB", ShowVersion, repositoryRoot: root, importFirst: Computed(("Fixture.LineB", "4.0.8-preview")));
+            "Fixture.LineB", ShowVersion, repositoryRoot: root, importFirst: Computed(("Fixture.LineB", "4.1.8-preview")));
 
         Assert.True(exitCode == 0, $"build failed with exit {exitCode}:\n{output}");
-        Assert.Contains($"PackageVersion=4.0.8-preview Version=4.0.8-preview RepositoryCommit={Commit}. AssemblyVersion=4.0.0.0.", output);
+        Assert.Contains($"PackageVersion=4.1.8-preview Version=4.1.8-preview RepositoryCommit={Commit}. AssemblyVersion=4.0.0.0.", output);
     }
 
     /// <summary>
@@ -118,24 +118,24 @@ public sealed class PackageVersionBuildCheckTests : IDisposable
     [Fact]
     public void Without_computed_input_a_global_version_is_the_package_version()
     {
-        var (exitCode, output) = MsBuildFixture.Run("Fixture.LineB", ShowVersion, ["Version=4.0.0-preview.123"], root);
+        var (exitCode, output) = MsBuildFixture.Run("Fixture.LineB", ShowVersion, ["Version=4.1.0-preview.123"], root);
 
         Assert.True(exitCode == 0, $"build failed with exit {exitCode}:\n{output}");
-        Assert.Contains("PackageVersion=4.0.0-preview.123 Version=4.0.0-preview.123 ", output);
+        Assert.Contains("PackageVersion=4.1.0-preview.123 Version=4.1.0-preview.123 ", output);
     }
 
     public static TheoryData<string, string[], bool, string> Overrides => new()
     {
         // With computed input, a project's own Version, or a global /p:Version, would stamp another version on its assemblies.
         { "<PropertyGroup><Version>9.9.9</Version></PropertyGroup>", [], true, "ELSAPV003" },
-        { "", ["Version=4.0.0-preview.123"], true, "ELSAPV003" },
+        { "", ["Version=4.1.0-preview.123"], true, "ELSAPV003" },
         // Nothing sets PackageVersion, with or without computed input.
         { "", ["PackageVersion=1.2.3"], false, "ELSAPV004" },
         { "<PropertyGroup><PackageVersion>1.2.3</PackageVersion></PropertyGroup>", [], false, "ELSAPV004" },
         { "<PropertyGroup><PackageVersion>1.2.3</PackageVersion></PropertyGroup>", [], true, "ELSAPV004" },
         // Nothing sets AssemblyVersion either: a host's share declares its major (#2150).
         { "<PropertyGroup><AssemblyVersion>1.0.0.0</AssemblyVersion></PropertyGroup>", [], false, "ELSAPV008" },
-        { "", ["AssemblyVersion=4.0.8.0"], true, "ELSAPV008" },
+        { "", ["AssemblyVersion=4.1.8.0"], true, "ELSAPV008" },
     };
 
     [Theory]
@@ -143,7 +143,7 @@ public sealed class PackageVersionBuildCheckTests : IDisposable
     public void An_override_of_the_version_fails(string body, string[] globalProperties, bool computed, string expectedCode)
     {
         var (exitCode, output) = MsBuildFixture.Run(
-            "Fixture.LineB", body, globalProperties, root, importFirst: computed ? Computed(("Fixture.LineB", "4.0.8-preview")) : null);
+            "Fixture.LineB", body, globalProperties, root, importFirst: computed ? Computed(("Fixture.LineB", "4.1.8-preview")) : null);
 
         Assert.True(exitCode != 0, $"expected a build failure but it succeeded:\n{output}");
         Assert.Contains(expectedCode, output);
@@ -153,7 +153,7 @@ public sealed class PackageVersionBuildCheckTests : IDisposable
     [Fact]
     public void A_computed_version_off_the_projects_line_fails()
     {
-        var (exitCode, output) = MsBuildFixture.Run("Fixture.LineB", repositoryRoot: root, importFirst: Computed(("Fixture.LineB", "4.1.0-preview")));
+        var (exitCode, output) = MsBuildFixture.Run("Fixture.LineB", repositoryRoot: root, importFirst: Computed(("Fixture.LineB", "4.2.0-preview")));
 
         Assert.True(exitCode != 0, $"expected a build failure but it succeeded:\n{output}");
         Assert.Contains("ELSAPV002", output);
@@ -183,7 +183,7 @@ public sealed class PackageVersionBuildCheckTests : IDisposable
     {
         var (exitCode, output) = MsBuildFixture.Run(
             "Fixture.LineB", "<PropertyGroup><IsPackable>true</IsPackable></PropertyGroup>", repositoryRoot: root, target: target,
-            importFirst: Computed(("Fixture.Other", "4.0.8-preview")));
+            importFirst: Computed(("Fixture.Other", "4.1.8-preview")));
 
         Assert.True(fails == (exitCode != 0), $"exit {exitCode}:\n{output}");
         Assert.Equal(fails, output.Contains("ELSAPV005", StringComparison.Ordinal));

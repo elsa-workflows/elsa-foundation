@@ -88,7 +88,7 @@ public sealed class PinnedTransitivePackTests : IDisposable
             ["pack", "Essentials/src/App/Fixture.App.csproj", "-c", "Release", "-o", Path.Join(root.FullName, "out"), "-nodeReuse:false"], root.FullName, TimeSpan.FromMinutes(5));
         Assert.True(exitCode == 0, $"dotnet pack failed with exit {exitCode}:\n{output}");
 
-        var listed = NuspecDependencies(Path.Join(root.FullName, "out", "Fixture.App.4.0.0-dev.nupkg")).Where(dependency => dependency.Id != "Fixture.Lib");
+        var listed = NuspecDependencies(Path.Join(root.FullName, "out", "Fixture.App.4.1.0-dev.nupkg")).Where(dependency => dependency.Id != "Fixture.Lib");
         var restored = Pins(Path.Join(root.FullName, "Essentials", "src", "App", "obj", "project.assets.json"), "centralTransitiveDependencyGroups", "version", _ => true);
         var locked = Pins(Path.Join(root.FullName, "Essentials", "src", "App", "packages.lock.json"), "dependencies", "requested",
             package => package.GetProperty("type").GetString() == "CentralTransitive");

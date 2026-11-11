@@ -13,7 +13,7 @@ public sealed class TemplateTests
         Assert.Equal("Elsa.Integrations.Connector", document.RootElement.GetProperty("identity").GetString());
 
         var project = File.ReadAllText(Path.GetFullPath(Path.Combine(RepoRoot(), "Extensions", "Integrations", "templates", "elsa-connector", "Company.Connector.csproj")));
-        Assert.Contains("Version=\"4.0.*-*\"", project, StringComparison.Ordinal);
+        Assert.Contains("Version=\"4.1.*-*\"", project, StringComparison.Ordinal);
     }
 
     private static string RepoRoot()

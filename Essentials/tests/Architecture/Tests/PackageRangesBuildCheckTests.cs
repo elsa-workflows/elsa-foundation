@@ -32,7 +32,7 @@ public sealed class PackageRangesBuildCheckTests : IDisposable
     public void An_unbounded_range_on_a_project_reference_fails_while_a_third_partys_passes()
     {
         var (exitCode, output) = MsBuildFixture.Run(
-            "Fixture.LineB", Body(ownRange: "[4.0.3-preview, 6.0.0)", thirdPartyRange: "[10.0.10, 11.0.0)"),
+            "Fixture.LineB", Body(ownRange: "[4.1.3-preview, 6.0.0)", thirdPartyRange: "[10.0.10, 11.0.0)"),
             repositoryRoot: root, target: "GenerateNuspec", importFirst: Computed());
 
         Assert.True(exitCode != 0, $"expected a build failure but it succeeded:\n{output}");
@@ -46,7 +46,7 @@ public sealed class PackageRangesBuildCheckTests : IDisposable
     public void A_bounded_range_on_a_project_reference_and_any_range_on_a_third_party_pass()
     {
         var (exitCode, output) = MsBuildFixture.Run(
-            "Fixture.LineB", Body(ownRange: "[4.0.3-preview, 5.0.0)", thirdPartyRange: "[10.0.10, )"),
+            "Fixture.LineB", Body(ownRange: "[4.1.3-preview, 5.0.0)", thirdPartyRange: "[10.0.10, )"),
             repositoryRoot: root, target: "GenerateNuspec", importFirst: Computed());
 
         Assert.True(exitCode == 0, $"build failed with exit {exitCode}:\n{output}");
@@ -89,7 +89,7 @@ public sealed class PackageRangesBuildCheckTests : IDisposable
                 <ElsaVersionComputationCommit>{Commit}</ElsaVersionComputationCommit>
               </PropertyGroup>
               <PropertyGroup Condition="'$(MSBuildProjectName)' == 'Fixture.LineB'">
-                <ElsaComputedPackageVersion>4.0.8-preview</ElsaComputedPackageVersion>
+                <ElsaComputedPackageVersion>4.1.8-preview</ElsaComputedPackageVersion>
                 <ElsaInputFingerprint>sha256:{new string('a', 64)}</ElsaInputFingerprint>
               </PropertyGroup>
             </Project>

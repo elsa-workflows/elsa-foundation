@@ -72,8 +72,8 @@ public sealed class PackageVersioningPackTests : IDisposable
     {
         Dotnet("pack", "Essentials/src/App/Fixture.App.csproj", "-c", "Release", "-o", Output);
 
-        var package = Path.Join(Output, "Fixture.App.4.0.0-dev.nupkg");
-        Assert.Equal([("Fixture.Lib", "4.0.0-dev"), ("Microsoft.Extensions.Primitives", PrimitivesVersion)], Dependencies(package));
+        var package = Path.Join(Output, "Fixture.App.4.1.0-dev.nupkg");
+        Assert.Equal([("Fixture.Lib", "4.1.0-dev"), ("Microsoft.Extensions.Primitives", PrimitivesVersion)], Dependencies(package));
         Assert.Null(Entry(package, "elsa-input-fingerprint.json"));
         Assert.Equal(("4.0.0.0", "1.0.0.0", "4.0.0.0"), AssemblyVersions(package));
     }
@@ -85,11 +85,11 @@ public sealed class PackageVersioningPackTests : IDisposable
     [Fact]
     public void A_pack_with_only_a_global_version_matches_todays_unbounded_ranges_and_carries_no_fingerprint()
     {
-        Dotnet("pack", "Essentials/src/App/Fixture.App.csproj", "-c", "Release", "-p:Version=4.0.0-preview.999", "-o", Output);
+        Dotnet("pack", "Essentials/src/App/Fixture.App.csproj", "-c", "Release", "-p:Version=4.1.0-preview.999", "-o", Output);
 
-        var package = Path.Join(Output, "Fixture.App.4.0.0-preview.999.nupkg");
+        var package = Path.Join(Output, "Fixture.App.4.1.0-preview.999.nupkg");
         Assert.Equal(
-            [("Fixture.Lib", "4.0.0-preview.999"), ("Microsoft.Extensions.Primitives", PrimitivesVersion)],
+            [("Fixture.Lib", "4.1.0-preview.999"), ("Microsoft.Extensions.Primitives", PrimitivesVersion)],
             Dependencies(package));
         Assert.Null(Entry(package, "elsa-input-fingerprint.json"));
     }
@@ -108,15 +108,15 @@ public sealed class PackageVersioningPackTests : IDisposable
         Dotnet("build", "Essentials/src/App/Fixture.App.csproj", "-c", "Release", $"-p:CustomBeforeDirectoryBuildProps={properties}");
         Dotnet("pack", "Essentials/src/App/Fixture.App.csproj", "-c", "Release", "--no-build", $"-p:CustomBeforeDirectoryBuildProps={properties}", "-o", Output);
 
-        var package = Path.Join(Output, "Fixture.App.4.0.8-preview.nupkg");
+        var package = Path.Join(Output, "Fixture.App.4.1.8-preview.nupkg");
         var metadata = Metadata(package);
-        Assert.Equal("4.0.8-preview", metadata.Element(metadata.Name.Namespace + "version")!.Value);
+        Assert.Equal("4.1.8-preview", metadata.Element(metadata.Name.Namespace + "version")!.Value);
         Assert.Equal(head, (string?)metadata.Element(metadata.Name.Namespace + "repository")!.Attribute("commit"));
-        Assert.Equal([("Fixture.Lib", "[4.0.3-preview, 5.0.0)"), ("Microsoft.Extensions.Primitives", PrimitivesVersion)], Dependencies(package));
+        Assert.Equal([("Fixture.Lib", "[4.1.3-preview, 5.0.0)"), ("Microsoft.Extensions.Primitives", PrimitivesVersion)], Dependencies(package));
         Assert.Equal($$"""{"schema_version":1,"fingerprint":"{{AppFingerprint}}"}""", Entry(package, "elsa-input-fingerprint.json")?.Trim());
         // The assembly claims its line's major, as a dev build's does, and so does its reference to Lib, whose package is at
-        // 4.0.3-preview: a host shares either with a package built either way (#2150). The file version keeps the full one.
-        Assert.Equal(("4.0.0.0", "4.0.8.0", "4.0.0.0"), AssemblyVersions(package));
+        // 4.1.3-preview: a host shares either with a package built either way (#2150). The file version keeps the full one.
+        Assert.Equal(("4.0.0.0", "4.1.8.0", "4.0.0.0"), AssemblyVersions(package));
     }
 
     /// <summary>A no-build pack stamping another version than the build did would ship assemblies claiming a different one.</summary>
@@ -159,8 +159,8 @@ public sealed class PackageVersioningPackTests : IDisposable
         Dotnet("build", "Essentials/src/App/Fixture.App.csproj", "-c", "Release", $"-p:CustomBeforeDirectoryBuildProps={properties}");
         Dotnet("pack", "Essentials/src/App/Fixture.App.csproj", "-c", "Release", "--no-build", $"-p:CustomBeforeDirectoryBuildProps={properties}", "-o", Output);
 
-        var package = Path.Join(Output, "Fixture.App.4.0.8-preview.nupkg");
-        Assert.Equal([("Fixture.Lib", "[4.0.3-preview, 5.0.0)"), ("Microsoft.Extensions.Primitives", PrimitivesVersion)], Dependencies(package));
+        var package = Path.Join(Output, "Fixture.App.4.1.8-preview.nupkg");
+        Assert.Equal([("Fixture.Lib", "[4.1.3-preview, 5.0.0)"), ("Microsoft.Extensions.Primitives", PrimitivesVersion)], Dependencies(package));
     }
 
     public void Dispose() => root.Delete(recursive: true);
@@ -175,11 +175,11 @@ public sealed class PackageVersioningPackTests : IDisposable
                 <ElsaVersionComputationCommit>{commit}</ElsaVersionComputationCommit>
               </PropertyGroup>
               <PropertyGroup Condition="'$(MSBuildProjectName)' == 'Fixture.App'">
-                <ElsaComputedPackageVersion>4.0.8-preview</ElsaComputedPackageVersion>
+                <ElsaComputedPackageVersion>4.1.8-preview</ElsaComputedPackageVersion>
                 <ElsaInputFingerprint>{AppFingerprint}</ElsaInputFingerprint>
               </PropertyGroup>
               <PropertyGroup Condition="'$(MSBuildProjectName)' == 'Fixture.Lib'">
-                <ElsaComputedPackageVersion>4.0.3-preview</ElsaComputedPackageVersion>
+                <ElsaComputedPackageVersion>4.1.3-preview</ElsaComputedPackageVersion>
                 <ElsaInputFingerprint>sha256:{new string('b', 64)}</ElsaInputFingerprint>
               </PropertyGroup>
             </Project>

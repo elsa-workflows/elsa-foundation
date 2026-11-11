@@ -87,7 +87,7 @@ Decision: plan on [#4027](https://github.com/elsa-workflows/elsa-foundation/issu
 
 Not renamed: the branch name `agent/codex/3538-specialist-design` in the spec header (it is the branch the design was written on), other specs that mention specialists in their own history, and evidence files.
 
-Version line: [ADR 0094](../adr/0094-agent-definitions-own-authored-content-and-providers-publish-activities.md#amendment--2026-11-09-accepted) gives the rename one Minor bump of the single pre-GA version line, with this page as its release note. The bump is not part of this stage. It is one change of its own, `ElsaVersion` 4.0 → 4.1 in `VersionLines.props`, made after the last rename stage (3b, Weaver's own wording) has merged, so that every Line B package moves to the new minor once and the note it carries is the complete map. Until then the renamed ids are published on the current line (see the top of this page) and this ledger records the break.
+Version line: [ADR 0094](../adr/0094-agent-definitions-own-authored-content-and-providers-publish-activities.md#amendment--2026-11-09-accepted) gives the rename one Minor bump of the single pre-GA version line, with this page as its release note. The bump is not part of this stage. It is one change of its own, `ElsaVersion` 4.0 → 4.1 in `VersionLines.props`, made after the last rename stage had merged, so that every Line B package moves to the new minor once and the note it carries is the complete map. See [the version bump](#2026-11-11-the-version-line-moves-to-41) below.
 
 Weaver enum members and JSON property names that still say agent (`agentScopes`, `AgentHarnessProvider`, `SubAgents`) are wire names and stay until an owner decision; the analyzer checks type and namespace declarations only, so it does not flag them. Stage 3c below renames them.
 
@@ -139,3 +139,21 @@ What a consumer has to do:
 - Stored Weaver sessions from before this stage are not migrated (pre-GA clean break, as in stage 1, which regenerated the Weaver migrations). Context attachments are stored as protected JSON under the old property name, so an attachment recorded earlier reads back with no scopes, and its canonical digest no longer matches. Start from an empty Weaver store.
 
 Kept: the `agent` property of the SDK prompt request (`StudioWeaverPromptRequest.agent`). It asks for a named agent other than Weaver, which is what "agent" means after this rename, so `weaver` would say the opposite. It never leaves the browser: the client refuses such a prompt because no other agent can be addressed yet.
+
+## 2026-11-11: the version line moves to 4.1
+
+Decision: [ADR 0094, amendment of 2026-11-09](../adr/0094-agent-definitions-own-authored-content-and-providers-publish-activities.md#amendment--2026-11-09-accepted): the rename takes one Minor bump, with this page as its release note. It follows the last rename stage (3c).
+
+| Line | Property in `VersionLines.props` | Was | Is |
+|---|---|---|---|
+| B, every package that is not a shared contract | `ElsaVersion` | 4.0 | 4.1 |
+| A, the shared contract packages | `ElsaContractsVersion` | 4.0 | 4.0 (unchanged: no contract package was renamed) |
+
+What a consumer has to do:
+
+- Line B packages are published as `4.1.<patch>-preview` from the first publish after this change; each package's patch starts again at 0. The `4.0.x-preview` versions stay on the feed and get no further updates.
+- A floating reference such as `4.0.*-*` keeps resolving the last 4.0 preview. Move it to `4.1.*-*` to follow the line. The connector template (`dotnet new elsa-connector`) now references `Elsa.Integrations.Sdk` as `4.1.*-*`.
+- A single-point pin (`[4.0.12-preview]`) keeps working and keeps the old names. Moving a pin to 4.1 means applying the renames on this page in the same step.
+- Assembly versions do not change: they carry the major only (`4.0.0.0`).
+
+Not part of the line, and unchanged: the Studio npm and NuGet packages and the Docker image tags, which are versioned by their own workflows (`4.0.0-preview.N`).
