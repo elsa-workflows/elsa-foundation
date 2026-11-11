@@ -88,6 +88,8 @@ const state: WorkflowDefinitionState = {
   rootActivity: {
     nodeId: "root",
     activityVersionId: "sequence",
+    inputs: [],
+    outputs: [],
     structure: { kind: "elsa.sequence.structure", schemaVersion: "1.0.0", payload: { activities: [
       { nodeId: "get-customer", activityVersionId: "get-customer-v1", inputs: [], outputs: [] },
       { nodeId: "consumer", activityVersionId: "invoice-v1", inputs: [], outputs: [],
@@ -98,7 +100,7 @@ const state: WorkflowDefinitionState = {
 
 describe("activity data source client", () => {
   it("analyzes the current workflow snapshot against the acknowledged base through the advertised relation", async () => {
-    const postJson = vi.fn(async (_path: string, body: { documentRevision: string }) => supportedResponse(body.documentRevision));
+    const postJson = vi.fn(async (_path: string, body: { documentRevision: string }, _init?: unknown) => supportedResponse(body.documentRevision));
     const endpoint = context(postJson);
     const snapshot = canonicalizeStateForWire(state);
     const controller = new AbortController();

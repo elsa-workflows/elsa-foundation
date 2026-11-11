@@ -79,12 +79,14 @@ export interface ActivityDataContextResult {
 
 /**
  * Bounded whole-value browsing. Member shapes are not requested: member selection is not authored here, so
- * depth and member budgets are zero and the server returns each source's root shape only.
+ * depth and member budgets are zero and the server returns each source's root shape only. Every field is sent,
+ * including the empty member path: the workflow endpoint refuses a query that omits it.
  */
 export const wholeValueSourceQuery = {
   includeSources: true,
   skip: 0,
   take: 100,
+  memberPath: [],
   shapeLimits: { maximumDepth: 0, maximumMembers: 0 }
 } as const;
 

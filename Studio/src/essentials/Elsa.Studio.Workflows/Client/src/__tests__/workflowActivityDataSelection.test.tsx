@@ -75,7 +75,7 @@ function draft(customerId: unknown, overrides: Partial<WorkflowDraft> = {}): Wor
     state: {
       variables: [], inputs: [], outputs: [],
       rootActivity: {
-        nodeId: "root", activityVersionId: "sequence",
+        nodeId: "root", activityVersionId: "sequence", inputs: [], outputs: [],
         structure: { kind: "elsa.sequence.structure", schemaVersion: "1.0.0", payload: { activities: [
           { nodeId: "producer", activityVersionId: "get-customer-v1", inputs: [], outputs: [] },
           { nodeId: "consumer", activityVersionId: "invoice-v1", inputs: [], outputs: [],
