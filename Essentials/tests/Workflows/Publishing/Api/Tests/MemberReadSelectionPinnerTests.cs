@@ -33,6 +33,17 @@ public sealed class MemberReadSelectionPinnerTests
     }
 
     [Fact]
+    public void A_read_with_more_than_one_matching_fact_stays_deferred_instead_of_failing_publication()
+    {
+        var tree = Tree();
+
+        var pinned = MemberReadSelectionPinner.Pin(tree, [Fact(), Fact() with { SelectedType = new TypeReference("Int32") }]);
+
+        Assert.Same(tree, pinned);
+        Assert.Equal(RuntimeReadSelectionMode.DeferredFit, Consumer(pinned).InputBindings["value"].Selection!.Mode);
+    }
+
+    [Fact]
     public void A_read_the_analysis_could_not_type_stays_deferred()
     {
         var tree = Tree();

@@ -186,10 +186,12 @@ internal static class TestCompiler
     // Direct compiler tests compose the real authority against their real fixture catalog and structures.
     // A fresh operation scope prevents request-local catalog/visibility caches from leaking between compiles.
     internal static IActivityDataSelectionAnalyzer SourceAuthority(
-        IActivityDefinitionVersionStore versions, IActivityStructureService structures, bool memberReads = false) =>
-        new TestSourceAuthority(versions, structures, memberReads);
+        IActivityDefinitionVersionStore versions, IActivityStructureService structures, bool memberReads = false,
+        Action<IServiceCollection>? configure = null) =>
+        new TestSourceAuthority(versions, structures, memberReads, configure);
 
-    private sealed class TestSourceAuthority(IActivityDefinitionVersionStore versions, IActivityStructureService structures, bool memberReads)
+    private sealed class TestSourceAuthority(IActivityDefinitionVersionStore versions, IActivityStructureService structures, bool memberReads,
+        Action<IServiceCollection>? configure)
         : IActivityDataSelectionAnalyzer
     {
         public async ValueTask<ActivityDataSelectionAnalysis> AnalyzeAsync(ActivityDataSelectionDocument document,
@@ -202,6 +204,7 @@ internal static class TestCompiler
             new WorkflowDesignValidationsFeature { MemberReads = memberReads }.ConfigureServices(services);
             services.AddSingleton(structures);
             services.AddSingleton<IActivityDefinitionLookup>(new TestSourceCatalog(versions));
+            configure?.Invoke(services);
             await using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
             await using var scope = provider.CreateAsyncScope();
             return await scope.ServiceProvider.GetRequiredService<IActivityDataSelectionAnalyzer>()

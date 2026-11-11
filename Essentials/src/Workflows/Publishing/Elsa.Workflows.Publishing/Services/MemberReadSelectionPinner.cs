@@ -71,12 +71,13 @@ internal static class MemberReadSelectionPinner
             !known.TryGetValue($"{node.AuthoredActivityId}/inputs/{binding.InputKey}", out var candidates))
             return binding;
 
-        // The facts must describe this exact read: the same producer, projection and segments.
-        var fact = candidates.SingleOrDefault(candidate =>
+        // The facts must describe this exact read: the same producer, projection and segments. Anything but exactly
+        // one such fact leaves the read deferred, so the runtime checks it, rather than guessing between facts.
+        var matches = candidates.Where(candidate =>
             StringComparer.Ordinal.Equals(candidate.ProducerNodeId, result.ProducerExecutableNodeId) &&
             StringComparer.Ordinal.Equals(candidate.ProjectionKey, result.ProjectionKey) &&
-            candidate.MemberPath.SequenceEqual(selection.Segments, StringComparer.Ordinal));
-        if (fact?.SelectedType is not { } selectedType || fact.ProfileRevision is not { } profileRevision)
+            candidate.MemberPath.SequenceEqual(selection.Segments, StringComparer.Ordinal)).Take(2).ToArray();
+        if (matches is not [{ SelectedType: { } selectedType, ProfileRevision: { } profileRevision } fact])
             return binding;
 
         return new RuntimeInputBinding(
