@@ -147,6 +147,13 @@ describe("Decisions Studio journeys", () => {
     click(button(host, "New decision"));
     expect(opened).toHaveBeenCalledWith("/decisions?new=1", "_blank", "noopener");
   });
+  it("disables the new decision shortcut while the inspector is read-only", async () => {
+    const api = stubApi(), opened = vi.spyOn(window, "open").mockReturnValue(null); disposals.push(() => opened.mockRestore());
+    const { host } = mount(<DecisionVersionEditor api={api} descriptor={{ name: "Decision", typeName: "String" }} context={{} as never} value="" disabled onChange={vi.fn()} />);
+    await vi.waitFor(() => expect(host.textContent).toContain("Approval"));
+    const shortcut = button(host, "New decision"); expect(shortcut.disabled).toBe(true);
+    click(shortcut); expect(opened).not.toHaveBeenCalled();
+  });
   it("hides the new decision shortcut from authors who cannot manage decisions", async () => {
     const api = stubApi(["read"]);
     const { host } = mount(<DecisionVersionEditor api={api} descriptor={{ name: "Decision", typeName: "String" }} context={{} as never} value="" disabled={false} onChange={vi.fn()} />);
