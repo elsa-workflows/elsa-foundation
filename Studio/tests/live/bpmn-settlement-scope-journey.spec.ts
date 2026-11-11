@@ -1,5 +1,5 @@
 import { existsSync, unlinkSync, writeFileSync } from "node:fs";
-import { expect, test, type APIRequestContext, type Locator, type Page, type Route } from "@playwright/test";
+import { expect, test, type APIRequestContext, type Locator, type Page, type Request, type Route } from "@playwright/test";
 import { studioPassword } from "./support/journey";
 import { addPersonalBackend, signInToStudio, waitForSelectedBackend } from "./support/studioReady";
 
@@ -60,8 +60,16 @@ async function publishHuman(api: APIRequestContext, processId: string, taskName:
   return post(api, "/bpmn/artifacts", { requestId: `publish-${processId}`, definition: humanDefinition(processId, taskName) });
 }
 
+function withBackend(page: Page, path: string) {
+  const backend = new URL(page.url()).searchParams.get("backend");
+  if (!backend) return path;
+  const url = new URL(path, "http://studio.local");
+  url.searchParams.set("backend", backend);
+  return `${url.pathname}${url.search}`;
+}
+
 async function openBpmnProcesses(page: Page) {
-  await page.goto("/workflows/bpmn");
+  await page.goto(withBackend(page, "/workflows/bpmn"));
   await expect(page.getByRole("heading", { name: "BPMN processes", exact: true, level: 2 })).toBeVisible({ timeout: 30_000 });
 }
 
@@ -89,6 +97,20 @@ async function waitForStartableProcess(page: Page, sourceReferenceId: string) {
     return 0;
   }, { timeout: 30_000, intervals: [200, 500] }).toBe(1);
   return page.locator("tbody tr").nth(rowIndex);
+}
+
+function isBpmnStartPost(request: Request) {
+  return request.method() === "POST" && new URL(request.url()).pathname.replace(/\/+$/, "") === "/bpmn/executions";
+}
+
+function watchBpmnStartPost(page: Page) {
+  return Promise.race([
+    page.waitForEvent("requestfinished", { predicate: isBpmnStartPost, timeout: 120_000 }).then(() => ({ status: "finished" as const })),
+    page.waitForEvent("requestfailed", { predicate: isBpmnStartPost, timeout: 120_000 }).then(request => ({
+      status: "failed" as const,
+      failure: request.failure()?.errorText ?? "failed"
+    }))
+  ]);
 }
 
 async function holdStart(page: Page) {
@@ -143,16 +165,22 @@ test.describe("FR-012 awaiting settlement and timeout path", () => {
       });
       const native = await post(api, `/publishing/workflows/${submitted.version.id}/publish`, {});
       await post(api, `/runtime/workflows/executables/${native.artifactId}/execute`, { sourceReferenceId: native.sourceReferenceId });
+      const artifactId = published.executable.artifactId as string;
 
       let childId = "";
       await expect.poll(async () => {
         const executions = await get(api, "/bpmn/executions?limit=50");
-        childId = executions.items.find((item: { status: string }) => item.status === "Running")?.executionId ?? "";
+        const child = executions.items
+          .filter((item: { status: string; executable?: { artifactId?: string }; createdAt?: string }) =>
+            item.status === "Running" && item.executable?.artifactId === artifactId)
+          .sort((left: { createdAt?: string }, right: { createdAt?: string }) =>
+            Date.parse(right.createdAt ?? "") - Date.parse(left.createdAt ?? ""))[0];
+        childId = child?.executionId ?? "";
         return childId;
       }, { timeout: 30_000, intervals: [200, 500, 1_000] }).not.toBe("");
 
       await signInToStudio(page);
-      await page.goto(`/workflows/bpmn/runs/${encodeURIComponent(childId)}`);
+      await page.goto(withBackend(page, `/workflows/bpmn/runs/${encodeURIComponent(childId)}`));
       await expect(page.locator(".wf-bpmn-run-heading")).toContainText("Waiting for a person", { timeout: 30_000 });
 
       writeFileSync(holdPath!, "hold");
@@ -213,7 +241,7 @@ test.describe("FR-012 awaiting settlement and timeout path", () => {
       const started = await post(api, "/bpmn/executions", { requestId: `timed-start-${Date.now()}`, sourceReferenceId: published.sourceReferenceId });
 
       await signInToStudio(page);
-      await page.goto(`/workflows/bpmn/runs/${encodeURIComponent(started.executionId)}`);
+      await page.goto(withBackend(page, `/workflows/bpmn/runs/${encodeURIComponent(started.executionId)}`));
       await expect(page.locator(".wf-bpmn-run-heading")).toBeVisible({ timeout: 30_000 });
       await expect(async () => {
         const refresh = page.getByRole("button", { name: "Refresh run", exact: true });
@@ -224,7 +252,8 @@ test.describe("FR-012 awaiting settlement and timeout path", () => {
       const heading = page.locator(".wf-bpmn-run-heading");
       await expect(heading).toContainText("Completed");
       await expect(heading).not.toContainText("awaiting settlement");
-      // Product gap: both end events report Completed/Done. Studio does not name the timed-out path.
+      // Product gap tracked by #3650: Studio does not name the timed-out path. Flip these
+      // assertions when a label ships.
       await expect(heading).not.toContainText("Timed out");
       await expect(heading).not.toContainText("timed-out");
       await info.attach("fr-012-timeout-end-event-gap.png", { body: await page.screenshot({ fullPage: true }), contentType: "image/png" });
@@ -245,9 +274,10 @@ test.describe("FR-012 awaiting settlement and timeout path", () => {
 test.describe("FR-014 pending start does not follow a scope change", () => {
   test.describe.configure({ mode: "serial" });
 
-  test("does not apply a pending start after an account switch", async ({ page, playwright }) => {
+  test("does not apply a pending start after an account switch", async ({ page, playwright }, info) => {
     const api = await operator(playwright);
     const hold = await holdStart(page);
+    const startPost = watchBpmnStartPost(page);
     try {
       const published = await publishHuman(api, `scope-account-${Date.now()}`, "Account switch wait");
       await signInToStudio(page, "admin");
@@ -264,9 +294,15 @@ test.describe("FR-014 pending start does not follow a scope change", () => {
 
       await signInToStudio(page, "operator");
       await openBpmnProcesses(page);
+      hold.release();
+      const startOutcome = await startPost;
+      await info.attach("fr-014-account-start-outcome.json", {
+        body: JSON.stringify(startOutcome, null, 2),
+        contentType: "application/json"
+      });
+      expect(["finished", "failed"]).toContain(startOutcome.status);
       await expect(page.getByText("Last start: accepted")).toHaveCount(0);
       await expect(page.getByText("The start outcome is unconfirmed. Resume uses the retained request.")).toHaveCount(0);
-      expect(published.sourceReferenceId).toBeTruthy();
     } finally {
       hold.release();
       await hold.dispose();
