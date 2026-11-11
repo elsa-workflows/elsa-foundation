@@ -210,6 +210,7 @@ public sealed partial class EfWorkflowSchedulerPoisonStoreTests
     [InlineData("second-look-fails")]
     [InlineData("second-look-cancelled")]
     [InlineData("timeout-reported-as-cancellation")]
+    [InlineData("timeout-reported-as-cancellation-then-taken-over")]
     public async Task Fenced_record_looks_at_the_ownership_row_again_before_any_provider_failure_leaves(string then)
     {
         // Not every takeover shows as a conflict on the ownership row. Under a stricter isolation level it is a
@@ -225,11 +226,13 @@ public sealed partial class EfWorkflowSchedulerPoisonStoreTests
         await using var otherConnection = database.Open("tenant-a");
         var clock = new FakeTimeProvider(Now);
         var lease = await Node(fixture, "node-a", clock).AcquireAsync(OwnedWorkflow);
+        var takenOver = then.EndsWith("taken-over", StringComparison.Ordinal);
+        if (takenOver)
+            failure.AfterRollback = async () => await Node(otherConnection, "node-b", clock).AcquireAsync(OwnedWorkflow);
+        if (then.StartsWith("timeout-reported-as-cancellation", StringComparison.Ordinal))
+            failure.SaveFailure = () => new TaskCanceledException(ProviderSaveFailure.Message);
         switch (then)
         {
-            case "taken-over":
-                failure.AfterRollback = async () => await Node(otherConnection, "node-b", clock).AcquireAsync(OwnedWorkflow);
-                break;
             case "second-look-fails":
                 failure.SecondLookFailure = () => new SimulatedProviderFailure("Simulated failure of the ownership read.");
                 break;
@@ -240,15 +243,12 @@ public sealed partial class EfWorkflowSchedulerPoisonStoreTests
                     return new OperationCanceledException(cancellation.Token);
                 };
                 break;
-            case "timeout-reported-as-cancellation":
-                failure.SaveFailure = () => new TaskCanceledException(ProviderSaveFailure.Message);
-                break;
         }
         failure.Armed = true;
         var store = FencedStore(fixture, clock);
         Func<Task> record = () => store.RecordFencedAsync(Record(1), lease.ToFence(), cancellation.Token).AsTask();
 
-        if (then == "taken-over")
+        if (takenOver)
         {
             Assert.Equal(RuntimeFencingRejectionReason.StaleToken, (await Assert.ThrowsAsync<RuntimeStaleFencingTokenException>(record)).Reason);
         }
@@ -266,6 +266,35 @@ public sealed partial class EfWorkflowSchedulerPoisonStoreTests
         }
 
         Assert.Equal(then is "second-look-fails" or "second-look-cancelled" ? 1 : 0, failure.FailedSecondLooks);
+        Assert.Empty(fixture.Context.ChangeTracker.Entries());
+        await using var read = database.Open("tenant-a");
+        Assert.Null(await read.Store.FindAsync(OwnedWorkflow, "work-1"));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Fenced_record_treats_a_bare_timeout_as_a_provider_failure_and_looks_at_the_ownership_row_again(bool takenOver)
+    {
+        // Beginning the transaction, a read and the commit can fail with a bare TimeoutException or IOException, which
+        // EF Core does not wrap. Like any provider failure it must not leave as it is, and not before the ownership
+        // row was read once more: behind it a takeover leaves as stale.
+        await using var database = await TestDatabase.CreateAsync();
+        var commit = new CommitFailure { Failure = () => new TimeoutException("Simulated timeout of the commit.") };
+        await using var fixture = database.Open("tenant-a", commit);
+        await using var otherConnection = database.Open("tenant-a");
+        var clock = new FakeTimeProvider(Now);
+        var lease = await Node(fixture, "node-a", clock).AcquireAsync(OwnedWorkflow);
+        if (takenOver)
+            commit.AfterRollback = async () => await Node(otherConnection, "node-b", clock).AcquireAsync(OwnedWorkflow);
+        commit.Armed = true;
+        Func<Task> record = () => FencedStore(fixture, clock).RecordFencedAsync(Record(1), lease.ToFence()).AsTask();
+
+        if (takenOver)
+            Assert.Equal(RuntimeFencingRejectionReason.StaleToken, (await Assert.ThrowsAsync<RuntimeStaleFencingTokenException>(record)).Reason);
+        else
+            Assert.IsType<TimeoutException>((await Assert.ThrowsAsync<EfPoisonStoreException>(record)).InnerException);
+
         Assert.Empty(fixture.Context.ChangeTracker.Entries());
         await using var read = database.Open("tenant-a");
         Assert.Null(await read.Store.FindAsync(OwnedWorkflow, "work-1"));
@@ -393,7 +422,8 @@ public sealed partial class EfWorkflowSchedulerPoisonStoreTests
 
         await using (var transaction = await fixture.Context.Database.BeginTransactionAsync())
         {
-            await Assert.ThrowsAsync<EfPoisonStoreException>(() => store.RecordFencedAsync(Record(1), lease.ToFence()).AsTask());
+            var refusal = await Assert.ThrowsAsync<EfPoisonStoreException>(() => store.RecordFencedAsync(Record(1), lease.ToFence()).AsTask());
+            Assert.IsType<InvalidOperationException>(refusal.InnerException);
             // Nothing is staged for the caller's commit to write.
             Assert.False(fixture.Context.ChangeTracker.HasChanges());
             await transaction.CommitAsync();
@@ -650,17 +680,31 @@ public sealed partial class EfWorkflowSchedulerPoisonStoreTests
         }
     }
 
-    // Fails the commit of the record's transaction, after its save went through.
+    // Fails the commit of the record's transaction, after its save went through. Another node's write can then land
+    // once the transaction has rolled back.
     private sealed class CommitFailure : IDbTransactionInterceptor
     {
+        private bool failed;
         public bool Armed { get; set; }
+        public Func<Exception> Failure { get; init; } = () => new SimulatedProviderFailure("Simulated failure of the commit.");
+        public Func<Task>? AfterRollback { get; set; }
 
         public ValueTask<InterceptionResult> TransactionCommittingAsync(DbTransaction transaction, TransactionEventData eventData, InterceptionResult result, CancellationToken cancellationToken = default)
         {
             if (!Armed)
                 return ValueTask.FromResult(result);
             Armed = false;
-            throw new SimulatedProviderFailure("Simulated failure of the commit.");
+            failed = true;
+            throw Failure();
+        }
+
+        public async Task TransactionRolledBackAsync(DbTransaction transaction, TransactionEndEventData eventData, CancellationToken cancellationToken = default)
+        {
+            if (!failed)
+                return;
+            failed = false;
+            if (AfterRollback is not null)
+                await AfterRollback();
         }
     }
 

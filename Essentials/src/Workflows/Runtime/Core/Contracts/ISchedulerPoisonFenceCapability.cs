@@ -14,9 +14,9 @@ namespace Elsa.Workflows.Runtime.Core.Contracts;
 /// time, its poison record would land on a run that another node now runs. A drainer that has the ownership service
 /// checks the lease before it touches the faulted step; this capability covers the time between that check and the
 /// record, and the whole fault for a drainer without the service. A record written through it cannot land on a run
-/// that changed owner in that time. It is not a guarantee for every record. The
-/// drainer writes the record without the fence when no lease for the run is ambient, when the store lacks this
-/// capability or reports <see cref="CanRecordFenced"/> as <see langword="false"/>, when the store could not say
+/// that changed owner in that time. It is not a guarantee for every record. The drainer writes the record without
+/// the fence when it was built without its ownership accessor, when no lease for the run is ambient, when the store
+/// lacks this capability or reports <see cref="CanRecordFenced"/> as <see langword="false"/>, when the store could not say
 /// whether it can check, and when the fenced write fails for a reason other than a lost lease.
 /// </para>
 /// <para>

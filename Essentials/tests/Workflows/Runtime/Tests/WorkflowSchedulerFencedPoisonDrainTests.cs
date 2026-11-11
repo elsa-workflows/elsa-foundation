@@ -248,7 +248,7 @@ public sealed class WorkflowSchedulerFencedPoisonDrainTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task DrainAsync_TagsTheDispatchSpanOnlyWhenTheRecordFellBackToTheUnfencedWrite(bool fencedWriteFails)
+    public async Task DrainAsync_TagsTheDispatchSpanWhenTheFencedWriteFailsAndNotWhenItSucceeds(bool fencedWriteFails)
     {
         // A host whose fenced write keeps failing records every poison without the fence. The dispatch span says so,
         // with the type of the innermost failure: a store that wraps provider failures would otherwise put its own

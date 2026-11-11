@@ -72,7 +72,8 @@ public sealed class EfWorkflowSchedulerPoisonStore(
     /// The fence is not the run's current, unexpired lease. Nothing was written.
     /// </exception>
     /// <exception cref="EfPoisonStoreException">
-    /// A provider failure, with the provider's exception as its inner exception. That includes an
+    /// A provider failure, with the provider's exception as its inner exception. That includes a bare
+    /// <see cref="IOException"/> or <see cref="TimeoutException"/>, and an
     /// <see cref="OperationCanceledException"/> raised while <paramref name="cancellationToken"/> is not cancelled,
     /// which is how some providers report a timeout. Nothing was written, unless the
     /// failure came from the commit itself: a commit that reports a failure may still have been applied. The inner
@@ -130,11 +131,14 @@ public sealed class EfWorkflowSchedulerPoisonStore(
                 }
             }
         }
-        catch (Exception exception) when (EfRelationalExceptionClassifier.IsStoreBoundaryFailure(exception) ||
-            exception is OperationCanceledException && !cancellationToken.IsCancellationRequested)
+        catch (Exception exception) when (exception is IOException or TimeoutException ||
+            exception is OperationCanceledException && !cancellationToken.IsCancellationRequested ||
+            EfRelationalExceptionClassifier.IsStoreBoundaryFailure(exception))
         {
-            // A provider failure is about to leave. An OperationCanceledException raised while this call's token is
-            // not cancelled is one too: a provider timeout reported that way, not a cancellation of this call.
+            // A provider failure is about to leave. A bare IOException or TimeoutException is one, as in the sibling
+            // stores: a transaction that could not begin, a read or a commit can fail with either. So is an
+            // OperationCanceledException raised while this call's token is not cancelled: a provider timeout
+            // reported that way, not a cancellation of this call.
             //
             // The failure does not say whether the run was taken: a conflict on the ownership row that was not
             // retried, a serialization failure under a stricter isolation level and a lock timeout on that row all

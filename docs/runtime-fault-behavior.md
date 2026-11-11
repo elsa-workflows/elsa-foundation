@@ -307,11 +307,11 @@ would throw out of a drain that still owns its run, and inside an active coalesc
 does not flush after a drain that threw, so that drain's buffered checkpoints would be left to replay. What
 follows differs between the two:
 
-- **The ownership read failed.** The step is acknowledged, and the poison store is still asked. Where it can
+- **The ownership read failed.** The step is acknowledged or released, and the poison store is still asked. Where it can
   check the lease, the record is written under it, so a drain that had in fact lost its run is turned away at
   the record. Where it cannot, the record is written with no ownership check.
-- **The poison store could not say whether it can check the lease.** The step is acknowledged and the record is
-  written with no ownership check.
+- **The poison store could not say whether it can check the lease.** The step is acknowledged or released, and
+  the record is written with no ownership check.
 
 Cancellation of the drain is let through from either question. Only an `OperationCanceledException` raised
 while the drain's own token is cancelled counts as that. A store whose client reports a timeout as one has
