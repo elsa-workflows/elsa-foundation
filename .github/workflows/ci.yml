@@ -981,18 +981,23 @@ jobs:
           HEAVY: ${{ needs.plan-scope.outputs.heavy }}
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
-          # A push is only deferred when this PR already has a completed, green full tier on an earlier commit. A ready run
-          # that a quick follow-up push cancelled proved nothing, so the next push then runs the full tier itself. A lookup
-          # that fails counts as "none yet".
+          # A push is only deferred when this PR's newest commit with a completed, green full tier differs from this head by
+          # documentation only (the classifier of the docs-only fast path). Any code change since then, a ready run that a
+          # quick follow-up push cancelled, a rewritten history, or a failed lookup all run the full tier on this push.
           prior_full_tier_passed() {
             local sha
-            for sha in $(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/commits?per_page=100" --jq '.[].sha' | tail -n 30); do
+            for sha in $(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/commits?per_page=100" --paginate --jq '.[].sha' | tail -n 30 | tac); do
               if gh api "repos/$GITHUB_REPOSITORY/commits/$sha/check-runs?filter=latest&per_page=100" \
                   --jq '[.check_runs[] | select(.name | test("^(Integration|EF container) shard")) | .conclusion] | length > 0 and all(. == "success")' \
                   | grep -qx true; then
-                return 0
+                # Newest green commit decides: nothing but documentation may have changed since it.
+                rm -f "$RUNNER_TEMP/since-green.out"
+                python3 tools/ci/change_scope.py --base "$sha" --head "$HEAD_SHA" --github-output "$RUNNER_TEMP/since-green.out" > /dev/null 2>&1 \
+                  && grep -qx 'docs_only=true' "$RUNNER_TEMP/since-green.out"
+                return
               fi
             done
             return 1
@@ -1014,10 +1019,10 @@ jobs:
           elif [[ "$HEAVY" == true ]]; then
             run=true; reason="the pull request is ready for review and this run carries the heavy proofs"
           elif ! prior_full_tier_passed; then
-            run=true; reason="no earlier commit of this pull request has a completed, green full tier, so this push runs it"
+            run=true; reason="no earlier commit of this pull request has a green full tier that differs from this head by documentation only, so this push runs it"
           else
             run=false
-            reason="deferred: the full tier ran when this pull request became ready and runs again in the merge queue and nightly on main. Add the \`full-tier\` label or run \`gh workflow run ci.yml --ref <branch> -f tier=full\` to run it on this push."
+            reason="deferred: the full tier already passed on an earlier commit and only documentation changed since. It runs again in the merge queue and nightly on main. To run it on a later push, add the \`full-tier\` label before pushing, or run \`gh workflow run ci.yml --ref <branch> -f tier=full\`."
           fi
           echo "run=$run" >> "$GITHUB_OUTPUT"
           printf '### Full tier\n\n%s\n' "$reason" >> "$GITHUB_STEP_SUMMARY"
@@ -1063,7 +1068,7 @@ jobs:
             echo "Not run: draft. The full tier runs once the pull request is marked ready for review."; exit 0
           fi
           if [[ "$RUN" == false ]]; then
-            echo "Deferred: the full tier ran when this pull request became ready, and runs again in the merge queue and nightly on main."; exit 0
+            echo "Deferred: the full tier already passed on an earlier commit and only documentation changed since; it runs again in the merge queue and nightly on main."; exit 0
           fi
           if [[ "$RUN" != true ]]; then
             echo "::error::Plan full tier gave no decision (run='$RUN')."; exit 1
