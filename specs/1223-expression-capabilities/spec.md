@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-10
 
-**Status**: Provisional — initiative #3052 spec **S-1**. Written as if its dependent ADRs are agreed; see **Dependencies & agreed decisions** and **Open questions**. Issue #3026.
+**Status**: Draft — **provisional**, initiative #3052 spec **S-1**. Written as if its dependent ADRs are agreed; see **Dependencies & agreed decisions** and **Open questions**. Issue #3026.
 
 **Input**: User description: "Expression capabilities (Elsa 4) — what expressions may do for current time, randomness, GUIDs, built-in helpers, and .NET-implemented functions, and how Elsa 3 time/GUID/string functions convert faithfully."
 
