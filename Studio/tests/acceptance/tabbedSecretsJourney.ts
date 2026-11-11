@@ -2,7 +2,7 @@ import { expect, type Page, type TestInfo, type Locator } from "@playwright/test
 
 type Capture = (page: Page, info: TestInfo, name: string) => Promise<void>;
 async function section(editor: Locator, name: string) {
-  const tab = editor.getByRole("tab", { name: new RegExp(`^${name}(?: \\(\\d+\\))?$`) });
+  const tab = editor.getByRole("tab", { name: new RegExp(`^${name}(?: \\(\\d+\\))?(?: — needs attention)?$`) });
   await tab.click();
   await expect(tab).toHaveAttribute("aria-selected", "true");
   return tab;

@@ -29,7 +29,8 @@ async function openEditSecret(page: import("@playwright/test").Page, scenario = 
 }
 
 async function selectSection(editor: import("@playwright/test").Locator, section: "Secret" | "Details" | "Storage & lifetime") {
-  const tab = editor.getByRole("tab", { name: new RegExp(`^${section}(?: \\(\\d+\\))?$`) });
+  // A section may carry a count and, after a failed option load, an attention marker.
+  const tab = editor.getByRole("tab", { name: new RegExp(`^${section}(?: \\(\\d+\\))?(?: — needs attention)?$`) });
   await tab.click();
   await expect(tab).toHaveAttribute("aria-selected", "true");
   return tab;
@@ -482,10 +483,13 @@ test("scope failure is recoverable across section changes without stealing focus
   await expect(editor.getByRole("alert").filter({ hasText: "Secret options could not be loaded." })).toBeVisible();
   await expect(detailsTab).toHaveAttribute("aria-selected", "true");
   await expect(detailsTab).toBeFocused();
+  const attention = editor.getByRole("tab", { name: /^Storage & lifetime(?: \(\d+\))? — needs attention$/ });
+  await expect(attention).toBeVisible();
   await selectSection(editor, "Storage & lifetime");
   await expect(editor.getByRole("textbox", { name: "Custom scope value", exact: true })).toHaveValue(fixtureScope);
   await editor.getByRole("button", { name: "Retry scope suggestions", exact: true }).click();
   await expect(editor.getByRole("alert")).toHaveCount(0);
+  await expect(attention).toHaveCount(0);
   await selectSection(editor, "Secret");
   await expect(editor.getByLabel("Value", { exact: true })).toHaveValue(fixtureValue);
   await expect(page.getByTestId("unexpected-secret-reads")).toHaveText("0");
