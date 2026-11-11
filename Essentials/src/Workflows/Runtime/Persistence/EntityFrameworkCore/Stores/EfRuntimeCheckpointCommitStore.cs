@@ -646,7 +646,6 @@ public sealed class EfRuntimeCheckpointCommitStore(
                 var winner = await ReconcileMarkerAsync(exception, writeCancellationToken);
                 if (winner is not null)
                     return ResolveReplay(commit, fingerprint, winner);
-                markerAbsentAfterFailure = true;
                 if (commit.ExpectedBookmarkResume is not null || commit.ExpectedModelParentWait is not null)
                     throw new RuntimeSchedulerWorkUnavailableException("runtime.bookmark.admission-unavailable", "Exact bookmark admission changed concurrently.", exception);
                 throw;
@@ -665,7 +664,6 @@ public sealed class EfRuntimeCheckpointCommitStore(
                 var reconciled = await ReconcileMarkerAsync(exception, writeCancellationToken);
                 if (reconciled is not null)
                     return ResolveReplay(commit, fingerprint, reconciled);
-                markerAbsentAfterFailure = true;
                 if (commit.ExpectedBookmarkResume is not null && (exception is DbUpdateConcurrencyException or IOException ||
                     EfRelationalExceptionClassifier.IsProviderFailure(exception)))
                     throw new RuntimeSchedulerWorkUnavailableException("runtime.bookmark.admission-unavailable", "Exact bookmark admission is unavailable.", exception);
@@ -673,9 +671,13 @@ public sealed class EfRuntimeCheckpointCommitStore(
             }
         }
 
+        // The marker read after a failed attempt, for both arms that run one. It records that no marker was found only
+        // when the read has returned none. A read that throws, and a read that returns a marker the commit then does
+        // not match, leave that unrecorded, so the failure still gets a marker read before it leaves the commit.
         async ValueTask<RuntimeCheckpointCommitEntity?> ReconcileMarkerAsync(Exception original, CancellationToken token)
         {
-            try { return await FindMarkerAsync(scope, commit.CommitId, token); }
+            RuntimeCheckpointCommitEntity? found;
+            try { found = await FindMarkerAsync(scope, commit.CommitId, token); }
             catch (Exception lookupFailure) when (commit.ExpectedBookmarkResume is not null &&
                 (lookupFailure is IOException || lookupFailure is OperationCanceledException && !token.IsCancellationRequested ||
                     EfRelationalExceptionClassifier.IsProviderFailure(lookupFailure)))
@@ -683,6 +685,9 @@ public sealed class EfRuntimeCheckpointCommitStore(
                 throw new RuntimeSchedulerWorkUnavailableException("runtime.bookmark.admission-unavailable",
                     "Exact bookmark admission could not reconcile its durable checkpoint.", new AggregateException(original, lookupFailure));
             }
+
+            markerAbsentAfterFailure = found is null;
+            return found;
         }
     }
 
