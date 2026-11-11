@@ -62,7 +62,9 @@ jobs:
   # Decision documents on an initiative branch stay check-free; implementation PRs to it run the tiers as a PR to main
   # does. run=false only for a documentation-only pull request whose base is initiative/* (change_scope.py's classifier,
   # the same one as the docs-only fast path). Every other run gets run=true without reading a diff, and the jobs below
-  # skip only on an explicit 'false', so a gate that fails or gives nothing leaves main's CI exactly as it was. The
+  # skip only on an explicit 'false'. A gate that gives nothing changes nothing; a gate that fails still starts the
+  # required contexts below (!cancelled()), and they report red because the jobs under them were skipped (GitHub skips a
+  # job whose ancestor failed), never green by being skipped. test_tiers.py check-workflows proves all of this. The
   # merge commit's first parent is the PR's base tip, so a depth-2 checkout is enough for the diff.
   initiative-gate:
     name: Initiative gate

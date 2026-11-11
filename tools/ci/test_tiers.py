@@ -426,11 +426,12 @@ def check_workflows(ci: str, ci_full: str) -> list[str]:
 # A pull request to initiative/* runs CI only when it carries implementation (docs/contributing/merging.md#ci-tiers).
 # The `initiative-gate` job decides (change_scope.py --gate); every other job skips on its explicit run=false. The check
 # below proves that on the real ci.yml by evaluating each job's `if:` the way GitHub does, in dependency order: a job
-# with no status function in its condition also needs every dependency to have succeeded, a skipped job's outputs are
+# with no status function in its condition also needs every ancestor to have succeeded, a skipped job's outputs are
 # empty, and !cancelled()/always()/failure() lift that implicit success() requirement.
 
 GATE_JOB = "initiative-gate"
 GATE_OPEN = f"needs.{GATE_JOB}.outputs.run != 'false'"
+GATE_NAME = "Initiative gate"  # merging.md#ci-tiers names it; check_docs keeps the two in step
 
 
 class ExpressionError(Exception):
@@ -543,12 +544,16 @@ def evaluate(expression: str, context: Callable[[str], object]) -> object:
     return result
 
 
-def simulate(ci: str, event: str, outputs: dict[str, dict[str, str]], draft: bool = False) -> dict[str, bool]:
-    """Which jobs of a workflow start for `event` (not workflow_dispatch), every started job succeeding with the given
-    outputs."""
+def simulate(ci: str, event: str, outputs: dict[str, dict[str, str]], draft: bool = False,
+             failed: frozenset[str] = frozenset()) -> dict[str, bool]:
+    """Which jobs of a workflow start for `event` (not workflow_dispatch). A started job succeeds with the given outputs,
+    or fails without outputs when it is in `failed`. success() and failure() look at every ancestor, not only the
+    direct needs: GitHub skips a job without a status function when any job it transitively needs did not succeed
+    (actions/runner#491)."""
     jobs = _jobs(ci)
     results: dict[str, str] = {}
     started: dict[str, bool] = {}
+    ancestry: dict[str, set[str]] = {}
 
     def visit(job: str, trail: tuple[str, ...] = ()) -> None:
         if job in results:
@@ -558,6 +563,7 @@ def simulate(ci: str, event: str, outputs: dict[str, dict[str, str]], draft: boo
         needs = _job_needs(jobs[job])
         for need in needs:
             visit(need, trail + (job,))
+        ancestors = ancestry[job] = set(needs).union(*(ancestry[need] for need in needs))
 
         def context(name: str) -> object:
             if name == "cancelled()":
@@ -565,9 +571,9 @@ def simulate(ci: str, event: str, outputs: dict[str, dict[str, str]], draft: boo
             if name == "always()":
                 return True
             if name == "success()":
-                return all(results[need] == "success" for need in needs)
+                return all(results[ancestor] == "success" for ancestor in ancestors)
             if name == "failure()":
-                return any(results[need] == "failure" for need in needs)
+                return any(results[ancestor] == "failure" for ancestor in ancestors)
             if name == "github.event_name":
                 return event
             if name == "github.event.pull_request.draft":
@@ -589,7 +595,7 @@ def simulate(ci: str, event: str, outputs: dict[str, dict[str, str]], draft: boo
             expression = f"success() && ({condition})" if condition else "success()"
         runs = bool(evaluate(expression, context))
         started[job] = runs
-        results[job] = "success" if runs else "skipped"
+        results[job] = ("failure" if job in failed else "success") if runs else "skipped"
 
     for job in jobs:
         visit(job)
@@ -618,7 +624,8 @@ def _raises(action: Callable[[], object], error: type[Exception]) -> bool:
 
 def check_initiative_gate(ci: str) -> list[str]:
     """Docs-only PR to initiative/*: only the gate starts. Code PR to it: the PR and full tiers start, as on main.
-    Any other run: the gate says run=true, and only an explicit false skips, so the jobs start as they did before."""
+    Any other run: the gate says run=true and the jobs start as they did before; only an explicit false skips, and a
+    gate that fails still starts every required context, which reports red."""
     problems = []
     trigger = ci.split("\njobs:\n", 1)[0]
     pull_request = re.search(r"^  pull_request:[ \t]*\n((?: {4,}.*\n)+)", trigger, re.M)
@@ -632,6 +639,8 @@ def check_initiative_gate(ci: str) -> list[str]:
         return problems
     if "python3 tools/ci/change_scope.py --gate" not in gate or "run: ${{ steps.gate.outputs.run }}" not in gate:
         problems.append(f"{CI}: `{GATE_JOB}` must output run from `change_scope.py --gate`")
+    if _job_name(gate) != GATE_NAME:
+        problems.append(f"{CI}: `{GATE_JOB}` must be named `{GATE_NAME}`, the name merging.md#ci-tiers uses")
     try:
         closed = {GATE_JOB: {"run": "false"}}
         started = []
@@ -645,13 +654,19 @@ def check_initiative_gate(ci: str) -> list[str]:
         missing = [job for job in TIER_JOBS if not code.get(job)]
         if missing:
             problems.append(f"{CI}: a ready PR that carries implementation does not start {', '.join(missing)}")
-        # A gate that failed or reported nothing must leave every run as it was: only an explicit 'false' skips.
+        # Only an explicit 'false' skips: a gate that reports nothing starts every job, and a gate that fails still
+        # starts every required context, which then reports red rather than passing as skipped.
         for event in ("pull_request", "merge_group", "push", "schedule"):
             opened = simulate(ci, event, {GATE_JOB: {"run": "true"}, **_CODE_OUTPUTS})
             silent = simulate(ci, event, _CODE_OUTPUTS)
             if {j: r for j, r in opened.items() if j != GATE_JOB} != {j: r for j, r in silent.items() if j != GATE_JOB}:
-                problems.append(f"{CI}: on {event}, jobs must skip only on an explicit run=false from `{GATE_JOB}`, so "
-                                f"a gate that fails cannot skip a required check")
+                problems.append(f"{CI}: on {event}, jobs must skip only on an explicit run=false from `{GATE_JOB}`")
+            broken = simulate(ci, event, _CODE_OUTPUTS, failed=frozenset({GATE_JOB}))
+            required = ["build-and-test", "generated-maps"] + (["full-tier"] if event in ("pull_request", "merge_group") else [])
+            skipped = [job for job in required if not broken.get(job)]
+            if skipped:
+                problems.append(f"{CI}: on {event}, a failed `{GATE_JOB}` skips {', '.join(skipped)}; a required check "
+                                f"must still start and report red")
     except ExpressionError as error:
         problems.append(f"{CI}: cannot evaluate the job conditions: {error}")
     return problems
@@ -665,7 +680,7 @@ def check_docs(read: Callable[[str], str | None]) -> list[str]:
     if section is None:
         problems.append(f"{MERGING}: no `## CI tiers` section")
     else:
-        for literal in (DISPATCH, "PR tier", "full tier", "gh pr ready", "draft", MANIFEST):
+        for literal in (DISPATCH, "PR tier", "full tier", "gh pr ready", "draft", MANIFEST, GATE_NAME, "initiative/"):
             if literal.lower() not in section.lower():
                 problems.append(f"{MERGING}#ci-tiers does not mention `{literal}`")
     for skill in SKILLS:
@@ -924,6 +939,11 @@ def self_test() -> int:
     check("expressions: == ignores case and ! binds tightest",
           evaluate("'Main' == 'main' && !f", names) is True and evaluate("!t || t", names) is True)
     check("expressions: an unknown token is refused", _raises(lambda: evaluate("a ~ b", names), ExpressionError))
+    chain = ("on:\n  push:\njobs:\n  a:\n    name: A\n  b:\n    needs: a\n    if: ${{ !cancelled() }}\n"
+             "  c:\n    needs: b\n  d:\n    needs: [b]\n    if: ${{ !cancelled() }}\n")
+    ran = simulate(chain, "push", {}, failed=frozenset({"a"}))
+    check("simulate: a failed ancestor skips a job without a status function (actions/runner#491)",
+          ran == {"a": True, "b": True, "c": False, "d": True})
     real_ci = _read_file(CI) or ""
     check("initiative: the real ci.yml passes", bool(real_ci) and not check_initiative_gate(real_ci))
     if real_ci:
@@ -949,13 +969,21 @@ def self_test() -> int:
                 real_ci.replace("needs.initiative-gate.outputs.run != 'false'", "needs.initiative-gate.outputs.run == 'true'"),
             "no initiative/** trigger": real_ci.replace("      - 'initiative/**'\n", ""),
             "no gate job": real_ci.replace("  initiative-gate:\n", "  initiative-gate-renamed:\n"),
+            "a required context that a failed gate skips": real_ci.replace(
+                "    needs: initiative-gate\n    if: ${{ !cancelled() && needs.initiative-gate.outputs.run != 'false' && "
+                "(github.event_name != 'workflow_dispatch' || inputs.suite == 'ci') }}\n    runs-on: ubuntu-latest\n"
+                "    timeout-minutes: 15",
+                "    needs: initiative-gate\n    if: ${{ needs.initiative-gate.outputs.run != 'false' && "
+                "(github.event_name != 'workflow_dispatch' || inputs.suite == 'ci') }}\n    runs-on: ubuntu-latest\n"
+                "    timeout-minutes: 15"),
+            "a renamed gate job": real_ci.replace("    name: Initiative gate\n", "    name: Initiative check\n"),
         }
         for name, text in regressions.items():
             check(f"initiative: {name} fails", text != real_ci and bool(check_initiative_gate(text)))
 
     docs = {
         MERGING: f"# Merging\n\n## CI tiers\n\nThe PR tier and the full tier, per {MANIFEST}. Open a draft, then "
-                 f"`gh pr ready <n>`. Run `{DISPATCH}`.\n\n## Review and merge\n",
+                 f"`gh pr ready <n>`. Run `{DISPATCH}`. A PR to `initiative/*`: `{GATE_NAME}`.\n\n## Review and merge\n",
         CI: "      tier:\n        description: Which tier\n        type: choice\n        options: [full, pr]\n",
         **{skill: f"See [CI tiers](../../../docs/contributing/{DOCS_ANCHOR})." for skill in SKILLS},
     }
@@ -965,6 +993,8 @@ def self_test() -> int:
     check("docs: a renamed dispatch option fails",
           bool(check_docs(lambda p: docs[CI].replace("[full, pr]", "[everything, pr]") if p == CI else docs.get(p))))
     check("docs: a missing section fails", bool(check_docs(lambda p: "# Merging\n" if p == MERGING else docs.get(p))))
+    check("docs: a section without the initiative gate fails",
+          bool(check_docs(lambda p: docs[MERGING].replace(GATE_NAME, "the gate") if p == MERGING else docs.get(p))))
     check("docs: a section without the dispatch command fails",
           bool(check_docs(lambda p: docs[MERGING].replace(DISPATCH, "run it by hand") if p == MERGING else docs.get(p))))
 
