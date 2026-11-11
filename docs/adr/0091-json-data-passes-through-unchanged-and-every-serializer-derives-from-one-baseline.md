@@ -239,7 +239,9 @@ decision 6 unchanged. Today it does not (see Context): activity inputs, expressi
 literals and stateful activity state use System.Text.Json's defaults, while activity results are written with Web
 options. Every conversion between data and a given .NET type, in or out, uses the same effective contract, so a value
 written by one activity reads back the same in the next. The ADR 0046 amendment's adapter rules for these conversions
-(member matching with a warning for unmatched members, a `DateTime` read as UTC) are applied through that contract,
+(member matching with a warning for unmatched members; a `DateTime` or `DateTimeOffset` without an offset is never
+silently read as UTC, but needs a source time zone or an explicit assume-UTC policy recorded in the published
+conversion contract, and is refused otherwise) are applied through that contract,
 not as special cases at each call site. A number is never narrowed to `long` or `double` on the way, unless the target
 type asks for it.
 
