@@ -148,6 +148,112 @@ public sealed class Elsa3ActivityMapCoverageTests
     }
 
     /// <summary>
+    /// #3297: the intrinsics' side of the null table holds in their contracts. Every intrinsic input is required and
+    /// accepts no null (<see cref="Elsa3IntrinsicContracts"/>), so no intrinsic row may leave a null unbound or convert
+    /// it to a typed null, and an emitted value must fit the input's type.
+    /// </summary>
+    [Fact]
+    public void Every_intrinsic_null_conversion_fits_its_contract()
+    {
+        foreach (var entry in Map.Entries.Where(entry => entry.Target is Elsa3ActivityTarget.Intrinsic))
+        {
+            var contract = Elsa3IntrinsicContracts.Resolve(((Elsa3ActivityTarget.Intrinsic)entry.Target).ActivityVersionId, entry);
+            foreach (var rule in entry.Members.Where(rule => rule.OnNull is not null))
+            {
+                var input = contract.Inputs.Single(input => input.ReferenceKey == rule.Elsa4Key);
+                var name = $"'{entry.Elsa3TypeName}.{rule.Elsa3Name}'";
+                if (rule.OnNull is { Rule: Elsa3NullRule.TypedNull } or { Rule: Elsa3NullRule.Refuse, WhenBound: not null })
+                    Assert.True(input.IsNullable && !input.IsRequired, $"{name} converts a null to a typed null, but intrinsic input '{input.ReferenceKey}' does not accept one.");
+                if (rule.OnNull is { Rule: Elsa3NullRule.NoBinding })
+                    Assert.False(input.IsRequired, $"{name} leaves a null unbound, but intrinsic input '{input.ReferenceKey}' is required and has no default.");
+                if (rule.OnNull is { Rule: Elsa3NullRule.Emit, Value: var value })
+                    Assert.True(EmittedValueFits(value, IntrinsicClrType(input.Type)),
+                        $"{name} emits '{value}' for a null, which does not fit intrinsic input '{input.ReferenceKey}' of type '{input.Type.Alias}'.");
+            }
+        }
+    }
+
+    /// <summary>
+    /// #3297: an emitted value (<see cref="Elsa3NullRule.Emit"/>) is bound as a literal, so it must fit the Elsa 4
+    /// input's type, or publication refuses the converted workflow.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(CatalogEntries))]
+    public async Task Every_emitted_null_value_fits_the_elsa4_input_type(string elsa3Type)
+    {
+        var entry = Map.Find(elsa3Type)!;
+        var typeKey = ((Elsa3ActivityTarget.CatalogActivity)entry.Target).ActivityTypeKey;
+        var catalog = RealActivityCatalog.Create();
+        var version = await catalog.GetVersion(catalog.VersionIdOf(typeKey));
+
+        foreach (var rule in entry.Members.Where(rule => rule.OnNull is { Rule: Elsa3NullRule.Emit }))
+        {
+            var input = version.Inputs.Single(input => input.ReferenceKey == rule.Elsa4Key);
+            var value = rule.OnNull!.Value;
+            Assert.True(EmittedValueFits(value, InputProperty(typeKey, input).PropertyType),
+                $"'{elsa3Type}.{rule.Elsa3Name}' emits '{value}' for a null, which does not fit '{typeKey}.{input.ReferenceKey}' of type '{input.Type.Alias}'.");
+        }
+    }
+
+    /// <summary>
+    /// #3297: a <see cref="Elsa3NullRule.NoBinding"/> row claims that Elsa 4's default for the input equals what Elsa 3
+    /// ran with (spec 267's per-member table), so a converted null runs as before. The claim is checked twice: the
+    /// contract's declared default, when there is one, and the value the unbound input runs with (the activity's
+    /// property on a fresh instance). If an Elsa 4 default changes, this fails instead of converted workflows changing
+    /// behaviour silently. The Elsa 3 values are spec 267's "what Elsa 3 ran with" column, as JSON.
+    /// </summary>
+    [Fact]
+    public async Task Every_unbound_null_runs_with_the_value_elsa3_ran_with()
+    {
+        var elsa3RanWith = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["Elsa.If.Condition"] = "false",
+            ["Elsa.While.Condition"] = "false",
+            ["Elsa.FlowDecision.Condition"] = "false",
+            ["Elsa.For.Start"] = "0",
+            ["Elsa.For.End"] = "0",
+            ["Elsa.HttpEndpoint.Authorize"] = "false",
+            ["Elsa.SendHttpRequest.Method"] = "\"GET\"",
+            ["Elsa.FlowSendHttpRequest.Method"] = "\"GET\"",
+            ["Elsa.WriteHttpResponse.StatusCode"] = "200",
+            ["Elsa.PublishEvent.IsLocalEvent"] = "false",
+            ["Elsa.DispatchWorkflow.WaitForCompletion"] = "false",
+        };
+        var catalog = RealActivityCatalog.Create();
+        var unbound = Map.Entries
+            .SelectMany(entry => entry.Members.Select(rule => (Entry: entry, Rule: rule)))
+            .Where(item => item.Rule.OnNull is { Rule: Elsa3NullRule.NoBinding })
+            .ToArray();
+
+        // Every no-binding row states what Elsa 3 ran with, and every stated value belongs to a no-binding row.
+        Assert.Equal(
+            elsa3RanWith.Keys.Order(StringComparer.Ordinal),
+            unbound.Select(item => $"{item.Entry.Elsa3TypeName}.{item.Rule.Elsa3Name}").Order(StringComparer.Ordinal));
+
+        var mismatches = new List<string>();
+        foreach (var (entry, rule) in unbound)
+        {
+            var name = $"{entry.Elsa3TypeName}.{rule.Elsa3Name}";
+            // Intrinsics are covered by Every_intrinsic_null_conversion_fits_its_contract: their inputs are required, so
+            // a no-binding row on one already fails there.
+            if (entry.Target is not Elsa3ActivityTarget.CatalogActivity { ActivityTypeKey: var typeKey })
+                continue;
+
+            var expected = JsonDocument.Parse(elsa3RanWith[name]).RootElement;
+            var input = (await catalog.GetVersion(catalog.VersionIdOf(typeKey))).Inputs.Single(input => input.ReferenceKey == rule.Elsa4Key);
+            if (input.DefaultValue is { } declared && !JsonElement.DeepEquals(declared, expected))
+                mismatches.Add($"'{name}': Elsa 3 ran with {expected}, but '{typeKey}.{input.ReferenceKey}' declares the default {declared}.");
+
+            var property = InputProperty(typeKey, input);
+            var runsWith = JsonSerializer.SerializeToElement(property.GetValue(FreshInstance(property.DeclaringType!)), property.PropertyType);
+            if (!JsonElement.DeepEquals(runsWith, expected))
+                mismatches.Add($"'{name}': Elsa 3 ran with {expected}, but '{typeKey}.{input.ReferenceKey}' runs unbound with {runsWith}.");
+        }
+
+        Assert.True(mismatches.Count == 0, string.Join(Environment.NewLine, mismatches));
+    }
+
+    /// <summary>
     /// Spec 248 D-3: an entry without a <c>canStartWorkflow</c> rule drops the flag, because Elsa 3 only uses it there to
     /// pick a flowchart's start. That is faithful only for non-triggers, so exactly the Elsa 3 triggers declare one.
     /// </summary>
@@ -247,6 +353,55 @@ public sealed class Elsa3ActivityMapCoverageTests
 
         Assert.All(declared, code => Assert.Contains(code, codes));
         Assert.All(codes, code => Assert.True(declared.Contains(code) || raisedByRewrites.Contains(code), $"Behaviour code '{code}' is used by no map entry."));
+    }
+
+    /// <summary>
+    /// Whether <paramref name="value"/>, bound as the normalizer binds an emitted null value (a JSON array or object stays
+    /// JSON, anything else is text), reads as <paramref name="clrType"/>. Text reads as a number, as a literal does.
+    /// </summary>
+    private static bool EmittedValueFits(string? value, Type clrType)
+    {
+        if (value is null)
+            return false;
+
+        var literal = value.TrimStart() is ['[' or '{', ..] ? JsonDocument.Parse(value).RootElement : JsonSerializer.SerializeToElement(value);
+        try
+        {
+            literal.Deserialize(clrType, JsonSerializerOptions.Web);
+            return true;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// A fresh activity instance, so its property initializers run. Services an activity takes (DispatchWorkflow's
+    /// primary constructor) are only used when it executes, so null stands in for each.
+    /// </summary>
+    private static object FreshInstance(Type activityType)
+    {
+        var constructor = activityType.GetConstructors().OrderBy(constructor => constructor.GetParameters().Length).First();
+        return constructor.Invoke(new object?[constructor.GetParameters().Length]);
+    }
+
+    /// <summary>The CLR types of the aliases the intrinsic contracts declare.</summary>
+    private static Type IntrinsicClrType(Elsa.Primitives.Models.TypeReference type) => type.Alias switch
+    {
+        "String" => typeof(string),
+        "Object" => typeof(object),
+        _ => throw new InvalidOperationException($"Intrinsic input type '{type.Alias}' has no CLR type in this test; add it.")
+    };
+
+    /// <summary>The CLR property behind a catalog input: the activity type key is the CLR type name, the input name the property.</summary>
+    private static PropertyInfo InputProperty(string activityTypeKey, Elsa.Activities.Design.Core.Models.InputDefinition input)
+    {
+        var type = RealActivityCatalog.Anchors
+            .Select(anchor => anchor.Assembly).Distinct()
+            .Select(assembly => assembly.GetType(activityTypeKey))
+            .Single(type => type is not null)!;
+        return type.GetProperty(input.Name) ?? throw new InvalidOperationException($"'{activityTypeKey}' has no property '{input.Name}'.");
     }
 
     private static IReadOnlySet<string> Slots(IActivityDefinitionVersion version) =>
