@@ -1,17 +1,37 @@
 using Elsa.Secrets.Core.Contracts;
 using Elsa.Secrets.Core.Models;
+using Elsa.Secrets.Core.Options;
+using Elsa.Secrets.Options;
 using Elsa.Secrets.Stores;
+using Microsoft.Extensions.Options;
 
 namespace Elsa.Secrets.Types;
 
 public sealed class TextSecretTypeProvider : ISecretTypeProvider
 {
-    public SecretTypeDescriptor Descriptor { get; } = new(
-        SecretTypeNames.Text,
-        "Text",
-        "Plain text secret value.",
-        "text",
-        [SecretStoreNames.Encrypted, SecretStoreNames.Configuration]);
+    public TextSecretTypeProvider()
+        : this(Microsoft.Extensions.Options.Options.Create(new SecretsOptions()))
+    {
+    }
+
+    public TextSecretTypeProvider(IOptions<SecretsOptions> options)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            SecretStoreNames.Encrypted,
+            SecretStoreNames.Configuration,
+            DefaultWritableSecretStore.ResolveName(options.Value.DefaultWritableStoreName)
+        };
+        Descriptor = new(
+            SecretTypeNames.Text,
+            "Text",
+            "Plain text secret value.",
+            "text",
+            names);
+    }
+
+    public SecretTypeDescriptor Descriptor { get; }
 
     public ValueTask<SecretValidationResult> ValidateCreateAsync(CreateSecretRequest request, CancellationToken cancellationToken = default)
         => new(Validate(request.StoreName, request.Value, request.ConfigurationKey, request.Metadata));

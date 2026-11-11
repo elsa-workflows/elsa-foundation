@@ -9,7 +9,8 @@ Use `services.AddConnections()` to register defaults, then replace these service
 
 - `IConnectionRepository` for persistence. The default `InMemoryConnectionRepository` drops metadata
   on restart. Opt into [EF persistence](../Persistence/EntityFrameworkCore/README.md) to retain it;
-  choose durable Secrets storage separately for owned credentials (`connection:<name>:<field>`).
+  choose durable Secrets storage separately for owned credentials (`connection:<name>:<field>`),
+  which are created in the store named by `Elsa:Secrets:DefaultWritableStoreName` (default `encrypted`).
   `GetCapabilitiesAsync` identifies the actual configured metadata profile; unspecified contributions
   do not claim durability. A replacement must keep
   the compare-and-swap contract on `SaveAsync`: it saves only when the stored `State.Version` equals
