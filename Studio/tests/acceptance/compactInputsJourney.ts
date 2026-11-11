@@ -54,13 +54,21 @@ export async function compactInputsJourney(page: Page, info: TestInfo, capture: 
     if (!runId) return;
     const runTasks = async () => (await api<{ items: Array<{ id: string; workflowExecutionId: string; status: string; revision: number }> }>("/runtime/user-tasks?view=mine&limit=100"))
       .items.filter(item => item.workflowExecutionId === runId);
-    for (const task of (await runTasks()).filter(item => item.status === "Open" || item.status === "Claimed")) {
-      await api(`/runtime/user-tasks/${encodeURIComponent(task.id)}/complete`, "POST",
-        { revision: task.revision, requestId: `acceptance-cleanup-${task.id}`, action: "Reject", data: { Note: "Closed by acceptance cleanup" } });
-    }
-    // Completion is accepted (202): the task stays in the inbox as CompletionPending until the run resumes and
-    // applies it. Wait for it to leave "My tasks" entirely, before the next cleanup deletes the definition.
-    await expect.poll(async () => (await runTasks()).map(task => task.status), { timeout: 15_000, message: "The cleanup's task leaves the inbox" }).toEqual([]);
+    // Completion is accepted (202): the task stays in the inbox as CompletionPending until the run resumes and applies
+    // it, and a delayed continuation can still create the task. Close whatever task is open until the run is terminal
+    // and has no task in "My tasks", before the next cleanup deletes the definition.
+    const terminal = new Set(["Completed", "Faulted", "Cancelled"]);
+    const closed = new Set<string>();
+    await expect.poll(async () => {
+      const tasks = await runTasks();
+      for (const task of tasks.filter(item => !closed.has(item.id) && (item.status === "Open" || item.status === "Claimed"))) {
+        await api(`/runtime/user-tasks/${encodeURIComponent(task.id)}/complete`, "POST",
+          { revision: task.revision, requestId: `acceptance-cleanup-${task.id}`, action: "Reject", data: { Note: "Closed by acceptance cleanup" } });
+        closed.add(task.id);
+      }
+      const status = (await api<{ instance: { status: string } }>(`/runtime/workflows/instances/${runId}`)).instance.status;
+      return { settled: terminal.has(status), tasks: tasks.map(task => task.status) };
+    }, { timeout: 30_000, message: "The cleanup's run settles and its task leaves the inbox" }).toEqual({ settled: true, tasks: [] });
   });
   registerCleanup(async () => { await api(`/design/workflows/definitions/${encodeURIComponent(submitted.definition.id)}`, "DELETE"); });
   const published = await api<{ artifactId: string; sourceReferenceId: string }>(`/publishing/workflows/${submitted.version.id}/publish`, "POST", {});
