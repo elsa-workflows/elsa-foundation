@@ -217,14 +217,19 @@ A company whose workflow engineers do know .NET can open those extension points,
 default stays plain. *Dates* shows what goes wrong otherwise: Elsa 3 exposed dates as .NET `DateTime` values, so the
 same workflow behaved differently on each server.
 
-**Defaults first, with a minimal explicit interop.** JSON stays the durable contract and the default JavaScript
-representation. S-8 builds the defaults (JSON values, the kinds, registered functions) and a minimal explicit .NET
-interop capability: the guarded opt-in of V10 for host-exposed .NET objects, in script activities and in input
-bindings, with the author's representation choice recorded in the published contract and explicit write-back for
-durable data. That interop follows the persistence, per-attempt materialization (V7), workflow-state write and
-external-effect rules above; selecting it gives no rollback or exactly-once execution for arbitrary .NET methods
-(V4). Unrestricted .NET type access (Jint's `AllowClr`) and broader conveniences, such as registered aliases with
-properties and methods, are defined in this ADR and built separately when a use case asks for them.
+**Defaults first; the .NET opt-in is defined here and built separately.** JSON stays the durable contract and the
+default JavaScript representation. S-8 builds the defaults: JSON values, the kinds and registered functions, with .NET
+objects disabled in scripts. The guarded opt-in of V10, for host-exposed .NET objects in script activities and in
+input bindings, is specified in this ADR and implemented separately; nothing in S-8 depends on it. Live .NET objects
+are never required to solve a core engine problem: core needs are met by registered functions that exchange plain
+values, for example a function that reads the bytes of an uploaded file from an activity's output and returns them as
+bytes. The opt-in is an addition for .NET developers who want one domain language shared between .NET and JavaScript.
+When it is enabled, it follows the persistence, per-attempt materialization (V7), workflow-state write and
+external-effect rules above, records the author's representation choice in the published contract and needs explicit
+write-back for durable data; selecting it gives no rollback or exactly-once execution for arbitrary .NET methods (V4).
+Until it is implemented, an Elsa 3 script that uses .NET members is refused at conversion with guidance. Unrestricted
+.NET type access (Jint's `AllowClr`) and broader conveniences, such as registered aliases with properties and methods,
+are likewise defined in this ADR and built separately when a use case asks for them.
 
 ### Adapter rules
 
@@ -358,6 +363,10 @@ today. Its date-heavy scripts are already refused.
   function is already .NET code that a binding calls, so the restriction takes a capability away without keeping .NET
   out of bindings. And under faithful-or-refuse, an Elsa 3 input expression that uses .NET access would have to be
   refused at conversion. The guardrails of V10 keep the default plain and make the opt-in visible and bounded instead.
+- **Shipping a minimal .NET interop together with the defaults.** Not chosen: the interop is not needed to deliver
+  the defaults, and core needs go through registered functions that exchange plain values. Building it alongside them
+  would put an optional capability on the path of required work. .NET objects stay disabled in scripts until the
+  opt-in of V10 is built on its own.
 - **Frozen or JSON-backed views of each value instead of plain JavaScript values.** Not chosen: a view needs a custom
   Jint object for every value and cannot give real arrays. `BigInt` is no way out either: `JSON.stringify` throws on
   it, and mixing it with numbers throws.
