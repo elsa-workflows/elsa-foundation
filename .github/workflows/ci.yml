@@ -61,8 +61,8 @@ concurrency:
 jobs:
   # Decision documents on an initiative branch stay check-free; implementation PRs to it run the tiers as a PR to main
   # does. run=false only for a documentation-only pull request whose base is initiative/* (change_scope.py's classifier,
-  # the same one as the docs-only fast path). Every other run gets run=true without reading a diff, and the jobs below
-  # skip only on an explicit 'false'. A gate that gives nothing changes nothing; a gate that fails still starts the
+  # the same one as the docs-only fast path). A run that is not a PR to initiative/* gets run=true without reading a
+  # diff, and the jobs below skip only on an explicit 'false'. A gate that gives nothing changes nothing; a gate that fails still starts the
   # required contexts below (!cancelled()), so none of them passes by being skipped: each gives its own verdict, and
   # Build & test goes red on a code change because GitHub skips the shards under a failed ancestor. test_tiers.py
   # check-workflows proves that the contexts start and that run=true starts what a silent gate does. The

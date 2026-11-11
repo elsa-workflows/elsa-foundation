@@ -7,9 +7,10 @@ the catalog link check. Anything uncertain (a git error, an empty diff, a non-PR
 full run: this script can widen CI, never narrow it by accident.
 
 The same classifier gates pull requests to an initiative branch (docs/contributing/initiatives.md): ADR, spec and
-agenda PRs there run no CI at all, and only a PR that carries implementation runs the tiers. `--gate` writes `run=`
-for the `Initiative gate` job: false only for a documentation-only pull request whose base is `initiative/*`; every
-other event or base, and any diff it cannot read, gives true, so main's CI is never narrowed by it.
+agenda PRs there run no tier (only the gate job itself), and only a PR that carries implementation runs the tiers.
+`--gate` writes `run=` for the `Initiative gate` job: false only for a documentation-only pull request whose base is
+`initiative/*`; every other event or base, and any diff it cannot read, gives true, so main's CI is never narrowed by
+it.
 
 Usage:
   change_scope.py --base <sha> --head <sha> [--github-output <file>] [--summary <file>]
