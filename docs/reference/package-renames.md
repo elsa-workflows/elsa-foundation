@@ -125,7 +125,7 @@ Decision: owner decision of 2026-11-11 on [#4027](https://github.com/elsa-workfl
 
 | Kind | Was | Is |
 |---|---|---|
-| JSON property of a context attachment (API request and response, stored session records, SDK type `StudioWeaverContextAttachment`) | `agentScopes` | `weaverScopes` |
+| JSON property of a context attachment (API response, stored session records, SDK type `StudioWeaverContextAttachment`; the request model never had it) | `agentScopes` | `weaverScopes` |
 | .NET members | `WeaverContextAttachment.AgentScopes`, the `AgentScopes` parameter of `WeaverToolDescriptor`, the `AgentScopes` property of the API attachment response | `WeaverScopes` |
 | Provider kind | enum member `WeaverProviderKind.AgentHarnessProvider`, wire value `"agent-harness-provider"` | `WeaverProviderKind.WeaverHarnessProvider`, `"weaver-harness-provider"` (the glossary term is "Weaver harness provider") |
 | Harness capability flag | `WeaverHarnessCapabilities.SubAgents` | `WeaverHarnessCapabilities.Delegation`. The value (`1 << 4`) is unchanged and no harness sets it. `SubWeavers` would have been wrong: what a harness delegates to is not a Weaver |
