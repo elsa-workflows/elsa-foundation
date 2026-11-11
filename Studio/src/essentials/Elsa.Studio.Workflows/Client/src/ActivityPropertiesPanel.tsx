@@ -76,6 +76,14 @@ import { ReportedPropertyEditor } from "./ReportedPropertyEditor";
 import { clearDictionaryEditorSessionScope } from "./dictionaryEditorSession";
 import { useDialogFocus } from "./workflow-editor/useDialogFocus";
 import { createActivityExpressionDocument } from "./activityExpressionDocument";
+import type { ActivityDataBinding } from "./api/activityDataSelection";
+import {
+  activityResultExpressionDescriptor,
+  activityResultSyntax,
+  offersActivityData,
+  type ActivityDataSelectionHost
+} from "./activityDataSelection";
+import { ActivityDataSelectionProvider, ChooseDataButton } from "./ActivityDataChooser";
 
 const inlineTextEditorIds = new Set([
   "studio.property.singleline",
@@ -118,6 +126,11 @@ export interface ActivityPropertiesPanelProps {
   showHeading?: boolean;
   /** Overrides the standalone empty-state copy when the panel is presented as activity inputs. */
   emptyLabel?: string;
+  /**
+   * The document owner's source analysis for Choose data. Only a surface that owns an analyzable document passes
+   * one; without it no input offers Choose data, and a stored activity output still renders as a reference.
+   */
+  activityDataSelection?: ActivityDataSelectionHost | null;
   onChange(activity: ActivityNode): void;
 }
 
@@ -142,6 +155,7 @@ export function ActivityPropertiesPanel({
   expressionEditorSessionScope,
   showHeading = true,
   emptyLabel = "This activity does not expose editable properties.",
+  activityDataSelection = null,
   onChange
 }: ActivityPropertiesPanelProps) {
   const generatedDictionarySessionScope = useId();
@@ -266,6 +280,7 @@ export function ActivityPropertiesPanel({
       status={scopeStatus}
       retry={scopeRetry}
     >
+    <ActivityDataSelectionProvider host={activityDataSelection}>
     <div className="wf-properties">
       {showHeading ? <span className="wf-section-label">Properties</span> : null}
       <ExpressionDescriptorStatus
@@ -288,6 +303,7 @@ export function ActivityPropertiesPanel({
         </AdvancedSection>
       ) : null}
     </div>
+    </ActivityDataSelectionProvider>
     </WorkflowReferenceAuthoringProvider>
   );
 }
@@ -521,9 +537,6 @@ function PropertyRow({
   // editor and no conversion control, so no control on the row can write anything but a Secret Reference
   // or a clear (elsa-foundation spec 188, workflow secret safety).
   const secretOnly = acceptsOnlySecretReference(input);
-  const syntaxDescriptors = secretOnly
-    ? expressionDescriptors.filter(descriptor => descriptor.type === secretSyntax)
-    : expressionDescriptors;
   const dynamicOptions = useActivityInputOptions(endpointContext, workflowState, activity, activityDescriptor, input);
   const [failedOptionsScope, setFailedOptionsScope] = useState<string>();
   const reportedEditorSignals = useRef(new Set<string>());
@@ -574,7 +587,15 @@ function PropertyRow({
   const editor = resolveEditor(editors, effectiveInput, context);
   const wrapped = input.isWrapped !== false ? readWrappedInput(activity, input) : null;
   const syntax = wrapped?.expression.type ?? (secretOnly ? secretSyntax : "Literal");
-  const expressionDescriptor = expressionDescriptors.find(descriptor => descriptor.type === syntax);
+  // A stored activity output is a reference the server's expression catalog does not list. Naming it lets the syntax
+  // picker show the current mode and keep the way back to a fixed value or an expression.
+  const rowDescriptors = syntax === activityResultSyntax && !expressionDescriptors.some(descriptor => descriptor.type === syntax)
+    ? [...expressionDescriptors, activityResultExpressionDescriptor]
+    : expressionDescriptors;
+  const syntaxDescriptors = secretOnly
+    ? rowDescriptors.filter(descriptor => descriptor.type === secretSyntax)
+    : rowDescriptors;
+  const expressionDescriptor = rowDescriptors.find(descriptor => descriptor.type === syntax);
   const editingMode = expressionDescriptor?.editingMode;
   // A masked input shows what it stores only under author code or a reference (showsMaskedValue); under any other
   // syntax, Literal and Object included, its value is masked. This flag is read, from the row's current state, by
@@ -817,10 +838,18 @@ function PropertyRow({
       current.onChange(cleared, current.input);
       return;
     }
-    if (currentWrapped?.expression.type === "Connection" && nextValue === null) {
+    const clearsReference = nextValue === null &&
+      (currentWrapped?.expression.type === "Connection" || currentWrapped?.expression.type === activityResultSyntax);
+    if (clearsReference) {
+      // Clearing a reference unbinds the input, so it is untouched again rather than holding an empty reference.
       const unbound = { ...current.activity };
       delete unbound[getInputPropertyName(current.input)];
       current.onChange(unbound, current.input);
+      if (currentWrapped?.expression.type === activityResultSyntax) {
+        requestAnimationFrame(() => rowRef.current?.querySelector<HTMLButtonElement>(
+          ".wf-choose-data-trigger, .wf-syntax-picker-trigger"
+        )?.focus());
+      }
       return;
     }
     const portableDefinition = currentWrapped
@@ -914,6 +943,38 @@ function PropertyRow({
     }
     applyTransition(nextDescriptor, nextValue);
   };
+
+  // Stores the server's binding unchanged as one edit. Replacing authored content asks first, as any lossy
+  // syntax switch does; an untouched input has nothing to lose.
+  const chooseData = (binding: ActivityDataBinding) => {
+    if (!wrapped) return;
+    const descriptor = rowDescriptors.find(candidate => candidate.type === binding.expressionType) ??
+      (binding.expressionType === activityResultSyntax ? activityResultExpressionDescriptor : null);
+    if (!descriptor) return;
+    const untouched = !Object.prototype.hasOwnProperty.call(latestProperty.current.activity, getInputPropertyName(input));
+    const replacesValue = !untouched && planInputSyntaxTransition(
+      input,
+      editingMode ?? "structured",
+      descriptor.editingMode,
+      portableDefinition?.source ?? value,
+      binding.value
+    ).requiresConfirmation;
+    const discardedBindingCount = portableDefinition ? Object.keys(portableDefinition.parameters).length : 0;
+    if (replacesValue || discardedBindingCount > 0) {
+      setExpandRequested(false);
+      setPendingTransition({ descriptor, nextValue: binding.value, replacesValue, discardedBindingCount });
+      return;
+    }
+    applyTransition(descriptor, binding.value);
+  };
+  const offersChooseData = wrapped != null && syntax !== activityResultSyntax && offersActivityData(input, readOnly);
+  const chooseDataButton = offersChooseData ? (
+    <ChooseDataButton
+      target={{ nodeId: activity.nodeId, inputKey: getInputPropertyName(input) }}
+      inputLabel={input.displayName || input.name}
+      onSelect={chooseData}
+    />
+  ) : null;
   // The whole collection concept resolves to a single node: a collection-scoped editor when one claims
   // the value (e.g. a multi-select for option sets), otherwise a repeater of per-element editors.
   const collectionEditor = collectionType
@@ -1007,6 +1068,7 @@ function PropertyRow({
         <label>{input.displayName || input.name}</label>
         <div className="wf-property-row-header-meta">
           <span>{formatTypeName(input.typeName)}</span>
+          {chooseDataButton}
           {wrapped && !useInlineSyntaxPicker && !useDictionarySyntaxPicker ? (
             <SyntaxPicker
               label={`${input.displayName || input.name} expression syntax`}
