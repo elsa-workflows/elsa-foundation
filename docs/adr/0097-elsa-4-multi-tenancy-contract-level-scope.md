@@ -51,7 +51,8 @@ Sibling work: embedding program [#4132](https://github.com/elsa-workflows/elsa-f
 [#4150](https://github.com/elsa-workflows/elsa-foundation/issues/4150) consume section (g);
 [#4145](https://github.com/elsa-workflows/elsa-foundation/issues/4145) is the identity Phase 1 tenant-awareness
 addendum and does not change 0085 D6;
-[#4146](https://github.com/elsa-workflows/elsa-foundation/issues/4146) may later add a finding to (g).
+[#4146](https://github.com/elsa-workflows/elsa-foundation/issues/4146) reported in (g); the crash is
+[#4158](https://github.com/elsa-workflows/elsa-foundation/issues/4158).
 
 ## (a) The invariant
 
@@ -115,9 +116,10 @@ operation on tenant-keyed data.
 - Identity and catalog language keep saying **tenant** / **tenant id** for the principal and the tenant
   catalog row. Persistence language says **scope** for the bound partition. The two values are equal for
   a given request once the resolver has bound the scope; they are still different kinds of thing.
-- Startup tasks that touch tenant-keyed data run **per bound persistence scope**, not once per shell
-  unless the task is host-wide. Shell activation remains the CShells lifecycle; it does not iterate
-  tenants by itself.
+- Startup tasks run once per shell, not per tenant (`TaskManager.RunStartupTasks`, one DI scope).
+  Per-partition visits use `IPersistenceScopeRunner`. `IStartupTask` XML that says "executed for each
+  tenant" is stale; updating it is follow-through of this vocabulary, not a TaskManager change
+  (section (g)). Shell activation remains the CShells lifecycle; it does not iterate tenants.
 
 ### Deferred
 
@@ -284,6 +286,18 @@ tenant and no identity features**. That is a supported default of this ADR, not 
   second tenant and they do not skip isolation because the host has only one.
 - A later multi-tenant composition of the same host adds the resolver pipeline and catalog on top of
   this default. It does not replace the contract.
+- The authoring-stack startup crash in a host with no tenant set up is a small store-contract bug
+  ([#4158](https://github.com/elsa-workflows/elsa-foundation/issues/4158)), found by spike
+  [#4146](https://github.com/elsa-workflows/elsa-foundation/issues/4146). `EfDesignAtomicWrite`
+  treats a null request tenant as the bound `"default"` and rejects staged host-wide catalog rows.
+  It is not identity seeding and is not blocked on this ADR. Host-wide catalog rows stay `TenantId`
+  null (section (e)); they are never stamped `"default"`. Workbench does not hit it on the default
+  composition; Foundation.Host does not ship authoring features.
+- Startup tasks run once per [shell](../glossary/root.md), not per tenant.
+  `TaskManager.RunStartupTasks` uses one DI scope per shell. `IPersistenceScopeRunner` is the
+  per-partition visitor. `IStartupTask`'s XML ("executed for each tenant") is stale relative to the
+  [startup task](../glossary/root.md) glossary entry; updating it is follow-through of (b), not a
+  code change in this ADR.
 
 ### Proposed
 
@@ -296,12 +310,6 @@ tenant and no identity features**. That is a supported default of this ADR, not 
 
 ### Deferred
 
-- The root cause of the authoring-stack startup crash
-  ("An EF design operation staged an entity owned by a different tenant") in a host with no tenant
-  set up. That is spike [#4146](https://github.com/elsa-workflows/elsa-foundation/issues/4146). This
-  section will gain that finding when the spike reports; it is not classified here as a code bug, a
-  missing prerequisite, or a tenancy-coupling that needs more than the fixed-tenant source.
-- Whether Workbench and Foundation.Host can hit the same crash with a non-default scope.
 - Multi-tenant embedding (a later embedding-program phase).
 
 ## Owner questions Q1–Q5 and Q12
@@ -334,8 +342,6 @@ phases.
 
 Also open:
 
-- **#4146 finding for (g).** Not yet reported. When the spike classifies the authoring-stack tenant
-  mismatch, append that classification to section (g) Deferred / Proposed.
 - The 13-store unscoped audit and the two-scope behaviour of timers, stimulus and outbox are inferred
   from code, not demonstrated. [#4134](https://github.com/elsa-workflows/elsa-foundation/issues/4134)
   validates the estimate; confirmed leaks are filed separately.
@@ -376,7 +382,9 @@ Also open:
   second-tenant journey (#3701, tenant half of #4107).
 - Identity Phase 1 issues #2775 and #2777–#2782 follow [#4145](https://github.com/elsa-workflows/elsa-foundation/issues/4145)
   without changing their scope or ADR 0085 D6.
-- Embedding #4150 implements section (g) once #4146 has classified the startup crash.
+- Embedding #4150 implements section (g). The authoring-stack startup crash is
+  [#4158](https://github.com/elsa-workflows/elsa-foundation/issues/4158), not a prerequisite of this
+  ADR.
 - Program #4131 is updated with this ADR's link when the PR merges. #4135 records the program in
   ADR 0080 D0 and the registry; this ADR does not.
 - No constitution amendment. Framework §2.20 and ADR 0073 already require provider-neutral contracts
