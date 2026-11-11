@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { ElsaStudioModuleApi, StudioAgentContextAttachment, StudioAgentContributionDiagnostic, StudioAgentMode, StudioAgentPromptRequest, StudioAgentSurface, StudioAgentToolResult } from "../../sdk";
+import type { ElsaStudioModuleApi, StudioWeaverContextAttachment, StudioWeaverContributionDiagnostic, StudioWeaverMode, StudioWeaverPromptRequest, StudioWeaverSurface, StudioWeaverToolResult } from "../../sdk";
 import { AgentExecutionError, classifyAutonomyFailure, classifyRecoveryFailure, createAgentClient, getAgentErrorCode, getAgentRetryAfterSeconds, POLICY_CHANGED, type AgentClient } from "../agent/agentClient";
 import { collectAgentContext } from "../agent/agentContext";
 import { getActiveAgentCapabilities, getActivePromptStarters } from "../agent/agentContributions";
@@ -107,7 +107,7 @@ export type WeaverRecoveryNotice =
 
 export interface UseWeaverSessionOptions {
   api: ElsaStudioModuleApi;
-  surface: StudioAgentSurface;
+  surface: StudioWeaverSurface;
   client?: AgentClient;
   subscribeStream?: typeof subscribeAgentSessionStream;
 }
@@ -123,9 +123,9 @@ export interface UseWeaverSession {
   timeline: WeaverTimelineEntry[];
   plan: AgentPlanStep[];
   proposals: AgentActionProposal[];
-  toolResults: StudioAgentToolResult[];
-  attachments: StudioAgentContextAttachment[];
-  contextDiagnostics: StudioAgentContributionDiagnostic[];
+  toolResults: StudioWeaverToolResult[];
+  attachments: StudioWeaverContextAttachment[];
+  contextDiagnostics: StudioWeaverContributionDiagnostic[];
   followups: WeaverFollowup[];
   pendingProposalIds: ReadonlySet<string>;
   /** The backend-acknowledged mode of the current conversation, or the create-time request before one exists. */
@@ -142,7 +142,7 @@ export interface UseWeaverSession {
   promptStarters: ReturnType<typeof getActivePromptStarters>;
   capabilities: ReturnType<typeof getActiveAgentCapabilities>;
   activeProvider: AgentProviderDiagnostics | undefined;
-  send(message: string | StudioAgentPromptRequest): void;
+  send(message: string | StudioWeaverPromptRequest): void;
   stop(): void;
   removeFollowup(id: string): void;
   approveProposal(proposal: AgentActionProposal): void;
@@ -185,14 +185,14 @@ const DISABLED_POLICY: AgentBootstrapResponse["policy"] = {
 export function useWeaverSession({ api, surface, client, subscribeStream = subscribeAgentSessionStream }: UseWeaverSessionOptions): UseWeaverSession {
   const [bootstrap, setBootstrap] = useState<AgentBootstrapResponse | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
-  const [requestContextDiagnostics, setRequestContextDiagnostics] = useState<StudioAgentContributionDiagnostic[]>([]);
-  const [streamContextDiagnostics, setStreamContextDiagnostics] = useState<StudioAgentContributionDiagnostic[]>([]);
+  const [requestContextDiagnostics, setRequestContextDiagnostics] = useState<StudioWeaverContributionDiagnostic[]>([]);
+  const [streamContextDiagnostics, setStreamContextDiagnostics] = useState<StudioWeaverContributionDiagnostic[]>([]);
   const contextDiagnostics = useMemo(() => [...requestContextDiagnostics, ...streamContextDiagnostics], [requestContextDiagnostics, streamContextDiagnostics]);
-  const [attachments, setAttachments] = useState<StudioAgentContextAttachment[]>([]);
+  const [attachments, setAttachments] = useState<StudioWeaverContextAttachment[]>([]);
   const [messages, setMessages] = useState<AgentMessageViewModel[]>([]);
   const [timeline, setTimeline] = useState<WeaverTimelineEntry[]>([]);
   const [plan, setPlan] = useState<AgentPlanStep[]>([]);
-  const [toolResults, setToolResults] = useState<StudioAgentToolResult[]>([]);
+  const [toolResults, setToolResults] = useState<StudioWeaverToolResult[]>([]);
   const [proposals, setProposals] = useState<AgentActionProposal[]>([]);
   const [followups, setFollowups] = useState<WeaverFollowup[]>([]);
   const [chatState, setChatState] = useState<WeaverChatState>("idle");
@@ -274,7 +274,7 @@ export function useWeaverSession({ api, surface, client, subscribeStream = subsc
 
   const clientRunner = useMemo(() => createClientInvocationRunner(api), [api]);
   const agentClient = useMemo(() => client ?? createAgentClient(api.backend), [api.backend, client]);
-  const mode: StudioAgentMode = bootstrap?.modes[0] ?? "explain";
+  const mode: StudioWeaverMode = bootstrap?.modes[0] ?? "explain";
   const contributionFilter = useMemo(() => ({
     // This only presents capabilities the backend already admitted. It grants no tool authority;
     // permissions are checked again by the backend when a request or invocation is executed.
@@ -303,7 +303,7 @@ export function useWeaverSession({ api, surface, client, subscribeStream = subsc
         const result = await agentClient.bootstrap();
         if (!disposed) {
           setBootstrap(result);
-          api.agent.providerAvailability.set(result.enabled && result.providerStatus !== "unavailable" && result.providerStatus !== "disabled");
+          api.weaver.providerAvailability.set(result.enabled && result.providerStatus !== "unavailable" && result.providerStatus !== "disabled");
           // Adopt the deployment's default autonomy mode (already clamped to its ceiling server-side).
           // The dropdown is disabled until ready, so this can't clobber a user's choice.
           setDraftAutoApplyMode(result.policy.defaultAutonomyMode);
@@ -311,7 +311,7 @@ export function useWeaverSession({ api, surface, client, subscribeStream = subsc
       } catch (e) {
         if (!disposed) {
           setBootstrap({ enabled: false, providerStatus: "unavailable", modes: [], capabilities: [], provider: undefined, policy: DISABLED_POLICY });
-          api.agent.providerAvailability.set(false);
+          api.weaver.providerAvailability.set(false);
           setError(getAgentErrorMessage(e));
         }
       }
@@ -599,7 +599,7 @@ export function useWeaverSession({ api, surface, client, subscribeStream = subsc
     settledRequestIdsRef.current.add(requestId);
     if (turnRequestIdRef.current === requestId) turnRequestIdRef.current = null;
     // The policy that admitted the turn, not the current selector value, describes its result.
-    api.agent.publishPromptResult({ requestId, status, text, autoApply: (turnAcceptedPolicyRef.current?.autonomyMode ?? autoApplyModeRef.current) === "full-auto" });
+    api.weaver.publishPromptResult({ requestId, status, text, autoApply: (turnAcceptedPolicyRef.current?.autonomyMode ?? autoApplyModeRef.current) === "full-auto" });
   }, [api]);
 
   useEffect(() => {
@@ -635,7 +635,7 @@ export function useWeaverSession({ api, surface, client, subscribeStream = subsc
     return subscription;
   }, [agentClient, api.backend, clearContextDiagnostics, handleStreamEvent, publishTurnResult, subscribeStream]);
 
-  const startTurn = useCallback(async (request: StudioAgentPromptRequest) => {
+  const startTurn = useCallback(async (request: StudioWeaverPromptRequest) => {
     const { message, requestId } = request;
     recoveryGenerationRef.current++;
     setReopening(false);
@@ -724,7 +724,7 @@ export function useWeaverSession({ api, surface, client, subscribeStream = subsc
     }
   }, [agentClient, capabilities, mode, surface]);
 
-  const send = useCallback((value: string | StudioAgentPromptRequest) => {
+  const send = useCallback((value: string | StudioWeaverPromptRequest) => {
     const request = typeof value === "string" ? { message: value } : value;
     const message = request.message.trim();
     if (!message || !ready) {

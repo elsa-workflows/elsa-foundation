@@ -269,19 +269,18 @@ internal sealed class ActivityDataSelectionAnalyzer(
             findings.Add(new(path, "ValueFlow/CyclicBackEdge", "This result lookup crosses a cyclic back-edge; transfer iteration state explicitly."));
             return null;
         }
-        var facts = context.Graph.Assess(producer, consumer);
-        var availability = facts.Availability;
+        var availability = context.Graph.Assess(producer, consumer).Availability;
         var notDefinite = !binding.IsOptional && availability != ActivityChildResultAvailability.Definite;
         if (admitOccurrence && notDefinite)
             findings.Add(new(path, "ValueFlow/UnavailableProducer", "The required result producer is not causally available on every path to this input."));
-        // A direct binding without a scope names only the producer. It is sound only where the owning structure says
-        // that no earlier run of the producer can also lead to this input; a structure that has not said is not
-        // trusted. Repetition of an enclosing structure is refused above as a cyclic back-edge. Bindings that declare
-        // a scope and expression parameters keep their existing rules (#4056).
+        // A direct binding without a scope names only the producer. It is sound only where the owning structure and
+        // every structure above it say that no earlier run of the producer can also lead to this input; one that has
+        // not said is not trusted. Browsing and publication both decide here, so what is offered is what is admitted.
+        // Bindings that declare a scope and expression parameters keep their existing rules (#4056).
         var declaresNoScope = binding.IsDirect && binding.Scope is null;
-        var earlierRun = declaresNoScope && facts.EarlierProducerRunCanReachConsumer != false;
+        var earlierRun = declaresNoScope && context.Graph.EarlierProducerRunCanReachConsumer(producer, consumer);
         if (admitOccurrence && earlierRun && !notDefinite)
-            findings.Add(new(path, "ValueFlow/EarlierProducerRun", "The owning structure does not establish that only one run of this producer can lead to this input, so a result binding without a scope cannot tell its runs apart. Carry the value in a variable instead."));
+            findings.Add(new(path, "ValueFlow/EarlierProducerRun", "The owning structure, or a structure around it, does not establish that only one run of this producer can lead to this input, so a result binding without a scope cannot tell its runs apart. Carry the value in a variable instead."));
         var version = await catalog.Find(producer.Node.ActivityVersionId, ct);
         if (version is null)
         {

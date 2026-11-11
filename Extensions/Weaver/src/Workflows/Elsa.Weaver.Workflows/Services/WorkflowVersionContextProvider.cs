@@ -14,27 +14,27 @@ namespace Elsa.Weaver.Workflows.Services;
 /// every turn. Without a version reference it contributes nothing.
 /// </summary>
 internal sealed class WorkflowVersionContextProvider(
-    IAgentSessionService sessions,
-    IAgentToolAuthorizer authorizer,
+    IWeaverSessionService sessions,
+    IWeaverToolAuthorizer authorizer,
     IServiceProvider services,
-    IEnumerable<IWorkflowDefinitionAuthorizer>? owners = null) : IAgentContextProvider
+    IEnumerable<IWorkflowDefinitionAuthorizer>? owners = null) : IWeaverContextProvider
 {
     // The owning reader and structure service are resolved only when a version is referenced, so composing this source
     // never builds the design read path a turn without a version does not use.
     private IEnumerable<IWorkflowVersionReader> readers => services.GetServices<IWorkflowVersionReader>();
     private IEnumerable<IActivityStructureService> structures => services.GetServices<IActivityStructureService>();
 
-    public AgentContextProviderDescriptor Descriptor { get; } = new(WorkflowVersionContext.ContextSourceId, WorkflowVersionContext.ModuleId, "workflow-version",
+    public WeaverContextProviderDescriptor Descriptor { get; } = new(WorkflowVersionContext.ContextSourceId, WorkflowVersionContext.ModuleId, "workflow-version",
         [WorkflowVersionContext.VersionKind, WorkflowVersionContext.GuidanceKind], ["1"], [WorkflowVersionContext.ResourceType]);
 
-    public async ValueTask<AgentContextContribution> CollectAsync(AgentContextRequest request, CancellationToken cancellationToken = default)
+    public async ValueTask<WeaverContextContribution> CollectAsync(WeaverContextRequest request, CancellationToken cancellationToken = default)
     {
         var callers = request.CallerAttachments.Where(item => item.ContentType == WorkflowVersionContext.VersionKind).ToArray();
         if (callers.Length == 0) return new([], []);
         var session = await FindSessionAsync(request.SessionId, cancellationToken);
         if (session is null) return SessionDenied();
-        var attachments = new List<AgentContextAttachment>();
-        var diagnostics = new List<AgentContributionDiagnostic>();
+        var attachments = new List<WeaverContextAttachment>();
+        var diagnostics = new List<WeaverContributionDiagnostic>();
         foreach (var caller in callers)
         {
             if (!WorkflowVersionContext.TryRead(caller, out var reference, out var error))
@@ -55,23 +55,23 @@ internal sealed class WorkflowVersionContextProvider(
         return new(attachments, diagnostics);
     }
 
-    public async ValueTask<AgentContextContribution> AdmitDisclosureAsync(AgentContextDisclosureRequest request, CancellationToken cancellationToken = default)
+    public async ValueTask<WeaverContextContribution> AdmitDisclosureAsync(WeaverContextDisclosureRequest request, CancellationToken cancellationToken = default)
     {
         var session = await FindSessionAsync(request.SessionId, cancellationToken);
         if (session is null) return SessionDenied();
-        var projection = new List<AgentContextAttachment>();
+        var projection = new List<WeaverContextAttachment>();
         foreach (var item in request.Context)
         {
             if (item.ModuleId != Descriptor.ModuleId || item.SchemaVersion != "1" || !Descriptor.ContextKinds.Contains(item.ContentType, StringComparer.Ordinal))
                 return ContextDenied();
             if (item.ContentType == WorkflowVersionContext.GuidanceKind)
             {
-                if (item.Origin != AgentContextOrigin.InstalledGuidance) return ContextDenied();
+                if (item.Origin != WeaverContextOrigin.InstalledGuidance) return ContextDenied();
                 projection.Add(WorkflowVersionContext.Guidance());
                 continue;
             }
             // Only this module's own read is ever retained; it is read again, so a withheld or deleted version stops being disclosed.
-            if (item.Origin != AgentContextOrigin.AuthoritativeRead || !WorkflowVersionContext.TryRead(item, out var reference, out _)) return ContextDenied();
+            if (item.Origin != WeaverContextOrigin.AuthoritativeRead || !WorkflowVersionContext.TryRead(item, out var reference, out _)) return ContextDenied();
             var (fresh, refusal) = await AdmitAsync(session, reference, item.Sensitivity, cancellationToken);
             if (refusal is not null) return new([], [refusal]);
             // A historical projection is what was disclosed then; the current turn discloses the current read (identical
@@ -97,8 +97,8 @@ internal sealed class WorkflowVersionContextProvider(
     }
 
     /// <summary>The admitted read of one referenced version, or the required refusal (denied, unavailable or not found).</summary>
-    private async Task<(AgentContextAttachment? Attachment, AgentContributionDiagnostic? Refusal)> AdmitAsync(AgentSession session,
-        WorkflowVersionContext.Reference reference, AgentContextSensitivity sensitivity, CancellationToken cancellationToken)
+    private async Task<(WeaverContextAttachment? Attachment, WeaverContributionDiagnostic? Refusal)> AdmitAsync(WeaverSession session,
+        WorkflowVersionContext.Reference reference, WeaverContextSensitivity sensitivity, CancellationToken cancellationToken)
     {
         var reader = WorkflowVersionContext.Reader(readers, out _);
         var read = await WorkflowVersionContext.ReadAsync(authorizer, owners, reader, session.ActorId, session.TenantId,
@@ -111,7 +111,7 @@ internal sealed class WorkflowVersionContextProvider(
         return (WorkflowVersionContext.Attachment(read.Version, read.Versions!, flattened.Activities.Count, flattened.Truncated, flattened.Incomplete, sensitivity, reference.Client), null);
     }
 
-    private AgentContributionDiagnostic? Refusal(WorkflowVersionContext.Outcome outcome) => outcome switch
+    private WeaverContributionDiagnostic? Refusal(WorkflowVersionContext.Outcome outcome) => outcome switch
     {
         WorkflowVersionContext.Outcome.Read => null,
         WorkflowVersionContext.Outcome.Denied => new(Descriptor.Id, "weaver.workflow.permission_denied", WorkflowVersionContext.DeniedMessage, true),
@@ -126,20 +126,20 @@ internal sealed class WorkflowVersionContextProvider(
     };
 
     // A caller classification can restrict module-owned data; it cannot certify prior redaction.
-    private static AgentContextSensitivity Admitted(AgentContextSensitivity caller) =>
-        caller == AgentContextSensitivity.SecretRedacted ? AgentContextSensitivity.Secret :
-        caller < AgentContextSensitivity.Internal ? AgentContextSensitivity.Internal : caller;
+    private static WeaverContextSensitivity Admitted(WeaverContextSensitivity caller) =>
+        caller == WeaverContextSensitivity.SecretRedacted ? WeaverContextSensitivity.Secret :
+        caller < WeaverContextSensitivity.Internal ? WeaverContextSensitivity.Internal : caller;
 
-    private async Task<AgentSession?> FindSessionAsync(string sessionId, CancellationToken cancellationToken)
+    private async Task<WeaverSession?> FindSessionAsync(string sessionId, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         var session = await sessions.FindAsync(sessionId, cancellationToken);
-        return session is { Status: AgentSessionStatus.Active } && !string.IsNullOrWhiteSpace(session.ActorId)
+        return session is { Status: WeaverSessionStatus.Active } && !string.IsNullOrWhiteSpace(session.ActorId)
             && !string.IsNullOrWhiteSpace(session.TenantId) && (session.ExpiresAt is null || session.ExpiresAt > DateTimeOffset.UtcNow) ? session : null;
     }
 
-    private AgentContextContribution SessionDenied() => new([], [new(Descriptor.Id, "weaver.workflow.session_denied",
+    private WeaverContextContribution SessionDenied() => new([], [new(Descriptor.Id, "weaver.workflow.session_denied",
         "A current workflow session with an authenticated actor and tenant is required.", true)]);
-    private AgentContextContribution ContextDenied() => new([], [new(Descriptor.Id, "weaver.workflow.disclosure_invalid",
+    private WeaverContextContribution ContextDenied() => new([], [new(Descriptor.Id, "weaver.workflow.disclosure_invalid",
         "The retained workflow version evidence does not match this module's supported context kinds and tools.", true)]);
 }

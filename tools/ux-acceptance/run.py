@@ -21,13 +21,16 @@ PROJECTS = {'desktop-light', 'desktop-dark', 'narrow-light', 'narrow-dark'}
 CAPTURES = {
     'business decisions authoring and explanations': ['reference', 'decisions-list', 'decisions-search', 'decision-create', 'decision-table', 'decision-case-editor', 'decision-case-expectation', 'decision-cases', 'decision-regression', 'decision-published', 'decision-explanation', 'decision-clone', 'decision-conflict', 'decision-history', 'decisions-no-matches', 'decision-imported', 'decision-table-320', 'decision-table-320-scrolled', 'decision-picker', 'decision-picker-new-tab'],
     'feature filtering and settings dialogs': ['reference', 'features-server-no-matches', 'features-server-populated', 'features-studio-no-matches', 'features-studio-populated', 'feature-settings-dialog', 'feature-impact-dialog'],
+    'outlined Secret create journey': ['reference', 'secret-empty', 'secret-invalid', 'secret-filled', 'secret-options', 'secret-list', 'secret-reopened', 'secret-cancelled'],
     'collections and connection creation': ['reference', 'no-matches', 'connections-list', 'secret-create', 'secret-list', 'secret-detail', 'secret-duplicate', 'invalid-name', 'completed'],
     'publication blockers explain how to correct agent settings': ['reference', 'blocked', 'instructions-focused', 'model-blocked', 'model-focused', 'completed'],
     'save template toast': ['reference', 'save-form', 'saved-toast', 'template-list', 'reopened-template'],
     'workflow template metadata defaults': ['reference', 'template-defaults', 'template-edits', 'template-catalog-entry', 'template-persisted'],
-    'user tasks inbox and response': ['reference', 'tasks-empty', 'tasks-list', 'task-detail', 'task-actions', 'task-history', 'task-forms', 'task-form-versions', 'task-form-editor', 'task-form-actions', 'completed'],
+    'user tasks inbox and response': ['reference', 'tasks-empty', 'tasks-list', 'task-detail', 'task-actions', 'task-history', 'task-forms', 'task-form-versions', 'task-form-editor', 'task-form-actions', 'completed', 'tasks-return', 'task-not-found', 'task-tab-return'],
     'executable designer parity': ['reference', 'definition-sequence', 'executable-sequence', 'nested-sequence', 'draft-sequence', 'empty-sequence', 'compensation', 'flowchart', 'bpmn'],
+    'choose data for activity outputs': ['reference', 'choose-data-entry', 'chooser-open', 'output-reference', 'not-selectable', 'replace-chooser', 'chooser-320'],
     'agent authoring and navigation': ['reference', 'agents-list', 'agent-create', 'agent-designer', 'agent-model', 'advanced-settings', 'inputs', 'outputs', 'input-general', 'input-presentation', 'input-advanced', 'output-general', 'output-presentation', 'output-advanced', 'completed'],
+    'user task authoring and workflow result': ['reference', 'form-authoring', 'published-form', 'task-authoring', 'form-selection', 'json-output-definitions', 'renamed-output', 'removed-output', 'output-picker', 'frozen-task-form', 'run-outcomes', 'run-outcomes-readable', 'run-output-reached', 'workflow-result', 'task-fault-causes', 'task-fault-details', 'prefill-fault'],
 }
 JOURNEYS = set(CAPTURES)
 

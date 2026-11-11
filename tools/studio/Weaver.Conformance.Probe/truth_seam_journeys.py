@@ -297,7 +297,7 @@ def require_no_placeholders(generation):
     agent = generation.get("workflowAgent") if isinstance(generation, dict) else None
     check(isinstance(agent, dict) and isinstance(agent.get("types"), list) and agent["types"], "The host does not report its workflow agent package")
     types = set(agent["types"])
-    check("DefaultWorkflowAgentContextProvider" in types and "WorkflowActivityCatalog" in types,
+    check("DefaultWorkflowWeaverContextProvider" in types and "WorkflowActivityCatalog" in types,
           "The reported types are not the loaded Agent Workflows package")
     check(not types & LEGACY_PLACEHOLDERS, "The packaged consumer still ships a legacy workflow placeholder")
     check(agent.get("activityAuthoringCatalogs") == ["HttpActivityAuthoringCatalog"],

@@ -1,7 +1,7 @@
 import React from "react";
-import type { StudioAgentContextAttachment } from "../../sdk";
+import type { StudioWeaverContextAttachment } from "../../sdk";
 
-export function AgentContextChips({ attachments }: { attachments: StudioAgentContextAttachment[] }) {
+export function AgentContextChips({ attachments }: { attachments: StudioWeaverContextAttachment[] }) {
   if (attachments.length === 0) {
     return null;
   }
@@ -19,7 +19,7 @@ export function AgentContextChips({ attachments }: { attachments: StudioAgentCon
   );
 }
 
-function contextMetadata(attachment: StudioAgentContextAttachment) {
+function contextMetadata(attachment: StudioWeaverContextAttachment) {
   // Only backend-admitted envelope metadata is shared presentation. The owning module interprets
   // resource payloads and may include an appropriate display name in its declared label.
   const origin = attachment.origin ? {

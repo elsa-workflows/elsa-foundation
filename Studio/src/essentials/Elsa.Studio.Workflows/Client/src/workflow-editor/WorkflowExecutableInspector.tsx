@@ -2,7 +2,7 @@ import { qualifyStudioBackendPath } from "@elsa-workflows/studio-sdk";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ReactFlow, Background, Controls, type Edge, type Node } from "@xyflow/react";
 import { ChevronLeft, ChevronRight, Fingerprint, ListTree, Maximize2, Minimize2, RotateCcw, Sparkles, Workflow as WorkflowIcon } from "lucide-react";
-import type { StudioAgentRegistry, StudioEndpointContext, StudioWorkflowRunInputEditorContribution } from "@elsa-workflows/studio-sdk";
+import type { StudioWeaverRegistry, StudioEndpointContext, StudioWorkflowRunInputEditorContribution } from "@elsa-workflows/studio-sdk";
 import { CopyableIdentifier, StudioButton } from "@elsa-workflows/studio-ui";
 import { getDefinition } from "../api/workflowDesign";
 import { listActivities } from "../api/activityDesign";
@@ -61,7 +61,7 @@ import {
 } from "./useExecutableWorkflowRun";
 import { ExecutableRunButton } from "./ExecutableRunButton";
 import { activateWorkflowCanvasNode, decorateWorkflowCanvasElements } from "./workflowAccessibility";
-import { readOnlyMinimapFitViewOptions, shouldShowReadOnlyMiniMap } from "./readOnlyMinimap";
+import { getReadOnlyFitViewOptions } from "./readOnlyMinimap";
 import { FitReadOnlyFlowView, useReadOnlyFlowNodes } from "./useReadOnlyFlowCanvas";
 import { WorkflowReadOnlyMiniMap } from "./WorkflowReadOnlyMiniMap";
 import { RetainFlowViewport } from "../graph-authoring/RetainFlowViewport";
@@ -94,7 +94,7 @@ type SourceDefinitionState =
 
 export function WorkflowExecutableInspectorWorkbench({ context, ai, weaver, runInputEditors, artifactId, sourceReferenceId, onSelectReference, onIdentityChange }: {
   context: StudioEndpointContext;
-  ai: StudioAgentRegistry;
+  ai: StudioWeaverRegistry;
   /** The Workflows module's agent state: the inspector contributes the exact Executable it shows (spec 1193 FR-028). */
   weaver?: WorkflowAgentController;
   runInputEditors: StudioWorkflowRunInputEditorContribution[];
@@ -397,7 +397,8 @@ export function WorkflowExecutableCanvas({ detail, activityCatalog, graph, chose
             nodeTypes={nodeTypes}
             edgeTypes={edgeTypes}
             fitView
-            fitViewOptions={shouldShowReadOnlyMiniMap(flowNodes.length) ? readOnlyMinimapFitViewOptions : undefined}
+            fitViewOptions={getReadOnlyFitViewOptions(flowNodes.length)}
+            minZoom={0.1}
             onNodesChange={onNodesChange}
             nodesDraggable={false}
             nodesConnectable={false}
@@ -414,7 +415,7 @@ export function WorkflowExecutableCanvas({ detail, activityCatalog, graph, chose
             <Background />
             <FitReadOnlyFlowView nodeCount={flowNodes.length} />
             <WorkflowReadOnlyMiniMap nodeCount={flowNodes.length} />
-            <Controls showInteractive={false} />
+            <Controls showInteractive={false} fitViewOptions={getReadOnlyFitViewOptions(flowNodes.length)} />
             <RetainFlowViewport />
           </ReactFlow>
         )}

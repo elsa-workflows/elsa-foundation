@@ -6,7 +6,7 @@ import { App } from "../app/App";
 import * as loader from "../app/loader";
 import * as clients from "../app/agent/agentClient";
 import * as streams from "../app/agent/agentStream";
-import type { ElsaStudioModuleApi, StudioAgentPromptResult } from "../sdk";
+import type { ElsaStudioModuleApi, StudioWeaverPromptResult } from "../sdk";
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -18,14 +18,14 @@ afterEach(() => {
 describe("shell-owned Weaver intent", () => {
   it.each([false, true])("gives synchronous correlations an explicit disposition, including cancellation-listener replacement=%s", async replacement => {
     let api!: ElsaStudioModuleApi;
-    const results: StudioAgentPromptResult[] = [];
+    const results: StudioWeaverPromptResult[] = [];
     vi.spyOn(loader, "registerStudioModuleInstances").mockImplementation(async (_modules, registry) => {
       api = registry;
-      api.agent.onPromptResult(result => {
+      api.weaver.onPromptResult(result => {
         results.push(result);
-        if (replacement && result.requestId === "same-tick-first" && result.status === "cancelled") api.agent.dispatchPrompt({ requestId: "replacement", message: "New intent after cancellation", mode: "enqueue" });
+        if (replacement && result.requestId === "same-tick-first" && result.status === "cancelled") api.weaver.dispatchPrompt({ requestId: "replacement", message: "New intent after cancellation", mode: "enqueue" });
       });
-      api.agent.capabilities.add({ id: "sample.inspect", displayName: "Inspect", description: "Read selected resource", kind: "answer", risk: "read-only", surfaces: ["*"] });
+      api.weaver.capabilities.add({ id: "sample.inspect", displayName: "Inspect", description: "Read selected resource", kind: "answer", risk: "read-only", surfaces: ["*"] });
       return;
     });
     const client: clients.AgentClient = {
@@ -49,8 +49,8 @@ describe("shell-owned Weaver intent", () => {
     try {
       await vi.waitFor(() => expect(api).toBeDefined()); await settle();
       flushSync(() => {
-        api.agent.dispatchPrompt({ requestId: "same-tick-first", message: "First intent", mode: "enqueue" });
-        api.agent.dispatchPrompt({ requestId: "same-tick-second", message: "Second intent", mode: "enqueue" });
+        api.weaver.dispatchPrompt({ requestId: "same-tick-first", message: "First intent", mode: "enqueue" });
+        api.weaver.dispatchPrompt({ requestId: "same-tick-second", message: "Second intent", mode: "enqueue" });
       });
       await settle();
       expect(results.map(result => result.requestId).sort()).toEqual(replacement ? ["replacement", "same-tick-first", "same-tick-second"] : ["same-tick-first", "same-tick-second"]);
@@ -64,7 +64,7 @@ describe("shell-owned Weaver intent", () => {
     let releaseRegistry: (() => void) | undefined;
     vi.spyOn(loader, "registerStudioModuleInstances").mockImplementation(async (_modules, api) => {
       registries.push(api);
-      api.agent.capabilities.add({ id: "sample.inspect", displayName: "Inspect", description: "Read the selected resource.", kind: "answer", risk: "read-only", surfaces: ["*"] });
+      api.weaver.capabilities.add({ id: "sample.inspect", displayName: "Inspect", description: "Read the selected resource.", kind: "answer", risk: "read-only", surfaces: ["*"] });
       if (registries.length === 2 && transition === "registry reconciliation") await new Promise<void>(resolve => { releaseRegistry = resolve; });
       return;
     });
@@ -94,7 +94,7 @@ describe("shell-owned Weaver intent", () => {
     try {
       await vi.waitFor(() => expect(registries).toHaveLength(1));
       await settle();
-      flushSync(() => registries[0].agent.dispatchPrompt({ requestId: "first-request", message: "Inspect the selected resource.", mode: "enqueue" }));
+      flushSync(() => registries[0].weaver.dispatchPrompt({ requestId: "first-request", message: "Inspect the selected resource.", mode: "enqueue" }));
       await vi.waitFor(() => expect(client.sendMessage).toHaveBeenCalledTimes(1));
       await settle();
       if (transition === "close/reopen") {
@@ -114,7 +114,7 @@ describe("shell-owned Weaver intent", () => {
       await vi.waitFor(() => expect(container.querySelector('[aria-label="Weaver assistant"]')).not.toBeNull());
       await settle();
       expect(client.sendMessage).toHaveBeenCalledTimes(1);
-      flushSync(() => registries.at(-1)!.agent.dispatchPrompt({ requestId: "fresh-request", message: "Inspect again on request.", mode: "enqueue" }));
+      flushSync(() => registries.at(-1)!.weaver.dispatchPrompt({ requestId: "fresh-request", message: "Inspect again on request.", mode: "enqueue" }));
       await vi.waitFor(() => expect(client.sendMessage).toHaveBeenCalledTimes(2));
       expect(vi.mocked(client.sendMessage).mock.calls.map(([, body]) => body.requestId)).toEqual(["first-request", "fresh-request"]);
     } finally {

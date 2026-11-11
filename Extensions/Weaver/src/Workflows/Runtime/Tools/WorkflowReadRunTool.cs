@@ -22,8 +22,8 @@ namespace Elsa.Weaver.Workflows.Runtime.Tools;
 /// only what the result discloses. A result that does not fit even at its smallest bound is refused, never sent over budget.
 /// </remarks>
 internal sealed class WorkflowReadRunTool(
-    IAgentToolAuthorizer authorizer,
-    IServiceProvider services) : IAgentTool, IAgentToolAuthorization
+    IWeaverToolAuthorizer authorizer,
+    IServiceProvider services) : IWeaverTool, IWeaverToolAuthorization
 {
     // Resolved only when the tool is used, so listing the installed tools never builds the Runtime read path.
     private IEnumerable<IWorkflowRunInspection> inspections => services.GetServices<IWorkflowRunInspection>();
@@ -49,22 +49,22 @@ internal sealed class WorkflowReadRunTool(
 
     internal sealed record Tier(int Incidents, int Activities, int Values, int Bookmarks, int ValueChars, int MessageChars);
 
-    internal static readonly AgentToolDescriptor Contract = new(ToolName, "Read workflow Run",
+    internal static readonly WeaverToolDescriptor Contract = new(ToolName, "Read workflow Run",
         "Returns one exact workflow Run named by an admitted workflows.run context (its workflowExecutionId, or the only one), read-only: the Workflow " +
         "Instance and its Executable (artifact id and Artifact Hash), status (a Run still in progress is attributed to the read time), recorded incidents, " +
         "a page of activity executions (activityPageSize, activityContinuationToken), and the selected activity execution's bookmarks, incidents, value " +
         "evidence and state view. A withheld value stays withheld; unavailable data is listed by reason. It never retries, cancels, deletes or dispatches a Run.",
-        AgentToolMutability.ReadOnly, AgentRisk.ReadOnly,
+        WeaverToolMutability.ReadOnly, WeaverRisk.ReadOnly,
         """{"type":"object","properties":{"workflowExecutionId":{"type":"string","minLength":1,"maxLength":256},"activityPageSize":{"type":"integer","minimum":1,"maximum":50},"activityContinuationToken":{"type":"string","minLength":1,"maxLength":1024}},"additionalProperties":false}""",
         ["workflows/runtime:read"], ["/workflows"])
     {
-        ModuleId = WorkflowRunContext.ModuleId, ContractVersion = "1", ExecutionLocation = AgentExecutionLocation.Server,
+        ModuleId = WorkflowRunContext.ModuleId, ContractVersion = "1", ExecutionLocation = WeaverExecutionLocation.Server,
         ResultType = ResultType, ResultSchemaVersion = "1", DisclosureSourceId = WorkflowRunContext.ContextSourceId
     };
 
-    public AgentToolDescriptor Descriptor => Contract;
+    public WeaverToolDescriptor Descriptor => Contract;
 
-    public async ValueTask<AgentPolicyDecision> AuthorizeAsync(string actorId, string tenantId, AgentResourceTarget? target, CancellationToken cancellationToken = default)
+    public async ValueTask<WeaverPolicyDecision> AuthorizeAsync(string actorId, string tenantId, WeaverResourceTarget? target, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
         if (WorkflowRunContext.Inspection(inspections) is not { } inspection)
@@ -82,7 +82,7 @@ internal sealed class WorkflowReadRunTool(
             : new(true, []);
     }
 
-    public async Task<AgentResult<AgentToolPreparation>> PrepareAsync(AgentToolInvocation invocation, CancellationToken cancellationToken = default)
+    public async Task<WeaverResult<WeaverToolPreparation>> PrepareAsync(WeaverToolInvocation invocation, CancellationToken cancellationToken = default)
     {
         JsonElement arguments;
         try { arguments = JsonSerializer.SerializeToElement(invocation.Arguments, JsonOptions); }
@@ -103,7 +103,7 @@ internal sealed class WorkflowReadRunTool(
                 default: return Invalid();
             }
         }
-        var contexts = invocation.Context.Where(item => item.ContentType == WorkflowRunContext.RunKind && item.Origin == AgentContextOrigin.AuthoritativeRead)
+        var contexts = invocation.Context.Where(item => item.ContentType == WorkflowRunContext.RunKind && item.Origin == WeaverContextOrigin.AuthoritativeRead)
             .Select(item => WorkflowRunContext.TryRead(item, out var reference, out _) ? reference : null).OfType<WorkflowRunContext.Reference>().ToArray();
         var bound = workflowExecutionId is null ? contexts.Length == 1 ? contexts[0] : null : contexts.FirstOrDefault(item => item.WorkflowExecutionId == workflowExecutionId);
         if (bound is null)
@@ -125,19 +125,19 @@ internal sealed class WorkflowReadRunTool(
         var data = Result(read.Run!, bound.ActivityExecutionId, pageSize, tier, estimate: false);
         // The hard guard: never sent over budget (a Run that grew between the two reads is refused rather than cut).
         if (data.GetRawText().Length > ResultBudget) return Failure(WorkflowRunContext.TooLargeCode, WorkflowRunContext.TooLargeMessage, 413);
-        return AgentResult<AgentToolPreparation>.Success(new(WorkflowRunContext.Target(read.Run!.Instance.WorkflowExecutionId, bound.ActivityExecutionId), data,
-            AgentRisk.ReadOnly, new(ResultType, "1", data), RequiresApproval: false));
+        return WeaverResult<WeaverToolPreparation>.Success(new(WorkflowRunContext.Target(read.Run!.Instance.WorkflowExecutionId, bound.ActivityExecutionId), data,
+            WeaverRisk.ReadOnly, new(ResultType, "1", data), RequiresApproval: false));
     }
 
-    public Task<AgentResult<AgentToolResult>> ExecuteAsync(AgentPreparedToolInvocation invocation, CancellationToken cancellationToken = default) =>
-        Task.FromResult(AgentResult<AgentToolResult>.Success(new(invocation.ToolCallId, Descriptor.Name, true,
+    public Task<WeaverResult<WeaverToolResult>> ExecuteAsync(WeaverPreparedToolInvocation invocation, CancellationToken cancellationToken = default) =>
+        Task.FromResult(WeaverResult<WeaverToolResult>.Success(new(invocation.ToolCallId, Descriptor.Name, true,
             "Read the exact workflow Run through the workflow runtime; nothing was changed.", new(ResultType, "1", invocation.Arguments))));
 
     /// <summary>
     /// Whether a retained result discloses more than the actor's current run access covers: incident details read under value
     /// inspection, or values released under payload resolution. A result whose disclosure cannot be read is treated as exceeding.
     /// </summary>
-    internal static bool Exceeds(AgentPayload? payload, WorkflowRunInspectionDetails current)
+    internal static bool Exceeds(WeaverPayload? payload, WorkflowRunInspectionDetails current)
     {
         if (payload is null) return false;
         var data = payload.Data;
@@ -154,7 +154,7 @@ internal sealed class WorkflowReadRunTool(
         return released && !(current.CanInspectValues && current.CanResolveValues);
     }
 
-    private static AgentResult<AgentToolPreparation>? Refusal(WorkflowRunContext.Outcome outcome) => outcome switch
+    private static WeaverResult<WeaverToolPreparation>? Refusal(WorkflowRunContext.Outcome outcome) => outcome switch
     {
         WorkflowRunContext.Outcome.Denied => Failure("weaver.workflow.permission_denied", WorkflowRunContext.DeniedMessage, 403),
         WorkflowRunContext.Outcome.NotFound => Failure(WorkflowRunContext.NotFoundCode, WorkflowRunContext.NotFoundMessage, 404),
@@ -330,9 +330,9 @@ internal sealed class WorkflowReadRunTool(
         };
     }
 
-    private static AgentResult<AgentToolPreparation> Invalid() => Failure("weaver.workflow.run_arguments_invalid",
+    private static WeaverResult<WeaverToolPreparation> Invalid() => Failure("weaver.workflow.run_arguments_invalid",
         "Only workflowExecutionId (a Run identity), activityPageSize (1 to 50) and activityContinuationToken are accepted.", 400);
 
-    private static AgentResult<AgentToolPreparation> Failure(string code, string message, int status) =>
-        AgentResult<AgentToolPreparation>.Failure(code, message, status);
+    private static WeaverResult<WeaverToolPreparation> Failure(string code, string message, int status) =>
+        WeaverResult<WeaverToolPreparation>.Failure(code, message, status);
 }

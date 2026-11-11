@@ -3,7 +3,7 @@ import type { WorkflowEditorDocumentAdapter } from "./WorkflowEditorDocumentAdap
 import { activityPaletteNotice, getActivityPaletteContext, isActivityOfferedInContext } from "../graph-authoring/activityPaletteContext";
 import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { Boxes, Code2, Download, History, LogIn, LogOut, ListTree, Variable, Package, PackageOpen, Play, Plus, SlidersHorizontal, Sparkles, Upload, Workflow as WorkflowIcon } from "lucide-react";
-import { authSessionEndedEvent, authSessionStartedEvent, expressionEditorSessionEndedEvent, useStudioThemeLayout, useStudioWorkspaceTitle, type StudioActivityPropertyEditorContribution, type StudioAgentRegistry, type StudioEndpointContext, type StudioExpressionEditorContribution, type StudioExpressionToolingClient, type StudioWorkflowDesignerPanelContribution, type StudioWorkflowRunInputEditorContribution, type StudioTestStimulusEditorContribution, type StudioWorkflowRunRelatedLinkContribution } from "@elsa-workflows/studio-sdk";
+import { authSessionEndedEvent, authSessionStartedEvent, expressionEditorSessionEndedEvent, useStudioThemeLayout, useStudioWorkspaceTitle, type StudioActivityPropertyEditorContribution, type StudioWeaverRegistry, type StudioEndpointContext, type StudioExpressionEditorContribution, type StudioExpressionToolingClient, type StudioWorkflowDesignerPanelContribution, type StudioWorkflowRunInputEditorContribution, type StudioTestStimulusEditorContribution, type StudioWorkflowRunRelatedLinkContribution } from "@elsa-workflows/studio-sdk";
 import type { ActivityCatalogItem, ActivityNode, WorkflowDraft } from "../workflowTypes";
 import {
   collectActivityNodeIds,
@@ -90,6 +90,7 @@ import { forgetRemovedNodes, useWorkflowDocument } from "./workflowDocument";
 import { useWorkflowCanvas } from "./useWorkflowCanvas";
 import { useWorkflowGraphOperationBatch } from "./useWorkflowGraphOperationBatch";
 import { useWorkflowPersistence } from "./useWorkflowPersistence";
+import { useWorkflowActivityDataSelection } from "./useWorkflowActivityDataSelection";
 import { useWorkflowEditorData } from "./useWorkflowEditorData";
 import { useDefinitionMetadata } from "./useDefinitionMetadata";
 import { DirectBpmnPublishAction } from "./DirectBpmnPublishAction";
@@ -170,7 +171,7 @@ export function WorkflowEditor({
   onOpenBpmnProcesses?(): void;
   definitionId: string;
   documentAdapter?: WorkflowEditorDocumentAdapter;
-  ai: StudioAgentRegistry;
+  ai: StudioWeaverRegistry;
   weaver?: WorkflowAgentController;
   propertyEditors: StudioActivityPropertyEditorContribution[];
   expressionEditors: StudioExpressionEditorContribution[];
@@ -1135,6 +1136,19 @@ export function WorkflowEditor({
     repairVariableReference(compensationValidationTarget(scope, path) ?? nodeId);
   }, [draft?.state.rootActivity, catalogByVersion, repairVariableReference]);
 
+  // Choose data on ordinary activity inputs of a server workflow draft. BPMN-owned canvases keep their own model
+  // contracts and are not offered it here.
+  const activityDataSelection = useWorkflowActivityDataSelection({
+    context,
+    enabled: !documentAdapter && !isBpmnDesigner,
+    draft,
+    persistedDraft,
+    saving,
+    catalogByVersion,
+    validationErrors: combinedValidationErrors,
+    revealActivity: repairVariableReference
+  });
+
   const togglePaletteCategory = (category: string) => {
     setExpandedPaletteCategories(current => {
       const next = new Set(current);
@@ -1338,6 +1352,7 @@ export function WorkflowEditor({
           descriptorStatus={descriptorStatus}
           onRetryExpressionDescriptors={() => { void reloadExpressionDescriptors(); }}
           scopedVariableAnalysis={scopedVariableAnalysis}
+          activityDataSelection={activityDataSelection}
           activeTabId={activeInspectorTabId}
           onActiveTabChange={setActiveInspectorTabId}
           onSelectedActivityChange={updateSelectedActivity}

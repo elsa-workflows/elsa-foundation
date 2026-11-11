@@ -70,12 +70,12 @@ public sealed class WorkflowAuthorizationUnavailableTests
         fixture.Owner.Mode = OwnerMode.Deny;
         var denied = await fixture.DispatchReadAsync(context.Value.Attachments, "read-denied");
 
-        Assert.Equal(AgentToolDispatchOutcome.Denied, unavailable.Outcome);
+        Assert.Equal(WeaverToolDispatchOutcome.Denied, unavailable.Outcome);
         Assert.Null(unavailable.Result);
         Assert.Equal(Code, unavailable.Error?.Code);
         Assert.Equal(503, unavailable.Error?.StatusCode);
         Assert.DoesNotContain(Cause, JsonSerializer.Serialize(unavailable), StringComparison.Ordinal);
-        Assert.Equal(AgentToolDispatchOutcome.Denied, denied.Outcome);
+        Assert.Equal(WeaverToolDispatchOutcome.Denied, denied.Outcome);
         Assert.Equal("weaver.tool.forbidden", denied.Error?.Code);
         Assert.Equal(403, denied.Error?.StatusCode);
     }
@@ -90,7 +90,7 @@ public sealed class WorkflowAuthorizationUnavailableTests
         fixture.Owner.Mode = OwnerMode.Throw;
         var dispatch = await fixture.DispatchMoveAsync(context.Value!.Attachments, "move-unavailable");
 
-        Assert.Equal(AgentToolDispatchOutcome.Denied, dispatch.Outcome);
+        Assert.Equal(WeaverToolDispatchOutcome.Denied, dispatch.Outcome);
         Assert.Null(dispatch.Proposal);
         Assert.Equal(Code, dispatch.Error?.Code);
         Assert.Equal(503, dispatch.Error?.StatusCode);
@@ -103,8 +103,8 @@ public sealed class WorkflowAuthorizationUnavailableTests
         using var fixture = await Fixture.CreateAsync();
         var context = await fixture.CollectAsync();
         var dispatch = await fixture.DispatchMoveAsync(context.Value!.Attachments, "move-approved");
-        var proposal = Assert.IsType<AgentActionProposal>(dispatch.Proposal);
-        var proposals = fixture.Services.GetRequiredService<IAgentProposalService>();
+        var proposal = Assert.IsType<WeaverActionProposal>(dispatch.Proposal);
+        var proposals = fixture.Services.GetRequiredService<IWeaverProposalService>();
         var approved = await proposals.ApproveAsync(proposal.Id, "actor-1", proposal.BaseRevision);
         Assert.True(approved.Succeeded, approved.Error?.Message);
 
@@ -127,7 +127,7 @@ public sealed class WorkflowAuthorizationUnavailableTests
         var collected = await fixture.CollectAsync();
 
         Assert.False(collected.Succeeded);
-        Assert.Equal(new AgentError(Code, "The owning module could not establish current authority for this operation.", 503), collected.Error);
+        Assert.Equal(new WeaverError(Code, "The owning module could not establish current authority for this operation.", 503), collected.Error);
         Assert.DoesNotContain(collected.Value?.Attachments ?? [], item => item.ContentType == "workflow.definition");
         var diagnostic = Assert.Single(collected.Value!.Diagnostics, item => item.Code == Code);
         Assert.True(diagnostic.Required);
@@ -157,7 +157,7 @@ public sealed class WorkflowAuthorizationUnavailableTests
         Assert.DoesNotContain(Cause, diagnostic.Message, StringComparison.Ordinal);
     }
 
-    private static readonly AgentResourceTarget Target = new(WorkflowAgentSnapshot.ModuleId, "workflow-definition", "wf-1", "rev-1");
+    private static readonly WeaverResourceTarget Target = new(WorkflowWeaverSnapshot.ModuleId, "workflow-definition", "wf-1", "rev-1");
 
     public enum OwnerMode { Allow, Deny, Throw }
 
@@ -178,13 +178,13 @@ public sealed class WorkflowAuthorizationUnavailableTests
         private readonly IServiceScope scope;
         internal SwitchableOwner Owner { get; } = new();
         internal IServiceProvider Services => scope.ServiceProvider;
-        internal AgentSession Session { get; private set; } = null!;
-        internal DefaultWorkflowAgentContextProvider Source =>
-            Services.GetServices<IAgentContextProvider>().OfType<DefaultWorkflowAgentContextProvider>().Single();
+        internal WeaverSession Session { get; private set; } = null!;
+        internal DefaultWorkflowWeaverContextProvider Source =>
+            Services.GetServices<IWeaverContextProvider>().OfType<DefaultWorkflowWeaverContextProvider>().Single();
 
         private Fixture(Action<IServiceCollection>? configure)
         {
-            root = AgentTestServices.Create(services =>
+            root = WeaverTestServices.Create(services =>
             {
                 new WeaverWorkflowsFeature().ConfigureServices(services);
                 services.AddSingleton<IWorkflowDefinitionAuthorizer>(Owner);
@@ -196,26 +196,26 @@ public sealed class WorkflowAuthorizationUnavailableTests
         internal static async Task<Fixture> CreateAsync(Action<IServiceCollection>? configure = null)
         {
             var fixture = new Fixture(configure);
-            fixture.Session = await fixture.Services.GetRequiredService<IAgentSessionService>().CreateAsync(new("tenant-1", "actor-1",
-                "conversation-1", "test-provider", "build", null, AgentPolicy.Default, new Dictionary<string, string>()));
+            fixture.Session = await fixture.Services.GetRequiredService<IWeaverSessionService>().CreateAsync(new("tenant-1", "actor-1",
+                "conversation-1", "test-provider", "build", null, WeaverPolicy.Default, new Dictionary<string, string>()));
             return fixture;
         }
 
-        internal async Task<IAgentToolAuthorization> ToolAsync(string name) =>
-            Assert.IsAssignableFrom<IAgentToolAuthorization>(Assert.Single(await Services.GetRequiredService<IAgentToolRegistry>().ListAsync(),
+        internal async Task<IWeaverToolAuthorization> ToolAsync(string name) =>
+            Assert.IsAssignableFrom<IWeaverToolAuthorization>(Assert.Single(await Services.GetRequiredService<IWeaverToolRegistry>().ListAsync(),
                 item => item.Descriptor.Name == name));
 
-        internal Task<AgentResult<AgentContextContribution>> CollectAsync() => Services.GetRequiredService<IAgentContextCollector>()
-            .CollectAsync(Session.Policy, WorkflowAgentTests.Request(WorkflowAgentTests.Snapshot()) with { SessionId = Session.Id });
+        internal Task<WeaverResult<WeaverContextContribution>> CollectAsync() => Services.GetRequiredService<IWeaverContextCollector>()
+            .CollectAsync(Session.Policy, WorkflowWeaverTests.Request(WorkflowWeaverTests.Snapshot()) with { SessionId = Session.Id });
 
-        internal Task<AgentToolDispatch> DispatchReadAsync(IReadOnlyCollection<AgentContextAttachment> context, string turn) =>
-            Services.GetRequiredService<IAgentToolInvoker>().DispatchAsync(new($"call-{turn}", WorkflowReadGraphTool.ToolName, Session.Id,
+        internal Task<WeaverToolDispatch> DispatchReadAsync(IReadOnlyCollection<WeaverContextAttachment> context, string turn) =>
+            Services.GetRequiredService<IWeaverToolInvoker>().DispatchAsync(new($"call-{turn}", WorkflowReadGraphTool.ToolName, Session.Id,
                 "actor-1", new Dictionary<string, object?>(), context) { TenantId = "tenant-1", TurnId = turn }, Session.Policy);
 
-        internal Task<AgentToolDispatch> DispatchMoveAsync(IReadOnlyCollection<AgentContextAttachment> context, string turn) =>
-            Services.GetRequiredService<IAgentToolInvoker>().DispatchAsync(new($"call-{turn}", "workflow_set_designer_position", Session.Id,
+        internal Task<WeaverToolDispatch> DispatchMoveAsync(IReadOnlyCollection<WeaverContextAttachment> context, string turn) =>
+            Services.GetRequiredService<IWeaverToolInvoker>().DispatchAsync(new($"call-{turn}", "workflow_set_designer_position", Session.Id,
                 "actor-1", new Dictionary<string, object?> { ["activityId"] = "node-1", ["x"] = 50, ["y"] = 60 }, context)
-            { TenantId = "tenant-1", TurnId = turn, Client = WorkflowAgentTests.Snapshot().Client }, Session.Policy);
+            { TenantId = "tenant-1", TurnId = turn, Client = WorkflowWeaverTests.Snapshot().Client }, Session.Policy);
 
         public void Dispose()
         {

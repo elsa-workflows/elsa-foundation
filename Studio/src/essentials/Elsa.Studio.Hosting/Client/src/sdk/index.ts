@@ -695,6 +695,10 @@ export interface StudioActivityPropertyEditorContext {
   activity: unknown;
   /** The node id of the activity being edited, so an editor can tell one activity from the next. Absent on older hosts. */
   activityId?: string | null;
+  /** Current literal input values keyed by descriptor reference key. Masked inputs are excluded. */
+  inputValues?: Record<string, unknown>;
+  /** Atomically update related literal inputs in one authoring change. Unavailable on older hosts. */
+  setLiteralInputs?: (values: Record<string, unknown>) => void;
   expressionDescriptors: StudioExpressionDescriptor[];
   readOnly?: boolean;
   scope?: StudioActivityPropertyEditorScope;
@@ -748,6 +752,11 @@ export interface StudioActivityPropertyEditorContribution extends StudioBackendA
    * Review & publish. Omission means this contribution does not add draft-validation issues.
    */
   collectDraftValidation?(activity: unknown, context?: StudioDraftValidationContext): StudioDraftValidationIssue[] | Promise<StudioDraftValidationIssue[]>;
+  /**
+   * When true, this contribution reads other inputs of the activity (`context.activity`, `inputValues`).
+   * The properties panel then refreshes its row when a sibling input changes; other rows keep their memo.
+   */
+  readsActivityContext?: true;
   supports(descriptor: StudioActivityInputDescriptor, context: StudioActivityPropertyEditorContext): boolean;
   component: ComponentType<StudioActivityPropertyEditorProps>;
 }
@@ -1197,91 +1206,91 @@ export interface StudioExpressionEditorContribution extends StudioBackendAwareCo
   sourceRenderer?: StudioExpressionSourceRenderer;
 }
 
-export type StudioAgentMode = "explain" | "build" | "troubleshoot" | "operate" | "administer";
-export type StudioAgentSensitivity = "public" | "internal" | "sensitive" | "secret-redacted";
-export type StudioAgentCapabilityKind = "answer" | "context" | "prompt-starter" | "proposal" | "action";
-export type StudioAgentRisk = "read-only" | "review-required" | "destructive" | "admin";
-export type StudioAgentToolInvocationMode = "read-only" | "direct" | "proposal" | "privileged";
-export type StudioAgentToolAvailabilityStatus = "available" | "disabled" | "policy-denied" | "unavailable";
+export type StudioWeaverMode = "explain" | "build" | "troubleshoot" | "operate" | "administer";
+export type StudioWeaverSensitivity = "public" | "internal" | "sensitive" | "secret-redacted";
+export type StudioWeaverCapabilityKind = "answer" | "context" | "prompt-starter" | "proposal" | "action";
+export type StudioWeaverRisk = "read-only" | "review-required" | "destructive" | "admin";
+export type StudioWeaverToolInvocationMode = "read-only" | "direct" | "proposal" | "privileged";
+export type StudioWeaverToolAvailabilityStatus = "available" | "disabled" | "policy-denied" | "unavailable";
 
-export interface StudioAgentSurface {
+export interface StudioWeaverSurface {
   route: string;
   resourceType?: string;
   resourceId?: string;
   selection?: unknown;
 }
 
-export interface StudioAgentContextRequest {
-  surface: StudioAgentSurface;
-  mode?: StudioAgentMode;
+export interface StudioWeaverContextRequest {
+  surface: StudioWeaverSurface;
+  mode?: StudioWeaverMode;
   sessionId?: string;
   signal?: AbortSignal;
 }
 
 /** Backend payload enums retain camelCase wire spelling; presentation may normalize labels. */
-export type StudioAgentContextOrigin = "clientSnapshot" | "resourceData" | "authoritativeRead" | "installedGuidance";
-export type StudioAgentExecutionLocation = "server" | "clientWorkingState";
-export type StudioAgentEffectScope = "clientWorkingState" | "serverPersisted";
-export type StudioAgentPreparedRisk = "readOnly" | "reviewRequired" | "destructive" | "admin";
-export type StudioAgentClientOutcome = "applied" | "refused" | "uncertain";
+export type StudioWeaverContextOrigin = "clientSnapshot" | "resourceData" | "authoritativeRead" | "installedGuidance";
+export type StudioWeaverExecutionLocation = "server" | "clientWorkingState";
+export type StudioWeaverEffectScope = "clientWorkingState" | "serverPersisted";
+export type StudioWeaverPreparedRisk = "readOnly" | "reviewRequired" | "destructive" | "admin";
+export type StudioWeaverClientOutcome = "applied" | "refused" | "uncertain";
 
 /** Module-defined data is opaque to the shell and provider transports. */
-export interface StudioAgentPayload<TData = unknown> {
+export interface StudioWeaverPayload<TData = unknown> {
   typeId: string;
   schemaVersion: string;
   data: TData;
 }
 
 /** Identifies an originating registry and module/editor lifetime; it grants no authority. */
-export interface StudioAgentClientBinding {
+export interface StudioWeaverClientBinding {
   clientId: string;
   generationId: string;
 }
 
-export interface StudioAgentContextAttachment {
+export interface StudioWeaverContextAttachment {
   id: string;
   source: string;
   sourceId?: string;
   label: string;
   contentType: string;
-  sensitivity: StudioAgentSensitivity;
+  sensitivity: StudioWeaverSensitivity;
   scope: string;
   content?: unknown;
   summary?: string;
   references?: Record<string, string>;
   moduleId?: string;
   schemaVersion?: string;
-  target?: StudioAgentResourceTarget | null;
+  target?: StudioWeaverResourceTarget | null;
   /** Caller values are input to installed backend admission, never self-asserted trust. */
-  origin?: StudioAgentContextOrigin;
-  client?: StudioAgentClientBinding | null;
+  origin?: StudioWeaverContextOrigin;
+  client?: StudioWeaverClientBinding | null;
   agentScopes?: string[];
 }
 
-export interface StudioAgentContributionDiagnostic {
+export interface StudioWeaverContributionDiagnostic {
   contributorId: string;
   code: string;
   message: string;
   required: boolean;
 }
 
-export interface StudioAgentContextCollection {
-  attachments: StudioAgentContextAttachment[];
-  diagnostics: StudioAgentContributionDiagnostic[];
+export interface StudioWeaverContextCollection {
+  attachments: StudioWeaverContextAttachment[];
+  diagnostics: StudioWeaverContributionDiagnostic[];
 }
 
-export interface StudioAgentContextProviderContribution extends StudioBackendAwareContribution {
+export interface StudioWeaverContextProviderContribution extends StudioBackendAwareContribution {
   id: string;
   moduleId?: string;
   displayName: string;
   order?: number;
   surfaces: string[];
-  sensitivity: StudioAgentSensitivity;
+  sensitivity: StudioWeaverSensitivity;
   required?: boolean;
-  collect(context: StudioAgentContextRequest): Promise<StudioAgentContextCollection | StudioAgentContextAttachment[]>;
+  collect(context: StudioWeaverContextRequest): Promise<StudioWeaverContextCollection | StudioWeaverContextAttachment[]>;
 }
 
-export interface StudioAgentPromptStarterContribution extends StudioBackendAwareContribution {
+export interface StudioWeaverPromptStarterContribution extends StudioBackendAwareContribution {
   id: string;
   moduleId?: string;
   label: string;
@@ -1291,43 +1300,43 @@ export interface StudioAgentPromptStarterContribution extends StudioBackendAware
   requiredCapabilities?: string[];
 }
 
-export interface StudioAgentCapabilityContribution extends StudioBackendAwareContribution {
+export interface StudioWeaverCapabilityContribution extends StudioBackendAwareContribution {
   id: string;
   moduleId?: string;
   displayName: string;
   description: string;
-  kind: StudioAgentCapabilityKind;
-  risk: StudioAgentRisk;
+  kind: StudioWeaverCapabilityKind;
+  risk: StudioWeaverRisk;
   surfaces: string[];
   requiredPermissions?: string[];
 }
 
-export interface StudioAgentActionContribution extends StudioBackendAwareContribution {
+export interface StudioWeaverActionContribution extends StudioBackendAwareContribution {
   id: string;
   capabilityId: string;
   displayName: string;
   description: string;
-  risk: Exclude<StudioAgentRisk, "read-only">;
+  risk: Exclude<StudioWeaverRisk, "read-only">;
   surfaces: string[];
   proposalSchema: unknown;
 }
 
-export interface StudioAgentToolAvailability {
-  status: StudioAgentToolAvailabilityStatus;
+export interface StudioWeaverToolAvailability {
+  status: StudioWeaverToolAvailabilityStatus;
   reason?: string;
 }
 
-export interface StudioAgentToolSlotContribution extends StudioBackendAwareContribution {
+export interface StudioWeaverToolSlotContribution extends StudioBackendAwareContribution {
   id: string;
   moduleId?: string;
   displayName: string;
   description?: string;
   order?: number;
   surfaces: string[];
-  invocationModes?: StudioAgentToolInvocationMode[];
+  invocationModes?: StudioWeaverToolInvocationMode[];
 }
 
-export interface StudioAgentToolContractContribution extends StudioBackendAwareContribution {
+export interface StudioWeaverToolContractContribution extends StudioBackendAwareContribution {
   id: string;
   slotId: string;
   moduleId?: string;
@@ -1338,25 +1347,25 @@ export interface StudioAgentToolContractContribution extends StudioBackendAwareC
   inputSchema: unknown;
   resourceTargetSchema: unknown;
   resultSchema: unknown;
-  risk: StudioAgentRisk;
+  risk: StudioWeaverRisk;
   requiredPermissions?: string[];
-  availability?: StudioAgentToolAvailability;
-  invocationModes: StudioAgentToolInvocationMode[];
+  availability?: StudioWeaverToolAvailability;
+  invocationModes: StudioWeaverToolInvocationMode[];
   resultRendererIds?: string[];
   contractVersion?: string;
-  executionLocation?: StudioAgentExecutionLocation;
+  executionLocation?: StudioWeaverExecutionLocation;
   /** Invoked only for a matching backend-prepared, explicitly reviewed client request. */
-  executeClient?(invocation: StudioAgentPreparedInvocation, signal?: AbortSignal): Promise<StudioAgentClientExecutionResult>;
+  executeClient?(invocation: StudioWeaverPreparedInvocation, signal?: AbortSignal): Promise<StudioWeaverClientExecutionResult>;
   /**
    * Preview (#3441): the owning module's report, before anything is dispatched, of whether the invocation's exact
    * unsaved target (for example its editor and working generation) still exists in this page. Anything other than
    * `available`, or a failure to answer, refuses the operation with zero effect and the module's reason; nothing is
    * reconstructed. A module that omits it is dispatched as before, and its `executeClient` may still refuse.
    */
-  clientTargetAvailability?(invocation: StudioAgentPreparedInvocation, signal?: AbortSignal): StudioAgentToolAvailability | Promise<StudioAgentToolAvailability>;
+  clientTargetAvailability?(invocation: StudioWeaverPreparedInvocation, signal?: AbortSignal): StudioWeaverToolAvailability | Promise<StudioWeaverToolAvailability>;
 }
 
-export interface StudioAgentResourceTarget {
+export interface StudioWeaverResourceTarget {
   moduleId: string;
   resourceType: string;
   resourceId: string | null;
@@ -1367,7 +1376,7 @@ export interface StudioAgentResourceTarget {
 }
 
 /** Frozen server preparation; callback code must not replace target, arguments or approval digest. */
-export interface StudioAgentPreparedInvocation {
+export interface StudioWeaverPreparedInvocation {
   invocationId: string;
   sessionId: string;
   turnId: string;
@@ -1377,57 +1386,57 @@ export interface StudioAgentPreparedInvocation {
   moduleId: string;
   actorId: string;
   tenantId: string;
-  target: StudioAgentResourceTarget | null;
+  target: StudioWeaverResourceTarget | null;
   arguments: unknown;
   approvalDigest: string;
-  risk: StudioAgentPreparedRisk;
-  preview: StudioAgentPayload;
-  executionLocation: StudioAgentExecutionLocation;
+  risk: StudioWeaverPreparedRisk;
+  preview: StudioWeaverPayload;
+  executionLocation: StudioWeaverExecutionLocation;
   requiresApproval: boolean;
-  client: StudioAgentClientBinding | null;
+  client: StudioWeaverClientBinding | null;
   expiresAt: string;
 }
 
 /** Observed module outcome. Returning from a dispatch call alone does not prove application. */
-export interface StudioAgentClientExecutionResult {
-  outcome: StudioAgentClientOutcome;
+export interface StudioWeaverClientExecutionResult {
+  outcome: StudioWeaverClientOutcome;
   summary: string;
-  after?: StudioAgentResourceTarget | null;
-  result?: StudioAgentPayload | null;
+  after?: StudioWeaverResourceTarget | null;
+  result?: StudioWeaverPayload | null;
 }
 
-export interface StudioAgentClientAcknowledgement extends StudioAgentClientExecutionResult {
-  client: StudioAgentClientBinding;
+export interface StudioWeaverClientAcknowledgement extends StudioWeaverClientExecutionResult {
+  client: StudioWeaverClientBinding;
   approvalDigest: string;
 }
 
-export interface StudioAgentEffectReceipt {
+export interface StudioWeaverEffectReceipt {
   invocationId: string;
-  before: StudioAgentResourceTarget;
-  after: StudioAgentResourceTarget;
-  scope: StudioAgentEffectScope;
-  evidence: StudioAgentPayload;
+  before: StudioWeaverResourceTarget;
+  after: StudioWeaverResourceTarget;
+  scope: StudioWeaverEffectScope;
+  evidence: StudioWeaverPayload;
 }
 
-export interface StudioAgentToolResult {
+export interface StudioWeaverToolResult {
   toolCallId: string;
   toolName: string;
   succeeded: boolean;
   content: string;
-  payload?: StudioAgentPayload | null;
-  receipt?: StudioAgentEffectReceipt | null;
+  payload?: StudioWeaverPayload | null;
+  receipt?: StudioWeaverEffectReceipt | null;
 }
 
-export interface StudioAgentResultRendererProps {
+export interface StudioWeaverResultRendererProps {
   proposal: unknown;
-  resourceTarget?: StudioAgentResourceTarget;
+  resourceTarget?: StudioWeaverResourceTarget;
   result: unknown;
   resultType?: string;
-  preparedInvocation?: StudioAgentPreparedInvocation;
-  toolResult?: StudioAgentToolResult;
+  preparedInvocation?: StudioWeaverPreparedInvocation;
+  toolResult?: StudioWeaverToolResult;
 }
 
-export interface StudioAgentResultRendererContribution extends StudioBackendAwareContribution {
+export interface StudioWeaverResultRendererContribution extends StudioBackendAwareContribution {
   id: string;
   /** The contributing module. Unless `resourceModuleIds` is set, it is also the resource module whose results this presents. */
   moduleId?: string;
@@ -1441,8 +1450,8 @@ export interface StudioAgentResultRendererContribution extends StudioBackendAwar
   resourceTypes?: string[];
   resultTypes?: string[];
   schemaVersions?: string[];
-  component: ComponentType<StudioAgentResultRendererProps>;
-  supports?(props: StudioAgentResultRendererProps): boolean;
+  component: ComponentType<StudioWeaverResultRendererProps>;
+  supports?(props: StudioWeaverResultRendererProps): boolean;
 }
 
 /**
@@ -1450,7 +1459,7 @@ export interface StudioAgentResultRendererContribution extends StudioBackendAwar
  * action only that module can perform (for example a designer-history Undo of a change it applied). The host renders
  * every matching control after the renderer; a control renders nothing when it has nothing to offer.
  */
-export interface StudioAgentResultControlContribution extends StudioBackendAwareContribution {
+export interface StudioWeaverResultControlContribution extends StudioBackendAwareContribution {
   id: string;
   moduleId?: string;
   displayName: string;
@@ -1459,7 +1468,7 @@ export interface StudioAgentResultControlContribution extends StudioBackendAware
   resourceModuleIds?: string[];
   resultTypes: string[];
   schemaVersions?: string[];
-  component: ComponentType<StudioAgentResultRendererProps>;
+  component: ComponentType<StudioWeaverResultRendererProps>;
 }
 
 /** Whether a renderer or control presents results of a resource module, by `resourceModuleIds` when set, else `moduleId`. */
@@ -1468,20 +1477,20 @@ export function presentsResourceModule(contribution: { moduleId?: string; resour
   return !contribution.moduleId || contribution.moduleId === resourceModuleId;
 }
 
-export interface StudioAgentRegistry extends StudioAgentPromptDispatcher {
+export interface StudioWeaverRegistry extends StudioWeaverPromptDispatcher {
   /** Stable per registry instance; modules pair it with a private editor generation. */
   readonly clientId: string;
-  readonly promptActions: StudioContributionRegistry<StudioAgentPromptActionContribution>;
+  readonly promptActions: StudioContributionRegistry<StudioWeaverPromptActionContribution>;
   readonly providerAvailability: StudioAiProviderAvailability;
-  readonly contextProviders: StudioContributionRegistry<StudioAgentContextProviderContribution>;
-  readonly promptStarters: StudioContributionRegistry<StudioAgentPromptStarterContribution>;
-  readonly capabilities: StudioContributionRegistry<StudioAgentCapabilityContribution>;
-  readonly actions: StudioContributionRegistry<StudioAgentActionContribution>;
-  readonly toolSlots: StudioContributionRegistry<StudioAgentToolSlotContribution>;
-  readonly toolContracts: StudioContributionRegistry<StudioAgentToolContractContribution>;
-  readonly resultRenderers: StudioContributionRegistry<StudioAgentResultRendererContribution>;
+  readonly contextProviders: StudioContributionRegistry<StudioWeaverContextProviderContribution>;
+  readonly promptStarters: StudioContributionRegistry<StudioWeaverPromptStarterContribution>;
+  readonly capabilities: StudioContributionRegistry<StudioWeaverCapabilityContribution>;
+  readonly actions: StudioContributionRegistry<StudioWeaverActionContribution>;
+  readonly toolSlots: StudioContributionRegistry<StudioWeaverToolSlotContribution>;
+  readonly toolContracts: StudioContributionRegistry<StudioWeaverToolContractContribution>;
+  readonly resultRenderers: StudioContributionRegistry<StudioWeaverResultRendererContribution>;
   /** Optional, additive: hosts that predate result controls omit it, so contributors guard its use. */
-  readonly resultControls?: StudioContributionRegistry<StudioAgentResultControlContribution>;
+  readonly resultControls?: StudioContributionRegistry<StudioWeaverResultControlContribution>;
 }
 
 export type StudioAiPromptMode = "enqueue" | "steer";
@@ -1491,11 +1500,11 @@ export type StudioAiToolDangerLevel = "low" | "medium" | "high" | "critical";
 export type StudioAiTenantBehavior = "tenant-scoped" | "host-scoped" | "cross-tenant-denied";
 export type StudioAiProposalStatus = "draft" | "validated" | "blocked" | "approved" | "rejected" | "applied" | "expired";
 
-export interface StudioAgentPromptRequest {
+export interface StudioWeaverPromptRequest {
   message: string;
   agent?: string | null;
   mode?: StudioAiPromptMode;
-  attachments?: StudioAgentContextAttachment[];
+  attachments?: StudioWeaverContextAttachment[];
   source?: {
     moduleId?: string;
     actionId?: string;
@@ -1509,7 +1518,7 @@ export interface StudioAgentPromptRequest {
 }
 
 /** The completed outcome of a prompt dispatched with a {@link StudioAiPromptRequest.requestId}. */
-export interface StudioAgentPromptResult {
+export interface StudioWeaverPromptResult {
   requestId: string;
   status: "completed" | "cancelled" | "failed";
   /** The assistant's final message text (empty for cancelled/failed turns). */
@@ -1518,7 +1527,7 @@ export interface StudioAgentPromptResult {
   autoApply?: boolean;
 }
 
-export interface StudioAgentPromptActionContribution<TContext = unknown> extends StudioBackendAwareContribution {
+export interface StudioWeaverPromptActionContribution<TContext = unknown> extends StudioBackendAwareContribution {
   id: string;
   label: string;
   description?: string;
@@ -1526,13 +1535,13 @@ export interface StudioAgentPromptActionContribution<TContext = unknown> extends
   order?: number;
   placement: StudioAiPromptPlacement;
   contextKind: string;
-  createPrompt(context: TContext): StudioAgentPromptRequest | null;
+  createPrompt(context: TContext): StudioWeaverPromptRequest | null;
 }
 
 /** Compatibility names for callers migrating to the canonical agent dispatcher. */
-export type StudioAiPromptRequest = StudioAgentPromptRequest;
-export type StudioAiPromptResult = StudioAgentPromptResult;
-export type StudioAiPromptActionContribution<TContext = unknown> = StudioAgentPromptActionContribution<TContext>;
+export type StudioAiPromptRequest = StudioWeaverPromptRequest;
+export type StudioAiPromptResult = StudioWeaverPromptResult;
+export type StudioAiPromptActionContribution<TContext = unknown> = StudioWeaverPromptActionContribution<TContext>;
 
 export type StudioDialogTone = "default" | "danger";
 export type StudioDialogKind = "confirm" | "prompt" | "alert";
@@ -1601,15 +1610,15 @@ export const studioSlotIds = {
   workflowTestStimulusEditors: "workflow.test-stimulus.editors",
   workflowRunRelatedLinks: "workflow.run.related-links",
   settingEditors: "studio.setting-editors",
-  agentContextProviders: "studio.weaver.context-providers",
-  agentPromptStarters: "studio.weaver.prompt-starters",
-  agentPromptActions: "studio.weaver.prompt-actions",
-  agentCapabilities: "studio.weaver.capabilities",
-  agentActions: "studio.weaver.actions",
-  agentToolSlots: "studio.weaver.tool-slots",
-  agentToolContracts: "studio.weaver.tool-contracts",
-  agentResultRenderers: "studio.weaver.result-renderers",
-  agentResultControls: "studio.weaver.result-controls",
+  weaverContextProviders: "studio.weaver.context-providers",
+  weaverPromptStarters: "studio.weaver.prompt-starters",
+  weaverPromptActions: "studio.weaver.prompt-actions",
+  weaverCapabilities: "studio.weaver.capabilities",
+  weaverActions: "studio.weaver.actions",
+  weaverToolSlots: "studio.weaver.tool-slots",
+  weaverToolContracts: "studio.weaver.tool-contracts",
+  weaverResultRenderers: "studio.weaver.result-renderers",
+  weaverResultControls: "studio.weaver.result-controls",
   workflowDesignerNodeRenderers: "workflow.designer.node-renderers",
   workflowDesignerToolboxItems: "workflow.designer.toolbox-items",
   workflowDesignerPanels: "workflow.designer.panels",
@@ -1694,15 +1703,15 @@ export const studioSlots = {
   workflowTestStimulusEditors: defineStudioSlot({ id: studioSlotIds.workflowTestStimulusEditors, kind: "workflow-test-stimulus-editor", title: "Workflow Test Run stimulus editors", owner: hostSlotOwner() }),
   workflowRunRelatedLinks: defineStudioSlot({ id: studioSlotIds.workflowRunRelatedLinks, kind: "workflow-run-related-link", title: "Workflow run related links", owner: hostSlotOwner() }),
   settingEditors: defineStudioSlot({ id: studioSlotIds.settingEditors, kind: "setting-editor", title: "Setting editors", owner: hostSlotOwner() }),
-  agentContextProviders: defineStudioSlot({ id: studioSlotIds.agentContextProviders, kind: "weaver-context-provider", title: "Weaver context providers", owner: hostSlotOwner() }),
-  agentPromptStarters: defineStudioSlot({ id: studioSlotIds.agentPromptStarters, kind: "weaver-prompt-starter", title: "Weaver prompt starters", owner: hostSlotOwner() }),
-  agentPromptActions: defineStudioSlot({ id: studioSlotIds.agentPromptActions, kind: "weaver-prompt-action", title: "Weaver prompt actions", owner: hostSlotOwner() }),
-  agentCapabilities: defineStudioSlot({ id: studioSlotIds.agentCapabilities, kind: "weaver-capability", title: "Weaver capabilities", owner: hostSlotOwner() }),
-  agentActions: defineStudioSlot({ id: studioSlotIds.agentActions, kind: "weaver-action", title: "Weaver actions", owner: hostSlotOwner() }),
-  agentToolSlots: defineStudioSlot({ id: studioSlotIds.agentToolSlots, kind: "weaver-tool-slot", title: "Weaver tool slots", owner: hostSlotOwner() }),
-  agentToolContracts: defineStudioSlot({ id: studioSlotIds.agentToolContracts, kind: "weaver-tool-contract", title: "Weaver tool contracts", owner: hostSlotOwner() }),
-  agentResultRenderers: defineStudioSlot({ id: studioSlotIds.agentResultRenderers, kind: "weaver-result-renderer", title: "Weaver result renderers", owner: hostSlotOwner() }),
-  agentResultControls: defineStudioSlot({ id: studioSlotIds.agentResultControls, kind: "weaver-result-control", title: "Weaver result controls", owner: hostSlotOwner() }),
+  weaverContextProviders: defineStudioSlot({ id: studioSlotIds.weaverContextProviders, kind: "weaver-context-provider", title: "Weaver context providers", owner: hostSlotOwner() }),
+  weaverPromptStarters: defineStudioSlot({ id: studioSlotIds.weaverPromptStarters, kind: "weaver-prompt-starter", title: "Weaver prompt starters", owner: hostSlotOwner() }),
+  weaverPromptActions: defineStudioSlot({ id: studioSlotIds.weaverPromptActions, kind: "weaver-prompt-action", title: "Weaver prompt actions", owner: hostSlotOwner() }),
+  weaverCapabilities: defineStudioSlot({ id: studioSlotIds.weaverCapabilities, kind: "weaver-capability", title: "Weaver capabilities", owner: hostSlotOwner() }),
+  weaverActions: defineStudioSlot({ id: studioSlotIds.weaverActions, kind: "weaver-action", title: "Weaver actions", owner: hostSlotOwner() }),
+  weaverToolSlots: defineStudioSlot({ id: studioSlotIds.weaverToolSlots, kind: "weaver-tool-slot", title: "Weaver tool slots", owner: hostSlotOwner() }),
+  weaverToolContracts: defineStudioSlot({ id: studioSlotIds.weaverToolContracts, kind: "weaver-tool-contract", title: "Weaver tool contracts", owner: hostSlotOwner() }),
+  weaverResultRenderers: defineStudioSlot({ id: studioSlotIds.weaverResultRenderers, kind: "weaver-result-renderer", title: "Weaver result renderers", owner: hostSlotOwner() }),
+  weaverResultControls: defineStudioSlot({ id: studioSlotIds.weaverResultControls, kind: "weaver-result-control", title: "Weaver result controls", owner: hostSlotOwner() }),
   workflowDesignerNodeRenderers: defineStudioSlot({ id: studioSlotIds.workflowDesignerNodeRenderers, kind: "workflow-designer-node-renderer", title: "Workflow designer node renderers", owner: hostSlotOwner() }),
   workflowDesignerToolboxItems: defineStudioSlot({ id: studioSlotIds.workflowDesignerToolboxItems, kind: "workflow-designer-toolbox-item", title: "Workflow designer toolbox items", owner: hostSlotOwner() }),
   workflowDesignerPanels: defineStudioSlot({ id: studioSlotIds.workflowDesignerPanels, kind: "workflow-designer-panel", title: "Workflow designer panels", owner: hostSlotOwner() }),
@@ -1721,16 +1730,16 @@ export interface StudioDashboardWidgetRegistry extends Omit<StudioContributionRe
   add<TSnapshot = unknown, TSettings = unknown>(contribution: StudioDashboardWidgetContribution<TSnapshot, TSettings>): void;
 }
 
-export interface StudioAgentPromptDispatcher {
-  dispatchPrompt(request: StudioAgentPromptRequest): void;
-  onPrompt(listener: (request: StudioAgentPromptRequest) => void): () => void;
+export interface StudioWeaverPromptDispatcher {
+  dispatchPrompt(request: StudioWeaverPromptRequest): void;
+  onPrompt(listener: (request: StudioWeaverPromptRequest) => void): () => void;
   /** Publishes the completed outcome of a correlated prompt back to interested callers. */
-  publishPromptResult(result: StudioAgentPromptResult): void;
+  publishPromptResult(result: StudioWeaverPromptResult): void;
   /** Subscribes to correlated prompt results. Returns an unsubscribe function. */
-  onPromptResult(listener: (result: StudioAgentPromptResult) => void): () => void;
+  onPromptResult(listener: (result: StudioWeaverPromptResult) => void): () => void;
 }
 
-export type StudioAiPromptDispatcher = StudioAgentPromptDispatcher;
+export type StudioAiPromptDispatcher = StudioWeaverPromptDispatcher;
 
 /**
  * Observable availability of the AI provider backing Weaver surfaces. The host reports the latest state
@@ -1746,8 +1755,8 @@ export interface StudioAiProviderAvailability {
   subscribe(listener: (available: boolean) => void): () => void;
 }
 
-/** Compatibility facade: contribution registration is exclusively on api.agent. */
-export type StudioAiContributionApi = StudioAgentPromptDispatcher;
+/** Compatibility facade: contribution registration is exclusively on api.weaver. */
+export type StudioAiContributionApi = StudioWeaverPromptDispatcher;
 
 export interface ElsaStudioHostContext extends StudioEndpointContext {
   hostVersion: string;
@@ -2010,7 +2019,7 @@ export interface ElsaStudioModuleApi {
   /** Optional on older hosts. Only authorized matching public state views are supplied to contributors. */
   readonly workflowRunRelatedLinks?: StudioContributionRegistry<StudioWorkflowRunRelatedLinkContribution>;
   readonly settingEditors: StudioContributionRegistry<StudioSettingEditorContribution>;
-  readonly agent: StudioAgentRegistry;
+  readonly weaver: StudioWeaverRegistry;
   readonly workflowDesigner: {
     readonly nodeRenderers: StudioContributionRegistry<unknown>;
     readonly toolboxItems: StudioContributionRegistry<unknown>;
@@ -2071,8 +2080,8 @@ export function createDashboardWidgetRegistry(options: Pick<CreateStudioContribu
 
 /** Shared prompt transport while contribution producers migrate from the legacy AI facade. */
 export function createAiContributionApi(): StudioAiContributionApi {
-  const listeners = new Set<(request: StudioAgentPromptRequest) => void>();
-  const results = new Set<(result: StudioAgentPromptResult) => void>();
+  const listeners = new Set<(request: StudioWeaverPromptRequest) => void>();
+  const results = new Set<(result: StudioWeaverPromptResult) => void>();
   return {
     dispatchPrompt(request) { for (const listener of listeners) listener(request); },
     onPrompt(listener) { listeners.add(listener); return () => listeners.delete(listener); },
@@ -2081,7 +2090,7 @@ export function createAiContributionApi(): StudioAiContributionApi {
   };
 }
 
-export function createAgentRegistry(options: Pick<CreateStudioContributionRegistryOptions<unknown>, "hostPolicy"> = {}): StudioAgentRegistry {
+export function createWeaverRegistry(options: Pick<CreateStudioContributionRegistryOptions<unknown>, "hostPolicy"> = {}): StudioWeaverRegistry {
   const prompts = createAiContributionApi();
   const listeners = new Set<(available: boolean) => void>();
   let available = true;
@@ -2093,15 +2102,15 @@ export function createAgentRegistry(options: Pick<CreateStudioContributionRegist
       set(value) { if (value !== available) { available = value; for (const listener of listeners) listener(value); } },
       subscribe(listener) { listeners.add(listener); listener(available); return () => listeners.delete(listener); }
     },
-    contextProviders: createContributionRegistry<StudioAgentContextProviderContribution>({ ...options, slot: studioSlots.agentContextProviders }),
-    promptActions: createContributionRegistry<StudioAgentPromptActionContribution>({ ...options, slot: studioSlots.agentPromptActions }),
-    promptStarters: createContributionRegistry<StudioAgentPromptStarterContribution>({ ...options, slot: studioSlots.agentPromptStarters }),
-    capabilities: createContributionRegistry<StudioAgentCapabilityContribution>({ ...options, slot: studioSlots.agentCapabilities }),
-    actions: createContributionRegistry<StudioAgentActionContribution>({ ...options, slot: studioSlots.agentActions }),
-    toolSlots: createContributionRegistry<StudioAgentToolSlotContribution>({ ...options, slot: studioSlots.agentToolSlots }),
-    toolContracts: createContributionRegistry<StudioAgentToolContractContribution>({ ...options, slot: studioSlots.agentToolContracts }),
-    resultRenderers: createContributionRegistry<StudioAgentResultRendererContribution>({ ...options, slot: studioSlots.agentResultRenderers }),
-    resultControls: createContributionRegistry<StudioAgentResultControlContribution>({ ...options, slot: studioSlots.agentResultControls })
+    contextProviders: createContributionRegistry<StudioWeaverContextProviderContribution>({ ...options, slot: studioSlots.weaverContextProviders }),
+    promptActions: createContributionRegistry<StudioWeaverPromptActionContribution>({ ...options, slot: studioSlots.weaverPromptActions }),
+    promptStarters: createContributionRegistry<StudioWeaverPromptStarterContribution>({ ...options, slot: studioSlots.weaverPromptStarters }),
+    capabilities: createContributionRegistry<StudioWeaverCapabilityContribution>({ ...options, slot: studioSlots.weaverCapabilities }),
+    actions: createContributionRegistry<StudioWeaverActionContribution>({ ...options, slot: studioSlots.weaverActions }),
+    toolSlots: createContributionRegistry<StudioWeaverToolSlotContribution>({ ...options, slot: studioSlots.weaverToolSlots }),
+    toolContracts: createContributionRegistry<StudioWeaverToolContractContribution>({ ...options, slot: studioSlots.weaverToolContracts }),
+    resultRenderers: createContributionRegistry<StudioWeaverResultRendererContribution>({ ...options, slot: studioSlots.weaverResultRenderers }),
+    resultControls: createContributionRegistry<StudioWeaverResultControlContribution>({ ...options, slot: studioSlots.weaverResultControls })
   };
 }
 

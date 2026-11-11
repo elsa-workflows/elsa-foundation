@@ -5,7 +5,7 @@ using Elsa.Weaver.Core.Contracts;
 using Elsa.Weaver.Core.Models;
 using Elsa.Weaver.Workflows.Runtime.Services;
 using Microsoft.Extensions.DependencyInjection;
-using static Elsa.Weaver.Workflows.Runtime.Tests.WorkflowRuntimeAgentTestHost;
+using static Elsa.Weaver.Workflows.Runtime.Tests.WorkflowRuntimeWeaverTestHost;
 
 namespace Elsa.Weaver.Workflows.Runtime.Tests;
 
@@ -16,9 +16,9 @@ public sealed class WorkflowRuntimeOnlyCompositionTests
     [Fact]
     public async Task A_runtime_only_host_serves_the_Executable_and_Run_journeys_with_no_Design_assembly_loaded()
     {
-        using var host = new WorkflowRuntimeAgentTestHost();
+        using var host = new WorkflowRuntimeWeaverTestHost();
         var session = await host.SessionAsync();
-        var collected = await host.Services.GetRequiredService<IAgentContextCollector>().CollectAsync(AgentPolicy.Default,
+        var collected = await host.Services.GetRequiredService<IWeaverContextCollector>().CollectAsync(WeaverPolicy.Default,
             new(session.Id, "workflow-executable", new Dictionary<string, string>()) { CallerAttachments = [Reference()] });
 
         Assert.True(collected.Succeeded, collected.Error?.Message);
@@ -26,7 +26,7 @@ public sealed class WorkflowRuntimeOnlyCompositionTests
         var prepared = await host.PrepareAsync(session, collected.Value.Attachments);
         Assert.True(prepared.Succeeded);
         // The Run journey (slice G) composes in the same Runtime-only host.
-        var runs = await host.Services.GetRequiredService<IAgentContextCollector>().CollectAsync(AgentPolicy.Default,
+        var runs = await host.Services.GetRequiredService<IWeaverContextCollector>().CollectAsync(WeaverPolicy.Default,
             new(session.Id, "workflow-run", new Dictionary<string, string>()) { CallerAttachments = [RunReference()] });
         Assert.True(runs.Succeeded, runs.Error?.Message);
         Assert.True((await host.PrepareRunAsync(session, runs.Value!.Attachments)).Succeeded);
@@ -46,15 +46,15 @@ public sealed class WorkflowRuntimeOnlyCompositionTests
     [InlineData("workflows.library", "workflow-library")]
     public async Task A_runtime_only_host_reports_Design_journeys_as_explicitly_unavailable(string kind, string resourceType)
     {
-        using var host = new WorkflowRuntimeAgentTestHost();
+        using var host = new WorkflowRuntimeWeaverTestHost();
         var session = await host.SessionAsync();
-        var design = new AgentContextAttachment($"{kind}:1", "workflow", "resource-1", "Design context", kind, AgentContextSensitivity.Internal, "selection",
+        var design = new WeaverContextAttachment($"{kind}:1", "workflow", "resource-1", "Design context", kind, WeaverContextSensitivity.Internal, "selection",
             "Design context", JsonSerializer.SerializeToElement(new { definitionId = "definition-1", versionId = "version-1" }), new Dictionary<string, string>())
         {
-            ModuleId = ModuleId, SchemaVersion = "1", Target = new(ModuleId, resourceType, "resource-1", "resource-1"), Origin = AgentContextOrigin.ClientSnapshot
+            ModuleId = ModuleId, SchemaVersion = "1", Target = new(ModuleId, resourceType, "resource-1", "resource-1"), Origin = WeaverContextOrigin.ClientSnapshot
         };
 
-        var collected = await host.Services.GetRequiredService<IAgentContextCollector>().CollectAsync(AgentPolicy.Default,
+        var collected = await host.Services.GetRequiredService<IWeaverContextCollector>().CollectAsync(WeaverPolicy.Default,
             new(session.Id, "workflow", new Dictionary<string, string>()) { CallerAttachments = [design] });
 
         Assert.False(collected.Succeeded);
@@ -63,7 +63,7 @@ public sealed class WorkflowRuntimeOnlyCompositionTests
         Assert.Equal("No installed module admits the supplied context kind and owner.", refusal.Message);
         Assert.Empty(collected.Value.Attachments);
         // And no Design tool is installed to reach the draft or a version another way.
-        var tools = (await host.Services.GetRequiredService<IAgentToolRegistry>().ListAsync()).Select(tool => tool.Descriptor.Name).ToArray();
+        var tools = (await host.Services.GetRequiredService<IWeaverToolRegistry>().ListAsync()).Select(tool => tool.Descriptor.Name).ToArray();
         Assert.Equal(["workflow_read_executable", "workflow_read_run"], tools.Where(name => name.StartsWith("workflow_", StringComparison.Ordinal)).Order());
     }
 
@@ -72,7 +72,7 @@ public sealed class WorkflowRuntimeOnlyCompositionTests
     {
         // SC-007: the Weaver Workflows Vitest holds every prompt and tool contract to the same file's runtime section.
         var fixture = Registrations()["runtime"]!.AsObject();
-        using var host = new WorkflowRuntimeAgentTestHost();
+        using var host = new WorkflowRuntimeWeaverTestHost();
         Assert.Equal("Elsa.Weaver.Workflows.Runtime", fixture["package"]!.GetValue<string>());
         Assert.Equal(fixture["package"]!.GetValue<string>(), typeof(WeaverWorkflowsRuntimeFeature).Assembly.GetName().Name);
         Assert.Equal(fixture["contextSourceId"]!.GetValue<string>(), host.Source.Descriptor.Id);
@@ -82,9 +82,9 @@ public sealed class WorkflowRuntimeOnlyCompositionTests
         Assert.Equal(fixture["runSource"]!["id"]!.GetValue<string>(), host.RunSource.Descriptor.Id);
         Assert.Equal(ModuleId, host.RunSource.Descriptor.ModuleId);
         Assert.Equal(Strings(fixture["runSource"]!["contextKinds"]!), host.RunSource.Descriptor.ContextKinds);
-        var capabilities = await host.Services.GetServices<IAgentCapabilityProvider>().OfType<WorkflowRuntimeAgentCapabilityProvider>().Single().GetCapabilitiesAsync();
+        var capabilities = await host.Services.GetServices<IWeaverCapabilityProvider>().OfType<WorkflowRuntimeWeaverCapabilityProvider>().Single().GetCapabilitiesAsync();
         Assert.Equal(Strings(fixture["capabilities"]!), capabilities.Select(item => item.Id));
-        var tools = (await host.Services.GetRequiredService<IAgentToolRegistry>().ListAsync()).Where(tool => tool.Descriptor.ModuleId == ModuleId)
+        var tools = (await host.Services.GetRequiredService<IWeaverToolRegistry>().ListAsync()).Where(tool => tool.Descriptor.ModuleId == ModuleId)
             .Select(tool => tool.Descriptor).ToArray();
         Assert.Equal(fixture["tools"]!.AsArray().Select(item => (item!["name"]!.GetValue<string>(), item["resultType"]!.GetValue<string>(),
                 item["rendererId"]?.GetValue<string>(), item["executionLocation"]!.GetValue<string>(), item["disclosureSourceId"]!.GetValue<string>())),

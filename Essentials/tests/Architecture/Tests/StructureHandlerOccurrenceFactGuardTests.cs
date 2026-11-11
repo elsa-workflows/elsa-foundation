@@ -7,15 +7,17 @@ using Xunit;
 namespace Elsa.Architecture.Tests;
 
 /// <summary>
-/// Every first-party structure handler states <see cref="ActivityChildResultFacts.EarlierProducerRunCanReachConsumer"/>
-/// itself (#4053). Publication refuses an activity-result binding without a scope wherever the owning structure leaves
-/// the fact unset, so a handler that inherits the interface default silently stops its children's results from being
-/// offered. The check reads compiled code: the handler must declare its own <c>AssessChildResult</c>, and it, or a
-/// method of the same assembly it calls, must set the fact.
+/// Every first-party structure handler can state <see cref="ActivityChildResultFacts.EarlierProducerRunCanReachConsumer"/>
+/// itself. Publication refuses an activity-result binding without a scope wherever the owning structure, or one around
+/// it, leaves the fact unset, so a handler that inherits the interface default silently stops its children's results
+/// from being offered. The check reads compiled code: the handler must declare its own <c>AssessChildResult</c>, and
+/// it, or a method of the same assembly it calls, must contain a call to the fact's setter.
 /// </summary>
 /// <remarks>
-/// A behavioural check over registered handlers would need a meaningful structure payload per handler, which only each
-/// handler's own tests can build; those tests pin the value. This guard pins that every handler answers at all.
+/// This proves the setter is reachable from each handler's <c>AssessChildResult</c>, not that every return path sets it:
+/// a path that returns an unavailable or unknown result may leave it unset, which is refused anyway. Which value each
+/// handler states, and that a definite result always comes with it, is pinned by that handler's own tests, which can
+/// build a meaningful structure payload.
 /// </remarks>
 public sealed class StructureHandlerOccurrenceFactGuardTests
 {
