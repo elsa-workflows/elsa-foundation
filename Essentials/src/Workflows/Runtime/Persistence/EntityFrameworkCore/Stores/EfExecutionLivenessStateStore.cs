@@ -24,6 +24,9 @@ public sealed class EfExecutionLivenessStateStore(
     internal bool UsesSameBackingStore(RuntimeDbContext candidateContext, IPersistenceAccessContextAccessor candidateAccessor) =>
         ReferenceEquals(context, candidateContext) && ReferenceEquals(accessContextAccessor, candidateAccessor);
 
+    /// <summary>The persistence scope whose ownership rows this store reads and writes.</summary>
+    internal string OwnershipRowScope => EfRuntimeOperationalStoreSupport.RequireScope(accessContextAccessor);
+
     public async ValueTask<ExecutionLivenessState> SaveAsync(ExecutionLivenessState state, CancellationToken cancellationToken = default)
     {
         ValidateState(state);

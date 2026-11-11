@@ -28,6 +28,12 @@ public sealed class EfRuntimeCheckpointCommitStore(
 {
     internal IRuntimeCoalescingSessionAccessor? CoalescingSessions { private get; init; }
 
+    /// <summary>
+    /// The fence cursors of this process. With them a fenced commit checks the fence with one conditional statement
+    /// when its lease has a cursor. Without them it reads the ownership row on every commit.
+    /// </summary>
+    internal EfExecutionFenceCursors? FenceCursors { private get; init; }
+
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private readonly TimeProvider _timeProvider = timeProvider ?? TimeProvider.System;
 
@@ -302,8 +308,9 @@ public sealed class EfRuntimeCheckpointCommitStore(
 
         // The drain's own lease heartbeat bumps the fence row's revision without changing the lease, so a checkpoint
         // staged just before it would fail on a benign same-owner renewal. Retry only a conflict confined to that row,
-        // and only on a context with nothing else pending (rollback clears the tracker). Each attempt re-reads and
-        // revalidates the fence, so a real ownership transition still fails as stale.
+        // and only on a context with nothing else pending (rollback clears the tracker). Each attempt checks the fence
+        // again, so a real ownership transition still fails as stale. Only an attempt that read the row can conflict
+        // this way: one that checked the fence with its cursor's statement holds the row from that statement on.
         async ValueTask<RuntimeCheckpointCommitStoreResult> CommitFencedAsync(CancellationToken writeCancellationToken, WorkflowExecutableIdentity? requiredExistingRoot = null)
         {
             var retryable = commit.ExpectedFence is not null && !context.ChangeTracker.HasChanges() &&
@@ -326,6 +333,10 @@ public sealed class EfRuntimeCheckpointCommitStore(
         {
             var marker = ToEntity(commit, scope, id, fingerprint);
             var touchedTestScopes = new Dictionary<string, WorkflowTestScopeRecord>(StringComparer.Ordinal);
+            var fenceKey = commit.ExpectedFence is null || FenceCursors is null
+                ? default(EfExecutionFenceCursors.Key?)
+                : EfExecutionFenceCursors.Key.For(scope, commit.WorkflowExecutionId, commit.ExpectedFence);
+            var fenceAfterCommit = default(ExecutionFenceCursor);
 
             await using var transaction = await context.Database.BeginTransactionAsync(writeCancellationToken);
             try
@@ -342,13 +353,20 @@ public sealed class EfRuntimeCheckpointCommitStore(
                 // transaction, and the immutable marker is added only after every supported participant is staged.
                 if (commit.ExpectedFence is { } expectedFence)
                 {
-                    await EfRuntimeCheckpointParticipantStaging.StageExecutionFenceAsync(
+                    // Admitting background work reads the ownership row this step tracks (its deletion tombstone),
+                    // and only the read path tracks it, so such a commit does not use its cursor.
+                    var known = fenceKey is { } key && commit.StateChanges.BackgroundActivityWork.Admissions.Count == 0 &&
+                                FenceCursors!.TryGet(key, out var cursor)
+                        ? cursor
+                        : default(ExecutionFenceCursor?);
+                    fenceAfterCommit = await EfRuntimeCheckpointParticipantStaging.StageExecutionFenceAsync(
                         context,
                         scope,
                         commit.WorkflowExecutionId,
                         expectedFence,
                         _timeProvider,
-                        writeCancellationToken);
+                        writeCancellationToken,
+                        known);
                 }
 
                 await StageExactBookmarkResumeAsync(commit, scope, touchedTestScopes, writeCancellationToken);
@@ -450,7 +468,20 @@ public sealed class EfRuntimeCheckpointCommitStore(
                 context.RuntimeCheckpointCommits.Add(marker);
                 await context.SaveChangesAsync(writeCancellationToken);
                 EnsureExactBookmarkDeadline(commit);
-                await transaction.CommitAsync(writeCancellationToken);
+                try
+                {
+                    await transaction.CommitAsync(writeCancellationToken);
+                }
+                catch when (fenceKey is not null)
+                {
+                    // A commit that reports a failure may still have been applied, so the revision is not known.
+                    FenceCursors!.Distrust(fenceKey.Value);
+                    throw;
+                }
+
+                // Only now is the bump durable. Before the commit it could still be rolled back.
+                if (fenceKey is not null)
+                    FenceCursors!.Advance(fenceKey.Value, fenceAfterCommit);
                 return ResultFor(commit, marker);
             }
             catch (EfRuntimeCheckpointParticipantStaging.ExistingRootLeaseRequiredException)

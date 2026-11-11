@@ -213,7 +213,7 @@ Every shell with the runtime API has this machinery: the runtime API feature cal
 
 **What is buffered:** writes to run, activity execution, durable value and scheduler state, and continuation intents (`EnqueueSchedulerWork`), which are consumed from the buffer within the segment so a folded segment does not save its own continuation.
 
-**What is never buffered:** lease, heartbeat and ownership writes go straight to the operational store. The folded commit still goes through the single checkpoint committer, which stamps the drain's ownership lease as `ExpectedFence` so a stale writer is refused before anything is saved.
+**What is never buffered:** lease, heartbeat and ownership writes go straight to the operational store. The folded commit still goes through the single checkpoint committer, which stamps the drain's ownership lease as `ExpectedFence` so a stale writer is refused before anything is saved. The EF store checks that fence first in its transaction. When the lease has a [fence cursor](glossary/elsa.md) it is one conditional update of the ownership row; otherwise, and whenever that update matches no row, the store reads the row and validates the lease.
 
 **Boundaries that always save.** These checkpoints are never folded away:
 
@@ -383,6 +383,7 @@ The two nested-invoke handlers are the exception: their commits go through a dyn
 | Timer and bookmark stores never buffered | `RuntimeCheckpointCoalescingTests.Coalescing_DoesNotDecorateDurableTimerOrBookmarkStores_SoDelaySuspensionStaysDurable` |
 | Every mode | `PersistenceModeFlushTests`: suspension, resume, fault, handler fault, cancellation and ownership loss |
 | Host-agnostic runtime | `RuntimeCoreCompositionRootTests` |
+| Fence check at commit | `EfRuntimeCheckpointCommitStoreTests` on SQLite: one conditional update and no read with a current fence cursor; a read after a heartbeat, takeover, borrow, release, run deletion or lease expiry the process did not hear of, with the refusal reason each gives; a failed commit and a commit of unknown outcome. `EfExecutionFenceCursorCompositionTests`: which compositions get a cursor, and the heartbeat's own service scope. `RuntimeCheckpointFenceCursor*SmokeTests` on PostgreSQL, SQL Server and MySQL: a takeover and a heartbeat through a second connection |
 
 ## Where this lives in the code
 
