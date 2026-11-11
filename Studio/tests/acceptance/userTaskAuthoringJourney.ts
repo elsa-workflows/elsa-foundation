@@ -183,6 +183,8 @@ export async function userTaskAuthoringJourney(page: Page, info: TestInfo, captu
   await page.getByLabel(/^Note/).fill("Approved with case preserved"); await capture(page, info, "frozen-task-form");
   await page.getByRole("button", { name: "Approve", exact: true }).click();
   await expect.poll(async () => (await get(`/runtime/workflows/instances/${runId}`)).instance.status, { timeout: 30_000 }).toBe("Completed");
+  await page.getByRole("button", { name: "Refresh task", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Back to task list", exact: true })).toBeEnabled();
   const completed = await get(`/runtime/workflows/instances/${runId}`);
   expect(completed.outputs.RenamedData).toMatchObject({ isRedacted: false, captureMode: "DiagnosticSnapshot", value: { kind: "object", properties: [{ name: "Note", value: { preview: "Approved with case preserved" } }] } });
   await page.setViewportSize({ width: 1600, height: 1100 }); await page.goto(`/workflows/instances/${runId}`);

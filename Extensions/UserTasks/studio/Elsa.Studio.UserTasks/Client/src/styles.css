@@ -1,6 +1,4 @@
 .user-tasks { color: var(--studio-text); }
-.user-task-workspace { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--studio-page-gap); align-items: start; }
-.user-task-workspace--selected { grid-template-columns: minmax(0, 1fr) minmax(22rem, 1fr); }
 .user-task-content { display: grid; min-width: 0; gap: var(--studio-page-gap); }
 .user-task-results { min-width: 0; display: grid; gap: var(--studio-space-4); }
 .user-task-search { flex: 0 1 28rem; min-width: 0; }
@@ -14,8 +12,7 @@
 .user-task-detail details { margin-top: var(--studio-space-4); }
 .user-task-detail summary { cursor: pointer; font-weight: 600; }
 .user-task-detail fieldset > label { display: grid; gap: var(--studio-space-2); margin-bottom: var(--studio-space-3); }
-.user-task-results tr[data-selected="true"] { background: var(--studio-accent-soft); }
-.user-task-detail { min-width: 0; overflow-wrap: anywhere; padding: var(--studio-space-4, 1rem); background: var(--studio-surface); border: 1px solid var(--studio-border); border-radius: var(--studio-radius-md, .5rem); }
+.user-task-detail { min-width: 0; max-width: 64rem; display: grid; gap: var(--studio-space-4); overflow-wrap: anywhere; }
 .user-task-fields, .user-task-field { display: grid; gap: .5rem; }
 .user-task-field { margin-block: .75rem; }
 .user-task-field-author { display: grid; grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr)); gap: .75rem; margin-block: 1rem; }
@@ -27,8 +24,6 @@
 .user-tasks td { overflow-wrap: anywhere; }
 .user-tasks [aria-invalid="true"] { border-color: var(--studio-danger); }
 @media (width <= 800px) {
-  .user-task-workspace--selected { grid-template-columns: minmax(0, 1fr); }
-  .user-task-workspace--selected > .user-task-detail { grid-row: 1; }
   .user-task-search { flex-basis: 100%; }
   .user-task-inbox { width: 100%; }
   .user-task-inbox select { flex: 1; }

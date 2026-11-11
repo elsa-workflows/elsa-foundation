@@ -1,15 +1,17 @@
 // @vitest-environment jsdom
-import React from "react";
+import React, { Activity } from "react";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { StudioHttpError, type StudioActivityPropertyEditorContribution, type ElsaStudioModuleApi } from "@elsa-workflows/studio-sdk";
+import { StudioHttpError, requestStudioNavigation, type StudioActivityPropertyEditorContribution, type ElsaStudioModuleApi } from "@elsa-workflows/studio-sdk";
 import { register } from "../module";
 import { ActionsEditor, AssignmentEditor, FormEditor } from "../PropertyEditors";
 import { BasicTaskForm } from "../TaskForm";
 import { FormsPage } from "../FormsPage";
-import { TasksPage, TaskDetail } from "../TasksPage";
+import { TasksPage } from "../TasksPage";
+import { TaskDetail, TaskDetailPage } from "../TaskDetailPage";
 import { read, type TaskActor, type TaskItem } from "../taskApi";
+import { readTaskBrowseLocation, replaceTaskBrowseLocation, taskCollectionPath, taskDetailPath } from "../taskNavigation";
 async function act(action: () => unknown) {
   let result: unknown;
   flushSync(() => { result = action(); });
@@ -18,7 +20,7 @@ async function act(action: () => unknown) {
   flushSync(() => {});
 }
 let container: HTMLDivElement; let root: Root;
-beforeEach(() => { container = document.createElement("div"); document.body.append(container); root = createRoot(container); });
+beforeEach(() => { window.history.replaceState(null, "", "/"); container = document.createElement("div"); document.body.append(container); root = createRoot(container); });
 afterEach(async () => { await act(async () => root.unmount()); container.remove(); });
 const identity: TaskActor = { userId: "alice", canRead: true, canAct: true, canManage: false, canManageForms: false, canReadForms: false };
 const task = (): TaskItem => ({ id: "task", title: "Purchase", assigneeId: "alice", actions: ["Approve", "Reject"], optionalFormActions: [], prefill: {}, status: "Open", revision: 1, history: [{ operation: "created", actorId: "workflow", at: "2026-11-02T12:00:00Z" }] });
@@ -52,7 +54,7 @@ describe("task form rendering and decision delivery", () => {
     const post = vi.fn().mockRejectedValueOnce(new StudioHttpError(0, "Connection lost"))
       .mockRejectedValueOnce(new StudioHttpError(403, "Permission changed"))
       .mockResolvedValue({ ...task(), status: "CompletionPending", revision: 2 });
-    await act(async () => root.render(<TaskDetail api={api(get, post)} id="task" identity={identity} changed={vi.fn()} />));
+    await act(async () => root.render(<TaskDetail api={api(get, post)} id="task" identity={identity} />));
     await click("Approve"); await click("Retry Approve"); await click("Refresh task"); await click("Retry Approve");
     expect(post).toHaveBeenCalledTimes(3);
     expect(post.mock.calls[0][1]).toEqual(post.mock.calls[1][1]); expect(post.mock.calls[0][1]).toEqual(post.mock.calls[2][1]);
@@ -63,7 +65,7 @@ describe("task form rendering and decision delivery", () => {
     const old = new Promise<TaskItem>(resolve => { release = resolve; });
     const get = vi.fn().mockReturnValueOnce(old).mockResolvedValue({ ...task(), status: "Completed", revision: 3 });
     const context = api(get);
-    await act(async () => root.render(<TaskDetail api={context} id="task" identity={identity} changed={vi.fn()} />));
+    await act(async () => root.render(<TaskDetail api={context} id="task" identity={identity} />));
     await click("Retry"); await act(async () => release(task()));
     expect(container.textContent).toContain("Completed"); expect([...container.querySelectorAll("button")].some(item => item.textContent === "Approve")).toBe(false);
   });
@@ -71,7 +73,7 @@ describe("task form rendering and decision delivery", () => {
     const accepted = { ...task(), status: "CompletionPending", revision: 2, decision: { response: { action: "Approve", data: {} } } };
     const get = vi.fn().mockResolvedValueOnce(task()).mockResolvedValue({ ...accepted, status: "Completed", revision: 3 });
     const post = vi.fn().mockResolvedValue(accepted);
-    await act(async () => root.render(<TaskDetail api={api(get, post)} id="task" identity={identity} changed={vi.fn()} />));
+    await act(async () => root.render(<TaskDetail api={api(get, post)} id="task" identity={identity} />));
     await click("Approve"); expect(container.textContent).toContain("The workflow will continue when delivery completes.");
     await click("Refresh task");
     expect(container.textContent).toContain("Completed");
@@ -80,9 +82,9 @@ describe("task form rendering and decision delivery", () => {
   it("renders server errors against the exact field key and refuses a missing integration", async () => {
     const withForm = { ...task(), form: { id: "f", version: "1", name: "F", provider: "elsa.basic-forms/1", fields: [{ key: "AccountID", label: "Account", kind: "text", required: true, readOnly: false }] } };
     const post = vi.fn().mockRejectedValue(new StudioHttpError(400, "Correct the form", null, { errors: { AccountID: "Account is required" } }));
-    await act(async () => root.render(<TaskDetail api={api(vi.fn().mockResolvedValue(withForm), post)} id="task" identity={identity} changed={vi.fn()} />));
+    await act(async () => root.render(<TaskDetail api={api(vi.fn().mockResolvedValue(withForm), post)} id="task" identity={identity} />));
     await click("Approve"); expect(container.textContent).toContain("Account is required"); expect(container.querySelector("input")!.getAttribute("aria-invalid")).toBe("true");
-    await act(async () => root.render(<TaskDetail key="missing" api={api(vi.fn().mockResolvedValue({ ...withForm, form: { ...withForm.form, provider: "custom/1" } }))} id="task" identity={identity} changed={vi.fn()} />));
+    await act(async () => root.render(<TaskDetail key="missing" api={api(vi.fn().mockResolvedValue({ ...withForm, form: { ...withForm.form, provider: "custom/1" } }))} id="task" identity={identity} />));
     expect(container.textContent).toContain("Form integration unavailable");
     const approve = [...container.querySelectorAll("button")].find(item => item.textContent === "Approve"); expect(approve!.disabled).toBe(true);
   });
@@ -101,7 +103,7 @@ it("takes forms-only users directly to their permitted form workspace without re
 it("makes an unanswered boolean explicit and submits a selected No as false", async () => {
   const withForm = { ...task(), form: { id: "f", version: "1", name: "F", provider: "elsa.basic-forms/1", fields: [{ key: "Confirmed", label: "Confirmed", kind: "boolean", required: true, readOnly: false }] } };
   const post = vi.fn().mockResolvedValue({ ...withForm, status: "CompletionPending", revision: 2 });
-  await act(async () => root.render(<TaskDetail api={api(vi.fn().mockResolvedValue(withForm), post)} id="task" identity={identity} changed={vi.fn()} />));
+  await act(async () => root.render(<TaskDetail api={api(vi.fn().mockResolvedValue(withForm), post)} id="task" identity={identity} />));
   const select = container.querySelector("select")!; expect(select.value).toBe("");
   await act(async () => { select.value = "false"; select.dispatchEvent(new Event("change", { bubbles: true })); });
   await click("Approve"); expect(post.mock.calls[0][1].data).toEqual({ Confirmed: false });
@@ -117,11 +119,11 @@ it("replaces detail selection when the same task page receives another route ID"
     return path.endsWith("one") ? first : second;
   });
   const context = api(get);
-  await act(async () => root.render(<TasksPage api={context} initialId="one" />));
+  await act(async () => root.render(<TaskDetailPage api={context} id="one" navigate={vi.fn()} />));
   await vi.waitFor(() => expect(get.mock.calls.some(([path]) => path.endsWith("one"))).toBe(true));
   await act(async () => finishFirst({ ...task(), id: "one", title: "First purchase" }));
   await vi.waitFor(async () => { await act(async () => {}); expect(container.textContent).toContain("First purchase"); });
-  await act(async () => root.render(<TasksPage api={context} initialId="two" />));
+  await act(async () => root.render(<TaskDetailPage api={context} id="two" navigate={vi.fn()} />));
   await vi.waitFor(() => expect(get.mock.calls.some(([path]) => path.endsWith("two"))).toBe(true));
   await act(async () => finishSecond({ ...task(), id: "two", title: "Second purchase" }));
   await vi.waitFor(async () => { await act(async () => {}); expect(container.textContent).toContain("Second purchase"); });
@@ -131,7 +133,7 @@ it("replaces detail selection when the same task page receives another route ID"
 it("claims and releases group work using returned revisions", async () => {
   const group = { ...task(), assigneeId: undefined, groupId: "finance" };
   const post = vi.fn().mockResolvedValueOnce({ ...group, claimantId: "alice", status: "Claimed", revision: 2 }).mockResolvedValueOnce({ ...group, revision: 3 });
-  await act(async () => root.render(<TaskDetail api={api(vi.fn().mockResolvedValue(group), post)} id="task" identity={identity} changed={vi.fn()} />));
+  await act(async () => root.render(<TaskDetail api={api(vi.fn().mockResolvedValue(group), post)} id="task" identity={identity} />));
   await click("Claim task"); await click("Release task");
   expect(post.mock.calls[0][0]).toContain("/claim"); expect(post.mock.calls[0][1].revision).toBe(1);
   expect(post.mock.calls[1][0]).toContain("/release"); expect(post.mock.calls[1][1].revision).toBe(2);
@@ -174,7 +176,7 @@ it("clears validation only for response fields that the user corrects", async ()
     { key: "Amount", label: "Amount", kind: "number", required: true, readOnly: false }
   ] } };
   const post = vi.fn().mockRejectedValue(new StudioHttpError(400, "Correct the response", null, { errors: { Note: "Enter a note", Amount: "Enter an amount" } }));
-  await act(async () => root.render(<TaskDetail api={api(vi.fn().mockResolvedValue(withForm), post)} id="task" identity={identity} changed={vi.fn()} />));
+  await act(async () => root.render(<TaskDetail api={api(vi.fn().mockResolvedValue(withForm), post)} id="task" identity={identity} />));
   await click("Approve");
   expect(container.textContent).toContain("Enter a note"); expect(container.textContent).toContain("Enter an amount");
   await input(container.querySelector("textarea")!, "Reviewed");
@@ -223,7 +225,7 @@ it("resolves an unaccepted ambiguous response when a newer revision proves its C
   const withForm = { ...task(), form: { id: "f", version: "1", name: "F", provider: "elsa.basic-forms/1", fields: [{ key: "Note", label: "Note", kind: "text" }] } };
   const get = vi.fn().mockResolvedValueOnce(withForm).mockResolvedValue({ ...withForm, revision: 2 });
   const post = vi.fn().mockRejectedValueOnce(new StudioHttpError(0, "Connection lost")).mockResolvedValue({ ...withForm, status: "CompletionPending", revision: 3 });
-  await act(async () => root.render(<TaskDetail api={api(get, post)} id="task" identity={identity} changed={vi.fn()} />));
+  await act(async () => root.render(<TaskDetail api={api(get, post)} id="task" identity={identity} />));
   await input(container.querySelector("input")!, "Keep my response"); await click("Approve"); await click("Refresh task");
   expect(container.querySelector("input")!.disabled).toBe(false); expect(container.querySelector("input")!.value).toBe("Keep my response");
   await click("Approve"); expect(post.mock.calls[1][1].revision).toBe(2); expect(post.mock.calls[1][1].requestId).not.toBe(post.mock.calls[0][1].requestId);
@@ -299,7 +301,7 @@ it("renders an explicit external integration and submits its nested case-sensiti
   const post = vi.fn().mockResolvedValue({ ...custom, status: "CompletionPending", revision: 2 });
   const context = api(vi.fn().mockResolvedValue(custom), post);
   Object.assign(context, { userTaskForms: { list: () => [{ id: "acme.renderer", provider: "acme.forms/1", component: ({ value, onChange, readOnly }) => <label>External amount<input disabled={readOnly} value={String((value.Approval as { AmountUSD?: number } | undefined)?.AmountUSD ?? "")} onChange={event => onChange({ Approval: { AmountUSD: Number(event.target.value), CaseSensitiveKey: "kept" } })} /></label> }] } as NonNullable<ElsaStudioModuleApi["userTaskForms"]> });
-  await act(async () => root.render(<TaskDetail api={context} id="task" identity={identity} changed={vi.fn()} />));
+  await act(async () => root.render(<TaskDetail api={context} id="task" identity={identity} />));
   await input(container.querySelector("input")!, "42"); await click("Approve");
   expect(post.mock.calls[0][1].data).toEqual({ Approval: { AmountUSD: 42, CaseSensitiveKey: "kept" } });
 });
@@ -421,4 +423,216 @@ it.each([false, true])("prevents competing local navigation while resolving the 
     expect(competing.disabled).toBe(true);
     if (!preview) expect(container.querySelector<HTMLButtonElement>("tbody button.user-task-link")!.disabled).toBe(true);
   } finally { await act(async () => release(page)); }
+});
+
+
+function registeredRoutes(context: ElsaStudioModuleApi) {
+  const areas: Parameters<ElsaStudioModuleApi["featureAreas"]["add"]>[0][] = [];
+  register(Object.assign(context, {
+    featureAreas: { add: (area: typeof areas[number]) => areas.push(area) },
+    propertyEditors: { add: vi.fn() },
+    userTaskForms: { ...context.userTaskForms, add: vi.fn() }
+  }));
+  return areas[0].routes!;
+}
+
+it("opens the task detail route as a standalone page without loading the inbox", async () => {
+  window.history.replaceState(null, "", "/user-tasks/task");
+  const get = vi.fn(async (path: string) => path.includes("identity") ? identity : path.includes("?") ? { items: [task()] } : task());
+  const Route = registeredRoutes(api(get)).find(route => route.path === "/user-tasks/:id")!.component;
+  await act(async () => root.render(<Route navigate={vi.fn()} />));
+  await vi.waitFor(() => expect(container.textContent).toContain("Purchase"));
+  expect(container.querySelector('input[type="search"]')).toBeNull();
+  expect(container.querySelector('table[aria-label="User Tasks"]')).toBeNull();
+  expect(get.mock.calls.some(([path]) => path.startsWith("/runtime/user-tasks?"))).toBe(false);
+  expect(container.textContent).toContain("Back to task list");
+});
+
+it("navigates from the collection to a task instead of mounting its response editor beside the list", async () => {
+  const get = vi.fn(async (path: string) => path.includes("identity") ? identity : path.includes("?") ? { items: [task()] } : task());
+  const navigate = vi.fn();
+  const Route = registeredRoutes(api(get)).find(route => route.path === "/user-tasks")!.component;
+  await act(async () => root.render(<Route navigate={navigate} />));
+  await act(async () => container.querySelector<HTMLAnchorElement>('[data-task-id="task"]')!.click());
+  expect(navigate).toHaveBeenCalledWith(expect.stringContaining("/user-tasks/task"));
+  expect(container.querySelector("aside")).toBeNull();
+  expect(get.mock.calls.some(([path]) => path.endsWith("/user-tasks/task"))).toBe(false);
+});
+
+it("protects an unsent task response from normal Studio navigation and silent guard probes", async () => {
+  const withForm = { ...task(), form: { id: "f", version: "1", name: "F", provider: "elsa.basic-forms/1", fields: [{ key: "Note", label: "Note", kind: "text" }] } };
+  await act(async () => root.render(<TaskDetail api={api(vi.fn().mockResolvedValue(withForm))} id="task" identity={identity} />));
+  await input(container.querySelector("input")!, "Keep my response");
+  const before = container.textContent;
+  expect(requestStudioNavigation("/user-tasks/task", "/user-tasks/task", "probe")).toBe(false);
+  expect(container.textContent).toBe(before);
+  expect(requestStudioNavigation("/user-tasks/task", "/user-tasks")).toBe(false);
+});
+
+
+it("retains inbox search and opaque paging context through a standalone task and its return link", async () => {
+  const contextQuery = new URLSearchParams({ view: "queue", search: "Purchase", after: "opaque+/=" });
+  window.history.replaceState({ retained: "host history" }, "", `/user-tasks?${contextQuery}`);
+  const get = vi.fn(async (path: string) => path.includes("identity") ? identity : path.includes("?") ? { items: [{ ...task(), id: "opaque/id" }] } : { ...task(), id: "opaque/id" });
+  const routes = registeredRoutes(api(get)); const navigate = vi.fn();
+  const List = routes.find(route => route.path === "/user-tasks")!.component;
+  const Detail = routes.find(route => route.path === "/user-tasks/:id")!.component;
+  await act(async () => root.render(<List navigate={navigate} />));
+  expect(container.querySelector<HTMLInputElement>('input[type="search"]')!.value).toBe("Purchase");
+  await act(async () => container.querySelector<HTMLAnchorElement>("[data-task-id]")!.click());
+  const detailPath = navigate.mock.calls.at(-1)![0] as string;
+  expect(new URL(detailPath, location.origin).pathname).toBe("/user-tasks/opaque%2Fid");
+  expect(new URL(detailPath, location.origin).searchParams.get("after")).toBe("opaque+/=");
+  expect(window.history.state).toEqual({ retained: "host history" });
+  window.history.replaceState(null, "", detailPath);
+  await act(async () => root.render(<Detail navigate={navigate} />));
+  await vi.waitFor(() => expect(container.textContent).toContain("Purchase"));
+  await click("Back to task list");
+  const back = new URL(navigate.mock.calls.at(-1)![0], location.origin);
+  expect(back.pathname).toBe("/user-tasks"); expect(back.searchParams.get("view")).toBe("queue");
+  expect(back.searchParams.get("search")).toBe("Purchase"); expect(back.searchParams.get("after")).toBe("opaque+/="); expect(back.searchParams.get("focusTask")).toBe("opaque/id");
+});
+
+it("identifies the task resource independently of its originating inbox", () => {
+  const route = registeredRoutes(api()).find(route => route.path === "/user-tasks/:id")!;
+  expect(route.workspace!.resourceKey!(new URL("https://studio/user-tasks/opaque%2Fid?view=queue"))).toBe("user-task:opaque/id");
+  expect(route.workspace!.resourceKey!(new URL("https://studio/user-tasks/opaque%2Fid?view=history"))).toBe("user-task:opaque/id");
+});
+
+it("shows a denied task detail without reading either tasks or the inbox", async () => {
+  const get = vi.fn().mockResolvedValue({ ...identity, canRead: false, canReadForms: true, canManageForms: true });
+  await act(async () => root.render(<TaskDetailPage api={api(get)} id="task" navigate={vi.fn()} />));
+  expect(container.textContent).toContain("Task access unavailable"); expect(container.querySelector("table")).toBeNull();
+  expect(container.textContent).not.toContain("Reusable task forms"); expect(get).toHaveBeenCalledTimes(1);
+});
+
+it("keeps a response when discard is cancelled and releases the guard only after confirmed discard", async () => {
+  const withForm = { ...task(), form: { id: "f", version: "1", name: "F", provider: "elsa.basic-forms/1", fields: [{ key: "Note", label: "Note", kind: "text" }] } };
+  const confirm = vi.fn().mockResolvedValueOnce(false).mockResolvedValueOnce(true); const closed = vi.fn();
+  const context = Object.assign(api(vi.fn().mockResolvedValue(withForm)), { dialogs: { confirm } }) as unknown as ElsaStudioModuleApi;
+  await act(async () => root.render(<TaskDetail api={context} id="task" identity={identity} onClose={closed} />));
+  await input(container.querySelector("input")!, "Unsent notes");
+  await click("Back to task list"); expect(closed).not.toHaveBeenCalled(); expect(container.querySelector("input")!.value).toBe("Unsent notes");
+  expect(requestStudioNavigation("/user-tasks/task", "/user-tasks/task", "probe")).toBe(false);
+  await click("Back to task list"); expect(closed).toHaveBeenCalledTimes(1);
+  expect(requestStudioNavigation("/user-tasks/task", "/user-tasks/task", "probe")).toBe(true);
+});
+
+it("blocks closing and unload while an ambiguous task response is unconfirmed", async () => {
+  const get = vi.fn().mockResolvedValueOnce(task()).mockResolvedValue({ ...task(), revision: 2 });
+  const post = vi.fn().mockRejectedValue(new StudioHttpError(0, "Connection lost"));
+  await act(async () => root.render(<TaskDetail api={api(get, post)} id="task" identity={identity} />));
+  await click("Approve");
+  expect(requestStudioNavigation("/user-tasks/task", "/user-tasks", "close")).toBe(false);
+  expect(window.dispatchEvent(new Event("beforeunload", { cancelable: true }))).toBe(false);
+  await click("Refresh task");
+  expect(requestStudioNavigation("/user-tasks/task", "/user-tasks/task", "probe")).toBe(true);
+});
+
+
+it("does not navigate after a discard confirmation outlives the task view", async () => {
+  let finish!: (value: boolean) => void;
+  const confirm = vi.fn().mockReturnValue(new Promise<boolean>(resolve => { finish = resolve; })); const closed = vi.fn();
+  const withForm = { ...task(), form: { id: "f", version: "1", name: "F", provider: "elsa.basic-forms/1", fields: [{ key: "Note", label: "Note", kind: "text" }] } };
+  const context = Object.assign(api(vi.fn().mockResolvedValue(withForm)), { dialogs: { confirm } }) as unknown as ElsaStudioModuleApi;
+  await act(async () => root.render(<TaskDetail api={context} id="task" identity={identity} onClose={closed} />));
+  await input(container.querySelector("input")!, "Unsent notes"); await click("Back to task list");
+  await act(async () => root.render(<p>Another view</p>)); await act(async () => finish(true));
+  expect(closed).not.toHaveBeenCalled();
+});
+
+
+it("restarts an expired inbox cursor after returning from a task without dropping its filter", async () => {
+  window.history.replaceState(null, "", "/user-tasks?view=queue&search=Purchase&after=expired");
+  const get = vi.fn(async (path: string) => path.includes("identity") ? identity : path.includes("after=") ? Promise.reject(new StudioHttpError(410, "The inbox cursor expired")) : { items: [task()] });
+  await act(async () => root.render(<TasksPage api={api(get)} />));
+  expect(container.textContent).toContain("The inbox cursor expired"); await click("First page");
+  expect(container.textContent).toContain("Purchase"); expect(container.textContent).not.toContain("Tasks unavailable");
+  expect(new URL(location.href).searchParams.get("view")).toBe("queue"); expect(new URL(location.href).searchParams.get("search")).toBe("Purchase"); expect(new URL(location.href).searchParams.has("after")).toBe(false);
+});
+
+
+it("preserves the selected backend while qualifying task and collection browse queries", () => {
+  window.history.replaceState(null, "", "/user-tasks?backend=production&view=queue&search=Purchase&after=opaque%2B%2F%3D");
+  const browse = readTaskBrowseLocation(location.search);
+  for (const path of [taskDetailPath("opaque/id", browse), taskCollectionPath(browse, "opaque/id")]) {
+    const url = new URL(path, location.origin);
+    expect(url.searchParams.get("backend")).toBe("production"); expect(url.searchParams.get("view")).toBe("queue");
+    expect(url.searchParams.get("search")).toBe("Purchase"); expect(url.searchParams.get("after")).toBe("opaque+/=");
+    expect(path.split("?")).toHaveLength(2);
+  }
+  replaceTaskBrowseLocation({ ...browse, cursor: null });
+  expect(new URL(location.href).searchParams.get("backend")).toBe("production");
+});
+
+it.each([false, true])("retains a workspace task response and retry identity across Activity hide/show (ambiguous=%s)", async ambiguous => {
+  const withForm = { ...task(), form: { id: "f", version: "1", name: "F", provider: "elsa.basic-forms/1", fields: [{ key: "Note", label: "Note", kind: "text" }] } };
+  let identityReads = 0; let finishIdentity!: (who: TaskActor) => void;
+  const revalidation = new Promise<TaskActor>(resolve => { finishIdentity = resolve; });
+  const get = vi.fn(async (path: string) => { if (path.includes("identity")) { identityReads++; return identityReads === 1 ? identity : revalidation; } return withForm; });
+  const post = vi.fn().mockRejectedValue(new StudioHttpError(0, "Connection lost")); const context = api(get, post); const navigate = vi.fn();
+  const screen = (mode: "visible" | "hidden") => <Activity mode={mode}><TaskDetailPage api={context} id="task" navigate={navigate} /></Activity>;
+  await act(async () => root.render(screen("visible")));
+  await vi.waitFor(() => expect(container.querySelector("input")).not.toBeNull());
+  await input(container.querySelector("input")!, "Retain this exact response");
+  if (ambiguous) await click("Approve");
+  await act(async () => root.render(screen("hidden"))); await act(async () => root.render(screen("visible")));
+  await vi.waitFor(() => expect(identityReads).toBeGreaterThan(1));
+  try { expect(container.querySelector("input")?.value).toBe("Retain this exact response"); }
+  finally { await act(async () => finishIdentity(identity)); }
+  expect(container.querySelector("input")!.value).toBe("Retain this exact response");
+  if (ambiguous) { await click("Retry Approve"); expect(post).toHaveBeenCalledTimes(2); expect(post.mock.calls[1][1]).toEqual(post.mock.calls[0][1]); }
+  expect(requestStudioNavigation("/user-tasks/task", "/user-tasks/task", "probe")).toBe(false);
+});
+
+it("allows leaving after an accepted response while runtime delivery is still pending", async () => {
+  const closed = vi.fn(); const receipt = { ...task(), status: "CompletionPending", revision: 2, decision: { response: { action: "Approve", data: {} } } };
+  await act(async () => root.render(<TaskDetail api={api(vi.fn().mockResolvedValue(task()), vi.fn().mockResolvedValue(receipt))} id="task" identity={identity} onClose={closed} />));
+  await click("Approve"); expect(container.textContent).toContain("Your response is recorded");
+  expect(requestStudioNavigation("/user-tasks/task", "/user-tasks/task", "probe")).toBe(true);
+  const back = [...container.querySelectorAll("button")].find(button => button.textContent === "Back to task list")!;
+  expect(back.disabled).toBe(false); await click("Back to task list"); expect(closed).toHaveBeenCalledTimes(1);
+});
+
+it("releases an ambiguous attempt when refresh confirms a durable pending decision", async () => {
+  const receipt = { ...task(), status: "CompletionPending", revision: 2, decision: { response: { action: "Approve", data: {} } } };
+  const get = vi.fn().mockResolvedValueOnce(task()).mockResolvedValue(receipt);
+  await act(async () => root.render(<TaskDetail api={api(get, vi.fn().mockRejectedValue(new StudioHttpError(0, "Connection lost")))} id="task" identity={identity} />));
+  await click("Approve"); expect(requestStudioNavigation("/user-tasks/task", "/user-tasks/task", "probe")).toBe(false);
+  await click("Refresh task"); expect(container.textContent).toContain("Your response is recorded");
+  expect(requestStudioNavigation("/user-tasks/task", "/user-tasks/task", "probe")).toBe(true);
+});
+
+it("resets a task response when its backend connection scope changes", async () => {
+  const withForm = { ...task(), form: { id: "f", version: "1", name: "F", provider: "elsa.basic-forms/1", fields: [{ key: "Note", label: "Note", kind: "text" }] } };
+  const first = api(vi.fn(async (path: string) => path.includes("identity") ? identity : withForm));
+  const second = api(vi.fn(async (path: string) => path.includes("identity") ? identity : { ...withForm, prefill: { Note: "Other backend" } }));
+  await act(async () => root.render(<TaskDetailPage api={first} id="task" navigate={vi.fn()} />));
+  await vi.waitFor(() => expect(container.querySelector("input")).not.toBeNull()); await input(container.querySelector("input")!, "First backend response");
+  await act(async () => root.render(<TaskDetailPage api={second} id="task" navigate={vi.fn()} />));
+  await vi.waitFor(() => expect(container.querySelector("input")?.value).toBe("Other backend"));
+});
+
+
+it("keeps an unsent workspace response through transient access revalidation failure", async () => {
+  let identityReads = 0;
+  const withForm = { ...task(), form: { id: "f", version: "1", name: "F", provider: "elsa.basic-forms/1", fields: [{ key: "Note", label: "Note", kind: "text" }] } };
+  const context = api(vi.fn(async (path: string) => { if (path.includes("identity")) { if (++identityReads > 1) throw new Error("Access service temporarily unavailable"); return identity; } return withForm; }));
+  const screen = (mode: "visible" | "hidden") => <Activity mode={mode}><TaskDetailPage api={context} id="task" navigate={vi.fn()} /></Activity>;
+  await act(async () => root.render(screen("visible"))); await vi.waitFor(() => expect(container.querySelector("input")).not.toBeNull());
+  await input(container.querySelector("input")!, "Keep during outage");
+  await act(async () => root.render(screen("hidden"))); await act(async () => root.render(screen("visible")));
+  await vi.waitFor(() => expect(container.textContent).toContain("Could not refresh task access"));
+  expect(container.querySelector("input")!.value).toBe("Keep during outage");
+});
+
+it("withdraws the response view when tab-return access revalidation denies reading tasks", async () => {
+  let identityReads = 0;
+  const withForm = { ...task(), form: { id: "f", version: "1", name: "F", provider: "elsa.basic-forms/1", fields: [{ key: "Note", label: "Note", kind: "text" }] } };
+  const context = api(vi.fn(async (path: string) => path.includes("identity") ? { ...identity, canRead: ++identityReads === 1 } : withForm));
+  const screen = (mode: "visible" | "hidden") => <Activity mode={mode}><TaskDetailPage api={context} id="task" navigate={vi.fn()} /></Activity>;
+  await act(async () => root.render(screen("visible"))); await vi.waitFor(() => expect(container.querySelector("input")).not.toBeNull());
+  await input(container.querySelector("input")!, "Private notes");
+  await act(async () => root.render(screen("hidden"))); await act(async () => root.render(screen("visible")));
+  await vi.waitFor(() => expect(container.textContent).toContain("Task access unavailable")); expect(container.querySelector("input")).toBeNull();
 });
