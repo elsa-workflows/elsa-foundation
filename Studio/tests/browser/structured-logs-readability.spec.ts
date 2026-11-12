@@ -110,7 +110,7 @@ for (const [theme, workspace] of [["linen", "linen"], ["classic", "minimal"]]) {
 }
 
 test("dock reset restores filters and level focus after copying and scrolling", async ({ page, context }) => {
-  await page.setViewportSize({ width: 390, height: 1000 });
+  await page.setViewportSize({ width: 1024, height: 1000 });
   await context.grantPermissions(["clipboard-read", "clipboard-write"]);
   await page.addInitScript(() => localStorage.setItem("elsa-studio-structured-logs-autoscroll", "false"));
   await page.route("**/_elsa/studio/diagnostics/structured-logs/**", async route => {
@@ -125,13 +125,24 @@ test("dock reset restores filters and level focus after copying and scrolling", 
   });
   await page.goto("/minimal-studio.html?screen=logs-panel");
   const table = page.getByRole("table", { name: "Structured logs", exact: true });
+  let paneWidth = 0;
+  // Exercise a genuinely overflowing dock using its measured container, not a phone card.
+  for (const width of [1024, 960, 900, 860, 820, 780, 740, 700]) {
+    await page.setViewportSize({ width, height: 1000 });
+    paneWidth = await page.locator(".structured-logs-panel").evaluate(element => element.clientWidth);
+    if (paneWidth > 620 && paneWidth < 710) break;
+  }
+  expect(paneWidth).toBeGreaterThan(620);
+  expect(paneWidth).toBeLessThan(710);
   const rows = table.getByRole("row", { name: /Select Information structured log/ });
   await expect(rows).toHaveCount(2);
   await expect(page.getByRole("textbox", { name: "Filter by category", exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: "Pause", exact: true }).click();
   await rows.first().getByRole("button", { name: /Copy structured log message/ }).click();
   await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(entries[0].message);
+  await expect.poll(() => table.evaluate(element => element.scrollWidth - element.clientWidth)).toBeGreaterThan(0);
   await table.evaluate(element => { element.scrollLeft = element.scrollWidth; });
+  await expect.poll(() => table.evaluate(element => element.scrollLeft)).toBeGreaterThan(0);
   const level = page.getByRole("combobox", { name: "Minimum log level", exact: true });
   const sourceFilter = page.getByRole("combobox", { name: "Structured log source", exact: true });
   await level.selectOption("Warning");
