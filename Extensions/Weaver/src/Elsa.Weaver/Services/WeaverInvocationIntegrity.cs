@@ -73,7 +73,7 @@ internal static class WeaverInvocationIntegrity
           && left.ResourceId == right.ResourceId && left.Revision == right.Revision;
 
     public static bool ValidReceipt(WeaverPreparedToolInvocation invocation, WeaverToolResult result, WeaverEffectScope scope)
-        => result.Succeeded && result.ToolCallId == invocation.ToolCallId && result.ToolName == invocation.ToolName
+        => result.Succeeded && result.Error is null && result.ToolCallId == invocation.ToolCallId && result.ToolName == invocation.ToolName
            && result.Payload is not null && result.Receipt is { } receipt
            && receipt.InvocationId == invocation.InvocationId && receipt.Scope == scope
            && SameTarget(invocation.Target, receipt.Before)

@@ -333,12 +333,17 @@ internal sealed class DefaultWeaverTurnOrchestrator(
                     return new(null, new("weaver.tool.not_admitted", "This tool is not admitted for the current turn.", 403));
                 if (await TrackAsync(async () => await AuthorizeDisclosuresAsync(session, checkpoint.History, afterWrite, dispatchToken)) is { } postWriteDenial)
                     return new(null, postWriteDenial, true);
-                return new(invocation with { Context = prepared.Context }, null);
-            }, async (invocation, result, dispatchToken) =>
+                return new(invocation with { Context = prepared.Context }, null, DeclaredCodes: descriptor.ModuleCodes is not null);
+            }, async (invocation, result, refusal, dispatchToken) =>
             {
                 // Record the real observation before attempting another disclosure. Cancellation,
                 // provider errors and an empty assistant response cannot erase its provenance.
-                await boundary.CallAsync("record-tool-result", () => RecordToolResultAsync(sessionId, invocation.Context, result));
+                // A refused tool call has real server correlation, but no preparation/application identity.
+                // It remains a bare engine diagnostic, excluded from owner-resource result disclosure below.
+                var refusalId = refusal ? WeaverInvocationIntegrity.Digest(new
+                    { Kind = "tool-refusal", invocation.SessionId, invocation.TurnId, invocation.ToolCallId }) : null;
+                await boundary.CallAsync(refusal ? "record-tool-refusal" : "record-tool-result",
+                    () => RecordToolResultAsync(sessionId, invocation.Context, result, refusalId));
                 observedResults.Add(result);
                 var messages = await TrackAsync(() => sessions.ListMessagesAsync(sessionId, dispatchToken));
                 // The tool execution and its recorded result ended the earlier pass; this one lasts until the checkpoint write.
@@ -825,9 +830,10 @@ internal sealed class DefaultWeaverTurnOrchestrator(
         return error;
     }
 
-    private async Task RecordToolResultAsync(string sessionId, IReadOnlyCollection<WeaverContextAttachment> context, WeaverToolResult result)
+    private async Task RecordToolResultAsync(string sessionId, IReadOnlyCollection<WeaverContextAttachment> context, WeaverToolResult result,
+        string? refusalId = null)
     {
-        var identity = result.Access?.InvocationId;
+        var identity = refusalId ?? result.Access?.InvocationId;
         if (string.IsNullOrWhiteSpace(identity))
             throw new WeaverContributionException("An observed tool outcome has no server preparation identity.");
         var fingerprint = WeaverInvocationIntegrity.Digest(result);
@@ -907,12 +913,12 @@ internal sealed class DefaultWeaverTurnOrchestrator(
             && WeaverInvocationIntegrity.Digest(Envelopes(before)) == WeaverInvocationIntegrity.Digest(Envelopes(after));
     }
 
-    private sealed record ToolInvocationAdmission(WeaverToolInvocation? Invocation, WeaverError? Error, bool StopProvider = false);
+    private sealed record ToolInvocationAdmission(WeaverToolInvocation? Invocation, WeaverError? Error, bool StopProvider = false, bool DeclaredCodes = false);
 
     /// <summary>One foreground dispatch boundary shared by host-driven and delegated provider loops.</summary>
     private sealed class ProviderToolInvoker(IWeaverToolInvoker inner, Func<bool> receiptOnly,
         Func<WeaverToolInvocation, CancellationToken, Task<ToolInvocationAdmission>> beforeDispatch,
-        Func<WeaverToolInvocation, WeaverToolResult, CancellationToken, Task<WeaverError?>> admit,
+        Func<WeaverToolInvocation, WeaverToolResult, bool, CancellationToken, Task<WeaverError?>> admit,
         Action<WeaverContributionException> fail, Action<WeaverError> stop) : IWeaverToolInvoker
     {
         // The SDK may request concurrent calls. Serialize their effect/admission transitions; this
@@ -955,20 +961,37 @@ internal sealed class DefaultWeaverTurnOrchestrator(
                     stop(new("weaver.tool.admission_unavailable", "The current tool operation could not complete safely.", 503));
                     throw new OperationCanceledException("Provider disclosure stopped during tool dispatch.", cancellationToken);
                 }
-                if (dispatch.Outcome == WeaverToolDispatchOutcome.Executed && dispatch.Result is { } result)
+                var refusal = dispatch.Outcome == WeaverToolDispatchOutcome.Denied && current.DeclaredCodes;
+                if (refusal && dispatch.Result is null)
                 {
+                    // The effects contract could not be admitted (for example a held 1.0 store). Its existing
+                    // top-level error is transportable without persisting a new typed-result representation.
+                    stop(dispatch.Error ?? new("weaver.tool.admission_unavailable", "The typed refusal contract is unavailable.", 503));
+                    throw new OperationCanceledException("Provider disclosure stopped before retaining a typed tool refusal.", cancellationToken);
+                }
+                if (dispatch.Outcome == WeaverToolDispatchOutcome.Executed && dispatch.Result is not null || refusal)
+                {
+                    var result = dispatch.Result!;
+                    if (refusal && (result.Succeeded || result.Payload is not null || result.Receipt is not null || result.Access is not null
+                        || result.Error is null || result.Error != dispatch.Error || result.Content != result.Error.Message
+                        || result.ToolCallId != invocation.ToolCallId || result.ToolName != invocation.ToolName))
+                        throw new WeaverContributionException("A typed refusal must be a correlated engine diagnostic without resource effect evidence.");
                     WeaverError? denied;
-                    try { denied = await admit(invocation, result, cancellationToken); }
+                    try { denied = await admit(invocation, result, refusal, cancellationToken); }
                     catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
                     catch (WeaverContributionException expected) when (expected.InnerException is null)
                     {
-                        denied = new("weaver.result.disclosure_unavailable", "The observed outcome could not retain complete disclosure provenance. Its effect is retained and will not be repeated.", 503);
+                        denied = new("weaver.result.disclosure_unavailable", refusal
+                            ? "The refused tool call could not retain complete disclosure provenance. Start a fresh supported session."
+                            : "The observed outcome could not retain complete disclosure provenance. Its effect is retained and will not be repeated.", 503);
                     }
                     catch (Exception cause)
                     {
                         fail(cause as WeaverContributionException ?? new WeaverContributionException(
                             $"Weaver disclosure 'admit-result' for session '{invocation.SessionId}' could not be established.", cause));
-                        denied = new("weaver.result.disclosure_unavailable", "The observed outcome could not be admitted for provider disclosure. Its effect is retained and will not be repeated.", 503);
+                        denied = new("weaver.result.disclosure_unavailable", refusal
+                            ? "The refused tool call could not be admitted for provider disclosure. Start a fresh supported session."
+                            : "The observed outcome could not be admitted for provider disclosure. Its effect is retained and will not be repeated.", 503);
                     }
                     if (denied is not null)
                     {

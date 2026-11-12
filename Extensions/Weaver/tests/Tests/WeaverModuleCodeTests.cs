@@ -103,6 +103,69 @@ public sealed class WeaverModuleCodeTests
         Assert.Equal(WeaverModuleCodes.UnsupportedCode, WeaverModuleCodes.Error(valid, ["Native.ok"], ownerOrigin: true).Code);
     }
 
+    [Fact]
+    public void Null_error_preserves_exact_legacy_tool_result_canonical_shape_and_denied_factory()
+    {
+        var legacy = new WeaverToolResult("call", "tool", false, "Legacy refusal.");
+        Assert.Equal(WeaverInvocationIntegrity.Digest(new
+        {
+            legacy.ToolCallId, legacy.ToolName, legacy.Succeeded, legacy.Content, legacy.Payload,
+            legacy.Receipt, legacy.Access
+        }), WeaverInvocationIntegrity.Digest(legacy));
+        var json = JsonSerializer.Serialize(legacy, WeaverSseJsonContext.Default.WeaverToolResult);
+        using var document = JsonDocument.Parse(json);
+        Assert.False(document.RootElement.TryGetProperty("error", out _));
+        Assert.Null(WeaverToolDispatch.Denied(new("legacy.denied", "Legacy.")).Result);
+    }
+
+    [Fact]
+    public async Task Undeclared_denials_keep_the_original_dispatch_and_owner_text()
+    {
+        var tool = new CodeTool { Codes = null, ErrorPhase = "prepare", RawCode = "legacy native code", RawMessage = "Legacy owner text." };
+        using var fixture = await CreateAsync(tool);
+        var denied = await fixture.Invoker.DispatchAsync(fixture.Invocation(), fixture.Session.Policy);
+        Assert.Equal(WeaverToolDispatchOutcome.Denied, denied.Outcome);
+        Assert.Null(denied.Result);
+        Assert.Equal("legacy native code", denied.Error!.Code);
+        Assert.Equal("Legacy owner text.", denied.Error.Message);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Missing_or_unobserved_effects_do_not_create_a_new_typed_result_before_preparation(bool observedVariation)
+    {
+        var tool = new CodeTool { ErrorPhase = "prepare" };
+        using var fixture = await ProposalFixture.CreateAsync(tool, configure: services =>
+        {
+            if (observedVariation) new WeaverEffectsFeatureTests.ObservedEffectsFeature().ConfigureServices(services);
+        });
+        var denied = await fixture.Invoker.DispatchAsync(fixture.Invocation(), fixture.Session.Policy);
+        Assert.Equal(observedVariation ? "schema-version-not-finalized" : "weaver.effects.not_enabled", denied.Error?.Code);
+        Assert.Equal(WeaverToolDispatchOutcome.Denied, denied.Outcome);
+        Assert.Null(denied.Result);
+        Assert.Equal(0, tool.Inner.PrepareCalls);
+        Assert.Equal(0, tool.ExecuteRequests);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Declaring_owner_limit_metadata_is_bounded_and_custom_results_cannot_claim_owner_origin(bool unavailable)
+    {
+        var canary = Guid.NewGuid().ToString("N");
+        var error = new WeaverError("outside." + canary, canary, 503) { OwnerUnavailable = unavailable, Limit = canary };
+        var normalized = WeaverModuleCodes.Error(error, ["native.ok"], ownerOrigin: true);
+        Assert.Null(normalized.Limit);
+        Assert.Equal(unavailable, normalized.OwnerUnavailable);
+        Assert.DoesNotContain(canary, JsonSerializer.Serialize(normalized));
+        var result = WeaverModuleCodes.Result(new WeaverToolResult("call", "tool", false, canary) { Error = error }, ["native.ok"]);
+        Assert.False(result.Value.Error!.OwnerUnavailable);
+        Assert.Equal(WeaverModuleCodes.UnsupportedCode, result.Value.Error.Code);
+        Assert.Null(result.Value.Error.Limit);
+        Assert.DoesNotContain(canary, JsonSerializer.Serialize(result.Value));
+    }
+
     [Theory]
     [InlineData("prepare", false)]
     [InlineData("prepare", true)]
@@ -126,7 +189,15 @@ public sealed class WeaverModuleCodeTests
             error = (await fixture.ExecuteAsync(proposal)).Error;
             Assert.DoesNotContain(canary, JsonSerializer.Serialize(await fixture.Services.GetRequiredService<IWeaverSessionRecordStore>().LoadAsync(fixture.Session.Id)));
         }
-        else error = (await fixture.Invoker.DispatchAsync(fixture.Invocation(), fixture.Session.Policy)).Error;
+        else
+        {
+            var denied = await fixture.Invoker.DispatchAsync(fixture.Invocation(), fixture.Session.Policy);
+            error = denied.Error;
+            Assert.Equal(WeaverToolDispatchOutcome.Denied, denied.Outcome);
+            Assert.Equal(error, denied.Result!.Error);
+            Assert.False(denied.Result.Succeeded);
+            Assert.Null(denied.Result.Payload); Assert.Null(denied.Result.Receipt); Assert.Null(denied.Result.Access);
+        }
         Assert.NotNull(error);
         Assert.Equal(unavailable ? WeaverModuleCodes.UnavailableCode : phase == "authority" ? "weaver.tool.forbidden" : WeaverModuleCodes.UnsupportedCode, error.Code);
         Assert.Equal(unavailable, error.OwnerUnavailable);
@@ -153,9 +224,46 @@ public sealed class WeaverModuleCodeTests
         Assert.Equal(WeaverModuleCodes.UnavailableCode, error.GetProperty("code").GetString());
         Assert.True(error.GetProperty("ownerUnavailable").GetBoolean());
         Assert.Equal("bytes", error.GetProperty("limit").GetString());
+        Assert.Equal(WeaverModuleCodes.UnavailableCode, response.Body.GetProperty("data").GetProperty("toolResult")
+            .GetProperty("error").GetProperty("code").GetString());
         Assert.DoesNotContain(canary, response.Body.GetRawText());
         Assert.Equal(1, tool.ExecuteRequests);
         Assert.Equal(0, tool.Inner.ExecuteCalls);
+        var retained = await fixture.Proposals.FindResultAsync(proposal.Id);
+        Assert.Equal(WeaverModuleCodes.UnavailableCode, retained!.Error!.Code);
+        Assert.True(retained.Error.OwnerUnavailable);
+        Assert.False(retained.Succeeded);
+        var audit = await fixture.Services.GetRequiredService<IWeaverAuditReader>().ListAsync(fixture.Session.Id);
+        Assert.Contains(audit, item => item.Metadata.TryGetValue("code", out var code) && code == WeaverModuleCodes.UnavailableCode
+            && item.Metadata.GetValueOrDefault("ownerUnavailable") == "true");
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task A_successful_owner_result_with_a_typed_error_cannot_claim_a_confirmed_effect(bool custom)
+    {
+        var canary = Guid.NewGuid().ToString("N");
+        var tool = new CodeTool { ErrorInResult = true, RawCode = "outside." + canary, RawMessage = canary };
+        using var fixture = await CreateAsync(tool, custom);
+        var proposal = await fixture.ProposeAsync();
+        await fixture.ApproveAsync(proposal);
+        var outcome = await fixture.ExecuteAsync(proposal);
+        Assert.Equal("uncertain", outcome.Value?.Status);
+        Assert.False(outcome.Value?.Executed);
+        Assert.Equal(1, tool.Inner.ExecuteCalls);
+        Assert.DoesNotContain(canary, JsonSerializer.Serialize(outcome));
+    }
+
+    [Fact]
+    public async Task A_read_result_cannot_be_both_successful_and_a_typed_error()
+    {
+        var tool = new CodeTool { ReadOnly = true, ErrorInResult = true };
+        using var fixture = await CreateAsync(tool);
+        var denied = await fixture.Invoker.DispatchAsync(fixture.Invocation(), fixture.Session.Policy);
+        Assert.Equal(WeaverToolDispatchOutcome.Denied, denied.Outcome);
+        Assert.Equal("weaver.tool.result_invalid", denied.Error?.Code);
+        Assert.False(denied.Result!.Succeeded);
     }
 
     [Theory]
@@ -188,6 +296,13 @@ public sealed class WeaverModuleCodeTests
         Assert.DoesNotContain(canary, JsonSerializer.Serialize(provider.Inputs));
         Assert.DoesNotContain(canary, JsonSerializer.Serialize(await services.GetRequiredService<IWeaverSessionRecordStore>().LoadAsync(session.Id)));
         Assert.DoesNotContain(canary, JsonSerializer.Serialize(await services.GetRequiredService<IWeaverAuditReader>().ListAsync(session.Id)));
+        var forwarded = provider.Inputs.SelectMany(input => input.PendingToolResults).Single();
+        Assert.Equal(unavailable ? WeaverModuleCodes.UnavailableCode : WeaverModuleCodes.UnsupportedCode, forwarded.Error!.Code);
+        Assert.Equal(unavailable, forwarded.Error.OwnerUnavailable);
+        var message = Assert.Single((await sessions.ListMessagesAsync(session.Id)).Where(message => message.Role == WeaverRole.Tool));
+        Assert.Equal(forwarded.Error, Assert.Single(message.ToolResults).Error);
+        Assert.Null(Assert.Single(message.ToolResults).Access);
+        Assert.False(string.IsNullOrEmpty(message.RequestId));
     }
 
     [Theory]
@@ -333,6 +448,7 @@ public sealed class WeaverModuleCodeTests
         internal string RawMessage { get; init; } = "A safe owner explanation.";
         internal bool Unavailable { get; init; }
         internal bool ReadOnly { get; init; }
+        internal bool ErrorInResult { get; init; }
         internal int ExecuteRequests { get; private set; }
         public WeaverToolDescriptor Descriptor => Inner.Descriptor with { ModuleCodes = Codes,
             Mutability = ReadOnly ? WeaverToolMutability.ReadOnly : WeaverToolMutability.Mutating, Risk = ReadOnly ? WeaverRisk.ReadOnly : Inner.CurrentRisk };
@@ -347,8 +463,11 @@ public sealed class WeaverModuleCodeTests
         {
             ExecuteRequests++;
             if (ErrorPhase == "execute") return new(null, Error);
+            if (ReadOnly && ErrorInResult)
+                return WeaverResult<WeaverToolResult>.Success(new(invocation.ToolCallId, invocation.ToolName, true, RawMessage) { Error = Error });
             var value = (await Inner.ExecuteAsync(invocation, cancellationToken)).Value!;
-            return WeaverResult<WeaverToolResult>.Success(value with { Content = RawMessage, Receipt = value.Receipt! with { ModuleCode = RawCode } });
+            return WeaverResult<WeaverToolResult>.Success(value with
+                { Content = RawMessage, Receipt = value.Receipt! with { ModuleCode = RawCode }, Error = ErrorInResult ? Error : null });
         }
         public ValueTask<WeaverPolicyDecision> AuthorizeAsync(string actorId, string tenantId, WeaverResourceTarget? target, CancellationToken cancellationToken = default)
             => ValueTask.FromResult(ErrorPhase == "authority"

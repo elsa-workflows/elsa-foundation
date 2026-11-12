@@ -1437,6 +1437,8 @@ export interface StudioWeaverToolResult {
   toolName: string;
   succeeded: boolean;
   content: string;
+  /** Normalized typed refusal; never an application receipt or an authority grant. */
+  error?: { code: string; message: string; statusCode: number; ownerUnavailable?: boolean; limit?: string | null } | null;
   payload?: StudioWeaverPayload | null;
   receipt?: StudioWeaverEffectReceipt | null;
 }

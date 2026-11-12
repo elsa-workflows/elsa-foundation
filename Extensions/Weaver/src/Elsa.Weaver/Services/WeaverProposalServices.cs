@@ -245,13 +245,23 @@ internal sealed class InMemoryWeaverProposalService(
         IReadOnlyDictionary<string, string>? metadata = null)
     {
         var performed = result.Value is { Executed: true, Status: "performed" };
-        if (performed)
+        var error = store.Results.TryGetValue(proposalId, out var retained) ? retained.Error : null;
+        if (performed || error is not null)
         {
             var facts = metadata?.ToDictionary(pair => pair.Key, pair => pair.Value) ?? new Dictionary<string, string>();
-            facts["outcome"] = "performed";
-            facts["scope"] = nameof(WeaverEffectScope.NoPersistedEffect);
-            facts["dispatch"] = "server";
-            facts["effect"] = "performed";
+            if (performed)
+            {
+                facts["outcome"] = "performed";
+                facts["scope"] = nameof(WeaverEffectScope.NoPersistedEffect);
+                facts["dispatch"] = "server";
+                facts["effect"] = "performed";
+            }
+            if (error is not null)
+            {
+                facts["code"] = error.Code;
+                facts["statusCode"] = error.StatusCode.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                facts["ownerUnavailable"] = error.OwnerUnavailable ? "true" : "false";
+            }
             metadata = facts;
         }
         return AuditAsync(store.Proposals[proposalId], result.Value?.Executed == true ? WeaverAuditEventKind.ProposalExecuted
@@ -857,6 +867,11 @@ internal sealed class InMemoryWeaverProposalService(
                     : refusal ?? (beforeDispatch ? "Execution admission refused the operation before dispatch. No effect occurred."
                         : "The owning executor refused application before reporting an effect."))
                 : null);
+        // This optional new outcome representation depends on the selected store's admitted effects contract,
+        // not on fixture classes or a live module lookup. The approval decision itself remains core-only.
+        // A held/legacy store keeps the original representation; the actual write still checks its own attempt.
+        if (outcome.Error is { } typedError && result is not null && await effects.CheckAsync(CancellationToken.None) is null)
+            result = result with { Error = typedError };
         await TransitionAsync(proposal with { Status = status, UpdatedAt = clock.GetUtcNow(), Result = value?.ToolResult?.Payload },
             version, result, outcome, acknowledgement?.Invoke(outcome));
         return outcome;
@@ -973,9 +988,24 @@ internal sealed class InMemoryWeaverProposalService(
     private async Task ExpireBeforeDispatchAsync(WeaverActionProposal proposal, long version, string? actorId)
     {
         var expired = proposal with { Status = WeaverActionProposalStatus.Expired, UpdatedAt = clock.GetUtcNow() };
-        await TransitionAsync(expired, version);
+        WeaverToolResult? result = null;
+        WeaverResult<WeaverProposalExecutionResult>? execution = null;
+        IReadOnlyDictionary<string, string> metadata = PreDispatchExpiry;
+        if (proposal.PreparedInvocation is { } prepared && await effects.CheckAsync(CancellationToken.None) is null)
+        {
+            execution = Expired<WeaverProposalExecutionResult>();
+            result = DefaultWeaverActionProposalExecutor.LifecycleResult(prepared, "refused",
+                "The prepared operation expired before dispatch. No effect occurred.") with { Error = execution.Error };
+            metadata = new Dictionary<string, string>(PreDispatchExpiry)
+            {
+                ["code"] = execution.Error!.Code,
+                ["statusCode"] = execution.Error.StatusCode.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                ["ownerUnavailable"] = "false"
+            };
+        }
+        await TransitionAsync(expired, version, result, execution);
         await AuditAsync(expired, WeaverAuditEventKind.ProposalFailed, actorId, "The prepared operation expired before dispatch; no effect occurred.",
-            CancellationToken.None, PreDispatchExpiry);
+            CancellationToken.None, metadata);
     }
 
     /// <summary>

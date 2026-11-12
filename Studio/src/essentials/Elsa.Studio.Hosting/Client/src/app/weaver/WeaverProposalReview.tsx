@@ -1,4 +1,5 @@
 import React, { Suspense } from "react";
+import { WeaverResultError } from "./WeaverResultError";
 import { AlertTriangle, Check, Loader2, Play, X } from "lucide-react";
 import { presentsResourceModule, type StudioWeaverResultControlContribution, type StudioWeaverResultRendererContribution, type StudioWeaverResultRendererProps } from "../../sdk";
 import { WeaverResultBoundary } from "./WeaverResultBoundary";
@@ -67,6 +68,7 @@ export function WeaverProposalReview({
               <strong>{proposal.title}</strong>
             </header>
             <p>{proposal.summary}</p>
+            <WeaverResultError error={proposal.toolResult?.error} summary={proposal.summary} />
             <dl className="weaver-proposal-details" aria-label="Required host privileges">
               <div><dt>Requires</dt><dd>{effectivePrivilegeLabels(proposal).join(", ")}</dd></div>
             </dl>

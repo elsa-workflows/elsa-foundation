@@ -27,7 +27,8 @@ public sealed class WeaverSchemaWriteAdmissionTests
         "prepared-classes", "performed-proposal", "proposal-result-code", "proposal-result-scope",
         "execution-status", "execution-classes", "execution-result", "execution-error", "message-error",
         "message-result-code", "message-result-scope", "message-history", "paused-results", "paused-history",
-        "snapshot-code", "snapshot-scope", "empty-code"
+        "snapshot-code", "snapshot-scope", "empty-code", "proposal-result-error", "execution-result-error",
+        "message-result-error", "message-history-error", "paused-results-error", "paused-history-error", "snapshot-error"
     };
 
     [Theory]
@@ -146,7 +147,8 @@ public sealed class WeaverSchemaWriteAdmissionTests
     public async Task Opaque_module_values_never_acquire_first_party_schema_meaning()
     {
         using var fixture = await AdmittedDatabase.CreateAsync();
-        var opaque = JsonSerializer.SerializeToElement(new { ModuleCode = "module.code", Scope = 2, RequiredPrivilegeClasses = new[] { 0 }, OwnerUnavailable = true });
+        var opaque = JsonSerializer.SerializeToElement(new { ModuleCode = "module.code", Scope = 2, RequiredPrivilegeClasses = new[] { 0 },
+            OwnerUnavailable = true, Error = new { Code = "module.error" } });
         var result = Result() with { Receipt = Result().Receipt! with { ModuleCode = null, Scope = WeaverEffectScope.ServerPersisted }, Payload = new("module.value", "1", opaque) };
         var record = new WeaverSessionRecord(Records.Session(Id))
         {
@@ -281,6 +283,8 @@ public sealed class WeaverSchemaWriteAdmissionTests
     private static WeaverSessionRecordWrite NewWrite(string path)
     {
         var result = Result();
+        var errorResult = new WeaverToolResult("call", "tool", false, "Refused.")
+            { Error = new("module.unavailable", "Unavailable.", 503) { OwnerUnavailable = true } };
         var proposal = new WeaverProposalRecord(Records.Proposal(Id, "proposal", WeaverActionProposalStatus.Executed));
         var execution = new WeaverProposalExecutionResult("proposal", true, "module.resource", "resource", "Ran");
         var message = Records.Message(Id, "message");
@@ -306,6 +310,13 @@ public sealed class WeaverSchemaWriteAdmissionTests
             "snapshot-code" => SnapshotWrite(snapshot),
             "snapshot-scope" => SnapshotWrite(snapshot with { ToolResults = [result with { Receipt = result.Receipt! with { ModuleCode = null, Scope = WeaverEffectScope.NoPersistedEffect } }] }),
             "empty-code" => WithProposal(proposal with { Result = result with { Receipt = result.Receipt! with { ModuleCode = "" } } }),
+            "proposal-result-error" => WithProposal(proposal with { Result = errorResult }),
+            "execution-result-error" => WithProposal(proposal with { Execution = WeaverResult<WeaverProposalExecutionResult>.Success(execution with { ToolResult = errorResult }) }),
+            "message-result-error" => new(Id, new(Owner, 1)) { Messages = [new(message with { ToolResults = [errorResult] })] },
+            "message-history-error" => new(Id, new(Owner, 1)) { Messages = [new(message with { DisclosureHistory = [snapshot with { ToolResults = [errorResult] }] })] },
+            "paused-results-error" => new(Id, new(Owner, 1)) { PausedTurn = pause with { Turn = pause.Turn with { DisclosureResults = [errorResult] } } },
+            "paused-history-error" => new(Id, new(Owner, 1)) { PausedTurn = pause with { Turn = pause.Turn with { DisclosureHistory = [snapshot with { ToolResults = [errorResult] }] } } },
+            "snapshot-error" => SnapshotWrite(snapshot with { ToolResults = [errorResult] }),
             _ => throw new ArgumentOutOfRangeException(nameof(path))
         };
     }

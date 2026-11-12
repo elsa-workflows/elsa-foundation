@@ -11,7 +11,7 @@ const entrypoints = [
 const consumer = `
 import type { StudioWeaverPrivilegeClass, StudioWeaverPreparedInvocation, StudioWeaverEffectReceipt,
   StudioWeaverToolContractContribution, StudioWeaverContextProviderContribution, StudioWeaverContributionDiagnostic,
-  StudioWeaverClientExecutionResult } from "@elsa-workflows/studio-sdk";
+  StudioWeaverClientExecutionResult, StudioWeaverToolResult } from "@elsa-workflows/studio-sdk";
 const classes: readonly StudioWeaverPrivilegeClass[] = ["administrative", "irrecoverable", "activation"];
 const legacyFields: Pick<StudioWeaverPreparedInvocation, "requiredPrivilegeClasses"> = {};
 const currentFields: Pick<StudioWeaverPreparedInvocation, "requiredPrivilegeClasses"> = { requiredPrivilegeClasses: classes };
@@ -36,6 +36,12 @@ currentTool.moduleCodes?.push("sample.test.changed");
 const legacyContext: StudioWeaverContextProviderContribution = { id: "owner", displayName: "Owner", surfaces: ["*"], sensitivity: "internal", collect: async () => [] };
 const currentContext: StudioWeaverContextProviderContribution = { ...legacyContext, moduleCodes: ["sample.read.unavailable"] };
 const diagnostic: StudioWeaverContributionDiagnostic = { contributorId: "owner", code: "sample.read.unavailable", message: "Owner unavailable.", required: true, ownerUnavailable: true };
+const legacyResult: StudioWeaverToolResult = { toolCallId: "call", toolName: "sample_test", succeeded: false, content: "Refused." };
+const refusalResult: StudioWeaverToolResult = { ...legacyResult, error: { code: "module.owner.unavailable", message: "Owner unavailable.",
+  statusCode: 503, ownerUnavailable: true } };
+const nullResultError: StudioWeaverToolResult = { ...legacyResult, error: null };
+// @ts-expect-error Typed diagnostic classification cannot be supplied as a string.
+const invalidResultError: StudioWeaverToolResult = { ...legacyResult, error: { ...refusalResult.error!, ownerUnavailable: "true" } };
 // @ts-expect-error A transport flag cannot make a client ACK a server performed result.
 const clientPerformed: StudioWeaverClientExecutionResult = { outcome: "performed", summary: "Not a client ACK outcome." };
 `;

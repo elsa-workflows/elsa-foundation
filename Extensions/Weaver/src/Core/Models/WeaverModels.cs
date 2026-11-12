@@ -562,6 +562,10 @@ public sealed record WeaverTurnMessage(WeaverRole Role, string Content, string? 
 /// <summary>The result of executing one tool, fed back to the provider on the next step.</summary>
 public sealed record WeaverToolResult(string ToolCallId, string ToolName, bool Succeeded, string Content, WeaverPayload? Payload = null)
 {
+    /// <summary>Preview: the normalized typed refusal; absent for legacy results and never evidence of an effect.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public WeaverError? Error { get; init; }
+
     public WeaverEffectReceipt? Receipt { get; init; }
     /// <summary>Preparation identity stamped by the engine for current authority checks before later disclosure.</summary>
     public WeaverToolResultAccess? Access { get; init; }

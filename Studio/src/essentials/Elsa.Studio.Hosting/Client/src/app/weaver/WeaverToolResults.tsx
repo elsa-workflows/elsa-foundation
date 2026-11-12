@@ -1,5 +1,6 @@
 import React, { Suspense } from "react";
 import { WeaverResultBoundary } from "./WeaverResultBoundary";
+import { WeaverResultError } from "./WeaverResultError";
 import { presentsResourceModule, type StudioWeaverResultControlContribution, type StudioWeaverResultRendererContribution, type StudioWeaverToolResult } from "../../sdk";
 import { ResultControls } from "./WeaverProposalReview";
 
@@ -8,6 +9,7 @@ export function WeaverToolResults({ results, renderers, controls = [] }: { resul
   return <section aria-label="Module results">{results.map(result => {
     const payload = result.payload ?? result.receipt?.evidence;
     return <article key={result.toolCallId} data-succeeded={result.succeeded}><p>{result.content}</p>
+      <WeaverResultError error={result.error} summary={result.content} />
       {result.receipt ? <div><small>{formatEffectScope(result.receipt.scope)}</small>
         <p>Observed target: {result.receipt.after.resourceId ?? result.receipt.after.resourceType} · revision {result.receipt.after.revision ?? "unversioned"}</p></div> : null}
       <WeaverResultBoundary key={result.toolCallId} fallback={<pre>{JSON.stringify(payload, null, 2)}</pre>}><ToolResultPresentation result={result} renderers={renderers} controls={controls} /></WeaverResultBoundary>

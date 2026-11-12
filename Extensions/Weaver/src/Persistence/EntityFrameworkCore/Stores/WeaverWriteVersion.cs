@@ -87,8 +87,9 @@ internal static class WeaverWriteVersion
             || results.ValueKind != JsonValueKind.Array) return false;
         foreach (var result in results.EnumerateArray())
         {
-            if (result.ValueKind != JsonValueKind.Object || !result.TryGetProperty("Receipt", out var receipt)
-                || receipt.ValueKind != JsonValueKind.Object) continue;
+            if (result.ValueKind != JsonValueKind.Object) continue;
+            if (result.TryGetProperty("Error", out var error) && error.ValueKind != JsonValueKind.Null) return true;
+            if (!result.TryGetProperty("Receipt", out var receipt) || receipt.ValueKind != JsonValueKind.Object) continue;
             if (receipt.TryGetProperty("ModuleCode", out var code) && code.ValueKind != JsonValueKind.Null) return true;
             if (receipt.TryGetProperty("Scope", out var scope) && scope.ValueKind == JsonValueKind.Number
                 && scope.TryGetInt32(out var number) && number == (int)WeaverEffectScope.NoPersistedEffect) return true;
@@ -98,6 +99,6 @@ internal static class WeaverWriteVersion
 
     private static bool NeedsEffects(WeaverPreparedToolInvocation? invocation) => invocation?.RequiredPrivilegeClasses is { Count: > 0 };
 
-    private static bool NeedsEffects(WeaverToolResult? result) => result?.Receipt is { } receipt
+    private static bool NeedsEffects(WeaverToolResult? result) => result?.Error is not null || result?.Receipt is { } receipt
         && (receipt.ModuleCode is not null || receipt.Scope == WeaverEffectScope.NoPersistedEffect);
 }

@@ -98,7 +98,7 @@ internal sealed class DefaultWeaverActionProposalExecutor(WeaverPreparedInvocati
         if (!execution.Succeeded)
             return execution.Error is { } error ? new(null, error)
                 : WeaverResult<WeaverProposalExecutionResult>.Failure("weaver.proposal.refused", "The owning module refused application.", 409);
-        var normalized = WeaverModuleCodes.Result(execution.Value!, admission.Descriptor.ModuleCodes).Value;
+        var normalized = WeaverModuleCodes.Result(execution.Value!, admission.Descriptor.ModuleCodes, ownerOrigin: true).Value;
         var status = WeaverInvocationIntegrity.SuccessStatus(prepared, normalized, admission.Descriptor);
         if (status is null)
             return WeaverResult<WeaverProposalExecutionResult>.Success(Uncertain(proposal,
@@ -151,7 +151,7 @@ internal sealed class DefaultWeaverActionProposalExecutor(WeaverPreparedInvocati
         if (!completed.Succeeded || completed.Value is null)
             return WeaverResult<WeaverProposalExecutionResult>.Success(Uncertain(proposal,
                     "Client completion validation is unavailable. Its reported effect remains uncertain and will not be replayed."));
-        var normalized = WeaverModuleCodes.Result(completed.Value, admission.Descriptor.ModuleCodes).Value;
+        var normalized = WeaverModuleCodes.Result(completed.Value, admission.Descriptor.ModuleCodes, ownerOrigin: true).Value;
         if (WeaverInvocationIntegrity.SuccessStatus(prepared, normalized, admission.Descriptor) != "executed")
             return WeaverResult<WeaverProposalExecutionResult>.Success(Uncertain(proposal,
                 "The reported client effect did not validate against the exact prepared operation. Its outcome is uncertain and will not be replayed."));

@@ -17,6 +17,7 @@ Preserve positional constructors and every existing enum ordinal.
 | Tool and context descriptors | ModuleCodes nullable read-only collection of strings; null is undeclared compatibility, omitted; empty is a declared closed set accepting no code |
 | WeaverEffectReceipt | ModuleCode nullable string, omitted when null |
 | WeaverError | OwnerUnavailable bool, false/omitted; public value alone is not provenance |
+| WeaverToolResult | Error nullable WeaverError, omitted when null; a normalized refusal, never effect evidence |
 
 Prepared class members and defaults are defined in [privilege-policy.md](privilege-policy.md). No principal is a model/persistence member. Use existing WeaverProposalExecutionResult.Status and Executed; no second outcome enum is added.
 
@@ -52,11 +53,26 @@ Use one small internal source-bound normalizer and private provenance like the e
 5. Forward the normalized WeaverError object rather than reconstructing Failure(code,message,status) and dropping metadata/provenance. Arbitrary deserialized flags do not become fresh owner authority.
 6. Undeclared sources retain explicit legacy pass-through/dotted-owner-code behavior. Engine-generated errors remain engine errors, not module-set inputs.
 
+Declaring-tool refusals retain their normalized typed error through the existing result envelope. A pre-review refusal
+keeps dispatch `Denied` and has no payload, receipt or preparation access identity. The foreground records its actual
+server session/turn/tool-call correlation, then applies the normal disclosure checkpoint before either provider sees it.
+Bare engine diagnostics remain excluded from owning-resource result disclosure; they confer no resource authority.
+A dormant effects contract stops through the existing top-level error lifecycle instead of recording new result members
+under format1.0. Existing undeclared denied dispatches and null-error result JSON stay unchanged. Execution refusals
+retain the same normalized error on their existing lifecycle result for review and supported continuation; audit metadata
+carries only its code, numeric status and unavailable classification. An error-bearing result cannot prove success.
+Declaring owners may use only the documented bounded disclosure-limit values; other `Limit` text is discarded before disclosure.
+New terminal lifecycle outcomes retain a core pre-dispatch policy/expiry refusal's canonical error only when the selected
+store's existing effects admission is available. This generic representation check calls no owning tool or principal,
+works for unclassed tools and removed modules, and does not rewrite an old preparation, digest or retained result.
+Successful approval still checks retained core meaning only. A human denial remains the existing `denied` lifecycle
+decision, not an invented error.
+
 Opaque module JSON is not parsed for native messages or codes by Weaver. Module-owned mapping/allowlists and the existing disclosure owner must keep it safe. Generic replacement does not authorize unsafe opaque data, discard a genuine resource receipt wholesale, or automatically change its outcome to uncertain. The generic canary fixture supplies safe owner payloads and canaries in the typed channels; module cases separately prove their opaque projections.
 
 ## Weaver1.1 data
 
-Store new classes, receipt module code and performed status/scope in existing records; no relational schema change. Add1.1.0 to the existing Weaver family with identity1.0→1.1 content upcast. Authenticate/unprotect before defaults; never decrypt/re-encrypt inside the upcaster. Preserve purpose strings and disclosure canonical bytes.
+Store new classes, receipt module code, typed result error and performed status/scope in existing records; no relational schema change. Add1.1.0 to the existing Weaver family with identity1.0→1.1 content upcast. Authenticate/unprotect before defaults; never decrypt/re-encrypt inside the upcaster. Preserve purpose strings and disclosure canonical bytes.
 
 Read all declared columns of a protected row through the chain together. Contentless snapshot/key/owner/counter records still require readable stamps. Audit owner association/list and owned session/proposal-count projections must not bypass readability validation.
 

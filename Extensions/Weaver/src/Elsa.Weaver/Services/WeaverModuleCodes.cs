@@ -28,9 +28,12 @@ internal static class WeaverModuleCodes
         {
             Code = code,
             Message = unavailable ? WeaverToolAccess.OwnerUnavailableMessage : replaced || value.OwnerUnavailable && !ownerOrigin ? UnsupportedMessage : value.Message,
-            OwnerUnavailable = unavailable
+            OwnerUnavailable = unavailable,
+            // Limit belongs to the engine's disclosure protocol, not to an owner's arbitrary metadata.
+            Limit = codes is null || value.Limit is null or "snapshots" or "bytes" or "snapshot-too-large" or "snapshot-does-not-fit"
+                ? value.Limit : null
         };
-        replaced |= normalized.Message != value.Message || normalized.OwnerUnavailable != value.OwnerUnavailable;
+        replaced |= normalized.Message != value.Message || normalized.OwnerUnavailable != value.OwnerUnavailable || normalized.Limit != value.Limit;
         return normalized == value ? value : normalized;
     }
 
@@ -58,13 +61,21 @@ internal static class WeaverModuleCodes
         };
     }
 
-    internal static (WeaverToolResult Value, bool Replaced) Result(WeaverToolResult value, IReadOnlyCollection<string>? codes)
+    internal static (WeaverToolResult Value, bool Replaced) Result(WeaverToolResult value, IReadOnlyCollection<string>? codes, bool ownerOrigin = false)
     {
         Validate(codes);
-        if (value.Receipt is not { ModuleCode: { } original } receipt) return (value, false);
+        var result = value;
+        var changed = false;
+        if (value.Error is { } error)
+        {
+            var normalized = Error(error, codes, ownerOrigin, out changed);
+            result = result with { Error = normalized, Content = normalized.Message };
+            changed |= result.Content != value.Content;
+        }
+        if (value.Receipt is not { ModuleCode: { } original } receipt) return (result, changed);
         var code = Code(original, codes, false, out var replaced);
-        return !replaced ? (value, false)
-            : (value with { Content = UnsupportedMessage, Receipt = receipt with { ModuleCode = code } }, true);
+        return !replaced ? (result, changed)
+            : (result with { Content = UnsupportedMessage, Receipt = receipt with { ModuleCode = code } }, true);
     }
 
     private static string Code(string value, IReadOnlyCollection<string>? codes, bool unavailable, out bool replaced)

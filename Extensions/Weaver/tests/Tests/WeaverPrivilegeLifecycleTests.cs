@@ -85,6 +85,7 @@ public sealed class WeaverPrivilegeLifecycleTests
         Set(config, WeaverPrivilegeClass.Activation, false);
         var denied = await fixture.ApproveAsync(proposal);
         Assert.Equal("weaver.proposal.privilege_disabled", denied.Error?.Code);
+        Assert.Equal(denied.Error, (await fixture.Proposals.FindResultAsync(proposal.Id))!.Error);
         Assert.Equal(WeaverActionProposalStatus.Failed, (await fixture.Proposals.FindAsync(proposal.Id))?.Status);
         Assert.Contains("No effect occurred", (await fixture.Proposals.FindResultAsync(proposal.Id))!.Content);
         Assert.Contains(await fixture.Audit.ListAsync(fixture.Session.Id), row => row.Kind == WeaverAuditEventKind.ProposalFailed
@@ -92,7 +93,9 @@ public sealed class WeaverPrivilegeLifecycleTests
         Assert.Equal(WeaverSessionPolicyOutcome.Succeeded, await ProbeAsync(fixture));
         Set(config, WeaverPrivilegeClass.Activation, true);
         Assert.False((await fixture.ApproveAsync(proposal)).Succeeded);
-        Assert.Equal("weaver.proposal.privilege_disabled", (await fixture.ExecuteAsync(proposal)).Error?.Code);
+        var execution = await fixture.ExecuteAsync(proposal);
+        Assert.Equal("weaver.proposal.privilege_disabled", execution.Error?.Code);
+        Assert.Equal(execution.Error, (await fixture.Proposals.FindResultAsync(proposal.Id))!.Error);
         var fresh = await fixture.Invoker.DispatchAsync(fixture.Invocation("fresh-call") with { TurnId = "fresh-turn" }, fixture.Session.Policy);
         Assert.Equal(WeaverToolDispatchOutcome.ProposalCreated, fresh.Outcome);
         Assert.NotEqual(proposal.Id, fresh.Proposal!.Id);
