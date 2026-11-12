@@ -329,7 +329,27 @@ function preserveXmlContext(element: Element, destination: Element) {
     if ((value ?? fallback) !== (destinationValue ?? fallback)) element.setAttributeNS(xmlNamespace, `xml:${name}`, value ?? fallback);
   }
 }
+function rejectOpaqueQNameResolution(target: Element, prefix: string) {
+  for (const element of [target, ...target.getElementsByTagName("*")]) {
+    if (element.lookupNamespaceURI(prefix)) continue;
+    const values = [...element.attributes].map(attribute => attribute.value);
+    // QName simple content can span adjacent text, CDATA, comments or processing instructions.
+    values.push([...element.childNodes].filter(node => node.nodeType === Node.TEXT_NODE || node.nodeType === Node.CDATA_SECTION_NODE).map(node => node.textContent ?? "").join(""));
+    if (values.some(value => value.includes(`${prefix}:`))) fail("namespace declaration would resolve retained opaque QName content");
+  }
+}
 function preserveNamespaceContext(element: Element, destination: Element) {
+  // Destination-only prefixes cannot be undeclared in XML 1.0. Refuse a move that would give
+  // retained opaque content a new meaning, just as explicit namespace introduction does.
+  const destinationPrefixes = new Set<string>();
+  for (let current: Element | null = destination; current; current = current.parentElement) {
+    for (const attribute of [...current.attributes]) {
+      if (attribute.namespaceURI === "http://www.w3.org/2000/xmlns/" && attribute.prefix === "xmlns")
+        destinationPrefixes.add(attribute.localName);
+    }
+  }
+  for (const prefix of destinationPrefixes)
+    if (destination.lookupNamespaceURI(prefix) && !element.lookupNamespaceURI(prefix)) rejectOpaqueQNameResolution(element, prefix);
   preserveXmlContext(element, destination);
   const declarations = new Map<string, string>();
   for (let current: Element | null = element; current; current = current.parentElement) {
@@ -454,12 +474,7 @@ function applyCommand(parsed: ParsedBpmnDocument, command: BpmnDocumentCommand) 
       if (previous || command.prefix === "xml") fail("namespace declaration cannot rebind an existing prefix");
       // A previously unresolved opaque QName must not acquire a new meaning as a side effect.
       // Declare at the narrowest owner, or choose an unused prefix for the actual new field.
-      for (const element of [target, ...target.getElementsByTagName("*")]) {
-        if (element.lookupNamespaceURI(command.prefix)) continue;
-        const values = [...element.attributes].map(attribute => attribute.value);
-        values.push(...[...element.childNodes].filter(node => node.nodeType === Node.TEXT_NODE || node.nodeType === Node.CDATA_SECTION_NODE).map(node => node.textContent ?? ""));
-        if (values.some(value => value.includes(`${command.prefix}:`))) fail("namespace declaration would resolve retained opaque QName content");
-      }
+      rejectOpaqueQNameResolution(target, command.prefix);
       target.setAttributeNS("http://www.w3.org/2000/xmlns/", `xmlns:${command.prefix}`, namespace);
       return;
     }
@@ -592,7 +607,11 @@ function applyCommand(parsed: ParsedBpmnDocument, command: BpmnDocumentCommand) 
         resolveBpmnDocumentReference(parsed, reference, reference.textContent)?.getAttribute("id") === sources[index])
         && targets[0] && resolveBpmnDocumentReference(parsed, targets[0], targets[0].textContent)?.getAttribute("id") === targetId) return;
       const target = targets[0] ?? parsed.document.createElementNS(bpmnNamespaces.model, "bpmn:targetRef");
-      if (target.textContent !== targetId) target.textContent = targetId;
+      if (target.textContent !== targetId) {
+        if ([...target.childNodes].some(node => node.nodeType !== Node.TEXT_NODE && node.nodeType !== Node.CDATA_SECTION_NODE))
+          fail("data target replacement needs explicit correspondence for retained content");
+        target.textContent = targetId;
+      }
       if (!targets.length) association.insertBefore(target, children(association, bpmnNamespaces.model, "transformation")[0]
         ?? children(association, bpmnNamespaces.model, "assignment")[0] ?? null);
       const retained = new Set<Element>();

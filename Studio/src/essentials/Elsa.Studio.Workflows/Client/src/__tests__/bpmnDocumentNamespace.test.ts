@@ -47,7 +47,10 @@ describe("explicit namespace introduction", () => {
 
   it.each(['<b:extensionElements><v:keep ref="fresh:Thing"/></b:extensionElements>',
     '<b:extensionElements><v:keep>fresh:Thing</v:keep></b:extensionElements>',
-    '<b:extensionElements><v:keep><![CDATA[fresh:Thing]]></v:keep></b:extensionElements>'])("does not resolve previously opaque unbound content %s", content => {
+    '<b:extensionElements><v:keep><![CDATA[fresh:Thing]]></v:keep></b:extensionElements>',
+    '<b:extensionElements><v:keep>fresh<![CDATA[:Thing]]></v:keep></b:extensionElements>',
+    '<b:extensionElements><v:keep>fre<!-- retained -->sh:Thing</v:keep></b:extensionElements>',
+    '<b:extensionElements><v:keep>fresh:<?vendor keep?>Thing</v:keep></b:extensionElements>'])("does not resolve previously opaque unbound content %s", content => {
     expect(() => applyBpmnDocumentCommands(owner(content), [{ kind: "namespace", target: { elementId: "T" }, prefix: "fresh", namespaceURI: "urn:fresh" }])).toThrow("opaque QName");
   });
 
@@ -57,6 +60,33 @@ describe("explicit namespace introduction", () => {
     const parsed = readBpmnDocument(next);
     expect(parsed.byId.get("T")!.lookupNamespaceURI("fresh")).toBe("urn:fresh");
     expect(parsed.document.getElementsByTagNameNS("urn:vendor", "keep")[0].lookupNamespaceURI("fresh")).toBe("urn:local");
+  });
+
+  it.each(['<b:extensionElements><v:keep ref="fresh:Thing"/></b:extensionElements>',
+    '<b:extensionElements><v:keep>fresh:Thing</v:keep></b:extensionElements>',
+    '<b:extensionElements><v:keep><![CDATA[fresh:Thing]]></v:keep></b:extensionElements>',
+    '<b:extensionElements><v:keep>fresh<![CDATA[:Thing]]></v:keep></b:extensionElements>',
+    '<b:extensionElements><v:keep>fre<!-- retained -->sh:Thing</v:keep></b:extensionElements>',
+    '<b:extensionElements><v:keep>fresh:<?vendor keep?>Thing</v:keep></b:extensionElements>'])("refuses newly resolved opaque QNames on reparenting %s", content => {
+    const before = owner(content);
+    before.structure!.payload.documentXml = String(before.structure!.payload.documentXml)
+      .replace('</b:process>', '<b:subProcess id="S" xmlns:fresh="urn:new"/></b:process>');
+    const snapshot = structuredClone(before);
+    expect(() => applyBpmnDocumentCommands(before, [{ kind: "reparent", target: { elementId: "T" }, parent: { elementId: "S" } }])).toThrow("opaque QName");
+    expect(before).toEqual(snapshot);
+  });
+
+  it.each(['<b:extensionElements><v:keep xmlns:fresh="urn:local" ref="fresh:Thing"/></b:extensionElements>',
+    '<b:extensionElements><v:keep ref="unrelated:Thing"/></b:extensionElements>'])("allows reparenting when destination declarations do not resolve opaque content %s", content => {
+    const before = owner(content);
+    before.structure!.payload.documentXml = String(before.structure!.payload.documentXml)
+      .replace('</b:process>', '<b:subProcess id="S" xmlns:fresh="urn:new"/></b:process>');
+    const next = applyBpmnDocumentCommands(before, [{ kind: "reparent", target: { elementId: "T" }, parent: { elementId: "S" } }]);
+    const parsed = readBpmnDocument(next);
+    expect(parsed.byId.get("T")!.parentElement!.getAttribute("id")).toBe("S");
+    const keep = parsed.document.getElementsByTagNameNS("urn:vendor", "keep")[0];
+    expect(keep.getAttribute("ref")).toBe(content.includes("unrelated:") ? "unrelated:Thing" : "fresh:Thing");
+    expect(keep.lookupNamespaceURI(content.includes("unrelated:") ? "unrelated" : "fresh")).toBe(content.includes("unrelated:") ? null : "urn:local");
   });
 
   it.each([["", "urn:new"], ["bad:prefix", "urn:new"], ["xmlns", "urn:new"], ["xml", "urn:wrong"],

@@ -313,3 +313,12 @@ A failed covering save preserves the hold/undo and stops publication before pref
 ## User Task form renderers
 
 The additive `user-task.form-renderers` slot exposes `api.userTaskForms`. Contribute a unique `id`, the server form `provider` ID and a component accepting `StudioUserTaskFormProps` (`form`, `value`, `readOnly`, `errors`, `onChange`). Treat form values/error keys as opaque case-sensitive data and read only own properties. Respect read-only state and preserve entered values on validation/conflict. Exactly one renderer must match a task's pinned provider; missing/duplicate matches disable completion. Server-side `IUserTaskFormProvider` validation remains authoritative. The optional UserTasksStudio module contributes the basic renderer and owns inbox/forms/editor flows; the SDK defines only the contribution contract.
+
+## Activity implementation admission
+
+`StudioActivityDefinitionImplementationEditorProps.onChange(value): void` remains the legacy
+notification contract, including existing async and concise callbacks. Its return value is not a receipt.
+The optional `tryChange(value, expectedValue): boolean` port admits a controlled change synchronously
+against the editor's exact baseline. Return literal `true` only after canonical admission; return `false`
+without mutation on refusal. Controlled editors update history only after `true` and do not also call
+`onChange`. A Promise, `undefined` or another return value cannot acknowledge controlled work.
