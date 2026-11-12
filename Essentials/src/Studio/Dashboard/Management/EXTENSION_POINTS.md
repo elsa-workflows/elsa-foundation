@@ -8,7 +8,9 @@ Owner/composition root: `Elsa.Studio.Dashboard.Management`. Contract layer: `Els
 | --- | --- | --- |
 | [`IDashboardQueryService`](../Core/Contracts/DashboardQueryContracts.cs) | Replacement, Core | `DashboardQueryService`, scoped; native discovery/validate/execute/drill. API/resource validation/authoring consume it. Exactly one. |
 
-Use deliberate replacement registrations preserving current authority, cancellation, domain errors, bounds and identity. Management's shell initializer rejects duplicate registrations for every replacement above, including when the feature is composed without the API. It requires its query registration; actor, audience, persistence and authoring remain optional for query-only composition. Resource service, definition validation, persistence, native API and optional Weaver authoring implementations arrive with their behavior tests in later slices. A caller attachment never supplies identity authority.
+Resource storage now adds scoped replacements `IDashboardResourceService` (`DashboardResourceService`), `IDashboardDefinitionValidator` (`DashboardDefinitionValidator`, or the fail-closed unavailable fallback for standalone resource composition) and `IDashboardResourceStore` (`EfDashboardResourceStore<TContext>` in the EF package). The actor context and audience directory are still host-supplied; their API defaults and Weaver authoring follow in later slices. Resource operations use current access/CAS and store definitions only, never result caches or transcripts.
+
+Use deliberate replacement registrations preserving current authority, cancellation, domain errors, bounds and identity. Management's shell initializer rejects duplicate registrations for every replacement above, including when the feature is composed without the API. It requires its query, resource and definition-validator registrations; actor, audience, persistence and authoring remain optional for query-only composition. Native API and optional Weaver authoring implementations arrive in later slices. A caller attachment never supplies identity authority.
 
 ## Implementable contributor interfaces
 

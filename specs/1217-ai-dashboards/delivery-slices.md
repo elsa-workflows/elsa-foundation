@@ -12,7 +12,7 @@ Each PR is based on its predecessor until that predecessor lands. Split an overs
 | --- | --- | --- |
 | 1 | T001–T005: spec and SDK-free query, resource, authoring contracts; tracked API and solution registration | Draft [#4217](https://github.com/elsa-workflows/elsa-foundation/pull/4217), `58cda618a7`; Core build/maps/catalog and independent review pass; Architecture/CI pending |
 | 2 | T006–T009/T011: native validation, named event fan-in and read bounds; query tests (resource authorization moves to tested persistence/resource slice) | Prepared; 55 query/composition cases pass after causal regression controls; review pending |
-| 3 | T008–T009/T024: resource service/authorization and EF definitions, CAS, revisions and SQLite schema; resource and normal consumer-context tests | Preserved; not reintegrated |
+| 3 | T008–T009/T024: resource service/authorization and EF definitions, CAS, revisions and SQLite schema; resource and normal consumer-context tests | Prepared SQLite/resource slice; tests/review in progress, HTTP and relational providers deferred |
 | 4 | T024/T033: relational migrations and provider/security tests | Preserved; not reintegrated |
 | 5 | T010/T016/T023/T026/T030–T031: authenticated native APIs, audience resolution, resource HTTP tests and catalogs | Preserved; not reintegrated |
 | 6 | T013–T015/T021: reusable runtime inspection and Workflow query source; numerical tests | Preserved; not reintegrated |
@@ -22,6 +22,10 @@ Each PR is based on its predecessor until that predecessor lands. Split an overs
 | 10 | T040–T042: independently packaged Acme business dataset and package-only consumer qualification | Preserved; not reintegrated |
 | 11 | T022/T028–T029/T034/T038–T039/T043/T046: actual composed host and live provider qualification; split native and provider harnesses if needed | Preserved harness; qualification unavailable on new source |
 | 12 | T012/T044–T049: host composition, remaining integrator documentation, final acceptance and resulting-main reconciliation | Pending all applicable predecessors |
+
+## Before API exposure
+
+Code Review approved slice1 without blockers and noted that the current store list materializes full documents and embedded history. Before enabling the native API, add bounded store paging and avoid accumulating history during collection/reuse scans; preserve current ACL filtering, stable continuation invalidation, source withdrawal and no privileged result caches. Requalify real-store collection/history/CAS controls. This is an additional resource sub-slice, not a completed capacity guarantee. The token-last ListAsync convention is corrected in the first resource implementation slice while its API is Unshipped.
 
 ## Drift and evidence
 

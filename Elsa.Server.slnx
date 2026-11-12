@@ -413,6 +413,7 @@
   <Folder Name="/Essentials/src/Studio/Dashboard/">
     <Project Path="Essentials/src/Studio/Dashboard/Core/Elsa.Studio.Dashboard.Core.csproj" />
     <Project Path="Essentials/src/Studio/Dashboard/Management/Elsa.Studio.Dashboard.Management.csproj" />
+    <Project Path="Essentials/src/Studio/Dashboard/Persistence/EntityFrameworkCore/Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.csproj" />
   </Folder>
   <Folder Name="/Essentials/src/Studio/Preferences/">
     <Project Path="Essentials/src/Studio/Preferences/Core/Elsa.Studio.Preferences.Core.csproj" />
@@ -755,6 +756,7 @@
   <Folder Name="/Essentials/tests/Studio/" />
   <Folder Name="/Essentials/tests/Studio/Dashboard/">
     <Project Path="Essentials/tests/Studio/Dashboard/QueryTests/Elsa.Studio.Dashboard.QueryTests.csproj" />
+    <Project Path="Essentials/tests/Studio/Dashboard/ResourceTests/Elsa.Studio.Dashboard.ResourceTests.csproj" />
   </Folder>
   <Folder Name="/Essentials/tests/Studio/Preferences/">
     <Project Path="Essentials/tests/Studio/Preferences/Tests/Elsa.Studio.Preferences.Tests.csproj" />

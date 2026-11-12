@@ -128,6 +128,10 @@ public sealed class EfCoreDependencyGuardTests
     public void Every_admitted_Connections_project_resolves_only_its_reviewed_EF_closure() =>
         AssertReviewedModuleClosure(Spec1179ConnectionsEf.ExpectedEfPackagesByProject, "Connections metadata (#3578)");
 
+    [Fact]
+    public void Every_admitted_saved_Dashboard_project_resolves_only_its_reviewed_EF_closure() =>
+        AssertReviewedModuleClosure(Spec1217DashboardEf.ExpectedEfPackagesByProject, "saved Dashboard definitions (#3604)");
+
     private static void AssertReviewedModuleClosure(IReadOnlyDictionary<string, string[]> projects, string module)
     {
         var offenders = projects.SelectMany(project => RestoreConfigurations.SelectMany(configuration =>
@@ -722,6 +726,7 @@ public sealed class EfCoreDependencyGuardTests
                     Adr0072SecretsEfPilot.IsProjectPath(relativePath) ||
                     Adr0073RepositoryFirstEf.IsProjectPath(relativePath) ||
                     Spec1179ConnectionsEf.IsProjectPath(relativePath) ||
+                    Spec1217DashboardEf.IsProjectPath(relativePath) ||
                     Spec1179AgentEf.IsProjectPath(relativePath) ||
                     Spec1189WeaverEf.IsProjectPath(relativePath) ||
                     Adr0073StructuredLogsEf.IsProjectPath(relativePath) ||
@@ -1547,4 +1552,18 @@ public sealed class EfCoreDependencyGuardTests
         public static bool IsProjectPath(string relativePath) =>
             ProjectPaths.Contains(relativePath, StringComparer.Ordinal);
     }
+    // Spec1217: finite SQLite saved-definition storage; query and authoring remain EF-free.
+    internal static class Spec1217DashboardEf
+    {
+        private static readonly string[] CorePackages = ["Microsoft.EntityFrameworkCore", "Microsoft.EntityFrameworkCore.Abstractions", "Microsoft.EntityFrameworkCore.Analyzers", "Microsoft.EntityFrameworkCore.Relational"];
+        public static readonly IReadOnlyDictionary<string, string[]> ExpectedEfPackagesByProject =
+            new Dictionary<string, string[]>(StringComparer.Ordinal)
+            {
+                ["Essentials/src/Studio/Dashboard/Persistence/EntityFrameworkCore/Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.csproj"] = CorePackages,
+                ["Essentials/tests/Studio/Dashboard/ResourceTests/Elsa.Studio.Dashboard.ResourceTests.csproj"] =
+                    [.. CorePackages, "Microsoft.EntityFrameworkCore.Sqlite", "Microsoft.EntityFrameworkCore.Sqlite.Core"]
+            };
+        public static bool IsProjectPath(string relativePath) => ExpectedEfPackagesByProject.ContainsKey(relativePath);
+    }
+
 }
