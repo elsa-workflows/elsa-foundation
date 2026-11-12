@@ -175,7 +175,8 @@ for (const { frameDelay, commitDelay } of [{ frameDelay: 0, commitDelay: 0 }, { 
       }, frameDelay);
     }
     if (commitDelay) {
-      // React's scheduler runs non-urgent renders from MessageChannel tasks; hold each one back.
+      // React's scheduler runs non-urgent renders from MessageChannel tasks; hold each one back. This patches every channel on the
+      // page, but Studio's own code opens none, so in this fixture only React's scheduler is slowed.
       await page.addInitScript(delay => {
         const Channel = window.MessageChannel;
         window.MessageChannel = class extends Channel {

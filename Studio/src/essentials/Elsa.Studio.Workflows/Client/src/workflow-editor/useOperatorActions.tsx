@@ -429,6 +429,9 @@ export function useOperatorActions({
     const controller = new AbortController();
     following.current = { planId: pending.planId, controller };
     const options = { sleep, now: () => Date.now(), signal: controller.signal };
+    // Keep this before the first await: confirm() closes the dialog and calls follow() in one go, so the pending state lands in the
+    // commit that closes the dialog, and focus moves away from the row buttons that commit removes. Set later, the buttons would still
+    // be there when focus returns, and focus would fall to the page when they go (#4096).
     setFollowed({ ...pending, label: pending.submittedLabel });
     try {
       const result = await followOperatorPlan(apiRef.current, pending.planId, {
@@ -528,6 +531,7 @@ export function useOperatorActions({
       storePendingOperatorAction(state.workflowExecutionId, pending);
       if (selectedRun.current !== state.workflowExecutionId || currentRun.current !== state.workflowExecutionId) return;
       setMessage({ text: state.model.submittedLabel, tone: "info" });
+      // close() and follow() must run together, with no await between them; see follow().
       if (isCurrentOrigin(state)) close(state);
       void follow(pending);
     } catch (error) {
