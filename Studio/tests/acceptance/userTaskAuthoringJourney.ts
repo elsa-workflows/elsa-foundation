@@ -155,7 +155,7 @@ export async function userTaskAuthoringJourney(page: Page, info: TestInfo, captu
   await editorViews.getByRole("tab", { name: "Designer", exact: true }).click();
   await expect(page.getByRole("combobox", { name: "Output Name", exact: true })).toHaveAttribute("aria-invalid", "false");
   await expect.poll(() => page.getByRole("combobox", { name: "Output Name", exact: true }).evaluate(element => getComputedStyle(element).backgroundSize)).toBe("5px 5px, 5px 5px");
-  const valueRow = page.locator(".wf-property-row").filter({ has: page.locator(".wf-property-row-header label", { hasText: /^Value$/ }) });
+  const valueRow = page.locator(".wf-property-row").filter({ has: page.locator(".studio-field-label, .wf-property-row-header > span", { hasText: /^Value$/ }) });
   await valueRow.locator("button.wf-syntax-picker-trigger").click(); await page.getByRole("option", { name: /^Variable/ }).click();
   await selectVariable(page.getByRole("combobox", { name: "Variable reference", exact: true }));
   await captureInspector("output-picker", page.getByRole("combobox", { name: "Output Name", exact: true }));

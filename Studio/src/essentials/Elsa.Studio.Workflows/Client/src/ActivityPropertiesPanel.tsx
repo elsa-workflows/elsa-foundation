@@ -1,7 +1,7 @@
 import { type KeyboardEvent as ReactKeyboardEvent, lazy, memo, Suspense, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Braces, Cable, Code2, KeyRound, Maximize2, SlidersHorizontal, Type, X, type LucideIcon } from "lucide-react";
-import { AdvancedSection, AnchoredPopover } from "@elsa-workflows/studio-ui";
+import { AdvancedSection, AnchoredPopover, StudioField } from "@elsa-workflows/studio-ui";
 import {
   authSessionEndedEvent,
   authSessionStartedEvent,
@@ -1117,11 +1117,18 @@ function PropertyRow({
   // A single session must never be mounted into two editor engines at once. While the dialog owns the
   // text document, unmount the compact surface; closing remounts it from the same URI-scoped session.
   const renderedValueEditor = expanded && editingMode === "text" ? null : valueEditor;
+  // Scalar editors own the caption on their outline. Keep the row caption for composite,
+  // unavailable and third-party editors that have not opted into that presentation contract.
+  const editorPresentsField = !secretOnly && !dictionaryType && !collectionType && !expanded && (
+    valueMasked ? editingMode === "literal" && editor?.id === maskedPropertyEditorId
+      : editingMode === "text" && inlineExpressionContext ? !contributedExpressionEditor
+      : !contributedExpressionEditor && editingMode === "literal" && (!editor || editor.presentsField)
+  );
 
   return (
-    <div ref={rowRef} className="wf-property-row">
+    <div ref={rowRef} className="wf-property-row" role="group" aria-label={input.displayName || input.name}>
       <div className="wf-property-row-header">
-        <label>{input.displayName || input.name}</label>
+        {editorPresentsField ? null : <span className="wf-property-row-caption">{input.displayName || input.name}</span>}
         <div className="wf-property-row-header-meta">
           <span>{formatTypeName(input.typeName)}</span>
           {chooseDataButton}
@@ -1676,7 +1683,7 @@ function renderEditor(
       onDisclosureFallbackChange={onDisclosureFallbackChange}
     />
   ) : (
-    <input type="text" value={value == null ? "" : String(value)} disabled={disabled} onChange={event => onChange(event.target.value)} />
+    <StudioField label={input.displayName || input.name}><input type="text" value={value == null ? "" : String(value)} disabled={disabled} onChange={event => onChange(event.target.value)} /></StudioField>
   );
 }
 
@@ -1688,7 +1695,7 @@ function GenericTextExpressionEditor({ descriptor, syntax, value, disabled, init
   }, [initialFocus, syntax]);
 
   return (
-    <input
+    <StudioField label={`${descriptor.displayName || descriptor.name} expression`}><input
       type="text"
       aria-label={`${descriptor.displayName || descriptor.name} expression`}
       value={value == null ? "" : String(value)}
@@ -1698,7 +1705,7 @@ function GenericTextExpressionEditor({ descriptor, syntax, value, disabled, init
       autoCapitalize="off"
       autoCorrect="off"
       onChange={event => onChange(event.target.value)}
-    />
+    /></StudioField>
   );
 }
 
@@ -1806,7 +1813,7 @@ export function ConversionControl({
       </div>
       {mode === "profile" ? (
         <div className="wf-conversion-profile">
-          <input
+          <StudioField label={`${inputLabel} conversion profile id`}><input
             type="text"
             aria-label={`${inputLabel} conversion profile id`}
             placeholder="Profile id"
@@ -1817,8 +1824,8 @@ export function ConversionControl({
             autoCapitalize="off"
             autoCorrect="off"
             onChange={event => setProfileId(event.target.value)}
-          />
-          <input
+          /></StudioField>
+          <StudioField label={`${inputLabel} conversion profile version`}><input
             type="text"
             aria-label={`${inputLabel} conversion profile version`}
             placeholder="Version"
@@ -1826,7 +1833,7 @@ export function ConversionControl({
             disabled={disabled}
             spellCheck={false}
             onChange={event => setProfile({ id: profile?.id ?? "", version: event.target.value })}
-          />
+          /></StudioField>
           <datalist id={datalistId}>
             {profiles.map(candidate => (
               <option key={`${candidate.id}@${candidate.version}`} value={candidate.id}>

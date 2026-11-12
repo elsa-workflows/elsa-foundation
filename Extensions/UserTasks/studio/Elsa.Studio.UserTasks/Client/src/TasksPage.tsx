@@ -2,7 +2,7 @@ import { qualifyStudioBackendPath, isStudioWorkspaceTabClick, openStudioWorkspac
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Inbox, RefreshCw } from "lucide-react";
 import type { ElsaStudioModuleApi } from "@elsa-workflows/studio-sdk";
-import { SkeletonRows, StudioButton, StudioCollectionFooter, StudioCollectionToolbar, StudioPage, StudioPageHeader, StudioResultState, StudioSearchInput, StudioTableContainer } from "@elsa-workflows/studio-ui";
+import { SkeletonRows, StudioButton, StudioCollectionFooter, StudioCollectionToolbar, StudioPage, StudioPageHeader, StudioResultState, StudioSearchInput, StudioTableContainer, StudioField } from "@elsa-workflows/studio-ui";
 import { FormsPage } from "./FormsPage";
 import { actor, list, message, statusOf, type TaskActor, type TaskPage } from "./taskApi";
 import { TaskStatus } from "./TaskStatus";
@@ -51,8 +51,8 @@ export function TasksPage({ api, navigate }: { api: ElsaStudioModuleApi; navigat
     <div ref={root} className="user-task-content">
     {!denied && <StudioCollectionToolbar>
       <StudioSearchInput className="user-task-search" aria-label="Search tasks" placeholder="Search tasks" value={search} onChange={event => { changeBrowse({ ...browse, search: event.target.value, cursor: null }); }} />
-      <label className="user-task-inbox">Inbox<select value={view} onChange={event => { changeBrowse({ ...browse, view: event.target.value, cursor: null }); }}>
-        <option value="mine">My tasks</option><option value="queue">Group queue</option><option value="history">History</option>{identity?.canManage ? <option value="all">All tasks</option> : null}</select></label>
+      <StudioField className="user-task-inbox" label="Inbox"><select value={view} onChange={event => { changeBrowse({ ...browse, view: event.target.value, cursor: null }); }}>
+        <option value="mine">My tasks</option><option value="queue">Group queue</option><option value="history">History</option>{identity?.canManage ? <option value="all">All tasks</option> : null}</select></StudioField>
       {clearInToolbar && <StudioButton variant="ghost" onClick={() => { changeBrowse({ ...browse, search: "", cursor: null }); }}>Clear search</StudioButton>}
     </StudioCollectionToolbar>}
       <div className="user-task-results" aria-busy={loading}>

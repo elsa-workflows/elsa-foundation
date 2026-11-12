@@ -155,7 +155,7 @@ it("publishes a reusable basic form through the structured field editor", async 
   const post = vi.fn().mockResolvedValue({});
   await act(async () => root.render(<FormsPage api={api(get, post)} />));
   await click("Create form version");
-  const field = (label: string) => [...container.querySelectorAll("label")].find(item => item.textContent?.startsWith(label))!.querySelector("input")!;
+  const field = (label: string) => [...container.querySelectorAll("label")].find(item => item.textContent?.startsWith(label))!.control as HTMLInputElement;
   await input(field("Form ID"), "purchase"); await input(field("Name"), "Purchase response");
   await click("Add field"); await input(field("Key"), "AccountID"); await input(field("Label"), "Account");
   await click("Publish form version");
@@ -360,11 +360,11 @@ it("recovers an immutable-version collision without discarding the authored fiel
   const post = vi.fn().mockImplementationOnce(async () => { latest = 2; throw new StudioHttpError(409, "Version exists"); }).mockResolvedValue({});
   await act(async () => root.render(<FormsPage api={api(get, post)} />));
   await click("Create next version");
-  const field = (label: string) => [...container.querySelectorAll("label")].find(item => item.textContent?.startsWith(label))!.querySelector("input")!;
+  const field = (label: string) => [...container.querySelectorAll("label")].find(item => item.textContent?.startsWith(label))!.control as HTMLInputElement;
   await input(field("Name"), "Edited purchase"); await click("Publish form version");
   await click("Use next available version");
   const version = [...container.querySelectorAll("label")].find(item => item.textContent?.startsWith("Version"))!;
-  expect(version.querySelector("input")).toBeNull(); expect(version.querySelector("output")!.textContent).toBe("3"); expect(field("Name").value).toBe("Edited purchase");
+  expect(version.control?.tagName).toBe("OUTPUT"); expect(version.control?.textContent).toBe("3"); expect(field("Name").value).toBe("Edited purchase");
   await click("Publish form version"); expect(post.mock.calls[1][1]).toMatchObject({ name: "Edited purchase", version: "3" });
 });
 

@@ -1,6 +1,6 @@
 import React, { useEffect, useId, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, EyeOff, RefreshCw, Settings } from "lucide-react";
-import { OverflowMenu, selectSettingEditor } from "@elsa-workflows/studio-ui";
+import { OverflowMenu, selectSettingEditor, StudioField } from "@elsa-workflows/studio-ui";
 import { normalizeHomeWidgetSize, useDialogFocus, type ElsaStudioModuleApi, type StudioDashboardWidgetContribution, type StudioDashboardWidgetSize } from "@elsa-workflows/studio-sdk";
 import { useDashboardWidget } from "./useDashboardWidgets";
 
@@ -61,9 +61,9 @@ export function WidgetFrame({ api, widget, size, settings, refreshIntervalMs, gl
         <div className="dashboard-widget-actions" aria-label={`${widget.title} controls`}>
           <button type="button" onClick={() => onMove(-1)} aria-label={`Move ${widget.title} earlier`}><ChevronLeft size={15} /></button>
           <button type="button" onClick={() => onMove(1)} aria-label={`Move ${widget.title} later`}><ChevronRight size={15} /></button>
-          <select aria-label={`Size of ${widget.title}`} value={size} onChange={event => onSize(normalizeHomeWidgetSize(event.target.value))}>
+          <StudioField label={`Size of ${widget.title}`}><select aria-label={`Size of ${widget.title}`} value={size} onChange={event => onSize(normalizeHomeWidgetSize(event.target.value))}>
             {widget.supportedSizes.map(option => <option key={option} value={option}>{sizeLabels[option] ?? option}</option>)}
-          </select>
+          </select></StudioField>
           {widget.settings ? <button type="button" onClick={() => setSettingsOpen(true)} aria-label={`Settings for ${widget.title}`}><Settings size={15} /></button> : null}
           {widget.load ? <button type="button" onClick={() => void runtime.refresh()} aria-label={`Refresh ${widget.title}`}><RefreshCw size={15} /></button> : null}
           {!pinned ? <button type="button" onClick={onHide} aria-label={widget.id === "home.get-started" ? `Dismiss ${widget.title}` : `Hide ${widget.title}`}><EyeOff size={15} /></button> : null}

@@ -34,6 +34,43 @@ instead of overriding row borders, selection fills or primary actions with liter
 Keep owner-specific graph geometry, runtime state and permissions in the module; a presentation
 change must preserve those behaviors. Do not select behavior using palette IDs.
 
+## Outlined form fields
+
+Scalar form editors use `StudioField`. Its caption stays on the top border in every theme;
+help and validation stay below the control and out of its accessible name. Keep native value,
+change, blur, ref, required and disabled properties on the control:
+
+```tsx
+<StudioField label="Endpoint" description="Use an absolute URL" error={error}>
+  <input value={endpoint} onChange={event => setEndpoint(event.target.value)} disabled={saving} />
+</StudioField>
+```
+
+A single native child is associated automatically, including one inside a native wrapper.
+Caller IDs and existing descriptions are preserved. Checkboxes/radios, search controls, table
+cells, file pickers and rich editors retain their own semantic presentation. Multiple individually
+labelled controls form a real group; do not wrap several controls in a single HTML label.
+
+Use `StudioFormField` for an explicit native-control contract or adornments:
+
+```tsx
+<StudioFormField label="Credential" trailing={<button type="button" onClick={retry}>Retry</button>}>
+  {attributes => <input {...attributes} value={credential} onChange={updateCredential} />}
+</StudioFormField>
+```
+
+The shell does not disable adjacent actions. Set their disabled state explicitly. For opaque
+contributed editors, pass `controlId` to `StudioField` and forward that ID plus
+`data-studio-field-control=""` to the actual native control. The shared component does not clone
+inside arbitrary React components. Setting/property editor contributions may opt into
+`presentsField: true` when they own the shared field and descriptor caption; omitted values retain
+legacy host captions. Keep editor metadata, validation reporting and domain behaviour intact.
+
+Do not override field borders with module card styles. The Outlined width and gap roles are
+`--studio-outlined-field-width` and `--studio-outlined-field-gap`; colour, radius and typography
+continue to use semantic theme tokens. A real legend gap supports transparent surfaces without
+painting an opaque patch behind the label.
+
 ## Module stylesheet loading
 
 Use the shared `defineModuleConfig` for installed module builds. It emits an ESM

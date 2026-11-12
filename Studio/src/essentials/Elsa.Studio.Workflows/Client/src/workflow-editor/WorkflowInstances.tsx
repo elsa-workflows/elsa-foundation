@@ -77,7 +77,7 @@ import { getReadOnlyFitViewOptions } from "./readOnlyMinimap";
 import { FitReadOnlyFlowView, useReadOnlyFlowNodes } from "./useReadOnlyFlowCanvas";
 import { READ_ONLY_READABLE_ZOOM } from "./readableFitViewport";
 import { WorkflowReadOnlyMiniMap } from "./WorkflowReadOnlyMiniMap";
-import { AdvancedSection, CopyableIdentifier, OverflowMenu, StudioPageHeader, StudioButton } from "@elsa-workflows/studio-ui";
+import { AdvancedSection, CopyableIdentifier, OverflowMenu, StudioPageHeader, StudioButton, StudioField } from "@elsa-workflows/studio-ui";
 import { RunWorkflowPicker } from "./RunWorkflowPicker";
 import { WorkflowListIdentifiers } from "./WorkflowListIdentifiers";
 import "./cleanListTables.css";
@@ -429,9 +429,7 @@ export function WorkflowInstances({ context, navigate }: {
         ) : null}
         <AdvancedSection label="More filters" setCount={advancedAppliedCount} defaultOpen={advancedAppliedCount > 0} allowCollapseWhenSet>
           <div className="wf-toolbar wf-run-advanced-selects">
-            <label className="wf-toolbar-field">
-              <span>Status</span>
-              <select aria-label="Workflow run status" value={draftFilters.status} onChange={event => setDraftFilters(current => ({ ...current, status: event.target.value }))}>
+            <StudioField className="wf-toolbar-field" label={<><span>Status</span></>}><select aria-label="Workflow run status" value={draftFilters.status} onChange={event => setDraftFilters(current => ({ ...current, status: event.target.value }))}>
                 <option value="">All statuses</option>
                 <option value="Pending">Pending</option>
                 <option value="Running">Running</option>
@@ -439,27 +437,20 @@ export function WorkflowInstances({ context, navigate }: {
                 <option value="Completed">Completed</option>
                 <option value="Faulted">Faulted</option>
                 <option value="Cancelled">Cancelled</option>
-              </select>
-            </label>
-            <label className="wf-toolbar-field">
-              <span>Kind</span>
-              <select aria-label="Run Kind" value={draftFilters.runKind} onChange={event => setDraftFilters(current => ({ ...current, runKind: event.target.value }))}>
+              </select></StudioField>
+            <StudioField className="wf-toolbar-field" label={<><span>Kind</span></>}><select aria-label="Run Kind" value={draftFilters.runKind} onChange={event => setDraftFilters(current => ({ ...current, runKind: event.target.value }))}>
                 <option value="">All kinds</option>
                 <option value="TestRun">Test Run</option>
                 <option value="PublishedRun">Published Run</option>
                 <option value="BackgroundWeaverRun">Background Weaver Run</option>
                 <option value="Unknown">Unknown / legacy</option>
-              </select>
-            </label>
-            <label className="wf-toolbar-field">
-              <span>Incident health</span>
-              <select aria-label="Workflow run incident health" value={draftFilters.incidentHealth} disabled={!canFilterByHealth && !draftFilters.incidentHealth} onChange={event => setDraftFilters(current => ({ ...current, incidentHealth: event.target.value as RunHistoryFilters["incidentHealth"] }))}>
+              </select></StudioField>
+            <StudioField className="wf-toolbar-field" label={<><span>Incident health</span></>}><select aria-label="Workflow run incident health" value={draftFilters.incidentHealth} disabled={!canFilterByHealth && !draftFilters.incidentHealth} onChange={event => setDraftFilters(current => ({ ...current, incidentHealth: event.target.value as RunHistoryFilters["incidentHealth"] }))}>
                 <option value="">All health states</option>
                 <option value="active" disabled={!canFilterByHealth}>Active incidents</option>
                 <option value="blocking" disabled={!canFilterByHealth}>Needs intervention</option>
                 <option value="none" disabled={!canFilterByHealth}>No active incidents</option>
-              </select>
-            </label>
+              </select></StudioField>
           </div>
           <div className="wf-run-filter-fields">
             <RunFilterInput label="Execution ID" value={draftFilters.workflowExecutionId} onChange={value => setDraftFilters(current => ({ ...current, workflowExecutionId: value }))} />
@@ -608,16 +599,13 @@ export function WorkflowInstances({ context, navigate }: {
           <span className="wf-pagination-summary" aria-live="polite">
             Showing {page.count} of {page.totalCount} matching runs
           </span>
-          <label className="wf-page-size">
-            Rows
-            <select aria-label="Workflow run page size" value={location.pageSize} onChange={event => updateLocation({
+          <StudioField className="wf-page-size" label="Rows"><select aria-label="Workflow run page size" value={location.pageSize} onChange={event => updateLocation({
               filters: location.filters,
               pageSize: Number(event.target.value),
               cursor: null
             }, false)}>
               {runHistoryPageSizes.map(size => <option key={size} value={size}>{size}</option>)}
-            </select>
-          </label>
+            </select></StudioField>
           <div className="wf-page-controls">
             <button type="button" disabled={!previousPage.available} onClick={() => {
               const previous = moveCursorHistoryPrevious(cursorHistory.current, cursorScope, location.cursor, page);
@@ -650,10 +638,7 @@ function RunFilterInput({ label, value, type = "text", onChange }: {
   onChange(value: string): void;
 }) {
   return (
-    <label className="wf-run-filter-field">
-      <span>{label}</span>
-      <input aria-label={`Workflow run ${label.toLowerCase()}`} type={type} value={value} onChange={event => onChange(event.target.value)} />
-    </label>
+    <StudioField className="wf-run-filter-field" label={<><span>{label}</span></>}><input aria-label={`Workflow run ${label.toLowerCase()}`} type={type} value={value} onChange={event => onChange(event.target.value)} /></StudioField>
   );
 }
 

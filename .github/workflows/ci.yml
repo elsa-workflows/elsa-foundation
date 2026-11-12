@@ -1157,6 +1157,15 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
+      - name: Retain Outlined theme and state captures
+        if: ${{ always() && steps.browser-tests.outcome != 'skipped' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: outlined-fields-${{ github.sha }}-${{ matrix.shard }}
+          path: Studio/test-results/outlined-fields-*/attachments/*.png
+          if-no-files-found: ignore
+          retention-days: 14
+
   studio-ux-acceptance:
     name: UX acceptance (composed Studio)
     needs: plan-scope

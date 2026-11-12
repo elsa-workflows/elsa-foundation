@@ -2,7 +2,7 @@ import { qualifyStudioBackendPath } from "@elsa-workflows/studio-sdk";
 import { Trash2 } from "lucide-react";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import type { ElsaStudioModuleApi, StudioActivityPropertyEditorProps } from "@elsa-workflows/studio-sdk";
-import { StudioButton } from "@elsa-workflows/studio-ui";
+import { StudioButton, StudioField } from "@elsa-workflows/studio-ui";
 import { forms, targets, message, type FormVersion } from "./taskApi";
 export function ActionsEditor({ value, disabled, onChange, onValidationChange }: StudioActivityPropertyEditorProps) {
   let literal: unknown = value;
@@ -10,7 +10,7 @@ export function ActionsEditor({ value, disabled, onChange, onValidationChange }:
   const items = Array.isArray(literal) ? literal.map(String) : [];
   const invalid = !items.length || items.some(item => !item.trim() || item !== item.trim() || item === "Unmatched") || new Set(items).size !== items.length;
   useEffect(() => { onValidationChange?.(invalid); return () => onValidationChange?.(false); }, [invalid, onValidationChange]);
-  return <div className="user-task-property-editor">{items.map((item, index) => <div className="user-task-action-row" key={index}><label>Action {index + 1}<input className="studio-input" disabled={disabled} value={item} onChange={event => onChange(items.map((entry, i) => i === index ? event.target.value : entry))} /></label>
+  return <div className="user-task-property-editor">{items.map((item, index) => <div className="user-task-action-row" key={index}><StudioField label={<>Action {index + 1}</>}><input className="studio-input" disabled={disabled} value={item} onChange={event => onChange(items.map((entry, i) => i === index ? event.target.value : entry))} /></StudioField>
     <StudioButton variant="ghost" aria-label={`Remove action ${index + 1}`} title={`Remove action ${index + 1}`} disabled={disabled} onClick={() => onChange(items.filter((_, i) => i !== index))}><RemoveIcon /></StudioButton></div>)}
     <StudioButton disabled={disabled || items.length >= 20} onClick={() => onChange([...items, ""])}>Add action</StudioButton>
     {invalid ? <p role="alert">Enter unique, nonempty action names without surrounding spaces.</p> : null}</div>;
@@ -39,8 +39,8 @@ export function AssignmentEditor({ api, group, value, disabled, onChange, contex
     ++generation.current; busy.current = false; setItems([]); setMore(false); setSkip(0); void load(0, false);
     return () => { ++generation.current; busy.current = false; };
   }, [load]);
-  return <div className="user-task-property-editor"><select className="studio-input" aria-invalid={invalid} disabled={disabled} aria-label={group ? "Task group" : "Task assignee"} value={typeof value === "string" ? value : ""} onChange={event => onChange(event.target.value || null)}>
-    <option value="">None</option>{value && !items.some(item => item.id === value) ? <option value={String(value)}>{String(value)}</option> : null}{items.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select>
+  return <div className="user-task-property-editor"><StudioField label={group ? "Task group" : "Task assignee"}><select className="studio-input" aria-invalid={invalid} disabled={disabled} aria-label={group ? "Task group" : "Task assignee"} value={typeof value === "string" ? value : ""} onChange={event => onChange(event.target.value || null)}>
+    <option value="">None</option>{value && !items.some(item => item.id === value) ? <option value={String(value)}>{String(value)}</option> : null}{items.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></StudioField>
     {invalid && !group && <p role="alert">{hasUser ? "Choose either an assignee or a group; clear the other assignment." : "Select an assignee or a group for this task."}</p>}
     {more ? <StudioButton disabled={disabled || loading} onClick={() => void load(skip, true)}>More choices</StudioButton> : null}{error ? <p role="alert">{error}</p> : null}</div>;
 }
@@ -76,9 +76,9 @@ export function FormEditor({ api, value, disabled, onChange, context, descriptor
   const unavailable = Boolean(selected && !options.some(item => item.value === selected));
   const invalid = !loading && !error && !dynamicForm && (versionMode ? Boolean(formId && (!selected || unavailable)) : unavailable);
   useEffect(() => { onValidationChange?.(invalid); return () => onValidationChange?.(false); }, [invalid, onValidationChange]);
-  if (dynamicForm) return <div className="user-task-property-editor"><input className="studio-input" aria-label="Task form version" value={selected} disabled={disabled} onChange={event => onChange(event.target.value || null)} /><p>The form ID is an expression. Enter the exact immutable version that expression will resolve.</p></div>;
+  if (dynamicForm) return <div className="user-task-property-editor"><StudioField label="Task form version"><input className="studio-input" aria-label="Task form version" value={selected} disabled={disabled} onChange={event => onChange(event.target.value || null)} /></StudioField><p>The form ID is an expression. Enter the exact immutable version that expression will resolve.</p></div>;
   return <div className="user-task-property-editor">
-    <select className="studio-input" disabled={disabled || loading || Boolean(error) || (versionMode && !formId)} aria-label={versionMode ? "Task form version" : "Task form"} value={selected} aria-invalid={invalid} onChange={event => {
+    <StudioField label={versionMode ? "Task form version" : "Task form"}><select className="studio-input" disabled={disabled || loading || Boolean(error) || (versionMode && !formId)} aria-label={versionMode ? "Task form version" : "Task form"} value={selected} aria-invalid={invalid} onChange={event => {
       const id = event.target.value;
       if (versionMode) onChange(id || null);
       else if (context.setLiteralInputs) context.setLiteralInputs({ FormId: id || null, FormVersion: items.find(item => item.form.id === id)?.form.version ?? null });
@@ -87,7 +87,7 @@ export function FormEditor({ api, value, disabled, onChange, context, descriptor
       <option value="">{loading ? "Loading forms…" : versionMode ? "Select a published version" : "No form"}</option>
       {unavailable && <option value={selected}>{selected}{!loading && !error ? " (unavailable)" : ""}</option>}
       {options.map(item => <option key={item.value} value={item.value}>{item.label}</option>)}
-    </select>
+    </select></StudioField>
     {versionMode ? <p>Published versions stay fixed. Open tasks keep their original form.</p> : <>
       <p>Selecting a form pins its latest published version.</p>
       <a className="studio-button" data-variant="secondary" data-size="sm" href={qualifyStudioBackendPath("/user-tasks/forms")}>Manage forms</a>

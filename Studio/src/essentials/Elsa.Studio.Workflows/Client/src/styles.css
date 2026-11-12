@@ -5426,13 +5426,13 @@ button.wf-reference-select {
   gap: 10px;
 }
 
-.wf-property-row-header label {
+.wf-property-row-caption {
   color: var(--wf-text);
   font-size: 12px;
   font-weight: var(--wf-label-weight, 600);
 }
 
-.wf-property-row-header span {
+.wf-property-row-header-meta > span {
   border: 1px solid var(--wf-border);
   border-radius: 999px;
   color: var(--wf-muted-text);

@@ -37,7 +37,7 @@ describe("workflows module", () => {
     await waitForEditor(container);
     await waitForButtonByText(container, "Details");
     await click(buttonByText(container, "Details"));
-    const input = [...container.querySelectorAll<HTMLLabelElement>("label")].find(label => label.textContent?.startsWith("Display name"))!.querySelector<HTMLInputElement>("input")!;
+    const input = [...container.querySelectorAll<HTMLLabelElement>("label")].find(label => label.textContent?.startsWith("Display name"))!.control as HTMLInputElement;
     await fill(input, "Approve ");
     expect(input.value).toBe("Approve ");
     await fill(input, input.value + "order");
@@ -1764,7 +1764,7 @@ describe("workflows module", () => {
 
     // The type badge shows a friendly label for the assembly-qualified generic collection type rather
     // than leaking an assembly-qualifier fragment ("0, Culture=neutral, PublicKeyToken=…").
-    const typeBadge = container.querySelector(".wf-property-row-header span");
+    const typeBadge = container.querySelector(".wf-property-row-header-meta > span");
     expect(typeBadge?.textContent).toBe("ICollection<String>");
 
     // The collection input renders the repeater (not a single text box) and starts empty.
