@@ -146,7 +146,7 @@ The tables below are the relational shape. A document provider stores the same r
 
 | Table | Row | Notes |
 |---|---|---|
-| `partition` | id, owner, epoch, lease_until, position | `position` counts the instance-commits made in the partition. `epoch` changes only when ownership is taken. Times are in milliseconds; `lease_until` is written from the owner's clock under the default fence and compared with database time at a take |
+| `partition` | id, owner, epoch, lease_until, position | `position` counts the journal rows written in the partition; a turn at the Minimal history level writes none and does not move it. `epoch` changes only when ownership is taken. Times are in milliseconds; `lease_until` is written from the owner's clock under the default fence and compared with database time at a take |
 | `node` | id, seen_at | A heartbeat, so nodes can count each other for a fair share of partitions. Liveness only |
 | `instance` | id, partition, model, definition, status, sub_status, state, state_version, jobs, revision, parent, root, correlation, tenant, created, updated | `state` is opaque to the kernel and owned by the model. `jobs` is the kernel's list of background jobs in flight. The row is the truth about the present; lists and counts read it directly |
 | `message` | seq, id, partition, target, kind, payload, headers, sender, reply_to, start, due, seen, trial, attempts, keep_until, done | The inbox. `seq` is assigned by the database and gives the order. `id` is unique and makes adding idempotent. `due` in the future makes it a timer or a retry. `start` is an optional spec for creating the target |
@@ -161,7 +161,7 @@ The viewer's tables are projections of the journal. There is no outbox, dispatch
 
 ## The commit
 
-The owner of partition `p` at epoch `e`, which believes the position is `n`, commits `k` instance turns in one transaction:
+The owner of partition `p` at epoch `e`, which believes the position is `n`, commits a batch of instance turns in one transaction, `k` of which write a journal row:
 
 1. `UPDATE partition SET position = n + k, lease_until = <now + lease> WHERE id = p AND epoch = e AND position = n`.
 2. **Check that it changed exactly one row before anything else is sent.** If not, roll back and reset.
@@ -205,7 +205,7 @@ Rows per flush are capped (parameter limits, lock escalation). 100 instance-comm
 - **Order:** a target's messages are handled in `seq` order. A sender's commits are serial, so messages from one sender to one target arrive in the order sent.
 - **Consuming:** state change and delete are one transaction, so a message changes state exactly once, though a turn's code may run more than once after a crash.
 - **Timers** are messages with a future `due`. The poll returns database time; the owner anchors it when the answer arrives and schedules by the difference on a monotonic clock. A timer is cancelled by deleting its message, whose id the sender knows.
-- **Poison:** a new owner puts the messages its predecessor had marked on trial: a fenced commit sets their `trial` to its epoch, and their turns run with nothing else in flight. If that owner is lost too, the next take adds one attempt to exactly the messages that were on trial, in the take's own transaction. Suspects start in a group that halves with every attempt, so a poison message ends up on trial alone, and a death stops counting against its neighbours. A message past the threshold is parked, with its instance faulted. So a turn that kills the process cannot walk the cluster. A turn that throws parks its instance at once; retries are the model's business.
+- **Poison:** a new owner puts the messages its predecessor had marked on trial: a fenced commit sets their `trial` to its epoch, and their turns run with nothing else in flight. If that owner is lost too, the next take adds one attempt to exactly the messages that were on trial, in the take's own transaction. Suspects are tried one at a time by default; an optional larger starting group halves with every attempt, so a poison message ends up on trial alone either way, and a death stops counting against its neighbours. A message past the threshold is parked, with its instance faulted. So a turn that kills the process cannot walk the cluster. A turn that throws parks its instance at once; retries are the model's business.
 - **Edge cases:** a message whose target does not exist and that carries no start spec is dropped and journalled. A message to a finished instance is consumed and dropped.
 - **Wake-up:** whoever adds a message signals the owner (in process on one node; a pluggable notifier between nodes). The signal is a hint; the poll is the guarantee.
 
@@ -247,12 +247,13 @@ public interface ITurn
     IReadOnlyList<Message> Inbox { get; }                     // in order; sender, reply-to, headers
     IAmbient Ambient { get; }                                 // not durable: this activation only
     object State { get; set; }
-    void Send(InstanceRef target, string kind, object? payload = null, SendOptions? options = null);
+    string Send(InstanceRef target, string kind, object? payload = null, SendOptions? options = null);   // returns the message id
+    void Recall(string message);                              // delete a message to self, e.g. a timer
     InstanceRef Start(StartSpec spec, Placement placement = Placement.WithParent);
     void StartJob(string key, object? arguments = null);           // start a background job
     void CancelJob(string key);
     void Hold(Message message);                               // hand it to the next turn again
-    void Subscribe(string key, string wait);
+    void Subscribe(string key, string wait, bool keep = false); // keep: also get events published earlier
     void Unsubscribe(string key, string wait);
     void Record(JournalEntry entry);                          // common envelope plus the model's payload
     void Emit(string channel, object item);                   // live, not durable
@@ -427,7 +428,7 @@ These figures come from the prototype's own cost runs, reported in its findings;
 | Store conformance, 57 semantic cases: in memory | 56 pass, 1 skipped | Re-run on 12 November |
 | Store conformance: SQLite, either fence | 54 pass, 1 skipped; 2 reference cases differ (subscribing twice, removing what is absent), where the contract is silent and must be defined | Re-run on 12 November |
 | Store conformance: PostgreSQL, SQL Server, MySQL, MongoDB, either fence | PostgreSQL 54 pass, 3 differ; SQL Server and MySQL 53 pass, 3 differ, 1 skipped; MongoDB 57 pass. The differing cases are where the contract is silent | Reported by the merge run; not re-run |
-| Stress: 40 s, 5,000 messages, killed connections and stalls | Every property holds on all five engines; 0 deadlocks on PostgreSQL, SQL Server (checked fence) and MySQL. SQL Server with the fence in the batch: 127 deadlocks on takes in one run (E9), safety held | Reported by the merge run; not re-run |
+| Stress: 40 s, 5,000 messages, killed connections and stalls | Every property holds on all five engines; 0 deadlocks on PostgreSQL, SQL Server (checked fence) and MySQL. SQL Server with the fence in the batch: 127 deadlocks on takes in one run on the engines branch (ENGINES.md E9; one on MySQL), safety held; not re-run after the merge | Reported by the merge run; not re-run |
 | Stress with the fence broken on purpose | Violations on every engine: PostgreSQL 228, SQL Server 26, MySQL 611, SQLite 238, MongoDB 390 | Reported by the merge run; not re-run |
 
 - **Built since draft 2:** suspend, resume, terminate, rebind and delete; events that start instances; the projector; reply addresses for live output across nodes; the native model with HTTP routes; the store on SQL Server, MySQL and MongoDB.
@@ -489,11 +490,13 @@ The test: give Elsa 3 users a reason to move and nothing that stops them, and gi
 - **Standalone jobs:** Elsa.Jobs rebuilt on the kernel as a job actor type; a spike now, release placement in the proposal.
 - **After, with a spike now:** BPMN, the Orleans adapter, ETL. The out-of-process job worker protocol follows in 1.x; its contract is designed now so jobs are built right.
 
+### Open owner questions
+
 - **SQL Server's default fence (E9).** The fence in the batch deadlocks takes with stale commits on SQL Server; the fix (the checked fence there) is not applied. Open for the owner: the checked fence as SQL Server's default.
 
 ### Earlier open questions
 
-- **Poison counting is the weakest part.** An owner lost while a message is on trial costs that message an attempt, so under the simulation's rate of faults an innocent message is sometimes parked (at 1,000 actions, 12 innocent instances across 20,000 simulation runs). Built: a release, a reset followed by a take by the same process, and a take of a free partition do not count; only a take from another owner does. Built: job tickets are tried like any message, and a job on trial at the threshold becomes an error result while its instance goes on; decision 9 changes that to parking the job and faulting the instance, which is not built yet. Open: an owner with a trial in flight renewing its lease on a short timer, so that only a real death counts (proposed, not built). Recovery of a deep backlog after a takeover goes in trial groups that halve with every attempt.
+- **Poison counting is the weakest part.** An owner lost while a message is on trial costs that message an attempt, so under the simulation's rate of faults an innocent message is sometimes parked (at 1,000 actions, 12 innocent instances across 20,000 simulation runs). Built: a release, a reset followed by a take by the same process, and a take of a free partition do not count; only a take from another owner does. Built: job tickets are tried like any message, and a job on trial at the threshold becomes an error result while its instance goes on; decision 9 changes that to parking the job and faulting the instance, which is not built yet. Open: an owner with a trial in flight renewing its lease on a short timer, so that only a real death counts (proposed, not built). Recovery of a deep backlog after a takeover is serial by default (one suspect at a time); a larger starting group, halving with every attempt, recovers faster.
 - **State size.** The whole state is rewritten at each commit. Fine for kilobytes. A growing agent thread or a large variable needs segments or values stored by reference. Measure before adding. Decided 12 November: large values by reference, and a size benchmark in the cost runs; segments only if measured.
 - **Events:** the table with the two-sided check is built and passes. A correlation instance per key would remove both tables, the owed read and invariant 8, at the cost of one hop. Built and measured as a sample model. Decided 12 November: the tables stay the kernel's one mechanism; the correlation instance remains a sample model.
 - **Notifier between nodes.** Decided 12 November: a pluggable wake signal over the runtime's transport; polling remains the guarantee.
