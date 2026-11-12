@@ -12,7 +12,7 @@ parallel secret store, no Elsa 3 shims. HTTP uses the foundation `http` connecti
 ```
 Extensions/Integrations/
   src/Sdk/Elsa.Integrations.Sdk/   Elsa.Integrations.Sdk v1 (#2726 / #2825)
-  src/Sdk/Testing/                 Elsa.Integrations.Sdk.Testing (ConnectorHarness)
+  src/Sdk/Elsa.Integrations.Sdk.Testing/  Elsa.Integrations.Sdk.Testing (ConnectorHarness)
   src/Connectors/OAuth2/           Generic OAuth2 scheme (#2727)
   src/Connectors/Slack/            Slack Web API activities (#3322)
   src/Connectors/Microsoft365/     Microsoft Graph v1.0 activities (#3330)

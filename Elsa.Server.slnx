@@ -130,7 +130,7 @@
   </Folder>
   <Folder Name="/Extensions/Integrations/src/Sdk/">
     <Project Path="Extensions/Integrations/src/Sdk/Elsa.Integrations.Sdk/Elsa.Integrations.Sdk.csproj" />
-    <Project Path="Extensions/Integrations/src/Sdk/Testing/Elsa.Integrations.Sdk.Testing.csproj" />
+    <Project Path="Extensions/Integrations/src/Sdk/Elsa.Integrations.Sdk.Testing/Elsa.Integrations.Sdk.Testing.csproj" />
   </Folder>
   <Folder Name="/Extensions/Integrations/tests/">
     <Project Path="Extensions/Integrations/tests/Tests/Elsa.Integrations.Tests.csproj" />

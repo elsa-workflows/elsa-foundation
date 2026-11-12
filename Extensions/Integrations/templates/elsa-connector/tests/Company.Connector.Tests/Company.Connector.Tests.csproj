@@ -20,7 +20,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Company.Connector.csproj" />
+    <ProjectReference Include="..\..\src\Company.Connector\Company.Connector.csproj" />
   </ItemGroup>
 
   <ItemGroup>

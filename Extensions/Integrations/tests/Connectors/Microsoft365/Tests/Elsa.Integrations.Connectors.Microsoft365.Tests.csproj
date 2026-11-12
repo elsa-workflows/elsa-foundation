@@ -16,7 +16,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\..\..\src\Connectors\Microsoft365\Elsa.Integrations.Connectors.Microsoft365.csproj" />
     <ProjectReference Include="..\..\..\..\src\Sdk\Elsa.Integrations.Sdk\Elsa.Integrations.Sdk.csproj" />
-    <ProjectReference Include="..\..\..\..\src\Sdk\Testing\Elsa.Integrations.Sdk.Testing.csproj" />
+    <ProjectReference Include="..\..\..\..\src\Sdk\Elsa.Integrations.Sdk.Testing\Elsa.Integrations.Sdk.Testing.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\Essentials\src\Connections\Core\Elsa.Connections.Core.csproj" />
   </ItemGroup>
 

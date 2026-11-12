@@ -10,4 +10,4 @@ Scaffolded with `dotnet new elsa-connector`.
 - HTTP: the named `Elsa.Activities.Http` client; apply a bound `[ActivityConnection]` through `ApplyConnectionAsync` (`IHttpConnectionApplicator`) before send
 - Activities only: no `IShellFeature`, hosted services, or EF contexts
 - Service connections (`[ActivityConnection]`, `ConnectionReference`, `SensitiveValue`, `ConnectionsPermissions`, the `http` type) are owned by `Elsa.Connections`
-- Tests: the `Tests/` project references `Elsa.Integrations.Sdk.Testing` (`ConnectorHarness`, in-memory secrets and HTTP connections). Do not reference those fakes from the connector package.
+- Tests: `tests/Company.Connector.Tests/` is a sibling of `src/Company.Connector/` and references `Elsa.Integrations.Sdk.Testing` (`ConnectorHarness`, in-memory secrets and HTTP connections). Do not nest tests under the connector project directory, and do not reference those fakes from the connector package.

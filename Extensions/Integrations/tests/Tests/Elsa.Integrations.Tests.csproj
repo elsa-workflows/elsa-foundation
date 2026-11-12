@@ -14,7 +14,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Sdk\Elsa.Integrations.Sdk\Elsa.Integrations.Sdk.csproj" />
-    <ProjectReference Include="..\..\src\Sdk\Testing\Elsa.Integrations.Sdk.Testing.csproj" />
+    <ProjectReference Include="..\..\src\Sdk\Elsa.Integrations.Sdk.Testing\Elsa.Integrations.Sdk.Testing.csproj" />
     <ProjectReference Include="..\..\..\..\Essentials\src\Secrets\Workflows\Elsa.Secrets.Workflows.csproj" />
   </ItemGroup>
 
