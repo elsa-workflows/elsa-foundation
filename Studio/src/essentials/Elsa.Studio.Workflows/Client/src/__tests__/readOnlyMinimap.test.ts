@@ -61,4 +61,9 @@ describe("read-only zoom controls (#4196)", () => {
     const controlsTop = height - READ_ONLY_PANEL_MARGIN - READ_ONLY_CONTROLS_BUTTON_SIZE;
     expect((tall.y + tall.height) * view.zoom + view.y).toBeLessThanOrEqual(controlsTop);
   });
+
+  it("uses the controls-only padding on a canvas without a MiniMap, whatever its node count", () => {
+    expect(getReadOnlyFitViewOptions(8, false)).toEqual(getReadOnlyFitViewOptions(2));
+    expect(getReadOnlyFitViewOptions(8)).toBe(readOnlyMinimapFitViewOptions);
+  });
 });

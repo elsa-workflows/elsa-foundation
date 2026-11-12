@@ -42,7 +42,7 @@ export function BpmnRunCanvas({ inspection, selectedElement, onSelect }: { inspe
       nodesDraggable={false} nodesConnectable={false} edgesReconnectable={false} deleteKeyCode={null}
       onNodeClick={(_, node) => onSelect(node.id)} onNodeDragStart={undefined} minZoom={0.2} maxZoom={1.8}
       ariaLabelConfig={workflowCanvasAriaLabelConfig}>
-      <Background gap={18} size={1} /><ReadOnlyFlowControls nodeCount={flowNodes.length} showInteractive={false} /><FitReadOnlyFlowView nodeCount={flowNodes.length} />
+      <Background gap={18} size={1} /><ReadOnlyFlowControls nodeCount={flowNodes.length} miniMap={false} showInteractive={false} /><FitReadOnlyFlowView nodeCount={flowNodes.length} miniMap={false} />
     </ReactFlow>
   </div>;
 }

@@ -44,10 +44,17 @@ for (const viewport of viewports) {
       await expect(task.locator('.source[data-handleid="Unmatched"]')).toBeAttached();
       if (viewport.paneHeight) {
         // The untouched first view re-fits when the pane shrinks, as it does when run feedback appears.
-        const tallPane = (await pane.boundingBox())!.height;
-        await page.setViewportSize({ width: viewport.width, height: Math.round(viewport.height - (tallPane - viewport.paneHeight)) });
-        await expect.poll(async () => Math.round((await pane.boundingBox())?.height ?? 0), { message: "run canvas pane is short" })
-          .toBeLessThanOrEqual(viewport.paneHeight + 1);
+        // Shrink the window by the pane's surplus until the pane is the target height, in case
+        // something around the canvas (a loading note) changes its height between measurements.
+        const target = viewport.paneHeight;
+        let windowHeight = viewport.height;
+        await expect.poll(async () => {
+          const paneHeight = Math.round((await pane.boundingBox())?.height ?? 0);
+          if (Math.abs(paneHeight - target) <= 1) return true;
+          windowHeight -= paneHeight - target;
+          await page.setViewportSize({ width: viewport.width, height: windowHeight });
+          return false;
+        }, { message: `run canvas pane is ${target}px tall` }).toBe(true);
       }
 
       const fonts: Record<string, number> = {};

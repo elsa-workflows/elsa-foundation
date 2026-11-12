@@ -11,7 +11,7 @@ export const READ_ONLY_MINIMAP_HEIGHT = 80;
 export const READ_ONLY_PANEL_MARGIN = 15;
 /** Room kept between a fitted node and a floating panel. */
 export const READ_ONLY_PANEL_GAP = 8;
-/** One xyflow control button is 26px square (`box-sizing: border-box`, so its 1px border is inside). */
+/** One xyflow control button is 26px square; Studio's global `box-sizing: border-box` reset keeps its 1px border inside. */
 export const READ_ONLY_CONTROLS_BUTTON_SIZE = 26;
 
 /**
@@ -24,7 +24,10 @@ export const READ_ONLY_CONTROLS_ORIENTATION = "horizontal" as const;
 
 /** Bottom inset that keeps fitted nodes clear of the controls row. */
 export const READ_ONLY_CONTROLS_CLEARANCE = READ_ONLY_PANEL_MARGIN + READ_ONLY_CONTROLS_BUTTON_SIZE + READ_ONLY_PANEL_GAP;
-/** Right and bottom insets that keep fitted nodes clear of the MiniMap and its 1px border. */
+/**
+ * Right and bottom insets that keep fitted nodes clear of the 120×80 MiniMap. The extra 2px allows for a
+ * border outside that box; with the border-box reset the border is inside it, so the real gap is about 10px.
+ */
 export const READ_ONLY_MINIMAP_CLEARANCE_RIGHT = READ_ONLY_PANEL_MARGIN + READ_ONLY_MINIMAP_WIDTH + 2 + READ_ONLY_PANEL_GAP;
 export const READ_ONLY_MINIMAP_CLEARANCE_BOTTOM = READ_ONLY_PANEL_MARGIN + READ_ONLY_MINIMAP_HEIGHT + 2 + READ_ONLY_PANEL_GAP;
 
@@ -54,6 +57,7 @@ const readOnlyOutcomeFitViewOptions: FitViewOptions = {
   padding: { top: "24px", right: "112px", bottom: `${READ_ONLY_CONTROLS_CLEARANCE}px`, left: "32px" }
 };
 
-export function getReadOnlyFitViewOptions(nodeCount: number): FitViewOptions {
-  return shouldShowReadOnlyMiniMap(nodeCount) ? readOnlyMinimapFitViewOptions : readOnlyOutcomeFitViewOptions;
+/** `miniMap` says whether the canvas shows the read-only MiniMap; canvases that never render one pass false. */
+export function getReadOnlyFitViewOptions(nodeCount: number, miniMap = shouldShowReadOnlyMiniMap(nodeCount)): FitViewOptions {
+  return miniMap ? readOnlyMinimapFitViewOptions : readOnlyOutcomeFitViewOptions;
 }

@@ -1,7 +1,7 @@
 import { getViewportForBounds, type Node } from "@xyflow/react";
 import { describe, expect, it } from "vitest";
 import { getReadableFitViewport, pickReadOnlyFocusNode, READ_ONLY_READABLE_ZOOM, readableEdgeMargin, readableMinimapEdgeMargin } from "../workflow-editor/readableFitViewport";
-import { READ_ONLY_CONTROLS_BUTTON_SIZE, READ_ONLY_PANEL_MARGIN, readOnlyMinimapFitViewOptions } from "../workflow-editor/readOnlyMinimap";
+import { getReadOnlyFitViewOptions, READ_ONLY_CONTROLS_BUTTON_SIZE, READ_ONLY_PANEL_MARGIN, readOnlyMinimapFitViewOptions } from "../workflow-editor/readOnlyMinimap";
 
 const padding = { top: "24px", right: "112px", bottom: "32px", left: "32px" } as const;
 // A User Task (Approve/Reject/Unmatched) followed by Set Output, as the composed journey lays it out.
@@ -98,10 +98,11 @@ describe("readable first view on a short phone pane (#4196)", () => {
   const controlsTop = height - READ_ONLY_PANEL_MARGIN - READ_ONLY_CONTROLS_BUTTON_SIZE;
 
   it.each([
-    ["without the MiniMap", readableEdgeMargin],
-    ["with the MiniMap", readableMinimapEdgeMargin]
-  ])("keeps the graph above the controls row %s", (_name, margin) => {
-    const view = getReadableFitViewport({ graph, focus: task, width, height, padding, minZoom: 0.1, maxZoom: 2, readableZoom: 1, margin });
+    ["without the MiniMap", 2, readableEdgeMargin],
+    ["with the MiniMap", 3, readableMinimapEdgeMargin]
+  ] as const)("keeps the graph above the controls row %s", (_name, nodeCount, margin) => {
+    const view = getReadableFitViewport({ graph, focus: task, width, height, padding: getReadOnlyFitViewOptions(nodeCount).padding,
+      minZoom: 0.1, maxZoom: 2, readableZoom: 1, margin });
     expect(view.zoom).toBe(1);
     expect(graph.y * view.zoom + view.y).toBeGreaterThanOrEqual(0);
     expect((graph.y + graph.height) * view.zoom + view.y).toBeLessThanOrEqual(controlsTop - 8);
