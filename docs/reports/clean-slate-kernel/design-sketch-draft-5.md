@@ -44,7 +44,7 @@ Owner decisions on this proposal. They become binding when the design is approve
 10. **State size:** large values are stored by reference, and a size benchmark goes into the cost runs; segments only if measurements show the need.
 11. **Viewer read path:** the API shows a run from its projected rows plus the journal tail past the projector's cursor, expanded in memory, so the view is always current. Studio may ask for a projector catch-up for the partition; rounds are coalesced. Studio never forces an owner commit or shows uncommitted state. Live watching is a push stream of committed journal entries.
 
-**Built so far (the prototype at `baba05a78c`):** decision 2 (both fence modes are built and measured), 5 (the tables) and part of 9 (job tickets are counted like messages; a job on trial at the threshold becomes an error result). Partly: 3 (wake hints in one process; the pluggable signal comes with round 4). Not built yet: 1 (the Orleans adapter), 4 (short waits in memory), 6 (reply addresses carry no deadline), 7 (a start after a delete creates a new instance with the same id), 8 (the projector writes one statement per instance in its page), the rest of 9 (parking the job and faulting the instance), 10 and 11.
+**Built so far (the prototype at `baba05a78c`):** decision 2 (both fence modes are built and measured), 5 (the tables) and part of 9 (job tickets are counted like messages; a job on trial at the threshold becomes an error result). Not built yet: 3 (an added message is found by the owner's next poll; round 4 adds the wake-signal interface with an in-process implementation), 1 (the Orleans adapter), 4 (short waits in memory), 6 (reply addresses carry no deadline), 7 (a start after a delete creates a new instance with the same id), 8 (the projector writes one statement per instance in its page), the rest of 9 (parking the job and faulting the instance), 10 and 11.
 
 ## Three layers
 
@@ -154,6 +154,8 @@ The tables below are the relational shape. A document provider stores the same r
 | `event` | key, id, payload, keep_until | Published events. By default an event reaches only the waits committed before it is published, and a wait committed later misses it (default 7, as Elsa 4 behaves today). A wait that asks for kept events (`keep: true`; BPMN message correlation asks) also gets events published within their window before it |
 | `journal` | partition, position, instance, entries | One row per instance-commit: what happened, as one compact value. The truth about the past. Feeds the viewer's tables. Written according to the history level |
 | `projection` | partition, position | How far the projector has got. Its own row, so the projector never touches the fence row |
+
+This is the proposed shape. Not in the prototype yet: the instance's `sub_status`, `root`, `correlation`, `tenant`, `created` and `updated`, and the message's `headers`. The prototype also keeps `fault`, `history`, `suspended` and `children` on the instance row, and a `revision` on each journal row.
 
 The viewer's tables are projections of the journal. There is no outbox, dispatcher, scheduler queue, per-run lease, commit marker, dispatch record or timer table.
 
