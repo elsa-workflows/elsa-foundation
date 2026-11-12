@@ -16,7 +16,7 @@ public sealed class ShellCompositionTests
     [Fact]
     public async Task Composes_once_when_the_first_attempt_succeeds()
     {
-        var blueprint = new QueuedBlueprint(null);
+        var blueprint = new QueuedBlueprint((Exception?)null);
 
         var settings = await ShellComposition.ComposeAsync(blueprint, TimeSpan.Zero, CancellationToken.None);
 

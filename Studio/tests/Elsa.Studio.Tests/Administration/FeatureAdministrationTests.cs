@@ -155,7 +155,7 @@ public sealed class FeatureAdministrationTests
         // #4092: the losing edit of two concurrent applies loads the catalog while the winner's save reloads configuration.
         // The tripwire reproduces that interleaving deterministically: it fires one reload from inside the store's compose.
         var tripwire = new CompositionTripwire();
-        await using var host = await AdministrationHost.StartAsync(managedFeatures: true, afterStudio: builder => builder.Configuration.Add(tripwire));
+        await using var host = await AdministrationHost.StartAsync(managedFeatures: true, afterStudio: builder => ((IConfigurationBuilder)builder.Configuration).Add(tripwire));
         var catalog = await Catalog(host);
         var winner = Request(catalog);
         var loser = Request(catalog);
