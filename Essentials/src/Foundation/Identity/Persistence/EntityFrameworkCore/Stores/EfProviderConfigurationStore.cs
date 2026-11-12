@@ -9,14 +9,62 @@ using Elsa.Persistence.EntityFramework;
 namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Stores;
 
 /// <summary>
-/// EF-backed tenant/global provider configuration store. It owns only I06/I07 and never delegates
-/// to another store or requires a provider engine in this assembly.
+/// EF-backed tenant/global provider configuration store. Coordinated global writes own a serializable
+/// transaction with IAM revision guards when both modules use one database target.
 /// </summary>
 public sealed class EfProviderConfigurationStore(
     IdentityProviderConfigurationDbContext context,
-    IPersistenceAccessContextAccessor accessContextAccessor)
+    IPersistenceAccessContextAccessor accessContextAccessor,
+    IdentityIamDbContext? iamContext = null)
     : IProviderConfigurationStore, IRevisionAwareProviderConfigurationStore
 {
+    public EfProviderConfigurationStore(IdentityProviderConfigurationDbContext context, IPersistenceAccessContextAccessor accessContextAccessor)
+        : this(context, accessContextAccessor, null) { }
+
+    public bool SupportsIdentityRevisionGuards => iamContext is not null && context.Database.IsRelational() && iamContext.Database.IsRelational() &&
+        EfIamRevisionGuards.OwnsConfiguredTarget(context) && EfIamRevisionGuards.OwnsConfiguredTarget(iamContext) &&
+        context.Database.ProviderName == iamContext.Database.ProviderName &&
+        !string.IsNullOrEmpty(context.Database.GetConnectionString()) &&
+        string.Equals(context.Database.GetConnectionString(), iamContext.Database.GetConnectionString(), StringComparison.Ordinal);
+
+    public async ValueTask<IamRevisionSaveResult> SaveWithIdentityRevisionGuardsAsync(ProviderConfigurationRecord configuration,
+        string? expectedRevision, IReadOnlyList<IamRevisionGuard> guards, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(configuration);
+        ArgumentNullException.ThrowIfNull(guards);
+        ValidateConfiguration(configuration);
+        IdentityEntityFrameworkAccessGuard.EnsurePrivilegedGlobal(accessContextAccessor);
+        if (configuration.TenantId is not null) throw new ArgumentException("A coordinated provider configuration must be global.", nameof(configuration));
+        EfIamRevisionGuards.Validate(guards);
+        if (expectedRevision is not null && !IdentityEntityFrameworkRevisionCodec.TryGetVersion(expectedRevision, out _))
+            return EfIdentityStoreSupport.InvalidRevision();
+        foreach (var guard in guards)
+        {
+            if (!EfIamRevisionGuards.TryGetVersion(guard.Revision, out _)) return EfIdentityStoreSupport.InvalidRevision();
+        }
+        if (!SupportsIdentityRevisionGuards) throw new NotSupportedException("Coordinated IAM and provider configuration require one relational database target.");
+        if (context.Database.CurrentTransaction is not null || iamContext!.Database.CurrentTransaction is not null ||
+            System.Transactions.Transaction.Current is not null || context.ChangeTracker.HasChanges() || iamContext.ChangeTracker.HasChanges())
+            throw new InvalidOperationException("A coordinated provider write owns its transaction and cannot borrow caller changes.");
+        context.EnsureProviderBinding(); iamContext.EnsureProviderBinding();
+        try
+        {
+            await using var transaction = await EfSharedTransaction.BeginSerializableAsync([context, iamContext], cancellationToken);
+            var ownedIam = transaction.Context<IdentityIamDbContext>();
+            if (!await EfIamRevisionGuards.AdvanceAsync(ownedIam, guards, cancellationToken))
+                return new(IamRevisionSaveStatus.Conflict);
+            var ownedStore = new EfProviderConfigurationStore(transaction.Context<IdentityProviderConfigurationDbContext>(), accessContextAccessor);
+            var saved = await ownedStore.SaveWithRevisionAsync(configuration, expectedRevision, cancellationToken);
+            if (saved.Status != IamRevisionSaveStatus.Saved) return saved;
+            await transaction.CommitAsync(cancellationToken);
+            return saved;
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (EfCommitOutcomeUnknownException) { throw; }
+        catch (Exception exception) when (EfRelationalExceptionClassifier.IsSaveConflict(exception, EfWriteConflict.Concurrency | EfWriteConflict.UniqueKey))
+        { return new(IamRevisionSaveStatus.Conflict); }
+    }
+
     public async ValueTask<ProviderConfigurationRecord?> FindGlobalAsync(
         string provider,
         CancellationToken cancellationToken = default)
