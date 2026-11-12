@@ -1,5 +1,5 @@
 import unittest
-from studio_gate import PROOFS, failures
+from studio_gate import HEAVY_PROOFS, PROOFS, failures
 
 
 class StudioGateTests(unittest.TestCase):
@@ -13,6 +13,20 @@ class StudioGateTests(unittest.TestCase):
             missing = dict(green)
             del missing[proof]
             self.assertTrue(failures('true', missing))
+
+    def test_draft_may_skip_only_the_heavy_proofs(self):
+        green = dict.fromkeys(PROOFS, 'success')
+        for proof in PROOFS:
+            with self.subTest(proof=proof):
+                skipped = dict(green, **{proof: 'skipped'})
+                self.assertEqual(proof not in HEAVY_PROOFS, bool(failures('true', skipped, 'false')))
+                self.assertTrue(failures('true', skipped, 'true'))
+        for proof in HEAVY_PROOFS:
+            self.assertTrue(failures('true', dict(green, **{proof: 'failure'}), 'false'))
+
+    def test_missing_heavy_scope_is_not_a_fast_path(self):
+        for heavy in (None, '', 'True', 'unknown'):
+            self.assertTrue(failures('true', dict.fromkeys(PROOFS, 'success'), heavy))
 
     def test_unrelated_change_does_not_need_studio(self):
         self.assertEqual([], failures('false', {}))

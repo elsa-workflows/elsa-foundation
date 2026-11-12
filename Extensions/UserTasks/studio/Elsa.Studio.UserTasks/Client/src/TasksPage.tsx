@@ -6,6 +6,7 @@ import { SkeletonRows, StudioButton, StudioCollectionFooter, StudioCollectionToo
 import { FormsPage } from "./FormsPage";
 import { actor, list, message, statusOf, type TaskActor, type TaskPage } from "./taskApi";
 import { TaskStatus } from "./TaskStatus";
+import { useTaskPeople } from "./taskPeople";
 import { readTaskBrowseLocation, replaceTaskBrowseLocation, taskDetailPath } from "./taskNavigation";
 
 export function TasksPage({ api, navigate }: { api: ElsaStudioModuleApi; navigate?(path: string): void }) {
@@ -14,6 +15,7 @@ export function TasksPage({ api, navigate }: { api: ElsaStudioModuleApi; navigat
   const [identity, setIdentity] = useState<TaskActor>(); const [page, setPage] = useState<TaskPage>();
   const [error, setError] = useState(""); const [loading, setLoading] = useState(true);
   const [, renderLocation] = useState(0); const focusHandled = useRef<string | null>(null);
+  const person = useTaskPeople(api, identity);
   const sequence = useRef(0); const root = useRef<HTMLDivElement>(null);
   useEffect(() => { const update = () => renderLocation(value => value + 1); window.addEventListener("popstate", update); return () => window.removeEventListener("popstate", update); }, []);
   const browse = { view, search, cursor };
@@ -40,6 +42,8 @@ export function TasksPage({ api, navigate }: { api: ElsaStudioModuleApi; navigat
   if (identity && !identity.canRead && !identity.canManage && (identity.canReadForms || identity.canManageForms)) return <FormsPage api={api} />;
   const denied = identity && !identity.canRead && !identity.canManage;
   const filtered = Boolean(search.trim());
+  // The empty state offers its own Clear search; the toolbar repeats it only beside results.
+  const clearInToolbar = filtered && !(page && page.items.length === 0);
   return <StudioPage className="user-tasks" aria-label="User Tasks management">
     <StudioPageHeader title="User Tasks" description="Your assigned work and available group tasks."
       actions={<><StudioButton onClick={() => void refresh()} disabled={loading}><RefreshCw size={16} aria-hidden="true" />Refresh</StudioButton>
@@ -49,7 +53,7 @@ export function TasksPage({ api, navigate }: { api: ElsaStudioModuleApi; navigat
       <StudioSearchInput className="user-task-search" aria-label="Search tasks" placeholder="Search tasks" value={search} onChange={event => { changeBrowse({ ...browse, search: event.target.value, cursor: null }); }} />
       <label className="user-task-inbox">Inbox<select value={view} onChange={event => { changeBrowse({ ...browse, view: event.target.value, cursor: null }); }}>
         <option value="mine">My tasks</option><option value="queue">Group queue</option><option value="history">History</option>{identity?.canManage ? <option value="all">All tasks</option> : null}</select></label>
-      {filtered && <StudioButton variant="ghost" onClick={() => { changeBrowse({ ...browse, search: "", cursor: null }); }}>Clear search</StudioButton>}
+      {clearInToolbar && <StudioButton variant="ghost" onClick={() => { changeBrowse({ ...browse, search: "", cursor: null }); }}>Clear search</StudioButton>}
     </StudioCollectionToolbar>}
       <div className="user-task-results" aria-busy={loading}>
         <StudioTableContainer role="region" aria-label="Task inbox" tabIndex={0}>
@@ -59,16 +63,16 @@ export function TasksPage({ api, navigate }: { api: ElsaStudioModuleApi; navigat
             <StudioResultState icon={<Inbox size={32} />} title={filtered ? "No matching tasks" : cursor ? "No more tasks" : view === "queue" ? "No group tasks available" : view === "history" ? "No task history yet" : "No tasks here"}
               description={filtered ? "Try a different search or clear it to see your inbox." : "Choose another inbox or refresh when new work arrives."}
               actions={filtered ? <StudioButton onClick={() => { changeBrowse({ ...browse, search: "", cursor: null }); }}>Clear search</StudioButton> : cursor ? <StudioButton onClick={() => changeBrowse({ ...browse, cursor: null })}>First page</StudioButton> : undefined} /> : page ?
-            <table className="studio-table" aria-label="User Tasks"><thead><tr><th scope="col">Task</th><th scope="col">Status</th><th scope="col">Assignment</th></tr></thead>
+            <table className="studio-table user-task-table" aria-label="User Tasks"><thead><tr><th scope="col">Task</th><th scope="col">Status</th><th scope="col">Assignment</th></tr></thead>
               <tbody>{page.items.map(task => <tr key={task.id}>
-                <td><a data-task-id={task.id} className="user-task-link" href={taskDetailPath(task.id, browse)} onClick={event => {
+                <td data-label="Task"><a data-task-id={task.id} className="user-task-link" href={taskDetailPath(task.id, browse)} onClick={event => {
                   const path = taskDetailPath(task.id, browse);
                   if (isStudioWorkspaceTabClick(event) && openStudioWorkspaceTab(path)) { event.preventDefault(); return; }
                   if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
                   replaceTaskBrowseLocation(browse, task.id);
                   if (navigate) { event.preventDefault(); navigate(path); }
                 }}>{task.title}</a></td>
-                <td><TaskStatus status={task.status} /></td><td>{task.claimantId ?? task.assigneeId ?? task.groupId ?? "Unassigned"}</td>
+                <td data-label="Status"><TaskStatus status={task.status} /></td><td data-label="Assignment">{person(task.claimantId ?? task.assigneeId ?? task.groupId) || "Unassigned"}</td>
               </tr>)}</tbody></table> : null}
         </StudioTableContainer>
         {!loading && !error && !denied && page && <StudioCollectionFooter>
