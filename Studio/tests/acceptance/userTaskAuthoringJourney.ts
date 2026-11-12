@@ -86,10 +86,14 @@ export async function userTaskAuthoringJourney(page: Page, info: TestInfo, captu
   await page.getByRole("textbox", { name: "Form ID", exact: true }).scrollIntoViewIfNeeded();
   await capture(page, info, "form-authoring");
   await page.getByRole("button", { name: "Publish form version", exact: true }).click();
+  // #4068: publication is confirmed on the page, so no toast covers the heading on a narrow screen.
+  await expect(page.getByRole("status").filter({ hasText: `Published ${title} version 1.` })).toBeVisible();
+  await expect(page.getByRole("group", { name: "Form published", exact: true })).toHaveCount(0);
   const formRow = page.getByRole("row").filter({ hasText: formId });
   const formLink = formRow.getByRole("button", { name: title, exact: true });
   await expect(formLink).toBeVisible(); await formLink.press("Enter");
   await expect(page.getByRole("heading", { name: "Published version 1", exact: true })).toBeFocused();
+  await expect(page.getByRole("heading", { name: "Published version 1", exact: true })).toHaveCSS("outline-style", "none");
   await capture(page, info, "published-form");
   await page.getByRole("button", { name: "Back to forms", exact: true }).press("Enter");
   await expect(formLink).toBeFocused();
@@ -234,9 +238,34 @@ export async function userTaskAuthoringJourney(page: Page, info: TestInfo, captu
   await expect(runtimeTask.locator('.source[data-handleid="Approve"]')).toBeVisible();
   await expect(runtimeTask.locator('.source[data-handleid="Reject"]')).toBeVisible();
   await page.setViewportSize(projectViewport);
+  const runCanvas = page.getByRole("region", { name: "Workflow run canvas", exact: true });
+  const outcomeLabels = runtimeTask.locator(".wf-node-port-label").filter({ hasText: /^(Approve|Reject|Unmatched)$/ });
+  const renderedOutcomeFont = () => outcomeLabels.first().evaluate(element => {
+    const viewport = element.closest(".react-flow__viewport");
+    if (!viewport) throw new Error("Runtime graph viewport is unavailable");
+    const matrix = new DOMMatrixReadOnly(getComputedStyle(viewport).transform);
+    return Number.parseFloat(getComputedStyle(element).fontSize) * Math.hypot(matrix.a, matrix.b);
+  });
+  // The first view keeps the outcome labels readable (#4064): the whole graph when it fits legibly,
+  // otherwise a readable part around the task, with every outcome label inside the canvas.
+  await expect.poll(renderedOutcomeFont).toBeGreaterThanOrEqual(10);
+  const initialFont = await renderedOutcomeFont();
+  for (const label of ["Approve", "Reject", "Unmatched"]) {
+    await expect.poll(async () => {
+      const box = await outcomeLabels.filter({ hasText: new RegExp(`^${label}$`) }).boundingBox();
+      const pane = await runCanvas.locator(".react-flow__pane").boundingBox();
+      // The zoom controls and MiniMap float over the pane, so a label under one of them is not readable.
+      const panels = await Promise.all((await runCanvas.locator(".react-flow__panel:visible").all()).map(panel => panel.boundingBox()));
+      const underPanel = panels.some(panel => box && panel && box.x < panel.x + panel.width && box.x + box.width > panel.x
+        && box.y < panel.y + panel.height && box.y + box.height > panel.y);
+      return Boolean(box && pane && !underPanel && box.x >= pane.x && box.x + box.width <= pane.x + pane.width
+        && box.y >= pane.y && box.y + box.height <= pane.y + pane.height);
+    }, { message: `${label} is readable inside the run canvas's first view` }).toBe(true);
+  }
+  await capture(page, info, "run-outcomes-initial");
   await page.getByRole("button", { name: "Fit View", exact: true }).click();
   expect((await page.getByRole("button", { name: "All executions", exact: true }).boundingBox())!.height).toBeGreaterThanOrEqual(32);
-  const canvasBox = (await page.getByRole("region", { name: "Workflow run canvas", exact: true }).boundingBox())!;
+  const canvasBox = (await runCanvas.boundingBox())!;
   for (const node of await page.locator(".react-flow__node").all()) {
     await expect.poll(async () => {
       const box = await node.boundingBox();
@@ -270,15 +299,7 @@ export async function userTaskAuthoringJourney(page: Page, info: TestInfo, captu
   }
   await capture(page, info, "run-outcomes");
 
-  // Fit View is an overview. Verify ordinary controls can recover readable outcomes.
-  const runCanvas = page.getByRole("region", { name: "Workflow run canvas", exact: true });
-  const outcomeLabels = runtimeTask.locator(".wf-node-port-label").filter({ hasText: /^(Approve|Reject|Unmatched)$/ });
-  const renderedOutcomeFont = () => outcomeLabels.first().evaluate(element => {
-    const viewport = element.closest(".react-flow__viewport");
-    if (!viewport) throw new Error("Runtime graph viewport is unavailable");
-    const matrix = new DOMMatrixReadOnly(getComputedStyle(viewport).transform);
-    return Number.parseFloat(getComputedStyle(element).fontSize) * Math.hypot(matrix.a, matrix.b);
-  });
+  // Fit View is the whole-graph overview. Verify ordinary controls can recover readable outcomes from it.
   const overviewFont = await renderedOutcomeFont();
   const zoomIn = runCanvas.getByRole("button", { name: "Zoom In", exact: true });
   await expect(zoomIn).toBeVisible(); await expect(zoomIn).toBeEnabled();
@@ -340,7 +361,7 @@ export async function userTaskAuthoringJourney(page: Page, info: TestInfo, captu
   try { await panTo([...await outcomeLabels.all(), taskName], true); }
   catch { framedWithNode = false; await panTo(await outcomeLabels.all(), true); }
   for (const label of ["Approve", "Reject", "Unmatched"]) await expect(outcomeLabels.filter({ hasText: new RegExp(`^${label}$`) })).toBeVisible();
-  await info.attach("runtime-outcome-readable-font.json", { body: JSON.stringify({ overviewFont, recoveredFont: await renderedOutcomeFont(), framedWithNode }), contentType: "application/json" });
+  await info.attach("runtime-outcome-readable-font.json", { body: JSON.stringify({ initialFont, overviewFont, recoveredFont: await renderedOutcomeFont(), framedWithNode }), contentType: "application/json" });
   await capture(page, info, "run-outcomes-readable");
   const runtimeOutput = page.locator(`.react-flow__node[data-id="${outputNodeId}"]`);
   await panTo([runtimeOutput]);
