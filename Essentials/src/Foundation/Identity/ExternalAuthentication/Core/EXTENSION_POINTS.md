@@ -22,9 +22,9 @@ terms: [authentication architecture](../../../../../../docs/reference/authentica
 | `ILocalLoginRecovery` | Replacement | Current canonical actor first, then a bounded local user page scan; requires an enabled password method, password, active identity/membership, framework eligibility and current provider-management permission. |
 | `IConnectionSignInEvidence` | Replacement | Records successful normal external administrator sign-ins in a private protected observation envelope. Preview and ordinary reader sign-ins never establish recovery evidence. |
 
-At the initial catalog stage, `AddFoundationExternalAuthentication` installs only the catalog/registry
-contracts, options and activation validation. The remaining contracts have no default implementation here;
-their implementations are introduced with the owning admission, lifecycle and flow slices. Missing readiness,
+At the catalog/admission stage, `AddFoundationExternalAuthentication` installs the catalog/registry, admission
+service, explicit JIT/matching policies, options and activation validation. The remaining contracts have no default implementation here;
+their implementations are introduced with the owning lifecycle and flow slices. Missing readiness,
 recovery, session or protocol support never counts as an installed usable path. Register replacements before
 Foundation's registration and preserve the shared duplicate-contract diagnostics.
 
