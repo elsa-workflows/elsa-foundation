@@ -448,6 +448,11 @@
       "medianMinutes": 0.01
     },
     {
+      "project": "Essentials/tests/Studio/Dashboard/QueryTests/Elsa.Studio.Dashboard.QueryTests.csproj",
+      "tier": "pr",
+      "medianMinutes": null
+    },
+    {
       "project": "Essentials/tests/Studio/Preferences/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.ProviderTests.csproj",
       "tier": "integration",
       "trait": "testcontainers",

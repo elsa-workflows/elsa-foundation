@@ -10,9 +10,9 @@ Each PR is based on its predecessor until that predecessor lands. Split an overs
 
 | Slice | Spec tasks / boundary | Current state |
 | --- | --- | --- |
-| 1 | T001–T005: spec and SDK-free query, resource, authoring contracts; tracked API and solution registration | Prepared on current main `dff7c490d0`; build/review pending |
-| 2 | T006–T009/T011: native validation, named event fan-in, read bounds and resource authorization; query tests | Preserved; not reintegrated |
-| 3 | T008/T024: EF definitions, CAS, revisions and SQLite schema; normal consumer-context tests | Preserved; not reintegrated |
+| 1 | T001–T005: spec and SDK-free query, resource, authoring contracts; tracked API and solution registration | Draft [#4217](https://github.com/elsa-workflows/elsa-foundation/pull/4217), `58cda618a7`; Core build/maps/catalog and independent review pass; Architecture/CI pending |
+| 2 | T006–T009/T011: native validation, named event fan-in and read bounds; query tests (resource authorization moves to tested persistence/resource slice) | Prepared; 55 query/composition cases pass after causal regression controls; review pending |
+| 3 | T008–T009/T024: resource service/authorization and EF definitions, CAS, revisions and SQLite schema; resource and normal consumer-context tests | Preserved; not reintegrated |
 | 4 | T024/T033: relational migrations and provider/security tests | Preserved; not reintegrated |
 | 5 | T010/T016/T023/T026/T030–T031: authenticated native APIs, audience resolution, resource HTTP tests and catalogs | Preserved; not reintegrated |
 | 6 | T013–T015/T021: reusable runtime inspection and Workflow query source; numerical tests | Preserved; not reintegrated |
