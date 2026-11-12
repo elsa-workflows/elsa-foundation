@@ -4,7 +4,7 @@ Implementation baseline for the capture/provider/API workers. Existing public co
 
 ## Envelope and logical batch
 
-Reuse RuntimeHistoryEvent with existing constructor and Sequence/Name/OccurredAt meaning. Add null/default-omitted init-only SchemaVersion (default 1), Authority (Unspecified, CommittedTransition, DeliveryObservation), BookmarkId, AttemptId, ExecutionScopeId, IterationId, Causation, PhysicalCommitId and RecordedAt. Old envelopes remain Unspecified authority, never silently promoted. Payload remains compatible but this metadata path emits no arbitrary payload.
+Reuse RuntimeHistoryEvent with its existing constructor and Sequence/Name/OccurredAt meaning. Add init-only SchemaVersion (default 1), default-omitted Authority (Unspecified, CommittedTransition, DeliveryObservation), and null-omitted CheckpointOrdinal, BookmarkId, AttemptId, ParentActivityExecutionId, ActivityAncestryKnown, ExecutionScopeId, IterationId, Causation, PhysicalCommitId and RecordedAt. SchemaVersion is an additive serialized field; the optional occurrence/position fields remain absent on old envelopes. Old envelopes remain Unspecified authority, never silently promoted. Payload remains compatible but this metadata path emits no arbitrary payload. Existing no-history checkpoint fingerprint/wire preservation is a separate obligation in S03.
 
 New Core models:
 

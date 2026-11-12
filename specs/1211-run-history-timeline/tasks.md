@@ -7,7 +7,7 @@
 ## Phase 1 — Setup and reviewed boundary
 
 - [x] T001 Record owner delivery authority and preserve the selected reference in specs/1211-run-history-timeline/spec.md and design/timeline-workspace.md.
-- [ ] T002 Inspect actual capture/coalescing, provider/query/access and Studio/acceptance seams and consolidate decisions in specs/1211-run-history-timeline/research.md.
+- [x] T002 Inspect actual capture/coalescing, provider/query/access and Studio/acceptance seams and consolidate decisions in specs/1211-run-history-timeline/research.md. Current-main source review: R14; behavior qualification remains with each implementation slice.
 - [ ] T003 Review and freeze cross-layer candidate/record/policy/query contracts and dependency map in specs/1211-run-history-timeline/contracts/ and plan.md, resolving replay-after-enable, required-policy refusal, deletion races, empty search windows and unknown creation history.
 
 ## Phase 2 — Shared foundation
