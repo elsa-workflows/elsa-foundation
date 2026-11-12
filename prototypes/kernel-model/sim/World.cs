@@ -114,7 +114,13 @@ public sealed class Wire(World world, Actor actor) : IKernelStore
     public ValueTask<Committed> CommitAsync(CommitBatch batch, CancellationToken cancellationToken = default) =>
         Send("commit", $"commit p{batch.Partition} e{batch.Epoch} @{batch.Position} [{string.Join(", ", batch.Steps.Select(Describe))}]"
             + (batch.Seen.Count > 0 ? $" seen [{string.Join(", ", batch.Seen)}]" : "") + (batch.Trial.Count > 0 ? $" on trial [{string.Join(", ", batch.Trial)}]" : ""),
-            () => world.Store.CommitAsync(batch));
+            () => world.Store.CommitAsync(batch) is var landed && landed.Result.Landed && batch.Trial.Count > 0 ? Counted(landed, batch.Trial.Count) : landed);
+
+    private static ValueTask<Committed> Counted(ValueTask<Committed> landed, int trials)
+    {
+        World.Count("put on trial", trials);
+        return landed;
+    }
 
     public ValueTask<Polled> PollAsync(int partition, long epoch, TimeSpan horizon, int limit, CancellationToken cancellationToken = default) =>
         Send("poll", $"poll p{partition} e{epoch}", () => world.Store.PollAsync(partition, epoch, horizon, limit));
@@ -262,10 +268,12 @@ public sealed partial class World
         var (owner, epoch) = (Store.Partitions[partition].Owner, Store.Partitions[partition].Epoch);
         var taken = Store.TakeAsync(partition, node, lease);
         var lost = taken.Result is not null && owner is not null && owner != node;
+        if (lost) Count("owners lost");
         foreach (var row in Store.Messages.Values)
         {
             // I14, the counting half: one more attempt for exactly the rows that were on trial under the owner that was lost.
             var onTrial = lost && !row.Done && row.Trial == epoch && row.Message.Target.Partition == partition;
+            if (onTrial) Count("attempts charged");
             var expected = _attempts.GetValueOrDefault(row.Message.Id) + (onTrial ? 1 : 0);
             if (row.Attempts != expected) Faults.Add($"I14 the take of partition {partition} by {node} left {row.Message.Id} at {row.Attempts} attempts; it should be {expected}");
             _attempts[row.Message.Id] = row.Attempts;
@@ -493,11 +501,16 @@ public sealed class Generator(int seed, World world)
     private readonly List<(string Target, string Key)> _runs = [];
     private int _serial;
 
+    /// <summary>Scales lost calls, wrong answers, crashes and pauses. At 1 the random stream is the default one.</summary>
+    public static double Faults = 1;
+
     public Act Next()
     {
         var r = _random;
         var alive = world.Alive.ToList();
         var actor = alive[r.Next(alive.Count)];
+        if (Faults > 1 && r.NextDouble() < (Faults - 1) * 2.0 / 108)       // more owners lost
+            return r.Next(2) == 0 ? new Act("crash", r.Next(world.Config.Nodes), Flag: r.Next(3) == 0) : new Act(r.Next(2) == 0 ? "pause" : "resume", r.Next(world.Config.Nodes));
         var roll = r.Next(108);
         switch (roll)
         {
@@ -522,13 +535,14 @@ public sealed class Generator(int seed, World world)
                 if (open.Count == 0) return new Act("tick", r.Next(50));
                 var (a, call, index) = open[r.Next(open.Count)];
                 var fault = r.Next(100);
-                if (!call.Executed) return fault < 4 ? new Act("lose", a.Id, index, Flag: call.Kind == "commit" && fault < 2) : new Act("exec", a.Id, index);
-                return new Act("answer", a.Id, index, Flag: fault < 5);
+                if (!call.Executed) return fault < 4 * Faults ? new Act("lose", a.Id, index, Flag: call.Kind == "commit" && fault < 2 * Faults) : new Act("exec", a.Id, index);
+                return new Act("answer", a.Id, index, Flag: fault < 5 * Faults);
             }
             case < 90: return Outside(r, alive);
-            case < 93: return new Act("tick", r.Next(3000));
+            case < 93: return new Act("tick", r.Next((int)(3000 * Faults)));      // long silences expire leases: the main cause of lost owners here
             case < 94 when world.Config.Upgrade: return new Act("crash", r.Next(world.Config.Nodes));   // a rolling deploy restarts nodes more often than crashes do
             case < 94: return new Act("skew", r.Next(world.Config.Nodes), r.Next(-5000, 5000));
+            case < 96 when Faults < 1 && r.NextDouble() >= Faults: return new Act("tick", r.Next(50));     // fewer owners lost
             case < 95: return new Act("crash", r.Next(world.Config.Nodes), Flag: r.Next(3) == 0);
             case < 96: return new Act(r.Next(2) == 0 ? "pause" : "resume", r.Next(world.Config.Nodes));
             case < 97:

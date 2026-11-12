@@ -664,3 +664,39 @@ The owner's requirement of 12 November: a workflow handles an HTTP request and p
   instances that later messages would create again (a counter, which every add can start), because a message with
   a start spec creates a new instance with the same id: delete then means "start over", which is right for a keyed
   instance and has to be a decision.
+
+## 21. Innocent messages parked at the threshold. Run
+
+Round 2 left this open: at 1,000 actions about 7 percent of seeds parked an innocent message (1,412 instances in
+20,000 seeds), and section 7 argued that the simulation loses owners far more often than a real cluster does.
+
+- **How it was measured:** `--faults F` scales lost calls, wrong answers, crashes, pauses and the long silences that
+  let a lease expire (`Generator.Faults`; at 1 the random stream is the default one). `--flaw TrialBeforeLoad` switches
+  off the rule of F13 that a trial starts only when its step can run at once (instance loaded, nothing in flight),
+  which is the trial rule of round 2. Each row is 5,000 seeds of 1,000 actions, threshold 3 (every fifth seed: 5 with
+  groups of 4).
+
+| Faults | Owners lost | Rule of F13: put on trial | attempts charged | innocent parked | Round 2's rule: innocent parked | seeds failed |
+|---:|---:|---:|---:|---:|---:|---:|
+| 0.5 | 47,294 | 87,331 | 21,997 | 0 | 17 | 30 |
+| 1 | 68,145 | 84,342 | 23,239 | 4 | 165 | 34 |
+| 2 | 102,253 | 74,531 | 22,485 | 6 | 269 | 26 |
+| 4 | 139,950 | 59,938 | 19,748 | 0 | 41 | 5 |
+
+- **What it shows:** with the trial rule of round 2, innocent parking grows faster than the fault rate between 0.5
+  and 2 (17, 165, 269: three deaths have to meet one message), and at 4 so little work gets done that fewer messages
+  ever reach a trial. With the rule of F13 it is 0 to 6 per 5,000 seeds at every fault rate, 30 to 45 times fewer.
+  The failed seeds are `IDLE` runs of F13 itself, which the old rule brings back.
+- **Why, reasoned from the counts:** in this simulation most owners are lost because their lease runs out while the
+  host does nothing with them, not because they crash. A trial that waited for its instance's load spanned the poll,
+  the load and their answers, tens of actions, and every one of them was a chance to lose the owner. A trial that
+  starts only when its step can run spans the step and one commit.
+- **The rule does not let a poison message walk, run:** a message that kills the process is still tried alone in its
+  process, and the end check requires every such instance to end Faulted; no seed of any row failed it.
+- **Acceptable, reasoned:** yes. At 1,000 actions the simulation loses an owner about every 70 actions; the
+  remaining rate (at most 6 instances in 5 million actions) needs three such losses during the two commits of one
+  message's trials. In a cluster that loses an owner every few hours and tries a message in milliseconds, it is zero
+  for practical purposes.
+- **Proposed, reasoned, not built:** an owner with a trial in flight renews its lease on a short timer, so only a
+  stalled or dead process lets it expire. In the simulation the host renews only when a random action says so; a
+  real host can do this without risk, because a renewal is a fenced commit that changes nothing.

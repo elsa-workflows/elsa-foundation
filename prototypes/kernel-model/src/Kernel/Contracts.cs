@@ -164,4 +164,5 @@ public enum Flaw : long
     EvictBusy = 1L << 38,          // an instance whose commit is in flight may be evicted
     DeleteLeavesJournal = 1L << 39, // a delete leaves the instance's journal rows
     ProjectorStopsAtGap = 1L << 40, // the projector stops at the first missing position, as in section 10
+    TrialBeforeLoad = 1L << 41,    // for the measurement of section 21: a trial may start before its instance is loaded and idle
 }

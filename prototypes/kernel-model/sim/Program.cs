@@ -10,6 +10,7 @@ using Kernel.Sim;
 
 string? Arg(string name) => Array.IndexOf(args, name) is >= 0 and var i && i + 1 < args.Length ? args[i + 1] : null;
 var actions = int.Parse(Arg("--actions") ?? "300");
+Generator.Faults = double.Parse(Arg("--faults") ?? "1", System.Globalization.CultureInfo.InvariantCulture);
 var flaws = (Arg("--flaw") ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries).Aggregate(Flaw.None, (all, name) => all | Enum.Parse<Flaw>(name, true));
 
 if (args.Contains("--mutations")) return Mutations(int.Parse(Arg("--seeds") ?? "2000"));

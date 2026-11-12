@@ -299,7 +299,8 @@ public sealed class Worker
     /// once: its instance is loaded, has nothing in flight, is not suspended, and no kernel message waits ahead of it.
     /// </summary>
     private bool CanTry(Item suspect) =>
-        _slots.TryGetValue(suspect.Message.Target.Id, out var slot) && slot.Loaded && (!slot.Busy || Has(Flaw.SuspendDuringTrial)) && !Withheld(slot)
+        _slots.TryGetValue(suspect.Message.Target.Id, out var slot) && (slot.Loaded || Has(Flaw.TrialBeforeLoad))
+        && (!slot.Busy || Has(Flaw.SuspendDuringTrial) || Has(Flaw.TrialBeforeLoad)) && !Withheld(slot)
         && !slot.Inbox.TakeWhile(i => i != suspect).Any(i => Kinds.IsControl(i.Message.Kind));
 
     /// <summary>
