@@ -1,0 +1,258 @@
+
+<!-- 7 ─────────────────────────────────────────── -->
+<section class="ch" id="ownership">
+  <div class="num">07</div>
+  <h2>Ownership and takeover</h2>
+  <p>Leases decide who <i>should</i> write. The fence decides who <i>can</i>. Play through a takeover where the old owner was only paused, the case that breaks most designs.</p>
+  <div class="stepper" id="own-stepper">
+  <figure>
+    <div class="fig">
+    <svg class="dg" viewBox="0 0 960 310" role="img" aria-label="Node A takes partition 17 at epoch 7 and commits, then pauses; its lease runs out and node B takes it at epoch 8; when A wakes, its commit at epoch 7 matches no row and is rejected.">
+      <text class="tt" x="20" y="74">Node A</text>
+      <text class="tt" x="20" y="154">Node B</text>
+      <text class="tt" x="20" y="234">partition 17</text>
+      <line class="grid" x1="130" y1="70" x2="940" y2="70"/>
+      <line class="grid" x1="130" y1="150" x2="940" y2="150"/>
+      <line class="grid" x1="130" y1="230" x2="940" y2="230"/>
+      <text class="ts" x="940" y="300" text-anchor="end">time →</text>
+
+      <g data-k="a-take"><path class="edge dash" d="M150,80 L150,222"/><rect class="b2" x="142" y="62" width="16" height="16" rx="4"/><text class="el" x="150" y="50" text-anchor="middle">take</text><text class="tm" x="150" y="252" text-anchor="middle">epoch 7 · pos 40</text></g>
+      <g data-k="a-commit"><path class="edge dash" d="M270,80 L270,222"/><rect class="b2" x="262" y="62" width="16" height="16" rx="4"/><text class="el" x="270" y="50" text-anchor="middle">commit 3 turns</text><text class="tm" x="270" y="270" text-anchor="middle">pos 43, lease renewed</text></g>
+      <g data-k="a-pause"><rect class="frame" x="360" y="62" width="400" height="16" rx="4"/><text class="el" x="560" y="50" text-anchor="middle">Node A paused: GC pause or network split</text></g>
+      <g data-k="lease"><path class="hotline" d="M500,40 L500,236"/><text class="hot" x="500" y="296" text-anchor="middle">lease runs out</text></g>
+      <g data-k="b-take"><path class="edge dash" d="M560,160 L560,222"/><rect class="b2" x="552" y="142" width="16" height="16" rx="4"/><text class="el" x="560" y="130" text-anchor="middle">take</text><text class="tm" x="560" y="252" text-anchor="middle">epoch 8 · pos 43</text><text class="tm" x="560" y="270" text-anchor="middle">+1 attempt on trial</text></g>
+      <g data-k="b-poll"><rect class="b2" x="652" y="142" width="16" height="16" rx="4"/><text class="el" x="660" y="180" text-anchor="middle">poll: every row seen &lt; 8</text></g>
+      <g data-k="a-stale" class="hotlit"><path class="edge dash" d="M800,80 L800,222"/><rect class="box" x="792" y="62" width="16" height="16" rx="4"/><text class="el" x="800" y="50" text-anchor="middle">wakes, commits at epoch 7</text><text class="tm" x="800" y="252" text-anchor="middle">0 rows: refused</text><text class="el" x="800" y="100" text-anchor="middle">resets, drops memory</text></g>
+      <g data-k="b-commit"><path class="edge dash" d="M890,160 L890,222"/><rect class="b2" x="882" y="142" width="16" height="16" rx="4"/><text class="el" x="890" y="130" text-anchor="middle">commit</text><text class="tm" x="890" y="270" text-anchor="middle">pos 44</text></g>
+    </svg>
+    </div>
+  </figure>
+  <div class="stepbar"><button data-prev aria-label="Previous step">← Back</button><button class="primary" data-next>Next step →</button><span class="count" data-count></span></div>
+  <ol class="steps">
+    <li data-on="a-take"><b>A takes the partition.</b><p>The take succeeds only if the partition is free, its lease has expired, or A already owns it. Every take raises the epoch: now 7.</p></li>
+    <li data-on="a-take a-commit"><b>A commits.</b><p>The fence checks epoch 7 and position 40 and moves the position to 43. The same update renews the lease. An idle owner sends an empty fenced commit as its heartbeat.</p></li>
+    <li data-on="a-commit a-pause"><b>A stops.</b><p>A long GC pause or a network split. A still believes it owns the partition and still holds instances in memory.</p></li>
+    <li data-on="a-pause lease"><b>The lease runs out.</b><p>Nobody has written, so nothing is wrong yet. A wrong lease costs availability, never correctness.</p></li>
+    <li data-on="lease b-take"><b>B takes the partition.</b><p>Epoch 8, position 43. In the same transaction every message A had on trial gets one more attempt: that is how a message that kills its owner gets counted.</p></li>
+    <li data-on="b-take b-poll"><b>B polls everything.</b><p>Every row with <code>seen &lt; 8</code> comes back, so B finds all A was holding. B builds memory from rows alone, and hands nothing over in memory until a poll comes back short.</p></li>
+    <li data-on="a-stale"><b>A wakes and tries to commit.</b><p>Its commit is fenced on epoch 7. It matches no row, so nothing lands. A resets and drops its memory. This is the Orleans two-activations case, caught.</p></li>
+    <li data-on="b-commit"><b>B carries on.</b><p>B commits position 43 to 44. No two commits ever landed at the same position, and nothing prepared under epoch 7 got in.</p></li>
+  </ol>
+  </div>
+  <ul>
+    <li><b>Fair share.</b> A node counts the others from the <code>node</code> heartbeats, holds its share of partitions and releases the surplus.</li>
+    <li><b>Reset is start-up.</b> After any doubt the owner drops its memory and takes again. The take waits behind a commit still in flight, so it reads the true position.</li>
+    <li><b>Failover takes about one lease</b> (10 s by default): the price of never having two writers.</li>
+  </ul>
+</section>
+
+<!-- 8 ─────────────────────────────────────────── -->
+<section class="ch" id="messages">
+  <div class="num">08</div>
+  <h2>Messages, timers and poison</h2>
+  <p>The inbox is the outbox: a message to another instance is a row inserted in the sender's own transaction, and nothing is relayed afterwards.</p>
+  <div class="grid">
+    <div class="card l2"><h4>Order</h4><p>A target handles its messages in <code>seq</code> order. A sender's commits are serial, so messages from one sender to one target arrive in the order sent.</p></div>
+    <div class="card l2"><h4>Once in state</h4><p>A state change and the delete of the message that caused it are one transaction. A message changes state exactly once, though a turn's code may run more than once after a crash.</p></div>
+    <div class="card l2"><h4>Outside commands</h4><p>Carry <code>keep_until</code>. The consuming commit marks them <code>done</code> and a sweep deletes them later, so a client retrying a handled command gets a duplicate-key answer, not a second effect. Messages between instances need no window: a repeat cannot exist.</p></div>
+    <div class="card l2"><h4>Timers</h4><p>A message with a future <code>due</code>. The poll returns database time; the owner anchors it and schedules on a monotonic clock. Cancel a timer by deleting its message, whose id the sender knows.</p></div>
+    <div class="card l3"><h4>Creating instances</h4><p>A message may carry a start spec: if its target does not exist, the owner creates it on delivery. Starting a child, starting on an event and signal-with-start are all this one mechanism.</p></div>
+    <div class="card l3"><h4>Placement</h4><p>A start without a caller's key goes into a partition the starting node owns and runs there, with no hop. A keyed start hashes the key to a partition. A child goes into its parent's partition, so a call tree commits together.</p></div>
+    <div class="card"><h4>Poison</h4><p>A new owner tries its predecessor's held messages one at a time: a fenced commit bumps one message's attempts and its turn runs alone. A death counts only against the message on trial. Past the threshold it is parked and its instance faulted, so a message that kills its process cannot walk the cluster.</p></div>
+    <div class="card"><h4>Edge cases</h4><p>A message to an instance that does not exist and carries no start spec is dropped and journalled. A message to a finished instance is consumed and dropped. A turn that throws parks its instance at once; retries are the model's business.</p></div>
+  </div>
+</section>
+
+<!-- 9 ─────────────────────────────────────────── -->
+<section class="ch" id="models">
+  <div class="num">09</div>
+  <h2>Execution models</h2>
+  <p>A workflow instance runs an execution model. The model is a plug-in with one job: given the state and the inbox, produce new state and outgoing messages. Everything else is the kernel's.</p>
+  <div class="two">
+  <pre><code><span class="k">public interface</span> IExecutionModel
+{
+    string Key { get; }         <span class="c">// "elsa.native", "bpmn", ...</span>
+    int StateVersion { get; }
+    object CreateState(StartSpec start);
+    object UpgradeState(object state, int from);
+    ValueTask TurnAsync(ITurn turn, CancellationToken ct);
+    ValueTask&lt;object?&gt; ExecuteJobAsync(IJob job, CancellationToken ct);
+    InstanceSummary Describe(object state);
+}</code></pre>
+  <pre><code><span class="k">public interface</span> IStep
+{
+    InstanceInfo Instance { get; }
+    IReadOnlyList&lt;Message&gt; Inbox { get; }
+    IAmbient Ambient { get; }   <span class="c">// this activation only</span>
+    object State { get; set; }
+    void Send(...);  InstanceRef Start(...);
+    void StartJob(key, args);  void CancelJob(key);
+    void Hold(message);
+    void Subscribe(key, wait);  void Unsubscribe(...);
+    void Record(entry);         <span class="c">// journal</span>
+    void Emit(channel, item);   <span class="c">// live, not durable</span>
+    void Rebind(definition);  void SetStatus(...);
+}</code></pre>
+  </div>
+  <h3>A persistence mode is just where a turn ends</h3>
+  <p>A turn commits at its end and only there. A model that wants a durable boundary ends the turn and sends itself a "continue" message, which the owner hands over in memory. That is all a persistence mode is. Here are ten activities with no wait, measured on PostgreSQL:</p>
+  <figure>
+    <div class="fig">
+      <svg class="dg" id="modes-svg" viewBox="0 0 960 250" role="img" aria-label="Ten activities: Ephemeral commits nothing, Balanced commits once at the end, Durable commits after every activity."></svg>
+    </div>
+    <figcaption>With a wait in the middle, Balanced also commits once at the wait. After a crash, Balanced runs again the activities since its last commit: activity code runs at least once, its effect on the workflow's state exactly once.</figcaption>
+  </figure>
+  <h3>How the known models sit on the contract</h3>
+  <div class="grid">
+    <div class="card l3"><h4>Native (Elsa)</h4><p>State is the live activity frames, variables and scheduled work. Slow activities are jobs. Each container brings its own semantics (below). Built as a spike; it passes its own simulation checks.</p></div>
+    <div class="card l3"><h4>BPMN</h4><p>Hosted on <a href="https://github.com/valence-works/bpmn">Bpmn.Semantics</a>, a pure interpreter: definition, token state and one event in; next state and commands out. A turn feeds it the message; its commands become jobs, timers, subscriptions and sends. State is tokens and scopes. A task is a job, so an interrupting boundary event can cancel it. A call activity is a start. A message that arrives early waits in <code>event</code>.</p></div>
+    <div class="card l3"><h4>ETL</h4><p>State is stage cursors and references to data held elsewhere. Partitions of work are children spread over partitions. Backpressure is a credit protocol between instances.</p></div>
+    <div class="card l3"><h4>Agents</h4><p>State is the conversation checkpoint (a Microsoft Agent Framework thread). A tool call is a job; streamed output is emitted; another agent is another instance; a human approval is a subscription.</p></div>
+    <div class="card l3"><h4>Standalone jobs</h4><p>Elsa.Jobs rebuilt on the kernel: a job is an actor type next to the workflow instance, so a .NET app gets durable jobs without workflows. A workflow's job is the same thing, in the same commit, with no bridge between stores.</p></div>
+    <div class="card l3"><h4>Durable entities</h4><p>State is the entity's value; operations are messages with a reply-to. The reviewers' test of a fifth model: it fits with no change.</p></div>
+    <div class="card l3"><h4>Replay-style authoring</h4><p>Temporal and Durable Task style code, or Restate's journaled awaits, fit as models on the same contract. The kernel imposes neither.</p></div>
+  </div>
+  <h3>Containers and their semantics</h3>
+  <p>The native model is one activity tree. Each container brings its own semantics, runtime state and kind of diagram, and containers nest freely. The kernel sees none of this; it sees turns. Decided 12 November.</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Container</th><th>What drives it</th><th>Runtime state</th><th>Semantics</th></tr></thead>
+    <tbody>
+      <tr><td>Sequence, If, ForEach, While, Parallel</td><td>The previous child completing</td><td>An index; a fixed join</td><td>Built in. The structure says whether more can arrive, so no tokens</td></tr>
+      <tr><td>Flowchart</td><td>Outcomes choose the flows</td><td>Tokens (execution paths) and join arrivals per loop round</td><td><b>Graph engine</b>: today's Elsa 4 Flowchart engine (dead-path joins, BPMN's gateway kinds) lifted into a library for the native model</td></tr>
+      <tr><td>StateMachine</td><td>Events fire guarded transitions; exit, transition and entry actions run</td><td>The active configuration of every region</td><td><b>Statechart engine</b>: one event per turn; later events wait with <code>Hold</code> while an action is suspended. A native composite, so it works as a root and nested</td></tr>
+    </tbody>
+  </table></div>
+  <p class="note">The plan: extract the graph engine and port the prototype's Flowchart to it (its All join after a decision does not fire today), a BPMN spike that hosts the Bpmn.Semantics interpreter on the kernel, then a StateMachine spike with nested states and parallel regions. Each step is gated by new simulation invariants and mutation checks, and none may move the cost table.</p>
+  <h3>Background jobs</h3>
+  <figure>
+    <div class="fig">
+    <svg class="dg" viewBox="0 0 960 210" role="img" aria-label="A turn starts a job and commits a ticket; the kernel runs it outside the turn while the instance keeps taking messages; the result comes back as a message and changes state once.">
+      <text class="tt" x="20" y="64">Instance i42</text>
+      <text class="tt" x="20" y="144">Background job</text>
+      <line class="grid" x1="150" y1="60" x2="940" y2="60"/>
+      <line class="grid" x1="150" y1="140" x2="940" y2="140"/>
+      <rect class="b2" x="160" y="44" width="176" height="32" rx="6"/><text x="248" y="65" text-anchor="middle">turn: StartJob("charge")</text>
+      <text class="ts" x="160" y="96">commit: jobs entry + ticket</text>
+      <path class="edge" d="M318,78 L330,124"/><text class="el" x="338" y="108">ExecuteJobAsync</text>
+      <rect class="b3" x="320" y="126" width="340" height="28" rx="6"/><text x="490" y="145" text-anchor="middle">outside the turn; may run again after a crash</text>
+      <rect class="box" x="400" y="44" width="170" height="32" rx="6"/><text x="485" y="65" text-anchor="middle">a timer or cancel: turns run</text>
+      <path class="edge" d="M660,128 L716,78"/><text class="el" x="700" y="112">result as a message</text>
+      <rect class="b2" x="718" y="44" width="212" height="32" rx="6"/><text x="824" y="65" text-anchor="middle">applied once, ahead of others</text>
+      <text class="ts" x="20" y="186">A new owner finds the ticket by polling and starts the work again. A cancelled job's result is never applied.</text>
+      <text class="ts" x="20" y="204">A result is handled before other messages, so a model never sees a result after its own cancel.</text>
+    </svg>
+    </div>
+  </figure>
+  <p><b>Models compose through messages only.</b> A parent of any model starts a child of any model and gets a message when it finishes. A cancel goes to the children the parent itself started, so admitting a child and cancelling the parent cannot race. The kernel owns suspend and resume, terminating a tree, tenant checks on sends and trace headers.</p>
+</section>
+
+<!-- 10 ─────────────────────────────────────────── -->
+<section class="ch" id="events">
+  <div class="num">10</div>
+  <h2>Events and correlation</h2>
+  <p>An external event (an approval, a payment notice, a BPMN message) must reach every instance waiting for its key, even when the event and the wait are committed at nearly the same moment. Each side checks for the other after its own commit.</p>
+  <figure>
+    <div class="fig">
+    <svg class="dg" viewBox="0 0 960 270" role="img" aria-label="The subscriber commits a subscription and an owed read; the publisher commits the event and then reads subscriptions; when they cross, at least one sees the other and the derived id refuses the double delivery.">
+      <text class="tt" x="40" y="30">Waiting instance</text>
+      <text class="tt" x="540" y="30">Publisher</text>
+      <rect class="b2" x="40" y="46" width="380" height="44" rx="6"/><text x="56" y="73">commit: subscription row + "read events for k"</text>
+      <rect class="box" x="40" y="116" width="380" height="44" rx="6"/><text x="56" y="143">read the event table for k (the owed read)</text>
+      <rect class="box" x="40" y="186" width="380" height="44" rx="6"/><text x="56" y="213">deliver what is there; next commit clears the debt</text>
+      <rect class="b2" x="540" y="46" width="380" height="44" rx="6"/><text x="556" y="73">commit: insert the event</text>
+      <rect class="box" x="540" y="116" width="380" height="44" rx="6"/><text x="556" y="143">read the subscriptions for k</text>
+      <rect class="box" x="540" y="186" width="380" height="44" rx="6"/><text x="556" y="213">add one delivery message per match</text>
+      <path class="edge" d="M230,90 L230,114"/><path class="edge" d="M230,160 L230,184"/>
+      <path class="edge" d="M730,90 L730,114"/><path class="edge" d="M730,160 L730,184"/>
+      <path class="edge dash" d="M540,82 L424,134"/><path class="edge dash" d="M420,82 L536,134"/>
+      <text class="el" x="480" y="112" text-anchor="middle">each sees</text>
+      <text class="el" x="480" y="126" text-anchor="middle">the other</text>
+      <text class="ts" x="480" y="258" text-anchor="middle">Both sides derive the same delivery id, ev:{event}:{instance}:{wait}, so the double is refused.</text>
+    </svg>
+    </div>
+    <figcaption>Default since your decision: events are not kept. Only a wait that asks for kept events (BPMN message correlation) pays for the event row and the owed read.</figcaption>
+  </figure>
+  <h3>The alternative: correlation as an ordinary instance per key</h3>
+  <p>Built as a 50-line model with no kernel change: subscribing and publishing are messages to the key's instance, which holds the waits and the kept events. It passed every run. It costs a hop, measured on PostgreSQL for one waiter, one event:</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Version</th><th class="n">Commits</th><th class="n">Round trips</th></tr></thead>
+    <tbody>
+      <tr><td>Tables (subscription, event, owed read)</td><td class="n">4</td><td class="n">17 (13)</td></tr>
+      <tr><td>Key instance in the waiter's partition</td><td class="n">6</td><td class="n">21 (15)</td></tr>
+      <tr><td>Key instance in another partition</td><td class="n">9</td><td class="n">33 (24)</td></tr>
+    </tbody>
+  </table></div>
+  <p class="note">In brackets: with the fence in the batch. The tables stay for broad keys; the instance is the simpler choice for narrow, quiet keys such as an approval.</p>
+</section>
+
+<!-- 11 ─────────────────────────────────────────── -->
+<section class="ch" id="http">
+  <div class="num">11</div>
+  <h2>Synchronous HTTP</h2>
+  <p>A workflow handles a request and writes the response itself. The response travels on the live <code>Emit</code> channel, not as a durable message: if it cannot reach the caller, the caller gets an error and the workflow is unaffected. Pick a case.</p>
+  <div class="stepper" id="http-stepper">
+  <div class="tabs" role="tablist" aria-label="HTTP cases">
+    <button type="button" role="tab" data-tab="a" aria-selected="true">Start, Ephemeral</button>
+    <button type="button" role="tab" data-tab="b" aria-selected="false">Start, Balanced</button>
+    <button type="button" role="tab" data-tab="c" aria-selected="false">Resume on another node</button>
+    <button type="button" role="tab" data-tab="d" aria-selected="false">Owner lost</button>
+  </div>
+  <figure>
+    <div class="fig">
+    <svg class="dg" viewBox="0 0 960 330" role="img" aria-label="A client, node A that receives the request, node B that owns a waiting instance, and the database, with the paths a request takes in each case.">
+      <g data-k="h-req"><path class="edge" d="M140,140 L218,96"/><text class="el" x="168" y="108" text-anchor="middle">request</text></g>
+      <g data-k="h-run"><path class="edge" d="M355,112 L355,138"/></g>
+      <g data-k="h-resp"><path class="edge" d="M220,166 L142,166"/><text class="el" x="181" y="160" text-anchor="middle">response</text></g>
+      <g data-k="h-commitA"><path class="edge" d="M490,152 L540,152 L540,20 L880,20 L880,108"/><text class="el" x="710" y="14" text-anchor="middle">commit, then release</text></g>
+      <g data-k="h-msg"><path class="edge" d="M490,224 L540,224 L540,316 L900,316 L900,222"/><text class="el" x="720" y="310" text-anchor="middle">resume message + reply address</text></g>
+      <g data-k="h-pollB"><path class="edge" d="M818,135 L752,135"/><text class="el" x="785" y="128" text-anchor="middle">poll</text></g>
+      <g data-k="h-commitB"><path class="edge" d="M752,158 L818,158"/><text class="el" x="785" y="174" text-anchor="middle">commit</text></g>
+      <g data-k="h-reply"><path class="edge" d="M630,174 L630,246 L492,246"/><text class="el" x="566" y="240" text-anchor="middle">reply, not durable</text></g>
+      <g data-k="h-respB"><path class="edge" d="M220,240 L80,240 L80,202"/><text class="el" x="150" y="234" text-anchor="middle">response</text></g>
+      <g data-k="h-503" class="hotlit only-lit"><path class="edge" d="M220,240 L80,240 L80,202"/><text class="el" x="150" y="234" text-anchor="middle">503</text></g>
+
+      <g data-k="client"><rect class="box" x="20" y="120" width="120" height="80" rx="8"/><text class="tt" x="80" y="156" text-anchor="middle">Client</text><text class="ts" x="80" y="176" text-anchor="middle">HTTP request</text></g>
+      <g data-k="na"><rect class="frame" x="200" y="30" width="310" height="270" rx="10"/><text class="tt" x="216" y="54">Node A · received the request</text></g>
+      <g data-k="route"><rect class="box" x="220" y="72" width="270" height="40" rx="6"/><text x="236" y="97">Route table, in memory</text></g>
+      <g data-k="ia"><rect class="box" x="220" y="140" width="270" height="50" rx="6"/><text class="tt" x="236" y="162">New instance, runs inline</text><text class="ts" x="236" y="180">request as Ambient, in a partition A owns</text></g>
+      <g data-k="wait"><rect class="box" x="220" y="212" width="270" height="46" rx="6"/><text class="tt" x="236" y="232">Request held open</text><text class="ts" x="236" y="249">reply address: node A + request id</text></g>
+      <g data-k="nb"><rect class="frame" x="570" y="30" width="200" height="270" rx="10"/><text class="tt" x="586" y="54">Node B · owns i42</text></g>
+      <g data-k="ib"><rect class="box" x="590" y="110" width="160" height="64" rx="6"/><text class="tt" x="606" y="136">i42, waiting</text><text class="ts" x="606" y="156">state in memory</text></g>
+      <g data-k="db"><rect class="bs" x="820" y="110" width="120" height="110" rx="8"/><text class="tt" x="880" y="160" text-anchor="middle">Database</text><text class="ts" x="880" y="180" text-anchor="middle">message, instance</text></g>
+      <g data-k="lost" class="only-lit"><path class="hotline" d="M580,40 L760,290"/><path class="hotline" d="M760,40 L580,290"/><text class="hot" x="670" y="284" text-anchor="middle">Node B lost</text></g>
+    </svg>
+    </div>
+  </figure>
+  <div class="stepbar"><button data-prev aria-label="Previous step">← Back</button><button class="primary" data-next>Next step →</button><span class="count" data-count></span></div>
+  <ol class="steps" data-set="a">
+    <li data-on="client h-req route na"><b>The request arrives.</b><p>Any node can take it. The route table is built when definitions are published, so finding the workflow reads nothing.</p></li>
+    <li data-on="h-run ia na"><b>It runs inline.</b><p>The node places the new instance in a partition it owns and runs it in the request, with the request as <code>Ambient</code>. No hop.</p></li>
+    <li data-on="ia h-resp client"><b>Respond and finish.</b><p>The workflow writes the response and ends without waiting. In Ephemeral mode nothing is committed: zero database calls.</p></li>
+  </ol>
+  <ol class="steps" data-set="b" hidden>
+    <li data-on="client h-req route na"><b>The request arrives.</b><p>Same as before: the route table is in memory.</p></li>
+    <li data-on="h-run ia na"><b>It runs inline.</b><p>The instance is placed locally and runs in the request.</p></li>
+    <li data-on="ia h-commitA db"><b>The turn commits.</b><p>The response is held until the commit of the turn that wrote it lands: 2 to 3 round trips of latency. A caller never sees a response for work that was then lost.</p></li>
+    <li data-on="ia h-resp client"><b>The response is released.</b><p>Writing the response does not end the workflow; the request returns and the workflow goes on. A route can opt out and respond before the commit.</p></li>
+  </ol>
+  <ol class="steps" data-set="c" hidden>
+    <li data-on="client h-req route na"><b>A resume arrives at node A.</b><p>The workflow it resumes is waiting, and node B owns its partition.</p></li>
+    <li data-on="h-msg wait db"><b>A adds a resume message.</b><p>It carries a reply address, node A and the request's id, and A keeps the request open.</p></li>
+    <li data-on="h-pollB ib nb db"><b>B runs the turn.</b><p>B finds the message by poll or wake hint, marks it seen and runs the turn.</p></li>
+    <li data-on="h-commitB ib db"><b>B commits.</b><p>The turn that wrote the response commits, so the response may now be released.</p></li>
+    <li data-on="h-reply ib wait"><b>B replies to A.</b><p>Over the runtime's transport between nodes, the same one wake-ups use. It is not durable. On one node this is all in process.</p></li>
+    <li data-on="h-respB wait client"><b>A answers the request.</b><p>One hop paid, because B owns the instance. Moving the instance to the receiving node, as Elsa 3 does, is left out unless measurements show the hop matters.</p></li>
+  </ol>
+  <ol class="steps" data-set="d" hidden>
+    <li data-on="client h-req route na"><b>A resume arrives at node A.</b><p>Node B owns the waiting workflow.</p></li>
+    <li data-on="h-msg wait db"><b>A adds the resume message</b><p>and holds the request open with a reply address.</p></li>
+    <li data-on="lost nb"><b>Node B dies.</b><p>After its lease runs out another node takes the partition and resumes the workflow from the rows, as usual.</p></li>
+    <li data-on="h-503 wait client"><b>The request ends with 503.</b><p>By default, never a hang and never two responses. The workflow's later output is not sent to a caller that is gone.</p></li>
+  </ol>
+  </div>
+  <ul>
+    <li><b>Waiting before responding</b> (a background job, a short timer): the instance stays in memory on the receiving node and the request waits, up to the route's timeout.</li>
+    <li><b>Client disconnect and timeout</b> end the observation. They do not cancel the workflow, unless the route maps them to a cancel message.</li>
+    <li><b>Streaming</b> (chunked responses, server-sent events, an agent's tokens) uses the same channel. Large bodies stay out of state; the workflow holds a reference.</li>
+  </ul>
+</section>
