@@ -410,6 +410,34 @@ public sealed class ClrAssemblyScannerTests
         Assert.Equal("Literal", input.DefaultSyntax);
     }
 
+    [Theory]
+    [InlineData(nameof(JsonDefaultFixtureActivity.Element), "{}")]
+    [InlineData(nameof(JsonDefaultFixtureActivity.NullableElement), "{\"a\":1}")]
+    [InlineData(nameof(JsonDefaultFixtureActivity.Node), "[1,2]")]
+    [InlineData(nameof(JsonDefaultFixtureActivity.Object), "{}")]
+    [InlineData(nameof(JsonDefaultFixtureActivity.Array), "[]")]
+    public void ActivityInputAttribute_ParsesJsonTypedDefaultAsJson(string inputName, string expectedJson)
+    {
+        using var folder = TempAssemblyFolder.WithCopyOf(typeof(UnannotatedFixtureActivity).Assembly);
+
+        var input = InputFor<JsonDefaultFixtureActivity>(CreateScanner().Scan(folder.Path), inputName);
+
+        Assert.Equal(expectedJson, input.DefaultValue?.GetRawText());
+    }
+
+    [Theory]
+    [InlineData(nameof(JsonDefaultFixtureActivity.NotJson), "not json")]
+    [InlineData(nameof(JsonDefaultFixtureActivity.Text), "{}")]
+    public void ActivityInputAttribute_KeepsStringDefault_WhenInputIsNotJsonOrDefaultIsNotJson(string inputName, string expected)
+    {
+        using var folder = TempAssemblyFolder.WithCopyOf(typeof(UnannotatedFixtureActivity).Assembly);
+
+        var input = InputFor<JsonDefaultFixtureActivity>(CreateScanner().Scan(folder.Path), inputName);
+
+        Assert.Equal(JsonValueKind.String, input.DefaultValue?.ValueKind);
+        Assert.Equal(expected, input.DefaultValue?.GetString());
+    }
+
     [Fact]
     public void InheritedActivityInputAttribute_MapsMetadata()
     {
