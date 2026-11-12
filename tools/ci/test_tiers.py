@@ -343,12 +343,26 @@ def _job_name(block: str) -> str:
 
 
 MERGE_GROUP_TRIGGER = re.compile(r"^  merge_group:[ \t]*\n    types: \[checks_requested\][ \t]*$", re.M)
+# Pull requests to main and to an initiative branch run the same jobs and the same tier selection
+# (docs/contributing/merging.md#ci-tiers); no other base joins without a change here.
+PR_BASES = ("main", "'initiative/**'")
+
+
+def _pr_bases(trigger: str) -> list[str]:
+    block = re.search(r"^  pull_request:[ \t]*\n((?:    .*\n)+)", trigger, re.M)
+    branches = re.search(r"^    branches:[ \t]*\n((?:      - .*\n)+)", block.group(1), re.M) if block else None
+    return [line.strip()[2:].strip() for line in branches.group(1).splitlines()] if branches else []
 
 
 def check_workflows(ci: str, ci_full: str) -> list[str]:
     """A required context must never be skippable, the merge queue must get every required context, and no labeled
     trigger may sit on a required workflow (research R8)."""
     problems = []
+    bases = _pr_bases(ci.split("\njobs:\n", 1)[0] + "\n")
+    if sorted(bases) != sorted(PR_BASES):
+        problems.append(f"{CI}: `pull_request.branches` must be exactly {', '.join(PR_BASES)} (found "
+                        f"{', '.join(bases) or 'none'}): pull requests to an initiative branch run the CI a pull request "
+                        f"to main runs")
     if not MERGE_GROUP_TRIGGER.search(ci.split("\njobs:\n", 1)[0]):
         problems.append(f"{CI}: the required checks must also run on `merge_group: types: [checks_requested]`, or every "
                         f"merge-queue entry waits for checks that never report")
@@ -614,7 +628,7 @@ def self_test() -> int:
     check("job entry: keeps only test projects, with forward slashes",
           entry == {"shard": "core-only", "whole": ["t/A/A.Tests.csproj"], "split": []})
 
-    good_ci = ("on:\n  pull_request:\n  merge_group:\n    types: [checks_requested]\njobs:\n  plan-tiers:\n    name: Plan tiers\n"
+    good_ci = ("on:\n  pull_request:\n    branches:\n      - main\n      - 'initiative/**'\n  merge_group:\n    types: [checks_requested]\njobs:\n  plan-tiers:\n    name: Plan tiers\n"
                "  generated-maps:\n    name: Generated maps fresh\n"
                "  build-and-test:\n    name: Build & test\n"
                "    needs: [plan-tiers, pr-shard, architecture-guards, core-only, plan-scope, studio-lint-and-test, studio-browser-tests, studio-dotnet-build-and-test, studio-ux-acceptance]\n    if: ${{ !cancelled() }}\n")
@@ -632,6 +646,12 @@ def self_test() -> int:
     queue_full = good_full.replace("if: ${{ !cancelled() }}",
                                    "if: ${{ !cancelled() && (github.event_name == 'pull_request' || github.event_name == 'merge_group') }}")
     check("workflows: the real shape passes", not check_workflows(good_ci, good_full))
+    check("workflows: pull requests to an initiative branch must run CI",
+          bool(check_workflows(good_ci.replace("      - 'initiative/**'\n", ""), good_full)))
+    check("workflows: pull requests to main must run CI",
+          bool(check_workflows(good_ci.replace("      - main\n", "", 1), good_full)))
+    check("workflows: no other pull-request base joins unnoticed",
+          bool(check_workflows(good_ci.replace("      - main\n", "      - main\n      - 'release/**'\n", 1), good_full)))
     check("workflows: a skippable Build & test fails",
           bool(check_workflows(good_ci.replace("if: ${{ !cancelled() }}", "if: ${{ needs.x.outputs.y }}"), good_full)))
     check("workflows: a ready-only skip of the required PR context fails",
