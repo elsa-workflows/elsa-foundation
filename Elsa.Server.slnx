@@ -413,6 +413,8 @@
   <Folder Name="/Essentials/src/Studio/Dashboard/">
     <Project Path="Essentials/src/Studio/Dashboard/Core/Elsa.Studio.Dashboard.Core.csproj" />
     <Project Path="Essentials/src/Studio/Dashboard/Management/Elsa.Studio.Dashboard.Management.csproj" />
+  </Folder>
+  <Folder Name="/Essentials/src/Studio/Dashboard/Persistence/">
     <Project Path="Essentials/src/Studio/Dashboard/Persistence/EntityFrameworkCore/Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.csproj" />
   </Folder>
   <Folder Name="/Essentials/src/Studio/Preferences/">

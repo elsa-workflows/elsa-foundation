@@ -8,7 +8,7 @@ using Elsa.Studio.Dashboard.Core.Resources;
 namespace Elsa.Studio.Dashboard.Management.Resources;
 
 internal sealed class DashboardResourceService(IDashboardResourceStore store, IDashboardDefinitionValidator definitions,
-    IDashboardAudienceDirectory directory, TimeProvider clock) : IDashboardResourceService
+    TimeProvider clock, IDashboardAudienceDirectory? directory = null) : IDashboardResourceService
 {
     public async ValueTask<DashboardResourcePage> ListAsync(DashboardActor actor, string kind, string? ownership = null,
         string? search = null, string? continuationToken = null, CancellationToken cancellationToken = default)
@@ -104,6 +104,8 @@ internal sealed class DashboardResourceService(IDashboardResourceStore store, ID
         {
             if (grant.Kind is not ("user" or "role") || grant.Access is not ("viewer" or "editor") || string.IsNullOrWhiteSpace(grant.Id) || grant.Id.Length > 256)
                 Invalid("Audience entries require a supported identity and viewer or editor access.");
+            if (directory is null)
+                throw new DashboardResourceException("unavailable", "Audience resolution is not configured for this host.");
             if (!await directory.IsValidAsync(actor, grant, cancellationToken))
                 Invalid("An audience entry is unavailable or cannot be shared with in the current tenant.");
         }

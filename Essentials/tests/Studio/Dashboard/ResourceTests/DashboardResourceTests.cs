@@ -330,6 +330,17 @@ public sealed class DashboardResourceTests
         Assert.Single((await host.With(service => service.ListAsync(actor, "dashboard"))).Items);
     }
 
+    [Fact]
+    public async Task Private_resource_composition_without_a_directory_refuses_audience_grants()
+    {
+        await using var host = await ResourceHost.CreateAsync(withAudienceDirectory: false);
+        var actor = Actor("owner");
+        var question = await host.With(service => service.CreateAsync(actor, "question", Question("without-directory")));
+        await AssertCode("unavailable", () => host.With(service => service.SetAudienceAsync(actor, "question", question.Id,
+            question.Revision, [new("user", "viewer", "viewer")])));
+        Assert.Empty((await host.With(service => service.GetAudienceAsync(actor, "question", question.Id))).Items);
+    }
+
     internal static DashboardResourceInput Question(string key) => new() { Name = "Question", OperationKey = key,
         Definition = new() { Query = new() { Dataset = new("test.records", "1"), Form = "records", Fields = ["id"] } } };
     internal static DashboardActor Actor(string id, string tenant = "tenant-a", string[]? roles = null) =>
@@ -346,13 +357,13 @@ internal sealed class ResourceHost : IAsyncDisposable
     { this.provider = provider; Path = path; this.ownsPath = ownsPath; Validator = validator; }
     public string Path { get; }
     public ResourceValidator Validator { get; }
-    public static async Task<ResourceHost> CreateAsync(string? path = null, bool initialize = true)
+    public static async Task<ResourceHost> CreateAsync(string? path = null, bool initialize = true, bool withAudienceDirectory = true)
     {
         var owned = path is null;
         path ??= System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"elsa-dashboard-resources-{Guid.NewGuid():N}.db");
         var services = new ServiceCollection(); var validator = new ResourceValidator();
         services.AddSingleton<IDashboardDefinitionValidator>(validator);
-        services.AddSingleton<IDashboardAudienceDirectory, ResourceDirectory>();
+        if (withAudienceDirectory) services.AddSingleton<IDashboardAudienceDirectory, ResourceDirectory>();
         services.AddDbContext<DashboardResourcesSqliteDbContext>(options => options.UseSqlite($"Data Source={path};Pooling=False"));
         services.AddDashboardResourcesEntityFrameworkCore<DashboardResourcesSqliteDbContext>();
         services.AddDashboardResources();
