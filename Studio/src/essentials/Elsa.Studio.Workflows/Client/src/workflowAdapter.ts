@@ -916,7 +916,7 @@ export function createActivityNode(activity: ActivityCatalogItem, nodeId: string
   }
 
   const template = activity.authoringTemplate ? structuredClone(activity.authoringTemplate) : null;
-  return template
+  const node: ActivityNode = template
     ? { ...template, nodeId, activityVersionId: activity.activityVersionId, structure: createStructureForActivity(activity) }
     : {
         nodeId,
@@ -925,6 +925,14 @@ export function createActivityNode(activity: ActivityCatalogItem, nodeId: string
         outputs: [],
         structure: createStructureForActivity(activity)
       };
+  // Required defaults shown by the inspector must also be bound in the saved draft.
+  for (const input of activity.inputs) {
+    if (!isRecord(input) || !input.isRequired || input.defaultValue == null || input.isCredential || typeof input.referenceKey !== "string") continue;
+    const key = input.referenceKey;
+    if (Object.hasOwn(node, key) || node.inputs.some(value => isRecord(value) && value.referenceKey === key)) continue;
+    node.inputs.push({ referenceKey: key, value: { value: structuredClone(input.defaultValue), expressionType: input.defaultSyntax || "Literal" } });
+  }
+  return node;
 }
 
 export function normalizeActivityStructures(root: ActivityNode | null | undefined, catalog: ActivityCatalogLookup): ActivityNode | null {
@@ -1132,6 +1140,9 @@ export function flowchartEdges(owner: ActivityNode): Edge<WorkflowEdgeData>[] {
 }
 
 export function getActivitySourcePorts(activity: ActivityNode, catalogItem?: ActivityCatalogItem): WorkflowPortDescriptor[] {
+  // Executable inspection supplies its immutable contract; never recompute it from today's catalog defaults.
+  const pinned = readStringList(activity.executableOutcomes);
+  if (Array.isArray(activity.executableOutcomes)) return pinned.map(name => ({ name, displayName: name }));
   const structured = switchOutcomePorts(activity);
   if (structured) return structured;
   const cases = readStringList((activity as { cases?: unknown }).cases);

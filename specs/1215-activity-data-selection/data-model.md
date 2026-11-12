@@ -36,7 +36,7 @@ its existing argument-level location. New names are reserved reference kinds, no
 | `InputMember` | `referenceKey` identifying the owning document's input declaration | `memberPath` | `WorkflowRequestMember`, after declaration/closed-scope lowering |
 | `WorkflowRequestMember` | `memberKey` identifying an admitted request member | `memberPath` | `WorkflowRequestMember` |
 | `VariableMember` | `referenceKey`, `declaringScopeId` using existing lexical identity rules | `memberPath` | `VariableMember` |
-| `ActivityResultMember` | `producerNodeId`, `projectionKey`, `producerScopeId`, existing `isOptional` producer-occurrence flag | `memberPath` | `ActivityResultMember` |
+| `ActivityResultMember` | `producerNodeId`, `projectionKey`, existing `isOptional` producer-occurrence flag; no `producerScopeId` ([admission](contracts/binding-contract.md#1-authored-wire)) | `memberPath` | `ActivityResultMember` |
 
 `memberPath` is a nonempty ordered array of JSON strings. Each segment is one exact serialized
 object property or string-keyed dictionary key. Empty or punctuation-bearing member names are literal

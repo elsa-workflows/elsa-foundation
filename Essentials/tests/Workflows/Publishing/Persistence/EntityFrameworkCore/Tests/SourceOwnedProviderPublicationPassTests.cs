@@ -17,6 +17,8 @@ using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Testing;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Design.Core.Models;
+using Elsa.Workflows.Design.Validations.Core.Contracts;
+using Elsa.Workflows.Design.Validations.Core.Models;
 using Elsa.Workflows.Design.Tests.Infrastructure;
 using Elsa.Workflows.Publishing.Api.Services;
 using Elsa.Workflows.Publishing.Core.Contracts;
@@ -280,7 +282,9 @@ public sealed class SourceOwnedProviderPublicationPassTests : IAsyncLifetime
             stores,
             scope.Templates,
             new AcceptAllActivityTemplateAdmissionPolicy(),
-            TimeProvider.System);
+            TimeProvider.System,
+            [],
+            new NoAuthoredGraphAnalyzer());
         return new SourceOwnedActivityVersionPublisher(
             command ?? scope.SourceCommand,
             stores,
@@ -329,7 +333,7 @@ public sealed class SourceOwnedProviderPublicationPassTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// A provider compiler with its own gates, as the specialist provider has: content it cannot read fails to compile,
+    /// A provider compiler with its own gates, as the agent provider has: content it cannot read fails to compile,
     /// and a selected model the capability source says cannot serve the content is refused before any template exists.
     /// </summary>
     private sealed class AcmeProvider : IActivityTemplateProviderCompiler, IActivityTemplateDependencyDiscoverer
@@ -365,6 +369,15 @@ public sealed class SourceOwnedProviderPublicationPassTests : IAsyncLifetime
 
         public ValueTask<ActivityTemplateDependencyDiscovery> DiscoverDependenciesAsync(ActivityTemplateDependencyDiscoveryRequest request, CancellationToken cancellationToken = default) =>
             ValueTask.FromResult(new ActivityTemplateDependencyDiscovery([], []));
+    }
+
+    // This provider fixture emits only native empty-input roots. Any new authored graph must use
+    // the real shared analyzer instead of silently inheriting a permissive test substitute.
+    private sealed class NoAuthoredGraphAnalyzer : IActivityDataSelectionAnalyzer
+    {
+        public ValueTask<ActivityDataSelectionAnalysis> AnalyzeAsync(ActivityDataSelectionDocument document,
+            ActivityDataSelectionTarget? target = null, ActivityDataSelectionQuery? query = null, CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("This provider fixture does not own an authored graph.");
     }
 
     private sealed class AcceptingValidator : IActivityDraftValidator

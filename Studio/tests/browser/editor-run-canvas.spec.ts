@@ -29,12 +29,12 @@ for (const theme of ["light", "dark"]) {
     await page.reload();
     await expect(node).toHaveAccessibleName(/State: authoring/);
     await expect(page.getByRole("group", { name: "Execution controls", exact: true })).toHaveCount(0);
+    await page.getByRole("tab", { name: "Runtime", exact: true }).click();
     const previous = page.getByRole("group", { name: "Previous Test Run", exact: true });
     await expect(previous).toBeVisible();
     await previous.getByRole("button", { name: "Restore Test Run", exact: true }).click();
     await expect(node).toHaveAccessibleName(/Run state: Completed/);
     await expect(previous).toHaveCount(0);
-    await page.getByRole("tab", { name: "Runtime", exact: true }).click();
     await expect(page.getByRole("group", { name: "Execution controls", exact: true })).toBeVisible();
     await node.click();
     await expect(page.getByLabel("Inspector panel", { exact: true }).getByText("Current: 1", { exact: true })).toBeVisible();
@@ -61,6 +61,7 @@ for (const theme of ["light", "dark"]) {
     await expect(node).toHaveAccessibleName(/Run state: Completed/);
     expect(await viewport.getAttribute("style")).toBe(transform);
     const location = page.url();
+    await page.getByRole("tab", { name: "Runtime", exact: true }).click();
     await page.getByRole("button", { name: "Return to editing", exact: true }).click();
     await expect(node).toHaveAccessibleName(/State: authoring/);
     expect(await viewport.getAttribute("style")).toBe(transform);

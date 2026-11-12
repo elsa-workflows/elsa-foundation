@@ -1,0 +1,3 @@
+# Retained compatibility fixtures are checked by byte length and SHA-256.
+# Preserve their captured bytes on checkouts with core.autocrlf enabled.
+/Extensions/Etl/tests/Shared/Fixtures/** -text

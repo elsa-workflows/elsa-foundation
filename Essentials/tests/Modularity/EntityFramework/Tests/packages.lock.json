@@ -400,11 +400,6 @@
           "SQLitePCLRaw.core": "3.0.3"
         }
       },
-      "System.Security.Cryptography.Pkcs": {
-        "type": "Transitive",
-        "resolved": "6.0.4",
-        "contentHash": "LGbXi1oUJ9QgCNGXRO9ndzBL/GZgANcsURpMhNR8uO+rca47SZmciS3RSQUvlQRwK3QHZSHNOXzoMUASKA+Anw=="
-      },
       "System.Security.Cryptography.ProtectedData": {
         "type": "Transitive",
         "resolved": "4.4.0",
@@ -702,7 +697,10 @@
       "elsa.workflows.design.validations.core": {
         "type": "Project",
         "dependencies": {
+          "Elsa.Activities.Design.Core": "[4.0.0-dev, )",
           "Elsa.Events.Core": "[4.0.0-dev, )",
+          "Elsa.Expressions.Core": "[4.0.0-dev, )",
+          "Elsa.Primitives": "[4.0.0-dev, )",
           "Elsa.Workflows.Design.Core": "[4.0.0-dev, )"
         }
       },
@@ -969,6 +967,12 @@
           "SQLitePCLRaw.config.e_sqlite3": "3.0.3",
           "SourceGear.sqlite3": "3.50.4.5"
         }
+      },
+      "System.Security.Cryptography.Pkcs": {
+        "type": "CentralTransitive",
+        "requested": "[9.0.21, )",
+        "resolved": "9.0.21",
+        "contentHash": "KD+oHoYIxwNCajjVe58WVwq9cRpum+Pg3tRveDRtkcaw6w3oc7sNBoMRtb5P5OehI3bgv1ucMpgjf8lpj5J96A=="
       },
       "ValenceWorks.MinimalEndpoints": {
         "type": "CentralTransitive",
