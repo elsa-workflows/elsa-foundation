@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_publish_commit": "6d8b311bf47eb91e1e280e503ed537efcf9245ef",
+  "last_publish_commit": "dff7c490d0e5501b22d4ba89beb389c956d4f423",
   "packages": [
     {
       "package_id": "Elsa.Activities.Bpmn",
@@ -649,8 +649,8 @@
     },
     {
       "package_id": "Elsa.Integrations.Connectors.OAuth2",
-      "version": "4.0.9-preview",
-      "commit": "b9c2a6e64af2570097725e46ba4fdcfb9dddca68"
+      "version": "4.0.10-preview",
+      "commit": "dff7c490d0e5501b22d4ba89beb389c956d4f423"
     },
     {
       "package_id": "Elsa.Integrations.Connectors.Slack",
