@@ -13,7 +13,8 @@ This script does the install in four steps:
 1. Download Chromium with `playwright install chromium` (Playwright's CDN, not apt), with bounded retries.
 2. Ask Playwright which of its system packages are missing: `playwright install-deps --dry-run chromium` simulates
    the install with `apt-get install -s`, which reads the local package lists and needs no network.
-3. Send only the missing packages to apt, with bounded retries. Each attempt runs `apt-get update` and
+3. Send only the packages that are not installed to apt, with bounded retries: libraries and tools first, fonts in
+   a separate pass. Each attempt runs `apt-get update` and
    `apt-get install --download-only` under a timeout (the network part, safe to stop), then installs from the
    downloaded archives without the network. A missing shared library or tool fails the step after its retries.
    Missing font packages (fonts-*, xfonts-*) only change how non-Latin text is drawn, so when apt still cannot
@@ -27,6 +28,7 @@ Usage (from the directory whose node_modules holds Playwright):
 from __future__ import annotations
 
 import argparse
+import os
 import re
 import subprocess
 import sys
@@ -38,10 +40,10 @@ FONT_PREFIXES = ("fonts-", "xfonts-")
 
 ATTEMPTS = 3
 BACKOFF_SECONDS = (15, 45)
-BROWSER_DOWNLOAD_TIMEOUT = 600
+BROWSER_DOWNLOAD_TIMEOUT = 300
 APT_UPDATE_TIMEOUT = 60
 APT_DOWNLOAD_TIMEOUT = 120
-APT_OPTIONS = ("-o", "DPkg::Lock::Timeout=120")
+APT_OPTIONS = ("-o", "DPkg::Lock::Timeout=60")
 
 ALL_INSTALLED = "All system dependencies are installed."
 MISSING_HEADER = re.compile(r"^Missing system dependencies \((\d+)\):[ \t]*$", re.MULTILINE)
@@ -77,6 +79,7 @@ class Result:
 
 
 Runner = Callable[[Sequence[str], bool], Result]
+DPKG_STATUS_FORMAT = "-f=${Package}\t${db:Status-Status}\n"
 
 
 def run_command(command: Sequence[str], capture: bool) -> Result:
@@ -113,6 +116,16 @@ def parse_missing(output: str) -> list[str] | None:
     return packages if len(packages) == int(header.group(1)) else None
 
 
+def parse_installed(output: str) -> set[str]:
+    """Names dpkg-query reports as installed. Lines without a tab are its notes about unknown names."""
+    installed = set()
+    for line in output.splitlines():
+        name, tab, status = line.partition("\t")
+        if tab and status.strip() == "installed":
+            installed.add(name.strip())
+    return installed
+
+
 def split_fonts(packages: Sequence[str]) -> tuple[list[str], list[str]]:
     fonts = [package for package in packages if package.startswith(FONT_PREFIXES)]
     required = [package for package in packages if not package.startswith(FONT_PREFIXES)]
@@ -124,6 +137,7 @@ class Installer:
     playwright: str
     run: Runner = run_command
     sleep: Callable[[float], None] = time.sleep
+    exists: Callable[[str], bool] = os.path.exists
     attempts: int = ATTEMPTS
     backoff: Sequence[int] = BACKOFF_SECONDS
     warnings: list[str] = field(default_factory=list)
@@ -175,17 +189,30 @@ class Installer:
                                "If Playwright changed it, update tools/ci/install_playwright_chromium.py.")
         return missing
 
+    def installed_packages(self, packages: Sequence[str]) -> set[str]:
+        # dpkg-query exits 1 when some names are unknown; the lines it prints for the others still hold.
+        command = ["dpkg-query", "-W", DPKG_STATUS_FORMAT, *packages]
+        return parse_installed(self.run(command, True).output)
+
     def install_system_packages(self) -> None:
-        missing = self.missing_packages()
+        reported = self.missing_packages()
+        # The report lists every package apt's simulation would touch, so it also names installed packages that
+        # have a newer candidate. Those already serve Chromium; only absent packages need apt.
+        installed = self.installed_packages(reported) if reported else set()
+        upgrades = [package for package in reported if package in installed]
+        missing = [package for package in reported if package not in installed]
+        if upgrades:
+            print(f"Already installed, reported only because apt has a newer version: {' '.join(upgrades)}.")
         if not missing:
             print("The runner image already has every system package Playwright lists for Chromium; apt is not used.")
             return
         required, fonts = split_fonts(missing)
-        if self.retry("Install missing system packages", lambda: self.apt_attempt(missing)):
-            return
-        if required:
+        # Separate passes, so a font apt cannot fetch never blocks a library it can.
+        if required and not self.retry("Install missing system packages", lambda: self.apt_attempt(required)):
             raise InstallError(f"apt could not install {' '.join(required)} after {self.attempts} attempts. "
                                "Chromium needs these packages; see the apt output above for the cause.")
+        if not fonts or self.retry("Install missing font packages", lambda: self.apt_attempt(fonts)):
+            return
         message = (f"apt could not install the font packages {' '.join(fonts)} after {self.attempts} attempts. "
                    "Chromium runs without them; non-Latin text renders with fallback glyphs in this job.")
         self.warnings.append(message)
@@ -196,6 +223,9 @@ class Installer:
             raise InstallError("Chromium was installed but did not launch on this runner; see the error above.")
 
     def install(self) -> None:
+        if not self.exists(self.playwright):
+            raise InstallError(f"No Playwright CLI at {self.playwright} in {os.getcwd()}; check the action's "
+                               "working-directory and that dependencies were installed first.")
         self.download_browser()
         self.install_system_packages()
         self.verify_launch()

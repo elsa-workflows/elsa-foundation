@@ -30,18 +30,29 @@ E: Unable to locate package libavif16
 
 
 class FakeRunner:
-    """Answers each command by its kind; `apt` is the list of exit codes for successive apt download attempts."""
+    """Answers each command by its kind. `apt` lists exit codes for successive apt downloads (then 0); a download
+    that names an `unavailable` package always fails."""
 
-    def __init__(self, reports, apt=(), download=(0,), launch=0, update=0):
+    def __init__(self, reports, apt=(), download=(0,), launch=0, update=0, installed=(), unavailable=()):
         self.reports = list(reports)
         self.apt = list(apt)
         self.download = list(download)
         self.launch = launch
         self.update = update
+        self.installed = set(installed)
+        self.unavailable = set(unavailable)
         self.commands = []
 
     def __call__(self, command, capture):
         self.commands.append(list(command))
+        if command[0] == "dpkg-query":
+            # The real format, checked against dpkg-query in the Playwright 1.61.1 noble image: tab, then a bare
+            # "installed"; ${Status} would print "install ok installed" and match nothing.
+            assert command[:3] == ["dpkg-query", "-W", "-f=${Package}\t${db:Status-Status}\n"], command
+            lines = [f"{name}\tinstalled" for name in command[3:] if name in self.installed]
+            lines += [f"dpkg-query: no packages found matching {name}" for name in command[3:]
+                      if name not in self.installed]
+            return installer.Result(1, "\n".join(lines) + "\n")
         if "--dry-run" in command:
             return installer.Result(1, self.reports.pop(0))
         if command[-2:] == ["install", "chromium"]:
@@ -51,7 +62,9 @@ class FakeRunner:
         if "update" in command:
             return installer.Result(self.update)
         if "--download-only" in command:
-            return installer.Result(self.apt.pop(0))
+            if self.unavailable.intersection(command):
+                return installer.Result(100)
+            return installer.Result(self.apt.pop(0) if self.apt else 0)
         if "--no-download" in command:
             return installer.Result(0)
         raise AssertionError(f"unexpected command {command}")
@@ -59,7 +72,9 @@ class FakeRunner:
     def kinds(self):
         names = []
         for command in self.commands:
-            if "--dry-run" in command:
+            if command[0] == "dpkg-query":
+                names.append("query")
+            elif "--dry-run" in command:
                 names.append("report")
             elif command[-2:] == ["install", "chromium"]:
                 names.append("browser")
@@ -76,7 +91,7 @@ class FakeRunner:
 
 def install(runner):
     sleeps = []
-    subject = installer.Installer("pw", run=runner, sleep=sleeps.append)
+    subject = installer.Installer("pw", run=runner, sleep=sleeps.append, exists=lambda path: True)
     with redirect_stdout(io.StringIO()) as output:
         try:
             subject.install()
@@ -96,6 +111,10 @@ class ParseTests(unittest.TestCase):
         self.assertIsNone(installer.parse_missing(SIMULATION_FAILED))
         self.assertIsNone(installer.parse_missing(""))
         self.assertIsNone(installer.parse_missing("Missing system dependencies (3):\n  libnss3\n"))
+
+    def test_reads_installed_names_from_dpkg_query(self):
+        output = "libnss3\tinstalled\nfonts-unifont\tnot-installed\ndpkg-query: no packages found matching x\n"
+        self.assertEqual(installer.parse_installed(output), {"libnss3"})
 
     def test_fonts_are_told_apart_from_libraries_and_tools(self):
         required, fonts = installer.split_fonts(["xvfb", "fonts-unifont", "libnss3", "xfonts-utils"])
@@ -144,6 +163,35 @@ class InstallTests(unittest.TestCase):
         self.assertIn("libnss3", error)
         self.assertNotIn("fonts-unifont", error)
         self.assertNotIn("launch", runner.kinds())
+
+    def test_installed_package_with_a_newer_candidate_is_not_installed_again(self):
+        upgrade_only = "Missing system dependencies (1):\n  libnss3\n"
+        runner = FakeRunner([upgrade_only], installed=["libnss3"])
+        _, _, error, output = install(runner)
+        self.assertIsNone(error)
+        self.assertEqual(runner.kinds(), ["browser", "report", "query", "launch"])
+        self.assertIn("reported only because apt has a newer version: libnss3", output)
+
+    def test_font_outage_does_not_block_a_library_apt_can_fetch(self):
+        runner = FakeRunner([LIBRARY_MISSING], unavailable=["fonts-unifont"])
+        subject, _, error, _ = install(runner)
+        self.assertIsNone(error)
+        fetches = [command for command in runner.commands if "--download-only" in command]
+        self.assertIn("libnss3", fetches[0])
+        self.assertNotIn("fonts-unifont", fetches[0])
+        self.assertTrue(all("fonts-unifont" in command and "libnss3" not in command for command in fetches[1:]))
+        self.assertEqual(len(fetches), 4)
+        self.assertIn("fonts-unifont", subject.warnings[0])
+        self.assertEqual(runner.kinds()[-1], "launch")
+
+    def test_missing_cli_fails_at_once_with_its_path(self):
+        runner = FakeRunner([])
+        subject = installer.Installer("./node_modules/.bin/playwright", run=runner, sleep=self.fail,
+                                      exists=lambda path: False)
+        with redirect_stdout(io.StringIO()):
+            with self.assertRaisesRegex(installer.InstallError, "No Playwright CLI at ./node_modules/.bin/playwright"):
+                subject.install()
+        self.assertEqual(runner.commands, [])
 
     def test_browser_that_does_not_launch_fails(self):
         runner = FakeRunner([ALL_PRESENT], launch=1)
