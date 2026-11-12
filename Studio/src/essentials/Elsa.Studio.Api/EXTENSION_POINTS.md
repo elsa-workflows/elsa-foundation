@@ -37,6 +37,16 @@ Studio API is the composition root for Studio.Core contracts. Frontend lifecycle
 - Register: return `shell` from `StudioModuleInstance`, or call `api.shell.add(contribution)` during registration. `registerStudioModuleInstances` aggregates instance contributions into each fresh registry.
 - Known implementations: Backends switcher, connection notice and recovery page (intra-domain, optional). Backend admission applies to normal contributions; recovery uses only original-host services and is available before a selected connection exists.
 
+### Workflow canvas editor contributions (SDK — Elsa.Studio.Hosting)
+
+- Kind: Contributor; optional `workflow.designer.canvas-editors` slot (`api.workflowDesigner.canvasEditors`), owned by the Workflows module.
+- Signature: `StudioWorkflowDesignerCanvasContribution { id, title, order?, protocol: { id, version }, supportedResourceKinds, supportedStructures: [{ kind, schemaVersions }], requiresBackend?, load() }`; the deferred loader returns a component receiving the agreed module-owned `context`.
+- Register: guard `api.workflowDesigner.canvasEditors` before calling `.add(contribution)`; older hosts omit this registry and retain their existing editor. Discovery uses ordinary SDK registry ordering and backend/host policy without invoking the loader.
+- Compatibility: Workflows' `matchingCanvasEditors` filters a governed registry list by exact protocol ID/version, resource kind, structure kind and authored schema version. The SDK defines no implicit document protocol or compatibility downgrade.
+- Preference bridge: `StudioCanvasEditorPreferenceStore { load(): Promise<string | null>, save(editorId): Promise<void> }`. Workflows' `createCanvasEditorPreferences` uses the governed `workflow-authoring` namespace and scopes device recovery to user, tenant, Studio host and backend; preferences are separate from authored documents.
+- Known implementations: **pending** optional canvas implementation/package slices S10–S11 of [spec 1224](../../../../specs/1224-optional-bpmn-js-editor/delivery-slices.md). No canvas is registered by this prerequisite.
+- Consumers: compatibility/preference helpers are present; actual Workflow and Activity Graph editor consumers are **pending** S13–S14. This seam does not activate either canvas or establish editor/runtime acceptance.
+
 ### Workflow run related links (SDK — Elsa.Studio.Hosting)
 
 - Kind: Contributor; optional `workflow.run.related-links` slot (`api.workflowRunRelatedLinks`).
@@ -52,6 +62,13 @@ Studio API is the composition root for Studio.Core contracts. Frontend lifecycle
 - Signature: `StudioRouteContribution.workspace?: { resourceKey?(location: URL): string | null | undefined }`, with `useStudioWorkspaceTitle(title, detail?)`, `useStudioRouteLocation()`, `useStudioWorkspaceWhenActive()` and `openStudioWorkspaceTab(path, { activate? })` for screens.
 - Register: set `workspace` on `api.routes.add(...)` or a feature-area route. Navigation guards read `StudioNavigationRequest.intent` (`navigate`, `close`, `probe`).
 - Known implementations: Workflows definitions, templates, Activity Definitions and upgrade plans (intra-domain). The workspace tab host itself is not replaceable. See spec [1188](../../../../specs/1188-studio-workspace-tabs/spec.md).
+
+### Activity implementation editor admission (SDK — Elsa.Studio.Hosting)
+
+- Kind: optional synchronous admission on `StudioActivityDefinitionImplementationEditorProps`.
+- Signature: existing `onChange(value): void` remains a notification, including async and concise callbacks. Optional `tryChange(value, expectedValue): boolean` returns literal `true` only after the parent admits the value against the exact baseline. A refusal leaves canonical state unchanged.
+- Register: the owning host supplies the optional callback through the existing activity implementation editor props. Controlled editors update their history only after `true` and do not also call `onChange`; a Promise or other return value is not a receipt.
+- Known implementation/consumer: host activation is **pending** S14 of [spec 1224](../../../../specs/1224-optional-bpmn-js-editor/delivery-slices.md). This prerequisite adds history/checkpoint support without activating the optional editor. Legacy hosts continue using `onChange` unchanged. Contract details: [SDK documentation](../Elsa.Studio.Hosting/Client/src/sdk/README.md#activity-implementation-admission).
 
 ## Events
 

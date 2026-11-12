@@ -442,6 +442,23 @@ export interface StudioWorkflowDesignerPanelContribution<TContext = unknown> {
   component: ComponentType<StudioWorkflowDesignerPanelProps<TContext>>;
 }
 
+/** Optional module canvas; the contributing module owns its document protocol and context. */
+export interface StudioWorkflowDesignerCanvasContribution extends StudioBackendAwareContribution {
+  id: string;
+  title: string;
+  order?: number;
+  protocol: { id: string; version: number };
+  supportedResourceKinds: StudioGraphAuthoringResourceKind[];
+  supportedStructures: { kind: string; schemaVersions: string[] }[];
+  load(): Promise<{ default: ComponentType<{ context: unknown }> }>;
+}
+
+/** Per-user preference; never part of a workflow or activity document. */
+export interface StudioCanvasEditorPreferenceStore {
+  load(): Promise<string | null>;
+  save(editorId: string): Promise<void>;
+}
+
 export interface StudioWorkflowContextConnection {
   source: string;
   target: string;
@@ -1622,6 +1639,7 @@ export const studioSlotIds = {
   workflowDesignerNodeRenderers: "workflow.designer.node-renderers",
   workflowDesignerToolboxItems: "workflow.designer.toolbox-items",
   workflowDesignerPanels: "workflow.designer.panels",
+  workflowDesignerCanvasEditors: "workflow.designer.canvas-editors",
   diagnostics: "studio.diagnostics",
   diagnosticsWidgets: "studio.diagnostics.widgets"
 } as const;
@@ -1715,6 +1733,7 @@ export const studioSlots = {
   workflowDesignerNodeRenderers: defineStudioSlot({ id: studioSlotIds.workflowDesignerNodeRenderers, kind: "workflow-designer-node-renderer", title: "Workflow designer node renderers", owner: hostSlotOwner() }),
   workflowDesignerToolboxItems: defineStudioSlot({ id: studioSlotIds.workflowDesignerToolboxItems, kind: "workflow-designer-toolbox-item", title: "Workflow designer toolbox items", owner: hostSlotOwner() }),
   workflowDesignerPanels: defineStudioSlot({ id: studioSlotIds.workflowDesignerPanels, kind: "workflow-designer-panel", title: "Workflow designer panels", owner: hostSlotOwner() }),
+  workflowDesignerCanvasEditors: defineStudioSlot({ id: studioSlotIds.workflowDesignerCanvasEditors, kind: "workflow-designer-canvas-editor", title: "Workflow canvas editors", owner: moduleSlotOwner("Elsa.Studio.Workflows") }),
   diagnostics: defineStudioSlot({ id: studioSlotIds.diagnostics, kind: "diagnostic", title: "Diagnostics", owner: hostSlotOwner() }),
   diagnosticsWidgets: defineStudioSlot({ id: studioSlotIds.diagnosticsWidgets, kind: "diagnostics-widget", title: "Diagnostics widgets", owner: hostSlotOwner() })
 };
@@ -1944,6 +1963,12 @@ export interface StudioActivityDefinitionImplementationEditorProps {
   value: StudioActivityDefinitionImplementationState;
   readOnly: boolean;
   onChange(value: StudioActivityDefinitionImplementationState): void;
+  /**
+   * Optional synchronous parent admission. Return true only after admitting this value against its
+   * exact baseline, or false without changing canonical state. Controlled editors require literal
+   * true before updating history; the legacy onChange notification is not an acknowledgement.
+   */
+  tryChange?(value: StudioActivityDefinitionImplementationState, expectedValue: StudioActivityDefinitionImplementationState): boolean;
 }
 
 export interface StudioActivityDefinitionImplementationEditorContribution extends StudioBackendAwareContribution {
@@ -2024,6 +2049,8 @@ export interface ElsaStudioModuleApi {
     readonly nodeRenderers: StudioContributionRegistry<unknown>;
     readonly toolboxItems: StudioContributionRegistry<unknown>;
     readonly panels: StudioContributionRegistry<StudioWorkflowDesignerPanelContribution>;
+    /** Absent on older hosts; contributions must guard before registering. */
+    readonly canvasEditors?: StudioContributionRegistry<StudioWorkflowDesignerCanvasContribution>;
     /** Optional host alias of the standalone `registerActivityIcons` export. Callers must guard when it is missing. */
     registerActivityIcons?: (icons: Record<string, StudioActivityIconComponent | null | undefined>) => void;
   };
