@@ -77,6 +77,32 @@ public sealed class CompensationScopeDesignTests : IDisposable
         Assert.Equal(["deliver", "reserve"], _structureService.ChildrenCompletedBefore(node, "confirm"));
         Assert.Empty(_structureService.ChildrenCompletedBefore(node, "reserve")!);
         Assert.Null(_structureService.ChildrenCompletedBefore(node, "elsewhere"));
+
+        Assert.Equal(ActivityChildResultAvailability.Definite, _structureService.AssessChildResult(node, "deliver", "cancel").Availability);
+        Assert.Equal(ActivityChildResultAvailability.Definite, _structureService.AssessChildResult(node, "reserve", "cancel").Availability);
+        Assert.Equal(ActivityChildResultAvailability.Definite, _structureService.AssessChildResult(node, "reserve", "confirm").Availability);
+        var handlerResult = _structureService.AssessChildResult(node, "cancel", "confirm");
+        Assert.Equal(ActivityChildResultAvailability.Unknown, handlerResult.Availability);
+        Assert.Null(handlerResult.MayRunConcurrently);
+        Assert.Null(handlerResult.IsCyclicBackEdge);
+    }
+
+    /// <summary>
+    /// A scope runs each forward step once. A handler can run more than once when it is retried, but every attempt is
+    /// scheduled from its own step's run, so one attempt never leads to another. No earlier run of a child is behind a
+    /// reader, a child with itself included, so a definite result always states the fact.
+    /// </summary>
+    [Fact]
+    public void No_earlier_run_of_a_step_or_handler_leads_to_a_reader()
+    {
+        var node = ScopeNode("scope",
+            ("Inventory", Leaf("reserve"), Leaf("release")),
+            ("Delivery", Leaf("deliver"), Leaf("cancel")));
+        var children = new[] { "reserve", "release", "deliver", "cancel" };
+
+        foreach (var producer in children)
+        foreach (var consumer in children)
+            Assert.False(_structureService.AssessChildResult(node, producer, consumer).EarlierProducerRunCanReachConsumer);
     }
 
     [Fact]

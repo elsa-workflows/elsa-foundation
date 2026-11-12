@@ -22,6 +22,7 @@ import { withHttpEndpointResponseMode } from "../httpEndpointResponseMode";
 import { isHttpEndpointType } from "./httpTestRequest";
 import { getAvailabilityStateLabel } from "../activityAvailability";
 import { ActivityPropertiesPanel } from "../ActivityPropertiesPanel";
+import type { ActivityDataSelectionHost } from "../activityDataSelection";
 import { ActivityOutputsPanel } from "../ActivityOutputsPanel";
 import { IntrinsicInspector } from "../IntrinsicInspector";
 import { readIntrinsicDescriptor } from "../intrinsicActivities";
@@ -92,6 +93,8 @@ interface InspectorPanelProps {
   descriptorStatus: "loading" | "ready" | "failed";
   onRetryExpressionDescriptors(): void;
   scopedVariableAnalysis: ScopedVariableAnalysis;
+  /** Source analysis for Choose data on the ordinary activity inputs; absent where the owner offers none. */
+  activityDataSelection?: ActivityDataSelectionHost | null;
   activeTabId?: ActivityInspectorTabId;
   onActiveTabChange?(tabId: ActivityInspectorTabId): void;
   onSelectedActivityChange(activity: ActivityNode): void;
@@ -149,6 +152,7 @@ export function InspectorPanel({
   descriptorStatus,
   onRetryExpressionDescriptors,
   scopedVariableAnalysis,
+  activityDataSelection = null,
   activeTabId,
   onActiveTabChange,
   onSelectedActivityChange,
@@ -266,6 +270,7 @@ export function InspectorPanel({
       scopeRetry={scopedVariableAnalysis.retry}
       showHeading={false}
       emptyLabel="This activity has no configurable inputs."
+      activityDataSelection={activityDataSelection}
       onChange={onSelectedActivityChange}
     />
   );

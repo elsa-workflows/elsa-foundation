@@ -244,6 +244,8 @@ public sealed class WorkflowStartActivitySchedulerWorkHandler : IWorkflowSchedul
             throw new WorkflowExecutableNotFoundException(startPayload.PinnedExecutable.ArtifactId);
 
         SchedulerWorkHandlerHelpers.ValidatePinnedExecutable(workItem, startPayload.PinnedExecutable, executable.Identity);
+        // Every activity start, the root's first, so an executable with member reads never starts any activity here.
+        SchedulerWorkHandlerHelpers.EnsureMemberSelectionSupported(executable, serviceProvider);
 
         if (!executable.NodesById.TryGetValue(startPayload.ExecutableNodeId, out var executableNode))
             throw new InvalidOperationException($"StartActivity scheduler work item '{workItem.WorkItemId}' references executable node '{startPayload.ExecutableNodeId}', which is missing from executable artifact '{WorkflowExecutableIdentityComparer.Format(executable.Identity)}'.");
