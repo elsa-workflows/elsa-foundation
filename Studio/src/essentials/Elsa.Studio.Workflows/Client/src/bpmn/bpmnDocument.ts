@@ -333,7 +333,8 @@ function rejectOpaqueQNameResolution(target: Element, prefix: string) {
   for (const element of [target, ...target.getElementsByTagName("*")]) {
     if (element.lookupNamespaceURI(prefix)) continue;
     const values = [...element.attributes].map(attribute => attribute.value);
-    values.push(...[...element.childNodes].filter(node => node.nodeType === Node.TEXT_NODE || node.nodeType === Node.CDATA_SECTION_NODE).map(node => node.textContent ?? ""));
+    // QName simple content can span adjacent text, CDATA, comments or processing instructions.
+    values.push([...element.childNodes].filter(node => node.nodeType === Node.TEXT_NODE || node.nodeType === Node.CDATA_SECTION_NODE).map(node => node.textContent ?? "").join(""));
     if (values.some(value => value.includes(`${prefix}:`))) fail("namespace declaration would resolve retained opaque QName content");
   }
 }

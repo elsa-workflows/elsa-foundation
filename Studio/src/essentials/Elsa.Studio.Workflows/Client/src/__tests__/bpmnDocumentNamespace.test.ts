@@ -47,7 +47,10 @@ describe("explicit namespace introduction", () => {
 
   it.each(['<b:extensionElements><v:keep ref="fresh:Thing"/></b:extensionElements>',
     '<b:extensionElements><v:keep>fresh:Thing</v:keep></b:extensionElements>',
-    '<b:extensionElements><v:keep><![CDATA[fresh:Thing]]></v:keep></b:extensionElements>'])("does not resolve previously opaque unbound content %s", content => {
+    '<b:extensionElements><v:keep><![CDATA[fresh:Thing]]></v:keep></b:extensionElements>',
+    '<b:extensionElements><v:keep>fresh<![CDATA[:Thing]]></v:keep></b:extensionElements>',
+    '<b:extensionElements><v:keep>fre<!-- retained -->sh:Thing</v:keep></b:extensionElements>',
+    '<b:extensionElements><v:keep>fresh:<?vendor keep?>Thing</v:keep></b:extensionElements>'])("does not resolve previously opaque unbound content %s", content => {
     expect(() => applyBpmnDocumentCommands(owner(content), [{ kind: "namespace", target: { elementId: "T" }, prefix: "fresh", namespaceURI: "urn:fresh" }])).toThrow("opaque QName");
   });
 
@@ -61,7 +64,10 @@ describe("explicit namespace introduction", () => {
 
   it.each(['<b:extensionElements><v:keep ref="fresh:Thing"/></b:extensionElements>',
     '<b:extensionElements><v:keep>fresh:Thing</v:keep></b:extensionElements>',
-    '<b:extensionElements><v:keep><![CDATA[fresh:Thing]]></v:keep></b:extensionElements>'])("refuses newly resolved opaque QNames on reparenting %s", content => {
+    '<b:extensionElements><v:keep><![CDATA[fresh:Thing]]></v:keep></b:extensionElements>',
+    '<b:extensionElements><v:keep>fresh<![CDATA[:Thing]]></v:keep></b:extensionElements>',
+    '<b:extensionElements><v:keep>fre<!-- retained -->sh:Thing</v:keep></b:extensionElements>',
+    '<b:extensionElements><v:keep>fresh:<?vendor keep?>Thing</v:keep></b:extensionElements>'])("refuses newly resolved opaque QNames on reparenting %s", content => {
     const before = owner(content);
     before.structure!.payload.documentXml = String(before.structure!.payload.documentXml)
       .replace('</b:process>', '<b:subProcess id="S" xmlns:fresh="urn:new"/></b:process>');
