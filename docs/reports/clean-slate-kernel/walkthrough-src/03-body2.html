@@ -86,10 +86,11 @@
     IReadOnlyList&lt;Message&gt; Inbox { get; }
     IAmbient Ambient { get; }   <span class="c">// this activation only</span>
     object State { get; set; }
-    string Send(...);  void Recall(id);  InstanceRef Start(...);
+    string Send(...);  void Recall(id);  InstanceRef Start(spec, placement, detached);
     void StartJob(key, args);  void CancelJob(key);
     void Hold(message);
     void Subscribe(key, wait, keep);  void Unsubscribe(...);
+    string Publish(key, payload, keep);  bool Redelivered(message);
     void Record(entry);         <span class="c">// journal</span>
     void Emit(channel, item);   <span class="c">// live, not durable</span>
     void Rebind(definition);  void SetStatus(...);

@@ -64,7 +64,7 @@
     <div class="card"><h4>3 · No lost message</h4><p>A committed message reaches a turn that consumes it while any node owns the partition.</p></div>
     <div class="card"><h4>4 · Once in state</h4><p>A message changes state at most once, including a retried outside command.</p></div>
     <div class="card"><h4>5 · Timers</h4><p>Never delivered early, never lost.</p></div>
-    <div class="card"><h4>6 · Journal order</h4><p>No gaps among rows written; the projector never passes an unwritten position.</p></div>
+    <div class="card"><h4>6 · Journal order</h4><p>Rows present plus rows removed by deletes equal the position; the projector never passes an unwritten position.</p></div>
     <div class="card"><h4>7 · Takeover</h4><p>After a take at e + 1 nothing from e commits, and the new owner sees all that did.</p></div>
     <div class="card"><h4>8 · Index matches state</h4><p>An instance's subscriptions are exactly the waits in its committed state.</p></div>
     <div class="card"><h4>9 · Memory matches rows</h4><p>What an owner holds equals the committed row plus its own uncommitted turn.</p></div>
@@ -147,7 +147,7 @@
       <ul>
         <li>Commit fence in the batch by default (2 round trips on PostgreSQL); fence first stays an option</li>
         <li>A pluggable wake signal between nodes; polling remains the guarantee</li>
-        <li>Short timers and jobs of an Ephemeral instance stay in memory, up to the route timeout</li>
+        <li>Short timers and jobs of an Ephemeral instance stay in memory, up to the route timeout or a few seconds</li>
         <li>Events: subscription and event tables are the one kernel mechanism</li>
         <li>Reply addresses expire at the route's timeout, then the instance is unpinned</li>
         <li>Recreate after delete: generated ids never return; caller keys may after <code>keep_until</code></li>

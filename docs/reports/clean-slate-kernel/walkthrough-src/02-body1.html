@@ -124,7 +124,7 @@
       <text class="ts" x="840" y="422" text-anchor="middle">runtime conformance suite (planned)</text>
     </svg>
     </div>
-    <figcaption>Every guarantee lives in layer 2. Layer 1 only says where an actor runs and wakes it up; layer 3 only says what an actor does with its messages. The two seams and the storage contract are the only ways in. Built in the prototype: the built-in partition runtime, the durable layer and the workflow instance with the native model; the other runtimes, models and actor types shown are planned or samples.</figcaption>
+    <figcaption>Every guarantee lives in layer 2. Layer 1 only says where an actor runs and wakes it up; layer 3 only says what an actor does with its messages. The two seams and the storage contract are the only ways in. Built in the prototype: the built-in partition runtime, the durable layer and the native model, with the workflow instance's features still inside the durable layer; the other runtimes, models and actor types shown are planned or samples.</figcaption>
   </figure>
   <div class="grid">
     <div class="card l1" data-pick-card="l1"><h4>1 · Actor runtime</h4>
@@ -168,7 +168,7 @@
     <dt>Partition</dt><dd>A fixed bucket of instances (64 on server databases, 1 on SQLite). Its owner is the only node that writes its instances.</dd>
     <dt>Epoch</dt><dd>A counter on the partition row, raised every time a node takes the partition. Work started under an older epoch is thrown away.</dd>
     <dt>Position</dt><dd>How many journal rows a partition has written (a turn at the Minimal history level writes none). The commit checks it, so two commits can never land at the same position.</dd>
-    <dt>Fence</dt><dd>The conditional update at the start of every commit: it lands only while the epoch and position are still the ones the owner expects.</dd>
+    <dt>Fence</dt><dd>The conditional update inside every commit: it lands only while the epoch and position are still the ones the owner expects.</dd>
     <dt>Lease</dt><dd>How long the owner may hold the partition without writing (10 s). It decides who should write; the fence decides who can.</dd>
     <dt>Message</dt><dd>A row in the inbox table: target, kind, payload, an order key <code>seq</code>, optionally a due time (a timer) and a start spec (create the target if missing).</dd>
     <dt>Job</dt><dd>A background job: something slow an instance starts during a turn, whose result comes back later as a message while the instance keeps taking other messages.</dd>
@@ -200,7 +200,7 @@
     ValueTask WokenAsync(ActorId actor, CancellationToken ct);
     ValueTask&lt;TimeSpan?&gt; RunAsync(CancellationToken ct);        <span class="c">// one pass: turns until idle; when to call again</span>
 }</code></pre>
-  <p class="note">A sketch. The code is not yet split this way; that restructuring is the next piece of work.</p>
+  <p class="note">A sketch. The prototype is being split this way in round 4, in progress.</p>
   <figure>
     <div class="fig">
     <svg class="dg" viewBox="0 0 960 330" role="img" aria-label="Hosting partitions batches many instances behind one fence; one grain per instance, which is not built, would give every instance its own fence and commit, plus a sweep that wakes idle instances.">
@@ -313,13 +313,13 @@
       <g data-k="e-proj"><path class="edge" d="M810,288 L810,354"/><text class="el" x="818" y="326">in position order</text></g>
 
       <g data-k="caller"><rect class="box" x="20" y="40" width="150" height="64" rx="7"/><text class="tt" x="95" y="66" text-anchor="middle">Caller</text><text class="ts" x="95" y="86" text-anchor="middle">API, HTTP, other node</text></g>
-      <g data-k="node"><rect class="frame" x="210" y="24" width="420" height="392" rx="10"/><text class="tt" x="226" y="46">Owner of partition 17 · epoch 8</text></g>
+      <g><rect class="frame" x="210" y="24" width="420" height="392" rx="10"/><text class="tt" x="226" y="46">Owner of partition 17 · epoch 8</text></g>
       <g data-k="poll"><rect class="box" x="236" y="62" width="368" height="46" rx="6"/><text class="tt" x="252" y="84">Poller</text><text class="ts" x="252" y="100">reads rows not yet seen at this epoch</text></g>
       <g data-k="inst"><rect class="box" x="236" y="150" width="368" height="70" rx="6"/><text class="tt" x="252" y="174">Instance i42, state in memory</text><text class="ts" x="252" y="194">the model's turn: consume, send, record, emit</text><text class="ts" x="252" y="210">reads nothing from the database</text></g>
       <g data-k="commit"><rect class="box" x="236" y="262" width="368" height="46" rx="6"/><text class="tt" x="252" y="284">Committer</text><text class="ts" x="252" y="300">one transaction per flush, many instances</text></g>
       <g data-k="hand"><rect class="box" x="236" y="350" width="170" height="46" rx="6"/><text class="tt" x="252" y="372">i43, same partition</text><text class="ts" x="252" y="388">its message, in memory</text></g>
       <g data-k="emit"><rect class="box" x="434" y="350" width="170" height="46" rx="6"/><text class="tt" x="450" y="372">Live channel</text><text class="ts" x="450" y="388">HTTP response, stream</text></g>
-      <g data-k="db"><rect class="frame" x="680" y="24" width="260" height="300" rx="10"/><text class="tt" x="696" y="46">Database</text></g>
+      <g><rect class="frame" x="680" y="24" width="260" height="300" rx="10"/><text class="tt" x="696" y="46">Database</text></g>
       <g data-k="t-msg"><rect class="box" x="700" y="62" width="220" height="46" rx="6"/><text class="tt" x="716" y="82">message</text><text class="ts" x="716" y="98">the inbox</text></g>
       <g data-k="t-part"><rect class="box" x="700" y="122" width="220" height="46" rx="6"/><text class="tt" x="716" y="142">partition</text><text class="ts" x="716" y="158">the fence: epoch, position</text></g>
       <g data-k="t-inst"><rect class="box" x="700" y="182" width="220" height="46" rx="6"/><text class="tt" x="716" y="202">instance</text><text class="ts" x="716" y="218">current state, revision</text></g>
