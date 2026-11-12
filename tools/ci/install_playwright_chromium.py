@@ -39,8 +39,8 @@ FONT_PREFIXES = ("fonts-", "xfonts-")
 ATTEMPTS = 3
 BACKOFF_SECONDS = (15, 45)
 BROWSER_DOWNLOAD_TIMEOUT = 600
-APT_UPDATE_TIMEOUT = 120
-APT_DOWNLOAD_TIMEOUT = 180
+APT_UPDATE_TIMEOUT = 60
+APT_DOWNLOAD_TIMEOUT = 120
 APT_OPTIONS = ("-o", "DPkg::Lock::Timeout=120")
 
 ALL_INSTALLED = "All system dependencies are installed."
@@ -147,14 +147,13 @@ class Installer:
             raise InstallError(f"Chromium could not be downloaded after {self.attempts} attempts.")
 
     def apt_update(self) -> bool:
-        return self.run(with_timeout(APT_UPDATE_TIMEOUT, sudo(["apt-get", *APT_OPTIONS, "update"])), False).code == 0
+        return self.run(sudo(with_timeout(APT_UPDATE_TIMEOUT, ["apt-get", *APT_OPTIONS, "update"])), False).code == 0
 
     def apt_attempt(self, packages: Sequence[str]) -> bool:
         # A failed update is not final: the image's lists may still name reachable archives, so try the download.
         self.apt_update()
-        download = sudo(["apt-get", *APT_OPTIONS, "install", "-y", "--no-install-recommends", "--download-only",
-                         *packages])
-        if self.run(with_timeout(APT_DOWNLOAD_TIMEOUT, download), False).code != 0:
+        download = ["apt-get", *APT_OPTIONS, "install", "-y", "--no-install-recommends", "--download-only", *packages]
+        if self.run(sudo(with_timeout(APT_DOWNLOAD_TIMEOUT, download)), False).code != 0:
             return False
         install = sudo(["apt-get", *APT_OPTIONS, "install", "-y", "--no-install-recommends", "--no-download",
                         *packages])

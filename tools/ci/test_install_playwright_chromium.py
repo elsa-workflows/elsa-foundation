@@ -119,8 +119,13 @@ class InstallTests(unittest.TestCase):
         self.assertEqual(subject.warnings, [])
         self.assertEqual(runner.kinds()[-2:], ["dpkg", "launch"])
         fetch = next(command for command in runner.commands if "--download-only" in command)
-        self.assertEqual(fetch[:3], ["timeout", "--kill-after=15", str(installer.APT_DOWNLOAD_TIMEOUT)])
-        self.assertIn("sudo", fetch)
+        # timeout runs under sudo, as root, so it can stop apt-get when the mirrors hang.
+        self.assertEqual(fetch[:6], ["sudo", "env", "DEBIAN_FRONTEND=noninteractive", "timeout", "--kill-after=15",
+                                     str(installer.APT_DOWNLOAD_TIMEOUT)])
+        update = next(command for command in runner.commands if "update" in command)
+        self.assertEqual(update[:4], ["sudo", "env", "DEBIAN_FRONTEND=noninteractive", "timeout"])
+        offline_install = next(command for command in runner.commands if "--no-download" in command)
+        self.assertNotIn("timeout", offline_install)
         self.assertEqual(fetch[-9:], installer.parse_missing(FONTS_MISSING))
 
     def test_lasting_outage_for_fonts_only_warns_and_still_proves_the_browser(self):
