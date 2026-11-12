@@ -2,8 +2,8 @@
 
 **Branch**: `claude/3052-s10-variable-lifecycle-f662ac` | **Date**: 2026-11-09 | **Spec**: [spec.md](spec.md)
 
-**Status**: provisional, like the spec. The ADR PR it waits on (ADR 0092, #3411 at `a356aa9cf`) is in the spec's *Approval*
-section. Nothing here is implemented until #3052's specs are defined, this spec is approved and the initiative branch
+**Status**: approved with the spec (2026-11-12). ADR 0092 (#3411) is accepted and merged into the initiative branch
+(`f52a661df`). Nothing here is implemented until #3052's specs are defined, this spec is approved and the initiative branch
 lands.
 
 ## Summary
