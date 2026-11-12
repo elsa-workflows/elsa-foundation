@@ -1,6 +1,6 @@
 namespace Kernel.Sim;
 
-public sealed record Config(int Nodes, int Partitions, Flaw Flaws);
+public sealed record Config(int Nodes, int Partitions, Flaw Flaws, int Attempts = 3, int Group = 1);
 
 /// <summary>One thing that happens. Concrete, so that a list of them replays without the random generator.</summary>
 public sealed record Act(string Kind, int A = 0, int B = 0, string S = "", Message? M = null, bool Flag = false)
@@ -18,6 +18,7 @@ public sealed record Act(string Kind, int A = 0, int B = 0, string S = "", Messa
         "tick" => $"{A} ms pass",
         "skew" => $"the wall clock of node {A} jumps {B} ms",
         "crash" => $"node {A} crashes and restarts{(Flag ? "; the old process lives on" : "")}",
+        "release" => $"actor {A} releases its partition",
         "pause" => $"node {A} pauses",
         "resume" => $"node {A} resumes",
         "project" => $"the projector reads partition {A}",
@@ -85,11 +86,14 @@ public sealed class Wire(World world, Actor actor) : IKernelStore
     }
 
     public ValueTask<Lease?> TakeAsync(int partition, string node, TimeSpan lease, CancellationToken cancellationToken = default) =>
-        Send("take", $"take p{partition}", () => world.Store.TakeAsync(partition, node, lease));
+        Send("take", $"take p{partition}", () => world.Take(partition, node, lease));
+
+    public ValueTask ReleaseAsync(int partition, long epoch, CancellationToken cancellationToken = default) => world.Store.ReleaseAsync(partition, epoch);
 
     public ValueTask<Committed> CommitAsync(CommitBatch batch, CancellationToken cancellationToken = default) =>
         Send("commit", $"commit p{batch.Partition} e{batch.Epoch} @{batch.Position} [{string.Join(", ", batch.Steps.Select(Describe))}]"
-            + (batch.Seen.Count > 0 ? $" seen [{string.Join(", ", batch.Seen)}]" : ""), () => world.Store.CommitAsync(batch));
+            + (batch.Seen.Count > 0 ? $" seen [{string.Join(", ", batch.Seen)}]" : "") + (batch.Trial.Count > 0 ? $" on trial [{string.Join(", ", batch.Trial)}]" : ""),
+            () => world.Store.CommitAsync(batch));
 
     public ValueTask<Polled> PollAsync(int partition, long epoch, TimeSpan horizon, int limit, CancellationToken cancellationToken = default) =>
         Send("poll", $"poll p{partition} e{epoch}", () => world.Store.PollAsync(partition, epoch, horizon, limit));
@@ -130,10 +134,10 @@ public sealed partial class World
     public readonly List<Actor> Actors = [];
     public readonly int[,] Current;
     public readonly long[] Skew, Projected;
+    public readonly int[] Incarnation;
     public readonly bool[] Paused;
     public readonly List<string> Faults = [];
     private readonly List<Task> _watched = [];
-    public const int Attempts = 8;      // high, because the simulation also kills owners for no reason (finding F2)
     public long Time = 1_000_000;
     public bool Auto;
     public int? Dying;
@@ -147,6 +151,7 @@ public sealed partial class World
         Skew = new long[config.Nodes];
         Paused = new bool[config.Nodes];
         Projected = new long[config.Partitions];
+        Incarnation = new int[config.Nodes];
         for (var node = 0; node < config.Nodes; node++)
             for (var partition = 0; partition < config.Partitions; partition++)
                 Spawn(node, partition);
@@ -164,15 +169,17 @@ public sealed partial class World
             new Counter(), new Parent(), new Child(), new Waiter(), new Sequence(),
             new Runner((run, cancel) => Work(actor, run, cancel)), new Fragile(() => Dying = node),
         ];
-        actor.Worker = new Worker("node" + node, partition, new Wire(this, actor), models, new WorkerOptions
+        // A node's name is unique per process start: a restarted process is not its predecessor (finding F9).
+        actor.Worker = new Worker(Config.Flaws.HasFlag(Flaw.StableNodeName) ? "node" + node : $"node{node}.{Incarnation[node]}", partition, new Wire(this, actor), models, new WorkerOptions
         {
-            Lease = TimeSpan.FromSeconds(10), Horizon = TimeSpan.FromSeconds(2), PollLimit = 3, MaxBatch = 4, MaxAttempts = World.Attempts,
+            Lease = TimeSpan.FromSeconds(10), Horizon = TimeSpan.FromSeconds(2), PollLimit = 3, MaxBatch = 4, MaxAttempts = Config.Attempts, TrialGroup = Config.Group,
             Monotonic = () => Time + node * 7919,       // every node counts at the database's rate from its own zero
             WallClock = () => Time + Skew[node],
             Flaws = Config.Flaws,
             OnStep = (instance, inbox, _) =>
             {
                 Log?.Invoke($"        actor {actor.Id} steps {instance} with [{string.Join(", ", inbox.Select(m => m.Kind + " " + m.Id))}]");
+                Alone(actor, instance.Id, "a step of " + instance);
                 foreach (var message in inbox)
                     if (message.Due > Time) Faults.Add($"I5 {message.Id} was delivered to {instance} {message.Due - Time} ms before it was due");
             },
@@ -181,8 +188,35 @@ public sealed partial class World
         Current[node, partition] = actor.Id;
     }
 
-    private static ValueTask<object?> Work(Actor actor, IRun run, CancellationToken cancel)
+    /// <summary>The take, watched: taking from another owner means that owner was lost, the only thing that may raise attempts.</summary>
+    public ValueTask<Lease?> Take(int partition, string node, TimeSpan lease)
     {
+        var (owner, epoch) = (Store.Partitions[partition].Owner, Store.Partitions[partition].Epoch);
+        var taken = Store.TakeAsync(partition, node, lease);
+        var lost = taken.Result is not null && owner is not null && owner != node;
+        foreach (var row in Store.Messages.Values)
+        {
+            // I14, the counting half: one more attempt for exactly the rows that were on trial under the owner that was lost.
+            var onTrial = lost && !row.Done && row.Trial == epoch && row.Message.Target.Partition == partition;
+            var expected = _attempts.GetValueOrDefault(row.Message.Id) + (onTrial ? 1 : 0);
+            if (row.Attempts != expected) Faults.Add($"I14 the take of partition {partition} by {node} left {row.Message.Id} at {row.Attempts} attempts; it should be {expected}");
+            _attempts[row.Message.Id] = row.Attempts;
+        }
+        return taken;
+    }
+
+    // Invariant 14, the "alone" half: while rows are on trial at the current epoch, the owner starts nothing but them.
+    private void Alone(Actor actor, string instance, string what)
+    {
+        var partition = Store.Partitions[actor.Partition];
+        if (actor.Worker.Epoch != partition.Epoch) return;
+        var trial = Store.Messages.Values.Where(m => !m.Done && m.Trial == partition.Epoch && m.Message.Target.Partition == actor.Partition).ToList();
+        if (trial.Count > 0 && !trial.Exists(m => m.Message.Target.Id == instance)) Faults.Add($"I14 {what} started on actor {actor.Id} while {trial[0].Message.Id} was on trial");
+    }
+
+    private ValueTask<object?> Work(Actor actor, IRun run, CancellationToken cancel)
+    {
+        Alone(actor, run.Instance.Id, $"run {run.Key} of {run.Instance}");
         var done = new TaskCompletionSource<object?>();
         actor.Runs[run.Instance.Id + "!" + run.Key] = done;
         cancel.Register(() => done.TrySetCanceled());
@@ -192,6 +226,7 @@ public sealed partial class World
     private void Crash(int node, bool zombie)
     {
         Paused[node] = false;
+        Incarnation[node]++;
         foreach (var actor in Actors.Where(a => a.Node == node && !a.Dead).ToList())
         {
             // The old process is gone, or (zombie) lives on with its memory beside the new one under the same name.
@@ -221,7 +256,7 @@ public sealed partial class World
     {
         switch (act.Kind)
         {
-            case "take" or "poll" or "load" or "flush" or "beat" or "meet":
+            case "take" or "poll" or "load" or "flush" or "beat" or "meet" or "release":
             {
                 if (Live(act.A) is not { } actor) return null;
                 var (worker, calls) = (actor.Worker, actor.Calls.Count);
@@ -233,6 +268,7 @@ public sealed partial class World
                     case "flush" when worker.Owns && !worker.Flushing && worker.NeedsFlush: Watch(worker.FlushAsync()); break;
                     case "beat" when worker.Owns && !worker.Flushing: Watch(worker.BeatAsync()); break;
                     case "meet" when worker.Owns && !worker.Meeting && worker.NeedsMeet: Watch(worker.MeetAsync()); break;
+                    case "release" when worker.Owns: Watch(worker.ReleaseAsync()); break;
                     default: return null;
                 }
                 return actor.Calls.Count > calls ? $"call {actor.Calls.Count - 1}: {actor.Calls[^1].Text}" : "nothing to send";
@@ -319,7 +355,7 @@ public sealed partial class World
 /// <summary>Chooses the next thing to happen from a seed.</summary>
 public sealed class Generator(int seed, World world)
 {
-    private static readonly string[] Bad = ["throw", "spoil", "die"];
+    private static readonly string[] Bad = ["throw", "spoil", "die", "dierun"];
     private readonly Random _random = new(seed);
     private readonly List<Message> _outside = [];
     private readonly List<(string Target, string Key)> _runs = [];
@@ -343,7 +379,8 @@ public sealed class Generator(int seed, World world)
                 var pick = ready[r.Next(ready.Count)];
                 return new Act("step", pick.Id, S: pick.id);
             }
-            case < 47: return new Act("flush", actor.Id);
+            case < 46: return new Act("flush", actor.Id);
+            case < 47: return new Act("release", actor.Id);
             case < 48: return new Act("beat", actor.Id);
             case < 52: return new Act("meet", actor.Id);
             case < 82:
@@ -409,7 +446,7 @@ public sealed class Generator(int seed, World world)
                 return new Act("add", M: new Message($"x{n}", new InstanceRef(target), "cancel", Json.Write(key), KeepUntil: keep));
             }
             default:
-                return new Act("add", M: To("f" + r.Next(3), r.Next(3) == 0 ? Bad[r.Next(3)] : "ok", null, Fragile.Spec));
+                return new Act("add", M: To("f" + r.Next(3), r.Next(3) == 0 ? Bad[r.Next(4)] : "ok", null, Fragile.Spec));
         }
     }
 

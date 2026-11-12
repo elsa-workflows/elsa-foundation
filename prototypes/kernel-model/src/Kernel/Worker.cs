@@ -6,7 +6,14 @@ public sealed record WorkerOptions
     public TimeSpan Horizon { get; init; } = TimeSpan.FromSeconds(10);
     public int PollLimit { get; init; } = 500;
     public int MaxBatch { get; init; } = 500;
+    /// <summary>How many owners may be lost with a message on trial before it is parked.</summary>
     public int MaxAttempts { get; init; } = 3;
+
+    /// <summary>
+    /// How many suspects are tried together at first; the group halves with every attempt. 1 tries them one at a time,
+    /// which is exact and slow. A larger group recovers a backlog faster and needs MaxAttempts above its base-2 logarithm.
+    /// </summary>
+    public int TrialGroup { get; init; } = 1;
 
     /// <summary>A monotonic clock in milliseconds. Only differences are used: the database tells the time.</summary>
     public Func<long> Monotonic { get; init; } = static () => Environment.TickCount64;
@@ -42,7 +49,8 @@ public sealed class Worker
     private long _generation, _anchor = long.MinValue, _local;
     private bool _taking, _polling, _loading, _flushing, _meeting, _caughtUp;
     private string _refusal = "";
-    private Item? _trial;   // the one inherited message being tried, alone (finding F2)
+    private readonly HashSet<Item> _trial = [];     // the suspects being tried now, with nothing else in flight (finding F2)
+    private readonly HashSet<long> _mine = [];      // the epochs this process has held: what it marked then did not kill it
 
     public Worker(string node, int partition, IKernelStore store, IEnumerable<IExecutionModel> models, WorkerOptions? options = null)
     {
@@ -69,10 +77,11 @@ public sealed class Worker
     public bool Meeting => _meeting;
     public int Queued => _queue.Count;
     public bool NeedsLoad => _slots.Values.Any(s => !s.Loaded);
-    public bool NeedsFlush => _queue.Count > 0 || _items.Values.Any(Unmarked) || NextTrial() is not null;
+    public bool NeedsFlush => _queue.Count > 0 || _items.Values.Any(Unmarked) || NextTrial().Count > 0;
+    public IEnumerable<string> Trial => _trial.Select(i => i.Message.Id);
     public bool NeedsMeet => _meets.Exists(i => !Awaits(i) && !i.Taken);
     public IEnumerable<string> Ready => _slots.Where(s => s.Value.Loaded && !s.Value.Busy && Deliverable(s.Value).Count > 0).Select(s => s.Key)
-        .Where(id => _trial is null || id == _trial.Message.Target.Id);    // while a trial runs, nothing else does
+        .Where(id => _trial.Count == 0 || OnTrial(id));    // while a trial runs, nothing else does
 
     // What is in memory, for tests of invariant 9.
     public IEnumerable<(string Id, InstanceRow? Row, string? State, bool Busy)> Instances =>
@@ -104,6 +113,17 @@ public sealed class Worker
         Observe(lease.Now);
         Epoch = lease.Epoch;
         Position = lease.Position;
+        _mine.Add(lease.Epoch);
+    }
+
+    /// <summary>Stand down: drop what is in memory and give the partition up. Whoever takes it next finds no death.</summary>
+    public async Task ReleaseAsync(CancellationToken cancellationToken = default)
+    {
+        if (!Owns) return;
+        var epoch = Epoch;
+        Reset();
+        try { await _store.ReleaseAsync(Partition, epoch, cancellationToken); }
+        catch (Exception) { /* then the lease runs out instead */ }
     }
 
     /// <summary>Recovery after any doubt is the same path as start-up: drop everything; the host takes the partition again.</summary>
@@ -121,7 +141,7 @@ public sealed class Worker
         _behind.Clear();
         _cancelling.Clear();
         _caughtUp = false;
-        _trial = null;
+        _trial.Clear();
     }
 
     private void Observe(long now) => _anchor = Math.Max(_anchor, now - _options.Monotonic());
@@ -145,8 +165,7 @@ public sealed class Worker
         _polling = false;
         Observe(polled.Now);    // anchored when the answer arrives, so the estimate never runs ahead of the database
         foreach (var row in polled.Messages)
-            Hold(row.Message, row.Seq, durable: true, marked: false, attempts: row.Attempts,
-                inherited: row.Seen > 0 && row.Message.Kind is not (Kinds.Run or Kinds.Meet) && (row.Message.Due is not { } due || due <= polled.Now));
+            Hold(row.Message, row.Seq, durable: true, marked: false, attempts: row.Attempts, suspect: Suspect(row, polled.Now));
         // Finding F1: caught up when a poll comes back short and every row this owner wrote meanwhile has come back with it.
         if (polled.Messages.Count < _options.PollLimit && _behind.Count == 0) _caughtUp = true;
     }
@@ -162,12 +181,21 @@ public sealed class Worker
         return true;
     }
 
-    private void Hold(Message message, long seq, bool durable, bool marked, bool inherited = false, int attempts = 0, bool fresh = false)
+    /// <summary>
+    /// A message that another owner had marked, or that is on trial already, may be what killed that owner. What this
+    /// same process marked in an epoch it held earlier is not: the process is alive.
+    /// </summary>
+    private bool Suspect(Stored row, long now) => row.Message.Kind != Kinds.Meet && row.Attempts < _options.MaxAttempts
+        && (row.Trial > 0 || (row.Seen > 0 && !_mine.Contains(row.Seen) && (row.Message.Due is not { } due || due <= now)));
+
+    private bool OnTrial(string instance) => _trial.Any(t => t.Message.Target.Id == instance);
+
+    private void Hold(Message message, long seq, bool durable, bool marked, bool suspect = false, int attempts = 0, bool fresh = false)
     {
         // The owner skips ids it holds, and (finding F5) ids it consumed while the poll that returned them was in flight.
         if (!Has(Flaw.PollWithoutSkip) && (_items.ContainsKey(message.Id) || _consumed.Contains(message.Id))) return;
         _behind.Remove(message.Id);
-        var item = new Item(message, seq) { Durable = durable, Marked = marked, Inherited = inherited, Attempts = attempts };
+        var item = new Item(message, seq) { Durable = durable, Marked = marked, Suspect = suspect, Attempts = attempts };
         _items[message.Id] = item;
         if (message.Kind == Kinds.Meet)
         {
@@ -175,7 +203,13 @@ public sealed class Worker
             _meets.Add(item);
             return;
         }
-        if (message.Kind == Kinds.Run)
+        if (message.Kind == Kinds.Run && attempts >= _options.MaxAttempts)
+        {
+            // Off-step work that was on trial when too many owners were lost is parked: its result is an error.
+            var error = $"the run was on trial when {attempts} owners were lost";
+            item.Message = message with { Kind = Kinds.RunFinished, Payload = Json.Write(new RunFinished(message.Read<RunTicket>().Key, null, error)) };
+        }
+        else if (message.Kind == Kinds.Run)
         {
             item.Ticket = true;
             item.Key = message.Read<RunTicket>().Key;
@@ -187,21 +221,34 @@ public sealed class Worker
         slot.Inbox.Insert(at < 0 ? slot.Inbox.Count : at, item);    // a target's messages are handled in seq order
     }
 
-    private bool Unmarked(Item item) => item.Durable && !item.Marked && !item.Taken && (!item.Inherited || Has(Flaw.BumpAllInherited));
+    private static bool Unmarked(Item item) => item.Durable && !item.Marked && !item.Taken && !item.Suspect;
 
     /// <summary>
-    /// Finding F2: a message an earlier owner held may be the one that killed it. Such messages are tried one at a
-    /// time: a commit bumps the attempts of that one message, then its step runs with nothing else in flight. So a
-    /// death counts against the message that was on trial, and never against its neighbours.
+    /// Finding F2: suspects are tried apart from everything else. A fenced commit writes that they are on trial at this
+    /// epoch; then only they run. If this owner's lease expires, the take that follows adds an attempt to exactly the
+    /// rows on trial. So a death counts against what was on trial and never against its neighbours. A group holds
+    /// suspects with the same attempts and halves with each attempt, so a poison message ends up alone.
     /// </summary>
-    private Item? NextTrial() => _trial is not null || Has(Flaw.BumpAllInherited) ? null
-        : _items.Values.Where(i => i.Durable && !i.Marked && !i.Taken && i.Inherited).MinBy(i => i.Seq);
+    private List<Item> NextTrial()
+    {
+        if (_trial.Count > 0) return [];
+        var suspects = _items.Values.Where(i => i.Durable && !i.Marked && !i.Taken && i.Suspect).OrderBy(i => i.Seq).ToList();
+        if (suspects.Count == 0 || Has(Flaw.BumpAllInherited)) return suspects;
+        var (attempts, group, skipped) = (suspects[0].Attempts, new List<Item>(), new HashSet<string>());
+        foreach (var suspect in suspects)
+        {
+            // A member must not wait behind an older suspect of the same target that is not in the group.
+            if (suspect.Attempts == attempts && group.Count < Math.Max(1, _options.TrialGroup >> attempts) && !skipped.Contains(suspect.Message.Target.Id)) group.Add(suspect);
+            else skipped.Add(suspect.Message.Target.Id);
+        }
+        return group;
+    }
 
     /// <summary>
     /// Finding F3: a polled message is not acted on until a fenced commit has marked it seen at this epoch (and bumped
     /// its attempts if an earlier owner had it). The sketch's rule covers only rows an earlier owner had marked.
     /// </summary>
-    private bool Awaits(Item item) => item.Durable && !item.Marked && (item.Inherited || !Has(Flaw.RunBeforeMark));
+    private bool Awaits(Item item) => item.Durable && !item.Marked && (item.Suspect || !Has(Flaw.RunBeforeMark));
 
     private List<Item> Deliverable(Slot slot)
     {
@@ -242,7 +289,7 @@ public sealed class Worker
     public void Run(string instance)
     {
         if (!Owns || !_slots.TryGetValue(instance, out var slot) || !slot.Loaded || slot.Busy) return;
-        if (_trial is not null && _trial.Message.Target.Id != instance) return;
+        if (_trial.Count > 0 && !OnTrial(instance)) return;
         var due = Deliverable(slot);
         if (due.Count == 0) return;
         slot.Inbox.RemoveAll(due.Contains);
@@ -252,8 +299,8 @@ public sealed class Worker
         var spec = creator < 0 ? null : due[creator].Message.Start;
         if (slot.Row is { Status: not InstanceStatus.Running })
             Enqueue(new Unit(slot, instance) { Consumed = due });    // a finished target: consumed and dropped
-        else if (due.Find(i => i.Attempts > _options.MaxAttempts) is { } poison)
-            Enqueue(Park(slot, instance, due, spec, $"message {poison.Message.Id} was taken {poison.Attempts} times and never handled"));
+        else if (due.Find(i => i.Attempts >= _options.MaxAttempts && i.Message.Kind != Kinds.RunFinished) is { } poison)
+            Enqueue(Park(slot, instance, due, spec, $"message {poison.Message.Id} was on trial when {poison.Attempts} owners were lost"));
         else if (slot.Row is null && spec is null)                   // no target and no start spec: dropped and journalled
             Enqueue(new Unit(slot, instance) { Consumed = due, Journal = Json.Write(due.Select(i => "dropped " + i.Message.Id)) });
         else
@@ -298,7 +345,7 @@ public sealed class Worker
 
     private void StartRun(Item ticket)
     {
-        if (ticket.Cancel is not null || ticket.Taken || Awaits(ticket)) return;
+        if (ticket.Cancel is not null || ticket.Taken || Awaits(ticket) || (_trial.Count > 0 && !_trial.Contains(ticket))) return;
         ticket.Cancel = new CancellationTokenSource();
         _ = DriveRun(ticket, ticket.Message.Read<RunTicket>());
     }
@@ -365,13 +412,13 @@ public sealed class Worker
         if (_flushing || !Owns) return;
         var units = _queue.GetRange(0, Math.Min(_queue.Count, _options.MaxBatch));     // rows per flush are capped
         var marks = _items.Values.Where(Unmarked).Take(_options.MaxBatch).ToList();
-        var trial = NextTrial();
-        if (trial is not null) marks.Add(trial);
-        if (units.Count == 0 && marks.Count == 0 && !beat) return;
+        var trial = units.Count == _queue.Count ? NextTrial() : [];    // a trial starts only when this commit leaves nothing else in flight
+        if (units.Count == 0 && marks.Count == 0 && trial.Count == 0 && !beat) return;
         _queue.RemoveRange(0, units.Count);
+        if (!Has(Flaw.BumpAllInherited)) _trial.UnionWith(trial);      // from here on nothing else starts
         var generation = _generation;
         _flushing = true;
-        var outcome = await CommitAsync(units, marks, generation, cancellationToken);
+        var outcome = await CommitAsync(units, marks, trial, generation, cancellationToken);
         if (outcome == Outcome.Refused)
         {
             // A definite error: no reset. The batch's instances are committed one by one and the one that fails is parked.
@@ -379,16 +426,18 @@ public sealed class Worker
             for (var i = 0; outcome == Outcome.Landed && i < units.Count; i++)
             {
                 var unit = units[i];
-                outcome = await CommitAsync([unit], i == 0 ? marks : [], generation, cancellationToken);
+                // The marks ride with the first of these commits that lands.
+                outcome = await CommitAsync([unit], marks, trial, generation, cancellationToken);
                 if (outcome == Outcome.Refused && unit.Slot is { } slot)
-                    outcome = await CommitAsync([Park(slot, unit.Instance, unit.Consumed, unit.Spec, _refusal)], [], generation, cancellationToken);
+                    outcome = await CommitAsync([Park(slot, unit.Instance, unit.Consumed, unit.Spec, _refusal)], marks, trial, generation, cancellationToken);
+                if (outcome == Outcome.Landed) (marks, trial) = ([], []);
             }
             if (outcome == Outcome.Refused && generation == _generation) Reset();   // nothing left to set apart
         }
         if (generation == _generation) _flushing = false;
     }
 
-    private async Task<Outcome> CommitAsync(List<Unit> units, List<Item> marks, long generation, CancellationToken cancellationToken)
+    private async Task<Outcome> CommitAsync(List<Unit> units, List<Item> marks, List<Item> trial, long generation, CancellationToken cancellationToken)
     {
         // Finding F1: until the owner has caught up with the rows it inherited, what it sends to its own partition goes
         // through the table like everything else. Handing it over in memory would let it overtake older rows.
@@ -398,7 +447,7 @@ public sealed class Worker
                 Has(Flaw.KeepConsumedMessages) ? [] : [.. u.Consumed.Where(i => i.Durable && i.Message.KeepUntil is null).Select(i => i.Message.Id), .. Has(Flaw.VolatileRunTicket) ? [] : u.Cancelled],
                 Has(Flaw.KeepConsumedMessages) ? [] : u.Consumed.Where(i => i.Durable && i.Message.KeepUntil is not null).Select(i => i.Message.Id).ToList(),
                 u.Sent.Where(m => !u.Volatile.Contains(m.Id)).ToList(), u.Subscribed, u.Unsubscribed, u.Journal)).ToList(),
-            marks.Select(i => i.Message.Id).ToList(), marks.Where(i => i.Inherited).Select(i => i.Message.Id).ToList());
+            marks.Select(i => i.Message.Id).ToList(), trial.Select(i => i.Message.Id).ToList());
         while (true)
         {
             Committed result;
@@ -423,19 +472,11 @@ public sealed class Worker
             }
             Position += batch.Positions;
             Observe(result.Now);
-            foreach (var item in marks)
-            {
-                item.Marked = true;
-                if (!item.Inherited) continue;
-                (item.Attempts, item.Inherited) = (item.Attempts + 1, false);
-                if (!Has(Flaw.BumpAllInherited)) _trial = item;
-            }
+            foreach (var item in marks.Concat(trial)) item.Marked = true;
             var seqs = new Queue<long>(result.Seqs);
             foreach (var unit in units) Apply(unit, seqs, handOver);
-            foreach (var item in marks)
-            {
+            foreach (var item in marks.Concat(trial))
                 if (item.Key is not null && _items.ContainsKey(item.Message.Id)) StartRun(item);
-            }
             return Outcome.Landed;
         }
     }
@@ -486,7 +527,8 @@ public sealed class Worker
     private void Forget(Item item)
     {
         _items.Remove(item.Message.Id);
-        if (item == _trial) _trial = null;
+        if (_trial.Remove(item) && _trial.Count == 0)      // the trial is over: what waited for it may start
+            foreach (var ticket in _items.Values.Where(i => i.Key is not null).ToList()) StartRun(ticket);
         if (item.Durable && _polling && !Has(Flaw.PollRace)) _consumed.Add(item.Message.Id);
         if (item.Key is not null) item.Cancel?.Cancel();
         if (_slots.TryGetValue(item.Message.Target.Id, out var slot)) slot.Inbox.Remove(item);
@@ -508,7 +550,7 @@ internal sealed class Item(Message message, long seq)
     public long Seq = seq;
     public bool Durable;            // it is a row
     public bool Marked;             // its row says seen at this epoch
-    public bool Inherited;          // an earlier owner had it: its attempts are bumped with the mark
+    public bool Suspect;            // another owner had it: it is tried apart before anything else is believed of it
     public int Attempts;
     public bool Ticket;             // a kernel message, not (yet) for the model
     public bool Taken;              // a step or a commit in flight has it

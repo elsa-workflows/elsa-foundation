@@ -13,10 +13,12 @@ var actions = int.Parse(Arg("--actions") ?? "300");
 var flaws = (Arg("--flaw") ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries).Aggregate(Flaw.None, (all, name) => all | Enum.Parse<Flaw>(name, true));
 
 if (args.Contains("--mutations")) return Mutations(int.Parse(Arg("--seeds") ?? "2000"));
+if (Arg("--backlog") is { } backlog) return Backlog(int.Parse(backlog));
 if (Arg("--seed") is { } one) return Replay(int.Parse(one), flaws) ? 0 : 1;
 return Sweep(int.Parse(Arg("--from") ?? "1"), int.Parse(Arg("--seeds") ?? "10000"), flaws) ? 0 : 1;
 
-static Config ConfigOf(int seed, Flaw flaws) => new(2 + seed % 2, 2, flaws);
+// Every fifth seed tries suspects in groups of four that halve, with a threshold to match; the others one at a time.
+static Config ConfigOf(int seed, Flaw flaws) => flaws.HasFlag(Flaw.StableNodeName) ? new(1, 2, flaws) : seed % 5 == 0 ? new(2 + seed % 2, 2, flaws, Attempts: 5, Group: 4) : new(2 + seed % 2, 2, flaws);
 
 (string? Violation, List<Act> Acts) Run(int seed, Flaw flaws)
 {
@@ -96,7 +98,7 @@ bool Sweep(int from, int seeds, Flaw flaws)
         Interlocked.Add(ref acts, done.Count);
         if (violation is not null) failures.Add((seed, violation));
     });
-    Console.WriteLine($"{seeds} seeds from {from}, {acts} actions, {clock.Elapsed.TotalSeconds:F1} s, flaws: {flaws}: {failures.Count} failed");
+    Console.WriteLine($"{seeds} seeds from {from}, {acts} actions, {clock.Elapsed.TotalSeconds:F1} s, flaws: {flaws}: {failures.Count} failed; {World.Bystanders} innocent instances parked at the threshold");
     foreach (var group in failures.GroupBy(f => f.Violation.Split(' ')[0]).OrderByDescending(g => g.Count()))
     {
         var first = group.MinBy(f => f.Seed);
@@ -105,13 +107,44 @@ bool Sweep(int from, int seeds, Flaw flaws)
     return failures.IsEmpty;
 }
 
+// What it costs to recover the messages a dead owner held: commits until idle, for trial groups of different sizes.
+int Backlog(int messages)
+{
+    foreach (var group in new[] { 1, 8, 64 })
+    {
+        var time = 1_000_000L;
+        var store = new InMemoryStore(1, () => time);
+        var commits = 0;
+        var counting = new CountingStore(store, () => commits++);
+        var options = new WorkerOptions { TrialGroup = group, MaxAttempts = 10, Monotonic = () => time };
+        var first = new Worker("first", 0, counting, [new Counter()], options);
+        first.TakeAsync().Wait();
+        for (var i = 0; i < messages; i++) store.AddAsync(new Message("x" + i, InstanceRef.In(0, "c" + i), "add", Json.Write(new Add("t" + i)), Start: Counter.Spec)).AsTask().Wait();
+        first.PollAsync().Wait();
+        first.FlushAsync().Wait();      // marked, and then the owner dies with all of them in memory
+        time += 60_000;
+        commits = 0;
+        var second = new Worker("second", 0, counting, [new Counter()], options);
+        second.TakeAsync().Wait();
+        while (store.Messages.Count > 0)
+        {
+            second.PollAsync().Wait();
+            second.LoadAsync().Wait();
+            foreach (var id in second.Ready.ToList()) second.Run(id);
+            second.FlushAsync().Wait();
+        }
+        Console.WriteLine($"{messages} messages held by a dead owner, trial group {group}: {commits} commits to recover them");
+    }
+    return 0;
+}
+
 int Mutations(int seeds)
 {
     Flaw[] mutations =
     [
         Flaw.FenceWithoutEpoch, Flaw.FenceWithoutPosition, Flaw.FenceWithoutPosition | Flaw.NoResetAfterFailedCommit, Flaw.CommitDespiteFence,
         Flaw.NoResetAfterFailedCommit, Flaw.DeliverBeforeCommit, Flaw.PollWithoutSkip, Flaw.KeepConsumedMessages, Flaw.DeleteWithoutCount,
-        Flaw.DeleteWithoutCount | Flaw.PollWithoutSkip,
+        Flaw.DeleteWithoutCount | Flaw.PollWithoutSkip, Flaw.EveryTakeCounts,
         // behaviours of draft 1, or of a literal reading of draft 2: the findings of FINDINGS.md
         Flaw.WallClockTimers, Flaw.DeleteOutsideCommands, Flaw.HandOverWhileBehind, Flaw.BumpAllInherited, Flaw.RunBeforeMark,
         Flaw.VolatileRunTicket, Flaw.PollRace, Flaw.MeetWithoutTicket,

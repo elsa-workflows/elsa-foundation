@@ -16,7 +16,7 @@ public sealed class InMemoryStore(int partitions, Func<long> clock, Flaw flaws =
     public sealed class MessageRow(Message message, long seq, long seen)
     {
         public Message Message = message;
-        public long Seq = seq, Seen = seen;
+        public long Seq = seq, Seen = seen, Trial;
         public int Attempts;
         public bool Done;
     }
@@ -42,7 +42,11 @@ public sealed class InMemoryStore(int partitions, Func<long> clock, Flaw flaws =
         lock (_gate)
         {
             var (p, now) = (Partitions[partition], clock());
-            if (p.Owner is not null && p.Owner != node && p.LeaseUntil >= now) return new((Lease?)null);
+            var died = p.Owner is not null && p.Owner != node;      // taken from another: only possible once its lease has expired
+            if (died && p.LeaseUntil >= now) return new((Lease?)null);
+            if (died || (Has(Flaw.EveryTakeCounts) && p.Owner is not null))
+                foreach (var row in Messages.Values)
+                    if (row.Trial == p.Epoch && !row.Done && row.Message.Target.Partition == partition) row.Attempts++;
             (p.Owner, p.Epoch, p.LeaseUntil) = (node, p.Epoch + 1, now + (long)lease.TotalMilliseconds);
             return new(new Lease(p.Epoch, p.Position, now));
         }
@@ -103,8 +107,8 @@ public sealed class InMemoryStore(int partitions, Func<long> clock, Flaw flaws =
             }
             foreach (var id in batch.Seen)
                 if (Messages.GetValueOrDefault(id) is { } seen) seen.Seen = batch.Epoch;
-            foreach (var id in batch.Bumped)
-                if (Messages.GetValueOrDefault(id) is { } bumped) bumped.Attempts++;
+            foreach (var id in batch.Trial)
+                if (Messages.GetValueOrDefault(id) is { } tried) (tried.Seen, tried.Trial) = (batch.Epoch, batch.Epoch);
             return new(new Committed(fenced, now, seqs));
 
             // A count that does not match: memory and rows have parted. At the current epoch and position that is a kernel bug.
@@ -116,6 +120,13 @@ public sealed class InMemoryStore(int partitions, Func<long> clock, Flaw flaws =
         }
     }
 
+    public ValueTask ReleaseAsync(int partition, long epoch, CancellationToken cancellationToken = default)
+    {
+        lock (_gate)
+            if (Partitions[partition].Epoch == epoch) Partitions[partition].Owner = null;
+        return default;
+    }
+
     public ValueTask<Polled> PollAsync(int partition, long epoch, TimeSpan horizon, int limit, CancellationToken cancellationToken = default)
     {
         lock (_gate)
@@ -125,7 +136,7 @@ public sealed class InMemoryStore(int partitions, Func<long> clock, Flaw flaws =
             var rows = Messages.Values
                 .Where(m => m.Message.Target.Partition == partition && m.Seen < epoch && !m.Done && (m.Message.Due ?? 0) <= until)
                 .OrderBy(m => m.Seq).Take(limit)
-                .Select(m => new Stored(m.Message, m.Seq, m.Seen, m.Attempts)).ToList();
+                .Select(m => new Stored(m.Message, m.Seq, m.Seen, m.Attempts, m.Trial)).ToList();
             return new(new Polled(rows, now));
         }
     }

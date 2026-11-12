@@ -25,7 +25,7 @@ public sealed class Oracle
             case "waiter": Waiters[target] = Json.Read<List<string>>(m.Start.Input!); break;
             case "sequence": var input = Json.Read<SequenceInput>(m.Start.Input!); Sequences[target] = (input.Count, input.Mode, posted); break;
             case "runner": List(Runners, target).Add(m.Read<string>()); break;
-            case "fragile": Fragiles[target] = Fragiles.GetValueOrDefault(target) || m.Kind != "ok"; break;
+            case "fragile": Fragiles[target] = Fragiles.GetValueOrDefault(target) || m.Kind is "throw" or "spoil" or "die"; break;
             case null when m.Kind == "add": Ghosts.Add(target); break;
         }
     }
@@ -38,6 +38,9 @@ public sealed partial class World
     public readonly Oracle Oracle = new();
     private readonly Dictionary<string, (long Revision, InstanceStatus Status)> _known = new(StringComparer.Ordinal);
     private readonly Dictionary<(Type, string), object> _parsed = new();
+    private readonly Dictionary<string, int> _attempts = new(StringComparer.Ordinal);  // per message, as last seen
+    public readonly HashSet<string> Parked = new(StringComparer.Ordinal);               // instances parked by the rule of invariant 14
+    public static long Bystanders;      // how many of those had done nothing wrong, over all runs
 
     private T? State<T>(string id) where T : class =>
         Store.Instances.GetValueOrDefault(id) is not { State: var json } || json == "null" ? null
@@ -64,6 +67,9 @@ public sealed partial class World
         _watched.RemoveAll(t => t.IsCompletedSuccessfully);
         if (_watched.Find(t => t.IsFaulted) is { } bug) return "BUG " + bug.Exception!.InnerException;
         var waiting = Store.Messages.Values.Where(m => !m.Done).ToLookup(m => m.Message.Target.Id, m => m.Message);
+        // I14, the counting half: attempts change only in a take (see World.Take).
+        foreach (var row in Store.Messages.Values)
+            if (row.Attempts != _attempts.GetValueOrDefault(row.Message.Id)) return $"I14 the attempts of {row.Message.Id} changed to {row.Attempts} outside a take";
         return Journal() ?? Memory() ?? Counters(waiting) ?? Trees(waiting) ?? Waits() ?? Sequences(waiting) ?? Runs();
     }
 
@@ -97,8 +103,12 @@ public sealed partial class World
             if (_known.TryGetValue(row.Id, out var before) && (row.Revision < before.Revision || (before.Status != InstanceStatus.Running && row.Status != before.Status)))
                 return $"I10 {row.Id} went from revision {before.Revision} {before.Status} to revision {row.Revision} {row.Status}";
             _known[row.Id] = (row.Revision, row.Status);
-            if (row.Status == InstanceStatus.Faulted && !Oracle.Fragiles.GetValueOrDefault(row.Id))
-                return $"I14 {row.Id} did nothing wrong and was parked: {row.Fault}";
+            if (row.Status != InstanceStatus.Faulted) continue;
+            // I14: parked for losing owners only at the threshold; otherwise only an instance that really fails is parked.
+            var poison = row.Fault is { } fault && fault.StartsWith("message ") ? fault[8..fault.IndexOf(" was on trial")] : null;
+            if (poison is not null && _attempts.GetValueOrDefault(poison) < Config.Attempts) return $"I14 {row.Id} was parked before the threshold: {row.Fault}";
+            if (poison is null && !Oracle.Fragiles.GetValueOrDefault(row.Id)) return $"I14 {row.Id} did nothing wrong and was parked: {row.Fault}";
+            if (poison is not null && Parked.Add(row.Id) && !Oracle.Fragiles.GetValueOrDefault(row.Id)) Interlocked.Increment(ref Bystanders);
         }
         if (_known.Keys.FirstOrDefault(id => !Store.Instances.ContainsKey(id)) is { } gone) return $"I10 the row of {gone} disappeared";
         return Oracle.Ghosts.FirstOrDefault(Store.Instances.ContainsKey) is { } ghost ? $"I10 {ghost} was created by a message without a start spec" : null;
@@ -150,6 +160,7 @@ public sealed partial class World
         }
         foreach (var (target, tokens) in sent)
         {
+            if (Parked.Contains(target)) continue;
             var state = State<CounterState>(target);
             var applied = state?.Tokens ?? [];
             if (applied.Count != applied.Distinct().Count() || state?.Ids.Count != state?.Ids.Distinct().Count())
@@ -166,7 +177,7 @@ public sealed partial class World
                 return $"I11 {target} applied [{string.Join(", ", applied)}]; they were sent from outside as [{string.Join(", ", outside)}]";
         }
         foreach (var (sender, target, tokens) in forwards)
-            if (State<CounterState>(target) is { } state && !InOrder(state.Tokens, tokens))
+            if (!Parked.Contains(target) && State<CounterState>(target) is { } state && !InOrder(state.Tokens, tokens))
                 return $"I11 {target} applied [{string.Join(", ", state.Tokens)}]; {sender} sent it [{string.Join(", ", tokens)}] in that order";
         return null;
     }
@@ -195,7 +206,7 @@ public sealed partial class World
                 if (!stage) return $"I2 child {child} of {id}: row {row?.Status.ToString() ?? "none"}, {start} start, {timer} timer, {finished} child-finished waiting";
             }
             foreach (var child in state.Done)
-                if (Store.Instances.GetValueOrDefault(child) is not { Status: InstanceStatus.Finished } || waiting[child].Any()) return $"I2 {id} counts {child} as done and it is not";
+                if (Store.Instances.GetValueOrDefault(child) is not { Status: InstanceStatus.Finished or InstanceStatus.Faulted } || (!Parked.Contains(child) && waiting[child].Any())) return $"I2 {id} counts {child} as done and it is not";
         }
         return null;
     }
@@ -226,6 +237,7 @@ public sealed partial class World
                 if (!posted && mode != Sequence.Ephemeral && !waiting[id].Any()) return $"I3 the start of {id} is lost";
                 continue;
             }
+            if (Parked.Contains(id)) continue;
             var done = State<SequenceState>(id)!.Done;
             if (mode == Sequence.Ephemeral) return $"I2 {id} is ephemeral and has a row";
             if (!done.SequenceEqual(Enumerable.Range(1, done.Count)) || done.Count > count) return $"I4 {id} did activities [{string.Join(", ", done)}] of {count}";
@@ -294,14 +306,16 @@ public sealed partial class World
                     Watch(worker.MeetAsync());
                     foreach (var id in worker.Ready.Order(StringComparer.Ordinal).ToList())
                     {
+                        if (Dying is not null) break;
                         worker.Run(id);
-                        if (Dying is not { } dying) continue;
+                    }
+                    if (Dying is null) Watch(worker.FlushAsync());
+                    if (Dying is { } dying)     // a step or off-step work killed the process
+                    {
                         Dying = null;
                         Crash(dying, zombie: false);
-                        break;
+                        continue;
                     }
-                    if (actor.Dead) continue;
-                    Watch(worker.FlushAsync());
                     foreach (var key in actor.Runs.Keys.ToList())
                         if (actor.Runs.Remove(key, out var work)) work.TrySetResult("done");
                 }
@@ -331,28 +345,29 @@ public sealed partial class World
     private string? End()
     {
         if (Store.Messages.Values.FirstOrDefault(m => !m.Done) is { } message) return $"END message {message.Message.Id} was never consumed";
-        if (Store.Subscriptions.FirstOrDefault() is { } subscription) return $"END the subscription of {subscription.Instance} to {subscription.Key} is left behind";
+        if (Store.Subscriptions.FirstOrDefault(s => !Parked.Contains(s.Instance)) is { } subscription) return $"END the subscription of {subscription.Instance} to {subscription.Key} is left behind";
         foreach (var (id, children) in Oracle.Parents)
         {
+            if (Parked.Contains(id)) continue;
             if (Store.Instances.GetValueOrDefault(id) is not { Status: InstanceStatus.Finished }) return $"END parent {id} did not finish";
             foreach (var child in State<ParentState>(id)!.Done)
-                if (State<ChildState>(child) is not { Fired: 1 }) return $"I5 the timer of child {child} fired {State<ChildState>(child)?.Fired} times";
+                if (!Parked.Contains(child) && State<ChildState>(child) is not { Fired: 1 }) return $"I5 the timer of child {child} fired {State<ChildState>(child)?.Fired} times";
         }
         foreach (var id in Oracle.Waiters.Keys)
-            if (Store.Instances.GetValueOrDefault(id) is not { Status: InstanceStatus.Finished }) return $"END waiter {id} did not finish";
+            if (!Parked.Contains(id) && Store.Instances.GetValueOrDefault(id) is not { Status: InstanceStatus.Finished }) return $"END waiter {id} did not finish";
         foreach (var (id, (count, mode, posted)) in Oracle.Sequences)
         {
             var row = Store.Instances.GetValueOrDefault(id);
-            if (row is null ? !posted && mode != Sequence.Ephemeral : row.Status != InstanceStatus.Finished) return $"END sequence {id} ({mode}{(posted ? ", handed over in memory" : "")}) ended as {row?.Status.ToString() ?? "no row"}";
+            if (!Parked.Contains(id) && (row is null ? !posted && mode != Sequence.Ephemeral : row.Status != InstanceStatus.Finished)) return $"END sequence {id} ({mode}{(posted ? ", handed over in memory" : "")}) ended as {row?.Status.ToString() ?? "no row"}";
         }
         foreach (var (id, keys) in Oracle.Runners)
         {
             var log = State<RunnerState>(id)?.Log ?? [];
-            if (keys.Find(k => !log.Contains("start " + k) || !(log.Contains("result " + k) || log.Contains("cancel " + k))) is { } key)
+            if (!Parked.Contains(id) && keys.Find(k => !log.Contains("start " + k) || !(log.Contains("result " + k) || log.Contains("cancel " + k))) is { } key)
                 return $"I12 run {key} of {id} has neither a result nor a cancel: [{string.Join(", ", log)}]";
         }
         foreach (var (id, bad) in Oracle.Fragiles)
-            if (Store.Instances.GetValueOrDefault(id)?.Status != (bad ? InstanceStatus.Faulted : InstanceStatus.Running)) return $"I14 {id} ended as {Store.Instances.GetValueOrDefault(id)?.Status.ToString() ?? "no row"}";
+            if (!Parked.Contains(id) && Store.Instances.GetValueOrDefault(id)?.Status != (bad ? InstanceStatus.Faulted : InstanceStatus.Running)) return $"I14 {id} ended as {Store.Instances.GetValueOrDefault(id)?.Status.ToString() ?? "no row"}";
         for (var p = 0; p < Config.Partitions; p++)
         {
             Project(p, int.MaxValue);

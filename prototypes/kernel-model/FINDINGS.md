@@ -261,3 +261,82 @@ Counted with a `DbCommandInterceptor` and a `DbTransactionInterceptor`.
 cursor itself); `Hold`, `Emit`, `Ambient`, `Rebind`, `Describe`, state versions; headers, reply-to, tenant, root,
 sub-status; subscriptions of kind start; placement other than with the parent; the bound on instances in memory;
 suspend and resume; correlation as an instance per key; MySQL and SQL Server.
+
+# Round 2 (against draft 3)
+
+Sections 1 to 6 above are round 1 and describe the kernel as it was at commit `4b2f4d1587`. Seeds named there were
+found on that kernel; the flaws still replay, but a seed may have moved.
+
+## 7. Poison counting, reworked
+
+### What changed. Run
+
+- **An attempt is a death, and a death is a take.** A take from another owner can only succeed because that owner's
+  lease expired. In the same transaction the take adds one attempt to every message the lost owner had on trial.
+  Nothing else changes `attempts`. A release, a reset followed by a take by the same process, and a take of a free
+  partition are not deaths. `IKernelStore.TakeAsync`, `ReleaseAsync`; `message.trial` is a new column (the epoch at
+  which the row was last put on trial).
+- **Who is a suspect.** A row that another process marked, or that is on trial already. What this process marked in
+  an epoch it held earlier is not: the process is alive. `Worker.Suspect`, `Worker._mine`.
+- **Trials.** Suspects are put on trial by a fenced commit (`seen = e, trial = e`), in a commit that leaves nothing
+  else in flight; from the moment that commit is sent until every member is consumed, the owner starts no other step
+  and no other off-step work. `Worker.NextTrial`.
+- **Run tickets are tried like any message.** Off-step work that was on trial at the threshold is parked: its ticket
+  becomes a result with an error and the instance goes on.
+- **Groups that halve.** `WorkerOptions.TrialGroup` (default 1). A group holds up to `TrialGroup >> attempts` suspects
+  with the same attempts, so a poison message is alone after log2(group) deaths.
+
+### Invariant 14, stated exactly
+
+1. `attempts` of a message changes only in a take that finds another owner's lease expired, and then by exactly one,
+   for exactly the rows whose `trial` is the lost owner's epoch.
+2. While rows are on trial at the current epoch, the owner starts no step of an instance and no off-step work that
+   has no row among them.
+3. A message is parked for losing owners if and only if its attempts have reached the threshold. With a trial group
+   of 1 that means: the threshold number of owners were lost while it was on trial alone.
+4. An instance is parked otherwise only when its step throws or its row is refused.
+5. A message whose step or off-step work kills every owner is parked after threshold + 1 deaths: the first death
+   finds it not yet on trial.
+
+The simulation checks 1 by recomputing every take (`World.Take`), 2 at every start of a step or run (`World.Alone`),
+3 and 4 on every faulted row, and 5 at the end.
+
+### Results. Run
+
+- 20,000 seeds of 1,000 actions: 0 failures, with the threshold at 3 (and at 5 with groups of 4 on every fifth seed).
+- Under rule 3 an innocent message can still be parked: 1,412 instances in those 20,000 runs lost three owners while
+  on trial. The simulation loses an owner about every 70 actions and a trial lasts tens of actions there; a real
+  trial lasts two commits.
+- `--flaw EveryTakeCounts` (any take counts): caught, seed 31. `--flaw BumpAllInherited` (all suspects at once, no
+  quarantine): caught, seed 2. `--flaw RunBeforeMark`: caught, seed 3.
+
+### F9. A node's name must be unique per process start. Run
+
+- **Replay:** seed 3, `--flaw StableNodeName` (one node, which keeps its name across restarts): `IDLE`, the message
+  that kills the process is never parked. 2,107 of 6,000 seeds.
+- **Why:** "re-taken by its holder" is recognised by the owner's name. A restarted process with the old name is taken
+  for the live holder, so its predecessor's death is never counted.
+- **Cost, reasoned:** a restarted process must wait for its predecessor's lease to run out before it owns anything.
+
+### F10. A refused batch lost its marks when its first instance was parked. Run
+
+- **Replay (on the kernel before the fix):** seed 22: `IDLE`. The trial was recorded in memory when the commit was
+  sent; the batch was refused, the first instance was parked in a commit that carried no marks, and the trial never
+  reached the rows. The owner waited for it for ever.
+- **Fix:** the marks ride with the first commit of the one-by-one sequence that lands.
+
+### The trade of groups. Run: `--backlog 1000`
+
+| Trial group | Commits to recover 1,000 messages held by a dead owner |
+|---|---|
+| 1 | 1,000 |
+| 8 | 126 |
+| 64 | 16 |
+
+- With a group of 1 the next trial rides in the commit that consumes the previous one, so recovery costs one commit
+  per message and the rest of the partition waits meanwhile.
+- A group of `g` needs a threshold above log2(g), and a neighbour of a poison message can collect up to log2(g)
+  attempts before the group has halved down to one (reasoned).
+- **Not solved, reasoned:** a suspect that is off-step work holds its trial until its result is handled. Long work
+  that was in flight at a crash therefore holds up its partition while it is tried. A group lets up to `g` such runs
+  restart together.
