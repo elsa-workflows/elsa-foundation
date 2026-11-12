@@ -291,10 +291,9 @@ not publish successful values or outcomes through mutable execution-context `Set
   - The connections of every selected outcome are scheduled. When two of them lead to the same node, each is an
     arrival at that node. **By default** its synchronizing implicit join
     ([ADR 0064](0064-flowchart-infers-joins-from-propagated-dead-paths.md)) accounts for the arrivals of one activation
-    and runs the target once (two arrivals, one run). An explicit per-arrival mode may instead run the target per
-    arrival; that behaviour must be visible in authoring and pinned in the published contract, so identical-looking
-    connections never hide a change in execution cardinality. Loop re-entry and independent activations stay distinct
-    executions under either mode. S-3 carries the detail.
+    and runs the target once (two arrivals, one run). Loop re-entry and independent activations stay distinct
+    executions. This amendment defines no other join behaviour; whether a target may run once per arrival belongs to
+    the design of join behaviour as a whole, not to the outcome contract. S-3 carries the detail.
   - Path analysis, joins ([ADR 0064](0064-flowchart-infers-joins-from-propagated-dead-paths.md)), the unordered-write
     warning ([ADR 0048](0048-container-output-captures-resolve-through-producer-visible-variable-frames.md), spec 266)
     and inspection treat a node that may select several outcomes as an inclusive fork.
@@ -330,8 +329,8 @@ including connected RunJavaScript nodes whose `Done` was converted to `Unmatched
 - the shape of the selection in the transition and in persisted completion records;
 - how a multi-outcome declaration appears in the activity contract and in Studio;
 - the activity-declared catch-all handling (a generic per-node fallback is deferred until a concrete use case);
-- the changes to scheduling and joins — including when the default "two arrivals, one run" applies and how an explicit
-  per-arrival mode is made visible and pinned — and spec 266's exclusivity analysis.
+- the changes to scheduling and joins — including when the default "two arrivals, one run" applies — and spec 266's
+  exclusivity analysis.
 
 ### 7. Provide a generated method-call authoring facade
 
