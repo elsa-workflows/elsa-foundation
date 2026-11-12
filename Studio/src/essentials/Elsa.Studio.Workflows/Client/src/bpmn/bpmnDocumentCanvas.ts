@@ -72,18 +72,19 @@ export function projectBpmnDocumentCanvas(owner: ActivityNode, address: BpmnScop
   const diagnostics: BpmnDocumentCanvasDiagnostic[] = [];
   const bySemanticId = new Map<string, BpmnDocumentShape[]>();
   for (const shape of shapes) bySemanticId.set(shape.elementId, [...(bySemanticId.get(shape.elementId) ?? []), shape]);
-  const selectInstance = (instances: readonly BpmnDocumentShape[], position: BpmnPoint, child?: BpmnDocumentShape): BpmnDocumentShape | undefined => {
+  const selectInstance = (instances: readonly BpmnDocumentShape[], position: BpmnPoint, child?: BpmnDocumentShape | BpmnDocumentScene["edges"][number]): BpmnDocumentShape | undefined => {
     const candidates = [...instances].sort((a, b) => distance(position, a.bounds) - distance(position, b.bounds)
       || a.bounds.width * a.bounds.height - b.bounds.width * b.bounds.height || a.shapeId.localeCompare(b.shapeId));
     if (child && candidates.length > 1 && distance(position, candidates[0].bounds) === distance(position, candidates[1].bounds)) {
-      diagnostics.push({ code: "ambiguous-di-parent", elementId: child.elementId, diId: child.shapeId,
+      const edge = "edgeId" in child;
+      diagnostics.push({ code: edge ? "ambiguous-edge-endpoint-di" : "ambiguous-di-parent", elementId: child.elementId, diId: edge ? child.edgeId : child.shapeId,
         relatedDiIds: candidates.filter(candidate => distance(position, candidate.bounds) === distance(position, candidates[0].bounds)).map(candidate => candidate.shapeId),
-        message: "Several DI instances match this visual parent; no relationship is inferred." });
+        message: `Several DI instances match this ${edge ? "edge endpoint" : "visual parent"}; no relationship is inferred.` });
       return undefined;
     }
     return candidates[0];
   };
-  const pick = (elementId: string | undefined, position: BpmnPoint, child?: BpmnDocumentShape) => selectInstance(elementId ? bySemanticId.get(elementId) ?? [] : [], position, child);
+  const pick = (elementId: string | undefined, position: BpmnPoint, child?: BpmnDocumentShape | BpmnDocumentScene["edges"][number]) => selectInstance(elementId ? bySemanticId.get(elementId) ?? [] : [], position, child);
   const poolFor = (element: Element, shape: BpmnDocumentShape) => {
     const process = bpmnOwningProcess(element);
     if (!process) return undefined;
@@ -108,9 +109,13 @@ export function projectBpmnDocumentCanvas(owner: ActivityNode, address: BpmnScop
     if (element.localName === "boundaryEvent") {
       const host = resolveBpmnDocumentReference(parsed, element, element.getAttribute("attachedToRef"));
       const hostId = identity(host);
-      if (hostId) attachmentById.set(shape.shapeId, hostId);
-      parent = hostId && assessBpmnBoundaryAttachment(parsed, shape.elementId, hostId).allowed ? pick(hostId, center(shape.bounds), shape) : undefined;
-      if (!parent) diagnostics.push({ code: "missing-attachment-di", elementId: shape.elementId, diId: shape.shapeId, message: "Boundary attachment has no host shape in this plane." });
+      const assessment = hostId && assessBpmnBoundaryAttachment(parsed, shape.elementId, hostId);
+      if (hostId && assessment && assessment.allowed) {
+        attachmentById.set(shape.shapeId, hostId);
+        parent = pick(hostId, center(shape.bounds), shape);
+        if (!parent) diagnostics.push({ code: "missing-attachment-di", elementId: shape.elementId, diId: shape.shapeId, message: "Boundary attachment has no host shape in this plane." });
+      } else diagnostics.push({ code: "invalid-boundary-attachment", elementId: shape.elementId, diId: shape.shapeId,
+        message: assessment && !assessment.allowed ? assessment.reason : "Boundary attachment has no actual activity host." });
     } else if (element.localName === "lane") {
       const parentLane = element.parentElement?.parentElement;
       parent = parentLane?.localName === "lane" ? pick(identity(parentLane), center(shape.bounds), shape) : semanticParent(element, shape);
@@ -156,7 +161,7 @@ export function projectBpmnDocumentCanvas(owner: ActivityNode, address: BpmnScop
   const endpointShape = (edge: BpmnDocumentScene["edges"][number], side: "source" | "target", endpoint: BpmnDocumentEndpoint, position: BpmnPoint) => {
     const di = parsed.byId.get(edge.edgeId)!;
     const attribute = `${side}Element`;
-    if (!di.hasAttribute(attribute)) return pick(endpoint.displayElementId, position);
+    if (!di.hasAttribute(attribute)) return pick(endpoint.displayElementId, position, edge);
     const explicit = resolveBpmnDocumentReference(parsed, di, di.getAttribute(attribute));
     const shape = explicit && byShapeId.get(identity(explicit) ?? "");
     const allowed = endpoint.ownerElementId ? [endpoint.ownerElementId] : endpoint.referenceIds;
@@ -231,6 +236,10 @@ function geometryCommands(canvas: BpmnDocumentCanvas, next: ReadonlyMap<string, 
       const old = nodes.get(id)?.data.absoluteBounds, bounds = next.get(id);
       if (old && bounds && !equalBounds(old, bounds)) fail("visual parent DI is ambiguous for this move");
     }
+  }
+  for (const diagnostic of canvas.diagnostics.filter(item => item.code === "invalid-boundary-attachment" && item.diId)) {
+    const old = nodes.get(diagnostic.diId!)?.data.absoluteBounds, bounds = next.get(diagnostic.diId!);
+    if (old && bounds && !equalBounds(old, bounds)) fail("boundary attachment must be repaired before changing its geometry");
   }
   for (const [id, bounds] of next) {
     const node = nodes.get(id);

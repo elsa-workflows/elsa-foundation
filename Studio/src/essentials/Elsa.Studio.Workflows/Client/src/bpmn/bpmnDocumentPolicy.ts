@@ -89,6 +89,8 @@ export function assessBpmnBoundaryAttachment(parsed: ParsedBpmnDocument, boundar
   const boundary = parsed.byId.get(boundaryId), host = parsed.byId.get(hostId);
   if (!isBpmnModelElement(boundary) || boundary.localName !== "boundaryEvent" || !isBpmnModelElement(host) || !activity(host))
     return refuse("A boundary event needs an activity host.");
+  if (!bpmnFlowScope(boundary) || bpmnFlowScope(boundary) !== bpmnFlowScope(host))
+    return refuse("A boundary and its host must share the same standard flow scope.");
   if (eventSubprocess(host) || bpmnBoolean(host, "isForCompensation")) return refuse("This activity cannot host a boundary event.");
   if (host.localName === "receiveTask") {
     for (const element of parsed.byId.values()) {

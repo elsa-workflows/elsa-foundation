@@ -27,6 +27,31 @@ function ownerWithThreePointRoute(vertical = false, collinear = false) {
 }
 
 describe("complete document canvas projection", () => {
+  it.each([100, 200])("refuses equally close implicit endpoint instances even when their areas differ (%s)", width => {
+    const owner = documentCanvasOwner(xml => xml.replace('</bpmndi:BPMNPlane></bpmndi:BPMNDiagram>', `<bpmndi:BPMNShape id="TCopyDI" bpmnElement="T"><dc:Bounds x="100.5" y="100.75" width="${width}" height="80"/></bpmndi:BPMNShape></bpmndi:BPMNPlane></bpmndi:BPMNDiagram>`));
+    const before = structuredClone(owner), view = projectBpmnDocumentCanvas(owner, documentCanvasScope);
+    expect(view.unresolvedEdgeIds).toContain("FDI");
+    expect(view.diagnostics).toContainEqual(expect.objectContaining({ code: "ambiguous-edge-endpoint-di", diId: "FDI", relatedDiIds: expect.arrayContaining(["TDI", "TCopyDI"]) }));
+    for (const id of ["TDI", "TCopyDI"]) {
+      const node = view.nodes.find(item => item.id === id)!;
+      expect(() => planBpmnDocumentMove(view, new Map([[id, { x: node.position.x + 20, y: node.position.y }]]))).toThrow("endpoint DI");
+    }
+    expect(owner).toEqual(before);
+  });
+
+  it.each([["T2", "T2DI"], ["I", "IDI"]])("does not parent or move a boundary with a host in another scope %s", (hostId, hostDiId) => {
+    const owner = documentCanvasOwner(xml => xml.replace('id="B" attachedToRef="T"', `id="B" attachedToRef="${hostId}"`));
+    const before = structuredClone(owner), view = projectBpmnDocumentCanvas(owner, documentCanvasScope);
+    const boundary = view.nodes.find(node => node.id === "BDI")!, host = view.nodes.find(node => node.id === hostDiId)!;
+    expect(boundary.parentId).toBeUndefined();
+    expect(boundary.data.attachmentHostId).toBeUndefined();
+    expect(view.diagnostics).toContainEqual(expect.objectContaining({ code: "invalid-boundary-attachment", diId: "BDI" }));
+    const commands = planBpmnDocumentMove(view, new Map([[hostDiId, { x: host.position.x + 10, y: host.position.y }]]));
+    expect(commands.some(command => command.kind === "bounds" && command.shapeId === "BDI")).toBe(false);
+    expect(() => planBpmnDocumentMove(view, new Map([["BDI", { x: boundary.position.x + 10, y: boundary.position.y }]]))).toThrow("attachment");
+    expect(owner).toEqual(before);
+  });
+
   it("honors explicit QName DI endpoints before proximity and moves only their authored instance", () => {
     const owner = documentCanvasOwner(xml => xml.replace('</bpmndi:BPMNPlane></bpmndi:BPMNDiagram>', '<bpmndi:BPMNShape id="TCopyDI" bpmnElement="T"><dc:Bounds x="800" y="500" width="100" height="80"/></bpmndi:BPMNShape></bpmndi:BPMNPlane></bpmndi:BPMNDiagram>')
       .replace('id="FDI" bpmnElement="F"', 'id="FDI" bpmnElement="F" sourceElement="tns:TCopyDI" targetElement="tns:ODI"'));
