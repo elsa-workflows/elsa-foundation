@@ -1,10 +1,10 @@
 # Execution kernel: clean-slate design sketch (draft 5, 12 November 2026)
 
-Status: a sketch that has been tested once. Draft 1 had two first-principles reviews (protocol and model contract); both said "right shape, needs changes". Draft 2 was built as a standalone model (853 lines of kernel) and attacked by a simulation and a PostgreSQL stress test, which found eight more faults; this draft carries their fixes. With the fixes, 200,000 simulated runs of 300 actions pass every invariant, and so do two stress runs on PostgreSQL. What is still weak or untested is listed at the end. It replaces the approach of ADR 0098.
+Status: **proposed, not approved; no product code exists.** The owner decisions recorded below are inputs to the design proposal and its review; they bind the build once the design is approved. History: draft 1 had two first-principles reviews (protocol and model contract); both said "right shape, needs changes". Draft 2 was built as a standalone model and attacked by a deterministic simulation and a PostgreSQL stress test, which found eight more faults. Three more rounds and a merge of four branches have since run it on five database engines; the current evidence is in "What the tests did and did not show". It replaces the journal-first approach proposed as ADR 0098 in open PR #4176 (not merged).
 
-Draft 4 separates three layers, at the owner's decision of 12 November: an actor runtime, a durable layer, and workflow instances as one actor type. Sections below that describe partitions describe the built-in actor runtime; the code of the model is not yet restructured this way. Draft 5 renames step to turn and run (off-step work) to job, at the owner's decision of 12 November; the runtime's call into a partition is a pass. It also adds the containers' semantics: Flowchart on a graph engine extracted from today's Flowchart, StateMachine on its own statechart engine, and BPMN hosted on the Bpmn.Semantics interpreter (valence-works/bpmn).
+Draft 4 separates three layers, at the owner's decision of 12 November: an actor runtime, a durable layer, and workflow instances as one actor type. Every runtime hosts partitions, so the sections that describe partitions hold for any runtime. The model's code is being restructured into the three layers (round 4). Draft 5 renames step to turn and run (off-step work) to job, at the owner's decision of 12 November; the runtime's call into a partition is a pass. It also adds the containers' semantics: Flowchart on a graph engine extracted from today's Flowchart, StateMachine on its own statechart engine, and BPMN hosted on the Bpmn.Semantics interpreter (valence-works/bpmn).
 
-The model, its findings and how to replay each failing seed are on branch `agent/claude/kernel-model`, under `prototypes/kernel-model/`.
+The model (`prototypes/kernel-model/`), its findings and how to replay each failing seed are on local branches, not yet published: the four branches merged at `baba05a78c` (`agent/claude/kernel-model-merged`), with round 4 on top. The model lands on main in later PRs of program #4229.
 
 ## Requirements (the owner's, 12 November)
 
@@ -15,6 +15,34 @@ The model, its findings and how to replay each failing seed are on branch `agent
 - The actor model is its own layer, and a workflow instance is one kind of virtual actor on it. The built-in actor runtime can be replaced by another (Orleans, Proto.Actor, ...) through a public seam. Integrators who want that write the adapter; Elsa ships one runtime and keeps one reference adapter, for Orleans, in its tests.
 - Synchronous HTTP: a user can design a workflow that handles an HTTP request and produces the HTTP response itself.
 - Unreleased code: any API and any ADR may change.
+
+## Decisions taken so far (12 November)
+
+Owner decisions on this proposal. They become binding when the design is approved; changing one is an owner decision.
+
+**Kernel defaults:**
+1. **Activity side effects:** at least once in Balanced; idempotency keys are documented; Durable mode where a repeat is unacceptable.
+2. **History level:** Full by default; a busy workflow may choose State only.
+3. **Lease:** 10 seconds, so failover takes about 10 seconds and idle load stays low.
+4. **Partitions:** 64 by default on server databases, 1 on SQLite.
+5. **HTTP response:** released after the commit of the turn that wrote it; opt-out per route.
+6. **Reads across instances:** none; questions to another instance go as messages or through projections.
+7. **Events:** not kept by default. Keeping is switched on per subscription; BPMN message correlation uses it.
+
+**Optimisation order:** correctness, then database calls per workflow, then latency, then flexibility.
+
+**Walkthrough decisions:**
+1. **Orleans:** hosts each partition as a grain. One grain per instance, the per-actor fence and the sweep are dropped (see "The seam").
+2. **Commit fence:** in the batch by default, using EF concurrency tokens: 2 round trips on PostgreSQL, the lease time from the node clock. The fence as its own statement stays an option.
+3. **Wake-ups between nodes:** a pluggable wake signal over the runtime's transport; polling remains the guarantee.
+4. **Short waits of an Ephemeral instance:** short timers and jobs stay in memory up to a threshold (the route timeout or a few seconds), so request-response workflows stay at zero database calls.
+5. **Events:** the subscription and event tables stay the kernel's one mechanism; a correlation instance per key remains a sample model.
+6. **Reply addresses:** expire at the route's timeout, carried as an absolute deadline; after it the owner drops the reply and unpins the instance.
+7. **Recreate after delete:** a rule per kind of id. A generated id never comes back (the start is dropped and journalled). A caller key refuses a repeat within `keep_until` and may start a fresh run after it.
+8. **Projector:** off the hot path in its own transaction, each round batched into set-based writes (about 2 to 3 round trips per round).
+9. **Job poison:** jobs are counted like messages. A job goes on trial alone, and a take after a lost owner adds an attempt to its ticket; past the threshold the job is parked and its instance faulted.
+10. **State size:** large values are stored by reference, and a size benchmark goes into the cost runs; segments only if measurements show the need.
+11. **Viewer read path:** the API shows a run from its projected rows plus the journal tail past the projector's cursor, expanded in memory, so the view is always current. Studio may ask for a projector catch-up for the partition; rounds are coalesced. Studio never forces an owner commit or shows uncommitted state. Live watching is a push stream of committed journal entries.
 
 ## Three layers
 
@@ -28,19 +56,15 @@ Why the durable layer is ours whatever the runtime: Orleans grain calls are at m
 
 ### The seam between layers 1 and 2
 
-Layer 2 hands the runtime a set of **ownership scopes** and the runtime decides which node hosts each one. A runtime declares its granularity:
+Layer 2 hands the runtime a set of **ownership scopes**, one per partition, and the runtime decides which node hosts each one. A scope is a partition of many actors: one conditional update fences them all, one poll covers their inboxes, and the commits of many actors go in one transaction, which is why 100 instances commit in 2 round trips. Every runtime works this way; Orleans hosts each partition as a grain.
 
-- **Partition:** a scope is a partition of many actors. One conditional update fences them all, one poll covers their inboxes, and the commits of many actors go in one transaction. The built-in runtime works this way, which is why 100 instances commit in 2 round trips.
-- **Actor:** a scope is one actor. The fence is the actor's own record, its inbox is read when it activates or is woken, and each actor commits alone, at 2 to 3 round trips per commit. An Orleans adapter with one grain per workflow instance works this way. A runtime can also host partitions as its actors, and keep the batching.
-
-Note (dropped on 12 November): runtimes host partitions only; Orleans hosts each partition as a grain. One grain per instance may come later as a new grain type, which needs an owner epoch on the instance row and a sweep.
+**Dropped on 12 November: actor granularity.** Draft 4 also allowed a scope of one actor (one grain per workflow instance), with its own fence record, its inbox read on activation, each actor committing alone at 2 to 3 round trips, and a sweep to wake idle actors. It loses batching and buys nothing the goals need. It may come back later as a new grain type, which would need an owner epoch on the instance row and the sweep.
 
 A sketch of the interface; the restructuring will settle it:
 
 ```csharp
 public interface IActorRuntime
 {
-    Granularity Granularity { get; }                          // Partition or Actor
     ScopeId ScopeOf(ActorId actor);
     ValueTask StartAsync(IScopeHost host, CancellationToken cancellationToken);
     ValueTask WakeAsync(ActorId actor, CancellationToken cancellationToken);   // a hint: there is work
@@ -60,7 +84,7 @@ public interface IScopeActivation : IAsyncDisposable
 ```
 
 - The runtime calls a scope one pass at a time and never on two nodes at once as far as it knows (Orleans calls this a turn; Temporal calls an instance's turn a workflow task). Layer 2 does not trust that: its fence catches a second activation, which is exactly the Orleans case above.
-- A wake-up is only a hint. With actor granularity nothing polls an idle actor, so layer 2 also runs a **sweep**: it finds actors with unseen messages or a due time that has passed and no live owner, and wakes them through the runtime. With partition granularity the partition's own poll does this. (Dropped on 12 November: with partitions only, the sweep is not needed now; see the note above.)
+- A wake-up is only a hint: the partition's own poll is the guarantee, so a lost hint never loses work. The sweep that actor granularity needed is dropped with it.
 - A **runtime conformance suite**, like the store conformance suite, runs the simulation's invariants and a stress test against any runtime adapter. The Orleans adapter must pass it, including runs where two activations of one grain are forced.
 
 ### Deployment profiles, not runtimes
@@ -125,7 +149,7 @@ The tables below are the relational shape. A document provider stores the same r
 | `instance` | id, partition, model, definition, status, sub_status, state, state_version, jobs, revision, parent, root, correlation, tenant, created, updated | `state` is opaque to the kernel and owned by the model. `jobs` is the kernel's list of background jobs in flight. The row is the truth about the present; lists and counts read it directly |
 | `message` | seq, id, partition, target, kind, payload, headers, sender, reply_to, start, due, seen, attempts, keep_until, done | The inbox. `seq` is assigned by the database and gives the order. `id` is unique and makes adding idempotent. `due` in the future makes it a timer or a retry. `start` is an optional spec for creating the target |
 | `subscription` | key, instance, wait, partition, kind | Routes external events to waiting instances (kind wait) or to a definition that starts one (kind start) |
-| `event` | key, id, payload, keep_until | Published events, kept for a while so that an event and a subscription that cross each other still meet |
+| `event` | key, id, payload, keep_until | Published events. Kept only long enough that an event and a subscription that cross each other still meet, unless keeping is switched on for the subscription (default 7: events are not kept; BPMN message correlation keeps them) |
 | `journal` | partition, position, instance, entries | One row per instance-commit: what happened, as one compact value. The truth about the past. Feeds the viewer's tables. Written according to the history level |
 | `projection` | partition, position | How far the projector has got. Its own row, so the projector never touches the fence row |
 
@@ -145,7 +169,7 @@ The owner of partition `p` at epoch `e`, which believes the position is `n`, com
 8. Insert `k` journal rows at positions `n + 1 .. n + k`.
 9. Commit.
 
-Statement 1 is the fence. The row lock on the partition row orders it against a takeover. The check in step 2 is why a commit is **two round trips, not one**: a commit sent in the same packet as a fence that matched nothing would still land. There are two ways to do it, both measured: `epoch` and `position` as EF concurrency tokens in the one `SaveChanges`, which checks before it sends the commit (2 round trips on PostgreSQL, lease time from the node's clock); or the fence as its own statement first (3 round trips, lease time from the database). The fence also renews the lease, so a busy partition needs no heartbeat. An idle owner sends an empty fenced commit as its heartbeat, which is also how a stale one finds out.
+Statement 1 is the fence. The row lock on the partition row orders it against a takeover. The check in step 2 is why a commit is **two round trips, not one**: a commit sent in the same packet as a fence that matched nothing would still land. There are two ways to do it, both measured: `epoch` and `position` as EF concurrency tokens in the one `SaveChanges`, which checks before it sends the commit (2 round trips on PostgreSQL, lease time from the node's clock); or the fence as its own statement first (3 round trips, lease time from the database). The fence also renews the lease, so a busy partition needs no heartbeat. An idle owner sends an empty fenced commit as its heartbeat, which is also how a stale one finds out. **Default (12 November): the fence in the batch; the fence as its own statement stays an option.**
 
 The ordinal in a derived message id has a fixed width. EF sends the inserts of one commit in key order, so without it the eleventh message of a turn overtook the third (found on PostgreSQL).
 
@@ -188,7 +212,7 @@ Rows per flush are capped (parameter limits, lock escalation). 100 instance-comm
 ## Events
 
 - **Subscribing** is part of a turn's commit, which also sends the instance a message that says "read the events for these keys". The owner reads `event`, delivers what it finds, and a later commit deletes that message. A new owner inherits it and reads again.
-- **Publishing** inserts the event with `keep_until`, commits, then reads `subscription` and adds one message per match, with an id derived from event and wait.
+- **Publishing** inserts the event with `keep_until` (by default just the crossing window; longer where keeping is switched on), commits, then reads `subscription` and adds one message per match, with an id derived from event and wait.
 - Each side looks after its own commit, so when the two cross, at least one sees the other, and the derived id removes the double.
 - Under test as an alternative: correlation as an ordinary instance per key, which needs no tables and no rule, at the cost of one hop.
 
@@ -297,13 +321,13 @@ Each step has a gate. Nothing reaches product code before the design is approved
 
 - **StateMachine placement:** a native composite (recommended here), to be confirmed by #3815's M0.
 - **Default join for a Flowchart node with several inbound connections** and no explicit gateway: keep main's current default (`DeadPathJoin` decides implicit joins), so Flowcharts authored for Elsa 4 behave the same.
-- **BPMN scope for the first release:** recommended, the subset most Camunda users rely on (gateways, service, user and call tasks, timer and message events, boundary events, embedded subprocesses); compensation and event subprocesses after.
+- **BPMN scope for its first release (after release 1):** recommended, the subset most Camunda users rely on (gateways, service, user and call tasks, timer and message events, boundary events, embedded subprocesses); compensation and event subprocesses after.
 
 ## Standalone jobs: Elsa.Jobs on the kernel (owner decision, 12 November)
 
 There is one job concept. A workflow's background job and a standalone job are the same thing on the kernel, and Elsa.Jobs is rebuilt on it rather than kept as a second durable authority.
 
-The reference is the `Elsa.Jobs` domain on `agent/codex/3586-background-jobs` (source `a786c52f`, about 40,000 lines; draft PR #3909, closed; ADR 0096, not on main). It is a standalone runner whose own store owns execution authority, bridged to native workflows and BPMN through checkpoint/outbox sources, a pending-admission address, delivery responsibility and exact consumption proofs. That bridge is the cross-store handshake this kernel removes: on the kernel, starting a job is one commit (a ticket in the instance's inbox) and the result is a message applied once.
+The reference is the `Elsa.Jobs` domain on `agent/codex/3586-background-jobs` (source `a786c52f`, about 40,000 added lines under `Extensions/Jobs`, about 30,000 of them C#; draft PR #3909, closed; ADR 0096, not on main). It is a standalone runner whose own store owns execution authority, bridged to native workflows and BPMN through checkpoint/outbox sources, a pending-admission address, delivery responsibility and exact consumption proofs. That bridge is the cross-store handshake this kernel removes: on the kernel, starting a job is one commit (a ticket in the instance's inbox) and the result is a message applied once.
 
 - **A standalone job is an actor type** in layer 3, next to the workflow instance. An ordinary .NET application installs layers 1 and 2 plus the job actor type: no workflow runtime, BPMN, Studio or HTTP API. One store, one fence, one projector, one retention policy.
 - **The public API is kept:** `IJobClient`, `IJobHandler<TInput, TResult>`, `JobExecutionContext`, submission with an idempotency key and an immutable request (the provider recomputes the request digest), retry and attempt-timeout policies, queues, schedules and holds.
@@ -317,7 +341,7 @@ The reference is the `Elsa.Jobs` domain on `agent/codex/3586-background-jobs` (s
   - retention that removes payload bytes and keeps identities, digests, outcomes and attempts.
 - **Mapping onto the kernel:** schedules are kernel timers with cron start specs, materialized into job actors; instance and definition holds are suspend; queue and type holds and capacity are admission rules; the worker protocol (claim, renew, complete, with a lease, a fence, replay-safe receipts and implementation pinning) is the answer to design-now question 5.
 - **To prove in the prototype:** a claim checks due time, handler compatibility, holds, capacity and recovery at once. In Elsa.Jobs that is one database transaction per claim; on the kernel the partition owner should decide it in memory and commit the grant with its batch. A spike measures the round trips per job (submit, claim, complete, result delivered) against Elsa.Jobs's path.
-- **Release placement** of standalone jobs and the external worker protocol is decided in the design proposal. Background jobs inside workflows are in release 1 either way.
+- **Release placement** of standalone jobs is decided in the design proposal. The external worker protocol follows in 1.x; its contract is designed now. Background jobs inside workflows are in release 1 either way.
 
 ## Synchronous HTTP requests
 
@@ -361,35 +385,47 @@ The projector runs as a background worker, off the hot path, in its own transact
 10. **Create once.** Two messages that would create the same instance create one, in either order and across a takeover.
 11. **Order.** Messages from one sender to one target are handled in the order sent.
 12. **Jobs.** A job's result is applied exactly once. A cancelled job's result never is.
-13. **Events meet.** An event and a subscription for the same key that are both committed within the event's window result in exactly one delivery.
+13. **Events meet.** An event and a subscription for the same key that are both committed within the event's window (by default only the crossing window) result in exactly one delivery.
 14. **One bad instance.** An instance whose commit or turn always fails is parked, and the rest of its partition keeps going. A message is parked for killing the process only after the threshold number of owners were lost while it was on trial alone.
 
 Faults to inject: a crash before, during and after a commit and before the in-memory hand-over; a commit whose outcome is unknown; a paused owner that wakes after a takeover; two nodes that both believe they own a partition; a message inserted while a poll runs; an outside command retried after it was handled; a turn that always throws; clocks that disagree.
 
 ## What it costs (measured on the model)
 
-PostgreSQL figures are round trips: one per command execution and one per commit. SQLite figures are calls into the engine, where EF sends one command per row. "Today" is the current core, counted on 11 November.
+PostgreSQL round trips for the native model on the kernel (NATIVE.md, after the merge), against today's core counted on 11 November. The kernel figures are fence as its own statement / fence in the batch (the default). The model's history is one journal row per commit; the projector's writes come on top, and today's figures include its viewer rows.
 
-| Run | Today, PostgreSQL | Model, PostgreSQL | Today, SQLite | Model, SQLite |
-|---|---:|---:|---:|---:|
-| Ten no-op activities, ephemeral, started on the owner | 32 | 0 | 29 | 0 |
-| The same, Balanced | 48 | 2 (3 with the fence as its own statement) | 64 | 5 |
-| The same, Durable | 230 | 20 (30) | 221 | 77 |
-| Balanced, started from a node that does not own the partition | | 7 (9) | | 13 |
-| Parent with three children in one partition | | 8 (12) | | 49 |
-| 100 Balanced instances started at once | not measured | 2 (3) for all of them | not measured | 203 |
+| Run | Today | Kernel |
+|---|---:|---:|
+| HTTP reference workflow, Ephemeral, inline | 80 | 0 |
+| HTTP reference workflow, Balanced | 80 | 3 / 2 |
+| HTTP reference workflow, Durable | 153 | 12 / 8 |
+| One WriteLine, Balanced | 48 | 3 / 2 |
+| Ten WriteLines, Durable | 230 | 33 / 22 |
+| Forty WriteLines, Durable | 680 | 123 / 82 |
+| Fork and join, Balanced | 142 | 15 / 11 |
 
-- The model's activities do nothing and its history is one journal row per commit; the projector's writes and a real model's own reads come on top. The current core's figures include its viewer rows.
-- Durable is 10 commits: one per activity, and the last one also finishes the instance.
-- A start from another node costs the insert, a poll, the commit that marks the message, a read that finds no instance yet, and the turn's commit.
+A Balanced run on the owner, per engine (EF store; fence as its own statement, in brackets in the batch): PostgreSQL 3 (2), SQL Server 4 (3, needs read-committed snapshot isolation), MySQL 7 (6), MongoDB 3 (2, needs a replica set). SQLite takes 5 calls into the engine, where EF sends one command per row. A commit costs the same round trips for 1 or 100 instances, because they share the transaction.
+
+These figures come from the prototype's own cost runs, reported in its findings; they were not re-measured for this record.
 
 ## What the tests did and did not show
 
-- **Simulation:** several nodes against one in-memory store, one random action at a time: takes, polls, turns, commits, crashes, a paused owner that wakes with stale memory, commits whose answer is wrong, retried outside commands, clocks that disagree. 200,000 runs of 300 actions pass. At 1,000 actions 11 of 20,000 runs fail, all for one reason: see "poison counting" below.
-- **Mutation check:** ten deliberate breakages of the kernel. Eight are caught in the first run. Two are not caught alone (the position in the fence; the count on deletes) because another rule covers each; both are caught when that other rule is removed too.
-- **PostgreSQL stress:** six workers on two partitions with 150 ms leases, stalls and randomly killed connections. Two runs (5,000 and 8,000 messages, about 500 and 900 takeovers) end with every property holding. With the fence broken on purpose the same test reports 286 violations.
-- **Not built:** synchronous HTTP across nodes (a reply address over the runtime's transport); the three layers as separate code; the seam; the runtime conformance suite; the Orleans adapter.
-- **Not tested:** MySQL, SQL Server, SQLite under concurrency, and the two-round-trip fence under stress. Not built: fair share of partitions, the projector's row, `Hold`, `Emit`, `Ambient`, `Rebind`, state versions, suspend and resume, events that start instances.
+| Test | Result | Checked by |
+|---|---|---|
+| Simulation after the merge: 200,000 runs of 300 actions | 0 failed, 0 parked | Re-run on 12 November |
+| Simulation: 20,000 runs of 1,000 actions | 0 failed; 12 innocent instances parked (see poison counting) | Re-run on 12 November |
+| The same with native instances in the mix | 0 failed; 15 innocent instances parked; 409,284 instances matched | Re-run on 12 November |
+| Mutation check: the kernel broken one rule at a time | 37 breakages; 35 caught alone; the other two (the position in the fence, the count on deletes) caught when the rule that covers each is removed too | Re-run on 12 November |
+| Mutation check of the native model | 5 of 5 caught | Re-run on 12 November |
+| Store conformance, 57 semantic cases: in memory | 56 pass, 1 skipped | Re-run on 12 November |
+| Store conformance: SQLite, either fence | 54 pass, 1 skipped; 2 reference cases differ (subscribing twice, removing what is absent), where the contract is silent and must be defined | Re-run on 12 November |
+| Store conformance: PostgreSQL, SQL Server, MySQL, MongoDB | Pass | Reported by the merge run; not re-run |
+| Stress: 40 s, 5,000 messages, killed connections and stalls | Every property holds on all five engines; 0 deadlocks | Reported by the merge run; not re-run |
+| Stress with the fence broken on purpose | Violations on every engine: PostgreSQL 228, SQL Server 26, MySQL 611, SQLite 238, MongoDB 390 | Reported by the merge run; not re-run |
+
+- **Built since draft 2:** suspend, resume, terminate, rebind and delete; events that start instances; the projector; reply addresses for live output across nodes; the native model with HTTP routes; the store on SQL Server, MySQL and MongoDB.
+- **Not built yet:** the three layers as separate code (round 4, in progress); the runtime conformance suite; the Orleans adapter; fair share of partitions; the graph engine and the BPMN, StateMachine and standalone-jobs spikes.
+- **Not measured yet:** bytes written per commit and PostgreSQL bloat (design-now question 7).
 
 ## Trade-offs
 
@@ -427,10 +463,11 @@ These are cheap to design in now and expensive to retrofit. The proposal must an
 4. **Very large fan-out and fan-in.** A ForEach over 100,000 items, or ETL partitions: if every child reports to the parent, the parent takes 100,000 messages and turns. Needed: a counting or aggregating pattern (for example a tree of combiners) on the kernel, designed rather than discovered.
 5. **Job workers outside the process.** Built from Elsa.Jobs's worker protocol (see "Standalone jobs" above). Workers in any language pull jobs over gRPC or HTTP, with a lease, a heartbeat and a timeout (Zeebe's job workers). This changes the job contract (leases, timeouts, retries owned by the worker), so decide before jobs are built.
 6. **Observability as a contract.** Trace context on every message; stable metric names (inbox depth, projector lag, commit latency, parked count, lease takeovers); operator actions (retry or discard a parked message, inspect an inbox, force a partition handover).
+7. **Write volume and bloat.** A commit rewrites the instance's whole state and, at Full history, also appends a journal row; the inbox inserts and then deletes. On PostgreSQL that leaves dead row versions and vacuum pressure under load. Needed: bytes written per commit and dead-tuple counts in the stress run, before and after the mitigations (table fill factor so updates stay on the page, a partitioned inbox, values by reference). If the numbers demand it, a lazy snapshot (the state change in the journal, the instance row rewritten every N turns) is the fallback, as a prototype spike first. Snapshot plus journal stays the default; full event sourcing and a log-only store are not the default.
 
 ### Architecture documentation (owner decision, 12 November)
 
-The design gets a reference section in `docs/architecture/` (published through GitBook with the rest of `docs/`), not the GitHub wiki: a README with the overview, a reading order, the walkthrough link and each page's status, then one page per topic, landed one page per PR beside the design proposal. Terms are defined once in the glossary; decisions stay in ADRs. Pages carry a "Proposed" banner until the design is approved and "Current" from the switch. At the switch, the pages that describe the old core (the architecture tour, how a workflow executes, durable resumption, durable timers, bookmark expiration, runtime fault behaviour) are rewritten or retired, after the owner sees the list.
+The design gets a reference section in `docs/architecture/` (the engineering documentation, read on GitHub), not the GitHub wiki. Correction: GitBook publishes `website/docs/`, not `docs/`; whether the section also gets a published summary in `website/docs/` is an open owner question. The section has a README with the overview, a reading order, the walkthrough link and each page's status, then one page per topic, landed one page per PR beside the design proposal. Terms are defined once in the glossary; decisions stay in ADRs. Pages carry a "Proposed" banner until the design is approved and "Current" from the switch. At the switch, the pages that describe the old core (the architecture tour, how a workflow executes, durable resumption, durable timers, bookmark expiration, runtime fault behaviour) are rewritten or retired, after the owner sees the list.
 
 ### Release 1 scope (owner decision, 12 November)
 
@@ -438,7 +475,7 @@ The test: give Elsa 3 users a reason to move and nothing that stops them, and gi
 
 - **In:** the kernel (actor runtime and durable layer) with the built-in runtime; the Embedded and Cluster profiles; the native model with its structured containers and the Flowchart on the extracted graph engine; synchronous HTTP; PostgreSQL, SQL Server and SQLite, tuned; Studio pointed at the new core, with the run viewer on the projector's tables; and, in a basic form, trace context and metrics, retention and delete, admission control with bounded inboxes, and migrating instances between definition versions for the simple cases.
 - **StateMachine:** in, unless #3815 has not passed its design milestone (M0) when the native model build starts; then it moves to 1.1. The release never waits on it.
-- **MySQL:** supported, not tuned. The conformance suite and the stress test run on it in CI; the docs say it is slower (7 round trips per commit against PostgreSQL's 3).
+- **MySQL:** supported, not tuned. The conformance suite and the stress test run on it in CI; the docs say it is slower (7 round trips per commit against PostgreSQL's 3 with the fence as its own statement; 6 against 2 with the fence in the batch, the default).
 - **MongoDB:** proven in CI against a replica set, so the store contract stays MongoDB-safe; production support in 1.1.
 - **Agents:** native activities with agent calls as background jobs; a dedicated agent execution model after the switch, checked by a spike first.
 - **Large fan-out:** the aggregating pattern is designed in the proposal and ships with ETL; release 1 caps a parallel ForEach at a documented size.
@@ -447,7 +484,7 @@ The test: give Elsa 3 users a reason to move and nothing that stops them, and gi
 
 ### Earlier open questions
 
-- **Poison counting is the weakest part.** An owner lost for any reason while a message is on trial costs that message an attempt, so under the simulation's rate of faults an innocent message is sometimes parked (the 11 failing runs). Proposed: an owner that resets and takes the partition again is alive, so it does not count; only a lease that expired does. A background job that kills the process is not counted at all yet. Recovery of a deep backlog after a takeover is serial.
+- **Poison counting is the weakest part.** An owner lost for any reason while a message is on trial costs that message an attempt, so under the simulation's rate of faults an innocent message is sometimes parked (at 1,000 actions, 12 of 20,000 simulation runs park an innocent instance). Proposed: an owner that resets and takes the partition again is alive, so it does not count; only a lease that expired does. A background job that kills the process is not counted at all yet. Recovery of a deep backlog after a takeover is serial.
 - **State size.** The whole state is rewritten at each commit. Fine for kilobytes. A growing agent thread or a large variable needs segments or values stored by reference. Measure before adding. Decided 12 November: large values by reference, and a size benchmark in the cost runs; segments only if measured.
 - **Events:** the table with the two-sided check is built and passes. A correlation instance per key would remove both tables, the owed read and invariant 8, at the cost of one hop. Not built yet; to be tried next. Decided 12 November: the tables stay the kernel's one mechanism; the correlation instance remains a sample model.
 - **Notifier between nodes.** Decided 12 November: a pluggable wake signal over the runtime's transport; polling remains the guarantee.
