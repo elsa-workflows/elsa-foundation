@@ -4,6 +4,8 @@
     <RootNamespace>Kernel.Ef.Conformance</RootNamespace>
     <NoWarn>$(NoWarn);EF1002</NoWarn>
     <ServerGarbageCollection>true</ServerGarbageCollection>
+    <!-- ENGINES.md E2: Microsoft.Data.SqlClient refuses to open a connection in invariant-globalization mode. -->
+    <InvariantGlobalization>false</InvariantGlobalization>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../Kernel.EntityFramework/Kernel.EntityFramework.csproj" />

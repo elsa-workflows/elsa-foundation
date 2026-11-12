@@ -134,6 +134,9 @@ public sealed class EfStore(Func<KernelDb> create, bool postgres, bool fenceInBa
     /// <summary>MUTATION, for the stress test only: the fence statement loses its epoch and position conditions.</summary>
     public bool Unfenced { get; init; }
 
+    /// <summary>MUTATION, to reproduce ENGINES.md E1 (MONGO.md M5): a definite error is reported as definite even when the fence in the batch did not match.</summary>
+    public bool DefiniteBeatsFence { get; init; }
+
     /// <summary>How often E1 turned a key violation into "the fence matched nothing". For the stress test's report.</summary>
     public int KeyViolationsAsFence => _keyViolationsAsFence;
     private int _keyViolationsAsFence;
@@ -284,13 +287,23 @@ public sealed class EfStore(Func<KernelDb> create, bool postgres, bool fenceInBa
         catch (Exception e)
         {
             var failure = Classify(e);
-            // ENGINES.md E1. With the fence in the batch the rows are sent before the fence is checked, so an owner that
-            // is behind collides with its successor's rows first and is told "duplicate key". A key violation counts as
-            // a definite error only if the fence still holds; otherwise it is the fence that matched nothing.
-            if (fenceInBatch && failure.Failure == Failure.Definite && !await HoldsAsync(batch, cancellationToken))
+            // ENGINES.md E1, MONGO.md M5. With the fence in the batch the rows are sent before the fence is checked, so an
+            // owner that is behind collides with its successor's rows first and is told "duplicate key" (PK_Journal, or a
+            // derived message id). A fence that did not match wins over every other error of the batch: a failure that
+            // says the batch did not happen (definite, or a deadlock victim) is reported as such only while the fence
+            // still holds, and is "not landed" otherwise. Epoch and position never return to old values, so a fence
+            // that holds now held when the batch ran. An unknown outcome stays unknown: the batch may have landed and
+            // moved the position itself.
+            if (fenceInBatch && !DefiniteBeatsFence && failure.Failure is Failure.Definite or Failure.Transient)
             {
-                Interlocked.Increment(ref _keyViolationsAsFence);
-                return new Committed(false, 0, []);
+                bool holds;
+                try { holds = await HoldsAsync(batch, cancellationToken); }
+                catch (Exception check) { throw new StoreException(Failure.Unknown, "the fence could not be read after a failed commit: " + check.Message, check); }
+                if (!holds)
+                {
+                    Interlocked.Increment(ref _keyViolationsAsFence);
+                    return new Committed(false, 0, []);
+                }
             }
             throw failure;
         }

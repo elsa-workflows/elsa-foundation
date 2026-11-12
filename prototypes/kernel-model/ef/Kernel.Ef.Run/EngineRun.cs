@@ -14,7 +14,7 @@ using Npgsql;
 /// <summary>
 /// The runs of ENGINES.md: the stress test, the cost count and the probes of Program.cs, on any of the four engines.
 ///   x stress|cost|probe|block|definite|deadlock postgres|sqlserver|mysql|sqlite "connection" [key=value ...]
-/// Options: fence=checked|batch  unfenced=1  seconds=40  messages=5000  partitions=2  nodes=3
+/// Options: fence=checked|batch  unfenced=1  m5=1 (E1 off: a definite error beats a fence that missed)  seconds=40  messages=5000  partitions=2  nodes=3
 ///          kill=0 (no sessions killed)   rcsi=0 (locking; default on) readpast=1 xactabort=1 (SQL Server)   isolation=rc takerr=1 (MySQL)   wal=0|1 busy=ms timeout=s (SQLite)
 ///          role=workers name=b signal=path (a second process on the same database)   locks=1 (cost)
 ///          savepoints=1 (leave Entity Framework's savepoint on, SQL Server and MySQL)   batchsize=n (statements per command, SQL Server and MySQL; default 1000)
@@ -528,7 +528,7 @@ sealed class Target(string engine, string connection, Dictionary<string, string>
 
     public EfStore Store(Func<KernelDb> create) => new(create, postgres: engine != "sqlite", FenceInBatch)
     {
-        Unfenced = Has("unfenced"),
+        Unfenced = Has("unfenced"), DefiniteBeatsFence = Has("m5"),
         Engine = engine switch
         {
             "sqlserver" => new SqlServerEngine { ReadPast = Has("readpast"), Savepoints = Has("savepoints"), ReadCommittedSnapshot = Get("rcsi", "1") == "1" },

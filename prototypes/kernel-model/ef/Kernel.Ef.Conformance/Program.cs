@@ -2,87 +2,143 @@ using System.Data.Common;
 using Kernel;
 using Kernel.EntityFramework;
 using Kernel.Store.Conformance;
+using Microsoft.Data.SqlClient;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
+using MySql.Data.MySqlClient;
 using Npgsql;
 
-// The store conformance suite against the Entity Framework store. EfStore.cs is used as it is.
+// The store conformance suite against the Entity Framework store. EfStore.cs and Engines.cs are used as they are.
 //   dotnet ef/Kernel.Ef.Conformance/bin/Release/net10.0/Kernel.Ef.Conformance.dll sqlite semantic
-//   dotnet ... postgres "Host=localhost;Port=<port>;Username=postgres;Password=kernel" [--fence-in-batch] semantic|stress|cost ...
+//   dotnet ... postgres "Host=localhost;Port=<port>;Username=postgres;Password=kernel" [--fence-in-batch] [--m5] semantic|stress|cost ...
+//   dotnet ... sqlserver "Server=localhost,<port>;User Id=sa;Password=...;TrustServerCertificate=True" [--fence-in-batch] [--rcsi-off] semantic ...
+//   dotnet ... mysql "server=localhost;port=<port>;uid=root;pwd=kernel" [--fence-in-batch] [--rc] semantic ...
+// --m5: the mutation that lets a definite error beat a fence that did not match (ENGINES.md E1, MONGO.md M5).
 
+string[] flags = ["--fence-in-batch", "--m5", "--rcsi-off", "--rc"];
 switch (args)
 {
     case ["sqlite", .. var rest]:
-        return await Cli.RunAsync(new EfProvider(null, rest.Contains("--fence-in-batch")), rest.Where(a => a != "--fence-in-batch").ToArray());
-    case ["postgres", var connection, .. var rest]:
-        return await Cli.RunAsync(new EfProvider(connection, rest.Contains("--fence-in-batch")), rest.Where(a => a != "--fence-in-batch").ToArray());
+        return await Cli.RunAsync(new EfProvider("sqlite", null, rest), rest.Where(a => !flags.Contains(a)).ToArray());
+    case [var engine and ("postgres" or "sqlserver" or "mysql"), var connection, .. var rest]:
+        return await Cli.RunAsync(new EfProvider(engine, connection, rest), rest.Where(a => !flags.Contains(a)).ToArray());
     default:
-        Console.Error.WriteLine("sqlite <suite command> | postgres <connection> [--fence-in-batch] <suite command>");
+        Console.Error.WriteLine("sqlite <suite command> | postgres|sqlserver|mysql <connection> [--fence-in-batch] [--m5] [--rcsi-off] [--rc] <suite command>");
         return 2;
 }
 
-/// <summary>The suite's plug for <see cref="EfStore"/>: SQLite in a file, or PostgreSQL in a database of its own per store.</summary>
-sealed class EfProvider(string? postgres, bool fenceInBatch) : IStoreProvider
+/// <summary>The suite's plug for <see cref="EfStore"/>: SQLite in a file; PostgreSQL, SQL Server or MySQL in a database of its own per store.</summary>
+sealed class EfProvider(string engine, string? server, string[] flags) : IStoreProvider
 {
-    public string Name => $"entity framework, {(postgres is null ? "sqlite" : "postgresql")}, {(fenceInBatch ? "fence in batch" : "checked fence")}";
+    private bool FenceInBatch => flags.Contains("--fence-in-batch");
 
-    public static Func<KernelDb> Factory(bool pg, string connection, params IInterceptor[] interceptors)
+    public string Name => $"entity framework, {engine}, {(FenceInBatch ? "fence in batch" : "checked fence")}"
+        + (flags.Contains("--m5") ? ", M5 MUTATION" : "") + (engine == "sqlserver" ? flags.Contains("--rcsi-off") ? ", locking" : ", RCSI" : "")
+        + (engine == "mysql" ? flags.Contains("--rc") ? ", READ COMMITTED" : ", REPEATABLE READ" : "");
+
+    private bool Pg => engine == "postgres";
+    private string Engine => engine;
+
+    public Func<KernelDb> Factory(string connection, params IInterceptor[] interceptors)
     {
         var builder = new DbContextOptionsBuilder<KernelDb>();
-        if (pg) builder.UseNpgsql(connection);
-        else builder.UseSqlite(connection);
+        _ = engine switch
+        {
+            "postgres" => builder.UseNpgsql(connection),
+            "sqlserver" => builder.UseSqlServer(connection, o => o.MaxBatchSize(1000)),     // ENGINES.md E7
+            "mysql" => builder.UseMySQL(connection, o => o.MaxBatchSize(1000)),
+            _ => builder.UseSqlite(connection),
+        };
         var options = builder.AddInterceptors(interceptors).Options;
         return () => new KernelDb(options);
     }
 
+    private EfStore Store(Func<KernelDb> create, bool fenceInBatch, bool unfenced = false) => new(create, engine != "sqlite", fenceInBatch)
+    {
+        Unfenced = unfenced,
+        DefiniteBeatsFence = flags.Contains("--m5"),
+        Engine = engine switch
+        {
+            "sqlserver" => new SqlServerEngine { ReadCommittedSnapshot = !flags.Contains("--rcsi-off") },
+            "mysql" => new MySqlEngine { Isolation = flags.Contains("--rc") ? System.Data.IsolationLevel.ReadCommitted : null },
+            _ => null,
+        },
+    };
+
     public async Task<ProvidedStore> CreateAsync(int partitions, StoreSetup setup)
     {
-        var counter = setup.Counting ? new Counting(postgres is not null) : null;
+        var counter = setup.Counting ? new Counting(Pg) : null;
         IInterceptor[] interceptors = counter is null ? [] : [counter, counter.Transactions];
         string worker, outside, admin;
         string? file = null;
-        if (postgres is not null)
+        var database = "kconf_" + Guid.NewGuid().ToString("N")[..12];
+        switch (engine)
         {
-            var database = "kconf_" + Guid.NewGuid().ToString("N")[..12];
-            worker = $"{postgres};Database={database};Application Name=kernel-worker;Maximum Pool Size=40";
-            outside = $"{postgres};Database={database};Application Name=kernel-outside";
-            admin = $"{postgres};Database={database};Application Name=kernel-admin";
+            case "postgres":
+                worker = $"{server};Database={database};Application Name=kernel-worker;Maximum Pool Size=40";
+                outside = $"{server};Database={database};Application Name=kernel-outside";
+                admin = $"{server};Database={database};Application Name=kernel-admin";
+                break;
+            case "sqlserver":
+                worker = $"{server};Database={database};Application Name=kernel-worker;Max Pool Size=40";
+                outside = $"{server};Database={database};Application Name=kernel-outside";
+                admin = $"{server};Database={database};Application Name=kernel-admin";
+                break;
+            case "mysql":
+                worker = $"{server};database={database};maximumpoolsize=40";
+                outside = $"{server};database={database}";
+                admin = $"{server};database={database};pooling=false";
+                break;
+            default:
+                file = Path.Combine(Path.GetTempPath(), $"kernel-conformance-{Guid.NewGuid():N}.db");
+                worker = outside = admin = $"Data Source={file};Pooling=False";
+                break;
         }
-        else
-        {
-            file = Path.Combine(Path.GetTempPath(), $"kernel-conformance-{Guid.NewGuid():N}.db");
-            worker = outside = admin = $"Data Source={file};Pooling=False";
-        }
-        await new EfStore(Factory(postgres is not null, admin), postgres is not null).CreateAsync(partitions);
-        var store = new EfStore(Factory(postgres is not null, worker, interceptors), postgres is not null, fenceInBatch) { Unfenced = setup.BrokenFence };
-        return new Provided(postgres is not null, store, new EfStore(Factory(postgres is not null, outside), postgres is not null, fenceInBatch), admin, file, counter);
+        await Store(Factory(admin), false).CreateAsync(partitions);
+        var store = Store(Factory(worker, interceptors), FenceInBatch, setup.BrokenFence);
+        return new Provided(this, store, Store(Factory(outside), FenceInBatch), admin, file, counter);
     }
 
-    private sealed class Provided(bool pg, EfStore store, EfStore outside, string admin, string? file, Counting? counter) : ProvidedStore
+    private sealed class Provided(EfProvider provider, EfStore store, EfStore outside, string admin, string? file, Counting? counter) : ProvidedStore
     {
         public override IKernelStore Store => store;
         public override IKernelStore NewClient() => outside;
         public override ICostCounter? Counter => counter;
 
-        // PostgreSQL refuses a NUL in text (22021), every time. SQLite stores anything.
-        public override InstanceRow? Refused(InstanceRow row) => pg ? row with { State = "\u0000" + row.State } : null;
+        // PostgreSQL refuses a NUL in text (22021), every time. SQLite, SQL Server and MySQL store any string the
+        // instance row can hold: no refused row (the case is skipped).
+        public override InstanceRow? Refused(InstanceRow row) => provider.Pg ? row with { State = "\u0000" + row.State } : null;
+
+        private DbConnection Connect() => provider.Engine switch
+        {
+            "postgres" => new NpgsqlConnection(admin),
+            "sqlserver" => new SqlConnection(admin),
+            "mysql" => new MySqlConnection(admin),
+            _ => new SqliteConnection(admin),
+        };
 
         public override async Task<IAsyncDisposable?> HoldPartitionAsync(int partition)
         {
-            DbConnection connection = pg ? new NpgsqlConnection(admin) : new SqliteConnection(admin);
+            var connection = Connect();
             await connection.OpenAsync();
             var transaction = await connection.BeginTransactionAsync();
             await using var command = connection.CreateCommand();
             command.Transaction = transaction;
-            command.CommandText = pg ? $"""SELECT 1 FROM "Partitions" WHERE "Id" = {partition} FOR UPDATE""" : $"""UPDATE "Partitions" SET "Owner" = "Owner" WHERE "Id" = {partition}""";
+            command.CommandText = provider.Engine switch
+            {
+                "postgres" => $"""SELECT 1 FROM "Partitions" WHERE "Id" = {partition} FOR UPDATE""",
+                "sqlserver" => $"""SELECT 1 FROM "Partitions" WITH (UPDLOCK, ROWLOCK) WHERE "Id" = {partition}""",
+                "mysql" => $"""SELECT 1 FROM `Partitions` WHERE `Id` = {partition} FOR UPDATE""",
+                _ => $"""UPDATE "Partitions" SET "Owner" = "Owner" WHERE "Id" = {partition}""",
+            };
             await command.ExecuteNonQueryAsync();
             return new Hold(connection, transaction);
         }
 
         public override async Task<int> KillAsync(Random random)
         {
-            if (!pg) return 0;
+            if (provider.Engine != "postgres") return 0;      // the semantic cases do not kill; the engines' stress is EngineRun.cs
             await using var connection = new NpgsqlConnection(admin);
             await connection.OpenAsync();
             await using var command = new NpgsqlCommand("""SELECT pg_terminate_backend(pid) FROM (SELECT pid FROM pg_stat_activity WHERE application_name = 'kernel-worker' AND datname = current_database() AND state <> 'idle' ORDER BY random() LIMIT 1) busy""", connection);
@@ -94,17 +150,18 @@ sealed class EfProvider(string? postgres, bool fenceInBatch) : IStoreProvider
 
         public override async ValueTask DisposeAsync()
         {
-            if (pg)
+            switch (provider.Engine)
             {
-                NpgsqlConnection.ClearAllPools();
-                await using var db = Factory(true, admin)();
-                await db.Database.EnsureDeletedAsync();
+                case "sqlite":
+                    SqliteConnection.ClearAllPools();
+                    try { File.Delete(file!); } catch (IOException) { }
+                    return;
+                case "postgres": NpgsqlConnection.ClearAllPools(); break;
+                case "sqlserver": SqlConnection.ClearAllPools(); break;
+                case "mysql": MySqlConnection.ClearAllPools(); break;
             }
-            else
-            {
-                SqliteConnection.ClearAllPools();
-                try { File.Delete(file!); } catch (IOException) { }
-            }
+            await using var db = provider.Factory(admin)();
+            await db.Database.EnsureDeletedAsync();
         }
     }
 
