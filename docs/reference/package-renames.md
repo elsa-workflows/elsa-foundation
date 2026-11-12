@@ -146,7 +146,7 @@ Decision: [ADR 0094, amendment of 2026-11-09](../adr/0094-agent-definitions-own-
 
 | Line | Property in `VersionLines.props` | Was | Is |
 |---|---|---|---|
-| B, every package that is not a shared contract | `ElsaVersion` | 4.0 | 4.1 |
+| B, every package that is not a shared contract, except the Studio NuGet packages (see below) | `ElsaVersion` | 4.0 | 4.1 |
 | A, the shared contract packages | `ElsaContractsVersion` | 4.0 | 4.0 (unchanged: no contract package was renamed) |
 
 What a consumer has to do:
