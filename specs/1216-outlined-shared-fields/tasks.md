@@ -14,12 +14,14 @@
 
 ## US2 — All themes and states
 - [x] T009 Add real shared-component browser gallery for every palette/appearance and risky states/layouts.
-- [ ] T010 Verify Minimal/UserTasks/Agent rule collisions, long labels,320/360px,200% text,RTL,forced colours/reduced motion, opaque/transparent/patterned surfaces.
+- [x] T010 Verify Minimal/UserTasks/Agent rule collisions, long labels,320/360px,200% text,RTL,forced colours/reduced motion, opaque/transparent/patterned surfaces.
 
 ## US3 — Module adoption and delivery
-- [ ] T011 Update module UI guidance/examples and verify independently bundled consumers.
-- [ ] T012 Run affected whole suites, types/lint/build and actual composed journeys with retained current-source evidence.
-- [ ] T013 Run independent correctness/standards/acceptance reviews to convergence and independently inspect current rendered evidence.
+- [x] T011 Update module UI guidance/examples and verify independently bundled consumers.
+- [x] T012 Run affected whole suites, types/lint/build and actual composed journeys with retained current-source evidence.
+- [x] T013 Run independent correctness/standards/acceptance reviews to convergence and independently inspect current rendered evidence.
 - [ ] T014 Complete exact-head required CI, protected merge and containing-main verification; reconcile issue/program.
 
 Dependencies: T003→T004/T005/T006/T007; migration→T008/T009/T011; all implementation→T012→T013→T014. Independent research was parallel; source mutations remain scoped to this owned worktree. Do not count documentation, planned counts or stale artifacts as executed acceptance.
+
+Qualification checkpoint: production revision `a5a339ac8073c63108c0e3f0a40a6fe4c2e33af2` passed a clean59-case gallery and52 composed journeys, each once with no skips/retries. Independent round4 local product UX, correctness and standards found no remaining actionable issue. The complete receipt and earlier failed/superseded runs are on [PR4244](https://github.com/elsa-workflows/elsa-foundation/pull/4244). T014 remains external and pending until exact-head CI, shared Actions evidence and containing-main proof actually pass.
