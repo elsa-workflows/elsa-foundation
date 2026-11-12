@@ -147,14 +147,16 @@ describe("FitReadOnlyFlowView with a readable minimum zoom (#4064)", () => {
     expect(setViewport.mock.calls[1][0].zoom).toBeGreaterThanOrEqual(1);
   });
 
-  it("centres the selected activity when the graph cannot fit legibly", async () => {
+  it("starts at the graph's reading start even when a later activity is selected", async () => {
     graphNodes.items[1]!.selected = true;
     pane.width = 340; pane.height = 600;
     flushSync(() => root.render(<FitReadOnlyFlowView nodeCount={2} minReadableZoom={1} />));
     await settleAutoFit();
     const view = setViewport.mock.calls[0][0];
-    expect(420 * view.zoom + view.x).toBeGreaterThanOrEqual(0);
-    expect(660 * view.zoom + view.x).toBeLessThanOrEqual(340);
+    expect(view.zoom).toBe(1);
+    // The first (task) activity at x 0..240 is in view, not the selected output at x 420.
+    expect(view.x).toBeGreaterThanOrEqual(0);
+    expect(240 + view.x).toBeLessThanOrEqual(340);
   });
 
   it("does not take the viewport back after the user moves it", async () => {

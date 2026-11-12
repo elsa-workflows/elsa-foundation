@@ -1,5 +1,4 @@
 import { getViewportForBounds, type FitViewOptions, type Node, type Rect, type Viewport } from "@xyflow/react";
-import type { WorkflowRuntimeNodeOverlay } from "../workflowAdapter";
 
 /**
  * Smallest zoom at which a run canvas's first view keeps outcome port labels readable.
@@ -14,25 +13,14 @@ export const READ_ONLY_READABLE_ZOOM = 1;
 const readableEdgeMargin = { top: 24, right: 112, bottom: 32, left: 32 };
 const minimumFocusInset = 8;
 
-const settledStatuses = new Set(["Completed", "Canceled", "Cancelled"]);
-
-function focusRank(node: Node): number {
-  const runtime = (node.data as { runtime?: WorkflowRuntimeNodeOverlay } | undefined)?.runtime;
-  if (node.selected || runtime?.selected) return 0;
-  if (runtime?.hasBlockingIncident) return 1;
-  if (runtime && (runtime.incidentCount > 0 || runtime.status === "Faulted")) return 2;
-  if (runtime?.status && !settledStatuses.has(runtime.status)) return 3;
-  return 4;
-}
-
 /**
- * The activity a readable first view centres on: the selected one, then one that needs attention
- * (blocking incident, incident or fault), then one still running or suspended, and otherwise the
- * graph's reading start (leftmost, then topmost).
+ * The activity a readable first view starts from: the graph's reading start (leftmost, then
+ * topmost). It depends only on the layout, never on runtime evidence that may still be loading,
+ * so the first view is the same on every visit. Showing a selected activity is the separate
+ * focus request's job.
  */
 export function pickReadOnlyFocusNode<T extends Node>(nodes: T[]): T | undefined {
-  return [...nodes].sort((left, right) =>
-    focusRank(left) - focusRank(right) || left.position.x - right.position.x || left.position.y - right.position.y)[0];
+  return [...nodes].sort((left, right) => left.position.x - right.position.x || left.position.y - right.position.y)[0];
 }
 
 /** The translation that centres `[start, start + size]` between the screen margins. */
@@ -63,7 +51,7 @@ export interface ReadableFitViewportInput {
 
 /**
  * Fit the whole graph when that keeps labels readable. Otherwise use the readable zoom, centre the
- * focus activity, and clamp so the view never scrolls past the graph's edges into empty canvas.
+ * graph's reading start, and clamp so the view never scrolls past the graph's edges into empty canvas.
  */
 export function getReadableFitViewport({ graph, focus, width, height, padding, minZoom, maxZoom, readableZoom }: ReadableFitViewportInput): Viewport {
   const overview = getViewportForBounds(graph, width, height, minZoom, maxZoom, padding ?? 0.1);

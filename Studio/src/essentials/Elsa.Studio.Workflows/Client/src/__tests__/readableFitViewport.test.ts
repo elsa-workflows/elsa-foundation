@@ -56,25 +56,13 @@ describe("getReadableFitViewport", () => {
 });
 
 describe("pickReadOnlyFocusNode", () => {
-  it("prefers the selected activity", () => {
-    const nodes = [node("first", 0, 0, {}, { status: "Faulted", hasBlockingIncident: true, incidentCount: 1 }), node("chosen", 400, 0, { selected: true })];
-    expect(pickReadOnlyFocusNode(nodes)?.id).toBe("chosen");
-  });
-
-  it("then an activity that needs attention, then one still running or suspended", () => {
+  it("starts where the graph starts, whatever a later activity's runtime state", () => {
     expect(pickReadOnlyFocusNode([
-      node("first", 0, 0, {}, { status: "Completed" }),
-      node("waiting", 300, 0, {}, { status: "Running", subStatus: "Suspended" }),
-      node("faulted", 600, 0, {}, { status: "Faulted" })
-    ])?.id).toBe("faulted");
-    expect(pickReadOnlyFocusNode([
-      node("first", 0, 0, {}, { status: "Completed" }),
-      node("waiting", 300, 0, {}, { status: "Running", subStatus: "Suspended" })
-    ])?.id).toBe("waiting");
-  });
-
-  it("otherwise starts where the graph starts", () => {
-    expect(pickReadOnlyFocusNode([node("later", 420, 0), node("start", 0, 40), node("above", 0, 0, {}, { status: "Completed" })])?.id).toBe("above");
+      node("selected", 420, 0, { selected: true }),
+      node("faulted", 300, 0, {}, { status: "Faulted", hasBlockingIncident: true, incidentCount: 1 }),
+      node("start", 0, 40),
+      node("above", 0, 0, {}, { status: "Completed" })
+    ])?.id).toBe("above");
   });
 });
 
