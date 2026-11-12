@@ -5,7 +5,7 @@ It tests the design before product code exists. It shares nothing with the Elsa 
 repository: the folder has its own `Directory.Build.*`, `Directory.Packages.props`, `NuGet.config`, `global.json` and
 `.editorconfig`.
 
-What was found is in [FINDINGS.md](FINDINGS.md).
+What was found is in [FINDINGS.md](FINDINGS.md). Native workflows as an execution model on it, their cost and their simulation are in [NATIVE.md](NATIVE.md) (`models/`, `sim/Native*.cs`).
 
 ## Layout
 
