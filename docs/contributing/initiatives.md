@@ -203,15 +203,17 @@ drafter reconciles it.
    or `**Status**: Approved` for an initial spec approval. Later spec changes retain the appropriate
    [lifecycle status](../reference/spec-lifecycle.md), including `Implemented` when delivery finishes. An approving
    coordinator asks the author to make this edit instead of committing to the PR. A status line alone is not agreement.
-2. Every human approver in the approval plan who is not an author approves the **final text**, including that status
-   edit: an `APPROVED` review on the current head commit, or on an earlier commit whose text is still the same (see
-   below). A later changes-requested review must be resolved by a fresh approval.
-3. An author includes anyone who committed to the PR, as the normal merge rules require. A human author named in
-   the approval plan records their agreement in a PR comment naming the final commit, without self-approving.
-   A bot's publishing identity or approval never substitutes for a human approver's agreement.
+2. Every human approver in the approval plan agrees with the **direction the final text records**. Agreement may be
+   recorded in any form: a meeting read-back processed by the coordinator, a comment, a reconciliation row, or a
+   review. A GitHub `APPROVED` review is welcome but not required, and a changes-requested review that later commits
+   answer does not block once the coordinator records how it was answered. The coordinator decides that a PR is
+   agreed when every decision and open question in it is settled under that record, and links the record on the
+   board and in the PR.
+3. A bot's publishing identity or approval never substitutes for a human approver's agreement.
 4. The coordinator records the agreed commit on the board and marks the PR ready. The coordinator then runs the
    [pre-merge gate](#the-pre-merge-gate) and merges the PR into the [initiative branch](#the-initiative-branch).
-   Agreement is not the merge: a PR can be agreed and still wait for a clean gate or a side track.
+   Agreement is not the merge: a PR can be agreed and still wait for a clean gate or a side track. Approvers verify
+   what was merged afterwards and raise any mistake as a new point.
 
 **Material changes need renewed agreement.** An approval stays valid for a later commit unless a change could
 seriously alter that reviewer's standpoint or decision. Trivial, non-semantic edits — the status line, formatting, a
@@ -303,7 +305,7 @@ final round for the proposals still open.
 prevents a comment loop on a point where positions are clear and only a conversation will move them.
 
 **3. The final round (one pass).** Every approver, for every open proposal at the head the coordinator names:
-- **approves** the text they can agree with (an `APPROVED` review); or
+- **approves** the text they can agree with (a review or a comment); or
 - **records a meeting item**: one PR comment headed `Meeting item`, in the approver's own words, with
   - the point (one line, with the decision ID and the document section);
   - their position (one or two sentences);
@@ -413,11 +415,11 @@ follow their own subsection below where it differs.
   gate. Code Review does not merge initiative proposals ([org review and merge rules][org-agents-review]). Each
   accepted proposal is one squash commit, so the branch reads as a decision log. The coordinator also merges
   implementation PRs, after Code Review's approval and green checks instead of the gate. The coordinator also pushes the merges
-  of `main`, the ADR index updates and any renumbering of merged items; nobody else pushes to the branch. When the
-  coordinator authored or committed to a proposal, the recorded delegate, or else a non-author approver, stands in:
-  they run the gate, push what it needs and merge the proposal, because an author never merges their own PR. A stand-in
-  who is not the recorded delegate does not edit the board: they post the `main` commit and the merge commit in a
-  pointer comment, and the coordinator records them at the next sync.
+  of `main`, the ADR index updates and any renumbering of merged items; nobody else pushes to the branch. The
+  coordinator merges a proposal they authored too, once its agreement is recorded. When the coordinator is away, the
+  recorded delegate, or else an approver, stands in: they run the gate, push what it needs and merge the proposal. A
+  stand-in who is not the recorded delegate does not edit the board: they post the `main` commit and the merge commit
+  in a pointer comment, and the coordinator records them at the next sync.
 - **Merging closes the issues the PR fixes.** GitHub closes an issue from `Fixes #n`, `Closes #n` or `Resolves #n`
   only when the PR merges into the default branch, and the initiative reaches `main` only when it lands. Whoever merges
   a PR into the initiative branch therefore closes, right after the merge, every issue it fixes
