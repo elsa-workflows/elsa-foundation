@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { applyNodeChanges, useNodesInitialized, useReactFlow, useStore, type Node, type NodeChange, type Viewport } from "@xyflow/react";
-import { getReadOnlyFitViewOptions } from "./readOnlyMinimap";
-import { getReadableFitViewport, pickReadOnlyFocusNode } from "./readableFitViewport";
+import { getReadOnlyFitViewOptions, shouldShowReadOnlyMiniMap } from "./readOnlyMinimap";
+import { getReadableFitViewport, pickReadOnlyFocusNode, readableEdgeMargin, readableMinimapEdgeMargin } from "./readableFitViewport";
 
 function isSameViewport(left: Viewport, right: Viewport): boolean {
   return left.x === right.x && left.y === right.y && left.zoom === right.zoom;
@@ -45,7 +45,8 @@ export function useReadOnlyFlowNodes<T extends Node>(nodes: T[]) {
  * focus/zoom-to-node request releases ownership until this canvas remounts for a new graph.
  *
  * With `minReadableZoom`, the auto-fit never goes below that zoom: when the whole graph cannot fit
- * legibly, it centres the selected, failing or active activity instead (#4064). The Fit View control
+ * legibly, it shows a readable part starting at the graph's reading start (leftmost, then topmost
+ * activity), clamped to the graph's edges and kept clear of the MiniMap (#4064). The Fit View control
  * keeps fitting the whole graph, so the full overview stays one click away.
  */
 export function FitReadOnlyFlowView({ nodeCount, focusRequestId = 0, minReadableZoom }: { nodeCount: number; focusRequestId?: number; minReadableZoom?: number }) {
@@ -90,7 +91,8 @@ export function FitReadOnlyFlowView({ nodeCount, focusRequestId = 0, minReadable
       padding: options.padding,
       minZoom: storeMinZoom ?? 0.1,
       maxZoom: storeMaxZoom ?? 2,
-      readableZoom: minReadableZoom
+      readableZoom: minReadableZoom,
+      margin: shouldShowReadOnlyMiniMap(nodeCount) ? readableMinimapEdgeMargin : readableEdgeMargin
     })).then(recordAutoFit);
   }, [fitView, focusRequestId, getNodes, getNodesBounds, getViewport, initialized, minReadableZoom, nodeCount, paneHeight, paneWidth, setViewport, storeMaxZoom, storeMinZoom]);
 
