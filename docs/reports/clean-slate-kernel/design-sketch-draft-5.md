@@ -35,7 +35,7 @@ Owner decisions on this proposal. They become binding when the design is approve
 1. **Orleans:** hosts each partition as a grain. One grain per instance, the per-actor fence and the sweep are dropped (see "The seam").
 2. **Commit fence:** in the batch by default, using EF concurrency tokens: 2 round trips on PostgreSQL, the lease time from the node clock. The fence as its own statement stays an option.
 3. **Wake-ups between nodes:** a pluggable wake signal over the runtime's transport; polling remains the guarantee.
-4. **Short waits of an Ephemeral instance:** short timers and jobs stay in memory up to a threshold (the route timeout or a few seconds), so request-response workflows stay at zero database calls.
+4. **Short waits of an Ephemeral instance:** short timers and jobs stay in memory up to a threshold (the route timeout or a few seconds), so request-response workflows stay at zero database calls. Not built yet.
 5. **Events:** the subscription and event tables stay the kernel's one mechanism; a correlation instance per key remains a sample model.
 6. **Reply addresses:** expire at the route's timeout, carried as an absolute deadline; after it the owner drops the reply and unpins the instance.
 7. **Recreate after delete:** a rule per kind of id. A generated id never comes back (the start is dropped and journalled). A caller key refuses a repeat within `keep_until` and may start a fresh run after it.
@@ -58,7 +58,7 @@ Why the durable layer is ours whatever the runtime: Orleans grain calls are at m
 
 Layer 2 hands the runtime a set of **ownership scopes**, one per partition, and the runtime decides which node hosts each one. A scope is a partition of many actors: one conditional update fences them all, one poll covers their inboxes, and the commits of many actors go in one transaction, which is why 100 instances commit in 2 round trips. Every runtime works this way; Orleans hosts each partition as a grain.
 
-**Dropped on 12 November: actor granularity.** Draft 4 also allowed a scope of one actor (one grain per workflow instance), with its own fence record, its inbox read on activation, each actor committing alone at 2 to 3 round trips, and a sweep to wake idle actors. It loses batching and buys nothing the goals need. It may come back later as a new grain type, which would need an owner epoch on the instance row and the sweep.
+**Dropped on 12 November: actor granularity.** Draft 4 also allowed a scope of one actor (one grain per workflow instance), with its own fence record, its inbox read on activation, each actor committing alone at 2 to 3 round trips, and a sweep to wake idle actors. It loses batching and buys nothing the goals need. It may come back later as a new grain type, which would need an owner epoch on the instance row and the sweep. Until then, user code that wants to call an instance like a grain gets a reference that forwards to the grain of the instance's partition, with no kernel change.
 
 A sketch of the interface; the restructuring will settle it:
 
@@ -392,7 +392,7 @@ Faults to inject: a crash before, during and after a commit and before the in-me
 
 ## What it costs (measured on the model)
 
-PostgreSQL round trips for the native model on the kernel (NATIVE.md, after the merge), against today's core counted on 11 November. The kernel figures are fence as its own statement / fence in the batch (the default). The model's history is one journal row per commit; the projector's writes come on top, and today's figures include its viewer rows.
+PostgreSQL round trips for the native model on the kernel (NATIVE.md's runs; the fork-join row as re-measured on the merged kernel, DESIGN.md and FINDINGS section 23), against today's core counted on 11 November. The kernel figures are fence as its own statement / fence in the batch (the default). The model's history is one journal row per commit; the projector's writes come on top, and today's figures include its viewer rows.
 
 | Run | Today | Kernel |
 |---|---:|---:|
@@ -402,7 +402,7 @@ PostgreSQL round trips for the native model on the kernel (NATIVE.md, after the 
 | WriteLine sequence of 5 to 40, Balanced | 48 | 3 / 2 |
 | Ten WriteLines, Durable | 230 | 33 / 22 |
 | Forty WriteLines, Durable | 680 | 123 / 82 |
-| Fork and join, Balanced | 142 | 15 / 11 |
+| Fork and join with a direct resume, Balanced | 142 | 11 / 8 |
 
 A Balanced run on the owner, per engine (EF store; fence as its own statement, in brackets in the batch): PostgreSQL 3 (2), SQL Server 4 (3, needs read-committed snapshot isolation), MySQL 7 (6), MongoDB 3 (2, needs a replica set). SQLite takes 5 calls into the engine, where EF sends one command per row. A commit costs the same round trips for 1 or 100 instances, because they share the transaction.
 
@@ -420,11 +420,11 @@ These figures come from the prototype's own cost runs, reported in its findings;
 | Store conformance, 57 semantic cases: in memory | 56 pass, 1 skipped | Re-run on 12 November |
 | Store conformance: SQLite, either fence | 54 pass, 1 skipped; 2 reference cases differ (subscribing twice, removing what is absent), where the contract is silent and must be defined | Re-run on 12 November |
 | Store conformance: PostgreSQL, SQL Server, MySQL, MongoDB, either fence | PostgreSQL 54 pass, 3 differ; SQL Server and MySQL 53 pass, 3 differ, 1 skipped; MongoDB 57 pass. The differing cases are where the contract is silent | Reported by the merge run; not re-run |
-| Stress: 40 s, 5,000 messages, killed connections and stalls | Every property holds on all five engines; 0 deadlocks | Reported by the merge run; not re-run |
+| Stress: 40 s, 5,000 messages, killed connections and stalls | Every property holds on all five engines; 0 deadlocks on PostgreSQL, SQL Server and MySQL | Reported by the merge run; not re-run |
 | Stress with the fence broken on purpose | Violations on every engine: PostgreSQL 228, SQL Server 26, MySQL 611, SQLite 238, MongoDB 390 | Reported by the merge run; not re-run |
 
 - **Built since draft 2:** suspend, resume, terminate, rebind and delete; events that start instances; the projector; reply addresses for live output across nodes; the native model with HTTP routes; the store on SQL Server, MySQL and MongoDB.
-- **Not built yet:** the three layers as separate code (round 4, in progress); the runtime conformance suite; the Orleans adapter; fair share of partitions; the graph engine and the BPMN, StateMachine and standalone-jobs spikes.
+- **Not built yet:** the three layers as separate code (round 4, in progress); the runtime conformance suite; the Orleans adapter; the graph engine and the BPMN, StateMachine and standalone-jobs spikes; short timers and jobs of an Ephemeral instance kept in memory (decision 4); the stress test with native instances; a three-node MongoDB replica set.
 - **Not measured yet:** bytes written per commit and PostgreSQL bloat (design-now question 7).
 
 ## Trade-offs
@@ -484,7 +484,7 @@ The test: give Elsa 3 users a reason to move and nothing that stops them, and gi
 
 ### Earlier open questions
 
-- **Poison counting is the weakest part.** An owner lost for any reason while a message is on trial costs that message an attempt, so under the simulation's rate of faults an innocent message is sometimes parked (at 1,000 actions, 12 of 20,000 simulation runs park an innocent instance). Proposed: an owner that resets and takes the partition again is alive, so it does not count; only a lease that expired does. Background jobs are to be counted like messages (decision 9); not built yet. Recovery of a deep backlog after a takeover is serial.
+- **Poison counting is the weakest part.** An owner lost while a message is on trial costs that message an attempt, so under the simulation's rate of faults an innocent message is sometimes parked (at 1,000 actions, 12 innocent instances across 20,000 simulation runs). Built: a release, a reset followed by a take by the same process, and a take of a free partition do not count; only a take from another owner does. Built: job tickets are tried like any message, and a job on trial at the threshold becomes an error result while its instance goes on; decision 9 changes that to parking the job and faulting the instance, which is not built yet. Open: an owner with a trial in flight renewing its lease on a short timer, so that only a real death counts (proposed, not built). Recovery of a deep backlog after a takeover goes in trial groups that halve with every attempt.
 - **State size.** The whole state is rewritten at each commit. Fine for kilobytes. A growing agent thread or a large variable needs segments or values stored by reference. Measure before adding. Decided 12 November: large values by reference, and a size benchmark in the cost runs; segments only if measured.
 - **Events:** the table with the two-sided check is built and passes. A correlation instance per key would remove both tables, the owed read and invariant 8, at the cost of one hop. Built and measured as a sample model. Decided 12 November: the tables stay the kernel's one mechanism; the correlation instance remains a sample model.
 - **Notifier between nodes.** Decided 12 November: a pluggable wake signal over the runtime's transport; polling remains the guarantee.
