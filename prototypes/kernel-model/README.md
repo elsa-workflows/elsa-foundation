@@ -124,6 +124,29 @@ $NAT cost postgres "$PG;Database=kernel_native"
 $NAT memory 3000
 ```
 
+## The gates of a refactor
+
+What round 4 stage A ran before and after (FINDINGS section 24 has the numbers); a change that claims to change no
+behaviour must give the same output, times and renamed words aside:
+
+```
+$SIM --seeds 200000
+$SIM --seeds 20000 --actions 1000
+$SIM --native --seeds 20000 --actions 1000
+$SIM --mutations --seeds 20000
+$SIM --native-mutations --seeds 20000
+dotnet conformance/Kernel.Store.Conformance.Run/bin/Release/net10.0/Kernel.Store.Conformance.Run.dll semantic
+$EFC sqlite semantic; $EFC sqlite --fence-in-batch semantic
+$NAT smoke; $NAT cost sqlite
+$EFR x cost sqlite "Data Source=.out/cost.db" [fence=batch]                  # delete .out/cost.db* between runs
+$EFR x cost postgres "$PG;Database=kernel_cost" proxy=1 [fence=batch]
+$EFC postgres "$PG" [--fence-in-batch] semantic
+$NAT cost postgres "$PG;Database=kernel_native"
+```
+
+The `tcp` column of the PostgreSQL cost run varies by a read or two between runs for the 1,000-instance rows; the
+counted and sent round trips do not.
+
 ## How the simulation works
 
 - Several nodes run against one in-memory store. Each `(node, partition)` pair is an *actor* with its own worker. The
