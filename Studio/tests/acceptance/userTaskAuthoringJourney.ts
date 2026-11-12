@@ -71,10 +71,14 @@ export async function userTaskAuthoringJourney(page: Page, info: TestInfo, captu
   await page.getByRole("textbox", { name: "Form ID", exact: true }).scrollIntoViewIfNeeded();
   await capture(page, info, "form-authoring");
   await page.getByRole("button", { name: "Publish form version", exact: true }).click();
+  // #4068: publication is confirmed on the page, so no toast covers the heading on a narrow screen.
+  await expect(page.getByRole("status").filter({ hasText: `Published ${title} version 1.` })).toBeVisible();
+  await expect(page.getByRole("group", { name: "Form published", exact: true })).toHaveCount(0);
   const formRow = page.getByRole("row").filter({ hasText: formId });
   const formLink = formRow.getByRole("button", { name: title, exact: true });
   await expect(formLink).toBeVisible(); await formLink.press("Enter");
   await expect(page.getByRole("heading", { name: "Published version 1", exact: true })).toBeFocused();
+  await expect(page.getByRole("heading", { name: "Published version 1", exact: true })).toHaveCSS("outline-style", "none");
   await capture(page, info, "published-form");
   await page.getByRole("button", { name: "Back to forms", exact: true }).press("Enter");
   await expect(formLink).toBeFocused();

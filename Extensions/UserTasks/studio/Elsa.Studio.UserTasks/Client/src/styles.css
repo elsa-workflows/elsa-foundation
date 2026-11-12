@@ -57,3 +57,27 @@
 .user-task-form-fields dd { margin: .35rem 0 0; color: var(--studio-text-muted); }
 
 .user-task-form-editor { --studio-field-border-width: 0; --studio-field-padding: 0; }
+
+/* Focus moves to these headings so screen readers start in the right place; they are not controls. */
+.user-tasks :is(h1, h2)[tabindex="-1"]:focus { outline: none; }
+
+.user-task-version-value { display: block; min-height: var(--studio-control-height); padding-block: .45rem; font-weight: 600; color: var(--studio-text); }
+
+/* A completed or cancelled task's response is a record, not a form: no field chrome or resize handle. */
+.user-task-response[data-final] :is(input, textarea, select):disabled {
+  padding-inline: 0; border-color: transparent; background: transparent; color: var(--studio-text);
+  opacity: 1; resize: none; cursor: default; -webkit-text-fill-color: currentColor; appearance: none;
+}
+.user-task-response[data-final] textarea:disabled { field-sizing: content; min-height: 0; }
+
+/* At phone widths each row stacks into a labelled block, so every value and its action stay with the row's name. */
+@media (width <= 640px) {
+  .user-task-table, .user-task-forms-table { min-width: 0; }
+  .user-task-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .user-task-table :is(tbody, tr, td) { display: block; }
+  .user-task-table tbody tr { padding: var(--studio-space-3); }
+  .user-task-table td { height: auto; padding: var(--studio-space-1, .25rem) 0; }
+  .user-task-table td[data-label]:not(:first-child)::before { display: block; margin-bottom: .15rem; content: attr(data-label); color: var(--studio-text-muted); font-size: var(--studio-label-size); font-weight: 600; }
+  .user-task-table td[data-empty] { display: none; }
+  .user-task-table .user-task-link { min-width: 0; font-weight: 600; }
+}
