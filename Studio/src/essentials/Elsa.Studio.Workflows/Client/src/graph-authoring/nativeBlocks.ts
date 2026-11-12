@@ -228,6 +228,7 @@ export function planExtractNativeBlock(context: NativeBlockContext, request: Ext
   return guarded(() => {
     const scope = prepare(context);
     const selected = selection(scope.slot.activities, request.selectedNodeIds);
+    assertMemberReadsRemainInScope(context, selected);
     const { block, presentation } = newBlock(context, scope.kind, request, scope.identities);
     let ordered = scope.slot.activities.filter(x => selected.has(x.nodeId));
     const first = scope.slot.activities.findIndex(x => selected.has(x.nodeId));
@@ -262,6 +263,37 @@ export function planExtractNativeBlock(context: NativeBlockContext, request: Ext
     const layout = [...translateLayout(context.document.layout, selected, { x: -position.x, y: -position.y }), { nodeId: block.nodeId, ...position }];
     return ready(context, edited(context, withActivities(owner, children), layout, [...context.document.activityPresentation, presentation]), [block.nodeId]);
   });
+}
+
+function assertMemberReadsRemainInScope(context: NativeBlockContext, selected: Set<string>) {
+  const locations: { node: ActivityNode; moved: boolean }[] = [];
+  const visit = (node: ActivityNode, moved = false) => {
+    moved ||= selected.has(node.nodeId);
+    locations.push({ node, moved });
+    for (const slot of getChildSlots(node, context.catalog)) {
+      if (node.structure?.kind === compensationScopeStructureKind && slot.id === compensationStepsSlotId) continue;
+      slot.activities.forEach(child => visit(child, moved));
+    }
+  };
+  visit(context.document.rootActivity);
+  const movedIds = new Set(locations.filter(item => item.moved).map(item => item.node.nodeId));
+  const inspect = (value: unknown, path: string) => {
+    if (Array.isArray(value)) { value.forEach((item, index) => inspect(item, `${path}[${index}]`)); return; }
+    if (!record(value)) return;
+    if (typeof value.expressionType === "string") {
+      // This role names its producer by lineage, without a declaring scope. Moving it below
+      // a block cannot preserve a read from outside that block under the shared authority.
+      if (value.expressionType.toLowerCase() === "activityresultmember" && record(value.value)
+        && typeof value.value.producerNodeId === "string" && movedIds.has(value.value.producerNodeId))
+        refuse("member-result-scope-crossing", path, "This member read would cross the new block boundary. Include its consuming activity in the selection or keep the producer in its current scope.");
+      // Literal/object payloads are data. Other expression roles keep their own contracts;
+      // a nested object resembling a member binding is not itself an authored member read.
+      return;
+    }
+    Object.entries(value).forEach(([key, child]) => inspect(child, `${path}.${key}`));
+  };
+  locations.filter(item => !item.moved).forEach(({ node }) => inspect(node.inputs, `nodes.${node.nodeId}.inputs`));
+  inspect(context.referenceContext, "referenceContext");
 }
 
 function readConnections(owner: ActivityNode): Connection[] {

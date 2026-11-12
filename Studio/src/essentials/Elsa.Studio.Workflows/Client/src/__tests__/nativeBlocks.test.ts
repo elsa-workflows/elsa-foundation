@@ -54,6 +54,41 @@ function compensationContext(kind: "sequence" | "flowchart", withHandler = true,
 }
 
 describe("pure native block planning", () => {
+  it.each(["sequence", "flowchart"] as const)("refuses an outside member reader before extracting its %s producer", kind => {
+    const ctx = kind === "sequence" ? context() : flow();
+    const consumer = (payload(ctx).activities as ActivityNode[])[3];
+    consumer.inputs = [{ referenceKey: "CustomerId", value: { expressionType: "ActivityResultMember", value: { producerNodeId: "b", projectionKey: "$result", memberPath: ["customerId"] } } }];
+    const before = structuredClone(ctx);
+    const plan = extract(ctx);
+    refused(plan, "member-result-scope-crossing");
+    expect(plan).toMatchObject({ diagnostics: [{ path: "nodes.d.inputs[0].value" }] });
+    expect(applyNativeBlockPlan(ctx, plan)).toEqual(plan);
+    expect(ctx).toEqual(before);
+  });
+
+  it("keeps member readers with their producer and retains reads from an outside producer", () => {
+    const ctx = context();
+    const children = payload(ctx).activities as ActivityNode[];
+    const member = (producerNodeId: string) => ({ referenceKey: "CustomerId", value: { expressionType: "ActivityResultMember", value: { producerNodeId, projectionKey: "$result", memberPath: ["customerId"] } } });
+    children[1].inputs = [member("a")];
+    children[2].inputs = [member("b")];
+    const plan = accepted(extract(ctx));
+    expect((planPayload(plan).activities as ActivityNode[])[1].structure!.payload.activities).toEqual(children.slice(1, 3));
+    expect(accepted(planUngroupNativeBlock({ ...ctx, document: plan.document }, "new-block")).document.rootActivity).toEqual(ctx.document.rootActivity);
+  });
+
+  it("checks descendant producers and resource-owned member readers without treating literal objects as bindings", () => {
+    const nested = container("sequence", [node("producer")]); nested.nodeId = "b";
+    const ctx = context(container("sequence", [node("a"), nested, node("c")]));
+    const binding = { expressionType: "activityresultmember", value: { producerNodeId: "producer", projectionKey: "$result", memberPath: ["customerId"] } };
+    ctx.referenceContext = [{ outputMappings: [{ source: binding }] }];
+    const before = structuredClone(ctx);
+    refused(extract(ctx), "member-result-scope-crossing");
+    expect(ctx).toEqual(before);
+    ctx.referenceContext = [{ value: { expressionType: "Literal", value: binding } }];
+    accepted(extract(ctx));
+  });
+
   it("extracts authored Sequence order and preserves every child value and unrelated sidecar", () => {
     const ctx = context();
     const b = (payload(ctx).activities as ActivityNode[])[1];
