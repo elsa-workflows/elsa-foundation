@@ -60,8 +60,13 @@ export async function timelineSelectionJourney(page: Page, info: TestInfo, captu
     await expect(page.getByText("Resolving execution scope…", { exact: true })).toHaveCount(0);
     await expect(page.getByText("Loading visible execution evidence…", { exact: true })).toHaveCount(0);
     await expect(page.getByText("Loading recorded executions…", { exact: true })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Retry execution scope", exact: true })).toHaveCount(0);
+    await expect(page.getByText("Some visible execution evidence could not be loaded. Refresh to retry.", { exact: true })).toHaveCount(0);
     await capture(page, info, name);
   }
+  // Let the deep link establish its parent scope before navigating away from Activity.
+  await expect(page.locator(".wf-execution-scope > button")).toHaveCount(2);
+  await expect(page.getByText("Loading recorded executions…", { exact: true })).toHaveCount(0);
   await timelineTab.click();
   const entries = panel.getByRole("list", { name: "Execution timeline", exact: true }).getByRole("button");
   await expect(entries).toHaveCount(3);
