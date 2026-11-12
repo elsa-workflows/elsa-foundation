@@ -1,6 +1,8 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
+using System.Xml;
+using Elsa.Activities.Bpmn.Core;
 using Elsa.Activities.Bpmn.Activities;
 using Elsa.Activities.Bpmn.Design;
 using Elsa.Activities.Bpmn.Internal;
@@ -227,10 +229,11 @@ public sealed class BpmnDocumentStructureHandlerTests
     }
 
     [Theory]
-    [InlineData("<broken>")]
-    [InlineData("<definitions xmlns='urn:other'><process id='Process'/></definitions>")]
-    [InlineData("<!DOCTYPE definitions [<!ENTITY body 'expanded'>]><definitions xmlns='http://www.omg.org/spec/BPMN/20100524/MODEL'>&body;</definitions>")]
-    public void Malformed_or_entity_expanding_XML_refuses_before_lowering(string source) => AssertInvalid(payload => payload["documentXml"] = source);
+    [InlineData("<broken>", true)]
+    [InlineData("<definitions xmlns='urn:other'><process id='Process'/></definitions>", false)]
+    [InlineData("<!DOCTYPE definitions [<!ENTITY body 'expanded'>]><definitions xmlns='http://www.omg.org/spec/BPMN/20100524/MODEL'>&body;</definitions>", true)]
+    public void Malformed_or_entity_expanding_XML_refuses_before_lowering(string source, bool parserFailure) =>
+        AssertInvalid(payload => payload["documentXml"] = source, parserFailure ? typeof(XmlException) : null);
 
     [Theory]
     [InlineData("activities")]
@@ -281,7 +284,7 @@ public sealed class BpmnDocumentStructureHandlerTests
                 case "duplicate-variable": ((JsonArray)payload["variables"]!).Add(payload["variables"]![0]!.DeepClone()); break;
                 default: throw new ArgumentException(mutation);
             }
-        });
+        }, mutation == "unknown-native-member" ? typeof(JsonException) : null);
     }
 
     [Theory]
@@ -342,7 +345,7 @@ public sealed class BpmnDocumentStructureHandlerTests
         Assert.Throws<ArgumentException>(() => compiler.CompileRoot(root, new ActivityTreeProjector(structures).Project(root), rows));
     }
 
-    private void AssertInvalid(Action<JsonObject> mutate)
+    private void AssertInvalid(Action<JsonObject> mutate, Type? parserCause = null)
     {
         var source = Owner();
         var original = source.Structure!.Payload.GetRawText();
@@ -350,11 +353,21 @@ public sealed class BpmnDocumentStructureHandlerTests
         mutate(payload);
         var invalid = source with { Structure = new(BpmnProcess.StructureKind, BpmnAuthoredDocument.SchemaVersion, JsonSerializer.SerializeToElement(payload, Web)) };
         var invalidBefore = invalid.Structure.Payload.GetRawText();
-        Assert.Throws<InvalidOperationException>(() => _handler.ProjectChildren(invalid));
-        Assert.Throws<InvalidOperationException>(() => _handler.ReplaceChildren(invalid, []));
-        Assert.Throws<InvalidOperationException>(() => _handler.CompileExecutableStructure(invalid));
+        Refuses(() => _handler.ProjectChildren(invalid));
+        Refuses(() => _handler.ReplaceChildren(invalid, []));
+        Refuses(() => _handler.CompileExecutableStructure(invalid));
         Assert.Equal(original, source.Structure.Payload.GetRawText());
         Assert.Equal(invalidBefore, invalid.Structure.Payload.GetRawText());
+
+        void Refuses(Action action)
+        {
+            if (parserCause is null) { Assert.Throws<InvalidOperationException>(action); return; }
+            var exception = Assert.Throws<BpmnDocumentSourceException>(action);
+            Assert.IsAssignableFrom<InvalidOperationException>(exception);
+            Assert.Equal(parserCause, exception.InnerException?.GetType());
+            Assert.Contains(invalid.NodeId, exception.Message, StringComparison.Ordinal);
+            Assert.Contains("Process", exception.Message, StringComparison.Ordinal);
+        }
     }
 
     private static ActivityNode Owner()

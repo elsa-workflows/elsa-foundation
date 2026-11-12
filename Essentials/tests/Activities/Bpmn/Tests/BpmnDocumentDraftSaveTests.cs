@@ -3,6 +3,8 @@ using Elsa.Activities.Bpmn.Core;
 using Elsa.Activities.Bpmn.Design;
 using Elsa.Activities.Bpmn.Internal;
 using Elsa.Activities.Bpmn.Models;
+using Elsa.Activities.Sequence;
+using Elsa.Activities.Sequence.Models;
 using Elsa.Events;
 using Elsa.Events.Core.Contracts;
 using Elsa.Events.Core.Extensions;
@@ -91,6 +93,62 @@ public sealed class BpmnDocumentDraftSaveTests
         Assert.True(JsonElement.DeepEquals(native.Structure!.Payload, retained.Activities.Single().Structure!.Payload));
         Assert.True(JsonElement.DeepEquals(document.AdditionalProperties!["futureMetadata"], retained.AdditionalProperties!["futureMetadata"]));
         Assert.Contains("After", BpmnDocumentStructureHandler.Read(updatedEvent.Draft.State.RootActivity!).DocumentXml, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task No_op_save_keeps_independent_process_headers_and_native_descendant_presentation_but_prunes_deleted_ownership()
+    {
+        var services = new ServiceCollection();
+        new ActivitiesBpmnDesignFeature().ConfigureServices(services);
+        new ActivitiesSequenceFeature().ConfigureServices(services);
+        using var provider = services.BuildServiceProvider();
+        var structures = new DefaultActivityStructureService(provider.GetServices<IActivityStructureHandler>());
+        var serializer = SerializationServices.PayloadSerializer();
+        var accessor = new Accessor();
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        await using var db = new WorkflowsDesignSqliteDbContext(new DbContextOptionsBuilder<WorkflowsDesignSqliteDbContext>().UseSqlite(connection).Options);
+        await db.Database.EnsureCreatedAsync();
+        var writer = new EfDesignAtomicWriter(db, accessor);
+        const string otherProcess = "<b:process id='P2'><b:subProcess id='Scope'><b:task id='Hidden'/></b:subProcess></b:process>";
+        var xml = $"<b:definitions xmlns:b='{BpmnDocumentStructureHandler.ModelNamespace}'><b:process id='P1'><b:task id='Visible'/></b:process>" +
+            otherProcess + "</b:definitions>";
+        var visible = new ActivityNode("visible", "native@1", [], []);
+        var leaf = new ActivityNode("hidden-leaf", "native@1", [], []);
+        var sequence = new ActivityNode("hidden-sequence", "sequence@1", [], [], new("elsa.sequence.structure", "1.0.0",
+            JsonSerializer.SerializeToElement(new SequenceAuthoredStructure([leaf], []), BpmnDocumentStructureHandler.SerializerOptions)));
+        var document = new BpmnAuthoredDocument(xml, "P1", [visible, sequence], [new("Visible", visible.NodeId), new("Hidden", sequence.NodeId)], [])
+        { ScopeHeaders = [new("P2", "p2-header", "process@1", [], [], []), new("Scope", "scope-header", "process@1", [], [], [])] };
+        var owner = new ActivityNode("owner", "process@1", [], [], new(BpmnActivityIdentities.StructureKind, BpmnAuthoredDocument.SchemaVersion,
+            JsonSerializer.SerializeToElement(document, BpmnDocumentStructureHandler.SerializerOptions)));
+        Assert.Equal("visible", Assert.Single(structures.ProjectChildren(owner).Single().Activities).NodeId);
+        var state = new WorkflowDefinitionState([], owner, [], [], null);
+        var presentation = new[] { "owner", "visible", "p2-header", "scope-header", "hidden-sequence", "hidden-leaf", "ghost" }
+            .Select(id => new ActivityPresentationRecord(id, $"Name {id}", $"Description {id}")).ToArray();
+        var definition = new WorkflowDefinition { Id = "presentation-definition", Name = "Presentation retention" };
+        var draft = new WorkflowDefinitionDraft { Id = "presentation-draft", WorkflowDefinitionId = definition.Id, State = state };
+        await new EfAddWorkflowDefinitionCommand(db, accessor, writer, serializer, new Identities())
+            .Execute(new DesignOperationKey("presentation-seed"), definition, draft, [], presentation);
+        var command = new EfUpdateDraftCommand(db, accessor, writer, serializer, structures, new Locks());
+        await command.Execute(new DesignOperationKey("presentation-no-op"), new UpdateDraftRequest(draft.Id, state, [], presentation));
+        db.ChangeTracker.Clear();
+        var stored = await new EfWorkflowDefinitionDraftStore(db, serializer, accessor).FindWithLayoutByIdAsync(draft.Id);
+        Assert.Equal(presentation.Where(record => record.NodeId != "ghost").OrderBy(record => record.NodeId),
+            stored!.ActivityPresentation.OrderBy(record => record.NodeId));
+        Assert.Equal(xml, BpmnDocumentStructureHandler.Read(stored.Draft.State.RootActivity!).DocumentXml);
+
+        var removed = BpmnDocumentScopeProjection.Write(owner, document with
+        {
+            DocumentXml = xml.Replace(otherProcess, "", StringComparison.Ordinal), Activities = [visible],
+            Bindings = [new("Visible", visible.NodeId)], ScopeHeaders = []
+        });
+        await command.Execute(new DesignOperationKey("presentation-remove-process"),
+            new UpdateDraftRequest(draft.Id, state with { RootActivity = removed }, [], presentation));
+        db.ChangeTracker.Clear();
+        stored = await new EfWorkflowDefinitionDraftStore(db, serializer, accessor).FindWithLayoutByIdAsync(draft.Id);
+        Assert.Equal(presentation.Where(record => record.NodeId is "owner" or "visible").OrderBy(record => record.NodeId),
+            stored!.ActivityPresentation.OrderBy(record => record.NodeId));
+        Assert.Equal(xml, document.DocumentXml);
     }
 
     private sealed class Accessor : IPersistenceAccessContextAccessor

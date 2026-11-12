@@ -24,6 +24,14 @@ public sealed class DefaultActivityStructureService : IActivityStructureService
             : [];
     }
 
+    public ActivityOwnershipProjection ProjectOwnership(ActivityNode activity)
+    {
+        ArgumentNullException.ThrowIfNull(activity);
+        return TryGetHandler(activity.Structure, out var handler)
+            ? handler.ProjectOwnership(activity)
+            : new([], []);
+    }
+
     public IReadOnlyCollection<ActivityChildContractMemberUsage> ProjectChildContractMemberUsage(ActivityNode activity)
     {
         ArgumentNullException.ThrowIfNull(activity);
