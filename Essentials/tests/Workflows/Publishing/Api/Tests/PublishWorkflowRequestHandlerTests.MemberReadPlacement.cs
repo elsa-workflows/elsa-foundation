@@ -61,6 +61,37 @@ public sealed partial class PublishWorkflowRequestHandlerTests
         Assert.Equal(ValueConversionRejectionReason.SelectedMemberContractUnknown, refusal.ReasonCode);
     }
 
+    /// <summary>
+    /// A member read of a graph variable inside a reusable body is placed with the variable's scope moved to the
+    /// placed graph's scope, as a whole-value read of it is, and is published deferred with its segments.
+    /// </summary>
+    [Fact]
+    public async Task A_variable_member_read_in_a_placed_reusable_body_is_published_with_its_scope_remapped()
+    {
+        var read = new WorkflowArgumentState("Text", new ArgumentValue(JsonSerializer.SerializeToElement(new
+        {
+            referenceKey = "total", declaringScopeId = "activity-graph", memberPath = new[] { "customerId" }
+        }), "VariableMember"), null, null, null, null);
+        var whole = new WorkflowArgumentState("Text", new ArgumentValue(new Elsa.Expressions.Core.Models.VariableReference("total", "activity-graph"), "Variable"),
+            null, null, null, null);
+        object[] variables = [new { referenceKey = "total", name = "Total", type = new { alias = "String", collectionKind = "Single" }, storageDriverKey = "elsa.json" }];
+
+        var memberExecutable = await PublishPlacedBodyAsync(read, variables);
+        var wholeExecutable = await PublishPlacedBodyAsync(whole, variables);
+
+        RuntimeInputBinding Reader(WorkflowExecutable executable) => Assert.Single(executable.RootActivity.DescendantsAndSelf(),
+            node => node.InputBindings.TryGetValue("Text", out var text) && text.Variable is not null).InputBindings["Text"];
+        var member = Reader(memberExecutable);
+        var placedScope = Reader(wholeExecutable).Variable!.DeclaringScopeId;
+        Assert.Equal(RuntimeInputBindingSource.VariableMember, member.Source);
+        Assert.NotEqual("activity-graph", placedScope);
+        Assert.Equal(("total", placedScope), (member.Variable!.VariableKey, member.Variable.DeclaringScopeId));
+        Assert.Equal(["customerId"], member.Selection!.Segments);
+        Assert.Equal(RuntimeReadSelectionMode.DeferredFit, member.Selection.Mode);
+        Assert.Null(member.ConversionPlan);
+        Assert.Contains(new RuntimeRequirement(RuntimeReadSelection.RequirementKey, "1"), memberExecutable.RuntimeRequirements);
+    }
+
     private static WorkflowArgumentState BodyRead(AuthoredValueConversionRequest? conversion) =>
         new("Text", new ArgumentValue(JsonSerializer.SerializeToElement(new
         {
@@ -69,7 +100,7 @@ public sealed partial class PublishWorkflowRequestHandlerTests
 
     // Compiles a reusable activity whose body produces a customer and reads its typed customerId, places it in a
     // workflow and publishes that workflow, with member reads on in both analyses.
-    private async Task<WorkflowExecutable> PublishPlacedBodyAsync(WorkflowArgumentState read)
+    private async Task<WorkflowExecutable> PublishPlacedBodyAsync(WorkflowArgumentState read, object[]? bodyVariables = null)
     {
         var registry = TestWellKnownTypeRegistry.Create();
         registry.RegisterType(typeof(CustomerProducer), TypeAliasConvention.CanonicalAlias(typeof(CustomerProducer)));
@@ -94,7 +125,7 @@ public sealed partial class PublishWorkflowRequestHandlerTests
         var contract = new DesignContract("1", [], [], [new("done", "Done", true)]);
         var manifest = new ActivityProviderManifest(GraphActivityProvider.Key, "1", JsonSerializer.SerializeToElement(new
         {
-            rootActivity = body, variables = Array.Empty<object>(), outputMappings = Array.Empty<object>()
+            rootActivity = body, variables = bodyVariables ?? [], outputMappings = Array.Empty<object>()
         }, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
         var coordinator = new ActivityTemplateCompiler(new ActivityTemplateProviderCompilerRegistry([graph]),
             new ActivityTemplateDependencyDiscovererRegistry([graph]), publications, dependencyVersions, templates,

@@ -37,10 +37,10 @@ using SequenceActivity = Elsa.Activities.Sequence.Activities.Sequence;
 namespace Elsa.Activities.Behavioral;
 
 /// <summary>
-/// A member read of an activity result end to end: authored, admitted by the real data selection analysis, compiled
-/// by the real publication compiler, then run by the engine. The reader commits exactly the selected member, in a
-/// Sequence and in a top-level Flowchart, whether the analysis could type the member (pinned and planned) or not
-/// (checked at run time). With member reads off, nothing publishes one.
+/// A member read of an activity result or a variable end to end: authored, admitted by the real data selection
+/// analysis, compiled by the real publication compiler, then run by the engine. The reader commits exactly the selected
+/// member, in a Sequence and in a top-level Flowchart, whether the analysis could type the member (pinned and planned)
+/// or not (checked at run time; a variable member always is). With member reads off, nothing publishes one.
 /// </summary>
 public sealed class MemberReadPublicationRunTests
 {
@@ -85,6 +85,54 @@ public sealed class MemberReadPublicationRunTests
         var refusal = Assert.IsType<ActivityDataSelectionRejectedException>(error.InnerException);
         Assert.Contains(refusal.Findings, finding => finding.Path == "reader/inputs/Value" && finding.Type == "ActivityData/UnsupportedMemberBinding");
     }
+
+    [Theory]
+    [InlineData("sequence")]
+    [InlineData("flowchart")]
+    public async Task A_published_variable_member_read_commits_exactly_the_selected_member(string structure)
+    {
+        using var publication = new Publication(memberReads: true, typed: true);
+
+        var executable = await publication.Compile(Root(structure, VariableRead(["address", "street"])), [Customer()]);
+
+        var reader = Assert.Single(executable.RootActivity.DescendantsAndSelf(), node => node.AuthoredActivityId == "reader");
+        var binding = reader.InputBindings[nameof(MemberReader.Value)];
+        Assert.Equal(RuntimeInputBindingSource.VariableMember, binding.Source);
+        Assert.Equal(("customer", "workflow"), (binding.Variable!.VariableKey, binding.Variable.DeclaringScopeId));
+        Assert.Equal(["address", "street"], binding.Selection!.Segments);
+        Assert.Equal(RuntimeReadSelectionMode.DeferredFit, binding.Selection.Mode);
+        Assert.Null(binding.ConversionPlan);
+        Assert.Contains(new RuntimeRequirement(RuntimeReadSelection.RequirementKey, "1"), executable.RuntimeRequirements);
+
+        await using var harness = Harness();
+        var run = await harness.RunAsync(executable);
+
+        run.AssertWorkflowCompleted();
+        Assert.Equal("Main", run.AssertCompleted("reader").InputSnapshot!.Values[nameof(MemberReader.Value)].InlineValue!.Value.GetString());
+        Assert.Equal("Main", run.AssertCompleted("reader").Completion!.Result.InlineValue!.Value.GetProperty("value").GetString());
+    }
+
+    [Theory]
+    [InlineData("sequence")]
+    [InlineData("flowchart")]
+    public async Task With_member_reads_off_nothing_publishes_a_variable_member_read(string structure)
+    {
+        using var publication = new Publication(memberReads: false, typed: true);
+
+        var error = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(() =>
+            publication.Compile(Root(structure, VariableRead(["address", "street"])), [Customer()]).AsTask());
+
+        var refusal = Assert.IsType<ActivityDataSelectionRejectedException>(error.InnerException);
+        Assert.Contains(refusal.Findings, finding => finding.Path == "reader/inputs/Value" && finding.Type == "ActivityData/UnsupportedMemberBinding");
+    }
+
+    private static ArgumentState VariableRead(string[] path) => new(nameof(MemberReader.Value), new ArgumentValue(JsonSerializer.SerializeToElement(new
+    {
+        referenceKey = "customer", declaringScopeId = "workflow", memberPath = path
+    }), "VariableMember"), null, null, null, null);
+
+    private static VariableDefinition Customer() => new("customer", "Customer", new TypeReference("Object"), null,
+        new ArgumentValue(JsonSerializer.SerializeToElement(new { customerId = "c-1", address = new { street = "Main" } }), "Object"));
 
     private static ArgumentState Read(string[] path) => new(nameof(MemberReader.Value), new ArgumentValue(JsonSerializer.SerializeToElement(new
     {
@@ -159,9 +207,9 @@ public sealed class MemberReadPublicationRunTests
                 new ExecutableNodeCompiler(structures, registry, inputs, outputs));
         }
 
-        public ValueTask<WorkflowExecutable> Compile(ActivityNode root) => _compiler.CompileAsync(
+        public ValueTask<WorkflowExecutable> Compile(ActivityNode root, VariableDefinition[]? variables = null) => _compiler.CompileAsync(
             new("version", WorkflowExecutableReferenceScope.Published, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow, null, "artifact-")
-            { Source = new("definition", "version", "1.0.0", new([], root, [], [], null), "WorkflowDefinitionVersion", "version", "1.0.0") });
+            { Source = new("definition", "version", "1.0.0", new(variables ?? [], root, [], [], null), "WorkflowDefinitionVersion", "version", "1.0.0") });
 
         public void Dispose()
         {

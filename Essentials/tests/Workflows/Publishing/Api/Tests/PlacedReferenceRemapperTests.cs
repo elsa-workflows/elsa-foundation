@@ -121,12 +121,10 @@ public sealed class PlacedReferenceRemapperTests
     }
 
     /// <summary>
-    /// A request or variable member read would otherwise pass through unchanged and keep its template-local scope.
-    /// Until placement remaps those, the remapper refuses one rather than return it as it was.
+    /// A request member read is not remapped yet, so the remapper refuses one rather than return it as it was.
     /// </summary>
     [Theory]
     [InlineData(RuntimeInputBindingSource.WorkflowRequestMember)]
-    [InlineData(RuntimeInputBindingSource.VariableMember)]
     public void A_member_read_is_refused_rather_than_passed_through_unremapped(RuntimeInputBindingSource source)
     {
         var selection = new RuntimeReadSelection(1, ["id"], RuntimeReadSelectionMode.DeferredFit);
@@ -140,6 +138,35 @@ public sealed class PlacedReferenceRemapperTests
         var exception = Assert.Throws<NotSupportedException>(() => PlacedReferenceRemapper.Remap(NodeWith(binding), PlacedIds, GraphScope));
 
         Assert.Contains("publication does not compile member reads yet", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("box", "node-box")]
+    [InlineData("workflow", GraphScope)]
+    [InlineData("activity-graph", GraphScope)]
+    public void A_variable_member_read_moves_with_its_scope_and_keeps_its_selection(string scope, string placedScope)
+    {
+        var selection = new RuntimeReadSelection(1, ["address", "a.b", ""], RuntimeReadSelectionMode.DeferredFit);
+        var binding = new RuntimeInputBinding("value", new ValueTypeDescriptor("String"), ValueProtectionPolicy.InstanceInline,
+            RuntimeInputBindingSource.VariableMember, selection, variable: new RuntimeVariableReference("total", scope),
+            metadata: new Dictionary<string, string> { ["input.meta"] = "kept" });
+
+        var remapped = PlacedReferenceRemapper.Remap(NodeWith(binding), PlacedIds, GraphScope).InputBindings["value"];
+
+        Assert.Equal(RuntimeInputBindingSource.VariableMember, remapped.Source);
+        Assert.Equal(("total", placedScope), (remapped.Variable!.VariableKey, remapped.Variable.DeclaringScopeId));
+        Assert.Same(selection, remapped.Selection);
+        Assert.Equal("kept", remapped.Metadata["input.meta"]);
+    }
+
+    [Fact]
+    public void A_variable_member_read_of_a_scope_outside_the_placement_is_returned_unchanged()
+    {
+        var node = NodeWith(new RuntimeInputBinding("value", new ValueTypeDescriptor("Object"), ValueProtectionPolicy.InstanceInline,
+            RuntimeInputBindingSource.VariableMember, new RuntimeReadSelection(1, ["id"], RuntimeReadSelectionMode.DeferredFit),
+            variable: new RuntimeVariableReference("total", "elsewhere")));
+
+        Assert.Same(node, PlacedReferenceRemapper.Remap(node, PlacedIds, GraphScope));
     }
 
     [Fact]

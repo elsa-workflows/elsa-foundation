@@ -37,8 +37,7 @@ public sealed class RuntimeInputBindingCompiler(
     private const string WorkflowRequestExpressionType = "WorkflowRequest";
     private const string ActivityResultExpressionType = "ActivityResult";
     private const string ActivityResultMemberExpressionType = "ActivityResultMember";
-    private const int MaximumMemberSegments = 64;
-    private const int MaximumMemberPathLength = 4096;
+    private const string VariableMemberExpressionType = "VariableMember";
     private const string DefaultExpressionType = "Default";
     private const string ReferenceKeyMetadataKey = "referenceKey";
 
@@ -437,6 +436,9 @@ public sealed class RuntimeInputBindingCompiler(
         if (string.Equals(value.ExpressionType, ActivityResultMemberExpressionType, StringComparison.OrdinalIgnoreCase))
             return CompileActivityResultMemberInput(nodeId, inputDefinition, value, effectivePolicy, conversion);
 
+        if (string.Equals(value.ExpressionType, VariableMemberExpressionType, StringComparison.OrdinalIgnoreCase))
+            return CompileVariableMemberInput(nodeId, inputDefinition, value, effectivePolicy, conversion);
+
         // Studio's object editor serializes arrays and objects as JSON under the "Object" syntax. The value is
         // authored data, not an executable expression, so preserve it as a durable literal. This is particularly
         // important for publish-time trigger metadata such as HttpEndpoint.SupportedMethods, which must be known
@@ -693,9 +695,7 @@ public sealed class RuntimeInputBindingCompiler(
         if (string.IsNullOrWhiteSpace(producerNodeId) || string.IsNullOrWhiteSpace(projectionKey))
             throw Refusal(nodeId, inputDefinition, "ActivityData/InvalidSource",
                 "A member read of an activity result names its producer and projection only, and declares no scope.");
-        var segments = ReadMemberPath(payload)
-            ?? throw Refusal(nodeId, inputDefinition, "ActivityData/InvalidMemberPath",
-                $"A member path is a nonempty array of at most {MaximumMemberSegments} strings of at most {MaximumMemberPathLength} characters in total.");
+        var segments = ReadMemberPath(nodeId, inputDefinition, payload);
         var isOptional = payload.TryGetProperty("isOptional", out var optionalElement) && optionalElement.ValueKind == JsonValueKind.True;
 
         return new RuntimeInputBinding(
@@ -709,28 +709,52 @@ public sealed class RuntimeInputBindingCompiler(
             conversionRequest: AuthoredValueConversionMapper.ToRuntimeRequest(conversion));
     }
 
-    private static string[]? ReadMemberPath(JsonElement payload)
+    /// <summary>
+    /// Compiles a read of one member of a variable. Its declaring scope is explicit, unlike a whole-value read's. The
+    /// selection is always deferred: a variable can hold JSON from any writer, so its member is checked when it is read,
+    /// and with nothing known to convert from, only the default conversion can be honoured.
+    /// </summary>
+    private static RuntimeInputBinding CompileVariableMemberInput(
+        string nodeId,
+        InputDefinition inputDefinition,
+        ArgumentValue value,
+        ValueProtectionPolicy effectivePolicy,
+        AuthoredValueConversionRequest? conversion)
     {
-        if (!payload.TryGetProperty("memberPath", out var raw) || raw.ValueKind != JsonValueKind.Array)
-            return null;
-        var count = raw.GetArrayLength();
-        if (count is 0 or > MaximumMemberSegments)
-            return null;
-        var segments = new string[count];
-        var length = 0;
-        var index = 0;
-        foreach (var item in raw.EnumerateArray())
-        {
-            if (item.ValueKind != JsonValueKind.String)
-                return null;
-            segments[index++] = item.GetString()!;
-            length += segments[index - 1].Length;
-            if (length > MaximumMemberPathLength)
-                return null;
-        }
+        var payload = value.Value is JsonElement element ? element : default;
+        var variableKey = payload.ValueKind == JsonValueKind.Object ? ReadOptionalStringProperty(payload, "referenceKey") : null;
+        var scopeId = payload.ValueKind == JsonValueKind.Object ? ReadOptionalStringProperty(payload, "declaringScopeId") : null;
+        if (payload.ValueKind != JsonValueKind.Object || payload.TryGetProperty("path", out _) ||
+            string.IsNullOrWhiteSpace(variableKey) || string.IsNullOrWhiteSpace(scopeId))
+            throw Refusal(nodeId, inputDefinition, "ActivityData/InvalidSource",
+                "A member read of a variable names the variable and its declaring scope.");
+        var segments = ReadMemberPath(nodeId, inputDefinition, payload);
+        var targetType = ToValueTypeDescriptor(inputDefinition);
+        if (conversion is { Mode: not AuthoredValueConversionMode.Auto })
+            throw ValueConversionPublicationException.SourceContractUnavailable(
+                $"VF-COER-001: Variable member input '{inputDefinition.ReferenceKey}' on node '{nodeId}' requests a '{conversion.Mode}' conversion, " +
+                "but the selected member's contract is not known at publication.",
+                ValueConversionRejectionReason.SelectedMemberContractUnknown,
+                targetType,
+                AuthoredValueConversionMapper.Mode(conversion),
+                AuthoredValueConversionMapper.Profile(conversion),
+                InputBindingContext(nodeId, inputDefinition));
 
-        return segments;
+        return new RuntimeInputBinding(
+            inputDefinition.ReferenceKey,
+            targetType,
+            effectivePolicy,
+            RuntimeInputBindingSource.VariableMember,
+            new RuntimeReadSelection(RuntimeReadSelection.CurrentSchemaVersion, segments, RuntimeReadSelectionMode.DeferredFit),
+            variable: new RuntimeVariableReference(variableKey, scopeId),
+            metadata: BuildInputMetadata(inputDefinition));
     }
+
+    private static string[] ReadMemberPath(string nodeId, InputDefinition inputDefinition, JsonElement payload) =>
+        ActivityDataMemberPath.TryRead(payload, out var segments)
+            ? [.. segments]
+            : throw Refusal(nodeId, inputDefinition, "ActivityData/InvalidMemberPath",
+                $"A member path is a nonempty array of at most {ActivityDataMemberPath.MaximumSegments} strings of at most {ActivityDataMemberPath.MaximumLength} characters in total.");
 
     // A member path, or a legacy path anywhere but a workflow request, on a whole-value read would otherwise be dropped
     // and the whole value read instead; refuse it at the input, as the data selection analysis does.

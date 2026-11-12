@@ -74,12 +74,29 @@ internal static class PlacedReferenceRemapper
         IReadOnlyDictionary<string, string> placedNodeIds,
         string graphScopeId)
     {
-        // A request or variable member read would keep a template-local scope here; only result member reads are remapped.
-        if (binding.Selection is not null && binding.Source != RuntimeInputBindingSource.ActivityResultMember)
+        // A request member read is not remapped yet; result and variable member reads are.
+        if (binding.Selection is not null && binding.Source is not (RuntimeInputBindingSource.ActivityResultMember or RuntimeInputBindingSource.VariableMember))
             throw PublishedMemberReadDiagnostics.Unsupported(null, binding);
 
         switch (binding.Source)
         {
+            case RuntimeInputBindingSource.VariableMember when binding.Variable is { } memberVariable:
+            {
+                // The scope moves with the placement as a whole-value read's does; the selection is carried unchanged.
+                var scopeId = RemapScope(memberVariable.DeclaringScopeId, placedNodeIds, graphScopeId);
+                return StringComparer.Ordinal.Equals(scopeId, memberVariable.DeclaringScopeId)
+                    ? binding
+                    : new RuntimeInputBinding(
+                        binding.InputName,
+                        binding.TargetType,
+                        binding.EffectivePolicy,
+                        binding.Source,
+                        binding.Selection,
+                        variable: new RuntimeVariableReference(memberVariable.VariableKey, scopeId),
+                        metadata: binding.Metadata,
+                        conversionPlan: binding.ConversionPlan,
+                        conversionRequest: binding.ConversionRequest);
+            }
             case RuntimeInputBindingSource.ActivityResultMember when binding.ActivityResult is { } memberResult:
             {
                 // The producer moves with the placement; the selection is carried unchanged.

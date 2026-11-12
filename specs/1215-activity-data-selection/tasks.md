@@ -129,6 +129,19 @@ conversion refused), and real publish → run in a Sequence and a top-level Flow
 pinning reads inside a placed body (follow-up), a run of a placed body's member read, the other families (slice D),
 and Studio.
 
+#4078 slice D1 receipt (not task completion; checkboxes stay open): `VariableMember` publishes under the same
+`MemberReads` setting. T012, variable member reads: the authored parse (explicit `declaringScopeId` required; `path`
+refused; the one shared member-path reading, `ActivityDataMemberPath` in Validations Core, used by the analyzer and
+the binding compiler), analyzer offer and admission exactly as the whole `Variable` read (same
+`Variable/UnresolvableReference` code; owning restrictions that admit `Variable` admit it), and a compiler branch that
+emits a deferred selection and refuses an explicit conversion (`SelectedMemberContractUnknown`). T013, variable
+member reads: always deferred, no pin; the linker and the intrinsic source-plan step pass it through; placement
+remaps its scope as for `VariableRead`. Also: a result member read the whole-read rules refuse is no longer typed,
+so it reports one finding. T017, variable member reads: analyzer, compiler, linker, remapper and bounds rows, publish
+with the setting on and off, a reusable body's read placed with its scope remapped, a CLR-seeded variable read by its
+stored PascalCase name and absent by its camelCase name (`VF-SEL-001`), and real publish → run in a Sequence and a
+top-level Flowchart. Not done: a run of a placed body's variable member read, request and input member reads (D2).
+
 - [ ] T018 [P] [US1] Add the language-neutral source client in `Studio/src/essentials/Elsa.Studio.Workflows/Client/src/` using existing capability discovery; integrate exact acknowledged autosave/current-snapshot acquisition with `workflow-editor/useWorkflowPersistence.ts` and `ActivityDefinitionDraftEditor.tsx`, discard late identities and preserve manual/held edits (depends T008).
 - [ ] T019 [P] [US1] Repair structured whole/result/member preservation in `Studio/src/essentials/Elsa.Studio.Workflows/Client/src/activityInputWire.ts` and add canonical save/Code Apply/reopen controls in `__tests__/activityInputWire.test.ts`; preserve unknown unsupported source definitions without JSON stringification.
 - [ ] T020 [US1] Build the shared Choose data/browser/reference contribution in `Studio/src/essentials/Elsa.Studio.Workflows/Client/src/` with existing Studio controls, stable authorized identities, readable provenance/navigation/replace/clear and keyboard/cancel/focus behavior; capability-gate member authoring while allowing #3094's qualified whole-output slice (depends T018–T019).
