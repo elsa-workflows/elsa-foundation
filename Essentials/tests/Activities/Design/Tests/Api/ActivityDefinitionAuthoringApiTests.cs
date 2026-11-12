@@ -221,7 +221,7 @@ public sealed class ActivityDefinitionAuthoringApiTests
         using var document = System.Text.Json.JsonDocument.Parse(await host.GetOpenApiAsync());
         var requestProperties = document.RootElement.GetProperty("components")
             .GetProperty("schemas")
-            .GetProperty("CreateReusableActivityDraftRequest")
+            .GetProperty("CreateReusableActivityDraftBody")
             .GetProperty("properties");
         var schema = requestProperties.GetProperty("layout");
         var layoutTypes = schema.GetProperty("type").ValueKind == JsonValueKind.Array
@@ -238,8 +238,11 @@ public sealed class ActivityDefinitionAuthoringApiTests
             Assert.Contains("nodeId", itemProperties.EnumerateObject().Select(property => property.Name));
             Assert.Contains("data", itemProperties.EnumerateObject().Select(property => property.Name));
         }
+        var presentationSchema = requestProperties.GetProperty("activityPresentation");
+        Assert.Contains("array", presentationSchema.GetProperty("type").ToString(), StringComparison.Ordinal);
+        Assert.True(presentationSchema.TryGetProperty("items", out _));
         Assert.Equal(
-            new[] { "contract", "layout", "presentationLabel", "provider", "sourceVersionId" }.Order(StringComparer.Ordinal),
+            new[] { "activityPresentation", "contract", "layout", "presentationLabel", "provider", "sourceVersionId" }.Order(StringComparer.Ordinal),
             requestProperties.EnumerateObject().Select(property => property.Name).Order(StringComparer.Ordinal));
     }
 

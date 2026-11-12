@@ -1,5 +1,5 @@
 {
-  "description": "Spec 1193 slice D: the active-draft snapshot Studio's bridge discloses for one seeded draft (workflowExplainContext.test.tsx produces exactly this content), and the owning catalog's declared inputs for it. Elsa.Agent.Tests admits this content strictly against that catalog. The canary is the credential literal the draft holds in the browser; it appears nowhere here.",
+  "description": "Spec 1193 slice D: the active-draft snapshot Studio's bridge discloses for one seeded draft (workflowExplainContext.test.tsx produces exactly this content), and the owning catalog's declared inputs for it. Elsa.Weaver.Tests admits this content strictly against that catalog. The canary is the credential literal the draft holds in the browser; it appears nowhere here.",
   "canary": "CANARY-CREDENTIAL-2f7a9c",
   "admittedLength": 3349,
   "catalog": [

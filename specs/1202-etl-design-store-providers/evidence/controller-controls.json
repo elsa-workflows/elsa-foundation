@@ -1,0 +1,80 @@
+{
+  "baselineSource": "e4dde3cdfeddb2ccf6b072f502b68a17b67dc00d",
+  "candidateSources": {
+    "specs/1202-etl-design-store-providers/evidence/design_store_workbench_journey.py": "0ec99b45e8e094019b6f75b602314346d681bfb88c051bbc8252117a7997f000",
+    "specs/1202-etl-design-store-providers/evidence/test_design_store_workbench_journey.py": "4eb1e66bca4d6d9a9c21e54c3229f242af4a7c8a175c00425ee08e5fdc55dcdd"
+  },
+  "controls": {
+    "before": {
+      "executed": 11,
+      "passed": 1,
+      "failed": 10,
+      "logSha256": "88210cceacf53405a9b8e4582fce6237aa0ba90dbea676b96a54ab27ebab1171"
+    },
+    "after": {
+      "executed": 11,
+      "passed": 11,
+      "failed": 0,
+      "logSha256": "107c5c58a93f234b4eedbc7bbb493a73524fe2a57bbb091eeefd5b5404a89d38"
+    }
+  },
+  "limits": [
+    "Failure-path resource controls, not a new Workbench/database-engine journey.",
+    "Docker calls are controlled doubles; host controls launch and reap real owned Python child processes.",
+    "Fresh main reconciliation, actual host qualification and complete-PR review remain pending."
+  ],
+  "findings": [
+    "Database constructor failure leaked a successfully started owned container.",
+    "Host spawn/listen/readiness/login failure leaked process or log.",
+    "Catalog membership accepted duplicate/unexpected rows.",
+    "Content-root allocation failure occurred before the resource cleanup block."
+  ],
+  "corrections": [
+    "Constructor rollback preserves the original failure, annotating cleanup failures safely.",
+    "Host log starts before spawning and closes in finally; process is optional during partial initialization.",
+    "Exact sorted catalog equality.",
+    "Acquire database/content root within the cleanup block; database cleanup runs even if host cleanup fails."
+  ],
+  "followup": {
+    "parentSource": "1b6f07946710bcf5e35db2843904c5f60c494245",
+    "testSources": {
+      "specs/1202-etl-design-store-providers/evidence/design_store_workbench_journey.py": "aaee444a621d91c85011d70b4b37ba6ab23671fb502502630d85092b1917eb18",
+      "specs/1202-etl-design-store-providers/evidence/test_design_store_workbench_journey.py": "a1d88aa8ff1c249955fd6e716459a7fc67bb716ed0d43b05aad4f15f3f10c1af"
+    },
+    "failureErrorControl": {
+      "before": {
+        "executed": 12,
+        "passed": 11,
+        "errors": 1,
+        "logSha256": "535a4c1b8d86c1e77d8c15f8e24e8771c0f2199666ac078820622d9ad3e80ef8"
+      },
+      "after": {
+        "executed": 12,
+        "passed": 12,
+        "failed": 0,
+        "errors": 0,
+        "logSha256": "6084b874a4258c3fb3f96b54c3338739f7c443689cfd7f35262327e858ed5d80"
+      }
+    },
+    "change": "Unsuccessful SQL setup raises a safe error rather than exposing generated credential arguments through CalledProcessError; controlled placeholder is checked, no real credential is included in receipts."
+  },
+  "nativeCompletionControl": {
+    "before": {
+      "executed": 13,
+      "passed": 12,
+      "failed": 1,
+      "logSha256": "77d9b8149d18e9863eafc28fad3561d8a54001b5b98a74f36ecae1653e834567"
+    },
+    "after": {
+      "executed": 13,
+      "passed": 13,
+      "failed": 0,
+      "logSha256": "efbb8956ab708762706b73115389ded4c72525d106e5fe1f433e3224e440abfc"
+    },
+    "sources": {
+      "specs/1202-etl-design-store-providers/evidence/design_store_workbench_journey.py": "bb012be257b817c7d0fc2f47d2df909dc025222a4bf62ddf5a0b8cf3a1bc57c5",
+      "specs/1202-etl-design-store-providers/evidence/test_design_store_workbench_journey.py": "da17553eaf653dc3abb7bc97ccd86d9b32c6079250482bfcea3c85536183046d"
+    },
+    "change": "Require one downstream activity, retain native version/publication/source/workflow identifiers; actual engine refresh follows."
+  }
+}

@@ -48,6 +48,17 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="../../../../Extensions/Agent/src/OpenAI/Elsa.Agent.OpenAI.csproj" />
+    <ProjectReference Include="../../../../Extensions/Decisions/src/Core/Elsa.Decisions.Core.csproj" />
+    <ProjectReference Include="../../../../Extensions/Decisions/src/Elsa.Decisions/Elsa.Decisions.csproj" />
+    <ProjectReference Include="../../../../Extensions/Decisions/src/Design/Elsa.Decisions.Design.csproj" />
+    <ProjectReference Include="../../../../Extensions/Decisions/src/Api/Elsa.Decisions.Api.csproj" />
+    <ProjectReference Include="../../../../Extensions/Decisions/src/Persistence/Core/Elsa.Decisions.Persistence.Core.csproj" />
+    <ProjectReference Include="../../../../Extensions/Decisions/src/Persistence/EntityFrameworkCore/Elsa.Decisions.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="../../../../Extensions/Decisions/src/Workflows/Design/Elsa.Decisions.Workflows.Design.csproj" />
+    <ProjectReference Include="../../../../Extensions/Decisions/src/Workflows/Runtime/Elsa.Decisions.Workflows.Runtime.csproj" />
+    <ProjectReference Include="../../../../Extensions/Decisions/src/Workflows/Api/Elsa.Decisions.Workflows.Api.csproj" />
+    <ProjectReference Include="../../../../Extensions/Decisions/src/Tooling/Elsa.Decisions.Tooling.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="../../../../Extensions/Rules/src/Runtime/Elsa.Rules.Runtime.csproj" />
     <ProjectReference Include="../../../../Extensions/Rules/src/Workflows/Design/Elsa.Rules.Workflows.Design.csproj" />
     <ProjectReference Include="../../../../Extensions/Rules/src/Workflows/Runtime/Elsa.Rules.Workflows.Runtime.csproj" />
@@ -61,25 +72,29 @@
     <ProjectReference Include="../../../../Extensions/Etl/src/Workflows/Runtime/Elsa.Etl.Workflows.Runtime.csproj" />
     <ProjectReference Include="../../../../Extensions/Etl/src/Workflows/Design/Elsa.Etl.Workflows.Design.csproj" />
     <ProjectReference Include="../../../../Extensions/Etl/src/Persistence/EntityFrameworkCore/Elsa.Etl.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="../../../../Extensions/Etl/src/Sql/PostgreSql/Elsa.Etl.Sql.PostgreSql.csproj" />
+    <ProjectReference Include="../../../../Extensions/Etl/src/Sql/SqlServer/Elsa.Etl.Sql.SqlServer.csproj" />
+    <ProjectReference Include="../../../../Extensions/Etl/src/RabbitMq/Elsa.Etl.RabbitMq.csproj" />
+    <ProjectReference Include="../../../../Extensions/Etl/src/Tooling/Elsa.Etl.Tooling.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="..\..\..\src\Activities\Design\Api\Elsa.Activities.Design.Api.csproj" />
-    <ProjectReference Include="..\..\..\..\Extensions\Agent\src\Api\Elsa.Agent.Api.csproj" />
-    <ProjectReference Include="..\..\..\..\Extensions\Agent\src\Elsa.Agent\Elsa.Agent.csproj" />
+    <ProjectReference Include="..\..\..\..\Extensions\Weaver\src\Api\Elsa.Weaver.Api.csproj" />
+    <ProjectReference Include="..\..\..\..\Extensions\Weaver\src\Elsa.Weaver\Elsa.Weaver.csproj" />
+    <ProjectReference Include="..\..\..\..\Extensions\Weaver\src\Core\Elsa.Weaver.Core.csproj" />
     <ProjectReference Include="..\..\..\..\Extensions\Agent\src\Core\Elsa.Agent.Core.csproj" />
-    <ProjectReference Include="..\..\..\..\Extensions\Agent\src\Specialists\Core\Elsa.Agent.Specialists.Core.csproj" />
-    <ProjectReference Include="../../../../Extensions/Agent/src/Specialists/Connections/Elsa.Agent.Specialists.Connections.csproj" />
+    <ProjectReference Include="../../../../Extensions/Agent/src/Connections/Elsa.Agent.Connections.csproj" />
+    <ProjectReference Include="../../../../Extensions/Weaver/src/Persistence/EntityFrameworkCore/Elsa.Weaver.Persistence.EntityFrameworkCore.csproj" />
     <ProjectReference Include="../../../../Extensions/Agent/src/Persistence/EntityFrameworkCore/Elsa.Agent.Persistence.EntityFrameworkCore.csproj" />
-    <ProjectReference Include="../../../../Extensions/Agent/src/Specialists/Persistence/EntityFrameworkCore/Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.csproj" />
-    <ProjectReference Include="../../../../Extensions/Agent/src/Specialists/Anthropic/Elsa.Agent.Specialists.Anthropic.csproj" />
-    <ProjectReference Include="../../../../Extensions/Agent/src/Specialists/AzureOpenAI/Elsa.Agent.Specialists.AzureOpenAI.csproj" />
-    <ProjectReference Include="..\..\..\..\Extensions\Agent\src\Specialists\Design\Elsa.Agent.Specialists.Design.csproj" />
-    <ProjectReference Include="..\..\..\..\Extensions\Agent\src\Specialists\JsonSchema\Elsa.Agent.Specialists.JsonSchema.csproj" />
-    <ProjectReference Include="..\..\..\..\Extensions\Agent\src\Specialists\Elsa.Agent.Specialists\Elsa.Agent.Specialists.csproj" />
-    <ProjectReference Include="../../../../Extensions/Agent/src/Specialists/Review/Elsa.Agent.Specialists.Review/Elsa.Agent.Specialists.Review.csproj" />
-    <ProjectReference Include="../../../../Extensions/Agent/src/Specialists/Review/Api/Elsa.Agent.Specialists.Review.Api.csproj" />
-    <ProjectReference Include="../../../../Extensions/Agent/src/Specialists/Api/Elsa.Agent.Specialists.Api.csproj" />
-    <ProjectReference Include="../../../../Extensions/Agent/src/Specialists/Inspection/Api/Elsa.Agent.Specialists.Inspection.Api.csproj" />
-    <ProjectReference Include="..\..\..\..\Extensions\Agent\src\Workflows\Elsa.Agent.Workflows\Elsa.Agent.Workflows.csproj" />
-    <ProjectReference Include="..\..\..\..\Extensions\Agent\src\Workflows\Runtime\Elsa.Agent.Workflows.Runtime.csproj" />
+    <ProjectReference Include="../../../../Extensions/Agent/src/Anthropic/Elsa.Agent.Anthropic.csproj" />
+    <ProjectReference Include="../../../../Extensions/Agent/src/AzureOpenAI/Elsa.Agent.AzureOpenAI.csproj" />
+    <ProjectReference Include="..\..\..\..\Extensions\Agent\src\Design\Elsa.Agent.Design.csproj" />
+    <ProjectReference Include="..\..\..\..\Extensions\Agent\src\JsonSchema\Elsa.Agent.JsonSchema.csproj" />
+    <ProjectReference Include="..\..\..\..\Extensions\Agent\src\Elsa.Agent\Elsa.Agent.csproj" />
+    <ProjectReference Include="../../../../Extensions/Agent/src/Review/Elsa.Agent.Review/Elsa.Agent.Review.csproj" />
+    <ProjectReference Include="../../../../Extensions/Agent/src/Review/Api/Elsa.Agent.Review.Api.csproj" />
+    <ProjectReference Include="../../../../Extensions/Agent/src/Api/Elsa.Agent.Api.csproj" />
+    <ProjectReference Include="../../../../Extensions/Agent/src/Inspection/Api/Elsa.Agent.Inspection.Api.csproj" />
+    <ProjectReference Include="..\..\..\..\Extensions\Weaver\src\Workflows\Elsa.Weaver.Workflows\Elsa.Weaver.Workflows.csproj" />
+    <ProjectReference Include="..\..\..\..\Extensions\Weaver\src\Workflows\Runtime\Elsa.Weaver.Workflows.Runtime.csproj" />
     <ProjectReference Include="..\..\..\src\Activities\Bpmn\Elsa.Activities.Bpmn\Elsa.Activities.Bpmn.csproj" />
     <ProjectReference Include="..\..\..\src\Activities\Bpmn\Interchange\Elsa.Activities.Bpmn.Interchange.csproj" />
     <ProjectReference Include="..\..\..\src\Activities\Bpmn\Api\Elsa.Activities.Bpmn.Api.csproj" />
@@ -128,6 +143,7 @@
     <ProjectReference Include="..\..\..\src\Workflows\Dashboard\Elsa.Workflows.Dashboard\Elsa.Workflows.Dashboard.csproj" />
     <ProjectReference Include="..\..\..\..\Extensions\Elsa3\src\Activities\Design\Import\Elsa3.Activities.Design.Import\Elsa3.Activities.Design.Import.csproj" />
     <ProjectReference Include="..\..\..\..\Extensions\Elsa3\src\Activities\Design\Import\Publishing\Elsa3.Activities.Design.Import.Publishing.csproj" />
+    <ProjectReference Include="..\..\..\..\Extensions\Elsa3\src\Activities\Design\Import\Reconciliation\Elsa3.Activities.Design.Import.Reconciliation.csproj" />
     <ProjectReference Include="..\..\..\..\Extensions\Elsa3\src\Mapping\Elsa3.Mapping.csproj" />
     <ProjectReference Include="..\..\..\..\Extensions\Elsa3\src\Models\Elsa3.Models.csproj" />
     <!-- PinnedTransitivePackTests runs the maps generator's own pinned-transitive reader over a real fixture,
@@ -152,8 +168,8 @@
     <ProjectReference Include="..\..\..\src\Activities\Scheduling\Elsa.Activities.Scheduling.csproj" />
     <ProjectReference Include="..\..\..\src\Activities\Scripting\Elsa.Activities.Scripting.csproj" />
     <ProjectReference Include="..\..\..\src\Activities\Sequence\Elsa.Activities.Sequence.csproj" />
-    <ProjectReference Include="..\..\..\..\Extensions\Agent\src\Anthropic\Elsa.Agent.Anthropic.csproj" />
-    <ProjectReference Include="..\..\..\..\Extensions\Agent\src\GitHubCopilot\Elsa.Agent.GitHubCopilot.csproj" />
+    <ProjectReference Include="..\..\..\..\Extensions\Weaver\src\Anthropic\Elsa.Weaver.Anthropic.csproj" />
+    <ProjectReference Include="..\..\..\..\Extensions\Weaver\src\GitHubCopilot\Elsa.Weaver.GitHubCopilot.csproj" />
     <ProjectReference Include="..\..\..\src\Caching\Memory\Elsa.Caching.Memory.csproj" />
     <ProjectReference Include="..\..\..\src\Cluster\EntityFrameworkCore\Elsa.Cluster.EntityFrameworkCore.csproj" />
     <ProjectReference Include="..\..\..\src\Diagnostics\ConsoleLogStreaming\Elsa.Diagnostics.ConsoleLogStreaming.csproj" />

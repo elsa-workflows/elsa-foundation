@@ -44,6 +44,7 @@ public sealed class ExecutableActivityTemplate
         ClosedTemplates = Array.AsReadOnly(closedTemplates.ToArray());
         RuntimeRequirements = Array.AsReadOnly(runtimeRequirements
             .Concat(nodes.Select(node => new RuntimeRequirement(node.Descriptor.ConsumerKey, node.Descriptor.SchemaVersion)))
+            .Concat(RuntimeReadSelectionRequirement.For(nodes))
             .Distinct()
             .OrderBy(item => item.ConsumerKey, StringComparer.Ordinal)
             .ThenBy(item => item.SchemaVersion, StringComparer.Ordinal)
@@ -404,7 +405,10 @@ public sealed record ActivityExecutionLayout(
     string TemplateHash,
     IReadOnlyList<ExecutableActivityLayoutRecord> Nodes,
     IReadOnlyList<ActivityExecutionLayoutConnection> Connections,
-    IReadOnlyList<ActivityExecutionNestedBoundaryLayout> NestedBoundaries);
+    IReadOnlyList<ActivityExecutionNestedBoundaryLayout> NestedBoundaries)
+{
+    public IReadOnlyList<WorkflowExecutableActivityPresentationRecord> ActivityPresentation { get; init; } = [];
+}
 
 public enum ActivityExecutionLayoutSelection
 {

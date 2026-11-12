@@ -6,7 +6,7 @@ using Elsa.Workflows.Runtime.Api.Handlers.Alterations;
 using Elsa.Workflows.Runtime.Api.Models.Alterations;
 using Elsa.Workflows.Runtime.Api.Requests.Alterations;
 using Microsoft.AspNetCore.Http;
-using NativeEndpoints;
+using MinimalEndpoints;
 
 namespace Elsa.Workflows.Runtime.Api.Endpoints.AlterationPlans.Submit;
 

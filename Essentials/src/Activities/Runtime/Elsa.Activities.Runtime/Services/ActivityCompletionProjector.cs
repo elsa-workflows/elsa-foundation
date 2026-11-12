@@ -13,8 +13,6 @@ namespace Elsa.Activities.Runtime.Services;
 /// </summary>
 public sealed class ActivityCompletionProjector(IExternalPayloadStore? externalPayloadStore = null)
 {
-    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
-
     public ActivityCompletionProjection Project(
         string invocationId,
         ActivityAttempt attempt,
@@ -60,7 +58,7 @@ public sealed class ActivityCompletionProjector(IExternalPayloadStore? externalP
         if (!contract.Result.Policy.IsPersistable)
             return ProjectTransient(invocationId, attempt, contract, completion, completedAt);
 
-        var resultJson = JsonSerializer.SerializeToElement(completion.Result, completion.ResultType, SerializerOptions);
+        var resultJson = JsonSerializer.SerializeToElement(completion.Result, completion.ResultType, ActivityValueJson.Options);
         var resultPolicy = contract.Result.Projections.Values.Aggregate(
             contract.Result.Policy,
             (policy, projection) => ValuePolicyCombiner.Combine(

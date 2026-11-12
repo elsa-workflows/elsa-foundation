@@ -1,5 +1,5 @@
 using System.Text.Json;
-using Acme.Specialists.Runtime;
+using Acme.Agents.Runtime;
 using Elsa.Activities.Runtime;
 using Elsa.Activities.Runtime.Contracts;
 using Elsa.Workflows.Runtime.Api;
@@ -41,7 +41,7 @@ new ActivitiesPrimitivesFeature().ConfigureServices(services);
 #if BPMN
 new ActivitiesBpmnFeature().ConfigureServices(services);
 #endif
-services.AddSingleton<IActivityActivationStrategy>(new SpecialistActivationStrategy(client));
+services.AddSingleton<IActivityActivationStrategy>(new AgentActivationStrategy(client));
 services.AddPersistenceModeOptions(new PersistenceModeOptions { Mode = PersistenceMode.Durable });
 services.AddPersistenceModes();
 await using var provider = services.BuildServiceProvider();
@@ -66,9 +66,9 @@ var now = DateTimeOffset.UtcNow;
 var executable = new WorkflowExecutable(identity, root, new Dictionary<string, WorkflowExecutableResumeTarget>(), now,
     new Dictionary<string, string>(), IncidentStrategyBuiltIns.FaultReference, template.RuntimeRequirements, template.StorageDriverRequirements);
 await provider.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(executable);
-var executionId = mode + "-specialist-run";
+var executionId = mode + "-agent-run";
 var actor = await provider.GetRequiredService<IWorkflowExecutionActorProvider>().GetAgentAsync(new(
-    executionId, WorkflowExecutionActorActivationReason.Start, now, "specialist-research", WorkflowExecutionActorCapabilities.InProcessMailbox));
+    executionId, WorkflowExecutionActorActivationReason.Start, now, "agent-research", WorkflowExecutionActorCapabilities.InProcessMailbox));
 var payload = new WorkflowExecutionStartCommandPayload(identity, identity.ArtifactId);
 var metadata = new Dictionary<string, string> { ["runtime.artifactId"] = identity.ArtifactId };
 var command = new WorkflowExecutionCommand("start-native", executionId, WorkflowExecutionCommandKind.Start, now, JsonSerializer.SerializeToElement(payload), metadata);
@@ -80,9 +80,9 @@ if (mode == "invalid-output")
 {
     var activity = activities.Single();
     if (workflow?.Status != WorkflowExecutionStatus.Faulted || activity.Completion is not null
-        || activity.Fault?.Message != "specialist.output.invalid" || client.Calls != 1)
+        || activity.Fault?.Message != "agent.output.invalid" || client.Calls != 1)
         throw new InvalidOperationException("Wrong-cause invalid-output failure: " + JsonSerializer.Serialize(new { workflow, activities }));
-    throw new InvalidOperationException("EXPECTED_CONTROL:specialist.output.invalid:no-accepted-result");
+    throw new InvalidOperationException("EXPECTED_CONTROL:agent.output.invalid:no-accepted-result");
 }
 if (workflow?.Status != WorkflowExecutionStatus.Completed)
     throw new InvalidOperationException(JsonSerializer.Serialize(new { mode, dispatch, workflow, activities }));

@@ -495,6 +495,39 @@ namespace Elsa.Etl.Persistence.EntityFrameworkCore.Migrations.Sqlite.Runtime
                         });
                 });
 
+            modelBuilder.Entity("Elsa.Etl.Persistence.EntityFrameworkCore.Entities.EtlConnectorSourceWatermarkRecord", b =>
+                {
+                    b.Property<string>("ScopeKey")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CheckpointKey")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RunKey")
+                        .IsRequired()
+                        .HasMaxLength(1200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("UpdatedAtUtcTicks")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("Watermark")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("ScopeKey", "CheckpointKey");
+
+                    b.HasIndex("SchemaVersion");
+
+                    b.ToTable("elsa_etl_connector_source_watermarks", (string)null);
+                });
+
             modelBuilder.Entity("Elsa.Etl.Persistence.EntityFrameworkCore.Entities.EtlRuntimeManifestRecord", b =>
                 {
                     b.Property<string>("ScopeKey")

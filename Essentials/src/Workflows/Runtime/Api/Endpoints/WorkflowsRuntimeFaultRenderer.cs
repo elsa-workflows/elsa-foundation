@@ -8,7 +8,7 @@ using Elsa.Workflows.Runtime.Services.Alterations;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using NativeEndpoints;
+using MinimalEndpoints;
 using System.Globalization;
 
 namespace Elsa.Workflows.Runtime.Api.Endpoints;
@@ -121,6 +121,9 @@ internal sealed class WorkflowsRuntimeFaultRenderer : IEndpointFaultRenderer
                     return true;
                 case WorkflowExecutableReferenceRejectedException rejected when runtime.ExecutableArms:
                     await RuntimeProblemWriting.ProblemAsync(context, StatusCodes.Status409Conflict, rejected.Message);
+                    return true;
+                case WorkflowExecutableStartRejectedException { Category: WorkflowExecutableStartRejectionCategory.Input } refused when runtime.ExecutableArms:
+                    await RuntimeProblemWriting.ProblemAsync(context, StatusCodes.Status400BadRequest, refused.Message);
                     return true;
                 case WorkflowAlterationResourceNotFoundException when runtime.NotFoundArms:
                 case EntityNotFoundException when runtime.NotFoundArms:

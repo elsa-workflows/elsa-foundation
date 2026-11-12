@@ -26,7 +26,7 @@ def http(method, path, status, body, request=None):
 
 
 def sse(values, termination="client-closed"):
-    return {"origin": BACKEND, "method": "GET", "path": "/_elsa/agent/sessions/" + SESSION + "/stream", "status": 200, "termination": termination,
+    return {"origin": BACKEND, "method": "GET", "path": "/_elsa/weaver/sessions/" + SESSION + "/stream", "status": 200, "termination": termination,
             "errorType": None, "frames": [{"ordinal": index + 1, "value": dict(value, id=value.get("id", "event-" + str(index)))} for index, value in enumerate(values)]}
 
 
@@ -43,7 +43,7 @@ BUSY_RUN_ORDER = ("create", "command", "message", "initialStream", "busyReview",
 class Native:
     """Builds the retained shape of one Python lifecycle case; mutations change parts before writing.
 
-    Parts are written like AgentTransport receipts, ``NNNN-<name>.json`` in retention order; ``order`` maps the
+    Parts are written like WeaverTransport receipts, ``NNNN-<name>.json`` in retention order; ``order`` maps the
     default order to the written one, and a name it omits is not retained at all."""
     def __init__(self, root, key, provider, mutate=None, order=None):
         self.root, self.key, self.provider = Path(root), key, provider
@@ -59,7 +59,7 @@ class Native:
     def result(self, status=None):
         base = {"toolCallId": self.call, "toolName": WITNESS["sizeTool"], "content": "Synthetic outcome."}
         if status:
-            return {**base, "succeeded": False, "payload": {"typeId": "agent.operation-outcome", "schemaVersion": "1",
+            return {**base, "succeeded": False, "payload": {"typeId": "weaver.operation-outcome", "schemaVersion": "1",
                     "data": {"status": status, "invocationId": INVOCATION}}, "receipt": None}
         payload = {"typeId": WITNESS["sizeResultType"], "schemaVersion": "1", "data": {"size": "small", "revision": "rev-2"}}
         return {**base, "succeeded": True, "payload": payload, "receipt": {"scope": "serverPersisted", "invocationId": INVOCATION,
@@ -87,16 +87,16 @@ class Native:
 
     def session(self, messages, policy=None, user_status="completed"):
         user = {"id": "message-1", "role": "user", "status": user_status, "acceptedPolicyRevision": 1}
-        return http("GET", "/_elsa/agent/sessions/" + SESSION, 200, {"data": {"sessionId": SESSION, "policy": policy or CREATED,
+        return http("GET", "/_elsa/weaver/sessions/" + SESSION, 200, {"data": {"sessionId": SESSION, "policy": policy or CREATED,
                     "messages": [user, *[{"role": "tool", "status": "completed", "acceptedPolicyRevision": 1, "content": json.dumps(value)} for value in messages]]}})
 
     def build(self):
         k, parts = self.key, self.parts
-        proposal_path = lambda action: "/_elsa/agent/proposals/" + PROPOSAL + "/" + action
+        proposal_path = lambda action: "/_elsa/weaver/proposals/" + PROPOSAL + "/" + action
         parts.update(
-            create=http("POST", "/_elsa/agent/sessions", 200, {"data": {"sessionId": SESSION, "policy": CREATED}, "error": None}),
+            create=http("POST", "/_elsa/weaver/sessions", 200, {"data": {"sessionId": SESSION, "policy": CREATED}, "error": None}),
             command={"commandId": COMMAND, "toolName": WITNESS["sizeTool"], "arguments": {"size": "small"}},
-            message=http("POST", "/_elsa/agent/sessions/" + SESSION + "/messages", 200,
+            message=http("POST", "/_elsa/weaver/sessions/" + SESSION + "/messages", 200,
                          {"data": {"message": {"id": "message-1", "sessionId": SESSION, "role": "user", "requestId": "request-1",
                                                 "acceptedPolicy": copy.deepcopy(CREATED)}}},
                          {"requestId": "request-1", "requestedCapabilities": [WITNESS["sizeCapability"]]}),
@@ -109,7 +109,7 @@ class Native:
         if k == "cancel-before-effect":
             parts.update(initialStream=sse([{"kind": "started", "payload": {"turnId": TURN}}, {"kind": "contextAdmitted"},
                                             {"kind": "turnCancelled", "payload": {"turnId": TURN}}]),
-                         cancel=http("POST", "/_elsa/agent/sessions/" + SESSION + "/turns/" + TURN + "/cancel", 200, {"data": {"cancelled": True, "turnId": TURN}}),
+                         cancel=http("POST", "/_elsa/weaver/sessions/" + SESSION + "/turns/" + TURN + "/cancel", 200, {"data": {"cancelled": True, "turnId": TURN}}),
                          gate={"commandId": COMMAND, "epoch": "epoch-1", "state": "hold", "timeoutMilliseconds": 60000},
                          trace={"records": self.trace(None, cancel=True), "incompleteTailBytes": 0},
                          session=self.session([], user_status="cancelled"), ownerAfter=owner("rev-1", "medium"))
@@ -127,24 +127,24 @@ class Native:
             if k.startswith("denied"):
                 parts.update(deny=http("POST", proposal_path("deny"), 200, {"data": {"status": "denied"}}),
                              closedExecute=http("POST", proposal_path("execute"), 409, {"data": {"status": "denied", "executed": False},
-                                                                                       "error": {"code": "agent.proposal.closed"}}))
+                                                                                       "error": {"code": "weaver.proposal.closed"}}))
             elif k.startswith("stale"):
                 parts.update(approve=approve, independentEdit={"edited": True}, ownerBeforeExecution=owner("rev-9", "medium"),
                              execute=http("POST", proposal_path("execute"), 409, {"data": None, "error": {"code": "acme.home.stale"}}),
                              ownerAfter=owner("rev-9", "medium"))
             else:
                 parts.update(approve=approve, authorityBody={"directPermissions": [key for key in BASE_GRANTS if key != "studio/preferences:write"]},
-                             execute=http("POST", proposal_path("execute"), 403, {"data": None, "error": {"code": "agent.proposal.forbidden"}}),
+                             execute=http("POST", proposal_path("execute"), 403, {"data": None, "error": {"code": "weaver.proposal.forbidden"}}),
                              ownerWithheld=owner("rev-1", "medium"), restored={"restored": True})
         elif k == "duplicate-effect-delivery":
             ok = http("POST", proposal_path("execute"), 200, {"data": executed, "error": None})
             parts.update(approve=approve, execute=ok, repeatExecute=copy.deepcopy(ok), lateExecute=copy.deepcopy(ok),
                          ownerAfterExecute=owner("rev-2", "small"), ownerAfter=owner("rev-2", "small"),
-                         repeatDelivery=sse([{"kind": "contextAdmitted"}, {"kind": "error", "error": {"code": "agent.message.no_pending"}}]),
+                         repeatDelivery=sse([{"kind": "contextAdmitted"}, {"kind": "error", "error": {"code": "weaver.message.no_pending"}}]),
                          trace={"records": self.trace(self.result()), "incompleteTailBytes": 0}, session=self.session([self.result()]))
         else:
-            path, body = "/_elsa/agent/sessions/" + SESSION + "/autonomy", {"autonomyMode": "full-auto", "expectedRevision": 1}
-            busy = http("PUT", path, 409, {"data": None, "error": {"code": "agent.session.busy"}}, body)
+            path, body = "/_elsa/weaver/sessions/" + SESSION + "/autonomy", {"autonomyMode": "full-auto", "expectedRevision": 1}
+            busy = http("PUT", path, 409, {"data": None, "error": {"code": "weaver.session.busy"}}, body)
             acknowledged = {**CREATED, "autonomyMode": "full-auto", "revision": 2}
             for name in ("busyReview", "busyApproved", "busyContinuation"):
                 parts[name], parts[name + "Detail"] = copy.deepcopy(busy), self.session([])
@@ -214,13 +214,13 @@ class LifecycleVerifierTests(unittest.TestCase):
     def test_refusals_require_their_exact_cause_continuation_and_zero_effect(self):
         effect = lambda value: value.update(size="small", revision="rev-2")
         cases = [
-            ("denied-result-continuation", {"closedExecute": rewrite_http(lambda v: v["error"].update(code="agent.proposal.invalid_state"))}, "lifecycle.refusal_cause"),
+            ("denied-result-continuation", {"closedExecute": rewrite_http(lambda v: v["error"].update(code="weaver.proposal.invalid_state"))}, "lifecycle.refusal_cause"),
             ("denied-result-continuation", {"ownerAfter": effect}, "lifecycle.effect_observed"),
             ("denied-result-continuation", {"continuation": lambda r: r["frames"].pop()}, "lifecycle.continuation_missing"),
             ("denied-result-continuation", {"continuation": lambda r: r["frames"][0]["value"]["payload"].update(turnId="another-turn")}, "lifecycle.continuation_missing"),
-            ("stale-target-continuation", {"execute": rewrite_http(lambda v: v["error"].update(code="agent.proposal.approval_required"))}, "lifecycle.refusal_cause"),
+            ("stale-target-continuation", {"execute": rewrite_http(lambda v: v["error"].update(code="weaver.proposal.approval_required"))}, "lifecycle.refusal_cause"),
             ("stale-target-continuation", {"ownerBeforeExecution": lambda v: v.update(revision="rev-1")}, "lifecycle.refusal_cause"),
-            ("authority-refusal-continuation", {"authorityBody": lambda v: v.update(directPermissions=["agent:use"])}, "lifecycle.authority"),
+            ("authority-refusal-continuation", {"authorityBody": lambda v: v.update(directPermissions=["weaver:use"])}, "lifecycle.authority"),
             ("authority-refusal-continuation", {"execute": lambda r: r.update(status=409)}, "lifecycle.native_status"),
             ("authority-refusal-continuation", {"ownerWithheld": lambda v: v.update(size="small")}, "lifecycle.effect_observed"),
         ]
@@ -288,7 +288,7 @@ class LifecycleVerifierTests(unittest.TestCase):
 
     def test_busy_requires_three_real_refusals_then_one_acknowledged_settled_update(self):
         self.assertEqual("lifecycle.native_status", self.cause("busy-policy-lifecycle", {"busyApproved": lambda r: r.update(status=200)}))
-        self.assertEqual("lifecycle.busy_missing", self.cause("busy-policy-lifecycle", {"busyContinuation": rewrite_http(lambda v: v["error"].update(code="agent.session.policy_stale"))}))
+        self.assertEqual("lifecycle.busy_missing", self.cause("busy-policy-lifecycle", {"busyContinuation": rewrite_http(lambda v: v["error"].update(code="weaver.session.policy_stale"))}))
         self.assertEqual("lifecycle.busy_missing", self.cause("busy-policy-lifecycle", {"busyReview": lambda r: r.update(requestBody={"autonomyMode": "full-auto", "expectedRevision": 0})}))
         self.assertEqual("lifecycle.policy_relabelled", self.cause("busy-policy-lifecycle", {"busyReviewDetail": rewrite_http(lambda v: v["data"]["policy"].update(revision=2))}))
         self.assertEqual("lifecycle.busy_not_released", self.cause("busy-policy-lifecycle", {"settled": rewrite_http(lambda v: v["data"]["messages"][0].update(status="streaming"))}))
@@ -374,10 +374,10 @@ class BrowserLifecycleTests(unittest.TestCase):
                        {"kind": "toolApprovalRequested", "proposalId": proposal["id"]}]
         frames.append({"kind": "completed"})
         body = "".join("data: " + json.dumps(dict(value, id="event-" + str(index))) + "\n\n" for index, value in enumerate(frames))
-        files["agent-streams"] = [AutonomyEvidenceTests.stream(body)]
+        files["weaver-streams"] = [AutonomyEvidenceTests.stream(body)]
         files["autonomy-create-session"] = {"status": 200, "request": {"autonomyMode": mode or "manual"}, "response": {"data": {"sessionId": SESSION, "policy": policy}}}
         accepted = {"status": 200, "response": {"data": {"message": {"sessionId": SESSION, "acceptedPolicy": copy.deepcopy(policy)}}}}
-        base = BACKEND + "/_elsa/agent"
+        base = BACKEND + "/_elsa/weaver"
         create = {"url": base + "/sessions", "method": "POST", "body": {}}
         message = {"url": base + "/sessions/" + SESSION + "/messages", "method": "POST", "body": {}}
         action = lambda name, index=0: {"url": base + "/proposals/proposal-" + str(index) + "/" + name, "method": "POST", "body": {}}
@@ -392,7 +392,7 @@ class BrowserLifecycleTests(unittest.TestCase):
                           "owner-at-review": own({"visible": True, "revision": "rev-1"}), "owner-after-approval": own({"visible": True, "revision": "rev-1"}),
                           "owner-after": own({"visible": False, "revision": "rev-2"}),
                           "resource-execute": {"status": 200, "response": {"data": {"proposalId": "proposal-0", "executed": True, "status": "executed", "toolResult": result}}},
-                          "agent-requests": [create, message, message, action("approve"), action("execute")]})
+                          "weaver-requests": [create, message, message, action("approve"), action("execute")]})
             observation = {"status": "passed", "journey": "resource", "observations": {}}
         else:
             draft, saved = {"layout": [1]}, {"layout": [2]}
@@ -406,7 +406,7 @@ class BrowserLifecycleTests(unittest.TestCase):
                               "workflow-save-ack": {"status": 200, "response": {"data": {"executed": True, "toolResult": results[1]}}},
                               "owner-after-undo": own({"draft": draft}), "owner-after": own({"draft": saved}),
                               "owning-write-attempts": [{"method": "PUT"}], "explicit-save": {"status": 200}, "saved-draft-validations": own({"errors": []}),
-                              "publish-attempts": [], "agent-requests": [create, message, action("approve"), action("execute"), ack(),
+                              "publish-attempts": [], "weaver-requests": [create, message, action("approve"), action("execute"), ack(),
                                                                          message, action("approve", 1), action("execute", 1), ack()]})
                 observation = {"status": "passed", "journey": "workflow", "observations": {name: True for name in (
                     "workingStateChanged", "noImplicitSave", "wholeUndo", "validated", "explicitSaveReadback")}}
@@ -418,7 +418,7 @@ class BrowserLifecycleTests(unittest.TestCase):
                               "confirmation-retry": {"status": 200, "request": {"outcome": "applied"}, "response": envelope},
                               "lost-confirmation-uncertain-ui": {"status": "uncertain"}, "owner-after": own({"draft": draft}),
                               "browser-diagnostics": {"failedRequests": [{"url": ack()["url"], "errorText": "net::ERR_FAILED"}]},
-                              "agent-requests": [create, message, action("approve"), action("execute"), ack(), ack()]})
+                              "weaver-requests": [create, message, action("approve"), action("execute"), ack(), ack()]})
                 observation = {"status": "failed", "journey": "lost-confirmation", "expectedFailureObserved": True,
                                "actual": {"stage": "client-confirmation-delivery", "diagnostic": "net::ERR_FAILED"},
                                "observations": {name: True for name in ("responseLost", "uncertain", "sameAcknowledgement", "sameInvocation",
@@ -429,7 +429,7 @@ class BrowserLifecycleTests(unittest.TestCase):
         for name, value in files.items(): (output / (name + ".json")).write_text(json.dumps(value))
         observation.update(provider=provider, lifecycle={"caseKey": key, "sessionId": SESSION, "createdPolicy": policy},
                            ownerBefore=retained(output / "owner-before.json"), ownerAfter=retained(output / "owner-after.json"),
-                           evidence=[retained(output / "agent-requests.json")])
+                           evidence=[retained(output / "weaver-requests.json")])
         (output / "trace.json").write_text("{}"); (output / "adapter-correlation.json").write_text("{}")
         correlated = {"trace": retained(output / "trace.json"), "receipt": retained(output / "adapter-correlation.json")}
         return output, observation, correlated
@@ -459,9 +459,9 @@ class BrowserLifecycleTests(unittest.TestCase):
         self.assertEqual("lifecycle.review_bypassed", self.cause("visibility-review-control",
                          lambda f, o: f["owner-at-review"]["value"].update(visible=False)))
         self.assertEqual("lifecycle.native_requests", self.cause("visibility-review-control",
-                         lambda f, o: f["agent-requests"].append({"url": BACKEND + "/_elsa/agent/sessions/" + SESSION + "/autonomy", "method": "PUT"})))
+                         lambda f, o: f["weaver-requests"].append({"url": BACKEND + "/_elsa/weaver/sessions/" + SESSION + "/autonomy", "method": "PUT"})))
         self.assertEqual("lifecycle.duplicate_effect", self.cause("visibility-review-control",
-                         lambda f, o: f["agent-requests"].append(f["agent-requests"][-1])))
+                         lambda f, o: f["weaver-requests"].append(f["weaver-requests"][-1])))
         self.assertEqual("lifecycle.policy_relabelled", self.cause("workflow-review-control",
                          lambda f, o: f["lifecycle-session-after"]["value"]["data"]["policy"].update(revision=2)))
 
@@ -473,7 +473,7 @@ class BrowserLifecycleTests(unittest.TestCase):
                          lambda f, o: f["workflow-message"]["response"]["data"]["message"].update(allowedContextKinds=["*"])))
         private = 'data: {"id": "event-private", "kind": "messageDelta", "payload": {"maxContextSensitivity": "sensitive"}}\n\n'
         with self.assertRaisesRegex(RuntimeError, "autonomy.policy_disclosed: A native stream frame disclosed private policy"):
-            self.verify("interrupted-after-effect", change=lambda f, o: f["agent-streams"][0].update(rawBody=private + f["agent-streams"][0]["rawBody"]))
+            self.verify("interrupted-after-effect", change=lambda f, o: f["weaver-streams"][0].update(rawBody=private + f["weaver-streams"][0]["rawBody"]))
 
     def test_workflow_boundaries_and_publish_are_mandatory(self):
         for change in (lambda f, o: f.update({"publish-attempts": [{"method": "POST"}]}),
@@ -490,7 +490,7 @@ class BrowserLifecycleTests(unittest.TestCase):
                          lambda f, o: f["confirmation-retry"].update(request={"outcome": "uncertain"})))
         self.assertEqual("lifecycle.confirmation", self.cause("interrupted-after-effect", lambda f, o: f["browser-diagnostics"].update(failedRequests=[])))
         self.assertEqual("lifecycle.duplicate_effect", self.cause("interrupted-after-effect",
-                         lambda f, o: f["agent-requests"].insert(4, f["agent-requests"][3])))
+                         lambda f, o: f["weaver-requests"].insert(4, f["weaver-requests"][3])))
         self.assertEqual("lifecycle.stored_result", self.cause("interrupted-after-effect",
                          lambda f, o: f["lifecycle-session-after"]["value"]["data"].update(messages=[])))
 
@@ -535,7 +535,7 @@ class LifecycleManifestTests(unittest.TestCase):
             row = rows[lifecycle]
             if name == "omitted": rows.pop(lifecycle)
             elif name == "duplicate": rows[lifecycle - 1] = copy.deepcopy(row)
-            elif name == "wrong-cause": row["outcome"]["busyCode"] = "agent.session.policy_stale"
+            elif name == "wrong-cause": row["outcome"]["busyCode"] = "weaver.session.policy_stale"
             elif name == "wrong-adapter": row["adapter"] = "anthropic" if row["provider"] == "copilot" else "copilot"
             elif name == "no-owner": row["ownerAfter"] = None
             elif name == "no-correlation": row["correlation"].pop("proposalId")
@@ -557,7 +557,7 @@ class LifecycleManifestTests(unittest.TestCase):
     def test_single_record_gate_names_the_wrong_cause(self):
         row = next(item for item in self.rows() if item["caseKey"] == "stale-target-continuation")
         require_lifecycle_record(self.root, row)
-        row["outcome"]["execute"] = "agent.proposal.approval_required"
+        row["outcome"]["execute"] = "weaver.proposal.approval_required"
         with self.assertRaisesRegex(RuntimeError, "Wrong-cause"): require_lifecycle_record(self.root, row)
 
     def runtime(self):
@@ -637,7 +637,7 @@ class LifecycleManifestTests(unittest.TestCase):
         def failing(kind):
             rows = {row["id"]: row for row in complete_autonomy_rows(self.ref)}
             target = "anthropic-stale-target-continuation"
-            if kind == "wrong-cause": rows[target]["outcome"]["execute"] = "agent.proposal.approval_required"
+            if kind == "wrong-cause": rows[target]["outcome"]["execute"] = "weaver.proposal.approval_required"
             elif kind == "missing-evidence": rows[target]["evidence"] = []
             elif kind == "changed-evidence": rows[target]["evidence"] = [{**self.ref, "sha256": "0" * 64}]
             elif kind == "wrong-mode-outcome": rows["copilot-reviewed-size-control"]["outcomeAtDecision"] = "automatic"

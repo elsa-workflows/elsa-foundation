@@ -168,7 +168,7 @@ describe("Activity Graph Sequence host", () => {
     await vi.waitFor(() => expect(document.activeElement).toBe(cloneStep));
     click(cloneStep);
     confirmOnce();
-    click(button(rendered.container, "Delete Branch", "aria-label"));
+    click(button(rendered.container, "Delete Branch (copy)", "aria-label"));
     expect(sequenceActivities(rendered.value()).map(activity => activity.nodeId)).toEqual(["branch-source", "tail"]);
     expect(rendered.value().layout.map(record => record.nodeId)).not.toContain(clonedNested.nodeId);
 

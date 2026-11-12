@@ -42,7 +42,10 @@ This module does not expose replaceable service contracts in v1. Its activity-ow
   projects two slots per step from the authored structure, compiles the executable structure (the ordered steps with
   their forward and handler node ids) and remaps it through publishing. Its `ChildrenCompletedBefore` tells expression
   authoring which results are guaranteed: a step sees the steps before it, and a handler sees its own step first, then
-  the earlier steps, nearest first.
+  the earlier steps, nearest first. Its `AssessChildResult` adapts that order and states
+  `EarlierProducerRunCanReachConsumer = false` for every pair, a child with itself included. A forward step runs
+  once; a handler can run more than once when it is retried, but every attempt is scheduled from its own step's run,
+  and the producers a handler reads are forward steps, so no earlier run is behind a reader.
 - `CompensationScopeValidator` implements `IDraftValidator` (`Elsa.Workflows.Design.Validations.Core`). It reports a
   blank or duplicate step name and a step without a forward activity, with path `{scopeNodeId}/steps/{index}`. The
   compile-time guard in the structure handler and the runtime navigator are backstops.

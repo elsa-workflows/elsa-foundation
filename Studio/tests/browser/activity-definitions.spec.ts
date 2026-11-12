@@ -735,6 +735,50 @@ test("Activity Definition dependency explorer keeps exact snapshot pages, repeat
   expect(state.requestedUrls.some(url => url.includes("direction=inbound") && url.includes("transitive=true"))).toBe(true);
 });
 
+for (const theme of ["light", "dark"]) {
+  for (const width of [1440, 360]) {
+    test(`Activity member settings retain edits and align controls (${theme}, ${width})`, async ({ page }, info) => {
+      await mockActivityDefinitionAuthoring(page);
+      await page.setViewportSize({ width, height: 1000 });
+      await createBrowserActivity(page, theme);
+      await page.locator("details.ad-authoring-advanced, details.ad-technical-disclosure").first().locator("summary").click();
+      await page.getByRole("tab", { name: "Inputs (0)", exact: true }).click();
+      await page.getByRole("button", { name: "Add input", exact: true }).click();
+      await page.getByRole("textbox", { name: "Input name", exact: true }).fill("Topic");
+      await page.getByRole("button", { name: "Add input", exact: true }).last().click();
+      const member = page.locator("[data-contract-kind='input'][data-contract-selected='true']");
+      await member.getByRole("combobox", { name: "Default", exact: true }).selectOption("literal");
+      await member.getByRole("textbox", { name: "Value", exact: true }).fill("A pending topic");
+      await page.screenshot({ path: info.outputPath("general.png"), fullPage: true });
+      const general = member.getByRole("tab", { name: "General", exact: true });
+      await general.focus();
+      await general.press("ArrowRight");
+      await expect(member.getByRole("tab", { name: "Presentation", exact: true })).toBeFocused();
+      const displayName = member.getByRole("textbox", { name: /^Display name/ });
+      const category = member.getByRole("combobox", { name: /^Category/ });
+      await displayName.fill("Writing topic");
+      await category.fill("Writing");
+      const a = (await displayName.boundingBox())!, b = (await category.boundingBox())!;
+      expect(a.height).toBe(b.height);
+      if (width > 760) expect(Math.abs(a.y - b.y)).toBeLessThanOrEqual(1);
+      await page.screenshot({ path: info.outputPath("presentation.png"), fullPage: true });
+      await member.getByRole("tab", { name: "Advanced", exact: true }).click();
+      const key = member.getByRole("textbox", { name: "Stable reference key", exact: true });
+      await key.fill("writing-topic");
+      const apply = member.getByRole("button", { name: "Apply key", exact: true });
+      expect((await apply.boundingBox())!.x).toBeGreaterThan((await key.boundingBox())!.x);
+      await expect(member.getByRole("combobox", { name: "Durable storage driver", exact: true })).toBeVisible();
+      await apply.click();
+      await expect(apply).toBeDisabled();
+      await page.screenshot({ path: info.outputPath("advanced.png"), fullPage: true });
+      await general.click();
+      await expect(member.getByRole("textbox", { name: "Value", exact: true })).toHaveValue("A pending topic");
+      await member.getByRole("button", { name: "Apply default", exact: true }).click();
+      await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    });
+  }
+}
+
 test("Activity Definition create, graph autosave, reload, conflict preservation, and recovery", async ({ page }) => {
   const state = await mockActivityDefinitionAuthoring(page);
   await page.goto("/?mode=activity-definitions");
@@ -749,7 +793,7 @@ test("Activity Definition create, graph autosave, reload, conflict preservation,
 
   await expect(page).toHaveURL(/definition=activity-def-browser.*section=editor.*draft=activity-draft-browser/);
   await expectSavedRevision(page, 1);
-  await page.getByRole("tab", { name: "Inputs & outputs" }).click();
+  await page.getByRole("tab", { name: /^Inputs \(\d+\)$/ }).click();
   await page.getByRole("button", { name: "Add input", exact: true }).click();
   await page.getByRole("textbox", { name: "Input name", exact: true }).fill("Customer note");
   await page.getByRole("button", { name: "Add input", exact: true }).last().click();
@@ -761,6 +805,7 @@ test("Activity Definition create, graph autosave, reload, conflict preservation,
   await contractInput.getByText("Advanced", { exact: true }).click();
   await contractInput.getByRole("checkbox", { name: /Allow null/ }).check();
   await expectSavedRevision(page, 3);
+  await contractInput.getByRole("tab", { name: "General", exact: true }).click();
   await contractInput.getByRole("combobox", { name: /^Default/ }).selectOption("null");
   await contractInput.getByRole("button", { name: "Apply default" }).click();
   await expectSavedRevision(page, 4);
@@ -775,7 +820,7 @@ test("Activity Definition create, graph autosave, reload, conflict preservation,
 
   await page.reload();
   await expectSavedRevision(page, 6);
-  await page.getByRole("tab", { name: "Inputs & outputs" }).click();
+  await page.getByRole("tab", { name: /^Inputs \(\d+\)$/ }).click();
   await expect(page.getByRole("region", { name: "Customer note", exact: true }).getByRole("combobox", { name: /^Default/ })).toHaveValue("null");
   await page.getByRole("tab", { name: "Designer" }).click();
   await expect(page.locator(".wf-sequence-step").getByText("Write line", { exact: true })).toHaveCount(1);
@@ -807,7 +852,7 @@ test("Activity Definition provider contract proposals require review and apply a
   const state = await mockActivityDefinitionAuthoring(page);
   await createBrowserActivity(page);
 
-  await page.getByRole("tab", { name: "Inputs & outputs" }).click();
+  await page.getByRole("tab", { name: /^Inputs \(\d+\)$/ }).click();
   const suggestions = page.locator("details.ad-interface-suggestions");
   await expect(suggestions.getByText("Technical details", { exact: true })).toBeAttached();
   await expect(suggestions.getByText("Technical comparison", { exact: true })).toBeAttached();
@@ -849,7 +894,7 @@ test("Activity Definition validation distinguishes valid, invalid, unavailable, 
   const contractDiagnostic = page.getByRole("button", { name: "Focus activity.contract.outcome-required" });
   await contractDiagnostic.click();
   await expect(page.locator("[data-contract-field='referenceKey']").locator("..")).toBeFocused();
-  await expect(page.getByRole("tab", { name: "Inputs & outputs" })).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("tab", { name: /^Outcomes \(\d+\)$/ })).toHaveAttribute("aria-selected", "true");
   await page.getByRole("button", { name: "Return to diagnostic" }).click();
   await expect(contractDiagnostic).toBeFocused();
 
@@ -872,7 +917,7 @@ test("Activity Definition validation distinguishes valid, invalid, unavailable, 
 
   state.validationMode = "valid";
   await page.getByRole("button", { name: "Validate saved revision" }).click();
-  await page.locator(".ad-diagnostics-panel summary").click();
+  await page.locator(".ad-diagnostics-panel > details > summary").click();
   await expect(page.getByText("Valid draft")).toBeVisible();
   await expect(page.getByText(/Revision 1 passed validation/)).toBeVisible();
 
@@ -895,6 +940,7 @@ test("Activity Definition validation distinguishes valid, invalid, unavailable, 
   await page.getByRole("button", { name: "Validate saved revision" }).click();
   await expect(page.getByText(/backend rejected validation/)).toBeVisible();
   await expect(page.getByText(/server draft advanced to revision 2/i)).toBeVisible();
+  await page.getByText("About validation and Test Run", { exact: true }).click();
   await expect(page.getByText(/Runtime rejection is reported by the Test Run experience/)).toBeVisible();
 });
 
@@ -1051,7 +1097,7 @@ test("published recommendation is placed exactly, dispatched once, and inspected
   await expect(page.locator("[data-graph-root-location]")).toContainText("Sequence");
   state.validationMode = "valid";
   await page.getByRole("button", { name: "Validate saved revision" }).click();
-  await page.locator(".ad-diagnostics-panel summary").click();
+  await page.locator(".ad-diagnostics-panel > details > summary").click();
   await expect(page.getByText("Valid draft")).toBeVisible();
   await page.getByRole("button", { name: "Review & publish" }).click();
   await page.getByRole("textbox", { name: "Publication version" }).fill("2.0.0");
@@ -1296,13 +1342,13 @@ test("Activity Definition publication blocks invalid preflight and reopens stale
   state.preflightMode = "invalid";
 
   await page.getByRole("button", { name: "Review & publish" }).click();
-  await expect(page.getByText("Publication blocked")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Resolve these issues before publishing", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Publish 1.0.0" })).toBeDisabled();
   expect(state.publicationWrites).toBe(0);
 
   state.preflightMode = "valid";
   state.publishMode = "stale";
-  await page.getByRole("button", { name: "Refresh review" }).click();
+  await page.getByRole("button", { name: "Check again" }).click();
   await expect(page.locator(".ad-publication-summary").first().getByText("Ready to publish", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Publish 1.0.0" }).click();
   await expect(page.getByText("reopened preflight without publishing", { exact: false })).toBeVisible();
@@ -3146,3 +3192,19 @@ test("published state stays inside its column regardless of stylesheet order", a
   expect(noteBox.x + noteBox.width).toBeLessThan(updatedBox.x);
   expect((await row.boundingBox())!.height).toBeLessThanOrEqual(64);
 });
+
+for (const width of [320, 1440, 2552]) for (const theme of ["light", "dark"]) {
+  test(`Activity collection disclosure controls match adjacent controls at ${width}px ${theme}`, async ({ page }, testInfo) => {
+    await mockActivityDefinitions(page, route => route.fulfill({ json: pageOf([]) }));
+    await page.setViewportSize({ width, height: 1000 });
+    await page.goto(`/?mode=activity-definitions&theme=${theme}`);
+    await expect(page.getByRole("heading", { name: "No designed activities yet", exact: true })).toBeVisible();
+    const refresh = page.getByRole("button", { name: "Refresh", exact: true });
+    const tools = page.locator(".ad-tools-disclosure > summary");
+    const advanced = page.locator(".ad-advanced-filters > summary");
+    expect((await tools.boundingBox())!.height).toBe((await refresh.boundingBox())!.height);
+    expect((await advanced.boundingBox())!.height).toBe((await page.getByRole("searchbox", { name: "Search", exact: true }).locator("..").boundingBox())!.height);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.screenshot({ path: testInfo.outputPath("activity-collection.png"), fullPage: true });
+  });
+}

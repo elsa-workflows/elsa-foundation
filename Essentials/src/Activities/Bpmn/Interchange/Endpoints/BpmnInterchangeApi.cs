@@ -1,4 +1,5 @@
-using NativeEndpoints;
+using Elsa.Activities.Bpmn.Interchange.Models;
+using MinimalEndpoints;
 using Elsa.Workflows.Design.Core.Models;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
@@ -33,13 +34,16 @@ public static class BpmnInterchangeApi
     }
 }
 
-public sealed record AnalyzeBpmnDocumentRequest(string Xml, string? ProcessId = null);
+/// <param name="ConfirmedBindings">Element ids whose retained task binding the author confirmed; see <see cref="BpmnImportOptions.ConfirmedBindings"/>.</param>
+public sealed record AnalyzeBpmnDocumentRequest(string Xml, string? ProcessId = null, IReadOnlyList<string>? ConfirmedBindings = null);
 
-public sealed record ImportBpmnDocumentRequest(string Xml, string? ProcessId = null, string? NodeIdPrefix = null);
+/// <param name="ConfirmedBindings">Element ids whose retained task binding the author confirmed; see <see cref="BpmnImportOptions.ConfirmedBindings"/>.</param>
+public sealed record ImportBpmnDocumentRequest(string Xml, string? ProcessId = null, string? NodeIdPrefix = null, IReadOnlyList<string>? ConfirmedBindings = null);
 
 public sealed record ExportBpmnDocumentRequest(ActivityNode ProcessNode, string? ProcessId = null);
 
-public sealed record ExportBpmnDocumentResult(string Xml);
+/// <param name="Omissions">Every task binding the document does not carry, each with why.</param>
+public sealed record ExportBpmnDocumentResult(string Xml, IReadOnlyList<BpmnExportOmission>? Omissions = null);
 
 internal sealed record BpmnInterchangeError(
     Dictionary<string, string[]> Errors,

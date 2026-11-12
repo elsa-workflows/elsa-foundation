@@ -33,6 +33,8 @@ The domain separates those responsibilities while sharing durable infrastructure
 
 Each package has an actual consumer or deployment boundary. Add a separate connector package only when a real connector dependency or independently selectable implementation requires it. Add no generic foundation package, provider umbrella or placeholder implementation.
 
+**Extended by [spec 1202](../../specs/1202-etl-design-store-providers/spec.md) (2026-11-03):** the persistence package admits EF Core, `.Abstractions`, `.Analyzers` and `.Relational` only; provider engines stay host and test dependencies. For the design store's four-engine qualification, the nonpackable migration host under `Extensions/Etl/src/Tooling` admits the three server engines plus private `.Design`, and the provider suite under `Extensions/Etl/tests/Persistence/ProviderTests` admits the three server engines, following ADR 0088's Rules pattern, but without SQLite, whose ETL chains are hand-maintained. Both reach the internal contexts through same-domain friendship; the architecture guard ratchets these closures.
+
 ## Consequences and limits
 
 ETL state does not enter the workflow checkpoint's typed state-change participants. An ETL-owned enricher adds admission responsibility to the real bookmark-created checkpoint; an idempotent ETL admission transaction and ETL terminal outbox bridge the two stores. Cancellation records an idempotent tombstone even when it arrives before admission.

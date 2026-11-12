@@ -68,4 +68,7 @@ internal abstract class ForwardingEtlConnectorRuntimeStore(IEtlRuntimeStore runt
 
     public virtual ValueTask<EtlStoreStatus> ReleaseConnectorPartitionAsync(EtlConnectorPartitionLease lease, CancellationToken cancellationToken = default) =>
         Connector.ReleaseConnectorPartitionAsync(lease, cancellationToken);
+    public virtual ValueTask<long?> FindConnectorSourceWatermarkAsync(EtlScope scope, EtlConnectorSourceWatermarkKey key,
+        CancellationToken cancellationToken = default) =>
+        Connector.FindConnectorSourceWatermarkAsync(scope, key, cancellationToken);
 }

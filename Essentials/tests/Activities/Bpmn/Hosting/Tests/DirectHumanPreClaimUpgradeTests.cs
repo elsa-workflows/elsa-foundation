@@ -54,6 +54,7 @@ public sealed class DirectHumanPreClaimUpgradeTests
             Assert.True(JsonNode.DeepEquals(completed, await host.GetAsync(path)));
             await host.StopAsync();
             await AssertDirectOnlyAsync(host.RuntimeDatabase, artifacts);
+            await AssertActivityDesignStoresAsync(host, Path.Combine(input.FullName, "design.sqlite"));
         }
         finally
         {
@@ -91,6 +92,7 @@ public sealed class DirectHumanPreClaimUpgradeTests
             SameView(capture.TerminalView, await host.GetAsync(path));
             await host.StopAsync();
             await AssertDirectOnlyAsync(host.RuntimeDatabase, artifacts);
+            await AssertActivityDesignStoresAsync(host, Path.Combine(input.FullName, "design.sqlite"));
         }
         finally
         {
@@ -167,6 +169,36 @@ public sealed class DirectHumanPreClaimUpgradeTests
             await gzip.CopyToAsync(target);
         }
         return directory;
+    }
+
+    private static async Task AssertActivityDesignStoresAsync(OwnedWorkbench host, string capturedDatabase)
+    {
+        Assert.NotEqual(host.DesignDatabase, host.ActivityDesignDatabase);
+        foreach (var table in new[] { "elsa_activity_definition_draft_layouts", "elsa_activity_version_layouts" })
+        {
+            Assert.Contains("ActivityPresentation", await ColumnsAsync(host.ActivityDesignDatabase, table));
+            // No replacement of the captured authoring schema is smuggled into Runtime recovery.
+            Assert.Equal(await ColumnsAsync(capturedDatabase, table), await ColumnsAsync(host.DesignDatabase, table));
+        }
+        Assert.Equal(await ActivityHistoryAsync(capturedDatabase), await ActivityHistoryAsync(host.DesignDatabase));
+
+        static async Task<string[]> ColumnsAsync(string database, string table)
+        {
+            await using var connection = Read(database); await connection.OpenAsync();
+            await using var command = connection.CreateCommand(); command.CommandText = $"PRAGMA table_info(\"{table}\")";
+            await using var reader = await command.ExecuteReaderAsync(); var columns = new List<string>();
+            while (await reader.ReadAsync()) columns.Add(reader.GetString(1));
+            return columns.ToArray();
+        }
+        static async Task<string[]> ActivityHistoryAsync(string database)
+        {
+            await using var connection = Read(database); await connection.OpenAsync();
+            await using var command = connection.CreateCommand();
+            command.CommandText = "SELECT MigrationId, ProductVersion FROM __EFMigrationsHistory_ElsaActivitiesDesign ORDER BY MigrationId";
+            await using var reader = await command.ExecuteReaderAsync(); var rows = new List<string>();
+            while (await reader.ReadAsync()) rows.Add(reader.GetString(0) + "|" + reader.GetString(1));
+            return rows.ToArray();
+        }
     }
 
     private static async Task AssertDirectOnlyAsync(string database, SortedDictionary<string, string> artifacts)
