@@ -3,7 +3,7 @@ import type { WorkflowEditorDocumentAdapter } from "./WorkflowEditorDocumentAdap
 import { activityPaletteNotice, getActivityPaletteContext, isActivityOfferedInContext } from "../graph-authoring/activityPaletteContext";
 import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { Boxes, Code2, Download, History, LogIn, LogOut, ListTree, Variable, Package, PackageOpen, Play, Plus, SlidersHorizontal, Sparkles, Upload, Workflow as WorkflowIcon } from "lucide-react";
-import { authSessionEndedEvent, authSessionStartedEvent, expressionEditorSessionEndedEvent, useStudioThemeLayout, useStudioWorkspaceTitle, type StudioActivityPropertyEditorContribution, type StudioAgentRegistry, type StudioEndpointContext, type StudioExpressionEditorContribution, type StudioExpressionToolingClient, type StudioWorkflowDesignerPanelContribution, type StudioWorkflowRunInputEditorContribution, type StudioTestStimulusEditorContribution, type StudioWorkflowRunRelatedLinkContribution } from "@elsa-workflows/studio-sdk";
+import { authSessionEndedEvent, authSessionStartedEvent, expressionEditorSessionEndedEvent, useStudioThemeLayout, useStudioWorkspaceTitle, type StudioActivityPropertyEditorContribution, type StudioWeaverRegistry, type StudioEndpointContext, type StudioExpressionEditorContribution, type StudioExpressionToolingClient, type StudioWorkflowDesignerPanelContribution, type StudioWorkflowRunInputEditorContribution, type StudioTestStimulusEditorContribution, type StudioWorkflowRunRelatedLinkContribution } from "@elsa-workflows/studio-sdk";
 import type { ActivityCatalogItem, ActivityNode, WorkflowDraft } from "../workflowTypes";
 import {
   collectActivityNodeIds,
@@ -76,6 +76,11 @@ import { activateWorkflowCanvasNode } from "./workflowAccessibility";
 import { useDraftValidations } from "./useDraftValidations";
 import { useExecutableArtifactExport } from "./useExecutableArtifactExport";
 import { combineValidationErrors, detectStructuralValidationErrors } from "../draftValidation";
+import { useContributionDraftValidation } from "../useContributionDraftValidation";
+import {
+  collectContributionDraftValidation,
+  contributionDraftValidationCollectors
+} from "../contributionDraftValidation";
 import { createValidationActivityLabels, humanizeValidationErrors } from "../validationActivityLabels";
 import { WorkflowArtifactsPanel } from "./WorkflowExecutables";
 import { LazyWorkflowTestDrivePanel } from "./lazyTestDriveUi";
@@ -85,6 +90,7 @@ import { forgetRemovedNodes, useWorkflowDocument } from "./workflowDocument";
 import { useWorkflowCanvas } from "./useWorkflowCanvas";
 import { useWorkflowGraphOperationBatch } from "./useWorkflowGraphOperationBatch";
 import { useWorkflowPersistence } from "./useWorkflowPersistence";
+import { useWorkflowActivityDataSelection } from "./useWorkflowActivityDataSelection";
 import { useWorkflowEditorData } from "./useWorkflowEditorData";
 import { useDefinitionMetadata } from "./useDefinitionMetadata";
 import { DirectBpmnPublishAction } from "./DirectBpmnPublishAction";
@@ -138,7 +144,7 @@ const HttpTestRequestDialog = React.lazy(() =>
 
 export { PublicationReviewDialog } from "./PublicationReviewDialog";
 
-import type { WorkflowAgentController } from "../workflowAgent";
+import type { WorkflowWeaverController } from "../workflowWeaver";
 
 export function WorkflowEditor({
   context,
@@ -165,8 +171,8 @@ export function WorkflowEditor({
   onOpenBpmnProcesses?(): void;
   definitionId: string;
   documentAdapter?: WorkflowEditorDocumentAdapter;
-  ai: StudioAgentRegistry;
-  weaver?: WorkflowAgentController;
+  ai: StudioWeaverRegistry;
+  weaver?: WorkflowWeaverController;
   propertyEditors: StudioActivityPropertyEditorContribution[];
   expressionEditors: StudioExpressionEditorContribution[];
   runRelatedLinks?: StudioWorkflowRunRelatedLinkContribution[];
@@ -387,17 +393,31 @@ export function WorkflowEditor({
   const structuralValidationErrors = useMemo(
     () => detectStructuralValidationErrors(draft?.state, activityLabels),
     [activityLabels, draft?.state]);
+  const localDraftValidation = useContributionDraftValidation(
+    draft?.state.rootActivity,
+    propertyEditors,
+    expressionEditors,
+    catalogByVersion
+  );
   const combinedValidationErrors = useMemo(
     () => humanizeValidationErrors(combineValidationErrors({
       draftErrors: draft?.validationErrors,
       serverErrors: draftValidations.available ? draftValidations.errors : null,
-      structuralErrors: structuralValidationErrors
+      structuralErrors: structuralValidationErrors,
+      localErrors: localDraftValidation.errors
     }), activityLabels),
-    [activityLabels, draft?.validationErrors, draftValidations.available, draftValidations.errors, structuralValidationErrors]);
+    [activityLabels, draft?.validationErrors, draftValidations.available, draftValidations.errors, localDraftValidation.errors, structuralValidationErrors]);
+  const collectLocalValidation = useCallback(async (snapshot: WorkflowDraft) => {
+    return collectContributionDraftValidation(
+      snapshot.state.rootActivity,
+      contributionDraftValidationCollectors(propertyEditors, expressionEditors),
+      catalogByVersion
+    );
+  }, [catalogByVersion, expressionEditors, propertyEditors]);
   const findRisksAction = findAiAction(ai, "weaver.workflows.find-draft-risks");
   const proposeUpdateAction = findAiAction(ai, "weaver.workflows.propose-update");
   const explainVersionAction = findAiAction(ai, "weaver.workflows.explain-version");
-  const versionAgent = useMemo(() => ({ ai, controller: weaver, explainAction: explainVersionAction }), [ai, explainVersionAction, weaver]);
+  const versionWeaver = useMemo(() => ({ ai, controller: weaver, explainAction: explainVersionAction }), [ai, explainVersionAction, weaver]);
   const aiProviderAvailable = useAiProviderAvailability(ai);
 
   // The React Flow canvas mirror and every graph interaction (add/drag/connect/splice/delete/auto-layout)
@@ -602,7 +622,7 @@ export function WorkflowEditor({
 
   // Module-owned reviewed edits use the native document comparison/transaction seam.
   useWorkflowGraphOperationBatch({ draft: editableDraft, details, catalog, document: editorDoc, controller: weaver, holdForReview, reviewHeld, canEdit: editorDoc.canEdit, setStatus, setError, history: batchHistory,
-    resourceType: documentAdapter?.agentResource?.resourceType });
+    resourceType: documentAdapter?.weaverResource?.resourceType });
 
   useEffect(() => {
     if (!draft?.state.rootActivity || catalog.length === 0) return;
@@ -629,7 +649,7 @@ export function WorkflowEditor({
 
   // Mirror the live design onto window for Weaver's out-of-band tooling.
   useWorkflowContextBridge({ controller: weaver, clientId: ai.clientId, details, draft, selectedNode, selectedNodeId, selectedDescriptor, inspectedNode, inspectedDescriptor, inspectedIsScopeOwner, catalogByVersion, historical: editorDoc.pinned, validationErrors: combinedValidationErrors,
-    agentResource: documentAdapter?.agentResource });
+    weaverResource: documentAdapter?.weaverResource });
 
   // Memoized so contributed panels get a stable context identity and can bail out of re-renders
   // (React.memo / effect deps) while the editor re-renders for unrelated reasons.
@@ -703,7 +723,8 @@ export function WorkflowEditor({
     setError,
     setActiveRightPanelId,
     setInspectorCollapsed,
-    setAutosavePaused
+    setAutosavePaused,
+    collectLocalValidation
   });
 
   // Workflow declaration edits (variables/inputs/outputs) flow through here. Routing them through an in-place
@@ -1115,6 +1136,19 @@ export function WorkflowEditor({
     repairVariableReference(compensationValidationTarget(scope, path) ?? nodeId);
   }, [draft?.state.rootActivity, catalogByVersion, repairVariableReference]);
 
+  // Choose data on ordinary activity inputs of a server workflow draft. BPMN-owned canvases keep their own model
+  // contracts and are not offered it here.
+  const activityDataSelection = useWorkflowActivityDataSelection({
+    context,
+    enabled: !documentAdapter && !isBpmnDesigner,
+    draft,
+    persistedDraft,
+    saving,
+    catalogByVersion,
+    validationErrors: combinedValidationErrors,
+    revealActivity: repairVariableReference
+  });
+
   const togglePaletteCategory = (category: string) => {
     setExpandedPaletteCategories(current => {
       const next = new Set(current);
@@ -1318,6 +1352,7 @@ export function WorkflowEditor({
           descriptorStatus={descriptorStatus}
           onRetryExpressionDescriptors={() => { void reloadExpressionDescriptors(); }}
           scopedVariableAnalysis={scopedVariableAnalysis}
+          activityDataSelection={activityDataSelection}
           activeTabId={activeInspectorTabId}
           onActiveTabChange={setActiveInspectorTabId}
           onSelectedActivityChange={updateSelectedActivity}
@@ -1341,11 +1376,15 @@ export function WorkflowEditor({
       title: "Runtime",
       order: 5,
       icon: <Play size={15} />,
-      render: () => <WorkflowRuntimePanel testRun={testRun} context={context} observation={observation} currentDraftSignature={draft ? getDraftSignature(draft) : ""} stimulusEditors={testStimulusEditors} publishedEquivalent={publishedEquivalent} onOpenRun={openWorkflowRun} activityLabels={activityLabels} onRunViewUpdated={editorDoc.updateTestRunView} onWaitDraftUpdated={editorDoc.updateTestRunWaitDraft} executionControls={renderedTestRun ? <AttachedTestRunControls
-        canvas={{ ...runCanvas,
+      render: () => <WorkflowRuntimePanel testRun={testRun} context={context} observation={observation} currentDraftSignature={draft ? getDraftSignature(draft) : ""} stimulusEditors={testStimulusEditors} publishedEquivalent={publishedEquivalent} onOpenRun={openWorkflowRun} activityLabels={activityLabels} onRunViewUpdated={editorDoc.updateTestRunView} onWaitDraftUpdated={editorDoc.updateTestRunWaitDraft} executionControls={renderedTestRun ? <AttachedTestRunControls canvas={{ ...runCanvas,
           attach: () => { if (!runCanvas.stale || editorDoc.showSnapshot()) { runCanvas.attach(); setInspectorView("run-data"); } },
-          detach: () => { editorDoc.returnToEditing(); runCanvas.detach(); } }}
-      /> : null} />
+          detach: () => { editorDoc.returnToEditing(); runCanvas.detach(); } }} /> : restoration.receipt ? <div className="wf-attached-test-run" role="group" aria-label="Previous Test Run">
+          <span>Restore the previous Test Run after verifying the saved design and current access.</span>
+          <button type="button" disabled={restoration.pending} onClick={() => void restoration.restore()}>{restoration.pending ? "Verifying Test Run…" : "Restore Test Run"}</button>
+          {restoration.receipt.workflowExecutionId ? <button type="button" onClick={() => openWorkflowRun(restoration.receipt!.workflowExecutionId!)}>Open run</button> : null}
+          <button type="button" onClick={restoration.dismiss}>Dismiss</button>
+          {restoration.message ? <span role="status">{restoration.message}</span> : null}
+        </div> : null} />
     },
     {
       id: "test-drive",
@@ -1427,13 +1466,7 @@ export function WorkflowEditor({
         onRun={() => { if (operations?.testRuns.state !== "unavailable") void run(); }}
         canRun={canRunTest}
         runTitle={operations?.testRuns.state === "unavailable" ? operations.testRuns.reason ?? "Test runs are unavailable on this backend." : draft.state.rootActivity ? "Run a transient test of the current design" : "Add a root activity before running"}
-        runStatus={!renderedTestRun && restoration.receipt ? <div className="wf-attached-test-run" role="group" aria-label="Previous Test Run">
-          <span>Restore the previous Test Run after verifying the saved design and current access.</span>
-          <button type="button" disabled={restoration.pending} onClick={() => void restoration.restore()}>{restoration.pending ? "Verifying Test Run…" : "Restore Test Run"}</button>
-          {restoration.receipt.workflowExecutionId ? <button type="button" onClick={() => openWorkflowRun(restoration.receipt!.workflowExecutionId!)}>Open run</button> : null}
-          <button type="button" onClick={restoration.dismiss}>Dismiss</button>
-          {restoration.message ? <span role="status">{restoration.message}</span> : null}
-        </div> : null}
+
         moreActions={documentAdapter ? [{ label: "Document", actions: [{ label: "Save a copy", icon: <Boxes size={15} />, onSelect: () => setSaveTemplateOpen(true) }, { label: "Export JSON", icon: <Download size={15} />, onSelect: exportJson }] }] : [
           ...(templatesAvailable ? [{ label: "Templates", actions: [{ label: "Save as template", icon: <Boxes size={15} />, disabled: busy, onSelect: () => setSaveTemplateOpen(true) }] }] : []),
           {
@@ -1610,7 +1643,7 @@ export function WorkflowEditor({
             <div className="wf-properties-view">
               <section className="wf-properties-section">
                 <h3>Versions</h3>
-                <WorkflowVersionHistory definitionId={details.definition.id} versions={details.versions ?? []} agent={documentAdapter ? undefined : versionAgent} />
+                <WorkflowVersionHistory definitionId={details.definition.id} versions={details.versions ?? []} weaver={documentAdapter ? undefined : versionWeaver} />
               </section>
             </div>
           ) : canvasView !== "designer" ? (
@@ -1769,6 +1802,7 @@ export function WorkflowEditor({
             onSelectNode={goToValidationNode}
             onSetAsStartNode={isFlowchartScope ? setStartNode : undefined}
             unavailable={draftValidations.available === false}
+            pending={localDraftValidation.pending && combinedValidationErrors.length === 0}
           />
           </>
           )}
@@ -1777,6 +1811,7 @@ export function WorkflowEditor({
           ariaLabel: "Inspector panel",
           tabLabel: "Inspector panel tabs",
           tabs: rightPanelTabs,
+          keepMountedTabIds: runCanvas.attached ? ["inspector", "runtime"] : [],
           activeTabId: activeRightPanel.id,
           onSelect: setActiveRightPanelId
         }}

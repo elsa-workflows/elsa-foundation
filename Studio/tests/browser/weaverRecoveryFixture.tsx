@@ -1,21 +1,21 @@
 import React, { useState } from "react";
 import { createRoot } from "react-dom/client";
-import { createEndpointContext, StudioHttpError, type StudioAgentPreparedInvocation, type StudioBackendSession, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import { createEndpointContext, StudioHttpError, type StudioWeaverPreparedInvocation, type StudioBackendSession, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { createStudioRegistry } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/registry";
-import { createAgentClient } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/agent/agentClient";
-import type { subscribeAgentSessionStream } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/agent/agentStream";
-import type { AgentStreamEvent } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/agent/agentTypes";
+import { createWeaverClient } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/weaver/weaverClient";
+import type { subscribeWeaverSessionStream } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/weaver/weaverStream";
+import type { WeaverStreamEvent } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/weaver/weaverTypes";
 import { WeaverSurface } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/weaver";
 import { ThemeProvider } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/components/ThemeProvider";
 import "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/styles.css";
-import "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/agent/agent.css";
+import "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/weaver/weaverControls.css";
 import "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/weaver/weaver.css";
 
-// A durable fake Agent backend (#3441 T022). State lives in localStorage, so a reload behaves like a server that kept
+// A durable fake Weaver backend (#3441 T022). State lives in localStorage, so a reload behaves like a server that kept
 // running and a second tab in the same browser context sees the same server. Requests go through the real Studio
-// agent client; only the transport and the turn stream are simulated.
+// Weaver client; only the transport and the turn stream are simulated.
 type Message = { id: string; role: string; content: string; status: string; statusReason?: string };
-type Proposal = { id: string; title: string; summary: string; risk: string; status: string; baseRevision: string; resourceTarget: unknown; preparedInvocation?: StudioAgentPreparedInvocation; ownerResolution?: { claim: string; actorId: string }; result?: unknown };
+type Proposal = { id: string; title: string; summary: string; risk: string; status: string; baseRevision: string; resourceTarget: unknown; preparedInvocation?: StudioWeaverPreparedInvocation; ownerResolution?: { claim: string; actorId: string }; result?: unknown };
 type Session = { id: string; owner: string; workspace?: string; continuedFrom?: string; title: string; status: string; updatedAt: string; messages: Message[]; proposals: Proposal[]; paused?: boolean };
 type Store = { next: number; sessions: Session[]; log: string[] };
 
@@ -38,9 +38,9 @@ const backendSession = {
   refreshCapabilities: async () => { throw new Error("unused"); }
 } as unknown as StudioBackendSession;
 const api = createStudioRegistry({ hostVersion: "1.0.0", sdkVersion: "1.0.0", ...createEndpointContext(window.location.origin + "/") }, { backendBaseUrl: "https://fixture.example/", backendSession });
-api.agent.capabilities.add({ id: "weaver.fixture", displayName: "Fixture", description: "Fixture capability.", kind: "answer", risk: "read-only", surfaces: ["*"] });
+api.weaver.capabilities.add({ id: "weaver.fixture", displayName: "Fixture", description: "Fixture capability.", kind: "answer", risk: "read-only", surfaces: ["*"] });
 let releaseDelivery: (() => void) | null = null;
-api.agent.toolContracts.add({
+api.weaver.toolContracts.add({
   id: "sample_change", slotId: "sample", moduleId: "Sample", displayName: "Move sample", description: "Move the sample in the open editor.", surfaces: ["*"],
   inputSchema: {}, resourceTargetSchema: {}, resultSchema: {}, risk: "review-required", invocationModes: ["proposal"], contractVersion: "1", executionLocation: "clientWorkingState",
   clientTargetAvailability: () => params.get("target") === "gone" ? { status: "unavailable", reason: "The sample editor that held this unsaved change is closed." } : { status: "available" },
@@ -53,7 +53,7 @@ function refuse(status: number, code: string, message: string): never {
 
 function owned(store: Store, id: string) {
   const session = store.sessions.find(item => item.id === id);
-  if (!session || session.owner !== user) refuse(404, "agent.session.not_found", `Agent session '${id}' was not found.`);
+  if (!session || session.owner !== user) refuse(404, "weaver.session.not_found", `Weaver session '${id}' was not found.`);
   return session;
 }
 
@@ -62,7 +62,7 @@ function proposalOf(store: Store, proposalId: string) {
     const proposal = session.proposals.find(item => item.id === proposalId);
     if (proposal && session.owner === user) return { session, proposal };
   }
-  return refuse(404, "agent.proposal.not_found", "Not found.");
+  return refuse(404, "weaver.proposal.not_found", "Not found.");
 }
 
 function details(session: Session) {
@@ -72,7 +72,7 @@ function details(session: Session) {
 function route(method: string, path: string, body: Record<string, unknown> = {}): unknown {
   const store = read();
   const url = new URL(path, "https://fixture.example/");
-  const parts = url.pathname.split("/").filter(Boolean).slice(2); // after _elsa/agent
+  const parts = url.pathname.split("/").filter(Boolean).slice(2); // after _elsa/weaver
   const done = <T,>(value: T) => { write(store); return { data: value }; };
   if (method === "GET" && parts[0] === "bootstrap") {
     return { data: { enabled: true, providerStatus: "available", modes: ["explain"], capabilities: [{ id: "weaver.fixture", displayName: "Fixture", description: "", kind: "answer", risk: "readOnly", surfaces: ["*"] }],
@@ -96,23 +96,23 @@ function route(method: string, path: string, body: Record<string, unknown> = {})
     if (rest.length === 0) return { data: details(session) };
     if (rest[0] === "proposals") return { data: session.proposals };
     if (rest[0] === "messages" && rest.length === 1) {
-      if (session.messages.some(item => item.role === "user" && (item.status === "pending" || item.status === "streaming"))) refuse(409, "agent.message.delivery_conflict", "Another prompt is pending.");
+      if (session.messages.some(item => item.role === "user" && (item.status === "pending" || item.status === "streaming"))) refuse(409, "weaver.message.delivery_conflict", "Another prompt is pending.");
       const message = { id: `msg_${store.next}_${session.messages.length + 1}`, role: "user", content: String(body.content ?? body.message), status: "pending" };
       session.messages.push(message); store.log.push("message");
       return done({ message: { id: message.id, status: "pending", context: [] }, warnings: [] });
     }
     if (rest[0] === "messages" && rest[2] === "withdraw") {
-      const message = session.messages.find(item => item.id === rest[1]) ?? refuse(404, "agent.message.not_found", "Not found.");
-      if (message.status !== "pending") refuse(409, "agent.message.not_pending", "The prompt already started.");
+      const message = session.messages.find(item => item.id === rest[1]) ?? refuse(404, "weaver.message.not_found", "Not found.");
+      if (message.status !== "pending") refuse(409, "weaver.message.not_pending", "The prompt already started.");
       Object.assign(message, { status: "cancelled", statusReason: "withdrawn" }); store.log.push("withdraw");
       return done(message);
     }
     if (rest[0] === "client-invocations") {
-      const proposal = session.proposals.find(item => item.preparedInvocation?.invocationId === rest[1]) ?? refuse(404, "agent.invocation.not_found", "Not found.");
+      const proposal = session.proposals.find(item => item.preparedInvocation?.invocationId === rest[1]) ?? refuse(404, "weaver.invocation.not_found", "Not found.");
       if (rest[2] === "resolution") {
-        if (proposal.status !== "uncertain") refuse(409, "agent.invocation.not_uncertain", "Not uncertain.");
+        if (proposal.status !== "uncertain") refuse(409, "weaver.invocation.not_uncertain", "Not uncertain.");
         const claim = String(body.claim);
-        if (proposal.ownerResolution && proposal.ownerResolution.claim !== claim) refuse(409, "agent.invocation.resolution_conflict", "A different statement is recorded.");
+        if (proposal.ownerResolution && proposal.ownerResolution.claim !== claim) refuse(409, "weaver.invocation.resolution_conflict", "A different statement is recorded.");
         proposal.ownerResolution = { claim, actorId: user }; store.log.push(`resolve:${claim}`);
         return done(proposal);
       }
@@ -131,7 +131,7 @@ function route(method: string, path: string, body: Record<string, unknown> = {})
     if (parts[2] === "deny") { proposal.status = "denied"; return done({ id: proposal.id, status: "denied" }); }
     if (parts[2] === "execute") {
       proposal.status = "awaitingClient";
-      proposal.preparedInvocation = { ...proposal.preparedInvocation!, client: { clientId: api.agent.clientId, generationId: "generation" }, expiresAt: new Date(Date.now() + 300_000).toISOString() };
+      proposal.preparedInvocation = { ...proposal.preparedInvocation!, client: { clientId: api.weaver.clientId, generationId: "generation" }, expiresAt: new Date(Date.now() + 300_000).toISOString() };
       return done({ proposalId: proposal.id, executed: false, status: "awaitingClient", resourceType: "sample", resourceId: "one", summary: "Delivered to the originating page.", clientInvocation: proposal.preparedInvocation });
     }
   }
@@ -145,14 +145,14 @@ const http = {
   async putJson(path: string, body: Record<string, unknown>) { return route("PUT", path, body); }
 };
 const context = { baseUrl: "https://fixture.example/", http } as unknown as StudioEndpointContext;
-const client = createAgentClient(context);
+const client = createWeaverClient(context);
 
 // The turn stream: a turn runs only while it is open, as on the server.
-const subscribeStream: typeof subscribeAgentSessionStream = (_context, url, onEvent, onError, options) => {
+const subscribeStream: typeof subscribeWeaverSessionStream = (_context, url, onEvent, onError, options) => {
   let closed = false;
   const sessionId = decodeURIComponent(url.split("/")[4]);
   const replyId = options?.defaultMessageId ?? "reply";
-  const emit = (event: AgentStreamEvent) => { if (!closed) onEvent(event); };
+  const emit = (event: WeaverStreamEvent) => { if (!closed) onEvent(event); };
   void (async () => {
     const tick = () => new Promise(resolve => setTimeout(resolve, 30));
     const store = read();
@@ -167,7 +167,7 @@ const subscribeStream: typeof subscribeAgentSessionStream = (_context, url, onEv
     if (prompt.content.includes("[limit]")) {
       // The documented session limit: the turn stops before the provider, and everything recorded stays.
       prompt.status = "failed"; write(store);
-      emit({ type: "error", code: "agent.context.disclosure_budget_exceeded", limit: "bytes", message: "Session limit reached: this conversation has recorded 8 MiB of recorded disclosure. Continue in a new session; nothing recorded here was discarded." });
+      emit({ type: "error", code: "weaver.context.disclosure_budget_exceeded", limit: "bytes", message: "Session limit reached: this conversation has recorded 8 MiB of recorded disclosure. Continue in a new session; nothing recorded here was discarded." });
       return;
     }
     if (prompt.content.includes("[drop]")) {

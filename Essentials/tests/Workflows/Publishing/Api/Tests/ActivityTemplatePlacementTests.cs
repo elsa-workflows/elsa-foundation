@@ -572,10 +572,38 @@ public sealed class ActivityTemplatePlacementTests
         Assert.Equal("object", capture.Type.Kind);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Placed_owner_facts_preserve_graph_variables_and_body_reference_keys_at_the_real_boundary(bool requestRead)
+    {
+        var (placer, request) = ClosedScopeGraph("closed",
+            formatInputs: requestRead ? """[{"referenceKey":"total","value":{"value":{"referenceKey":"amount"},"expressionType":"Input"}}]""" : null,
+            includeGraphContract: true);
+        request = request with
+        {
+            BoundaryInputBindings = new Dictionary<string, RuntimeInputBinding>
+            {
+                ["amount"] = new("amount", new("Object"), ValueProtectionPolicy.InstanceInline,
+                    RuntimeInputBindingSource.WorkflowRequest, workflowRequest: new("OuterAmount"))
+            }
+        };
+        var placed = await placer.PlaceAsync(request);
+        var facts = ActivityTemplatePlacer.DescribeDataSelectionFacts(placed.Root, ["OuterAmount"],
+            new Dictionary<string, IReadOnlyCollection<string>> { ["workflow"] = ["not-a-graph-variable"] });
+        ActivityTemplateDataSelectionGuard.Validate(placed.Root, true, facts);
+        Assert.Equal(new[] { "OuterAmount" }, facts.RequestMembersByConsumer[placed.Root.ExecutableNodeId]);
+        var format = placed.Root.DescendantsAndSelf().Single(node => node.InputBindings.ContainsKey("total"));
+        Assert.Equal(new[] { "amount" }, facts.RequestMembersByConsumer[format.ExecutableNodeId]);
+        Assert.DoesNotContain("workflow", facts.VisibleVariableScopesByConsumer[format.ExecutableNodeId]);
+        Assert.Equal(new[] { "total" }, facts.VariableDeclarations[placed.Root.ExecutableNodeId]);
+    }
+
     private static (ActivityTemplatePlacer Placer, ActivityTemplatePlacementRequest Request) ClosedScopeGraph(
         string? scopeModel,
         string? formatInputs = null,
-        string? computeOutputs = null)
+        string? computeOutputs = null,
+        bool includeGraphContract = false)
     {
         var formatOverlay = new ExecutableActivityTemplateOccurrenceOverlay(
             "1",
@@ -592,7 +620,8 @@ public sealed class ActivityTemplatePlacementTests
             : Json($$"""{"entryOccurrenceId":"compute","scopeModel":"{{scopeModel}}","variables":[{"referenceKey":"total","name":"Total","type":{"alias":"object","collectionKind":"Single"},"storageDriverKey":"elsa.json"}]}""");
         var graphRoot = new ExecutableNode("graph-boundary", "graph-boundary", "elsa.graph-activity", "1",
             new RuntimeActivityDescriptor("elsa.graph-activity", "1", payload),
-            new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, RuntimeOutputCapture>(), new Dictionary<string, string>());
+            new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, RuntimeOutputCapture>(), new Dictionary<string, string>(),
+            activityContract: includeGraphContract ? RuntimeContractWithInputs(["amount"], []) : null);
         var graphTemplate = Template("template-graph", "hash-graph", graphRoot,
         [
             new("definition-compute", "version-compute", "1.0.0", "template-compute", "hash-compute", "compute", ActivityInvocationOrigin.Empty, null, "activity-graph", 0, emptyOverlay),

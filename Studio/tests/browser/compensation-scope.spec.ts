@@ -163,13 +163,30 @@ test("a repeated scope picks its occurrence by keyboard, and names a Compensate 
 
 // Spec 260: operator actions on a waiting recovery.
 
-for (const frameDelay of [0, 900]) {
-  test(`retries a failed handler by keyboard: the dialog names target and effect, then the row shows submitted, Applying… and the result${frameDelay ? " with delayed animation frames" : ""}`, async ({ page }) => {
+// Frames late, or React's scheduled commits late (#4096: on a loaded runner both frames ran before the commit that closes the
+// dialog and removes the row's Retry button). Focus must land on the recovery chip either way.
+for (const { frameDelay, commitDelay } of [{ frameDelay: 0, commitDelay: 0 }, { frameDelay: 900, commitDelay: 0 }, { frameDelay: 0, commitDelay: 150 }]) {
+  const variant = frameDelay ? " with delayed animation frames" : commitDelay ? " with delayed React commits" : "";
+  test(`retries a failed handler by keyboard: the dialog names target and effect, then the row shows submitted, Applying… and the result${variant}`, async ({ page }) => {
     if (frameDelay) {
       await page.addInitScript(delay => {
         const requestFrame = window.requestAnimationFrame.bind(window);
         window.requestAnimationFrame = callback => requestFrame(time => window.setTimeout(() => callback(time), delay));
       }, frameDelay);
+    }
+    if (commitDelay) {
+      // React's scheduler runs non-urgent renders from MessageChannel tasks; hold each one back. This patches every channel on the
+      // page, but Studio's own code opens none, so in this fixture only React's scheduler is slowed.
+      await page.addInitScript(delay => {
+        const Channel = window.MessageChannel;
+        window.MessageChannel = class extends Channel {
+          constructor() {
+            super();
+            const post = this.port2.postMessage.bind(this.port2);
+            this.port2.postMessage = (message: unknown) => { window.setTimeout(() => post(message), delay); };
+          }
+        };
+      }, commitDelay);
     }
     await page.goto("/?mode=compensation-scope&view=actions&theme=light");
 

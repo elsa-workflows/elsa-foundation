@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { applyNodeChanges, useNodesInitialized, useReactFlow, useStore, type Node, type NodeChange, type Viewport } from "@xyflow/react";
-import { readOnlyMinimapFitViewOptions, shouldShowReadOnlyMiniMap } from "./readOnlyMinimap";
+import { getReadOnlyFitViewOptions, shouldShowReadOnlyMiniMap } from "./readOnlyMinimap";
+import { getReadableFitViewport, pickReadOnlyFocusNode, readableEdgeMargin, readableMinimapEdgeMargin } from "./readableFitViewport";
 
 function isSameViewport(left: Viewport, right: Viewport): boolean {
   return left.x === right.x && left.y === right.y && left.zoom === right.zoom;
@@ -42,12 +43,19 @@ export function useReadOnlyFlowNodes<T extends Node>(nodes: T[]) {
  * Re-fit after xyflow measures nodes, and again when the pane shrinks (status line, error card),
  * but only while the viewport is still the one the last auto-fit produced. A user pan/zoom or a
  * focus/zoom-to-node request releases ownership until this canvas remounts for a new graph.
+ *
+ * With `minReadableZoom`, the auto-fit never goes below that zoom: when the whole graph cannot fit
+ * legibly, it shows a readable part starting at the graph's reading start (leftmost, then topmost
+ * activity), clamped to the graph's edges and kept clear of the MiniMap (#4064). The Fit View control
+ * keeps fitting the whole graph, so the full overview stays one click away.
  */
-export function FitReadOnlyFlowView({ nodeCount, focusRequestId = 0 }: { nodeCount: number; focusRequestId?: number }) {
+export function FitReadOnlyFlowView({ nodeCount, focusRequestId = 0, minReadableZoom }: { nodeCount: number; focusRequestId?: number; minReadableZoom?: number }) {
   const initialized = useNodesInitialized();
-  const { fitView, getViewport } = useReactFlow();
+  const { fitView, getViewport, getNodes, getNodesBounds, setViewport } = useReactFlow();
   const paneWidth = useStore(state => state.width);
   const paneHeight = useStore(state => state.height);
+  const storeMinZoom = useStore(state => state.minZoom);
+  const storeMaxZoom = useStore(state => state.maxZoom);
   const lastAutoFitViewport = useRef<Viewport | null>(null);
   const seenFocusRequestId = useRef(focusRequestId);
   const autoFitReleased = useRef(false);
@@ -65,10 +73,28 @@ export function FitReadOnlyFlowView({ nodeCount, focusRequestId = 0 }: { nodeCou
       return;
     }
 
-    void fitView(shouldShowReadOnlyMiniMap(nodeCount) ? readOnlyMinimapFitViewOptions : { padding: 0.12 }).then(() => {
-      lastAutoFitViewport.current = getViewport();
-    });
-  }, [fitView, focusRequestId, getViewport, initialized, nodeCount, paneHeight, paneWidth]);
+    const options = getReadOnlyFitViewOptions(nodeCount);
+    const recordAutoFit = () => { lastAutoFitViewport.current = getViewport(); };
+    if (minReadableZoom === undefined) {
+      void fitView(options).then(recordAutoFit);
+      return;
+    }
+
+    const nodes = getNodes();
+    if (nodes.length === 0) return;
+    const focusNode = pickReadOnlyFocusNode(nodes);
+    void setViewport(getReadableFitViewport({
+      graph: getNodesBounds(nodes),
+      focus: focusNode ? getNodesBounds([focusNode]) : null,
+      width: paneWidth,
+      height: paneHeight,
+      padding: options.padding,
+      minZoom: storeMinZoom ?? 0.1,
+      maxZoom: storeMaxZoom ?? 2,
+      readableZoom: minReadableZoom,
+      margin: shouldShowReadOnlyMiniMap(nodeCount) ? readableMinimapEdgeMargin : readableEdgeMargin
+    })).then(recordAutoFit);
+  }, [fitView, focusRequestId, getNodes, getNodesBounds, getViewport, initialized, minReadableZoom, nodeCount, paneHeight, paneWidth, setViewport, storeMaxZoom, storeMinZoom]);
 
   return null;
 }

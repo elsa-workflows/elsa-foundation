@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <IsTestProject>true</IsTestProject>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" PrivateAssets="all" />
+    <PackageReference Include="coverlet.collector" PrivateAssets="all" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- The shared child-process harness; its own build-order reference builds the production Workbench these tests kill. -->
+    <ProjectReference Include="../../../../../Essentials/tests/Workbench/Tests/Elsa.Workbench.Tests.csproj" />
+    <ProjectReference Include="../../../../../Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+</Project>

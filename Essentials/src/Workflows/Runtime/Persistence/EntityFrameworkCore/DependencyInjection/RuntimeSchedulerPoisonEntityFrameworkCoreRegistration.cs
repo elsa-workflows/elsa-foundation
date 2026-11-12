@@ -83,7 +83,14 @@ public static class RuntimeSchedulerPoisonEntityFrameworkCoreRegistration
                 if (!owned.Contains(descriptor))
                     owned.Add(descriptor);
 
-            services.AddScoped<EfWorkflowSchedulerPoisonStore>();
+            // #4032: the store records under a run's ownership fence only when the registered ownership store keeps its
+            // rows in the same context. Ownership is registered separately and in any order, and may be another
+            // backend's, so the store looks it up in its own scope when a fenced record is asked for.
+            services.AddScoped(serviceProvider => new EfWorkflowSchedulerPoisonStore(
+                serviceProvider.GetRequiredService<RuntimeDbContext>(),
+                serviceProvider.GetRequiredService<IPersistenceAccessContextAccessor>(),
+                serviceProvider.GetService<IExecutionLivenessStateStore>,
+                serviceProvider.GetService<TimeProvider>()));
             var concrete = services.Last();
             var contract = ServiceDescriptor.Scoped<IWorkflowSchedulerPoisonStore>(serviceProvider =>
                 serviceProvider.GetRequiredService<EfWorkflowSchedulerPoisonStore>());

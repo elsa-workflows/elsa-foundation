@@ -53,7 +53,24 @@ specific target/host contract reason; a visually similar but ineligible control 
 The source browser has activity results, workflow inputs, scoped variables and any current-item sources
 explicitly exposed by the owning structure. Identity is independent of the display label:
 
-- Activity results retain producer node, declared output/projection and structural/causal identity.
+- Activity results retain producer node, declared output/projection and structural/causal identity. The
+  server returns the complete binding for each activity result the author can select; the client stores it
+  unchanged and never derives a producer scope. Which bindings the server returns is the admission rule in
+  the [binding contract](binding-contract.md#1-authored-wire).
+- A source is selectable when its `binding` is non-null. The reason code is information, not the selection
+  test: an optional read of a conditional producer comes with a binding and still carries
+  `ConditionalOccurrence`.
+- A source listed without a binding carries one reason code, the first that applies, availability first:
+  `ConditionalOccurrence`, `AvailabilityUnknown`, `UnavailableProducer`, then `EarlierProducerRun` (the
+  structure holding producer and consumer, or one around it, does not state that no earlier run of the
+  producer can lead to this input, as on a Flowchart cycle or in a Sequence on a BPMN gateway loop), then
+  `NoTypedResult` (the producer declares no typed whole result). Its identity stays inspectable, and
+  expression authoring may still bind it as a portable parameter.
+- To read a conditional producer optionally, the client sends a focused query whose source is the
+  scope-free binding with `isOptional: true`, for example
+  `{"expressionType":"ActivityResult","value":{"producerNodeId":"fetch","projectionKey":"$result","isOptional":true}}`.
+  Where the rule admits it, the single returned source carries that binding, which the client stores
+  unchanged. On a path where the producer did not run, the read resolves to no value instead of failing.
 - Workflow inputs retain their stable input identity; display-name edits do not rebind them.
 - Variables retain declaration identity and lexical scope; same-name/shadowed variables remain distinct.
 - Current item is a structure-owned projection of an existing value role with iteration scope. The
@@ -120,6 +137,15 @@ is bounded and permission filtering occurs before disclosure. A target/type/cata
 an otherwise unauthorized resource. Use no-store responses and bounded in-memory client metadata only;
 purge that metadata on permission/session/backend changes. Log safe codes, not source paths, symbol names,
 authored documents or source text.
+
+The Foundation leaf does not adapt expression-shaped host metadata filters into neutral policy. When
+either `IExpressionAuthoringContextFilter` or `IExpressionAuthoringSymbolFilter` is configured, both
+neutral resource endpoints return `unavailable` with `activity-data.metadata-policy-unavailable`, after
+their available authentication/catalog authorization checks and before private draft or shape reads.
+The legacy expression surface continues to apply those filters. This is an explicit unavailable host
+composition, not permission to ignore restrictions or a claim of full neutral-filter support. A neutral
+policy adaptation needs normal contract review before chooser freeze; M3–M5 restricted-host acceptance
+must retain this distinction. No workflow/language identity is fabricated for an Activity Definition.
 
 Publication and every executable-producing/test-run path independently resolve the same source facts and
 validate the actual persisted/promoted candidate. A successful chooser response or matching client hash is

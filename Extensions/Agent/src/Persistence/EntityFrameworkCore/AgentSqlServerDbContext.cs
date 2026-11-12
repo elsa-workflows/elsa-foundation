@@ -1,3 +1,4 @@
+using Elsa.Agent.Persistence.EntityFrameworkCore.Entities;
 using Elsa.Persistence.EntityFramework;
 using Microsoft.EntityFrameworkCore;
 
@@ -8,5 +9,6 @@ public sealed class AgentSqlServerDbContext(DbContextOptions<AgentSqlServerDbCon
     public const string ExpectedProviderName = EfProviderNames.SqlServer;
     protected override void ConfigureProvider(ModelBuilder modelBuilder)
     {
+        modelBuilder.Entity<AgentTurnRecord>().Property(x => x.Payload).HasColumnType("nvarchar(max)");
     }
 }

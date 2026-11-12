@@ -2,7 +2,9 @@
 
 This optional path runs Studio from source and connects it to a published Elsa Workbench image. The verified pair was Studio commit `7cb2f2c2381411694c470cdb9179402571bcf832` and Workbench source revision `592d6c0eb2a1ae45563ce5b234fb4e97af2867ed`, pinned to immutable image index `elsaworkflows/elsa-workbench@sha256:73ef26e41760eaa4618a37cfbd7285002408f634e4089201b3864cb1f6147904` (preview `4.0.0-preview.1115`). The tested platform was macOS arm64 using the Linux/arm64 image manifest. This result is specific to this source pair and tested platform.
 
-Follow the prerequisites in [Make a visible Studio source edit](studio-source-quickstart.md), using a disposable clone so existing work stays untouched. Switch that clone to the verified commit before installing or editing:
+The primary contributor path is now [Run Studio from source](studio-source-quickstart.md) in this repository's `Studio/` tree. The commands below remain the recorded packaged-image pair (Studio commit `7cb2f2c2` from the former `elsa-foundation-studio` repository). They were not re-run against current Foundation `main`.
+
+Use only the prerequisites section of [Run Studio from source](studio-source-quickstart.md) (SDK, Node, pnpm and Corepack), not that guide's clone or run steps. Then use a disposable clone of the former repository so existing work stays untouched. Switch that clone to the verified commit before installing or editing:
 
 ```bash
 git clone https://github.com/elsa-workflows/elsa-foundation-studio.git elsa-foundation-studio-contributor
@@ -194,7 +196,7 @@ dotnet run --no-build --project src/apps/Elsa.Studio.Web/Elsa.Studio.Web.csproj 
 
 Open `http://localhost:5089` and sign in with the Development seed. Keep Studio on this origin because the backend CORS and login return-origin settings name it. No Data Protection certificate is configured here, so this setup makes no encryption-at-rest claim.
 
-Follow [Exercise a visible edit](studio-source-quickstart.md#exercise-a-visible-edit). For [Run a workflow in the browser](studio-source-quickstart.md#run-a-workflow-in-the-browser), use the name `Contributor packaged journey 585` instead of `Contributor source journey 583`, and set the Write Line text to `Hello from the packaged contributor journey 585` instead of the source walkthrough’s `583` text. Verify the run completes with no active incidents and confirm its expected stdout with `docker logs "$cid"` in the backend terminal.
+Follow the Dashboard heading edit and browser journey in [Earlier recorded source-edit exercise](studio-source-quickstart.md#earlier-recorded-source-edit-exercise). For the browser journey, use the name `Contributor packaged journey 585` instead of `Contributor source journey 583`, and set the Write Line text to `Hello from the packaged contributor journey 585`. Verify the run completes with no active incidents and confirm its expected stdout with `docker logs "$cid"` in the backend terminal.
 
 When finished, stop your Studio host with Ctrl+C in its terminal. In the backend terminal, stop only the container you started and remove its two disposable volumes by their recorded names. The cleanup function checks each result and reports incomplete cleanup if any stop, remove, or volume removal fails:
 

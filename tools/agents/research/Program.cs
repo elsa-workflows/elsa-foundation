@@ -97,7 +97,7 @@ var deniedRequest = deniedProposal.Messages.SelectMany(m => m.Contents).OfType<T
 await approvalAgent.RunAsync(new ChatMessage(ChatRole.User, [deniedRequest.CreateResponse(false)]), deniedSession);
 Check(protectedCalls == 1, "denied SDK tool approval produces no effect");
 
-var otherAgent = new ChatClientAgent(client, instructions: "Unrelated specialist.", name: "DifferentVersion");
+var otherAgent = new ChatClientAgent(client, instructions: "Unrelated agent.", name: "DifferentVersion");
 var foreignState = await otherAgent.DeserializeSessionAsync(state);
 await otherAgent.RunAsync("Another task.", foreignState);
 Check(client.Calls[^1].History.Any(m => m.Text.Contains("moss gardens")), "SDK session format alone does not enforce Elsa agent/version ownership");
@@ -140,11 +140,11 @@ var right = second.BindAsExecutor("beta");
 var aggregate = new CohortCollector(cohorts);
 var team = new WorkflowBuilder(start).AddFanOutEdge(start, [left, right])
     .AddFanInBarrierEdge([left, right], aggregate).WithOutputFrom(aggregate).Build();
-await using var teamRun = await InProcessExecution.RunAsync(team, "Compare both specialists.");
+await using var teamRun = await InProcessExecution.RunAsync(team, "Compare both agents.");
 var outputs = teamRun.NewEvents.OfType<WorkflowOutputEvent>().Select(x => x.Data).OfType<string>().ToArray();
 if (!outputs.SequenceEqual(["alpha|beta"]) || !cohorts.SequenceEqual([2]))
     Console.Error.WriteLine(JsonSerializer.Serialize(new { outputs, cohorts, events = teamRun.OutgoingEvents.Select(e => new { kind = e.GetType().Name, data = e.ToString() }) }));
-Check(outputs.SequenceEqual(["alpha|beta"]) && cohorts.SequenceEqual([2]), "MAF fan-in barrier receives both specialist results in one cohort");
+Check(outputs.SequenceEqual(["alpha|beta"]) && cohorts.SequenceEqual([2]), "MAF fan-in barrier receives both agent results in one cohort");
 
 Console.WriteLine(JsonSerializer.Serialize(new
 {

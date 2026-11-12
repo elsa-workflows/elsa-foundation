@@ -409,7 +409,6 @@ function createFeedFromDraft(feedDraft: FeedDraft): ModuleManagementFeed {
     name: feedDraft.name.trim(),
     serviceIndex: feedDraft.serviceIndex.trim() || null,
     directoryPath: feedDraft.directoryPath.trim() || null,
-    credentials: null,
     includeAll: feedDraft.includeAllPackages || feedDraft.includePatterns.trim() === "*",
     includePatterns,
     directory: { watch: true, debounceWindow: "00:00:01" }
