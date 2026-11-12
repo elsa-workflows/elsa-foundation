@@ -49,7 +49,9 @@ improve that implementation instead of assuming it must be introduced.
   or ownership-scoped; arbitrary process-wide durable-state caching is outside this plan.
 - No timing CI gate, general benchmark service, production SLO, release or production deployment is introduced by
   this continuation.
-- **Owner amendment, 11 November 2026:** epic #2564 stops after #4166. Its targets (32
+- **Owner amendment, 11 November 2026**
+  ([recorded on #2564](https://github.com/elsa-workflows/elsa-foundation/issues/2564#issuecomment-6807592241)):
+  epic #2564 stops after #4166. Its targets (32
   SQLite commands and 16 PostgreSQL round trips for ten WriteLines under Balanced) and its method of proof are
   taken over by the [Journal-first runtime core](journal-core.md) program, which replaces the earlier boundary
   "no journal rewrite". The remaining slices of #2564 are not built. #2564 stays open until that program meets
