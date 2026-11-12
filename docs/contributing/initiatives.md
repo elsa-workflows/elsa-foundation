@@ -145,7 +145,8 @@ usual. The board moves to the analysis-and-decisions phase, and the initiative c
   ADR PR it leads to.
 - When there is no ADR PR yet, the analysis's author decides whether and when an ADR is drafted from it. Receiving an
   analysis for discussion is not authorization to publish an ADR from it.
-- Analyses inside an initiative are not filed as spike issues, and are not posted on the initiative issue.
+- Analyses inside an initiative are not filed as spike issues, and are not posted on the initiative issue, except the
+  [kick-off](#kick-off)'s inputs and reviews.
 
 **Approval plan.** Every ADR or spec PR names its required human approvers, and the capacity each acts in, in its
 description. By default that is the initiative's Approvers list. A different plan, or an exception to the rules on
