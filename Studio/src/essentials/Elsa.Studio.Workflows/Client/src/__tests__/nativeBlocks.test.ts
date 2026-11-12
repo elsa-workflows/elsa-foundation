@@ -167,6 +167,51 @@ describe("pure native block planning", () => {
     expect(ctx).toEqual(before);
   });
 
+  it.each(["Block result 1", "bLoCk ReSuLt 1", "Block result new-block-result-1", "bLoCk ReSuLt NeW-bLoCk-ReSuLt-1"])("keeps generated variable names unique without changing an existing name: %s", name => {
+    const ctx = context();
+    ctx.catalog.push({ ...action, activityVersionId: "elsa.intrinsic.set@1", intrinsic: { kind: "Set", valueInputKey: "value" } });
+    payload(ctx).variables = [{ referenceKey: "other-key", name, type: { alias: "Elsa.Any", collectionKind: "single" }, storageDriverType: null, default: null }];
+    (payload(ctx).activities as ActivityNode[])[3].inputs = [{ referenceKey: "text", value: { expressionType: "ActivityResult", value: { producerNodeId: "b", projectionKey: "$result" } } }];
+    const plan = accepted(extract(ctx));
+    const names = (planPayload(plan).variables as { name: string }[]).map(variable => variable.name);
+    expect(new Set(names.map(item => item.toUpperCase())).size).toBe(names.length);
+    expect(names).toEqual([name, name.toUpperCase() === "BLOCK RESULT 1" ? "Block result 2" : "Block result 1"]);
+    expect((payload(ctx).variables as { name: string }[]).map(variable => variable.name)).toEqual([name]);
+  });
+
+  it("avoids shadowing a disclosed ancestor variable name", () => {
+    const ctx = context();
+    ctx.catalog.push({ ...action, activityVersionId: "elsa.intrinsic.set@1", intrinsic: { kind: "Set", valueInputKey: "value" } });
+    ctx.referenceContext = [[{ referenceKey: "outer-key", name: "BLOCK RESULT 1", type: { alias: "Int32", collectionKind: "single" } }]];
+    (payload(ctx).activities as ActivityNode[])[3].inputs = [{ referenceKey: "text", value: { expressionType: "ActivityResult", value: { producerNodeId: "b", projectionKey: "$result" } } }];
+    expect((planPayload(accepted(extract(ctx))).variables as { name: string }[])[0].name).toBe("Block result 2");
+  });
+
+  it.each([" Done ", "   ", ""])("uses canonical Done ports for a scope-free transfer: %j", sourcePort => {
+    const ctx = flow();
+    ctx.catalog.push({ ...action, activityVersionId: "elsa.intrinsic.set@1", intrinsic: { kind: "Set", valueInputKey: "value" } });
+    for (const connection of payload(ctx).connections as ReturnType<typeof edge>[]) connection.source.port = sourcePort;
+    (payload(ctx).activities as ActivityNode[])[3].inputs = [{ referenceKey: "text", value: { expressionType: "ActivityResult", value: { producerNodeId: "b", projectionKey: "$result" } } }];
+    const plan = accepted(extract(ctx));
+    accepted(planUngroupNativeBlock({ ...ctx, document: plan.document }, "new-block"));
+  });
+
+  it.each(["legacy", "computed-ambient"])("refuses variable introduction when a scope observer is unproved: %s", form => {
+    const ctx = context();
+    ctx.catalog.push({ ...action, activityVersionId: "elsa.intrinsic.set@1", intrinsic: { kind: "Set", valueInputKey: "value" } });
+    const children = payload(ctx).activities as ActivityNode[];
+    children[0].inputs = [{ referenceKey: "text", value: { expressionType: "JavaScript", value: form === "legacy" ? "getVariable(name)" : {
+      language: "JavaScript", source: "getVariable(name) ?? 0", resultType: { alias: "Object", collectionKind: "single" }, options: {}, capabilityProfile: "binding-pure-v1",
+      parameters: { name: { kind: "Literal", value: "Block result 1" } }
+    } } }];
+    children[3].inputs = [{ referenceKey: "text", value: { expressionType: "ActivityResult", value: { producerNodeId: "b", projectionKey: "$result" } } }];
+    const before = structuredClone(ctx);
+    refused(extract(ctx), "opaque-result-scope");
+    expect(ctx).toEqual(before);
+    children[3].inputs = [];
+    accepted(extract(ctx));
+  });
+
   it.each(["sequence", "flowchart"] as const)("refuses an outside member reader before extracting its %s producer", kind => {
     const ctx = kind === "sequence" ? context() : flow();
     const consumer = (payload(ctx).activities as ActivityNode[])[3];

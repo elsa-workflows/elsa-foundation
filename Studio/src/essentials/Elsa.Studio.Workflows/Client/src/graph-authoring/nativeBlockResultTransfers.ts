@@ -61,6 +61,22 @@ export function transferNativeBlockResults(context: NativeBlockContext, proposed
   };
   inspectOutside(context.referenceContext, "referenceContext");
   if (!references.length) return proposed;
+  const inspectScopeReads = (value: unknown, path: string) => {
+    if (Array.isArray(value)) { value.forEach((item, index) => inspectScopeReads(item, `${path}[${index}]`)); return; }
+    if (!record(value)) return;
+    if (typeof value.expressionType === "string") {
+      if (["literal", "object", "default", "secret", "connection", "input", "variable", "variablemember", "activityresult", "activityresultmember", "workflowrequest"].includes(value.expressionType.toLowerCase())) return;
+      const expression = value.value;
+      if (!record(expression) || typeof expression.language !== "string" || typeof expression.source !== "string"
+        || !record(expression.resultType) || !record(expression.options) || !record(expression.parameters)
+        || expression.capabilityProfile !== "binding-pure-v1"
+        || (expression.language.toLowerCase() === "javascript" && /\bvariables\b|\bgetVariable\b|\bget[A-Z_$][\w$]*\s*\(/.test(expression.source)))
+        refuse("opaque-result-scope", path, "Adding a result variable cannot preserve an opaque or ambient scope read. Keep the producer and reader together or use explicit expression parameters.");
+      return;
+    }
+    Object.entries(value).forEach(([key, child]) => inspectScopeReads(child, `${path}.${key}`));
+  };
+  inspectScopeReads(owner, `nodes.${ownerId}`);
   const setDescriptors = context.catalog.filter(item => item.available !== false && item.activityVersionId === "elsa.intrinsic.set@1"
     && typeof item.intrinsic?.kind === "string" && item.intrinsic.kind.toLowerCase() === "set" && item.intrinsic.valueInputKey === "value");
   if (setDescriptors.length !== 1)
@@ -84,6 +100,20 @@ export function transferNativeBlockResults(context: NativeBlockContext, proposed
     let index = 1;
     while (occupied.has(`${blockId}-${suffix}-${index}`)) index++;
     const id = `${blockId}-${suffix}-${index}`; occupied.add(id); return id;
+  };
+  const occupiedNames = new Set<string>();
+  const reserveNames = (value: unknown) => {
+    if (Array.isArray(value)) { value.forEach(reserveNames); return; }
+    if (!record(value)) return;
+    if (typeof value.referenceKey === "string" && typeof value.name === "string" && record(value.type)) occupiedNames.add(value.name.toUpperCase());
+    Object.values(value).forEach(reserveNames);
+  };
+  reserveNames(context.document.rootActivity);
+  reserveNames(context.referenceContext);
+  const allocateName = () => {
+    let index = 1;
+    while (occupiedNames.has(`BLOCK RESULT ${index}`)) index++;
+    const name = `Block result ${index}`; occupiedNames.add(name.toUpperCase()); return name;
   };
   for (const reference of references) {
     const producerId = reference.binding.producerNodeId as string;
@@ -114,7 +144,7 @@ export function transferNativeBlockResults(context: NativeBlockContext, proposed
         while (typeof next === "string" && !visited.has(next)) {
           visited.add(next);
           const outgoing = edges.filter(edge => edge.source.nodeId === next);
-          if (outgoing.length > 1 || outgoing.some(edge => edge.source.port && edge.source.port !== "Done")) break;
+          if (outgoing.length > 1 || outgoing.some(edge => (edge.source.port?.trim() || "Done") !== "Done")) break;
           next = outgoing[0]?.target.nodeId;
         }
         if (next !== undefined || visited.size !== originalChildren.length || edges.length !== originalChildren.length - 1)
@@ -143,7 +173,7 @@ export function transferNativeBlockResults(context: NativeBlockContext, proposed
   const body = block.structure!.payload;
   const captures = new Map<string, ActivityNode[]>();
   const added = [...transfers.values()].map(transfer => {
-    const variable = { referenceKey: transfer.key, name: `Block result ${transfer.key}`, type: { alias: "Elsa.Any", collectionKind: "single" }, storageDriverType: null, default: null };
+    const variable = { referenceKey: transfer.key, name: allocateName(), type: { alias: "Elsa.Any", collectionKind: "single" }, storageDriverType: null, default: null };
     const capture: ActivityNode = { nodeId: transfer.nodeId, activityVersionId: setDescriptors[0].activityVersionId, inputs: [{ referenceKey: "value", value: {
       expressionType: "ActivityResult", value: { producerNodeId: transfer.producerId, projectionKey: transfer.projection, ...(transfer.scope ? { producerScopeId: transfer.scope } : {}) }
     } }], outputs: [], intrinsic: { kind: "set", valueType: variable.type, variable: { referenceKey: transfer.key, declaringScopeId: ownerId } } };

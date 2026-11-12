@@ -154,7 +154,16 @@
       "displayName": "Write Line",
       "description": null,
       "executionType": "Action",
-      "inputs": [],
+      "inputs": [
+        {
+          "name": "Expression",
+          "referenceKey": "Expression",
+          "typeName": "Object",
+          "collectionKind": "Single",
+          "isNullable": true,
+          "isRequired": false
+        }
+      ],
       "outputs": [],
       "designFacets": [],
       "ports": [
@@ -165,24 +174,60 @@
     },
     {
       "activityVersionId": "elsa.intrinsic.set@1",
-      "activityTypeKey": "Elsa.Activities.Primitives.Activities.WriteLine",
-      "version": "1.0.0",
+      "activityTypeKey": "Elsa.SetVariable",
+      "version": "1",
       "category": "Primitives",
-      "displayName": "Write Line",
-      "description": null,
+      "displayName": "Set Variable",
+      "description": "Assigns a value to a declared workflow variable, resolved to its nearest visible scope.",
       "executionType": "Action",
-      "inputs": [],
+      "inputs": [
+        {
+          "referenceKey": "variable",
+          "name": "Variable",
+          "type": "String",
+          "typeName": "String",
+          "displayName": "Variable",
+          "order": 0,
+          "isBrowsable": true,
+          "isRequired": true,
+          "isNullable": false,
+          "uiHint": "variable-picker"
+        },
+        {
+          "referenceKey": "value",
+          "name": "Value",
+          "type": "Elsa.Any",
+          "typeName": "Elsa.Any",
+          "displayName": "Value",
+          "order": 1,
+          "isBrowsable": true,
+          "isRequired": true,
+          "isNullable": true,
+          "uiHint": "single-line"
+        }
+      ],
       "outputs": [],
-      "designFacets": [],
-      "intrinsic": {
-        "kind": "Set",
-        "valueInputKey": "value"
-      },
       "ports": [
         {
-          "name": "Done"
+          "name": "Done",
+          "displayName": "Done",
+          "isBrowsable": true
         }
-      ]
+      ],
+      "designFacets": [],
+      "available": true,
+      "authoringTemplate": {
+        "nodeId": "intrinsic",
+        "activityVersionId": "elsa.intrinsic.set@1",
+        "inputs": [],
+        "outputs": []
+      },
+      "intrinsic": {
+        "kind": "Set",
+        "valueInputKey": "value",
+        "variableInputKey": "variable",
+        "outputNameInputKey": null
+      }
     }
   ],
   "versions": {
@@ -417,7 +462,7 @@
               "variables": [
                 {
                   "referenceKey": "block-result-1",
-                  "name": "Block result block-result-1",
+                  "name": "Block result 1",
                   "type": {
                     "alias": "Elsa.Any",
                     "collectionKind": "single"
@@ -554,7 +599,7 @@
               "variables": [
                 {
                   "referenceKey": "block-result-1",
-                  "name": "Block result block-result-1",
+                  "name": "Block result 1",
                   "type": {
                     "alias": "Elsa.Any",
                     "collectionKind": "single"
@@ -619,7 +664,7 @@
                             "language": "JavaScript",
                             "source": "prior + 1",
                             "resultType": {
-                              "alias": "Int32",
+                              "alias": "Object",
                               "collectionKind": "single"
                             },
                             "options": {},
@@ -770,7 +815,7 @@
                           "language": "JavaScript",
                           "source": "prior + 1",
                           "resultType": {
-                            "alias": "Int32",
+                            "alias": "Object",
                             "collectionKind": "single"
                           },
                           "options": {},
@@ -824,7 +869,7 @@
               "variables": [
                 {
                   "referenceKey": "block-result-1",
-                  "name": "Block result block-result-1",
+                  "name": "Block result 1",
                   "type": {
                     "alias": "Elsa.Any",
                     "collectionKind": "single"
@@ -919,7 +964,7 @@
                           "language": "JavaScript",
                           "source": "prior + 1",
                           "resultType": {
-                            "alias": "Int32",
+                            "alias": "Object",
                             "collectionKind": "single"
                           },
                           "options": {},
@@ -973,7 +1018,7 @@
               "variables": [
                 {
                   "referenceKey": "block-result-1",
-                  "name": "Block result block-result-1",
+                  "name": "Block result 1",
                   "type": {
                     "alias": "Elsa.Any",
                     "collectionKind": "single"
@@ -1061,7 +1106,23 @@
                                       "referenceKey": "value",
                                       "value": {
                                         "expressionType": "JavaScript",
-                                        "value": "getVariable('Counter') + 1"
+                                        "value": {
+                                          "language": "JavaScript",
+                                          "source": "counter + 1",
+                                          "resultType": {
+                                            "alias": "Int32",
+                                            "collectionKind": "single"
+                                          },
+                                          "options": {},
+                                          "capabilityProfile": "binding-pure-v1",
+                                          "parameters": {
+                                            "counter": {
+                                              "kind": "Variable",
+                                              "declaringScopeNodeId": "workflow",
+                                              "variableKey": "counter"
+                                            }
+                                          }
+                                        }
                                       }
                                     }
                                   ],
@@ -1252,7 +1313,23 @@
                                             "referenceKey": "value",
                                             "value": {
                                               "expressionType": "JavaScript",
-                                              "value": "getVariable('Counter') + 1"
+                                              "value": {
+                                                "language": "JavaScript",
+                                                "source": "counter + 1",
+                                                "resultType": {
+                                                  "alias": "Int32",
+                                                  "collectionKind": "single"
+                                                },
+                                                "options": {},
+                                                "capabilityProfile": "binding-pure-v1",
+                                                "parameters": {
+                                                  "counter": {
+                                                    "kind": "Variable",
+                                                    "declaringScopeNodeId": "workflow",
+                                                    "variableKey": "counter"
+                                                  }
+                                                }
+                                              }
                                             }
                                           }
                                         ],
@@ -1338,7 +1415,7 @@
                             "variables": [
                               {
                                 "referenceKey": "block-result-1",
-                                "name": "Block result block-result-1",
+                                "name": "Block result 1",
                                 "type": {
                                   "alias": "Elsa.Any",
                                   "collectionKind": "single"
@@ -1451,7 +1528,23 @@
                                     "referenceKey": "value",
                                     "value": {
                                       "expressionType": "JavaScript",
-                                      "value": "getVariable('Counter') + 1"
+                                      "value": {
+                                        "language": "JavaScript",
+                                        "source": "counter + 1",
+                                        "resultType": {
+                                          "alias": "Int32",
+                                          "collectionKind": "single"
+                                        },
+                                        "options": {},
+                                        "capabilityProfile": "binding-pure-v1",
+                                        "parameters": {
+                                          "counter": {
+                                            "kind": "Variable",
+                                            "declaringScopeNodeId": "workflow",
+                                            "variableKey": "counter"
+                                          }
+                                        }
+                                      }
                                     }
                                   }
                                 ],
@@ -1533,7 +1626,7 @@
                             "variables": [
                               {
                                 "referenceKey": "block-result-1",
-                                "name": "Block result block-result-1",
+                                "name": "Block result 1",
                                 "type": {
                                   "alias": "Elsa.Any",
                                   "collectionKind": "single"
@@ -1881,7 +1974,7 @@
               "variables": [
                 {
                   "referenceKey": "block-result-1",
-                  "name": "Block result block-result-1",
+                  "name": "Block result 1",
                   "type": {
                     "alias": "Elsa.Any",
                     "collectionKind": "single"
@@ -2053,7 +2146,7 @@
               "variables": [
                 {
                   "referenceKey": "block-result-1",
-                  "name": "Block result block-result-1",
+                  "name": "Block result 1",
                   "type": {
                     "alias": "Elsa.Any",
                     "collectionKind": "single"
@@ -2118,7 +2211,7 @@
                             "language": "JavaScript",
                             "source": "prior + 1",
                             "resultType": {
-                              "alias": "Int32",
+                              "alias": "Object",
                               "collectionKind": "single"
                             },
                             "options": {},
@@ -2309,7 +2402,7 @@
                           "language": "JavaScript",
                           "source": "prior + 1",
                           "resultType": {
-                            "alias": "Int32",
+                            "alias": "Object",
                             "collectionKind": "single"
                           },
                           "options": {},
@@ -2388,7 +2481,7 @@
               "variables": [
                 {
                   "referenceKey": "block-result-1",
-                  "name": "Block result block-result-1",
+                  "name": "Block result 1",
                   "type": {
                     "alias": "Elsa.Any",
                     "collectionKind": "single"
@@ -2483,7 +2576,7 @@
                           "language": "JavaScript",
                           "source": "prior + 1",
                           "resultType": {
-                            "alias": "Int32",
+                            "alias": "Object",
                             "collectionKind": "single"
                           },
                           "options": {},
@@ -2572,7 +2665,7 @@
               "variables": [
                 {
                   "referenceKey": "block-result-1",
-                  "name": "Block result block-result-1",
+                  "name": "Block result 1",
                   "type": {
                     "alias": "Elsa.Any",
                     "collectionKind": "single"
@@ -2660,7 +2753,23 @@
                                       "referenceKey": "value",
                                       "value": {
                                         "expressionType": "JavaScript",
-                                        "value": "getVariable('Counter') + 1"
+                                        "value": {
+                                          "language": "JavaScript",
+                                          "source": "counter + 1",
+                                          "resultType": {
+                                            "alias": "Int32",
+                                            "collectionKind": "single"
+                                          },
+                                          "options": {},
+                                          "capabilityProfile": "binding-pure-v1",
+                                          "parameters": {
+                                            "counter": {
+                                              "kind": "Variable",
+                                              "declaringScopeNodeId": "workflow",
+                                              "variableKey": "counter"
+                                            }
+                                          }
+                                        }
                                       }
                                     }
                                   ],
@@ -2876,7 +2985,23 @@
                                             "referenceKey": "value",
                                             "value": {
                                               "expressionType": "JavaScript",
-                                              "value": "getVariable('Counter') + 1"
+                                              "value": {
+                                                "language": "JavaScript",
+                                                "source": "counter + 1",
+                                                "resultType": {
+                                                  "alias": "Int32",
+                                                  "collectionKind": "single"
+                                                },
+                                                "options": {},
+                                                "capabilityProfile": "binding-pure-v1",
+                                                "parameters": {
+                                                  "counter": {
+                                                    "kind": "Variable",
+                                                    "declaringScopeNodeId": "workflow",
+                                                    "variableKey": "counter"
+                                                  }
+                                                }
+                                              }
                                             }
                                           }
                                         ],
@@ -3002,7 +3127,7 @@
                             "variables": [
                               {
                                 "referenceKey": "block-result-1",
-                                "name": "Block result block-result-1",
+                                "name": "Block result 1",
                                 "type": {
                                   "alias": "Elsa.Any",
                                   "collectionKind": "single"
@@ -3115,7 +3240,23 @@
                                     "referenceKey": "value",
                                     "value": {
                                       "expressionType": "JavaScript",
-                                      "value": "getVariable('Counter') + 1"
+                                      "value": {
+                                        "language": "JavaScript",
+                                        "source": "counter + 1",
+                                        "resultType": {
+                                          "alias": "Int32",
+                                          "collectionKind": "single"
+                                        },
+                                        "options": {},
+                                        "capabilityProfile": "binding-pure-v1",
+                                        "parameters": {
+                                          "counter": {
+                                            "kind": "Variable",
+                                            "declaringScopeNodeId": "workflow",
+                                            "variableKey": "counter"
+                                          }
+                                        }
+                                      }
                                     }
                                   }
                                 ],
@@ -3232,7 +3373,7 @@
                             "variables": [
                               {
                                 "referenceKey": "block-result-1",
-                                "name": "Block result block-result-1",
+                                "name": "Block result 1",
                                 "type": {
                                   "alias": "Elsa.Any",
                                   "collectionKind": "single"

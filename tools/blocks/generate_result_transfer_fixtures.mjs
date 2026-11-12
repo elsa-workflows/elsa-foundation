@@ -16,8 +16,8 @@ try {
   const fixtures = await server.ssrLoadModule(resolve(client, "src/__tests__/fixtures.ts"));
   const catalog = [fixtures.sequenceActivity, fixtures.flowchartActivity].map(item => ({ ...item,
     ports: [{ name: "Done" }, { name: "Break" }], designFacets: [...item.designFacets ?? [], { kind: "elsa.outcomes", schemaVersion: "1", payload: { ports: [{ name: "Done" }, { name: "Break" }] } }] }));
-  catalog.push(fixtures.whileActivity, { ...fixtures.writeLine, activityVersionId: "inline-version", activityTypeKey: "Elsa.Activities.Primitives.Activities.Inline", ports: [{ name: "Done" }] },
-    { ...fixtures.writeLine, activityVersionId: "elsa.intrinsic.set@1", intrinsic: { kind: "Set", valueInputKey: "value" }, ports: [{ name: "Done" }] });
+  catalog.push(fixtures.whileActivity, { ...fixtures.writeLine, activityVersionId: "inline-version", activityTypeKey: "Elsa.Activities.Primitives.Activities.Inline", ports: [{ name: "Done" }],
+    inputs: [{ name: "Expression", referenceKey: "Expression", typeName: "Object", collectionKind: "Single", isNullable: true, isRequired: false }], outputs: [] }, fixtures.setVariableActivity);
   const cases = [];
   for (const kind of ["sequence", "flowchart"]) for (const profile of ["direct", "parameter", "loop"]) {
     const parameter = profile === "parameter";
@@ -28,7 +28,7 @@ try {
     const read = { producerNodeId: "producer", projectionKey: "$result", producerScopeId: "scope:root" };
     const producer = node("producer", loop ? "Variable" : "Literal", loop ? { referenceKey: "counter" } : 42);
     const consumer = node("consumer", parameter ? "JavaScript" : "ActivityResult", parameter ? {
-      language: "JavaScript", source: "prior + 1", resultType: { alias: "Int32", collectionKind: "single" }, options: {}, capabilityProfile: "binding-pure-v1",
+      language: "JavaScript", source: "prior + 1", resultType: { alias: "Object", collectionKind: "single" }, options: {}, capabilityProfile: "binding-pure-v1",
       parameters: { prior: { kind: "ActivityResult", producerNodeId: "producer", projectionKey: "$result" } }
     } : read);
     const answer = { nodeId: "answer", activityVersionId: "elsa.intrinsic.set-output@1", intrinsic: { kind: "setOutput", valueType: { alias: "Elsa.Any", collectionKind: "single" } }, outputs: [],
@@ -42,7 +42,10 @@ try {
     const variables = [];
     const scope = [];
     if (loop) {
-      const increment = { nodeId: "increment", activityVersionId: "elsa.intrinsic.set@1", inputs: [{ referenceKey: "value", value: argument("JavaScript", "getVariable('Counter') + 1") }], outputs: [],
+      const increment = { nodeId: "increment", activityVersionId: "elsa.intrinsic.set@1", inputs: [{ referenceKey: "value", value: argument("JavaScript", {
+        language: "JavaScript", source: "counter + 1", resultType: { alias: "Int32", collectionKind: "single" }, options: {}, capabilityProfile: "binding-pure-v1",
+        parameters: { counter: { kind: "Variable", declaringScopeNodeId: "workflow", variableKey: "counter" } }
+      }) }], outputs: [],
         intrinsic: { kind: "set", valueType: { alias: "Elsa.Any", collectionKind: "single" }, variable: { referenceKey: "counter" } } };
       body.structure.payload.activities = [increment, producer, consumer];
       if (kind === "flowchart") Object.assign(body.structure.payload, { startNodeId: "increment", connections: [
