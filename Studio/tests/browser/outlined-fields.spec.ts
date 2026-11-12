@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page, type TestInfo } from "@playwright/test";
 import { allThemeModes, builtInThemeDefinitions } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/themes/presets";
 import { workspaceStyles } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/themes/workspaceStyles";
 
@@ -18,14 +18,14 @@ for (const theme of builtInThemeDefinitions) for (const mode of allThemeModes) {
     await expect(page.getByLabel("Disabled", { exact: true })).toBeDisabled();
     await expect(page.getByLabel("Read only", { exact: true })).toHaveAttribute("readonly", "");
     await expect(page.getByLabel("Invalid", { exact: true })).toHaveAttribute("aria-invalid", "true");
-    await info.attach(`${theme.id}-${mode}-states`, { body: await page.screenshot({ fullPage: true }), contentType: "image/png" });
+    await capture(page, info, `${theme.id}-${mode}-states`);
     const draft = page.getByLabel("Invalid", { exact: true });
     await draft.fill("Recovered draft"); await expect(draft).not.toHaveAttribute("aria-invalid", "true");
     await page.getByRole("button", { name: "Show value" }).click();
     await expect(page.getByLabel("Secret value", { exact: true })).toHaveValue("protected draft");
     await expect(page.getByLabel("Secret value", { exact: true })).toHaveAttribute("type", "text");
     await page.getByLabel("Focused", { exact: true }).focus();
-    await info.attach(`${theme.id}-${mode}`, { body: await page.screenshot({ fullPage: true }), contentType: "image/png" });
+    await capture(page, info, `${theme.id}-${mode}`);
   });
 }
 for (const style of workspaceStyles) for (const mode of ["light", "dark"] as const) {
@@ -35,7 +35,7 @@ for (const style of workspaceStyles) for (const mode of ["light", "dark"] as con
     await page.evaluate(() => { document.documentElement.style.setProperty("--studio-body-size", "28px"); document.documentElement.style.setProperty("--studio-small-size", "24px"); });
     await expect(page.getByLabel("Populated", { exact: true })).toHaveValue("Draft value");
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-    await info.attach(`${style.id}-${mode}-narrow-rtl`, { body: await page.screenshot({ fullPage: true }), contentType: "image/png" });
+    await capture(page, info, `${style.id}-${mode}-narrow-rtl`);
   });
 }
 test("Outlined forced colours preserve field and keyboard focus", async ({ page }, info) => {
@@ -44,5 +44,11 @@ test("Outlined forced colours preserve field and keyboard focus", async ({ page 
   const field = page.getByLabel("Populated", { exact: true }); await field.focus();
   await expect(field).toBeFocused();
   expect(await field.evaluate(element => getComputedStyle(element.closest("fieldset")!).outlineStyle)).toBe("solid");
-  await info.attach("forced-colours", { body: await page.screenshot({ fullPage: true }), contentType: "image/png" });
+  await capture(page, info, "forced-colours");
 });
+
+async function capture(page: Page, info: TestInfo, name: string) {
+  const path = info.outputPath(`${name.replace(/[^a-zA-Z0-9_-]/g, "-")}.png`);
+  await page.screenshot({ path, fullPage: true });
+  await info.attach(name, { path, contentType: "image/png" });
+}
