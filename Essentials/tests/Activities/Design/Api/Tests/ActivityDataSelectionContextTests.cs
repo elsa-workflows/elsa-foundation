@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Schema;
 using System.Text.Json.Nodes;
 using Elsa.Api.AspNetCore;
 using Elsa.Testing;
@@ -31,6 +32,16 @@ namespace Elsa.Activities.Design.Api.Tests;
 
 public sealed class ActivityDataSelectionContextTests
 {
+    [Fact]
+    public void Whole_value_query_path_is_an_optional_array_in_the_generated_schema()
+    {
+        var schema = JsonSchemaExporter.GetJsonSchemaAsNode(ActivitiesDesignWire.Context.GetTypeInfo(typeof(ActivityDataSelectionQuery))!);
+        using var document = JsonDocument.Parse(schema.ToJsonString());
+        Assert.Equal("array", document.RootElement.GetProperty("properties").GetProperty("memberPath").GetProperty("type").GetString());
+        if (document.RootElement.TryGetProperty("required", out var required))
+            Assert.DoesNotContain(required.EnumerateArray(), member => member.GetString() == "memberPath");
+    }
+
     [Theory]
     [InlineData("{}")]
     [InlineData("{\"includeSources\":true,\"take\":100,\"shapeLimits\":{\"maximumDepth\":4,\"maximumMembers\":128}}")]

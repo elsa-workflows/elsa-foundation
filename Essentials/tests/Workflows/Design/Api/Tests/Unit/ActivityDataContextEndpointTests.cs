@@ -2,6 +2,7 @@ using System.Collections.Immutable;
 using System.Security.Claims;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Schema;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using Elsa.Activities.Design.Core.Contracts;
@@ -24,6 +25,7 @@ using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Design.Tests.Unit.BaselineValidatorTests;
 using Elsa.Workflows.Design.Validations;
 using Elsa.Workflows.Design.Validations.Core.Contracts;
+using Elsa.Workflows.Design.Validations.Core.Models;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
@@ -34,6 +36,19 @@ namespace Elsa.Workflows.Design.Api.Tests.Unit;
 
 public sealed class ActivityDataContextEndpointTests
 {
+    [Fact]
+    public void Whole_value_query_path_is_an_optional_array_in_the_generated_schema()
+    {
+        using var host = new Host();
+        var options = host.Services.GetRequiredService<Microsoft.Extensions.Options.IOptions<Microsoft.AspNetCore.Http.Json.JsonOptions>>().Value.SerializerOptions;
+        options.MakeReadOnly();
+        var schema = JsonSchemaExporter.GetJsonSchemaAsNode(options.GetTypeInfo(typeof(ActivityDataSelectionQuery)));
+        using var document = JsonDocument.Parse(schema.ToJsonString());
+        Assert.Equal("array", document.RootElement.GetProperty("properties").GetProperty("memberPath").GetProperty("type").GetString());
+        if (document.RootElement.TryGetProperty("required", out var required))
+            Assert.DoesNotContain(required.EnumerateArray(), member => member.GetString() == "memberPath");
+    }
+
     [Theory]
     [InlineData("{}")]
     [InlineData("{\"includeSources\":true,\"take\":100,\"shapeLimits\":{\"maximumDepth\":4,\"maximumMembers\":128}}")]

@@ -40,19 +40,20 @@ public sealed record ActivityDataSelectionTarget(string NodeId, string InputKey)
 /// <remarks>Source is an existing canonical role binding. It is re-resolved, not trusted as metadata.</remarks>
 public sealed record ActivityDataSelectionQuery
 {
+    private readonly ImmutableArray<string> _memberPath = [];
+
     public ActivityDataSelectionQuery() { }
 
     /// <summary>Preserves optional query defaults in source-generated JSON readers of this immutable model.</summary>
     [JsonConstructor]
     public ActivityDataSelectionQuery(bool includeSources = true, string? search = null, int skip = 0, int take = 100,
-        ArgumentValue? source = null, ImmutableArray<string> memberPath = default, ActivitySerializedShapeLimits? shapeLimits = null)
+        ArgumentValue? source = null, ActivitySerializedShapeLimits? shapeLimits = null)
     {
         IncludeSources = includeSources;
         Search = search;
         Skip = skip;
         Take = take;
         Source = source;
-        MemberPath = memberPath.IsDefault ? [] : memberPath;
         ShapeLimits = shapeLimits ?? new();
     }
 
@@ -62,7 +63,12 @@ public sealed record ActivityDataSelectionQuery
     public int Skip { get; init; }
     public int Take { get; init; } = 100;
     public ArgumentValue? Source { get; init; }
-    public ImmutableArray<string> MemberPath { get; init; } = [];
+    /// <summary>An omitted path selects the whole value; generated readers may supply the default array.</summary>
+    public ImmutableArray<string> MemberPath
+    {
+        get => _memberPath;
+        init => _memberPath = value.IsDefault ? [] : value;
+    }
     public ActivitySerializedShapeLimits ShapeLimits { get; init; } = new();
 }
 
