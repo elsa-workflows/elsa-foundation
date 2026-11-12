@@ -723,7 +723,7 @@ ol.stmts code { font-size: 12.5px; }
     <tbody>
       <tr><td>Sequence, If, ForEach, While, Parallel</td><td>The previous child completing</td><td>An index; a fixed join</td><td>Built in. The structure says whether more can arrive, so no tokens</td></tr>
       <tr><td>Flowchart</td><td>Outcomes choose the flows</td><td>Tokens (execution paths) and join arrivals per loop round</td><td><b>Graph engine</b>: today's Elsa 4 Flowchart engine (dead-path joins, BPMN's gateway kinds) lifted into a library for the native model</td></tr>
-      <tr><td>StateMachine</td><td>Events fire guarded transitions; exit, transition and entry actions run</td><td>The active configuration of every region</td><td><b>Statechart engine</b>: one event per turn; later events wait with <code>Hold</code> while an action is suspended. A native composite, so it works as a root and nested</td></tr>
+      <tr><td>StateMachine</td><td>Events fire guarded transitions; exit, transition and entry actions run</td><td>The active configuration of every region</td><td><b>Statechart engine</b>: one event per turn; later events wait with <code>Hold</code> while an action is suspended. A native composite (recommended; #3815's design milestone decides), so it works as a root and nested</td></tr>
     </tbody>
   </table></div>
   <p class="note">The plan: extract the graph engine and port the prototype's Flowchart to it (its All join after a decision does not fire today), a BPMN spike that hosts the Bpmn.Semantics interpreter on the kernel, then a StateMachine spike with nested states and parallel regions. Each step is gated by new simulation invariants and mutation checks, and none may move the cost table.</p>
@@ -774,7 +774,7 @@ ol.stmts code { font-size: 12.5px; }
       <text class="ts" x="480" y="258" text-anchor="middle">Both sides derive the same delivery id, ev:{event}:{instance}:{wait}, so the double is refused.</text>
     </svg>
     </div>
-    <figcaption>Default since the owner's decision of 12 November: events are not kept. Only a wait that asks for kept events (BPMN message correlation) pays for the event row and the owed read.</figcaption>
+    <figcaption>Default since the owner's decision of 12 November: events are not kept. Only a wait that asks for kept events (BPMN message correlation) pays for the owed read; the publisher still inserts the event row.</figcaption>
   </figure>
   <h3>The alternative: correlation as an ordinary instance per key</h3>
   <p>Built as a 50-line model with no kernel change: subscribing and publishing are messages to the key's instance, which holds the waits and the kept events. It passed every run. It costs a hop, measured on PostgreSQL for one waiter, one event:</p>
@@ -900,7 +900,7 @@ ol.stmts code { font-size: 12.5px; }
   <div class="legend"><span><i style="background:var(--hot)"></i>Today's core</span><span><i style="background:var(--accent)"></i>New kernel, native model</span></div>
   <figure>
     <div class="fig"><svg class="dg" id="cost-svg" viewBox="0 0 960 424" role="img" aria-label="Round trips per run: today's core needs 48 to 680; the new kernel needs 0 to 123 for the same workflows."></svg></div>
-    <figcaption>Kernel figures are with the fence as its own statement; with the fence in the batch they are lower (2, 8, 2, 22, 11, 82). The model's history is one journal row per commit; the projector's own writes come on top, and today's figures include its viewer rows.</figcaption>
+    <figcaption>Kernel figures are with the fence as its own statement; with the fence in the batch they are lower (2, 8, 2, 22, 8, 82). The fork-join figures are from the merged kernel. The model's history is one journal row per commit; the projector's own writes come on top, and today's figures include its viewer rows.</figcaption>
   </figure>
   <div class="tablewrap"><table>
     <thead><tr><th>Engine</th><th class="n">Balanced run on the owner</th><th>Notes</th></tr></thead>
@@ -945,7 +945,7 @@ ol.stmts code { font-size: 12.5px; }
       <tr><td>Mutation check: the kernel broken one rule at a time</td><td>37 single breakages, 35 caught alone; the other two caught in the combined runs with the rule that covers each. Native model: 5 of 5</td><td>Re-run on 12 November</td></tr>
       <tr><td>Store conformance, 57 semantic cases: in memory and SQLite (either fence)</td><td>In memory 56 pass, 1 skipped. SQLite 54 pass, 1 skipped, 2 reference cases differ where the contract is silent</td><td>Re-run on 12 November</td></tr>
       <tr><td>Store conformance: PostgreSQL, SQL Server, MySQL, MongoDB, either fence</td><td>PostgreSQL 54 pass, 3 differ; SQL Server and MySQL 53 pass, 3 differ, 1 skipped; MongoDB 57 pass</td><td>Merge run; not re-run</td></tr>
-      <tr><td>Stress: 40 s, 5,000 messages, killed connections, stalls</td><td>Every property holds on all five engines, 0 deadlocks</td><td>Merge run; not re-run</td></tr>
+      <tr><td>Stress: 40 s, 5,000 messages, killed connections, stalls</td><td>Every property holds on all five engines; 0 deadlocks on PostgreSQL, SQL Server and MySQL</td><td>Merge run; not re-run</td></tr>
       <tr><td>Stress with the fence broken on purpose</td><td>Violations on every engine: PostgreSQL 228, SQL Server 26, MySQL 611, SQLite 238, MongoDB 390</td><td>Merge run; not re-run</td></tr>
     </tbody>
   </table></div>
@@ -1002,6 +1002,7 @@ ol.stmts code { font-size: 12.5px; }
         <li>Deployment profiles as code; inline execution on every profile</li>
         <li>A stress test with native instances; a three-node MongoDB replica set</li>
         <li>The graph engine extracted from the Flowchart; a BPMN spike on Bpmn.Semantics; a StateMachine spike; an agent spike; a standalone jobs spike (Elsa.Jobs as a job actor type)</li>
+        <li>Short timers and jobs of an Ephemeral instance kept in memory; the stress test with native instances; a three-node MongoDB replica set</li>
       </ul></div>
     <div class="card"><h4>Decided 12 November</h4>
       <ul>
@@ -1025,11 +1026,15 @@ ol.stmts code { font-size: 12.5px; }
         <li>Fan-out and fan-in over 100,000 children without flooding the parent</li>
         <li>Job workers outside the process, in any language, with leases and heartbeats, built from Elsa.Jobs's worker protocol</li>
         <li>Observability: trace context, stable metrics, operator actions on parked work</li>
+        <li>Write volume and bloat: bytes per commit and PostgreSQL dead rows, measured</li>
       </ul></div>
     <div class="card"><h4>Still open</h4>
       <ul>
         <li>What the store contract says about subscribing twice and removing what is absent</li>
         <li>Tenant and trace headers; <code>Describe</code> for lists</li>
+        <li>StateMachine as a native composite: recommended, decided by #3815's design milestone</li>
+        <li>The default join for a Flowchart node with several inbound connections</li>
+        <li>BPMN's scope for its first release</li>
       </ul></div>
   </div>
   <h3>Release 1 scope (decided 12 November)</h3>
@@ -1188,7 +1193,7 @@ ol.stmts code { font-size: 12.5px; }
     ["HTTP request to response, Durable", 153, 12],
     ["WriteLine sequence, Balanced", 48, 3],
     ["Ten WriteLines, Durable", 230, 33],
-    ["Fork, wait, resume, join, Balanced", 142, 15],
+    ["Fork, wait, resume, join, Balanced", 142, 11],
     ["Forty WriteLines, Durable", 680, 123]
   ];
   const x0 = 320, k = 0.8, top = 20, rh = 52;

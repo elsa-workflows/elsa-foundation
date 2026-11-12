@@ -119,7 +119,7 @@
     <tbody>
       <tr><td>Sequence, If, ForEach, While, Parallel</td><td>The previous child completing</td><td>An index; a fixed join</td><td>Built in. The structure says whether more can arrive, so no tokens</td></tr>
       <tr><td>Flowchart</td><td>Outcomes choose the flows</td><td>Tokens (execution paths) and join arrivals per loop round</td><td><b>Graph engine</b>: today's Elsa 4 Flowchart engine (dead-path joins, BPMN's gateway kinds) lifted into a library for the native model</td></tr>
-      <tr><td>StateMachine</td><td>Events fire guarded transitions; exit, transition and entry actions run</td><td>The active configuration of every region</td><td><b>Statechart engine</b>: one event per turn; later events wait with <code>Hold</code> while an action is suspended. A native composite, so it works as a root and nested</td></tr>
+      <tr><td>StateMachine</td><td>Events fire guarded transitions; exit, transition and entry actions run</td><td>The active configuration of every region</td><td><b>Statechart engine</b>: one event per turn; later events wait with <code>Hold</code> while an action is suspended. A native composite (recommended; #3815's design milestone decides), so it works as a root and nested</td></tr>
     </tbody>
   </table></div>
   <p class="note">The plan: extract the graph engine and port the prototype's Flowchart to it (its All join after a decision does not fire today), a BPMN spike that hosts the Bpmn.Semantics interpreter on the kernel, then a StateMachine spike with nested states and parallel regions. Each step is gated by new simulation invariants and mutation checks, and none may move the cost table.</p>
@@ -170,7 +170,7 @@
       <text class="ts" x="480" y="258" text-anchor="middle">Both sides derive the same delivery id, ev:{event}:{instance}:{wait}, so the double is refused.</text>
     </svg>
     </div>
-    <figcaption>Default since the owner's decision of 12 November: events are not kept. Only a wait that asks for kept events (BPMN message correlation) pays for the event row and the owed read.</figcaption>
+    <figcaption>Default since the owner's decision of 12 November: events are not kept. Only a wait that asks for kept events (BPMN message correlation) pays for the owed read; the publisher still inserts the event row.</figcaption>
   </figure>
   <h3>The alternative: correlation as an ordinary instance per key</h3>
   <p>Built as a 50-line model with no kernel change: subscribing and publishing are messages to the key's instance, which holds the waits and the kept events. It passed every run. It costs a hop, measured on PostgreSQL for one waiter, one event:</p>

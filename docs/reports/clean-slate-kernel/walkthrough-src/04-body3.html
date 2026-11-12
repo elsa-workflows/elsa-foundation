@@ -38,7 +38,7 @@
   <div class="legend"><span><i style="background:var(--hot)"></i>Today's core</span><span><i style="background:var(--accent)"></i>New kernel, native model</span></div>
   <figure>
     <div class="fig"><svg class="dg" id="cost-svg" viewBox="0 0 960 424" role="img" aria-label="Round trips per run: today's core needs 48 to 680; the new kernel needs 0 to 123 for the same workflows."></svg></div>
-    <figcaption>Kernel figures are with the fence as its own statement; with the fence in the batch they are lower (2, 8, 2, 22, 11, 82). The model's history is one journal row per commit; the projector's own writes come on top, and today's figures include its viewer rows.</figcaption>
+    <figcaption>Kernel figures are with the fence as its own statement; with the fence in the batch they are lower (2, 8, 2, 22, 8, 82). The fork-join figures are from the merged kernel. The model's history is one journal row per commit; the projector's own writes come on top, and today's figures include its viewer rows.</figcaption>
   </figure>
   <div class="tablewrap"><table>
     <thead><tr><th>Engine</th><th class="n">Balanced run on the owner</th><th>Notes</th></tr></thead>
@@ -83,7 +83,7 @@
       <tr><td>Mutation check: the kernel broken one rule at a time</td><td>37 single breakages, 35 caught alone; the other two caught in the combined runs with the rule that covers each. Native model: 5 of 5</td><td>Re-run on 12 November</td></tr>
       <tr><td>Store conformance, 57 semantic cases: in memory and SQLite (either fence)</td><td>In memory 56 pass, 1 skipped. SQLite 54 pass, 1 skipped, 2 reference cases differ where the contract is silent</td><td>Re-run on 12 November</td></tr>
       <tr><td>Store conformance: PostgreSQL, SQL Server, MySQL, MongoDB, either fence</td><td>PostgreSQL 54 pass, 3 differ; SQL Server and MySQL 53 pass, 3 differ, 1 skipped; MongoDB 57 pass</td><td>Merge run; not re-run</td></tr>
-      <tr><td>Stress: 40 s, 5,000 messages, killed connections, stalls</td><td>Every property holds on all five engines, 0 deadlocks</td><td>Merge run; not re-run</td></tr>
+      <tr><td>Stress: 40 s, 5,000 messages, killed connections, stalls</td><td>Every property holds on all five engines; 0 deadlocks on PostgreSQL, SQL Server and MySQL</td><td>Merge run; not re-run</td></tr>
       <tr><td>Stress with the fence broken on purpose</td><td>Violations on every engine: PostgreSQL 228, SQL Server 26, MySQL 611, SQLite 238, MongoDB 390</td><td>Merge run; not re-run</td></tr>
     </tbody>
   </table></div>
@@ -140,6 +140,7 @@
         <li>Deployment profiles as code; inline execution on every profile</li>
         <li>A stress test with native instances; a three-node MongoDB replica set</li>
         <li>The graph engine extracted from the Flowchart; a BPMN spike on Bpmn.Semantics; a StateMachine spike; an agent spike; a standalone jobs spike (Elsa.Jobs as a job actor type)</li>
+        <li>Short timers and jobs of an Ephemeral instance kept in memory; the stress test with native instances; a three-node MongoDB replica set</li>
       </ul></div>
     <div class="card"><h4>Decided 12 November</h4>
       <ul>
@@ -163,11 +164,15 @@
         <li>Fan-out and fan-in over 100,000 children without flooding the parent</li>
         <li>Job workers outside the process, in any language, with leases and heartbeats, built from Elsa.Jobs's worker protocol</li>
         <li>Observability: trace context, stable metrics, operator actions on parked work</li>
+        <li>Write volume and bloat: bytes per commit and PostgreSQL dead rows, measured</li>
       </ul></div>
     <div class="card"><h4>Still open</h4>
       <ul>
         <li>What the store contract says about subscribing twice and removing what is absent</li>
         <li>Tenant and trace headers; <code>Describe</code> for lists</li>
+        <li>StateMachine as a native composite: recommended, decided by #3815's design milestone</li>
+        <li>The default join for a Flowchart node with several inbound connections</li>
+        <li>BPMN's scope for its first release</li>
       </ul></div>
   </div>
   <h3>Release 1 scope (decided 12 November)</h3>
