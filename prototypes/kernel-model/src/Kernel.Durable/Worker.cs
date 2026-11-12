@@ -30,7 +30,11 @@ public sealed record WorkerOptions
     /// <summary>Where live output goes: to callers on this process, or over the runtime's transport to other nodes.</summary>
     public IReplyTransport? Transport { get; init; }
 
-    /// <summary>A monotonic clock in milliseconds. Only differences are used: the database tells the time.</summary>
+    /// <summary>
+    /// The host's monotonic clock in milliseconds. Only differences are used: the database tells the time. The default
+    /// is the one clock the kernel names, for hosts that pass none; the simulation always passes its own (FINDINGS
+    /// section 24).
+    /// </summary>
     public Func<long> Monotonic { get; init; } = static () => Environment.TickCount64;
 
     public Func<long>? WallClock { get; init; }     // read only under Flaw.WallClockTimers
@@ -48,7 +52,8 @@ public sealed record WorkerOptions
 /// It is a single-threaded state machine. A pass (<see cref="RunAsync"/>) is <see cref="PollAsync"/> when woken,
 /// <see cref="LoadAsync"/>, <see cref="MeetAsync"/>, <see cref="RunTurn"/> for every instance that is ready, and
 /// <see cref="FlushAsync(CancellationToken)"/>. The simulation calls those pieces one at a time, in any order, and
-/// decides when. Nothing here reads a clock, starts a thread or picks at random.
+/// decides when. Nothing here reads a clock but the one in <see cref="WorkerOptions.Monotonic"/>, starts a thread or
+/// picks at random.
 /// </summary>
 public sealed class Worker : IScopeActivation, ITurnServices
 {
