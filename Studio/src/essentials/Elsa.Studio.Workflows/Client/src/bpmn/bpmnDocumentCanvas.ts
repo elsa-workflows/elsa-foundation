@@ -117,7 +117,7 @@ export function projectBpmnDocumentCanvas(owner: ActivityNode, address: BpmnScop
           const hostLanes = laneMembership(host!);
           const process = bpmnOwningProcess(host!);
           const containers = shapes.filter(candidate => candidate.elementType === "participant"
-            ? resolveBpmnDocumentReference(parsed, candidate.element, candidate.element.getAttribute("processRef")) === process
+            ? !!process && resolveBpmnDocumentReference(parsed, candidate.element, candidate.element.getAttribute("processRef")) === process
             : candidate.elementType === "lane" ? hostLanes.some(lane => candidate.element === lane || candidate.element.contains(lane))
               : isSubProcessElementType(candidate.elementType) && candidate.element.contains(host!));
           diagnostics.push({ code: "missing-attachment-di", elementId: shape.elementId, diId: shape.shapeId,
