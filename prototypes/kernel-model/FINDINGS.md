@@ -738,3 +738,67 @@ All at commit `fca58696ed` plus the documentation, on the machine shared with ot
 
   The stress test drives the models of round 1 only; it does not exercise the heartbeat, the projector, kernel
   commands, start subscriptions, reply addresses or deletes on PostgreSQL.
+
+## 23. The merge of the four branches. Run
+
+Branch `agent/claude/kernel-model-merged`: round 3 (`0f09246d32`) as the base, then the engines (`1aeede63f2`, merge
+`899c5a8ce6`), MongoDB (`5d5e7fc36f`, merge `9d4f4ef851`) and native (`60feb16e9c`, merge `c7ae88efea`).
+
+### What conflicted, and how it was resolved
+
+| Where | Conflict | Resolution |
+|---|---|---|
+| `EfStore.cs` | Textually one hunk (the model); in meaning, every statement round 3 added was PostgreSQL/SQLite SQL (`ON CONFLICT`, `RETURNING`), the delete and the unsubscribe ran before `SaveChanges` | Each new operation in every dialect (`Engine.HeartbeatAsync`, `SubscribeAsync`, `ViewAsync`; `ReplyTo` in the dialects' poll and add). The instance delete moved into the batch with its revision as token; the set-based deletes run after `SaveChanges`, so with the fence in the batch they run only once it held (E1) and lock after the partition row (E9). E4 for the projector's transaction; E8-style indexes on `Subscriptions(Instance)` and `Journal(Partition, Instance)` |
+| `IKernelStore` | Round 3 added the heartbeat, start subscriptions, projector and view rows, delete, unsubscribe-all, held messages and four instance columns; the suite and `MongoStore` knew none of them | Eleven semantic cases, one per operation, and one for E1 with a stale owner's delete, unsubscribe and hold. `MongoStore` implements them in its one bulk write (M5's upsert fence still stops it) and its transactions (M2, M3). `ReadViewsAsync` added so the suite can read what the projector wrote |
+| Stress tests | Round 3's operations were not exercised under concurrency anywhere | Both stress harnesses now suspend, resume, terminate and delete trees and start instances by events, and check their end state. The journal check allows the gaps deletes leave |
+| HTTP | Native's `ILiveChannel` and round 3's `Emit`, `Ambient`, `Requests` | Native emits with the kernel's `Emit`; an HTTP start passes the request as `Ambient`; hosts use `Requests` and `IReplyTransport`. N2 (`OnApplied`, `OnReset`, `Unit.Parked`) removed: round 3's release in `Apply` and the "lost" of `Reset` do that job. The opt-out moved from the response to the route, on the caller's reply address |
+| `IStep.Publish` (N1) | Round 3's start subscriptions and tickets do not publish from a step | Kept as the one way a step publishes; now passes the partition count, so a step's event can start an instance. A publish ticket is no suspect |
+| `World.cs`, `Checks.cs`, `Program.cs` | Config fields, model lists, the stray-subscription check, the settle loop, the summary line | All kept: `Upgrade` and `Native`; native waits allowed beside tree leaves; `Unfair()` then `NativeMeet()` at settle |
+
+### Frictions and defaults applied
+
+- Frictions of NATIVE.md, each small and on the existing ticket and commit mechanisms (run): F-N3 `Events.Delivered`;
+  F-N4 `Send` returns the id and `Recall` deletes a message to self with the commit (native cancels its timers);
+  F-N5 `Start(..., detached: true)` (native's DispatchWorkflow); F-N6 `Redelivered` (native journals "may have run";
+  new check N6: in the runs below 3,656 and 972 External effects ran again, every one told); F-N8 a wait carries the
+  meet ticket only when it asks for kept events (fork-join-resume Balanced on PostgreSQL: 15 to 11 round trips).
+  Not done: F-N7 (short timers in memory for ephemeral instances: a new mechanism), F-N10 (a publish to a waiter in the
+  same partition is not handed over in memory), F-N11 (two places say "ephemeral").
+- The owner's defaults of 12 November (run): events are not kept for a wait unless it asks (`Subscribe(..., keep:
+  true)`; the simulation's waiter asks, so invariant 13 is checked as before; F-N9 is gone); lease 10 s
+  (`Defaults.Lease`); 64 partitions on server stores and 1 on SQLite (`CreateAsync()`); a response released after the
+  commit of the step that wrote it, opt-out per route. The simulation and stress tests keep their short leases.
+
+### The gates
+
+| Gate | Result |
+|---|---|
+| Simulation, 200,000 × 300 | 0 failed, 0 innocent parked (106 s) |
+| Simulation, 20,000 × 1,000 | 0 failed, 12 innocent parked (as section 22) |
+| `--native`, 200,000 × 300 | 0 failed; 1,438,331 native instances matched a run without faults |
+| `--native`, 20,000 × 1,000 | 0 failed, 15 innocent parked; 409,284 matched |
+| Mutation check, 20,000 seeds | 37 of 39 caught alone, at the first failing seeds of section 22 for every round 3 flaw; `FenceWithoutPosition` and `DeleteWithoutCount` caught with the rule that covers each (seeds 19, 1) |
+| Native mutations, 20,000 seeds | All 5 caught: `InFlightInMemory` 1, `JoinWithoutGuard` 6, `ResumeAnyChild` 1, `NoAttemptCommit` 12, `ScopeInMemory` 1 (NATIVE.md had 2, 5, 2, 2, 6: moved by the merged kernel's actions) |
+| Native smoke | 31 of 31 ok, including release after commit, the per-route opt-out, two nodes, an owner lost while a request waits |
+| Native cost, SQLite and PostgreSQL | Every row ok, nothing left |
+| Semantic cases (57) | In-memory 56 + 1 skipped; SQLite 54 + 2 differ + 1 skipped; PostgreSQL 54 + 3 differ; SQL Server and MySQL 53 + 3 differ + 1 skipped; MongoDB 57. The same with the fence in the batch. With E1 off (`--m5`) the new stale-owner case fails on PostgreSQL |
+| Stress, 40 s, 5,000 messages | PostgreSQL holds (630 sessions killed, 530 resets, 0 deadlocks); SQL Server RCSI checked holds (1,360 killed, 0 deadlocks); MySQL holds (781 killed, 0 deadlocks); SQLite WAL holds; MongoDB holds (350 connections killed). Each with 439 trees terminated (222 deleted) and 412 instances started by an event |
+| Fence broken on purpose, 15 s | PostgreSQL 228 violations, SQL Server 26, MySQL 611, SQLite 238, MongoDB 390: every engine fails, as it must |
+| Cost | DESIGN.md "What it costs": every row of ENGINES.md and MONGO.md as before within a round trip (SQL Server's 1,000 at once 13 / 12, was 11 / 10); round 3's operations measured for the first time |
+
+Seeds named in sections 2 to 20 had already moved on the round 3 branch itself (checked on its tip: the same seeds pass
+there as here); section 22's first failing seeds are the replayable ones, and all of them replay unchanged.
+
+### New findings
+
+None from the gates: no gate failed after the merge for a reason other than a merge mistake. Two merge mistakes were
+caught before they were committed: the stress tests' journal check took the gaps of deletes for I6 (run), and round
+3's set-based deletes ran before the fence in the batch (found by reading, fixed as above; whether the old order ever
+answered wrongly was not run). Observations, not faults: a projector round
+costs one statement per instance in its page; a terminate or a delete costs one extra round trip on EF for its
+set-based delete.
+
+### Not done
+
+The seam between layers 1 and 2; draft 4's workflow-instance layer; F-N7, F-N10, F-N11; skipping the event insert when
+no wait can want it kept; the stress test with native instances; a MongoDB replica set of three.

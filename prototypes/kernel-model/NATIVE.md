@@ -3,6 +3,15 @@
 A spike: Elsa's native workflows as an execution model on the standalone kernel of this folder, measured and attacked.
 It answers whether the kernel's model contract holds for real workflow semantics, and at what cost.
 
+**After the merge (FINDINGS.md section 23).** This text describes the native branch as it was built. On the merged
+kernel: the live channel of section 4 (`ILiveChannel`, `LiveNode`, `LiveNetwork`) and the kernel hooks N2
+(`OnApplied`, `OnReset`) are gone; the model emits with the kernel's `Emit`, an HTTP start hands the request over as
+`Ambient`, each node keeps its requests in the kernel's `Requests`, and the opt-out of the release rule is per route
+(`HttpEndpoint.RespondBeforeCommit`), not per response. N1 (`IStep.Publish`) stays. Frictions F-N3 to F-N6 and F-N8
+are fixed in the kernel (`Events.Delivered`, `Recall`, `Start(..., detached)`, `Redelivered`, and a wait that does not
+ask for kept events needs no meet ticket), and F-N9 by the owner's default that a wait gets no event published before
+it. The simulation's check N6 is new. The seeds and costs below are the branch's; section 23 has the merged ones.
+
 Every claim says how it is known: **run** means a command below produced it; **reasoned** means nobody ran it.
 
 | Path | What |

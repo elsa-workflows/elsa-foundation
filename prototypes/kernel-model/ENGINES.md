@@ -4,6 +4,11 @@ The EF store of the kernel model on PostgreSQL, SQL Server, MySQL and SQLite: th
 [FINDINGS.md](FINDINGS.md) section 4, the cost count of section 5, probes for what a review of the protocol predicted,
 the store conformance suite, and the fence broken on purpose on every engine.
 
+**After the merge (FINDINGS.md section 23).** Round 3's store operations (heartbeat, start subscriptions, the
+projector's row and the view rows, delete, unsubscribe-all, held messages, reply addresses) are implemented in every
+dialect; E1, E4, E7 and E8 hold for them, and the conformance suite has cases for each. The figures below are the
+branch's; section 23 has the merged ones.
+
 Evidence is marked as in FINDINGS: **run** means a command below produced it; **reasoned** means nobody ran it.
 Raw output of every run is under `.out/` (not committed).
 

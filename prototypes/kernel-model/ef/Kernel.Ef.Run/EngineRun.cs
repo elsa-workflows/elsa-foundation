@@ -356,6 +356,25 @@ static class EngineRun
             owner.Post(new Message($"m{++n}", InstanceRef.In(0, $"parent{n}"), Kinds.Start, Start: new StartSpec("parent", "p", Json.Write(new ParentInput(3, 0)))), fresh: true);
             await Drain(owner, poll: false);
         });
+        // Round 3's operations (merge): a kernel command from outside, the projector, a heartbeat, a start on an event.
+        var tree = InstanceRef.In(0, $"tree{++n}");
+        await Row("terminate a parent with three waiting children, from another node", () => Drain(owner, poll: true), async () =>
+        {
+            owner.Post(new Message($"m{++n}", tree, Kinds.Start, Start: new StartSpec("parent", "p", Json.Write(new ParentInput(3, -1)))), fresh: true);
+            await Drain(owner, poll: false);
+            await store.AddAsync(new Message($"m{++n}", tree, Kinds.Terminate, KeepUntil: keep));
+        });
+        await Row("delete that parent, from another node", () => Drain(owner, poll: true), async () => await store.AddAsync(new Message($"m{++n}", tree, Kinds.Delete, KeepUntil: keep)));
+        await Row("a start subscription, then an event that starts an instance", async () =>
+        {
+            var start = new SubscriptionRow($"key{++n}", "", "s", OnEvent.Spec("o"));
+            await Events.SubscribeAsync(store, start, 1);     // one partition: the instance lands in the owner's
+            await Events.PublishAsync(store, new EventRow(start.Key, $"e{n}", null, keep), 1);
+            await Drain(owner, poll: true);
+        });
+        await Row("a projector round over the journal so far", () => new Projector(store, 0, take: 10_000).RoundAsync());
+        await Row("a heartbeat", async () => await store.HeartbeatAsync("owner", TimeSpan.FromSeconds(30)));
+
         foreach (var many in target.Get("many", "100,1000").Split(",").Select(int.Parse))
             await Row($"{many} balanced instances started at once", async () =>
             {
@@ -369,7 +388,7 @@ static class EngineRun
             });
 
         await using var check = create();
-        var unfinished = await check.Instances.CountAsync(i => i.Status != InstanceStatus.Finished);
+        var unfinished = await check.Instances.CountAsync(i => i.Status != InstanceStatus.Finished && i.Status != InstanceStatus.Cancelled);
         var left = await check.Messages.CountAsync(m => !m.Done);
         Console.WriteLine($"check: {await check.Instances.CountAsync()} instances, {unfinished} not finished, {left} messages left, position {(await check.Partitions.SingleAsync(p => p.Id == 0)).Position}");
         return unfinished == 0 && left == 0 ? 0 : 1;

@@ -6,6 +6,11 @@ extra, the EF store on SQLite and PostgreSQL. `src/Kernel/` and `EfStore.cs` are
 
 **Run** means a command produced it (outputs under `.out/`, not committed); **reasoned** means nobody ran it.
 
+**After the merge (FINDINGS.md section 23).** `MongoStore` implements round 3's operations (heartbeat, start
+subscriptions, the projector's document and the view documents, delete, unsubscribe-all, held messages, reply
+addresses), following M1 to M5; the suite has a case for each. "`src/Kernel/` and `EfStore.cs` are unchanged" was
+true on this branch only. The figures below are the branch's; section 23 has the merged ones.
+
 ## 1. What was built
 
 | Path | What |
