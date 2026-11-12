@@ -301,6 +301,13 @@ describe("complete BPMN document authority", () => {
     expect(() => command({ kind: "attribute", target: address("Task"), name: "vendor:new", namespaceURI: "urn:changed", value: "new" })).toThrow("explicitly declared matching prefix");
   });
 
+  it.each(['<!-- vendor marker -->', '<?vendor preserve?>', '<vendor:keep/>'])("refuses losing opaque data target content %s", retained => {
+    const original = owner(dataDocument().replace('<bpmn:targetRef>Input</bpmn:targetRef>', `<bpmn:targetRef>${retained}Input</bpmn:targetRef>`));
+    const before = structuredClone(original);
+    expect(() => applyBpmnDocumentCommands(original, [{ kind: "dataReferences", elementId: "InputAssociation", sourceRefs: ["DataRef"], targetRef: "Input2" }])).toThrow("retained");
+    expect(original).toEqual(before);
+  });
+
   it("projects data-association child references and all semantic sources", () => {
     const association = projectBpmnDocumentScene(owner(dataDocument()), "Diagram").edges.find(edge => edge.elementId === "InputAssociation")!;
     expect(association.elementType).toBe("dataInputAssociation");
