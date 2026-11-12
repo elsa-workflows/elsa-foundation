@@ -1962,12 +1962,13 @@ export interface StudioActivityDefinitionImplementationEditorProps {
   historyResetKey?: string;
   value: StudioActivityDefinitionImplementationState;
   readOnly: boolean;
+  onChange(value: StudioActivityDefinitionImplementationState): void;
   /**
-   * The host returns false before admitting a stale or unauthorized change, or true after updating
-   * its canonical implementation. Controlled editors supply their acknowledged baseline for edits
-   * and history actions. Legacy editors and void-returning hosts remain supported.
+   * Optional synchronous parent admission. Return true only after admitting this value against its
+   * exact baseline, or false without changing canonical state. Controlled editors require literal
+   * true before updating history; the legacy onChange notification is not an acknowledgement.
    */
-  onChange(value: StudioActivityDefinitionImplementationState, expectedValue?: StudioActivityDefinitionImplementationState): boolean | void;
+  tryChange?(value: StudioActivityDefinitionImplementationState, expectedValue: StudioActivityDefinitionImplementationState): boolean;
 }
 
 export interface StudioActivityDefinitionImplementationEditorContribution extends StudioBackendAwareContribution {

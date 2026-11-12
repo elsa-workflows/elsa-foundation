@@ -34,7 +34,8 @@ export function useGraphAuthoringCanvas<TDocument>({
   applyModel,
   reconcileDocument,
   documentSignature = stableSignature,
-  onChange
+  onChange,
+  tryChange
 }: {
   document: TDocument;
   adapter: GraphDocumentAdapter<TDocument>;
@@ -55,7 +56,10 @@ export function useGraphAuthoringCanvas<TDocument>({
   reconcileDocument?(previous: TDocument, next: TDocument): TDocument;
   /** Compare server acknowledgements using the host's persisted representation. */
   documentSignature?(document: TDocument): string;
-  onChange(document: TDocument, expectedDocument?: TDocument): boolean | void;
+  /** Legacy notification; its return value is not a parent acknowledgement. */
+  onChange(document: TDocument): void;
+  /** Optional synchronous admission against the exact acknowledged baseline. */
+  tryChange?(document: TDocument, expectedDocument: TDocument): boolean;
 }) {
   const selectedNodeIdRef = useRef(selectedNodeId);
   selectedNodeIdRef.current = selectedNodeId;
@@ -113,20 +117,28 @@ export function useGraphAuthoringCanvas<TDocument>({
     // receipt when the Activity Definition host has closed or advanced this provider draft.
     // Register only the echo marker early: a synchronous parent render may run the signature effect.
     emittedSignatureRef.current = nextSignature;
-    let accepted: boolean | void;
-    try { accepted = onChange(next, previous); }
-    catch (error) { restoreCanvas(); throw error; }
-    if (accepted === false) {
-      restoreCanvas();
-      return false;
+    try {
+      if (tryChange) {
+        const accepted: unknown = tryChange(next, previous);
+        if (accepted !== true) {
+          // A malformed async host is never an acknowledgement; observe a rejected Promise
+          // without letting its eventual completion commit child history.
+          void Promise.resolve(accepted).catch(() => undefined);
+          restoreCanvas();
+          return false;
+        }
+      } else {
+        onChange(next);
+      }
     }
+    catch (error) { restoreCanvas(); throw error; }
     historyRef.current = history;
     documentRef.current = next;
     setNodes(model.nodes);
     setEdges(model.edges);
     setHistoryVersion(version => version + 1);
     return true;
-  }, [derive, documentSignature, onChange, reconcileDocument]);
+  }, [derive, documentSignature, onChange, reconcileDocument, tryChange]);
 
   const commitCanvas = useCallback((
     nextNodes: Node<WorkflowNodeData>[],
