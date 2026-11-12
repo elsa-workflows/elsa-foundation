@@ -120,8 +120,9 @@ It permits:
   random sequence;
 - functions implemented in .NET that are registered for this profile and exchange only JSON values with
   the expression. A call is never refused or skipped because of what it does, and the workflow designer
-  owns the idempotency of external effects (D-6). No function profile is required; a durability hint, if
-  the D-2 details need one, is defined there.
+  owns the idempotency of external effects (D-6). No function profile is required. A function is effect-free
+  unless its host declares it effectful at registration; only a declared call gets the commit boundary
+  (ADR 0045 §5, D-6).
 
 It forbids:
 
@@ -283,10 +284,11 @@ represent the operation:
 3. parameter binding, options, result type, source, or capability change does change the hash;
 4. restart/retry uses the pinned value without reevaluation;
 5. fresh and durable `Any` values produce equivalent reads;
-6. undeclared ambient reads, all mutation forms, service/configuration access, and nondeterministic
-   helpers are rejected;
+6. undeclared ambient reads, all mutation forms and service/configuration access are rejected;
+   nondeterministic helpers (clock, randomness, GUIDs) are allowed (D-1);
 7. expression results cannot downgrade source sensitivity/protection; and
-8. no processor, filter, or event can add a forbidden host capability to the pure profile.
+8. no processor, filter, or event can add a forbidden host capability to the `binding-readonly-v1`
+   profile.
 
 Importer fixtures MUST include literals, variables, workflow inputs, unique prior outputs,
 output-only references, combined expression/reference values, JavaScript, Liquid, loops, and nested

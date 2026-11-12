@@ -63,9 +63,9 @@ behaviour.
 - **The name starts a new family at v1.** The succession from `binding-pure-v1` is recorded here, not in the version
   number.
 - **It also allows functions implemented in .NET** that are registered for the profile and exchange only JSON values
-  with the script. A call is never refused or skipped because of what it does. No function profile is required; if
-  ADR 0045 needs a classification for the durability boundary of input evaluation, it is a durability hint defined
-  there.
+  with the script. A call is never refused or skipped because of what it does. No function profile is required. A
+  function is effect-free unless its host declares it effectful at registration; only a declared call gets the
+  commit boundary of input evaluation (ADR 0045 §5, D-6).
 - **It forbids live .NET objects** while .NET interop is off, which is the default. A host may enable .NET interop
   for JavaScript through one replaceable engine strategy, provided by a feature (ADR 0046 amendment V10). It then
   applies to script activities and input-binding expressions alike: a JavaScript input expression takes the same
