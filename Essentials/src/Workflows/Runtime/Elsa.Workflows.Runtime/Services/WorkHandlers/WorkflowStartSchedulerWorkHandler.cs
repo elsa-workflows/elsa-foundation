@@ -338,7 +338,11 @@ public sealed class WorkflowStartSchedulerWorkHandler : IWorkflowSchedulerWorkHa
             authority: startPayload.Authority,
             dispatchNestingDepth: startPayload.DispatchNestingDepth,
             testScope: startPayload.TestScope)
-        { ModelWorkOrigin = startPayload.StartAuthority?.ModelWork };
+        {
+            ModelWorkOrigin = startPayload.StartAuthority?.ModelWork,
+            HistoryCapturePolicy = startPayload.HistoryCapturePolicy,
+            HistoryCaptureEnabledAtAdmission = startPayload.HistoryCaptureEnabledAtAdmission
+        };
 
         return new RuntimeSchedulerWorkItem(
             workItemId: RuntimeChainId.Derive(startWorkItem.WorkItemId, $"checkpoint:{RuntimeCheckpointNames.WorkflowStarted}"),

@@ -23,7 +23,9 @@ Current main at resumption is `dff7c490d0e5501b22d4ba89beb389c956d4f423`. #3850 
 | Plain checkpoint marker reads: [#4166](https://github.com/elsa-workflows/elsa-foundation/pull/4166), `ae248a69a6` | Preserve the normal successful-write path; history-free commits must not regain unconditional marker reads. |
 | New-run activity lookup probes: [#4030](https://github.com/elsa-workflows/elsa-foundation/pull/4030), `1769c5b5a8` | Preserve current read-selection/cache ownership and bounded work when adding history queries. |
 
-The resumption check found an open historical `main is red: CI` tracker, #4177, and a still-running required shard on current main. That is not a claim of a healthy base. Recheck actual required results before depending on them or merging; do not count unrelated skips as passes.
+The initial resumption check found an open historical `main is red: CI` tracker, #4177, and a still-running required shard on the base. Its required Build & test later passed, as recorded in [S01's review receipt](https://github.com/elsa-workflows/elsa-foundation/pull/4227#issuecomment-6837882481). The open historical tracker is not silently closed. Recheck actual required results before depending on them or merging; do not count unrelated skips as passes.
+
+Adjacent open Studio work: [#4223](https://github.com/elsa-workflows/elsa-foundation/pull/4223), head `d2ce73eca248f22975fa64a6965081b02b0d49fb`, keeps a timeline row's selection/focus in Timeline until Activity is explicitly opened. It was not landed at this check. Reconcile its eventual source/tests when implementing S06/S07; its author-reported evidence is not acceptance of #3849.
 
 ## Task-ordered review units
 
@@ -31,10 +33,11 @@ Each row names a coherent boundary, not permission to include every donor file m
 
 | Slice | Tasks | Review boundary and required proof | Status |
 |---|---|---|---|
-| S01 | T001–T003 | Adopt the selected spec/reference, design contracts and this delivery map. Validate documentation and independent boundary review; no runtime/Studio implementation is enabled. | Preparing |
-| S02 | T004 | Immutable history envelope, policy/batch/head/bookmark/query contracts and API tracking. Constructor/identity/safety behavior and compatibility tests. | Not started |
-| S03 | T005, T007 | Optional checkpoint write sidecar, fingerprint/fold preservation and writer-reader capability contract. History-free replay and unchanged continuation separation controls. | Not started |
-| S04 | T006, T008 | Actual capture-policy admission, deterministic capture and atomic in-memory participant. Split capture and storage if needed; qualify rollback/replay/no-record and scoped registration before enabling. | Not started |
+| S01 | T001–T003 | Adopt the selected spec/reference, design contracts and this delivery map. Validate documentation and independent boundary review; no runtime/Studio implementation is enabled. | [#4227](https://github.com/elsa-workflows/elsa-foundation/pull/4227): source review clean R3; ready, required CI queued; unmerged |
+| S02 | T004 | Immutable history envelope, policy/batch/head/bookmark/query contracts and API tracking. Constructor/identity/safety behavior and compatibility tests. | [#4236](https://github.com/elsa-workflows/elsa-foundation/pull/4236): source review clean R2; draft on S01; 24 cases not run |
+| S03 | T005, T007 | Optional checkpoint write sidecar, fingerprint/fold preservation and writer-reader capability contract. History-free replay and unchanged continuation separation controls. | [#4243](https://github.com/elsa-workflows/elsa-foundation/pull/4243): source review clean R1; draft on S02; 12 cases not run |
+| S04a | T006, supporting T007 | Optional admission-policy/known-choice carriers, actual start/checkpoint handoff, retained-policy precedence including legacy absence, and Required-state refusal without a contribution. No production resolver/capture registration yet. | Preparing; 14 new cases not run; tasks remain open for complete qualification |
+| S04b+ | T006–T008 | Qualified actual policy composition, deterministic capture and atomic in-memory participant. Split provenance/capture/storage where needed; qualify rollback/replay/no-record and scoped registration before enabling. | Not started |
 | S05 | T009–T010 | Authorized bounded run/event read APIs and honest coverage/capability results, with real handler/authorization and unknown-kind tests. | Not started |
 | S06 | T011–T014 | Primary Timeline/Diagram workspace, stable observation/filter/selection and affected Workflows/browser behavior. Preserve delivered run-canvas changes. | Not started |
 | S07 | T015–T018 | Exact execution journal and Journal/Bookmarks/Data navigation over compact Inputs; preserve occurrence/attempt/descendant identity and exact links. | Not started |

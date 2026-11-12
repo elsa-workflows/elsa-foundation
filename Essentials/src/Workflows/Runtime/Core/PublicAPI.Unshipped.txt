@@ -10700,3 +10700,15 @@ Elsa.Workflows.Runtime.Core.Contracts.IRuntimeCheckpointCommitStore.SupportsHist
 Elsa.Workflows.Runtime.Core.Contracts.IRuntimeCheckpointCommitStore.CanCommitHistory(Elsa.Workflows.Runtime.Core.Contracts.IRuntimeHistoryStore! selectedStore) -> bool
 Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpointCommit.HistoryBatches.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryBatch!>?
 Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpointCommit.HistoryBatches.init -> void
+Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpointCommandPayload.HistoryCapturePolicy.init -> void
+Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpointCommandPayload.HistoryCapturePolicy.get -> Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryCapturePolicy?
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionStartCommandPayload.HistoryCapturePolicy.get -> Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryCapturePolicy?
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionStartCommandPayload.HistoryCapturePolicy.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionState.HistoryCapturePolicy.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionState.HistoryCapturePolicy.get -> Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryCapturePolicy?
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionState.HistoryCaptureEnabledAtAdmission.get -> bool?
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionState.HistoryCaptureEnabledAtAdmission.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionStartCommandPayload.HistoryCaptureEnabledAtAdmission.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionStartCommandPayload.HistoryCaptureEnabledAtAdmission.get -> bool?
+Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpointCommandPayload.HistoryCaptureEnabledAtAdmission.get -> bool?
+Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpointCommandPayload.HistoryCaptureEnabledAtAdmission.init -> void

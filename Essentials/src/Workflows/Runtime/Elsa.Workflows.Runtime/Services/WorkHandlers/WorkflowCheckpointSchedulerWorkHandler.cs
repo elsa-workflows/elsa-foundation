@@ -270,6 +270,8 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
                 [RuntimeMetadataKeys.SchedulerWorkItemId] = workItem.WorkItemId
             }, persistenceMode), priorWorkflowState, workItem)))
         {
+            HistoryCapturePolicy = priorWorkflowState is not null ? priorWorkflowState.HistoryCapturePolicy : payload.HistoryCapturePolicy,
+            HistoryCaptureEnabledAtAdmission = priorWorkflowState is not null ? priorWorkflowState.HistoryCaptureEnabledAtAdmission : payload.HistoryCaptureEnabledAtAdmission,
             RunKind = priorWorkflowState?.RunKind ?? payload.RunKind,
             PinnedSource = priorWorkflowState?.PinnedSource ?? payload.PinnedSource,
             Partition = priorWorkflowState?.Partition ?? payload.Partition,
@@ -370,6 +372,8 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
                 [RuntimeMetadataKeys.SchedulerWorkItemId] = workItem.WorkItemId
             }, priorWorkflowState)))
         {
+            HistoryCapturePolicy = priorWorkflowState is not null ? priorWorkflowState.HistoryCapturePolicy : payload.HistoryCapturePolicy,
+            HistoryCaptureEnabledAtAdmission = priorWorkflowState is not null ? priorWorkflowState.HistoryCaptureEnabledAtAdmission : payload.HistoryCaptureEnabledAtAdmission,
             RunKind = priorWorkflowState?.RunKind ?? payload.RunKind,
             PinnedSource = priorWorkflowState?.PinnedSource ?? payload.PinnedSource,
             Partition = priorWorkflowState?.Partition ?? payload.Partition,
