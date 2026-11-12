@@ -22,12 +22,13 @@ public static class Cli
                 if (rest.Length > 0) options = options with { Seconds = int.Parse(rest[0]) };
                 if (rest.Length > 1) options = options with { Messages = int.Parse(rest[1]) };
                 if (rest.Length > 2) options = options with { FaultRate = double.Parse(rest[2], System.Globalization.CultureInfo.InvariantCulture) };
-                Console.WriteLine($"{provider.Name}: stress {options.Seconds} s, {options.Messages} messages, fault rate {options.FaultRate}{(options.BrokenFence ? ", FENCE BROKEN ON PURPOSE" : "")}");
+                if (rest.Length > 3 && rest[3].Split('-') is [var min, var max]) options = options with { KillEvery = (int.Parse(min), int.Parse(max)) };
+                Console.WriteLine($"{provider.Name}: stress {options.Seconds} s, {options.Messages} messages, fault rate {options.FaultRate}, a kill every {options.KillEvery.Min}-{options.KillEvery.Max} ms{(options.BrokenFence ? ", FENCE BROKEN ON PURPOSE" : "")}");
                 return await Stress.RunAsync(provider, options);
             case ["cost"]:
                 return await Cost.RunAsync(provider);
             default:
-                Console.Error.WriteLine("semantic [filter] | semantic-broken [filter] | stress [seconds] [messages] [fault rate] | stress-broken ... | cost");
+                Console.Error.WriteLine("semantic [filter] | semantic-broken [filter] | stress [seconds] [messages] [fault rate] [kill every min-max ms] | stress-broken ... | cost");
                 return 2;
         }
     }

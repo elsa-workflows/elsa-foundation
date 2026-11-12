@@ -101,6 +101,7 @@ public static class Stress
             }
         }))).ToList();
 
+        var killErrors = new ConcurrentDictionary<string, int>();
         var chaos = Task.Run(async () =>
         {
             var random = new Random(7);
@@ -108,7 +109,7 @@ public static class Stress
             {
                 await Task.Delay(random.Next(o.KillEvery.Min, o.KillEvery.Max));
                 try { kills += await provided.KillAsync(random); }
-                catch (Exception) { }
+                catch (Exception e) { killErrors.AddOrUpdate($"{e.GetType().Name}: {e.Message.Split('\n')[0]}", 1, (_, n) => n + 1); }
             }
         });
 
@@ -168,6 +169,8 @@ public static class Stress
         calm = true;
         faulty.Calm = true;
         await chaos;
+        if (provided.Chaos.Length > 0) output.WriteLine("  " + provided.Chaos);
+        foreach (var (error, n) in killErrors) output.WriteLine($"  the connection killer failed x{n}: {error}");
         output.WriteLine($"chaos over after {watch.Elapsed.TotalSeconds:0} s: {kills} connections killed, {faulty.Before} + {faulty.After} calls failed before + after executing, {stalls} stalls, {releases} releases, {steps} steps so far; settling");
 
         var deadline = DateTime.UtcNow + o.Settle;

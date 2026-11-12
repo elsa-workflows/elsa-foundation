@@ -47,6 +47,9 @@ public abstract class ProvidedStore : IAsyncDisposable
     /// <summary>Things the store itself saw go wrong (the in-memory store's ghost list), checked after a stress run.</summary>
     public virtual IReadOnlyList<string> Ghosts => [];
 
+    /// <summary>What the provider's connection killer did, in words.</summary>
+    public virtual string Chaos => "";
+
     /// <summary>What went on the wire, when <see cref="StoreSetup.Counting"/> was asked for.</summary>
     public virtual ICostCounter? Counter => null;
 
