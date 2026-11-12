@@ -82,11 +82,11 @@ describe("studio registry", () => {
     expect(api.workflowRunInputEditors?.slot.id).toBe(studioSlotIds.workflowRunInputEditors);
     expect(api.workflowTestStimulusEditors?.slot.id).toBe(studioSlotIds.workflowTestStimulusEditors);
     expect(api.workflowRunRelatedLinks?.slot.id).toBe("workflow.run.related-links");
-    expect(api.agent.promptStarters.slot.id).toBe(studioSlotIds.agentPromptStarters);
-    expect(api.agent.toolSlots.slot.id).toBe(studioSlotIds.agentToolSlots);
-    expect(api.agent.toolContracts.slot.id).toBe(studioSlotIds.agentToolContracts);
-    expect(api.agent.resultRenderers.slot.id).toBe(studioSlotIds.agentResultRenderers);
-    expect(api.agent.promptActions.slot.id).toBe(studioSlotIds.agentPromptActions);
+    expect(api.weaver.promptStarters.slot.id).toBe(studioSlotIds.weaverPromptStarters);
+    expect(api.weaver.toolSlots.slot.id).toBe(studioSlotIds.weaverToolSlots);
+    expect(api.weaver.toolContracts.slot.id).toBe(studioSlotIds.weaverToolContracts);
+    expect(api.weaver.resultRenderers.slot.id).toBe(studioSlotIds.weaverResultRenderers);
+    expect(api.weaver.promptActions.slot.id).toBe(studioSlotIds.weaverPromptActions);
   });
 
   it("lets third-party modules register driver-specific Test Run stimulus editors", () => {
@@ -267,7 +267,7 @@ describe("studio registry", () => {
     // Collection scope: an option set is owned by the multi-select; without options nothing claims it, so
     // the property panel falls back to its repeater. Element scope is unaffected by either rule.
     const collectionContext: StudioActivityPropertyEditorContext = { ...context, scope: "collection" };
-    const optionInput = input({ typeName: "System.Collections.Generic.ICollection`1", uiSpecifications: { options: ["a", "b"] } });
+    const optionInput = input({ typeName: "System.Collections.Generic.ICollection`1", uiSpecifications: { options: [{ label: "a", value: "a" }, { label: "b", value: "b" }] } });
     expect(resolveEditor(api.propertyEditors.list(), optionInput, collectionContext)?.id).toBe("studio.property.multiselect");
     expect(resolveEditor(api.propertyEditors.list(), { ...optionInput, uiHint: "checklist" }, collectionContext)?.id).toBe("studio.property.multiselect");
     expect(resolveEditor(api.propertyEditors.list(), input({ typeName: "System.Collections.Generic.ICollection`1", uiHint: "checklist" }), collectionContext)?.id).toBe("studio.property.multiselect");
@@ -355,6 +355,8 @@ describe("studio registry", () => {
     });
     const Definitions = () => null;
     const Instances = () => null;
+    const ParentIcon = () => null;
+    const ChildIcon = () => null;
 
     api.featureAreas.add({
       id: "workflows",
@@ -368,10 +370,11 @@ describe("studio registry", () => {
       nav: {
         title: "Workflows",
         path: "/workflows/definitions",
+        icon: ParentIcon,
         iconColor: "#0ea5e9",
         items: [
           { title: "Definitions", path: "/workflows/definitions" },
-          { title: "Instances", path: "/workflows/instances" }
+          { title: "Instances", path: "/workflows/instances", icon: ChildIcon }
         ]
       },
       routes: [
@@ -384,8 +387,8 @@ describe("studio registry", () => {
       expect.objectContaining({ id: "workflows", ownedPaths: ["/workflows"], required: true, defaultEnabled: true })
     ]);
     expect(api.navigation.list()).toEqual([
-      expect.objectContaining({ id: "workflows", path: "/workflows/definitions", activePathPrefix: "/workflows" }),
-      expect.objectContaining({ id: "workflows-instances", path: "/workflows/instances", parentId: "workflows" })
+      expect.objectContaining({ id: "workflows", path: "/workflows/definitions", activePathPrefix: "/workflows", icon: ParentIcon }),
+      expect.objectContaining({ id: "workflows-instances", path: "/workflows/instances", parentId: "workflows", icon: ChildIcon })
     ]);
     expect(api.routes.list().map(route => route.id)).toEqual(["workflows-definitions", "workflows-instances"]);
     expect(findFeatureAreaForPath(api.featureAreas.list(), "/workflows/instances/42")?.id).toBe("workflows");
@@ -432,7 +435,7 @@ describe("studio registry", () => {
     });
     const listener = vi.fn();
 
-    api.agent.promptActions.add({
+    api.weaver.promptActions.add({
       id: "explain-resource",
       label: "Explain",
       placement: "selection",
@@ -444,7 +447,7 @@ describe("studio registry", () => {
     unsubscribe();
     api.ai.dispatchPrompt({ message: "This should not be observed." });
 
-    expect(api.agent.promptActions.list()).toEqual([expect.objectContaining({ id: "explain-resource" })]);
+    expect(api.weaver.promptActions.list()).toEqual([expect.objectContaining({ id: "explain-resource" })]);
     expect(listener).toHaveBeenCalledTimes(1);
     expect(listener).toHaveBeenCalledWith({ message: "Explain this workflow." });
   });
@@ -457,7 +460,7 @@ describe("studio registry", () => {
   });
 
   it("creates a backend client that can target a separate base url", async () => {
-    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ ok: true }), { status: 200 }));
+    const fetchMock = vi.fn<typeof fetch>(async () => new Response(JSON.stringify({ ok: true }), { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
 
     const api = createStudioRegistry({
@@ -487,7 +490,7 @@ describe("studio registry", () => {
   });
 
   it("posts json through the backend client", async () => {
-    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ ok: true }), { status: 200 }));
+    const fetchMock = vi.fn<typeof fetch>(async () => new Response(JSON.stringify({ ok: true }), { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
 
     const api = createStudioRegistry({
@@ -506,7 +509,7 @@ describe("studio registry", () => {
   });
 
   it("supports put, delete, and form requests through the backend client", async () => {
-    const fetchMock = vi.fn(async () => new Response("", { status: 200 }));
+    const fetchMock = vi.fn<typeof fetch>(async () => new Response("", { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
     const client = createEndpointContext("https://foundation.example/").http;
     const form = new FormData();

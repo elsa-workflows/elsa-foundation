@@ -35,7 +35,7 @@ try
                 ResponseFormat = ChatResponseFormat.ForJsonSchema(JsonSerializer.SerializeToElement(new
                 {
                     type = "object", properties = new { headline = new { type = "string" } }, required = new[] { "headline" }, additionalProperties = false
-                }), "SpecialistResult")
+                }), "AgentResult")
             })) updates.Add(update);
         }
         catch (Exception e) { failure = e; }

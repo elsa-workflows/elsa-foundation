@@ -53,6 +53,25 @@ public sealed class RuntimeSchedulerDispatchFrameTests
         Assert.False(frame.NonRetainingCheckpointAttempted);
     }
 
+    [Fact]
+    public void Withdrawing_a_refused_attempt_takes_back_that_attempt_alone()
+    {
+        // #3683: a store's unavailable refusal is withdrawn, but every other attempt on the same frames still counts.
+        using var outer = RuntimeSchedulerDispatchFrame.Open("wfexec-1");
+        using var inner = RuntimeSchedulerDispatchFrame.Open("wfexec-1");
+
+        RuntimeSchedulerDispatchFrame.RecordCheckpointAttempt(Commit("wfexec-1") with { RetainSchedulerWork = true }).Withdraw();
+        var refused = RuntimeSchedulerDispatchFrame.RecordCheckpointAttempt(Commit("wfexec-1"));
+        refused.Withdraw();
+        Assert.False(inner.NonRetainingCheckpointAttempted);
+        Assert.False(outer.NonRetainingCheckpointAttempted);
+
+        RuntimeSchedulerDispatchFrame.RecordCheckpointAttempt(Commit("wfexec-1"));
+        RuntimeSchedulerDispatchFrame.RecordCheckpointAttempt(Commit("wfexec-1")).Withdraw();
+        Assert.True(inner.NonRetainingCheckpointAttempted);
+        Assert.True(outer.NonRetainingCheckpointAttempted);
+    }
+
     private static RuntimeCheckpointCommit Commit(string workflowExecutionId) =>
         new(
             $"commit-{workflowExecutionId}",

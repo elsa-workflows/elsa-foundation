@@ -7,6 +7,7 @@ import { ThemeProvider } from "../../src/essentials/Elsa.Studio.Hosting/Client/s
 import { writeAppearancePreferences } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/themes/appearance";
 import "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/styles.css";
 import "../../src/essentials/Elsa.Studio.Workflows/Client/src/styles.css";
+import "../../src/essentials/Elsa.Studio.Workflows/Client/src/workspaceAppearance.css";
 
 const scenario = new URLSearchParams(window.location.search).get("scenario") ?? "ready";
 const flowchart = rootActivity("Elsa.Activities.Flowchart.Activities.Flowchart", "Flowchart", "flowchart-v1");

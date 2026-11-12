@@ -5,7 +5,7 @@ date: 2026-10-21
 
 # Rules owns its execution domain
 
-Status: Accepted after the bounded planning review on 21 October 2026 under Sipke Schoorstra's standing delegated architecture/refactoring/self-review authority. No multi-architect vote is asserted. Implementation unit: [#3181](https://github.com/elsa-workflows/elsa-foundation/issues/3181), [spec 999](../../specs/999-durable-rules/spec.md), under [Program #2892](https://github.com/elsa-workflows/elsa-foundation/issues/2892). The program lead adopts this narrow domain decision under that delegated authority; runtime/package/provider qualification remains pending.
+Status: Accepted after the bounded planning review on 21 October 2026 under Sipke Schoorstra's standing delegated architecture/refactoring/self-review authority. No multi-architect vote is asserted. Implementation unit: [#3181](https://github.com/elsa-workflows/elsa-foundation/issues/3181), [spec 999](../../specs/999-durable-rules/spec.md), under [Program #2892](https://github.com/elsa-workflows/elsa-foundation/issues/2892). The program lead adopts this narrow domain decision under that delegated authority; runtime/package/provider qualification remains pending. Amended 2026-11-09 (source-build identity opt-in, below).
 
 ## Decision
 
@@ -49,3 +49,11 @@ Acceptance requires actual computed-version packages in a clean PackageReference
 ## Amendment scope
 
 Adoption adds only the Rules domain name and purpose, with the Elsa constitution minor update 6.1.0 → 6.2.0 and its sync-impact report. Framework stays at 6.1.0. Existing domain purposes, defaults and native contracts stay governed by their existing rules. Draft/provisional sections are not ratified by this change. The owner's delegated decision authority is recorded explicitly instead of claiming the normal multi-architect consensus occurred.
+
+## Amendment — 2026-11-09, accepted
+
+**Decision (owner, Sipke Schoorstra, recorded on [#2892](https://github.com/elsa-workflows/elsa-foundation/issues/2892#issuecomment-6740307877)): a Rules host may advertise a source-build identity as an explicit opt-in.** `RulesRuntimeFeature.AllowSourceBuildIdentity` (default off) replaces the packaged receipt reader with `RuleSourceBuildIdentitySource`, which pins the SHA-256 and SHA-512 of the three Rules assemblies the process actually loaded from disk. The pin keeps the packaged pin shape, but every package id carries the `source-build:` prefix, the asset paths sit under `source-build/`, and the content-hash slot holds the assembly file's SHA-512 rather than a NuGet archive hash, so it can never equal a packaged pin and remains distinguishable as execution-environment provenance (spec 999 FR-003). The host logs a warning when the pin is first read. It cannot be combined with `DeploymentReceiptPath` or `HostDepsPath`.
+
+Why the rule existed, and still does: a Rules pin is the recovery contract for admitted runs. A packaged receipt lets a second deployment prove it runs the same semantic bytes before it touches a run the first one admitted; a source checkout cannot prove that, because the next build changes the bytes. The opt-in proves which bytes ran, not where they came from: a run admitted under it is recoverable only by a host that loads byte-identical Rules assemblies, and a changed build leaves such runs unavailable rather than refused or repinned, exactly as a mismatched receipt would. Packaged-receipt behaviour, the package qualification gate, and "unavailable, not refused" are unchanged, and ordinary source-host tests still do not establish package provenance.
+
+What it enables: the source-built Workbench and its CI-gated process-kill witnesses for a native parent waiting on `RunRules`, and local development without a deployment pipeline. Hazard for anyone who enables it on a production host: every rebuild strands the runs admitted by the previous build until that exact build is restored.

@@ -58,6 +58,20 @@ docker compose -p elsa-pair-check -f ./pair-compose.yml down --volumes --remove-
 
 Use the same project name and temporary file as at startup. Do not run global prune or cleanup commands. Keep any failure diagnostics before cleanup; do not report a pass if cleanup is incomplete.
 
+## CI failure diagnostics
+
+The CI journey retains bounded diagnostics when it fails. Download `published-pair-diagnostics-<run ID>-<attempt>` from that Actions run; artifacts expire after seven days. The upload selects only `diagnostic.json` and, when safe to capture, `viewport.png` from the runner's `published-pair-diagnostics` directory.
+
+The JSON receipt contains fixed safe summaries and distinguishes the activity-picker visibility wait from the click. It is limited to 16 KiB. The optional viewport screenshot masks inputs and is limited to 2 MiB. Capture has a three-second cap. Login, unsafe-page and navigation failures may omit the screenshot, and capture may be unavailable if the page or browser has closed. The artifact excludes raw console messages, network payloads or headers, authentication state, full DOM dumps and traces.
+
+These files help locate a failure; they do not establish its cause or provide UX acceptance. A failed proof stays failed if diagnostic capture fails, times out or omits a screenshot. Image pins, journey assertions and owned-resource cleanup still apply.
+
+The diagnostic unit tests run with Node's built-in test runner before the browser journey and require neither a browser nor Docker:
+
+```bash
+node --test tools/contributor-pair-proof/diagnostics.test.mjs
+```
+
 ## Recorded image provenance and hosted result
 
 The index digest is the immutable Compose pin. The child digest records the selected Linux/amd64 manifest. Preview numbers are CI run counters, not library or package versions.

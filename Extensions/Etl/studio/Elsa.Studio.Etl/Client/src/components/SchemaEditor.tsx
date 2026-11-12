@@ -9,10 +9,15 @@ export function SchemaEditor({
   schema,
   maxFields,
   disabled,
-  onChange
+  onChange,
+  fieldLabel = "CSV field",
+  emptyMessage = "Add the CSV header fields expected by this stage."
 }: {
   title: string;
   description: string;
+  /** The column heading for field names; a SQL table's fields are its columns. */
+  fieldLabel?: string;
+  emptyMessage?: string;
   schema: readonly EtlColumn[];
   maxFields: number;
   disabled: boolean;
@@ -34,11 +39,11 @@ export function SchemaEditor({
         </button>
       </div>
 
-      {schema.length === 0 ? <p className="etl-editor-empty" role="status">Add the CSV header fields expected by this stage.</p> : null}
+      {schema.length === 0 ? <p className="etl-editor-empty" role="status">{emptyMessage}</p> : null}
       <div className="studio-table-container etl-editor-table-wrap" tabIndex={0} role="region" aria-label={`${title} fields table`}>
         <table className="studio-table etl-editor-table">
           <thead>
-            <tr><th scope="col">CSV field</th><th scope="col">Type</th><th scope="col">Required</th><th scope="col"><span className="etl-editor-sr-only">Actions</span></th></tr>
+            <tr><th scope="col">{fieldLabel}</th><th scope="col">Type</th><th scope="col">Required</th><th scope="col"><span className="etl-editor-sr-only">Actions</span></th></tr>
           </thead>
           <tbody>
             {schema.map((column, index) => (

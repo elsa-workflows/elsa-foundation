@@ -454,3 +454,28 @@ It is applied **per column**, never through `modelBuilder.UseCollation`, for two
 share one database, so a database-wide collation is one module setting its neighbours' comparison
 semantics, and a model-level declaration did not survive migration generation at all
 ([#1837](https://github.com/elsa-workflows/elsa-foundation/issues/1837)).
+
+## Shared source revisions
+
+`AddSourceRevisions(prefix, provider)` maps working copies, immutable snapshots and pins in an ordinary
+consumer-owned context. No Elsa base context is required. The composing module owns migrations,
+physical placement and retention policy. `EfSourceModel.Chain` is the shared row readability contract;
+source serialization profiles belong to typed adapters.
+
+Construct `EfSourceRevisions(context, trustedScope)` behind a domain-owned reader/writer. The scope
+includes partition, tenant, source kind and trusted authority; never bind it from authored JSON.
+The optional single-copy claim is a domain cardinality policy. Read/list/history are bounded and
+materialized; the API never exposes `IQueryable`. Names are presentation/search fields, not identity.
+`StageSave`/`StageDiscard` enlist the same CAS in an existing domain transaction. Standalone operations
+own their local transaction and refuse a context with pending unrelated changes. A context is scoped
+to one operation at a time; no automatic storage retry guesses an unknown commit outcome.
+
+Capture records the operation identity, exact content/profile/fingerprint and capture pin atomically.
+Replay returns that snapshot after edits or discard; a new capture of a discarded copy is refused.
+Pins and collection serialize on the source fence and relational foreign keys. An operation pin may
+be released only after the future shared publication coordinator proves safe terminal cancellation
+or transfers retention to a confirmed release. No timeout or absent receipt authorizes release.
+This source capability does not compile, reserve a release, publish or make a snapshot executable.
+See [spec 1179's boundary](../../../../specs/1179-agents/plan.md#3790-source-slice-placement-and-transition).
+
+The initial collection policy retains snapshots for the lifetime of an active copy, even after individual pins are released. Collection requires a discarded copy and no pins. The retained discarded copy cannot capture again, so collected snapshot/operation IDs cannot be rebound to new content. More aggressive active-copy collection would require durable operation tombstones; it is not silently approximated here.

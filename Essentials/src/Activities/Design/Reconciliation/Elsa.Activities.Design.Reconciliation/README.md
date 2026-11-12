@@ -27,6 +27,7 @@ Reconciliation lifecycle for the activity catalog (Sipke item 6 — idempotent r
 ## Replaceable services (per §2.6.2)
 
 - `IActivityDefinitionHasher` — scoped (§2.5.1: it executes a hash, not application-wide static state); provider modules may override to swap the canonicalisation / hash algorithm.
+- `IActivityReconciliationDiagnosticStore` — singleton, `InMemoryActivityReconciliationDiagnosticStore` by default: the reconciliation-state sibling for source-owned versions a publishing bridge refused. Each refused version's diagnostics are recorded there and logged; the version is skipped and the pass continues.
 
 ## Naming history
 

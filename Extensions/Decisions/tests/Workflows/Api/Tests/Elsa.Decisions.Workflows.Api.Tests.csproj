@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><IsTestProject>true</IsTestProject><IsPackable>false</IsPackable></PropertyGroup>
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" PrivateAssets="all" />
+    <ProjectReference Include="../../../../src/Workflows/Api/Elsa.Decisions.Workflows.Api.csproj" />
+    <ProjectReference Include="../../../../src/Elsa.Decisions/Elsa.Decisions.csproj" />
+    <ProjectReference Include="../../../../../../Essentials/src/Foundation/Identity/Elsa.Foundation.Identity/Elsa.Foundation.Identity.csproj" />
+    <Using Include="Xunit" />
+  </ItemGroup>
+</Project>

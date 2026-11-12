@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
-// Weaver session recovery journeys (#3441 T022) over a durable fake Agent backend that survives reloads and is
-// shared by tabs of one browser context. Requests go through the real Studio agent client.
+// Weaver session recovery journeys (#3441 T022) over a durable fake Weaver backend that survives reloads and is
+// shared by tabs of one browser context. Requests go through the real Studio Weaver client.
 type FixtureWindow = { weaverFixture: { seed(sessions: unknown[]): string[]; log(): string[]; release(): void; state(): { sessions: { id: string; continuedFrom?: string; messages: { id: string; status: string; statusReason?: string }[]; proposals: { id: string; status: string; ownerResolution?: { claim: string } }[] }[] }; target: unknown } };
 
 async function open(page: Page, query = "") {
@@ -27,7 +27,7 @@ test.beforeEach(async ({ page }) => {
 test("reload returns to the same session with its pending review, decidable once", async ({ page }) => {
   await open(page);
   await send(page, "Rename the sample [review]");
-  const proposal = dock(page).locator(".agent-proposal");
+  const proposal = dock(page).locator(".weaver-proposal");
   await expect(proposal).toHaveAttribute("data-status", "awaiting-approval");
 
   await page.reload();
@@ -103,7 +103,7 @@ test("the owner resolves an uncertain client change, and the statement is kept a
     preparedInvocation: { invocationId: "inv_u", sessionId: "agt_1", turnId: "turn", toolCallId: "call", toolName: "sample_change", toolContractVersion: "1", moduleId: "Sample", actorId: "ada", tenantId: "tenant", target: null, arguments: {}, approvalDigest: "digest", risk: "reviewRequired", preview: { typeId: "sample.preview", schemaVersion: "1", data: {} }, executionLocation: "clientWorkingState", requiresApproval: true, client: { clientId: "closed-tab", generationId: "g" }, expiresAt: "2026-01-01T00:00:00Z" } }] }]);
   await open(page);
   await dock(page).getByRole("list", { name: "Recent conversations" }).getByRole("button").click();
-  const proposal = dock(page).locator(".agent-proposal");
+  const proposal = dock(page).locator(".weaver-proposal");
   await expect(proposal).toHaveAttribute("data-status", "uncertain");
   await proposal.getByRole("group", { name: "Resolve uncertain change" }).getByRole("button", { name: "It was not applied" }).click();
   await expect(proposal).toContainText("You stated that this change was not applied. This is your statement, not a receipt");
@@ -116,14 +116,14 @@ test("the owner resolves an uncertain client change, and the statement is kept a
 test("a second tab neither refuses nor marks the first tab's client delivery", async ({ page, context }) => {
   await open(page);
   await send(page, "Move the sample [client]");
-  const proposalA = dock(page).locator(".agent-proposal");
+  const proposalA = dock(page).locator(".weaver-proposal");
   await proposalA.getByRole("button", { name: "Approve" }).click();
   await proposalA.getByRole("button", { name: "Apply" }).click();
   await expect.poll(() => log(page)).toContain("execute");
 
   const tabB = await context.newPage();
   await open(tabB);
-  const proposalB = dock(tabB).locator(".agent-proposal");
+  const proposalB = dock(tabB).locator(".weaver-proposal");
   await expect(proposalB).toHaveAttribute("data-status", "awaiting-client");
   await expect(proposalB).toContainText("Waiting for the Studio tab or page that started this change.");
   for (const button of await proposalB.getByRole("button").all()) await expect(button).toBeDisabled();
@@ -134,16 +134,16 @@ test("a second tab neither refuses nor marks the first tab's client delivery", a
   await expect(proposalA).toHaveAttribute("data-status", "executed");
   expect((await log(page)).filter(entry => entry.startsWith("ack"))).toEqual(["ack:applied"]);
   await tabB.reload();
-  await expect(dock(tabB).locator(".agent-proposal")).toHaveAttribute("data-status", "executed");
+  await expect(dock(tabB).locator(".weaver-proposal")).toHaveAttribute("data-status", "executed");
 });
 
 test("after a reload an approved client change whose page is gone is refused with zero effect", async ({ page }) => {
   await open(page);
   await send(page, "Move the sample [client]");
-  await dock(page).locator(".agent-proposal").getByRole("button", { name: "Approve" }).click();
-  await expect(dock(page).locator(".agent-proposal")).toHaveAttribute("data-status", "approved");
+  await dock(page).locator(".weaver-proposal").getByRole("button", { name: "Approve" }).click();
+  await expect(dock(page).locator(".weaver-proposal")).toHaveAttribute("data-status", "approved");
   await page.goto("/weaver-recovery.html?target=gone");
-  const proposal = dock(page).locator(".agent-proposal");
+  const proposal = dock(page).locator(".weaver-proposal");
   await expect(proposal).toHaveAttribute("data-status", "approved");
   await proposal.getByRole("button", { name: "Apply" }).click();
   await expect(proposal).toHaveAttribute("data-status", "failed");

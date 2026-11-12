@@ -40,7 +40,7 @@ export function EtlConnectorPipelineEditor({
       </header>
 
       <ol className="etl-editor-order" aria-label="ETL operation order">
-        <li><span>1</span><div><strong>Read source records</strong><small>{pipeline.source.kind === "csv" ? "Validate the declared CSV schema" : pipeline.source.kind === "jsonl" ? "Read one JSON object per line" : "Read bounded HTTP JSON pages"}</small></div></li>
+        <li><span>1</span><div><strong>Read source records</strong><small>{pipeline.source.kind === "csv" ? "Validate the declared CSV schema" : pipeline.source.kind === "jsonl" ? "Read one JSON object per line" : pipeline.source.kind === "sql" ? "Read one snapshot of the table" : pipeline.source.kind === "rabbitmq" ? "Drain queued messages" : "Read bounded HTTP JSON pages"}</small></div></li>
         <li><span>2</span><div><strong>Match optional lookup</strong><small>{pipeline.lookup ? "Join CSV rows by exact typed keys" : "No lookup is configured"}</small></div></li>
         <li><span>3</span><div><strong>Map output fields</strong><small>Use declared source or lookup values</small></div></li>
         <li><span>4</span><div><strong>Apply output filters</strong><small>Equality or inequality over typed fields</small></div></li>
@@ -76,14 +76,14 @@ export function EtlConnectorPipelineEditor({
         disabled={readOnly}
         onChange={lookup => update("lookup", lookup)}
       />
-      <MappingEditor mapping={pipeline.mapping} sourceSchema={sourceSchema} lookupSchema={lookupSchema} sourceLabel={pipeline.source.kind === "csv" ? "Source CSV" : "Source JSON"} disabled={readOnly} onChange={mapping => update("mapping", mapping)} />
+      <MappingEditor mapping={pipeline.mapping} sourceSchema={sourceSchema} lookupSchema={lookupSchema} sourceLabel={pipeline.source.kind === "csv" ? "Source CSV" : pipeline.source.kind === "sql" ? "Source table" : "Source JSON"} disabled={readOnly} onChange={mapping => update("mapping", mapping)} />
       <FilterEditor filters={pipeline.filters} mapping={pipeline.mapping} sourceSchema={sourceSchema} lookupSchema={lookupSchema} disabled={readOnly} onChange={filters => update("filters", filters)} />
 
       <section className="etl-editor-section" aria-labelledby={`${titleId}-routes`}>
         <div className="etl-editor-section-heading"><div><h3 id={`${titleId}-routes`}>Output routes</h3><p>Choose separate host-approved destinations for accepted and rejected records. No endpoint or credential is entered here.</p></div></div>
         <div className="etl-editor-binding-grid">
-          <DestinationEditor label="Accepted records" role="MainOutput" destination={pipeline.routes.main} bindings={bindings} bindingsLoading={bindingsLoading} bindingsUnavailable={bindingsUnavailable} disabled={readOnly} onChange={main => update("routes", { ...pipeline.routes, main })} />
-          <DestinationEditor label="Rejected records" role="ErrorOutput" destination={pipeline.routes.errors} bindings={bindings} bindingsLoading={bindingsLoading} bindingsUnavailable={bindingsUnavailable} disabled={readOnly} onChange={errors => update("routes", { ...pipeline.routes, errors })} />
+          <DestinationEditor label="Accepted records" role="MainOutput" destination={pipeline.routes.main} outputFields={pipeline.mapping.map(field => field.name)} bindings={bindings} bindingsLoading={bindingsLoading} bindingsUnavailable={bindingsUnavailable} disabled={readOnly} onChange={main => update("routes", { ...pipeline.routes, main })} />
+          <DestinationEditor label="Rejected records" role="ErrorOutput" destination={pipeline.routes.errors} outputFields={[]} bindings={bindings} bindingsLoading={bindingsLoading} bindingsUnavailable={bindingsUnavailable} disabled={readOnly} onChange={errors => update("routes", { ...pipeline.routes, errors })} />
         </div>
       </section>
 
@@ -92,10 +92,12 @@ export function EtlConnectorPipelineEditor({
   );
 }
 
-function DestinationEditor({ label, role, destination, bindings, bindingsLoading, bindingsUnavailable, disabled, onChange }: {
+function DestinationEditor({ label, role, destination, outputFields, bindings, bindingsLoading, bindingsUnavailable, disabled, onChange }: {
   label: string;
   role: "MainOutput" | "ErrorOutput";
   destination: EtlPipelineV2["routes"]["main"];
+  /** The mapped output field names a SQL key may select. */
+  outputFields: readonly string[];
   bindings: readonly EtlConnectorBindingSummary[];
   bindingsLoading: boolean;
   bindingsUnavailable: boolean;
@@ -109,18 +111,24 @@ function DestinationEditor({ label, role, destination, bindings, bindingsLoading
         <label htmlFor={`${id}-kind`}>{label} destination kind</label>
         <select id={`${id}-kind`} value={destination.kind} disabled={disabled} onChange={event => {
           const kind = event.currentTarget.value as EtlPipelineV2["routes"]["main"]["kind"];
-          onChange({ kind, binding: destination.binding });
+          onChange(kind === "sql" ? { kind, binding: destination.binding, table: "", key: [] }
+            : kind === "rabbitmq" ? { kind, binding: destination.binding, exchange: "", routingKey: "" }
+            : { kind, binding: destination.binding });
         }}>
           <option value="http">HTTP</option>
           <option value="jsonl">JSONL file</option>
           <option value="csv">CSV file</option>
+          {/* Only the main route can deliver to SQL: the error route's shape is the runtime's. */}
+          {role === "MainOutput" && <option value="sql">SQL table</option>}
+          {/* Likewise only the main route publishes to RabbitMQ (spec 1200). */}
+          {role === "MainOutput" && <option value="rabbitmq">RabbitMQ exchange</option>}
         </select>
       </div>
       <PipelineBindingSelect
         label={`${label} binding`}
         role={role}
         // Hosts list output folder approvals under the jsonl kind; a CSV route publishes into the same folders.
-        kind={destination.kind === "http" ? "http" : "jsonl"}
+        kind={destination.kind === "http" ? "http" : destination.kind === "sql" ? "sql" : destination.kind === "rabbitmq" ? "rabbitMq" : "jsonl"}
         subjectLabel={destination.kind === "csv" ? (role === "MainOutput" ? "Accepted file output" : "Rejected file output") : undefined}
         value={destination.binding}
         bindings={bindings}
@@ -129,6 +137,51 @@ function DestinationEditor({ label, role, destination, bindings, bindingsLoading
         disabled={disabled}
         onChange={binding => onChange({ ...destination, binding })}
       />
+      {destination.kind === "sql" && (
+        <>
+          <div className="etl-editor-field">
+            <label htmlFor={`${id}-table`}>{label} table</label>
+            <input id={`${id}-table`} value={destination.table} disabled={disabled} placeholder="schema.table"
+              aria-describedby={`${id}-table-help`}
+              onChange={event => onChange({ ...destination, table: event.currentTarget.value })} />
+            <small id={`${id}-table-help`}>The host binding must allow this table. Its columns are the output field names.</small>
+          </div>
+          <fieldset className="etl-editor-field">
+            <legend>{label} key</legend>
+            <small>Rows are upserted by these fields; map them from required source fields.</small>
+            {outputFields.map(field => (
+              <label key={field}>
+                <input type="checkbox" checked={destination.key.includes(field)} disabled={disabled}
+                  onChange={event => onChange({
+                    ...destination,
+                    key: event.currentTarget.checked
+                      ? outputFields.filter(name => name === field || destination.key.includes(name))
+                      : destination.key.filter(name => name !== field)
+                  })} />
+                {field}
+              </label>
+            ))}
+          </fieldset>
+        </>
+      )}
+      {destination.kind === "rabbitmq" && (
+        <>
+          <div className="etl-editor-field">
+            <label htmlFor={`${id}-exchange`}>{label} exchange</label>
+            <input id={`${id}-exchange`} value={destination.exchange} disabled={disabled} placeholder="Default exchange"
+              aria-describedby={`${id}-exchange-help`}
+              onChange={event => onChange({ ...destination, exchange: event.currentTarget.value })} />
+            <small id={`${id}-exchange-help`}>The host binding must allow this exchange; leave it empty for the default exchange.</small>
+          </div>
+          <div className="etl-editor-field">
+            <label htmlFor={`${id}-routing-key`}>{label} routing key</label>
+            <input id={`${id}-routing-key`} value={destination.routingKey} disabled={disabled}
+              aria-describedby={`${id}-routing-key-help`}
+              onChange={event => onChange({ ...destination, routingKey: event.currentTarget.value })} />
+            <small id={`${id}-routing-key-help`}>Each record is one message with this routing key. A queue must match it, or the run fails.</small>
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -180,7 +233,7 @@ function RunModeEditor({ pipeline, disabled, onChange }: {
 }
 
 function columns(pipeline: EtlPipelineV2): EtlColumn[] {
-  return pipeline.source.kind === "csv"
-    ? pipeline.source.schema
-    : pipeline.source.fields.map(({ name, type, required }) => ({ name, type, required }));
+  if (pipeline.source.kind === "csv") return pipeline.source.schema;
+  if (pipeline.source.kind === "sql") return pipeline.source.columns;
+  return pipeline.source.fields.map(({ name, type, required }) => ({ name, type, required }));
 }

@@ -13,7 +13,7 @@ Studio adapts per operation using advertised relations. It hides unavailable org
 ## Technical Context
 
 **Language/Version**: Existing C#/.NET 10 and TypeScript/React.
-**Primary Dependencies**: Existing CShells feature configuration, manifest settings, NativeEndpoints, Studio SDK capability/endpoint context and Features module.
+**Primary Dependencies**: Existing CShells feature configuration, manifest settings, MinimalEndpoints, Studio SDK capability/endpoint context and Features module.
 **Storage**: Existing configuration store and workflow library stores; no schema/provider/migration changes.
 **Testing**: Whole affected API/frontend projects, rendered browser regressions, real selected-backend setting Apply/off/restart/on and published-artifact execution; normal repository/package/consumer/architecture gates.
 **Target Platform**: Existing composed Workbench/Studio; desktop and 320px keyboard UI, existing styles and modes.

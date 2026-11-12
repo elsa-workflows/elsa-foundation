@@ -14,6 +14,5 @@ membership/provider/placement/dispatch receipts and waits for Cancelled state wi
 outbox; a failure records its exception type, message and actual status, artifact and owner.
 
 [`two-host-qualification/cluster-controller.py`](../two-host-qualification/cluster-controller.py) drives it on two
-real Workbench nodes with shared PostgreSQL. Results: cancelling a **parked** execution owned by another node passed;
-cancelling a **progressing** drain on another node did **not** qualify (placement sometimes moved to the sender, and
-otherwise the sender stalled before dispatch). See the program report.
+real Workbench nodes with shared PostgreSQL. Results, and the later #3669 work on cancelling a progressing drain, are in the
+[program report](../../../../docs/reports/native-runtime-performance-program-2026-11-01.md#remote-cancellation-across-a-durable-cluster).
