@@ -18,8 +18,11 @@ internal static class TokenSubjectKey
         ArgumentNullException.ThrowIfNull(subject);
 
         var kind = subject.UserId is not null ? "user" : "provider";
+        // Existing canonical-user and issuer-less legacy keys retain their exact UTF-8 v1 bytes.
+        // Issuer-qualified external subjects have a separate versioned domain.
+        var version = subject.UserId is null && subject.Issuer is not null ? "v2" : "v1";
         using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
-        Append(hash, "elsa.token-subject.v1");
+        Append(hash, $"elsa.token-subject.{version}");
         Append(hash, kind);
         Append(hash, subject.TenantId);
         if (subject.UserId is { } userId)
@@ -29,10 +32,12 @@ internal static class TokenSubjectKey
         else
         {
             Append(hash, subject.Provider!);
+            if (subject.Issuer is { } issuer)
+                Append(hash, issuer);
             Append(hash, subject.ProviderSubject!);
         }
 
-        return $"elsa:v1:{kind}:{Convert.ToHexStringLower(hash.GetHashAndReset())}";
+        return $"elsa:{version}:{kind}:{Convert.ToHexStringLower(hash.GetHashAndReset())}";
     }
 
     private static void Append(IncrementalHash hash, string value)

@@ -189,6 +189,10 @@ public static class IdentityClaimTypes
     public const string Role = "elsa.identity.role";
 
     public const string Permission = "elsa.identity.permission";
+    public const string SubjectIssuer = "elsa.identity.subject_issuer";
+    public const string ExternalSubject = "elsa.identity.external_subject";
+    public const string TokenSubjectKey = "elsa.identity.token_subject";
+    public const string SessionId = "elsa.identity.session_id";
 }
 
 public static class DefaultIdentityPermissionKeys
