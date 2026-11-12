@@ -269,6 +269,9 @@ export function useGraphCanvasInteractions({
   // React Flow's keyboard selection is emitted as a node change, while the inspector is driven by the
   // host's selected node id. Keep both projections aligned so Enter/Space has the same result as a
   // pointer click and the accessible pressed state always describes what the inspector is showing.
+  // Re-run when the canvas nodes themselves change: overlay/snapshot rebuilds can drop `selected`
+  // without changing `selectedNodeId`, which would leave aria-pressed stale until the next id change.
+  const selectedNodePressed = nodes.find(node => node.id === selectedNodeId)?.selected;
   useEffect(() => {
     setNodes(current => {
       let changed = false;
@@ -280,7 +283,7 @@ export function useGraphCanvasInteractions({
       });
       return changed ? next : current;
     });
-  }, [selectedNodeId, setNodes]);
+  }, [selectedNodeId, selectedNodePressed, setNodes]);
 
   const focusCanvasNode = useCallback((nodeId: string) => {
     const element = Array.from(canvasRef.current?.querySelectorAll<HTMLElement>(".react-flow__node, .wf-sequence-step") ?? [])

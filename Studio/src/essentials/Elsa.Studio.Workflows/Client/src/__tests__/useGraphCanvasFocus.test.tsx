@@ -12,6 +12,9 @@ type HookHarnessProps = {
   nodes: Node<WorkflowNodeData>[];
   result: { current: HookResult | null };
   commitCanvas?: () => void;
+  select?: (nodeId: string | null) => void;
+  mode?: "flowchart" | "unsupported";
+  selectedNodeId?: string | null;
 };
 
 const mounted: Array<{ root: Root; container: HTMLDivElement }> = [];
@@ -111,6 +114,17 @@ describe("useGraphCanvasInteractions auto-layout", () => {
   });
 });
 
+describe("useGraphCanvasInteractions read-only selection", () => {
+  it("forwards React Flow select changes while the canvas is a read-only unsupported projection", () => {
+    const select = vi.fn();
+    const fixture = renderHook([node("write")], undefined, { select, mode: "unsupported" });
+
+    fixture.result.current!.onNodesChange([{ type: "select", id: "write", selected: true }]);
+
+    expect(select).toHaveBeenCalledWith("write");
+  });
+});
+
 describe("useGraphCanvasInteractions node resize", () => {
   it("commits the resized width as one canvas transaction", () => {
     const commitCanvas = vi.fn();
@@ -134,7 +148,11 @@ describe("useGraphCanvasInteractions node resize", () => {
   });
 });
 
-function renderHook(nodes: Node<WorkflowNodeData>[], commitCanvas?: () => void) {
+function renderHook(
+  nodes: Node<WorkflowNodeData>[],
+  commitCanvas?: () => void,
+  options?: { select?: (nodeId: string | null) => void; mode?: "flowchart" | "unsupported"; selectedNodeId?: string | null }
+) {
   const container = document.createElement("div");
   document.body.append(container);
   const root = createRoot(container);
@@ -143,7 +161,7 @@ function renderHook(nodes: Node<WorkflowNodeData>[], commitCanvas?: () => void) 
     container,
     result,
     render(nextNodes: Node<WorkflowNodeData>[]) {
-      flushSync(() => root.render(<HookHarness nodes={nextNodes} result={result} commitCanvas={commitCanvas} />));
+      flushSync(() => root.render(<HookHarness nodes={nextNodes} result={result} commitCanvas={commitCanvas} {...options} />));
     }
   };
   mounted.push({ root, container });
@@ -151,18 +169,18 @@ function renderHook(nodes: Node<WorkflowNodeData>[], commitCanvas?: () => void) 
   return fixture;
 }
 
-function HookHarness({ nodes, result, commitCanvas = vi.fn() }: HookHarnessProps) {
+function HookHarness({ nodes, result, commitCanvas = vi.fn(), select = vi.fn(), mode = "flowchart", selectedNodeId = null }: HookHarnessProps) {
   const hook = useGraphCanvasInteractions({
     nodes,
     edges: [] as WorkflowEdge[],
     setNodes: vi.fn(),
     setEdges: vi.fn(),
-    mode: "flowchart",
+    mode,
     scopeKey: "root",
     canAddActivities: false,
-    selectedNodeId: null,
+    selectedNodeId,
     catalogByVersion: new Map(),
-    select: vi.fn(),
+    select,
     commitCanvas,
     placeActivity: vi.fn(() => null)
   });

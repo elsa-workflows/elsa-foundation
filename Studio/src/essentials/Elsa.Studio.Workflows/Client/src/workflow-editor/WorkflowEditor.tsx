@@ -70,6 +70,7 @@ import { AttachedTestRunControls } from "./AttachedTestRunControls";
 import { useTestRunObservation } from "./useTestRunObservation";
 import { useTestRunRestoration } from "./useTestRunRestoration";
 import { usePinnedEditorDocument } from "./usePinnedEditorDocument";
+import { selectAttachedRunEditorNode, selectAttachedRunEditorNodeOnCanvasPointerDown } from "./selectAttachedRunEditorNode";
 import { useEditorRunCanvas } from "./useEditorRunCanvas";
 import { useAttachedExecutionSelection } from "./useAttachedExecutionSelection";
 import { activateWorkflowCanvasNode } from "./workflowAccessibility";
@@ -330,6 +331,14 @@ export function WorkflowEditor({
     palettePresent: !inlineSteps || availableDesignerPanels.some(panel => panel.side === "left")
   });
   const { setInspectorCollapsed } = sidePanelLayout;
+  const revealRunInspectorOnSelectRef = useRef(false);
+  const selectAndInspect = useCallback((nodeId: string | null) => {
+    selectAttachedRunEditorNode(nodeId, select, revealRunInspectorOnSelectRef.current, () => {
+      setInspectorView("run-data");
+      setActiveRightPanelId("inspector");
+      setInspectorCollapsed(false);
+    });
+  }, [select, setInspectorCollapsed]);
   useEffect(() => {
     setActiveInspectorTabId(current =>
       resolveActivityInspectorTabId(current, inspectedSupportsScopedVariables, inspectedSlots.length > 0
@@ -439,7 +448,7 @@ export function WorkflowEditor({
     selectedNodeId,
     editDraft,
     editDraftAndSelect,
-    select,
+    select: selectAndInspect,
     resetToRoot,
     setStatus,
     setError
@@ -515,17 +524,18 @@ export function WorkflowEditor({
     const activities = new Map((scope?.slot.activities ?? (scopeOwner ? [scopeOwner] : [])).map(activity => [activity.nodeId, activity]));
     return runCanvas.nodes.map(node => {
       const activity = activities.get(node.data.runtimeNodeId ?? node.id);
-      return activity ? { ...node, data: { ...node.data,
+      const withActivity = activity ? { ...node, data: { ...node.data,
         collectionSlots: getCollectionSlots(activity, catalogByVersion.get(activity.activityVersionId)),
         workflowStartEnabled: getWorkflowStartEnabled(activity, catalogByVersion.get(activity.activityVersionId))
       } } : node;
+      const selected = withActivity.id === selectedNodeId || !!withActivity.selected;
+      if (withActivity.selected === selected && withActivity.domAttributes?.["aria-pressed"] === selected) return withActivity;
+      return { ...withActivity, selected, domAttributes: { ...withActivity.domAttributes, "aria-pressed": selected } };
     });
-  }, [catalogByVersion, runCanvas.nodes, scope?.slot.activities, scopeOwner]);
+  }, [catalogByVersion, runCanvas.nodes, scope?.slot.activities, scopeOwner, selectedNodeId]);
   const edges = runCanvas.edges;
-  const selectEditorNode = (nodeId: string | null) => {
-    select(nodeId);
-    if (runCanvas.attached) { setInspectorView("run-data"); setActiveRightPanelId("inspector"); setInspectorCollapsed(false); }
-  };
+  revealRunInspectorOnSelectRef.current = runCanvas.attached;
+  const selectEditorNode = selectAndInspect;
   const selectedCanvasNodeIds = useMemo(() => {
     const selected = nodes.filter(node => node.selected).map(node => node.id);
     return selected.length > 0 ? selected : (selectedNodeId ? [selectedNodeId] : []);
@@ -1715,7 +1725,14 @@ export function WorkflowEditor({
               onKeyDownCapture: event => activateWorkflowCanvasNode(event, nodeId => {
                 closeActivityContextMenu();
                 selectEditorNode(nodeId);
-              })
+              }),
+              onPointerDownCapture: event => {
+                selectAttachedRunEditorNodeOnCanvasPointerDown(event, runCanvas.attached, nodeId => {
+                  closeActivityContextMenu();
+                  // Reveal after this pointer gesture so React Flow can finish click/select first.
+                  window.setTimeout(() => selectAndInspect(nodeId), 0);
+                });
+              }
             }}
             edgeActions={edgeActions}
             availabilityLookup={availabilityLookup}

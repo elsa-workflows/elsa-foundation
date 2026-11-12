@@ -84,13 +84,15 @@ for (const theme of ["light", "dark"]) {
     await expect(node).toHaveAccessibleName(/Run state: Completed/);
     await expect.poll(() => node.evaluate(element => (element as HTMLElement).style.transform)).toBe(capturedPosition);
     await node.click();
+    await expect(node).toHaveAttribute("aria-pressed", "true");
+    const inspector = page.getByLabel("Inspector panel", { exact: true });
+    await expect(inspector.getByRole("tab", { name: "Configuration", exact: true })).toBeVisible();
     await page.keyboard.press("Delete");
     await page.keyboard.press("ControlOrMeta+d");
     await expect(node).toHaveCount(1);
     await expect.poll(() => node.evaluate(element => (element as HTMLElement).style.transform)).toBe(capturedPosition);
     await expect(page.getByRole("button", { name: "Undo", exact: true })).toBeDisabled();
     await expect(page.getByRole("button", { name: "Save", exact: true })).toBeDisabled();
-    const inspector = page.getByLabel("Inspector panel", { exact: true });
     await inspector.getByRole("tab", { name: "Configuration", exact: true }).click();
     await expect(inspector.locator("fieldset[disabled]")).toHaveCount(1);
     const editorViews = page.getByRole("tablist", { name: "Editor view tabs" });
