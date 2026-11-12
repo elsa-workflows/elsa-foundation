@@ -32,6 +32,8 @@ public sealed class InMemoryStore(int partitions, Func<long> clock, Flaw flaws =
     public Dictionary<(int Partition, long Position), JournalRow> Journal { get; } = [];
     public List<string> Ghost { get; } = [];
     public Dictionary<string, long> Nodes { get; } = new(StringComparer.Ordinal);
+    public long[] Projection { get; } = new long[partitions];
+    public Dictionary<string, ViewRow> Views { get; } = new(StringComparer.Ordinal);
 
     /// <summary>A row the database refuses, every time: a value too long.</summary>
     public Func<InstanceRow, bool>? Refuses { get; set; }
@@ -190,6 +192,23 @@ public sealed class InMemoryStore(int partitions, Func<long> clock, Flaw flaws =
     public ValueTask<IReadOnlyList<JournalRow>> ReadJournalAsync(int partition, long after, int take, CancellationToken cancellationToken = default)
     {
         lock (_gate) return new(Journal.Values.Where(j => j.Partition == partition && j.Position > after).OrderBy(j => j.Position).Take(take).ToList());
+    }
+
+    public ValueTask<long> ProjectedAsync(int partition, CancellationToken cancellationToken = default)
+    {
+        lock (_gate) return new(Projection[partition]);
+    }
+
+    public ValueTask<bool> ProjectAsync(int partition, long from, IReadOnlyList<JournalRow> rows, CancellationToken cancellationToken = default)
+    {
+        lock (_gate)
+        {
+            if (Projection[partition] != from && !Has(Flaw.ProjectorBlindWrite)) return new(false);
+            Projection[partition] = rows[^1].Position;
+            foreach (var row in rows.Where(r => r.Revision > 0))
+                Views[row.Instance] = Views.GetValueOrDefault(row.Instance) is { } view ? new ViewRow(row.Instance, Math.Max(view.Revision, row.Revision), view.Commits + 1) : new ViewRow(row.Instance, row.Revision, 1);
+            return new(true);
+        }
     }
 
     public ValueTask<int> SweepAsync(CancellationToken cancellationToken = default)

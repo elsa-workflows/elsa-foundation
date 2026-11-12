@@ -85,7 +85,8 @@ internal sealed class Step : IStep
     internal Unit Seal()
     {
         var created = Slot.Row is null;
-        var row = new InstanceRow(Id, Instance.Model, Instance.Definition, _status, Json.Write(State), _revision, Instance.Parent, Runs: _runs.Count == 0 ? null : Json.Write(_runs));
+        var history = Slot.Row?.History ?? Spec!.History;
+        var row = new InstanceRow(Id, Instance.Model, Instance.Definition, _status, Json.Write(State), _revision, Instance.Parent, Runs: _runs.Count == 0 ? null : Json.Write(_runs), History: history);
         if (_status != InstanceStatus.Running && row.Parent is not null) _sent.Add(Worker.Finished(row, _output is null ? null : Json.Write(_output)));
         var unit = new Unit(Slot, Id) { Consumed = Taken, Cancelled = _cancelled, Spec = Spec };
         // An ephemeral instance that ends in the step that created it, and leaves nothing for anyone else, is never written.
@@ -99,7 +100,7 @@ internal sealed class Step : IStep
         unit.Row = row;
         unit.Expected = created ? null : _revision - 1;
         unit.State = State;
-        unit.Journal = Json.Write(_entries);
+        unit.Journal = Worker.Journal(history, _entries);
         unit.Sent = _sent;
         unit.Fresh = _fresh;
         unit.Volatile = _volatile;

@@ -93,17 +93,25 @@ public sealed partial class World
         {
             var position = Store.Partitions[p].Position;
             if (count[p] != position || top[p] != position) return $"I6 partition {p} is at position {position} and its journal has {count[p]} rows up to {top[p]}";
-            if (Projected[p] > position) return $"I6 the projector of partition {p} is at {Projected[p]}, past position {position}";
+            if (Store.Projection[p] > position) return $"I6 the projector of partition {p} is at {Store.Projection[p]}, past position {position}";
         }
+        // I6 for the view: each view row counts exactly the journal rows of its instance up to its projector's position.
+        var projected = Store.Journal.Values.Where(j => j.Revision > 0 && j.Position <= Store.Projection[j.Partition]).GroupBy(j => j.Instance)
+            .ToDictionary(g => g.Key, g => (Revision: g.Max(j => j.Revision), Commits: g.Count()), StringComparer.Ordinal);
+        foreach (var (id, view) in Store.Views)
+            if (!projected.TryGetValue(id, out var expected) || expected != (view.Revision, view.Commits))
+                return $"I6 the view of {id} says revision {view.Revision} after {view.Commits} commits; the journal up to the projector says {expected.Revision} after {expected.Commits}";
+        if (projected.Keys.FirstOrDefault(id => !Store.Views.ContainsKey(id)) is { } unseen) return $"I6 the projector passed the journal rows of {unseen} and has no view of it";
         foreach (var (id, revisions) in commits)
         {
             revisions.Sort();
             if (Store.Instances.GetValueOrDefault(id) is not { } row) return $"I2 the journal has a commit of {id} and there is no row";
+            if (row.History == History.Minimal) return $"I6 {id} keeps minimal history and has journal rows";
             if (revisions.Count != row.Revision || revisions[^1] != row.Revision) return $"I2 {id} is at revision {row.Revision} and the journal has its commits [{string.Join(", ", revisions)}]";
         }
         foreach (var row in Store.Instances.Values)
         {
-            if (!commits.ContainsKey(row.Id)) return $"I2 {row.Id} has a row and no journal row";
+            if (!commits.ContainsKey(row.Id) && row.History != History.Minimal) return $"I2 {row.Id} has a row and no journal row";
             if (_known.TryGetValue(row.Id, out var before) && (row.Revision < before.Revision || (before.Status != InstanceStatus.Running && row.Status != before.Status)))
                 return $"I10 {row.Id} went from revision {before.Revision} {before.Status} to revision {row.Revision} {row.Status}";
             _known[row.Id] = (row.Revision, row.Status);
@@ -415,8 +423,8 @@ public sealed partial class World
             if (!Parked.Contains(id) && Store.Instances.GetValueOrDefault(id)?.Status != (bad ? InstanceStatus.Faulted : InstanceStatus.Running)) return $"I14 {id} ended as {Store.Instances.GetValueOrDefault(id)?.Status.ToString() ?? "no row"}";
         for (var p = 0; p < Config.Partitions; p++)
         {
-            Project(p, int.MaxValue);
-            if (Projected[p] != Store.Partitions[p].Position) return $"I6 the projector of partition {p} stopped at {Projected[p]} of {Store.Partitions[p].Position}";
+            for (var round = 0; round < 1000 && Store.Projection[p] < Store.Partitions[p].Position; round++) Watch(Of(round % Config.Nodes, p).Projector.RoundAsync());
+            if (Store.Projection[p] != Store.Partitions[p].Position) return $"I6 the projector of partition {p} stopped at {Store.Projection[p]} of {Store.Partitions[p].Position}";
         }
         return Faults.FirstOrDefault() ?? Check();
     }

@@ -15,8 +15,11 @@ public enum InstanceStatus { Running, Finished, Faulted, Cancelled }
 
 public enum Placement { WithParent }
 
+/// <summary>What each commit of an instance leaves in the journal: the model's entries, only that its state changed, or nothing.</summary>
+public enum History { Full, State, Minimal }
+
 /// <summary>What a message needs to create its target when the target does not exist.</summary>
-public sealed record StartSpec(string Model, string Definition, string? Input = null, string? Parent = null, bool Ephemeral = false);
+public sealed record StartSpec(string Model, string Definition, string? Input = null, string? Parent = null, bool Ephemeral = false, History History = History.Full);
 
 public sealed record SendOptions(TimeSpan? Delay = null, StartSpec? Start = null);
 
@@ -116,4 +119,5 @@ public enum Flaw
     // Round 3: each piece's rule, switched off.
     GreedyBalancer = 1 << 21,      // a node takes every free partition and never releases a surplus
     TrialPerPartition = 1 << 22,   // a trial is alone in its partition only, not in its process
+    ProjectorBlindWrite = 1 << 23, // the projector's write does not check that its position is still where it read it
 }

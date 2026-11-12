@@ -32,6 +32,21 @@ public sealed class InstanceEntity
     public long Revision { get; set; }
     public string? Parent { get; set; }
     public string? Fault { get; set; }
+    public History History { get; set; }
+}
+
+public sealed class ProjectionEntity
+{
+    public int Partition { get; set; }
+    public long Position { get; set; }
+}
+
+public sealed class ViewEntity
+{
+    public string Instance { get; set; } = "";
+    public int Partition { get; set; }
+    public long Revision { get; set; }
+    public int Commits { get; set; }
 }
 
 public sealed class MessageEntity
@@ -86,6 +101,8 @@ public sealed class KernelDb(DbContextOptions<KernelDb> options) : DbContext(opt
     public DbSet<SubscriptionEntity> Subscriptions => Set<SubscriptionEntity>();
     public DbSet<EventEntity> Events => Set<EventEntity>();
     public DbSet<JournalEntity> Journal => Set<JournalEntity>();
+    public DbSet<ProjectionEntity> Projections => Set<ProjectionEntity>();
+    public DbSet<ViewEntity> Views => Set<ViewEntity>();
 
     protected override void OnModelCreating(ModelBuilder model)
     {
@@ -126,6 +143,17 @@ public sealed class KernelDb(DbContextOptions<KernelDb> options) : DbContext(opt
         {
             e.ToTable("Journal");
             e.HasKey(j => new { j.Partition, j.Position });
+        });
+        model.Entity<ProjectionEntity>(e =>
+        {
+            e.ToTable("Projections");
+            e.HasKey(p => p.Partition);
+            e.Property(p => p.Partition).ValueGeneratedNever();
+        });
+        model.Entity<ViewEntity>(e =>
+        {
+            e.ToTable("Views");
+            e.HasKey(v => v.Instance);
         });
     }
 }
@@ -176,6 +204,7 @@ public sealed class EfStore(Func<KernelDb> create, bool postgres, bool fenceInBa
         await db.Database.EnsureCreatedAsync();
         if (await db.Partitions.AnyAsync()) return;
         db.Partitions.AddRange(Enumerable.Range(0, partitions).Select(id => new PartitionEntity { Id = id }));
+        db.Projections.AddRange(Enumerable.Range(0, partitions).Select(id => new ProjectionEntity { Partition = id }));
         await db.SaveChangesAsync();
     }
 
@@ -246,7 +275,7 @@ public sealed class EfStore(Func<KernelDb> create, bool postgres, bool fenceInBa
                     var entity = new InstanceEntity
                     {
                         Id = row.Id, Partition = batch.Partition, Model = row.Model, Definition = row.Definition, Status = row.Status,
-                        State = row.State, Runs = row.Runs, Revision = row.Revision, Parent = row.Parent, Fault = row.Fault,
+                        State = row.State, Runs = row.Runs, Revision = row.Revision, Parent = row.Parent, Fault = row.Fault, History = row.History,
                     };
                     if (step.Expected is not { } expected) db.Add(entity);
                     else db.Update(entity).Property(i => i.Revision).OriginalValue = expected;
@@ -320,7 +349,7 @@ public sealed class EfStore(Func<KernelDb> create, bool postgres, bool fenceInBa
     {
         await using var db = create();
         var rows = await db.Instances.AsNoTracking().Where(i => ids.Contains(i.Id)).ToListAsync(cancellationToken);
-        return rows.Select(i => new InstanceRow(i.Id, i.Model, i.Definition, i.Status, i.State, i.Revision, i.Parent, i.Fault, i.Runs)).ToList();
+        return rows.Select(i => new InstanceRow(i.Id, i.Model, i.Definition, i.Status, i.State, i.Revision, i.Parent, i.Fault, i.Runs, i.History)).ToList();
     }
 
     public async ValueTask PublishAsync(EventRow @event, CancellationToken cancellationToken = default)
@@ -350,6 +379,26 @@ public sealed class EfStore(Func<KernelDb> create, bool postgres, bool fenceInBa
         await using var db = create();
         var rows = await db.Journal.AsNoTracking().Where(j => j.Partition == partition && j.Position > after).OrderBy(j => j.Position).Take(take).ToListAsync(cancellationToken);
         return rows.Select(j => new JournalRow(j.Partition, j.Position, j.Instance, j.Revision, j.Entries)).ToList();
+    }
+
+    public async ValueTask<long> ProjectedAsync(int partition, CancellationToken cancellationToken = default)
+    {
+        await using var db = create();
+        return await db.Projections.Where(p => p.Partition == partition).Select(p => p.Position).SingleAsync(cancellationToken);
+    }
+
+    public async ValueTask<bool> ProjectAsync(int partition, long from, IReadOnlyList<JournalRow> rows, CancellationToken cancellationToken = default)
+    {
+        await using var db = create();
+        await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+        var moved = await db.Database.ExecuteSqlRawAsync("""UPDATE "Projections" SET "Position" = {0} WHERE "Partition" = {1} AND "Position" = {2}""", [rows[^1].Position, partition, from], cancellationToken);
+        if (moved != 1) return false;
+        foreach (var view in rows.Where(r => r.Revision > 0).GroupBy(r => r.Instance))
+            await db.Database.ExecuteSqlRawAsync(
+                """INSERT INTO "Views" ("Instance", "Partition", "Revision", "Commits") VALUES ({0}, {1}, {2}, {3}) ON CONFLICT ("Instance") DO UPDATE SET "Revision" = excluded."Revision", "Commits" = "Views"."Commits" + excluded."Commits" """,
+                [view.Key, partition, view.Max(r => r.Revision), view.Count()], cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        return true;
     }
 
     public async ValueTask<int> SweepAsync(CancellationToken cancellationToken = default)

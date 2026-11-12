@@ -149,7 +149,7 @@ int Mutations(int seeds)
         Flaw.WallClockTimers, Flaw.DeleteOutsideCommands, Flaw.HandOverWhileBehind, Flaw.BumpAllInherited, Flaw.RunBeforeMark,
         Flaw.VolatileRunTicket, Flaw.PollRace, Flaw.MeetWithoutTicket,
         // round 3: the rule of each new piece
-        Flaw.GreedyBalancer, Flaw.TrialPerPartition,
+        Flaw.GreedyBalancer, Flaw.TrialPerPartition, Flaw.ProjectorBlindWrite,
     ];
     var missed = 0;
     foreach (var mutation in mutations)

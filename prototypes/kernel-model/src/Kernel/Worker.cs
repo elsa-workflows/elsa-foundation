@@ -343,11 +343,15 @@ public sealed class Worker
     {
         var row = slot.Row is { } r ? r with { Status = InstanceStatus.Faulted, Revision = r.Revision + 1, Fault = error }
             : spec is null ? null
-            : new InstanceRow(instance, spec.Model, spec.Definition, InstanceStatus.Faulted, "null", 1, spec.Parent, error);
-        var unit = new Unit(slot, instance) { Row = row, Expected = slot.Row?.Revision, Consumed = taken, Journal = Json.Write(new[] { "parked: " + error }) };
+            : new InstanceRow(instance, spec.Model, spec.Definition, InstanceStatus.Faulted, "null", 1, spec.Parent, error, History: spec.History);
+        var unit = new Unit(slot, instance) { Row = row, Expected = slot.Row?.Revision, Consumed = taken, Journal = row is null ? null : Journal(row.History, ["parked: " + error]) };
         if (row?.Parent is not null) unit.Sent.Add(Finished(row, null));
         return unit;
     }
+
+    /// <summary>What a commit leaves in the journal at a history level. At Minimal no row is written and the position does not move.</summary>
+    internal static string? Journal(History history, IEnumerable<object> entries) =>
+        history switch { History.Full => Json.Write(entries), History.State => "[]", _ => null };
 
     internal static Message Finished(InstanceRow row, string? output) =>
         new($"{row.Id}#{row.Revision}.end", new InstanceRef(row.Parent!), Kinds.ChildFinished, Json.Write(new ChildFinished(row.Id, row.Status, output)), row.Id);

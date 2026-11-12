@@ -22,7 +22,7 @@ public sealed record Act(string Kind, int A = 0, int B = 0, string S = "", Messa
         "balance" => $"node {A} balances: heartbeat, release the surplus, take up to its share",
         "pause" => $"node {A} pauses",
         "resume" => $"node {A} resumes",
-        "project" => $"the projector reads partition {A}",
+        "project" => $"the projector of actor {A} runs a round",
         "sweep" => "the sweep runs",
         _ => $"actor {A}: {Kind}",
     };
@@ -66,6 +66,7 @@ public sealed class Actor(int id, int node, int partition)
     public int Node => node;
     public int Partition => partition;
     public Worker Worker = null!;
+    public Projector Projector = null!;
     public bool Dead, Zombie;
     public readonly List<Call> Calls = [];
     public readonly Dictionary<string, TaskCompletionSource<object?>> Runs = new(StringComparer.Ordinal);
@@ -118,7 +119,12 @@ public sealed class Wire(World world, Actor actor) : IKernelStore
     public ValueTask<bool> AddAsync(Message message, CancellationToken cancellationToken = default) => world.Store.AddAsync(message);
     public ValueTask PublishAsync(EventRow @event, CancellationToken cancellationToken = default) => world.Store.PublishAsync(@event);
     public ValueTask<IReadOnlyList<SubscriptionRow>> FindSubscriptionsAsync(string key, CancellationToken cancellationToken = default) => world.Store.FindSubscriptionsAsync(key);
-    public ValueTask<IReadOnlyList<JournalRow>> ReadJournalAsync(int partition, long after, int take, CancellationToken cancellationToken = default) => world.Store.ReadJournalAsync(partition, after, take);
+    public ValueTask<IReadOnlyList<JournalRow>> ReadJournalAsync(int partition, long after, int take, CancellationToken cancellationToken = default) =>
+        Send("journal", $"journal p{partition} after {after}", () => world.Store.ReadJournalAsync(partition, after, take));
+    public ValueTask<long> ProjectedAsync(int partition, CancellationToken cancellationToken = default) =>
+        Send("projected", $"projection p{partition}", () => world.Store.ProjectedAsync(partition));
+    public ValueTask<bool> ProjectAsync(int partition, long from, IReadOnlyList<JournalRow> rows, CancellationToken cancellationToken = default) =>
+        Send("project", $"project p{partition} from {from} to {rows[^1].Position}", () => world.Store.ProjectAsync(partition, from, rows));
     public ValueTask<int> SweepAsync(CancellationToken cancellationToken = default) => world.Store.SweepAsync();
 
     private static string Describe(StepCommit step) =>
@@ -133,6 +139,7 @@ public sealed class Wire(World world, Actor actor) : IKernelStore
         Polled polled => $"[{string.Join(", ", polled.Messages.Select(m => m.Message.Id))}]",
         IReadOnlyList<InstanceRow> rows => $"[{string.Join(", ", rows.Select(r => $"{r.Id} r{r.Revision}"))}]",
         IReadOnlyList<EventRow> events => $"[{string.Join(", ", events.Select(e => e.Id))}]",
+        IReadOnlyList<JournalRow> rows => $"[{string.Join(", ", rows.Select(j => j.Position))}]",
         _ => result.ToString()!,
     };
 }
@@ -144,7 +151,7 @@ public sealed partial class World
     public readonly InMemoryStore Store;
     public readonly List<Actor> Actors = [];
     public readonly int[,] Current;
-    public readonly long[] Skew, Projected;
+    public readonly long[] Skew;
     public readonly int[] Incarnation;
     public readonly Balancer[] Balancers;
     private readonly TrialGate[] _gates;
@@ -163,7 +170,6 @@ public sealed partial class World
         Current = new int[config.Nodes, config.Partitions];
         Skew = new long[config.Nodes];
         Paused = new bool[config.Nodes];
-        Projected = new long[config.Partitions];
         Incarnation = new int[config.Nodes];
         Balancers = new Balancer[config.Nodes];
         _gates = Enumerable.Range(0, config.Nodes).Select(_ => new TrialGate()).ToArray();
@@ -186,13 +192,15 @@ public sealed partial class World
     private void Spawn(int node, int partition)
     {
         var actor = new Actor(Actors.Count, node, partition);
+        var wire = new Wire(this, actor);
+        actor.Projector = new Projector(wire, partition, take: 5);    // a projector runs on every node, whoever owns the partition
         IExecutionModel[] models =
         [
             new Counter(), new Parent(), new Child(), new Waiter(), new Sequence(), new Correlation(Config.Flaws.HasFlag(Flaw.CorrelationForgets)), new CWaiter(Config.Partitions),
             new Runner((run, cancel) => Work(actor, run, cancel)), new Fragile(() => Dying = node),
         ];
         // A node's name is unique per process start: a restarted process is not its predecessor (finding F9).
-        actor.Worker = new Worker(Config.Flaws.HasFlag(Flaw.StableNodeName) ? "node" + node : $"node{node}.{Incarnation[node]}", partition, new Wire(this, actor), models, new WorkerOptions
+        actor.Worker = new Worker(Config.Flaws.HasFlag(Flaw.StableNodeName) ? "node" + node : $"node{node}.{Incarnation[node]}", partition, wire, models, new WorkerOptions
         {
             Lease = TimeSpan.FromSeconds(10), Horizon = TimeSpan.FromSeconds(2), PollLimit = 3, MaxBatch = 4, MaxAttempts = Config.Attempts, TrialGroup = Config.Group, Gate = _gates[node],
             Monotonic = () => Time + node * 7919,       // every node counts at the database's rate from its own zero
@@ -366,7 +374,12 @@ public sealed partial class World
                 Paused[act.A] = act.Kind == "pause";
                 return "";
             case "project":
-                return Project(act.A, 5);
+            {
+                if (Live(act.A) is not { } actor) return null;
+                var calls = actor.Calls.Count;
+                Watch(actor.Projector.RoundAsync());
+                return actor.Calls.Count > calls ? $"call {calls}: {actor.Calls[calls].Text}" : "nothing to send";
+            }
             case "sweep":
                 return $"{Store.SweepAsync().Result} rows deleted";
             default:
@@ -374,17 +387,6 @@ public sealed partial class World
         }
     }
 
-    /// <summary>The projector: journal rows after its cursor, in position order. It must never find a hole behind it.</summary>
-    private string Project(int partition, int take)
-    {
-        var rows = Store.ReadJournalAsync(partition, Projected[partition], take).Result;
-        foreach (var row in rows)
-        {
-            if (row.Position != Projected[partition] + 1) Faults.Add($"I6 the projector of partition {partition} was at {Projected[partition]} and read {row.Position} next");
-            Projected[partition] = row.Position;
-        }
-        return $"now at {Projected[partition]}";
-    }
 }
 
 /// <summary>Chooses the next thing to happen from a seed.</summary>
@@ -440,7 +442,7 @@ public sealed class Generator(int seed, World world)
                 var pick = running[r.Next(running.Count)];
                 return new Act("finish", pick.Id, S: pick.key);
             }
-            case < 99: return new Act("project", r.Next(world.Config.Partitions));
+            case < 99: return new Act("project", actor.Id);
             default: return new Act("sweep");
         }
     }
@@ -468,14 +470,14 @@ public sealed class Generator(int seed, World world)
             case < 44 when _outside.Count > 0:
                 return new Act("add", M: _outside[r.Next(_outside.Count)], S: "a retry");
             case < 48: return new Act("add", M: To("ghost" + n, "add", new Add("t" + n), null));
-            case < 56: return new Act("add", M: To("par" + n, Kinds.Start, null, new StartSpec("parent", "p", Json.Write(new ParentInput(r.Next(1, 4), r.Next(4000))))));
+            case < 56: return new Act("add", M: To("par" + n, Kinds.Start, null, new StartSpec("parent", "p", Json.Write(new ParentInput(r.Next(1, 4), r.Next(4000))), History: (History)r.Next(3))));
             case < 64:
             {
                 List<string> keys = r.Next(2) == 0 ? ["k" + r.Next(3)] : ["k0", "k" + r.Next(1, 3)];
                 return new Act("add", M: To("w" + n, Kinds.Start, null, new StartSpec("waiter", "w", Json.Write(keys))));
             }
             case < 71: return new Act("publish", B: n, S: "k" + r.Next(3));
-            case < 78: return new Act("add", M: To("s" + n, Kinds.Start, null, Sequence.Spec(r.Next(1, 6), Mode(r))));
+            case < 78: return new Act("add", M: To("s" + n, Kinds.Start, null, Sequence.Spec(r.Next(1, 6), Mode(r)) with { History = (History)r.Next(3) }));
             case < 84:
             {
                 var owner = alive[r.Next(alive.Count)];

@@ -1,7 +1,7 @@
 namespace Kernel;
 
 /// <summary><c>Runs</c> is the kernel's part of the row: the keys of the off-step work in flight, as a JSON array, or null.</summary>
-public sealed record InstanceRow(string Id, string Model, string Definition, InstanceStatus Status, string State, long Revision, string? Parent, string? Fault = null, string? Runs = null);
+public sealed record InstanceRow(string Id, string Model, string Definition, InstanceStatus Status, string State, long Revision, string? Parent, string? Fault = null, string? Runs = null, History History = History.Full);
 
 /// <summary>A message row as a poll returns it.</summary>
 public sealed record Stored(Message Message, long Seq, long Seen, int Attempts, long Trial);
@@ -11,6 +11,9 @@ public sealed record SubscriptionRow(string Key, string Instance, string Wait);
 public sealed record EventRow(string Key, string Id, string? Payload, long KeepUntil);
 
 public sealed record JournalRow(int Partition, long Position, string Instance, long Revision, string Entries);
+
+/// <summary>The viewer's row of an instance, as the projector has it: the last revision it saw and how many commits.</summary>
+public sealed record ViewRow(string Instance, long Revision, int Commits);
 
 public sealed record Lease(long Epoch, long Position, long Now);
 
@@ -88,6 +91,15 @@ public interface IKernelStore
     ValueTask<IReadOnlyList<EventRow>> FindEventsAsync(IReadOnlyCollection<string> keys, CancellationToken cancellationToken = default);
 
     ValueTask<IReadOnlyList<JournalRow>> ReadJournalAsync(int partition, long after, int take, CancellationToken cancellationToken = default);
+
+    /// <summary>The position of the partition's projector: its own row, apart from the fence.</summary>
+    ValueTask<long> ProjectedAsync(int partition, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// In one transaction: move the projector's position from <paramref name="from"/> to the last row's, if it is still
+    /// at <paramref name="from"/>, and write the view rows of <paramref name="rows"/>. False when another projector moved it first.
+    /// </summary>
+    ValueTask<bool> ProjectAsync(int partition, long from, IReadOnlyList<JournalRow> rows, CancellationToken cancellationToken = default);
 
     /// <summary>Delete handled outside commands and events whose window has passed.</summary>
     ValueTask<int> SweepAsync(CancellationToken cancellationToken = default);
