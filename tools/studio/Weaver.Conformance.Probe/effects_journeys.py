@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 import copy
+import ctypes
 import hashlib
 import json
 import os
@@ -16,6 +17,7 @@ import re
 import shutil
 import signal
 import subprocess
+import sys
 import threading
 import time
 import uuid
@@ -781,6 +783,13 @@ def require_browser_case(value, root, spec):
           and shutdown["nodePid"] > 1 and shutdown["browserPid"] > 1
           and isinstance(shutdown.get("observations"), list) and shutdown["observations"]
           and shutdown["observations"][-1] == {}, "Browser descendant shutdown has no retained absence observation")
+    owned = shutdown.get("ownedProcesses")
+    _need(isinstance(owned, dict) and str(shutdown["nodePid"]) in owned and str(shutdown["browserPid"]) in owned
+          and all(isinstance(row.get("started"), str) and row["started"]
+                  and type(row.get("session")) is int and type(row.get("group")) is int for row in owned.values())
+          and owned[str(shutdown["nodePid"])]["session"] == owned[str(shutdown["nodePid"])]["group"] == shutdown["nodePid"]
+          and shutdown.get("groups") == sorted({row["group"] for row in owned.values()}),
+          "Browser shutdown omitted its observed process birth/session/group ownership")
     browser = _owned(root, value["browser"])
     _need(browser.get("status") == "passed" and not browser.get("failure") and not browser.get("pageErrors")
           and browser.get("journey") == "module-effects" and browser.get("provider") == value["provider"], "browser journey incomplete")
@@ -928,18 +937,73 @@ def require_browser_case(value, root, spec):
     return value
 
 
+class _DarwinProcessInfo(ctypes.Structure):
+    # Darwin sys/proc_info.h proc_bsdinfo (PROC_PIDTBSDINFO=3). Native
+    # microsecond birth avoids ps lstart's one-second PID-reuse ambiguity.
+    _fields_ = [(name, ctypes.c_uint32) for name in
+                "flags status xstatus pid parent uid gid ruid rgid svuid svgid reserved".split()] + [
+                    ("comm", ctypes.c_char * 16), ("name", ctypes.c_char * 32)] + [
+                    (name, ctypes.c_uint32) for name in "nfiles group jobc tty ttygroup".split()] + [
+                    ("nice", ctypes.c_int32), ("startseconds", ctypes.c_uint64), ("startmicros", ctypes.c_uint64)]
+
+
 def _process_snapshot():
-    observed = subprocess.run(["ps", "-axo", "pid=,ppid=,pgid=,lstart="], capture_output=True, text=True, timeout=2, check=True)
-    return {int(parts[0]): {"parent": int(parts[1]), "group": int(parts[2]), "started": parts[3]}
-            for line in observed.stdout.splitlines() if len(parts := line.split(None, 3)) == 4}
+    observed = subprocess.run(["ps", "-axo", "pid="], capture_output=True, text=True, timeout=2, check=True)
+    native = ctypes.CDLL("/usr/lib/libproc.dylib", use_errno=True) if sys.platform == "darwin" else None
+    if native:
+        native.proc_pidinfo.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_uint64, ctypes.c_void_p, ctypes.c_int]
+        native.proc_pidinfo.restype = ctypes.c_int
+    rows = {}
+    for value in observed.stdout.split():
+        pid = int(value)
+        try:
+            if native:
+                info, confirmed = _DarwinProcessInfo(), _DarwinProcessInfo()
+                size = ctypes.sizeof(info)
+                if native.proc_pidinfo(pid, 3, 0, ctypes.byref(info), size) != size:
+                    if ctypes.get_errno() == 3: continue  # ESRCH, never a permission/incomplete census.
+                    raise RuntimeError("Native browser process census unavailable")
+                session = os.getsid(pid)
+                if native.proc_pidinfo(pid, 3, 0, ctypes.byref(confirmed), size) != size:
+                    if ctypes.get_errno() == 3: continue
+                    raise RuntimeError("Native browser process census confirmation unavailable")
+                _need((info.pid, info.parent, info.group, info.startseconds, info.startmicros)
+                      == (confirmed.pid, confirmed.parent, confirmed.group, confirmed.startseconds, confirmed.startmicros),
+                      "Process identity changed during its native census")
+                rows[pid] = {"parent": info.parent, "group": info.group, "session": session,
+                             "started": str(info.startseconds) + ":" + str(info.startmicros)}
+            else:
+                _need(sys.platform.startswith("linux"), "Native process birth identity unsupported on this platform")
+                fields = Path("/proc", str(pid), "stat").read_text().rsplit(")", 1)[1].split()
+                rows[pid] = {"parent": int(fields[1]), "group": int(fields[2]), "session": int(fields[3]), "started": fields[19]}
+        except (FileNotFoundError, ProcessLookupError): continue
+    return rows
 
 
-def _descends_from(pid, ancestor, snapshot):
-    visited = set()
-    while pid in snapshot and pid not in visited:
-        if pid == ancestor: return True
-        visited.add(pid); pid = snapshot[pid]["parent"]
-    return False
+def _same_process(left, right):
+    return all(left.get(key) == right.get(key) and left.get(key) is not None for key in ("started", "session", "group"))
+
+
+def _capture_owned_descendants(owned, current):
+    """Admit births only while a live unchanged ancestor proves this launch's lineage."""
+    _need(all(pid not in current or _same_process(row, current[pid]) for pid, row in owned.items()),
+          "An owned process identity was reused or changed")
+    changed = True
+    while changed:
+        changed = False
+        for pid, row in current.items():
+            parent = row["parent"]
+            if pid not in owned and parent in owned and parent in current and _same_process(owned[parent], current[parent]):
+                owned[pid] = dict(row); changed = True
+
+
+def _owned_group_census(groups, owned, current):
+    _need(all(pid not in current or _same_process(row, current[pid]) for pid, row in owned.items()),
+          "Owned process birth/session/group changed; no further signals or restoration")
+    members = {pid: row for pid, row in current.items() if row["group"] in groups}
+    _need(all(pid in owned and _same_process(owned[pid], row) for pid, row in members.items()),
+          "Unowned process group member; no further signals or restoration")
+    return members
 
 
 def require_browser_stopped(runtime):
@@ -949,7 +1013,7 @@ def require_browser_stopped(runtime):
           "The Studio module-selection request has no acknowledged outcome; restoration remains blocked")
 
 
-def _stop_browser_groups(process, lease, token, observed_browser, *, snapshot=_process_snapshot, send=os.killpg,
+def _stop_browser_groups(process, lease, token, owned, *, snapshot=_process_snapshot, send=os.killpg,
                          now=time.monotonic, sleep=time.sleep):
     """Stop only this launch's verified groups; absence is required even after a successful driver exit."""
     try: receipt = strict_json(lease.read_text()) if lease.is_file() else {}
@@ -958,24 +1022,20 @@ def _stop_browser_groups(process, lease, token, observed_browser, *, snapshot=_p
         and type(receipt.get("browserPid")) is int and receipt["browserPid"] > 1
     browser_pid = receipt["browserPid"] if valid else None
     current = snapshot()
-    browser = current.get(browser_pid)
-    if browser is not None:
-        if observed_browser is None or any(observed_browser[key] != browser[key] for key in ("started", "group")):
-            # The Node session is ours even when a browser lease cannot be
-            # trusted. Stop it, but never signal an unproven browser group.
-            try: send(process.pid, signal.SIGTERM)
-            except ProcessLookupError: pass
-            raise RuntimeError("Browser process ownership changed or was never established; restoration blocked")
-    # Playwright launches its browser in a detached process group. Establish that
-    # group while Node owns the live process, never infer ownership after reparenting.
-    groups = {process.pid}
-    if observed_browser: groups.add(observed_browser["group"])
-    elif valid: groups.add(browser_pid)
+    owned = dict(owned)
+    _capture_owned_descendants(owned, current)
+    # Freeze before signalling. A lease or numeric PGID alone grants no authority.
+    browser = owned.get(browser_pid)
+    groups = {process.pid, *(row["group"] for row in owned.values())}
+    if valid and browser is None: groups.add(browser_pid)  # A census blocker, never authority to signal.
     _need(all(group > 1 and group != os.getpgrp() for group in groups), "Unsafe browser process group")
     observations, signals = [], []
+    _owned_group_census(groups, owned, current)
     for sig, seconds in ((signal.SIGTERM, 5), (signal.SIGKILL, 5)):
-        for group in groups:
-            if any(row["group"] == group for row in current.values()):
+        for group in sorted(groups):
+            current = snapshot()
+            members = _owned_group_census(groups, owned, current)
+            if any(row["group"] == group for row in members.values()):
                 try: send(group, sig)
                 except ProcessLookupError: pass
                 signals.append({"group": group, "signal": int(sig)})
@@ -983,11 +1043,12 @@ def _stop_browser_groups(process, lease, token, observed_browser, *, snapshot=_p
         while True:
             process.poll()  # Reap Node so a zombie cannot masquerade as a live descendant.
             current = snapshot()
-            remaining = [pid for pid, row in current.items() if row["group"] in groups]
+            remaining = list(_owned_group_census(groups, owned, current))
             observations.append({str(pid): current[pid] for pid in remaining})
             if not remaining:
-                _need(valid, "No exact owned browser process lease; restoration remains blocked")
+                _need(valid and browser is not None, "No exact browser lease and observed ancestry; restoration remains blocked")
                 return {"nodePid": process.pid, "browserPid": browser_pid, "groups": sorted(groups), "remaining": [],
+                        "ownedProcesses": {str(pid): row for pid, row in owned.items()},
                         "signals": signals, "observations": observations, "provenAbsent": True}
             if now() >= deadline: break
             sleep(0.05)
@@ -1002,21 +1063,28 @@ def _run_effects_browser(runtime, name, command, config, output):
     config.update(effectsProcessLease=str(lease), effectsProcessToken=token)
     private_json(output / "config-private.json", config)
     runtime.effects_browser_stopped = False
-    observed_browser = None
+    owned = {}
     with log.open("w") as stream:
         process = subprocess.Popen(command, cwd=TOOL, stdin=subprocess.DEVNULL, stdout=stream, stderr=subprocess.STDOUT,
                                    env={key: value for key, value in os.environ.items() if key in RUNTIME_ENVIRONMENT}, start_new_session=True)
         try:
+            initial = _process_snapshot()
+            node = initial.get(process.pid)
+            _need(node is not None and node["parent"] == os.getpid() and node["group"] == node["session"] == process.pid,
+                  "Node launch ancestry, birth and isolated session could not be established")
+            owned[process.pid] = dict(node)
             deadline = time.monotonic() + 150
             while process.poll() is None:
+                processes = _process_snapshot()
+                _capture_owned_descendants(owned, processes)
                 if lease.is_file():
                     receipt = strict_json(lease.read_text())
                     _need(receipt.get("token") == token and receipt.get("nodePid") == process.pid, "Foreign browser process lease")
-                    processes = _process_snapshot()
                     browser_pid = receipt.get("browserPid")
-                    if browser_pid in processes and _descends_from(browser_pid, process.pid, processes):
-                        observed_browser = processes[browser_pid]
-                        _need(observed_browser["group"] in (process.pid, browser_pid), "Browser launch did not establish an isolated group")
+                    if browser_pid in owned:
+                        browser = owned[browser_pid]
+                        _need(browser["group"] in (process.pid, browser_pid) and browser["session"] in (process.pid, browser_pid),
+                              "Browser launch did not establish an isolated group/session")
                 if time.monotonic() >= deadline: raise TimeoutError("Effects browser deadline; no action replay")
                 time.sleep(0.05)
         finally:
@@ -1025,7 +1093,7 @@ def _run_effects_browser(runtime, name, command, config, output):
             remaining, interval = signal.getitimer(signal.ITIMER_REAL)
             signal.setitimer(signal.ITIMER_REAL, 0)
             try:
-                stopped = _stop_browser_groups(process, lease, token, observed_browser)
+                stopped = _stop_browser_groups(process, lease, token, owned)
                 stopped_receipt = runtime.save(output, "browser-process-stopped", stopped)
                 runtime.effects_browser_stopped = True
             finally:

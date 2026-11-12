@@ -304,16 +304,17 @@ class EffectsShutdownTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             lease = Path(directory) / "lease.json"
             lease.write_text(json.dumps({"token": "owned", "nodePid": 900, "browserPid": 901}))
-            browser = {"parent": 900, "group": 901, "started": "original-browser"}
+            browser = {"parent": 900, "group": 901, "session": 901, "started": "original-browser"}
+            renderer = {"parent": 901, "group": 901, "session": 901, "started": "renderer"}
             # Node already exited and the detached browser was reparented.
-            processes = {901: dict(browser, parent=1), 902: {"parent": 901, "group": 901, "started": "renderer"}}
+            processes = {901: dict(browser, parent=1), 902: renderer}
             sent = []
             def stop(group, sig):
                 sent.append((group, sig))
                 for pid in list(processes):
                     if processes[pid]["group"] == group: processes.pop(pid)
             process = SimpleNamespace(pid=900, poll=lambda: 0)
-            result = _stop_browser_groups(process, lease, "owned", browser, snapshot=lambda: copy.deepcopy(processes), send=stop)
+            result = _stop_browser_groups(process, lease, "owned", {901: browser, 902: renderer}, snapshot=lambda: copy.deepcopy(processes), send=stop)
             self.assertEqual([(901, signal.SIGTERM)], sent)
             self.assertTrue(result["provenAbsent"])
             require_browser_stopped(SimpleNamespace(effects_browser_stopped=result["provenAbsent"]))
@@ -322,10 +323,10 @@ class EffectsShutdownTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             lease = Path(directory) / "lease.json"
             lease.write_text(json.dumps({"token": "owned", "nodePid": 900, "browserPid": 901}))
-            browser = {"parent": 900, "group": 901, "started": "original-browser"}
+            browser = {"parent": 900, "group": 901, "session": 901, "started": "original-browser"}
             sent = []
             with self.assertRaises(RuntimeError):
-                _stop_browser_groups(SimpleNamespace(pid=900, poll=lambda: 0), lease, "owned", browser,
+                _stop_browser_groups(SimpleNamespace(pid=900, poll=lambda: 0), lease, "owned", {901: browser},
                     snapshot=lambda: {901: browser}, send=lambda group, sig: sent.append((group, sig)),
                     now=iter((0, 6, 7, 13)).__next__, sleep=lambda _: None)
             self.assertEqual([(901, signal.SIGTERM), (901, signal.SIGKILL)], sent)
@@ -334,11 +335,12 @@ class EffectsShutdownTests(unittest.TestCase):
 
     def test_missing_lease_stops_node_but_cannot_authorize_restoration(self):
         with tempfile.TemporaryDirectory() as directory:
-            processes = {900: {"parent": 1, "group": 900, "started": "owned-node"}}
+            node = {"parent": 1, "group": 900, "session": 900, "started": "owned-node"}
+            processes = {900: node}
             sent = []
             def stop(group, sig): sent.append((group, sig)); processes.clear()
             with self.assertRaises(RuntimeError):
-                _stop_browser_groups(SimpleNamespace(pid=900, poll=lambda: 0), Path(directory) / "missing.json", "owned", None,
+                _stop_browser_groups(SimpleNamespace(pid=900, poll=lambda: 0), Path(directory) / "missing.json", "owned", {900: node},
                                      snapshot=lambda: copy.deepcopy(processes), send=stop)
             self.assertEqual([(900, signal.SIGTERM)], sent)
 
@@ -346,12 +348,57 @@ class EffectsShutdownTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             lease = Path(directory) / "lease.json"
             lease.write_text(json.dumps({"token": "owned", "nodePid": 900, "browserPid": 901}))
-            original = {"parent": 900, "group": 901, "started": "original-browser"}
+            original = {"parent": 900, "group": 901, "session": 901, "started": "original-browser"}
             sent = []
             with self.assertRaises(RuntimeError):
-                _stop_browser_groups(SimpleNamespace(pid=900, poll=lambda: 0), lease, "owned", original,
+                _stop_browser_groups(SimpleNamespace(pid=900, poll=lambda: 0), lease, "owned", {901: original},
                     snapshot=lambda: {901: dict(original, started="reused-pid")}, send=lambda group, sig: sent.append((group, sig)))
-            self.assertEqual([(900, signal.SIGTERM)], sent)
+            self.assertEqual([], sent)
+
+    def test_late_pid_reuse_after_term_blocks_kill_and_restoration(self):
+        with tempfile.TemporaryDirectory() as directory:
+            lease = Path(directory) / "lease.json"
+            lease.write_text(json.dumps({"token": "owned", "nodePid": 900, "browserPid": 901}))
+            original = {"parent": 900, "group": 901, "session": 901, "started": "birth-A"}
+            replacement = dict(original, parent=1, started="birth-B")
+            sent = []
+            snapshots = iter(({901: original}, {901: original}, {901: original}, {901: original}, {901: replacement}))
+            # A remains unchanged through the final TERM wait. The very next
+            # pre-KILL census sees replacement B; no numeric-PGID KILL may follow.
+            with self.assertRaises(RuntimeError):
+                _stop_browser_groups(SimpleNamespace(pid=900, poll=lambda: 0), lease, "owned", {901: original},
+                    snapshot=lambda: copy.deepcopy(next(snapshots)), send=lambda group, sig: sent.append((group, sig)),
+                    now=iter((0, 6)).__next__, sleep=lambda _: None)
+            self.assertEqual([(901, signal.SIGTERM)], sent)
+            with self.assertRaises(RuntimeError): require_browser_stopped(SimpleNamespace(effects_browser_stopped=False))
+
+    def test_lease_without_observed_ancestry_cannot_authorize_a_live_group(self):
+        with tempfile.TemporaryDirectory() as directory:
+            lease = Path(directory) / "lease.json"
+            lease.write_text(json.dumps({"token": "owned", "nodePid": 900, "browserPid": 901}))
+            member = {"parent": 1, "group": 901, "session": 901, "started": "unobserved-member"}
+            sent = []
+            with self.assertRaises(RuntimeError):
+                _stop_browser_groups(SimpleNamespace(pid=900, poll=lambda: 0), lease, "owned", {},
+                    snapshot=lambda: {902: member}, send=lambda group, sig: sent.append((group, sig)))
+            self.assertEqual([], sent)
+
+    def test_new_or_changed_session_members_block_all_further_signals(self):
+        for mutation in ("new-member", "changed-session", "changed-group"):
+            with self.subTest(mutation=mutation), tempfile.TemporaryDirectory() as directory:
+                lease = Path(directory) / "lease.json"
+                lease.write_text(json.dumps({"token": "owned", "nodePid": 900, "browserPid": 901}))
+                original = {"parent": 900, "group": 901, "session": 901, "started": "birth-A"}
+                changed = {901: dict(original)}
+                if mutation == "new-member": changed[902] = dict(original, parent=901, started="new-renderer")
+                elif mutation == "changed-session": changed[901]["session"] = 999
+                else: changed[901]["group"] = 999
+                snapshots = iter(({901: original}, {901: original}, {901: original}, changed))
+                sent = []
+                with self.assertRaises(RuntimeError):
+                    _stop_browser_groups(SimpleNamespace(pid=900, poll=lambda: 0), lease, "owned", {901: original},
+                        snapshot=lambda: copy.deepcopy(next(snapshots)), send=lambda group, sig: sent.append((group, sig)))
+                self.assertEqual([(901, signal.SIGTERM)], sent)
 
 
 def nested_observe_fixture(provider):
