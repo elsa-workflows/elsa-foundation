@@ -76,6 +76,29 @@ public sealed partial class CanonicalRuntimeInputBindingResolverTests
         Assert.Contains("producer node 'producer'", exception.Message, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// A whole-value read of an externally stored result through a projection whose path is <c>$</c> reads the whole
+    /// stored payload, as the same projection of an inline result does.
+    /// </summary>
+    [Fact]
+    public async Task A_whole_value_read_of_an_external_result_through_a_dollar_projection_reads_the_whole_payload()
+    {
+        var store = new ExternalResultStore();
+        var producer = ExternallyCompletedProducer();
+        var consumer = RunningConsumer(producer.InvocationId);
+        var any = new ValueTypeDescriptor("Elsa.Any");
+        var binding = new RuntimeInputBinding("customer-id", any, ValueProtectionPolicy.InstanceInline, RuntimeInputBindingSource.ActivityResult,
+            activityResult: new RuntimeActivityResultReference("producer", "customer-id", producerScopeId: null));
+        var context = NewContext(consumer: consumer, runtimeView: [producer, consumer],
+            executable: NewProducerExecutable(SensitiveExternalProjection, any, "$"));
+
+        await new RuntimeActivityInputMaterializer(MemberSourceResolver, new TestTypeRegistry(), store)
+            .MaterializeSnapshotAsync(NewConsumerNode(binding, inputType: any), consumer.InvocationId, context, DateTimeOffset.UnixEpoch);
+
+        var written = Assert.Single(store.Writes);
+        Assert.True(JsonElement.DeepEquals(ExternalCustomerResult, written.Payload));
+    }
+
     private static ValueTask<ActivityInputSnapshot> MaterializeExternalResultMemberAsync(string projectionPath, ExternalResultStore store)
     {
         var producer = ExternallyCompletedProducer();

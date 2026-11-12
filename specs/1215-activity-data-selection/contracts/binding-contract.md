@@ -20,8 +20,9 @@ is forbidden because older compilers/readers can silently ignore such a field.
 | `VariableMember` | `referenceKey`, `declaringScopeId`, `memberPath` |
 | `ActivityResultMember` | `producerNodeId`, `projectionKey`, `memberPath`; existing producer `isOptional` defaults to false |
 
-`producerScopeId` is optional and legacy on both `ActivityResult` and `ActivityResultMember`. The
-data-selection analyzer never writes it: the binding it returns for a browsed producer names only the
+`producerScopeId` is optional and legacy on `ActivityResult` only. `ActivityResultMember` declares
+none, and one that does is refused (`ActivityData/InvalidSource`), at authoring, publication and in the
+compiled binding. The data-selection analyzer never writes it: the binding it returns for a browsed producer names only the
 producer and its projection. The code-first builder still writes one (#4056). A document that declares a
 scope keeps it, its bytes and its hash, and a declared scope must still be a nonblank string.
 
