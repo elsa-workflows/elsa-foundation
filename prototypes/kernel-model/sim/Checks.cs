@@ -15,6 +15,8 @@ public sealed class Oracle
     public readonly HashSet<string> Published = [];                                      // correlation instances that were sent an event
     public readonly Dictionary<string, (string Mode, bool Ephemeral, int PostedBy, bool Cancel)> Https = new();   // instances that answer requests
     public readonly HashSet<string> Trees = [];                                          // roots of trees started from outside
+    public readonly Dictionary<string, List<string>> Events = new();                   // key -> events published
+    public readonly List<SubscriptionRow> Starts = [];                                   // start subscriptions registered
 
     public bool Accepts(Message m) => m.Kind != "cancel" || (Runners.TryGetValue(m.Target.Id, out var keys) && keys.Contains(m.Read<string>()));
 
@@ -246,7 +248,11 @@ public sealed partial class World
     // I8: the subscriptions of an instance are exactly the waits in its committed state. I13: an event is delivered once.
     private string? Waits()
     {
-        var rows = Store.Subscriptions.ToLookup(s => s.Instance, s => s.Key);
+        var rows = Store.Subscriptions.Where(s => s.Start is null).ToLookup(s => s.Instance, s => s.Key);
+        // I20: an event starts at most one instance per start subscription, and that instance takes exactly that event.
+        foreach (var row in Store.Instances.Values.Where(i => i.Model == "onevent"))
+            if (State<OnEventState>(row.Id) is { } got && (got.Got.Count > 1 || got.Got.Exists(id => !row.Id.EndsWith(id.Replace("ev:", "on:").Replace("::", ":")))))
+                return $"I20 {row.Id} was started by [{string.Join(", ", got.Got)}]";
         // A running tree leaf waits; nothing else that is no waiter may, and a terminated leaf's wait is gone with its commit.
         if (rows.FirstOrDefault(g => !Oracle.Waiters.ContainsKey(g.Key) && Store.Instances.GetValueOrDefault(g.Key) is not { Model: "tree", Status: InstanceStatus.Running }) is { } stray)
             return $"I8 {stray.Key} has a subscription and is {(Store.Instances.GetValueOrDefault(stray.Key) is { } row ? row.Status.ToString() : "no waiter")}";
@@ -338,6 +344,8 @@ public sealed partial class World
     public string? Settle()
     {
         Deployed = true;
+        foreach (var start in CatchingUp) Events.CatchUpAsync(Store, start, Config.Partitions).AsTask().Wait();     // a registrar retries until it has read
+        CatchingUp.Clear();
         for (var node = 0; node < Config.Nodes; node++)     // the deployment finishes: every node still at version 1 restarts at 2
             if (Versions[node] == 1) Crash(node, zombie: false);
         foreach (var actor in Actors) actor.Dead |= actor.Zombie;
@@ -435,7 +443,7 @@ public sealed partial class World
             if (Store.EventRows.Values.FirstOrDefault(e => waits.Contains(e.Key) && e.KeepUntil >= Time) is { } e)
                 return $"I13 event {e.Id} for key {e.Key} and the wait of {id} are both committed and never met";
         foreach (var (id, waits) in left)
-            Events.PublishAsync(Store, new EventRow(waits[0], "last-" + id, null, Time + 3_600_000)).AsTask().Wait();
+            Kernel.Events.PublishAsync(Store, new EventRow(waits[0], "last-" + id, null, Time + 3_600_000), Config.Partitions).AsTask().Wait();
         // The same through correlation instances: a subscription and an event for one key, both committed, must have met.
         foreach (var (id, keys) in Oracle.CWaiters)
         {
@@ -449,7 +457,14 @@ public sealed partial class World
     private string? End()
     {
         if (Store.Messages.Values.FirstOrDefault(m => !m.Done && m.Message.Kind != "expire") is { } message) return $"END message {message.Message.Id} was never consumed";
-        if (Store.Subscriptions.FirstOrDefault(s => !Parked.Contains(s.Instance)) is { } subscription) return $"END the subscription of {subscription.Instance} to {subscription.Key} is left behind";
+        // I20 at the end: every event and every start subscription of its key, both committed, made exactly one instance.
+        var started = Store.Instances.Values.Where(i => i.Model == "onevent").Select(i => i.Id[(i.Id.IndexOf('/') + 1)..]).ToHashSet();
+        foreach (var start in Oracle.Starts)
+            foreach (var e in Oracle.Events.GetValueOrDefault(start.Key) ?? [])
+                if (!started.Remove($"on:{e}:{start.Wait}")) return $"I20 event {e} for key {start.Key} and start subscription {start.Wait} are both committed and no instance was started";
+        if (started.Count > 0) return $"I20 instances [{string.Join(", ", started)}] were started by no event and subscription";
+        if (Store.Instances.Values.FirstOrDefault(i => i.Model == "onevent" && i.Status != InstanceStatus.Finished) is { } open) return $"I20 {open.Id} ended as {open.Status}";
+        if (Store.Subscriptions.FirstOrDefault(s => s.Start is null && !Parked.Contains(s.Instance)) is { } subscription) return $"END the subscription of {subscription.Instance} to {subscription.Key} is left behind";
         foreach (var (id, children) in Oracle.Parents)
         {
             if (Parked.Contains(id)) continue;

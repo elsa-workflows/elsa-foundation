@@ -9,7 +9,8 @@ public sealed record InstanceRow(string Id, string Model, string Definition, Ins
 /// <summary>A message row as a poll returns it.</summary>
 public sealed record Stored(Message Message, long Seq, long Seen, int Attempts, long Trial);
 
-public sealed record SubscriptionRow(string Key, string Instance, string Wait);
+/// <summary>A wait of an instance; or, with <c>Start</c> and no instance, a definition that starts an instance for every event of the key.</summary>
+public sealed record SubscriptionRow(string Key, string Instance, string Wait, StartSpec? Start = null);
 
 public sealed record EventRow(string Key, string Id, string? Payload, long KeepUntil);
 
@@ -93,6 +94,9 @@ public interface IKernelStore
 
     ValueTask<IReadOnlyList<SubscriptionRow>> FindSubscriptionsAsync(string key, CancellationToken cancellationToken = default);
 
+    /// <summary>Register a subscription of kind start. Waits of instances are written by their commits, not here. Idempotent.</summary>
+    ValueTask SubscribeAsync(SubscriptionRow subscription, CancellationToken cancellationToken = default);
+
     ValueTask<IReadOnlyList<EventRow>> FindEventsAsync(IReadOnlyCollection<string> keys, CancellationToken cancellationToken = default);
 
     ValueTask<IReadOnlyList<JournalRow>> ReadJournalAsync(int partition, long after, int take, CancellationToken cancellationToken = default);
@@ -112,15 +116,35 @@ public interface IKernelStore
 
 public static class Events
 {
-    /// <summary>The message that delivers an event to a wait. Both sides derive the same id, so the double is refused.</summary>
-    public static Message Deliver(EventRow e, SubscriptionRow s) =>
-        new($"ev:{e.Id}:{s.Instance}:{s.Wait}", new InstanceRef(s.Instance), Kinds.Event, e.Payload, KeepUntil: e.KeepUntil);
+    /// <summary>
+    /// The message that delivers an event to a wait, or that starts an instance for it. Both sides derive the same id, so
+    /// the double is refused; a start's target is derived from event and subscription too, so it is created once.
+    /// </summary>
+    public static Message Deliver(EventRow e, SubscriptionRow s, int partitions = 1) => s.Start is null
+        ? new($"ev:{e.Id}:{s.Instance}:{s.Wait}", new InstanceRef(s.Instance), Kinds.Event, e.Payload, KeepUntil: e.KeepUntil)
+        : new($"ev:{e.Id}::{s.Wait}", InstanceRef.In(InstanceRef.Spread($"{e.Id}:{s.Wait}", partitions), $"on:{e.Id}:{s.Wait}"), Kinds.Event, e.Payload, Start: s.Start, KeepUntil: e.KeepUntil);
 
     /// <summary>The publisher's side: insert the event, and only then read who waits for it.</summary>
-    public static async ValueTask PublishAsync(IKernelStore store, EventRow e, CancellationToken cancellationToken = default)
+    public static async ValueTask PublishAsync(IKernelStore store, EventRow e, int partitions = 1, CancellationToken cancellationToken = default)
     {
         await store.PublishAsync(e, cancellationToken);
         foreach (var subscription in await store.FindSubscriptionsAsync(e.Key, cancellationToken))
-            await store.AddAsync(Deliver(e, subscription), cancellationToken);
+            await store.AddAsync(Deliver(e, subscription, partitions), cancellationToken);
+    }
+
+    /// <summary>
+    /// The registrar's side of a start subscription: insert it, and only then read the events of its key that are still
+    /// kept. Like a publisher, the registrar retries until both are done.
+    /// </summary>
+    public static async ValueTask SubscribeAsync(IKernelStore store, SubscriptionRow start, int partitions, CancellationToken cancellationToken = default)
+    {
+        await store.SubscribeAsync(start, cancellationToken);
+        await CatchUpAsync(store, start, partitions, cancellationToken);
+    }
+
+    public static async ValueTask CatchUpAsync(IKernelStore store, SubscriptionRow start, int partitions, CancellationToken cancellationToken = default)
+    {
+        foreach (var e in await store.FindEventsAsync([start.Key], cancellationToken))
+            await store.AddAsync(Deliver(e, start, partitions), cancellationToken);
     }
 }

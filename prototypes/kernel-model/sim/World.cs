@@ -24,6 +24,8 @@ public sealed record Act(string Kind, int A = 0, int B = 0, string S = "", Messa
         "resume" => $"node {A} resumes",
         "project" => $"the projector of actor {A} runs a round",
         "sweep" => "the sweep runs",
+        "register" => $"an outsider registers start subscription {S} for key {M!.Kind}",
+        "catch-up" => $"the registrar of {S} reads the events of its key",
         "request" => $"a request on actor {A} starts {M!.Target} ({S}) and waits for its response",
         "resume-request" => $"a request on node {A} sends {M!.Id} (resume to {M.Target}) with a reply address and waits",
         "disconnect" => $"the caller of request {S} goes away{(Flag ? " and asks for a cancel" : "")}",
@@ -126,6 +128,7 @@ public sealed class Wire(World world, Actor actor) : IKernelStore
     public ValueTask<bool> AddAsync(Message message, CancellationToken cancellationToken = default) => world.Store.AddAsync(message);
     public ValueTask PublishAsync(EventRow @event, CancellationToken cancellationToken = default) => world.Store.PublishAsync(@event);
     public ValueTask<IReadOnlyList<SubscriptionRow>> FindSubscriptionsAsync(string key, CancellationToken cancellationToken = default) => world.Store.FindSubscriptionsAsync(key);
+    public ValueTask SubscribeAsync(SubscriptionRow subscription, CancellationToken cancellationToken = default) => world.Store.SubscribeAsync(subscription);
     public ValueTask<IReadOnlyList<JournalRow>> ReadJournalAsync(int partition, long after, int take, CancellationToken cancellationToken = default) =>
         Send("journal", $"journal p{partition} after {after}", () => world.Store.ReadJournalAsync(partition, after, take));
     public ValueTask<long> ProjectedAsync(int partition, CancellationToken cancellationToken = default) =>
@@ -165,6 +168,7 @@ public sealed partial class World
     public readonly Dictionary<string, Requests> Processes = new(StringComparer.Ordinal);   // by process name: the requests open there
     public readonly List<(string Process, Request Request, string Instance)> Asked = [];
     public readonly List<(string Node, Reply Reply)> Deliveries = [];                   // on the transport between nodes
+    public readonly List<SubscriptionRow> CatchingUp = [];                              // start subscriptions inserted, their read still owed
     private readonly TrialGate[] _gates;
     public readonly bool[] Paused;
     public readonly List<string> Faults = [];
@@ -227,7 +231,7 @@ public sealed partial class World
         [
             new Counter(Versions[node]), new Parent(), new Child(), new Waiter(), new Sequence(), new Correlation(Config.Flaws.HasFlag(Flaw.CorrelationForgets)), new CWaiter(Config.Partitions),
             new Runner((run, cancel) => Work(actor, run, cancel)), new Fragile(() => Dying = node), new Http(actor.Id, (run, cancel) => Work(actor, run, cancel)),
-            new Tree((run, cancel) => Work(actor, run, cancel)),
+            new Tree((run, cancel) => Work(actor, run, cancel)), new OnEvent(),
         ];
         // A node's name is unique per process start: a restarted process is not its predecessor (finding F9).
         actor.Worker = new Worker(Config.Flaws.HasFlag(Flaw.StableNodeName) ? "node" + node : $"node{node}.{Incarnation[node]}", partition, wire, models, new WorkerOptions
@@ -389,8 +393,27 @@ public sealed partial class World
                 return "";
             }
             case "publish":
-                Events.PublishAsync(Store, new EventRow(act.S, "e" + act.B, "e" + act.B, Time + 3_600_000)).AsTask().Wait();
+                Events.PublishAsync(Store, new EventRow(act.S, "e" + act.B, "e" + act.B, Time + 3_600_000), Config.Partitions).AsTask().Wait();
+                Oracle.List(Oracle.Events, act.S).Add("e" + act.B);
+                foreach (var start in Oracle.Starts.Where(s => s.Key == act.S)) Count(CatchingUp.Contains(start) ? "start event between the registrar's insert and its read" : "start event after the registrar's read");
                 return "";
+            case "register":
+            {
+                // The registrar inserts, and reads later (or never, if it is the flaw): a publish may come in between.
+                var start = new SubscriptionRow(act.M!.Kind, "", act.S, OnEvent.Spec(act.S));
+                Store.SubscribeAsync(start).AsTask().Wait();
+                if (Oracle.Events.GetValueOrDefault(start.Key)?.Count > 0) Count("start event before the registrar's insert");
+                if (!Oracle.Starts.Contains(start)) Oracle.Starts.Add(start);
+                if (!Config.Flaws.HasFlag(Flaw.StartWithoutRead)) CatchingUp.Add(start);
+                return "";
+            }
+            case "catch-up":
+            {
+                if (CatchingUp.Find(s => s.Wait == act.S) is not { } start) return null;
+                Events.CatchUpAsync(Store, start, Config.Partitions).AsTask().Wait();
+                CatchingUp.Remove(start);
+                return "";
+            }
             case "finish":
             {
                 if (Live(act.A) is not { } actor || !actor.Runs.Remove(act.S, out var work)) return null;
@@ -557,7 +580,7 @@ public sealed class Generator(int seed, World world)
                 List<string> keys = r.Next(2) == 0 ? ["k" + r.Next(3)] : ["k0", "k" + r.Next(1, 3)];
                 return new Act("add", M: To("w" + n, Kinds.Start, null, new StartSpec("waiter", "w", Json.Write(keys))));
             }
-            case < 71: return new Act("publish", B: n, S: "k" + r.Next(3));
+            case < 71: return new Act("publish", B: n, S: r.Next(4) == 0 ? "s" + r.Next(2) : "k" + r.Next(3));
             case < 78: return new Act("add", M: To("s" + n, Kinds.Start, null, Sequence.Spec(r.Next(1, 6), Mode(r)) with { History = (History)r.Next(3) }));
             case < 84:
             {
@@ -620,6 +643,12 @@ public sealed class Generator(int seed, World world)
             if (ends.Count == 0) return new Act("tick", r.Next(50));
             return new Act("add", M: new Message($"x{_serial++}", new InstanceRef(ends[r.Next(ends.Count)]), Kinds.Terminate, KeepUntil: world.Time + 3_600_000));
         }
+        if (roll == 7)      // a definition that starts an instance on every event of a key
+        {
+            var which = r.Next(3);
+            return new Act("register", S: "d" + which, M: new Message("", default, "s" + which % 2));
+        }
+        if (roll == 8 && world.CatchingUp.Count > 0) return new Act("catch-up", S: world.CatchingUp[r.Next(world.CatchingUp.Count)].Wait);
         var rows = world.Store.Instances.Values.Where(i => i.Status == InstanceStatus.Running).Select(i => i.Id).Order(StringComparer.Ordinal).ToList();
         if (rows.Count == 0) return new Act("tick", r.Next(50));
         var target = rows[r.Next(rows.Count)];

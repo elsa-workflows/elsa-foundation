@@ -77,6 +77,7 @@ public sealed class SubscriptionEntity
     public string Instance { get; set; } = "";
     public string Wait { get; set; } = "";
     public int Partition { get; set; }
+    public string? Start { get; set; }      // a subscription of kind start: the spec of the instance an event creates
 }
 
 public sealed class EventEntity
@@ -373,7 +374,15 @@ public sealed class EfStore(Func<KernelDb> create, bool postgres, bool fenceInBa
     {
         await using var db = create();
         var rows = await db.Subscriptions.AsNoTracking().Where(s => s.Key == key).ToListAsync(cancellationToken);
-        return rows.Select(s => new SubscriptionRow(s.Key, s.Instance, s.Wait)).ToList();
+        return rows.Select(s => new SubscriptionRow(s.Key, s.Instance, s.Wait, s.Start is null ? null : Json.Read<StartSpec>(s.Start))).ToList();
+    }
+
+    public async ValueTask SubscribeAsync(SubscriptionRow subscription, CancellationToken cancellationToken = default)
+    {
+        await using var db = create();
+        await db.Database.ExecuteSqlRawAsync(
+            """INSERT INTO "Subscriptions" ("Key", "Instance", "Wait", "Partition", "Start") VALUES ({0}, {1}, {2}, 0, CAST({3} AS TEXT)) ON CONFLICT DO NOTHING""",
+            [subscription.Key, subscription.Instance, subscription.Wait, Json.Write(subscription.Start)], cancellationToken);
     }
 
     public async ValueTask<IReadOnlyList<EventRow>> FindEventsAsync(IReadOnlyCollection<string> keys, CancellationToken cancellationToken = default)

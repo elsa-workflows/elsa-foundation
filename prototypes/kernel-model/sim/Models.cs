@@ -407,3 +407,22 @@ public sealed class Tree(Func<IRun, CancellationToken, ValueTask<object?>> work)
         }
     }
 }
+
+// ---- an instance that an event starts: it takes the event and finishes ----------------------------------------------------
+
+public sealed class OnEventState
+{
+    public List<string> Got { get; set; } = [];
+}
+
+public sealed class OnEvent : Model<OnEventState>
+{
+    public override string Key => "onevent";
+    public static StartSpec Spec(string definition) => new("onevent", definition);
+
+    protected override void Step(IStep step, OnEventState state)
+    {
+        foreach (var message in step.Inbox.Where(m => m.Kind == Kinds.Event)) state.Got.Add(message.Id);
+        step.SetStatus(InstanceStatus.Finished);
+    }
+}

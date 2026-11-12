@@ -585,3 +585,21 @@ The owner's requirement of 12 November: a workflow handles an HTTP request and p
   (`I19 1/c0 is bound to c7, its row says c`).
 - **Not built, reasoned:** a rebind that also needs the state upgraded (a definition version whose model state
   differs) is a model's business: it can rebind and rewrite its state in the same step.
+
+## 17. Starts triggered by an event. Run
+
+- **Built:** a subscription of kind start is a `subscription` row with a start spec and no instance, registered from
+  outside (`IKernelStore.SubscribeAsync`, `Events.SubscribeAsync`). Both sides derive the delivering message from
+  event and subscription: its id (`ev:<event>::<subscription>`) and its target (`on:<event>:<subscription>`, in a
+  partition hashed from both), and it carries the start spec and the event's `keep_until`. So the publisher and the
+  registrar may both insert it; the second insert is refused, and the instance is created once. Once handled, the
+  message stays as a done marker for the event's window, so a late repeat meets a duplicate key.
+- **Contract finding, reasoned:** the registrar has the same duty as the publisher: insert, then read the other side.
+  An outsider that dies between the two loses the crossing, as F6 did for waits; outside callers already retry until
+  done, so the registrar must too. Registration as part of a commit (a deployer instance that subscribes) would put
+  the read in the inbox as F6 did, and needs nothing new.
+- **In the simulation:** start subscriptions on two keys; the registrar's insert and its read are separate actions, so
+  publishes fall before the insert (641 times in 4,000 seeds), between the insert and the read (507) and after (145).
+- **Invariant 20:** every pair of an event and a start subscription of its key, both committed, makes exactly one
+  instance, which takes exactly that event and finishes; no other instance is started. `--flaw StartWithoutRead`:
+  caught, seed 9.

@@ -178,6 +178,12 @@ public sealed class InMemoryStore(int partitions, Func<long> clock, Flaw flaws =
         return default;
     }
 
+    public ValueTask SubscribeAsync(SubscriptionRow subscription, CancellationToken cancellationToken = default)
+    {
+        lock (_gate) Subscriptions.Add(subscription);
+        return default;
+    }
+
     public ValueTask<IReadOnlyList<SubscriptionRow>> FindSubscriptionsAsync(string key, CancellationToken cancellationToken = default)
     {
         lock (_gate) return new(Subscriptions.Where(s => s.Key == key).OrderBy(s => s.Instance, StringComparer.Ordinal).ToList());

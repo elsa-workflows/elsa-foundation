@@ -158,4 +158,5 @@ public enum Flaw : long
     SkipUpgrade = 1L << 33,        // a row at an older state version is read as the current one
     StepNewerState = 1L << 34,     // a model steps a row that a newer version of it wrote
     RebindForgotten = 1L << 35,    // a rebind is not written to the row
+    StartWithoutRead = 1L << 36,   // read by the simulation: a registrar of a start subscription does not read the events kept
 }
