@@ -38,6 +38,7 @@ export function createCanvasEditorPreferences(api: Pick<ElsaStudioModuleApi, "ba
         try {
           const document = readDocument(await api.backend.http.getJson<unknown>(path, { headers }), true);
           revision = document?.revision;
+          if (document) localSave(document.editorId);
           return document?.editorId ?? null;
         } catch (error) {
           if (statusOf(error) === 404) revision = undefined;
@@ -65,6 +66,7 @@ export function createCanvasEditorPreferences(api: Pick<ElsaStudioModuleApi, "ba
         const saved = readDocument(response, true);
         if (!saved?.revision || saved.editorId !== editorId) throw new Error("The backend returned an incompatible canvas editor preference.");
         revision = saved.revision;
+        localSave(saved.editorId);
       };
       const result = writes.then(save);
       writes = result.catch(() => undefined);

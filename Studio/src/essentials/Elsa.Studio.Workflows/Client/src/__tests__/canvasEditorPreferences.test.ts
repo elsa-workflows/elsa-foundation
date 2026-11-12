@@ -31,6 +31,22 @@ describe("canvas editor saved preference", () => {
     expect(anonymous.backend.http.getJson).not.toHaveBeenCalled();
   });
 
+  it.each(["read", "write"])("refreshes the device fallback after an accepted server %s", async operation => {
+    const current = api();
+    const store = createCanvasEditorPreferences(current);
+    await store.save("offline-A");
+    if (operation === "write") {
+      current.backend.http.putJson = vi.fn().mockResolvedValue(document("online-B"));
+      await store.save("online-B");
+    } else {
+      current.backend.http.getJson = vi.fn().mockResolvedValue(document("online-B"));
+      expect(await store.load()).toBe("online-B");
+    }
+    const disconnected = api();
+    disconnected.backend.http.getJson = vi.fn().mockRejectedValue(new Error("Offline again"));
+    expect(await createCanvasEditorPreferences(disconnected).load()).toBe("online-B");
+  });
+
   it.each(["", "x".repeat(129), "a/b", "with space", "é", "line\n"])("refuses invalid id %j before any write", async id => {
     const current = api();
     await expect(createCanvasEditorPreferences(current).save(id)).rejects.toThrow("Invalid");
@@ -65,15 +81,20 @@ describe("canvas editor saved preference", () => {
     const current = api();
     const conflict = Object.assign(new Error("Refused"), { status });
     current.backend.http.getJson = vi.fn().mockResolvedValue(document("saved"));
-    const put = vi.fn().mockRejectedValueOnce(conflict).mockResolvedValueOnce(document("retry", "rev-2"));
+    let releaseRetry!: (value: unknown) => void;
+    const retryResponse = new Promise(resolve => { releaseRetry = resolve; });
+    const put = vi.fn().mockRejectedValueOnce(conflict).mockReturnValueOnce(retryResponse);
     current.backend.http.putJson = put;
     const store = createCanvasEditorPreferences(current);
     expect(await store.load()).toBe("saved");
+    const acceptedCache = localStorage.getItem(localStorage.key(0)!);
     const refused = store.save("conflicting"), retry = store.save("retry");
     await expect(refused).rejects.toBe(conflict);
+    expect(localStorage.getItem(localStorage.key(0)!)).toBe(acceptedCache);
+    releaseRetry(document("retry", "rev-2"));
     await retry;
     expect(put.mock.calls.map(call => call[2].headers["If-Match"])).toEqual(['"rev-1"', '"rev-1"']);
-    expect(localStorage.length).toBe(0);
+    expect(JSON.parse(localStorage.getItem(localStorage.key(0)!)!).value.editorId).toBe("retry");
   });
 
   it("queues a write behind an in-flight read instead of sending an obsolete precondition", async () => {
