@@ -90,6 +90,7 @@ public sealed class WorkflowActivationCoordinatorTests
         Assert.Equal(WorkflowActivationSlotIdentity.Create("definition-1", "default"), result.Reference.SlotId);
         Assert.Equal(["lease", "reference:save", "projection:prepare", "switch:activate", "observer"], _harness.Calls);
         Assert.Equal(["activation-1"], await _harness.ServingAsync());
+        Assert.Equal("definition-1", _harness.Observer.LastSnapshot?.DefinitionId);
     }
 
     [Fact]
@@ -325,6 +326,7 @@ public sealed class WorkflowActivationCoordinatorTests
         Assert.Null(result.Slot.ActiveActivationId);
         Assert.Empty(await _harness.ServingAsync());
         Assert.Equal(["switch:deactivate", "observer"], _harness.Calls);
+        Assert.Equal("definition-1", _harness.Observer.LastSnapshot?.DefinitionId);
 
         var repeat = await _harness.DeactivateAsync(result.Slot.Revision);
         Assert.Equal(WorkflowActivationOutcome.AlreadyInactive, repeat.Outcome);
@@ -928,11 +930,13 @@ public sealed class WorkflowActivationCoordinatorTests
     {
         public bool ThrowOnce { get; set; }
         public int Calls { get; private set; }
+        public WorkflowTriggerIndexSnapshot? LastSnapshot { get; private set; }
         public CancellationTokenSource? CancelAfterCall { get; set; }
 
         public async ValueTask OnTriggersIndexedAsync(WorkflowTriggerIndexSnapshot snapshot, CancellationToken cancellationToken = default)
         {
             Calls++;
+            LastSnapshot = snapshot;
             calls.Add("observer");
             if (CancelAfterCall is { } source)
             {

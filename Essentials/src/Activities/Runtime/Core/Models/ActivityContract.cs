@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using System.Collections.ObjectModel;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -90,7 +91,7 @@ public sealed class ActivityContract
         ContractVersion = contractVersion;
         DescriptorKind = descriptorKind;
         DescriptorPayload = descriptorPayload.Clone();
-        Inputs = inputArray.ToDictionary(x => x.Key, StringComparer.Ordinal);
+        Inputs = new ReadOnlyDictionary<string, ActivityInputContract>(inputArray.ToDictionary(x => x.Key, StringComparer.Ordinal));
         Result = result;
         Outcomes = outcomeArray.ToArray();
         Activation = activation;
@@ -179,6 +180,9 @@ public sealed class ActivityContract
         // the canonical shape, and the fingerprint, it had before the flag existed.
         if (input.IsCredential)
             projection[nameof(input.IsCredential)] = true;
+
+        if (input.IsStructureInput)
+            projection[nameof(input.IsStructureInput)] = true;
 
         if (!string.IsNullOrWhiteSpace(input.ConnectionType))
             projection[nameof(input.ConnectionType)] = input.ConnectionType;
@@ -312,6 +316,15 @@ public sealed class ActivityInputContract
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? ConnectionType { get; }
+
+    /// <summary>
+    /// The owning executable structure selects whether this input is consumed before activation.
+    /// Consumed values are pinned in the invocation snapshot; unconsumed values are deliberately absent.
+    /// These inputs are delivered to the structure-input consumer, not hydrated into CLR properties.
+    /// Omitted while false to preserve existing contracts and fingerprints.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool IsStructureInput { get; init; }
 }
 
 public sealed class ActivityResultContract

@@ -1,0 +1,99 @@
+{
+  "sourceInputsCommittedAt": "5dd1f5e04b0cfd7678199a6a219aa1fc27488961",
+  "localBuildMetadataHead": "d9d21adae07860d4e11230f8e4af239b89fdf527",
+  "sourceNote": "Assemblies were built from these unchanged source inputs before the commit and carry the prior HEAD metadata. These are local focused gates, not exact-head hosted or upgraded-host evidence.",
+  "checks": [
+    {
+      "log": "cleared-view-before.log",
+      "sha256": "85ad13469d8c46ec3839b90c96132436d30ac2285903b2221d39b9ce5976ffb7",
+      "outcome": "expected failure:1 failed,0 passed,0 skipped"
+    },
+    {
+      "log": "cleared-view-api-final.log",
+      "sha256": "661db7d75346f9713bc40e826f83e37a1c7d4543384a1673481ac131a0dd179b",
+      "outcome": "passed:26,0 failed,0 skipped"
+    },
+    {
+      "log": "cleared-view-etl-corrected.log",
+      "sha256": "0b94cbb47d481a616b075e54b54a92414c43b873fa97f0cb0b57b08268c23171",
+      "outcome": "passed:68,0 failed,0 skipped"
+    },
+    {
+      "log": "cleared-view-binary-run.log",
+      "sha256": "f85e42e7b1bdaf8e6be94bcbb140b49bf21471a5ee62c4f9aec395a343599e4b",
+      "outcome": "passed:old compiled projector was not recompiled; refusing defaults and old projection work"
+    }
+  ],
+  "oldCoreSource": "41f1828cb5797c167701e14f5c366cf152dda75b",
+  "oldCoreSha256": "3a687f1edc3357e59b5d7ee20a24a4c05130f8a151b0e674897bf0714bd0101d",
+  "newCoreSha256": "c02128b3179331203243d625199d54a7b808a8fcbd4374a80cd0a68c79b2b1e3",
+  "oldCompiledProjectorSha256": "7203ef4cb51c7980171f249c4905d1c65d00d54f8e417f9f152d7341612522c2",
+  "runtimeWriterChanged": false,
+  "actualUpgradedHostOrStudioVerified": true,
+  "generalApiCompatAndVersionMagnitudeVerified": false,
+  "T026Complete": true,
+  "fullReviewRounds": 0,
+  "upgradedHostInspection": {
+    "productSource": "0c7656afffcbdebcb60b444e357c7c52749d7eab",
+    "productInputsEqual": "5dd1f5e04b0cfd7678199a6a219aa1fc27488961",
+    "harnessSource": "5c5ebbbe1b1cadd5e0249467e35301a000da1aac",
+    "legacyCaptureSource": "41f1828cb5797c167701e14f5c366cf152dda75b",
+    "archiveSha256": "d15d210dc1321c23d16ebded098ff558fe246ddf083d993f9d90804c211034f1",
+    "legacyAssemblySha256": {
+      "workbench": "0cd53a07311a4f831eaca5dfce1ede5e186f097e8fd5b9a13545a9106d892402",
+      "studio": "15b4f8cc15bacc96f1cdb020759033ea38d0fd5d4e374bb7e709a7e9c6a0876d"
+    },
+    "newAssemblySha256": {
+      "workbench": "a9d3cfc71c3a61254c0065c6f0b24b67bcbc1e52fac4e4d524b6f3bcd5b9858b",
+      "studio": "d9462faac5c9b9f259b8f7c313ac226bc0f62388ad9cfa3f29430358a66948eb"
+    },
+    "restoredStage": "finished",
+    "replacementNavigation": "passed: completed RunEtl with cleared private state links to Succeeded ETL run, 4 accepted records, pipeline v1",
+    "originalFaultNavigation": "passed: retained private-state attempt links to Faulted ETL run etl.snapshot-read-failed, pipeline v1",
+    "writes": 0,
+    "pageErrors": 0,
+    "typedModelAndReceiptsUnchanged": true,
+    "runtimeAndEtlStoresByteIdenticalAfterInspection": true,
+    "designStoreChange": "startup rebuild of the derived activity dependency projection: rebuild id, sequence 3->4 and AsOf changed; Items identical",
+    "receipts": [
+      "upgrade/upgrade-inspection-controller.json",
+      "upgrade/replacement-browser-inspection.json",
+      "upgrade/ready.json"
+    ],
+    "localArtifactsSha256": {
+      "ui-replacement-etl-success.png": "f6db385ec7d6b19301bbc31fd8843f28aeb17ba9b8fae61be68ea12966fa1e5a",
+      "ui-replacement-native-reference.png": "a0fcaf408c73dd579fa9199b3db21483db0e5a3e16848740f7bbe433469a2bed",
+      "ui-original-etl-fault.png": "2cf7042a5a699ccee49129da2027f29b3a5bed0450bd3791eba28186b9b63d8e",
+      "upgrade-inspection-workbench.log": "a037056fbb7185064f2c02453ffc120440f8b9ee20e5e4d6b7d4d05e2c1aa498",
+      "upgrade-inspection-studio.log": "147932a11669b449686690e624637a2ae20b16233e0803be59d9fa1007a414f2"
+    },
+    "refusalControls": [
+      {
+        "case": "--product-source names the legacy capture source",
+        "outcome": "refused before any host: products not built from that source",
+        "logSha256": "b85b44003f26dfaf1ec1f0675e0e96328513094853b71dc086ac746ddbc2d2c4"
+      },
+      {
+        "case": "one byte of the archive altered",
+        "outcome": "refused before extraction: pinned size/SHA-256 differs",
+        "logSha256": "3e780b13fd35910d851ea54f6dafd3ee9715c2af067257831c8cf9bdc56ac1a6"
+      }
+    ],
+    "focusedChecksAtProductSource": [
+      {
+        "project": "Essentials/tests/Workflows/Runtime/Api/Tests",
+        "filter": "FullyQualifiedName~ActivityStateView",
+        "outcome": "passed:26,0 failed,0 skipped",
+        "logSha256": "3ca7f0fef63366b24d5a901d67ee120419e9c6158be1a8d02f3a56c4a240f5a6"
+      },
+      {
+        "project": "Extensions/Etl/tests/Tests",
+        "filter": "FullyQualifiedName~RunEtlStateViewProjector|FullyQualifiedName~NativeBoundary|FullyQualifiedName~RunEtl",
+        "outcome": "passed:41,0 failed,0 skipped",
+        "note": "A narrower selection than the earlier 68-case run; not a repetition of it.",
+        "logSha256": "ad3234b48e07488f846ed6ae00776e932fec3e6a91bec2af694cbf390ae38dc7"
+      }
+    ],
+    "rawArtifactsPublished": false
+  }
+}

@@ -47,6 +47,39 @@ public sealed class ConnectionManagerAndResolverTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task Resolved_revision_matches_its_snapshot_while_later_resolution_observes_a_save()
+    {
+        await CreateConnectionAsync("versioned");
+        var repository = _scope.ServiceProvider.GetRequiredService<IConnectionRepository>();
+        var before = (await repository.FindAsync(Tenant, "versioned"))!.State.Version;
+        await using var original = await _resolver.ResolveAsync(new ConnectionResolveRequest { TenantId = Tenant, Name = "versioned" });
+        Assert.True(before > 0);
+        Assert.Equal(before, original.Version);
+        Assert.False(string.IsNullOrWhiteSpace(original.IncarnationId));
+
+        await _manager.UpdateAsync(Tenant, "versioned", new UpdateConnectionRequest { DisplayName = "Updated" });
+        var after = (await repository.FindAsync(Tenant, "versioned"))!.State.Version;
+        await using var current = await _resolver.ResolveAsync(new ConnectionResolveRequest { TenantId = Tenant, Name = "versioned" });
+        Assert.True(after > before);
+        Assert.Equal(after, current.Version);
+        Assert.Equal(before, original.Version);
+        Assert.Equal(original.IncarnationId, current.IncarnationId);
+    }
+
+    [Fact]
+    public async Task Delete_and_recreate_of_the_same_name_has_a_distinct_creation_identity_even_when_versions_repeat()
+    {
+        await CreateConnectionAsync("recreated");
+        await using var original = await _resolver.ResolveAsync(new ConnectionResolveRequest { TenantId = Tenant, Name = "recreated" });
+        await _manager.DeleteAsync(Tenant, "recreated");
+        await CreateConnectionAsync("recreated");
+        await using var replacement = await _resolver.ResolveAsync(new ConnectionResolveRequest { TenantId = Tenant, Name = "recreated" });
+        Assert.Equal(original.Version, replacement.Version);
+        Assert.False(string.IsNullOrWhiteSpace(replacement.IncarnationId));
+        Assert.NotEqual(original.IncarnationId, replacement.IncarnationId);
+    }
+
+    [Fact]
     public async Task Create_Resolve_AndRejectWrongTypeOrOwner()
     {
         await _secrets.CreateAsync(Tenant, new CreateSecretRequest
@@ -456,6 +489,141 @@ public sealed class ConnectionManagerAndResolverTests : IAsyncDisposable
                 [HttpConnectionSecretFields.Token] = new() { Value = "tok" }
             }
         }).AsTask());
+    }
+
+    [Fact]
+    public async Task CreateAndUpdate_RejectSettingKeysTheTypeAndSchemeDoNotDeclare()
+    {
+        // #3138: a made-up key such as "token" must not carry a credential into unredacted settings.
+        var create = await Assert.ThrowsAsync<ArgumentException>(() => _manager.CreateAsync(Tenant, new CreateConnectionRequest
+        {
+            Name = "undeclared-key",
+            AuthScheme = HttpAuthSchemes.Bearer,
+            Settings = new Dictionary<string, string>
+            {
+                [HttpConnectionSettingKeys.AllowedHosts] = "api.example",
+                ["token"] = "undeclared-key-secret-sentinel"
+            },
+            SecretFields = new Dictionary<string, ConnectionSecretFieldInput>
+            {
+                [HttpConnectionSecretFields.Token] = new() { Value = "tok" }
+            }
+        }).AsTask());
+        Assert.Equal("settings", create.ParamName);
+        Assert.Contains("'token'", create.Message);
+        Assert.Contains(HttpConnectionSettingKeys.BaseUrl, create.Message);
+        Assert.DoesNotContain("undeclared-key-secret-sentinel", create.Message);
+        Assert.Null(await _manager.FindAsync(Tenant, "undeclared-key"));
+
+        // A non-sensitive field of another scheme is undeclared for this one: bearer has no username.
+        await Assert.ThrowsAsync<ArgumentException>(() => _manager.CreateAsync(Tenant, new CreateConnectionRequest
+        {
+            Name = "other-scheme-key",
+            AuthScheme = HttpAuthSchemes.Bearer,
+            Settings = new Dictionary<string, string>
+            {
+                [HttpConnectionSettingKeys.AllowedHosts] = "api.example",
+                [HttpConnectionSettingKeys.Username] = "alice"
+            },
+            SecretFields = new Dictionary<string, ConnectionSecretFieldInput>
+            {
+                [HttpConnectionSecretFields.Token] = new() { Value = "tok" }
+            }
+        }).AsTask());
+
+        await CreateConnectionAsync("undeclared-key-on-update");
+        var update = await Assert.ThrowsAsync<ArgumentException>(() => _manager.UpdateAsync(Tenant, "undeclared-key-on-update", new UpdateConnectionRequest
+        {
+            Settings = new Dictionary<string, string>
+            {
+                [HttpConnectionSettingKeys.AllowedHosts] = "api.example",
+                ["apiKey"] = "update-secret-sentinel"
+            }
+        }).AsTask());
+        Assert.Equal("settings", update.ParamName);
+        Assert.DoesNotContain("update-secret-sentinel", update.Message);
+        var kept = await _manager.FindAsync(Tenant, "undeclared-key-on-update");
+        Assert.False(kept!.Settings.ContainsKey("apiKey"));
+    }
+
+    [Fact]
+    public async Task CreateAndUpdate_RejectUrlSettingsThatCarryUserInfo()
+    {
+        var create = await Assert.ThrowsAsync<ArgumentException>(() => _manager.CreateAsync(Tenant, new CreateConnectionRequest
+        {
+            Name = "url-credentials",
+            AuthScheme = HttpAuthSchemes.Bearer,
+            Settings = new Dictionary<string, string> { [HttpConnectionSettingKeys.BaseUrl] = "https://alice:url-secret-sentinel@api.example/v1" },
+            SecretFields = new Dictionary<string, ConnectionSecretFieldInput>
+            {
+                [HttpConnectionSecretFields.Token] = new() { Value = "tok" }
+            }
+        }).AsTask());
+        Assert.Equal("settings", create.ParamName);
+        Assert.Contains($"'{HttpConnectionSettingKeys.BaseUrl}'", create.Message);
+        Assert.Contains("credentials", create.Message);
+        Assert.DoesNotContain("url-secret-sentinel", create.Message);
+        Assert.Null(await _manager.FindAsync(Tenant, "url-credentials"));
+
+        // A user name alone is user info too.
+        await Assert.ThrowsAsync<ArgumentException>(() => _manager.CreateAsync(Tenant, new CreateConnectionRequest
+        {
+            Name = "url-username",
+            AuthScheme = HttpAuthSchemes.Bearer,
+            Settings = new Dictionary<string, string> { [HttpConnectionSettingKeys.BaseUrl] = "https://alice@api.example/" },
+            SecretFields = new Dictionary<string, ConnectionSecretFieldInput>
+            {
+                [HttpConnectionSecretFields.Token] = new() { Value = "tok" }
+            }
+        }).AsTask());
+
+        await CreateConnectionAsync("url-credentials-on-update");
+        var update = await Assert.ThrowsAsync<ArgumentException>(() => _manager.UpdateAsync(Tenant, "url-credentials-on-update", new UpdateConnectionRequest
+        {
+            Settings = new Dictionary<string, string> { [HttpConnectionSettingKeys.BaseUrl] = "https://bob:update-url-secret-sentinel@api.example/" }
+        }).AsTask());
+        Assert.Equal("settings", update.ParamName);
+        Assert.DoesNotContain("update-url-secret-sentinel", update.Message);
+        var kept = await _manager.FindAsync(Tenant, "url-credentials-on-update");
+        Assert.False(kept!.Settings.ContainsKey(HttpConnectionSettingKeys.BaseUrl));
+    }
+
+    [Fact]
+    public async Task CreateAndUpdate_AcceptDeclaredTypeAndSchemeSettingsInAnyCasing()
+    {
+        // Type settings, the scheme's non-sensitive fields, and a URL without user info are all valid.
+        var created = await _manager.CreateAsync(Tenant, new CreateConnectionRequest
+        {
+            Name = "declared-settings",
+            AuthScheme = HttpAuthSchemes.ApiKey,
+            Settings = new Dictionary<string, string>
+            {
+                [HttpConnectionSettingKeys.BaseUrl] = "https://api.example/v1?client=elsa#fragment",
+                ["AllowedHosts"] = "api.example, backup.example",
+                [HttpConnectionSettingKeys.AllowInsecureHttp] = "false",
+                [HttpConnectionSettingKeys.ApiKeyPlacement] = ApiKeyPlacements.Header,
+                [HttpConnectionSettingKeys.ApiKeyHeaderName] = "X-Api-Key"
+            },
+            SecretFields = new Dictionary<string, ConnectionSecretFieldInput>
+            {
+                [HttpConnectionSecretFields.ApiKey] = new() { Value = "key" }
+            }
+        });
+        Assert.Equal(5, created.Settings.Count);
+
+        var updated = await _manager.UpdateAsync(Tenant, "declared-settings", new UpdateConnectionRequest
+        {
+            Settings = new Dictionary<string, string>
+            {
+                [HttpConnectionSettingKeys.AllowedHosts] = "api.example",
+                [HttpConnectionSettingKeys.ApiKeyPlacement] = ApiKeyPlacements.Query,
+                [HttpConnectionSettingKeys.ApiKeyQueryName] = "api_key"
+            }
+        });
+        Assert.Equal(ApiKeyPlacements.Query, updated!.Settings[HttpConnectionSettingKeys.ApiKeyPlacement]);
+
+        await using var resolved = await _resolver.ResolveAsync(new ConnectionResolveRequest { TenantId = Tenant, Name = "declared-settings" });
+        Assert.True(resolved.Hosts.Allows(new Uri("https://api.example/resource")));
     }
 
     [Fact]

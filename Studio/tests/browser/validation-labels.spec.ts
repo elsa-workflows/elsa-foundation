@@ -33,3 +33,24 @@ test("captures Classic light before/after screenshots of named validation copy",
     animations: "disabled"
   });
 });
+
+for (const theme of ["light", "dark"]) {
+  test(`compilation rejection retains its reason without execution requests or controls (${theme})`, async ({ page }) => {
+    const requests: string[] = [];
+    await page.route("**/rejected-fixture-api/**", async route => {
+      requests.push(route.request().url());
+      await route.fulfill({ status: 404, contentType: "application/json", body: JSON.stringify({ message: "Workflow test run was not found." }) });
+    });
+    await page.clock.install();
+    await page.goto(`/?mode=validation-labels&theme=${theme}`);
+    const summary = page.getByRole("region", { name: "Test run summary", exact: true });
+    await expect(summary.getByRole("heading", { name: "Latest test run", exact: true })).toBeVisible();
+    await expect(summary.locator(".wf-status-badge")).toHaveText("Rejected");
+    await expect(page.locator(".wf-runtime-reason")).toContainText("Say hello");
+    await expect(page.getByRole("region", { name: "Test Run controls" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Reconnect execution" })).toHaveCount(0);
+    await page.clock.runFor(10000);
+    await expect(page.getByTestId("validation-labels-fixture")).not.toContainText("Workflow test run was not found.");
+    expect(requests).toEqual([]);
+  });
+}

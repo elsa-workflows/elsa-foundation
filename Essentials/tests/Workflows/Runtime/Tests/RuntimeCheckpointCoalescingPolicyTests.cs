@@ -16,6 +16,7 @@ public sealed class RuntimeCheckpointCoalescingPolicyTests
     [InlineData(RuntimeCheckpointNames.WorkflowCompleted)]
     [InlineData(RuntimeCheckpointNames.WorkflowFaulted)]
     [InlineData(RuntimeCheckpointNames.WorkflowCancelled)]
+    [InlineData(RuntimeCheckpointNames.NativeModelWorkStartRetired)]
     [InlineData(RuntimeCheckpointNames.IncidentRecorded)]
     [InlineData(RuntimeCheckpointNames.ActivitySuspended)]
     [InlineData(RuntimeCheckpointNames.ActivityCancelled)]

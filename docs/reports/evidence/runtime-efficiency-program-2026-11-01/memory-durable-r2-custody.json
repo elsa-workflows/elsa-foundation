@@ -1,0 +1,12 @@
+{
+  "worker": "w1",
+  "series": "memory-durable-r2",
+  "status": "passed",
+  "blob": "w1-memory-durable-r2.tar.xz",
+  "bytes": 11140,
+  "sha256": "0f1906d81a859ee6954b8cc6cc9bfb2d61d4a93e7d7b2201dfd826d662fb7434",
+  "files": 13,
+  "protectedValuesAbsent": true,
+  "upload": "passed",
+  "localArchiveAndAllFileHashesVerified": true
+}

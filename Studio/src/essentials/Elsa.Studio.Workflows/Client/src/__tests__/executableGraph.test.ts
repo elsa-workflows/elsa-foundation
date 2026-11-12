@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { buildExecutableActivityGraph, findExecutableNodeFacts, ghostNodeLabel, isGhostFact } from "../executableGraph";
 import { buildExecutableInspectorCanvas } from "../workflow-editor/WorkflowExecutableInspector";
-import { getChildSlots, resolveScope } from "../workflowAdapter";
+import { getActivitySourcePorts, getChildSlots, planSlotNavigation, findNodeScopePath, resolveScope } from "../workflowAdapter";
 import type { ActivityNode, WorkflowExecutableNode } from "../workflowTypes";
-import { bpmnActivity, flowchartActivity, forEachActivity, sequenceActivity, setVariableActivity, setOutputActivity, writeLine } from "./fixtures";
+import { bpmnActivity, ifActivity, flowchartActivity, forEachActivity, sequenceActivity, setVariableActivity, setOutputActivity, writeLine } from "./fixtures";
 import { buildBpmnCanvas } from "../bpmn/bpmnAdapter";
 
 // The Executable Inspector adapts the Execution Material wire tree (executable nodes + named child
@@ -25,6 +25,26 @@ function executableNode(overrides: Partial<WorkflowExecutableNode> = {}): Workfl
     ...overrides
   };
 }
+
+it("keeps every pinned runtime outcome, including unconnected task actions, when the catalog changes or is missing", () => {
+  const outcomes = ["Approve", "Reject", "Request More Info", "Unmatched"];
+  const root = executableNode({ outcomes });
+  for (const available of [catalog, []]) {
+    const graph = buildExecutableActivityGraph(root, available);
+    expect(getActivitySourcePorts(graph.root, available[0]).map(port => port.name)).toEqual(outcomes);
+  }
+});
+
+it("honors an explicitly empty pinned outcome contract while retaining older-host fallback", () => {
+  for (const available of [catalog, []]) {
+    const empty = buildExecutableActivityGraph(executableNode({ outcomes: [] }), available);
+    expect(getActivitySourcePorts(empty.root, available[0])).toEqual([]);
+    for (const outcomes of [null, undefined]) {
+      const legacy = buildExecutableActivityGraph(executableNode({ outcomes }), available);
+      expect(getActivitySourcePorts(legacy.root, available[0]).map(port => port.name)).toEqual(["Done"]);
+    }
+  }
+});
 
 function sequenceRoot(children: WorkflowExecutableNode[]): WorkflowExecutableNode {
   return executableNode({
@@ -287,6 +307,26 @@ describe("buildExecutableInspectorCanvas", () => {
 
     expect(canvas.edges).toHaveLength(1);
     expect(canvas.edges[0]).toMatchObject({ source: "write-line-1", target: "send-email-1", deletable: false });
+  });
+
+  it("renders a secondary root slot and its container with read-only ownership intact", () => {
+    const activities = [...catalog, ifActivity];
+    const graph = buildExecutableActivityGraph(executableNode({
+      executableNodeId: "exec-if", authoredActivityId: "if-root", activityType: ifActivity.activityTypeKey, structureKind: "elsa.if.structure",
+      childSlots: [
+        { name: "If.Then", activities: [executableNode({ executableNodeId: "exec-sibling", authoredActivityId: "sibling" })] },
+        { name: "If.Else", activities: [sequenceRoot([executableNode({ executableNodeId: "exec-else-leaf", authoredActivityId: "else-leaf" })])] }
+      ]
+    }), activities);
+    const before = structuredClone(graph.root);
+    const slot = getChildSlots(graph.root, activities)[1];
+    const plan = planSlotNavigation([], graph.root, graph.root.nodeId, slot, "If / Else", activities)!;
+    const path = findNodeScopePath(graph.root, "else-leaf", node => node.nodeId === "if-root" ? "If" : node.nodeId, activities)!;
+    expect(path).toEqual(plan.frames);
+    const canvas = buildExecutableInspectorCanvas(graph, activities, [], path, () => {});
+    expect(canvas.nodes.map(node => node.id)).toEqual(["else-leaf"]);
+    expect(canvas.nodes[0]).toMatchObject({ draggable: false, connectable: false, deletable: false });
+    expect(graph.root).toEqual(before);
   });
 
   it("renders the scope a frame path addresses", () => {

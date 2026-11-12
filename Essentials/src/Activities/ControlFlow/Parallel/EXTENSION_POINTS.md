@@ -29,4 +29,5 @@ This module does not expose replaceable service contracts in v1. Its activity-ow
   branches with their names and branch node ids, plus the optional join threshold), and round-trips both
   through publishing so the runtime forks/joins without re-reading the design document. `Parallel` is not a
   container scope, so it declares no container-scoped variables (`SupportsScopedVariables` defaults to
-  `false`).
+  `false`). Its `AssessChildResult` keeps availability `Unknown` and states
+  `EarlierProducerRunCanReachConsumer = false`: `Parallel` schedules each branch itself, once per run.

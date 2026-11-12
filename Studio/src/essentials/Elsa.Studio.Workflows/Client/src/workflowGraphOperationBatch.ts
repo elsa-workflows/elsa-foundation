@@ -1,331 +1,430 @@
 import type { ActivityCatalogItem, ActivityNode, DesignMetadataRecord, WorkflowDraft } from "./workflowTypes";
-import { collectActivityNodeIds, createActivityNode } from "./workflowAdapter";
-import { camelize } from "./activityProperties";
+import { createActivityNode, findActivityNode, flowchartStructureKind, getChildSlots, replaceSlotActivities, updateActivity, type ChildSlot } from "./workflowAdapter";
+import { collectOwnedNodeIds } from "./bpmn/bpmnAdapter";
+import { updateActivityPresentation } from "./activityPresentation";
 
-export const workflowGraphOperationApplyEvent = "elsa-studio:apply-workflow-graph-operation-batch";
-export const workflowGraphOperationUndoEvent = "elsa-studio:undo-workflow-graph-operation-batch";
+/**
+ * The designer applier for `workflow_apply_operation_batch` contract 1 (spec 1193 FR-007). It accepts only the batch the
+ * server froze: every operation has exactly its declared fields and resolved node ids, so an unknown field, a missing
+ * property name, an unknown target or slot refuses the whole batch with the failing operation named. It never rewrites an
+ * activity's type, version, children or undeclared fields, and it applies all operations to one copy or none.
+ */
 
-export interface WorkflowGraphOperationBatch {
-  schemaVersion: string;
-  workflowDefinitionId: string;
-  baseRevision?: string | null;
-  operations: WorkflowGraphOperation[];
-  metadata?: Record<string, unknown>;
+export type WorkflowOperationRisk = "reviewRequired" | "destructive";
+
+export interface FrozenPoint { x: number; y: number }
+export type FrozenPropertyValue =
+  | { literal: string | number | boolean }
+  | { secretReference: { name: string; typeName: string | null; scope: string | null } };
+
+export type FrozenWorkflowOperation =
+  | { index: number; kind: "add"; risk: WorkflowOperationRisk; nodeId: string; activityVersionId: string; activityTypeKey: string; version: string; scopePath: string[]; slot: string; position: FrozenPoint | null }
+  | { index: number; kind: "set-root"; risk: WorkflowOperationRisk; nodeId: string; replacesRoot: boolean }
+  | { index: number; kind: "position"; risk: WorkflowOperationRisk; nodeId: string; x: number; y: number }
+  | { index: number; kind: "set-property"; risk: WorkflowOperationRisk; nodeId: string; property: string; inputName: string; typeName: string; value: FrozenPropertyValue }
+  | { index: number; kind: "update"; risk: WorkflowOperationRisk; nodeId: string; fields: { displayName?: string; description?: string; canStartWorkflow?: boolean }; startInput: string | null }
+  | { index: number; kind: "remove"; risk: WorkflowOperationRisk; nodeId: string }
+  | { index: number; kind: "connect"; risk: WorkflowOperationRisk; source: string; target: string; sourcePort: string; targetPort: string | null; scopeOwnerId: string; slot: string }
+  | { index: number; kind: "disconnect"; risk: WorkflowOperationRisk; source: string; target: string; sourcePort: string };
+
+export interface FrozenWorkflowBatch {
+  schemaVersion: "1";
+  highComplexity: boolean;
+  risk: WorkflowOperationRisk;
+  operations: FrozenWorkflowOperation[];
 }
 
-export interface WorkflowGraphOperation {
-  id: string;
-  kind: string | number;
-  parameters: Record<string, unknown>;
-  temporaryReferences?: string[];
-  summary?: string | null;
-}
-
-export interface WorkflowGraphOperationBatchApplyResult {
+export interface WorkflowBatchApplyResult {
   draft: WorkflowDraft;
   appliedCount: number;
-  finalActivityIds: string[];
-  temporaryReferences: Record<string, string>;
-  summary: string;
+  addedNodeIds: string[];
+  /** Ids that left the document: removed subtrees and a replaced root's tree. */
+  removedNodeIds: string[];
 }
 
-const operationKinds = [
-  "add-activity",
-  "update-activity",
-  "remove-activity",
-  "connect-activities",
-  "disconnect-activities",
-  "set-root",
-  "set-designer-position",
-  "set-activity-property"
-];
-
-export function applyWorkflowGraphOperationBatch(
-  draft: WorkflowDraft,
-  batch: WorkflowGraphOperationBatch,
-  catalog: ActivityCatalogItem[]
-): WorkflowGraphOperationBatchApplyResult {
-  if (!Array.isArray(batch.operations)) throw new Error("Weaver batch does not contain operations.");
-
-  const nextDraft = clone(draft);
-  const knownIds = collectActivityIds(nextDraft.state.rootActivity);
-  const temporaryReferences = new Map<string, string>();
-  const addedActivities = new Map<string, ActivityNode>();
-  const finalActivityIds: string[] = [];
-
-  for (const operation of batch.operations) {
-    const kind = normalizeOperationKind(operation.kind);
-    const parameters = operation.parameters ?? {};
-
-    if (kind === "add-activity") {
-      const requestedId = readString(parameters.activityId) ?? operation.temporaryReferences?.[0];
-      const nodeId = createFinalNodeId(requestedId ?? readString(parameters.displayName) ?? readString(parameters.activityType) ?? "weaver-activity", knownIds);
-      const activity = createActivity(operation, nodeId, catalog);
-      addedActivities.set(nodeId, activity);
-      finalActivityIds.push(nodeId);
-      if (requestedId) temporaryReferences.set(requestedId, nodeId);
-      if (nextDraft.state.rootActivity) appendActivityToRoot(nextDraft.state.rootActivity, activity);
-      const position = isRecord(parameters.position) ? readPosition(parameters.position, { x: 280, y: 160 }) : null;
-      if (position) nextDraft.layout = upsertLayout(nextDraft.layout, nodeId, position);
-      continue;
-    }
-
-    if (kind === "set-root") {
-      const activity = findOperationActivity(nextDraft, parameters.activityId, temporaryReferences, addedActivities);
-      if (!activity) throw new Error("Weaver batch referenced an unknown root activity.");
-      nextDraft.state.rootActivity = activity;
-      continue;
-    }
-
-    if (kind === "set-designer-position") {
-      const activityId = resolveActivityId(parameters.activityId, temporaryReferences);
-      if (!activityId || !findActivity(nextDraft.state.rootActivity, activityId)) throw new Error("Weaver batch referenced an unknown activity position.");
-      nextDraft.layout = upsertLayout(nextDraft.layout, activityId, readPosition(parameters, { x: 280, y: 160 }));
-      continue;
-    }
-
-    if (kind === "set-activity-property") {
-      const activity = findOperationActivity(nextDraft, parameters.activityId, temporaryReferences, addedActivities);
-      if (!activity) throw new Error("Weaver batch referenced an unknown activity property target.");
-      setActivityProperty(activity, readString(parameters.propertyName) ?? "Value", parameters.value ?? "", catalog);
-      continue;
-    }
-
-    if (kind === "update-activity") {
-      const activity = findOperationActivity(nextDraft, parameters.activityId, temporaryReferences, addedActivities);
-      if (!activity) throw new Error("Weaver batch referenced an unknown activity update target.");
-      const patch = isRecord(parameters.patch) ? parameters.patch : parameters;
-      Object.assign(activity, patch);
-      continue;
-    }
-
-    if (kind === "remove-activity") {
-      const activityId = resolveActivityId(parameters.activityId, temporaryReferences);
-      if (!activityId) throw new Error("Weaver batch referenced an unknown activity remove target.");
-      nextDraft.state.rootActivity = removeActivity(nextDraft.state.rootActivity, activityId);
-      nextDraft.layout = nextDraft.layout.filter(record => record.nodeId !== activityId);
-      continue;
-    }
-
-    if (kind === "connect-activities") {
-      connectActivities(nextDraft, parameters, temporaryReferences);
-      continue;
-    }
-
-    if (kind === "disconnect-activities") {
-      disconnectActivities(nextDraft, parameters, temporaryReferences);
-      continue;
-    }
-
-    throw new Error(`Weaver batch operation '${String(operation.kind || "unknown")}' is not supported by this designer apply path.`);
-  }
-
-  if (!nextDraft.state.rootActivity) throw new Error("Weaver batch did not produce a root activity.");
-
-  const catalogByVersion = new Map(catalog.map(activity => [activity.activityVersionId, activity]));
-  const reachableNodeIds = collectActivityNodeIds(nextDraft.state.rootActivity, catalogByVersion);
-  nextDraft.activityPresentation = (nextDraft.activityPresentation ?? [])
-    .filter(record => reachableNodeIds.has(record.nodeId));
-  nextDraft.sourceVersionId = null;
-  return {
-    draft: nextDraft,
-    appliedCount: batch.operations.length,
-    finalActivityIds,
-    temporaryReferences: Object.fromEntries(temporaryReferences),
-    summary: `Applied ${batch.operations.length} workflow operation${batch.operations.length === 1 ? "" : "s"} to the working draft.`
-  };
-}
-
-function createActivity(operation: WorkflowGraphOperation, nodeId: string, catalog: ActivityCatalogItem[]): ActivityNode {
-  const parameters = operation.parameters ?? {};
-  const activityVersionId = readString(parameters.activityVersionId) ?? readString(parameters.activityType) ?? "Elsa.Workflows.Activity";
-  const catalogItem = catalog.find(activity =>
-    activity.activityVersionId === activityVersionId ||
-    activity.activityTypeKey === activityVersionId ||
-    activity.displayName === readString(parameters.displayName));
-  if (catalogItem) return createActivityNode(catalogItem, nodeId);
-
-  return {
-    nodeId,
-    // catalogItem is provably undefined here (the truthy branch returned above), so use the id directly.
-    activityVersionId,
-    inputs: [],
-    outputs: [],
-    ...(readString(parameters.displayName) ? { displayName: readString(parameters.displayName) } : {}),
-    designer: { position: readPosition(parameters.position, { x: 280, y: 160 }) }
-  };
-}
-
-function appendActivityToRoot(root: ActivityNode, activity: ActivityNode) {
-  if (root.nodeId === activity.nodeId) return;
-  const slot = getActivityArray(root);
-  if (slot && !slot.some(item => item.nodeId === activity.nodeId)) {
-    slot.push(activity);
+/** A whole-batch refusal that names the failing operation. Nothing was applied. */
+export class WorkflowBatchRefusal extends Error {
+  constructor(readonly operationIndex: number | null, message: string) {
+    super(operationIndex === null ? message : `Operation ${operationIndex}: ${message}`);
+    this.name = "WorkflowBatchRefusal";
   }
 }
 
-function connectActivities(draft: WorkflowDraft, parameters: Record<string, unknown>, references: Map<string, string>) {
-  const root = draft.state.rootActivity;
-  if (!root?.structure) throw new Error("Weaver batch cannot connect activities without a flowchart root.");
+const maxOperations = 64;
+/** Node fields that carry identity, type, version or children; a property write never targets them. */
+const structuralFields = new Set(["nodeId", "activityVersionId", "inputs", "outputs", "structure", "intrinsic", "executionPlacement"]);
+const fieldsByKind: Record<FrozenWorkflowOperation["kind"], string[]> = {
+  "add": ["index", "kind", "risk", "nodeId", "activityVersionId", "activityTypeKey", "version", "scopePath", "slot", "position"],
+  "set-root": ["index", "kind", "risk", "nodeId", "replacesRoot"],
+  "position": ["index", "kind", "risk", "nodeId", "x", "y"],
+  "set-property": ["index", "kind", "risk", "nodeId", "property", "inputName", "typeName", "value"],
+  "update": ["index", "kind", "risk", "nodeId", "fields", "startInput"],
+  "remove": ["index", "kind", "risk", "nodeId"],
+  "connect": ["index", "kind", "risk", "source", "target", "sourcePort", "targetPort", "scopeOwnerId", "slot"],
+  "disconnect": ["index", "kind", "risk", "source", "target", "sourcePort"]
+};
 
-  const sourceId = resolveActivityId(parameters.sourceActivityId ?? parameters.sourceId ?? parameters.from, references);
-  const targetId = resolveActivityId(parameters.targetActivityId ?? parameters.targetId ?? parameters.to, references);
-  if (!sourceId || !targetId) throw new Error("Weaver batch connection is missing source or target activity.");
-
-  const payload = root.structure.payload;
-  const connections = Array.isArray(payload.connections) ? payload.connections : [];
-  const id = readString(parameters.connectionId) ?? `flow-${sourceId}-${targetId}`;
-  payload.connections = [
-    ...connections.filter(connection => !isRecord(connection) || connection.id !== id),
-    {
-      id,
-      source: { nodeId: sourceId, port: readString(parameters.outcome) ?? readString(parameters.sourcePort) ?? "Done" },
-      target: { nodeId: targetId }
-    }
-  ];
+/** Reads the frozen batch with the same strict schema the server froze it with: exact fields, exact types. */
+export function parseFrozenWorkflowBatch(value: unknown): FrozenWorkflowBatch {
+  if (!isPlainRecord(value)) throw new WorkflowBatchRefusal(null, "The batch is not an object.");
+  exactKeys(null, value, ["schemaVersion", "highComplexity", "risk", "operations"]);
+  if (value.schemaVersion !== "1") throw new WorkflowBatchRefusal(null, "Only batch schema 1 is supported.");
+  const risk = value.risk;
+  if (typeof value.highComplexity !== "boolean" || !isRisk(risk)) throw new WorkflowBatchRefusal(null, "The batch risk or complexity label is malformed.");
+  if (!Array.isArray(value.operations) || value.operations.length === 0 || value.operations.length > maxOperations)
+    throw new WorkflowBatchRefusal(null, `A batch holds 1 to ${maxOperations} operations.`);
+  const operations = value.operations.map((operation, position) => parseOperation(operation, position));
+  return { schemaVersion: "1", highComplexity: value.highComplexity, risk, operations };
 }
 
-function disconnectActivities(draft: WorkflowDraft, parameters: Record<string, unknown>, references: Map<string, string>) {
-  const root = draft.state.rootActivity;
-  const connections = root?.structure?.payload.connections;
-  if (!Array.isArray(connections)) return;
+function parseOperation(input: unknown, position: number): FrozenWorkflowOperation {
+  if (!isPlainRecord(input)) throw new WorkflowBatchRefusal(position, "The operation is not an object.");
+  const value: Record<string, unknown> = input;
+  if (value.index !== position) throw new WorkflowBatchRefusal(position, "The operation index does not match its position.");
+  const kind = value.kind;
+  if (typeof kind !== "string" || !Object.prototype.hasOwnProperty.call(fieldsByKind, kind)) throw new WorkflowBatchRefusal(position, `Unsupported operation kind '${String(kind)}'.`);
+  exactKeys(position, value, fieldsByKind[kind as FrozenWorkflowOperation["kind"]]);
+  const risk = value.risk;
+  if (!isRisk(risk)) throw new WorkflowBatchRefusal(position, "The operation risk is malformed.");
+  const text = (field: string): string => {
+    const candidate = value[field];
+    if (typeof candidate !== "string" || !candidate.trim() || candidate.length > 256) throw new WorkflowBatchRefusal(position, `'${field}' must be a non-empty string.`);
+    return candidate;
+  };
+  const optionalText = (field: string): string | null => value[field] === null ? null : text(field);
+  const number = (candidate: unknown, field: string): number => {
+    if (typeof candidate !== "number" || !Number.isFinite(candidate)) throw new WorkflowBatchRefusal(position, `'${field}' must be a finite number.`);
+    return candidate;
+  };
+  switch (kind as FrozenWorkflowOperation["kind"]) {
+    case "add": {
+      const scopePath = value.scopePath;
+      if (!Array.isArray(scopePath) || scopePath.some(segment => typeof segment !== "string" || !segment))
+        throw new WorkflowBatchRefusal(position, "'scopePath' must be an array of node ids.");
+      let point: FrozenPoint | null = null;
+      const frozenPosition = value.position;
+      if (frozenPosition !== null) {
+        if (!isPlainRecord(frozenPosition)) throw new WorkflowBatchRefusal(position, "'position' must be an object or null.");
+        exactKeys(position, frozenPosition, ["x", "y"]);
+        point = { x: number(frozenPosition.x, "position.x"), y: number(frozenPosition.y, "position.y") };
+      }
+      return { index: position, kind: "add", risk, nodeId: text("nodeId"), activityVersionId: text("activityVersionId"), activityTypeKey: text("activityTypeKey"),
+        version: text("version"), scopePath: [...scopePath as string[]], slot: text("slot"), position: point };
+    }
+    case "set-root": {
+      const replacesRoot = value.replacesRoot;
+      if (typeof replacesRoot !== "boolean") throw new WorkflowBatchRefusal(position, "'replacesRoot' must be a boolean.");
+      return { index: position, kind: "set-root", risk, nodeId: text("nodeId"), replacesRoot };
+    }
+    case "position":
+      return { index: position, kind: "position", risk, nodeId: text("nodeId"), x: number(value.x, "x"), y: number(value.y, "y") };
+    case "set-property": {
+      const property = text("property");
+      if (structuralFields.has(property)) throw new WorkflowBatchRefusal(position, `'${property}' is not an input; an activity's identity, type, version and children are never rewritten.`);
+      const propertyValue = value.value;
+      if (!isPlainRecord(propertyValue) || Object.keys(propertyValue).length !== 1) throw new WorkflowBatchRefusal(position, "'value' must hold exactly one of 'literal' or 'secretReference'.");
+      let frozen: FrozenPropertyValue;
+      if ("literal" in propertyValue) {
+        const literal = propertyValue.literal;
+        if (!(typeof literal === "string" || typeof literal === "boolean" || typeof literal === "number" && Number.isFinite(literal)))
+          throw new WorkflowBatchRefusal(position, "'literal' must be a string, a finite number or a boolean.");
+        frozen = { literal };
+      } else if ("secretReference" in propertyValue && isPlainRecord(propertyValue.secretReference)) {
+        const reference = propertyValue.secretReference;
+        exactKeys(position, reference, ["name", "typeName", "scope"]);
+        const { name, typeName, scope } = reference;
+        if (typeof name !== "string" || !name.trim() || typeName !== null && typeof typeName !== "string" || scope !== null && typeof scope !== "string")
+          throw new WorkflowBatchRefusal(position, "'secretReference' is malformed.");
+        frozen = { secretReference: { name, typeName: typeName as string | null, scope: scope as string | null } };
+      } else throw new WorkflowBatchRefusal(position, "'value' must hold exactly one of 'literal' or 'secretReference'.");
+      return { index: position, kind: "set-property", risk, nodeId: text("nodeId"), property, inputName: text("inputName"), typeName: text("typeName"), value: frozen };
+    }
+    case "update": {
+      const fields = value.fields;
+      if (!isPlainRecord(fields) || Object.keys(fields).length === 0) throw new WorkflowBatchRefusal(position, "'fields' must set at least one allowed field.");
+      const allowed = ["displayName", "description", "canStartWorkflow"];
+      const unknown = Object.keys(fields).filter(key => !allowed.includes(key));
+      if (unknown.length) throw new WorkflowBatchRefusal(position, `Unknown field(s) ${unknown.map(key => `'${key}'`).join(", ")}; an activity's type, version and children are never rewritten.`);
+      if ("displayName" in fields && typeof fields.displayName !== "string" || "description" in fields && typeof fields.description !== "string"
+        || "canStartWorkflow" in fields && typeof fields.canStartWorkflow !== "boolean")
+        throw new WorkflowBatchRefusal(position, "'fields' holds a value of the wrong type.");
+      const startInput = optionalText("startInput");
+      if (("canStartWorkflow" in fields) !== (startInput !== null)) throw new WorkflowBatchRefusal(position, "'startInput' must name the declared start input exactly when 'canStartWorkflow' is set.");
+      if (startInput !== null && structuralFields.has(startInput)) throw new WorkflowBatchRefusal(position, `'${startInput}' is not an input.`);
+      return { index: position, kind: "update", risk, nodeId: text("nodeId"), fields: { ...fields } as { displayName?: string; description?: string; canStartWorkflow?: boolean }, startInput };
+    }
+    case "remove":
+      return { index: position, kind: "remove", risk, nodeId: text("nodeId") };
+    case "connect":
+      return { index: position, kind: "connect", risk, source: text("source"), target: text("target"), sourcePort: text("sourcePort"),
+        targetPort: optionalText("targetPort"), scopeOwnerId: text("scopeOwnerId"), slot: text("slot") };
+    case "disconnect":
+      return { index: position, kind: "disconnect", risk, source: text("source"), target: text("target"), sourcePort: text("sourcePort") };
+  }
+}
 
-  const connectionId = readString(parameters.connectionId);
-  const sourceId = resolveActivityId(parameters.sourceActivityId ?? parameters.sourceId ?? parameters.from, references);
-  const targetId = resolveActivityId(parameters.targetActivityId ?? parameters.targetId ?? parameters.to, references);
-  root!.structure!.payload.connections = connections.filter(connection => {
-    if (!isRecord(connection)) return true;
-    if (connectionId && connection.id === connectionId) return false;
-    const source = isRecord(connection.source) ? connection.source.nodeId : undefined;
-    const target = isRecord(connection.target) ? connection.target.nodeId : undefined;
-    return source !== sourceId || target !== targetId;
+/**
+ * Studio's own risk classification of a frozen batch against the live working draft (ADR 0003). It never trusts the
+ * labels it was given: removals and disconnections are destructive, and so is a set-root that replaces a root the live
+ * draft has. Callers compare the result with the reviewed labels and fail closed on any difference.
+ */
+export function classifyWorkflowOperationRisk(draft: WorkflowDraft, batch: FrozenWorkflowBatch): WorkflowOperationRisk[] {
+  let hasRoot = !!draft.state.rootActivity;
+  return batch.operations.map(operation => {
+    if (operation.kind === "remove" || operation.kind === "disconnect") return "destructive";
+    if (operation.kind === "set-root") {
+      const replaces = hasRoot;
+      hasRoot = true;
+      return replaces ? "destructive" : "reviewRequired";
+    }
+    return "reviewRequired";
   });
 }
 
-function setActivityProperty(activity: ActivityNode, propertyName: string, value: unknown, catalog: ActivityCatalogItem[]) {
-  // A structured value (collection or object) must be authored as an Object expression so the backend
-  // JSON-deserializes it into the target type; a scalar rides the Literal path. Same rule toWireArgument
-  // in activityInputWire enforces at the wire boundary, applied here so the in-memory model is correct
-  // at the source instead of relying on the boundary to retrofit it.
-  const structured = isRecord(value);
-  activity[resolveInputPropertyKey(activity, propertyName, catalog)] = {
-    typeName: typeof value === "string" ? "String" : "Object",
-    expression: { type: structured ? "Object" : "Literal", value }
-  };
-}
+/** Applies every operation of a frozen batch to one copy of the draft, or throws a {@link WorkflowBatchRefusal}. */
+export function applyWorkflowOperationBatch(draft: WorkflowDraft, batch: FrozenWorkflowBatch, catalog: ActivityCatalogItem[]): WorkflowBatchApplyResult {
+  const catalogByVersion = new Map(catalog.map(item => [item.activityVersionId, item]));
+  const next: WorkflowDraft = clone(draft);
+  let root: ActivityNode | null = next.state.rootActivity ?? null;
+  let layout: DesignMetadataRecord[] = next.layout;
+  let presentation = next.activityPresentation ?? [];
+  // Every id the document already uses, in the tree or in a side table: a new node never reuses one of them, and
+  // neither does it reuse an id this batch removes.
+  const reserved = new Set<string>([...(root ? collectOwnedNodeIds(root, catalogByVersion) : []), ...layout.map(record => record.nodeId), ...presentation.map(record => record.nodeId)]);
+  const rootCandidates = new Map<string, ActivityNode>();
+  const added: string[] = [];
+  let rootInstalled = false;
+  let addedRoot = false;
+  const removed = new Set<string>();
 
-// Weaver names properties loosely (referenceKey, display name, or its camelCase form); resolve to the
-// catalog input's stable referenceKey so AI-authored values land on the same in-memory key the editor
-// and wire contract use. Falls back to camelize for activities without catalog input metadata.
-function resolveInputPropertyKey(activity: ActivityNode, propertyName: string, catalog: ActivityCatalogItem[]): string {
-  const inputs = catalog.find(item => item.activityVersionId === activity.activityVersionId)?.inputs ?? [];
-  for (const input of inputs) {
-    if (!isRecord(input) || typeof input.referenceKey !== "string" || !input.referenceKey.trim()) continue;
-    const name = typeof input.name === "string" ? input.name : "";
-    if (propertyName === input.referenceKey || (name && (propertyName === name || camelize(propertyName) === camelize(name)))) {
-      return input.referenceKey;
+  for (const operation of batch.operations) {
+    const refuse = (message: string): never => { throw new WorkflowBatchRefusal(operation.index, message); };
+    const find = (nodeId: string): ActivityNode => (root ? findActivityNode(root, nodeId, catalogByVersion) : null) ?? refuse(`No activity '${nodeId}' exists in the working draft.`);
+    switch (operation.kind) {
+      case "add": {
+        if (reserved.has(operation.nodeId)) refuse(`The new node id '${operation.nodeId}' is already used.`);
+        const item = catalogByVersion.get(operation.activityVersionId);
+        if (!item || item.activityTypeKey !== operation.activityTypeKey || item.version !== operation.version)
+          return refuse(`The activity '${operation.activityTypeKey}' ${operation.version} is not in this designer's catalog.`);
+        if (item.available === false) refuse(`'${item.displayName}' cannot be added here: ${item.availabilityReason ?? "the availability policy excludes it"}.`);
+        const node = createActivityNode(item, operation.nodeId);
+        reserved.add(operation.nodeId);
+        if (operation.scopePath.length === 0) {
+          if (operation.slot !== "root") refuse("A root candidate needs the 'root' slot.");
+          rootCandidates.set(operation.nodeId, node);
+        } else {
+          if (!root || operation.scopePath[0] !== root.nodeId) return refuse("The scope path does not start at the root.");
+          let owner: ActivityNode = root;
+          for (const segment of operation.scopePath.slice(1)) {
+            const holding = getChildSlots(owner, catalogByVersion).find(candidate => candidate.activities.some(child => child.nodeId === segment));
+            if (!holding) return refuse(`The scope path is not a containment chain at '${segment}'.`);
+            owner = holding.activities.find(child => child.nodeId === segment)!;
+          }
+          // As the server prepares it: nothing is added into an activity this batch adds, whose slots it could not confirm.
+          if (added.includes(owner.nodeId) || rootCandidates.has(owner.nodeId) || owner === root && addedRoot)
+            refuse(`'${owner.nodeId}' is added by this batch; activities are added into it in a following batch.`);
+          const slot = getChildSlots(owner, catalogByVersion).find(candidate => candidate.id === operation.slot);
+          if (!slot) return refuse(`'${owner.nodeId}' has no slot '${operation.slot}'.`);
+          if (slot.mode === "bpmn") refuse("BPMN scopes are not changed by an Operation Batch.");
+          if (slot.cardinality === "single" && slot.activities.length > 0) refuse(`The slot '${operation.slot}' holds a single activity and is occupied.`);
+          root = updateActivity(root, owner.nodeId, current => {
+            const target = getChildSlots(current, catalogByVersion).find(candidate => candidate.id === operation.slot)!;
+            return replaceSlotActivities(current, target, [...target.activities, node]);
+          }, catalogByVersion);
+        }
+        if (operation.position) layout = upsertLayout(layout, operation.nodeId, operation.position);
+        added.push(operation.nodeId);
+        break;
+      }
+      case "set-root": {
+        if (rootInstalled) refuse("A batch installs at most one root.");
+        const candidate = rootCandidates.get(operation.nodeId) ?? refuse(`'${operation.nodeId}' is not a root candidate of this batch.`);
+        if (operation.replacesRoot !== !!root) refuse("The working draft's root changed since the batch was reviewed.");
+        if (root) for (const id of collectOwnedNodeIds(root, catalogByVersion)) removed.add(id);
+        rootCandidates.delete(operation.nodeId);
+        root = candidate;
+        rootInstalled = true;
+        addedRoot = true;
+        break;
+      }
+      case "position":
+        find(operation.nodeId);
+        layout = upsertLayout(layout, operation.nodeId, operation);
+        break;
+      case "set-property": {
+        const node = find(operation.nodeId);
+        const input = catalogInputs(catalogByVersion.get(node.activityVersionId)).find(candidate => candidate.referenceKey === operation.property)
+          ?? refuse(`'${operation.inputName}' is not a declared input of this activity in the designer's catalog.`);
+        if ("literal" in operation.value && input.isCredential) refuse(`'${operation.inputName}' is a credential input; only a Secret Reference may be bound.`);
+        const expression = "literal" in operation.value
+          ? { type: "Literal", value: operation.value.literal }
+          : { type: "Secret", value: secretValue(operation.value.secretReference) };
+        // Only the authored value changes: an existing wrapper keeps its type, memory reference, conversion and extras.
+        root = updateActivity(root!, node.nodeId, current => {
+          const previous = current[operation.property];
+          const wrapper = isPlainRecord(previous) && isPlainRecord(previous.expression) ? previous : null;
+          return { ...current, [operation.property]: wrapper
+            ? { ...wrapper, typeName: typeof wrapper.typeName === "string" && wrapper.typeName ? wrapper.typeName : operation.typeName, expression }
+            : { typeName: operation.typeName, expression } };
+        }, catalogByVersion);
+        break;
+      }
+      case "update": {
+        const node = find(operation.nodeId);
+        if (operation.fields.displayName !== undefined || operation.fields.description !== undefined) {
+          const current = presentation.find(record => record.nodeId === node.nodeId);
+          presentation = updateActivityPresentation(presentation, node.nodeId, {
+            displayName: operation.fields.displayName ?? current?.displayName ?? undefined,
+            description: operation.fields.description ?? current?.description ?? undefined
+          });
+        }
+        if (operation.fields.canStartWorkflow !== undefined) {
+          const startInput = operation.startInput!;
+          if (!catalogInputs(catalogByVersion.get(node.activityVersionId)).some(input => input.referenceKey === startInput))
+            refuse("The activity declares no start input in the designer's catalog.");
+          const value = operation.fields.canStartWorkflow;
+          root = updateActivity(root!, node.nodeId, current => ({ ...current, [startInput]: { typeName: "Boolean", expression: { type: "Literal", value } } }), catalogByVersion);
+        }
+        break;
+      }
+      case "remove": {
+        const node = find(operation.nodeId);
+        if (node.nodeId === root!.nodeId) refuse("The root cannot be removed.");
+        const owner = parentOf(root!, node.nodeId, catalogByVersion) ?? refuse(`'${node.nodeId}' has no container.`);
+        if (owner.slot.mode === "bpmn") refuse("BPMN scopes are not changed by an Operation Batch.");
+        const owned = collectOwnedNodeIds(node, catalogByVersion);
+        for (const id of owned) removed.add(id);
+        root = updateActivity(root!, owner.owner.nodeId, current => {
+          const slot = getChildSlots(current, catalogByVersion).find(candidate => candidate.id === owner.slot.id)!;
+          return withoutConnections(replaceSlotActivities(current, slot, slot.activities.filter(child => child.nodeId !== node.nodeId)), owned);
+        }, catalogByVersion);
+        break;
+      }
+      case "connect": {
+        const owner = root ? findActivityNode(root, operation.scopeOwnerId, catalogByVersion) : null;
+        if (!owner || owner.structure?.kind !== flowchartStructureKind) return refuse(`'${operation.scopeOwnerId}' is not a flowchart.`);
+        if (added.includes(owner.nodeId) || owner === root && addedRoot) refuse(`'${owner.nodeId}' is added by this batch; its activities are connected in a following batch.`);
+        const slot = getChildSlots(owner, catalogByVersion).find(candidate => candidate.id === operation.slot);
+        if (!slot || slot.mode !== "flowchart") return refuse(`'${operation.slot}' is not the flowchart's slot.`);
+        if (!slot.activities.some(child => child.nodeId === operation.source) || !slot.activities.some(child => child.nodeId === operation.target))
+          refuse("The connected activities are not both in this flowchart.");
+        if (readConnections(owner).some(connection => connectionMatches(connection, operation.source, operation.target, operation.sourcePort)))
+          refuse("The activities are already connected from this port.");
+        root = updateActivity(root!, owner.nodeId, current => withConnections(current, [...readConnections(current), {
+          id: `flow-${operation.source}-${operation.target}-${operation.sourcePort}-b${operation.index}`,
+          source: { nodeId: operation.source, port: operation.sourcePort },
+          target: operation.targetPort ? { nodeId: operation.target, port: operation.targetPort } : { nodeId: operation.target }
+        }]), catalogByVersion);
+        break;
+      }
+      case "disconnect": {
+        find(operation.source);
+        const owner = parentOf(root!, operation.source, catalogByVersion);
+        if (!owner || owner.owner.structure?.kind !== flowchartStructureKind) return refuse("The source activity is not in a flowchart.");
+        const matches = readConnections(owner.owner).filter(connection => connectionMatches(connection, operation.source, operation.target, operation.sourcePort));
+        if (matches.length !== 1) refuse(matches.length ? "Several identical connections match; the batch cannot choose one." : "The connection no longer exists.");
+        root = updateActivity(root!, owner.owner.nodeId, current => withConnections(current,
+          readConnections(current).filter(connection => !connectionMatches(connection, operation.source, operation.target, operation.sourcePort))), catalogByVersion);
+        break;
+      }
     }
   }
-  return camelize(propertyName);
+
+  if (rootCandidates.size > 0) throw new WorkflowBatchRefusal(null, "A root candidate was added but never installed with set-root.");
+  if (!root) throw new WorkflowBatchRefusal(null, "The batch did not produce a root activity.");
+
+  const reachable = collectOwnedNodeIds(root, catalogByVersion);
+  next.state = { ...next.state, rootActivity: root };
+  next.layout = layout.filter(record => !removed.has(record.nodeId) || reachable.has(record.nodeId));
+  next.activityPresentation = presentation.filter(record => reachable.has(record.nodeId));
+  next.sourceVersionId = null;
+  return { draft: next, appliedCount: batch.operations.length, addedNodeIds: added, removedNodeIds: [...removed].filter(id => !reachable.has(id)) };
 }
 
-function findOperationActivity(draft: WorkflowDraft, activityId: unknown, references: Map<string, string>, added: Map<string, ActivityNode>) {
-  const id = resolveActivityId(activityId, references);
-  return id ? findActivity(draft.state.rootActivity, id) ?? added.get(id) ?? null : null;
+/**
+ * The single-operation change of `workflow_set_designer_position`, through the same strict applier. Kept for the
+ * existing layout tool and its receipt.
+ */
+export function applyWorkflowDesignerPosition(draft: WorkflowDraft, activityId: string, x: number, y: number, catalog: ActivityCatalogItem[]) {
+  return applyWorkflowOperationBatch(draft, { schemaVersion: "1", highComplexity: false, risk: "reviewRequired",
+    operations: [{ index: 0, kind: "position", risk: "reviewRequired", nodeId: activityId, x, y }] }, catalog);
 }
 
-function resolveActivityId(value: unknown, references: Map<string, string>) {
-  const id = readString(value);
-  return id ? references.get(id) ?? id : null;
-}
-
-function findActivity(activity: ActivityNode | null | undefined, nodeId: string): ActivityNode | null {
-  if (!activity) return null;
-  if (activity.nodeId === nodeId) return activity;
-  for (const child of getChildActivities(activity)) {
-    const found = findActivity(child, nodeId);
-    if (found) return found;
+function parentOf(root: ActivityNode, nodeId: string, catalog: Map<string, ActivityCatalogItem>): { owner: ActivityNode; slot: ChildSlot } | null {
+  for (const slot of getChildSlots(root, catalog)) {
+    if (slot.activities.some(child => child.nodeId === nodeId)) return { owner: root, slot };
+    for (const child of slot.activities) {
+      const found = parentOf(child, nodeId, catalog);
+      if (found) return found;
+    }
   }
   return null;
 }
 
-function removeActivity(activity: ActivityNode | null | undefined, nodeId: string): ActivityNode | null {
-  if (!activity) return null;
-  if (activity.nodeId === nodeId) return null;
-  const children = getActivityArray(activity);
-  if (children) {
-    const nextChildren = children
-      .map(child => removeActivity(child, nodeId))
-      .filter((child): child is ActivityNode => !!child);
-    children.splice(0, children.length, ...nextChildren);
-  }
-  return activity;
+interface CatalogInput { referenceKey: string; name: string; isCredential: boolean }
+
+function catalogInputs(item: ActivityCatalogItem | undefined): CatalogInput[] {
+  return (item?.inputs ?? []).flatMap(input => isPlainRecord(input) && typeof input.referenceKey === "string"
+    ? [{ referenceKey: input.referenceKey, name: typeof input.name === "string" ? input.name : input.referenceKey, isCredential: input.isCredential === true }]
+    : []);
 }
 
-function collectActivityIds(activity: ActivityNode | null | undefined, ids = new Set<string>()) {
-  if (!activity) return ids;
-  ids.add(activity.nodeId);
-  for (const child of getChildActivities(activity)) collectActivityIds(child, ids);
-  return ids;
+function secretValue(reference: { name: string; typeName: string | null; scope: string | null }) {
+  return { name: reference.name, ...(reference.typeName ? { typeName: reference.typeName } : {}), ...(reference.scope ? { scope: reference.scope } : {}) };
 }
 
-function getChildActivities(activity: ActivityNode) {
-  return getActivityArray(activity) ?? [];
+type FlowConnection = Record<string, unknown>;
+
+function readConnections(owner: ActivityNode): FlowConnection[] {
+  const connections = owner.structure?.payload.connections;
+  return Array.isArray(connections) ? connections.filter(isPlainRecord) : [];
 }
 
-function getActivityArray(activity: ActivityNode) {
-  const payload = activity.structure?.payload;
-  return Array.isArray(payload?.activities) ? payload.activities as ActivityNode[] : null;
+function withConnections(owner: ActivityNode, connections: FlowConnection[]): ActivityNode {
+  if (!owner.structure) return owner;
+  return { ...owner, structure: { ...owner.structure, payload: { ...owner.structure.payload, connections } } };
 }
 
-function upsertLayout(layout: DesignMetadataRecord[], nodeId: string, position: { x: number; y: number }) {
-  return [
-    ...layout.filter(record => record.nodeId !== nodeId),
-    { nodeId, x: position.x, y: position.y }
-  ];
+/** Drops the connections of a flowchart that touch any removed id, so a removal leaves no dangling wire. */
+function withoutConnections(owner: ActivityNode, removed: Set<string>): ActivityNode {
+  if (owner.structure?.kind !== flowchartStructureKind) return owner;
+  return withConnections(owner, readConnections(owner).filter(connection => {
+    const source = isPlainRecord(connection.source) ? connection.source.nodeId : null;
+    const target = isPlainRecord(connection.target) ? connection.target.nodeId : null;
+    return !(typeof source === "string" && removed.has(source)) && !(typeof target === "string" && removed.has(target));
+  }));
 }
 
-function readPosition(value: unknown, fallback: { x: number; y: number }) {
-  const record = isRecord(value) ? value : {};
-  const x = Number(record.x);
-  const y = Number(record.y);
-  return {
-    x: Number.isFinite(x) ? Math.max(40, Math.round(x)) : fallback.x,
-    y: Number.isFinite(y) ? Math.max(40, Math.round(y)) : fallback.y
-  };
+function connectionMatches(connection: FlowConnection, source: string, target: string, port: string) {
+  const from = isPlainRecord(connection.source) ? connection.source : null;
+  const to = isPlainRecord(connection.target) ? connection.target : null;
+  return !!from && from.nodeId === source && to?.nodeId === target && (typeof from.port === "string" && from.port ? from.port : "Done") === port;
 }
 
-function createFinalNodeId(value: string, knownIds: Set<string>) {
-  const base = value
-    .replace(/^temp:/, "")
-    .replace(/[^a-zA-Z0-9_-]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .toLowerCase() || "weaver-activity";
-  let next = base;
-  let index = 2;
-  while (knownIds.has(next)) {
-    next = `${base}-${index}`;
-    index += 1;
-  }
-  knownIds.add(next);
-  return next;
+function upsertLayout(layout: DesignMetadataRecord[], nodeId: string, point: FrozenPoint) {
+  // The designer's own convention for authored positions: whole pixels, kept clear of the canvas edge.
+  const x = Math.max(40, Math.round(point.x));
+  const y = Math.max(40, Math.round(point.y));
+  return layout.some(record => record.nodeId === nodeId)
+    ? layout.map(record => record.nodeId === nodeId ? { ...record, x, y } : record)
+    : [...layout, { nodeId, x, y }];
 }
 
-function normalizeOperationKind(kind: string | number) {
-  if (typeof kind === "number") return operationKinds[kind] ?? "";
-  return kind.replace(/([a-z0-9])([A-Z])/g, "$1-$2").toLowerCase();
+function exactKeys(index: number | null, value: Record<string, unknown>, keys: string[]) {
+  const unknown = Object.keys(value).filter(key => !keys.includes(key));
+  if (unknown.length) throw new WorkflowBatchRefusal(index, `Unknown field(s) ${unknown.map(key => `'${key}'`).join(", ")}.`);
+  const missing = keys.filter(key => !Object.prototype.hasOwnProperty.call(value, key));
+  if (missing.length) throw new WorkflowBatchRefusal(index, `Missing field(s) ${missing.map(key => `'${key}'`).join(", ")}.`);
 }
 
-function readString(value: unknown) {
-  return typeof value === "string" && value.trim() ? value : null;
+function isRisk(value: unknown): value is WorkflowOperationRisk {
+  return value === "reviewRequired" || value === "destructive";
+}
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function clone<T>(value: T): T {
-  return typeof structuredClone === "function"
-    ? structuredClone(value)
-    : JSON.parse(JSON.stringify(value)) as T;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
+  return typeof structuredClone === "function" ? structuredClone(value) : JSON.parse(JSON.stringify(value)) as T;
 }

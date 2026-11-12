@@ -12,6 +12,7 @@ export async function readVisibleActivityExecutions(context: StudioEndpointConte
   const observations: ActivityExecutionBrowseEntry[] = [];
   let repeated = false;
   let failed = false;
+  let denied = false;
   let index = 0;
   const worker = async () => {
     while (index < nodes.length && !signal.aborted) {
@@ -26,11 +27,15 @@ export async function readVisibleActivityExecutions(context: StudioEndpointConte
           && execution?.workflowExecutionId === workflowExecutionId && execution.executableNodeId === node) {
           activities.push(execution); observations.push(page.items[0]);
         }
-      } catch { failed = true; }
+      } catch (error) {
+        failed = true;
+        const status = typeof error === "object" && error !== null && "status" in error ? Number(error.status) : 0;
+        if (status === 401 || status === 403 || status === 404) denied = true;
+      }
     }
   };
   await Promise.all(Array.from({ length: Math.min(4, nodes.length) }, worker));
-  return { activities, observations, repeated, failed };
+  return { activities, observations, repeated, failed, denied };
 }
 
 /** Refreshes a visible scope without replacing the pinned graph, selected occurrence or confirmed batch. */

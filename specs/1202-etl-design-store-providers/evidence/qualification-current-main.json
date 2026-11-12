@@ -1,0 +1,287 @@
+{
+  "schemaVersion": 1,
+  "sourceAtCapture": "0ab14a527f02fb7c94da2488b666a3744884e1ff",
+  "batches": [
+    {
+      "sourceRevision": "3ba54f45fc0265661e5e4c3737e47d40dc3e677e",
+      "results": [
+        {
+          "name": "etl",
+          "command": [
+            "dotnet",
+            "test",
+            "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
+            "-c",
+            "Release",
+            "-p:RestoreLockedMode=true",
+            "--logger",
+            "trx;LogFileName=etl.trx",
+            "--results-directory",
+            "<owned-results>"
+          ],
+          "exitCode": 0,
+          "logSha256": "848920d516cc7b85c674a35d616cf72120a6ee6557e004a2bcc33b2588f0c5ac",
+          "counters": {
+            "total": "1323",
+            "executed": "1323",
+            "passed": "1323",
+            "failed": "0",
+            "error": "0",
+            "timeout": "0",
+            "aborted": "0",
+            "inconclusive": "0",
+            "passedButRunAborted": "0",
+            "notRunnable": "0",
+            "notExecuted": "0",
+            "disconnected": "0",
+            "warning": "0",
+            "completed": "0",
+            "inProgress": "0",
+            "pending": "0"
+          },
+          "trxSha256": "626e61ead4ff77565aa64942efc6a570ada496a3df4c226539b8547ef576a146"
+        },
+        {
+          "name": "provider",
+          "command": [
+            "dotnet",
+            "test",
+            "Extensions/Etl/tests/Persistence/ProviderTests/Elsa.Etl.Persistence.ProviderTests.csproj",
+            "-c",
+            "Release",
+            "-p:RestoreLockedMode=true",
+            "--logger",
+            "trx;LogFileName=provider.trx",
+            "--results-directory",
+            "<owned-results>"
+          ],
+          "exitCode": 1,
+          "logSha256": "f29e8293adaae79f0292b985475aa54eb7614e0d614218f3d3d5cfb92ce5db1f"
+        }
+      ]
+    },
+    {
+      "sourceRevision": "0ab14a527f02fb7c94da2488b666a3744884e1ff",
+      "results": [
+        {
+          "name": "provider",
+          "command": [
+            "dotnet",
+            "test",
+            "Extensions/Etl/tests/Persistence/ProviderTests/Elsa.Etl.Persistence.ProviderTests.csproj",
+            "-c",
+            "Release",
+            "-p:RestoreLockedMode=true",
+            "--logger",
+            "trx;LogFileName=provider.trx",
+            "--results-directory",
+            "<owned-results>"
+          ],
+          "exitCode": 0,
+          "logSha256": "6c27e16e312fffcad5a1f6b0d08797eadb174310e3c59ee1b189b3d9f10c0934",
+          "counters": {
+            "total": "105",
+            "executed": "105",
+            "passed": "105",
+            "failed": "0",
+            "error": "0",
+            "timeout": "0",
+            "aborted": "0",
+            "inconclusive": "0",
+            "passedButRunAborted": "0",
+            "notRunnable": "0",
+            "notExecuted": "0",
+            "disconnected": "0",
+            "warning": "0",
+            "completed": "0",
+            "inProgress": "0",
+            "pending": "0"
+          },
+          "trxSha256": "5d508ac19a658ff7d1e010d6fad981a1a1ecd5ce1b2e08b6245072fae2cad856"
+        },
+        {
+          "name": "graph-restore",
+          "command": [
+            "bash",
+            "tools/architecture/restore-ci-project-graph.sh"
+          ],
+          "exitCode": 0,
+          "logSha256": "1019ea89719ab042d3c8a6c38c1cd315d28f8f335db612a1dba2abcce657b6b6"
+        },
+        {
+          "name": "architecture",
+          "command": [
+            "dotnet",
+            "test",
+            "Essentials/tests/Architecture/Tests/Elsa.Architecture.Tests.csproj",
+            "-c",
+            "Release",
+            "--no-restore",
+            "--logger",
+            "trx;LogFileName=architecture.trx",
+            "--results-directory",
+            "<owned-results>"
+          ],
+          "exitCode": 0,
+          "logSha256": "1eeb2bc3d556a7f90a3ef80bc1fe8b567aad5a66b8d8cb407c63d9c898c30eb2",
+          "counters": {
+            "total": "616",
+            "executed": "616",
+            "passed": "616",
+            "failed": "0",
+            "error": "0",
+            "timeout": "0",
+            "aborted": "0",
+            "inconclusive": "0",
+            "passedButRunAborted": "0",
+            "notRunnable": "0",
+            "notExecuted": "0",
+            "disconnected": "0",
+            "warning": "0",
+            "completed": "0",
+            "inProgress": "0",
+            "pending": "0"
+          },
+          "trxSha256": "a5dff93744d81eebcaf9e67c667bf775bd20e18308ef4b2c4380a32a5e38ab88"
+        },
+        {
+          "name": "filters",
+          "command": [
+            "dotnet",
+            "run",
+            "--project",
+            "tools/maps/Elsa.Maps.Generator",
+            "-c",
+            "Release",
+            "--",
+            "solution-filters-check"
+          ],
+          "exitCode": 0,
+          "logSha256": "086dadebd679cb9119d00d85007e41289b11075ffd6e9370507513b906924e04"
+        },
+        {
+          "name": "tiers",
+          "command": [
+            "dotnet",
+            "run",
+            "--project",
+            "tools/maps/Elsa.Maps.Generator",
+            "-c",
+            "Release",
+            "--",
+            "test-tiers-check"
+          ],
+          "exitCode": 0,
+          "logSha256": "b7e312ef443f508c72a46576534db3b96919f26b8567d3c32a384b2864c300ae"
+        }
+      ]
+    }
+  ],
+  "restoreCorrections": {
+    "providerFailure": "NU1004 before provider discovery: main added Elsa.Persistence.Core to common EF dependencies.",
+    "providerChange": "Four project-reference lock lines, no external version change; locked restore retained.",
+    "toolingChange": "Graph restore regenerated the same four inherited project-reference lines in Tooling; its locked restore also passes. No production source changed during the batch.",
+    "toolingLockSha256": "cf083f1f8fa0ae2b8f0856a241c82757d9754e66713df64945a9e2c00ca8346d",
+    "toolingLockedRestoreLogSha256": "e53fb13b1f0a4ec3b18125f66939557ad522bf41e257e69e1ae0ffd8aa500979",
+    "unchangedEtlSuiteReused": true
+  },
+  "actualHosts": {
+    "harnessSource": "3ba54f45fc0265661e5e4c3737e47d40dc3e677e",
+    "productSource": "1b6f07946710bcf5e35db2843904c5f60c494245",
+    "checks": 18,
+    "passed": true,
+    "summarySha256": "de10211011570249df7357af806af33599e8dc572f71879170a4c606bb997028"
+  },
+  "pending": [
+    "Full independent review round10",
+    "Fresh required checks on final reviewed head",
+    "Existing GitGuardian incident triage",
+    "Base-first protected merge and resulting-main verification"
+  ],
+  "postMainIntegration": {
+    "main": "c0b61d8731de3266d14928e8b1624a31c386184d",
+    "mergedAt": "73d5db42752e40ec7a8e3d37cdd8e3f9fc32d2a5",
+    "providerAndArchitectureInvocationBase": "73d5db42752e40ec7a8e3d37cdd8e3f9fc32d2a5",
+    "workingTreeDirtyDuringQualification": true,
+    "executingFiles": {
+      "Extensions/Etl/tests/Persistence/ProviderTests/EtlProviderDesignDatabase.cs": "51c55676d0f1844a62bedfcd711e7223a921c778b364cc88fa93cf7f1e4e383d",
+      "Extensions/Etl/tests/Persistence/ProviderTests/EtlDesignDatabaseInitializationTests.cs": "cee3b3af5e87a95ccb7cb9b7be5fae7cbd3a01caca19f40f18b9c81f6c9e9cc2",
+      "specs/1202-etl-design-store-providers/evidence/design_store_workbench_journey.py": "daef0e97f3f6b4698b108e711f98c5e634c7964b10154ec39262e08380deda34",
+      "specs/1202-etl-design-store-providers/evidence/test_design_store_workbench_journey.py": "cd47e6fb2a9c866d57682d93ec405d8f0b5ad5665f09a613909be420fbf07178"
+    },
+    "committedEquivalentSource": "7462b02e26606117b4e228c98b6fecbd5e0e8d83",
+    "results": [
+      {
+        "name": "provider",
+        "exitCode": 0,
+        "logSha256": "ddeaa6ca44f3fb7f1eedc6dbd6290a659f7dd570993ea66b88ff01a9536a7352"
+      },
+      {
+        "name": "graph",
+        "exitCode": 0,
+        "logSha256": "a3098abeffd7fc09e0bace3100906ca187c89c4fc62eefcecfb063385c4d7c02"
+      },
+      {
+        "name": "architecture",
+        "exitCode": 0,
+        "logSha256": "c54732b6a617628746ecf88e69ea1f766cc311f54bfec19f80effe8e6c0f5ce2"
+      },
+      {
+        "name": "filters",
+        "exitCode": 0,
+        "logSha256": "086dadebd679cb9119d00d85007e41289b11075ffd6e9370507513b906924e04"
+      },
+      {
+        "name": "tiers",
+        "exitCode": 0,
+        "logSha256": "b7e312ef443f508c72a46576534db3b96919f26b8567d3c32a384b2864c300ae"
+      }
+    ],
+    "counters": {
+      "provider": {
+        "total": "108",
+        "executed": "108",
+        "passed": "108",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "architecture": {
+        "total": "616",
+        "executed": "616",
+        "passed": "616",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      }
+    },
+    "correctedControllerHost": {
+      "source": "7462b02e26606117b4e228c98b6fecbd5e0e8d83",
+      "productSource": "73d5db42752e40ec7a8e3d37cdd8e3f9fc32d2a5",
+      "checks": 18,
+      "passed": true,
+      "summarySha256": "89f87eeab21d0e0dac366dc8ae536bb2d2b8d5f2bce46e6eafef2f095dcf0fe6"
+    },
+    "reusedEtl": "1323/1323 at original3ba54f source; no ETL production change in later fixture/controller/comment-only corrections."
+  }
+}

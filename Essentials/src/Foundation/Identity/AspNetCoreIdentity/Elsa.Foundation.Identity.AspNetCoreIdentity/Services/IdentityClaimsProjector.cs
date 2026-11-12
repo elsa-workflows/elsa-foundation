@@ -23,9 +23,16 @@ internal static class IdentityClaimsProjector
         foreach (var marker in identity.FindAll(IdentityClaimTypes.Normalized).ToArray())
             identity.RemoveClaim(marker);
 
-        AddIfMissing(identity, ClaimTypes.NameIdentifier, user.Id);
-        AddIfMissing(identity, "sub", user.Id);
-        AddIfMissing(identity, IdentityClaimTypes.TenantId, user.TenantId);
+        // The canonical Elsa user replaces anything an incoming principal claimed as its identity: the user id,
+        // the subject (NameIdentifier and sub) and the tenant. Appending after a provider's own NameIdentifier would
+        // leave the provider's subject first, so tokens would be issued and revoked under a provider's sub (#2848).
+        Replace(identity, IdentityClaimTypes.UserId, user.Id);
+        Replace(identity, ClaimTypes.NameIdentifier, user.Id);
+        Replace(identity, "sub", user.Id);
+        Replace(identity, IdentityClaimTypes.TenantId, user.TenantId);
+        // An Elsa user is keyed by its id, never by a provider's subject, so no subject provider may ride along.
+        foreach (var subjectProvider in identity.FindAll(IdentityClaimTypes.SubjectProvider).ToArray())
+            identity.RemoveClaim(subjectProvider);
 
         if (!string.IsNullOrWhiteSpace(user.DisplayName))
             AddIfMissing(identity, ClaimTypes.Name, user.DisplayName);
@@ -76,5 +83,13 @@ internal static class IdentityClaimsProjector
     {
         if (!identity.HasClaim(type, value))
             identity.AddClaim(new Claim(type, value));
+    }
+
+    /// <summary>Leaves exactly one claim of <paramref name="type"/>, carrying <paramref name="value"/>.</summary>
+    private static void Replace(ClaimsIdentity identity, string type, string value)
+    {
+        foreach (var claim in identity.FindAll(type).ToArray())
+            identity.RemoveClaim(claim);
+        identity.AddClaim(new Claim(type, value));
     }
 }

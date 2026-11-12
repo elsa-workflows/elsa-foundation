@@ -1,0 +1,652 @@
+{
+  "status": "passed",
+  "source": "76ec58d0061135cfa028e1bc47ec7639fd139e7f",
+  "baseMain": "a01980064aed293502b9ada57a682286d950c7fd",
+  "version": "4.0.0-weaver3438.20261031.8",
+  "evidenceCategory": "deterministic-provider-protocol",
+  "liveProvider": false,
+  "independentPackageWitness": true,
+  "qualificationReportSha256": "7dd769bf6cfeb109f0019c4e080c7cd126e5767c5474c57fd3106c1afb233760",
+  "producerPackages": 80,
+  "stages": {
+    "completed": 135,
+    "nonzeroExit": 0
+  },
+  "sdkArchiveSha256": "2232f21ca4423ca371b0616e0cb83df497f4b797d4716b8ea9fe82db19ed8943",
+  "authors": {
+    "protocol": {
+      "id": "Acme.Weaver.ProtocolFixtures",
+      "version": "1.0.0-witness.76ec58d0",
+      "sha256": "c3ae60d643dfbc303929a9baa06dde0f341749062869f37e6169ebcaa7c9b83d"
+    },
+    "backend": {
+      "id": "Acme.Home.Weaver",
+      "version": "1.0.0-witness.76ec58d0",
+      "sha256": "bcf8204cfab60f812f9713ad1b5975207230a55318215fe270b4011b2dd84975"
+    },
+    "studio": {
+      "id": "Acme.Home.Studio",
+      "version": "1.0.0-witness.76ec58d0",
+      "sha256": "590ce2682a801c9ec71b98bffeb7e08a9f1487767367ff4fa141b4ff5006a985"
+    },
+    "incompatibleStudio": {
+      "id": "Acme.Home.Studio",
+      "version": "1.0.0-witness.76ec58d0.incompatible",
+      "sha256": "9f6c4fca1b53549b0fec9dc9713b606adbedf61e7651f5cf5eb48c78548b81ac"
+    }
+  },
+  "consumers": {
+    "backend": {
+      "commonFileCount": 155,
+      "commonFilesUnchanged": true,
+      "sourceReferences": [],
+      "frontendInvocations": 0,
+      "lockSha256": "d4a46b837299a808e5894d8ae25b0ca7137a5e7a690fa2ce89cf437bfddaff71"
+    },
+    "studio": {
+      "commonFileCount": 10108,
+      "commonFilesUnchanged": true,
+      "sourceReferences": [],
+      "frontendInvocations": 0,
+      "lockSha256": "a7e7bc5e1e72caa93d3d2d2a4071aa66b5d5659569d5e3a11cd62f47623d06f0"
+    }
+  },
+  "cases": [
+    {
+      "id": "module-missing",
+      "status": "failed",
+      "receiptSha256": "e062f1d8abb4ef7cc845773f22180e03fcc2ecf73bad72efdf41fa3906a6c2ec",
+      "observations": {
+        "ownerObserved": true,
+        "noFalseSuccess": true,
+        "noReplay": true
+      },
+      "ownerBeforeSha256": "c89a564a645244b91582c37511ed321a6dedbd0f8928f697e03ef4867957b792",
+      "ownerAfterSha256": "c89a564a645244b91582c37511ed321a6dedbd0f8928f697e03ef4867957b792",
+      "expectedFailureObserved": true,
+      "stage": "message",
+      "diagnostic": "agent.policyDenied: No installed module contributes the requested capability."
+    },
+    {
+      "id": "module-add",
+      "status": "passed",
+      "receiptSha256": "3db40537e5e868d147369c0540800657306046bb69df739416900e8e854a7c26",
+      "observations": {
+        "membership": true,
+        "servingGeneration": true,
+        "contributions": true
+      },
+      "ownerBeforeSha256": "c89a564a645244b91582c37511ed321a6dedbd0f8928f697e03ef4867957b792",
+      "ownerAfterSha256": "c89a564a645244b91582c37511ed321a6dedbd0f8928f697e03ef4867957b792"
+    },
+    {
+      "id": "resource-copilot",
+      "status": "passed",
+      "receiptSha256": "b43528437d7d0a9eef6d1c0325486803efbc9e6df893ad60d5444d8b34992167",
+      "observations": {
+        "context": true,
+        "read": true,
+        "review": true,
+        "ownerReadback": true,
+        "unrelatedPreserved": true,
+        "homeReload": true,
+        "actualAdapter": true
+      },
+      "ownerBeforeSha256": "300bb71ca85c45b81d4c11cf1169983022c36a60213e1a2e61191499cc3e9cc4",
+      "ownerAfterSha256": "4f9466a884f55f182c2493c32ba73dae73f59fc392bad7fb7e204ff79877a36d"
+    },
+    {
+      "id": "workflow-copilot",
+      "status": "passed",
+      "receiptSha256": "2f767c951b4277a7ce21b9f5beaa1825f3d5ea2d144b18b614cf9dc33e6cf6de",
+      "observations": {
+        "workingStateChanged": true,
+        "noImplicitSave": true,
+        "wholeUndo": true,
+        "validated": true,
+        "explicitSaveReadback": true,
+        "actualAdapter": true
+      },
+      "ownerBeforeSha256": "d8400ddbef2107d237cee2b455bbf5710b319c9cc3d7c182abbda7bc85826fdb",
+      "ownerAfterSha256": "1984521b4b77874d9dae13016ea3c21ccf398a46c02bde33fcae6cf612bc601d"
+    },
+    {
+      "id": "resource-anthropic",
+      "status": "passed",
+      "receiptSha256": "d204e75dcd81d1932606a974871f57df2706926ef55abf78ffbaf16fd2bd1802",
+      "observations": {
+        "context": true,
+        "read": true,
+        "review": true,
+        "ownerReadback": true,
+        "unrelatedPreserved": true,
+        "homeReload": true,
+        "actualAdapter": true
+      },
+      "ownerBeforeSha256": "4f9466a884f55f182c2493c32ba73dae73f59fc392bad7fb7e204ff79877a36d",
+      "ownerAfterSha256": "8e12d084f9229552a66ab98274606d1153622f28f0dd5233788eb252dec12551"
+    },
+    {
+      "id": "workflow-anthropic",
+      "status": "passed",
+      "receiptSha256": "af017b7d7aec766fb157c6d15948a45ca7ce4ab24e39edc659eaf7f3f9b1cde6",
+      "observations": {
+        "workingStateChanged": true,
+        "noImplicitSave": true,
+        "wholeUndo": true,
+        "validated": true,
+        "explicitSaveReadback": true,
+        "actualAdapter": true
+      },
+      "ownerBeforeSha256": "936379bf35730cea863bec92c4b9361f56ba42af04169dc770d72de606289e22",
+      "ownerAfterSha256": "a58ea02c083bc9c65a8f07a9e648f4f9cf019e547b2ad6c536afb48b6c06fbf3"
+    },
+    {
+      "id": "duplicate-execute",
+      "status": "passed",
+      "receiptSha256": "7672c655eeb2b15e906ffa93f825271038c4411e023564567ba3e35c99c4419c",
+      "observations": {
+        "retainedResult": true,
+        "oneMutation": true,
+        "actualAdapter": true
+      },
+      "ownerBeforeSha256": "8e12d084f9229552a66ab98274606d1153622f28f0dd5233788eb252dec12551",
+      "ownerAfterSha256": "c44976b29032439e3bcdeedca56c23e33342d1cb577a62ccd202ea1520df3d1e"
+    },
+    {
+      "id": "duplicate-ack",
+      "status": "passed",
+      "receiptSha256": "3281e0895fd5e908515c16cafe51b2ea51b7409fb1d61cd4dea80f5a4ce7d935",
+      "observations": {
+        "retainedResult": true,
+        "oneMutation": true,
+        "actualAdapter": true
+      },
+      "ownerBeforeSha256": "979e0bfe7d3fbfed05476a688ab19183f8e4efee05359932e27f641c9ff4a36a",
+      "ownerAfterSha256": "979e0bfe7d3fbfed05476a688ab19183f8e4efee05359932e27f641c9ff4a36a"
+    },
+    {
+      "id": "renderer-unavailable",
+      "status": "passed",
+      "receiptSha256": "d1cc20799e580c5df257ad185abb02274ed9dabe130b20567e84a9d87472fd03",
+      "observations": {
+        "safeGenericPresentation": true,
+        "commonControls": true,
+        "ownerObserved": true,
+        "actualAdapter": true
+      },
+      "ownerBeforeSha256": "ca4a6d0fe2623f69c5f9e92768aae3f118ca7086ebbb689159d1a5baef3adb58",
+      "ownerAfterSha256": "ca4a6d0fe2623f69c5f9e92768aae3f118ca7086ebbb689159d1a5baef3adb58"
+    },
+    {
+      "id": "consumed-intent-remount",
+      "status": "passed",
+      "receiptSha256": "2326c8b51150b03c1ba37c21fc5ba66b02f7a0d17150035703c77360110c5d16",
+      "observations": {
+        "nativeReconciliation": true,
+        "noResubmission": true,
+        "actualAdapter": true
+      },
+      "ownerBeforeSha256": "c44976b29032439e3bcdeedca56c23e33342d1cb577a62ccd202ea1520df3d1e",
+      "ownerAfterSha256": "c44976b29032439e3bcdeedca56c23e33342d1cb577a62ccd202ea1520df3d1e"
+    },
+    {
+      "id": "malformed-result",
+      "status": "failed",
+      "receiptSha256": "645755d3df3e0a0dd7ead3db7eeefa3f29802318c1b94da86db1d62b1bda30f1",
+      "observations": {
+        "workingStateChanged": true,
+        "noImplicitSave": true,
+        "ownerObserved": true,
+        "noFalseSuccess": true,
+        "noReplay": true,
+        "actualLocalApply": true,
+        "exactSchemaMutation": true
+      },
+      "ownerBeforeSha256": "73fe5cdc044674493935993d3eca57806cffc62f0c66a38c03209e9d5cebe7be",
+      "ownerAfterSha256": "73fe5cdc044674493935993d3eca57806cffc62f0c66a38c03209e9d5cebe7be",
+      "expectedFailureObserved": true,
+      "stage": "client-acknowledgement",
+      "diagnostic": "The reported client effect did not validate against the exact prepared operation. Its outcome is uncertain and will not be replayed."
+    },
+    {
+      "id": "lost-confirmation",
+      "status": "failed",
+      "receiptSha256": "fd9540712993ca1e0e8f1bb7dcfb65744b36571b7c3ef0c25bda6ca12d9c5b21",
+      "observations": {
+        "workingStateChanged": true,
+        "noImplicitSave": true,
+        "ownerObserved": true,
+        "noFalseSuccess": true,
+        "noReplay": true,
+        "responseLost": true,
+        "uncertain": true,
+        "sameAcknowledgement": true,
+        "sameInvocation": true,
+        "retainedResult": true,
+        "wholeUndo": true
+      },
+      "ownerBeforeSha256": "a6a2897a9a17fa740835b448a38530166e2422ce188026d2f794fb6bd485e081",
+      "ownerAfterSha256": "a6a2897a9a17fa740835b448a38530166e2422ce188026d2f794fb6bd485e081",
+      "expectedFailureObserved": true,
+      "stage": "client-confirmation-delivery",
+      "diagnostic": "net::ERR_FAILED"
+    },
+    {
+      "id": "client-binding-removed",
+      "status": "failed",
+      "receiptSha256": "86a85eba9684fa82394af63170bfdd878e164ca398ecfff1d05054b51e7631f2",
+      "observations": {
+        "ownerObserved": true,
+        "noFalseSuccess": true,
+        "noReplay": true
+      },
+      "ownerBeforeSha256": "067c6abd02b07f2888729a3a1858f4c6ce5e9500907c2e7a8638e303ba375dcb",
+      "ownerAfterSha256": "067c6abd02b07f2888729a3a1858f4c6ce5e9500907c2e7a8638e303ba375dcb",
+      "expectedFailureObserved": true,
+      "stage": "client-execution",
+      "diagnostic": "The originating workflow editor is unavailable."
+    },
+    {
+      "id": "foreign-scope",
+      "status": "failed",
+      "receiptSha256": "a255ac841e18443a6b162f9d3fa4b7d27843c12afe4c4631d94cd0340b56fb37",
+      "observations": {
+        "ownerObserved": true,
+        "noFalseSuccess": true,
+        "noReplay": true
+      },
+      "ownerBeforeSha256": "4e15dc308ce726e7ac9e32ec654a004aacf550488e90043622f7430ce3f19dba",
+      "ownerAfterSha256": "4e15dc308ce726e7ac9e32ec654a004aacf550488e90043622f7430ce3f19dba",
+      "expectedFailureObserved": true,
+      "stage": "context-admission",
+      "diagnostic": "agent.context.incomplete: Only a current Acme status card reference is supported."
+    },
+    {
+      "id": "malformed-scope",
+      "status": "failed",
+      "receiptSha256": "6bc1e451758d8abab53c8ddd39cc941aced189c0501532108f946e8f1b1441ae",
+      "observations": {
+        "ownerObserved": true,
+        "noFalseSuccess": true,
+        "noReplay": true
+      },
+      "ownerBeforeSha256": "4e15dc308ce726e7ac9e32ec654a004aacf550488e90043622f7430ce3f19dba",
+      "ownerAfterSha256": "4e15dc308ce726e7ac9e32ec654a004aacf550488e90043622f7430ce3f19dba",
+      "expectedFailureObserved": true,
+      "stage": "context-admission",
+      "diagnostic": "agent.context.incomplete: Only a current Acme status card reference is supported."
+    },
+    {
+      "id": "invalid-schema",
+      "status": "failed",
+      "receiptSha256": "64fa9b700f5ae54adc55075b500ea69780a4f5343aff81ce33bcf317e02fd178",
+      "observations": {
+        "ownerObserved": true,
+        "noFalseSuccess": true,
+        "noReplay": true
+      },
+      "ownerBeforeSha256": "4e15dc308ce726e7ac9e32ec654a004aacf550488e90043622f7430ce3f19dba",
+      "ownerAfterSha256": "4e15dc308ce726e7ac9e32ec654a004aacf550488e90043622f7430ce3f19dba",
+      "expectedFailureObserved": true,
+      "stage": "context-admission",
+      "diagnostic": "agent.context.incomplete: The installed module does not support this context schema version."
+    },
+    {
+      "id": "malformed-arguments",
+      "status": "failed",
+      "receiptSha256": "dbdc92db6539bb89dee391e047feb6bd860113908537664d3b4c5f2e7a962f6d",
+      "observations": {
+        "ownerObserved": true,
+        "noFalseSuccess": true,
+        "noReplay": true
+      },
+      "ownerBeforeSha256": "4e15dc308ce726e7ac9e32ec654a004aacf550488e90043622f7430ce3f19dba",
+      "ownerAfterSha256": "4e15dc308ce726e7ac9e32ec654a004aacf550488e90043622f7430ce3f19dba",
+      "expectedFailureObserved": true,
+      "stage": "tool-preparation",
+      "diagnostic": "acme.home.arguments_invalid"
+    },
+    {
+      "id": "no-op-resource",
+      "status": "failed",
+      "receiptSha256": "8cd09856a62738f4d626b35210f9ff2c71eee5c1d0cd6c6a91a30e37078328c1",
+      "observations": {
+        "ownerObserved": true,
+        "noFalseSuccess": true,
+        "noReplay": true
+      },
+      "ownerBeforeSha256": "4e15dc308ce726e7ac9e32ec654a004aacf550488e90043622f7430ce3f19dba",
+      "ownerAfterSha256": "4e15dc308ce726e7ac9e32ec654a004aacf550488e90043622f7430ce3f19dba",
+      "expectedFailureObserved": true,
+      "stage": "tool-preparation",
+      "diagnostic": "acme.home.noop"
+    },
+    {
+      "id": "missing-resource",
+      "status": "failed",
+      "receiptSha256": "a62e5d024fc3c0ecd1b9a8610752ebdf1de4429ee9dcc969f28eebcce0e8019a",
+      "observations": {
+        "ownerObserved": true,
+        "noFalseSuccess": true,
+        "noReplay": true
+      },
+      "ownerBeforeSha256": "b6c95d310860f756fc13e292f39f2cb0e3c4a3e87f0c3eea4a1c2d382fc0b17d",
+      "ownerAfterSha256": "b6c95d310860f756fc13e292f39f2cb0e3c4a3e87f0c3eea4a1c2d382fc0b17d",
+      "expectedFailureObserved": true,
+      "stage": "context-admission",
+      "diagnostic": "agent.context.incomplete: The Acme status card is absent from the personal Home layout."
+    },
+    {
+      "id": "default-resource",
+      "status": "failed",
+      "receiptSha256": "987ddcd893d3965168a0a81127f3e999f56658963d9c9fa3fe984ae881637e67",
+      "observations": {
+        "ownerObserved": true,
+        "noFalseSuccess": true,
+        "noReplay": true
+      },
+      "ownerBeforeSha256": "29142009385072b0beabcc6020a9e5b9e2d07317b9c69aaa6dfeb1ce7e80790f",
+      "ownerAfterSha256": "29142009385072b0beabcc6020a9e5b9e2d07317b9c69aaa6dfeb1ce7e80790f",
+      "expectedFailureObserved": true,
+      "stage": "context-admission",
+      "diagnostic": "agent.context.incomplete: Create a personal Home layout before using this widget."
+    },
+    {
+      "id": "read-denied",
+      "status": "failed",
+      "receiptSha256": "7e19e431697b4ef4f2e539b94e0fa30b2b5c133eb4c7267db65c1b092417c7bf",
+      "observations": {
+        "ownerObserved": true,
+        "noFalseSuccess": true,
+        "noReplay": true
+      },
+      "ownerBeforeSha256": "51c48aa415e30bbfa7f9e55b57363f4dfb57d17f79a5c6d2448e2142e5a4f686",
+      "ownerAfterSha256": "51c48aa415e30bbfa7f9e55b57363f4dfb57d17f79a5c6d2448e2142e5a4f686",
+      "expectedFailureObserved": true,
+      "stage": "execute",
+      "diagnostic": "agent.proposal.forbidden"
+    },
+    {
+      "id": "write-denied",
+      "status": "failed",
+      "receiptSha256": "6317daee515ac3aaf200af6cba42fb6d7657268cf0f652414a4d06a505595e8e",
+      "observations": {
+        "ownerObserved": true,
+        "noFalseSuccess": true,
+        "noReplay": true
+      },
+      "ownerBeforeSha256": "51c48aa415e30bbfa7f9e55b57363f4dfb57d17f79a5c6d2448e2142e5a4f686",
+      "ownerAfterSha256": "51c48aa415e30bbfa7f9e55b57363f4dfb57d17f79a5c6d2448e2142e5a4f686",
+      "expectedFailureObserved": true,
+      "stage": "execute",
+      "diagnostic": "agent.proposal.forbidden"
+    },
+    {
+      "id": "cross-user",
+      "status": "failed",
+      "receiptSha256": "91da06f281e7651ae31b17909f9d82be808b857d3eb0b31175b3552b79c04b6b",
+      "observations": {
+        "ownerObserved": true,
+        "noFalseSuccess": true,
+        "noReplay": true
+      },
+      "ownerBeforeSha256": "51c48aa415e30bbfa7f9e55b57363f4dfb57d17f79a5c6d2448e2142e5a4f686",
+      "ownerAfterSha256": "51c48aa415e30bbfa7f9e55b57363f4dfb57d17f79a5c6d2448e2142e5a4f686",
+      "expectedFailureObserved": true,
+      "stage": "execute",
+      "diagnostic": "agent.proposal.forbidden"
+    },
+    {
+      "id": "cross-tenant",
+      "status": "failed",
+      "receiptSha256": "a447cf7d9ed549130e71a7ff0e07d50c2a9c0b5d8dc8c04bd693063c9b744af5",
+      "observations": {
+        "ownerObserved": true,
+        "noFalseSuccess": true,
+        "noReplay": true
+      },
+      "ownerBeforeSha256": "51c48aa415e30bbfa7f9e55b57363f4dfb57d17f79a5c6d2448e2142e5a4f686",
+      "ownerAfterSha256": "51c48aa415e30bbfa7f9e55b57363f4dfb57d17f79a5c6d2448e2142e5a4f686",
+      "expectedFailureObserved": true,
+      "stage": "execute",
+      "diagnostic": "agent.proposal.forbidden"
+    },
+    {
+      "id": "cross-host",
+      "status": "failed",
+      "receiptSha256": "361bf79fc29babdf8d37e7d7896a84c5694734528b7cb1b4b59da18a5db1fe84",
+      "observations": {
+        "ownerObserved": true,
+        "noFalseSuccess": true,
+        "noReplay": true
+      },
+      "ownerBeforeSha256": "4e15dc308ce726e7ac9e32ec654a004aacf550488e90043622f7430ce3f19dba",
+      "ownerAfterSha256": "4e15dc308ce726e7ac9e32ec654a004aacf550488e90043622f7430ce3f19dba",
+      "expectedFailureObserved": true,
+      "stage": "execute",
+      "diagnostic": "acme.home.host_denied"
+    },
+    {
+      "id": "stale-revision",
+      "status": "failed",
+      "receiptSha256": "5716d0d5d4852acbad2a96a56784f165f87b180d83f81b4254ffe1849f53bd27",
+      "observations": {
+        "ownerObserved": true,
+        "noFalseSuccess": true,
+        "noReplay": true
+      },
+      "ownerBeforeSha256": "7c7d8c6d4ea6cdd3e900e8177afc7e56579ebc38ca7208c0c1b926d1c957af19",
+      "ownerAfterSha256": "7c7d8c6d4ea6cdd3e900e8177afc7e56579ebc38ca7208c0c1b926d1c957af19",
+      "expectedFailureObserved": true,
+      "stage": "execute",
+      "diagnostic": "acme.home.stale"
+    },
+    {
+      "id": "deny-before-effect",
+      "status": "failed",
+      "receiptSha256": "01ece8afecc8abb79690b4dae3ab49198c47de4edb19e68a73532231ec4d2cb3",
+      "observations": {
+        "ownerObserved": true,
+        "noFalseSuccess": true,
+        "noReplay": true
+      },
+      "ownerBeforeSha256": "7c7d8c6d4ea6cdd3e900e8177afc7e56579ebc38ca7208c0c1b926d1c957af19",
+      "ownerAfterSha256": "7c7d8c6d4ea6cdd3e900e8177afc7e56579ebc38ca7208c0c1b926d1c957af19",
+      "expectedFailureObserved": true,
+      "stage": "review",
+      "diagnostic": "denied"
+    },
+    {
+      "id": "cancel-before-effect",
+      "status": "failed",
+      "receiptSha256": "7ccc672661fdc8c42456a30e192a1e9f0aa1f4d891ae0e121940031ddf340467",
+      "observations": {
+        "ownerObserved": true,
+        "noFalseSuccess": true,
+        "noReplay": true
+      },
+      "ownerBeforeSha256": "7c7d8c6d4ea6cdd3e900e8177afc7e56579ebc38ca7208c0c1b926d1c957af19",
+      "ownerAfterSha256": "7c7d8c6d4ea6cdd3e900e8177afc7e56579ebc38ca7208c0c1b926d1c957af19",
+      "expectedFailureObserved": true,
+      "stage": "native-turn-cancellation",
+      "diagnostic": "turnCancelled"
+    },
+    {
+      "id": "redaction-opacity",
+      "status": "passed",
+      "receiptSha256": "5bbe3d346f0d49ac752b69d8fbd8c11159904553a6c78c7493a856be70e7ca0d",
+      "observations": {
+        "canariesOmitted": true,
+        "unrelatedPreserved": true,
+        "opaqueCommonPayloads": true,
+        "separateProtocolFixture": true
+      },
+      "ownerBeforeSha256": "7c7d8c6d4ea6cdd3e900e8177afc7e56579ebc38ca7208c0c1b926d1c957af19",
+      "ownerAfterSha256": "7c7d8c6d4ea6cdd3e900e8177afc7e56579ebc38ca7208c0c1b926d1c957af19"
+    },
+    {
+      "id": "concurrent-cas",
+      "status": "failed",
+      "receiptSha256": "ea2d95036028f33931ac0abec62cf57104f7d316865b8ac31eece344c2d02719",
+      "observations": {
+        "ownerObserved": true,
+        "noFalseSuccess": true,
+        "noReplay": true,
+        "oneWinner": true,
+        "oneConflict409": true,
+        "winnerStatePreserved": true
+      },
+      "ownerBeforeSha256": "7c7d8c6d4ea6cdd3e900e8177afc7e56579ebc38ca7208c0c1b926d1c957af19",
+      "ownerAfterSha256": "3970975059986901dec1b7e086818b20e57257755bb3a83595fbc40a26403a7d",
+      "expectedFailureObserved": true,
+      "stage": "native-cas",
+      "diagnostic": "acme.home.conflict"
+    },
+    {
+      "id": "pending-module-removed",
+      "status": "failed",
+      "receiptSha256": "42171af10d8b37c6b045319754378e31dbcbb3ceae348ce7e731fa76ef0fe35e",
+      "observations": {
+        "ownerObserved": true,
+        "noFalseSuccess": true,
+        "noReplay": true
+      },
+      "ownerBeforeSha256": "3970975059986901dec1b7e086818b20e57257755bb3a83595fbc40a26403a7d",
+      "ownerAfterSha256": "3970975059986901dec1b7e086818b20e57257755bb3a83595fbc40a26403a7d",
+      "expectedFailureObserved": true,
+      "stage": "proposal-lookup",
+      "diagnostic": "agent.proposal.not_found"
+    },
+    {
+      "id": "module-remove",
+      "status": "passed",
+      "receiptSha256": "eb204ed8717c04cf1628500b6d50ef055ce2a80f000f79243c92d7c9e1510f06",
+      "observations": {
+        "membership": true,
+        "servingGeneration": true,
+        "contributions": true,
+        "providerAvailable": true
+      },
+      "ownerBeforeSha256": "3970975059986901dec1b7e086818b20e57257755bb3a83595fbc40a26403a7d",
+      "ownerAfterSha256": "3970975059986901dec1b7e086818b20e57257755bb3a83595fbc40a26403a7d"
+    },
+    {
+      "id": "sdk-incompatible",
+      "status": "failed",
+      "receiptSha256": "a5b9b096f4ab80b59f53b5814b7857353ef9f74f43abe118e96e030fbdd28fdd",
+      "observations": {
+        "ownerObserved": true,
+        "noFalseSuccess": true,
+        "noReplay": true,
+        "browserContributionsAbsent": true,
+        "commonStudioUsable": true
+      },
+      "ownerBeforeSha256": "3970975059986901dec1b7e086818b20e57257755bb3a83595fbc40a26403a7d",
+      "ownerAfterSha256": "3970975059986901dec1b7e086818b20e57257755bb3a83595fbc40a26403a7d",
+      "expectedFailureObserved": true,
+      "stage": "module-admission",
+      "diagnostic": "incompatible"
+    },
+    {
+      "id": "module-restore",
+      "status": "passed",
+      "receiptSha256": "f8e28d7575b471443775f75133dcd5eea115bede561906aebb7fe9f673ee5830",
+      "observations": {
+        "originalArchive": true,
+        "membership": true,
+        "servingGeneration": true,
+        "contributions": true
+      },
+      "ownerBeforeSha256": "3970975059986901dec1b7e086818b20e57257755bb3a83595fbc40a26403a7d",
+      "ownerAfterSha256": "3970975059986901dec1b7e086818b20e57257755bb3a83595fbc40a26403a7d"
+    },
+    {
+      "id": "restored-resource-copilot",
+      "status": "passed",
+      "receiptSha256": "89390046db441f63ee701b167ccba57099e93a6d677338a57e128f727f6b487f",
+      "observations": {
+        "context": true,
+        "read": true,
+        "review": true,
+        "ownerReadback": true,
+        "unrelatedPreserved": true,
+        "homeReload": true,
+        "actualAdapter": true
+      },
+      "ownerBeforeSha256": "ca9e86a9232e1aec9755bd79b14cb31d3aaa1c3b0fbbafcb0e7c1db78c790b9f",
+      "ownerAfterSha256": "403df54731dec7cafa23abfd15643e78839b55542393537e5c40dc5938f33aae"
+    },
+    {
+      "id": "restored-workflow-copilot",
+      "status": "passed",
+      "receiptSha256": "d9dbcafb65a7ee0b1fd94802151fad46d34e6bb14b6177fb632ab2f9aa74e66f",
+      "observations": {
+        "workingStateChanged": true,
+        "noImplicitSave": true,
+        "wholeUndo": true,
+        "validated": true,
+        "explicitSaveReadback": true,
+        "actualAdapter": true
+      },
+      "ownerBeforeSha256": "875062747a12f29b6eafada64690a6c577f08fd6201f5baf7ed11f6dca902da8",
+      "ownerAfterSha256": "bf137e4f89fd83c4c9bb8b87ff429b8a0e0bb7d5625bc655cc5f6652303efddc"
+    },
+    {
+      "id": "restored-resource-anthropic",
+      "status": "passed",
+      "receiptSha256": "3f13ca9bd686a8f1eb454ecfe7f098403350ec4a92401ef8adabdb05e5449701",
+      "observations": {
+        "context": true,
+        "read": true,
+        "review": true,
+        "ownerReadback": true,
+        "unrelatedPreserved": true,
+        "homeReload": true,
+        "actualAdapter": true
+      },
+      "ownerBeforeSha256": "403df54731dec7cafa23abfd15643e78839b55542393537e5c40dc5938f33aae",
+      "ownerAfterSha256": "db2e9b6439ef02b4732a1a9be6988cb213c45ec60363da5f5570dc4f4b98f1a5"
+    },
+    {
+      "id": "restored-workflow-anthropic",
+      "status": "passed",
+      "receiptSha256": "dd647c81bd3ac1725dcadaa7ed3cb23c36ac6c5db754068cd7f94b75f39e1b62",
+      "observations": {
+        "workingStateChanged": true,
+        "noImplicitSave": true,
+        "wholeUndo": true,
+        "validated": true,
+        "explicitSaveReadback": true,
+        "actualAdapter": true
+      },
+      "ownerBeforeSha256": "caba4cafd4e8cdcee41cd4c9c54a85b36e7e71661b75a2223e104a172215285b",
+      "ownerAfterSha256": "7771f1c318fd95347ae1aabff049b48c2f4d9c43d64be6f2679f256901fbb517"
+    }
+  ],
+  "processes": {
+    "backend": {
+      "exitCode": 0,
+      "runtimePackageCachesEmpty": true
+    },
+    "studio": {
+      "exitCode": 0,
+      "runtimePackageCachesEmpty": true
+    }
+  },
+  "evidenceExport": {
+    "files": 11823,
+    "indexSha256": "17a352e1cdcf91d038d37aac23b7ff0234f6b40719eb93c61645a0bb3cd20d79",
+    "privateRuntimeStateIncluded": false
+  },
+  "integration": {
+    "finalReviewedHeadChecks": "pending",
+    "merge": "pending",
+    "resultingMainQualification": "pending"
+  },
+  "boundaries": [
+    "No live-provider success is claimed.",
+    "Expected failed controls remain Failed.",
+    "This is the qualified code baseline; PR integration and full Program M2-M5 remain required."
+  ]
+}

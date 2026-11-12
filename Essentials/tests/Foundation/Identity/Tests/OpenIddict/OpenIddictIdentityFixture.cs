@@ -17,12 +17,17 @@ public sealed class OpenIddictIdentityFixture : IAsyncDisposable
 {
     public ServiceProvider Services { get; }
 
-    public OpenIddictIdentityFixture(Action<OpenIddictIdentityOptions>? configure = null)
+    /// <param name="configureServices">
+    /// Runs before the OpenIddict registration, so a test can supply a replacement contract through its
+    /// <c>Replace*</c> method (an <see cref="IUserTokenEligibility"/>, for one) that the registration then keeps.
+    /// </param>
+    public OpenIddictIdentityFixture(Action<OpenIddictIdentityOptions>? configure = null, Action<IServiceCollection>? configureServices = null)
     {
         var databaseName = $"openiddict-{Guid.NewGuid():n}";
 
         var services = new ServiceCollection();
         services.AddLogging();
+        configureServices?.Invoke(services);
         services.AddOpenIddictVendorForTests(
             builder => ConfigureInMemoryStore(builder, databaseName));
         services.AddFoundationIdentityOpenIddict(
@@ -38,12 +43,16 @@ public sealed class OpenIddictIdentityFixture : IAsyncDisposable
         scope.ServiceProvider.GetRequiredService<OpenIddictIdentityDbContext>().Database.EnsureCreated();
     }
 
+    /// <summary>The provider the fixture's non-user subjects are issued under; it scopes their token subject.</summary>
+    public const string TestProvider = "test-provider";
+
     /// <summary>The token service, resolved from the root scope (sufficient for tests).</summary>
     public ITokenService TokenService => Services.GetRequiredService<ITokenService>();
 
+    /// <summary>Issues a pair for a subject that is no Elsa user, under <see cref="TestProvider"/>.</summary>
     public ValueTask<TokenIssueResult> IssueAsync(
         string subject = "user-1", string tenant = "tenant-a", params string[] scopes) =>
-        TokenService.IssueAsync(new TokenIssueRequest(subject, tenant, scopes.Length is 0 ? ["identity/users:read"] : scopes));
+        TokenService.IssueAsync(new TokenIssueRequest(subject, tenant, scopes.Length is 0 ? ["identity/users:read"] : scopes) { Provider = TestProvider });
 
     internal static void ConfigureInMemoryStore(DbContextOptionsBuilder builder, string databaseName) =>
         builder.UseInMemoryDatabase(databaseName);

@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { PublicationReviewDialog } from "../workflow-editor/WorkflowEditor";
 import {
   createPublicationReview,
+  withLocalValidationErrors,
   isWarningSeverity,
   splitPublicationValidations,
   withPublicationWarnings,
@@ -116,6 +117,18 @@ describe("publication review warnings", () => {
 
     expect(container.querySelector(".wf-publication-warnings")).toBeNull();
     expect(button(container, "Publish").disabled).toBe(false);
+  });
+
+  it("blocks Review & publish on designer-side Decision issues without treating them as warnings", () => {
+    const value = withLocalValidationErrors(review([]), [
+      { message: "notes is not in this table. Runtime will refuse extra inputs (InputMembership). Remove them before Review & publish." },
+      { message: "amount is empty or not a valid number. Runtime will refuse InvalidValue." }
+    ]);
+    expect(value.phase).toBe("validationBlocked");
+    expect(value.executableStatus).toBe("blocked");
+    expect(value.validationErrors).toHaveLength(2);
+    expect(value.validationWarnings).toEqual([]);
+    expect(withLocalValidationErrors(value, value.validationErrors.map(message => ({ message })))).toBe(value);
   });
 });
 

@@ -16,15 +16,18 @@ export function ConnectionCredentialField({
   field,
   value,
   disabled = false,
+  error,
   onChange
 }: {
   context: StudioEndpointContext;
   field: AuthSchemeField;
   value: ConnectionCredentialInput;
   disabled?: boolean;
+  error?: string;
   onChange(value: ConnectionCredentialInput): void;
 }) {
   const [search, setSearch] = useState("");
+  const [touched, setTouched] = useState(false);
   const [refreshAttempt, setRefreshAttempt] = useState(0);
   const requestKey = useMemo(() => ({ context, search, refreshAttempt }), [context, search, refreshAttempt]);
   const currentRequestKeyRef = useRef(requestKey);
@@ -49,6 +52,10 @@ export function ConnectionCredentialField({
   const selectionExpired = !!selectedSecret && !isEligibleSecret(selectedSecret);
   const selectionUnavailable = selectionUnresolved || selectionExpired;
   const invalid = selectionUnavailable && source === "secret";
+  const missing = field.required && (source === "secret" ? !selectedName : value.source !== "value" || !value.value.trim());
+  const validationMessage = error || (invalid ? "Select an available active text Secret before creating this connection." :
+    touched && missing ? `${field.displayName} is required. Choose an existing Secret or enter a new value.` : null);
+  const errorId = `${selectId}-error`;
 
   useEffect(() => {
     let active = true;
@@ -74,6 +81,7 @@ export function ConnectionCredentialField({
   }, [context, requestKey, search]);
 
   function changeSource(nextSource: "secret" | "value") {
+    setTouched(false);
     if (nextSource === "secret") onChange({ source: "secret", existingSecretName: "" });
     else onChange({ source: "value", value: "" });
   }
@@ -127,8 +135,9 @@ export function ConnectionCredentialField({
             id={selectId}
             value={selectedName}
             required={field.required}
-            aria-invalid={invalid || undefined}
-            aria-describedby={`${statusId} ${detailsId}`}
+            aria-invalid={!!validationMessage || undefined}
+            aria-describedby={`${statusId} ${detailsId}${validationMessage ? ` ${errorId}` : ""}`}
+            onBlur={() => setTouched(true)}
             onChange={event => {
               const nextName = event.target.value;
               if (!nextName) {
@@ -159,11 +168,7 @@ export function ConnectionCredentialField({
             {visibleState.status === "ready" && visibleState.items.length === 0 ? "No active text Secrets match this search." : null}
             {visibleState.status === "ready" && visibleState.capped ? "Showing up to 50 matches. Refine your search to find another Secret." : null}
           </p>
-          {invalid ? (
-            <p className="connection-credential-error" role="alert">
-              Select an available active text Secret before creating this connection.
-            </p>
-          ) : selectedSecret ? (
+          {!validationMessage && selectedSecret ? (
             <p className="connection-secret-selection">Selected: {formatSecret(selectedSecret)}</p>
           ) : null}
         </div>
@@ -175,11 +180,15 @@ export function ConnectionCredentialField({
             type="password"
             autoComplete="new-password"
             required={field.required}
+            aria-invalid={!!validationMessage || undefined}
+            aria-describedby={validationMessage ? errorId : detailsId}
+            onBlur={() => setTouched(true)}
             value={value.source === "value" ? value.value : ""}
             onChange={event => onChange({ source: "value", value: event.target.value })}
           />
         </label>
       )}
+      {validationMessage ? <p id={errorId} className="connection-credential-error" role="alert">{validationMessage}</p> : null}
     </fieldset>
   );
 }

@@ -1,0 +1,302 @@
+[
+  {
+    "mode": "Balanced",
+    "leaves": 1,
+    "concurrency": 1,
+    "variant": "baseline",
+    "runs": 2,
+    "completions": 1856,
+    "WorkflowsPerSecond": 46.3785918063202,
+    "P50Ms": 19.44195,
+    "P95Ms": 37.95605,
+    "P99Ms": 45.8183,
+    "AllocatedBytesPerWorkflow": 2418057.1470233696,
+    "range": [
+      43.11736920615847,
+      49.63981440648194
+    ],
+    "commands": [
+      46
+    ],
+    "transactions": [
+      2
+    ],
+    "checkpointCommits": [
+      1
+    ],
+    "labels": [
+      "Balanced-a1-c1-baseline-r1",
+      "Balanced-a1-c1-baseline-r2"
+    ]
+  },
+  {
+    "mode": "Balanced",
+    "leaves": 1,
+    "concurrency": 1,
+    "variant": "candidate",
+    "runs": 2,
+    "completions": 1954,
+    "WorkflowsPerSecond": 48.828245155022856,
+    "P50Ms": 18.20275,
+    "P95Ms": 36.89745,
+    "P99Ms": 44.6045,
+    "AllocatedBytesPerWorkflow": 2397073.274170966,
+    "range": [
+      43.910131357132975,
+      53.746358952912736
+    ],
+    "commands": [
+      45
+    ],
+    "transactions": [
+      2
+    ],
+    "checkpointCommits": [
+      1
+    ],
+    "labels": [
+      "Balanced-a1-c1-candidate-r2",
+      "Balanced-a1-c1-candidate-r1"
+    ]
+  },
+  {
+    "mode": "Balanced",
+    "leaves": 10,
+    "concurrency": 1,
+    "variant": "baseline",
+    "runs": 2,
+    "completions": 826,
+    "WorkflowsPerSecond": 20.614483440008552,
+    "P50Ms": 44.384100000000004,
+    "P95Ms": 89.2387,
+    "P99Ms": 107.77674999999999,
+    "AllocatedBytesPerWorkflow": 9167650.287538877,
+    "range": [
+      18.50462970123647,
+      22.724337178780633
+    ],
+    "commands": [
+      76
+    ],
+    "transactions": [
+      2
+    ],
+    "checkpointCommits": [
+      1
+    ],
+    "labels": [
+      "Balanced-a10-c1-baseline-r2",
+      "Balanced-a10-c1-baseline-r1"
+    ]
+  },
+  {
+    "mode": "Balanced",
+    "leaves": 10,
+    "concurrency": 1,
+    "variant": "candidate",
+    "runs": 2,
+    "completions": 1128,
+    "WorkflowsPerSecond": 28.167466553680697,
+    "P50Ms": 32.2273,
+    "P95Ms": 66.98465,
+    "P99Ms": 84.43355,
+    "AllocatedBytesPerWorkflow": 8521886.767724682,
+    "range": [
+      26.55444439015425,
+      29.78048871720715
+    ],
+    "commands": [
+      65
+    ],
+    "transactions": [
+      2
+    ],
+    "checkpointCommits": [
+      1
+    ],
+    "labels": [
+      "Balanced-a10-c1-candidate-r2",
+      "Balanced-a10-c1-candidate-r1"
+    ]
+  },
+  {
+    "mode": "Balanced",
+    "leaves": 10,
+    "concurrency": 16,
+    "variant": "baseline",
+    "runs": 2,
+    "completions": 5975,
+    "WorkflowsPerSecond": 148.6156895833634,
+    "P50Ms": 92.24860000000001,
+    "P95Ms": 261.24969999999996,
+    "P99Ms": 293.0229,
+    "AllocatedBytesPerWorkflow": 9132563.752825577,
+    "range": [
+      146.18791493326725,
+      151.04346423345956
+    ],
+    "commands": [
+      76
+    ],
+    "transactions": [
+      2
+    ],
+    "checkpointCommits": [
+      1
+    ],
+    "labels": [
+      "Balanced-a10-c16-baseline-r2",
+      "Balanced-a10-c16-baseline-r1"
+    ]
+  },
+  {
+    "mode": "Balanced",
+    "leaves": 10,
+    "concurrency": 16,
+    "variant": "candidate",
+    "runs": 2,
+    "completions": 7356,
+    "WorkflowsPerSecond": 183.03288181930574,
+    "P50Ms": 78.16290000000001,
+    "P95Ms": 169.08724999999998,
+    "P99Ms": 200.34455000000003,
+    "AllocatedBytesPerWorkflow": 8497332.709125184,
+    "range": [
+      173.6028618464099,
+      192.4629017922016
+    ],
+    "commands": [
+      65
+    ],
+    "transactions": [
+      2
+    ],
+    "checkpointCommits": [
+      1
+    ],
+    "labels": [
+      "Balanced-a10-c16-candidate-r2",
+      "Balanced-a10-c16-candidate-r1"
+    ]
+  },
+  {
+    "mode": "Balanced",
+    "leaves": 100,
+    "concurrency": 1,
+    "variant": "baseline",
+    "runs": 2,
+    "completions": 200,
+    "WorkflowsPerSecond": 2.2397621784373856,
+    "P50Ms": 437.50745,
+    "P95Ms": 542.48325,
+    "P99Ms": 603.403,
+    "AllocatedBytesPerWorkflow": 238224907.2,
+    "range": [
+      2.2085176194972513,
+      2.27100673737752
+    ],
+    "commands": [
+      391
+    ],
+    "transactions": [
+      7
+    ],
+    "checkpointCommits": [
+      3
+    ],
+    "labels": [
+      "Balanced-a100-c1-baseline-r2",
+      "Balanced-a100-c1-baseline-r1"
+    ]
+  },
+  {
+    "mode": "Balanced",
+    "leaves": 100,
+    "concurrency": 1,
+    "variant": "candidate",
+    "runs": 2,
+    "completions": 228,
+    "WorkflowsPerSecond": 5.687778502543866,
+    "P50Ms": 158.75414999999998,
+    "P95Ms": 284.21555,
+    "P99Ms": 395.97755,
+    "AllocatedBytesPerWorkflow": 73418962.73705271,
+    "range": [
+      5.629264800132979,
+      5.746292204954753
+    ],
+    "commands": [
+      290
+    ],
+    "transactions": [
+      7
+    ],
+    "checkpointCommits": [
+      3
+    ],
+    "labels": [
+      "Balanced-a100-c1-candidate-r2",
+      "Balanced-a100-c1-candidate-r1"
+    ]
+  },
+  {
+    "mode": "Durable",
+    "leaves": 10,
+    "concurrency": 1,
+    "variant": "baseline",
+    "runs": 2,
+    "completions": 227,
+    "WorkflowsPerSecond": 5.663390867266027,
+    "P50Ms": 155.8838,
+    "P95Ms": 366.0248,
+    "P99Ms": 389.24045,
+    "AllocatedBytesPerWorkflow": 28404554.083605282,
+    "range": [
+      5.485393576266022,
+      5.841388158266032
+    ],
+    "commands": [
+      286
+    ],
+    "transactions": [
+      25
+    ],
+    "checkpointCommits": [
+      12
+    ],
+    "labels": [
+      "Durable-a10-c1-baseline-r1",
+      "Durable-a10-c1-baseline-r2"
+    ]
+  },
+  {
+    "mode": "Durable",
+    "leaves": 10,
+    "concurrency": 1,
+    "variant": "candidate",
+    "runs": 2,
+    "completions": 247,
+    "WorkflowsPerSecond": 6.1470232223017005,
+    "P50Ms": 148.0532,
+    "P95Ms": 263.52785,
+    "P99Ms": 335.61965,
+    "AllocatedBytesPerWorkflow": 25114925.123884514,
+    "range": [
+      5.944557578457125,
+      6.349488866146276
+    ],
+    "commands": [
+      275
+    ],
+    "transactions": [
+      25
+    ],
+    "checkpointCommits": [
+      12
+    ],
+    "labels": [
+      "Durable-a10-c1-candidate-r1",
+      "Durable-a10-c1-candidate-r2"
+    ]
+  }
+]

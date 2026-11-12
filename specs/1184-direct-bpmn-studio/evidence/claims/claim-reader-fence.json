@@ -1,0 +1,135 @@
+{
+  "passed": true,
+  "predecessorSource": "fea85ce64856d8aea4fb7cfed58f7bcc229d0888",
+  "currentSource": "74b82f11e2025258cf1dc54a661f5c1249f7548f",
+  "predecessorProducts": [
+    {
+      "name": "Elsa.Workbench.dll",
+      "productVersion": "1.0.0+fea85ce64856d8aea4fb7cfed58f7bcc229d0888",
+      "sha256": "0db80cc52fa8855e924a52d69919dc191aec8cdfd3503b2bae22c9b4bbfd68ab"
+    },
+    {
+      "name": "Elsa.Activities.Bpmn.dll",
+      "productVersion": "1.0.0+fea85ce64856d8aea4fb7cfed58f7bcc229d0888",
+      "sha256": "6230ece593d9a35a17a9e21af91d6ee2dbd8f9bbc169fb882d06b893afbdb948"
+    },
+    {
+      "name": "Elsa.Activities.Bpmn.Interchange.dll",
+      "productVersion": "1.0.0+fea85ce64856d8aea4fb7cfed58f7bcc229d0888",
+      "sha256": "8959dbf034927191020be2e6b4435f062487dd95909de51bb14585d83276db76"
+    },
+    {
+      "name": "Elsa.Workflows.Runtime.Core.dll",
+      "productVersion": "1.0.0+fea85ce64856d8aea4fb7cfed58f7bcc229d0888",
+      "sha256": "2182f4f6063d779cb0e035c5b204d1eb4e52931ca7b4c74d14780bd0c88ee5cb"
+    },
+    {
+      "name": "Elsa.Workflows.Runtime.dll",
+      "productVersion": "1.0.0+fea85ce64856d8aea4fb7cfed58f7bcc229d0888",
+      "sha256": "4c04c7b6326464cc14be2281a5d2a4322edaa44e495507091e4f90c01bf09816"
+    },
+    {
+      "name": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.dll",
+      "productVersion": "1.0.0+fea85ce64856d8aea4fb7cfed58f7bcc229d0888",
+      "sha256": "c93d083a537f28f2cc501997622aaff3d2b4d4193866ecea0f7abfa1f0505a2c"
+    },
+    {
+      "name": "Elsa.Activities.Runtime.dll",
+      "productVersion": "1.0.0+fea85ce64856d8aea4fb7cfed58f7bcc229d0888",
+      "sha256": "14d39a2d106866f24e23739f38fbd75069bcff5e884de6fea189ff97ec1e20d9"
+    },
+    {
+      "name": "Elsa.Activities.DispatchWorkflow.Runtime.dll",
+      "productVersion": "1.0.0+fea85ce64856d8aea4fb7cfed58f7bcc229d0888",
+      "sha256": "f58b7bc4a02f2e0e57845bcec0d03aef26748447cc3da5fbc333f14056290159"
+    },
+    {
+      "name": "Elsa.Serialization.SystemText.dll",
+      "productVersion": "1.0.0+fea85ce64856d8aea4fb7cfed58f7bcc229d0888",
+      "sha256": "f10cf29cca70133254cd69cf3cf3d00bd6fdc11530c66d3c2b99b3ff1fe3b2e2"
+    },
+    {
+      "name": "Elsa.Workflows.Design.Core.dll",
+      "productVersion": "1.0.0+fea85ce64856d8aea4fb7cfed58f7bcc229d0888",
+      "sha256": "5fdaa02d407bdebd71984ced6880c0ac14db489edca32d7aef5d2f7a9606d53f"
+    },
+    {
+      "name": "Elsa.Workflows.Design.Api.dll",
+      "productVersion": "1.0.0+fea85ce64856d8aea4fb7cfed58f7bcc229d0888",
+      "sha256": "474acc60dc4a0344a7fdddc2b590912fb976d815cbf343df67305a54c1651cc1"
+    },
+    {
+      "name": "Elsa.Workflows.Design.Persistence.EntityFrameworkCore.dll",
+      "productVersion": "1.0.0+fea85ce64856d8aea4fb7cfed58f7bcc229d0888",
+      "sha256": "9f7289e4f3e2e78ac89dae3b15b0cc043922291bfd0477fbd555558ddfd6f7a0"
+    },
+    {
+      "name": "Elsa.Persistence.EntityFramework.dll",
+      "productVersion": "1.0.0+fea85ce64856d8aea4fb7cfed58f7bcc229d0888",
+      "sha256": "c409aa27b6195fb2a35e10ca8f33edb3166ae60eba82376adcff93486d2ead4d"
+    }
+  ],
+  "restoredDatabaseSha256": {
+    "runtime": "a0f2a9404d0db14f28ee750cc8c859eb692e2ada5916f4becd859c9ca516d34e",
+    "design": "96738942b52d32406b662984d340b0081b3e6c2de79ec850dfe95a622d485e0c"
+  },
+  "executionId": "bpmn:b98b0f94e2165411b14db7ff5f59c5a92376001f03b18df0a2312a29ccd364c1",
+  "observations": {
+    "execution": {
+      "status": 200,
+      "body": {
+        "executionId": "bpmn:b98b0f94e2165411b14db7ff5f59c5a92376001f03b18df0a2312a29ccd364c1",
+        "revision": 2,
+        "status": "Running",
+        "protocol": {
+          "key": "elsa.bpmn",
+          "version": 1
+        },
+        "executable": {
+          "artifactId": "sha256:7010f276804b7d3eec33fbf2a0baaad08ba4c054b885d015d6005a862d852646",
+          "definitionId": "bpmn-model:sha256:7010f276804b7d3eec33fbf2a0baaad08ba4c054b885d015d6005a862d852646",
+          "definitionVersionId": "sha256:7010f276804b7d3eec33fbf2a0baaad08ba4c054b885d015d6005a862d852646",
+          "artifactVersion": "1.0.0",
+          "artifactHash": "sha256:7010f276804b7d3eec33fbf2a0baaad08ba4c054b885d015d6005a862d852646"
+        },
+        "materialIncarnationId": "0261c1840cd845198d8b49a509fb46bb",
+        "createdAt": "2026-11-01T21:59:23.446438+00:00",
+        "updatedAt": "2026-11-01T21:59:23.891359+00:00",
+        "result": null
+      }
+    },
+    "work": {
+      "status": 422,
+      "problem": "{\"status\":422,\"errors\":{\"generalErrors\":[\"The BPMN state and exact work inventory differ.\"]}}"
+    },
+    "inspection": {
+      "status": 422,
+      "problem": "{\"status\":422,\"errors\":{\"generalErrors\":[\"BPMN execution \\u0027bpmn:b98b0f94e2165411b14db7ff5f59c5a92376001f03b18df0a2312a29ccd364c1\\u0027 has invalid inspection material \\u0027sha256:7010f276804b7d3eec33fbf2a0baaad08ba4c054b885d015d6005a862d852646\\u0027.\"]}}"
+    },
+    "legacyCompletion": {
+      "status": 422,
+      "problem": "{\"status\":422,\"errors\":{\"generalErrors\":[\"The BPMN material profile or binding/input/output contract is unsupported.\"]}}"
+    },
+    "claim": {
+      "status": 404,
+      "problem": ""
+    }
+  },
+  "refused": {
+    "work": true,
+    "inspection": true,
+    "legacyCompletion": true,
+    "claim": true
+  },
+  "modelRowsBefore": {
+    "elsa_runtime_model_execution": "8f6855464635bb8c7574d63af392a350d24aa90707e8d6abdab2b58191d146bc",
+    "elsa_runtime_model_input": "db6f140dfb65de5d7aeda83bee70acf29f6e7314ee9695a0c0908b0e2e371c53"
+  },
+  "modelRowsAfter": {
+    "elsa_runtime_model_execution": "8f6855464635bb8c7574d63af392a350d24aa90707e8d6abdab2b58191d146bc",
+    "elsa_runtime_model_input": "db6f140dfb65de5d7aeda83bee70acf29f6e7314ee9695a0c0908b0e2e371c53"
+  },
+  "modelRowsUnchanged": true,
+  "headerProjectionNote": "The execution header is projected without parsing the private claim frame; it discloses no work or claim.",
+  "predecessorLogSha256": "3c091d3bde1c2f5300bb89777d8b9ee2c5e443a84b97d64bacac3876d5a8193d"
+}

@@ -60,6 +60,9 @@ public sealed class RuntimeResumptionSweepRequest
     /// </summary>
     public int? MaxExecutionsPerSweep { get; }
 
+    /// <summary>Maximum simultaneous re-drives using independent bound operation scopes. Defaults to one.</summary>
+    public int MaxConcurrentDispatches { get; init; } = 1;
+
     /// <summary>
     /// Workflow execution IDs the sweep must skip this pass. The resumption pump populates this with
     /// executions in per-execution failure backoff so one poisoned execution cannot occupy a re-drive

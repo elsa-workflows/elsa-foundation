@@ -148,10 +148,10 @@ describe("Activity Definitions experience", () => {
       expect(primaryRow.querySelector(".studio-copyable-identifier__value")?.getAttribute("aria-label")).toBe(`Definition ID: ${exactId}`);
       expect(duplicateRow.querySelector(".studio-copyable-identifier__value")?.getAttribute("aria-label")).toBe("Definition ID: activity-definition-duplicate-name");
 
-      const disclosure = primaryRow.querySelector<HTMLButtonElement>(".studio-disclosure-fold-trigger")!;
+      const disclosure = primaryRow.querySelector<HTMLButtonElement>("button[aria-haspopup=dialog]")!;
       const copyButton = primaryRow.querySelector<HTMLButtonElement>('button[aria-label="Copy Definition ID"]')!;
       expect(disclosure.getAttribute("aria-expanded")).toBe("false");
-      expect(primaryRow.querySelector(".studio-disclosure-fold-body")?.hasAttribute("hidden")).toBe(true);
+      expect(document.querySelector('[role="dialog"]')).toBeNull();
       for (const key of ["Enter", " "]) {
         flushSync(() => disclosure.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true })));
         flushSync(() => copyButton.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true })));
@@ -166,10 +166,10 @@ describe("Activity Definitions experience", () => {
 
       click(disclosure);
       expect(disclosure.getAttribute("aria-expanded")).toBe("true");
-      expect(primaryRow.querySelector(".studio-disclosure-fold-body")?.hasAttribute("hidden")).toBe(false);
-      expect(primaryRow.textContent).toContain(exactTypeKey);
-      expect(primaryRow.textContent).toContain("activity-version-head-exact");
-      expect(primaryRow.textContent).toContain("activity-version-recommended-exact");
+      expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+      expect(document.body.textContent).toContain(exactTypeKey);
+      expect(document.body.textContent).toContain("activity-version-head-exact");
+      expect(document.body.textContent).toContain("activity-version-recommended-exact");
       click(copyButton);
       await waitFor(() => expect(writeText).toHaveBeenCalledWith(exactId));
       expect(rendered.container.textContent).not.toContain("Build your activity");
@@ -321,7 +321,7 @@ describe("Activity Definitions experience", () => {
     expect(rendered.container.querySelector<HTMLInputElement>("input[placeholder='Name, type key, or category']")?.value).toBe("second origin");
     expect(controlByLabel<HTMLInputElement>(rendered.container, "Provider key").value).toBe("provider-two");
     expect(controlByLabel<HTMLSelectElement>(rendered.container, "Rows per page").value).toBe("50");
-    expect(rendered.container.querySelector(".ad-collection-view button[aria-pressed='true']")?.textContent).toBe("Built-in");
+    expect(rendered.container.querySelector(".studio-filter-group button[aria-pressed='true']")?.textContent).toBe("Built-in");
 
     window.history.replaceState(firstOrigin, "", "/workflows/activity-definitions");
     window.dispatchEvent(new PopStateEvent("popstate"));
@@ -330,7 +330,7 @@ describe("Activity Definitions experience", () => {
     expect(rendered.container.querySelector<HTMLInputElement>("input[placeholder='Name, type key, or category']")?.value).toBe("first origin");
     expect(controlByLabel<HTMLInputElement>(rendered.container, "Provider key").value).toBe("");
     expect(controlByLabel<HTMLSelectElement>(rendered.container, "Rows per page").value).toBe("25");
-    expect(rendered.container.querySelector(".ad-collection-view button[aria-pressed='true']")?.textContent).toBe("Designed");
+    expect(rendered.container.querySelector(".studio-filter-group button[aria-pressed='true']")?.textContent).toBe("Designed");
     await rendered.unmount();
   }, 15000);
 
@@ -486,8 +486,7 @@ describe("Activity Definitions experience", () => {
     expect(remounted.container.querySelector<HTMLInputElement>("input[placeholder='Name, type key, or category']")?.value).toBe("invoice");
     expect(controlByLabel<HTMLInputElement>(remounted.container, "Provider key").value).toBe("visual-graph");
     expect(controlByLabel<HTMLSelectElement>(remounted.container, "Rows per page").value).toBe("10");
-    const resumedRequests = getJson.mock.calls.slice(requestStart).map(([url]) => String(url)).filter(url => url.startsWith("/design/activities/definitions?") && !url.includes("cursor=unmounted-auth-cursor"));
-    expect(resumedRequests.some(url => url.includes("search=invoice") && url.includes("providerKey=visual-graph") && url.includes("limit=10"))).toBe(true);
+    await waitFor(() => expect(getJson.mock.calls.slice(requestStart).map(([url]) => String(url)).filter(url => url.startsWith("/design/activities/definitions?") && !url.includes("cursor=unmounted-auth-cursor")).some(url => url.includes("search=invoice") && url.includes("providerKey=visual-graph") && url.includes("limit=10"))).toBe(true));
 
     resolveAuthorized(page([definition({ displayName: "Authorized after remount" })]));
     await waitFor(() => expect(`${remounted.container.textContent} ${getJson.mock.calls.slice(requestStart).map(([url]) => String(url)).join(" | ")}`).toContain("Authorized after remount"));
@@ -595,7 +594,7 @@ describe("Activity Definitions experience", () => {
     click(buttonByText(rendered.container, "Activity Definition"));
     await waitForText(rendered.container, "Build your activity");
     expect(new URLSearchParams(window.location.search).has("draft")).toBe(false);
-    expect(actionName).toBe("Continue editing draft");
+    expect(actionName).toBe("Edit draft");
     await rendered.unmount();
   });
 
@@ -618,7 +617,7 @@ describe("Activity Definitions experience", () => {
     const primaryAction = rendered.container.querySelector<HTMLButtonElement>(".ad-primary-action")!;
     await waitFor(() => expect(primaryAction.disabled).toBe(false));
     expect(primaryAction.textContent?.trim()).toBe("Open drafts");
-    expect([...rendered.container.querySelectorAll("button")].some(button => button.textContent?.includes("Continue editing draft"))).toBe(false);
+    expect([...rendered.container.querySelectorAll("button")].some(button => button.textContent?.includes("Edit draft"))).toBe(false);
     click(primaryAction);
     expect(new URLSearchParams(window.location.search).get("section")).toBe("drafts");
     expect(new URLSearchParams(window.location.search).has("draft")).toBe(false);
@@ -640,7 +639,7 @@ describe("Activity Definitions experience", () => {
     await waitForText(rendered.container, "Earlier active draft");
     click(buttonByText(rendered.container, "Next"));
     await waitForText(rendered.container, "Final active draft");
-    expect([...rendered.container.querySelectorAll("button")].some(button => button.textContent === "Continue editing draft")).toBe(false);
+    expect([...rendered.container.querySelectorAll("button")].some(button => button.textContent === "Edit draft")).toBe(false);
     click(buttonByText(rendered.container, "Open drafts"));
     expect(new URLSearchParams(window.location.search).has("draft")).toBe(false);
     await rendered.unmount();
@@ -1196,7 +1195,7 @@ describe("Activity Definitions experience", () => {
       window.dispatchEvent(new PopStateEvent("popstate"));
     });
     await waitForText(rendered.container, "Second evaluator");
-    await waitFor(() => expect(buttonByText(rendered.container, "Continue editing draft").disabled).toBe(false));
+    await waitFor(() => expect(buttonByText(rendered.container, "Edit draft").disabled).toBe(false));
 
     click(buttonByText(rendered.container, "Drafts"));
     await waitForText(rendered.container, "Second evaluator draft");
@@ -1299,7 +1298,7 @@ describe("Activity Definitions experience", () => {
     await waitFor(() => expect(resolveSearch).toBeDefined());
     expect(rendered.container.textContent).toContain("Invoice evaluator");
     resolveSearch(page([definition()]));
-    await waitFor(() => expect(rendered.container.querySelector(".ad-skeleton")).toBeNull());
+    await waitFor(() => expect(rendered.container.querySelector(".studio-skeleton-list")).toBeNull());
     click(buttonByText(rendered.container, "Built-in"));
     await waitFor(() => expect(resolveBuiltIn).toBeDefined());
     expect(rendered.container.textContent).not.toContain("Invoice evaluator");
@@ -1829,7 +1828,7 @@ function click(element: Element) { flushSync(() => element.dispatchEvent(new Mou
 function change(element: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement, value: string) { flushSync(() => { const prototype = element instanceof HTMLInputElement ? HTMLInputElement.prototype : element instanceof HTMLSelectElement ? HTMLSelectElement.prototype : HTMLTextAreaElement.prototype; const setter = Object.getOwnPropertyDescriptor(prototype, "value")?.set; setter?.call(element, value); element.dispatchEvent(new Event("change", { bubbles: true })); element.dispatchEvent(new Event("input", { bubbles: true })); }); }
 function controlByLabel<T extends HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>(container: HTMLElement, text: string) {
   const label = [...container.querySelectorAll("label")].find(candidate => candidate.textContent?.includes(text));
-  const control = label?.querySelector("input, select, textarea");
+  const control = label?.querySelector("input, select, textarea") ?? container.querySelector(`[aria-label="${text}"]`);
   if (!control) throw new Error(`Control labelled '${text}' not found.`);
   return control as T;
 }

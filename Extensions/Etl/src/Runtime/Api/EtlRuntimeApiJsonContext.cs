@@ -15,6 +15,7 @@ namespace Elsa.Etl.Runtime.Api;
 [JsonSerializable(typeof(EtlRunSummaryView))]
 [JsonSerializable(typeof(EtlRunDetailView))]
 [JsonSerializable(typeof(EtlRunCancellationView))]
+[JsonSerializable(typeof(EtlRunCompletionView))]
 internal partial class EtlRuntimeApiJsonContext : JsonSerializerContext
 {
     internal static EtlRuntimeApiJsonContext WireContext => Wire.Context;

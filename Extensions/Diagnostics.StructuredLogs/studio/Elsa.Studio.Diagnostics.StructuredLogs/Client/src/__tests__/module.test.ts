@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import React from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
@@ -39,6 +39,32 @@ describe("structured logs module", () => {
       restoreProperty(globalThis, "EventSource", originalEventSource);
       restoreProperty(navigator, "clipboard", originalClipboard);
     }
+  });
+
+  it("keeps recent logs visible when an anonymous custom transport cannot stream",async()=>{
+    register(stubApi({anonymous:true,getJson:async url=>url.includes("/sources")?[]:[wireEntry(1,"recent anonymous log")]}));
+    const view=await renderPanel();
+    try {
+      await vi.waitFor(()=>expect(view.container.textContent).toContain("Recent logs remain available"));
+      expect(view.container.textContent).toContain("recent anonymous log");
+      expect(StubEventSource.instances).toHaveLength(0);
+    } finally {await view.unmount();}
+  });
+
+  it("uses cookie-free fetch SSE for anonymous backends and cancels on unmount",async()=>{
+    const request=vi.fn(async(_url:string,_init?:RequestInit)=>new Response(new ReadableStream<Uint8Array>({start(controller){
+      const text=`event: entry\r\ndata: ${JSON.stringify(wireEntry(1,"anonymous live log"))}\r\n\r\n`;
+      controller.enqueue(new TextEncoder().encode(text.slice(0,9)));
+      controller.enqueue(new TextEncoder().encode(text.slice(9)));
+    }}),{status:200}));
+    register(stubApi({anonymous:true,requestResponse:request}));
+    const view=await renderPanel();
+    try {
+      await vi.waitFor(()=>expect(view.container.textContent).toContain("anonymous live log"));
+      expect(StubEventSource.instances).toHaveLength(0);
+      expect(request.mock.calls[0][1]?.credentials).toBe("omit");
+    } finally {await view.unmount();}
+    expect(request.mock.calls[0][1]?.signal?.aborted).toBe(true);
   });
 
   it("registers navigation, route, and bottom panel contributions", () => {
@@ -402,12 +428,15 @@ describe("structured logs module", () => {
 
 function stubApi(options?: {
   baseUrl?: string;
+  anonymous?: boolean;
+  requestResponse?: (url:string,init?:RequestInit)=>Promise<Response>;
   getJson?: (url: string, init?: RequestInit) => Promise<unknown>;
 }) {
   return {
     backend: {
       baseUrl: options?.baseUrl ?? "https://backend.example/",
-      http: { getJson: options?.getJson ?? (async () => []) }
+      ...(!options?.anonymous ? {accessTokenFactory:async()=>"test-interactive-session"} : {}),
+      http: { getJson: options?.getJson ?? (async () => []), requestResponse:options?.requestResponse }
     },
     navigation: registry(),
     routes: registry(),

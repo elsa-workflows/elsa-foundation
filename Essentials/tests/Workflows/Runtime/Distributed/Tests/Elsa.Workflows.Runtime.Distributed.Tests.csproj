@@ -34,6 +34,9 @@
     <!-- AddShellStartupValidation, which both shipped hosts compose: a shell runs its ValidateOnStart checks as it activates (#2331). -->
     <ProjectReference Include="..\..\..\..\..\src\Cluster\Readability\Elsa.Cluster.Readability.csproj" />
     <ProjectReference Include="..\..\..\..\Serialization\Testing\Elsa.Serialization.Testing.csproj" />
+    <!-- A real workflow runtime behind one node, to prove a cross-node Cancel stops a progressing drain (#2831). -->
+    <ProjectReference Include="..\..\..\..\Activities\Testing\Elsa.Activities.Testing.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Activities\ControlFlow\Elsa.Activities.ControlFlow.csproj" />
   </ItemGroup>
 
 </Project>

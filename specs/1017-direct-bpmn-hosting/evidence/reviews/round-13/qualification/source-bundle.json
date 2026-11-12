@@ -1,0 +1,17 @@
+{
+  "qualificationTree": "72576671d69336efe6c8f62bd31a0c6e9e14027e",
+  "studioExecutingSource": "e28ef6701cc468d342803425ba77bed4594fb8db",
+  "actualHostAndNestedExecutingSource": "c53167925de74d026be739ce4248ed4047c0e578",
+  "baselineMain": "588da3eb01d0949ba3c9721b61c09fbc2334a335",
+  "bundleRef": "refs/codex/verification/2898-qualification-7257",
+  "bundleBytes": 2616316,
+  "bundleSha256": "300995c27b5c6c86701dca69c17c8b23272c387bcc0c896c4935b90485bce848",
+  "coldRestore": {
+    "correctedCandidateInitiallyAbsent": true,
+    "prerequisitesAlreadyPresent": true,
+    "priorExecutingSourceAlreadyPresent": "e28ef6701cc468d342803425ba77bed4594fb8db",
+    "restoredHead": "72576671d69336efe6c8f62bd31a0c6e9e14027e",
+    "restoredTree": "b62245fb60658e9109c48b5523826f57b262cdc0",
+    "verification": "/tmp/elsa-2898-c531-followup/publication-proof/candidate-source.bundle is okay\nThe bundle contains this ref:\n72576671d69336efe6c8f62bd31a0c6e9e14027e refs/codex/verification/2898-qualification-7257\nThe bundle requires this ref:\n588da3eb01d0949ba3c9721b61c09fbc2334a335 \nThe bundle uses this hash algorithm: sha1"
+  }
+}

@@ -24,6 +24,7 @@ namespace Elsa.Activities.Graph.Runtime.Activities;
 /// See <c>specs/237-graph-boundary-completion/contracts/complete-activity.md</c> for the emitter contract.
 /// </para>
 /// </remarks>
+[ActivityPalette(ResourceKinds = ["activity-definition-graph"], Description = "Complete ends an enclosing reusable activity and belongs inside its graph body.")]
 [Activity(Icon = "CircleCheck")]
 public sealed class Complete : StructuralActivity, IRuntimeStructuralActivity
 {

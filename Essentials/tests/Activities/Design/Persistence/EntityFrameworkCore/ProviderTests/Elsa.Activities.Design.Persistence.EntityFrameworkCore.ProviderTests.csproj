@@ -23,5 +23,6 @@
   <ItemGroup>
     <!-- One case table for the ContentAuthorityIsValid marker, shared with the module's SQLite suite. -->
     <Compile Include="..\Tests\ActivityAuthorityValidityContract.cs" Link="ActivityAuthorityValidityContract.cs" />
+    <Compile Include="..\Tests\ActivityProviderDiscoveryContract.cs" Link="ActivityProviderDiscoveryContract.cs" />
   </ItemGroup>
 </Project>

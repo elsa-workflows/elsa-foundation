@@ -12,6 +12,9 @@ public interface IActivityStructureService
     /// </summary>
     IReadOnlyCollection<ActivityChildContractMemberUsage> ProjectChildContractMemberUsage(ActivityNode activity) => [];
 
+    /// <summary>Projects the owning handler's structure inputs and consumed ordinary-input keys.</summary>
+    ActivityStructureInputProjection ProjectInputs(ActivityNode activity) => ActivityStructureInputProjection.Empty;
+
     ActivityNode ReplaceChildren(ActivityNode activity, IReadOnlyCollection<ActivityChildProjection> childProjections);
 
     /// <summary>
@@ -20,6 +23,19 @@ public interface IActivityStructureService
     /// <see cref="IActivityStructureHandler.ChildrenCompletedBefore"/>.
     /// </summary>
     IReadOnlyList<string>? ChildrenCompletedBefore(ActivityNode activity, string childNodeId) => null;
+
+    /// <summary>Returns the owning structure's facts for a producer/consumer pair of direct children.</summary>
+    /// <remarks>
+    /// The default preserves custom services' <see cref="ChildrenCompletedBefore"/> declarations without
+    /// inferring unavailability from an omitted child. Unknown facts can be refined by an owning structure.
+    /// </remarks>
+    ActivityChildResultFacts AssessChildResult(ActivityNode activity, string producerChildNodeId, string consumerChildNodeId)
+    {
+        ArgumentNullException.ThrowIfNull(activity);
+        ArgumentException.ThrowIfNullOrWhiteSpace(producerChildNodeId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(consumerChildNodeId);
+        return ActivityChildResultFacts.FromCompletedBefore(ChildrenCompletedBefore(activity, consumerChildNodeId), producerChildNodeId);
+    }
 
     ActivityNodeStructure? CompileExecutableStructure(ActivityNode activity);
 

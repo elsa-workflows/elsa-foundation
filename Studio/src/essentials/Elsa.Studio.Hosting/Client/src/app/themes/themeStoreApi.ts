@@ -1,4 +1,5 @@
 import { isStudioThemeLayout, studioThemeLayouts, type StudioEndpointContext } from "../../sdk";
+import { isWorkspaceStyle } from "./workspaceStyles";
 import {
   allThemeModes,
   builtInThemeDefinitions,
@@ -136,7 +137,8 @@ export function findSelectableTheme(store: ThemeStoreResponse, themeId: string |
 
 export function validateThemeDefinition(theme: StudioThemeDefinition): ThemeValidationResult {
   const issues: ThemeValidationIssue[] = [];
-  if (!theme.id || !/^[a-z0-9][a-z0-9-]{1,62}[a-z0-9]$/.test(theme.id)) {
+  const knownBuiltIn = theme.source === "built-in" && builtInThemeDefinitions.some(builtIn => builtIn.id === theme.id);
+  if (!knownBuiltIn && (!theme.id || !/^[a-z0-9][a-z0-9-]{1,62}[a-z0-9]$/.test(theme.id))) {
     issues.push(error("id", "Theme ID must be kebab-case and between 3 and 64 characters."));
   } else if (theme.source === "custom" && builtInThemeDefinitions.some(builtIn => builtIn.id === theme.id)) {
     issues.push(error("id", "Theme ID is reserved for a built-in theme."));
@@ -177,6 +179,9 @@ export function validateThemeDefinition(theme: StudioThemeDefinition): ThemeVali
   validateShape(theme.shape, issues);
   if (theme.layout !== undefined && theme.layout !== null && !isStudioThemeLayout(theme.layout)) {
     issues.push(error("layout", `Layout must be one of ${studioThemeLayouts.join(", ")}.`));
+  }
+  if (theme.workspaceStyle !== undefined && theme.workspaceStyle !== null && !isWorkspaceStyle(theme.workspaceStyle)) {
+    issues.push(error("workspaceStyle", "Workspace style must be a supported Studio workspace treatment."));
   }
 
   return { valid: issues.every(issue => issue.severity !== "error"), issues };
@@ -324,6 +329,11 @@ function validateShape(shape: ThemeShape | undefined, issues: ThemeValidationIss
   }
 }
 
+/** Typed servers serialize absent optional members as null; omission keeps client defaults editable. */
+function normalizeOptionalMembers<T extends object>(value: T | null | undefined): T | undefined {
+  return value ? Object.fromEntries(Object.entries(value).filter(([, member]) => member !== null)) as T : undefined;
+}
+
 function normalizeThemeDefinition(theme: Partial<StudioThemeDefinition> | null | undefined): StudioThemeDefinition | null {
   if (!theme?.id || !theme.modes?.light || !theme.modes?.dark) {
     return null;
@@ -344,10 +354,11 @@ function normalizeThemeDefinition(theme: Partial<StudioThemeDefinition> | null |
       ...(theme.modes.dim ? { dim: theme.modes.dim } : {}),
       ...(theme.modes.highContrast ? { highContrast: theme.modes.highContrast } : {})
     },
-    // The host serializes absent optional sections as null; keep them undefined client-side.
-    typography: theme.typography ?? undefined,
-    shape: theme.shape ?? undefined,
+    // Normalize both absent sections and absent members from current and older typed hosts.
+    typography: normalizeOptionalMembers(theme.typography),
+    shape: normalizeOptionalMembers(theme.shape),
     layout: isStudioThemeLayout(theme.layout) ? theme.layout : undefined,
+    workspaceStyle: isWorkspaceStyle(theme.workspaceStyle) ? theme.workspaceStyle : undefined,
     material: theme.material
   };
 }

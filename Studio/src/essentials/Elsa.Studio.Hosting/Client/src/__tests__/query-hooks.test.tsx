@@ -1,11 +1,12 @@
 import React from "react";
+import { createStudioRegistry } from "../app/registry";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { ModuleManagementPage } from "../app/modules/ModuleManagementPage";
 import { PackageFeedsPage } from "../app/modules/PackageFeedsPage";
-import { createEndpointContext, type ElsaStudioModuleApi } from "../sdk";
+import { createEndpointContext, createHttpClient, type ElsaStudioModuleApi } from "../sdk";
 import { createTestQueryClient } from "./queryTestUtils";
 
 // Behavioural coverage for the shell's TanStack Query migration (#189): the Modules, Package feeds,
@@ -46,7 +47,7 @@ describe("module management query hooks", () => {
   });
 
   it("invalidates and refetches the registry after an upload mutation succeeds", async () => {
-    const fetchMock = vi.fn(async () => ({ ok: true, text: async () => "{}" }));
+    const fetchMock = vi.fn<typeof fetch>(async () => new Response("{}", { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
     const hostGetJson = vi.fn(async () => studioRegistry());
     const { container, unmount } = renderModuleManagementPage(stubApi({ hostGetJson }));
@@ -72,7 +73,7 @@ describe("module management query hooks", () => {
   });
 
   it("invalidates the registry after a feed mutation on the package feeds page", async () => {
-    const fetchMock = vi.fn(async () => ({ ok: true, text: async () => "{}" }));
+    const fetchMock = vi.fn<typeof fetch>(async () => new Response("{}", { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
     const hostGetJson = vi.fn(async () => studioRegistry());
     const { container, unmount } = renderPackageFeedsPage(stubApi({ hostGetJson }));
@@ -103,7 +104,9 @@ function stubApi(options: { hostGetJson?: (url: string) => Promise<unknown> }): 
       ? { status: "available", detail: "", backendBaseUrl: "https://foundation.example", checkedAt: new Date().toISOString(), registry: studioRegistry() }
       : hostRegistryRead(url);
 
+  const api = createStudioRegistry({ hostVersion: "1.0.0", sdkVersion: "1.0.0", ...createEndpointContext("https://studio.example/") });
   return {
+    ...api,
     host: {
       baseUrl: "https://studio.example/",
       hostVersion: "1.0.0",
@@ -116,9 +119,9 @@ function stubApi(options: { hostGetJson?: (url: string) => Promise<unknown> }): 
     },
     // The destructive feed-delete now goes through api.dialogs.confirm (#192 guard); auto-confirm so
     // this Query-invalidation test still exercises the mutation path once the confirmation resolves.
-    dialogs: { confirm: async () => true },
-    diagnostics: { add() {}, list: () => [] }
-  } as ElsaStudioModuleApi;
+    dialogs: { confirm: async () => true, prompt: async () => null, alert: async () => {} },
+    diagnostics: { ...api.diagnostics, add() {}, list: () => [] }
+  };
 }
 
 
@@ -140,7 +143,7 @@ function renderWithClient(node: React.ReactNode) {
 }
 
 function stubHttp(baseUrl: string, getJson: (url: string) => Promise<unknown>) {
-  return { ...createEndpointContext(baseUrl).http, getJson };
+  return { ...createEndpointContext(baseUrl).http, getJson: stubGetJson(baseUrl, getJson) };
 }
 
 function studioRegistry() {
@@ -149,18 +152,25 @@ function studioRegistry() {
     generatedAt: new Date().toISOString(),
     modules: [{ id: "Elsa.Studio.FeatureManagement", displayName: "Feature management", surface: "Studio", runtime: "Elsa.Studio.Web", sourceKind: "static-web-asset", scope: "full-stack", version: "1.0.1", status: "loaded", compatibility: "compatible", packageId: null, packageVersion: null, contributions: [], diagnostics: [], manifest: null }],
     packages: [], dropFolderPackages: [],
-    feeds: [{ name: "studio-local-packages", directoryPath: "packages", serviceIndex: null, credentials: null, includeAll: true, includePatterns: ["*"], directory: { watch: true, debounceWindow: "00:00:01" } }],
+    feeds: [{ name: "studio-local-packages", directoryPath: "packages", serviceIndex: null, includeAll: true, includePatterns: ["*"], directory: { watch: true, debounceWindow: "00:00:01" } }],
     retentionPolicy: { retainLastNVersions: 3, retainYoungerThanDays: 30, mode: "Automatic", protectLastKnownGood: true },
     capabilities: { canUploadPackages: true, canManageFeeds: true, canReconcile: true, canPrunePackages: true, feedChangesRequireRestart: true }, diagnostics: []
   };
 }
 
+// The pages default to the Server host; these cases exercise the Studio registry, so select it explicitly.
 function renderModuleManagementPage(api: ElsaStudioModuleApi) {
-  return renderWithClient(<ModuleManagementPage api={api} />);
+  return selectStudioHost(renderWithClient(<ModuleManagementPage api={api} />));
 }
 
 function renderPackageFeedsPage(api: ElsaStudioModuleApi) {
-  return renderWithClient(<PackageFeedsPage api={api} />);
+  return selectStudioHost(renderWithClient(<PackageFeedsPage api={api} />));
+}
+
+function selectStudioHost<T extends { container: Element }>(rendered: T) {
+  const tab = rendered.container.querySelector<HTMLButtonElement>("[aria-label='Hosts'] [data-tab-id='studio']");
+  flushSync(() => tab!.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+  return rendered;
 }
 
 async function clickSourceButton(container: Element, text: string) {
@@ -174,4 +184,11 @@ async function flushPromises() {
   for (let i = 0; i < 5; i++) {
     await new Promise(resolve => setTimeout(resolve, 0));
   }
+}
+
+// Preserve the generic HTTP contract by parsing fixture JSON through the normal transport.
+function stubGetJson(baseUrl: string, read: (url: string) => Promise<unknown>) {
+  return createHttpClient(baseUrl, {
+    fetch: async input => Response.json(await read(new URL(String(input)).pathname))
+  }).getJson;
 }

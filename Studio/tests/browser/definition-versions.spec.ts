@@ -14,8 +14,8 @@ async function expectColumnsAligned(headerRow: Locator, row: Locator) {
       return { x, width };
     }));
 
-  expect(headerBoxes).toHaveLength(6);
-  expect(cellBoxes).toHaveLength(6);
+  expect(headerBoxes).toHaveLength(8);
+  expect(cellBoxes).toHaveLength(8);
   for (let index = 0; index < headerBoxes.length; index++) {
     expect(Math.abs(headerBoxes[index].x - cellBoxes[index].x), `column ${index + 1} starts in the same place`).toBeLessThanOrEqual(1);
     expect(Math.abs(headerBoxes[index].width - cellBoxes[index].width), `column ${index + 1} has the same width`).toBeLessThanOrEqual(1);
@@ -62,10 +62,10 @@ test("workflow definition version columns show saved and published state and sta
   await expect(table.getByRole("columnheader", { name: "Latest version" })).toBeVisible();
   await expect(table.getByRole("columnheader", { name: "Published version" })).toBeVisible();
 
-  const longCells = longRow.getByRole("cell");
-  await expect(longCells.nth(2)).toContainText("Draft");
-  await expect(longCells.nth(2).locator(".wf-definition-version-number")).toHaveText("3.0.0");
-  const draftDisclosure = longCells.nth(2).locator("details");
+  const longCells = longRow.locator(".wf-definition-version");
+  await expect(longCells.nth(0)).toContainText("Draft");
+  await expect(longCells.nth(0).locator(".wf-definition-version-number")).toHaveText("3.0.0");
+  const draftDisclosure = longCells.nth(0).locator("details");
   await expect(draftDisclosure).not.toHaveAttribute("open");
   await draftDisclosure.locator("summary").focus();
   await page.keyboard.press("Enter");
@@ -73,27 +73,27 @@ test("workflow definition version columns show saved and published state and sta
   await expect(draftDisclosure).toContainText("Draft based on saved version 3.0.0.");
   await page.keyboard.press("Enter");
   await expect(draftDisclosure).not.toHaveAttribute("open");
-  await expect(longCells.nth(3)).toHaveText("2.0.0");
+  await expect(longCells.nth(1)).toHaveText("2.0.0");
 
-  const noDraftCells = noDraftRow.getByRole("cell");
-  await expect(noDraftCells.nth(2)).toHaveText("3.0.0");
-  await expect(noDraftCells.nth(3)).toHaveText("2.0.0");
+  const noDraftCells = noDraftRow.locator(".wf-definition-version");
+  await expect(noDraftCells.nth(0)).toHaveText("3.0.0");
+  await expect(noDraftCells.nth(1)).toHaveText("2.0.0");
 
-  const draftOnlyCells = draftOnlyRow.getByRole("cell");
-  await expect(draftOnlyCells.nth(2).locator("summary")).toHaveText("Draft");
-  await expect(draftOnlyCells.nth(2).locator(".wf-definition-version-number")).toHaveCount(0);
-  await expect(draftOnlyCells.nth(3)).toHaveText("Not published");
+  const draftOnlyCells = draftOnlyRow.locator(".wf-definition-version");
+  await expect(draftOnlyCells.nth(0).locator("summary")).toHaveText("Draft");
+  await expect(draftOnlyCells.nth(0).locator(".wf-definition-version-number")).toHaveCount(0);
+  await expect(draftOnlyCells.nth(1)).toHaveText("Not published");
 
-  const retractedCells = retractedRow.getByRole("cell");
-  await expect(retractedCells.nth(2)).toHaveText("5.0.0");
-  await expect(retractedCells.nth(3)).toHaveText("Retracted");
+  const retractedCells = retractedRow.locator(".wf-definition-version");
+  await expect(retractedCells.nth(0)).toHaveText("5.0.0");
+  await expect(retractedCells.nth(1)).toHaveText("Retracted");
 
-  const designOnlyCells = designOnlyRow.getByRole("cell");
-  await expect(designOnlyCells.nth(2)).toHaveText("1.0.0");
-  await expect(designOnlyCells.nth(3)).toHaveText("Unavailable");
+  const designOnlyCells = designOnlyRow.locator(".wf-definition-version");
+  await expect(designOnlyCells.nth(0)).toHaveText("1.0.0");
+  await expect(designOnlyCells.nth(1)).toHaveText("Unavailable");
 
-  await expect(longCells.nth(5).getByRole("button")).toHaveCount(1);
-  await expect(deletedRow.getByRole("cell").nth(5).getByRole("button")).toHaveCount(1);
+  await expect(longRow.getByRole("cell").last().getByRole("button")).toHaveCount(1);
+  await expect(deletedRow.getByRole("cell").last().getByRole("button")).toHaveCount(1);
   await expectColumnsAligned(headerRow, longRow);
   await expectColumnsAligned(headerRow, deletedRow);
 
@@ -115,12 +115,12 @@ test("workflow definition version columns show saved and published state and sta
   await page.keyboard.press("ArrowRight");
   await expect.poll(() => scrollArea.evaluate(element => element.scrollLeft)).toBeGreaterThan(scrollLeftBeforeKeyboard);
   await expect(latestHeader).toBeInViewport();
-  await expect(longCells.nth(2)).toBeInViewport();
+  await expect(longCells.nth(0)).toBeInViewport();
 
   const publishedHeader = table.getByRole("columnheader", { name: "Published version" });
   await scrollColumnIntoView(scrollArea, publishedHeader);
   await expect(publishedHeader).toBeInViewport();
-  await expect(longCells.nth(3)).toBeInViewport();
+  await expect(longCells.nth(1)).toBeInViewport();
 });
 
 test("definition actions support keyboard navigation and keep selection independent from opening", async ({ page }) => {

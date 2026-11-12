@@ -14,6 +14,19 @@ public sealed class EtlRuntimeIdentityTests
             EtlArtifactJson.CreateArtifactId(1, "orders", 1, new string('a', 64)));
 
     [Fact]
+    public void Connector_file_keys_keep_the_jsonl_key_and_add_a_csv_extension()
+    {
+        const string effectId = "effect-identity";
+        var jsonl = EtlRuntimeIdentity.ConnectorFileOutputKey(effectId);
+
+        // SHA-256 of the UTF-8 effect id, derived independently of the code under test.
+        Assert.Equal("cf37b4ab990c7af77e753f8d40e4117c010b7a4c65aaa3478049de4edc9d636c.jsonl", jsonl);
+        Assert.Equal(jsonl, EtlRuntimeIdentity.ConnectorFileOutputKey(effectId, EtlConnectorKind.Jsonl));
+        Assert.Equal(jsonl[..^".jsonl".Length] + ".csv", EtlRuntimeIdentity.ConnectorFileOutputKey(effectId, EtlConnectorKind.Csv));
+        Assert.Throws<ArgumentOutOfRangeException>(() => EtlRuntimeIdentity.ConnectorFileOutputKey(effectId, EtlConnectorKind.Http));
+    }
+
+    [Fact]
     public void Scope_key_preserves_null_named_and_opaque_tenants()
     {
         var scopes = new[]

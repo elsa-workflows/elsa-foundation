@@ -37,7 +37,7 @@ internal sealed class EtlConnectorInputBatchBuilderException(EtlPreparationDiagn
 }
 
 /// <summary>Builds and exactly reconstructs deterministic bounded batches from retained typed connector inputs.</summary>
-/// <remarks>CSV rows are parsed from the retained byte index; HTTP records are consumed directly from the verified page cache result.</remarks>
+/// <remarks>CSV rows and JSON Lines records are parsed from the retained byte index; HTTP records are consumed directly from the verified page cache result.</remarks>
 internal sealed class EtlConnectorInputBatchBuilder : IAsyncDisposable
 {
     private const int CanonicalFormatVersion = 2;
@@ -50,6 +50,9 @@ internal sealed class EtlConnectorInputBatchBuilder : IAsyncDisposable
     private readonly EtlPipelineV2 _pipeline;
     private readonly int _partitionOrdinal;
     private readonly EtlCsvSource? _csvSource;
+    private readonly EtlJsonlSource? _jsonlSource;
+    private readonly IReadOnlyList<EtlJsonPointer> _jsonlPointers;
+    private readonly long _jsonlFirstLineStart;
     private readonly FileStream? _source;
     private readonly FileStream? _index;
     private readonly EtlCsvHeaderMap? _sourceHeader;
@@ -61,7 +64,8 @@ internal sealed class EtlConnectorInputBatchBuilder : IAsyncDisposable
     private EtlConnectorInputBatchBuilder(string root, EtlConnectorRunAdmission admission,
         EtlConnectorPreparedRun prepared, EtlPipelineV2 pipeline, int partitionOrdinal,
         FileStream? source, FileStream? index, EtlCsvHeaderMap? sourceHeader,
-        IReadOnlyDictionary<EtlTypedValue, EtlTypedRow> lookupRows, long sourceRecordCount)
+        IReadOnlyDictionary<EtlTypedValue, EtlTypedRow> lookupRows, long sourceRecordCount,
+        IReadOnlyList<EtlJsonPointer> jsonlPointers, long jsonlFirstLineStart)
     {
         _root = root;
         _admission = admission;
@@ -69,6 +73,9 @@ internal sealed class EtlConnectorInputBatchBuilder : IAsyncDisposable
         _pipeline = pipeline;
         _partitionOrdinal = partitionOrdinal;
         _csvSource = pipeline.Source as EtlCsvSource;
+        _jsonlSource = pipeline.Source as EtlJsonlSource;
+        _jsonlPointers = jsonlPointers;
+        _jsonlFirstLineStart = jsonlFirstLineStart;
         _source = source;
         _index = index;
         _sourceHeader = sourceHeader;
@@ -96,16 +103,19 @@ internal sealed class EtlConnectorInputBatchBuilder : IAsyncDisposable
         var streamsTransferred = false;
         try
         {
-            var pipeline = ReadPipeline(admission);
+            var authored = ReadPipeline(admission);
+            // A SQL (spec 1198) or RabbitMQ (spec 1201) source is processed as the JSON Lines view of its retained snapshot.
+            var sqlSource = authored.Source is EtlSqlSource or EtlRabbitMqSource;
+            var pipeline = EtlSqlSnapshotReader.ProcessingView(authored);
             var root = Path.GetFullPath(hostApprovedSnapshotRoot);
             if (!Directory.Exists(root))
                 throw Invalid("etl.snapshot-read-failed");
-            ValidatePrepared(admission, prepared, pipeline, partitionOrdinal);
+            ValidatePrepared(admission, prepared, pipeline, partitionOrdinal, sqlSource);
 
             IReadOnlyDictionary<EtlTypedValue, EtlTypedRow> lookupRows = EmptyLookupRows;
             if (pipeline.Lookup is { } lookup)
             {
-                var pin = PreparedPin(admission, lookup.Binding, EtlFileRole.Lookup);
+                var pin = PreparedPin(admission, lookup.Binding, EtlFileRole.Lookup, EtlConnectorKind.Csv);
                 lookupRows = await EtlConnectorCsvSupport.ReadLookupRowsAsync(root, prepared.Lookup!, pin,
                     lookup, pipeline.Limits, cancellationToken);
             }
@@ -115,7 +125,7 @@ internal sealed class EtlConnectorInputBatchBuilder : IAsyncDisposable
             if (pipeline.Source is EtlCsvSource csv)
             {
                 var file = prepared.File!;
-                var sourcePin = PreparedPin(admission, csv.Binding, EtlFileRole.Source);
+                var sourcePin = PreparedPin(admission, csv.Binding, EtlFileRole.Source, EtlConnectorKind.Csv);
                 source = EtlConnectorCsvSupport.OpenSnapshot(root, file.Source, ".csv",
                     pipeline.Limits.MaxSnapshotBytes, sourcePin.ExpectedSha256!);
                 index = OpenGeneratedChunk(root, file.Index, ".index",
@@ -132,8 +142,31 @@ internal sealed class EtlConnectorInputBatchBuilder : IAsyncDisposable
                     throw Invalid(headerError!.Code, headerError.RecordOrdinal, headerError.Field);
             }
 
+            IReadOnlyList<EtlJsonPointer> jsonlPointers = Array.Empty<EtlJsonPointer>();
+            long jsonlFirstLineStart = 0;
+            if (pipeline.Source is EtlJsonlSource jsonl)
+            {
+                var file = prepared.File!;
+                source = EtlConnectorCsvSupport.OpenSnapshot(root, file.Source, ".jsonl",
+                    pipeline.Limits.MaxSnapshotBytes, SourceAnchor(admission, jsonl.Binding, EtlConnectorKind.Jsonl, file, sqlSource));
+                index = OpenGeneratedChunk(root, file.Index, ".index",
+                    checked((file.RecordCount + 1) * IndexEntrySize), exactLength: true);
+                await VerifyFileAsync(source, file.Source.ContentHash, cancellationToken);
+                await VerifyFileAsync(index, file.Index.ContentHash, cancellationToken);
+                index.Position = 0;
+                sourceRecordCount = file.RecordCount;
+                jsonlPointers = Array.AsReadOnly(jsonl.Fields.Select(field => new EtlJsonPointer(field.Pointer)).ToArray());
+
+                // Entry 0 is the sentinel covering only a leading byte order mark, never a header.
+                var sentinel = await ReadIndexEntryAsync(index, file.RecordCount, 0, new byte[IndexEntrySize], cancellationToken);
+                jsonlFirstLineStart = sentinel.EndByteOffset;
+                if (sentinel.StartByteOffset != 0 || sentinel.EndByteOffset is not (0 or 3) ||
+                    sentinel.EndByteOffset == 3 && !await StartsWithByteOrderMarkAsync(source, cancellationToken))
+                    throw Invalid("etl.source-index-invalid");
+            }
+
             var builder = new EtlConnectorInputBatchBuilder(root, admission, prepared, pipeline, partitionOrdinal,
-                source, index, sourceHeader, lookupRows, sourceRecordCount);
+                source, index, sourceHeader, lookupRows, sourceRecordCount, jsonlPointers, jsonlFirstLineStart);
             streamsTransferred = true;
             return builder;
         }
@@ -271,13 +304,19 @@ internal sealed class EtlConnectorInputBatchBuilder : IAsyncDisposable
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 var indexed = await ReadIndexEntryAsync(ordinalToRead, cancellationToken);
-                if (indexed.StartByteOffset != expectedStartOffset || indexed.EndByteOffset <= indexed.StartByteOffset ||
-                    indexed.EndByteOffset > file.Source.ByteLength)
+                // CSV records are contiguous; JSON Lines spans can be separated by skipped blank lines.
+                if ((_jsonlSource is null ? indexed.StartByteOffset != expectedStartOffset : indexed.StartByteOffset < expectedStartOffset) ||
+                    indexed.EndByteOffset <= indexed.StartByteOffset || indexed.EndByteOffset > file.Source.ByteLength)
                     return Failed("etl.source-index-invalid");
 
-                var csvRecord = await ReadSourceRecordAsync(_source!, file.Source.ByteLength, _pipeline, indexed, cancellationToken);
                 EtlConnectorInputRecord input;
-                if (EtlRowTransformer.TryParseTypedRow(_csvSource!.Schema, _sourceHeader!, csvRecord, out var typedRow, out var rowError))
+                if (_jsonlSource is not null)
+                {
+                    input = await ReadJsonlRecordAsync(indexed, expectedStartOffset, file.Source.ByteLength, cancellationToken);
+                }
+                else if (EtlRowTransformer.TryParseTypedRow(_csvSource!.Schema, _sourceHeader!,
+                             await ReadSourceRecordAsync(_source!, file.Source.ByteLength, _pipeline, indexed, cancellationToken),
+                             out var typedRow, out var rowError))
                 {
                     input = new EtlConnectorInputRecord(indexed.Ordinal, indexed.EndByteOffset - indexed.StartByteOffset,
                         EtlConnectorCsvSupport.FreezeRow(typedRow!), null);
@@ -410,14 +449,14 @@ internal sealed class EtlConnectorInputBatchBuilder : IAsyncDisposable
         diagnostic = null;
         switch (position)
         {
-            case EtlConnectorFilePosition file when _csvSource is not null && page is null && _prepared.File is not null:
+            case EtlConnectorFilePosition file when (_csvSource is not null || _jsonlSource is not null) && page is null && _prepared.File is not null:
                 if (file.StartOrdinal < 1 || file.EndOrdinalExclusive < file.StartOrdinal ||
                     file.EndOrdinalExclusive > _sourceRecordCount + 1 || file.NextOrdinal < file.StartOrdinal ||
                     file.NextOrdinal > file.EndOrdinalExclusive || file.StartOrdinal != ResolveFilePartitionStart() ||
                     file.EndOrdinalExclusive != ResolveFilePartitionEnd())
                     diagnostic = new EtlPreparationDiagnostic("etl.partition-cursor-invalid");
                 break;
-            case EtlConnectorHttpPosition http when _csvSource is null && _pipeline.Source is EtlHttpJsonSource && _prepared.File is null:
+            case EtlConnectorHttpPosition http when _pipeline.Source is EtlHttpJsonSource && _prepared.File is null:
                 if (http.Exhausted || http.Page is null || page is null ||
                     !StringComparer.Ordinal.Equals(http.Request.ShardId, _admission.Bindings.HttpShardIds[_partitionOrdinal]) ||
                     http.PageSequence != page.Descriptor.PageSequence || http.Page != page.Descriptor ||
@@ -485,6 +524,145 @@ internal sealed class EtlConnectorInputBatchBuilder : IAsyncDisposable
             record.EndByteOffset != entry.EndByteOffset || await records.MoveNextAsync())
             throw Invalid("etl.source-index-invalid", SafeOrdinal(entry.Ordinal));
         return record;
+    }
+
+    /// <summary>Re-verifies one indexed JSON Lines span against the snapshot and parses it into a typed row or record error.</summary>
+    /// <remarks>Spans longer than the record limit are only scanned in bounded chunks, never held in memory.</remarks>
+    private async ValueTask<EtlConnectorInputRecord> ReadJsonlRecordAsync(IndexEntry entry, long previousEnd, long sourceLength,
+        CancellationToken cancellationToken)
+    {
+        var source = _source!;
+        var ordinal = checked((int)entry.Ordinal);
+        var spanLength = entry.EndByteOffset - entry.StartByteOffset;
+
+        // Only whole blank lines may separate this span from the previous one, and it must start a line.
+        var gap = new JsonlFraming();
+        source.Position = previousEnd;
+        await ScanAsync(source, entry.StartByteOffset - previousEnd, null, (chunk, _) => gap.AcceptGap(chunk), cancellationToken);
+        if (!gap.ValidGap || entry.StartByteOffset == previousEnd && previousEnd != _jsonlFirstLineStart &&
+            !await PrecededByLineFeedAsync(source, entry.StartByteOffset, cancellationToken))
+            throw Invalid("etl.source-index-invalid", ordinal);
+
+        var maxRecordBytes = _pipeline.Limits.MaxRecordBytes;
+        // Only spans that can hold an admissible record (content plus CRLF) are buffered, never beyond one array.
+        var content = spanLength <= Math.Min(maxRecordBytes + 2L, Array.MaxLength) ? new byte[spanLength] : null;
+        var framing = new JsonlFraming();
+        source.Position = entry.StartByteOffset;
+        await ScanAsync(source, spanLength, content, (chunk, offset) => framing.AcceptSpan(chunk, offset, spanLength), cancellationToken);
+        if (!framing.ValidSpan(entry.EndByteOffset == sourceLength))
+            throw Invalid("etl.source-index-invalid", ordinal);
+
+        var contentLength = spanLength - framing.TerminatorLength;
+        if (contentLength > maxRecordBytes || content is null)
+            return JsonlError("etl.record-too-large");
+
+        try
+        {
+            using var document = JsonDocument.Parse(content.AsMemory(0, (int)contentLength), new JsonDocumentOptions
+            {
+                AllowTrailingCommas = false,
+                CommentHandling = JsonCommentHandling.Disallow,
+                MaxDepth = _pipeline.Http.MaxJsonDepth
+            });
+            EtlJsonRecordReader.ValidateDocument(document.RootElement);
+            if (document.RootElement.ValueKind != JsonValueKind.Object)
+                return JsonlError("etl.jsonl.record-not-object");
+            var (row, error) = EtlJsonRecordReader.ReadFields(document.RootElement, _jsonlSource!.Fields, _jsonlPointers, ordinal);
+            return new EtlConnectorInputRecord(entry.Ordinal, spanLength, row is null ? null : EtlConnectorCsvSupport.FreezeRow(row), error);
+        }
+        catch (Exception exception) when (exception is JsonException or EtlDuplicatePropertyException or InvalidOperationException)
+        {
+            // Decoder exceptions can carry input fragments; only the stable code is retained.
+            return JsonlError("etl.jsonl.record-invalid");
+        }
+
+        EtlConnectorInputRecord JsonlError(string code) =>
+            new(entry.Ordinal, spanLength, null, new EtlRowError(ordinal, null, code));
+    }
+
+    private static async ValueTask ScanAsync(FileStream source, long length, byte[]? capture,
+        Action<ReadOnlySpan<byte>, long> accept, CancellationToken cancellationToken)
+    {
+        var buffer = capture ?? new byte[(int)Math.Min(BufferSize, Math.Max(length, 1))];
+        long offset = 0;
+        while (offset < length)
+        {
+            var memory = capture is null
+                ? buffer.AsMemory(0, (int)Math.Min(buffer.Length, length - offset))
+                : capture.AsMemory((int)offset, (int)(length - offset));
+            var count = await source.ReadAsync(memory, cancellationToken);
+            if (count == 0)
+                throw Invalid("etl.source-index-invalid");
+            accept(memory.Span[..count], offset);
+            offset += count;
+        }
+    }
+
+    private static async ValueTask<bool> PrecededByLineFeedAsync(FileStream source, long offset, CancellationToken cancellationToken)
+    {
+        var previous = new byte[1];
+        source.Position = offset - 1;
+        await source.ReadExactlyAsync(previous, cancellationToken);
+        return previous[0] == (byte)'\n';
+    }
+
+    private static async ValueTask<bool> StartsWithByteOrderMarkAsync(FileStream source, CancellationToken cancellationToken)
+    {
+        var prefix = new byte[3];
+        source.Position = 0;
+        if (source.Length < prefix.Length)
+            return false;
+        await source.ReadExactlyAsync(prefix, cancellationToken);
+        return prefix is [0xEF, 0xBB, 0xBF];
+    }
+
+    /// <summary>Checks one indexed span, or the gap before it, as its bytes stream past: a span is one non-blank line ending in
+    /// LF (or at end of file) with no LF inside, and a gap holds only whole blank lines.</summary>
+    private sealed class JsonlFraming
+    {
+        private bool _lineFeedBeforeEnd;
+        private bool _nonBlank;
+        private bool _gapInvalid;
+        private byte _last;
+        private byte _beforeLast;
+        private long _seen;
+
+        public bool ValidGap => !_gapInvalid && (_seen == 0 || _last == (byte)'\n');
+
+        public int TerminatorLength => _seen > 0 && _last == (byte)'\n' ? _seen > 1 && _beforeLast == (byte)'\r' ? 2 : 1 : 0;
+
+        public void AcceptGap(ReadOnlySpan<byte> chunk)
+        {
+            foreach (var value in chunk)
+            {
+                if (value is not ((byte)' ' or (byte)'\t' or (byte)'\r' or (byte)'\n'))
+                    _gapInvalid = true;
+                Track(value);
+            }
+        }
+
+        public void AcceptSpan(ReadOnlySpan<byte> chunk, long offset, long spanLength)
+        {
+            for (var index = 0; index < chunk.Length; index++)
+            {
+                var value = chunk[index];
+                if (value == (byte)'\n' && offset + index != spanLength - 1)
+                    _lineFeedBeforeEnd = true;
+                if (value is not ((byte)' ' or (byte)'\t' or (byte)'\r' or (byte)'\n'))
+                    _nonBlank = true;
+                Track(value);
+            }
+        }
+
+        /// <summary>No LF inside, a terminating LF unless the span ends the file, and not a blank line.</summary>
+        public bool ValidSpan(bool endsFile) => !_lineFeedBeforeEnd && _nonBlank && (endsFile || _last == (byte)'\n');
+
+        private void Track(byte value)
+        {
+            _beforeLast = _last;
+            _last = value;
+            _seen++;
+        }
     }
 
     private static async ValueTask VerifyFileAsync(FileStream stream, string expectedHash, CancellationToken cancellationToken)
@@ -561,24 +739,29 @@ internal sealed class EtlConnectorInputBatchBuilder : IAsyncDisposable
     }
 
     private static void ValidatePrepared(EtlConnectorRunAdmission admission, EtlConnectorPreparedRun prepared,
-        EtlPipelineV2 pipeline, int partitionOrdinal)
+        EtlPipelineV2 pipeline, int partitionOrdinal, bool sqlSource)
     {
         if (pipeline.Limits is null || pipeline.Http is null || partitionOrdinal < 0)
             throw Invalid("etl.batch-descriptor-invalid");
-        var isCsv = pipeline.Source is EtlCsvSource;
-        if (isCsv != (prepared.File is not null) || (pipeline.Lookup is null) != (prepared.Lookup is null))
+        var isFile = pipeline.Source is EtlCsvSource or EtlJsonlSource;
+        if (isFile != (prepared.File is not null) || (pipeline.Lookup is null) != (prepared.Lookup is null))
             throw Invalid("etl.prepared-run-mismatch");
 
         if ((pipeline.Lookup is null) != (admission.Bindings.Lookup is null))
             throw Invalid("etl.binding-unavailable");
 
-        if (isCsv)
+        if (isFile)
         {
             var file = prepared.File!;
-            var pin = PreparedPin(admission, ((EtlCsvSource)pipeline.Source).Binding, EtlFileRole.Source);
+            var (binding, kind, extension) = pipeline.Source switch
+            {
+                EtlJsonlSource jsonl => (jsonl.Binding, EtlConnectorKind.Jsonl, ".jsonl"),
+                _ => (((EtlCsvSource)pipeline.Source).Binding, EtlConnectorKind.Csv, ".csv")
+            };
+            var anchor = SourceAnchor(admission, binding, kind, file, sqlSource);
             if (file.RecordCount < 0 || file.Source.ByteLength < 0 || file.Source.ByteLength > pipeline.Limits.MaxSnapshotBytes ||
-                !EtlConnectorCsvSupport.IsHash(file.Source.ContentHash) || !EtlConnectorCsvSupport.HashEquals(pin.ExpectedSha256!, file.Source.ContentHash) ||
-                !EtlConnectorCsvSupport.IsChunkKey(file.Source.Key, ".csv") ||
+                !EtlConnectorCsvSupport.IsHash(file.Source.ContentHash) || !EtlConnectorCsvSupport.HashEquals(anchor, file.Source.ContentHash) ||
+                !EtlConnectorCsvSupport.IsChunkKey(file.Source.Key, extension) ||
                 !EtlConnectorCsvSupport.IsChunkKey(file.Index.Key, ".index") || !EtlConnectorCsvSupport.IsHash(file.Index.ContentHash) ||
                 file.Index.ByteLength != checked((file.RecordCount + 1) * IndexEntrySize) || partitionOrdinal >= Math.Min(file.RecordCount, pipeline.Limits.FilePartitionCount))
                 throw Invalid("etl.prepared-run-mismatch");
@@ -598,7 +781,7 @@ internal sealed class EtlConnectorInputBatchBuilder : IAsyncDisposable
 
         if (pipeline.Lookup is { } lookup)
         {
-            var pin = PreparedPin(admission, lookup.Binding, EtlFileRole.Lookup);
+            var pin = PreparedPin(admission, lookup.Binding, EtlFileRole.Lookup, EtlConnectorKind.Csv);
             var descriptor = prepared.Lookup!;
             if (!EtlConnectorCsvSupport.IsChunkKey(descriptor.Key, ".csv") ||
                 !EtlConnectorCsvSupport.IsHash(descriptor.ContentHash) ||
@@ -608,13 +791,31 @@ internal sealed class EtlConnectorInputBatchBuilder : IAsyncDisposable
         }
     }
 
-    private static PinnedFileBinding PreparedPin(EtlConnectorRunAdmission admission, string alias, EtlFileRole role)
+    /// <summary>
+    /// The digest the source snapshot must match: a file source's pinned admission digest, or, for a SQL source whose bytes
+    /// did not exist at admission, the snapshot hash recorded with the preparation (spec 1198).
+    /// </summary>
+    private static string SourceAnchor(EtlConnectorRunAdmission admission, string alias, EtlConnectorKind fileKind,
+        EtlPreparedCsvInput file, bool sqlSource)
+    {
+        if (!sqlSource)
+            return PreparedPin(admission, alias, EtlFileRole.Source, fileKind).ExpectedSha256!;
+        var revision = admission.Bindings.Source?.Revision;
+        if (admission.Bindings.Source?.Kind is not (EtlConnectorKind.Sql or EtlConnectorKind.RabbitMq) || revision is null || revision.Alias != alias ||
+            revision.ExpectedSha256 is not null || !EtlConnectorCsvSupport.IsHash(revision.Handle) ||
+            string.IsNullOrWhiteSpace(revision.Revision) || !EtlConnectorCsvSupport.IsHash(file.Source.ContentHash))
+            throw Invalid("etl.binding-unavailable");
+        return file.Source.ContentHash;
+    }
+
+    private static PinnedFileBinding PreparedPin(EtlConnectorRunAdmission admission, string alias, EtlFileRole role,
+        EtlConnectorKind expectedKind)
     {
         var revision = role == EtlFileRole.Source ? admission.Bindings.Source?.Revision : admission.Bindings.Lookup?.Revision;
-        var expectedKind = role == EtlFileRole.Source
+        var pinnedKind = role == EtlFileRole.Source
             ? admission.Bindings.Source?.Kind
             : admission.Bindings.Lookup?.Kind;
-        if (revision is null || expectedKind != EtlConnectorKind.Csv || revision.Alias != alias ||
+        if (revision is null || pinnedKind != expectedKind || revision.Alias != alias ||
             !EtlConnectorCsvSupport.IsHash(revision.ExpectedSha256) || !EtlConnectorCsvSupport.IsHash(revision.Handle) ||
             string.IsNullOrWhiteSpace(revision.Revision))
             throw Invalid("etl.binding-unavailable");
@@ -670,6 +871,7 @@ internal sealed class EtlConnectorInputBatchBuilder : IAsyncDisposable
         {
             EtlCsvSource csv => csv.Schema.Select(column => (column.Name, column.Type)).ToArray(),
             EtlHttpJsonSource http => http.Fields.Select(field => (field.Name, field.Type)).ToArray(),
+            EtlJsonlSource jsonl => jsonl.Fields.Select(field => (field.Name, field.Type)).ToArray(),
             _ => throw new InvalidDataException("The ETL source declaration is unsupported.")
         };
 

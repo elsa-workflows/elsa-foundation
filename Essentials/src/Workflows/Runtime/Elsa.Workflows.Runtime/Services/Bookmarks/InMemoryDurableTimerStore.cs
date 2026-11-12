@@ -27,6 +27,18 @@ public sealed class InMemoryDurableTimerStore : IDurableTimerStore
 
     public bool SupportsClaimTransitions => true;
 
+    public ValueTask<DateTimeOffset?> GetNextDueTimeAsync(CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        lock (_syncRoot)
+        {
+            return ValueTask.FromResult(_timers.Values
+                .Select(state => (DateTimeOffset?)(state.VisibleAfter > state.Timer.DueTime
+                    ? state.VisibleAfter.Value : state.Timer.DueTime))
+                .Min());
+        }
+    }
+
     public ValueTask<DurableTimer> SaveAsync(DurableTimer timer, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(timer);

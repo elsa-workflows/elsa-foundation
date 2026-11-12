@@ -7,6 +7,7 @@ using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Diagnostics;
 using Elsa.Workflows.Runtime.Services.Incidents;
+using Elsa.Workflows.Runtime.Services.Executions;
 using Elsa.Workflows.Runtime.Services.Values;
 
 namespace Elsa.Workflows.Runtime.Services.Scheduler;
@@ -32,8 +33,10 @@ namespace Elsa.Workflows.Runtime.Services.Scheduler;
 /// decided later by the workflow's authored <c>IIncidentStrategy</c>, applied by
 /// <c>IncidentStrategyResolutionDrainObserver</c> at quiescence, with
 /// <c>BlockingIncidentWorkflowFaultObserver</c> as the backstop for drains that did not quiesce.</description></item>
-/// <item><description>A <b>handler</b> fault lands in <see cref="DispatchAsync"/>'s general catch, is poisoned by
-/// <see cref="HandleHandlerCrashAsync"/>, and is projected into a blocking incident by
+/// <item><description>A <b>handler</b> fault lands in <see cref="DispatchAsync"/>'s general catch. A drain that is
+/// found there to have lost its run's ownership lease is turned away and writes nothing; one found to have lost it
+/// only when the poison record is written has made its queue change and records nothing (#4032). Otherwise the fault
+/// is poisoned by <see cref="HandleHandlerCrashAsync"/>, and is projected into a blocking incident by
 /// <c>PoisonedSchedulerWorkIncidentObserver</c>, which deliberately leaves the workflow non-terminal. A handler fault a
 /// checkpoint rule caused is marked <see cref="RuntimeSchedulerWorkItemResult.CheckpointRuleViolation"/>, and the drain
 /// orchestrator faults the workflow for it (#1780).</description></item>
@@ -44,6 +47,39 @@ namespace Elsa.Workflows.Runtime.Services.Scheduler;
 /// </summary>
 public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
 {
+    internal DrainControlContext? DrainControls { private get; init; }
+    internal RuntimeExecutionProtocolSelector? ModelProtocols { private get; init; }
+
+    /// <summary>
+    /// Whether something re-drives work released with a future visibility: an <c>IWorkflowDispatchDurabilityEvidence</c>
+    /// naming <c>Resumption</c>, the same signal the router uses before parking shed work (#1320). Without it a
+    /// <c>RetryAfter</c> is poisoned rather than released to wait for a sweep nobody runs.
+    /// </summary>
+    internal bool HasResumptionRedriver { private get; init; }
+
+    /// <summary>
+    /// The accessor for the ambient ownership lease (#4032). Optional; the runtime composition root sets it. The
+    /// drainer reads it only when a work handler faults, and uses the lease only when it is a lease of the work
+    /// item's own execution. Under such a lease it asks <see cref="OwnershipService"/>, when that is set, before it
+    /// writes anything of the fault, and it writes the poison record under the lease when the poison store can check
+    /// it atomically (<see cref="ISchedulerPoisonFenceCapability"/>). Without the accessor neither happens, and the
+    /// record is written with no ownership check.
+    /// </summary>
+    public IRuntimeExecutionOwnershipContextAccessor? OwnershipContextAccessor { private get; init; }
+
+    /// <summary>
+    /// The ownership service the drainer asks, when a work handler faults under an ambient lease for the work item's
+    /// own execution, whether that lease is still the run's current one (#4032). Optional; the runtime composition
+    /// root sets it. It is asked before the drainer acknowledges, releases or re-enqueues the faulted step. A lease
+    /// that another owner took over, that expired, or that an alteration borrowed ends the drain with
+    /// <see cref="RuntimeStaleFencingTokenException"/>: the fault arm writes nothing, so the step is left as it was
+    /// and nothing is recorded. Only that answer stops the fault path, and the cancellation of the drain's own
+    /// token. When the service cannot answer, because its read failed, the fault path goes on as it does without the
+    /// service: the step is acknowledged or released, and the record is still written under the lease where the
+    /// poison store can check it. Without the service the drainer does not ask, and only a fenced poison record
+    /// checks the lease. It is not used without <see cref="OwnershipContextAccessor"/>.
+    /// </summary>
+    public IRuntimeExecutionOwnershipService? OwnershipService { private get; init; }
     private readonly IWorkflowSchedulerWorkQueue _schedulerWorkQueue;
     private readonly IReadOnlyCollection<IWorkflowSchedulerWorkHandler> _customHandlers;
     private readonly IReadOnlyCollection<IWorkflowSchedulerWorkHandler> _fallbackHandlers;
@@ -153,10 +189,16 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
         // would re-load and deserialize the state document needlessly on durable providers. (#293)
         var stoppedOnTerminalStatus = await IsWorkflowTerminatedAsync(request.WorkflowExecutionId, cancellationToken);
 
+        var yielded = false;
         while (remaining > 0 && !stoppedOnTerminalStatus)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
+            if (DrainControls?.ShouldYield(request.WorkflowExecutionId) == true)
+            {
+                yielded = true;
+                break;
+            }
             var delivery = await AcquireNextAsync(request.WorkflowExecutionId, cancellationToken);
             if (delivery is null)
                 break;
@@ -165,7 +207,8 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
             // A null decision here means this command kind has no pause boundary (the gate maps only StartActivity,
             // InvokeActivity, and GeneratedEvent), not that pausing is unavailable — the gate is required by
             // construction, so "no gate" is not a state this can be in. (#1277 R1)
-            var pauseDecision = await _pauseGate.EvaluateAsync(nextWorkItem, cancellationToken);
+            var pauseDecision = ModelProtocols?.IsSelectedModel(request.WorkflowExecutionId) == true
+                ? null : await _pauseGate.EvaluateAsync(nextWorkItem, cancellationToken);
             if (pauseDecision is { CanAdvance: false })
             {
                 await ReleaseAsync(delivery, cancellationToken);
@@ -194,7 +237,7 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
         // all-completed drain; flag it as the stop reason.
         var stopReason = stoppedOnTerminalStatus
             ? RuntimeSchedulerDrainStopReason.WorkflowTerminated
-            : (RuntimeSchedulerDrainStopReason?)null;
+            : yielded ? RuntimeSchedulerDrainStopReason.Yielded : (RuntimeSchedulerDrainStopReason?)null;
 
         // Outcome tags set after the loop, from already-computed values (no pre-computation, no extra work).
         if (activity is not null)
@@ -214,6 +257,7 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
 
     private async ValueTask<bool> IsWorkflowTerminatedAsync(string workflowExecutionId, CancellationToken cancellationToken)
     {
+        if (ModelProtocols?.IsSelectedModel(workflowExecutionId) == true) return false;
         // The terminal-status guard reads the state store injected by construction — no AsyncLocal
         // service-location in the drain path. The store is required, so there is no null fallback.
         var state = await _workflowExecutionStateStore.FindAsync(workflowExecutionId, cancellationToken);
@@ -253,6 +297,14 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
             ? _consumedWorkClaimAccessor.Begin(ConsumedSchedulerWorkItem.FromClaim(claim))
             : null;
 
+        // #3275, #3683: the positive evidence a delayed release needs, that this dispatch sent no non-retaining checkpoint
+        // to the store, for a RetryAfter and for temporarily unavailable work alike. Open only where such a release is
+        // possible: a claimed item of a kind that supports it.
+        using var dispatchFrame = claim is not null && RuntimeUnavailableWork.SupportsDelayedRelease(workItem.CommandKind)
+            ? RuntimeSchedulerDispatchFrame.Open(workItem.WorkflowExecutionId)
+            : null;
+        var handlerReturned = false;
+
         // The dispatch span nests under the drain-cycle span via Activity.Current. The activity-execution span
         // (Invoke slot) and the checkpoint-commit span both nest under this one when the pipeline runs. Null when
         // tracing is inactive.
@@ -270,10 +322,11 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
             // for slot-invoked handlers to read — no AsyncLocal service location in the drain path.
             await DispatchWithClaimRenewalAsync(
                 renewal,
-                dispatchCancellationToken => _pipelineDispatcher is not null
+                dispatchCancellationToken => _pipelineDispatcher is not null && ModelProtocols?.IsSelectedModel(workItem.WorkflowExecutionId) != true
                     ? _pipelineDispatcher.DispatchAsync(workItem, handler, ambientServices, dispatchCancellationToken)
                     : handler.HandleAsync(workItem, dispatchCancellationToken),
                 cancellationToken);
+            handlerReturned = true;
 
             // The handler's effect is now durable. On the atomic path a checkpoint commit already deleted the claimed item
             // inside its unit-of-work, so the separate acknowledgement is redundant and skipped;
@@ -315,16 +368,22 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
             // node neither acknowledges it nor records it as poison, which would leave the new owner nothing to run.
             throw;
         }
-        catch (RuntimeSchedulerWorkUnavailableException exception)
+        catch (RuntimeSchedulerWorkUnavailableException exception) when (
+            dispatchFrame is not { NonRetainingCheckpointAttempted: true } || _consumedWorkClaimAccessor?.WasConsumedDurably == true)
         {
+            // #3683: only work that sent no non-retaining checkpoint to the store is deferred here. One that did has an
+            // effect that is durable, or will be at the coalescing segment's flush, without its commit having consumed the
+            // item (an active segment consumes nothing, and a commit through a scope of its own holds no claim), so a
+            // release would run it again over that effect. It falls through to the handler-fault arm below instead. A
+            // commit the store refused with this same exception, rolled back, is no attempt (the committer withdraws it),
+            // so a refused native worker admission is still deferred and retried here.
+
             // Supported work preserves its retry delay through a durable claim or a visibility-aware overlay
             // whose drain flush persists the release. Unsupported work/provider pairs retain their source.
-            if (!RuntimeUnavailableWork.SupportsDelayedRelease(workItem.CommandKind) ||
-                renewal is null || _consumedWorkClaimAccessor?.WasConsumedDurably == true ||
-                _schedulerWorkQueue is IRuntimeSchedulerWorkDeferralCapability capability && !capability.CanDefer(renewal.Current))
+            if (!CanReleaseWithDelay(workItem, renewal))
                 throw;
 
-            var activeClaim = renewal;
+            var activeClaim = renewal!;
             var visibleAt = _timeProvider.GetUtcNow().Add(_claimOptions.UnavailableRetryDelay);
             var release = await _schedulerWorkQueue.ReleaseClaimAsync(activeClaim.Current, visibleAt, cancellationToken);
             if (!release.Succeeded)
@@ -343,8 +402,27 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
                 completedAt: _timeProvider.GetUtcNow(),
                 error: exception.SafeSummary);
         }
+        catch (Exception) when (ModelProtocols?.IsSelectedModel(workItem.WorkflowExecutionId) == true)
+        {
+            // A model driver failure leaves its accepted input owed. Native poison/incident policy cannot decide
+            // the outcome of a different semantic engine or acknowledge an unavailable decision.
+            throw;
+        }
         catch (Exception exception)
         {
+            // #4032: before this arm writes anything, find out whether the drain still owns the run. A drain whose
+            // lease another owner took over, that expired, or that an alteration borrowed has no say over the step:
+            // its acknowledgement would remove a step the owner has to run, and its poison record would become a
+            // blocking incident on a run the owner runs correctly. A refusal leaves the drain as
+            // RuntimeStaleFencingTokenException, as a refused commit does above: this arm acknowledges, releases,
+            // re-enqueues and records nothing. The step stays queued, unless a checkpoint commit earlier in this
+            // dispatch already consumed its durable copy: outside a coalescing segment through the commit's own
+            // consume (WasConsumedDurably), inside one through a boundary or cap-fold flush that advanced the durable
+            // queue. Then the item is gone and what the owner has is that commit. The check comes first, so a
+            // refusal costs one ownership read and no poison-store read or retry decision. Whether the poison store
+            // can record under the lease is settled here as well, before the acknowledgement. Without an ambient
+            // lease for this execution there is no check and no fence.
+            var poisonFence = await EnsureOwnedAndResolvePoisonFenceAsync(workItem, activity, cancellationToken);
             var faultInfo = _faultCapturePolicy.Capture(exception);
             var innerFaultInfo = _faultCapturePolicy.CaptureInner(exception);
             // Persisted handler-name — this value is written into poison/drain records (RuntimeSchedulerPoisonRecord.HandlerName,
@@ -357,9 +435,11 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
                 activity.SetStatus(ActivityStatusCode.Error, faultInfo.ExceptionType);
             }
 
-            // Ack-delete BEFORE poison handling (#412 item 3): a *handler fault* is a decided outcome, not a crash — the
-            // drainer stays alive and records the item to the poison store. The source item must therefore be removed
-            // from the durable queue here, before HandleHandlerCrashAsync records poison / honors a RetryNow re-enqueue;
+            // Ack-delete before poison handling (#412 item 3): a *handler fault* is a decided outcome, not a crash — the
+            // drainer stays alive and records the item to the poison store. Three reads come first: the ownership check
+            // and the poison store's fence capability, both above, and then the retry decision. Because the fault is a
+            // decided outcome, the source item must be removed from the durable queue here, before
+            // HandleHandlerCrashAsync records poison / honors a RetryNow re-enqueue;
             // otherwise the still-queued source item would be re-driven by the sweep AND re-enqueued by RetryNow, and a
             // deterministically-poisoning handler would hot-loop (redeliver forever). Ack-on-fault makes poison delivery
             // bounded. (A process crash — as opposed to a handler fault — never reaches this line, so the item stays
@@ -369,10 +449,40 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
             // poison delivery stays bounded without a second acknowledgement. A CompleteClaimAsync here would fail its
             // fence against the consumed claim and throw a spurious claim-lost out of this catch, skipping poison
             // recording entirely. Skip the ack but still record poison and return the Faulted result.
-            if (_consumedWorkClaimAccessor?.WasConsumedDurably != true)
+            //
+            // RetryAfter (#3275) is the exception: where the claim can carry a delay and a resumption sweep is
+            // composed to re-drive it, the item is released with the policy's delay instead, exactly like temporarily
+            // unavailable work. It stays the only copy, becomes claimable when due, and the sweep's backlog discovery
+            // re-drives it. The release needs positive evidence that running the item again repeats no checkpoint: the
+            // handler itself threw, rather than the acknowledgement after it returned, and the dispatch frame saw no
+            // non-retaining checkpoint go to the store. A checkpoint that went may be durable whether or not the call
+            // returned, a coalescing segment may hold it for its flush, and a handler may commit through a scope of
+            // its own, so none of that is inferred after the fact. A release the queue refuses falls back to the
+            // acknowledgement; everything not released is poisoned. A claim that was lost (an inactive coalescing
+            // segment whose durable copy is gone or held under another owner's live claim, say) refuses that
+            // acknowledgement too, so the drain throws claim-lost and records nothing. A delay that ends past the last
+            // representable time is poisoned as well: no queue can persist it, and releasing it anyway would park the
+            // step for good.
+            //
+            // Temporary unavailability lands here too once the dispatch has sent a non-retaining checkpoint to the store
+            // that the store did not refuse as unavailable (#3683). It cannot be deferred without repeating that
+            // checkpoint, and acknowledging it with no record would silently drop a step that did not finish. In an
+            // active coalescing segment the acknowledgement goes through the overlay, so the drain's flush still commits
+            // the effect and removes the durable copy.
+            var retry = await DecideRetryAsync(workItem, faultInfo, cancellationToken);
+            DateTimeOffset? releasedUntil = null;
+            if (retry.Decision is { Mode: RuntimeDomainRetryMode.RetryAfter, Delay: { } delay } && !handlerReturned && HasResumptionRedriver &&
+                dispatchFrame is { NonRetainingCheckpointAttempted: false } && delay <= DateTimeOffset.MaxValue - retry.Now &&
+                !RuntimeCheckpointCommitValidationException.IsCauseOf(exception) && CanReleaseWithDelay(workItem, renewal))
+            {
+                var visibleAt = retry.Now + delay;
+                if ((await _schedulerWorkQueue.ReleaseClaimAsync(renewal!.Current, visibleAt, cancellationToken)).Succeeded)
+                    releasedUntil = visibleAt;
+            }
+            if (releasedUntil is null && _consumedWorkClaimAccessor?.WasConsumedDurably != true)
                 await AckAsync(workItem, renewal?.Current, cancellationToken);
 
-            await HandleHandlerCrashAsync(workItem, handlerName, exception, faultInfo, innerFaultInfo, cancellationToken);
+            await HandleHandlerCrashAsync(workItem, handlerName, exception, faultInfo, innerFaultInfo, retry, releasedUntil, poisonFence, activity, cancellationToken);
 
             return new RuntimeSchedulerWorkItemResult(
                 workItemId: workItem.WorkItemId,
@@ -387,42 +497,145 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
         }
     }
 
-    // A dispatched handler threw. The work item has already been ack-deleted from the durable queue by the caller (the
-    // fault branch acks before invoking this method), so without this it would be dropped: no retry, no record, no
-    // incident. Record it to the poison store honoring IRuntimeDomainRetryPolicy — the default (Noop → DoNotRetry) parks
-    // it as Poisoned (safe, no loop). RetryNow re-enqueues immediately through the queue's public contract; RetryAfter
-    // records a NextRetryAt for the durable resumption pump (RuntimeResumptionPumpTask; see
-    // docs/runtime-durable-resumption.md) to re-drive and does NOT re-enqueue here, since immediate re-enqueue would
-    // ignore the delay and hot-loop. Because the source item was ack-deleted first, RetryNow's re-enqueue is the *only*
-    // requeue (the sweep's backlog discovery finds nothing to re-drive), so poison delivery stays bounded. This lives
-    // entirely in the fault path — it does not change claim/pause/dispatch ordering.
+    // Only a lease of the item's own execution counts, as in RuntimeCheckpointCommitter.AttachExpectedFence. The
+    // ownership service is optional: without it the lease is not checked here, and a fenced record still checks it.
+    //
+    // Only a confirmed lost lease stops the fault path. The ownership read is a provider read and can fail, and so
+    // can the poison store's answer to whether it can record under the lease. Neither failure says the run was lost.
+    // Stopping on one would throw out of a drain that owns its run, and inside an active coalescing segment the
+    // orchestrator does not flush after a drain that threw, so the segment's buffered checkpoints would go to replay.
+    // So the fault path goes on, and the dispatch span is tagged. A failed ownership read does not switch the fence
+    // off: the record is still written under the lease where the store can check it, which turns a lost lease away
+    // there. A store that cannot say whether it can check has its record written with no ownership check.
+    private async ValueTask<PoisonFence?> EnsureOwnedAndResolvePoisonFenceAsync(
+        RuntimeSchedulerWorkItem workItem,
+        Activity? activity,
+        CancellationToken cancellationToken)
+    {
+        if (OwnershipContextAccessor?.Current is not { } lease ||
+            !StringComparer.Ordinal.Equals(lease.WorkflowExecutionId, workItem.WorkflowExecutionId))
+            return null;
+
+        if (OwnershipService is { } ownershipService)
+        {
+            try
+            {
+                await ownershipService.EnsureCurrentAsync(workItem.WorkflowExecutionId, lease.FencingToken, cancellationToken);
+            }
+            catch (Exception failure) when (SaysNothingAboutOwnership(failure, cancellationToken))
+            {
+                TagFenceNotApplied(activity, failure);
+            }
+        }
+
+        try
+        {
+            return _poisonStore is ISchedulerPoisonFenceCapability { CanRecordFenced: true } store
+                ? new PoisonFence(store, lease.ToFence())
+                : null;
+        }
+        catch (Exception failure) when (SaysNothingAboutOwnership(failure, cancellationToken))
+        {
+            TagFenceNotApplied(activity, failure);
+            return null;
+        }
+    }
+
+    // Two exceptions do say something, and are let through: the stale fence, which is the lost lease, and the
+    // cancellation of this drain. Only an OperationCanceledException raised while the drain's own token is cancelled
+    // is that cancellation. A store whose client reports a timeout as one has failed like any other store.
+    private static bool SaysNothingAboutOwnership(Exception failure, CancellationToken cancellationToken) =>
+        failure is not RuntimeStaleFencingTokenException &&
+        !(failure is OperationCanceledException && cancellationToken.IsCancellationRequested);
+
+    // The innermost exception names the cause: a store that wraps provider failures would otherwise put its own
+    // exception type on every span.
+    private static void TagFenceNotApplied(Activity? activity, Exception failure)
+    {
+        if (activity is null)
+            return;
+
+        var cause = failure.GetBaseException().GetType();
+        activity.SetTag(WorkflowEngineTelemetry.PoisonFenceFallbackTag, cause.FullName ?? cause.Name);
+    }
+
+    private readonly record struct PoisonFence(ISchedulerPoisonFenceCapability Store, RuntimeExecutionFence Fence);
+
+    private async ValueTask<RetryDecisionContext> DecideRetryAsync(
+        RuntimeSchedulerWorkItem workItem,
+        RuntimeFaultInfo faultInfo,
+        CancellationToken cancellationToken)
+    {
+        var now = _timeProvider.GetUtcNow();
+        var existing = await _poisonStore.FindAsync(workItem.WorkflowExecutionId, workItem.WorkItemId, cancellationToken);
+        RuntimeDomainRetryDecision? decision;
+        string? policyFailure = null;
+        try
+        {
+            decision = _retryPolicy?.Decide(new RuntimeDomainRetryRequest(
+                workflowExecutionId: workItem.WorkflowExecutionId,
+                activityExecutionId: null,
+                failureType: faultInfo.ExceptionType,
+                failureCount: existing?.FailureCount ?? 0,
+                requestedAt: now));
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            // A policy that cannot decide must not leave the item claimed to loop on every lapse: it is poisoned, and
+            // so surfaces as an incident. The record names the policy failure so it is not mistaken for DoNotRetry.
+            decision = null;
+            policyFailure = exception.GetType().FullName ?? exception.GetType().Name;
+        }
+        return new(now, existing, decision, policyFailure);
+    }
+
+    private readonly record struct RetryDecisionContext(
+        DateTimeOffset Now,
+        RuntimeSchedulerPoisonRecord? Existing,
+        RuntimeDomainRetryDecision? Decision,
+        string? PolicyFailure);
+
+    // One delayed-release rule for temporarily unavailable work and for an honored RetryAfter.
+    private bool CanReleaseWithDelay(RuntimeSchedulerWorkItem workItem, ClaimRenewalState? renewal) =>
+        RuntimeUnavailableWork.SupportsDelayedRelease(workItem.CommandKind) &&
+        renewal is not null && _consumedWorkClaimAccessor?.WasConsumedDurably != true &&
+        (_schedulerWorkQueue is not IRuntimeSchedulerWorkDeferralCapability capability || capability.CanDefer(renewal.Current));
+
+    // A dispatched handler threw. The caller has already removed the source item from the durable queue, or, for an
+    // honored RetryAfter, released it with the policy's delay, so without this record a removed item would be dropped:
+    // no retry, no record, no incident. The default policy (Noop → DoNotRetry) parks it as Poisoned (safe, no loop).
+    // RetryNow re-enqueues immediately through the queue's public contract; because the source item was ack-deleted
+    // first, that is the *only* requeue, so poison delivery stays bounded. RetryAfter is RetryScheduled only when the
+    // caller released the item (releasedUntil): the queue then holds its single copy until NextRetryAt, and the
+    // resumption sweep re-drives it once claimable. A RetryAfter that was not released (no resumption sweep composed, a
+    // kind without delayed release, a legacy provider, a fault after the handler returned, a dispatch that sent a
+    // non-retaining checkpoint to the store, a refused release, a delay past the last representable time, or a
+    // checkpoint-rule fault) is Poisoned, so it surfaces as a blocking incident instead of waiting on a re-drive nothing
+    // performs (#3275). A policy that throws counts as no decision. This lives entirely in the fault path — it does not
+    // change claim/pause/dispatch ordering.
     //
     // What the operator eventually sees is decided elsewhere: PoisonedSchedulerWorkIncidentObserver projects a parked
     // Poisoned record into a blocking incident after the drain, and deliberately leaves the workflow non-terminal.
     // docs/runtime-fault-behavior.md maps that hand-off and contrasts it with the activity-fault path.
     //
-    // #1271: this method has no "no store, nothing to do" exit. There cannot be one — the caller has already ack-deleted
-    // the item, so returning early would drop it silently. The store is required by construction instead.
+    // #1271: this method has no "no store, nothing to do" exit. There cannot be one — unless it released a scheduled
+    // retry, the caller has already ack-deleted the item, so returning early would drop it silently. The store is
+    // required by construction instead.
     private async ValueTask HandleHandlerCrashAsync(
         RuntimeSchedulerWorkItem workItem,
         string handlerName,
         Exception exception,
         RuntimeFaultInfo faultInfo,
         RuntimeFaultInfo? innerFaultInfo,
+        RetryDecisionContext retry,
+        DateTimeOffset? releasedUntil,
+        PoisonFence? poisonFence,
+        Activity? activity,
         CancellationToken cancellationToken)
     {
-        var now = _timeProvider.GetUtcNow();
-        var existing = await _poisonStore.FindAsync(workItem.WorkflowExecutionId, workItem.WorkItemId, cancellationToken);
-        var priorFailureCount = existing?.FailureCount ?? 0;
-        var failureCount = priorFailureCount + 1;
+        var (now, existing, decision, policyFailure) = retry;
+        var failureCount = (existing?.FailureCount ?? 0) + 1;
         var firstFailedAt = existing?.FirstFailedAt ?? now;
-
-        var decision = _retryPolicy?.Decide(new RuntimeDomainRetryRequest(
-            workflowExecutionId: workItem.WorkflowExecutionId,
-            activityExecutionId: null,
-            failureType: faultInfo.ExceptionType,
-            failureCount: priorFailureCount,
-            requestedAt: now));
 
         var disposition = RuntimeSchedulerPoisonDisposition.Poisoned;
         DateTimeOffset? nextRetryAt = null;
@@ -434,10 +647,11 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
                 disposition = RuntimeSchedulerPoisonDisposition.RetryScheduled;
                 nextRetryAt = now;
                 break;
-            case RuntimeDomainRetryMode.RetryAfter:
+            case RuntimeDomainRetryMode.RetryAfter when releasedUntil is { } retryAt:
                 disposition = RuntimeSchedulerPoisonDisposition.RetryScheduled;
-                nextRetryAt = now + (decision.Delay ?? TimeSpan.Zero);
+                nextRetryAt = retryAt;
                 break;
+            case RuntimeDomainRetryMode.RetryAfter:
             case RuntimeDomainRetryMode.DoNotRetry:
             case RuntimeDomainRetryMode.Fault:
             case null:
@@ -446,7 +660,12 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
         }
 
         var metadata = BuildPoisonMetadata(workItem, existing, decision, exception);
-        await _poisonStore.RecordAsync(new RuntimeSchedulerPoisonRecord(
+        if (policyFailure is not null)
+        {
+            metadata[RuntimeMetadataKeys.SchedulerPoisonRetryMode] = "PolicyFailed";
+            metadata[RuntimeMetadataKeys.SchedulerPoisonRetryReason] = policyFailure;
+        }
+        var record = new RuntimeSchedulerPoisonRecord(
             workflowExecutionId: workItem.WorkflowExecutionId,
             workItemId: workItem.WorkItemId,
             commandKind: workItem.CommandKind,
@@ -458,8 +677,41 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
             lastFailedAt: now,
             nextRetryAt: nextRetryAt,
             metadata: metadata,
-            innerFault: innerFaultInfo),
-            cancellationToken);
+            innerFault: innerFaultInfo);
+
+        // #4032: a caller that has the ownership service checked the run's ownership before it wrote anything of this
+        // fault. Where the store can check the lease in the same unit of work, the record is written under it, which
+        // covers the time since that check. Only a lost lease refuses the record: RuntimeStaleFencingTokenException
+        // leaves the drain and nothing is recorded. The step's acknowledgement, its release or its RetryNow
+        // re-enqueue is not undone, so that refusal leaves what a process crash at this point leaves: the queue
+        // change without a record. In an active coalescing segment a re-enqueue, and the acknowledgement or release
+        // of a step claimed from the segment's overlay, are only in that overlay, and the orchestrator does not flush
+        // after a drain that threw, so nothing this arm writes is durable there.
+        //
+        // A fenced write that fails for any other reason says nothing about ownership: a write conflict the store
+        // gave up on, a transaction it could not open, a capability that changed its answer. So the record then
+        // goes the way it goes for a store without the capability. That record is unfenced: if the lease was in
+        // fact lost, it is written all the same. An owning drain therefore does not end with its step acknowledged
+        // and no record because the fenced write failed that way. It still can, as before, when its own token is
+        // cancelled here or when the unfenced RecordAsync fails as well. The dispatch span is tagged with the type
+        // of the failure's cause, so a host whose fenced write keeps failing can see that its records are unfenced.
+        // The cancellation of this drain is let through as well; an OperationCanceledException raised while the
+        // drain's token is not cancelled is a failed write like any other. With no lease for this execution, or a
+        // store that cannot check it, the record is written unfenced.
+        if (poisonFence is { } fenced)
+        {
+            try
+            {
+                await fenced.Store.RecordFencedAsync(record, fenced.Fence, cancellationToken);
+                return;
+            }
+            catch (Exception fencedFailure) when (SaysNothingAboutOwnership(fencedFailure, cancellationToken))
+            {
+                TagFenceNotApplied(activity, fencedFailure);
+            }
+        }
+
+        await _poisonStore.RecordAsync(record, cancellationToken);
     }
 
     private static Dictionary<string, string> BuildPoisonMetadata(
@@ -489,6 +741,12 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
             metadata[RuntimeMetadataKeys.InputKey] = inputFailure.InputKey;
             metadata[RuntimeMetadataKeys.ExpressionLanguage] = inputFailure.ExpressionLanguage;
             metadata[RuntimeMetadataKeys.InputEvaluationPhase] = inputFailure.EvaluationPhase;
+        }
+        else if (exception is RuntimeReadSelectionException selectionFailure)
+        {
+            // A member read's VF-SEL code, beside the fault type and message, as an expression input failure's code is.
+            metadata[RuntimeMetadataKeys.InputFailureCode] = selectionFailure.Code;
+            metadata[RuntimeMetadataKeys.InputKey] = selectionFailure.InputKey;
         }
 
         // A later retry-policy decision replaces its two fields, while older records without a new decision retain
@@ -541,21 +799,45 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
         string workflowExecutionId,
         CancellationToken cancellationToken)
     {
-        if (_schedulerWorkQueue.SupportsClaimTransitions)
+        if (_schedulerWorkQueue.SupportsClaimTransitions && _schedulerWorkQueue.SupportsClaimValidation)
         {
             var claim = await _schedulerWorkQueue.ClaimAsync(
                 new RuntimeSchedulerWorkClaimRequest(
                     workflowExecutionId,
                     _claimOwnerId,
                     _timeProvider.GetUtcNow(),
-                    _claimOptions.VisibilityTimeout),
+                    _claimOptions.VisibilityTimeout) { ValidateBeforeClaim = ValidateProtocolBeforeClaimAsync },
                 cancellationToken);
             return claim is null ? null : new SchedulerWorkDelivery(claim.Item, claim);
         }
 
+        // Legacy providers cannot run operation-local validation on their claim path. Validate the observed
+        // head under the execution's single-writer lease before entering their unchanged claim/dequeue path.
         var page = await _schedulerWorkQueue.ListAsync(new RuntimeSchedulerWorkQuery(workflowExecutionId, limit: 1), cancellationToken);
         var item = page.Items.FirstOrDefault();
+        if (item is not null)
+            await ValidateProtocolBeforeClaimAsync(item, cancellationToken);
+        if (_schedulerWorkQueue.SupportsClaimTransitions)
+        {
+            var claim = await _schedulerWorkQueue.ClaimAsync(new(workflowExecutionId, _claimOwnerId,
+                _timeProvider.GetUtcNow(), _claimOptions.VisibilityTimeout), cancellationToken);
+            return claim is null ? null : new SchedulerWorkDelivery(claim.Item, claim);
+        }
         return item is null ? null : new SchedulerWorkDelivery(item, null);
+    }
+
+    private async ValueTask ValidateProtocolBeforeClaimAsync(RuntimeSchedulerWorkItem item, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (item.CommandKind == WorkflowExecutionCommandKind.ExecuteModel && ModelProtocols is not null)
+        {
+            await ModelProtocols.SelectAsync(item, cancellationToken);
+            return;
+        }
+        if (item.CommandKind == WorkflowExecutionCommandKind.ExecuteModel || !Enum.IsDefined(item.CommandKind) ||
+            ModelProtocols?.IsSelectedModel(item.WorkflowExecutionId) == true)
+            throw new RuntimeSchedulerWorkUnavailableException("runtime.model.protocol-unavailable",
+                "Scheduler work requires a verified execution protocol that this host has not selected.");
     }
 
     // Completes the current fenced claim when the provider supports claim transitions. For a legacy provider, consumes
@@ -762,6 +1044,8 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
 
     private IWorkflowSchedulerWorkHandler FindHandler(RuntimeSchedulerWorkItem workItem)
     {
+        if (workItem.CommandKind == WorkflowExecutionCommandKind.ExecuteModel && ModelProtocols is not null)
+            return new ModelProtocolWorkHandler(ModelProtocols);
         foreach (var handler in _customHandlers)
         {
             if (handler.CanHandle(workItem))

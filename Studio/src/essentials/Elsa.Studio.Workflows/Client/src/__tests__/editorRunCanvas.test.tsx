@@ -5,7 +5,7 @@ import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { authSessionEndedEvent } from "@elsa-workflows/studio-sdk";
 import type { Node } from "@xyflow/react";
 import { useEditorRunCanvas, type EditorRunCanvas } from "../workflow-editor/useEditorRunCanvas";
-import { AttachedTestRunStatus } from "../workflow-editor/AttachedTestRunStatus";
+import { AttachedTestRunControls } from "../workflow-editor/AttachedTestRunControls";
 import type { WorkflowTestRunState } from "../workflow-editor/editorTypes";
 import type { WorkflowNodeData } from "../workflowAdapter";
 import type { ActivityExecutionStateSummary, WorkflowExecutableDetails, WorkflowInstanceDetails } from "../workflowTypes";
@@ -14,6 +14,7 @@ import { getDraftSignature } from "../workflow-editor/editorHelpers";
 import { useWorkflowOperations } from "../workflow-editor/useWorkflowOperations";
 import type { TestRunObservation } from "../workflow-editor/useTestRunObservation";
 import { writeLine } from "./fixtures";
+import { runtimeValueContextId } from "../workflow-editor/RuntimeValueEvidence";
 
 const api = vi.hoisted(() => ({ instance: vi.fn(), executable: vi.fn(), browse: vi.fn(), start: vi.fn() }));
 vi.mock("../api/runtime", async importOriginal => ({ ...await importOriginal<object>(), getWorkflowInstance: api.instance, getExecutable: api.executable, browseActivityExecutions: api.browse }));
@@ -51,7 +52,7 @@ afterEach(() => { flushSync(() => root.unmount()); container.remove(); });
 
 function Probe() {
   latest = useEditorRunCanvas(props);
-  return <><AttachedTestRunStatus view={props.testRun!.view} canvas={latest} onOpenDetails={() => {}} onOpenRun={() => {}} />
+  return <><AttachedTestRunControls canvas={latest} />
     <div data-node-status={latest.nodes[0]?.data.runtime?.status ?? "authoring"} />
   </>;
 }
@@ -67,12 +68,31 @@ async function settle() {
 }
 
 function click(label: string) {
-  const button = [...container.querySelectorAll("button")].find(item => item.textContent === label);
+  const button = [...container.querySelectorAll("button")].find(item => (item.getAttribute("aria-label") ?? item.textContent) === label);
   expect(button).toBeDefined();
   flushSync(() => button!.dispatchEvent(new MouseEvent("click", { bubbles: true })));
 }
 
 describe("execution attached to the editor canvas", () => {
+  it("shows loading feedback only until the first evidence read and retains confirmed state during refresh", async () => {
+    let release!: (value: unknown) => void;
+    api.browse.mockImplementation(() => new Promise(resolve => { release = resolve; }));
+    render(); await settle();
+    expect(latest.loading).toBe(true);
+    expect(container.textContent).toContain("Loading execution evidence…");
+    release({ totalCount: 1, items: [{ execution: activity }] }); await settle();
+    expect(latest.loading).toBe(false);
+    expect(container.textContent).not.toContain("Loading execution evidence…");
+
+    click("Refresh execution"); await settle();
+    expect(latest.loading).toBe(true);
+    expect(latest.nodes[0].data.runtime?.status).toBe("Completed");
+    expect(container.textContent).not.toContain("Loading execution evidence…");
+    release({ totalCount: 1, items: [{ execution: activity }] }); await settle();
+    expect(latest.loading).toBe(false);
+    expect(container.textContent).not.toContain("Loading execution evidence…");
+  });
+
   it("projects a verified unique occurrence without changing the document, selection or geometry", async () => {
     render(); await settle();
     expect(latest.nodes[0].data.runtime?.status).toBe("Completed");
@@ -85,7 +105,15 @@ describe("execution attached to the editor canvas", () => {
   });
 
   it("clears overlays in the first render after a draft change, before any async effect", async () => {
-    render(); await settle();
+    let releaseEvidence!: (value: unknown) => void;
+    api.browse.mockImplementationOnce(() => new Promise(resolve => { releaseEvidence = resolve; }));
+    render();
+    await vi.waitFor(() => expect(api.browse).toHaveBeenCalledOnce());
+    expect(latest.loading).toBe(true);
+    expect(latest.nodes[0].data.runtime).toBeUndefined();
+    releaseEvidence({ totalCount: 1, items: [{ execution: activity }] });
+    await vi.waitFor(() => expect(latest.nodes[0].data.runtime?.status).toBe("Completed"));
+    // Evidence readiness is asynchronous; invalidation must still happen in this very render.
     expect(latest.nodes[0].data.runtime).toBeDefined();
     render({ draftSignature: "a later design" });
     expect(latest.nodes).toBe(nodes);
@@ -145,6 +173,24 @@ describe("execution attached to the editor canvas", () => {
     expect(latest.activities.map(item => item.activityExecutionId)).toEqual(["activity-4"]);
     expect(latest.nodes[0].data.runtime?.status).toBe("Completed");
     expect(api.browse).toHaveBeenCalledWith(context, "run-1", { executableNodeId: "exec-write", ancestorActivityExecutionId: "body-4", anchorActivityExecutionId: "activity-4", limit: 1 }, expect.any(AbortSignal));
+  });
+
+  it("commits prepared overlays without dropping the verified graph during the next scope read", async () => {
+    render(); await settle();
+    const graph = latest.graph;
+    const chosen = { ...activity, activityExecutionId: "activity-4", status: "Faulted" };
+    api.browse.mockImplementation(() => new Promise(() => {}));
+    const prepared = { contextIdentity: runtimeValueContextId(context), workflowExecutionId: "run-1", ancestorId: "body-4",
+      selectedActivityExecutionId: chosen.activityExecutionId,
+      evidence: { activities: [chosen], observations: [], repeated: false, failed: false, denied: false } };
+    render({ selectedExecution: chosen, ancestorId: "body-4", prepared });
+    expect(latest.graph).toBe(graph);
+    expect(latest.details).toBe(details);
+    expect(latest.activities[0]?.activityExecutionId).toBe("activity-4");
+    expect(latest.nodes[0].data.runtime?.status).toBe("Faulted");
+    render({ context: {} as StudioEndpointContext });
+    expect(latest.graph).toBeNull();
+    expect(latest.activities).toEqual([]);
   });
 
   it("reconciles a shared observation while keeping the inspected occurrence and verified graph", async () => {
@@ -235,11 +281,12 @@ describe("execution attached to the editor canvas", () => {
     await settle();
     expect(api.instance).not.toHaveBeenCalled();
     expect(latest.nodes).toBe(nodes);
-    expect(container.textContent).toContain("Test Run rejected");
+    expect(container.querySelector("[aria-label='Execution controls']")?.textContent).toBe("");
+    expect(container.querySelector('button[aria-label="Refresh execution"]')).toBeNull();
   });
 
   it("captures the dispatched snapshot before awaiting the server, without saving or publishing", async () => {
-    const draft = structuredClone(snapshot);
+    const draft = structuredClone({ ...snapshot, layout: [{ nodeId: "write", x: 420, y: 180 }] });
     const signature = getDraftSignature(draft);
     const saveDraft = vi.fn();
     const startTestRun = vi.fn();
@@ -255,6 +302,8 @@ describe("execution attached to the editor canvas", () => {
     flushSync(() => root.render(<OperationsProbe />));
     const pending = operations.runTestDrive(draft, {}, { kind: "direct" }, "Direct start", []);
     draft.state.rootActivity!.nodeId = "later-node";
+    draft.layout[0].x = 999;
+    expect(api.start.mock.calls[0][1].layout).toEqual([{ nodeId: "write", x: 420, y: 180 }]);
     expect(api.start.mock.calls[0][1].state.rootActivity.nodeId).toBe("write");
     complete(run.view);
     await pending; await settle();

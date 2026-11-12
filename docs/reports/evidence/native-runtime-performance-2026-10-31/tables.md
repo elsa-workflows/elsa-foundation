@@ -1,0 +1,47 @@
+| Phase | Variant | Provider | Mode | Leaves | C | External | Cap | Pool | Runs | Samples | WF/s | p50 ms | p95 ms | p99 ms | MiB/WF | SQL | Checkpoint commits | Transactions |
+|---|---|---|---|---:|---:|---|---:|---|---:|---:|---:|---:|---:|---:|---:|---|---|---|
+| baseline | baseline | PostgreSql | Balanced | 1 | 1 | False | 50 | False | 2 | 1308 | 43.57 | 19.93 | 43.22 | 54.55 | 2.31 | [46] | [1] | [2] |
+| baseline | baseline | PostgreSql | Durable | 1 | 1 | False | 50 | False | 2 | 1265 | 42.07 | 19.28 | 43.65 | 77.58 | 2.32 | [46] | [1] | [2] |
+| baseline | baseline | PostgreSql | Ephemeral | 1 | 1 | False | 50 | False | 2 | 1471 | 48.99 | 17.96 | 34.7 | 38.93 | 2.31 | [46] | [1] | [2] |
+| baseline | baseline | PostgreSql | EphemeralNoRecord | 1 | 1 | False | 50 | False | 2 | 2481 | 82.7 | 10.63 | 20.94 | 27.04 | 1.49 | [33] | [0] | [1] |
+| baseline | baseline | PostgreSql | Balanced | 10 | 1 | False | 50 | False | 2 | 630 | 20.95 | 40.95 | 98.24 | 106.57 | 8.74 | [76] | [1] | [2] |
+| baseline | baseline | PostgreSql | Durable | 10 | 1 | False | 50 | False | 2 | 200 | 5.0 | 187.99 | 360.55 | 405.11 | 27.07 | [286] | [12] | [25] |
+| baseline | baseline | PostgreSql | Ephemeral | 10 | 1 | False | 50 | False | 2 | 596 | 19.85 | 43.87 | 99.19 | 112.59 | 8.72 | [76] | [1] | [2] |
+| baseline | baseline | PostgreSql | EphemeralNoRecord | 10 | 1 | False | 50 | False | 2 | 1044 | 34.79 | 25.39 | 69.21 | 82.4 | 5.03 | [63] | [0] | [1] |
+| baseline | baseline | PostgreSql | Balanced | 100 | 1 | False | 50 | False | 2 | 200 | 2.73 | 334.99 | 519.26 | 557.72 | 226.84 | [391] | [3] | [7] |
+| baseline | baseline | PostgreSql | Durable | 100 | 1 | False | 50 | False | 2 | 60 | 0.62 | 1572.51 | 1897.86 | 1946.69 | 528.67 | [2176, 2339] | [102] | [205] |
+| baseline | baseline | PostgreSql | Ephemeral | 100 | 1 | False | 50 | False | 2 | 200 | 4.43 | 207.07 | 347.71 | 416.44 | 69.69 | [346] | [1] | [2] |
+| baseline | baseline | PostgreSql | EphemeralNoRecord | 100 | 1 | False | 50 | False | 2 | 202 | 6.51 | 146.1 | 241.64 | 289.79 | 41.07 | [333] | [0] | [1] |
+| capacity | baseline | PostgreSql | Balanced | 1 | 16 | False | 50 | False | 1 | 4537 | 301.69 | 49.75 | 72.61 | 96.02 | 2.31 | [46] | [1] | [2] |
+| capacity | baseline | PostgreSql | Balanced | 1 | 64 | False | 50 | False | 1 | 6064 | 402.22 | 123.19 | 333.6 | 487.86 | 2.31 | [46] | [1] | [2] |
+| capacity | baseline | PostgreSql | Balanced | 10 | 64 | False | 50 | False | 1 | 2286 | 149.34 | 349.52 | 875.89 | 1250.77 | 8.7 | [76] | [1] | [2] |
+| experiment | baseline | PostgreSql | Balanced | 10 | 1 | False | 50 | False | 2 | 547 | 18.22 | 47.07 | 103.95 | 116.29 | 8.78 | [76] | [1] | [2] |
+| experiment | fast | PostgreSql | Balanced | 10 | 1 | False | 50 | False | 2 | 741 | 24.68 | 34.77 | 81.68 | 94.73 | 8.33 | [65] | [1] | [2] |
+| experiment | baseline | PostgreSql | Balanced | 100 | 1 | False | 50 | False | 2 | 200 | 3.15 | 307.51 | 389.07 | 470.97 | 227.01 | [391] | [3] | [7] |
+| experiment | fast | PostgreSql | Balanced | 100 | 1 | False | 50 | False | 2 | 200 | 5.63 | 161.53 | 294.71 | 389.29 | 71.58 | [290] | [3] | [7] |
+| local | baseline | Memory | EphemeralNoRecord | 1 | 1 | False | 50 | False | 1 | 33494 | 3349.22 | 0.22 | 0.63 | 0.83 | 0.3 | [0] | [0] | [0] |
+| local | baseline | Memory | Balanced | 10 | 1 | False | 50 | False | 1 | 1568 | 156.71 | 5.15 | 11.77 | 18.04 | 3.47 | [0] | [0] | [0] |
+| local | baseline | Memory | EphemeralNoRecord | 10 | 1 | False | 50 | False | 1 | 5890 | 588.95 | 1.22 | 4.41 | 6.9 | 2.39 | [0] | [0] | [0] |
+| local | baseline | Memory | Balanced | 100 | 1 | False | 50 | False | 1 | 193 | 19.25 | 41.07 | 122.47 | 173.3 | 35.62 | [0] | [0] | [0] |
+| local | baseline | Memory | EphemeralNoRecord | 100 | 1 | False | 50 | False | 1 | 517 | 51.59 | 15.06 | 41.37 | 62.7 | 25.53 | [0] | [0] | [0] |
+| local | baseline | Sqlite | Balanced | 1 | 1 | False | 50 | False | 1 | 952 | 95.19 | 9.04 | 18.81 | 22.91 | 2.44 | [50] | [1] | [2] |
+| local | baseline | Sqlite | EphemeralNoRecord | 1 | 1 | False | 50 | False | 1 | 1915 | 191.44 | 4.51 | 9.71 | 13.22 | 1.56 | [33] | [0] | [1] |
+| local | baseline | Sqlite | Balanced | 10 | 1 | False | 50 | False | 1 | 359 | 35.87 | 17.87 | 63.94 | 80.43 | 9.09 | [100] | [1] | [2] |
+| local | baseline | Sqlite | EphemeralNoRecord | 10 | 1 | False | 50 | False | 1 | 467 | 46.69 | 15.6 | 47.41 | 63.06 | 5.23 | [63] | [0] | [1] |
+| local | baseline | Sqlite | Balanced | 100 | 1 | False | 50 | False | 1 | 48 | 4.74 | 170.02 | 513.22 | 671.0 | 230.1 | [605] | [3] | [7] |
+| local | baseline | Sqlite | EphemeralNoRecord | 100 | 1 | False | 50 | False | 1 | 92 | 9.18 | 90.84 | 305.75 | 346.35 | 42.47 | [333] | [0] | [1] |
+| scaling | baseline | PostgreSql | Balanced | 10 | 1 | True | 50 | False | 1 | 100 | 5.64 | 165.81 | 272.28 | 320.67 | 24.93 | [254] | [11] | [22] |
+| scaling | baseline | PostgreSql | Balanced | 10 | 4 | False | 50 | False | 2 | 1701 | 56.54 | 62.74 | 119.32 | 137.36 | 8.72 | [76] | [1] | [2] |
+| scaling | baseline | PostgreSql | Balanced | 10 | 16 | False | 50 | False | 2 | 4216 | 139.87 | 95.89 | 259.11 | 293.29 | 8.71 | [76] | [1] | [2] |
+| scaling | baseline | PostgreSql | Durable | 10 | 1 | True | 50 | False | 1 | 100 | 3.56 | 264.9 | 414.38 | 558.81 | 32.49 | [377] | [22] | [33] |
+| scaling | baseline | PostgreSql | Durable | 10 | 4 | False | 50 | False | 1 | 202 | 13.32 | 286.83 | 394.84 | 476.28 | 27.03 | [286] | [12] | [25] |
+| scaling | baseline | PostgreSql | Durable | 10 | 16 | False | 50 | False | 1 | 592 | 38.19 | 382.45 | 559.67 | 625.07 | 27.05 | [286] | [12] | [25] |
+| scaling | baseline | PostgreSql | EphemeralNoRecord | 10 | 1 | True | 50 | False | 1 | 100 | 5.24 | 171.13 | 322.52 | 362.93 | 24.94 | [254] | [11] | [22] |
+| scaling | baseline | PostgreSql | EphemeralNoRecord | 10 | 4 | False | 50 | False | 1 | 1332 | 88.77 | 40.29 | 81.9 | 92.11 | 5.06 | [63] | [0] | [1] |
+| scaling | baseline | PostgreSql | EphemeralNoRecord | 10 | 16 | False | 50 | False | 1 | 3197 | 212.42 | 60.16 | 255.09 | 293.13 | 5.02 | [63] | [0] | [1] |
+| sqlite-scaling | baseline | Sqlite | Balanced | 10 | 4 | False | 50 | False | 1 | 855 | 56.43 | 17.62 | 332.08 | 625.46 | 9.1 | [100] | [1] | [2] |
+| sqlite-scaling | baseline | Sqlite | Balanced | 10 | 16 | False | 50 | False | 1 | 1060 | 68.94 | 143.84 | 795.16 | 1368.23 | 9.22 | [100] | [1] | [2] |
+| tuning | baseline | PostgreSql | Balanced | 10 | 4 | False | 50 | False | 2 | 1714 | 57.06 | 63.41 | 120.7 | 135.94 | 8.73 | [76] | [1] | [2] |
+| tuning | baseline | PostgreSql | Balanced | 10 | 4 | False | 50 | True | 2 | 1938 | 64.48 | 56.67 | 105.99 | 126.08 | 7.8 | [76] | [1] | [2] |
+| tuning | baseline | PostgreSql | Balanced | 100 | 1 | False | 10 | False | 1 | 35 | 2.27 | 432.61 | 515.07 | 516.05 | 348.78 | [527] | [12] | [25] |
+| tuning | baseline | PostgreSql | Balanced | 100 | 1 | False | 250 | False | 1 | 84 | 5.59 | 154.05 | 293.89 | 569.53 | 69.79 | [346] | [1] | [2] |

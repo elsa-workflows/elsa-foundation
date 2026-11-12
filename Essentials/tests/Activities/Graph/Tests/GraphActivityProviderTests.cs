@@ -27,6 +27,36 @@ public sealed partial class GraphActivityProviderTests
         new TestActivityStructureService(),
         new ActivityContractAuthoringValidator(new TestContractCapabilityCatalog()));
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Projects_structure_inputs_into_occurrences_and_closed_scope_reference_validation(bool unknownVariable)
+    {
+        var projection = new ActivityStructureInputProjection([
+            new("Case:a:Condition", new InputDefinition("Case:a:Condition", "Condition", new("Boolean"), null, "Condition", null, false),
+                new("foreign-key", unknownVariable ? new ArgumentValue(ParseJson("""{"referenceKey":"missing","declaringScopeId":"workflow"}"""), "Variable") : new ArgumentValue(true, "Literal"), null, null, null, null))], ["Value"]);
+        var provider = new GraphActivityProvider(new TestActivityStructureService { InputProjection = projection },
+            new ActivityContractAuthoringValidator(new TestContractCapabilityCatalog()));
+        var manifest = CreateManifest("""
+            {"variables":[],"rootActivity":{"nodeId":"graph-root","activityVersionId":"activity-ver-root","inputs":[{"referenceKey":"Value","value":{"expressionType":"Variable","value":{"referenceKey":"unused","declaringScopeId":"workflow"}}}],"outputs":[]},"outputMappings":[]}
+            """);
+        var result = await provider.CompileAsync(new("definition", "type", "draft", 1, "1.0.0", OutcomeContract(("done", "Done")), manifest,
+            [CreateDependency("graph-root", "activity-ver-root", "graph-root", OutcomeContract(("done", "Done")))], "fingerprint"));
+        if (unknownVariable)
+        {
+            Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Code == "activity.graph.body-variable-unknown" && diagnostic.Location?.ReferenceKey == "Case:a:Condition");
+            Assert.Null(result.ExecutableRoot);
+        }
+        else
+        {
+            Assert.Empty(result.Diagnostics);
+            var occurrence = Assert.Single(result.Occurrences);
+            Assert.Same(projection, occurrence.StructureInputs);
+            Assert.Equal("Case:a:Condition", occurrence.InputBindings[0].GetProperty("referenceKey").GetString());
+            Assert.Equal(1, occurrence.InputBindings.GetArrayLength());
+        }
+    }
+
     [Fact]
     public void Schema_one_round_trip_is_canonical_and_preserves_array_order()
     {
@@ -355,7 +385,8 @@ public sealed partial class GraphActivityProviderTests
             "provider-fingerprint");
 
         var first = await _provider.CompileAsync(request);
-        var second = await _provider.CompileAsync(request);
+        // A cosmetic republish changes release provenance, not executable behavior.
+        var second = await _provider.CompileAsync(request with { CandidateVersion = "2.0.1" });
 
         Assert.Empty(first.Diagnostics);
         Assert.Equal(JsonSerializer.Serialize(first.ExecutableRoot), JsonSerializer.Serialize(second.ExecutableRoot));
@@ -370,7 +401,7 @@ public sealed partial class GraphActivityProviderTests
         Assert.Equal(WellKnownRuntimeActivityConsumers.GraphActivity, first.ExecutableRoot!.Descriptor.ConsumerKey);
         var runtimeContract = Assert.IsType<Elsa.Activities.Runtime.Core.Models.ActivityContract>(first.ExecutableRoot.ActivityContract);
         Assert.Equal("activity-type-1", runtimeContract.ActivityTypeKey);
-        Assert.Equal("2.0.0", runtimeContract.ContractVersion);
+        Assert.Equal("1", runtimeContract.ContractVersion);
         Assert.Equal(WellKnownRuntimeActivityConsumers.GraphActivity, runtimeContract.DescriptorKind);
         Assert.True(JsonElement.DeepEquals(first.ExecutableRoot.Descriptor.Payload, runtimeContract.DescriptorPayload));
         Assert.Equal([ActivityOutcomes.Done], runtimeContract.Outcomes);
@@ -389,7 +420,7 @@ public sealed partial class GraphActivityProviderTests
         Assert.False(first.ExecutableRoot.Descriptor.Payload.TryGetProperty("templateHash", out _));
         // Every graph compiled now is a closed value scope, so placement remaps its body.
         Assert.Equal("closed", first.ExecutableRoot.Descriptor.Payload.GetProperty("scopeModel").GetString());
-        Assert.Equal("elsa.activity-graph/compiler/3.0.0", GraphActivityProvider.Fingerprint);
+        Assert.Equal("elsa.activity-graph/compiler/4.0.0", GraphActivityProvider.Fingerprint);
         Assert.Equal(2, first.ResourceMeasurements.LocalNodeCount);
         Assert.Equal(2, first.ResourceMeasurements.MaximumObservedAuthoredDepth);
         Assert.Equal(2, first.ResourceMeasurements.DependencyCount);
@@ -1209,6 +1240,8 @@ public sealed partial class GraphActivityProviderTests
     private sealed class TestActivityStructureService(bool hasHandlers = true) : IActivityStructureService
     {
         private static readonly JsonSerializerOptions Options = new(JsonSerializerDefaults.Web);
+        public ActivityStructureInputProjection InputProjection { get; init; } = ActivityStructureInputProjection.Empty;
+        public ActivityStructureInputProjection ProjectInputs(ActivityNode activity) => InputProjection;
 
         public IReadOnlyCollection<ActivityChildProjection> ProjectChildren(ActivityNode activity)
         {

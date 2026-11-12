@@ -79,3 +79,9 @@ Replace both: implement both contracts on one class, or register a node converte
 
 - **Implementation:** `Elsa3ReusableActivityTriggerClassifier`, registered with `TryAdd` by `Elsa3MappingFeature`.
 - **Purpose:** classifies an Elsa 3 activity type by its built-in map entry with the rule conversion uses for the start node (`Elsa3ActivityNormalizer.IsNonTrigger`): a mapped type without a `canStartWorkflow` rule is a non-trigger, an unmapped type is not known.
+
+### `IElsa3ConverterRevision` contribution
+
+- **Implementation:** `Elsa3ConverterRevision`, registered with `TryAdd` by `Elsa3MappingFeature`; `Elsa3ConverterRevision.CurrentRevision` is the converter's revision.
+- **Purpose:** numbers imported Elsa 3 versions `{n}.{R}.0` and, above revision 0, gives them identities of their own (spec 235 R-8, #3921), so a host that imported with an earlier converter gets the re-converted versions beside the earlier ones on its next import instead of a store rebuild.
+- **Rule:** bump `CurrentRevision` by one in the change that makes the converter emit different Elsa 4 content for the same Elsa 3 input; never for a change whose output is byte-identical.

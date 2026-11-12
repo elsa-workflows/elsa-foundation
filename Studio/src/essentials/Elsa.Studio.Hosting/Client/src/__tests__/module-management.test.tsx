@@ -1,10 +1,11 @@
 import React from "react";
+import { createStudioRegistry } from "../app/registry";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ModuleManagementPage } from "../app/modules/ModuleManagementPage";
 import { PackageFeedsPage } from "../app/modules/PackageFeedsPage";
-import { createEndpointContext, StudioHttpError, type ElsaStudioModuleApi } from "../sdk";
+import { createEndpointContext, createHttpClient, StudioHttpError, type ElsaStudioModuleApi } from "../sdk";
 import { withQueryClient } from "./queryTestUtils";
 
 describe("module management page", () => {
@@ -29,7 +30,7 @@ describe("module management page", () => {
     expect(gridPanel?.textContent).toContain("Source kind");
     expect(gridPanel?.textContent).toContain("static-web-asset");
     expect(gridPanel?.textContent).not.toContain("Upload Packages");
-    expect(container.querySelector(".modules-header")?.textContent).not.toContain("Upload Packages");
+    expect(container.querySelector(".studio-page-header")?.textContent).not.toContain("Upload Packages");
     expect(container.textContent).not.toContain("Elsa.Studio.FeatureManagement.1.0.1.nupkg");
 
     await clickSourceButton(container, "Nuplane");
@@ -45,6 +46,17 @@ describe("module management page", () => {
     expect(container.querySelector(".modules-dialog-backdrop")).toBeNull();
 
     await unmount();
+  });
+
+  it("selects the Server host by default on the modules and package feeds pages", async () => {
+    for (const render of [renderModuleManagementPage, renderPackageFeedsPage]) {
+      const { container, unmount } = await render(stubApi(), null);
+      const hostTabs = container.querySelector("[aria-label='Hosts']");
+
+      expect(hostTabs?.querySelector("[aria-selected='true']")?.getAttribute("data-tab-id")).toBe("server");
+
+      await unmount();
+    }
   });
 
   it("keeps drop-folder package management inline instead of opening a dialog", async () => {
@@ -282,7 +294,7 @@ describe("module management page", () => {
 
   it("deletes staged uploads through the existing drop-folder API after confirmation", async () => {
     const fetchMock = mockFetch();
-    const confirm = vi.fn(async () => true);
+    const confirm = vi.fn<ElsaStudioModuleApi["dialogs"]["confirm"]>(async () => true);
     const { container, unmount } = await renderModuleManagementPage(stubApi({ confirm }));
     await clickSourceButton(container, "Nuplane");
 
@@ -309,7 +321,7 @@ describe("module management page", () => {
 
   it("does not delete a staged upload when the confirmation is cancelled", async () => {
     const fetchMock = mockFetch();
-    const confirm = vi.fn(async () => false);
+    const confirm = vi.fn<ElsaStudioModuleApi["dialogs"]["confirm"]>(async () => false);
     const { container, unmount } = await renderModuleManagementPage(stubApi({ confirm }));
     await clickSourceButton(container, "Nuplane");
 
@@ -507,7 +519,7 @@ describe("module management page", () => {
 
   it("confirms before deleting a package feed and calls the delete API when confirmed", async () => {
     const fetchMock = mockFetch();
-    const confirm = vi.fn(async () => true);
+    const confirm = vi.fn<ElsaStudioModuleApi["dialogs"]["confirm"]>(async () => true);
     const { container, unmount } = await renderPackageFeedsPage(stubApi({ confirm }));
 
     const deleteFeedButton = container.querySelector<HTMLButtonElement>("[aria-label='Delete studio-local-packages']");
@@ -531,7 +543,7 @@ describe("module management page", () => {
 
   it("does not delete a package feed when the confirmation is cancelled", async () => {
     const fetchMock = mockFetch();
-    const confirm = vi.fn(async () => false);
+    const confirm = vi.fn<ElsaStudioModuleApi["dialogs"]["confirm"]>(async () => false);
     const { container, unmount } = await renderPackageFeedsPage(stubApi({ confirm }));
 
     const deleteFeedButton = container.querySelector<HTMLButtonElement>("[aria-label='Delete studio-local-packages']");
@@ -798,7 +810,7 @@ describe("module management page", () => {
   it("sends no management-key header on module management operations (#248)", async () => {
     // ADR 0037 / #248: the app builds its endpoint contexts with no management-key header, so module-management
     // requests carry none. The SPA holds no host management key at all.
-    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ ok: true }), { status: 200 }));
+    const fetchMock = vi.fn<typeof fetch>(async () => new Response(JSON.stringify({ ok: true }), { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
 
     const context = createEndpointContext("https://foundation.example/");
@@ -837,7 +849,9 @@ function stubApi(options?: {
     return studioRegistryRead(url);
   };
 
+  const api = createStudioRegistry({ hostVersion: "1.0.0", sdkVersion: "1.0.0", ...createEndpointContext("https://studio.example/") });
   return {
+    ...api,
     host: {
       baseUrl: "https://studio.example/",
       hostVersion: "1.0.0",
@@ -851,6 +865,7 @@ function stubApi(options?: {
       http: stubHttp("https://foundation.example/", async () => { throw new Error("backend context must not be probed for registry reads"); })
     },
     diagnostics: {
+      ...api.diagnostics,
       add() {},
       list: () => []
     },
@@ -861,7 +876,7 @@ function stubApi(options?: {
       prompt: async () => null,
       alert: async () => undefined
     }
-  } as ElsaStudioModuleApi;
+  };
 }
 
 function stubHttp(baseUrl: string, getJson: (url: string) => Promise<unknown>) {
@@ -869,7 +884,7 @@ function stubHttp(baseUrl: string, getJson: (url: string) => Promise<unknown>) {
   return {
     ...http,
     requestJson: http.requestJson,
-    getJson,
+    getJson: stubGetJson(baseUrl, getJson),
   };
 }
 
@@ -893,10 +908,7 @@ function setInputValue(input: HTMLInputElement, value: string) {
 }
 
 function mockFetch() {
-  const fetchMock = vi.fn(async () => ({
-    ok: true,
-    text: async () => "{}"
-  }));
+  const fetchMock = vi.fn<typeof fetch>(async () => new Response("{}", { status: 200 }));
   vi.stubGlobal("fetch", fetchMock);
   return fetchMock;
 }
@@ -994,7 +1006,6 @@ function studioRegistry() {
       name: "studio-local-packages",
       directoryPath: "packages",
       serviceIndex: null,
-      credentials: null,
       includeAll: true,
       includePatterns: ["*"],
       directory: { watch: true, debounceWindow: "00:00:01" }
@@ -1052,7 +1063,6 @@ function serverRegistry() {
       name: "local-packages",
       directoryPath: "packages",
       serviceIndex: null,
-      credentials: null,
       includeAll: true,
       includePatterns: ["*"],
       directory: { watch: true, debounceWindow: "00:00:01" }
@@ -1130,7 +1140,6 @@ function workbenchRegistry(includeNuplanePackage: boolean, includeDuplicatePacka
       name: "local-packages",
       directoryPath: "packages",
       serviceIndex: null,
-      credentials: null,
       includeAll: true,
       includePatterns: ["*"],
       directory: { watch: true, debounceWindow: "00:00:01" }
@@ -1158,7 +1167,7 @@ function workbenchRegistry(includeNuplanePackage: boolean, includeDuplicatePacka
   return registry;
 }
 
-async function renderModuleManagementPage(api: ElsaStudioModuleApi) {
+async function renderModuleManagementPage(api: ElsaStudioModuleApi, hostId: "studio" | "server" | null = "studio") {
   const container = document.createElement("div");
   document.body.appendChild(container);
   const root = createRoot(container);
@@ -1167,6 +1176,10 @@ async function renderModuleManagementPage(api: ElsaStudioModuleApi) {
     root.render(withQueryClient(<ModuleManagementPage api={api} />));
   });
   await flushPromises();
+  if (hostId) {
+    selectHostTab(container, hostId);
+    await flushPromises();
+  }
 
   return {
     container,
@@ -1177,7 +1190,7 @@ async function renderModuleManagementPage(api: ElsaStudioModuleApi) {
   };
 }
 
-async function renderPackageFeedsPage(api: ElsaStudioModuleApi) {
+async function renderPackageFeedsPage(api: ElsaStudioModuleApi, hostId: "studio" | "server" | null = "studio") {
   const container = document.createElement("div");
   document.body.appendChild(container);
   const root = createRoot(container);
@@ -1186,6 +1199,10 @@ async function renderPackageFeedsPage(api: ElsaStudioModuleApi) {
     root.render(withQueryClient(<PackageFeedsPage api={api} />));
   });
   await flushPromises();
+  if (hostId) {
+    selectHostTab(container, hostId);
+    await flushPromises();
+  }
 
   return {
     container,
@@ -1194,6 +1211,12 @@ async function renderPackageFeedsPage(api: ElsaStudioModuleApi) {
       container.remove();
     }
   };
+}
+
+// The pages default to the Server host; most cases here exercise the Studio registry, so select it explicitly.
+function selectHostTab(container: Element, hostId: "studio" | "server") {
+  const tab = container.querySelector<HTMLButtonElement>(`[aria-label='Hosts'] [data-tab-id='${hostId}']`);
+  flushSync(() => tab!.dispatchEvent(new MouseEvent("click", { bubbles: true })));
 }
 
 async function flushAnimationFrame() {
@@ -1206,4 +1229,11 @@ async function flushPromises() {
   for (let i = 0; i < 5; i++) {
     await new Promise(resolve => setTimeout(resolve, 0));
   }
+}
+
+// Preserve the generic HTTP contract by parsing fixture JSON through the normal transport.
+function stubGetJson(baseUrl: string, read: (url: string) => Promise<unknown>) {
+  return createHttpClient(baseUrl, {
+    fetch: async input => Response.json(await read(new URL(String(input)).pathname))
+  }).getJson;
 }

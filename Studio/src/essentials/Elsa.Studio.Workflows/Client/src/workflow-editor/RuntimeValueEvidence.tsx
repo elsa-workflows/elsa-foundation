@@ -15,6 +15,22 @@ export interface RuntimeValueEvidenceResolutionScope {
   context: StudioEndpointContext;
   workflowExecutionId: string;
   activityExecutionId: string;
+  preparedValues?: ReadonlyMap<string, PreparedRuntimeValue>;
+}
+
+export type PreparedRuntimeValue = { status: "ready"; payload: unknown } | { status: "failed"; error: string };
+
+export function runtimeValuePayloadKey(snapshot: ActivityExecutionInspectionValueSnapshot) {
+  return JSON.stringify([snapshot.evidenceId?.trim(), snapshot.captureMode.replace(/[^a-z]/gi, "").toLowerCase()]);
+}
+
+export function canAutomaticallyResolveValue(snapshot: ActivityExecutionInspectionValueSnapshot) {
+  const mode = snapshot.captureMode.replace(/[^a-z]/gi, "").toLowerCase();
+  const state = (snapshot.captureState ?? snapshot.state)?.replace(/[^a-z]/gi, "").toLowerCase();
+  return !snapshot.isSensitive && !!snapshot.evidenceId?.trim() && !snapshot.failure
+    && (snapshot.accessState ?? snapshot.access)?.toLowerCase() === "resolutionavailable"
+    && (mode === "payload" || mode === "diagnosticsnapshot")
+    && (!state || state === "payloadcaptured" || state === "diagnosticsnapshotcaptured" || (!snapshot.captureState && state === "captured"));
 }
 
 const RuntimeValueEvidenceResolutionContext = createContext<RuntimeValueEvidenceResolutionScope | null>(null);
@@ -100,13 +116,23 @@ export function RuntimeValueEvidenceContent({
   const canResolve = !!scope && !!evidenceId && supportedCaptureMode && capturedState && permissionAllowsResolution && !snapshot.failure;
   const resolutionIdentity = JSON.stringify([runtimeValueContextId(scope?.context), scope?.workflowExecutionId, scope?.activityExecutionId, evidenceId, captureModeKey]);
   const [requestedSensitiveIdentity, setRequestedSensitiveIdentity] = useState<string | null>(null);
-  const [retrySequence, setRetrySequence] = useState(0);
+  const [retryRequest, setRetryRequest] = useState({ identity: resolutionIdentity, sequence: 0 });
   const [resolution, setResolution] = useState<RuntimeValueResolutionState | null>(null);
+  // Forget local reveal, payload and retry state when leaving an occurrence, including A → B → A.
+  if (retryRequest.identity !== resolutionIdentity) {
+    setRetryRequest({ identity: resolutionIdentity, sequence: 0 });
+    setRequestedSensitiveIdentity(null);
+    setResolution(null);
+  }
+  const retrySequence = retryRequest.identity === resolutionIdentity ? retryRequest.sequence : 0;
+  const retryResolution = () => setRetryRequest(previous => ({ identity: resolutionIdentity,
+    sequence: (previous?.identity === resolutionIdentity ? previous.sequence : 0) + 1 }));
   const explicitlyRequested = snapshot.isSensitive && requestedSensitiveIdentity === resolutionIdentity;
   const shouldResolve = canResolve && (!snapshot.isSensitive || explicitlyRequested);
+  const preparedValue = shouldResolve && !snapshot.isSensitive && retrySequence === 0 ? scope?.preparedValues?.get(runtimeValuePayloadKey(snapshot)) : undefined;
 
   useEffect(() => {
-    if (!shouldResolve || !scope || !evidenceId) return;
+    if (!shouldResolve || !scope || !evidenceId || preparedValue) return;
 
     const controller = new AbortController();
     setResolution({ identity: resolutionIdentity, status: "loading" });
@@ -133,14 +159,15 @@ export function RuntimeValueEvidenceContent({
     );
 
     return () => controller.abort();
-  }, [evidenceId, resolutionIdentity, retrySequence, scope, shouldResolve, snapshot.captureMode]);
+  }, [evidenceId, preparedValue, resolutionIdentity, retrySequence, scope, shouldResolve, snapshot.captureMode]);
 
   const hasInlinePayload = !permissionAllowsResolution && snapshot.payload !== undefined;
   const diagnosticSnapshot = permissionAllowsResolution
     ? null
     : snapshot.snapshot ?? (snapshot.captureMode === "DiagnosticSnapshot" && hasInlinePayload ? snapshot.payload : null);
   const hasPayload = snapshot.captureMode === "Payload" && hasInlinePayload;
-  const currentResolution = resolution?.identity === resolutionIdentity ? resolution : null;
+  const currentResolution: RuntimeValueResolutionState | null = preparedValue ? { identity: resolutionIdentity, ...preparedValue }
+    : resolution?.identity === resolutionIdentity ? resolution : null;
   const protectedAccess = ["redacted", "permissionhidden", "permission-hidden", "resolutionpermissionrequired", "unavailable"].includes(accessKey);
   const canShowSensitiveValue = snapshot.isSensitive && canResolve;
   const invalidResolutionMetadata = permissionAllowsResolution && (!evidenceId || !supportedCaptureMode || !capturedState);
@@ -175,7 +202,7 @@ export function RuntimeValueEvidenceContent({
                 disabled={currentResolution?.status === "loading"}
                 onClick={() => {
                   setRequestedSensitiveIdentity(resolutionIdentity);
-                  if (currentResolution?.status === "failed") setRetrySequence(sequence => sequence + 1);
+                  if (currentResolution?.status === "failed") retryResolution();
                 }}
               >
                 {currentResolution?.status === "failed" ? "Retry captured value" : "Show captured value"}
@@ -197,7 +224,7 @@ export function RuntimeValueEvidenceContent({
         {!snapshot.isSensitive && !protectedAccess && currentResolution?.status === "failed" ? (
           <p role="alert">
             Could not resolve captured value: {currentResolution.error} {" "}
-            <button type="button" onClick={() => setRetrySequence(sequence => sequence + 1)}>Retry</button>
+            <button type="button" onClick={retryResolution}>Retry</button>
           </p>
         ) : null}
       </div>
@@ -314,6 +341,12 @@ function DiagnosticSnapshotReference({ node }: { node: DiagnosticSnapshotPayload
       <span>{resolutionReason}</span>
     </div>
   );
+}
+
+export function RuntimeCapturedValue({ value, captureMode }: { value: unknown; captureMode?: string | null }) {
+  return captureMode === "DiagnosticSnapshot" && isDiagnosticSnapshotNode(value)
+    ? <DiagnosticSnapshotTree node={value} />
+    : <RuntimeInputPayload payload={value} />;
 }
 
 function RuntimeInputPayload({ payload }: { payload: unknown }) {

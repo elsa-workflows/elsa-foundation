@@ -1,5 +1,7 @@
 # Build your own Studio host from packages
 
+This page is for **package consumers** who compose their own host from NuGet packages. To run the Studio source in this repository against a source-built Workbench, use [Run Studio from source](contributing/studio-source-quickstart.md).
+
 Use `Elsa.Studio.Hosting` for the common server pipeline and the prebuilt standard browser. Your application chooses its modules and configuration. It does not copy the private infrastructure from `Elsa.Studio.Web` or build the standard frontend.
 
 The [small runnable sample](../../tools/studio/PackageHost.Sample/) selects Dashboard. Its [Program.cs](../../tools/studio/PackageHost.Sample/Program.cs) is the complete composition root:
@@ -19,6 +21,8 @@ app.MapElsaStudio();
 app.Run();
 ```
 
+That C# is the whole composition root. The sample still needs the downloaded `CustomStudio.csproj`, `shells.json` (enabling `StudioApi` and `DashboardStudio`), `appsettings.json` and `NuGet.Config`. `AddElsaStudio` loads `shells.json` from the content root unless you set `ShellsFile = null`.
+
 ## Choose packages
 
 | Package | When to use it |
@@ -27,6 +31,7 @@ app.Run();
 | `Elsa.Studio.Dashboard` | The sample's Home module. Select other existing Studio module packages deliberately. |
 | `Elsa.Studio.Hosting.Themes` | Optional Theme Store, directory sources, picker and management capabilities. Independent of Nuplane. |
 | `Elsa.Studio.Hosting.Nuplane` | Optional package/feature administration using the shared CShells/Nuplane adapter and native store protection. Independent of themes. |
+| `Elsa.Studio.FeatureManagement` | Optional in-box management UI for package/feature administration (shell feature ID `FeatureManagement`). Pair with the Nuplane server addon when you want that UI. |
 | `Elsa.Studio.ConsoleStream` | Optional console capture and streaming. Its host services and hub belong in the application root. |
 | `Elsa.Studio.Api` / `Elsa.Studio.Core` | Public policy and module-author contracts when writing a module. Core remains lightweight; it is not a host infrastructure bucket. |
 
@@ -34,11 +39,11 @@ The reference distribution's [module assembly list](../src/apps/Elsa.Studio.Web/
 
 ## Run the sample outside the repository
 
-These commands use a .NET 10 SDK and a Bash-compatible shell. The producer currently pins SDK 10.0.300 with `latestFeature` roll-forward in [global.json](../../global.json). No Node, npm, pnpm or frontend source is needed by the consumer.
+These commands use a .NET 10 SDK and a Bash-compatible shell. The producer currently pins SDK 10.0.300 with `latestFeature` roll-forward in [global.json](../../global.json). No Node, npm, pnpm or frontend source is needed by the consumer. Downloading the CI artifact needs a GitHub account. The example below also needs an authenticated GitHub CLI (`gh`).
 
-This is a **preview candidate recipe**. Program #3340 validates actual NuGet archives in Studio CI; it does not publish a release or activate a feed publisher. Obtain a retained successful **main** Studio CI artifact, or matching packages from a maintainer-provided feed. CI artifacts expire after 14 days: choose a current verified run rather than treating an old run ID as a permanent distribution.
+This is a **preview candidate recipe**. Program #3340 validates actual NuGet archives in CI; it does not publish a release or activate a feed publisher. Obtain a retained successful **main** CI artifact, or matching packages from a maintainer-provided feed. CI artifacts expire after 14 days: choose a current verified run rather than treating an old run ID as a permanent distribution.
 
-1. In [Studio CI](https://github.com/elsa-workflows/elsa-foundation/actions/workflows/studio-ci.yml), choose a successful main run that contains `tools/studio/PackageHost.Sample` and download `studio-package-qualification-<run-id>-<attempt>`. Check `studio-consumer-qualification/report.json`: `status` must be `passed`; use its exact `version` and producer revision. [Program delivery receipts](https://github.com/elsa-workflows/elsa-foundation/issues/3340) identify verified runs.
+1. In [CI](https://github.com/elsa-workflows/elsa-foundation/actions/workflows/ci.yml), choose a successful main run that contains `tools/studio/PackageHost.Sample` and download `studio-package-qualification-<run-id>-<attempt>`. Check `studio-consumer-qualification/report.json`: `status` must be `passed`; use its exact `version` and `toolSourceRevision` (the producer commit). [Program delivery receipts](https://github.com/elsa-workflows/elsa-foundation/issues/3340) identify verified runs.
 2. Keep the extracted artifact **outside the application directory**. It includes retained test programs and private mutated control packages. Those are evidence, not consumer source or feed contents.
 3. Copy only the original archives from `studio-nuget/` and `studio-modularity-nuget/` into the application's `packages/` folder. Do not recursively collect every `.nupkg` from the artifact.
 
@@ -49,7 +54,7 @@ mkdir studio-host-work
 cd studio-host-work
 
 # Supply a current verified main run that includes PackageHost.Sample.
-: "${RUN_ID:?Set RUN_ID to the verified main Studio CI run}"
+: "${RUN_ID:?Set RUN_ID to the verified main CI run}"
 ATTEMPT=${ATTEMPT:-1}
 STUDIO_VERSION="4.0.0-studio-ci.$RUN_ID.$ATTEMPT"
 SAMPLE_REF=$(gh run view "$RUN_ID" --repo elsa-workflows/elsa-foundation --json headSha --jq .headSha)
@@ -118,7 +123,7 @@ Use the typed `StudioThemeSourceMode` and existing `Themes` configuration descri
 
 ### Package and feature administration
 
-Reference `Elsa.Studio.Hosting.Nuplane` at the same candidate version and import `Elsa.Studio.Hosting.Nuplane`. Retain the `studio` registration result as described above, call `studio.AddElsaStudioNuplane()` before `Build`, and call `app.MapElsaStudioNuplane()` after `MapElsaStudio`. The server addon and optional management UI modules are separate package/feature choices; enable the UI modules you actually want.
+Reference `Elsa.Studio.Hosting.Nuplane` at the same candidate version and import `Elsa.Studio.Hosting.Nuplane`. Retain the `studio` registration result as described above, call `studio.AddElsaStudioNuplane()` before `Build`, and call `app.MapElsaStudioNuplane()` after `MapElsaStudio`. The server addon and optional management UI modules are separate package/feature choices. For the in-box management UI, reference `Elsa.Studio.FeatureManagement`, pass its public feature assembly (see the reference host's [StudioFeatureAssemblies.cs](../src/apps/Elsa.Studio.Web/StudioFeatureAssemblies.cs)), and enable shell feature ID `FeatureManagement`; enable only the UI modules you actually want.
 
 The addon loads `nuplane-management.json` by default. With no resolving directory feed it registers a `packages` fallback without a watcher; uploads trigger reconciliation, while direct file copies need manual or explicitly configured reconciliation. Select an effective directory feed deliberately when several exist. Feed and file choices are frozen for the process. The existing public Nuplane builder callback configures trusted feeds/loading/store ownership; the addon does not introduce another membership protocol.
 
@@ -126,7 +131,7 @@ Installed metadata/assets require the coordinated immutable extracted-store prof
 
 The supported retention setting is `Studio:PackageManagement:RetentionPolicy:KeepNewestInactiveVersionsPerPackage`: `null` retains all installs; zero deliberately keeps no extra inactive versions. Active/protected versions remain protected by Nuplane. Legacy count/age/automatic cleanup settings are incompatible until an operator explicitly saves the supported policy; there is no silent migration or automatic deletion. A successful management-file save normalizes JSON and does not preserve comments. Custom/overlaid configuration stays readable but refuses local changes. Atomic saves and reloads share Hosting's process-lifetime configuration lease, not a cross-process file transaction.
 
-CShells.Nuplane owns change sequencing and shell replacement. Use its public `NuplaneIntegrationOptions.OnReloadResults`/logging for diagnostics; the current addon logs result names/errors and successful reload counts. Additional correlation/change/catalog facts must come from their owning public contracts. Do not restore the former duplicate Studio coordinator. Optional zero-count log verbosity refinements are not a delivered behavior change here. The qualification observer lookup is pinned to `IShellGenerationBuildParticipant`, as noted at the fixture.
+CShells.Nuplane owns change sequencing and shell replacement. Use its public `NuplaneIntegrationOptions.OnReloadResults`/logging for diagnostics; the current addon logs result names/errors and successful reload counts. Additional correlation/change/catalog facts must come from their owning public contracts. Do not restore the former duplicate Studio coordinator. Optional zero-count log verbosity refinements are not a delivered behavior change here. Qualification only: the qualification observer lookup is pinned to `IShellGenerationBuildParticipant`, as noted at the fixture.
 
 Workbench Server's pre-existing read-only administration is a separate profile. This program does not claim native Workbench maintenance convergence.
 
@@ -136,7 +141,7 @@ Keep the capture hook, host service registration and hub/HTTP mapping in the app
 
 ## Custom frontend and custom modules
 
-The standard payload reserves root-mounted `/studio`; module assets retain `/_content/<package-id>/...`. A separately named fallback document can use the standard bundles through `IndexFile`. The option does not relocate absolute bundle/application paths or promise arbitrary PathBase support.
+The standard payload reserves root-mounted `/studio`; RCL module assets use `/_content/<assembly-name>/...`. The assembly name may differ from its NuGet package ID. Use the accepted module manifest's asset URLs: installed assets resolve through the currently loaded assembly's package owner and active version. Ambiguous or stale owners are refused. Direct package-ID asset URLs remain supported when unambiguous. A separately named fallback document can use the standard bundles through `IndexFile`. The option does not relocate absolute bundle/application paths or promise arbitrary PathBase support.
 
 For a fully custom frontend, put `ExcludeAssets="build;buildTransitive"` on the final application's **direct** Hosting PackageReference. Hosting's .NET APIs remain available, its bundled assets are omitted, and independently selected module assets remain. Supply your own document and compatible SDK/vendor/import-map integration. Same-path overlays collide with the SDK. Transitive re-export/PrivateAssets shapes need their own qualification; do not generalize the tested direct-reference opt-out.
 

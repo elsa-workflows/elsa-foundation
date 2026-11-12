@@ -96,6 +96,38 @@ public sealed class EtlArtifactCompilerV2Tests
     }
 
     [Fact]
+    public void Jsonl_source_compiles_and_validates_its_alias_and_field_pointers()
+    {
+        var p = EtlV2TestPipelines.Create() with
+        {
+            Source = new EtlJsonlSource("source", [new("id", "/id", EtlColumnType.Int64, true), new("name", "/customer/name", EtlColumnType.String, true)]),
+            Routes = new(new EtlJsonlDestination("output"), new EtlJsonlDestination("errors"))
+        };
+        var source = (EtlJsonlSource)p.Source;
+
+        var artifact = Assert.IsType<EtlArtifact>(Compile(p).Artifact);
+        Assert.IsType<EtlJsonlSource>(EtlArtifactV2Json.Read(artifact.Pipeline).Source);
+        AssertRejected(p with { Source = source with { Binding = "/var/data/orders.jsonl" } }, "binding.alias.invalid");
+        AssertRejected(p with { Source = source with { Fields = [new("name", "/~3", EtlColumnType.String, true)] } }, "json.pointer.invalid");
+        AssertRejected(p with { Source = source with { Fields = [] } }, "schema.required");
+        AssertRejected(p with { Source = source with { Fields = [new("id", "/id", EtlColumnType.Int64, true), new("id", "/x", EtlColumnType.String, true)] } },
+            "schema.field.duplicate");
+    }
+
+    [Fact]
+    public void Csv_destinations_compile_on_either_route_and_validate_their_alias()
+    {
+        var p = EtlV2TestPipelines.Create() with { Routes = new(new EtlCsvDestination("output"), new EtlCsvDestination("errors")) };
+
+        var artifact = Assert.IsType<EtlArtifact>(Compile(p).Artifact);
+        var restored = EtlArtifactV2Json.Read(artifact.Pipeline);
+        Assert.IsType<EtlCsvDestination>(restored.Routes.Main);
+        Assert.Equal("csv", artifact.Pipeline.GetProperty("routes").GetProperty("errors").GetProperty("kind").GetString());
+        Assert.Empty(Compile(p with { Routes = new(new EtlCsvDestination("output"), new EtlHttpDestination("errors")) }).Diagnostics);
+        AssertRejected(p with { Routes = new(new EtlCsvDestination("/srv/out"), new EtlCsvDestination("errors")) }, "binding.alias.invalid");
+    }
+
+    [Fact]
     public void Invalid_variants_aliases_and_pagination_are_refused()
     {
         var p = EtlV2TestPipelines.Create();
