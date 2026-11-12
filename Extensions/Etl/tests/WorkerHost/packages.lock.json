@@ -79,10 +79,19 @@
           "SQLitePCLRaw.core": "3.0.3"
         }
       },
+      "elsa.activities.runtime.core": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Events.Core": "[4.0.0-dev, )",
+          "Elsa.Expressions.Core": "[4.0.0-dev, )",
+          "Elsa.Primitives": "[4.0.0-dev, )"
+        }
+      },
       "elsa.connections.core": {
         "type": "Project",
         "dependencies": {
-          "Elsa.Primitives": "[4.0.0-dev, )"
+          "Elsa.Primitives": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
         }
       },
       "elsa.etl.core": {
@@ -114,6 +123,18 @@
           "Elsa.Tasks.Core": "[4.0.0-dev, )"
         }
       },
+      "elsa.events.core": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Pipelines.Core": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.expressions.core": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Primitives": "[4.0.0-dev, )"
+        }
+      },
       "elsa.persistence.core": {
         "type": "Project"
       },
@@ -132,11 +153,30 @@
       "elsa.persistence.schema": {
         "type": "Project"
       },
+      "elsa.pipelines.core": {
+        "type": "Project"
+      },
       "elsa.primitives": {
         "type": "Project"
       },
+      "elsa.serialization.core": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Events.Core": "[4.0.0-dev, )",
+          "Elsa.Primitives": "[4.0.0-dev, )"
+        }
+      },
       "elsa.tasks.core": {
         "type": "Project"
+      },
+      "elsa.workflows.runtime.core": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Activities.Runtime.Core": "[4.0.0-dev, )",
+          "Elsa.Expressions.Core": "[4.0.0-dev, )",
+          "Elsa.Primitives": "[4.0.0-dev, )",
+          "Elsa.Serialization.Core": "[4.0.0-dev, )"
+        }
       },
       "CShells": {
         "type": "CentralTransitive",

@@ -43,8 +43,9 @@ internal sealed class DefaultConnectionResolver(
         }
 
         if (string.Equals(document.State.Status, ConnectionStatuses.Revoked, StringComparison.Ordinal) ||
-            string.Equals(document.State.Status, ConnectionStatuses.NeedsAuthorization, StringComparison.Ordinal) ||
-            string.Equals(document.State.Status, ConnectionStatuses.Error, StringComparison.Ordinal))
+            string.Equals(document.State.Status, ConnectionStatuses.Error, StringComparison.Ordinal) ||
+            (!request.AllowNeedsAuthorization &&
+             string.Equals(document.State.Status, ConnectionStatuses.NeedsAuthorization, StringComparison.Ordinal)))
         {
             throw new ConnectionUnavailableException(
                 name,

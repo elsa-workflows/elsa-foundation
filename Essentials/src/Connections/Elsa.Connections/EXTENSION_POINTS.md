@@ -43,7 +43,10 @@ Use `services.AddConnections()` to register defaults, then replace these service
   - A credential version that expires between the update's read and its rotation is reported as a 409 although no
     other request changed it; retrying the update succeeds (#3153).
   - `Revoke`, `Delete`, `Test`, `Find` and `List` do not wrap store failures (#3139).
-- `IConnectionResolver` for point-of-use resolution.
+- `IConnectionResolver` for point-of-use resolution. A connection in `NeedsAuthorization` is
+  refused unless the request sets `AllowNeedsAuthorization` (authorization begin and callback).
+  Callers that need credentials receive `ConnectionUnavailableException`, which implements
+  `IRuntimeFaultClassification` so the runtime records it as a non-retryable fault.
 - `IConnectionGrantWriter` for compare-and-swap grant writes (expected secret version).
 - `IConnectionPublishTenantAccessor` — owned by `ConnectionsDesign` (principal tenant, then persistence scope).
 - `IAccessTokenSource` implementations, keyed by `Kind`, for named credentials

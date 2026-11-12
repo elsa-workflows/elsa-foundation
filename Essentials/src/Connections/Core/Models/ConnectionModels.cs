@@ -185,6 +185,13 @@ public sealed class ConnectionResolveRequest
     public required string Name { get; init; }
     public string? RequiredType { get; init; }
     public string Owner { get; init; } = ConnectionOwners.Tenant;
+
+    /// <summary>
+    /// When true, a connection in <see cref="ConnectionStatuses.NeedsAuthorization"/> is returned
+    /// so authorization can complete. Callers that need credentials still resolve without this flag
+    /// and receive <see cref="Exceptions.ConnectionUnavailableException"/>.
+    /// </summary>
+    public bool AllowNeedsAuthorization { get; init; }
 }
 
 public sealed class ConnectionCredentialRequest

@@ -411,7 +411,8 @@
       "elsa.connections.core": {
         "type": "Project",
         "dependencies": {
-          "Elsa.Primitives": "[4.0.0-dev, )"
+          "Elsa.Primitives": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
         }
       },
       "elsa.etl.api": {
