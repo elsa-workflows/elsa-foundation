@@ -28,6 +28,8 @@ public sealed class CounterState
     public List<Forward> Forwarded { get; set; } = [];
     public List<string> Held { get; set; } = [];        // messages held once, which it applies when they come again
     public int Count { get; set; }                      // version 2 only: how many tokens it applied
+    public string? Bound { get; set; }                  // the definition it last rebound to
+    public List<string> Wrong { get; set; } = [];       // steps that saw another definition than the one it was bound to
 }
 
 public sealed record Forward(string Target, string Token);
@@ -51,8 +53,14 @@ public sealed class Counter(int version = 2) : Model<CounterState>
     protected override void Step(IStep step, CounterState state)
     {
         var holding = false;
+        if (step.Instance.Definition != (state.Bound ?? Spec.Definition)) state.Wrong.Add($"saw {step.Instance.Definition}, bound to {state.Bound}");
         foreach (var message in step.Inbox)
         {
+            if (message.Kind == "rebind")      // to another version of its definition, from the next step on
+            {
+                state.Bound = message.Read<string>();
+                step.Rebind(state.Bound);
+            }
             if (message.Kind != "add") continue;
             var add = message.Read<Add>();
             // A message that asks to be held is held once, with everything after it, so the order stays; a nudge to self

@@ -124,6 +124,9 @@ public sealed partial class World
             // I18: a state is read at its own version or upgraded; no model writes back a state older than the row's.
             if (_versions.TryGetValue(row.Id, out var version) && row.StateVersion < version) return $"I18 {row.Id} went from state version {version} back to {row.StateVersion}";
             _versions[row.Id] = row.StateVersion;
+            // I19: a rebind is the instance's from the next step on, in its row and in every step that follows.
+            if (row.Model == "counter" && State<CounterState>(row.Id) is { } bound && (bound.Wrong.Count > 0 || row.Definition != (bound.Bound ?? Counter.Spec.Definition)))
+                return $"I19 {row.Id} is bound to {bound.Bound ?? Counter.Spec.Definition}, its row says {row.Definition}{(bound.Wrong.Count > 0 ? ", and a step " + bound.Wrong[0] : "")}";
             if (row.Model == "counter" && row.StateVersion == 2 && State<CounterState>(row.Id) is { } counted && counted.Count != counted.Tokens.Count)
                 return $"I18 {row.Id} at state version 2 counts {counted.Count} tokens and holds {counted.Tokens.Count}";
             if (_known.TryGetValue(row.Id, out var before) && (row.Revision < before.Revision || (before.Status != InstanceStatus.Running && row.Status != before.Status)))

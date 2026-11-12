@@ -21,12 +21,12 @@ return Sweep(int.Parse(Arg("--from") ?? "1"), int.Parse(Arg("--seeds") ?? "10000
 // Every third seed is a rolling upgrade: counters start at state version 1 and each node moves to 2 when it restarts.
 static Config ConfigOf(int seed, Flaw flaws) => (flaws.HasFlag(Flaw.StableNodeName) ? new(1, 2, flaws) : seed % 5 == 0 ? new(2 + seed % 2, 2, flaws, Attempts: 5, Group: 4) : new Config(2 + seed % 2, 2, flaws)) with { Upgrade = seed % 3 == 0 };
 
-(string? Violation, List<Act> Acts) Run(int seed, Flaw flaws)
+(string? Violation, List<Act> Acts) Run(int seed, Flaw flaws, int? length = null)
 {
     var world = new World(ConfigOf(seed, flaws));
     var generator = new Generator(seed, world);
     var acts = new List<Act>();
-    while (acts.Count < actions)
+    while (acts.Count < (length ?? actions))
     {
         var act = generator.Next();
         if (world.Apply(act) is null) continue;     // not enabled now: choose again
@@ -151,9 +151,11 @@ int Mutations(int seeds)
         Flaw.WallClockTimers, Flaw.DeleteOutsideCommands, Flaw.HandOverWhileBehind, Flaw.BumpAllInherited, Flaw.RunBeforeMark,
         Flaw.VolatileRunTicket, Flaw.PollRace, Flaw.MeetWithoutTicket,
         // round 3: the rule of each new piece
-        Flaw.GreedyBalancer, Flaw.TrialPerPartition, Flaw.ProjectorBlindWrite, Flaw.EmitBeforeCommit, Flaw.ReplyTwice, Flaw.NoDeadline, Flaw.DeliverWhileSuspended, Flaw.NoShelf, Flaw.SuspendDuringTrial, Flaw.TerminateRootOnly, Flaw.HoldLoses, Flaw.HoldKeepsTrial, Flaw.SkipUpgrade, Flaw.StepNewerState,
+        Flaw.GreedyBalancer, Flaw.TrialPerPartition, Flaw.ProjectorBlindWrite, Flaw.EmitBeforeCommit, Flaw.ReplyTwice, Flaw.NoDeadline, Flaw.DeliverWhileSuspended, Flaw.NoShelf, Flaw.SuspendDuringTrial, Flaw.TerminateRootOnly, Flaw.HoldLoses, Flaw.HoldKeepsTrial, Flaw.SkipUpgrade, Flaw.StepNewerState, Flaw.RebindForgotten,
     ];
     var missed = 0;
+    // A deploy in progress meets an older owner only now and then: this one runs 1,000 actions a seed.
+    Flaw[] Longer = [Flaw.StepNewerState];
     foreach (var mutation in mutations)
     {
         var clock = Stopwatch.StartNew();
@@ -164,7 +166,7 @@ int Mutations(int seeds)
             var found = new ConcurrentBag<(int Seed, string Violation)>();
             Parallel.For(from, Math.Min(from + 64, seeds + 1), seed =>
             {
-                var (violation, done) = Run(seed, mutation);
+                var (violation, done) = Run(seed, mutation, Longer.Contains(mutation) ? 1000 : null);
                 Interlocked.Add(ref acts, done.Count);
                 if (violation is not null) found.Add((seed, violation));
             });

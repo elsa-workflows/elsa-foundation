@@ -14,6 +14,7 @@ internal sealed class Step : IStep
     private InstanceStatus _status = InstanceStatus.Running;
     private object? _output;
     private int _ordinal;
+    private string? _definition;
 
     internal Step(Worker worker, Slot slot, string id, List<Item> taken, int from, StartSpec? spec)
     {
@@ -95,6 +96,7 @@ internal sealed class Step : IStep
     public void Subscribe(string key, string wait) => _subscribed.Add(new SubscriptionRow(key, Id, wait));
     public void Unsubscribe(string key, string wait) => _unsubscribed.Add(new SubscriptionRow(key, Id, wait));
     public void Record(object entry) => _entries.Add(entry);
+    public void Rebind(string definition) => _definition = _worker.Has(Flaw.RebindForgotten) ? null : definition;
     public void SetStatus(InstanceStatus status, string? subStatus = null, object? output = null) => (_status, _output) = (status, output);
 
     /// <summary>The step's end is its commit, and the only one.</summary>
@@ -105,7 +107,7 @@ internal sealed class Step : IStep
         if (_status != InstanceStatus.Running || _worker.Has(Flaw.HoldLoses)) _held.Clear();     // nothing is held into an ended instance
         foreach (var message in Inbox)
             if (message.Kind == Kinds.RunFinished && _held.Contains(message.Id)) _runs.Add(message.Read<RunFinished>().Key);   // a held result: still in flight
-        var row = new InstanceRow(Id, Instance.Model, Instance.Definition, _status, Json.Write(State), _revision, Instance.Parent, Runs: _runs.Count == 0 ? null : Json.Write(_runs), History: history,
+        var row = new InstanceRow(Id, Instance.Model, _definition ?? Instance.Definition, _status, Json.Write(State), _revision, Instance.Parent, Runs: _runs.Count == 0 ? null : Json.Write(_runs), History: history,
             Children: _children.Count == 0 ? null : Json.Write(_children), StateVersion: version);
         if (_status != InstanceStatus.Running && row.Parent is not null) _sent.Add(Worker.Finished(row, _output is null ? null : Json.Write(_output)));
         var unit = new Unit(Slot, Id) { Consumed = Taken.FindAll(i => !_held.Contains(i.Message.Id)), Held = Taken.FindAll(i => _held.Contains(i.Message.Id)), Cancelled = _cancelled, Spec = Spec, Status = _status, Revision = _revision, Emitted = _emitted };

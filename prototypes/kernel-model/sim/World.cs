@@ -182,7 +182,7 @@ public sealed partial class World
         Skew = new long[config.Nodes];
         Paused = new bool[config.Nodes];
         Incarnation = new int[config.Nodes];
-        Versions = Enumerable.Repeat(config.Upgrade ? 1 : 2, config.Nodes).ToArray();
+        Versions = Enumerable.Range(0, config.Nodes).Select(node => config.Upgrade && node % 2 == 0 ? 1 : 2).ToArray();     // a deploy in progress
         Balancers = new Balancer[config.Nodes];
         _gates = Enumerable.Range(0, config.Nodes).Select(_ => new TrialGate()).ToArray();
         for (var node = 0; node < config.Nodes; node++)
@@ -295,7 +295,7 @@ public sealed partial class World
     {
         Paused[node] = false;
         Incarnation[node]++;
-        Versions[node] = Config.Upgrade && !Deployed && Incarnation[node] % 2 == 0 ? 1 : 2;     // a rolling deploy, with rollbacks
+        Versions[node] = Config.Upgrade && !Deployed && (Incarnation[node] + node) % 2 == 0 ? 1 : 2;     // a rolling deploy, with rollbacks
         _gates[node] = new TrialGate();     // a new process; a zombie keeps the old one
         foreach (var actor in Actors.Where(a => a.Node == node && !a.Dead).ToList())
         {
@@ -608,6 +608,12 @@ public sealed class Generator(int seed, World world)
     {
         var roll = r.Next(10);
         if (roll < 3) return new Act("add", M: new Message($"x{_serial}", InstanceRef.In(r.Next(world.Config.Partitions), "tr" + _serial++), Kinds.Start, Start: Tree.Spec(r.Next(1, 3), r.Next(1, 3)), KeepUntil: world.Time + 3_600_000));
+        if (roll == 6)      // a counter moves to another version of its definition
+        {
+            var counters = world.Store.Instances.Values.Where(i => i.Model == "counter" && i.Status == InstanceStatus.Running).Select(i => i.Id).Order(StringComparer.Ordinal).ToList();
+            if (counters.Count == 0) return new Act("tick", r.Next(50));
+            return new Act("add", M: new Message($"x{_serial++}", new InstanceRef(counters[r.Next(counters.Count)]), "rebind", Json.Write("c" + r.Next(2, 9)), KeepUntil: world.Time + 3_600_000));
+        }
         if (roll < 6)
         {
             var ends = world.Store.Instances.Values.Where(i => i.Status == InstanceStatus.Running && i.Model is "tree" or "runner").Select(i => i.Id).Order(StringComparer.Ordinal).ToList();

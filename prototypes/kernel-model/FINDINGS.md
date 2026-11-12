@@ -559,9 +559,11 @@ The owner's requirement of 12 November: a workflow handles an HTTP request and p
 
 ### F14. A node behind the deploy must not step a row written by a newer model (invariant 18). Run
 
-- **Replay:** `--flaw StepNewerState`, seed 99 at `--actions 1000` (`I18 0/c1 went from state version 2 back to 1`),
-  or seed 18198 at 300 actions. It is rare at 300 actions: in 4,000 seeds, an owner at version 1 held a counter row
-  at version 2 at 28 moments.
+- **Replay:** `--flaw StepNewerState --actions 1000`, seed 243 (`I18 1/c0 went from state version 2 back to 1`). It
+  is rare: 7 of 5,000 seeds of 1,000 actions fail, and at 300 actions none of 20,000 once the seeds moved (an owner
+  at version 1 held a counter row at version 2 at 28 moments in 4,000 seeds). The simulation's chaos phase commits
+  little (3.7 instance rows per seed of 300 actions; round 2's kernel, run the same way, 2.1), so counters rarely
+  reach a row before the deploy finishes. The mutation check runs this flaw at 1,000 actions.
 - **Sketch:** says nothing about a cluster in which nodes run different versions of a model. One does during every
   rolling deploy. An older model reads a newer state as far as it understands it and writes it back older: data is
   lost without an error.
@@ -572,3 +574,14 @@ The owner's requirement of 12 November: a workflow handles an HTTP request and p
   in the cluster (the `node` row can carry the model versions), or withheld instances wait for the deploy.
 - **Invariant 18:** an instance's state version never goes back, and a counter at version 2 counts exactly the
   tokens it holds. `--flaw SkipUpgrade` (read an old row as the new type): caught, seed 33.
+
+## 16. `Rebind`. Run
+
+- **Built:** `IStep.Rebind(definition)`: the commit writes the new definition into the row; from the next step on
+  the instance belongs to it. Three lines of kernel.
+- **Check (invariant 19):** outsiders tell counters to move to another version of their definition. The counter
+  notes the definition it was bound to, and every later step checks that it sees that one; the row must say it too.
+  Takeovers in between are covered because the definition is in the row. `--flaw RebindForgotten`: caught, seed 7
+  (`I19 1/c0 is bound to c7, its row says c`).
+- **Not built, reasoned:** a rebind that also needs the state upgraded (a definition version whose model state
+  differs) is a model's business: it can rebind and rewrite its state in the same step.
