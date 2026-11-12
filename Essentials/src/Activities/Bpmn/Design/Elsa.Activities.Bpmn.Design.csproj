@@ -5,6 +5,7 @@
   <ItemGroup>
     <InternalsVisibleTo Include="Elsa.Activities.Bpmn.Tests" />
     <InternalsVisibleTo Include="Elsa.Activities.Bpmn.Interchange.Tests" />
+    <InternalsVisibleTo Include="Elsa.Activities.Bpmn.Interchange" />
     <PackageReference Include="CShells.Abstractions" />
     <PackageReference Include="Elsa.Specifications.PackageManifest.Generator" PrivateAssets="all" />
   </ItemGroup>
