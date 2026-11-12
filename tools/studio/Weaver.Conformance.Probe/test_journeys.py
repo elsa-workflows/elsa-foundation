@@ -306,7 +306,7 @@ class CompleteWitnessOrchestrationTests(unittest.TestCase):
     def qualify(self, **overrides):
         names = (*ORIGINAL_SEQUENCE, "owned_origin", "configure_runtime", "_seed_principals", "JourneyRuntime", "private_json", "CaseRecords",
                  "server", "RestartableServer", "qualify_workflow_authorization", "qualify_workflow_truth_seams", "qualify_workflow_batch", "qualify_workflow_explain", "qualify_workflow_library", "qualify_workflow_inspection", "qualify_workflow_run", "_autonomy_preflight", "qualify_witness_autonomy", "qualify_witness_restarts",
-                 "capture_consumer_after", "validate_complete_witness")
+                 "qualify_effects", "capture_consumer_after", "validate_complete_witness")
         order = []
         def recorder(name):
             def call(*args, **kwargs):
@@ -344,7 +344,7 @@ class CompleteWitnessOrchestrationTests(unittest.TestCase):
         sequence = [name for name in order if name in ORIGINAL_SEQUENCE]
         self.assertEqual("qualify_context_disclosure", sequence[-1])
         tail = order[order.index("qualify_context_disclosure") + 1:]
-        self.assertEqual(["qualify_workflow_authorization", "qualify_workflow_truth_seams", "qualify_workflow_batch", "qualify_workflow_explain", "qualify_workflow_library", "qualify_workflow_inspection", "qualify_workflow_run", "_autonomy_preflight", "qualify_witness_autonomy", "qualify_witness_restarts",
+        self.assertEqual(["qualify_workflow_authorization", "qualify_workflow_truth_seams", "qualify_workflow_batch", "qualify_workflow_explain", "qualify_workflow_library", "qualify_workflow_inspection", "qualify_workflow_run", "_autonomy_preflight", "qualify_witness_autonomy", "qualify_effects", "qualify_witness_restarts",
                           "capture_consumer_after", "validate_complete_witness", "validate_complete_witness"], tail)
         self.assertEqual(1, order.count("qualify_workflow_authorization"))
         self.assertEqual(1, order.count("qualify_workflow_truth_seams"))
@@ -354,11 +354,13 @@ class CompleteWitnessOrchestrationTests(unittest.TestCase):
         self.assertEqual(1, order.count("qualify_workflow_inspection"))
         self.assertEqual(1, order.count("qualify_workflow_run"))
         self.assertEqual(1, order.count("qualify_witness_autonomy"))
+        self.assertEqual(1, order.count("qualify_effects"))
         self.assertEqual(1, order.count("qualify_witness_restarts"))
         self.assertEqual(1, order.count("RestartableServer"))
         self.assertEqual([{"reason": "synthetic"}], self.run.report["hostRestarts"])
         self.assertEqual(("passed", True), (self.run.report["status"], self.run.report["independentPackageWitness"]))
-        self.assertEqual(107, self.run.report["witnessManifest"]["expectedCaseCount"])
+        manifest = self.run.report["witnessManifest"]
+        self.assertEqual(107 + len(manifest["moduleEffectsCases"]) + len(manifest["story1RestartRequirements"]), manifest["expectedCaseCount"])
         self.assertNotIn("stageCount", json.dumps(self.run.report["witnessManifest"]))
 
     def test_failed_matrix_changed_original_records_or_failed_gate_never_promote(self):

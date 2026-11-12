@@ -7,6 +7,7 @@ from pathlib import Path
 import tarfile
 import tempfile
 import unittest
+from unittest.mock import patch
 import zipfile
 
 from autonomy_journeys import MATRIX_QUALIFICATION, MODE_QUALIFICATION, autonomy_stages
@@ -223,8 +224,15 @@ def complete_witness_report(base):
 
 
 class CompleteWitnessTests(unittest.TestCase):
-    """The extended inventory gate; synthetic receipts only, never a native qualification claim."""
+    """The original 107-case gate in isolation; new effects gates have their own adversarial tests.
+
+    Mock ONLY the added gates here so an old wrong-cause mutation cannot pass this
+    test merely because a newly mandatory section is absent. Production has no bypass.
+    """
     def setUp(self):
+        for name in ("manifest_gaps", "restart_manifest_gaps", "require_effects"):
+            mocked = patch("effects_journeys." + name, return_value=[])
+            mocked.start(); self.addCleanup(mocked.stop)
         self.base = QualificationTests("test_complete_synthetic_receipts_validate_without_status_or_file_mutation")
         self.base.setUp()
         self.addCleanup(self.base.tearDown)
@@ -238,12 +246,13 @@ class CompleteWitnessTests(unittest.TestCase):
 
     def test_manifest_is_original38_plus_four_plus_thirteen_and_ten_restarts_per_actual_adapter(self):
         manifest = witness_manifest()
-        self.assertEqual((38, 4, 2, 2, 2, 2, 4, 4, 2, 26, 20, 1, 107), (len(manifest["originalCases"]), len(manifest["currentAuthorityCases"]),
+        self.assertEqual((38, 4, 2, 2, 2, 2, 4, 4, 2, 26, 20, 1), (len(manifest["originalCases"]), len(manifest["currentAuthorityCases"]),
                                                      len(manifest["workflowAuthorizationCases"]), len(manifest["workflowTruthSeamCases"]),
                                                      len(manifest["workflowBatchCases"]), len(manifest["workflowExplainCases"]), len(manifest["workflowLibraryCases"]),
                                                      len(manifest["workflowInspectionCases"]), len(manifest["workflowRunCases"]),
                                                      len(manifest["autonomyCases"]), len(manifest["restartCases"]),
-                                                     len(manifest["restartControls"]), manifest["expectedCaseCount"]))
+                                                     len(manifest["restartControls"])))
+        self.assertEqual(107 + len(manifest["moduleEffectsCases"]) + len(manifest["story1RestartRequirements"]), manifest["expectedCaseCount"])
         self.assertEqual(["anthropic-workflow-authorization-unavailable", "copilot-workflow-authorization-unavailable"],
                          manifest["workflowAuthorizationCases"])
         self.assertEqual(["anthropic-workflow-truth-seams", "copilot-workflow-truth-seams"], manifest["workflowTruthSeamCases"])

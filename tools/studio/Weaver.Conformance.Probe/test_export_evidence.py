@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from autonomy_journeys import MATRIX_QUALIFICATION
 from restart_journeys import RESTART_QUALIFICATION
@@ -94,8 +95,15 @@ class ExportEvidenceTests(unittest.TestCase):
 
 
 class WitnessExportTests(unittest.TestCase):
-    """Export records completeness against the current manifest and never promotes or relabels."""
+    """Original107 export behavior in isolation; actual new gates are tested in test_effects_journeys.
+
+    Scope only the new gates out of these synthetic legacy records, so their own
+    missing-file and wrong-cause tests still exercise the intended export boundary.
+    """
     def setUp(self):
+        for name in ("manifest_gaps", "restart_manifest_gaps"):
+            mocked = patch("effects_journeys." + name, return_value=[])
+            mocked.start(); self.addCleanup(mocked.stop)
         self.base = test_qualification.QualificationTests("test_complete_synthetic_receipts_validate_without_status_or_file_mutation")
         self.base.setUp()
         self.addCleanup(self.base.tearDown)
@@ -110,7 +118,7 @@ class WitnessExportTests(unittest.TestCase):
     def test_complete_promoted_witness_exports_every_autonomy_reference(self):
         report = dict(self.complete, status="passed", independentPackageWitness=True)
         index = self.export(report)
-        self.assertEqual({"complete": True, "expectedCaseCount": 107, "gaps": []}, index["witnessCompleteness"])
+        self.assertEqual({"complete": True, "expectedCaseCount": report["witnessManifest"]["expectedCaseCount"], "gaps": []}, index["witnessCompleteness"])
         self.assertEqual("passed", index["qualificationStatus"]); self.assertFalse(index["qualificationStatusChanged"])
         root = self.base.root.resolve()
         for row in report[MATRIX_QUALIFICATION]["cases"]:

@@ -34,6 +34,7 @@ from explain_journeys import SECTION as EXPLAIN_SECTION, qualify_workflow_explai
 from library_journeys import SECTION as LIBRARY_SECTION, library_principal, qualify_workflow_library
 from inspection_journeys import SECTION as INSPECTION_SECTION, qualify_workflow_inspection
 from run_journeys import SECTION as RUN_SECTION, qualify_workflow_run, run_principal
+from effects_journeys import qualify_effects, require_resource_inventory
 from evidence import CONTROL_IDS, REQUIRED_CASES, validate_complete_witness, witness_manifest
 from journey_runtime import (BASE_GRANTS, HOME_PREFERENCES_PATH, NATIVE_HOME, HOST_HEADER, JourneyRuntime,
                              atomic_json, expect_error, same)
@@ -176,8 +177,7 @@ def _active_resource(runtime, name):
     w = runtime.witness
     tools = [item for item in generation["tools"] if item["moduleId"] == w["moduleId"]]
     contexts = [item for item in generation["contextSources"] if item["moduleId"] == w["moduleId"]]
-    check({item["name"] for item in tools} == {w["readTool"], w["writeTool"], w["sizeTool"]} and len(tools) == 3 and len(contexts) == 1,
-          "Native serving shell did not compose the exact resource tools and context source")
+    require_resource_inventory(tools, contexts, w)
     registry, reg = runtime.native.json(runtime.studio, name + "-registry", "/_elsa/module-management/registry")
     modules = [item for item in registry["modules"] if item["id"] == w["moduleId"]]
     packages = [item for item in registry["packages"] if item["id"] == w["studioPackage"]]
@@ -704,6 +704,10 @@ def qualify_distributions(run):
         qualify_witness_autonomy(runtime)
         check(same(original, {key: run.report[key] for key in original}),
               "The appended autonomy matrix changed the original or current-authority records")
+        # Spec1203 T037: ordinary common/memory effects, after the complete old autonomy
+        # inventory and before its original restart setup. The driver restores operator
+        # class settings and module selection; all prior case order/records remain intact.
+        qualify_effects(runtime)
         # The #3441 restart inventory comes last: it restarts this backend host between its phases and
         # configures the packaged durable store, which the earlier cases must not observe.
         original["autonomyLifecycleQualification"] = copy.deepcopy(run.report["autonomyLifecycleQualification"])
