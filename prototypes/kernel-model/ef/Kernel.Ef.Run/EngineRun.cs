@@ -15,7 +15,7 @@ using Npgsql;
 /// The runs of ENGINES.md: the stress test, the cost count and the probes of Program.cs, on any of the four engines.
 ///   x stress|cost|probe|block|definite|deadlock postgres|sqlserver|mysql|sqlite "connection" [key=value ...]
 /// Options: fence=checked|batch  unfenced=1  seconds=40  messages=5000  partitions=2  nodes=3
-///          kill=0 (no sessions killed)   rcsi=0 (locking; default on) readpast=1 xactabort=1 (SQL Server)   isolation=rc (MySQL)   wal=0|1 busy=ms timeout=s (SQLite)
+///          kill=0 (no sessions killed)   rcsi=0 (locking; default on) readpast=1 xactabort=1 (SQL Server)   isolation=rc takerr=1 (MySQL)   wal=0|1 busy=ms timeout=s (SQLite)
 ///          role=workers name=b signal=path (a second process on the same database)   locks=1 (cost)
 ///          savepoints=1 (leave Entity Framework's savepoint on, SQL Server and MySQL)   batchsize=n (statements per command, SQL Server and MySQL; default 1000)
 ///          many=100,1000 (cost: the sizes of the large flushes)   proxy=1 wire=1 (cost: count round trips on the TCP stream; MySQL: list what the server ran)
@@ -532,7 +532,7 @@ sealed class Target(string engine, string connection, Dictionary<string, string>
         Engine = engine switch
         {
             "sqlserver" => new SqlServerEngine { ReadPast = Has("readpast"), Savepoints = Has("savepoints"), ReadCommittedSnapshot = Get("rcsi", "1") == "1" },
-            "mysql" => new MySqlEngine { Isolation = Get("isolation", "") == "rc" ? System.Data.IsolationLevel.ReadCommitted : null, Savepoints = Has("savepoints") },
+            "mysql" => new MySqlEngine { Isolation = Get("isolation", "") == "rc" ? System.Data.IsolationLevel.ReadCommitted : null, Savepoints = Has("savepoints"), TakeIsolation = Has("takerr") ? null : System.Data.IsolationLevel.ReadCommitted },
             _ => null,
         },
     };

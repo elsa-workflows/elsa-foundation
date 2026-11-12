@@ -43,6 +43,9 @@ public abstract class Engine
         return Isolation is { } level ? db.Database.BeginTransactionAsync(level, cancellationToken) : db.Database.BeginTransactionAsync(cancellationToken);
     }
 
+    /// <summary>Begins the take's transaction: by default as the commit's.</summary>
+    public virtual Task<IDbContextTransaction> BeginTakeAsync(KernelDb db, CancellationToken cancellationToken) => BeginAsync(db, cancellationToken);
+
     /// <summary>Runs once, after the tables are created: database settings the engine needs.</summary>
     public virtual Task CreatedAsync(KernelDb db, CancellationToken cancellationToken) => Task.CompletedTask;
 
@@ -57,13 +60,20 @@ public abstract class Engine
     /// <summary>What one of this engine's own exceptions means; null when the exception is not this engine's.</summary>
     public abstract Failure? Classify(Exception exception);
 
-    /// <summary>The engine's part of the model: how <c>seq</c> is assigned.</summary>
+    /// <summary>The engine's part of the model: how <c>seq</c> is assigned, and the indexes the locking engines need.</summary>
     public static void Model(DatabaseFacade database, ModelBuilder model)
     {
         if (database.ProviderName == "Microsoft.EntityFrameworkCore.SqlServer")
             model.Entity<MessageEntity>().Property(m => m.Seq).ValueGeneratedOnAdd().UseIdentityColumn();
         if (database.ProviderName == "MySql.EntityFrameworkCore")
             MySqlEngine.Messages(model);
+        // ENGINES.md E8. The take's "attempts + 1 WHERE partition = p AND trial = e" had no index to use: on InnoDB it
+        // scanned the clustered index and, under REPEATABLE READ, locked every row and gap of the whole table (4,622 row
+        // locks), and deadlocked with another partition's commit inserting a message; on SQL Server it took an update
+        // lock on every row it passed and waited behind every partition's uncommitted inserts. With this index it
+        // touches the rows it changes.
+        if (database.ProviderName is "Microsoft.EntityFrameworkCore.SqlServer" or "MySql.EntityFrameworkCore")
+            model.Entity<MessageEntity>().HasIndex(m => new { m.Partition, m.Trial });
     }
 
     protected static object Value(object? value) => value ?? DBNull.Value;
@@ -185,6 +195,16 @@ public sealed class MySqlEngine : Engine
     // (REPEATABLE READ when none is given), so a level set on the session alone is overwritten.
 
     public override string Now => "CAST(UNIX_TIMESTAMP(SYSDATE(3)) * 1000 AS SIGNED)";
+
+    /// <summary>
+    /// ENGINES.md E8. The take runs at READ COMMITTED whatever <see cref="Engine.Isolation"/> says: under REPEATABLE READ
+    /// even the indexed "attempts + 1" takes next-key locks on the gap before the first row it changes, and a message
+    /// another partition inserts into that gap waits for the take. Null keeps the commit's level (the experiment).
+    /// </summary>
+    public System.Data.IsolationLevel? TakeIsolation { get; init; } = System.Data.IsolationLevel.ReadCommitted;
+
+    public override Task<IDbContextTransaction> BeginTakeAsync(KernelDb db, CancellationToken cancellationToken) =>
+        TakeIsolation is { } level ? db.Database.BeginTransactionAsync(level, cancellationToken) : BeginAsync(db, cancellationToken);
 
     public override string Sql(string sql) => sql.Replace('"', '`');
 
