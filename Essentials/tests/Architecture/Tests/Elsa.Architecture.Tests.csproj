@@ -136,6 +136,7 @@
     <ProjectReference Include="..\..\..\src\Connections\Core\Elsa.Connections.Core.csproj" />
     <ProjectReference Include="..\..\..\src\Studio\Preferences\Core\Elsa.Studio.Preferences.Core.csproj" />
     <ProjectReference Include="../../../src/Studio/Dashboard/Core/Elsa.Studio.Dashboard.Core.csproj" />
+    <ProjectReference Include="../../../src/Studio/Dashboard/Api/Elsa.Studio.Dashboard.Api.csproj" />
     <ProjectReference Include="../../../src/Studio/Dashboard/Persistence/EntityFrameworkCore/Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.csproj" />
     <ProjectReference Include="../../../src/Studio/Dashboard/Management/Elsa.Studio.Dashboard.Management.csproj" />
     <!-- Studio Preferences composes into the representative host in DomainManagementApiCompositionTests, so its endpoints appear in the committed endpoint-manifest baseline (#1455). -->

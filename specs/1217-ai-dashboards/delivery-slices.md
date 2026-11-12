@@ -14,7 +14,7 @@ Each PR is based on its predecessor until that predecessor lands. Split an overs
 | 2 | T006–T009/T011: native validation, named event fan-in and read bounds; query tests (resource authorization moves to tested persistence/resource slice) | Prepared; 55 query/composition cases pass after causal regression controls; review pending |
 | 3 | T008–T009/T024: resource service/authorization and EF definitions, CAS, revisions and SQLite schema; resource and normal consumer-context tests | Prepared SQLite/resource slice; tests/review in progress, HTTP and relational providers deferred |
 | 4 | T024/T033: bounded collection/reuse reads, relational migrations and provider/security tests | Prepared; SQLite paging/migration tests pass, provider/review/Architecture pending |
-| 5 | T010/T016/T023/T026/T030–T031: authenticated native APIs, audience resolution, resource HTTP tests and catalogs | Preserved; not reintegrated |
+| 5 | T010/T016/T023/T026/T030–T031: authenticated native APIs, audience resolution, resource HTTP tests and catalogs | Prepared;66 native resource/HTTP cases pass; review and graph/Architecture pending |
 | 6 | T013–T015/T021: reusable runtime inspection and Workflow query source; numerical tests | Preserved; not reintegrated |
 | 7 | T017/T025/T027/T035/T037: native Studio transport, editor, collections and renderers; split component and page integration as needed | Preserved; not reintegrated |
 | 8 | T019/T026/T032/T039: Studio sharing/history/recovery, accessibility and Home preservation tests | Preserved; not reintegrated |
