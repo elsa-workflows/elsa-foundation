@@ -186,7 +186,7 @@ Authored portable function definition.
 | `ResultType` | Expected portable result type |
 | `Parameters` | Ordered named parameters, each with an authored binding |
 | `Options` | Serializable evaluator options |
-| `CapabilityProfile` | Explicit deterministic capabilities permitted during evaluation |
+| `CapabilityProfile` | Explicit capabilities permitted during evaluation (`binding-readonly-v1`; need not be deterministic, D-1) |
 
 Binding expressions cannot carry delegates, closures, ambient variable/output names, mutating host
 functions, or implicit time/random/configuration access.
@@ -272,7 +272,7 @@ Executable pure expression.
 | `ResultType` | Portable expected result type |
 | `Parameters` | Name → normalized `RuntimeInputBinding` |
 | `Options` | Serialized evaluator options |
-| `CapabilityProfile` | Explicit deterministic capabilities |
+| `CapabilityProfile` | Explicit capabilities (`binding-readonly-v1`) |
 
 Parameter bindings are materialized before evaluation. The evaluator receives an immutable parameter
 map, never an activity execution or variable context.
