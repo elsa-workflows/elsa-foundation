@@ -24,11 +24,12 @@ public sealed class CounterState
     public List<string> Ids { get; set; } = [];
     public List<string> Tokens { get; set; } = [];
     public List<Forward> Forwarded { get; set; } = [];
+    public List<string> Held { get; set; } = [];        // messages held once, which it applies when they come again
 }
 
 public sealed record Forward(string Target, string Token);
 
-public sealed record Add(string Token, string? ForwardTo = null);
+public sealed record Add(string Token, string? ForwardTo = null, bool Hold = false);
 
 public sealed class Counter : Model<CounterState>
 {
@@ -37,9 +38,24 @@ public sealed class Counter : Model<CounterState>
 
     protected override void Step(IStep step, CounterState state)
     {
+        var holding = false;
         foreach (var message in step.Inbox)
         {
+            if (message.Kind != "add") continue;
             var add = message.Read<Add>();
+            // A message that asks to be held is held once, with everything after it, so the order stays; a nudge to self
+            // makes the next step come.
+            if (!holding && add.Hold && !state.Held.Contains(message.Id))
+            {
+                holding = true;
+                state.Held.Add(message.Id);
+                step.Send(step.Instance.Ref, "nudge");
+            }
+            if (holding)
+            {
+                step.Hold(message);
+                continue;
+            }
             state.Ids.Add(message.Id);
             state.Tokens.Add(add.Token);
             step.Record(add.Token);

@@ -540,7 +540,7 @@ public sealed class Generator(int seed, World world)
             case < 34:
             {
                 var forward = r.Next(4) == 0 ? InstanceRef.In(r.Next(world.Config.Partitions), "c" + r.Next(2)).Id : null;
-                return new Act("add", M: To("c" + r.Next(2), "add", new Add("t" + n, forward), Counter.Spec));
+                return new Act("add", M: To("c" + r.Next(2), "add", new Add("t" + n, forward, Hold: r.Next(5) == 0), Counter.Spec));
             }
             case < 44 when _outside.Count > 0:
                 return new Act("add", M: _outside[r.Next(_outside.Count)], S: "a retry");

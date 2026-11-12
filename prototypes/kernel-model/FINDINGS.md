@@ -527,3 +527,21 @@ The owner's requirement of 12 November: a workflow handles an HTTP request and p
   `--flaw TerminateRootOnly`: caught, seed 1 (`END the subscription of 1/tr32~1.1~1.0 to tk is left behind`).
 - **Coverage, run, 4,000 seeds:** 13,568 descendants cancelled in another partition than their parent's, 19,643 in
   the same; 431 of them were created after their parent had already been terminated.
+
+## 14. `Hold`. Run
+
+- **Built:** `IStep.Hold(message)`: the message is not consumed. It stays a row, goes back into memory in its place in
+  `seq` order, and is delivered with the next step, which comes when something new arrives. A held result keeps its
+  run in flight. Nothing is held into an instance that ends in that step. After a takeover the new owner does not
+  know a message was held and may deliver it alone; the model must allow for that (the simulation's counter does).
+- **Contract finding, run:** a held message that was on trial has run without killing the process, so its trial
+  must end. The row's trial mark must be cleared in the same commit (`StepCommit.Held`), or the row still says "on
+  trial" while the process goes on with other work, and the next owner's take would count a death against it.
+  `--flaw HoldKeepsTrial`: caught, seed 2 (`I14 run work of 0/h13 started ... while x2 was on trial`).
+- **Liveness, run during development (seed 66, three actions):** a held message waited for something new; a resume
+  behind it waited for everything ahead of it to go first; and the nudge that would have brought the next step was
+  behind the resume. Kernel messages now pass held messages. No flaw kept: the rule is one condition in
+  `Worker.Deliverable`.
+- **Check:** the counter holds a message that asks for it, with everything after it, and sends itself a nudge; the
+  existing checks of invariants 3, 4 and 11 then say that nothing held is lost, applied twice or reordered.
+  `--flaw HoldLoses` (a held message is consumed): caught, seed 1 (`I3 t41 for 1/c0 is neither waiting nor applied`).

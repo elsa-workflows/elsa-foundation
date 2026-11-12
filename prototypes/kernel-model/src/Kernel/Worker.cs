@@ -239,7 +239,12 @@ public sealed class Worker
             StartRun(item);
         }
         if (!_slots.TryGetValue(message.Target.Id, out var slot)) _slots[message.Target.Id] = slot = new Slot { Loaded = fresh };
-        var at = slot.Inbox.FindIndex(i => i.Seq > seq);
+        Insert(slot, item);
+    }
+
+    private static void Insert(Slot slot, Item item)
+    {
+        var at = slot.Inbox.FindIndex(i => i.Seq > item.Seq);
         slot.Inbox.Insert(at < 0 ? slot.Inbox.Count : at, item);    // a target's messages are handled in seq order
     }
 
@@ -302,14 +307,15 @@ public sealed class Worker
             if (Awaits(item)) break;    // nothing overtakes a message that waits for its mark
             if (control)
             {
-                // The kernel's, alone, after what came before it. A suspend waits while the instance has a message on trial,
-                // or the trial could never end.
-                if (due.Count == 0 && !(item.Message.Kind == Kinds.Suspend && OnTrial(instance) && !Has(Flaw.SuspendDuringTrial))) due.Add(item);
+                // The kernel's, alone, after what came before it, except held messages, which wait for something new and
+                // would wait for ever behind it. A suspend waits while the instance has a message on trial, or the trial
+                // could never end.
+                if (due.TrueForAll(i => i.Held) && !(item.Message.Kind == Kinds.Suspend && OnTrial(instance) && !Has(Flaw.SuspendDuringTrial))) due = [item];
                 break;
             }
             if (item.Message.Due is not { } at || at <= now) due.Add(item);
         }
-        return due;
+        return due.TrueForAll(i => i.Held) ? [] : due;    // held messages wait for something new to come with
     }
 
     public async Task LoadAsync(CancellationToken cancellationToken = default)
@@ -342,7 +348,7 @@ public sealed class Worker
         var due = Deliverable(instance, slot);
         if (due.Count == 0) return;
         slot.Inbox.RemoveAll(due.Contains);
-        foreach (var item in due) item.Taken = true;
+        foreach (var item in due) (item.Taken, item.Held) = (true, false);
         slot.Busy = true;
         var creator = slot.Row is null ? due.FindIndex(i => i.Message.Start is not null) : -1;
         var spec = creator < 0 ? null : due[creator].Message.Start;
@@ -537,7 +543,8 @@ public sealed class Worker
             units.Select(u => new StepCommit(u.Instance, u.Row, u.Expected,
                 Has(Flaw.KeepConsumedMessages) ? [] : [.. u.Consumed.Where(i => i.Durable && i.Message.KeepUntil is null).Select(i => i.Message.Id), .. Has(Flaw.VolatileRunTicket) ? [] : u.Cancelled],
                 Has(Flaw.KeepConsumedMessages) ? [] : u.Consumed.Where(i => i.Durable && i.Message.KeepUntil is not null).Select(i => i.Message.Id).ToList(),
-                u.Sent.Where(m => !u.Volatile.Contains(m.Id)).ToList(), u.Subscribed, u.Unsubscribed, u.Journal, u.Unsubscribe)).ToList(),
+                u.Sent.Where(m => !u.Volatile.Contains(m.Id)).ToList(), u.Subscribed, u.Unsubscribed, u.Journal, u.Unsubscribe,
+                u.Held.Where(i => i.Durable).Select(i => i.Message.Id).ToList())).ToList(),
             marks.Select(i => i.Message.Id).ToList(), trial.Select(i => i.Message.Id).ToList());
         while (true)
         {
@@ -589,6 +596,12 @@ public sealed class Worker
     private void Apply(Unit unit, Queue<long>? seqs, bool handOver)
     {
         foreach (var item in unit.Consumed) Forget(item);
+        foreach (var item in unit.Held)     // back in its place; its step ran, so it is no suspect and no longer on trial
+        {
+            (item.Taken, item.Held, item.Suspect, item.Marked) = (false, true, false, true);
+            Insert(unit.Slot!, item);
+            if (_trial.Remove(item) && _trial.Count == 0) _gate.Release(this);
+        }
         foreach (var id in unit.Cancelled)      // a cancelled run's ticket goes whether or not this owner had taken it into memory yet
         {
             _cancelling.Remove(id);
@@ -689,6 +702,7 @@ internal sealed class Item(Message message, long seq)
     public bool Marked;             // its row says seen at this epoch
     public bool Suspect;            // another owner had it: it is tried apart before anything else is believed of it
     public bool Shelved;            // a suspect whose row says seen at this epoch, not yet tried
+    public bool Held;               // a step handed it back: it waits for something new to come with
     public int Attempts;
     public bool Ticket;             // a kernel message, not (yet) for the model
     public bool Taken;              // a step or a commit in flight has it
@@ -708,7 +722,7 @@ internal sealed class Unit(Slot? slot, string instance)
     public InstanceStatus? Status = InstanceStatus.Running;     // after this unit; null when the instance does not exist
     public long Revision;
     public List<(string Channel, object? Item)> Emitted = [];
-    public List<Item> Consumed = [];
+    public List<Item> Consumed = [], Held = [];
     public List<string> Cancelled = [];
     public List<Message> Sent = [];
     public HashSet<string> Fresh = [], Volatile = [];

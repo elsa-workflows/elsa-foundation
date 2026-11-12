@@ -28,11 +28,12 @@ public sealed record Cluster(int Nodes, IReadOnlyList<int> Free, long Now);
 /// <summary>
 /// One instance's part of a commit. <c>Expected</c> is the revision the row must have; null means the row is new.
 /// <c>Consumed</c> messages are deleted; <c>Done</c> ones (outside commands, which carry keep_until) are marked done.
+/// <c>Held</c> messages stay, and are no longer on trial: their step ran and did not kill the process.
 /// <c>Unsubscribe</c> deletes every subscription of the instance: it was ended by force and the kernel holds no list of them.
 /// </summary>
 public sealed record StepCommit(
     string Instance, InstanceRow? Row, long? Expected, IReadOnlyList<string> Consumed, IReadOnlyList<string> Done, IReadOnlyList<Message> Sent,
-    IReadOnlyList<SubscriptionRow> Subscribed, IReadOnlyList<SubscriptionRow> Unsubscribed, string? Journal, bool Unsubscribe = false);
+    IReadOnlyList<SubscriptionRow> Subscribed, IReadOnlyList<SubscriptionRow> Unsubscribed, string? Journal, bool Unsubscribe = false, IReadOnlyList<string>? Held = null);
 
 /// <summary>What the owner of <c>Partition</c> at <c>Epoch</c>, believing the position is <c>Position</c>, writes in one transaction.</summary>
 public sealed record CommitBatch(

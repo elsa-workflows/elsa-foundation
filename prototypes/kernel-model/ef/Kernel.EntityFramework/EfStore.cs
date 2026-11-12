@@ -286,6 +286,8 @@ public sealed class EfStore(Func<KernelDb> create, bool postgres, bool fenceInBa
                 }
                 foreach (var id in step.Consumed) db.Remove(new MessageEntity { Id = id });
                 foreach (var id in step.Done) db.Attach(new MessageEntity { Id = id }).Entity.Done = true;
+                foreach (var id in step.Held ?? [])     // its step ran: no longer on trial
+                    db.Attach(new MessageEntity { Id = id, Trial = 0 }).Property(m => m.Trial).IsModified = true;
                 foreach (var message in step.Sent)
                 {
                     sent.Add(ToEntity(message, batch.HandOver && message.Target.Partition == batch.Partition ? batch.Epoch : 0, postgres ? 0 : ++seq));

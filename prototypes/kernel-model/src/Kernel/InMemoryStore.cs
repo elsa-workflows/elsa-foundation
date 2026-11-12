@@ -78,7 +78,7 @@ public sealed class InMemoryStore(int partitions, Func<long> clock, Flaw flaws =
                         var revision = Instances.GetValueOrDefault(row.Id)?.Revision;
                         if (revision != step.Expected) Diverged($"instance {row.Id} is at revision {revision?.ToString() ?? "none"}, the commit expected {step.Expected?.ToString() ?? "none"}");
                     }
-                    foreach (var id in step.Consumed.Concat(step.Done))
+                    foreach (var id in step.Consumed.Concat(step.Done).Concat(step.Held ?? []))
                         if (!Has(Flaw.DeleteWithoutCount) && Messages.GetValueOrDefault(id) is not { Done: false }) Diverged($"consumed message {id} is not there");
                     foreach (var message in step.Sent)
                         if (Messages.ContainsKey(message.Id)) Diverged($"sent message {message.Id} exists already");
@@ -113,6 +113,8 @@ public sealed class InMemoryStore(int partitions, Func<long> clock, Flaw flaws =
                 if (Messages.GetValueOrDefault(id) is { } seen) seen.Seen = batch.Epoch;
             foreach (var id in batch.Trial)
                 if (Messages.GetValueOrDefault(id) is { } tried) (tried.Seen, tried.Trial) = (batch.Epoch, batch.Epoch);
+            foreach (var id in batch.Steps.SelectMany(s => s.Held ?? []))
+                if (!Has(Flaw.HoldKeepsTrial) && Messages.GetValueOrDefault(id) is { } held) held.Trial = 0;
             return new(new Committed(fenced, now, seqs));
 
             // A count that does not match: memory and rows have parted. At the current epoch and position that is a kernel bug.

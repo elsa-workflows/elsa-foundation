@@ -5,7 +5,7 @@ internal sealed class Step : IStep
 {
     private readonly Worker _worker;
     private readonly List<Message> _sent = [];
-    private readonly HashSet<string> _fresh = [], _volatile = [], _started = [];
+    private readonly HashSet<string> _fresh = [], _volatile = [], _started = [], _held = [];
     private readonly List<SubscriptionRow> _subscribed = [], _unsubscribed = [];
     private readonly List<object> _entries = [];
     private readonly List<(string, object?)> _emitted = [];
@@ -86,6 +86,12 @@ internal sealed class Step : IStep
         _worker.Cancelling(ticket);     // from here on its result is nobody's
     }
 
+    public void Hold(Message message)
+    {
+        if (!Inbox.Contains(message)) throw new InvalidOperationException($"Message '{message.Id}' is not in this step's inbox.");
+        _held.Add(message.Id);
+    }
+
     public void Subscribe(string key, string wait) => _subscribed.Add(new SubscriptionRow(key, Id, wait));
     public void Unsubscribe(string key, string wait) => _unsubscribed.Add(new SubscriptionRow(key, Id, wait));
     public void Record(object entry) => _entries.Add(entry);
@@ -96,10 +102,13 @@ internal sealed class Step : IStep
     {
         var created = Slot.Row is null;
         var history = Slot.Row?.History ?? Spec!.History;
+        if (_status != InstanceStatus.Running || _worker.Has(Flaw.HoldLoses)) _held.Clear();     // nothing is held into an ended instance
+        foreach (var message in Inbox)
+            if (message.Kind == Kinds.RunFinished && _held.Contains(message.Id)) _runs.Add(message.Read<RunFinished>().Key);   // a held result: still in flight
         var row = new InstanceRow(Id, Instance.Model, Instance.Definition, _status, Json.Write(State), _revision, Instance.Parent, Runs: _runs.Count == 0 ? null : Json.Write(_runs), History: history,
             Children: _children.Count == 0 ? null : Json.Write(_children));
         if (_status != InstanceStatus.Running && row.Parent is not null) _sent.Add(Worker.Finished(row, _output is null ? null : Json.Write(_output)));
-        var unit = new Unit(Slot, Id) { Consumed = Taken, Cancelled = _cancelled, Spec = Spec, Status = _status, Revision = _revision, Emitted = _emitted };
+        var unit = new Unit(Slot, Id) { Consumed = Taken.FindAll(i => !_held.Contains(i.Message.Id)), Held = Taken.FindAll(i => _held.Contains(i.Message.Id)), Cancelled = _cancelled, Spec = Spec, Status = _status, Revision = _revision, Emitted = _emitted };
         // An ephemeral instance that ends in the step that created it, and leaves nothing for anyone else, is never written.
         if (created && Spec!.Ephemeral && _status != InstanceStatus.Running && _sent.Count == 0 && _subscribed.Count == 0) return unit;
         if (_subscribed.Count > 0)

@@ -90,6 +90,7 @@ public interface IStep
     InstanceRef Start(StartSpec spec, Placement placement = Placement.WithParent);
     void Run(string key, object? arguments = null);
     void CancelRun(string key);
+    void Hold(Message message);                 // not consumed: handed to the next step again, in its place in the order
     void Subscribe(string key, string wait);
     void Unsubscribe(string key, string wait);
     void Record(object entry);
@@ -109,7 +110,7 @@ public static class Json
 /// literal reading of the sketch, kept so that the seed that exposed each one stays replayable (see FINDINGS.md).
 /// </summary>
 [Flags]
-public enum Flaw
+public enum Flaw : long
 {
     None = 0,
     FenceWithoutEpoch = 1 << 0,
@@ -144,4 +145,6 @@ public enum Flaw
     NoShelf = 1 << 28,             // a suspect that cannot be tried keeps its row unseen
     SuspendDuringTrial = 1 << 29,  // an instance may be suspended while it has a message on trial
     TerminateRootOnly = 1 << 30,   // a terminate ends its instance and not the instances it started
+    HoldLoses = 1L << 31,          // a held message is consumed like the rest
+    HoldKeepsTrial = 1L << 32,     // a held message that was on trial stays on trial in its row
 }
