@@ -7,10 +7,15 @@ It answers whether the kernel's model contract holds for real workflow semantics
 kernel: the live channel of section 4 (`ILiveChannel`, `LiveNode`, `LiveNetwork`) and the kernel hooks N2
 (`OnApplied`, `OnReset`) are gone; the model emits with the kernel's `Emit`, an HTTP start hands the request over as
 `Ambient`, each node keeps its requests in the kernel's `Requests`, and the opt-out of the release rule is per route
-(`HttpEndpoint.RespondBeforeCommit`), not per response. N1 (`IStep.Publish`) stays. Frictions F-N3 to F-N6 and F-N8
+(`HttpEndpoint.RespondBeforeCommit`), not per response. N1 (`ITurn.Publish`) stays. Frictions F-N3 to F-N6 and F-N8
 are fixed in the kernel (`Events.Delivered`, `Recall`, `Start(..., detached)`, `Redelivered`, and a wait that does not
 ask for kept events needs no meet ticket), and F-N9 by the owner's default that a wait gets no event published before
 it. The simulation's check N6 is new. The seeds and costs below are the branch's; section 23 has the merged ones.
+
+**Round 4 (FINDINGS.md section 24).** The names are round 4's: an instance's step is a *turn* (`ITurn`), off-step
+work is a *background job* (`StartJob`, `IJob`, `job-finished`, the row's `jobs`), and the runtime's call into a
+partition is a *pass*. `src/Kernel` is now three projects: `src/Kernel.Runtime`, `src/Kernel.Durable` and
+`src/Kernel.Workflows`; a file named below without a path is in one of them. Seeds, counts and costs are unchanged.
 
 Every claim says how it is known: **run** means a command below produced it; **reasoned** means nobody ran it.
 
@@ -80,22 +85,22 @@ State (`NativeState`, JSON in the instance row):
 - `Frames`: live activities only (a composite with children, or an activity that waits), each with its private
   state, its iteration scope and its committed attempt. A leaf that completes in the burst never becomes a frame.
 - `Agenda`: scheduled work, in order: execute a node as a new frame (its id fixed when scheduled), or resume a wait.
-- `Waits`: wait id to frame, kind (event, timer, child, run) and key (subscription key, child id, run key).
+- `Waits`: wait id to frame, kind (event, timer, child, job) and key (subscription key, child id, job key).
 - `Variables` (the workflow's scope; iteration scopes live on frames), `Results` (last result per node), the start
   trigger not yet delivered, and the reply address of the request being answered.
 
 Messages: `start` (with the start spec), `native.continue` (a Durable boundary), `native.timer` (a Delay is due),
 `event` (a delivered event or HTTP request), `native.resume` (an outsider resumes a wait by its stimulus without the
-event tables), `child-finished`, `run-finished`, `native.cancel`.
+event tables), `child-finished`, `job-finished`, `native.cancel`.
 
-A step takes its inbox, turns each message into agenda work, then runs the agenda until everything waits or ends. A
+A turn takes its inbox, turns each message into agenda work, then runs the agenda until everything waits or ends. A
 wait is removed when its resume is processed, so a second delivery (two events, a stale timer) does nothing.
 Persistence modes are commit boundaries:
 
-- **Balanced:** one step until all waits or ends: one commit per burst (capped at 1,000 activities per step).
-- **Durable:** after every activity the step ends and sends `native.continue` to itself. An `[External]` activity
-  first commits its attempt (journal entry `a:frame:1`) in a step of its own, and runs in the next.
-- **Ephemeral:** `StartSpec.Ephemeral`; the kernel writes nothing when the instance ends in its first step and sent
+- **Balanced:** one turn until all waits or ends: one commit per burst (capped at 1,000 activities per turn).
+- **Durable:** after every activity the turn ends and sends `native.continue` to itself. An `[External]` activity
+  first commits its attempt (journal entry `a:frame:1`) in a turn of its own, and runs in the next.
+- **Ephemeral:** `StartSpec.Ephemeral`; the kernel writes nothing when the instance ends in its first turn and sent
   nothing. Otherwise it commits like Balanced.
 
 Journal entries are short strings: `c:frame:node` (completed), `j:...` (a join fired), `a:frame:n` (attempt),
@@ -108,9 +113,9 @@ The simulation's checks read them.
 |---|---|---|
 | Delay writes a timer through `IDurableTimerScheduler` | `TimerTrigger`: a message to self with a due time | run (smoke; sim) |
 | DispatchWorkflow reads three stores and stages a dispatch record and a post-commit intent | With wait: `ChildTrigger`, the kernel's `Start` and its `child-finished`. Without: `DispatchEffect`, a `Send` with a start spec | run |
-| PublishEvent stages through `IPublishStimulusStager` | `PublishEffect`: the kernel's publish, through `IStep.Publish` (**kernel change N1**) | run |
+| PublishEvent stages through `IPublishStimulusStager` | `PublishEffect`: the kernel's publish, through `ITurn.Publish` (**kernel change N1**) | run |
 | Parallel counts branch states through `IActivityExecutionStateStore.ListAllByParentAsync` | Counts its own branches in its private state | run |
-| Slow work: `AgentModelTurn`'s journal and lease renewer, background placement | `[Background]` leaf: `IStep.Run`; its inputs are materialized in the step, it runs off-step, its result is a `run-finished` | run |
+| Slow work: `AgentModelTurn`'s journal and lease renewer, background placement | `[Background]` leaf: `ITurn.StartJob`; its inputs are materialized in the turn, it runs as a background job, its result is a `job-finished` | run |
 | The structural context's `SchedulerWorkItem`, `ActivityExecutionState`, staged requests | `CompositeContext`: schedule, complete, join, fault, cancel, own state | run |
 | WriteHttpResponse's result read by the host | `EmitEffect` on the live channel, released after the commit (**hook N2**) | run |
 
@@ -129,10 +134,10 @@ route table, built from the definitions, read nothing at request time) and `Http
 | Case | How | Evidence |
 |---|---|---|
 | 1. A request starts a workflow | The route table finds the workflow; the host places it in a partition the node owns, hands the start over in memory with the request as the trigger, and observes it | run, one node; Ephemeral: zero database calls |
-| 2. Respond, then continue | WriteHttpResponse does not end the workflow; the request returns at the release and the workflow runs on (here into off-step work) | run |
-| 3. A wait before the response | Off-step work or a 20 ms Delay first; the instance stays in memory and the request stays open | run |
-| 4. A second request resumes a workflow waiting at an HttpEndpoint | The receiving node looks up the subscription on the route and adds the delivery with a reply address `node/request`; the owner runs the step and sends the response to that address | run, on one node and across two nodes (two workers, two partitions, one store; the transport is in process) |
-| 5. Released only after the commit of the step that wrote it | The model hands emitted items over at the end of a step that did not throw; `LiveNode` holds them until the kernel's `OnApplied` says the step's commit landed (or there was nothing to write), and drops them when the step was parked | run: in Balanced the instance row exists when the response is released; in Ephemeral nothing is written and it is released at once; with `BeforeCommit` it is released before the row exists |
+| 2. Respond, then continue | WriteHttpResponse does not end the workflow; the request returns at the release and the workflow runs on (here into a background job) | run |
+| 3. A wait before the response | A background job or a 20 ms Delay first; the instance stays in memory and the request stays open | run |
+| 4. A second request resumes a workflow waiting at an HttpEndpoint | The receiving node looks up the subscription on the route and adds the delivery with a reply address `node/request`; the owner runs the turn and sends the response to that address | run, on one node and across two nodes (two workers, two partitions, one store; the transport is in process) |
+| 5. Released only after the commit of the turn that wrote it | The model hands emitted items over at the end of a turn that did not throw; `LiveNode` holds them until the kernel's `OnApplied` says the turn's commit landed (or there was nothing to write), and drops them when the turn was parked | run: in Balanced the instance row exists when the response is released; in Ephemeral nothing is written and it is released at once; with `BeforeCommit` it is released before the row exists |
 | The owner lost while a request waits, same node | `OnReset` drops what was held and answers open requests on that partition with 503; the workflow finishes under the new epoch and its late answer goes nowhere | run |
 | The owner lost, receiving node elsewhere | The request times out (504); nothing tells the receiving node | reasoned. Missing: a signal from owner to the waiting node, or the waiting node watching the partition's lease |
 
@@ -167,7 +172,7 @@ PostgreSQL, round trips. Native: the fence as its own statement / the fence as c
 | http-reference | Balanced | **80** | **3 / 2** | 1 |
 | http-reference | Durable | 153 | 12 / 8 | 4 |
 | respond, then continue (case 2) | Balanced | | 6 / 4 | 2 |
-| off-step work or a 20 ms Delay before the response (case 3) | Ephemeral or Balanced | | 6 / 4 | 2 |
+| a background job or a 20 ms Delay before the response (case 3) | Ephemeral or Balanced | | 6 / 4 | 2 |
 | resume at an HttpEndpoint, both requests, one node or two (case 4) | Balanced | | 16 / 12 | 4 |
 
 SQLite, engine calls (commands):
@@ -182,7 +187,7 @@ SQLite, engine calls (commands):
 
 Where the commits of fork-join-resume go (run, from the traced commands): the start (row, subscription, meet ticket),
 a commit that only consumes the meet ticket after reading the event table, the commit that marks the polled resume
-seen (finding F3), and the step that finishes. A direct resume needs no subscription at all, but the Event activity
+seen (finding F3), and the turn that finishes. A direct resume needs no subscription at all, but the Event activity
 cannot know that it will come that way.
 
 Size and the model's own work, in memory (run: `memory 3000`, the in-memory store, one worker; the toy sequence of
@@ -204,7 +209,7 @@ commit for the toy), so those columns are not shown.
 
 Native instances join the mix (40% of the outside actions when `--native` is on): sequences with an External
 activity, a three-way join over event waits, a two-of-three threshold join, a flowchart All join over two waits,
-two waited children in a Parallel plus a detached one, a ForEach with a Delay in the body, a While and off-step work,
+two waited children in a Parallel plus a detached one, a ForEach with a Delay in the body, a While and a background job,
 and publishers that publish to other instances' waits. Starts come from outside (retried) or are handed to an owner
 in memory; events come by publish (before or after the wait), by direct resume, or from the publishers; some
 instances are cancelled. Modes are mixed. The kernel's faults are the simulation's, unchanged.
@@ -247,33 +252,33 @@ agree either way, so for that workflow only the variables are compared.
 
 Changes, marked `NATIVE` in the kernel's source:
 
-- **N1. Publishing from a step** (`IStep.Publish`, `Kinds.Publish`). Scenario: PublishEvent. `IStep` had no way to
+- **N1. Publishing from a turn** (`ITurn.Publish`, `Kinds.Publish`). Scenario: PublishEvent. `ITurn` had no way to
   publish; `Events.PublishAsync` needs the store, so a model could only publish by holding the store itself. The
   smallest change: the commit carries a ticket to self, and the owner publishes after it lands, exactly as it reads
-  events for a meet ticket (about 20 lines with comments in `Step`, `Worker`, `Contracts`; N1 and N2 together add 42 lines to the kernel). The inbox alone still says what is owed. Run.
+  events for a meet ticket (about 20 lines with comments in `Turn`, `Worker`, `Contracts`; N1 and N2 together add 42 lines to the kernel). The inbox alone still says what is owed. Run.
 - **N2. A post-commit signal** (`WorkerOptions.OnApplied`, `OnReset`). Scenario: WriteHttpResponse in Balanced. The
-  release rule needs to know that the step's commit landed, or that the step was parked or its worker reset; a model
+  release rule needs to know that the turn's commit landed, or that the turn was parked or its worker reset; a model
   cannot see that. The kernel's own `Emit` should own it. Run.
 
 Frictions, without a change:
 
 - **F-N3. A delivered event names neither its key nor its wait.** Scenario: every Event resume. The model reads the
   wait from the end of the message id (`ev:{event}:{instance}:{wait}`). Run.
-- **F-N4. A step cannot take back a timer.** Scenario: a threshold join cancels a branch waiting in a Delay; a
-  workflow is cancelled with a Delay pending. The sketch says a timer is cancelled by deleting its message; `IStep`
+- **F-N4. A turn cannot take back a timer.** Scenario: a threshold join cancels a branch waiting in a Delay; a
+  workflow is cancelled with a Delay pending. The sketch says a timer is cancelled by deleting its message; `ITurn`
   has no call for it, so the message arrives later, finds no wait, and costs a poll and a commit to drop (the cost is
   reasoned). BPMN boundary timers will make many of these.
 - **F-N5. No detached start.** Scenario: DispatchWorkflow without waiting. `Start` always makes a child (the child
   then reports to a parent that did not wait). `Send` with a start spec is detached, but the kernel then loads the
-  target before creating it, because only ids minted by `Start` are known to be fresh. Reasoned from `Worker.Run`.
+  target before creating it, because only ids minted by `Start` are known to be fresh. Reasoned from `Worker.RunTurn`.
 - **F-N6. A model cannot tell a redelivery.** Scenario: N4. In Durable, an External effect whose attempt was
   committed ran again under that same attempt 629 times in 20,000 seeds (476 in 5,000 of 1,000), each time after a
-  step's result was lost. To raise "may have run" as an incident instead, a step needs to know that its message was
-  held by a lost owner; the kernel knows (`Item.Suspect`) and could put it on the message. Run.
-- **F-N7. Ephemeral is lost at the first wait.** Scenario: HTTP case 3. A 20 ms Delay or off-step work before the
+  turn's result was lost. To raise "may have run" as an incident instead, a turn needs to know that its message was
+  held by a lost owner; the kernel knows (`Delivery.Suspect`) and could put it on the message. Run.
+- **F-N7. Ephemeral is lost at the first wait.** Scenario: HTTP case 3. A 20 ms Delay or a background job before the
   response is a message, so the instance commits twice (4 to 6 round trips) where it would otherwise cost zero. Short
   timers kept in memory for an instance that is not written would keep request-response workflows at zero. Run.
-- **F-N8. The meet ticket costs a commit.** Scenario: fork-join-resume. Every step that subscribes pays a read of the
+- **F-N8. The meet ticket costs a commit.** Scenario: fork-join-resume. Every turn that subscribes pays a read of the
   event table and a commit that only consumes the ticket, even when the resume will come directly. Run (traced).
 - **F-N9. Kept events change Event's meaning.** Scenario: the cost measurement, first version. An event published
   for a name stays an hour, so a later workflow waiting for the same name is resumed by it at once. Elsa 4 drops a
@@ -284,21 +289,21 @@ Frictions, without a change:
 - **F-N11. Two places say "ephemeral".** `StartSpec.Ephemeral` is the kernel's, the persistence mode is the model's;
   the model's `Spec` helper keeps them in step. Reasoned.
 
-What fitted without friction (run): `Run` and `run-finished` for slow work and its cancel; `Start` and
-`child-finished`; `Send` with a delay for timers; a Durable boundary as a message to self; one burst per step; the
+What fitted without friction (run): `StartJob` and `job-finished` for slow work and its cancel; `Start` and
+`child-finished`; `Send` with a delay for timers; a Durable boundary as a message to self; one burst per turn; the
 journal entry as the history and as what the checks read.
 
 ## 8. What a BPMN or an agent model would need that native did not
 
 Reasoned.
 
-- **BPMN:** cancelling timers from a step (F-N4), for boundary timers that mostly never fire; subscriptions of kind
+- **BPMN:** cancelling timers from a turn (F-N4), for boundary timers that mostly never fire; subscriptions of kind
   start, for message and signal start events (not built in the kernel); placement other than with the parent, for
-  multi-instance over thousands of items; interrupting a running task is `CancelRun` and fits; a message that
+  multi-instance over thousands of items; interrupting a running task is `CancelJob` and fits; a message that
   arrives early is a kept event (F-N9 is what BPMN wants).
 - **Agents:** streamed output cannot wait for a commit, so the live channel needs the before-commit path per item,
-  and many items per step; a conversation grows, and the state is rewritten at every commit (native rewrites 150 to
-  1,000 bytes; a thread is megabytes), so segments or values by reference; tool calls are `Run` and fit; a human
+  and many items per turn; a conversation grows, and the state is rewritten at every commit (native rewrites 150 to
+  1,000 bytes; a thread is megabytes), so segments or values by reference; tool calls are jobs (`StartJob`) and fit; a human
   approval is a subscription and fits.
 - **Both:** the draft-4 "workflow instance" layer should own what native did by hand: cancelling the children it
   started, status and sub-status, what lists show, and a history envelope (native's journal entries are bare strings).

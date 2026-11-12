@@ -9,6 +9,11 @@ projector's row and the view rows, delete, unsubscribe-all, held messages, reply
 dialect; E1, E4, E7 and E8 hold for them, and the conformance suite has cases for each. The figures below are the
 branch's; section 23 has the merged ones.
 
+**Round 4 (FINDINGS.md section 24).** The names are round 4's: an instance's step is a *turn* (`ITurn`), off-step
+work is a *background job* (`StartJob`, `IJob`, `job-finished`, the row's `jobs`), and the runtime's call into a
+partition is a *pass*. `src/Kernel` is now three projects: `src/Kernel.Runtime`, `src/Kernel.Durable` and
+`src/Kernel.Workflows`; a file named below without a path is in one of them. Seeds, counts and costs are unchanged.
+
 Evidence is marked as in FINDINGS: **run** means a command below produced it; **reasoned** means nobody ran it.
 Raw output of every run is under `.out/` (not committed).
 
@@ -284,7 +289,7 @@ must be passed at BEGIN (`Engine.BeginAsync`); a session setting is overwritten.
 Before the merge, 1 or 2 times per run on PostgreSQL, SQL Server and MySQL, a commit carried the same message id in
 `Seen` and in `Sent` (`0/par469#1.0000 in seen+sent`). EF refuses to track the id twice, the store answers *unknown*,
 and the owner resets: safe, wasted. After the merge it appeared once, in a broken-fence run. Kernel side, reasoned: a
-step whose revision was already committed ran again from a stale load.
+turn whose revision was already committed ran again from a stale load.
 
 ## The review's predictions
 

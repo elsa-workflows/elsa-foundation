@@ -1,20 +1,23 @@
 # Kernel model
 
-A standalone model of the execution kernel ([DESIGN.md](DESIGN.md): the design as built, against draft 4 of the
-sketch), the stores it runs on, the native Elsa workflow model on it, and a simulation that tries to break it all.
-It tests the design before product code exists. It shares nothing with the Elsa runtime and builds as its own
+A standalone model of the execution kernel ([DESIGN.md](DESIGN.md): the design as built, against draft 5 of the
+sketch, in three layers), the stores it runs on, the native Elsa workflow model on it, and a simulation that tries to
+break it all. It tests the design before product code exists. It shares nothing with the Elsa runtime and builds as its own
 repository: the folder has its own `Directory.Build.*`, `Directory.Packages.props`, `NuGet.config`, `global.json` and
 `.editorconfig`.
 
-What was found is in [FINDINGS.md](FINDINGS.md) (section 23: the merge of the four branches and its gates); what each
-database engine does to the EF store is in [ENGINES.md](ENGINES.md), MongoDB in [MONGO.md](MONGO.md), and native
-workflows as an execution model in [NATIVE.md](NATIVE.md).
+What was found is in [FINDINGS.md](FINDINGS.md) (section 24: the three layers and the round 4 names; section 23: the
+merge of the four branches and its gates); what each database engine does to the EF store is in
+[ENGINES.md](ENGINES.md), MongoDB in [MONGO.md](MONGO.md), and native workflows as an execution model in
+[NATIVE.md](NATIVE.md).
 
 ## Layout
 
 | Path | What |
 |---|---|
-| `src/Kernel` | The kernel: contracts, storage interface, partition worker, balancer, projector, reply addresses for live output, in-memory store, the owner's defaults. No clock, thread, timer or random number of its own |
+| `src/Kernel.Runtime` | Layer 1, the actor runtime: the seam (`IActorRuntime`, `IScopeHost`, `IScopeActivation`), the wake signal, and `PartitionRuntime`, the built-in runtime (balancer, activations, one pass at a time per partition); addresses, flaws, the owner's defaults |
+| `src/Kernel.Durable` | Layer 2, durable actors: `Worker` (a partition's activation: inbox, fenced commit, timers, background jobs, events, poison, journal), `DurableHost`, the seam to layer 3 (`IActorType`, `DurableTurn`), the store contract, the in-memory store, the projector, reply addresses for live output |
+| `src/Kernel.Workflows` | Layer 3, actor types: `WorkflowInstance` (status, definition, parent and children, suspend, resume, terminate, rebind, delete, the history envelope) and the execution-model contract (`IExecutionModel`, `ITurn`) |
 | `sim` | Toy execution models, the deterministic simulation, the invariant checks, the shrinker and the mutation check; `NativeSim.cs` puts native instances in the mix |
 | `models/Native` | The native Elsa workflow model: authoring surface, activities, interpreter, HTTP routes and host on the kernel's live output |
 | `models/Native.Run` | Native smoke tests, cost and memory measurement |
@@ -52,8 +55,8 @@ $SIM --backlog 1000                                  # how long a backlog of sus
 ```
 
 A seed fixes everything: the number of nodes, every action and every fault. `--flaw` takes the names of
-`Kernel.Flaw` (comma-separated); each one switches off one rule of the protocol. FINDINGS section 23 lists the first
-failing seed of every flaw.
+`Kernel.Runtime.Flaw` (comma-separated); each one switches off one rule of the protocol. FINDINGS section 23 lists the
+first failing seed of every flaw, section 24 the two flaws round 4 renamed.
 
 ## Databases
 
@@ -123,13 +126,16 @@ $NAT memory 3000
 
 ## How the simulation works
 
-- Several nodes run against one in-memory store. Each `(node, partition)` pair is an *actor* with its own worker.
-- One action happens at a time, chosen from the seed: a worker takes, polls, loads, runs one step, flushes, beats or
-  reads events; a node balances; a store call executes; its answer arrives, arrives as "connection lost" although it
-  executed, or the call never executes; an outsider adds a message, retries an old one, hands a start to an owner in
-  memory, publishes an event, registers a start subscription, suspends, resumes, terminates, rebinds or deletes an
-  instance; a request starts or resumes an HTTP workflow, or its caller goes away; the transport between nodes
-  delivers, repeats or drops a reply; off-step work completes; time passes; a wall clock jumps; a node crashes and
+- Several nodes run against one in-memory store. Each `(node, partition)` pair is an *actor* with its own worker. The
+  simulation is the actor runtime (layer 1): each process has a `PartitionRuntime` over a `DurableHost`, and takes,
+  releases and balancing go through them; the pieces of a pass (poll, load, turn, flush, meet) are separate actions, so
+  that one seed keeps its schedule. Once faults stop, the settling loop runs whole passes (`PassAsync`).
+- One action happens at a time, chosen from the seed: a runtime activates a partition (a take) or gives it up; a
+  worker polls, loads, runs one turn, flushes, beats or reads events; a node balances; a store call executes; its
+  answer arrives, arrives as "connection lost" although it executed, or the call never executes; an outsider adds a
+  message, retries an old one, hands a start to an owner in memory, publishes an event, registers a start
+  subscription, suspends, resumes, terminates, rebinds or deletes an instance; a request starts or resumes an HTTP workflow, or its caller goes away; the transport between nodes
+  delivers, repeats or drops a reply; a background job completes; time passes; a wall clock jumps; a node crashes and
   restarts, with or without its old process living on, sometimes at another model version; a node pauses or resumes;
   a projector runs a round; the sweep runs. With `--native`, native workflows are started, resumed by events or
   directly, and cancelled.

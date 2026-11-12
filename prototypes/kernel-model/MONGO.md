@@ -11,6 +11,11 @@ subscriptions, the projector's document and the view documents, delete, unsubscr
 addresses), following M1 to M5; the suite has a case for each. "`src/Kernel/` and `EfStore.cs` are unchanged" was
 true on this branch only. The figures below are the branch's; section 23 has the merged ones.
 
+**Round 4 (FINDINGS.md section 24).** The names are round 4's: an instance's step is a *turn* (`ITurn`), off-step
+work is a *background job* (`StartJob`, `IJob`, `job-finished`, the row's `jobs`), and the runtime's call into a
+partition is a *pass*. `src/Kernel` is now three projects: `src/Kernel.Runtime`, `src/Kernel.Durable` and
+`src/Kernel.Workflows`; a file named below without a path is in one of them. Seeds, counts and costs are unchanged.
+
 ## 1. What was built
 
 | Path | What |
@@ -42,7 +47,7 @@ Take (free, mine again, someone else's live lease, expired, the attempt bump on 
 the lost owner's last epoch, not on a retake by the same node); release (frees at once, is not a death, ignores an
 old epoch); the commit (lands with every record kind; refused for epoch or position with nothing written; atomic
 across all kinds, refused whole for a wrong revision, a create of an existing row, a missing or done consumed message,
-a duplicate send; revision checks; a step without a journal row keeps the position; consumed versus done; seen and
+a duplicate send; revision checks; a turn without a journal row keeps the position; consumed versus done; seen and
 trial marks; hand-over marks; a beat renews the lease and tells a stale owner); order (seqs of one commit in the order
 sent; a later send of one sender across a takeover by another node; outside adds in turn from three clients); the
 fence under concurrency (twelve commits at one position, exactly one lands, five rounds; a take beside a commit in
@@ -109,12 +114,12 @@ while the owner may be writing the instance, and the poll reads a partition's me
 | EF, PostgreSQL, fence in the batch | **1 fails**: the concurrent fence case, a definite `PK_Journal` violation (M5) | the same 3 |
 
 How each store refuses a count that does not match (the atomic cases): in-memory always *unknown*; MongoDB *not
-landed* for revision and consumed, *definite* for an existing row or message id; EF the same, except that two steps marking one message done end in
+landed* for revision and consumed, *definite* for an existing row or message id; EF the same, except that two turns marking one message done end in
 *unknown* (EF's change tracker refuses the second attach of one id before anything is sent).
 
 ### Stress
 
-| Run | Killed (cut + ended) | Injected | Stalls | Takeovers p0, p1 | Steps | Journal rows | End state |
+| Run | Killed (cut + ended) | Injected | Stalls | Takeovers p0, p1 | Turns | Journal rows | End state |
 |---|---|---|---|---|---|---|---|
 | In-memory, 15 s, 1,500 | | 36 + 49 | 136 | 89, 88 | 2,987 | 2,630 | all properties hold |
 | In-memory, 15 s, 1,500, fence broken | | | | 34,053, 34,181 | 68,320 | 113 | **601 violations** (I6, the store's own I1 ghosts, I3/I4, I11) |
@@ -158,7 +163,7 @@ the same harness reproduces FINDINGS section 5 exactly.
 A commit on MongoDB is `findAndModify` (the fence) + `bulkWrite` + `commitTransaction`, or `bulkWrite` +
 `commitTransaction` with the fence in the batch: the same as PostgreSQL. The only difference is the outside add:
 `findAndModify` on the inbox clock + `insert`, one more than PostgreSQL's identity column (M1). From another node,
-balanced: add 2, poll (`aggregate`) 1, the marking commit 3, the load (`find`) 1, the step's commit 3.
+balanced: add 2, poll (`aggregate`) 1, the marking commit 3, the load (`find`) 1, the turn's commit 3.
 
 ## 5. Findings
 
@@ -199,7 +204,7 @@ helps, so a deployment sets `transactionLifetimeLimitSeconds` to a few seconds (
 for the largest). In a living process the remedy made no difference that the stress test could see (the runs
 "no abort, no pause" against the default, with killSessions and with cuts only): the driver also aborts when a session
 is disposed (reasoned from those runs; not traced). One early run, made while the killer's `killSessions` was failing
-on a read-concern error and without either remedy, crawled: 99 steps in 32 s of chaos and 398 transient conflicts on
+on a read-concern error and without either remedy, crawled: 99 turns in 32 s of chaos and 398 transient conflicts on
 the fence. It was not reproduced, and its cause is not established.
 
 **M3. A take does not wait behind a commit in flight; it fails, and the kernel retries a transient failure at once. Run.**
@@ -246,7 +251,7 @@ Landed = false, whatever else in it would have failed."
 **M6. Run.** Subscribing twice: in memory and MongoDB keep one; EF throws a definite key violation (which parks).
 Unsubscribing what is not there: in memory and MongoDB change nothing; EF answers "not landed" (which resets). A count
 that does not match: in memory *unknown*, EF and MongoDB *not landed* or *definite*. The kernel does none of these
-today (reasoned from `Step`), but a model that re-subscribes would park on EF. Proposed: subscriptions are idempotent,
+today (reasoned from `Turn`), but a model that re-subscribes would park on EF. Proposed: subscriptions are idempotent,
 and a key that exists where a commit creates a row is a count that does not match (not landed).
 
 ### The provider's own job
@@ -262,8 +267,8 @@ would let a poll act on a message that is then rolled back; the count on the con
 (reasoned), but majority costs nothing measurable here. A single node cannot show either.
 
 **M9. A cut connection stalls the whole client. Run, cause reasoned.** In 15 s runs with only the injected failures
-the workers made about 3,000 steps and 135 stalls (a stall is drawn once per 25 loop rounds, so it counts rounds);
-with connections cut on the wire every 20 to 60 ms (74 cuts), 1,170 steps and 9 stalls in 28 s. The
+the workers made about 3,000 turns and 135 stalls (a stall is drawn once per 25 loop rounds, so it counts rounds);
+with connections cut on the wire every 20 to 60 ms (74 cuts), 1,170 turns and 9 stalls in 28 s. The
 driver treats a network error as the server being unavailable, clears the connection pool and waits for its monitor;
 every worker on that client pauses. Availability only; one client per partition, or a shorter `heartbeatFrequency`,
 would narrow it.
@@ -272,14 +277,14 @@ would narrow it.
 
 | One commit | Documents | State | Time | Round trips | Outcome |
 |---|---:|---:|---:|---|---|
-| 1 step (instance, journal row, 2 sends) | 5 | 0 | 17 ms | 3 | landed |
-| 500 steps, the kernel's default `MaxBatch` | 2,001 | 0.1 MiB | 51 ms | 3 | landed |
-| 2,000 steps | 8,001 | 0.4 MiB | 185 ms | 3 | landed |
-| 10,000 steps | 40,001 | 1.9 MiB | 709 ms | 3 | landed |
-| 50,000 steps | 200,001 | 9.5 MiB | 2,754 ms | 4 (the bulk write split in two) | landed |
-| 100 steps of 1 MiB of state | 201 | 100 MiB | 532 ms | 5 (split in three) | landed |
-| 1 step of 15 MiB of state | 3 | 15 MiB | 35 ms | 3 | landed |
-| 1 step of 17 MiB of state | 3 | 17 MiB | 29 ms | 3 (the last is the abort) | **definite**: the bulk write was refused (`ClientBulkWriteException`) |
+| 1 turn (instance, journal row, 2 sends) | 5 | 0 | 17 ms | 3 | landed |
+| 500 turns, the kernel's default `MaxBatch` | 2,001 | 0.1 MiB | 51 ms | 3 | landed |
+| 2,000 turns | 8,001 | 0.4 MiB | 185 ms | 3 | landed |
+| 10,000 turns | 40,001 | 1.9 MiB | 709 ms | 3 | landed |
+| 50,000 turns | 200,001 | 9.5 MiB | 2,754 ms | 4 (the bulk write split in two) | landed |
+| 100 turns of 1 MiB of state | 201 | 100 MiB | 532 ms | 5 (split in three) | landed |
+| 1 turn of 15 MiB of state | 3 | 15 MiB | 35 ms | 3 | landed |
+| 1 turn of 17 MiB of state | 3 | 17 MiB | 29 ms | 3 (the last is the abort) | **definite**: the bulk write was refused (`ClientBulkWriteException`) |
 
 MongoDB has no limit on the documents of one transaction since 4.2, and the driver splits a large bulk write into
 several messages of at most 48 MiB, each a round trip. A document is at most 16 MiB: an instance state above that is refused
