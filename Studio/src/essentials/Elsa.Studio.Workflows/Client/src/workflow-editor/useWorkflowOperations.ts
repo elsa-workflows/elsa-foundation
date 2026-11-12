@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState, type SetStateAction } from "react";
 import { getNotifications, notifySuccess, useNotificationGuard } from "./notifications";
 import { qualifyStudioBackendPath, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
-import type { ActivityCatalogItem, WorkflowDefinitionDetails, WorkflowDraft, WorkflowExecutionInputs, WorkflowTestRunStart, WorkflowTestRunView } from "../workflowTypes";
+import type { ActivityCatalogItem, ValidationError, WorkflowDefinitionDetails, WorkflowDraft, WorkflowExecutionInputs, WorkflowTestRunStart, WorkflowTestRunView } from "../workflowTypes";
 import {
   getWorkflowDefinitionVersion,
   getWorkflowPromotionVersionCapabilities,
@@ -42,6 +42,7 @@ import {
   publicationIntentFor,
   publicationPreflightMatchesIntent,
   splitPublicationValidations,
+  withLocalValidationErrors,
   withPublicationWarnings,
   type PublicationReviewState,
   type PublicationVersionSelection
@@ -73,6 +74,7 @@ interface WorkflowOperationsParams {
   setActiveRightPanelId(id: string): void;
   setInspectorCollapsed(collapsed: boolean): void;
   setAutosavePaused(paused: boolean): void;
+  collectLocalValidation?(draft: WorkflowDraft): Promise<ValidationError[]>;
 }
 
 // The editor's async command handlers: export JSON, save, promote+publish, and dispatch a transient test
@@ -97,7 +99,8 @@ export function useWorkflowOperations({
   setError,
   setActiveRightPanelId,
   setInspectorCollapsed,
-  setAutosavePaused
+  setAutosavePaused,
+  collectLocalValidation
 }: WorkflowOperationsParams) {
   const captureExportFeedback = useNotificationGuard(notificationScope);
   const exportOwnerRef = useRef({ scope: notificationScope, request: 0 });
@@ -472,6 +475,7 @@ export function useWorkflowOperations({
       // Spec 261 FR-515: list the server's validation warnings (for example a replay-safe compensation step) in the
       // review. They never block; a host without the validations relation, or a failed read, shows none.
       review = withPublicationWarnings(review, await getDraftValidations(context, draftSnapshot.id).catch(() => null));
+      if (collectLocalValidation) review = withLocalValidationErrors(review, await collectLocalValidation(draftSnapshot));
       if (!review.validationErrors.length && !(review.intent.action === "sideBySide" && !review.intent.slotName)) {
         const intent = publicationIntentFor(review, review.intent.action ?? "replace", review.intent.slotName ?? review.policy.defaultSlotName);
         const [preflight, versionPreflight] = await Promise.all([
@@ -511,7 +515,7 @@ export function useWorkflowOperations({
       setQuickPublishing(false);
       setOperation("idle");
     }
-  }, [draft, details, catalog, busy, context, executePublication, flushPendingSave, lineage, setAutosavePaused, setError, setOperation, setStatus]);
+  }, [collectLocalValidation, draft, details, catalog, busy, context, executePublication, flushPendingSave, lineage, setAutosavePaused, setError, setOperation, setStatus]);
 
   const cancelPublication = useCallback(() => {
     publicationReviewRequest.current += 1;

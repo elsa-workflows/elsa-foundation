@@ -1,146 +1,93 @@
-import React, { useId, useLayoutEffect, useRef, useState } from "react";
-import { Save, X } from "lucide-react";
+import React, { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import type { StudioNotificationApi } from "@elsa-workflows/studio-sdk";
 import { useDialogFocus } from "@elsa-workflows/studio-sdk";
+import { StudioButton, StudioDialogFooter } from "@elsa-workflows/studio-ui";
 import { CopySecretNameButton } from "./CopySecretNameButton";
 import { ScopeMatchingHint } from "./SecretScopePicker";
+import { SecretFormField } from "./SecretFormField";
+import { SecretEditorTabs, type SecretEditorSection, type SecretEditorState } from "./SecretEditorTabs";
 import type { SecretDescriptorsResponse, SecretMetadata } from "./secretTypes";
 
-export function SecretDetail({
-  secret,
-  descriptors,
-  notifications,
-  copyScope,
-  busy = false,
-  onSave,
-  onClose
-}: {
+interface SecretDetailProps {
   secret: SecretMetadata;
   descriptors: SecretDescriptorsResponse | null;
   busy?: boolean;
   notifications?: StudioNotificationApi;
   copyScope?: object;
+  presentation?: "dialog" | "page";
+  onStateChange?(state: SecretEditorState): void;
   onSave(name: string, request: { displayName: string; description?: string }): Promise<void>;
   onClose(): void;
-}) {
-  const dialogRef = useRef<HTMLElement>(null);
+}
+export function SecretDetail(props: SecretDetailProps) {
+  return props.presentation === "page" ? <SecretMetadataForm {...props} /> : <SecretDetailDialog {...props} />;
+}
+function SecretDetailDialog(props: SecretDetailProps) {
+  const ref = useRef<HTMLElement>(null);
+  const [busy, setBusy] = useState(false);
+  useDialogFocus(ref, busy ? null : props.onClose);
+  const { onStateChange } = props;
+  const report = useCallback((state: SecretEditorState) => { setBusy(state.busy); onStateChange?.(state); }, [onStateChange]);
+  return <div className="secrets-editor-backdrop" role="presentation"><section ref={ref} className="secrets-editor-dialog" role="dialog" aria-modal="true" aria-label="Edit secret" tabIndex={-1}>
+    <header><h3>Edit secret</h3><StudioButton aria-label="Close editor" onClick={props.onClose} disabled={busy}>Close</StudioButton></header>
+    <SecretMetadataForm {...props} onStateChange={report} />
+  </section></div>;
+}
+function SecretMetadataForm({ secret, descriptors, busy = false, onSave, onClose, onStateChange, notifications, copyScope }: SecretDetailProps) {
+  const formRef = useRef<HTMLFormElement>(null);
+  const initiallyFocused = useRef(false);
+  useLayoutEffect(() => { if (!initiallyFocused.current) { initiallyFocused.current = true; formRef.current?.querySelector<HTMLElement>("[data-dialog-initial-focus]")?.focus(); } }, []);
   const [displayName, setDisplayName] = useState(secret.displayName ?? "");
   const [description, setDescription] = useState(secret.description ?? "");
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const titleId = useId();
+  const savingRef = useRef(false);
+  const [error, setError] = useState("");
+  const errorRef = useRef<HTMLParagraphElement>(null);
+  const [active, setActive] = useState<SecretEditorSection>("details");
   const descriptionInputId = useId();
   const scopeInputId = useId();
   const scopeHelpId = useId();
   const cannotClose = busy || saving;
-  useDialogFocus(dialogRef, cannotClose ? null : onClose, false, () => {
-    // The refreshed row may mount in the same React commit that removes this dialog.
-    queueMicrotask(() => {
-      if (document.activeElement !== document.body || document.querySelector('[aria-modal="true"]')) return;
-      const fallback = Array.from(document.querySelectorAll<HTMLElement>("[data-secret-edit]"))
-        .find(element => element.dataset.secretEdit === secret.name);
-      fallback?.focus();
-    });
-  });
-  useLayoutEffect(() => {
-    dialogRef.current?.querySelector<HTMLElement>("[data-dialog-initial-focus]")?.focus();
-  }, [secret.name]);
-
+  const changed = displayName !== (secret.displayName ?? "") || description !== (secret.description ?? "");
+  useEffect(() => { onStateChange?.({ dirty: changed, busy: cannotClose }); }, [changed, cannotClose, onStateChange]);
+  useEffect(() => { if (error) errorRef.current?.focus(); }, [error]);
   const store = descriptors?.stores.find(item => item.name === secret.storeName);
   const type = descriptors?.types.find(item => item.name === secret.typeName);
-  const hasMetadataChanges = displayName !== (secret.displayName ?? "") || description !== (secret.description ?? "");
-  async function submitMetadata(event: React.FormEvent) {
+  async function submit(event: React.FormEvent) {
     event.preventDefault();
-    if (!hasMetadataChanges || cannotClose) return;
-    setSaving(true);
-    setError(null);
-    try {
-      await onSave(secret.name, {
-        displayName: displayName.trim(),
-        description: description.trim()
-      });
-      onClose();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Secret metadata could not be updated.");
-    } finally {
-      setSaving(false);
-    }
+    if (!changed || busy || savingRef.current) return;
+    savingRef.current = true; setSaving(true); setError("");
+    try { await onSave(secret.name, { displayName: displayName.trim(), description: description.trim() }); onClose(); }
+    catch (failure) { setError(failure instanceof Error ? failure.message : "Secret metadata could not be updated."); }
+    finally { savingRef.current = false; setSaving(false); }
   }
-
-  return (
-    <div
-      className="secrets-editor-backdrop"
-      role="presentation"
-      onClick={event => {
-        if (event.target === event.currentTarget && !cannotClose) onClose();
-      }}
-    >
-      <section
-        ref={dialogRef}
-        className="secrets-editor-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        tabIndex={-1}
-      >
-        <header>
-          <div>
-            <span className="secrets-kicker">Secret editor</span>
-            <h3 id={titleId}>Edit secret</h3>
-            <p className="secrets-technical-name"><code>{secret.name}</code><CopySecretNameButton key={secret.name} name={secret.name} notifications={notifications} scope={copyScope} /></p>
-          </div>
-          <div className="secrets-editor-header-actions">
-            <span className={`secrets-badge ${secret.status.toLowerCase()}`}>{secret.status}</span>
-            <button type="button" className="secrets-editor-close" aria-label="Close editor" title="Close" onClick={onClose} disabled={cannotClose}><X size={16} aria-hidden /></button>
-          </div>
-        </header>
-
-        <form className="secrets-edit-form" onSubmit={event => void submitMetadata(event)}>
-          <label>
-            <span>Display name</span>
-            <input data-dialog-initial-focus value={displayName} readOnly={cannotClose} onChange={event => setDisplayName(event.target.value)} />
-          </label>
-          <div className="secrets-description-field">
-            <label htmlFor={descriptionInputId}>Description</label>
-            <textarea id={descriptionInputId} value={description} readOnly={cannotClose} onChange={event => setDescription(event.target.value)} rows={4} />
-          </div>
-          <div className="secrets-editor-scope">
-            <label htmlFor={scopeInputId}>Scope</label>
-            <input id={scopeInputId} value={secret.scope || "No scope"} readOnly aria-describedby={scopeHelpId} />
-            <ScopeMatchingHint id={scopeHelpId} readOnly />
-          </div>
-          <dl className="secrets-metadata-grid secrets-editor-summary" aria-label="Secret summary">
-            <div><dt>Type</dt><dd>{type?.displayName ?? secret.typeName}</dd></div>
-            <div><dt>Store</dt><dd>{store?.displayName ?? secret.storeName}</dd></div>
-            <div><dt>Current version</dt><dd>{secret.currentVersion ?? "none"}</dd></div>
-            <div><dt>Expires</dt><dd>{secret.expiresAt ? formatDate(secret.expiresAt) : "never"}</dd></div>
-          </dl>
-          <details className="secrets-editor-details">
-            <summary>Details</summary>
-            <dl className="secrets-metadata-grid">
-              <div><dt>Created</dt><dd>{formatDate(secret.createdAt)}</dd></div>
-              <div><dt>Updated</dt><dd>{formatDate(secret.updatedAt)}</dd></div>
-              <div><dt>Store capability</dt><dd>{store?.isReadOnly ? "Configuration-backed value" : "Managed value"}</dd></div>
-            </dl>
-          </details>
-          {secret.tags.length > 0 ? (
-            <div className="secrets-tags" aria-label="Tags">
-              {secret.tags.map(tag => <span key={tag}>{tag}</span>)}
-            </div>
-          ) : null}
-          {error ? <p className="secrets-field-error" role="alert">{error}</p> : null}
-          <div className="secrets-dialog-actions">
-            <button type="button" onClick={onClose} disabled={cannotClose}>Cancel</button>
-            <button type="submit" disabled={!hasMetadataChanges || cannotClose}>
-              <Save size={15} aria-hidden /> {saving ? "Saving…" : "Save changes"}
-            </button>
-          </div>
-        </form>
-      </section>
-    </div>
-  );
+  return <form ref={formRef} className="secrets-edit-form secrets-tabbed-form" aria-busy={cannotClose} onSubmit={event => void submit(event)}>
+    <p className="secrets-technical-name"><code>{secret.name}</code><CopySecretNameButton name={secret.name} notifications={notifications} scope={copyScope} /></p>
+    {error ? <p ref={errorRef} className="secrets-field-error" role="alert" tabIndex={-1}>{error}</p> : null}
+    <fieldset className="secrets-editor-fields" disabled={cannotClose}>
+    <SecretEditorTabs active={active} onSelect={setActive}>
+      {{ secret: <>
+        <dl className="secrets-metadata-grid"><div><dt>Technical name</dt><dd>{secret.name}</dd></div><div><dt>Type</dt><dd>{type?.displayName ?? secret.typeName}</dd></div>
+          <div><dt>Status</dt><dd>{secret.status}</dd></div><div><dt>Current version</dt><dd>{secret.currentVersion ?? "none"}</dd></div></dl>
+        <p className="secrets-field-hint">The existing value stays hidden. Rotate the secret to replace it.</p>
+      </>, details: <>
+        <SecretFormField label="Display name" disabled={cannotClose}>
+          {attributes => <input {...attributes} data-dialog-initial-focus value={displayName} onChange={event => setDisplayName(event.target.value)} />}
+        </SecretFormField>
+        <SecretFormField label="Description" controlId={descriptionInputId} disabled={cannotClose}>
+          {attributes => <textarea {...attributes} value={description} onChange={event => setDescription(event.target.value)} rows={3} />}
+        </SecretFormField>
+        <dl className="secrets-metadata-grid"><div><dt>Tags</dt><dd>{secret.tags.join(", ") || "None"}</dd></div><div><dt>Created</dt><dd>{formatDate(secret.createdAt)}</dd></div><div><dt>Updated</dt><dd>{formatDate(secret.updatedAt)}</dd></div></dl>
+      </>, storage: <>
+        <dl className="secrets-metadata-grid"><div><dt>Store</dt><dd>{store?.displayName ?? secret.storeName}</dd></div><div><dt>Expires</dt><dd>{secret.expiresAt ? formatDate(secret.expiresAt) : "Never"}</dd></div></dl>
+        <SecretFormField label="Scope" controlId={scopeInputId} disabled={cannotClose}>
+          {attributes => <input {...attributes} value={secret.scope || "No scope"} readOnly aria-describedby={scopeHelpId} />}
+        </SecretFormField>
+        <ScopeMatchingHint id={scopeHelpId} readOnly concise />
+      </> }}
+    </SecretEditorTabs>
+    </fieldset>
+    <StudioDialogFooter className="secrets-dialog-actions" onCancel={onClose} cancelDisabled={cannotClose} confirmLabel={saving ? "Saving…" : "Save changes"} confirmDisabled={!changed || cannotClose} />
+  </form>;
 }
-
-function formatDate(value?: string | null) {
-  return value ? new Date(value).toLocaleString() : "-";
-}
+function formatDate(value?: string | null) { return value ? new Date(value).toLocaleString() : "-"; }

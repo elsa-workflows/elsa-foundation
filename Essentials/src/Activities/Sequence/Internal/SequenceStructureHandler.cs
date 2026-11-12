@@ -30,6 +30,27 @@ internal sealed class SequenceStructureHandler : IActivityStructureHandler
         return [new ActivityChildProjection(SequenceActivity.ActivitiesSlotName, structure.Activities)];
     }
 
+    public IReadOnlyList<string>? ChildrenCompletedBefore(ActivityNode activity, string childNodeId)
+    {
+        var children = ReadAuthoredStructure(activity).Activities.ToArray();
+        var index = Array.FindIndex(children, child => StringComparer.Ordinal.Equals(child.NodeId, childNodeId));
+        return index < 0 ? null : children.Take(index).Reverse().Select(child => child.NodeId).ToArray();
+    }
+
+    public ActivityChildResultFacts AssessChildResult(ActivityNode activity, string producerChildNodeId, string consumerChildNodeId)
+    {
+        var children = ReadAuthoredStructure(activity).Activities.ToArray();
+        var producer = Array.FindIndex(children, child => StringComparer.Ordinal.Equals(child.NodeId, producerChildNodeId));
+        var consumer = Array.FindIndex(children, child => StringComparer.Ordinal.Equals(child.NodeId, consumerChildNodeId));
+        if (producer < 0 || consumer < 0)
+            return new(ActivityChildResultAvailability.Unavailable);
+
+        // A Sequence runs each child once per run, in order.
+        return new(producer < consumer ? ActivityChildResultAvailability.Definite : ActivityChildResultAvailability.Unavailable,
+            IsCyclicBackEdge: false, MayRunConcurrently: false, AreMutuallyExclusive: false)
+        { EarlierProducerRunCanReachConsumer = false };
+    }
+
     public ActivityNode ReplaceChildren(ActivityNode activity, IReadOnlyCollection<ActivityChildProjection> childProjections)
     {
         var current = ReadAuthoredStructure(activity);

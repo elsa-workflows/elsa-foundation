@@ -3483,9 +3483,9 @@ Elsa.Workflows.Runtime.Core.Models.RoutingStructureMaterializationDiagnostics
 Elsa.Workflows.Runtime.Core.Models.RuntimeActivityResultReference
 Elsa.Workflows.Runtime.Core.Models.RuntimeActivityResultReference.IsOptional.get -> bool
 Elsa.Workflows.Runtime.Core.Models.RuntimeActivityResultReference.ProducerExecutableNodeId.get -> string!
-Elsa.Workflows.Runtime.Core.Models.RuntimeActivityResultReference.ProducerScopeId.get -> string!
+Elsa.Workflows.Runtime.Core.Models.RuntimeActivityResultReference.ProducerScopeId.get -> string?
 Elsa.Workflows.Runtime.Core.Models.RuntimeActivityResultReference.ProjectionKey.get -> string!
-Elsa.Workflows.Runtime.Core.Models.RuntimeActivityResultReference.RuntimeActivityResultReference(string! producerExecutableNodeId, string! projectionKey, string! producerScopeId, bool isOptional = false) -> void
+Elsa.Workflows.Runtime.Core.Models.RuntimeActivityResultReference.RuntimeActivityResultReference(string! producerExecutableNodeId, string! projectionKey, string? producerScopeId, bool isOptional = false) -> void
 Elsa.Workflows.Runtime.Core.Models.RuntimeActorEvictionOptions
 Elsa.Workflows.Runtime.Core.Models.RuntimeActorEvictionOptions.PassivateOnTerminal.get -> bool
 Elsa.Workflows.Runtime.Core.Models.RuntimeActorEvictionOptions.PassivateOnTerminal.set -> void
@@ -4029,8 +4029,10 @@ Elsa.Workflows.Runtime.Core.Models.RuntimeInputBinding.InputName.get -> string!
 Elsa.Workflows.Runtime.Core.Models.RuntimeInputBinding.Literal.get -> Elsa.Workflows.Runtime.Core.Models.ValueEnvelope?
 Elsa.Workflows.Runtime.Core.Models.RuntimeInputBinding.LiteralValue.get -> System.Text.Json.JsonElement?
 Elsa.Workflows.Runtime.Core.Models.RuntimeInputBinding.Metadata.get -> System.Collections.Generic.IReadOnlyDictionary<string!, string!>!
+Elsa.Workflows.Runtime.Core.Models.RuntimeInputBinding.RuntimeInputBinding(string! inputKey, Elsa.Primitives.Models.ValueTypeDescriptor! targetType, Elsa.Workflows.Runtime.Core.Models.ValueProtectionPolicy! effectivePolicy, Elsa.Workflows.Runtime.Core.Models.RuntimeInputBindingSource source, Elsa.Workflows.Runtime.Core.Models.RuntimeReadSelection? selection, Elsa.Workflows.Runtime.Core.Models.ValueEnvelope? literal = null, Elsa.Workflows.Runtime.Core.Models.RuntimeWorkflowRequestReference? workflowRequest = null, Elsa.Workflows.Runtime.Core.Models.RuntimeVariableReference? variable = null, Elsa.Workflows.Runtime.Core.Models.RuntimeActivityResultReference? activityResult = null, Elsa.Workflows.Runtime.Core.Models.RuntimeExpressionBinding? expression = null, System.Collections.Generic.IReadOnlyDictionary<string!, string!>? metadata = null, Elsa.Workflows.Runtime.Core.Models.ValueConversionPlan? conversionPlan = null, Elsa.Workflows.Runtime.Core.Models.RuntimeValueConversionRequest? conversionRequest = null, Elsa.Workflows.Runtime.Core.Models.RuntimeSecretReference? secret = null) -> void
 Elsa.Workflows.Runtime.Core.Models.RuntimeInputBinding.RuntimeInputBinding(string! inputKey, Elsa.Primitives.Models.ValueTypeDescriptor! targetType, Elsa.Workflows.Runtime.Core.Models.ValueProtectionPolicy! effectivePolicy, Elsa.Workflows.Runtime.Core.Models.RuntimeInputBindingSource source, Elsa.Workflows.Runtime.Core.Models.ValueEnvelope? literal = null, Elsa.Workflows.Runtime.Core.Models.RuntimeWorkflowRequestReference? workflowRequest = null, Elsa.Workflows.Runtime.Core.Models.RuntimeVariableReference? variable = null, Elsa.Workflows.Runtime.Core.Models.RuntimeActivityResultReference? activityResult = null, Elsa.Workflows.Runtime.Core.Models.RuntimeExpressionBinding? expression = null, System.Collections.Generic.IReadOnlyDictionary<string!, string!>? metadata = null, Elsa.Workflows.Runtime.Core.Models.ValueConversionPlan? conversionPlan = null, Elsa.Workflows.Runtime.Core.Models.RuntimeValueConversionRequest? conversionRequest = null, Elsa.Workflows.Runtime.Core.Models.RuntimeSecretReference? secret = null) -> void
 Elsa.Workflows.Runtime.Core.Models.RuntimeInputBinding.Secret.get -> Elsa.Workflows.Runtime.Core.Models.RuntimeSecretReference?
+Elsa.Workflows.Runtime.Core.Models.RuntimeInputBinding.Selection.get -> Elsa.Workflows.Runtime.Core.Models.RuntimeReadSelection?
 Elsa.Workflows.Runtime.Core.Models.RuntimeInputBinding.Source.get -> Elsa.Workflows.Runtime.Core.Models.RuntimeInputBindingSource
 Elsa.Workflows.Runtime.Core.Models.RuntimeInputBinding.TargetType.get -> Elsa.Primitives.Models.ValueTypeDescriptor!
 Elsa.Workflows.Runtime.Core.Models.RuntimeInputBinding.Variable.get -> Elsa.Workflows.Runtime.Core.Models.RuntimeVariableReference?
@@ -4048,11 +4050,14 @@ Elsa.Workflows.Runtime.Core.Models.RuntimeInputBindingResolutionContext.Workflow
 Elsa.Workflows.Runtime.Core.Models.RuntimeInputBindingResolutionContext.WorkflowInputEnvelopes.get -> System.Collections.Generic.IReadOnlyDictionary<string!, Elsa.Workflows.Runtime.Core.Models.ValueEnvelope!>!
 Elsa.Workflows.Runtime.Core.Models.RuntimeInputBindingSource
 Elsa.Workflows.Runtime.Core.Models.RuntimeInputBindingSource.ActivityResult = 4 -> Elsa.Workflows.Runtime.Core.Models.RuntimeInputBindingSource
+Elsa.Workflows.Runtime.Core.Models.RuntimeInputBindingSource.ActivityResultMember = 8 -> Elsa.Workflows.Runtime.Core.Models.RuntimeInputBindingSource
 Elsa.Workflows.Runtime.Core.Models.RuntimeInputBindingSource.Expression = 1 -> Elsa.Workflows.Runtime.Core.Models.RuntimeInputBindingSource
 Elsa.Workflows.Runtime.Core.Models.RuntimeInputBindingSource.Literal = 0 -> Elsa.Workflows.Runtime.Core.Models.RuntimeInputBindingSource
 Elsa.Workflows.Runtime.Core.Models.RuntimeInputBindingSource.SecretRead = 5 -> Elsa.Workflows.Runtime.Core.Models.RuntimeInputBindingSource
+Elsa.Workflows.Runtime.Core.Models.RuntimeInputBindingSource.VariableMember = 7 -> Elsa.Workflows.Runtime.Core.Models.RuntimeInputBindingSource
 Elsa.Workflows.Runtime.Core.Models.RuntimeInputBindingSource.VariableRead = 3 -> Elsa.Workflows.Runtime.Core.Models.RuntimeInputBindingSource
 Elsa.Workflows.Runtime.Core.Models.RuntimeInputBindingSource.WorkflowRequest = 2 -> Elsa.Workflows.Runtime.Core.Models.RuntimeInputBindingSource
+Elsa.Workflows.Runtime.Core.Models.RuntimeInputBindingSource.WorkflowRequestMember = 6 -> Elsa.Workflows.Runtime.Core.Models.RuntimeInputBindingSource
 Elsa.Workflows.Runtime.Core.Models.RuntimeInputEvaluationFailure
 Elsa.Workflows.Runtime.Core.Models.RuntimeInputEvaluationFailure.<Clone>$() -> Elsa.Workflows.Runtime.Core.Models.RuntimeInputEvaluationFailure!
 Elsa.Workflows.Runtime.Core.Models.RuntimeInputEvaluationFailure.Code.get -> string!
@@ -4426,6 +4431,19 @@ Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitRetryPolicy.Metadata.get -> 
 Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitRetryPolicy.RetryUntilAcknowledged.get -> bool
 Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitRetryPolicy.RuntimePostCommitRetryPolicy(int maxAttempts, System.TimeSpan? delay, System.Collections.Generic.IReadOnlyDictionary<string!, string!>? metadata = null) -> void
 Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitRetryPolicy.RuntimePostCommitRetryPolicy(int maxAttempts, System.TimeSpan? delay, bool retryUntilAcknowledged, System.Collections.Generic.IReadOnlyDictionary<string!, string!>? metadata = null) -> void
+Elsa.Workflows.Runtime.Core.Models.RuntimeReadSelection
+Elsa.Workflows.Runtime.Core.Models.RuntimeReadSelection.MayBeAbsent.get -> bool?
+Elsa.Workflows.Runtime.Core.Models.RuntimeReadSelection.MayBeNull.get -> bool?
+Elsa.Workflows.Runtime.Core.Models.RuntimeReadSelection.Mode.get -> Elsa.Workflows.Runtime.Core.Models.RuntimeReadSelectionMode
+Elsa.Workflows.Runtime.Core.Models.RuntimeReadSelection.ProfileRevision.get -> string?
+Elsa.Workflows.Runtime.Core.Models.RuntimeReadSelection.Representation.get -> Elsa.Primitives.Models.ValueRepresentation?
+Elsa.Workflows.Runtime.Core.Models.RuntimeReadSelection.RuntimeReadSelection(int schemaVersion, System.Collections.Generic.IReadOnlyList<string!>! segments, Elsa.Workflows.Runtime.Core.Models.RuntimeReadSelectionMode mode, Elsa.Primitives.Models.ValueTypeDescriptor? selectedType = null, bool? mayBeAbsent = null, bool? mayBeNull = null, Elsa.Primitives.Models.ValueRepresentation? representation = null, string? profileRevision = null) -> void
+Elsa.Workflows.Runtime.Core.Models.RuntimeReadSelection.SchemaVersion.get -> int
+Elsa.Workflows.Runtime.Core.Models.RuntimeReadSelection.Segments.get -> System.Collections.Generic.IReadOnlyList<string!>!
+Elsa.Workflows.Runtime.Core.Models.RuntimeReadSelection.SelectedType.get -> Elsa.Primitives.Models.ValueTypeDescriptor?
+Elsa.Workflows.Runtime.Core.Models.RuntimeReadSelectionMode
+Elsa.Workflows.Runtime.Core.Models.RuntimeReadSelectionMode.DeferredFit = 1 -> Elsa.Workflows.Runtime.Core.Models.RuntimeReadSelectionMode
+Elsa.Workflows.Runtime.Core.Models.RuntimeReadSelectionMode.Known = 0 -> Elsa.Workflows.Runtime.Core.Models.RuntimeReadSelectionMode
 Elsa.Workflows.Runtime.Core.Models.RuntimeRecoveryCandidate
 Elsa.Workflows.Runtime.Core.Models.RuntimeRecoveryCandidate.DetectedAt.get -> System.DateTimeOffset
 Elsa.Workflows.Runtime.Core.Models.RuntimeRecoveryCandidate.LastCheckpointId.get -> string?
@@ -7124,6 +7142,8 @@ const Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitIntent.MaximumKindLeng
 const Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitOutboxClaimTransitions.FirstDeliveryAttemptedAtMetadataKey = "runtime.delivery.firstAttemptedAt" -> string!
 const Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitOutboxIdentity.MaximumLength = 450 -> int
 const Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitOutboxIdentity.MaximumProjectionLength = 256 -> int
+const Elsa.Workflows.Runtime.Core.Models.RuntimeReadSelection.CurrentSchemaVersion = 1 -> int
+const Elsa.Workflows.Runtime.Core.Models.RuntimeReadSelection.RequirementKey = "elsa.runtime.input-member-selection" -> string!
 const Elsa.Workflows.Runtime.Core.Models.RuntimeResumeBookmarkCommandPayload.StimulusMatchedReason = "BookmarkStimulusMatched" -> string!
 const Elsa.Workflows.Runtime.Core.Models.RuntimeScheduleActivityCommandPayload.ActivityCompletionReason = "ActivityCompletion" -> string!
 const Elsa.Workflows.Runtime.Core.Models.RuntimeScheduleActivityCommandPayload.WorkflowStartReason = "WorkflowStart" -> string!
@@ -10344,3 +10364,9 @@ static Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionValue.operator ==
 Elsa.Workflows.Runtime.Core.Models.ActivityExecutionLayout.ActivityPresentation.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableActivityPresentationRecord!>!
 Elsa.Workflows.Runtime.Core.Models.ActivityExecutionLayout.ActivityPresentation.init -> void
 Elsa.Workflows.Runtime.Core.Contracts.IActivityStateViewProjector.DescriptorKind.get -> string?
+Elsa.Workflows.Runtime.Core.Contracts.IRunRowPresenceProbe
+Elsa.Workflows.Runtime.Core.Contracts.IRunRowPresenceProbe.HasAnyAsync(string! workflowExecutionId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>
+Elsa.Workflows.Runtime.Core.Contracts.IRunRowPresenceProbe.ResolveReadScope(string! workflowExecutionId, string! activityExecutionId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> string!
+Elsa.Workflows.Runtime.Core.Contracts.ISchedulerPoisonFenceCapability
+Elsa.Workflows.Runtime.Core.Contracts.ISchedulerPoisonFenceCapability.CanRecordFenced.get -> bool
+Elsa.Workflows.Runtime.Core.Contracts.ISchedulerPoisonFenceCapability.RecordFencedAsync(Elsa.Workflows.Runtime.Core.Models.RuntimeSchedulerPoisonRecord! record, Elsa.Workflows.Runtime.Core.Models.RuntimeExecutionFence! fence, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Models.RuntimeSchedulerPoisonRecord!>

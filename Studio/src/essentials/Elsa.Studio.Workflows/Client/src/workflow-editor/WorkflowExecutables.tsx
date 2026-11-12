@@ -2,7 +2,7 @@ import { qualifyStudioBackendPath } from "@elsa-workflows/studio-sdk";
 import { CopyableIdentifier, OverflowMenu, StudioButton, StudioCollectionFooter, StudioCollectionToolbar, StudioPageHeader, StudioSearchInput, type OverflowMenuItem } from "@elsa-workflows/studio-ui";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertCircle, ChevronDown, ChevronLeft, ChevronRight, Play, RotateCcw, ScanSearch, Search, Sparkles, X } from "lucide-react";
-import type { StudioAgentRegistry, StudioEndpointContext, StudioWorkflowRunInputEditorContribution } from "@elsa-workflows/studio-sdk";
+import type { StudioWeaverRegistry, StudioEndpointContext, StudioWorkflowRunInputEditorContribution } from "@elsa-workflows/studio-sdk";
 import { listExecutables } from "../api/runtime";
 import { listDefinitions } from "../api/workflowDesign";
 import { executableMatchesDefinitionSearch, getExecutableDefinitionIds, loadDefinitionNames } from "./executableDefinitionNames";
@@ -48,7 +48,7 @@ export function openExecutableInspector(artifactId: string, sourceReferenceId?: 
   window.dispatchEvent(new PopStateEvent("popstate"));
 }
 
-export function WorkflowExecutables({ context, ai, runInputEditors, definitionFilter, onDefinitionFilterChange, canBrowseDefinitions = true }: { context: StudioEndpointContext; ai: StudioAgentRegistry; runInputEditors: StudioWorkflowRunInputEditorContribution[]; definitionFilter: string | null; onDefinitionFilterChange(filter: string | null): void; canBrowseDefinitions?: boolean }) {
+export function WorkflowExecutables({ context, ai, runInputEditors, definitionFilter, onDefinitionFilterChange, canBrowseDefinitions = true }: { context: StudioEndpointContext; ai: StudioWeaverRegistry; runInputEditors: StudioWorkflowRunInputEditorContribution[]; definitionFilter: string | null; onDefinitionFilterChange(filter: string | null): void; canBrowseDefinitions?: boolean }) {
   const [state, setState] = useState<"loading" | "ready" | "failed">("loading");
   const [definitionNamesLoading, setDefinitionNamesLoading] = useState(false);
   const [error, setError] = useState("");
@@ -414,7 +414,7 @@ function WorkflowExecutableOrigins({ executable, definitionNames }: { executable
   );
 }
 
-export function WorkflowArtifactsPanel({ context, ai, runInputEditors, definitionId, publishedArtifactId }: { context: StudioEndpointContext; ai: StudioAgentRegistry; runInputEditors: StudioWorkflowRunInputEditorContribution[]; definitionId: string; publishedArtifactId: string | null }) {
+export function WorkflowArtifactsPanel({ context, ai, runInputEditors, definitionId, publishedArtifactId }: { context: StudioEndpointContext; ai: StudioWeaverRegistry; runInputEditors: StudioWorkflowRunInputEditorContribution[]; definitionId: string; publishedArtifactId: string | null }) {
   const [state, setState] = useState<"loading" | "ready" | "failed">("loading");
   const [error, setError] = useState("");
   const [status, setStatus] = useState("");

@@ -4,13 +4,29 @@ import { DecisionsPage } from "../DecisionsPage";
 import { CasePanel } from "../CasePanel";
 import { DecisionVersionEditor } from "../DecisionVersionEditor";
 import { EvaluationPanel } from "../EvaluationPanel";
-import { createNotificationController, studioNavigationRequestedEvent } from "@elsa-workflows/studio-sdk";
+import { createNotificationController, studioNavigationRequestedEvent, studioWorkspaceTabRequestedEvent, type StudioWorkspaceTabRequest } from "@elsa-workflows/studio-sdk";
 import { editTable, newDecisionXml, parseTable } from "../decisionXml";
 import { asset, button, click, render, select, stubApi, type } from "./helpers";
 const disposals: Array<() => void> = [];
 afterEach(() => { disposals.splice(0).forEach(dispose => dispose()); });
 function mount(content: React.ReactNode) { const result = render(content); disposals.push(result.dispose); return result; }
 describe("Decisions Studio journeys", () => {
+  it("enables draft actions after a create navigates within the mounted editor", async () => {
+    const api = stubApi(); api.backend.http.postJson.mockResolvedValue(asset as never);
+    const navigate = (path: string) => update(<DecisionsPage api={api} navigate={navigate} assetId={new URL(path, "https://studio.test").searchParams.get("decision") ?? undefined} />);
+    const { host, update } = mount(<DecisionsPage api={api} navigate={navigate} isNew />);
+    await vi.waitFor(() => expect(host.querySelector('input[aria-label="Input 1 name"]')).not.toBeNull());
+    type(Array.from(host.querySelectorAll<HTMLInputElement>("input")).find(input => input.parentElement?.textContent === "Name")!, asset.name);
+    click(button(host, "Save decision"));
+    await vi.waitFor(() => expect(host.querySelector(".decision-draft-bar")?.textContent).toContain("Saved draft"));
+    expect(button(host, "Validate").disabled).toBe(false);
+    expect(button(host, "Publish").disabled).toBe(false);
+    api.backend.http.postJson.mockResolvedValue({ success: true, diagnostics: [] } as never);
+    click(button(host, "Validate"));
+    await vi.waitFor(() => expect(host.textContent).toContain("The saved draft is valid"));
+    expect(api.notifications.notify).toHaveBeenCalledOnce();
+  });
+
   it("distinguishes a populated collection, an unmatched search and an empty collection", async () => {
     const api = stubApi(), navigate = vi.fn(), { host, update } = mount(<DecisionsPage api={api} navigate={navigate} />);
     await vi.waitFor(() => expect(host.textContent).toContain("Purchase approval"));
@@ -187,6 +203,36 @@ describe("Decisions Studio journeys", () => {
     expect(onChange).toHaveBeenLastCalledWith("approval@latest");
     update(<DecisionVersionEditor api={api} descriptor={{ name: "Decision", typeName: "String" }} context={{} as never} value="approval@latest" disabled={false} onChange={onChange} />);
     await vi.waitFor(() => expect(host.textContent).toContain("Version 1")); select(host.querySelector<HTMLSelectElement>('[aria-label="Business decision version"]')!, "v1"); expect(onChange).toHaveBeenLastCalledWith("approval@v1");
+  });
+  it("lets a workflow author start a new decision in another workspace tab without leaving the workflow", async () => {
+    const api = stubApi(), onChange = vi.fn(), requests: StudioWorkspaceTabRequest[] = [], opened = vi.spyOn(window, "open").mockReturnValue(null);
+    const handle = (event: Event) => { event.preventDefault(); requests.push((event as CustomEvent<StudioWorkspaceTabRequest>).detail); };
+    window.addEventListener(studioWorkspaceTabRequestedEvent, handle); disposals.push(() => { window.removeEventListener(studioWorkspaceTabRequestedEvent, handle); opened.mockRestore(); });
+    const { host } = mount(<DecisionVersionEditor api={api} descriptor={{ name: "Decision", typeName: "String" }} context={{} as never} value="" disabled={false} onChange={onChange} />);
+    await vi.waitFor(() => expect(host.textContent).toContain("Approval"));
+    click(button(host, "New decision"));
+    expect(requests).toEqual([{ path: expect.stringMatching(/^\/decisions\?new=1&handoff=[^&]+$/), activate: true }]);
+    expect(opened).not.toHaveBeenCalled(); expect(onChange).not.toHaveBeenCalled();
+  });
+  it("falls back to a browser tab for a new decision on hosts without workspace tabs", async () => {
+    const api = stubApi(), opened = vi.spyOn(window, "open").mockReturnValue(null); disposals.push(() => opened.mockRestore());
+    const { host } = mount(<DecisionVersionEditor api={api} descriptor={{ name: "Decision", typeName: "String" }} context={{} as never} value="" disabled={false} onChange={vi.fn()} />);
+    await vi.waitFor(() => expect(host.textContent).toContain("Approval"));
+    click(button(host, "New decision"));
+    expect(opened).toHaveBeenCalledWith("/decisions?new=1", "_blank", "noopener");
+  });
+  it("disables the new decision shortcut while the inspector is read-only", async () => {
+    const api = stubApi(), opened = vi.spyOn(window, "open").mockReturnValue(null); disposals.push(() => opened.mockRestore());
+    const { host } = mount(<DecisionVersionEditor api={api} descriptor={{ name: "Decision", typeName: "String" }} context={{} as never} value="" disabled onChange={vi.fn()} />);
+    await vi.waitFor(() => expect(host.textContent).toContain("Approval"));
+    const shortcut = button(host, "New decision"); expect(shortcut.disabled).toBe(true);
+    click(shortcut); expect(opened).not.toHaveBeenCalled();
+  });
+  it("hides the new decision shortcut from authors who cannot manage decisions", async () => {
+    const api = stubApi(["read"]);
+    const { host } = mount(<DecisionVersionEditor api={api} descriptor={{ name: "Decision", typeName: "String" }} context={{} as never} value="" disabled={false} onChange={vi.fn()} />);
+    await vi.waitFor(() => expect(host.textContent).toContain("Approval"));
+    expect(() => button(host, "New decision")).toThrow();
   });
   it("renders actual matched and selected rules for exact published evaluation", async () => {
     const xml = editTable(asset.xml!, { kind: "add-rule" }), table = parseTable(xml);

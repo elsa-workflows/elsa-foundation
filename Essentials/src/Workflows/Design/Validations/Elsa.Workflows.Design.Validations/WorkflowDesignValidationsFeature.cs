@@ -9,6 +9,7 @@ using Elsa.Workflows.Design.Validations.Core.Contracts;
 using Elsa.Workflows.Design.Validations.Core.Events;
 using Elsa.Workflows.Design.Validations.Handlers;
 using Elsa.Workflows.Design.Validations.Internal;
+using Elsa.Workflows.Design.Validations.Services;
 using Elsa.Workflows.Design.Validations.Validators;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -32,7 +33,8 @@ namespace Elsa.Workflows.Design.Validations;
 [ShellFeature(
     name: "WorkflowDesignValidations",
     DisplayName = "Workflow Design Validations",
-    Description = "Registers baseline workflow draft validators and validation event handling."
+    Description = "Registers baseline workflow draft validators and validation event handling.",
+    DependsOn = new object[] { "Events" }
 )]
 public class WorkflowDesignValidationsFeature : IShellFeature
 {
@@ -43,18 +45,29 @@ public class WorkflowDesignValidationsFeature : IShellFeature
     [ManifestSetting(DisplayName = "Maximum recursion depth", Description = "Maximum activity tree depth inspected by workflow draft validation.", Category = "Validation", DefaultValue = "100")]
     public int MaxRecursionDepth { get; set; } = 100;
 
+    /// <summary>
+    /// Whether bindings may read one member of an activity result. Bound to
+    /// <see cref="WorkflowDesignValidatorOptions.MemberReads"/>. Default: off.
+    /// </summary>
+    [ManifestSetting(DisplayName = "Member reads", Description = "Lets a binding read one member of an activity result. Turn on only when every runtime sharing this host's stores can run member reads.", Category = "Validation", DefaultValue = "false")]
+    public bool MemberReads { get; set; }
+
     public void ConfigureServices(IServiceCollection services)
     {
         services.Configure<WorkflowDesignValidatorOptions>(options =>
         {
             options.MaxRecursionDepth = MaxRecursionDepth;
+            options.MemberReads = MemberReads;
         });
 
         services.AddEventHandler<DraftValidating, ExecuteValidations>();
+        services.TryAddEventHandler<InputConstraintsCollecting, CollectInputConstraints>();
 
         services.AddScopedVariableAuthoring();
         services.AddScoped<ActivityTreeWalker>();
         services.AddScoped<CatalogVersionResolver>();
+        services.TryAddScoped<IActivityDataSelectionAnalyzer, ActivityDataSelectionAnalyzer>();
+        DataSelectionAnalyzerCompositionCheck.Register(services);
         services.AddScoped<ScopedVariableReferenceRemapper>();
         services.AddScoped<IDraftValidator, UnknownActivityVersionValidator>();
         services.AddScoped<IDraftValidator, UnhandledActivityStructureValidator>();

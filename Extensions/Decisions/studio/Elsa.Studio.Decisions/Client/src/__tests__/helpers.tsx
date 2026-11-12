@@ -12,7 +12,7 @@ export function stubApi(grants = ["read", "manage", "publish", "evaluate", "test
   const api = {
     backend: { baseUrl: "https://server.example/tenant", http: { getJson, postJson: vi.fn(), putJson: vi.fn(), deleteJson: vi.fn(), requestJson: vi.fn(), requestResponse: vi.fn() } },
     backendSession: { capabilities: { capabilities: [{ id: "elsa.api.decisions", contractVersion: "1", links: [{ rel: "decisions", href: "decisions" }] }] }, identity: { status: "authenticated", subject: "user", tenantId: "tenant", roles: [], permissions: grants.map(grant => `decisions:${grant}`) } },
-    runtime: { identity: { subject: "user", tenantId: "tenant" } }, featureAreas: registry(), propertyEditors: registry(),
+    runtime: { identity: { subject: "user", tenantId: "tenant" } }, featureAreas: registry(), propertyEditors: registry(), expressionEditors: registry(),
     dialogs: { confirm: vi.fn(async () => true), prompt: vi.fn(async () => "Imported approval"), alert: vi.fn() },
     notifications: { notify: vi.fn((_input: StudioNotificationInput) => ({ id: "decision-toast", update: vi.fn(), dismiss: vi.fn() })), track: <T,>(work: Promise<T>) => work }
   };
@@ -24,5 +24,9 @@ export function render(content: React.ReactNode) {
 }
 export function button(host: HTMLElement, text: string) { const result = Array.from(host.querySelectorAll<HTMLButtonElement>("button")).find(item => item.textContent?.trim() === text); if (!result) throw new Error(`Button not found: ${text}`); return result; }
 export function click(element: HTMLElement) { flushSync(() => element.click()); }
-export function type(element: HTMLInputElement, value: string) { flushSync(() => { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(element, value); element.dispatchEvent(new Event("input", { bubbles: true })); }); }
+export function type(element: HTMLInputElement | HTMLTextAreaElement, value: string) {
+  const proto = element instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+  flushSync(() => { Object.getOwnPropertyDescriptor(proto, "value")!.set!.call(element, value); element.dispatchEvent(new Event("input", { bubbles: true })); });
+}
 export function select(element: HTMLSelectElement, value: string) { flushSync(() => { element.value = value; element.dispatchEvent(new Event("change", { bubbles: true })); }); }
+export function blur(element: HTMLElement) { flushSync(() => element.blur()); }

@@ -1760,7 +1760,7 @@ if (searchParams.get("mode") !== "activity-authoring" && !navPlacementFixture &&
   document.documentElement.dataset.theme = fixtureTheme;
   document.documentElement.dataset.themeLayout = "classic";
   document.documentElement.dataset.themeMode = darkVariant ? "dark" : "light";
-  if (darkVariant || classicVariant || searchParams.get("mode") === "connections" || activityIconsFixture || activityDuplicateFixture || activityDuplicateEditorFixture || activityInspectorTabsFixture || validationLabelsFixture || publicationReviewFixture) {
+  if (darkVariant || classicVariant || searchParams.get("mode") === "connections" || searchParams.get("mode") === "decision-inputs" || activityIconsFixture || activityDuplicateFixture || activityDuplicateEditorFixture || activityInspectorTabsFixture || validationLabelsFixture || publicationReviewFixture) {
     const palette = getTheme(fixtureTheme)![darkVariant ? "dark" : "light"];
     for (const token of themeTokenNames) {
       document.documentElement.style.setProperty(`--${token.replace(/([A-Z])/g, "-$1").toLowerCase()}`, palette[token]);
@@ -1797,6 +1797,12 @@ async function renderRequestedFixture() {
   if (searchParams.get("mode") === "http-progressive-disclosure") {
     const { HttpProgressiveDisclosureFixture } = await import("./httpProgressiveDisclosureFixture");
     root.render(<HttpProgressiveDisclosureFixture />);
+    return;
+  }
+  if (searchParams.get("mode") === "decision-inputs") {
+    await import("../../src/essentials/Elsa.Studio.Hosting/Client/src/app/ui/components.css");
+    const { DecisionInputsFixture } = await import("./decisionInputsFixture");
+    root.render(<DecisionInputsFixture />);
     return;
   }
   if (searchParams.get("mode") === "connections") {

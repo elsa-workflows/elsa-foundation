@@ -68,6 +68,7 @@ namespace Elsa.Workflows.Runtime.Api;
 [JsonSerializable(typeof(WorkflowDispatchView))]
 [JsonSerializable(typeof(WorkflowDispatchRedriveView))]
 [JsonSerializable(typeof(WorkflowInstanceDetailsView))]
+[JsonSerializable(typeof(WorkflowOutputView))]
 [JsonSerializable(typeof(WorkflowInstanceListView))]
 [JsonSerializable(typeof(IReadOnlyCollection<WorkflowInstanceSummaryView>))]
 [JsonSerializable(typeof(WorkflowExecutablesListView))]

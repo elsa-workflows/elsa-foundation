@@ -671,7 +671,7 @@ export function collectWorkflowContextConnections(
   if (!activity) return result;
 
   // flowchartEdges decodes the flowchart structure payload into source/target edges; reuse it so the
-  // agent sees the same wiring the designer renders.
+  // Weaver sees the same wiring the designer renders.
   for (const edge of flowchartEdges(activity)) {
     result.push({ source: edge.source, target: edge.target, sourcePort: edge.sourceHandle ?? undefined, targetPort: edge.targetHandle ?? undefined });
   }

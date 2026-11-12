@@ -11,7 +11,8 @@ for that run only, never for the job, so one suite's mode cannot leak into the n
 time (pass --parallel 1), because each starts its own database containers. With `secrets`, the Secrets EF
 composition proof is one more run against the PostgreSQL the job started.
 
-Every test that failed in try1 runs once more, in try2/<index>/ (FR-004). test_results.py then decides the shard.
+Unless a container suite sets retryOnFailure=false, every test that failed in try1 runs once more, in try2/<index>/
+(FR-004). test_results.py then decides the shard; a failed single-attempt test still fails the shard.
 
 Usage:
   run_shard.py --entry <matrix-entry-json> --out <dir> --head <sha> [--parallel N] [--manifest <file>]
@@ -38,7 +39,11 @@ def runs_of(entry: dict) -> list[dict]:
     runs = [{"project": project, "group": "", "filter": ""} for project in entry.get("whole", [])]
     runs += [dict(run) for run in entry.get("split", [])]
     for suite in entry.get("suites", []):
+        retry_on_failure = suite.get("retryOnFailure", True)
+        if type(retry_on_failure) is not bool:
+            raise ValueError("suite retryOnFailure must be a boolean")
         runs.append({"project": suite["project"], "group": suite["suite"], "filter": "",
+                     "retryOnFailure": retry_on_failure,
                      "env": {suite["require"]: "1"} if suite.get("require") else {}})
     if entry.get("secrets"):
         runs.append({"project": entry["secretsProject"], "group": "secrets-ef-composition", "filter": "",
@@ -81,6 +86,11 @@ def main() -> int:
 
     entry = json.loads(args.entry)
     runs = runs_of(entry)
+    for index, run in enumerate(runs):
+        if run.get("retryOnFailure", True) is False:
+            for attempt in ("try1", "try2"):
+                if os.path.lexists(os.path.join(args.out, attempt, str(index))):
+                    parser.error("single-attempt suite requires fresh results directories")
     os.makedirs(args.out, exist_ok=True)
     with open(os.path.join(args.out, "runs.json"), "w", encoding="utf-8") as handle:
         # The Secrets connection string stays out of the recorded runs.
@@ -91,6 +101,9 @@ def main() -> int:
 
     retries = []
     for index, run in enumerate(runs):
+        if run.get("retryOnFailure", True) is False:
+            print(f"Single-attempt suite: no automatic retry for {run['project']}", flush=True)
+            continue
         retry = test_results.retry_filter(test_results.read_trx(os.path.join(args.out, "try1", str(index))).failed())
         if retry:
             retries.append((command(run, os.path.join(args.out, "try2", str(index)), retry), run.get("env", {})))

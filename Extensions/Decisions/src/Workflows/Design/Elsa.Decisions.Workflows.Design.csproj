@@ -9,6 +9,7 @@
     <ProjectReference Include="../../Persistence/Core/Elsa.Decisions.Persistence.Core.csproj" />
     <ProjectReference Include="../Runtime/Elsa.Decisions.Workflows.Runtime.csproj" />
     <ProjectReference Include="../../../../../Essentials/src/Workflows/Publishing/Core/Elsa.Workflows.Publishing.Core.csproj" />
+    <ProjectReference Include="../../../../../Essentials/src/Workflows/Design/Validations/Core/Elsa.Workflows.Design.Validations.Core.csproj" />
     <InternalsVisibleTo Include="Elsa.Decisions.Workflows.Tests" />
   </ItemGroup>
 </Project>
