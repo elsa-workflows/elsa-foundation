@@ -57,14 +57,15 @@ The integration witness must prove a continuing machine can retain bounded admis
 
 Apply these steps to one input. No authored exit/action/entry work runs during candidate discovery.
 
-1. Find transitions whose trigger matches this input and whose source visit is active and entered. For each
-   source, evaluate matching transitions in explicit order and retain its first eligible transition. A false
-   condition permits the next rule on that source. A condition error suspends selection; it is not permission
-   to try the next rule.
-2. Apply hierarchy fallback before cross-region arbitration. An eligible descendant candidate suppresses a
-   matching ancestor fallback for this evaluation, even if the child acts without exiting. If no child rule
-   is eligible, an eligible parent rule may handle the input (OD5). One shared ancestor is one candidate, not
-   one copy per active leaf. This suppression does not itself discard candidates in independent regions.
+1. Visit active, entered sources descendant first. At each source, first check whether an already eligible
+   matching descendant suppresses this ancestor fallback. If it does, do not evaluate that ancestor's guards,
+   even if the descendant acts without exiting. Otherwise evaluate the source's matching rules in explicit
+   order and retain its first eligible transition. A false condition permits the next rule on that source;
+   if none is eligible, continue toward the parent fallback (OD5). A condition error in a rule actually
+   considered suspends selection; it is not permission to try the next rule.
+2. Finish that hierarchy-aware discovery before cross-region arbitration. One shared ancestor is considered
+   once, not once per active leaf. Suppressing an ancestor does not itself discard candidates in independent
+   regions. A suppressed ancestor guard cannot fault an input handled by its eligible descendant.
 3. Compute each surviving candidate's exit set and the source visit it depends on. Two candidates conflict if
    their exit sets overlap, or one exits the other's source visit. An action-without-exit has an empty exit set
    but still depends on its live source; another candidate cannot exit it concurrently.
@@ -121,10 +122,15 @@ An empty phase completes without inventing an activity. Every non-empty slot com
 and composites; it may suspend durably. There is no guaranteed completion order for independent branches in
 the same phase (OD27–OD28).
 
-Persist the successful work and the pending work separately. A failed activity resumes/retries through its
-normal eligible runtime recovery boundary. Completed exits, actions, entries and sibling work are preserved;
-StateMachine adds no automatic cancellation of siblings when one faults (OD23, OD29). Still-running work follows
-the runtime's incident policy. A retry's successor activity does not create a new chart visit or selected set.
+Persist successful and pending work separately. Recovery uses the failed activity's normal eligible runtime
+boundary and preserves completed earlier phases (OD23). For regional Action work, preserve successful siblings
+and add no automatic sibling cancellation; still-running work follows the runtime's incident policy (OD29).
+A retry's successor activity does not create a new chart visit or selected set.
+
+Proposed extension for Exit and Entry: retain individual successful work and use the same no-added-sibling-
+cancellation rule, subject to normal incident policy and recovery eligibility. OD29 does not settle these other
+fault paths. Qualify this extension explicitly, including a failed regional Entry beside a still-waiting sibling,
+before adopting it as the execution contract.
 
 Cancel pending waits/work for visits that are actually left, through normal runtime cancellation. Cancel does
 not undo external effects. A late completion must match the exact visit and work occurrence for which it was
@@ -140,8 +146,10 @@ Ordinary activities/composites may serve as triggers; their completion makes a t
 Completion must retain its logical input/source identity so one published input can drive compatible regional
 reactions without accidentally grouping independent inputs by equal payload or by time.
 
-- If the completed trigger's condition is false and its source visit remains active, restart only that
-  rejected trigger. Do not reset other waits or the existing deadline (OD14).
+- If the completed trigger's condition is false, first let this input's evaluation and any selected work settle.
+  Then, if the same source visit remains active, restart only that rejected trigger. Do not reset other waits
+  or the existing deadline (OD14). In particular, do not restart a rejected child's composite while a selected
+  parent exit is still cancelling that visit.
 - After a successful action-without-exit, rearm only that reaction's trigger if the same source visit remains
   active. An event wait listens for a new input; a composite may repeat its authored work (OD42).
 - A trigger whose source was exited is cancelled and is not rearmed for a replacement visit. Re-entry arms
@@ -198,7 +206,9 @@ These are expected semantics to test, not executed test results.
 | Configuration and input | Eligible candidates | Expected result |
 |---|---|---|
 | Review/Checking; Withdraw | Checking's special withdrawal and Review's default withdrawal | Select the child; suppress the parent fallback. |
+| Review/Checking; Withdraw, eligible child but parent fallback guard would throw | Child withdrawal | Select the child without evaluating the suppressed parent guard. |
 | Review/Checking; Withdraw, child guard false | Review's default withdrawal | Select the parent; exit Checking before Review. |
+| Same false child guard; selected parent exit is pending | Parent withdrawal remains selected | Do not rearm the rejected child trigger during exit; after settlement the exited visit is ineligible for rearming. |
 | Parallel Review: Editorial/Checking and Legal/Checking; same published input | Region-local editorial and legal rules | Select both if compatible; preserve phase barriers and both source identities. |
 | Same parallel configuration; unrelated Legal rule exits Review | Editorial local rule and Legal whole-container exit | They conflict. Explicit transition order chooses; neither whole-container exit nor region geometry gets implicit priority. |
 | Editorial AddComment without exit versus Legal exit of Review | Empty-exit Editorial action and Legal containing exit | They conflict because Legal exits Editorial's source visit. |
