@@ -66,17 +66,15 @@ behaviour.
   with the script. A call is never refused or skipped because of what it does. No function profile is required; if
   ADR 0045 needs a classification for the durability boundary of input evaluation, it is a durability hint defined
   there.
-- **It forbids live .NET objects,** always. Scripts that may use objects the host explicitly registers use a separate
-  profile, for example `binding-readonly-interop-v1` (ADR 0046 amendment V10). A host opt-in allows that
-  profile, and the executable pins it like any profile, so one profile name never means different behaviour on
-  different hosts. `binding-readonly-v1` forbids live .NET objects always. A host may enable general .NET access
-  for input expressions through a further, separately named binding profile that an expression selects and the
-  executable pins. The guardrails are those of the ADR 0046 amendment, V10: such an expression is treated as
-  possibly effectful, with a commit before and after its evaluation; what it returns is a storable value or it is
-  refused; and it never writes Elsa-owned workflow state. Any workflow node that uses general .NET access, whether
-  a binding or a script activity, through a separately named profile or a per-script .NET object option however it
-  is finally spelled, gets a publish-time warning with a stable diagnostic code and a marker on the node in Studio,
-  so it is never switched on unnoticed (ADR 0046 amendment V12 gives the detail).
+- **It forbids live .NET objects** while .NET interop is off, which is the default. A host may enable .NET interop
+  for JavaScript through one replaceable engine strategy, provided by a feature (ADR 0046 amendment V10). It then
+  applies to script activities and input-binding expressions alike: a JavaScript input expression takes the same
+  input as a script in a JavaScript script activity. The guardrails are those of the ADR 0046 amendment, V10: what
+  such an expression returns is a storable value or it is refused, and it never writes Elsa-owned workflow state.
+  Any workflow node that uses general .NET access, whether a binding or a script activity, gets a publish-time
+  warning with a stable diagnostic code and a marker on the node in Studio, so it is never switched on unnoticed
+  (ADR 0046 amendment V12 gives the detail). The opt-in's implementing spec decides whether such an expression is
+  treated as possibly effectful and how the executable records that it needs .NET access.
 - **Spec 095's expression contract defines the profile in full.** That definition is amended alongside this ADR.
 
 The profile is part of the expression definition, so changing it changes expression fingerprints and artifact hashes
