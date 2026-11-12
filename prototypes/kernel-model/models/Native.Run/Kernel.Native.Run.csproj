@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>Kernel.Native.Run</RootNamespace>
+    <NoWarn>$(NoWarn);EF1002</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../sim/Models.cs" Link="Models.cs" />
+    <ProjectReference Include="../Native/Kernel.Native.csproj" />
+    <ProjectReference Include="../../ef/Kernel.EntityFramework/Kernel.EntityFramework.csproj" />
+  </ItemGroup>
+</Project>

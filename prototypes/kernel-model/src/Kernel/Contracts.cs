@@ -61,6 +61,7 @@ public static class Kinds
     public const string Delete = "kernel.delete";         // remove an ended instance: its row, its waits, its journal rows
 
     public static bool IsControl(string kind) => kind is Suspend or Resume or Terminate or Delete;
+    public const string Publish = "kernel.publish";    // NATIVE N1: "publish this event now that the commit has landed"
 }
 
 public interface IExecutionModel
@@ -93,14 +94,56 @@ public interface IStep
     IReadOnlyList<Message> Inbox { get; }
     object State { get; set; }
     object? Ambient { get; }                    // what the starter on this node gave: this activation only, never stored
-    void Emit(string channel, object? item);    // live output to whoever waits: released when the step's commit lands
-    void Send(InstanceRef target, string kind, object? payload = null, SendOptions? options = null);
-    InstanceRef Start(StartSpec spec, Placement placement = Placement.WithParent);
+
+    /// <summary>
+    /// Live output to whoever waits. Released when the step's commit lands, or at once when it has nothing to write
+    /// (the owner's default of 12 November). A caller whose route opts out (<see cref="ReplyTo.Of"/>) gets it when the
+    /// step ends instead, so it may see output of a step whose commit is then lost.
+    /// </summary>
+    void Emit(string channel, object? item);
+
+    /// <summary>Returns the message's id, derived from this instance and its revision: what <see cref="Recall"/> takes.</summary>
+    string Send(InstanceRef target, string kind, object? payload = null, SendOptions? options = null);
+
+    /// <summary>
+    /// Takes back a message this instance sent to itself and has not been given yet: a timer, a retry (merge, friction
+    /// F-N4). Its row is deleted with this step's commit, as a cancelled run's ticket is. The model vouches that it has
+    /// not received it; one that is in this step's inbox is consumed anyway, and the call does nothing.
+    /// </summary>
+    void Recall(string message);
+
+    /// <summary>
+    /// A child by default: it reports back, and a terminate goes on to it. <paramref name="detached"/> starts an instance
+    /// that has no parent (merge, friction F-N5): it reports to nobody, and since its id is minted here it needs no read.
+    /// </summary>
+    InstanceRef Start(StartSpec spec, Placement placement = Placement.WithParent, bool detached = false);
     void Run(string key, object? arguments = null);
     void CancelRun(string key);
     void Hold(Message message);                 // not consumed: handed to the next step again, in its place in the order
-    void Subscribe(string key, string wait);
+
+    /// <summary>
+    /// A wait for events of <paramref name="key"/> published from its commit on. <paramref name="keep"/> also gives it
+    /// the events still kept from before (the owner's default of 12 November: off; BPMN-style correlation turns it on):
+    /// only then does the commit carry the "read the events" ticket, which costs a read and a commit (friction F-N8).
+    /// </summary>
+    void Subscribe(string key, string wait, bool keep = false);
     void Unsubscribe(string key, string wait);
+
+    /// <summary>
+    /// True when this message was held by an owner before this one, so a step that took it may have run already and
+    /// its result been lost (merge, friction F-N6). A first delivery is false. It may say true for a message whose
+    /// earlier owner never ran it: "may have run", never "did run".
+    /// </summary>
+    bool Redelivered(Message message);
+
+    /// <summary>
+    /// NATIVE N1: publish an event from a step. The commit carries a ticket to self; after it lands the owner inserts the
+    /// event and delivers it to the subscriptions it finds, as <see cref="Events.PublishAsync"/> does for an outsider.
+    /// Returns the event's id, derived from the instance and its revision. <paramref name="keep"/> is how long the event
+    /// stays for waits that ask for kept events; the waits that exist when it is published get it either way.
+    /// </summary>
+    string Publish(string key, string? payload, TimeSpan keep);
+
     void Record(object entry);
     void Rebind(string definition);             // from the next step on, the instance belongs to another definition (version)
     void SetStatus(InstanceStatus status, string? subStatus = null, object? output = null);

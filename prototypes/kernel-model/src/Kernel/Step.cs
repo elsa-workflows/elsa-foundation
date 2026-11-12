@@ -9,6 +9,7 @@ internal sealed class Step : IStep
     private readonly List<SubscriptionRow> _subscribed = [], _unsubscribed = [];
     private readonly List<object> _entries = [];
     private readonly List<(string, object?)> _emitted = [];
+    private readonly HashSet<SubscriptionRow> _kept = [];
     private readonly List<string> _runs, _children, _cancelled = [];
     private readonly long _revision;
     private InstanceStatus _status = InstanceStatus.Running;
@@ -45,24 +46,38 @@ internal sealed class Step : IStep
     public object? Ambient => Slot.Ambient;
     public void Emit(string channel, object? item) => _emitted.Add((channel, item));
 
+    public bool Redelivered(Message message) => Taken.Find(i => i.Message.Id == message.Id)?.Again ?? false;
+
     private string Id => Instance.Ref.Id;
 
     // A message's id is derived from its sender and the sender's revision. Finding F8: the ordinal has a fixed width,
     // because Entity Framework sends the inserts of one commit in key order and the database hands out seq in that order.
-    public void Send(InstanceRef target, string kind, object? payload = null, SendOptions? options = null) =>
+    public string Send(InstanceRef target, string kind, object? payload = null, SendOptions? options = null) =>
         Send($"{Id}#{_revision}.{_ordinal++:D4}", target, kind, payload, options);
 
-    private void Send(string id, InstanceRef target, string kind, object? payload, SendOptions? options = null) =>
+    private string Send(string id, InstanceRef target, string kind, object? payload, SendOptions? options = null)
+    {
         _sent.Add(new Message(id, target, kind, payload is null ? null : Json.Write(payload), Id, options?.Start,
             options?.Delay is { } delay ? _worker.Now + (long)delay.TotalMilliseconds : null));
+        return id;
+    }
 
-    public InstanceRef Start(StartSpec spec, Placement placement = Placement.WithParent)
+    public void Recall(string message)
+    {
+        if (!message.StartsWith(Id + "#", StringComparison.Ordinal)) throw new InvalidOperationException($"Message '{message}' was not sent by {Id}.");
+        if (Inbox.Any(m => m.Id == message) || _cancelled.Contains(message)) return;     // given to this step: consumed with it
+        if (_sent.RemoveAll(m => m.Id == message) > 0) return;      // sent by this step: never written
+        _cancelled.Add(message);        // its row goes with this commit, as a cancelled run's ticket does
+        _worker.Cancelling(message);
+    }
+
+    public InstanceRef Start(StartSpec spec, Placement placement = Placement.WithParent, bool detached = false)
     {
         // With its parent by default, so a call tree talks in memory and commits together; spread, for a wide fan-out.
         var name = $"{Id[(Id.IndexOf('/') + 1)..]}~{_revision}.{_ordinal}";
         var child = InstanceRef.In(placement == Placement.Spread ? InstanceRef.Spread(name, _worker.Partitions) : Instance.Ref.Partition, name);
-        Send(child, Kinds.Start, null, new SendOptions(Start: spec with { Parent = Id }));
-        _children.Add(child.Id);    // the kernel's list: whom a terminate goes on to
+        Send(child, Kinds.Start, null, new SendOptions(Start: detached ? spec with { Parent = null } : spec with { Parent = Id }));
+        if (!detached) _children.Add(child.Id);    // the kernel's list: whom a terminate goes on to
         if (child.Partition == Instance.Ref.Partition) _fresh.Add(_sent[^1].Id);   // minted and owned here, so it cannot exist: no read
         return child;
     }
@@ -93,8 +108,20 @@ internal sealed class Step : IStep
         _held.Add(message.Id);
     }
 
-    public void Subscribe(string key, string wait) => _subscribed.Add(new SubscriptionRow(key, Id, wait));
+    public void Subscribe(string key, string wait, bool keep = false)
+    {
+        _subscribed.Add(new SubscriptionRow(key, Id, wait));
+        if (keep) _kept.Add(_subscribed[^1]);
+    }
     public void Unsubscribe(string key, string wait) => _unsubscribed.Add(new SubscriptionRow(key, Id, wait));
+    // NATIVE N1: the publish is a ticket to self, so "the inbox alone says what is owed" holds for it too.
+    public string Publish(string key, string? payload, TimeSpan keep)
+    {
+        var id = $"{Id}#{_revision}.{_ordinal:D4}";
+        Send(Instance.Ref, Kinds.Publish, new EventRow(key, id, payload, _worker.Now + (long)keep.TotalMilliseconds));
+        return id;
+    }
+
     public void Record(object entry) => _entries.Add(entry);
     public void Rebind(string definition) => _definition = _worker.Has(Flaw.RebindForgotten) ? null : definition;
     public void SetStatus(InstanceStatus status, string? subStatus = null, object? output = null) => (_status, _output) = (status, output);
@@ -113,10 +140,11 @@ internal sealed class Step : IStep
         var unit = new Unit(Slot, Id) { Consumed = Taken.FindAll(i => !_held.Contains(i.Message.Id)), Held = Taken.FindAll(i => _held.Contains(i.Message.Id)), Cancelled = _cancelled, Spec = Spec, Status = _status, Revision = _revision, Emitted = _emitted };
         // An ephemeral instance that ends in the step that created it, and leaves nothing for anyone else, is never written.
         if (created && Spec!.Ephemeral && _status != InstanceStatus.Running && _sent.Count == 0 && _subscribed.Count == 0) return unit;
-        if (_subscribed.Count > 0)
+        if (_kept.Count > 0)
         {
             // Finding F6: "read the events for the keys I subscribed" is a message to self, so a crash after this commit cannot lose it.
-            Send(Instance.Ref, Kinds.Meet, _subscribed.ToArray());
+            // Only waits that asked for kept events need it: the others get what is published from this commit on.
+            Send(Instance.Ref, Kinds.Meet, _subscribed.Where(_kept.Contains).ToArray());
             if (_worker.Has(Flaw.MeetWithoutTicket)) _volatile.Add(_sent[^1].Id);
         }
         unit.Row = row;

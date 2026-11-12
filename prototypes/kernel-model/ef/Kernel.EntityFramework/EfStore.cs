@@ -212,14 +212,19 @@ public sealed class EfStore(Func<KernelDb> create, bool postgres, bool fenceInBa
     private string False => postgres && Engine is null ? "false" : "0";
     private string Q(string sql) => Engine?.Sql(sql) ?? sql;
 
-    public async Task CreateAsync(int partitions)
+    /// <summary>
+    /// Creates the tables and the partition rows. The number of partitions is fixed here; by default (the owner's of 12
+    /// November) 64 on a server database and 1 on SQLite.
+    /// </summary>
+    public async Task CreateAsync(int? partitions = null)
     {
+        var count = partitions ?? (postgres ? Defaults.ServerPartitions : Defaults.SqlitePartitions);
         await using var db = create();
         await db.Database.EnsureCreatedAsync();
         if (Engine is not null) await Engine.CreatedAsync(db, default);
         if (await db.Partitions.AnyAsync()) return;
-        db.Partitions.AddRange(Enumerable.Range(0, partitions).Select(id => new PartitionEntity { Id = id }));
-        db.Projections.AddRange(Enumerable.Range(0, partitions).Select(id => new ProjectionEntity { Partition = id }));
+        db.Partitions.AddRange(Enumerable.Range(0, count).Select(id => new PartitionEntity { Id = id }));
+        db.Projections.AddRange(Enumerable.Range(0, count).Select(id => new ProjectionEntity { Partition = id }));
         await db.SaveChangesAsync();
     }
 

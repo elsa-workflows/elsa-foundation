@@ -1,5 +1,18 @@
 namespace Kernel;
 
+/// <summary>The owner's defaults of 12 November. A test or the simulation may choose its own.</summary>
+public static class Defaults
+{
+    /// <summary>A partition's lease.</summary>
+    public static readonly TimeSpan Lease = TimeSpan.FromSeconds(10);
+
+    /// <summary>Partitions of a database that serves several nodes: PostgreSQL, SQL Server, MySQL, MongoDB.</summary>
+    public const int ServerPartitions = 64;
+
+    /// <summary>Partitions of SQLite, which has one writer: more would only add polls and fences.</summary>
+    public const int SqlitePartitions = 1;
+}
+
 /// <summary>
 /// A node's fair share of the partitions. A round says "I am alive", counts the nodes heard from, gives up what is
 /// above the share and asks for free partitions up to it. Leases decide who should write and the fence who can; this

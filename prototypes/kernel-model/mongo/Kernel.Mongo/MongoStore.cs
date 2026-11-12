@@ -60,7 +60,7 @@ public sealed class MongoStore : IKernelStore
     public IMongoDatabase Database { get; }
 
     /// <summary>Collections, indexes and the partition documents. Collections are created here, not inside a transaction.</summary>
-    public async Task CreateAsync(int partitions)
+    public async Task CreateAsync(int partitions = Defaults.ServerPartitions)
     {
         var existing = await (await Database.ListCollectionNamesAsync()).ToListAsync();
         foreach (var name in new[] { "partitions", "clocks", "instances", "messages", "subscriptions", "events", "journal", "nodes", "projections", "views" })

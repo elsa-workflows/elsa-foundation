@@ -5,7 +5,7 @@ It tests the design before product code exists. It shares nothing with the Elsa 
 repository: the folder has its own `Directory.Build.*`, `Directory.Packages.props`, `NuGet.config`, `global.json` and
 `.editorconfig`.
 
-What was found is in [FINDINGS.md](FINDINGS.md); what each database engine does to the EF store is in [ENGINES.md](ENGINES.md).
+What was found is in [FINDINGS.md](FINDINGS.md); what each database engine does to the EF store is in [ENGINES.md](ENGINES.md), MongoDB in [MONGO.md](MONGO.md), and native workflows as an execution model in [NATIVE.md](NATIVE.md).
 
 ## Layout
 

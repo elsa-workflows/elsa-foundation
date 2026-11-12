@@ -6,5 +6,6 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../src/Kernel/Kernel.csproj" />
+    <ProjectReference Include="../models/Native/Kernel.Native.csproj" />
   </ItemGroup>
 </Project>

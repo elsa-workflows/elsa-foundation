@@ -191,7 +191,7 @@ public sealed class Waiter : Model<WaiterState>
             if (message.Kind == Kinds.Start && !state.Started)
             {
                 state.Started = true;
-                foreach (var key in state.Keys) step.Subscribe(key, "w");
+                foreach (var key in state.Keys) step.Subscribe(key, "w", keep: true);     // the waiter wants the events kept from before it (invariant 13)
                 state.Waits.AddRange(state.Keys);
             }
             else if (message.Kind == Kinds.Event && state.Waits.Count > 0)

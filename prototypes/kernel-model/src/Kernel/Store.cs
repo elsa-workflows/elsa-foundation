@@ -135,6 +135,18 @@ public static class Events
         ? new($"ev:{e.Id}:{s.Instance}:{s.Wait}", new InstanceRef(s.Instance), Kinds.Event, e.Payload, KeepUntil: e.KeepUntil)
         : new($"ev:{e.Id}::{s.Wait}", InstanceRef.In(InstanceRef.Spread($"{e.Id}:{s.Wait}", partitions), $"on:{e.Id}:{s.Wait}"), Kinds.Event, e.Payload, Start: s.Start, KeepUntil: e.KeepUntil);
 
+    /// <summary>
+    /// What a delivery is for: the event's id and the wait it was delivered to, read back from the derived id (merge,
+    /// friction F-N3: a model need not know the id's format). Null for a message that is no delivery.
+    /// </summary>
+    public static (string Event, string Wait)? Delivered(Message m)
+    {
+        if (m.Kind != Kinds.Event || !m.Id.StartsWith("ev:", StringComparison.Ordinal)) return null;
+        var marker = m.Start is null ? $":{m.Target.Id}:" : "::";
+        var at = m.Id.LastIndexOf(marker, StringComparison.Ordinal);
+        return at < 3 ? null : (m.Id[3..at], m.Id[(at + marker.Length)..]);
+    }
+
     /// <summary>The publisher's side: insert the event, and only then read who waits for it.</summary>
     public static async ValueTask PublishAsync(IKernelStore store, EventRow e, int partitions = 1, CancellationToken cancellationToken = default)
     {

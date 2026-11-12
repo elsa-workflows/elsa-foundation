@@ -2,7 +2,8 @@ namespace Kernel;
 
 public sealed record WorkerOptions
 {
-    public TimeSpan Lease { get; init; } = TimeSpan.FromSeconds(30);
+    /// <summary>The owner's default of 12 November: 10 s. A takeover waits for it to run out, so failover takes about one lease.</summary>
+    public TimeSpan Lease { get; init; } = Defaults.Lease;
     public TimeSpan Horizon { get; init; } = TimeSpan.FromSeconds(10);
     public int PollLimit { get; init; } = 500;
     public int MaxBatch { get; init; } = 500;
@@ -192,7 +193,7 @@ public sealed class Worker
         _polling = false;
         Observe(polled.Now);    // anchored when the answer arrives, so the estimate never runs ahead of the database
         foreach (var row in polled.Messages)
-            Hold(row.Message, row.Seq, durable: true, marked: false, attempts: row.Attempts, suspect: Suspect(row, polled.Now));
+            Hold(row.Message, row.Seq, durable: true, marked: false, attempts: row.Attempts, suspect: Suspect(row, polled.Now), again: row.Seen > 0 || row.Trial > 0);
         // Finding F1: caught up when a poll comes back short and every row this owner wrote meanwhile has come back with it.
         if (polled.Messages.Count < _options.PollLimit && _behind.Count == 0) _caughtUp = true;
     }
@@ -213,19 +214,20 @@ public sealed class Worker
     /// A message that another owner had marked, or that is on trial already, may be what killed that owner. What this
     /// same process marked in an epoch it held earlier is not: the process is alive.
     /// </summary>
-    private bool Suspect(Stored row, long now) => row.Message.Kind != Kinds.Meet && !Kinds.IsControl(row.Message.Kind) && row.Attempts < _options.MaxAttempts
+    private bool Suspect(Stored row, long now) => row.Message.Kind is not (Kinds.Meet or Kinds.Publish) && !Kinds.IsControl(row.Message.Kind) && row.Attempts < _options.MaxAttempts
         && (row.Trial > 0 || (row.Seen > 0 && !_mine.Contains(row.Seen) && (row.Message.Due is not { } due || due <= now)));
 
     private bool OnTrial(string instance) => _trial.Any(t => t.Message.Target.Id == instance);
 
-    private void Hold(Message message, long seq, bool durable, bool marked, bool suspect = false, int attempts = 0, bool fresh = false)
+    private void Hold(Message message, long seq, bool durable, bool marked, bool suspect = false, int attempts = 0, bool fresh = false, bool again = false)
     {
         // The owner skips ids it holds, and (finding F5) ids it consumed while the poll that returned them was in flight.
         if (!Has(Flaw.PollWithoutSkip) && (_items.ContainsKey(message.Id) || _consumed.Contains(message.Id))) return;
         _behind.Remove(message.Id);
-        var item = new Item(message, seq) { Durable = durable, Marked = marked, Suspect = suspect, Attempts = attempts };
+        // A recalled message (Recall) whose row a poll brings in before the commit that deletes it lands: taken, never given.
+        var item = new Item(message, seq) { Durable = durable, Marked = marked, Suspect = suspect, Attempts = attempts, Again = again, Taken = _cancelling.Contains(message.Id) };
         _items[message.Id] = item;
-        if (message.Kind == Kinds.Meet)
+        if (message.Kind is Kinds.Meet or Kinds.Publish)     // NATIVE N1: a publish ticket is handled like a meet ticket
         {
             item.Ticket = true;
             _meets.Add(item);
@@ -316,7 +318,7 @@ public sealed class Worker
         var suspended = Withheld(slot);
         foreach (var item in slot.Inbox)
         {
-            if (item.Ticket) continue;
+            if (item.Ticket || item.Taken) continue;    // taken here: recalled by a commit in flight
             var control = Kinds.IsControl(item.Message.Kind);
             if (suspended && !control) continue;    // a suspended instance is given nothing; its messages wait in order
             if (Awaits(item)) break;    // nothing overtakes a message that waits for its mark
@@ -493,8 +495,11 @@ public sealed class Worker
         _meeting = true;
         try
         {
-            var waits = tickets.SelectMany(t => t.Message.Read<SubscriptionRow[]>()).ToList();
-            var events = await _store.FindEventsAsync(waits.Select(w => w.Key).Distinct().ToArray(), cancellationToken);
+            // NATIVE N1: a publish ticket is the publisher's side, done by the owner after the commit that sent it.
+            foreach (var ticket in tickets.Where(t => t.Message.Kind == Kinds.Publish))
+                await Events.PublishAsync(_store, ticket.Message.Read<EventRow>(), Partitions, cancellationToken);
+            var waits = tickets.Where(t => t.Message.Kind == Kinds.Meet).SelectMany(t => t.Message.Read<SubscriptionRow[]>()).ToList();
+            IReadOnlyList<EventRow> events = waits.Count == 0 ? [] : await _store.FindEventsAsync(waits.Select(w => w.Key).Distinct().ToArray(), cancellationToken);
             foreach (var e in events)
                 foreach (var wait in waits.Where(w => w.Key == e.Key))
                     await _store.AddAsync(Events.Deliver(e, wait), cancellationToken);
@@ -516,6 +521,7 @@ public sealed class Worker
     {
         if (Has(Flaw.DeliverBeforeCommit)) HandOver(unit, null, hold: true);
         if (Has(Flaw.EmitBeforeCommit)) Release(unit);
+        else Release(unit, early: true);    // to callers whose route opted out of waiting for the commit
         if (unit.Durable) _queue.Add(unit);
         else Apply(unit, null, true);   // nothing to write: an ephemeral run, or messages that were never rows
     }
@@ -664,21 +670,22 @@ public sealed class Worker
     /// Live output, released only now: the step's commit has landed, or it had nothing to write. A message that carried a
     /// reply address joins the instance's callers; they get what the step emitted, and the end when the instance ends.
     /// </summary>
-    private void Release(Unit unit)
+    private void Release(Unit unit, bool early = false)
     {
         if (unit.Slot is not { } slot) return;
         foreach (var item in unit.Consumed)
             if (item.Message.ReplyTo is { } to) slot.Replies.Add(to);
+        var callers = slot.Replies.Where(to => Has(Flaw.EmitBeforeCommit) || ReplyTo.Parse(to).BeforeCommit == early).ToList();
         for (var i = 0; i < unit.Emitted.Count; i++)
-            foreach (var to in slot.Replies) Send(to, $"{unit.Instance}#{unit.Revision}.{i}", unit.Emitted[i].Channel, unit.Emitted[i].Item);
-        if (unit.Status == InstanceStatus.Running) return;
+            foreach (var to in callers) Send(to, $"{unit.Instance}#{unit.Revision}.{i}", unit.Emitted[i].Channel, unit.Emitted[i].Item);
+        if (early || unit.Status == InstanceStatus.Running) return;
         foreach (var to in slot.Replies) Send(to, unit.Instance + "#end", null, null, unit.Status, unit.Status is null ? "missing" : null);
         slot.Replies.Clear();
     }
 
     private void Send(string to, string key, string? channel, object? item, InstanceStatus? status = null, string? error = null)
     {
-        var (node, request) = ReplyTo.Parse(to);
+        var (node, request, _) = ReplyTo.Parse(to);
         _options.Transport?.Send(node, new Reply(request, key, channel, item, status, error));
     }
 
@@ -743,6 +750,7 @@ internal sealed class Item(Message message, long seq)
     public bool Marked;             // its row says seen at this epoch
     public bool Suspect;            // another owner had it: it is tried apart before anything else is believed of it
     public bool Shelved;            // a suspect whose row says seen at this epoch, not yet tried
+    public bool Again;              // its row was seen at an earlier epoch: a step may have run with it (IStep.Redelivered)
     public bool Held;               // a step handed it back: it waits for something new to come with
     public int Attempts;
     public bool Ticket;             // a kernel message, not (yet) for the model
