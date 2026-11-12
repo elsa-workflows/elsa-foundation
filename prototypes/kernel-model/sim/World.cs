@@ -108,7 +108,7 @@ public sealed class Wire(World world, Actor actor) : IKernelStore
 
     private static string Describe(StepCommit step) =>
         (step.Row is { } row ? $"{row.Id} r{row.Revision} {row.Status}" : step.Instance == "" ? "tickets" : $"{step.Instance} (no row)")
-        + (step.Consumed.Count > 0 ? $" -{string.Join(" -", step.Consumed)}" : "") + (step.Sent.Count > 0 ? $" +{string.Join(" +", step.Sent.Select(m => m.Id))}" : "");
+        + string.Concat(step.Consumed.Concat(step.Done).Select(id => " -" + id)) + (step.Sent.Count > 0 ? $" +{string.Join(" +", step.Sent.Select(m => m.Id))}" : "");
 
     public static string Describe(object? result) => result switch
     {

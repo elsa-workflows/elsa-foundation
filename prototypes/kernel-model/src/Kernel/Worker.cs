@@ -395,7 +395,8 @@ public sealed class Worker
         var handOver = _caughtUp || Has(Flaw.HandOverWhileBehind);
         var batch = new CommitBatch(Partition, Epoch, Position, _options.Lease, handOver,
             units.Select(u => new StepCommit(u.Instance, u.Row, u.Expected,
-                Has(Flaw.KeepConsumedMessages) ? [] : [.. u.Consumed.Where(i => i.Durable).Select(i => i.Message.Id), .. Has(Flaw.VolatileRunTicket) ? [] : u.Cancelled],
+                Has(Flaw.KeepConsumedMessages) ? [] : [.. u.Consumed.Where(i => i.Durable && i.Message.KeepUntil is null).Select(i => i.Message.Id), .. Has(Flaw.VolatileRunTicket) ? [] : u.Cancelled],
+                Has(Flaw.KeepConsumedMessages) ? [] : u.Consumed.Where(i => i.Durable && i.Message.KeepUntil is not null).Select(i => i.Message.Id).ToList(),
                 u.Sent.Where(m => !u.Volatile.Contains(m.Id)).ToList(), u.Subscribed, u.Unsubscribed, u.Journal)).ToList(),
             marks.Select(i => i.Message.Id).ToList(), marks.Where(i => i.Inherited).Select(i => i.Message.Id).ToList());
         while (true)

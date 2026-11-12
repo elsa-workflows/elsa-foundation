@@ -16,9 +16,12 @@ public sealed record Lease(long Epoch, long Position, long Now);
 
 public sealed record Polled(IReadOnlyList<Stored> Messages, long Now);
 
-/// <summary>One instance's part of a commit. <c>Expected</c> is the revision the row must have; null means the row is new.</summary>
+/// <summary>
+/// One instance's part of a commit. <c>Expected</c> is the revision the row must have; null means the row is new.
+/// <c>Consumed</c> messages are deleted; <c>Done</c> ones (outside commands, which carry keep_until) are marked done.
+/// </summary>
 public sealed record StepCommit(
-    string Instance, InstanceRow? Row, long? Expected, IReadOnlyList<string> Consumed, IReadOnlyList<Message> Sent,
+    string Instance, InstanceRow? Row, long? Expected, IReadOnlyList<string> Consumed, IReadOnlyList<string> Done, IReadOnlyList<Message> Sent,
     IReadOnlyList<SubscriptionRow> Subscribed, IReadOnlyList<SubscriptionRow> Unsubscribed, string? Journal);
 
 /// <summary>What the owner of <c>Partition</c> at <c>Epoch</c>, believing the position is <c>Position</c>, writes in one transaction.</summary>

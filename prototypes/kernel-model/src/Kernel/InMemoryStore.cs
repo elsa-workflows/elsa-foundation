@@ -71,7 +71,7 @@ public sealed class InMemoryStore(int partitions, Func<long> clock, Flaw flaws =
                         var revision = Instances.GetValueOrDefault(row.Id)?.Revision;
                         if (revision != step.Expected) Diverged($"instance {row.Id} is at revision {revision?.ToString() ?? "none"}, the commit expected {step.Expected?.ToString() ?? "none"}");
                     }
-                    foreach (var id in step.Consumed)
+                    foreach (var id in step.Consumed.Concat(step.Done))
                         if (!Has(Flaw.DeleteWithoutCount) && Messages.GetValueOrDefault(id) is not { Done: false }) Diverged($"consumed message {id} is not there");
                     foreach (var message in step.Sent)
                         if (Messages.ContainsKey(message.Id)) Diverged($"sent message {message.Id} exists already");
@@ -84,13 +84,13 @@ public sealed class InMemoryStore(int partitions, Func<long> clock, Flaw flaws =
             foreach (var step in batch.Steps)
             {
                 if (step.Row is not null) Instances[step.Row.Id] = step.Row;
-                foreach (var id in step.Consumed)
-                    if (Messages.GetValueOrDefault(id) is { } consumed)
-                    {
-                        // An outside command stays as a marker until its window has passed, so a late retry meets a duplicate key.
-                        if (consumed.Message.KeepUntil is not null && !Has(Flaw.DeleteOutsideCommands)) consumed.Done = true;
-                        else Messages.Remove(id);
-                    }
+                foreach (var id in step.Consumed) Messages.Remove(id);
+                foreach (var id in step.Done)
+                {
+                    // An outside command stays as a marker until its window has passed, so a late retry meets a duplicate key.
+                    if (Has(Flaw.DeleteOutsideCommands)) Messages.Remove(id);
+                    else if (Messages.GetValueOrDefault(id) is { } done) done.Done = true;
+                }
                 foreach (var message in step.Sent)
                 {
                     // Messages the owner hands over in memory to its own partition are written as seen already.
