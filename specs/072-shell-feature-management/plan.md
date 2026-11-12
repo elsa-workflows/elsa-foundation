@@ -67,3 +67,13 @@ tests/Elsa/Modularity/Tests/
 - CShells currently exposes runtime feature catalog refresh through an implementation type; isolate any reflection fallback behind a Modularity service so the API surface remains replaceable.
 - JSON shell mutation is v1-specific; keep it behind an interface so future non-file-backed shell stores can replace it.
 - Frontend editor extensibility should be generic enough for later modules without overfitting to this page.
+
+## Category navigation refinement plan (#4212)
+
+Replace the module-local CategorySelect and its obsolete popover styles with a visible CategoryRail. Use shared Studio search/button controls and native exclusive-filter buttons (`aria-pressed`). Keep All categories outside the category-search results so it is always reachable. Keep category search in the existing per-host state; browsing changes no feature configuration or network behavior.
+
+Use the existing category derivation after feature search, including the current unavailable-category reset. Preserve feature list, inspector, bulk selection, settings dialog and review/apply handlers. A module container query presents rail/list/inspector columns only when all three fit; otherwise the category actions occupy a bounded, scrollable normal-flow section above the list. The existing narrow list/inspector stacking stays. Labels wrap, with shared theme/focus tokens and coarse-pointer target sizes.
+
+Current paths are `Extensions/FeatureManagement/studio/Elsa.Studio.FeatureManagement/Client/src/{module.tsx,styles.css,__tests__/module.test.ts}` and `Studio/tests/acceptance/journeys.spec.ts`. No backend/project references, new dependencies or extension points change. Framework §2.21/§2.23 apply through retained behavioral coverage and regression bite-proof; FR-008/FR-010 stay unchanged. Deferred configuration classification is not ratified by this UI refinement.
+
+Validate the complete affected module suite, TypeScript and lint with light local checks. Extend the actual composed Features journey for category visibility/search/keyboard/reset and containment in every configured viewport/theme, retaining settings/impact assertions. Use hosted CI for heavy builds/browser/composed proof under the current machine constraint. Final independent correctness, standards and UX/spec reviews require exact-head downloadable composed captures before merge and resulting-main checks. Pending or failed checks remain explicit.

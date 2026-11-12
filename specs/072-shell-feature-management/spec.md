@@ -102,3 +102,16 @@ A Studio user can click Apply to persist staged feature changes for the backend-
 - The request route/backend URL determines the shell; shell selection is out of scope for Studio v1.
 - Disabling a feature removes it from the shell feature map.
 - Existing demo endpoints may remain during this slice; reusable feature logic moves into Modularity packages.
+
+## Category navigation refinement (#4212, 2026-11-12)
+
+**Status:** Planned. This refinement does not change the original implementation status above.
+
+Sipke selected the Category rail reference and authorized its production implementation on 12 November. The goal is to explore a large catalogue without repeatedly opening a menu. The reference is the selected Category rail design retained with #4212, using the shared controls in [module UI guidance](../../Studio/docs/module-ui.md).
+
+- **FR-011:** Categories, their counts and the current choice are visible alongside the feature list and inspector at roomy widths. At constrained widths the same controls appear above the list in normal flow, without a dropdown or nested disclosure. Long names wrap and keyboard focus remains visible.
+- **FR-012:** Category search narrows category choices without changing the feature filter or selected category. All categories remains available even when searching categories. No category matches offers a clear recovery action.
+- **FR-013:** Feature search continues to determine category counts and available choices; an unavailable selected category resets to All categories as today. Category selection and feature search compose. Studio and Server retain independent filters, selection and staged changes.
+- **FR-014:** Browsing categories neither stages nor applies changes, adds configuration reads nor bypasses read-only/pending/review boundaries. Bulk selection, settings drafts and the reviewed apply contract remain intact.
+
+Acceptance covers populated, empty, feature/category no-match and recovery states; native keyboard activation; per-host isolation; desktop, narrow and constrained-container layouts; light/dark themes; and the existing settings/impact journey. Current-head composed captures must be independently opened under [Studio UX acceptance](../../docs/contributing/studio-ux-acceptance.md). Pagination/virtualization (#3567), backend contracts and a new settings taxonomy are excluded.

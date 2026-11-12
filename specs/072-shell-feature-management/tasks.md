@@ -38,3 +38,13 @@
 - [x] T017 Run focused backend builds/tests.
 - [x] T018 Run focused Studio builds/tests.
 - [x] T019 Review diff, update task checkboxes, and commit backend and Studio changes.
+
+## Category navigation refinement (#4212)
+
+- [x] T020 Record and review the scoped category-rail acceptance, plan and tasks before implementation.
+- [x] T021 Replace CategorySelect with the visible accessible rail and per-host category search; remove obsolete popover behavior/styles.
+- [x] T022 Add responsive rail/list/inspector composition, bounded category scrolling, wrapping labels and shared theme/focus treatment.
+- [x] T023 Extend module behavior tests for search/selection/reset/counts, no-match recovery, host isolation and no mutation/network reads; preserve existing suites.
+- [x] T024 Extend the composed Features journey for keyboard navigation, category filtering/recovery and viewport containment; preserve settings and impact proof.
+- [ ] T025 Run affected whole light suites and a regression bite-proof, then obtain current-head hosted CI/composed evidence and independent correctness/standards/UX acceptance.
+- [ ] T026 Record PR evidence, complete gated merge and verify descendant main; mark this refinement Implemented only after acceptance.

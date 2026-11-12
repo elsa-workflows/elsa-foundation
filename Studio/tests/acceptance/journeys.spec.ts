@@ -148,6 +148,56 @@ test("feature filtering and settings dialogs", async ({ page }, info) => {
     await capture(page, info, `features-${host.toLowerCase()}-populated`);
   }
 
+  // Native category controls stay visible in the composed host, without a menu.
+  const rail = page.getByRole("region", { name: "Categories", exact: true });
+  const categories = rail.getByRole("group", { name: "Feature categories", exact: true });
+  const categorySearch = rail.getByRole("searchbox", { name: "Search categories", exact: true });
+  await page.getByRole("tablist", { name: "Hosts" }).getByRole("tab", { name: /^Server/ }).click();
+  await expect(rail).toBeVisible();
+  const category = categories.getByRole("button").nth(1);
+  const categoryLabel = await category.locator("span").first().innerText();
+  await categorySearch.fill(categoryLabel);
+  await category.focus();
+  await category.press("Enter");
+  await expect(category).toHaveAttribute("aria-pressed", "true");
+  await expect(category).toBeFocused();
+  await expect(list.locator(".feature-management-card").first()).toBeVisible();
+  await categorySearch.fill("no-such-category-acceptance");
+  await expect(rail.getByText("No categories match.", { exact: true })).toBeVisible();
+  await expect(list.locator(".feature-management-card").first()).toBeVisible();
+  await rail.getByRole("button", { name: "Clear category search", exact: true }).press("Enter");
+  await expect(categorySearch).toHaveValue("");
+  await expect(categories.getByRole("button", { pressed: true })).toContainText(categoryLabel);
+  await capture(page, info, "features-category-selected");
+  await categories.getByRole("button", { name: /^All categories/ }).press("Space");
+  await expect(categories.getByRole("button", { name: /^All categories/ })).toHaveAttribute("aria-pressed", "true");
+  // Evaluate the module's available width, which includes the host's settings navigation.
+  const composition = await rail.evaluate(element => {
+    const layout = element.parentElement!;
+    const listColumn = layout.querySelector(".feature-management-list-column")!;
+    const railRect = element.getBoundingClientRect();
+    const listRect = listColumn.getBoundingClientRect();
+    const containerWidth = layout.getBoundingClientRect().width;
+    return {
+      containerWidth,
+      railRight: railRect.right,
+      listLeft: listRect.left,
+      railBottom: railRect.bottom,
+      listTop: listRect.top,
+      contained: Array.from(element.querySelectorAll("button, input")).every(control => {
+        const rect = control.getBoundingClientRect();
+        return rect.left >= railRect.left && rect.right <= railRect.right + 1;
+      }),
+      overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth
+    };
+  });
+  expect(composition.contained).toBe(true);
+  expect(composition.overflow).toBeLessThanOrEqual(1);
+  if (composition.containerWidth >= 960) expect(composition.railRight).toBeLessThanOrEqual(composition.listLeft);
+  else expect(composition.railBottom).toBeLessThanOrEqual(composition.listTop);
+  await rail.scrollIntoViewIfNeeded();
+  await capture(page, info, "features-category-rail");
+
   await page.getByRole("tablist", { name: "Hosts" }).getByRole("tab", { name: /^Server/ }).click();
   await filter.fill("Activities Dispatch Workflow (Runtime)");
   await list.getByRole("button", { name: /^Activities Dispatch Workflow \(Runtime\)/ }).click();

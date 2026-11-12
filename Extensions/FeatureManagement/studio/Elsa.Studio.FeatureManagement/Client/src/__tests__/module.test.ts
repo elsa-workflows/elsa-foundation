@@ -443,39 +443,101 @@ describe("feature management module", () => {
     await unmount();
   });
 
-  it("filters features by category through the searchable dropdown and marks the selected feature", async () => {
+  it("browses visible categories without applying or reading configuration and recovers category search", async () => {
+    let reads = 0;
+    let writes = 0;
     const api = stubApi({
-      getJson: async () => ({
-        revision: "rev-1",
-        features: [
+      getJson: async () => {
+        reads++;
+        return { revision: "rev-1", features: [
           feature("RuntimeA", true, {}, ["Runtime"]),
-          feature("StorageA", true, {}, ["Storage"])
-        ]
-      })
+          feature("StorageA", true, {}, ["Storage"]),
+          feature("StorageB", true, {}, ["Storage"])
+        ] };
+      },
+      postJson: async () => { writes++; throw new Error("Browsing must not apply"); }
     });
     register(api);
     const { container, unmount } = await renderFeatureManagementPage();
-
-    await click(container.querySelector("[aria-label='Filter by category']"));
-
-    const searchInput = container.querySelector("[aria-label='Search categories']") as HTMLInputElement | null;
-    expect(searchInput).toBeTruthy();
-
-    // The category search narrows the option list before a category is picked.
-    await changeInput(searchInput, "stor");
-    const listbox = container.querySelector("[role='listbox']");
-    expect(listbox?.textContent).toContain("Storage");
-    expect(listbox?.textContent).not.toContain("Runtime");
-
-    await click(buttonContainingText(listbox as Element, "Storage"));
-
-    expect(container.querySelector(".feature-management-category-popover")).toBeNull();
-    expect(container.querySelector("[aria-label='Filter by category']")?.textContent).toContain("Storage");
-    expect(container.textContent).toContain("1 feature");
-    expect(container.textContent).toContain("StorageA");
-    expect(container.textContent).not.toContain("RuntimeA");
+    const choices = container.querySelector("[role='group'][aria-label='Feature categories']")!;
+    const search = container.querySelector<HTMLInputElement>("[aria-label='Search categories']");
+    expect(buttonContainingText(choices, "Runtime")).toBeTruthy();
+    expect(buttonContainingText(choices, "Storage").textContent).toBe("Storage2");
+    await changeInput(search, "stor");
+    expect(choices.textContent).not.toContain("Runtime");
+    expect(buttonContainingText(choices, "All categories")).toBeTruthy();
+    await click(buttonContainingText(choices, "Storage"));
+    expect(buttonContainingText(choices, "Storage").getAttribute("aria-pressed")).toBe("true");
+    expect(container.querySelectorAll(".feature-management-card")).toHaveLength(2);
     expect(container.querySelector(".feature-management-card.selected")?.textContent).toContain("StorageA");
+    await changeInput(search, "not-a-category");
+    expect(choices.textContent).toContain("No categories match.");
+    expect(container.querySelectorAll(".feature-management-card")).toHaveLength(2);
+    await click(buttonByText(choices, "Clear category search"));
+    expect(search?.value).toBe("");
+    expect(buttonContainingText(choices, "Storage").getAttribute("aria-pressed")).toBe("true");
+    await click(buttonContainingText(choices, "All categories"));
+    expect(container.querySelectorAll(".feature-management-card")).toHaveLength(3);
+    expect(buttonByText(container, "Review changes").disabled).toBe(true);
+    expect(reads).toBe(1);
+    expect(writes).toBe(0);
+    await unmount();
+  });
 
+  it("composes feature search with category counts and resets unavailable categories", async () => {
+    const api = stubApi({ getJson: async () => ({ revision: "rev-1", features: [
+      feature("RuntimeA", true, {}, ["Runtime"]),
+      feature("StorageA", true, {}, ["Storage"]),
+      feature("StorageB", true, {}, ["Storage"])
+    ] }) });
+    register(api);
+    const { container, unmount } = await renderFeatureManagementPage();
+    const choices = container.querySelector("[aria-label='Feature categories']")!;
+    const filter = container.querySelector<HTMLInputElement>("[aria-label='Filter features']");
+    await click(buttonContainingText(choices, "Storage"));
+    await changeInput(filter, "StorageA");
+    expect(buttonContainingText(choices, "Storage").textContent).toBe("Storage1");
+    expect(container.querySelectorAll(".feature-management-card")).toHaveLength(1);
+    await changeInput(filter, "RuntimeA");
+    expect(buttonContainingText(choices, "All categories").getAttribute("aria-pressed")).toBe("true");
+    expect(container.querySelector(".feature-management-card.selected")?.textContent).toContain("RuntimeA");
+    await changeInput(filter, "no-feature");
+    expect(choices.textContent).toContain("All categories0");
+    expect(container.textContent).toContain("No features match this filter.");
+    await changeInput(filter, "");
+    expect(container.querySelectorAll(".feature-management-card")).toHaveLength(3);
+    await unmount();
+  });
+
+  it("retains each host's category search, category and staged bulk selection", async () => {
+    let writes = 0;
+    const api = stubApi({
+      getJson: async () => ({ revision: "server-rev", features: [
+        feature("RuntimeA", true, {}, ["Runtime"]), feature("StorageA", true, {}, ["Storage"])
+      ] }),
+      hostGetJson: async () => ({ revision: "studio-rev", features: [feature("StudioA", true, {}, ["Studio"])] }),
+      postJson: async () => { writes++; throw new Error("Unexpected apply"); },
+      hostPostJson: async () => { writes++; throw new Error("Unexpected host apply"); }
+    });
+    register(api);
+    const { container, unmount } = await renderFeatureManagementPage();
+    await click(container.querySelector("[aria-label='Disable StorageA']"));
+    await click(container.querySelector("[aria-label='Select StorageA']"));
+    await changeInput(container.querySelector<HTMLInputElement>("[aria-label='Search categories']"), "stor");
+    await click(buttonContainingText(container.querySelector("[aria-label='Feature categories']")!, "Storage"));
+    await click(buttonContainingText(container, "Studio"));
+    expect(container.querySelector<HTMLInputElement>("[aria-label='Search categories']")?.value).toBe("");
+    expect(container.querySelector("[aria-label='Feature categories']")?.textContent).not.toContain("Storage");
+    await changeInput(container.querySelector<HTMLInputElement>("[aria-label='Search categories']"), "stud");
+    await click(buttonContainingText(container, "Server"));
+    expect(container.querySelector<HTMLInputElement>("[aria-label='Search categories']")?.value).toBe("stor");
+    expect(buttonContainingText(container.querySelector("[aria-label='Feature categories']")!, "Storage").getAttribute("aria-pressed")).toBe("true");
+    expect(container.querySelector<HTMLInputElement>("[aria-label='Select StorageA']")?.checked).toBe(true);
+    expect(container.querySelector("[aria-label='Enable StorageA']")).toBeTruthy();
+    const review = await openImpactReview(container);
+    expect(impactRowText(review, "StorageA")).toContain("StorageA");
+    await click(buttonByText(review, "Cancel"));
+    expect(writes).toBe(0);
     await unmount();
   });
 
