@@ -133,6 +133,10 @@ export async function executionNavigationJourney(page: Page, info: TestInfo, cap
     await exact(standalone, items[0]);
   }
   await page.goto(`/workflows/definitions?definition=${encodeURIComponent(created.definition.id)}`);
+  // Opening a definition normalizes its editor layout. Save that actual draft before capturing
+  // a Test Run snapshot, as a user would; a later draft change must still refuse restoration.
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(page.locator(".wf-editor-save-status")).toHaveText("Saved");
   await page.getByRole("button", { name: "Test Run", exact: true }).click();
   const update = page.getByRole("button", { name: "Update test", exact: true });
   if (await update.isVisible()) await update.click();

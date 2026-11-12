@@ -382,18 +382,29 @@ it("does not reclaim focus after a later outside control is removed before delay
   await new Promise(resolve => setTimeout(resolve, 0));
   expect(container.contains(document.activeElement)).toBe(false);
 });
-it.each([
+const replacementFocusScopes = [
   { name: "backend", options: { context: { ...context, baseUrl: "http://other-backend", http: {} } as StudioEndpointContext } },
   { name: "run", options: { workflowExecutionId: "other-run" } },
   { name: "node", options: { executableNodeId: "other-node" } },
   { name: "parent", options: { parentActivityExecutionId: "other-parent" } },
   { name: "ancestor", options: { ancestorActivityExecutionId: "other-ancestor" } }
-])("does not focus an old arrow request in the replacement $name scope", async ({ options }) => {
+];
+it.each(replacementFocusScopes)("does not focus an old arrow request in the replacement $name scope", async ({ options }) => {
   const pending = deferredNeighbor(); await beginDeferredArrow();
   focusNavigator(9, "other-scope", options);
   await vi.waitFor(() => expect(container.textContent).toContain("Execution 9 of 10"));
   pending.resolve(page([entry(9)])); await new Promise(resolve => setTimeout(resolve, 0));
   expect(onSelect).not.toHaveBeenCalled();
+  expect(container.contains(document.activeElement)).toBe(false);
+});
+it.each(replacementFocusScopes)("does not restore committed navigation into a replacement $name scope with the same execution ID", async ({ options }) => {
+  const pending = deferredNeighbor(); await beginDeferredArrow();
+  pending.resolve(page([entry(9)]));
+  await vi.waitFor(() => expect(onSelect).toHaveBeenLastCalledWith(expect.objectContaining({ activityExecutionId: "execution-9" })));
+  // The old selection started successfully, but its ID can also exist in another backend/run/scope.
+  focusNavigator(9, "new-context-after-selection", options);
+  await vi.waitFor(() => expect(container.textContent).toContain("Execution 9 of 10"));
+  await new Promise(resolve => setTimeout(resolve, 0));
   expect(container.contains(document.activeElement)).toBe(false);
 });
 it.each(["denied", "failed"])("does not carry a %s neighbor's intent into a later remount", async mode => {
