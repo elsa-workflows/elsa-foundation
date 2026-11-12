@@ -1943,7 +1943,12 @@ export interface StudioActivityDefinitionImplementationEditorProps {
   historyResetKey?: string;
   value: StudioActivityDefinitionImplementationState;
   readOnly: boolean;
-  onChange(value: StudioActivityDefinitionImplementationState): void;
+  /**
+   * The host returns false before admitting a stale or unauthorized change, or true after updating
+   * its canonical implementation. Controlled editors supply their acknowledged baseline for edits
+   * and history actions. Legacy editors and void-returning hosts remain supported.
+   */
+  onChange(value: StudioActivityDefinitionImplementationState, expectedValue?: StudioActivityDefinitionImplementationState): boolean | void;
 }
 
 export interface StudioActivityDefinitionImplementationEditorContribution extends StudioBackendAwareContribution {
