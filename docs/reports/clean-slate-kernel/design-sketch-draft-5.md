@@ -155,7 +155,7 @@ The tables below are the relational shape. A document provider stores the same r
 | `journal` | partition, position, instance, entries | One row per instance-commit: what happened, as one compact value. The truth about the past. Feeds the viewer's tables. Written according to the history level |
 | `projection` | partition, position | How far the projector has got. Its own row, so the projector never touches the fence row |
 
-This is the proposed shape, and the interfaces in this sketch are the proposed contract: at the evidence commit the prototype still says step and run (`IStep`, `StepAsync`, `IRun`) and has no `Describe`; its `UpgradeState` takes the stored string, and it declares a `StateType`. Not in the prototype yet: the instance's `sub_status`, `root`, `correlation`, `tenant`, `created` and `updated`, the message's `headers`, and the subscription's `kind` (the prototype tells a start subscription by the start spec on its row). The prototype also keeps `fault`, `history`, `suspended` and `children` on the instance row, a `revision` on each journal row and a `died` flag on the partition row; at the evidence commit `jobs` is still called `runs`.
+This is the proposed shape, and the interfaces in this sketch are the proposed contract: at the evidence commit the prototype still says step and run (`IStep`, `StepAsync`, `IRun`) and has no `Describe`; its `UpgradeState` takes the stored string, it declares a `StateType`, and its `Ambient` is a plain `object?`. Not in the prototype yet: the instance's `sub_status`, `root`, `correlation`, `tenant`, `created` and `updated`, the message's `headers`, and the subscription's `kind` (the prototype tells a start subscription by the start spec on its row). The prototype also keeps `fault`, `history`, `suspended` and `children` on the instance row, a `revision` on each journal row and a `died` flag on the partition row; at the evidence commit `jobs` is still called `runs`.
 
 The viewer's tables are projections of the journal. There is no outbox, dispatcher, scheduler queue, per-run lease, commit marker, dispatch record or timer table.
 
@@ -414,7 +414,7 @@ PostgreSQL round trips for the native model on the kernel (NATIVE.md's runs; the
 | Forty WriteLines, Durable | 680 | 123 / 82 |
 | Fork and join with a direct resume, Balanced | 142 | 11 / 8 |
 
-A Balanced run on the owner, per engine (EF store; fence as its own statement, in brackets in the batch): PostgreSQL 3 (2), SQL Server 4 (3, needs read-committed snapshot isolation), MySQL 7 (6), MongoDB 3 (2, needs a replica set). SQLite takes 5 calls into the engine, where EF sends one command per row. A commit costs the same round trips for 1 or 100 instances, because they share the transaction.
+A Balanced run on the owner, per engine (EF store; fence as its own statement, in brackets in the batch): PostgreSQL 3 (2), SQL Server 4 (3, needs read-committed snapshot isolation), MySQL 7 (6), MongoDB 3 (2, needs a replica set). SQLite takes 5 calls into the engine, where EF sends one command per row. On the server engines a commit costs the same round trips for 1 or 100 instances, because they share the transaction; SQLite's engine calls grow with the rows (203 for 100 instances).
 
 These figures come from the prototype's own cost runs, reported in its findings; they were not re-measured for this record.
 
