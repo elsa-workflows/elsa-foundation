@@ -75,7 +75,7 @@ function defaultJson(setting: StudioSettingDescriptor) { return normalize(settin
 function jsonText(value: unknown, setting: StudioSettingDescriptor) { return value == null || value === "" ? defaultJson(setting) : JSON.stringify(value, null, 2); }
 
 function SettingOutline({ setting, children, error }: { setting: StudioSettingDescriptor; children: React.ReactNode; error?: string }) {
-  return <StudioField label={setting.displayName || setting.name} description={setting.description} error={error}
+  return <StudioField label={setting.displayName || setting.name} description={setting.description} error={error} errorRole="alert"
     meta={<>{setting.required ? <em>Required</em> : null}{setting.restartRequired ? <em>Reload</em> : null}{setting.advanced ? <em>Advanced</em> : null}</>}>
     {children}
   </StudioField>;

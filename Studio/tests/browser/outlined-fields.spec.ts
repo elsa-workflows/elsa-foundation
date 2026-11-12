@@ -7,7 +7,7 @@ for (const theme of builtInThemeDefinitions) for (const mode of allThemeModes) {
     await page.goto(`/outlined-fields.html?theme=${theme.id}&mode=${mode}`);
     await page.getByLabel("Focused", { exact: true }).focus();
     await expect(page.getByLabel("Focused", { exact: true })).toBeFocused();
-    const frames = page.locator(".studio-form-control");
+    const frames = page.getByRole("region", { name: "Field states", exact: true }).locator(".studio-form-control");
     await expect(frames).toHaveCount(19);
     const geometry = await frames.evaluateAll(elements => elements.map(element => {
       const box = element.getBoundingClientRect(), legend = element.querySelector("legend")!.getBoundingClientRect(), style = getComputedStyle(element);
@@ -15,7 +15,13 @@ for (const theme of builtInThemeDefinitions) for (const mode of allThemeModes) {
     }));
     expect(geometry.every(item => item.border === "1px" && !item.overflows && item.labelFits)).toBe(true);
     expect(await page.locator(".studio-form-control [data-studio-field-control]").evaluateAll(elements => elements.every(element => getComputedStyle(element).borderLeftWidth === "0px"))).toBe(true);
+    const record = page.getByRole("region", { name: "Completed response", exact: true }).getByLabel("Note", { exact: true });
+    await expect(record).toBeDisabled();
+    await expect(record).toHaveValue("Reviewed purchase request");
+    await expect(record).toHaveCSS("resize", "none");
+    expect(await record.evaluate(element => { const style = getComputedStyle(element.closest("fieldset")!); return { border: style.borderTopWidth, opacity: style.opacity }; })).toEqual({ border: "0px", opacity: "1" });
     await expect(page.getByLabel("Disabled", { exact: true })).toBeDisabled();
+    expect(await page.locator(".studio-form-control [data-studio-field-control]:disabled").evaluateAll(elements => elements.every(element => getComputedStyle(element).opacity === "1"))).toBe(true);
     await expect(page.getByLabel("Read only", { exact: true })).toHaveAttribute("readonly", "");
     await expect(page.getByLabel("Invalid", { exact: true })).toHaveAttribute("aria-invalid", "true");
     await capture(page, info, `${theme.id}-${mode}-states`);

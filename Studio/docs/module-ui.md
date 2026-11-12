@@ -59,6 +59,8 @@ Use `StudioFormField` for an explicit native-control contract or adornments:
 </StudioFormField>
 ```
 
+Inline errors are described by the focused control. Use `errorRole="alert"` when the editor owns the error announcement; omit it when a form summary already announces the same error.
+
 The shell does not disable adjacent actions. Set their disabled state explicitly. For opaque
 contributed editors, pass `controlId` to `StudioField` and forward that ID plus
 `data-studio-field-control=""` to the actual native control. The shared component does not clone

@@ -76,7 +76,8 @@
   line-height: 1.4;
 }
 
-.studio-field.studio-form-field > .studio-form-control textarea[data-studio-field-control] { resize: vertical; }
+/* Native editor owners retain their read-only/record resize policy. */
+:where(.studio-field.studio-form-field > .studio-form-control) textarea:where([data-studio-field-control]) { resize: vertical; }
 .studio-field.studio-form-field > .studio-form-control select[data-studio-field-control]:not([multiple]):not([size]) { padding-inline-end: 30px; }
 .studio-field.studio-form-field > .studio-form-control [data-studio-field-control]:focus { outline: none; box-shadow: none; }
 .studio-field > .studio-form-control:focus-within { outline: 2px solid var(--studio-focus-ring-solid, var(--studio-accent)); outline-offset: 2px; }
@@ -121,3 +122,6 @@
 .studio-choice-control { display: flex; align-items: center; gap: 8px; min-inline-size: 0; }
 .studio-choice-control > input:is([type="checkbox"], [type="radio"]) { inline-size: 16px; min-block-size: 0; block-size: 16px; flex: 0 0 auto; }
 .studio-choice-control > label { margin: 0; font: inherit; }
+
+/* Apply disabled attenuation once at the field, including when legacy module CSS also dims inputs. */
+.studio-field.studio-form-field > .studio-form-control [data-studio-field-control]:disabled { opacity: 1; }

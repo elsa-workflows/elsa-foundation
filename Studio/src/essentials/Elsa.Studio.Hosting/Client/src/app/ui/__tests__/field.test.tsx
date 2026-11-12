@@ -111,3 +111,15 @@ it("separates metadata from the caption in an RTL legend without changing the co
   expect(container.querySelector("legend")?.textContent).toBe("Translated label Optional");
   expect(container.querySelector("input")?.labels?.[0].textContent).toBe("Translated label");
 });
+
+
+it("keeps inline errors described without duplicating a caller's alert announcement", () => {
+  const { container } = mount(<><p role="alert">Enter a name</p>
+    <fields.StudioField label="Name" error="Enter a name"><input /></fields.StudioField>
+    <fields.StudioField label="JSON" error="Invalid JSON" errorRole="alert"><textarea /></fields.StudioField></>);
+  expect(container.querySelectorAll('[role="alert"]')).toHaveLength(2);
+  const input = container.querySelector("input")!;
+  expect(document.getElementById(input.getAttribute("aria-describedby")!)?.textContent).toBe("Enter a name");
+  expect(input.getAttribute("aria-invalid")).toBe("true");
+  expect(container.querySelector("textarea")?.closest(".studio-field")?.querySelector('[role="alert"]')?.textContent).toBe("Invalid JSON");
+});

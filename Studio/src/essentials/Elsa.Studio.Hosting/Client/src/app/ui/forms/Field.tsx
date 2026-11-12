@@ -12,6 +12,7 @@ type FieldProps = Omit<React.HTMLAttributes<HTMLDivElement>, "children"> & {
   label: React.ReactNode;
   hint?: React.ReactNode;
   error?: React.ReactNode;
+  errorRole?: "alert";
   meta?: React.ReactNode;
   controlId?: string;
   labelId?: string;
@@ -25,7 +26,7 @@ type FieldProps = Omit<React.HTMLAttributes<HTMLDivElement>, "children"> & {
 /** One native control. A real legend gap also works on transparent and textured surfaces. */
 export const StudioFormField = forwardRef<HTMLDivElement, FieldProps & {
   children(attributes: ControlAttributes): React.ReactNode;
-}>(function StudioFormField({ label, hint, error, meta, controlId, labelId, disabled, leading, trailing, after, className, children, ...rest }, ref) {
+}>(function StudioFormField({ label, hint, error, errorRole, meta, controlId, labelId, disabled, leading, trailing, after, className, children, ...rest }, ref) {
   const generatedId = useId();
   const id = controlId ?? generatedId;
   const descriptionId = hint || error ? `${id}-help` : undefined;
@@ -41,7 +42,7 @@ export const StudioFormField = forwardRef<HTMLDivElement, FieldProps & {
         {trailing ? <div className="studio-form-adornment">{trailing}</div> : null}
       </div>
     </fieldset>
-    {descriptionId ? <small id={descriptionId} role={error ? "alert" : undefined} className={error ? "studio-field-error" : "studio-field-hint"}>{error || hint}</small> : null}
+    {descriptionId ? <small id={descriptionId} role={error ? errorRole : undefined} className={error ? "studio-field-error" : "studio-field-hint"}>{error || hint}</small> : null}
     {after}
   </div>;
 });
@@ -82,7 +83,7 @@ function decorateControl(children: React.ReactNode, target: NativeControl, attri
 export const StudioField = forwardRef<HTMLDivElement, Omit<FieldProps, "hint"> & {
   description?: React.ReactNode;
   children: React.ReactNode;
-}>(function StudioField({ label, description, meta, children, controlId, labelId, disabled, error, className, leading, trailing, after, ...rest }, ref) {
+}>(function StudioField({ label, description, meta, children, controlId, labelId, disabled, error, errorRole, className, leading, trailing, after, ...rest }, ref) {
   const generatedId = useId();
   const controls: NativeControl[] = [];
   collectControls(children, controls);
@@ -97,7 +98,7 @@ export const StudioField = forwardRef<HTMLDivElement, Omit<FieldProps, "hint"> &
         <label id={labelId} htmlFor={id}>{label}</label>{meta}
       </div>
       {Children.map(children, child => containsControl(child, choice) ? null : child)}
-      {descriptionId ? <small id={descriptionId} role={error ? "alert" : undefined}>{error || description}</small> : null}
+      {descriptionId ? <small id={descriptionId} role={error ? errorRole : undefined}>{error || description}</small> : null}
       {after}
     </div>;
   }
@@ -105,7 +106,7 @@ export const StudioField = forwardRef<HTMLDivElement, Omit<FieldProps, "hint"> &
   if (!control && controls.length === 0 && controlId) {
     const isMessage = (child: React.ReactNode) => isValidElement(child) && (child.type === "small" || child.type === "p");
     const messages = Children.map(children, child => isMessage(child) ? child : null);
-    return <StudioFormField {...rest} ref={ref} label={label} hint={description} error={error} meta={meta} controlId={controlId} labelId={labelId}
+    return <StudioFormField {...rest} ref={ref} label={label} hint={description} error={error} errorRole={errorRole} meta={meta} controlId={controlId} labelId={labelId}
       disabled={disabled} className={className} leading={leading} trailing={trailing} after={<>{messages}{after}</>}>
       {() => Children.map(children, child => isMessage(child) ? null : child)}
     </StudioFormField>;
@@ -121,7 +122,7 @@ export const StudioField = forwardRef<HTMLDivElement, Omit<FieldProps, "hint"> &
       }
       return child;
     });
-    return <StudioFormField {...rest} ref={ref} label={label} hint={description} error={error} meta={meta} controlId={control.props.id ?? controlId} labelId={labelId}
+    return <StudioFormField {...rest} ref={ref} label={label} hint={description} error={error} errorRole={errorRole} meta={meta} controlId={control.props.id ?? controlId} labelId={labelId}
       disabled={disabled ?? control.props.disabled} className={className} leading={leading} trailing={trailing} after={<>{messages}{after}</>}>
       {attributes => Children.map(children, child => containsControl(child, control) ? decorateControl(child, control, { ...attributes, "aria-describedby": [attributes["aria-describedby"], ...messageIds].filter(Boolean).join(" ") || undefined }) : null)}
     </StudioFormField>;
@@ -132,7 +133,7 @@ export const StudioField = forwardRef<HTMLDivElement, Omit<FieldProps, "hint"> &
       <legend id={labelId} className="studio-form-legend"><span className="studio-field-label">{label}</span>{meta}</legend>
       <div className="studio-form-group-content">{children}</div>
     </fieldset>
-    {descriptionId ? <small id={descriptionId} role={error ? "alert" : undefined} className={error ? "studio-field-error" : "studio-field-hint"}>{error || description}</small> : null}
+    {descriptionId ? <small id={descriptionId} role={error ? errorRole : undefined} className={error ? "studio-field-error" : "studio-field-hint"}>{error || description}</small> : null}
     {after}
   </div>;
 });

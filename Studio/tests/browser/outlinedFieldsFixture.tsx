@@ -1,3 +1,4 @@
+import { BasicTaskForm } from "../../../Extensions/UserTasks/studio/Elsa.Studio.UserTasks/Client/src/TaskForm";
 import React, { useState } from "react";
 import { createRoot } from "react-dom/client";
 import { StudioField, StudioFormField } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/ui/forms/Field";
@@ -48,12 +49,18 @@ function Fixture() {
       <StudioField label="Options"><label><input type="checkbox" defaultChecked /> Enabled</label><label><input type="radio" name="option" defaultChecked /> Default</label></StudioField>
       <div className="agent-editor"><StudioField label="Agent setting"><input defaultValue="Module style collision" /></StudioField></div>
       <div className="user-task-detail"><StudioField label="Task response"><input defaultValue="User Tasks collision" /></StudioField></div>
-      <div className="decisions-page"><StudioField label="Decision value"><input defaultValue="Decision collision" /></StudioField></div>
+      <div className="decisions-page"><StudioField label="Decision value"><input disabled defaultValue="Decision collision" /></StudioField></div>
       <div className="connections-page"><StudioField label="Connection setting"><input defaultValue="Connection collision" /></StudioField></div>
       <div className="feature-management-setting"><StudioField label="Feature setting"><input type="text" defaultValue="Settings collision" /></StudioField></div>
       <div className="etl-editor-field"><StudioField label="ETL setting"><input defaultValue="ETL collision" /></StudioField></div>
       <div style={{ background: "repeating-linear-gradient(45deg,transparent,transparent 6px,#8882 6px,#8882 12px)", padding: 12, "--studio-field-surface": "transparent" } as React.CSSProperties}>
         <StudioField label="Transparent surface"><input defaultValue="Real legend gap" /></StudioField>
+      </div>
+    </section>
+    <section aria-label="Completed response" className="user-task-detail" style={{ marginTop: 20 }}>
+      <h2>Completed response</h2>
+      <div className="user-task-response" data-final>
+        <BasicTaskForm form={{ fields: [{ key: "Note", label: "Note", kind: "multiline", required: true }] }} value={{ Note: "Reviewed purchase request" }} readOnly onChange={() => {}} />
       </div>
     </section>
   </main>;

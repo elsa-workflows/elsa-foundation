@@ -4,7 +4,7 @@ Baseline: `dff7c490d0e5501b22d4ba89beb389c956d4f423`. The source census inspecte
 
 279 scalar sites adopt the shared Outlined boundary. One descriptor site switches between text and checkbox: `ConnectionSettingField` outlines only its text branch. Helper-returned controls are framed at their caller: setting editors use `SettingOutline`; workflow-run fallback and enum editors use `WorkflowRunInputField` with explicit native control props; scope selection uses `SecretFormField`; disclosure demo controls use `ExpressionToggle`. Contributed opaque editors retain their published input contracts; presentation opt-in is additive.
 
-The following semantic treatments remain explicit:77 checkbox/radio choices retain individual names and native state;26 compact table/grid cells retain row/column context;19 search controls keep their search affordance;6 file pickers retain native upload semantics;4 rich/composer editors keep their editor surface. Existing shared callers with multiple controls retain a true labelled group. These are not migration omissions.
+The following semantic treatments remain explicit:77 checkbox/radio choices retain individual names and native state;26 compact table/grid cells retain row/column context;19 search controls keep their search affordance;6 file pickers retain native upload semantics;4 rich/composer editors keep their editor surface. Existing shared callers with multiple controls retain a true labelled group. Completed/cancelled User Tasks responses retain their existing record presentation (no field chrome, disabled opacity or resize handle), with individually associated captions. These are not migration omissions.
 
 ## Source-site census
 
