@@ -149,7 +149,7 @@ internal sealed class BpmnStructureHandler : IActivityStructureHandler
     {
         try { BpmnLegacyStructureGuard.RejectCompleteSourceFields(payload); }
         catch (JsonException exception)
-        { throw new BpmnModelValidationException($"Invalid legacy BPMN {context}: {exception.Message}", exception); }
+        { throw new BpmnDocumentSourceException($"Invalid legacy BPMN {context}: {exception.Message}", exception); }
     }
 
     private static string? Remap(string? nodeId, IReadOnlyDictionary<string, string> nodeIds) =>

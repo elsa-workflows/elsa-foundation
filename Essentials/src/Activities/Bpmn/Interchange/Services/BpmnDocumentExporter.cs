@@ -99,7 +99,10 @@ public sealed class BpmnDocumentExporter(IActivityDefinitionLookup? catalog = nu
 
     private static BpmnExportResult CompleteSourceExport(ActivityNode owner, BpmnExportOptions? options)
     {
-        var source = BpmnDocumentStructureHandler.Read(owner);
+        BpmnAuthoredDocument source;
+        try { source = BpmnDocumentStructureHandler.Read(owner); }
+        catch (InvalidOperationException exception)
+        { throw new BpmnInterchangeException($"Invalid complete BPMN export source '{owner.NodeId}': {exception.Message}", exception); }
         if (options?.ProcessId is { } requested && requested != source.ProcessId)
             throw new BpmnInterchangeException("Complete-source export preserves authored process IDs; renaming requires an explicit source/reference transform.");
         var omissions = source.Bindings.Select(binding => new BpmnExportOmission(binding.ElementId, "native-configuration-not-exported",
