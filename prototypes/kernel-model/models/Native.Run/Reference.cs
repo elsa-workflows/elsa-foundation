@@ -17,12 +17,12 @@ public static class Reference
 
     /// <summary>Today's shape: a Parallel of a WriteLine branch and an Event branch; the join completes the workflow.</summary>
     public static Workflow ForkJoinResume() =>
-        Workflow("fork-join-resume", Parallel("fork-join", null, WriteLine("write-in-branch", "forked"), Event("wait-for-event", EventName)));
+        Workflow("fork-join-resume", Parallel("fork-join", null, WriteLine("write-in-branch", "forked"), Event("wait-for-event", Expr("input.event"))));
 
     /// <summary>The brief's shape: three branches that each wait for an event, then a join and an activity after it.</summary>
     public static Workflow ForkJoinEvents(int branches = 3) =>
         Workflow($"fork-join-{branches}-events", Sequence("root",
-            Parallel("fork-join", null, [.. Enumerable.Range(1, branches).Select(i => Event($"wait-{i}", $"{EventName}-{i}"))]),
+            Parallel("fork-join", null, [.. Enumerable.Range(1, branches).Select(i => Event($"wait-{i}", Expr($"input.event + '-{i}'")))]),
             WriteLine("after-join", "joined")));
 
     /// <summary>Today's shape: an HttpEndpoint that captures the request and its content, a variable set from them, the response.</summary>

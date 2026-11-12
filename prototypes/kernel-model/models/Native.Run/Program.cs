@@ -69,7 +69,10 @@ static class Cost
         {
             counter.Reset();
             store.Reset();
+            var trace = Environment.GetEnvironmentVariable("NATIVE_TRACE") is { Length: > 0 } t && $"{name}, {mode}".StartsWith(t, StringComparison.Ordinal);
+            counter.Trace = trace ? [] : null;
             var ok = await body();
+            if (counter.Trace is { } lines) Console.WriteLine("    " + string.Join("\n    ", lines));
             // PostgreSQL: Npgsql sends BEGIN with the first command, so a round trip is a command or a COMMIT/ROLLBACK.
             // SQLite: no wire; BEGIN, each command and COMMIT are each one call into the engine.
             var trips = counter.Commands + counter.Transactions.Ended + (postgres ? 0 : counter.Transactions.Begun);
@@ -97,28 +100,28 @@ static class Cost
             await Row("fork-join-resume, start and a direct resume", mode, async () =>
             {
                 var id = Next("fj");
-                owner.Worker.Post(new Message($"{id}#start", id, Kinds.Start, Start: NativeModel.Spec("fork-join-resume", mode)), fresh: true);
+                owner.Worker.Post(new Message($"{id}#start", id, Kinds.Start, Start: NativeModel.Spec("fork-join-resume", mode, Wf.Object(("event", $"ev-{id}")))), fresh: true);
                 await owner.PumpAsync();
-                await store.AddAsync(new Message($"{id}#resume", id, NativeKinds.Resume, Json.Write(new ResumeStimulus(Reference.EventName)), KeepUntil: keep));
+                await store.AddAsync(new Message($"{id}#resume", id, NativeKinds.Resume, Json.Write(new ResumeStimulus($"ev-{id}")), KeepUntil: keep));
                 await owner.PumpAsync(poll: true);
                 return Finished(owner, id);
             });
             await Row("fork-join-resume, start and a published event", mode, async () =>
             {
                 var id = Next("fj");
-                owner.Worker.Post(new Message($"{id}#start", id, Kinds.Start, Start: NativeModel.Spec("fork-join-resume", mode)), fresh: true);
+                owner.Worker.Post(new Message($"{id}#start", id, Kinds.Start, Start: NativeModel.Spec("fork-join-resume", mode, Wf.Object(("event", $"ev-{id}")))), fresh: true);
                 await owner.PumpAsync();
-                await Events.PublishAsync(store, new EventRow("event:" + Reference.EventName, $"e-{id}", null, keep));
+                await Events.PublishAsync(store, new EventRow($"event:ev-{id}", $"e-{id}", null, keep));
                 await owner.PumpAsync(poll: true);
                 return Finished(owner, id);
             });
             await Row("fork-join, three event branches, three direct resumes", mode, async () =>
             {
                 var id = Next("fj3");
-                owner.Worker.Post(new Message($"{id}#start", id, Kinds.Start, Start: NativeModel.Spec("fork-join-3-events", mode)), fresh: true);
+                owner.Worker.Post(new Message($"{id}#start", id, Kinds.Start, Start: NativeModel.Spec("fork-join-3-events", mode, Wf.Object(("event", $"ev-{id}")))), fresh: true);
                 await owner.PumpAsync();
                 for (var i = 1; i <= 3; i++)
-                    await store.AddAsync(new Message($"{id}#resume{i}", id, NativeKinds.Resume, Json.Write(new ResumeStimulus($"{Reference.EventName}-{i}")), KeepUntil: keep));
+                    await store.AddAsync(new Message($"{id}#resume{i}", id, NativeKinds.Resume, Json.Write(new ResumeStimulus($"ev-{id}-{i}")), KeepUntil: keep));
                 await owner.PumpAsync(poll: true);
                 return Finished(owner, id);
             });
@@ -202,7 +205,7 @@ static class Memory
             Console.WriteLine($"| {name} | {mode} | {allocated / 1024.0:F1} KiB | {clock.Elapsed.TotalMicroseconds / runs:F0} µs | {(double)sizing.Commits / runs:F1} | {bytes} |");
         }
 
-        Message Start(string workflow, string mode, int i) => new($"{workflow}-{mode}-{i}#start", InstanceRef.In(0, $"{workflow}-{mode}-{i}"), Kinds.Start, Start: NativeModel.Spec(workflow, mode));
+        Message Start(string workflow, string mode, int i) => new($"{workflow}-{mode}-{i}#start", InstanceRef.In(0, $"{workflow}-{mode}-{i}"), Kinds.Start, Start: NativeModel.Spec(workflow, mode, Wf.Object(("event", "ev"))));
         foreach (var mode in new[] { Modes.Ephemeral, Modes.Balanced, Modes.Durable })
         {
             await Measure("toy model: ten no-ops (the kernel alone)", mode, async (o, _, i) =>
@@ -222,7 +225,7 @@ static class Memory
                 var start = Start("fork-join-resume", mode, i);
                 o.Worker.Post(start, fresh: true);
                 await o.PumpAsync();
-                o.Worker.Post(new Message($"{start.Target}#resume", start.Target, NativeKinds.Resume, Json.Write(new ResumeStimulus(Reference.EventName))));
+                o.Worker.Post(new Message($"{start.Target}#resume", start.Target, NativeKinds.Resume, Json.Write(new ResumeStimulus("ev"))));
                 await o.PumpAsync();
             });
             await Measure("http-reference", mode, async (o, _, _) =>
