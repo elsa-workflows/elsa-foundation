@@ -20,7 +20,8 @@ public sealed class BpmnStructureHandlerTests : IDisposable
         var services = new ServiceCollection();
         new Elsa.Activities.Bpmn.Design.ActivitiesBpmnDesignFeature().ConfigureServices(services);
         _provider = services.BuildServiceProvider();
-        _handler = Assert.Single(_provider.GetServices<IActivityStructureHandler>());
+        _handler = Assert.Single(_provider.GetServices<IActivityStructureHandler>(), handler =>
+            handler.Kind == BpmnProcessActivity.StructureKind && handler.SchemaVersion == BpmnProcessActivity.StructureSchemaVersion);
     }
 
     public void Dispose() => _provider.Dispose();

@@ -14,7 +14,23 @@
   analysis and mandatory headless publication consume these facts. Other task families, branches, multiple entries, events/listeners, loops,
   compensation, transactions and subprocess/call boundaries remain unknown; no generic admission
   rule or runtime occurrence semantics are relaxed.
-- Repeated feature composition retains one implementation. Runtime-only feature registration supplies no handler.
+- Repeated feature composition retains one implementation per exact kind/schema. Runtime-only feature registration supplies no handler.
+
+## Complete-document retention and source validation
+
+- Owning contracts: Workflows Design Core `IActivityStructureHandler` and Validations Core `IDraftValidator`.
+- Contributors: internal singleton `BpmnDocumentStructureHandler` for `elsa.bpmn.structure@2.0.0`,
+  internal singleton `BpmnDocumentScopeViewHandler` for transient `elsa.bpmn.scope-view@1.0.0`, and
+  scoped enumerable `BpmnScopeViewSourceValidator` / `BpmnDocumentAdmissionValidator`, registered by `ActivitiesBpmnDesignFeature`.
+- Classification: cross-domain projection and validation through existing owning contracts. XML is retained
+  once on the physical source alongside its disjoint native forest and compact scope headers. Views are pure,
+  scope-addressed query projections; replacement folds only owned native configuration back into the physical source.
+- The source validator rejects physically authored derived views and validates complete-document ownership
+  before generic traversal. Opaque literal JSON is not treated as activity source. The admission validator
+  reports execution-closed errors without preventing draft retention through ordinary create/update commands.
+- Exact kind/schema matching exposes the document retention payload; the scope-view handler has no authorable
+  payload type. Both handlers retain Unknown child-result facts and refuse executable compilation. Schema 1's
+  result-order proof is not reused, and no Publishing or Graph admission authority is replaced.
 
 ## Published model references
 
