@@ -22,6 +22,7 @@ var options = new MongoStoreOptions { FenceInBatch = rest.Remove("--fence-in-bat
 if (rest.Remove("--no-abort")) MongoStore.AbortOnFailure = false;
 if (rest.Remove("--no-backoff")) MongoStore.BackOffOnTransient = false;
 if (rest.Remove("--labels-only")) MongoStore.LabelsOnly = true;
+if (rest.Remove("--cuts-only")) MongoProvider.CutsOnly = true;
 if (rest is ["probe", .. var probe]) return await Probes.RunAsync(connection, options, probe.ToArray());
 using var provider = new MongoProvider(connection, options);
 return await Cli.RunAsync(provider, rest.ToArray());
