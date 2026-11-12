@@ -4,6 +4,7 @@ import hashlib
 import json
 from pathlib import Path
 import shutil
+import signal
 import subprocess
 import tempfile
 from types import SimpleNamespace
@@ -14,7 +15,8 @@ from case_records import retained, retained_json
 from effects_journeys import (CHECK_KIND, CHECK_TOOL, EXPECTED_CASES, HOST, MODULE, RESTART_REQUIREMENTS,
                              TOOLS, WIDGET, manifest_gaps, require_effects, require_performed, require_refusal,
                              require_resource_inventory, require_adapter_result, restart_manifest_gaps,
-                             require_called_refusal, require_normal_terminal, require_canary_absent, frames_from_raw, _policy)
+                             require_called_refusal, require_normal_terminal, require_canary_absent, frames_from_raw, _policy,
+                             require_nested_observations, _stop_browser_groups, require_browser_stopped)
 
 
 def check_fixture(passed=True):
@@ -291,6 +293,124 @@ class RefusalContinuationIntegrityTests(unittest.TestCase):
         value = {"toolCallId": "call", "error": {"code": "module.code.unsupported", "ownerUnavailable": True}}
         self.assertEqual(value, _normalized_result(value))
         with self.assertRaises(RuntimeError): require_normal_terminal(args[7] + [args[7][-1]])
+
+
+class EffectsShutdownTests(unittest.TestCase):
+    def setUp(self):
+        safe_group = patch("effects_journeys.os.getpgrp", return_value=42)
+        safe_group.start(); self.addCleanup(safe_group.stop)
+
+    def test_detached_browser_is_stopped_and_absence_proven_before_restoration(self):
+        with tempfile.TemporaryDirectory() as directory:
+            lease = Path(directory) / "lease.json"
+            lease.write_text(json.dumps({"token": "owned", "nodePid": 900, "browserPid": 901}))
+            browser = {"parent": 900, "group": 901, "started": "original-browser"}
+            # Node already exited and the detached browser was reparented.
+            processes = {901: dict(browser, parent=1), 902: {"parent": 901, "group": 901, "started": "renderer"}}
+            sent = []
+            def stop(group, sig):
+                sent.append((group, sig))
+                for pid in list(processes):
+                    if processes[pid]["group"] == group: processes.pop(pid)
+            process = SimpleNamespace(pid=900, poll=lambda: 0)
+            result = _stop_browser_groups(process, lease, "owned", browser, snapshot=lambda: copy.deepcopy(processes), send=stop)
+            self.assertEqual([(901, signal.SIGTERM)], sent)
+            self.assertTrue(result["provenAbsent"])
+            require_browser_stopped(SimpleNamespace(effects_browser_stopped=result["provenAbsent"]))
+
+    def test_surviving_descendant_blocks_restoration_after_term_and_kill(self):
+        with tempfile.TemporaryDirectory() as directory:
+            lease = Path(directory) / "lease.json"
+            lease.write_text(json.dumps({"token": "owned", "nodePid": 900, "browserPid": 901}))
+            browser = {"parent": 900, "group": 901, "started": "original-browser"}
+            sent = []
+            with self.assertRaises(RuntimeError):
+                _stop_browser_groups(SimpleNamespace(pid=900, poll=lambda: 0), lease, "owned", browser,
+                    snapshot=lambda: {901: browser}, send=lambda group, sig: sent.append((group, sig)),
+                    now=iter((0, 6, 7, 13)).__next__, sleep=lambda _: None)
+            self.assertEqual([(901, signal.SIGTERM), (901, signal.SIGKILL)], sent)
+            with self.assertRaises(RuntimeError): require_browser_stopped(SimpleNamespace(effects_browser_stopped=False))
+            with self.assertRaises(RuntimeError): require_browser_stopped(SimpleNamespace(effects_browser_stopped=True, effects_management_settled=False))
+
+    def test_missing_lease_stops_node_but_cannot_authorize_restoration(self):
+        with tempfile.TemporaryDirectory() as directory:
+            processes = {900: {"parent": 1, "group": 900, "started": "owned-node"}}
+            sent = []
+            def stop(group, sig): sent.append((group, sig)); processes.clear()
+            with self.assertRaises(RuntimeError):
+                _stop_browser_groups(SimpleNamespace(pid=900, poll=lambda: 0), Path(directory) / "missing.json", "owned", None,
+                                     snapshot=lambda: copy.deepcopy(processes), send=stop)
+            self.assertEqual([(900, signal.SIGTERM)], sent)
+
+    def test_reused_browser_pid_is_never_signalled_as_our_browser(self):
+        with tempfile.TemporaryDirectory() as directory:
+            lease = Path(directory) / "lease.json"
+            lease.write_text(json.dumps({"token": "owned", "nodePid": 900, "browserPid": 901}))
+            original = {"parent": 900, "group": 901, "started": "original-browser"}
+            sent = []
+            with self.assertRaises(RuntimeError):
+                _stop_browser_groups(SimpleNamespace(pid=900, poll=lambda: 0), lease, "owned", original,
+                    snapshot=lambda: {901: dict(original, started="reused-pid")}, send=lambda group, sig: sent.append((group, sig)))
+            self.assertEqual([(900, signal.SIGTERM)], sent)
+
+
+def nested_observe_fixture(provider):
+    native, trace = {}, []
+    own = [{"moduleId": MODULE, "origin": "authoritativeRead", "contentType": "acme.home.widget"},
+           {"moduleId": MODULE, "origin": "installedGuidance", "summary": "Acme owns personal widget semantics."}]
+    unrelated = [{"moduleId": "Elsa.Workflows", "origin": "authoritativeRead", "contentType": "workflows.list"},
+                 {"moduleId": "Elsa.Workflows", "origin": "installedGuidance", "summary": "Workflows owns workflow list semantics."}]
+    for index, name in enumerate(("nestedBefore", "unrelatedBefore", "nestedAfter", "unrelatedAfter")):
+        context = own if name == "nestedBefore" else [] if name == "nestedAfter" else unrelated
+        tools = [{"name": "acme_home_read_widget"}] if name == "nestedBefore" else [] if name == "nestedAfter" else [{"name": "workflow_read_graph"}]
+        command, session = "observe-" + str(index), "native-session-" + str(index)
+        native[name] = {"commandId": command, "sessionId": session, "frames": [
+            {"kind": "started", "payload": {"turnId": "turn-" + str(index)}},
+            {"kind": "contextAdmitted", "payload": {"attachments": copy.deepcopy(context)}}, {"kind": "completed"}]}
+        data = {"commandId": command, "tools": copy.deepcopy(tools)}
+        observation = {"commandId": command, "toolCount": len(tools)}
+        if provider == "copilot":
+            data.update(sessionId=session, prompt=json.dumps(context), systemMessage="Installed host prompt.")
+            observation["sessionId"] = session
+        else: data["messages"] = [{"role": "system", "contents": [{"kind": "text", "text": json.dumps(context)}]}]
+        trace.extend([{"kind": provider + ".request", "data": data}, {"kind": provider + ".observation", "data": observation}])
+    return native, trace
+
+
+class NestedRemovalEvidenceTests(unittest.TestCase):
+    def test_actual_observe_pairs_keep_unrelated_context_guidance_and_tools(self):
+        for provider in ("copilot", "anthropic"):
+            self.assertTrue(require_nested_observations(*nested_observe_fixture(provider), provider))
+
+    def test_stale_context_guidance_tools_missing_support_and_sdk_failures_are_rejected(self):
+        for provider in ("copilot", "anthropic"):
+            mutations = [
+                lambda n, t: n["nestedAfter"]["frames"][1]["payload"]["attachments"].append({"moduleId": MODULE}),
+                lambda n, t: t[4]["data"]["tools"].append({"name": "acme_home_read_widget"}),
+                lambda n, t: t[4]["data"].update(prompt="Acme owns personal widget semantics."),
+                lambda n, t: n["unrelatedAfter"]["frames"][1]["payload"].update(attachments=[]),
+                lambda n, t: t[6]["data"].update(tools=[]),
+                lambda n, t: n["nestedAfter"]["frames"][-1].update(kind="error"),
+                lambda n, t: n["nestedAfter"].update(sessionId=n["nestedBefore"]["sessionId"]),
+                lambda n, t: t.append({"kind": provider + ".call", "data": {"commandId": n["nestedAfter"]["commandId"]}}),
+            ]
+            if provider == "copilot": mutations.append(lambda n, t: t[5]["data"].update(sessionId="foreign"))
+            for index, mutate in enumerate(mutations):
+                with self.subTest(provider=provider, mutation=index):
+                    native, trace = nested_observe_fixture(provider); mutate(native, trace)
+                    with self.assertRaises(RuntimeError): require_nested_observations(native, trace, provider)
+
+
+class RawAuditCanaryTests(unittest.TestCase):
+    def test_actual_retained_http_body_is_decoded_before_private_canary_search(self):
+        canary = "ab" * 24; digest = hashlib.sha256(canary.encode()).hexdigest()
+        response = {"origin": "http://127.0.0.1:53001", "method": "GET", "path": "/_elsa/weaver/audit?take=100&sessionId=native",
+                    "status": 200, "rawBody": '{"data":[{"message":"' + "\\u0061\\u0062" * 24 + '"}]}'}
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "audit.json"; path.write_text(json.dumps(response))
+            with self.assertRaises(RuntimeError): require_canary_absent(json.loads(path.read_text()), digest)
+            response["rawBody"] = '{"data":[{"message":"Safe engine diagnostic."}]}'
+            require_canary_absent(response, digest)
 
 
 class PolicyContentRootTests(unittest.TestCase):

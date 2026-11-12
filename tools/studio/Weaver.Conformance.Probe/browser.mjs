@@ -73,7 +73,17 @@ function retain(name, value) {
 const result = { journey: config.journey, provider: config.provider, evidenceCategory: "deterministic-provider-protocol", liveProvider: false,
   status: "running", observations: {}, evidence: [], startedAt: new Date().toISOString(), noFabricatedResponses: true };
 process.on("uncaughtExceptionMonitor", retainFailureDiagnostic);
-const browser = await chromium.launch({ headless: true });
+const effectsProcess = config.journey === "module-effects";
+const lease = value => {
+  need(effectsProcess && path.isAbsolute(config.effectsProcessLease) && typeof config.effectsProcessToken === "string", "An owned effects browser process lease is required.");
+  const temporary = config.effectsProcessLease + ".tmp";
+  fs.writeFileSync(temporary, JSON.stringify({ token: config.effectsProcessToken, nodePid: process.pid, ...value }), { mode: 0o600 });
+  fs.renameSync(temporary, config.effectsProcessLease);
+};
+if (effectsProcess) lease({ phase: "launching", browserPid: null });
+const browserServer = effectsProcess ? await chromium.launchServer({ headless: true }) : null;
+if (browserServer) lease({ phase: "running", browserPid: browserServer.process().pid });
+const browser = browserServer ? await chromium.connect(browserServer.wsEndpoint()) : await chromium.launch({ headless: true });
 result.browserVersion = browser.version();
 const context = await browser.newContext({ storageState: config.storageState, viewport: { width: 1920, height: 1080 } });
 const page = await context.newPage();
@@ -2280,6 +2290,7 @@ async function moduleEffects() {
       const current = await hostRead("/modularity/features");
       const features = current.features.filter(row => row.enabled || row.id === selected.id)
         .map(row => ({ id: row.id, enabled: row.id === selected.id ? enabled : row.enabled, configuration: row.configuration }));
+      result.evidence.push(retain("effects-module-selection-attempt-" + enabled, { featureId: selected.id, enabled, revision: current.revision }));
       const response = await page.request.post(studio + "/modularity/features/apply", { headers: { Authorization: "Bearer " + token }, data: { revision: current.revision, features } });
       need(response.status() === 200, "Native Studio module selection failed.");
       const applied = await response.json();
@@ -2289,18 +2300,51 @@ async function moduleEffects() {
     await page.goto(studio + "/dashboard");
     await expect(page.getByTestId("acme-home-widget")).toBeVisible();
     const review = await capture("nested-before");
-    try {
+    const observe = async (name, route) => {
+      await page.goto(studio + route);
+      if (!await dock().isVisible()) await page.getByRole("button", { name: /^Weaver/ }).click();
+      const fresh = dock().getByRole("button", { name: "New conversation", exact: true });
+      if (await fresh.isVisible()) await fresh.click();
+      const selected = { commandId: crypto.randomUUID(), mode: "observe" };
+      const temporary = config.commandFile + "." + selected.commandId;
+      fs.writeFileSync(temporary, JSON.stringify(selected), { mode: 0o600 });
+      fs.renameSync(temporary, config.commandFile);
+      const commandReceipt = retain("effects-" + name + "-command", selected);
+      result.evidence.push(commandReceipt);
+      const message = responseFor("/messages");
+      await expect(dock().getByLabel("Ask Weaver", { exact: true })).toBeEnabled();
+      await dock().getByLabel("Ask Weaver", { exact: true }).fill("Describe the currently available Studio context without calling a tool.");
+      await dock().getByRole("button", { name: "Send message", exact: true }).click();
+      const sent = await accepted(message, "effects-" + name);
+      const sessionPath = new URL(sent.response.url()).pathname.replace(/\/messages$/, "");
+      await expect.poll(async () => (await streamCapture()).filter(stream => stream.url === backend + sessionPath + "/stream"
+        && stream.termination === "loadingFinished").length).toBe(1);
+      await expect(dock()).toHaveAttribute("aria-busy", "false");
+      const streams = (await streamCapture()).filter(stream => stream.url === backend + sessionPath + "/stream");
+      const stream = retain("effects-" + name + "-stream", streams);
+      result.evidence.push(stream);
+      return { commandId: selected.commandId, route, sessionPath, stream, command: commandReceipt,
+        message: ref(path.join(config.output, "effects-" + name + ".json")) };
+    };
+    const nestedBefore = await observe("nested-before-observe", "/dashboard");
+    const unrelatedBefore = await observe("unrelated-before-observe", "/workflows/definitions");
+    {
       await select(false);
-      await page.reload();
+      await page.goto(studio + "/dashboard");
+      await expect(page.getByTestId("acme-home-widget")).toHaveCount(0);
+      const nestedAfter = await observe("nested-after-observe", "/dashboard");
+      const unrelatedAfter = await observe("unrelated-after-observe", "/workflows/definitions");
+      await page.goto(studio + "/dashboard");
       await expect(page.getByTestId("acme-home-widget")).toHaveCount(0);
       const registryAfter = await hostRead("/_elsa/studio/module-registry", "registryAfter");
       const after = await read("after", witness.ownerEndpoint);
       expect(after).toEqual(before);
       await expect(page.getByRole("link", { name: "Workflows", exact: true }).first()).toBeVisible();
-      result.effects = { before, after, registryBefore, registryAfter, removedNestedWidget: true, unrelatedSupportRetained: true };
+      result.effects = { before, after, registryBefore, registryAfter, removedNestedWidget: true,
+        nestedObservations: { nestedBefore, unrelatedBefore, nestedAfter, unrelatedAfter } };
       result.effectsCaptures = { review, result: await capture("nested-removed"),
         accessibility: retain("effects-nested-accessibility", { route: new URL(page.url()).pathname, snapshot: await page.locator("body").ariaSnapshot() }) };
-    } finally { await select(true); }
+    } // Python restores this module only after proving the owned browser groups absent.
     return;
   }
   const isCheck = spec.tool === "acme_home_check_widget";
@@ -2425,9 +2469,8 @@ try {
   else if (config.journey === "workflow-version-history") await workflowVersionHistory();
   else if (config.journey === "workflow-executable-inspector") await workflowExecutableInspector();
   else if (config.journey === "workflow-run") await workflowRun();
-  else if (config.journey === "module-effects") await moduleEffects();
-  else if (config.journey === "autonomy-size" || lifecycle) {
-    const bounded = config.journey === "autonomy-size" ? autonomySize : config.journey === "resource" ? resource : workflow;
+  else if (config.journey === "module-effects" || config.journey === "autonomy-size" || lifecycle) {
+    const bounded = config.journey === "module-effects" ? moduleEffects : config.journey === "autonomy-size" ? autonomySize : config.journey === "resource" ? resource : workflow;
     let deadline;
     try {
       await Promise.race([bounded(), new Promise((_resolve, reject) => {
@@ -2435,8 +2478,9 @@ try {
           // Stop pending UI actions in this owned context; never let an expired
           // journey submit a late intent while failure evidence is captured.
           void context.close().catch(error => { result.deadlineCleanupError = redact({ type: error.name, message: error.message }); });
-          reject(new Error("The bounded autonomy browser journey expired after 180 seconds; no retry."));
-        }, 180000);
+          reject(new Error(config.journey === "module-effects" ? "The bounded effects browser journey expired after 120 seconds; no retry."
+            : "The bounded autonomy browser journey expired after 180 seconds; no retry."));
+        }, config.journey === "module-effects" ? 120000 : 180000);
       })]);
     } finally { clearTimeout(deadline); }
   }
@@ -2471,6 +2515,10 @@ try {
   retain("observation", result);
   await context.close();
   await browser.close();
+  if (browserServer) {
+    await browserServer.close();
+    lease({ phase: "closed", browserPid: browserServer.process().pid });
+  }
 }
 console.log(JSON.stringify({ status: result.status, journey: result.journey, expectedFailureObserved: !!result.expectedFailureObserved,
   observations: result.observations, failure: result.failure, evidence: path.join(config.output, "observation.json") }));

@@ -15,6 +15,7 @@ import secrets
 import re
 import shutil
 import signal
+import subprocess
 import threading
 import time
 import uuid
@@ -507,6 +508,10 @@ def require_canary_absent(value, digest):
     if isinstance(value, dict):
         for key, item in value.items():
             require_canary_absent(key, digest); require_canary_absent(item, digest)
+            # HTTP receipts retain their actual body as a JSON string. Searching
+            # the enclosing receipt alone misses escaped diagnostic text.
+            if key == "rawBody" and isinstance(item, str) and item.lstrip().startswith(("{", "[")):
+                require_canary_absent(strict_json(item), digest)
     elif isinstance(value, list):
         for item in value: require_canary_absent(item, digest)
     elif isinstance(value, str):
@@ -708,7 +713,74 @@ def _native_case(runtime, name, spec, fault_file):
             "refs": refs, "evidence": evidence, "canarySearch": {"files": len(evidence), "found": 0, "sha256": hashlib.sha256(canary.encode()).hexdigest()}}
 
 
+def require_nested_observations(observations, trace, provider):
+    """Compare real admissions and adapter requests, never registry/summary flags."""
+    names = ("nestedBefore", "unrelatedBefore", "nestedAfter", "unrelatedAfter")
+    _need(set(observations) == set(names), "Missing nested/unrelated native observe turn")
+    requests = {}
+    sessions, commands, positions = set(), set(), []
+    for name in names:
+        observed = observations[name]
+        command, session = observed["commandId"], observed["sessionId"]
+        _need(command not in commands and session not in sessions, "Nested observations reused a command or historical conversation")
+        commands.add(command); sessions.add(session)
+        require_normal_terminal(observed["frames"])
+        _need(not any(frame.get("kind") in ("toolCallStarted", "toolCallCompleted", "proposalCreated", "contributedResult")
+                      for frame in observed["frames"]), "Observe turn called a tool or acquired an effect")
+        admitted = [frame.get("payload", {}).get("attachments") for frame in observed["frames"] if frame.get("kind") == "contextAdmitted"]
+        _need(len(admitted) == 1 and isinstance(admitted[0], list), "Observe turn has no unique native context admission")
+        rows = [(index, row) for index, row in enumerate(trace) if row.get("data", {}).get("commandId") == command
+                and row.get("kind", "").startswith(provider + ".")]
+        native_requests = [(index, row["data"]) for index, row in rows if row.get("kind") == provider + ".request"]
+        _need([row.get("kind") for _, row in rows] == [provider + ".request", provider + ".observation"],
+              "Observe turn lacks its exact request/observation pair or invoked a tool")
+        position, request = native_requests[0]; positions.append(position)
+        if provider == "copilot": _need(request.get("sessionId") == session, "Observe SDK request belongs to another native session")
+        _need(isinstance(request.get("tools"), list), "Observe request omitted actual tool discovery")
+        observation = rows[-1][1]["data"]
+        _need(observation.get("toolCount") == len(request["tools"])
+              and (provider != "copilot" or observation.get("sessionId") == session), "Observe event differs from its actual request/session")
+        requests[name] = (admitted[0], request)
+    _need(positions == sorted(positions), "Nested observations are not in unload order")
+    before_context, before_request = requests["nestedBefore"]
+    after_context, after_request = requests["nestedAfter"]
+    owned_guidance = [item["summary"] for item in before_context if item.get("moduleId") == MODULE
+                      and item.get("origin") == "installedGuidance" and item.get("summary")]
+    _need(any(item.get("moduleId") == MODULE and item.get("origin") != "installedGuidance" for item in before_context)
+          and owned_guidance and any(tool.get("name", "").startswith("acme_home_") for tool in before_request["tools"]),
+          "Nested positive control lacked actual context, installed guidance or tools")
+    def strings(value):
+        if isinstance(value, str): return [value]
+        if isinstance(value, list): return [text for item in value for text in strings(item)]
+        if isinstance(value, dict): return [text for item in value.values() for text in strings(item)]
+        return []
+    _need(all(any(summary in text for text in strings(before_request)) for summary in owned_guidance), "Installed nested guidance never reached the provider")
+    _need(not any(item.get("moduleId") == MODULE for item in after_context)
+          and not any(tool.get("name", "").startswith("acme_home_") for tool in after_request["tools"])
+          and not any(MODULE in text or any(summary in text for summary in owned_guidance) for text in strings(after_request)),
+          "Removed module context, guidance or tools reached the provider")
+    unrelated_context, unrelated_request = requests["unrelatedBefore"]
+    retained_context, retained_request = requests["unrelatedAfter"]
+    unrelated = {item["moduleId"] for item in unrelated_context if item.get("moduleId") not in (None, MODULE)
+                 and item.get("origin") != "installedGuidance"}
+    guidance = [item for item in unrelated_context if item.get("moduleId") in unrelated and item.get("origin") == "installedGuidance"]
+    tools = [tool for tool in unrelated_request["tools"] if tool.get("name", "").startswith("workflow_")]
+    _need(unrelated and guidance and tools and all(any(item.get("moduleId") == module for item in retained_context) for module in unrelated)
+          and all(item in retained_context for item in guidance)
+          and all(tool in retained_request["tools"] for tool in tools)
+          and all(item.get("summary") and any(item["summary"] in text for text in strings(unrelated_request))
+                  and any(item["summary"] in text for text in strings(retained_request)) for item in guidance),
+          "Unrelated resource context, installed guidance and actual tools did not survive module removal")
+    return True
+
+
 def require_browser_case(value, root, spec):
+    shutdown = _owned(root, value["browserShutdown"])
+    _need(shutdown.get("provenAbsent") is True and shutdown.get("remaining") == []
+          and type(shutdown.get("nodePid")) is int and type(shutdown.get("browserPid")) is int
+          and shutdown["nodePid"] > 1 and shutdown["browserPid"] > 1
+          and isinstance(shutdown.get("observations"), list) and shutdown["observations"]
+          and shutdown["observations"][-1] == {}, "Browser descendant shutdown has no retained absence observation")
     browser = _owned(root, value["browser"])
     _need(browser.get("status") == "passed" and not browser.get("failure") and not browser.get("pageErrors")
           and browser.get("journey") == "module-effects" and browser.get("provider") == value["provider"], "browser journey incomplete")
@@ -744,7 +816,7 @@ def require_browser_case(value, root, spec):
                 require_canary_absent(strict_json(raw), digest)
         require_canary_absent(trace, digest)
     if spec["condition"] == "nested-removal":
-        _need(browser["effects"].get("removedNestedWidget") is True and browser["effects"].get("unrelatedSupportRetained") is True, "nested module removal not witnessed")
+        _need(browser["effects"].get("removedNestedWidget") is True, "nested module removal not witnessed")
         native = browser["effects"]
         _need(native["before"]["visible"] is True and native["after"] == native["before"], "nested removal changed the owner instead of unloading its presentation")
         _need(native["registryBefore"].get("complete") is True and native["registryAfter"].get("complete") is True,
@@ -758,6 +830,26 @@ def require_browser_case(value, root, spec):
             registry = _owned(root, browser["effectsRefs"][label])
             _need(registry.get("endpoint") == "/_elsa/studio/module-registry" and registry.get("status") == 200
                   and registry.get("value") == native[label], "nested registry projection is not its owning GET")
+        observations = {}
+        for name, item in native.get("nestedObservations", {}).items():
+            _need(_owned(root, item["command"]) == {"commandId": item["commandId"], "mode": "observe"}, "Nested turn changed the exact observe command")
+            message = _owned(root, item["message"])
+            path = item["sessionPath"]
+            _need(re.fullmatch(r"/_elsa/weaver/sessions/[^/]+", path) and message.get("url") == value["backendOrigin"] + path + "/messages"
+                  and message.get("status") == 200 and message.get("response", {}).get("error") is None
+                  and message.get("response", {}).get("data", {}).get("message", {}).get("sessionId") == path.split("/")[-1],
+                  "Nested observe message lacks its actual native session")
+            streams = _owned(root, item["stream"])
+            _need(isinstance(streams, list) and len(streams) == 1, "Nested observe stream is missing or duplicated")
+            stream = streams[0]
+            _need(stream.get("url") == value["backendOrigin"] + path + "/stream" and stream.get("status") == 200
+                  and stream.get("termination") == "loadingFinished" and stream.get("captureError") is None
+                  and stream.get("captureMethod") in ("streamResourceContent", "getResponseBody")
+                  and stream.get("contentType", "").split(";", 1)[0].strip() == "text/event-stream"
+                  and not stream.get("sizeExceeded") and not stream.get("captureValidationError")
+                  and stream.get("trailingIncompleteUtf8Bytes") == 0 and stream.get("textTruncation") == "none", "Nested observe stream is incomplete")
+            observations[name] = {"commandId": item["commandId"], "sessionId": path.split("/")[-1], "frames": frames_from_raw(stream.get("rawBody"))}
+        require_nested_observations(observations, trace["records"], value["provider"])
     elif spec["condition"] == "browser-typed" and spec["channel"] != "receipt":
         data = browser["effects"]
         if spec["channel"] != "context": _called_once(trace["records"], value["provider"], data["commandId"], spec["tool"])
@@ -836,6 +928,115 @@ def require_browser_case(value, root, spec):
     return value
 
 
+def _process_snapshot():
+    observed = subprocess.run(["ps", "-axo", "pid=,ppid=,pgid=,lstart="], capture_output=True, text=True, timeout=2, check=True)
+    return {int(parts[0]): {"parent": int(parts[1]), "group": int(parts[2]), "started": parts[3]}
+            for line in observed.stdout.splitlines() if len(parts := line.split(None, 3)) == 4}
+
+
+def _descends_from(pid, ancestor, snapshot):
+    visited = set()
+    while pid in snapshot and pid not in visited:
+        if pid == ancestor: return True
+        visited.add(pid); pid = snapshot[pid]["parent"]
+    return False
+
+
+def require_browser_stopped(runtime):
+    _need(getattr(runtime, "effects_browser_stopped", True) is True,
+          "Owned browser descendants are not proven stopped; do not restore privileges, faults or modules")
+    _need(getattr(runtime, "effects_management_settled", True) is True,
+          "The Studio module-selection request has no acknowledged outcome; restoration remains blocked")
+
+
+def _stop_browser_groups(process, lease, token, observed_browser, *, snapshot=_process_snapshot, send=os.killpg,
+                         now=time.monotonic, sleep=time.sleep):
+    """Stop only this launch's verified groups; absence is required even after a successful driver exit."""
+    try: receipt = strict_json(lease.read_text()) if lease.is_file() else {}
+    except (ValueError, OSError): receipt = {}
+    valid = receipt.get("token") == token and receipt.get("nodePid") == process.pid \
+        and type(receipt.get("browserPid")) is int and receipt["browserPid"] > 1
+    browser_pid = receipt["browserPid"] if valid else None
+    current = snapshot()
+    browser = current.get(browser_pid)
+    if browser is not None:
+        if observed_browser is None or any(observed_browser[key] != browser[key] for key in ("started", "group")):
+            # The Node session is ours even when a browser lease cannot be
+            # trusted. Stop it, but never signal an unproven browser group.
+            try: send(process.pid, signal.SIGTERM)
+            except ProcessLookupError: pass
+            raise RuntimeError("Browser process ownership changed or was never established; restoration blocked")
+    # Playwright launches its browser in a detached process group. Establish that
+    # group while Node owns the live process, never infer ownership after reparenting.
+    groups = {process.pid}
+    if observed_browser: groups.add(observed_browser["group"])
+    elif valid: groups.add(browser_pid)
+    _need(all(group > 1 and group != os.getpgrp() for group in groups), "Unsafe browser process group")
+    observations, signals = [], []
+    for sig, seconds in ((signal.SIGTERM, 5), (signal.SIGKILL, 5)):
+        for group in groups:
+            if any(row["group"] == group for row in current.values()):
+                try: send(group, sig)
+                except ProcessLookupError: pass
+                signals.append({"group": group, "signal": int(sig)})
+        deadline = now() + seconds
+        while True:
+            process.poll()  # Reap Node so a zombie cannot masquerade as a live descendant.
+            current = snapshot()
+            remaining = [pid for pid, row in current.items() if row["group"] in groups]
+            observations.append({str(pid): current[pid] for pid in remaining})
+            if not remaining:
+                _need(valid, "No exact owned browser process lease; restoration remains blocked")
+                return {"nodePid": process.pid, "browserPid": browser_pid, "groups": sorted(groups), "remaining": [],
+                        "signals": signals, "observations": observations, "provenAbsent": True}
+            if now() >= deadline: break
+            sleep(0.05)
+    raise RuntimeError("Owned browser descendants remain after bounded shutdown; restoration blocked")
+
+
+def _run_effects_browser(runtime, name, command, config, output):
+    run = runtime.run
+    run.report["stage"] = name; run.save()
+    log, lease = run.root / (name + ".log"), output / "browser-process-private.json"
+    token = secrets.token_hex(24)
+    config.update(effectsProcessLease=str(lease), effectsProcessToken=token)
+    private_json(output / "config-private.json", config)
+    runtime.effects_browser_stopped = False
+    observed_browser = None
+    with log.open("w") as stream:
+        process = subprocess.Popen(command, cwd=TOOL, stdin=subprocess.DEVNULL, stdout=stream, stderr=subprocess.STDOUT,
+                                   env={key: value for key, value in os.environ.items() if key in RUNTIME_ENVIRONMENT}, start_new_session=True)
+        try:
+            deadline = time.monotonic() + 150
+            while process.poll() is None:
+                if lease.is_file():
+                    receipt = strict_json(lease.read_text())
+                    _need(receipt.get("token") == token and receipt.get("nodePid") == process.pid, "Foreign browser process lease")
+                    processes = _process_snapshot()
+                    browser_pid = receipt.get("browserPid")
+                    if browser_pid in processes and _descends_from(browser_pid, process.pid, processes):
+                        observed_browser = processes[browser_pid]
+                        _need(observed_browser["group"] in (process.pid, browser_pid), "Browser launch did not establish an isolated group")
+                if time.monotonic() >= deadline: raise TimeoutError("Effects browser deadline; no action replay")
+                time.sleep(0.05)
+        finally:
+            # An outer SIGALRM may interrupt any await. Suppress it only while
+            # bounded shutdown proves that no stale UI action can run afterwards.
+            remaining, interval = signal.getitimer(signal.ITIMER_REAL)
+            signal.setitimer(signal.ITIMER_REAL, 0)
+            try:
+                stopped = _stop_browser_groups(process, lease, token, observed_browser)
+                stopped_receipt = runtime.save(output, "browser-process-stopped", stopped)
+                runtime.effects_browser_stopped = True
+            finally:
+                run.report["stages"].append({"name": name, "exitCode": process.poll(), "log": str(log),
+                                             "descendantsStopped": runtime.effects_browser_stopped})
+                run.save()
+                if remaining: signal.setitimer(signal.ITIMER_REAL, max(0.001, remaining), interval)
+    _need(process.returncode == 0, "Effects browser failed; private log: " + str(log))
+    return stopped_receipt
+
+
 def _browser_case(runtime, name, spec, fault_file):
     if spec["condition"] == "nested-removal":
         state, _, _ = runtime.state("effects-nested-precondition")
@@ -856,22 +1057,37 @@ def _browser_case(runtime, name, spec, fault_file):
         config["effectsCanary"] = canary  # Private input only; never included in exported browser inputs/receipts.
         config.update(effectsFaultFile=str(fault_file), effectsGateFile=str(runtime.gate_file), traceFile=str(runtime.run.profiles["backend"]["traceFiles"][runtime.provider]))
         config["effectsTraceOffset"] = Path(config["traceFile"]).stat().st_size if Path(config["traceFile"]).is_file() else 0
-    private_json(output / "config-private.json", config)
+    studio_original = None
+    if spec["condition"] == "nested-removal":
+        catalog, _ = runtime.native.json(runtime.studio, "effects-original-studio-catalog", "/modularity/features")
+        studio_original = next(row for row in catalog["features"] if row["id"] == runtime.witness["studioFeature"])
     transport = runtime.transport("effects-browser-trace")
     offset = transport.trace_file.stat().st_size if transport.trace_file.exists() else 0
     node = shutil.which("node")
     _need(node, "actual browser driver needs Node")
     try:
         stage_name = "effects-" + name.replace("/", "-").replace(":", "-")
-        runtime.run.run(stage_name, [node, str(TOOL / "browser.mjs"), str(output / "config-private.json")], TOOL,
-                        env={key: value for key, value in os.environ.items() if key in RUNTIME_ENVIRONMENT})
-    finally: fault_file.unlink(missing_ok=True)
+        shutdown = _run_effects_browser(runtime, stage_name, [node, str(TOOL / "browser.mjs"), str(output / "config-private.json")], config, output)
+    finally:
+        require_browser_stopped(runtime)
+        if studio_original is not None:
+            attempted = target / "effects-module-selection-attempt-false.json"
+            acknowledgement = target / "effects-module-selection-false.json"
+            if attempted.is_file() and not acknowledgement.is_file():
+                runtime.effects_management_settled = False
+            require_browser_stopped(runtime)
+            catalog, _ = runtime.native.json(runtime.studio, "effects-restore-studio-catalog", "/modularity/features")
+            current = next(row for row in catalog["features"] if row["id"] == studio_original["id"])
+            if (current["enabled"], current["configuration"]) != (studio_original["enabled"], studio_original["configuration"]):
+                runtime.apply_features("effects-restore-studio-owner", {studio_original["id"]:
+                                       (studio_original["enabled"], studio_original["configuration"])}, client=runtime.studio)
+        fault_file.unlink(missing_ok=True)
     observed = retained(target / "observation.json")
     trace = transport.protocol_trace(offset)
     _need(canary not in json.dumps(trace["records"]), "browser typed canary reached actual adapter payloads")
     result = {"id": name, "source": runtime.run.source, "provider": runtime.provider, "scenario": spec, "status": "passed", "bindings": source_bindings(),
               "backendOrigin": runtime.backend_origin, "canarySha256": hashlib.sha256(canary.encode()).hexdigest(),
-              "evidenceCategory": EVIDENCE_CATEGORY, "liveProvider": False, "browser": observed, "trace": trace["receipt"]}
+              "evidenceCategory": EVIDENCE_CATEGORY, "liveProvider": False, "browser": observed, "browserShutdown": shutdown, "trace": trace["receipt"]}
     if spec["condition"] in ("browser", "browser-failed") or spec["condition"] == "browser-typed" and spec["channel"] == "receipt":
         correlation = correlate_browser_protocol(transport, target, runtime.provider, offset=offset)
         result["protocolCorrelation"] = correlation["receipt"]
@@ -922,6 +1138,7 @@ def qualify_effects(runtime):
         raise
     finally:
         try:
+            require_browser_stopped(runtime)
             fault.unlink(missing_ok=True)
             _policy(runtime, [True] * 3)
             runtime.select_provider(original_provider)
