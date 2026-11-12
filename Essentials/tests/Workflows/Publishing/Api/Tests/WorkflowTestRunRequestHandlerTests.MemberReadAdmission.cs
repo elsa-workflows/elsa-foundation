@@ -6,11 +6,10 @@ using Xunit;
 namespace Elsa.Workflows.Publishing.Api.Tests;
 
 /// <summary>
-/// Characterises, on main before #4078, that a workflow test run, of a version or of an unsaved draft snapshot,
-/// refuses a reserved member-read kind and a member path on a whole-value kind before it saves an executable or
-/// dispatches. The refusal comes from the shared analyzer, but the rejection reason carries only the exception's
-/// generic text: the finding code and input path are not in the test-run view. Slice C of #4078 flips the
-/// <c>ActivityResultMember</c> row.
+/// A workflow test run, of a version or of an unsaved draft snapshot, with member reads off (the default), refuses
+/// every member-read kind, a result member read included, and a member path on a whole-value kind before it saves an
+/// executable or dispatches. The rejection reason carries only the exception's generic text: the finding code and
+/// input path are not in the test-run view.
 /// </summary>
 public sealed partial class WorkflowTestRunRequestHandlerTests
 {

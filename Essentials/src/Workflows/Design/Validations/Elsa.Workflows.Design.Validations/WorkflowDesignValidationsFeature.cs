@@ -45,11 +45,19 @@ public class WorkflowDesignValidationsFeature : IShellFeature
     [ManifestSetting(DisplayName = "Maximum recursion depth", Description = "Maximum activity tree depth inspected by workflow draft validation.", Category = "Validation", DefaultValue = "100")]
     public int MaxRecursionDepth { get; set; } = 100;
 
+    /// <summary>
+    /// Whether bindings may read one member of an activity result. Bound to
+    /// <see cref="WorkflowDesignValidatorOptions.MemberReads"/>. Default: off.
+    /// </summary>
+    [ManifestSetting(DisplayName = "Member reads", Description = "Lets a binding read one member of an activity result. Turn on only when every runtime sharing this host's stores can run member reads.", Category = "Validation", DefaultValue = "false")]
+    public bool MemberReads { get; set; }
+
     public void ConfigureServices(IServiceCollection services)
     {
         services.Configure<WorkflowDesignValidatorOptions>(options =>
         {
             options.MaxRecursionDepth = MaxRecursionDepth;
+            options.MemberReads = MemberReads;
         });
 
         services.AddEventHandler<DraftValidating, ExecuteValidations>();

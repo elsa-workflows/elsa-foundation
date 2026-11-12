@@ -106,8 +106,9 @@ public sealed class RuntimeCheckpointCommitter
         // are synchronous and happen after their source values are already computed.
         using var activity = _tracer.StartCheckpointCommit(commit);
 
-        // Carry the ambient ownership identity into the provider-facing envelope. Durable stores decide replay first,
-        // then validate this fence inside the same atomic decision as state, outbox, and the commit marker.
+        // Carry the ambient ownership identity into the provider-facing envelope. A durable store answers a replay of
+        // a saved commit whatever this fence says, and validates the fence of any other commit inside the same atomic
+        // decision as state, outbox, and the commit marker.
         commit = AttachExpectedFence(commit);
 
         if (commit.ModelState is not null && !_checkpointCommitStore.SupportsModelCheckpoint)

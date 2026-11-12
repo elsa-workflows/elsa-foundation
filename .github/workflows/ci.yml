@@ -6,12 +6,15 @@ name: CI
 # A merge-queue entry (merge_group) runs both tiers on the exact merge result and reports all three
 # required checks. Focused manual runs select a suite below.
 # Path filters live in tools/ci/workflow-paths.json and are applied by plan-scope.
+# Pull requests to an initiative branch (docs/contributing/initiatives.md) run exactly what a pull request to main runs,
+# diffed against the initiative branch: the same tier selection and the same documentation-only fast path.
 
 on:
   pull_request:
     types: [opened, reopened, synchronize, ready_for_review]
     branches:
       - main
+      - 'initiative/**'
   push:
     branches:
       - main
@@ -109,11 +112,12 @@ jobs:
         # Pull requests and merge-queue entries only; every other event is a full run. The classifier exits 0 whatever
         # it finds, and a diff it cannot read classifies as a full run.
         #
-        # BASE_SHA is the first parent of the merge commit GitHub tests: today's main. The diff from it is exactly what
-        # the pull request would change. pull_request.base.sha is the base from when the PR was opened or last
-        # retargeted, so on an older PR it also counted everything merged into main since, and a documentation-only PR
-        # got a full run (#2683: one docs file, classified by an .editorconfig change on main). A merge-queue entry's
-        # base is merge_group.base_sha, the commit the entry was built on; its head, GITHUB_SHA, is the merge result.
+        # BASE_SHA is the first parent of the merge commit GitHub tests: the base branch today (main or initiative/*).
+        # The diff from it is exactly what the pull request would change. pull_request.base.sha is the base from when the
+        # PR was opened or last retargeted, so on an older PR it also counted everything merged into main since, and a
+        # documentation-only PR got a full run (#2683: one docs file, classified by an .editorconfig change on main). A
+        # merge-queue entry's base is merge_group.base_sha, the commit the entry was built on; its head, GITHUB_SHA, is
+        # the merge result.
         # The same base serves the quarantine guard and the switch check below.
         env:
           BASE_SHA: ${{ github.event_name == 'pull_request' && format('{0}^1', github.sha) || github.event_name == 'merge_group' && github.event.merge_group.base_sha || '' }}
@@ -934,9 +938,9 @@ jobs:
         with:
           fetch-depth: 0
 
-      # BASE_SHA is the first parent of the merge commit GitHub tests, today's main, so both diffs below see only what
-      # the pull request changes; pull_request.base.sha can be days old on an open PR (see ci.yml). On a merge-queue
-      # entry it is merge_group.base_sha, the commit the entry was built on.
+      # BASE_SHA is the first parent of the merge commit GitHub tests, the base branch today (main or initiative/*), so
+      # both diffs below see only what the pull request changes; pull_request.base.sha can be days old on an open PR
+      # (see ci.yml). On a merge-queue entry it is merge_group.base_sha, the commit the entry was built on.
       - name: Classify the change scope
         id: scope
         env:

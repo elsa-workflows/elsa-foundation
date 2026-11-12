@@ -88,6 +88,35 @@ public sealed class MemberReadMaterializationTests
             Assert.Contains("is looked up in a string, which has no members", exception.Message, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// A member segment matches the stored name exactly. A variable seeded from a CLR value at start is stored with
+    /// its CLR property names, so it is read by those names; the camelCase name reads the member as absent.
+    /// </summary>
+    [Theory]
+    [InlineData("CustomerId", null)]
+    [InlineData("customerId", RuntimeReadSelectionException.AbsentMember)]
+    public async Task A_member_of_a_clr_seeded_variable_is_read_by_its_stored_name(string segment, string? code)
+    {
+        var seeded = WorkflowExecutionStartCommandPayload.ToJsonValues(new Dictionary<string, object?> { ["customer"] = new SeededCustomer("c-1") })["customer"];
+        var context = new RuntimeInputBindingResolutionContext("workflow", "invocation-1",
+            variableEnvelopes: new Dictionary<RuntimeVariableValueAddress, ValueEnvelope>
+            {
+                [new("workflow", "customer")] = ValueEnvelope.Inline(Customer, seeded, ValueProtectionPolicy.InstanceInline)
+            });
+
+        if (code is null)
+        {
+            var snapshot = await MaterializeAsync(Member("variable", [segment]), context, Store());
+            Assert.Equal("c-1", snapshot.Values["message"].InlineValue!.Value.GetString());
+            return;
+        }
+
+        var exception = await Assert.ThrowsAsync<RuntimeReadSelectionException>(() => MaterializeAsync(Member("variable", [segment]), context, Store()).AsTask());
+        Assert.Equal(code, exception.Code);
+    }
+
+    public sealed record SeededCustomer(string CustomerId);
+
     [Fact]
     public async Task A_member_whose_json_does_not_fit_the_input_type_is_refused_even_under_an_identity_plan()
     {
