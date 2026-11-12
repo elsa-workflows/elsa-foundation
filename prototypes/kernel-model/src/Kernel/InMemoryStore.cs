@@ -1,0 +1,185 @@
+namespace Kernel;
+
+/// <summary>
+/// The store in memory, with the semantics the SQL is meant to have: every operation is atomic, the conditional
+/// updates are honoured, keys are create-only. It also keeps <see cref="Ghost"/>: things a correct kernel never does,
+/// seen from the one place that sees every write.
+/// </summary>
+public sealed class InMemoryStore(int partitions, Func<long> clock, Flaw flaws = Flaw.None) : IKernelStore
+{
+    public sealed class PartitionRow
+    {
+        public string? Owner;
+        public long Epoch, LeaseUntil, Position;
+    }
+
+    public sealed class MessageRow(Message message, long seq, long seen)
+    {
+        public Message Message = message;
+        public long Seq = seq, Seen = seen;
+        public int Attempts;
+        public bool Done;
+    }
+
+    private readonly Lock _gate = new();
+    private long _seq;
+
+    public PartitionRow[] Partitions { get; } = Enumerable.Range(0, partitions).Select(_ => new PartitionRow()).ToArray();
+    public Dictionary<string, InstanceRow> Instances { get; } = new(StringComparer.Ordinal);
+    public Dictionary<string, MessageRow> Messages { get; } = new(StringComparer.Ordinal);
+    public HashSet<SubscriptionRow> Subscriptions { get; } = [];
+    public Dictionary<(string Key, string Id), EventRow> EventRows { get; } = [];
+    public Dictionary<(int Partition, long Position), JournalRow> Journal { get; } = [];
+    public List<string> Ghost { get; } = [];
+
+    /// <summary>A row the database refuses, every time: a value too long.</summary>
+    public Func<InstanceRow, bool>? Refuses { get; set; }
+
+    private bool Has(Flaw flaw) => (flaws & flaw) != 0;
+
+    public ValueTask<Lease?> TakeAsync(int partition, string node, TimeSpan lease, CancellationToken cancellationToken = default)
+    {
+        lock (_gate)
+        {
+            var (p, now) = (Partitions[partition], clock());
+            if (p.Owner is not null && p.Owner != node && p.LeaseUntil >= now) return new((Lease?)null);
+            (p.Owner, p.Epoch, p.LeaseUntil) = (node, p.Epoch + 1, now + (long)lease.TotalMilliseconds);
+            return new(new Lease(p.Epoch, p.Position, now));
+        }
+    }
+
+    public ValueTask<Committed> CommitAsync(CommitBatch batch, CancellationToken cancellationToken = default)
+    {
+        lock (_gate)
+        {
+            var (p, now) = (Partitions[batch.Partition], clock());
+            bool epoch = p.Epoch == batch.Epoch, position = p.Position == batch.Position;
+            var fenced = (epoch || Has(Flaw.FenceWithoutEpoch)) && (position || Has(Flaw.FenceWithoutPosition));
+            if (!fenced && !Has(Flaw.CommitDespiteFence)) return new(new Committed(false, now, []));
+            if (!epoch) Ghost.Add($"I1 a commit prepared under epoch {batch.Epoch} landed in partition {batch.Partition} at epoch {p.Epoch}");
+            else if (!position) Ghost.Add($"I1 a commit prepared at position {batch.Position} landed in partition {batch.Partition} at position {p.Position}");
+
+            if (fenced)
+            {
+                // Everything is checked before anything is written: a statement that fails aborts the transaction.
+                var at = batch.Position;
+                foreach (var step in batch.Steps)
+                {
+                    if (step.Row is { } row)
+                    {
+                        if (Refuses?.Invoke(row) == true) throw new StoreException(Failure.Definite, $"the row of {row.Id} was refused");
+                        var revision = Instances.GetValueOrDefault(row.Id)?.Revision;
+                        if (revision != step.Expected) Diverged($"instance {row.Id} is at revision {revision?.ToString() ?? "none"}, the commit expected {step.Expected?.ToString() ?? "none"}");
+                    }
+                    foreach (var id in step.Consumed)
+                        if (!Has(Flaw.DeleteWithoutCount) && Messages.GetValueOrDefault(id) is not { Done: false }) Diverged($"consumed message {id} is not there");
+                    foreach (var message in step.Sent)
+                        if (Messages.ContainsKey(message.Id)) Diverged($"sent message {message.Id} exists already");
+                    if (step.Journal is not null && Journal.ContainsKey((batch.Partition, ++at))) Diverged($"journal position {at} is written already");
+                }
+                (p.Position, p.LeaseUntil) = (batch.Position + batch.Positions, now + (long)batch.Lease.TotalMilliseconds);
+            }
+
+            var (next, seqs) = (batch.Position, new List<long>());
+            foreach (var step in batch.Steps)
+            {
+                if (step.Row is not null) Instances[step.Row.Id] = step.Row;
+                foreach (var id in step.Consumed)
+                    if (Messages.GetValueOrDefault(id) is { } consumed)
+                    {
+                        // An outside command stays as a marker until its window has passed, so a late retry meets a duplicate key.
+                        if (consumed.Message.KeepUntil is not null && !Has(Flaw.DeleteOutsideCommands)) consumed.Done = true;
+                        else Messages.Remove(id);
+                    }
+                foreach (var message in step.Sent)
+                {
+                    // Messages the owner hands over in memory to its own partition are written as seen already.
+                    Messages[message.Id] = new MessageRow(message, ++_seq, batch.HandOver && message.Target.Partition == batch.Partition ? batch.Epoch : 0);
+                    seqs.Add(_seq);
+                }
+                foreach (var subscription in step.Subscribed) Subscriptions.Add(subscription);
+                foreach (var subscription in step.Unsubscribed) Subscriptions.Remove(subscription);
+                if (step.Journal is not null) Journal[(batch.Partition, ++next)] = new JournalRow(batch.Partition, next, step.Instance, step.Row?.Revision ?? 0, step.Journal);
+            }
+            foreach (var id in batch.Seen)
+                if (Messages.GetValueOrDefault(id) is { } seen) seen.Seen = batch.Epoch;
+            foreach (var id in batch.Bumped)
+                if (Messages.GetValueOrDefault(id) is { } bumped) bumped.Attempts++;
+            return new(new Committed(fenced, now, seqs));
+
+            // A count that does not match: memory and rows have parted. At the current epoch and position that is a kernel bug.
+            void Diverged(string what)
+            {
+                if (epoch && position) Ghost.Add("I9 " + what);
+                throw new StoreException(Failure.Unknown, what);
+            }
+        }
+    }
+
+    public ValueTask<Polled> PollAsync(int partition, long epoch, TimeSpan horizon, int limit, CancellationToken cancellationToken = default)
+    {
+        lock (_gate)
+        {
+            var now = clock();
+            var until = now + (long)horizon.TotalMilliseconds;
+            var rows = Messages.Values
+                .Where(m => m.Message.Target.Partition == partition && m.Seen < epoch && !m.Done && (m.Message.Due ?? 0) <= until)
+                .OrderBy(m => m.Seq).Take(limit)
+                .Select(m => new Stored(m.Message, m.Seq, m.Seen, m.Attempts)).ToList();
+            return new(new Polled(rows, now));
+        }
+    }
+
+    public ValueTask<bool> AddAsync(Message message, CancellationToken cancellationToken = default)
+    {
+        lock (_gate)
+        {
+            if (Messages.ContainsKey(message.Id)) return new(false);
+            Messages[message.Id] = new MessageRow(message, ++_seq, 0);
+            return new(true);
+        }
+    }
+
+    public ValueTask<IReadOnlyList<InstanceRow>> LoadAsync(IReadOnlyCollection<string> ids, CancellationToken cancellationToken = default)
+    {
+        lock (_gate) return new(ids.Select(id => Instances.GetValueOrDefault(id)).OfType<InstanceRow>().ToList());
+    }
+
+    public ValueTask PublishAsync(EventRow @event, CancellationToken cancellationToken = default)
+    {
+        lock (_gate) EventRows.TryAdd((@event.Key, @event.Id), @event);
+        return default;
+    }
+
+    public ValueTask<IReadOnlyList<SubscriptionRow>> FindSubscriptionsAsync(string key, CancellationToken cancellationToken = default)
+    {
+        lock (_gate) return new(Subscriptions.Where(s => s.Key == key).OrderBy(s => s.Instance, StringComparer.Ordinal).ToList());
+    }
+
+    public ValueTask<IReadOnlyList<EventRow>> FindEventsAsync(IReadOnlyCollection<string> keys, CancellationToken cancellationToken = default)
+    {
+        lock (_gate)
+        {
+            var now = clock();
+            return new(EventRows.Values.Where(e => keys.Contains(e.Key) && e.KeepUntil >= now).OrderBy(e => e.Id, StringComparer.Ordinal).ToList());
+        }
+    }
+
+    public ValueTask<IReadOnlyList<JournalRow>> ReadJournalAsync(int partition, long after, int take, CancellationToken cancellationToken = default)
+    {
+        lock (_gate) return new(Journal.Values.Where(j => j.Partition == partition && j.Position > after).OrderBy(j => j.Position).Take(take).ToList());
+    }
+
+    public ValueTask<int> SweepAsync(CancellationToken cancellationToken = default)
+    {
+        lock (_gate)
+        {
+            var now = clock();
+            var messages = Messages.Values.Where(m => m.Done && m.Message.KeepUntil < now).Select(m => m.Message.Id).ToList();
+            var events = EventRows.Values.Where(e => e.KeepUntil < now).Select(e => (e.Key, e.Id)).ToList();
+            messages.ForEach(id => Messages.Remove(id));
+            events.ForEach(key => EventRows.Remove(key));
+            return new(messages.Count + events.Count);
+        }
+    }
+}
