@@ -49,8 +49,8 @@ persisted-state compatibility for that switch only. Authoring contracts, workflo
 Studio keep working unchanged. [ADR 0098](../adr/0098-the-runtime-core-keeps-a-journal-per-run-and-derives-everything-else.md)
 leaves the ports of the 9 November clarification unchanged: the new core is a second implementation behind the
 checkpoint commit port. Once the owner accepts it, the rule under "Approved scope and boundaries" to keep the
-existing EF checkpoint and outbox authority applies to the current core only. Every other rule of this program
-stands.
+existing EF checkpoint and outbox authority, and the rule there to preserve saved executions with explicit
+versioning, apply to the current core only; definitions are preserved. Every other rule of this program stands.
 
 ## Delivery sequence
 

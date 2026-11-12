@@ -14,14 +14,16 @@ Elsa runs on a core in which a run's durable truth is its journal, and the curre
 
 ## Rules of the program
 
-These are the owner's, from the goal recorded on #4175.
+The owner's, from the goal recorded on #4175:
 
-- The new core is built beside the current one, behind a host switch and the same ports. `main` stays shippable at every merge, with the current core as the default until the owner switches it.
+- The new core is built beside the current one, behind a host switch and the same host-facing contracts. `main` stays shippable at every merge, with the current core as the default until the owner switches it.
 - Clean break: new tables, no migration of runs in flight.
 - One slice per pull request. Slices run in parallel once S2 has landed, where they touch different files.
 - A slice is merged by its author session after a clean independent review round with gate evidence posted. That is an owner exception to the rule that an author never merges its own pull request, for this program's slices. The design, the switch of the default and the deletion of the old core wait for the owner.
 - A finished pull request may be merged with administrator rights when CI is stuck with no failed job; the pull request then records what CI had and had not reported.
-- The current core gets no new features and no further efficiency slices.
+- Epic #2564 gets no further slices on the current core.
+
+Proposed by ADR 0098, for the owner's approval with it: the ports of the 9 November clarification keep their contracts, and ownership per partition comes after the old core is deleted.
 
 ## Slices
 
@@ -42,15 +44,15 @@ These are the owner's, from the goal recorded on #4175.
 | S12 | PostgreSQL, SQL Server and MySQL qualification; the round-trip budget | S3 onward |
 | S13 | Switch the default | all of the above, the conformance suite passing on both cores, owner go-ahead |
 | S14 | Delete the old core, its tests and its migrations; report the after figures; close #2564 and #4043 | S13, owner go-ahead |
-| S15 | Ownership per partition and commits shared across runs | S14, owner decision |
+| S15 | Ownership per partition and commits shared across runs, which the owner's goal lists in the target shape | S14, owner decision |
 | S16 | A cleaner commit shape and the per-entity store interfaces off the public surface | S14, owner decision |
 
 ## Relation to other programs
 
-- [Runtime Efficiency #2531](runtime-efficiency.md): epic #2564 stops after #4166. Its targets and its method of proof are taken over here; its remaining slices are not built.
-- [Unified Execution #2892](unified-execution.md): the ports of the 9 November clarification are unchanged by ADR 0098. Model-owned semantics and the separately owned ETL and Rules domains are untouched. The merged pull requests of its execution-core milestone had changed only tests and reports when the current core was surveyed on 11 November.
+- [Runtime Efficiency #2531](runtime-efficiency.md): epic #2564 stops after #4166. Its targets and its method of proof are taken over here. Its remaining slices are not built.
+- [Unified Execution #2892](unified-execution.md): the ports of the 9 November clarification are unchanged by ADR 0098. Model-owned semantics and the separately owned ETL and Rules domains are untouched. The pull requests of its execution-core milestone that the survey of 11 November read (#4039 to #4129) had changed only tests and reports.
 - Sequencing: this program runs beside the active programs. It displaces the remaining slices of #2564. Foundation/Studio consolidation keeps priority one.
 
 ## Completion
 
-Close #4175 when the default has been switched, the old core is deleted, the conformance suite passes on `main`, and the deletion pull request has reported the after figures against the targets of ADR 0098. S15 and S16 can continue under their own issues.
+Close #4175 when the default has been switched, the old core is deleted, the conformance suite passes on `main`, and the deletion pull request has reported the after figures against the targets of ADR 0098. S15, which the owner's goal names, and S16 then continue under their own issues; closing #4175 before S15 is part of what the owner approves with ADR 0098.
