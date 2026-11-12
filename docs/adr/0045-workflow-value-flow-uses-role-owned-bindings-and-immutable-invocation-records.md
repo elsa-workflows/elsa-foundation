@@ -2,7 +2,8 @@
 
 Status: accepted (2026-07-16; ratified through an architect grilling session). §5 amended (accepted 2026-11-12; decisions D-1, D-5, D-6 and
 D-15): expressions no longer need to be deterministic. §2 amended (accepted 2026-11-12; decisions D-10 and
-D-11): null, omitted values and `undefined`.
+D-11): null, omitted values and `undefined`. §6 amended (accepted 2026-11-12;
+decisions D-4 and D-14): activities select their outcomes explicitly, several per completion.
 
 Elsa's canonical workflow and activity model will not use `IMemoryBlock`,
 `IMemoryBlockReference`, a memory register, or a universal runtime value-reference interface.
