@@ -57,7 +57,8 @@
   .wf-run-identity > strong { flex: 0 1 auto; max-width: none; overflow: hidden; overflow-wrap: normal; text-overflow: ellipsis; white-space: nowrap; }
   .wf-run-identity > :is(button, .wf-status-badge) { flex-shrink: 0; }
   /* A phone keeps the run header to a few rows: secondary tools keep their icon and accessible name, not their visible text. */
-  :is(.wf-run-toolbar, .wf-attached-test-run) .wf-run-live-tool { width: auto; }
+  /* Only the run toolbar hides the live tool's label; the attached Test Run keeps its fixed width so polling never moves it. */
+  .wf-run-toolbar .wf-run-live-tool { width: auto; }
   .wf-run-toolbar .wf-run-tool-label {
     position: absolute;
     width: 1px;
@@ -67,7 +68,8 @@
     clip-path: inset(50%);
     white-space: nowrap;
   }
-  .wf-run-toolbar .wf-run-tool:has(.wf-run-tool-label) { min-width: 32px; }
+  /* :where keeps this below the coarse-pointer 44px touch target. */
+  .wf-run-toolbar :where(.wf-run-tool:has(.wf-run-tool-label)) { min-width: 32px; }
 }
 
 @media (pointer: coarse) {
@@ -87,7 +89,7 @@
     flex-wrap: nowrap;
     align-items: baseline;
     gap: 12px;
-    padding: 10px 16px 0;
+    padding: 16px 16px 0;
   }
 
   .studio-page.wf-page--run-workbench > .studio-page-header > .studio-page-header-copy { flex: 0 0 auto; }
