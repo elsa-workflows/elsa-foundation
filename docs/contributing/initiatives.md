@@ -93,8 +93,9 @@ No activation by a program goal is needed for any phase.
 A new initiative starts with a kick-off, right after its issue and branch exist (*Start an initiative* in the
 [skill](../skills/catalog.md#initiative-coordination)). It replaces a scope fixed by one person up front with a scope
 the participants shape together: first open input, then alignment, then one written review of a concrete proposal,
-then a meeting. The coordinator runs every step. The participants are the approvers and anyone the coordinator
-invites.
+then a meeting. The coordinator, or the recorded delegate, runs every step. The participants are the approvers and
+anyone the coordinator invites. Kick-off inputs and reviews are the one exception to the rule that analyses are not
+posted on the initiative issue: no ADR PR exists for them yet. Keep them short and link longer research.
 
 1. **Open input round.** Before the scope is defined, every participant thinks about the initiative's area and records
    what is on their mind: research, inputs, questions, concerns, ideas. Each posts it as one comment on the initiative
@@ -114,8 +115,8 @@ invites.
 4. **One review round.** The coordinator requests every participant's review of the proposal-set PR and messages
    them. Reviewers review only the spec roadmap and the ADR proposals, and may do their own research and bring their
    own evidence. Each reviewer makes one pass, in one session, and records the result, thoughts and counter-proposals
-   in one comment on the initiative issue headed `Kick-off review`, which the coordinator links from the board. There
-   is no second written round.
+   in one comment on the initiative issue headed `Kick-off review`, which the coordinator links from the board. A
+   reviewer who agrees also approves the PR. There is no second written round.
 5. **Meeting.** If every reviewer agrees with the proposal set as it stands, the meeting is skipped. Otherwise the
    coordinator plans and prepares a meeting right after the review round, and every result, thought and
    counter-proposal is discussed there; one meeting is quicker than more written rounds.
@@ -127,10 +128,12 @@ the meeting is recorded and transcribed and ends with a **read-back** of every a
 coordinator, not the participants, classifies the transcript's outcomes against the anchors, confirms each with the
 participants before applying it, and applies it; the participants then only verify the applied text.
 
-**Leaving the kick-off.** The coordinator applies the review meeting's outcomes to the proposal set and the board: an
-ADR row and a reserved number for each ADR to change or write, a spec row for each spec on the roadmap, with what it
-needs. The proposal set then follows the agreement rule below and is merged into the initiative branch as the
-initiative's scope record. The board moves to the analysis-and-decisions phase, and the initiative continues with the
+**Leaving the kick-off.** The coordinator applies the outcomes of the review round, and of the meeting if one was
+held, to the proposal set. The proposal set is agreed when every approver has approved the PR's final text; it has no
+status line. Because the coordinator authored it, the recorded delegate or a non-author approver merges it into the
+initiative branch as the initiative's scope record (see *The initiative branch*). The coordinator then fills the board
+from the agreed set: an ADR row for each ADR to change (with its existing number) or write (with a reserved number),
+and a spec row for each spec on the roadmap, with what it needs. The board moves to the analysis-and-decisions phase, and the initiative continues with the
 normal phases.
 
 ## How work flows
@@ -357,7 +360,7 @@ whose base is an `initiative/*` branch, or the branch of a proposal stacked on o
 - **The coordinator merges** proposals into the initiative branch, by squash, after agreement and a clean pre-merge
   gate. Code Review does not merge initiative proposals ([org review and merge rules][org-agents-review]). Each
   accepted proposal is one squash commit, so the branch reads as a decision log. The coordinator also pushes the merges
-  of `main`, the ADR index updates and any renumbering of merged items; nobody else pushes to the branch. When the
+  of `main`, the ADR index updates, any renumbering of merged items and the kick-off's meeting agendas; nobody else pushes to the branch. When the
   coordinator authored or committed to a proposal, the recorded delegate, or else a non-author approver, stands in:
   they run the gate, push what it needs and merge the proposal, because an author never merges their own PR. A stand-in
   who is not the recorded delegate does not edit the board: they post the `main` commit and the merge commit in a
