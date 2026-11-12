@@ -198,9 +198,12 @@ public sealed class EfStore(Func<KernelDb> create, bool postgres, bool fenceInBa
             if (fenceInBatch)
             {
                 // MUTATION (Unfenced): the tokens are what the row says now, not what this owner believes, so the check always passes.
-                var (tokenEpoch, tokenPosition) = Unfenced
-                    ? await db.Partitions.AsNoTracking().Where(p => p.Id == batch.Partition).Select(p => ValueTuple.Create(p.Epoch, p.Position)).SingleAsync(cancellationToken)
-                    : (batch.Epoch, batch.Position);
+                var (tokenEpoch, tokenPosition) = (batch.Epoch, batch.Position);
+                if (Unfenced)
+                {
+                    var current = await db.Partitions.AsNoTracking().SingleAsync(p => p.Id == batch.Partition, cancellationToken);
+                    (tokenEpoch, tokenPosition) = (current.Epoch, current.Position);
+                }
                 var fence = db.Attach(new PartitionEntity { Id = batch.Partition, Epoch = tokenEpoch, Position = tokenPosition }).Entity;
                 fence.Position = batch.Position + batch.Positions;
                 fence.LeaseUntil = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + (long)batch.Lease.TotalMilliseconds;
