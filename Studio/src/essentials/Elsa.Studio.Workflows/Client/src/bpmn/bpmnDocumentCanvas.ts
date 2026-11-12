@@ -113,7 +113,16 @@ export function projectBpmnDocumentCanvas(owner: ActivityNode, address: BpmnScop
       if (hostId && assessment && assessment.allowed) {
         attachmentById.set(shape.shapeId, hostId);
         parent = pick(hostId, center(shape.bounds), shape);
-        if (!parent) diagnostics.push({ code: "missing-attachment-di", elementId: shape.elementId, diId: shape.shapeId, message: "Boundary attachment has no host shape in this plane." });
+        if (!parent) {
+          const hostLanes = laneMembership(host!);
+          const process = bpmnOwningProcess(host!);
+          const containers = shapes.filter(candidate => candidate.elementType === "participant"
+            ? resolveBpmnDocumentReference(parsed, candidate.element, candidate.element.getAttribute("processRef")) === process
+            : candidate.elementType === "lane" ? hostLanes.some(lane => candidate.element === lane || candidate.element.contains(lane))
+              : isSubProcessElementType(candidate.elementType) && candidate.element.contains(host!));
+          diagnostics.push({ code: "missing-attachment-di", elementId: shape.elementId, diId: shape.shapeId,
+            relatedDiIds: containers.map(container => container.shapeId), message: "Boundary attachment has no host shape in this plane." });
+        }
       } else diagnostics.push({ code: "invalid-boundary-attachment", elementId: shape.elementId, diId: shape.shapeId,
         message: assessment && !assessment.allowed ? assessment.reason : "Boundary attachment has no actual activity host." });
     } else if (element.localName === "lane") {
@@ -240,6 +249,12 @@ function geometryCommands(canvas: BpmnDocumentCanvas, next: ReadonlyMap<string, 
   for (const diagnostic of canvas.diagnostics.filter(item => item.code === "invalid-boundary-attachment" && item.diId)) {
     const old = nodes.get(diagnostic.diId!)?.data.absoluteBounds, bounds = next.get(diagnostic.diId!);
     if (old && bounds && !equalBounds(old, bounds)) fail("boundary attachment must be repaired before changing its geometry");
+  }
+  for (const diagnostic of canvas.diagnostics.filter(item => item.code === "missing-attachment-di" && item.diId)) {
+    for (const id of [diagnostic.diId!, ...(diagnostic.relatedDiIds ?? [])]) {
+      const old = nodes.get(id)?.data.absoluteBounds, bounds = next.get(id);
+      if (old && bounds && !equalBounds(old, bounds)) fail("boundary attachment DI is required before moving its containing scope");
+    }
   }
   for (const [id, bounds] of next) {
     const node = nodes.get(id);

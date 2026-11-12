@@ -27,6 +27,22 @@ function ownerWithThreePointRoute(vertical = false, collinear = false) {
 }
 
 describe("complete document canvas projection", () => {
+  it("refuses container movement dependent on a missing boundary host DI while allowing an unrelated pool", () => {
+    const owner = documentCanvasOwner(xml => {
+      const document = new DOMParser().parseFromString(xml, "application/xml");
+      [...document.getElementsByTagNameNS(bpmnNamespaces.diagram, "BPMNEdge")].forEach(edge => edge.remove());
+      [...document.getElementsByTagNameNS(bpmnNamespaces.diagram, "BPMNShape")].find(shape => shape.getAttribute("id") === "TDI")!.remove();
+      return new XMLSerializer().serializeToString(document);
+    });
+    const before = structuredClone(owner), view = projectBpmnDocumentCanvas(owner, documentCanvasScope);
+    const move = (id: string) => { const node = view.nodes.find(item => item.id === id)!; return planBpmnDocumentMove(view, new Map([[id, { x: node.position.x + 20, y: node.position.y }]])); };
+    expect(view.diagnostics).toContainEqual(expect.objectContaining({ code: "missing-attachment-di", diId: "BDI" }));
+    expect(() => move("PoolDI")).toThrow("attachment DI");
+    expect(() => move("LaneADI")).toThrow("attachment DI");
+    expect(() => move("Pool2DI")).not.toThrow();
+    expect(owner).toEqual(before);
+  });
+
   it.each([100, 200])("refuses equally close implicit endpoint instances even when their areas differ (%s)", width => {
     const owner = documentCanvasOwner(xml => xml.replace('</bpmndi:BPMNPlane></bpmndi:BPMNDiagram>', `<bpmndi:BPMNShape id="TCopyDI" bpmnElement="T"><dc:Bounds x="100.5" y="100.75" width="${width}" height="80"/></bpmndi:BPMNShape></bpmndi:BPMNPlane></bpmndi:BPMNDiagram>`));
     const before = structuredClone(owner), view = projectBpmnDocumentCanvas(owner, documentCanvasScope);
