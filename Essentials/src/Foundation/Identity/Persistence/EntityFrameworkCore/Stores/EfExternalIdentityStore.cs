@@ -3,6 +3,7 @@ using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Entities;
 using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Exceptions;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Microsoft.EntityFrameworkCore;
+using Elsa.Persistence.EntityFramework;
 
 namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Stores;
 
