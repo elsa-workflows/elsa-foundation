@@ -8,4 +8,9 @@
     <ProjectReference Include="../Kernel.Mongo/Kernel.Mongo.csproj" />
     <ProjectReference Include="../../conformance/Kernel.Store.Conformance/Kernel.Store.Conformance.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <Using Include="Kernel.Runtime" />
+    <Using Include="Kernel.Durable" />
+    <Using Include="Kernel.Workflows" />
+  </ItemGroup>
 </Project>

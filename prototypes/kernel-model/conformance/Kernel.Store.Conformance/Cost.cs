@@ -15,8 +15,8 @@ public static class Cost
         await using var provided = await provider.CreateAsync(2, new StoreSetup(Counting: true));
         var counter = provided.Counter ?? throw new InvalidOperationException($"{provider.Name} does not count its round trips");
         var store = provided.Store;
-        var owner = new Worker("owner", 0, store, Stress.Models());
-        await owner.TakeAsync();
+        var owner = new Worker("owner", 0, store, new WorkflowInstance(Stress.Models()));
+        await new DurableHost([owner]).ActivateAsync(owner.Partition);
         await owner.PollAsync();
         var n = 0;
         var keep = (await store.PollAsync(0, 0, TimeSpan.Zero, 1)).Now + 3_600_000;
@@ -62,18 +62,10 @@ public static class Cost
         return unfinished == 0 && left == 0 ? 0 : 1;
     }
 
-    /// <summary>A host that drives one worker until it has nothing left to do.</summary>
-    public static async Task Drain(Worker worker, bool poll)
+    /// <summary>A host that runs passes of one scope until two in a row find nothing to do.</summary>
+    public static async Task Drain(IScopeActivation scope, bool poll)
     {
-        if (poll) await worker.PollAsync();
-        for (var idle = 0; idle < 2;)
-        {
-            var busy = worker.NeedsLoad || worker.NeedsMeet || worker.NeedsFlush || worker.Ready.Any();
-            await worker.LoadAsync();
-            await worker.MeetAsync();
-            foreach (var id in worker.Ready.ToList()) worker.RunTurn(id);
-            await worker.FlushAsync();
-            idle = busy ? 0 : idle + 1;
-        }
+        if (poll) await scope.WokenAsync(null);      // the first pass reads the inbox
+        for (var idle = 0; idle < 2;) idle = await scope.RunAsync() == TimeSpan.Zero ? 0 : idle + 1;
     }
 }

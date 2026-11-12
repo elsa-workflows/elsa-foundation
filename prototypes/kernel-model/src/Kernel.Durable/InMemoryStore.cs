@@ -1,4 +1,6 @@
-namespace Kernel;
+using Kernel.Runtime;
+
+namespace Kernel.Durable;
 
 /// <summary>
 /// The store in memory, with the semantics the SQL is meant to have: every operation is atomic, the conditional

@@ -1,8 +1,12 @@
-namespace Kernel;
+using Kernel.Runtime;
+
+namespace Kernel.Durable;
 
 /// <summary>
-/// The kernel's part of the row: <c>Jobs</c>, the keys of the background jobs in flight, and <c>Children</c>, the instances
-/// it started that have not finished, each a JSON array or null.
+/// An actor's row. The durable layer's part: <c>Revision</c>, <c>State</c> (opaque), <c>StateVersion</c>, <c>History</c> and
+/// <c>Jobs</c>, the keys of the background jobs in flight. The workflow instance's part (layer 3): <c>Model</c>,
+/// <c>Definition</c>, <c>Status</c>, <c>Parent</c>, <c>Fault</c>, <c>Suspended</c> and <c>Children</c>, the instances it started
+/// that have not finished. One row, so one write per commit: a seam leak (FINDINGS section 24). JSON arrays or null.
 /// </summary>
 public sealed record InstanceRow(string Id, string Model, string Definition, InstanceStatus Status, string State, long Revision, string? Parent, string? Fault = null, string? Jobs = null, History History = History.Full, bool Suspended = false, string? Children = null, int StateVersion = 1);
 
@@ -28,9 +32,6 @@ public sealed record ViewRow(string Instance, long Revision, int Commits);
 public sealed record Lease(long Epoch, long Position, long Now);
 
 public sealed record Polled(IReadOnlyList<Stored> Messages, long Now);
-
-/// <summary>What a heartbeat sees: how many nodes were heard from within the window, and which partitions nobody holds.</summary>
-public sealed record Cluster(int Nodes, IReadOnlyList<int> Free, long Now);
 
 /// <summary>
 /// One instance's part of a commit. <c>Expected</c> is the revision the row must have; null means the row is new.
@@ -67,7 +68,11 @@ public sealed class StoreException(Failure failure, string message, Exception? i
     public Failure Failure => failure;
 }
 
-public interface IKernelStore
+/// <summary>
+/// The durable layer's storage contract, stated by what each operation guarantees. It also keeps the built-in runtime's
+/// membership (<see cref="IMembership"/>): the node rows and which partitions nobody holds.
+/// </summary>
+public interface IKernelStore : IMembership
 {
     /// <summary>
     /// Take the partition if it is free, expired or already mine. Every take bumps the epoch. A take from another
@@ -76,12 +81,6 @@ public interface IKernelStore
     /// start, or a restarted process would look like its predecessor taking again.
     /// </summary>
     ValueTask<Lease?> TakeAsync(int partition, string node, TimeSpan lease, CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// Say that this node is alive (the <c>node</c> row) and look at the cluster: the nodes heard from within
-    /// <paramref name="window"/>, and the partitions that have no owner or whose lease has expired. Liveness only.
-    /// </summary>
-    ValueTask<Cluster> HeartbeatAsync(string node, TimeSpan window, CancellationToken cancellationToken = default);
 
     /// <summary>Give the partition up, if this is still its epoch. A release is not a death.</summary>
     ValueTask ReleaseAsync(int partition, long epoch, CancellationToken cancellationToken = default);

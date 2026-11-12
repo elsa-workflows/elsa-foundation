@@ -1,4 +1,6 @@
-namespace Kernel;
+using Kernel.Runtime;
+
+namespace Kernel.Durable;
 
 /// <summary>
 /// Expands a partition's journal into the viewer's table, in position order. Its position is its own row, so it never

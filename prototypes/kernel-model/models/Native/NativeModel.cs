@@ -183,7 +183,7 @@ internal sealed class Burst(NativeModel model, ITurn turn, CancellationToken can
                 if (_s.Waits.FirstOrDefault(w => w.Value.Key == "event:" + stimulus.Event).Key is { } wait) Resume(wait, stimulus.Payload);
                 break;
             }
-            case Kinds.ChildFinished:
+            case WorkflowKinds.ChildFinished:
             {
                 var finished = m.Read<ChildFinished>();
                 var payload = new JsonObject { ["Status"] = finished.Status.ToString(), ["Output"] = finished.Output is null ? null : JsonNode.Parse(finished.Output), ["Child"] = finished.Child };

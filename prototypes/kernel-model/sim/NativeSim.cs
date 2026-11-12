@@ -221,19 +221,16 @@ public static class NativeReference
     {
         var time = 1_000_000L;
         var store = new InMemoryStore(1, () => time);
-        var worker = new Worker("reference", 0, store, [new NativeModel(NativeWorkflows.Registry)], new WorkerOptions { Monotonic = () => time });
-        worker.TakeAsync().Wait();
+        var worker = new Worker("reference", 0, store, new WorkflowInstance([new NativeModel(NativeWorkflows.Registry)]), new WorkerOptions { Monotonic = () => time });
+        new DurableHost([worker]).ActivateAsync(0).AsTask().Wait();
         worker.PollAsync().Wait();
         var id = InstanceRef.In(0, "reference");
         worker.Post(new Message("start", id, Kinds.Start, Start: NativeModel.Spec(workflow, Modes.Balanced, input?.DeepClone().AsObject())), fresh: true);
         var published = new HashSet<string>(StringComparer.Ordinal);
         for (var round = 0; round < 200 && store.Instances.GetValueOrDefault(id.Id)?.Status is null or InstanceStatus.Running; round++)
         {
-            worker.PollAsync().Wait();
-            worker.LoadAsync().Wait();
-            worker.MeetAsync().Wait();
-            foreach (var ready in worker.Ready.ToList()) worker.RunTurn(ready);
-            worker.FlushAsync().Wait();
+            worker.WokenAsync(null).AsTask().Wait();      // one pass that reads the inbox
+            worker.RunAsync().AsTask().Wait();
             foreach (var s in store.Subscriptions.Where(s => s.Instance == id.Id).ToList())
                 if (published.Add(s.Key)) Events.PublishAsync(store, new EventRow(s.Key, "e-" + s.Key, null, time + 3_600_000)).AsTask().Wait();
             time += 1_000;

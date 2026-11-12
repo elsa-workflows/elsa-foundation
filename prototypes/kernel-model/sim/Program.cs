@@ -1,6 +1,5 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
-using Kernel;
 using Kernel.Sim;
 
 // Usage:
@@ -125,15 +124,15 @@ int Backlog(int messages)
         var commits = 0;
         var counting = new CountingStore(store, () => commits++);
         var options = new WorkerOptions { TrialGroup = group, MaxAttempts = 10, Monotonic = () => time };
-        var first = new Worker("first", 0, counting, [new Counter()], options);
-        first.TakeAsync().Wait();
+        var first = new Worker("first", 0, counting, new WorkflowInstance([new Counter()]), options);
+        new DurableHost([first]).ActivateAsync(0).AsTask().Wait();
         for (var i = 0; i < messages; i++) store.AddAsync(new Message("x" + i, InstanceRef.In(0, "c" + i), "add", Json.Write(new Add("t" + i)), Start: Counter.Spec)).AsTask().Wait();
         first.PollAsync().Wait();
         first.FlushAsync().Wait();      // marked, and then the owner dies with all of them in memory
         time += 60_000;
         commits = 0;
-        var second = new Worker("second", 0, counting, [new Counter()], options);
-        second.TakeAsync().Wait();
+        var second = new Worker("second", 0, counting, new WorkflowInstance([new Counter()]), options);
+        new DurableHost([second]).ActivateAsync(0).AsTask().Wait();
         while (store.Messages.Count > 0)
         {
             second.PollAsync().Wait();

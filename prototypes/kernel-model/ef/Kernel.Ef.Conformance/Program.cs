@@ -1,5 +1,4 @@
 using System.Data.Common;
-using Kernel;
 using Kernel.EntityFramework;
 using Kernel.Store.Conformance;
 using Microsoft.Data.SqlClient;

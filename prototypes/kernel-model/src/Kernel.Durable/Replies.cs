@@ -1,4 +1,6 @@
-namespace Kernel;
+using Kernel.Runtime;
+
+namespace Kernel.Durable;
 
 /// <summary>
 /// What an owner sends to a caller that waits: an item a turn emitted, or the end of the observation. <c>Key</c> is the
@@ -8,7 +10,8 @@ public sealed record Reply(string Request, string Key, string? Channel, object? 
 
 /// <summary>
 /// The runtime's transport between nodes for live output. Not durable: a reply may be dropped, delayed or delivered
-/// twice. Between the workers of one process it is a call. It belongs to the actor-runtime layer.
+/// twice. Between the workers of one process it is a call. It rides on the runtime's transport between nodes, but it carries
+/// layer 2's replies, so its contract is declared here (FINDINGS section 24).
 /// </summary>
 public interface IReplyTransport
 {

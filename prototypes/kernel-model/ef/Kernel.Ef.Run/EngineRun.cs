@@ -1,7 +1,6 @@
 using System.Collections.Concurrent;
 using System.Data.Common;
 using System.Diagnostics;
-using Kernel;
 using Kernel.EntityFramework;
 using Kernel.Sim;
 using Microsoft.Data.SqlClient;
@@ -41,18 +40,11 @@ static class EngineRun
     private static IExecutionModel[] Models() =>
         [new Counter(), new Parent(), new Child(), new Waiter(), new Sequence(), new Correlation(), new CWaiter(2), new Runner((_, _) => new ValueTask<object?>((object?)null)), new Fragile(() => { }), new OnEvent()];
 
-    private static async Task Drain(Worker worker, bool poll)
+    // A host that runs passes of one scope until two in a row find nothing to do.
+    private static async Task Drain(IScopeActivation scope, bool poll)
     {
-        if (poll) await worker.PollAsync();
-        for (var idle = 0; idle < 2;)
-        {
-            var busy = worker.NeedsLoad || worker.NeedsMeet || worker.NeedsFlush || worker.Ready.Any();
-            await worker.LoadAsync();
-            await worker.MeetAsync();
-            foreach (var id in worker.Ready.ToList()) worker.RunTurn(id);
-            await worker.FlushAsync();
-            idle = busy ? 0 : idle + 1;
-        }
+        if (poll) await scope.WokenAsync(null);      // the first pass reads the inbox
+        for (var idle = 0; idle < 2;) idle = await scope.RunAsync() == TimeSpan.Zero ? 0 : idle + 1;
     }
 
     // ---- several owners of the same partitions, takeovers and killed sessions ---------------------------------------
@@ -84,12 +76,12 @@ static class EngineRun
 
         var loops = Enumerable.Range(0, nodes).SelectMany(node => Enumerable.Range(0, partitions).Select(partition => Task.Run(async () =>
         {
-            var (random, worker) = (new Random(node * 31 + partition + name.GetHashCode()), new Worker(name + node, partition, store, Models(), options));
+            var (random, worker) = (new Random(node * 31 + partition + name.GetHashCode()), new Worker(name + node, partition, store, new WorkflowInstance(Models()), options));
             while (!Stopped())
             {
                 if (!worker.Owns)
                 {
-                    await worker.TakeAsync();
+                    await new DurableHost([worker]).ActivateAsync(worker.Partition);
                     if (!worker.Owns) await Task.Delay(20);
                     continue;
                 }
@@ -310,8 +302,8 @@ static class EngineRun
         var create = target.Has("locks") ? target.Workers(counter, counter.Transactions, opens, saves, locks) : target.Workers(counter, counter.Transactions, opens, saves);
         await target.ResetAsync(2);
         var store = target.Store(create);
-        var owner = new Worker("owner", 0, store, Models(), new WorkerOptions { PollLimit = 5000, MaxBatch = 5000 });
-        await owner.TakeAsync();
+        var owner = new Worker("owner", 0, store, new WorkflowInstance(Models()), new WorkerOptions { PollLimit = 5000, MaxBatch = 5000 });
+        await new DurableHost([owner]).ActivateAsync(owner.Partition);
         await owner.PollAsync();
         var n = 0;
         var keep = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + 3_600_000;

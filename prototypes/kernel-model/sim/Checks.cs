@@ -255,7 +255,7 @@ public sealed partial class World
                 var row = Store.Instances.GetValueOrDefault(child);
                 var start = waiting[child].Count(m => m.Kind == Kinds.Start);
                 var timer = waiting[child].Count(m => m.Kind == "timer");
-                var finished = waiting[id].Count(m => m.Kind == Kinds.ChildFinished && m.Read<ChildFinished>().Child == child);
+                var finished = waiting[id].Count(m => m.Kind == WorkflowKinds.ChildFinished && m.Read<ChildFinished>().Child == child);
                 var stage = row is null ? (start, timer, finished) == (1, 0, 0)
                     : row.Status == InstanceStatus.Running ? (start, timer, finished) == (0, delay >= 0 ? 1 : 0, 0)
                     : (start, finished) == (0, 1) && timer <= (row.Status == InstanceStatus.Cancelled ? 1 : 0);
@@ -395,7 +395,7 @@ public sealed partial class World
             {
                 foreach (var (node, _) in slots.Where(s => s.Partition == p && Of(s.Node, p).Worker.Owns)) Watch(Of(node, p).Worker.BeatAsync());   // a stale owner learns that it is one
             }
-            for (var n = 0; n < Config.Nodes; n++) Watch(Balancers[(n + round) % Config.Nodes].RoundAsync());   // every node beats and asks for its share
+            for (var n = 0; n < Config.Nodes; n++) Watch(Runtimes[(n + round) % Config.Nodes].BalanceAsync());   // every node beats and asks for its share
             foreach (var (node, reply) in Deliveries.ToList())      // the transport delivers what it still carries
                 if (Processes.TryGetValue(node, out var requests) && Running(node)) requests.Receive(reply);
             Deliveries.Clear();
@@ -408,15 +408,16 @@ public sealed partial class World
                     var actor = Of(node, partition);
                     var worker = actor.Worker;
                     if (!worker.Owns) continue;
-                    Watch(worker.PollAsync());     // an eager host: it runs whatever is ready before it flushes
-                    Watch(worker.LoadAsync());
-                    Watch(worker.MeetAsync());
-                    foreach (var id in worker.Ready.Order(StringComparer.Ordinal).ToList())
+                    if (!actor.Runtime.Owns(partition)) Faults.Add($"BUG actor {actor.Id} owns partition {partition} and its runtime does not know it");
+                    // An eager host: every pass reads the inbox, and runs whatever is ready before it flushes. A process that
+                    // dies (now, or before the pass) cancels it: no turn after that, and no flush.
+                    using (_pass = new CancellationTokenSource())
                     {
-                        if (Dying is not null) break;
-                        worker.RunTurn(id);
+                        if (Dying is not null) _pass.Cancel();
+                        Watch(worker.WokenAsync(null).AsTask());
+                        Watch(actor.Runtime.PassAsync(partition, _pass.Token).AsTask());
                     }
-                    if (Dying is null) Watch(worker.FlushAsync());
+                    _pass = null;
                     if (Dying is { } dying)     // a turn or a background job killed the process
                     {
                         Dying = null;
@@ -468,7 +469,7 @@ public sealed partial class World
             if (Store.EventRows.Values.FirstOrDefault(e => waits.Contains(e.Key) && e.KeepUntil >= Time) is { } e)
                 return $"I13 event {e.Id} for key {e.Key} and the wait of {id} are both committed and never met";
         foreach (var (id, waits) in left)
-            Kernel.Events.PublishAsync(Store, new EventRow(waits[0], "last-" + id, null, Time + 3_600_000), Config.Partitions).AsTask().Wait();
+            Events.PublishAsync(Store, new EventRow(waits[0], "last-" + id, null, Time + 3_600_000), Config.Partitions).AsTask().Wait();
         // The same through correlation instances: a subscription and an event for one key, both committed, must have met.
         foreach (var (id, keys) in Oracle.CWaiters)
         {

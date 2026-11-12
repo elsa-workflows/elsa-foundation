@@ -54,7 +54,7 @@ public static class Stress
             var random = new Random(node * 31 + partition);
             // The node's name is unique per process start (finding F9): a restart is a new name.
             var generation = 0;
-            Worker Fresh() => new($"node{node}.{generation++}", partition, store, Models(), options);
+            Worker Fresh() => new($"node{node}.{generation++}", partition, store, new WorkflowInstance(Models()), options);
             var worker = Fresh();
             while (!stop.IsCancellationRequested)
             {
@@ -62,7 +62,7 @@ public static class Stress
                 {
                     if (!worker.Owns)
                     {
-                        await worker.TakeAsync();
+                        await new DurableHost([worker]).ActivateAsync(partition);
                         if (worker.Owns) Interlocked.Increment(ref takes);
                         else await Task.Delay(20);
                         continue;
@@ -83,7 +83,7 @@ public static class Stress
                     else if (random.Next(400) == 0)
                     {
                         Interlocked.Increment(ref releases);
-                        await worker.ReleaseAsync();
+                        await worker.DisposeAsync();
                     }
                     else if (random.Next(600) == 0)
                     {

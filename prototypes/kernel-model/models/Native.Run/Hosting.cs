@@ -10,22 +10,24 @@ public sealed class Owner
     {
         Requests = network.Node(node);
         Model = new NativeModel(registry, new NativeOptions { Flaws = native?.Flaws ?? NativeFlaw.None, Gate = native?.Gate, OnExternal = native?.OnExternal });
-        Worker = new Worker(node, partition, store, [Model, new Kernel.Sim.Sequence()], new WorkerOptions
+        Worker = new Worker(node, partition, store, new WorkflowInstance([Model, new Kernel.Sim.Sequence()]), new WorkerOptions
         {
             Monotonic = monotonic ?? (static () => Environment.TickCount64),
             Transport = network.From(node),
         });
+        Host = new DurableHost([Worker]);
         Http = new HttpHost(node, Requests, new HttpRoutes(registry), store);
     }
 
     public Worker Worker { get; }
+    public DurableHost Host { get; }
     public Requests Requests { get; }
     public NativeModel Model { get; }
     public HttpHost Http { get; }
 
     public async Task StartAsync()
     {
-        await Worker.TakeAsync();
+        await Host.ActivateAsync(Worker.Partition);
         await Worker.PollAsync();   // caught up: from here on it hands over in memory
     }
 
@@ -40,15 +42,11 @@ public sealed class Owner
     /// </summary>
     public async Task PumpAsync(bool poll = false, Func<bool>? until = null, int timeoutMs = 10_000, bool keepPolling = false)
     {
-        if (poll) await Worker.PollAsync();
+        if (poll) await Worker.WokenAsync(null);     // the first pass reads the inbox
         var deadline = Environment.TickCount64 + timeoutMs;
         for (var idle = 0; ;)
         {
-            var busy = Worker.NeedsLoad || Worker.NeedsMeet || Worker.NeedsFlush || Worker.Ready.Any();
-            await Worker.LoadAsync();
-            await Worker.MeetAsync();
-            foreach (var id in Worker.Ready.ToList()) Worker.RunTurn(id);
-            await Worker.FlushAsync();
+            var busy = await Worker.RunAsync() == TimeSpan.Zero;     // one pass
             if (until is null)
             {
                 idle = busy ? 0 : idle + 1;
@@ -61,7 +59,7 @@ public sealed class Owner
                     Worker.Instances.Select(i => $"{i.Id} {i.Row?.Status} r{i.Row?.Revision} busy={i.Busy} {i.State ?? i.Row?.State}"))
                     + "\n  messages: " + string.Join(", ", Worker.Messages.Select(m => m.Id)));
             if (!busy) await Task.Delay(1);
-            if (!busy && keepPolling) await Worker.PollAsync();
+            if (!busy && keepPolling) await Worker.WokenAsync(null);    // the next pass reads the inbox
         }
     }
 }

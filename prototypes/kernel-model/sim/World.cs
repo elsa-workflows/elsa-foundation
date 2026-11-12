@@ -78,6 +78,7 @@ public sealed class Actor(int id, int node, int partition)
     public Worker Worker = null!;
     public Projector Projector = null!;
     public TrialGate Gate = null!;
+    public PartitionRuntime Runtime = null!;    // layer 1 of this actor's process: its takes and releases go through it
     public bool Dead, Zombie;
     public int Version;
     public readonly List<Call> Calls = [];
@@ -174,7 +175,7 @@ public sealed partial class World
     public readonly long[] Skew;
     public readonly int[] Incarnation;
     public readonly int[] Versions;     // the counter model's version on each node: a rolling upgrade moves it from 1 to 2 at a restart
-    public readonly Balancer[] Balancers;
+    public readonly PartitionRuntime[] Runtimes;    // layer 1, one per process: the built-in runtime the simulation drives
     public readonly Dictionary<string, Requests> Processes = new(StringComparer.Ordinal);   // by process name: the requests open there
     public readonly List<(string Process, Request Request, string Instance)> Asked = [];
     public readonly List<(string Node, Reply Reply)> Deliveries = [];                   // on the transport between nodes
@@ -185,7 +186,18 @@ public sealed partial class World
     private readonly List<Task> _watched = [];
     public long Time = 1_000_000;
     public bool Auto, Deployed;
-    public int? Dying;
+    private int? _dying;
+    private CancellationTokenSource? _pass;     // the settling pass under way: a process that dies stops it at a turn boundary
+
+    public int? Dying
+    {
+        get => _dying;
+        set
+        {
+            _dying = value;
+            if (value is not null) _pass?.Cancel();
+        }
+    }
     public Action<string>? Log;
 
     public World(Config config)
@@ -198,7 +210,7 @@ public sealed partial class World
         Paused = new bool[config.Nodes];
         Incarnation = new int[config.Nodes];
         Versions = Enumerable.Range(0, config.Nodes).Select(node => config.Upgrade && node % 2 == 0 ? 1 : 2).ToArray();     // a deploy in progress
-        Balancers = new Balancer[config.Nodes];
+        Runtimes = new PartitionRuntime[config.Nodes];
         _gates = Enumerable.Range(0, config.Nodes).Select(_ => new TrialGate()).ToArray();
         for (var node = 0; node < config.Nodes; node++)
         {
@@ -212,7 +224,9 @@ public sealed partial class World
     private void Balance(int node)
     {
         Processes[Of(node, 0).Worker.Node] = new Requests(Config.Flaws);
-        Balancers[node] = new Balancer(Of(node, 0).Worker.Node, Store, Enumerable.Range(0, Config.Partitions).Select(p => Of(node, p).Worker).ToList(), TimeSpan.FromSeconds(25), Config.Flaws);
+        var runtime = Runtimes[node] = new PartitionRuntime(Of(node, 0).Worker.Node, Store, Config.Partitions, TimeSpan.FromSeconds(25), flaws: Config.Flaws);
+        runtime.StartAsync(new DurableHost(Enumerable.Range(0, Config.Partitions).Select(p => Of(node, p).Worker))).AsTask().Wait();
+        for (var partition = 0; partition < Config.Partitions; partition++) Of(node, partition).Runtime = runtime;
     }
 
     /// <summary>A process is alive while any of its workers is.</summary>
@@ -245,7 +259,7 @@ public sealed partial class World
             new Tree((job, cancel) => Work(actor, job, cancel)), new OnEvent(), NativeModelFor(actor),
         ];
         // A node's name is unique per process start: a restarted process is not its predecessor (finding F9).
-        actor.Worker = new Worker(Config.Flaws.HasFlag(Flaw.StableNodeName) ? "node" + node : $"node{node}.{Incarnation[node]}", partition, wire, models, new WorkerOptions
+        actor.Worker = new Worker(Config.Flaws.HasFlag(Flaw.StableNodeName) ? "node" + node : $"node{node}.{Incarnation[node]}", partition, wire, new WorkflowInstance(models), new WorkerOptions
         {
             Lease = TimeSpan.FromSeconds(10), Horizon = TimeSpan.FromSeconds(2), PollLimit = 3, MaxBatch = 4, MaxAttempts = Config.Attempts, TrialGroup = Config.Group, Gate = _gates[node],
             Monotonic = () => Time + node * 7919,       // every node counts at the database's rate from its own zero
@@ -351,13 +365,13 @@ public sealed partial class World
                 var (worker, calls) = (actor.Worker, actor.Calls.Count);
                 switch (act.Kind)
                 {
-                    case "take" when !worker.Owns && !worker.Taking: Watch(worker.TakeAsync()); break;
+                    case "take" when !worker.Owns && !worker.Taking: Watch(actor.Runtime.ActivateAsync(actor.Partition)); break;
                     case "poll" when worker.Owns && !worker.Polling: Watch(worker.PollAsync()); break;
                     case "load" when worker.Owns && !worker.Loading && worker.NeedsLoad: Watch(worker.LoadAsync()); break;
                     case "flush" when worker.Owns && !worker.Flushing && worker.NeedsFlush: Watch(worker.FlushAsync()); break;
                     case "beat" when worker.Owns && !worker.Flushing: Watch(worker.BeatAsync()); break;
                     case "meet" when worker.Owns && !worker.Meeting && worker.NeedsMeet: Watch(worker.MeetAsync()); break;
-                    case "release" when worker.Owns: Watch(worker.ReleaseAsync()); break;
+                    case "release" when worker.Owns: Watch(actor.Runtime.DeactivateAsync(actor.Partition)); break;
                     default: return null;
                 }
                 return actor.Calls.Count > calls ? $"call {actor.Calls.Count - 1}: {actor.Calls[^1].Text}" : "nothing to send";
@@ -366,7 +380,7 @@ public sealed partial class World
             {
                 if (Paused[act.A]) return null;
                 var calls = Actors.Sum(a => a.Calls.Count);
-                Watch(Balancers[act.A].RoundAsync());
+                Watch(Runtimes[act.A].BalanceAsync());
                 return $"{Actors.Sum(a => a.Calls.Count) - calls} takes sent";
             }
             case "turn":

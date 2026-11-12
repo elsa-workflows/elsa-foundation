@@ -5,7 +5,12 @@
     <ServerGarbageCollection>true</ServerGarbageCollection>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="../src/Kernel/Kernel.csproj" />
+    <ProjectReference Include="../src/Kernel.Workflows/Kernel.Workflows.csproj" />
     <ProjectReference Include="../models/Native/Kernel.Native.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Using Include="Kernel.Runtime" />
+    <Using Include="Kernel.Durable" />
+    <Using Include="Kernel.Workflows" />
   </ItemGroup>
 </Project>

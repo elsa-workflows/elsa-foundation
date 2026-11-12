@@ -1,6 +1,5 @@
 using System.Collections.Concurrent;
 using System.Data.Common;
-using Kernel;
 using Kernel.EntityFramework;
 using Kernel.Sim;
 using Microsoft.EntityFrameworkCore;
@@ -61,19 +60,11 @@ static Func<KernelDb> Factory(bool postgres, string connection, params IIntercep
 static IExecutionModel[] Models() =>
     [new Counter(), new Parent(), new Child(), new Waiter(), new Sequence(), new Correlation(), new CWaiter(2), new Runner((_, _) => new ValueTask<object?>((object?)null)), new Fragile(() => { })];
 
-// A host that drives one worker until it has nothing left to do.
-static async Task Drain(Worker worker, bool poll)
+// A host that runs passes of one scope until two in a row find nothing to do.
+static async Task Drain(IScopeActivation scope, bool poll)
 {
-    if (poll) await worker.PollAsync();
-    for (var idle = 0; idle < 2;)
-    {
-        var busy = worker.NeedsLoad || worker.NeedsMeet || worker.NeedsFlush || worker.Ready.Any();
-        await worker.LoadAsync();
-        await worker.MeetAsync();
-        foreach (var id in worker.Ready.ToList()) worker.RunTurn(id);
-        await worker.FlushAsync();
-        idle = busy ? 0 : idle + 1;
-    }
+    if (poll) await scope.WokenAsync(null);      // the first pass reads the inbox
+    for (var idle = 0; idle < 2;) idle = await scope.RunAsync() == TimeSpan.Zero ? 0 : idle + 1;
 }
 
 // ---- what a run costs ------------------------------------------------------------------------------------------------
@@ -85,8 +76,8 @@ static async Task Cost(bool postgres, string connection, bool fenceInBatch)
     await using (var db = create()) await db.Database.EnsureDeletedAsync();
     var store = new EfStore(create, postgres, fenceInBatch);
     await store.CreateAsync(2);
-    var owner = new Worker("owner", 0, store, Models());
-    await owner.TakeAsync();
+    var owner = new Worker("owner", 0, store, new WorkflowInstance(Models()));
+    await new DurableHost([owner]).ActivateAsync(owner.Partition);
     await owner.PollAsync();    // the owner is caught up: from here it hands over in memory
     var n = 0;
     var keep = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + 3_600_000;
@@ -122,8 +113,8 @@ static async Task Cost(bool postgres, string connection, bool fenceInBatch)
         await Drain(owner, poll: false);
     });
     // Waiting for an event: through the subscription and event tables, and through a correlation instance per key.
-    var other = new Worker("other", 1, store, Models());
-    await other.TakeAsync();
+    var other = new Worker("other", 1, store, new WorkflowInstance(Models()));
+    await new DurableHost([other]).ActivateAsync(other.Partition);
     await other.PollAsync();
     string Key(int partition) => Enumerable.Range(0, 1000).Select(i => $"k{partition}-{n}-{i}").First(k => Correlation.Of(k, 2).Partition == partition);
     Message Waiter(string model, string key) => new($"m{++n}", InstanceRef.In(0, $"{model}{n}"), Kinds.Start, Start: new StartSpec(model, "w", Json.Write(new List<string> { key })));
@@ -196,12 +187,12 @@ static async Task<int> Stress(string connection, int seconds, int messages, bool
     // another node take over; the stalled one wakes up with stale memory and finds out at its next commit.
     var loops = Enumerable.Range(0, nodes).SelectMany(node => Enumerable.Range(0, partitions).Select(partition => Task.Run(async () =>
     {
-        var (random, worker) = (new Random(node * 31 + partition), new Worker("node" + node, partition, store, Models(), options));
+        var (random, worker) = (new Random(node * 31 + partition), new Worker("node" + node, partition, store, new WorkflowInstance(Models()), options));
         while (!stop.IsCancellationRequested)
         {
             if (!worker.Owns)
             {
-                await worker.TakeAsync();
+                await new DurableHost([worker]).ActivateAsync(worker.Partition);
                 if (!worker.Owns) await Task.Delay(20);
                 continue;
             }

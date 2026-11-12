@@ -121,7 +121,7 @@ public sealed class Parent(bool knownOnly = false) : Model<ParentState>
                 for (var i = 0; i < input.Children; i++)
                     state.Pending.Add(turn.Start(new StartSpec("child", "c", Json.Write(input.DelayMs)), input.Spread && i % 2 == 0 ? Placement.Spread : Placement.WithParent).Id);
             }
-            else if (message.Kind == Kinds.ChildFinished)
+            else if (message.Kind == WorkflowKinds.ChildFinished)
             {
                 var child = message.Read<ChildFinished>().Child;
                 state.Done.Add(state.Pending.Remove(child) ? child : "!unexpected " + child);
