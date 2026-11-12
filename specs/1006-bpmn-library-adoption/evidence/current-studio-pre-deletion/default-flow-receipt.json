@@ -1,0 +1,13 @@
+{
+  "studioSourceCommit": "3815806acb51475903f3ee3b44cf263ac572db26",
+  "backendSourceCommit": "81f6ae7a47497a9f1f5704bd6b5f9b21fa1566a0",
+  "productionSourcesEqualCurrentParent": true,
+  "parentCommit": "6e2172c0766b20f1ce1b10311a938d3b372ac81f",
+  "actualUiImportEditPublishPublishedRunReloadExport": true,
+  "defaultFlowId": "default-flow",
+  "gatewayName": "Current default route",
+  "otherCondition": "Never",
+  "timerDescriptor": "PT1S",
+  "actualExportSha256": "1bd65d5af0588c23ac3946a54b00d6e4f59b47ed9bc5227e76f69f0d36efb39c",
+  "noUiMocksOrApplicationStateInjectionOrApiSubstitutionForUiSteps": true
+}

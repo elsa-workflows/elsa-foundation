@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from "react";
-import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
-import type { ActivityCatalogItem, WorkflowDefinitionDetails, WorkflowDraft, WorkflowExecutionInputs, WorkflowTestRunStart, WorkflowTestRunView } from "../workflowTypes";
+import { qualifyStudioBackendPath, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import type { ActivityCatalogItem, ValidationError, WorkflowDefinitionDetails, WorkflowDraft, WorkflowExecutionInputs, WorkflowTestRunStart, WorkflowTestRunView } from "../workflowTypes";
 import {
   getWorkflowDefinitionVersion,
   getWorkflowPromotionVersionCapabilities,
@@ -41,10 +41,12 @@ import {
   publicationIntentFor,
   publicationPreflightMatchesIntent,
   splitPublicationValidations,
+  withLocalValidationErrors,
   withPublicationWarnings,
   type PublicationReviewState,
   type PublicationVersionSelection
 } from "./publicationReview";
+import { getNotifications } from "./notifications";
 
 interface WorkflowOperationsParams {
   context: StudioEndpointContext;
@@ -57,10 +59,13 @@ interface WorkflowOperationsParams {
    * workflow has no published version or the server does not advertise the export relation.
    */
   publishedExecutable?: PublishedExecutableTarget | null;
-  saveDraft(draft: WorkflowDraft, savedStatus: string): Promise<WorkflowDraft>;
+  saveDraft(draft: WorkflowDraft, savedStatus: string, options?: { lineage?: Iterable<string> }): Promise<WorkflowDraft>;
+  /** The live history line, captured together with the publication review snapshot (spec 1193 FR-010). */
+  lineage?(): Iterable<string>;
   flushPendingSave(): Promise<void>;
   reload(options?: { shouldLoadDraft(): boolean }): Promise<void>;
   startTestRun(testRun: WorkflowTestRunState): void;
+  updateTestRunResult?(testRun: WorkflowTestRunState): void;
   setPublishedArtifact(id: string | null): void;
   setOperation(operation: WorkflowEditorOperation): void;
   setStatus(value: string): void;
@@ -68,6 +73,7 @@ interface WorkflowOperationsParams {
   setActiveRightPanelId(id: string): void;
   setInspectorCollapsed(collapsed: boolean): void;
   setAutosavePaused(paused: boolean): void;
+  collectLocalValidation?(draft: WorkflowDraft): Promise<ValidationError[]>;
 }
 
 // The editor's async command handlers: export JSON, save, promote+publish, and dispatch a transient test
@@ -80,16 +86,19 @@ export function useWorkflowOperations({
   busy,
   publishedExecutable = null,
   saveDraft,
+  lineage,
   flushPendingSave,
   reload,
   startTestRun,
+  updateTestRunResult,
   setPublishedArtifact,
   setOperation,
   setStatus,
   setError,
   setActiveRightPanelId,
   setInspectorCollapsed,
-  setAutosavePaused
+  setAutosavePaused,
+  collectLocalValidation
 }: WorkflowOperationsParams) {
   const [publicationReview, setPublicationReview] = useState<PublicationReviewState | null>(null);
   const latestDraftRef = useRef(draft);
@@ -140,12 +149,16 @@ export function useWorkflowOperations({
     }
   }, [busy, context, publishedExecutable, setError, setOperation, setStatus]);
 
-  const save = useCallback(async () => {
+  /** Saves this render's draft; a caller that captured the history line when the author acted passes it. */
+  const save = useCallback(async (options?: { lineage?: Iterable<string> }) => {
     if (!draft || busy) return;
+    // A caller that captured the history line when the author acted passes it; otherwise saveDraft decides the line
+    // by comparing this draft with the live one, so a stale render's draft is never credited with the live line.
+    const line = options?.lineage ? [...options.lineage] : undefined;
     setOperation("saving");
     setStatus("Saving...");
     try {
-      await saveDraft(draft, "Saved");
+      await saveDraft(draft, "Saved", { lineage: line });
     } catch {
       // saveDraft surfaces the error in the editor alert.
     } finally {
@@ -262,7 +275,7 @@ export function useWorkflowOperations({
         if (!savedDraft) {
           setPublicationReview(current => current ? { ...current, phase: "publishing", progressStep: "saving", intent } : current);
           setStatus("Saving publication snapshot...");
-          const justSaved = await saveDraft(publicationReview.draftSnapshot, "Publication snapshot saved");
+          const justSaved = await saveDraft(publicationReview.draftSnapshot, "Publication snapshot saved", { lineage: publicationReview.draftLineage });
           savedDraft = justSaved;
           setPublicationReview(current => current ? { ...current, savedDraft: justSaved, draftSnapshot: justSaved, intent } : current);
         }
@@ -407,6 +420,9 @@ export function useWorkflowOperations({
     // Settle any in-flight or pending autosave before capturing the review snapshot. Previously a save
     // racing the review left "Review & publish" appearing to do nothing; now it awaits (with feedback).
     setStatus(mode === "publish" ? "Saving before publication..." : "Saving before review...");
+    // The snapshot is this render's draft; its history line is captured now with it, before any await, since the author
+    // may Undo or Redo while the save settles or the review is open.
+    const draftLineage = lineage ? [...lineage()] : undefined;
     try {
       await flushPendingSave();
       const draftSnapshot = structuredClone(draft);
@@ -441,9 +457,11 @@ export function useWorkflowOperations({
       });
       review.versionPreflightSupported = versionCapabilities.preflight;
       review.exactVersionSupported = versionCapabilities.exact;
+      review.draftLineage = draftLineage;
       // Spec 261 FR-515: list the server's validation warnings (for example a replay-safe compensation step) in the
       // review. They never block; a host without the validations relation, or a failed read, shows none.
       review = withPublicationWarnings(review, await getDraftValidations(context, draftSnapshot.id).catch(() => null));
+      if (collectLocalValidation) review = withLocalValidationErrors(review, await collectLocalValidation(draftSnapshot));
       if (!review.validationErrors.length && !(review.intent.action === "sideBySide" && !review.intent.slotName)) {
         const intent = publicationIntentFor(review, review.intent.action ?? "replace", review.intent.slotName ?? review.policy.defaultSlotName);
         const [preflight, versionPreflight] = await Promise.all([
@@ -483,7 +501,7 @@ export function useWorkflowOperations({
       setQuickPublishing(false);
       setOperation("idle");
     }
-  }, [draft, details, catalog, busy, context, executePublication, flushPendingSave, setAutosavePaused, setError, setOperation, setStatus]);
+  }, [collectLocalValidation, draft, details, catalog, busy, context, executePublication, flushPendingSave, lineage, setAutosavePaused, setError, setOperation, setStatus]);
 
   const cancelPublication = useCallback(() => {
     publicationReviewRequest.current += 1;
@@ -513,6 +531,7 @@ export function useWorkflowOperations({
     onStarted?: (view: WorkflowTestRunView) => Promise<void>,
     acknowledgeUnavailableExpressionValidation = false
   ): Promise<WorkflowTestRunView | null> => {
+    draftSnapshot = structuredClone(draftSnapshot);
     const draftSignature = getDraftSignature(draftSnapshot);
     setStatus("Preparing test run...");
     try {
@@ -526,6 +545,7 @@ export function useWorkflowOperations({
         definitionId: draftSnapshot.definitionId,
         snapshotId,
         state: draftSnapshot.state,
+        layout: draftSnapshot.layout,
         activityPresentation: draftSnapshot.activityPresentation,
         inputs,
         start,
@@ -536,15 +556,30 @@ export function useWorkflowOperations({
         setStatus("Expression validation is unavailable. Confirmation is required before this Test Run can proceed.");
         return null;
       }
-      startTestRun({ draftSignature, view: nextTestRun, startLabel, workflowInputNames });
+      startTestRun({ draftSignature, startedHere: true, snapshot: draftSnapshot, endpointContext: context, view: nextTestRun, startLabel, workflowInputNames });
       setActiveRightPanelId("runtime");
       setInspectorCollapsed(false);
-      setStatus(isRejectedTestRun(nextTestRun) ? "Test run rejected" : "Test run dispatched");
+      setStatus("");
+      const rejected = isRejectedTestRun(nextTestRun);
+      const runtimeIssue = nextTestRun.commandDispatchStatus === "AcceptedButFaulted" || (nextTestRun.incidentCount ?? 0) > 0;
+      const prepared = nextTestRun.status === "Prepared" && !nextTestRun.workflowExecutionId;
+      const deferred = nextTestRun.status === "DispatchDeferred";
+      const duplicate = nextTestRun.status === "DispatchDuplicate";
+      getNotifications().notify({
+        level: rejected || runtimeIssue ? "error" : deferred || duplicate ? "info" : "success",
+        title: rejected ? "Test run rejected" : runtimeIssue ? "Test run needs attention" : prepared ? "Test trigger prepared" : deferred ? "Test run dispatch deferred" : duplicate ? "Test run already dispatched" : "Test run started",
+        message: rejected ? nextTestRun.reason ?? "Review the Runtime panel for details."
+          : runtimeIssue ? "Review the Runtime panel for incident details."
+          : prepared ? "Waiting for a test event. Follow progress in the Runtime panel." : undefined,
+        ...(nextTestRun.workflowExecutionId ? { link: { label: "Open run", path: qualifyStudioBackendPath(`/workflows/instances/${encodeURIComponent(nextTestRun.workflowExecutionId)}`) } } : {})
+      });
       if (onStarted && !isRejectedTestRun(nextTestRun)) await onStarted(nextTestRun);
       return nextTestRun;
     } catch (e) {
       setStatus("");
-      setError(describeWorkflowError(e, "The test run could not be dispatched."));
+      const error = describeWorkflowError(e, "The test run could not be dispatched.");
+      setError(error);
+      getNotifications().notify({ level: "error", title: "Test run could not start", message: error.message });
       return null;
     } finally {
       setOperation("idle");
@@ -567,15 +602,16 @@ export function useWorkflowOperations({
   ) => dispatchTestRun(draftSnapshot, inputs, start, startLabel, workflowInputNames, onStarted), [dispatchTestRun]);
 
   const updateTestDriveResult = useCallback((draftSignature: string, view: WorkflowTestRunView, startLabel: string, workflowInputNames: string[], driverActionResult?: WorkflowTestRunState["driverActionResult"], driverActionError?: string) => {
-    startTestRun({
+    (updateTestRunResult ?? startTestRun)({
       draftSignature,
+      endpointContext: context,
       view,
       startLabel,
       workflowInputNames,
       ...(driverActionResult ? { driverActionResult } : {}),
       ...(driverActionError ? { driverActionError } : {})
     });
-  }, [startTestRun]);
+  }, [context, startTestRun, updateTestRunResult]);
 
   const confirmUnavailableExpressionValidation = useCallback(async () => {
     const pending = expressionValidationWarning;

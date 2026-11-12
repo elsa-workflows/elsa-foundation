@@ -27,6 +27,10 @@ public interface IActivityStructureHandler
     /// </summary>
     Type? AuthoredPayloadType => null;
 
+    /// <summary>
+    /// Projects child slots and any structure-owned invocation outcome declarations. Generic publishing
+    /// consumes the outcome projections without inspecting this handler's authored payload.
+    /// </summary>
     IReadOnlyCollection<ActivityChildProjection> ProjectChildren(ActivityNode activity);
 
     /// <summary>
@@ -34,6 +38,9 @@ public interface IActivityStructureHandler
     /// Flowchart outcome ports. Values and expressions must never be included.
     /// </summary>
     IReadOnlyCollection<ActivityChildContractMemberUsage> ProjectChildContractMemberUsage(ActivityNode activity) => [];
+
+    /// <summary>Projects typed inputs consumed conditionally by this structure before activity activation.</summary>
+    ActivityStructureInputProjection ProjectInputs(ActivityNode activity) => ActivityStructureInputProjection.Empty;
 
     ActivityNode ReplaceChildren(ActivityNode activity, IReadOnlyCollection<ActivityChildProjection> childProjections);
 
@@ -43,6 +50,19 @@ public interface IActivityStructureHandler
     /// their results to that child. <see langword="null"/> (the default) promises no order, so nothing is offered.
     /// </summary>
     IReadOnlyList<string>? ChildrenCompletedBefore(ActivityNode activity, string childNodeId) => null;
+
+    /// <summary>
+    /// Assesses one direct child's result at another direct child using this structure's execution semantics.
+    /// The default adapts <see cref="ChildrenCompletedBefore"/>: a declared prior result is definite, while
+    /// omission or an undeclared order remains unknown. Nullable facts mean the structure has not supplied them.
+    /// </summary>
+    ActivityChildResultFacts AssessChildResult(ActivityNode activity, string producerChildNodeId, string consumerChildNodeId)
+    {
+        ArgumentNullException.ThrowIfNull(activity);
+        ArgumentException.ThrowIfNullOrWhiteSpace(producerChildNodeId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(consumerChildNodeId);
+        return ActivityChildResultFacts.FromCompletedBefore(ChildrenCompletedBefore(activity, consumerChildNodeId), producerChildNodeId);
+    }
 
     ActivityNodeStructure CompileExecutableStructure(ActivityNode activity);
 

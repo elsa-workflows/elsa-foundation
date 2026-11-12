@@ -123,7 +123,7 @@ public sealed class SwitchRuntimeTests
             childSlots: childSlots,
             structure: new ExecutableActivityStructure(
                 SwitchActivity.StructureKind,
-                SwitchActivity.StructureSchemaVersion,
+                SwitchActivity.LegacyStructureSchemaVersion,
                 JsonSerializer.SerializeToElement(new
                 {
                     cases = Cases.Select(@case => new { match = @case.Match, activity = includeCaseBranch ? @case.Node : null }).ToArray(),

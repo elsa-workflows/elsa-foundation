@@ -58,6 +58,7 @@ public sealed class ActivityOutcomeReachabilityTests(ActivityDriveFixture fixtur
     [
         "Elsa.Activities.Http.Activities.SendHttpRequest",
         "Elsa.Activities.Scripting.Activities.RunJavaScript",
+        "Elsa.Activities.Primitives.Activities.CreateUserTask",
         // Switch case ports and BpmnDecision outcomes are likewise authored data, not a declared enum.
         "Elsa.Activities.Switch.Activities.Switch",
         "Elsa.Activities.Bpmn.Activities.BpmnDecision",

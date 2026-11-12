@@ -11,7 +11,7 @@ service and a recurring pump that re-drives interrupted executions. See the work
 
 ### `WorkflowsRuntimeResumptionFeature : IShellFeature` *(`Elsa.Workflows.Runtime.Resumption`)*
 - **Feature id:** `WorkflowsRuntimeResumption` (`DependsOn` the `Tasks` feature — the pump is an `IRecurringTask`).
-- **Registers:** `IRuntimeResumptionService` → `RuntimeResumptionService` (`TryAddSingleton`), `RuntimeResumptionOptions` (mapped from `[ManifestSetting]`s), and the recurring pump `RuntimeResumptionPumpTask` as `IRecurringTask`.
+- **Registers:** `RuntimeResumptionService` (`TryAddScoped`) with `IRuntimeResumptionService` forwarded to it (scoped, so concurrent re-drives can resolve the concrete service in their own operation scopes), `RuntimeResumptionOptions` (mapped from `[ManifestSetting]`s), and the recurring pump `RuntimeResumptionPumpTask` as `IRecurringTask`.
 - **Composition gate:** the EF Core runtime feature (`WorkflowsRuntimeEntityFrameworkCore`) declares `DependsOn = ["WorkflowsRuntimeResumption"]`, so selecting durable runtime stores pulls the pump into the shell — "durable stores ⇒ pump available" is machine-visible in the feature catalog.
 
 ## Contributor implementations
@@ -27,7 +27,7 @@ Post-commit intent kinds can contribute their own retry policy. Parent-resume de
 ## Options
 
 ### `RuntimeResumptionOptions` *(`Elsa.Workflows.Runtime.Resumption`)*
-- Sweep interval (default 10s), max backoff interval (default 5m), outbox/backlog/recovery batch sizes (default 100), `MaxExecutionsPerSweep` (default 100, of which the recovery scanner keeps half and the backlog the rest; either side may use what the other leaves, and a cap of one alternates), and lease/heartbeat timeouts (default 5m, consumed by the recovery scanner path).
+- Sweep interval (default 10s), max backoff interval (default 5m), outbox/backlog/recovery batch sizes (default 100), `MaxExecutionsPerSweep` (default 100, of which the recovery scanner keeps half and the backlog the rest; either side may use what the other leaves, and a cap of one alternates), lease/heartbeat timeouts (default 5m, consumed by the recovery scanner path), and `MaxConcurrentDispatches` (default 1; independent executions re-driven together, each in its own persistence operation scope, with discovery, outbox and cursor settlement kept in order).
 
 ---
 

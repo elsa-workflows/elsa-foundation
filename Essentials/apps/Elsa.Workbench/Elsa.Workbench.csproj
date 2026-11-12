@@ -5,6 +5,11 @@
 		<IsPackable>false</IsPackable>
 	</PropertyGroup>
 
+	<!-- Finite host-recovery fault cuts. Standard builds contain no probe feature or control-file ports. -->
+	<ItemGroup Condition="'$(ElsaBpmnRecoveryProbe)' == 'true'">
+		<Compile Include="../../../e2e-tests/bpmn/RecoveryProbe/BpmnRecoveryProbeFeature.cs" Link="RecoveryProbe/BpmnRecoveryProbeFeature.cs" />
+	</ItemGroup>
+
 	<ItemGroup>
 		<PackageReference Include="CShells.Management.Api" />
 		<PackageReference Include="CShells.Nuplane" />
@@ -65,10 +70,14 @@
 		<ProjectReference Include="..\..\src\Cluster\EntityFrameworkCore\Elsa.Cluster.EntityFrameworkCore.csproj" />
 		<!-- Data Protection and its opt-in EF key store, composed from host configuration on the host container (#2191). -->
 		<ProjectReference Include="..\..\src\Foundation\DataProtection\EntityFrameworkCore\Elsa.Foundation.DataProtection.EntityFrameworkCore.csproj" />
-		<ProjectReference Include="..\..\..\Extensions\Agent\src\Core\Elsa.Agent.Core.csproj" />
-		<ProjectReference Include="..\..\..\Extensions\Agent\src\Api\Elsa.Agent.Api.csproj" />
-		<ProjectReference Include="..\..\..\Extensions\Agent\src\GitHubCopilot\Elsa.Agent.GitHubCopilot.csproj" />
-		<ProjectReference Include="..\..\..\Extensions\Agent\src\Workflows\Elsa.Agent.Workflows.csproj" />
+		<ProjectReference Include="..\..\..\Extensions\Weaver\src\Elsa.Weaver\Elsa.Weaver.csproj" />
+		<ProjectReference Include="..\..\..\Extensions\Weaver\src\Core\Elsa.Weaver.Core.csproj" />
+		<ProjectReference Include="..\..\..\Extensions\Weaver\src\Api\Elsa.Weaver.Api.csproj" />
+		<ProjectReference Include="..\..\..\Extensions\Weaver\src\GitHubCopilot\Elsa.Weaver.GitHubCopilot.csproj" />
+		<ProjectReference Include="..\..\..\Extensions\Weaver\src\Workflows\Elsa.Weaver.Workflows\Elsa.Weaver.Workflows.csproj" />
+		<ProjectReference Include="..\..\..\Extensions\Weaver\src\Workflows\Runtime\Elsa.Weaver.Workflows.Runtime.csproj" />
+		<!-- Opt-in durable Weaver sessions (#3441): the reference alone adds nothing; a shell enables WeaverEntityFrameworkCore with its provider. -->
+		<ProjectReference Include="..\..\..\Extensions\Weaver\src\Persistence\EntityFrameworkCore\Elsa.Weaver.Persistence.EntityFrameworkCore.csproj" />
 		<!-- Optional (#2294): the reference alone adds nothing; Program.cs composes it behind Elsa:ExtensionBuilder:Enabled. -->
 		<ProjectReference Include="..\..\..\Extensions\ExtensionBuilder\src\Api\Elsa.ExtensionBuilder.Api.csproj" />
 		<ProjectReference Include="..\..\src\Attention\Core\Elsa.Attention.Core.csproj" />
@@ -86,14 +95,32 @@
 		<ProjectReference Include="..\..\src\Workflows\Design\Reconciliation\Elsa.Workflows.Design.Reconciliation\Elsa.Workflows.Design.Reconciliation.csproj" />
 		<ProjectReference Include="..\..\src\Workflows\Design\Reconciliation\Json\Elsa.Workflows.Design.Reconciliation.Json.csproj" />
 		<ProjectReference Include="..\..\src\Activities\Runtime\Elsa.Activities.Runtime\Elsa.Activities.Runtime.csproj" />
+		<!-- The generic human review wait and its decision API, enabled by an explicit shell composition. -->
+		<ProjectReference Include="..\..\..\Extensions\Agent\src\Review\Elsa.Agent.Review\Elsa.Agent.Review.csproj" />
+		<ProjectReference Include="..\..\..\Extensions\Agent\src\Review\Api\Elsa.Agent.Review.Api.csproj" />
+		<!-- User-defined agents: agent authoring, its editor API and the model connection types, enabled by an explicit shell composition. -->
+		<ProjectReference Include="..\..\..\Extensions\Agent\src\Design\Elsa.Agent.Design.csproj" />
+		<ProjectReference Include="..\..\..\Extensions\Agent\src\Api\Elsa.Agent.Api.csproj" />
+		<ProjectReference Include="..\..\..\Extensions\Agent\src\Anthropic\Elsa.Agent.Anthropic.csproj" />
+		<ProjectReference Include="..\..\..\Extensions\Agent\src\AzureOpenAI\Elsa.Agent.AzureOpenAI.csproj" />
+		<ProjectReference Include="..\..\..\Extensions\Agent\src\OpenAI\Elsa.Agent.OpenAI.csproj" />
+		<!-- The agent runtime, its durable turn journal and its evidence reads, so agents can be test-run, inspected and published here. -->
+		<ProjectReference Include="..\..\..\Extensions\Agent\src\Elsa.Agent\Elsa.Agent.csproj" />
+		<ProjectReference Include="..\..\..\Extensions\Agent\src\Persistence\EntityFrameworkCore\Elsa.Agent.Persistence.EntityFrameworkCore.csproj" />
+		<ProjectReference Include="..\..\..\Extensions\Agent\src\Inspection\Api\Elsa.Agent.Inspection.Api.csproj" />
 		<!-- ETL is discoverable here and enabled only by an explicit shell composition. -->
 		<ProjectReference Include="..\..\..\Extensions\Etl\src\Design\Api\Elsa.Etl.Design.Api.csproj" />
 		<ProjectReference Include="..\..\..\Extensions\Etl\src\Runtime\Api\Elsa.Etl.Runtime.Api.csproj" />
 		<ProjectReference Include="..\..\..\Extensions\Etl\src\Runtime\Elsa.Etl.Runtime\Elsa.Etl.Runtime.csproj" />
 		<ProjectReference Include="..\..\..\Extensions\Etl\src\Persistence\EntityFrameworkCore\Elsa.Etl.Persistence.EntityFrameworkCore.csproj" />
+		<ProjectReference Include="..\..\..\Extensions\Etl\src\Sql\PostgreSql\Elsa.Etl.Sql.PostgreSql.csproj" />
+		<ProjectReference Include="..\..\..\Extensions\Etl\src\Sql\SqlServer\Elsa.Etl.Sql.SqlServer.csproj" />
+		<ProjectReference Include="..\..\..\Extensions\Etl\src\RabbitMq\Elsa.Etl.RabbitMq.csproj" />
 		<ProjectReference Include="..\..\..\Extensions\Etl\src\Workflows\Design\Elsa.Etl.Workflows.Design.csproj" />
 		<ProjectReference Include="..\..\..\Extensions\Etl\src\Workflows\Runtime\Elsa.Etl.Workflows.Runtime.csproj" />
 		<ProjectReference Include="..\..\src\Activities\Bpmn\Elsa.Activities.Bpmn\Elsa.Activities.Bpmn.csproj" />
+		<ProjectReference Include="../../src/Activities/Bpmn/Design/Elsa.Activities.Bpmn.Design.csproj" />
+		<ProjectReference Include="..\..\src\Activities\Bpmn\Api\Elsa.Activities.Bpmn.Api.csproj" />
 		<ProjectReference Include="..\..\src\Activities\Bpmn\Interchange\Elsa.Activities.Bpmn.Interchange.csproj" />
 		<ProjectReference Include="..\..\src\Activities\Compensation\Elsa.Activities.Compensation.csproj" />
 		<ProjectReference Include="..\..\src\Activities\ControlFlow\Elsa.Activities.ControlFlow.csproj" />
@@ -105,7 +132,7 @@
 		<ProjectReference Include="..\..\src\Activities\Http\Elsa.Activities.Http.csproj" />
 		<ProjectReference Include="..\..\src\Activities\Primitives\Elsa.Activities.Primitives.csproj" />
 		<ProjectReference Include="..\..\src\Activities\Sequence\Elsa.Activities.Sequence.csproj" />
-		<ProjectReference Include="..\..\src\Api\Capabilities\Elsa.Api.Capabilities.csproj" />
+		<ProjectReference Include="..\..\src\Api\Capabilities\Elsa.Api.Capabilities\Elsa.Api.Capabilities.csproj" />
 		<ProjectReference Include="..\..\src\Cluster\Readability\Elsa.Cluster.Readability.csproj" />
 		<ProjectReference Include="..\..\src\Expressions\JavaScript\Elsa.Expressions.JavaScript\Elsa.Expressions.JavaScript.csproj" />
 		<ProjectReference Include="..\..\src\Expressions\JavaScript\Jint\Elsa.Expressions.JavaScript.Jint.csproj" />
@@ -178,6 +205,7 @@
 		<ProjectReference Include="..\..\src\Connections\Core\Elsa.Connections.Core.csproj" />
 		<ProjectReference Include="..\..\src\Connections\Elsa.Connections\Elsa.Connections.csproj" />
 		<ProjectReference Include="..\..\src\Connections\Api\Elsa.Connections.Api.csproj" />
+		<ProjectReference Include="..\..\src\Connections\Persistence\EntityFrameworkCore\Elsa.Connections.Persistence.EntityFrameworkCore.csproj" />
 		<ProjectReference Include="..\..\src\Connections\Design\Elsa.Connections.Design.csproj" />
 		<ProjectReference Include="..\..\src\Connections\Workflows\Elsa.Connections.Workflows.csproj" />
 		<ProjectReference Include="..\..\src\Tasks\Core\Elsa.Tasks.Core.csproj" />
@@ -227,4 +255,13 @@
 		<InternalsVisibleTo Include="Elsa.Modularity.Tests" />
 	</ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="../../../Extensions/Decisions/src/Elsa.Decisions/Elsa.Decisions.csproj" />
+    <ProjectReference Include="../../../Extensions/Decisions/src/Design/Elsa.Decisions.Design.csproj" />
+    <ProjectReference Include="../../../Extensions/Decisions/src/Api/Elsa.Decisions.Api.csproj" />
+    <ProjectReference Include="../../../Extensions/Decisions/src/Persistence/EntityFrameworkCore/Elsa.Decisions.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="../../../Extensions/Decisions/src/Workflows/Design/Elsa.Decisions.Workflows.Design.csproj" />
+    <ProjectReference Include="../../../Extensions/Decisions/src/Workflows/Runtime/Elsa.Decisions.Workflows.Runtime.csproj" />
+    <ProjectReference Include="../../../Extensions/Decisions/src/Workflows/Api/Elsa.Decisions.Workflows.Api.csproj" />
+  </ItemGroup>
 </Project>

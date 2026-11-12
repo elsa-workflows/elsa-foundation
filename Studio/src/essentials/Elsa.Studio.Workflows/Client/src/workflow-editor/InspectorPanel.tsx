@@ -12,12 +12,17 @@ import type {
 import type { ActivityAvailabilityDiagnosticEntry, ActivityCatalogItem, ActivityNode, ActivityPresentationRecord, VariableDefinition, WorkflowDefinitionState } from "../workflowTypes";
 import type { ActivityDefinitionVersionView, RecommendedActivityDefinition } from "../activityDefinitionTypes";
 import type { ScopedVariableAnalysis } from "../api/workflowDesign";
-import { slotCrumbLabel, type ChildSlot } from "../workflowAdapter";
+import { hasSwitchCaseOutgoingConnections, slotCrumbLabel, type ChildSlot } from "../workflowAdapter";
+import { canUpgradeSwitch, getCollectionSlots, isPredicateOnlySwitch, upgradeSwitch } from "../collectionSlots";
+import { CollectionSlotEditor } from "./CollectionSlotEditor";
+import { CaseConditionEditor } from "./CaseConditionEditor";
+import { readStructureDesignFacet } from "../workflowAdapter";
 import { HttpEndpointResponseWarning } from "../HttpEndpointResponseWarning";
 import { withHttpEndpointResponseMode } from "../httpEndpointResponseMode";
 import { isHttpEndpointType } from "./httpTestRequest";
 import { getAvailabilityStateLabel } from "../activityAvailability";
 import { ActivityPropertiesPanel } from "../ActivityPropertiesPanel";
+import type { ActivityDataSelectionHost } from "../activityDataSelection";
 import { ActivityOutputsPanel } from "../ActivityOutputsPanel";
 import { IntrinsicInspector } from "../IntrinsicInspector";
 import { readIntrinsicDescriptor } from "../intrinsicActivities";
@@ -25,7 +30,7 @@ import { ScopedVariablesEditor } from "../WorkflowPropertiesView";
 import { readContainerVariables, shadowingWarningMap, writeContainerVariables } from "../scopedVariables";
 import { describeSlotContents } from "./editorHelpers";
 import { ConnectMenu } from "./graph";
-import { activityDescriptionMaxLength, activityDisplayNameMaxLength } from "../activityPresentation";
+import { ActivityPresentationFields } from "./ActivityPresentationFields";
 import { StudioLink } from "../StudioLink";
 
 // The open change-activity picker. Holds only the slot ID (not the ChildSlot descriptor): the menu can
@@ -35,6 +40,7 @@ import { StudioLink } from "../StudioLink";
 interface SlotPickerState {
   nodeId: string;
   slotId: string;
+  collectionItemLabel?: string;
   clientX: number;
   clientY: number;
 }
@@ -73,6 +79,9 @@ interface InspectorPanelProps {
   // the container whose contents the canvas displays, e.g. the flowchart a slot entry descended into.
   inspectingScopeOwner?: boolean;
   catalog: ActivityCatalogItem[];
+  choicesForSlot?(owner: ActivityNode, slot: ChildSlot): ActivityCatalogItem[];
+  placementNotice?: string;
+  bpmnRoutingPanel?: ReactNode;
   catalogByVersion?: Map<string, ActivityCatalogItem>;
   selectedSupportsScopedVariables: boolean;
   variablesPanel?: ReactNode;
@@ -84,9 +93,13 @@ interface InspectorPanelProps {
   descriptorStatus: "loading" | "ready" | "failed";
   onRetryExpressionDescriptors(): void;
   scopedVariableAnalysis: ScopedVariableAnalysis;
+  /** Source analysis for Choose data on the ordinary activity inputs; absent where the owner offers none. */
+  activityDataSelection?: ActivityDataSelectionHost | null;
   activeTabId?: ActivityInspectorTabId;
   onActiveTabChange?(tabId: ActivityInspectorTabId): void;
   onSelectedActivityChange(activity: ActivityNode): void;
+  /** Discrete collection operations end the previous property-edit history group. */
+  onSelectedStructureChange?(activity: ActivityNode): void;
   onSelectedPresentationChange?(presentation: Pick<ActivityPresentationRecord, "displayName" | "description">): void;
   onChangeReusableVersion?(activity: ActivityNode, version: ActivityDefinitionVersionView): void;
   onEnterSlot(ownerNodeId: string, slot: ChildSlot, label: string): void;
@@ -125,6 +138,9 @@ export function InspectorPanel({
   selectedSlots,
   inspectingScopeOwner = false,
   catalog,
+  choicesForSlot,
+  placementNotice,
+  bpmnRoutingPanel,
   catalogByVersion,
   selectedSupportsScopedVariables,
   variablesPanel,
@@ -136,9 +152,11 @@ export function InspectorPanel({
   descriptorStatus,
   onRetryExpressionDescriptors,
   scopedVariableAnalysis,
+  activityDataSelection = null,
   activeTabId,
   onActiveTabChange,
   onSelectedActivityChange,
+  onSelectedStructureChange,
   onSelectedPresentationChange,
   onChangeReusableVersion,
   onEnterSlot,
@@ -150,7 +168,15 @@ export function InspectorPanel({
   const [slotPicker, setSlotPicker] = useState<SlotPickerState | null>(null);
   const [localActiveTabId, setLocalActiveTabId] = useState<ActivityInspectorTabId>("inputs");
   const tabBaseId = useId();
-  const hasSlots = selectedSlots.length > 0;
+  const selectedCatalogItem = catalogByVersion?.get(selectedNode?.activityVersionId ?? "")
+    ?? catalog.find(item => item.activityVersionId === selectedNode?.activityVersionId);
+  const collections = selectedNode ? getCollectionSlots(selectedNode, selectedCatalogItem) : [];
+  // The palette can retain a legacy recommendation while the full catalog already offers an upgrade.
+  const switchUpgradeTarget = selectedNode?.structure?.kind === "elsa.switch.structure" && selectedNode.structure.schemaVersion === "1.0.0" ? [...catalog, ...(catalogByVersion?.values() ?? [])].find(item => {
+    const facet = readStructureDesignFacet(item);
+    return item.available !== false && item.activityTypeKey === selectedCatalogItem?.activityTypeKey && facet?.kind === "elsa.switch.structure" && facet.schemaVersion === "2.0.0";
+  }) : undefined;
+  const hasSlots = selectedSlots.length > 0 || collections.length > 0;
   const requestedTabId = activeTabId ?? localActiveTabId;
   const effectiveActiveTabId = resolveActivityInspectorTabId(requestedTabId, selectedSupportsScopedVariables, hasSlots);
   const inspectorTabs: StudioTabItem[] = [
@@ -181,7 +207,8 @@ export function InspectorPanel({
 
   // Adjust-during-render: an open picker belongs to the node it was opened for; drop it the moment the
   // selection moves, so it neither survives a selection change nor resurrects on reselection.
-  if (slotPicker && slotPicker.nodeId !== selectedNode?.nodeId) {
+  if (slotPicker && (slotPicker.nodeId !== selectedNode?.nodeId || !selectedSlots.some(slot =>
+    slot.id === slotPicker.slotId && slot.collectionItemLabel === slotPicker.collectionItemLabel))) {
     setSlotPicker(null);
   }
 
@@ -195,16 +222,20 @@ export function InspectorPanel({
     catalogByVersion?.get(selectedNode.activityVersionId) ?? catalog.find(item => item.activityVersionId === selectedNode.activityVersionId)
   );
 
+  const predicateOnly = isPredicateOnlySwitch(selectedNode);
+  const inputDescriptor = predicateOnly && selectedDescriptor ? { ...selectedDescriptor,
+    inputs: selectedDescriptor.inputs.filter(input => (input.referenceKey ?? input.name) !== "Value") } : selectedDescriptor;
   const propertiesPanel = intrinsicDescriptor ? (
     <IntrinsicInspector
       intrinsic={intrinsicDescriptor}
+      readOnly={readOnly}
       context={context}
       draftId={draftId}
       expressionTooling={expressionTooling}
       expressionEditorSessionScope={expressionEditorSessionScope}
       workflowState={workflowState}
       activity={selectedNode}
-      descriptor={selectedDescriptor}
+      descriptor={inputDescriptor}
       editors={propertyEditors}
       expressionEditors={expressionEditors}
       expressionDescriptors={expressionDescriptors}
@@ -220,13 +251,14 @@ export function InspectorPanel({
     />
   ) : (
     <ActivityPropertiesPanel
+      readOnly={readOnly}
       context={context}
       draftId={draftId}
       expressionTooling={expressionTooling}
       expressionEditorSessionScope={expressionEditorSessionScope}
       workflowState={workflowState}
       activity={selectedNode}
-      descriptor={selectedDescriptor}
+      descriptor={inputDescriptor}
       editors={propertyEditors}
       expressionEditors={expressionEditors}
       expressionDescriptors={expressionDescriptors}
@@ -238,11 +270,24 @@ export function InspectorPanel({
       scopeRetry={scopedVariableAnalysis.retry}
       showHeading={false}
       emptyLabel="This activity has no configurable inputs."
+      activityDataSelection={activityDataSelection}
       onChange={onSelectedActivityChange}
     />
   );
-  const selectedCatalogItem = catalogByVersion?.get(selectedNode.activityVersionId)
-    ?? catalog.find(item => item.activityVersionId === selectedNode.activityVersionId);
+  const renderSlot = (slot: ChildSlot) => {
+    const label = slotCrumbLabel(selectedNodeLabel, slot);
+    return <div className="wf-slot-row" key={slot.id}>
+      <button type="button" onClick={() => onEnterSlot(selectedNode.nodeId, slot, label)}>
+        {slot.label}<small>{describeSlotContents(slot, catalogByVersion)}</small>
+      </button>
+      {!readOnly && slot.cardinality === "single" ? <button
+        type="button" className="wf-slot-change"
+        aria-label={`${slot.activities.length > 0 ? "Change" : "Choose"} ${slot.label} activity`}
+        title={slot.activities.length > 0 ? "Change activity" : "Choose activity"}
+        onClick={event => setSlotPicker({ nodeId: selectedNode.nodeId, slotId: slot.id, collectionItemLabel: slot.collectionItemLabel, clientX: event.clientX, clientY: event.clientY })}
+      ><Repeat2 size={14} /></button> : null}
+    </div>;
+  };
 
   return (
     <div className="wf-inspector-content">
@@ -291,6 +336,7 @@ export function InspectorPanel({
           </div>
         ) : null}
       </div>
+      {placementNotice ? <p className="wf-muted" role="note">{placementNotice} This existing activity is preserved.</p> : null}
       <StudioTabs
         baseId={tabBaseId}
         className="wf-inspector-tabs"
@@ -309,7 +355,14 @@ export function InspectorPanel({
               onUseSync={() => onSelectedActivityChange(withHttpEndpointResponseMode(selectedNode, selectedCatalogItem, "Sync"))}
             />
           ) : null}
+          {switchUpgradeTarget ? <div className="wf-slot-collection-item">
+            <p className="wf-muted">Use a separate Boolean expression for each case. Existing matches and branches are preserved.</p>
+            {!canUpgradeSwitch(selectedNode) ? <p className="wf-muted" role="note">This Switch cannot be upgraded while Value uses an activation-only Secret reference or its cases have an unsupported shape. Replace the Secret Value binding or correct the case data first.</p> : null}
+            <button type="button" disabled={readOnly || !canUpgradeSwitch(selectedNode)} onClick={() => (onSelectedStructureChange ?? onSelectedActivityChange)(upgradeSwitch(selectedNode, switchUpgradeTarget))}>Upgrade to case conditions</button>
+          </div> : null}
+          {predicateOnly ? <p className="wf-muted">Set each case condition in the Slots tab.</p> : null}
           {propertiesPanel}
+          {bpmnRoutingPanel}
         </StudioTabPanel>
         <StudioTabPanel {...tabPanelProps("outputs")}>
           <ActivityOutputsPanel
@@ -344,34 +397,33 @@ export function InspectorPanel({
         {hasSlots ? (
           <StudioTabPanel {...tabPanelProps("slots")}>
             <div className="wf-slot-list">
-              {selectedSlots.map(slot => {
-                const label = slotCrumbLabel(selectedNodeLabel, slot);
-                return (
-                  <div className="wf-slot-row" key={slot.id}>
-                    <button type="button" onClick={() => onEnterSlot(selectedNode.nodeId, slot, label)}>
-                      {slot.label}
-                      <small>{describeSlotContents(slot, catalogByVersion)}</small>
-                    </button>
-                    {slot.cardinality === "single" ? (
-                      <button
-                        type="button"
-                        className="wf-slot-change"
-                        aria-label={`${slot.activities.length > 0 ? "Change" : "Choose"} ${slot.label} activity`}
-                        title={slot.activities.length > 0 ? "Change activity" : "Choose activity"}
-                        onClick={event => setSlotPicker({ nodeId: selectedNode.nodeId, slotId: slot.id, clientX: event.clientX, clientY: event.clientY })}
-                      >
-                        <Repeat2 size={14} />
-                      </button>
-                    ) : null}
-                  </div>
-                );
-              })}
+              {collections.map(collection => <CollectionSlotEditor
+                hasOutgoingConnections={workflowState?.rootActivity ? index => hasSwitchCaseOutgoingConnections(workflowState.rootActivity!, selectedNode, index, catalogByVersion) : undefined}
+                key={collection.property} activity={selectedNode} collection={collection} readOnly={readOnly}
+                onChange={next => { setSlotPicker(null); (onSelectedStructureChange ?? onSelectedActivityChange)(next); }}
+                renderCondition={item => <CaseConditionEditor
+                  collection={collection} item={item} activity={selectedNode} readOnly={readOnly}
+                  context={context} draftId={draftId} expressionTooling={expressionTooling} expressionEditorSessionScope={expressionEditorSessionScope}
+                  workflowState={workflowState} editors={propertyEditors} expressionEditors={expressionEditors}
+                  expressionDescriptors={expressionDescriptors} expressionDescriptorStatus={expressionDescriptorStatus}
+                  descriptorStatus={descriptorStatus} onRetryDescriptors={onRetryExpressionDescriptors}
+                  visibleVariables={scopedVariableAnalysis.visibleVariables} scopeStatus={scopedVariableAnalysis.status} scopeRetry={scopedVariableAnalysis.retry}
+                  onChange={onSelectedActivityChange} />}
+                renderBranch={index => {
+                  const slot = selectedSlots.find(candidate => candidate.collectionProperty === collection.property && candidate.collectionIndex === index);
+                  return slot ? renderSlot(slot) : null;
+                }}
+              />)}
+              {selectedSlots.filter(slot => !collections.some(collection => collection.property === slot.collectionProperty)).map(renderSlot)}
             </div>
             {slotPicker ? (
               <ConnectMenu
                 clientX={slotPicker.clientX}
                 clientY={slotPicker.clientY}
-                activities={catalog}
+                activities={(() => {
+                  const slot = selectedSlots.find(candidate => candidate.id === slotPicker.slotId);
+                  return slot && selectedNode && choicesForSlot ? choicesForSlot(selectedNode, slot) : catalog;
+                })()}
                 onPick={activity => {
                   setSlotPicker(null);
                   const slot = selectedSlots.find(candidate => candidate.id === slotPicker.slotId);
@@ -384,38 +436,8 @@ export function InspectorPanel({
           </StudioTabPanel>
         ) : null}
         <StudioTabPanel {...tabPanelProps("details")}>
-          <div className="wf-activity-presentation-fields">
-            <label>
-              <span>Display name</span>
-              <input
-                type="text"
-                maxLength={activityDisplayNameMaxLength}
-                value={selectedPresentation?.displayName ?? ""}
-                placeholder={selectedNodeLabel}
-                disabled={!onSelectedPresentationChange}
-                onChange={event => onSelectedPresentationChange?.({
-                  displayName: event.target.value,
-                  description: selectedPresentation?.description
-                })}
-              />
-              <small>{selectedPresentation?.displayName?.length ?? 0}/{activityDisplayNameMaxLength}</small>
-            </label>
-            <label>
-              <span>Description</span>
-              <textarea
-                rows={5}
-                maxLength={activityDescriptionMaxLength}
-                value={selectedPresentation?.description ?? ""}
-                placeholder="Explain what this activity does in this workflow."
-                disabled={!onSelectedPresentationChange}
-                onChange={event => onSelectedPresentationChange?.({
-                  displayName: selectedPresentation?.displayName,
-                  description: event.target.value
-                })}
-              />
-              <small>{selectedPresentation?.description?.length ?? 0}/{activityDescriptionMaxLength}</small>
-            </label>
-          </div>
+          <ActivityPresentationFields key={selectedNode.nodeId} presentation={selectedPresentation}
+            label={selectedNodeLabel} onChange={onSelectedPresentationChange} />
           <CopyableIdentifier label="Activity type" value={selectedActivityType} />
         </StudioTabPanel>
         <StudioTabPanel {...tabPanelProps("version")}>

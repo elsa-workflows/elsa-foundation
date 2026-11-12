@@ -149,7 +149,9 @@ public sealed class EfPendingMigrationActivationGuardTests : IDisposable
     public async Task Refuses_under_both_policies_a_feature_whose_module_is_finalized_at_a_version_this_host_cannot_read(EfMigratePolicy policy)
     {
         var connection = ConnectionTo(_harness.Database($"finalized-{Sentinel}"));
-        await FinalizeAsync("Secrets", connection, SecretsEfModule.SchemaFamily, [SecretsEfModule.SchemaVersion, "2.0.0"], "2.0.0");
+        var unreadableVersion = $"{Version.Parse(SecretsEfModule.SchemaVersion).Major + 1}.0.0";
+        await FinalizeAsync("Secrets", connection, SecretsEfModule.SchemaFamily,
+            [.. SecretsEfModule.Chain.ReadableVersions, unreadableVersion], unreadableVersion);
 
         var decision = await _harness.Guard(policy).EvaluateAsync(Request(Enabled(SecretsFeature, connection: connection)));
 
@@ -157,20 +159,23 @@ public sealed class EfPendingMigrationActivationGuardTests : IDisposable
         Assert.Equal(SecretsFeature, refusal.Feature);
         Assert.Equal(
             $"Feature '{SecretsFeature}' depends on EF module 'Secrets'. EF module 'Secrets' cannot activate: schema family " +
-            $"'{SecretsEfModule.SchemaFamily}' is finalized at '2.0.0' in this database, and this host reads only " +
-            $"[{SecretsEfModule.SchemaVersion}]. Rows at '2.0.0' may exist, and this host cannot read them. Run a version of the " +
-            "module that reads '2.0.0', or restore a database backup taken before '2.0.0' was finalized. Nothing was saved.",
+            $"'{SecretsEfModule.SchemaFamily}' is finalized at '{unreadableVersion}' in this database, and this host reads only " +
+            $"[{string.Join(", ", SecretsEfModule.Chain.ReadableVersions)}]. Rows at '{unreadableVersion}' may exist, and this host cannot read them. Run a version of the " +
+            $"module that reads '{unreadableVersion}', or restore a database backup taken before '{unreadableVersion}' was finalized. Nothing was saved.",
             refusal.Reason);
         AssertNothingLeaked(connection, decision);
     }
 
     [Theory]
-    [InlineData(EfMigratePolicy.Validate)]
-    [InlineData(EfMigratePolicy.AutoMigrate)]
-    public async Task Allows_under_both_policies_a_feature_whose_module_is_finalized_at_a_version_this_host_reads(EfMigratePolicy policy)
+    [InlineData(EfMigratePolicy.Validate, "1.0.0")]
+    [InlineData(EfMigratePolicy.AutoMigrate, "1.0.0")]
+    [InlineData(EfMigratePolicy.Validate, SecretsEfModule.SchemaVersion)]
+    [InlineData(EfMigratePolicy.AutoMigrate, SecretsEfModule.SchemaVersion)]
+    public async Task Allows_under_both_policies_a_feature_whose_module_is_finalized_at_a_version_this_host_reads(EfMigratePolicy policy, string finalizedVersion)
     {
         var connection = ConnectionTo(_harness.Database("readable"));
-        await FinalizeAsync("Secrets", connection, SecretsEfModule.SchemaFamily, [SecretsEfModule.SchemaVersion, "2.0.0"], SecretsEfModule.SchemaVersion);
+        await FinalizeAsync("Secrets", connection, SecretsEfModule.SchemaFamily,
+            [.. SecretsEfModule.Chain.ReadableVersions], finalizedVersion);
 
         Assert.True((await _harness.Guard(policy).EvaluateAsync(Request(Enabled(SecretsFeature, connection: connection)))).IsAllowed);
     }
@@ -185,11 +190,12 @@ public sealed class EfPendingMigrationActivationGuardTests : IDisposable
     public async Task Refuses_under_both_policies_a_family_complete_only_from_a_version_this_host_no_longer_reads(EfMigratePolicy policy)
     {
         var connection = ConnectionTo(_harness.Database("incomplete"));
-        await FinalizeAsync("Secrets", connection, SecretsEfModule.SchemaFamily, ["0.9.0", SecretsEfModule.SchemaVersion], SecretsEfModule.SchemaVersion);
+        await FinalizeAsync("Secrets", connection, SecretsEfModule.SchemaFamily,
+            ["0.9.0", .. SecretsEfModule.Chain.ReadableVersions], SecretsEfModule.SchemaVersion);
 
         var refusal = Assert.Single((await _harness.Guard(policy).EvaluateAsync(Request(Enabled(SecretsFeature, connection: connection)))).Refusals);
 
-        Assert.Contains($"is complete only from '0.9.0' in this database, and this host reads only [{SecretsEfModule.SchemaVersion}]", refusal.Reason, StringComparison.Ordinal);
+        Assert.Contains($"is complete only from '0.9.0' in this database, and this host reads only [{string.Join(", ", SecretsEfModule.Chain.ReadableVersions)}]", refusal.Reason, StringComparison.Ordinal);
     }
 
     /// <summary>

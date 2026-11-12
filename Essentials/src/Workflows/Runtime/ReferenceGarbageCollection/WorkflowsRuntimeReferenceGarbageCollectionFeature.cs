@@ -61,7 +61,8 @@ public sealed class WorkflowsRuntimeReferenceGarbageCollectionFeature : IShellFe
             options.ArtifactCreationGracePeriod = TimeSpan.FromMinutes(ArtifactCreationGracePeriodMinutes);
         });
 
-        services.TryAddScoped<IWorkflowExecutableReferenceGarbageCollector, WorkflowExecutableReferenceGarbageCollector>();
+        // The repo-owned pump shares Runtime's qualified selection; registering either feature first is equivalent.
+        services.TryAddScoped<IWorkflowExecutableReferenceGarbageCollector>(WorkflowExecutableReferenceGarbageCollector.Create);
         services.AddSingleton<IRecurringTask>(sp => new WorkflowExecutableReferenceGarbageCollectionPumpTask(
             sp.GetRequiredService<IPersistenceScopeRunner>(),
             sp.GetRequiredService<IOptions<WorkflowExecutableReferenceGarbageCollectionOptions>>(),

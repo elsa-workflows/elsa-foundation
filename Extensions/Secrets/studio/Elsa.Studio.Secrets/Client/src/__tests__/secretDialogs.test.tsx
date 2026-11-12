@@ -3,7 +3,6 @@ import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CreateSecretDialog, RotateSecretDialog } from "../SecretDialogs";
-import { SECRET_SCOPE_MATCHING_HINT } from "../SecretScopePicker";
 import type { CreateSecretRequest, RotateSecretRequest, SecretDescriptorsResponse, SecretMetadata } from "../secretTypes";
 
 type SecretSaveRequest = CreateSecretRequest | RotateSecretRequest;
@@ -119,144 +118,150 @@ describe("entered secret visibility", () => {
 });
 
 describe("Create dialog regression contract", () => {
-  it("uses descriptor defaults, gates submission on Value, and submits the exact default request without reading stored values", () => {
-    const fetch = vi.fn();
-    vi.stubGlobal("fetch", fetch);
+  it("preserves technical name casing on blur and submit while trimming whitespace", () => {
     const { container, onSave } = renderDialog("create");
-    const dialog = container.querySelector<HTMLElement>("[role='dialog']")!;
-    const type = fieldControl<HTMLSelectElement>(dialog, "Type");
-    const store = fieldControl<HTMLSelectElement>(dialog, "Store");
-    const value = fieldControl<HTMLInputElement>(dialog, "Value");
-    const create = dialog.querySelector<HTMLButtonElement>("button[type='submit']")!;
+    const name = fieldControl<HTMLInputElement>(container, "Technical name");
+    change(name, " DbConnectionString ");
+    flushSync(() => name.dispatchEvent(new FocusEvent("focusout", { bubbles: true })));
+    expect(name.value).toBe("DbConnectionString");
+    change(fieldControl<HTMLInputElement>(container, "Value"), "new-secret-value");
+    expect(container.querySelector<HTMLButtonElement>("button[type='submit']")!.disabled).toBe(false);
+    flushSync(() => container.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ name: "DbConnectionString", displayName: "DbConnectionString" }));
+  });
 
-    expect(type.value).toBe("text");
-    expect(store.value).toBe("encrypted");
-    expect(value.value).toBe("");
-    expect(create.disabled).toBe(true);
-    expect(onSave).not.toHaveBeenCalled();
-
-    change(value, "new-secret-value");
-    expect(create.disabled).toBe(false);
-    flushSync(() => dialog.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
-
-    expect(onSave).toHaveBeenCalledWith({
-      name: "test-key",
-      displayName: "test-key",
-      description: undefined,
-      typeName: "text",
-      storeName: "encrypted",
-      scope: undefined,
-      tags: [],
-      value: "new-secret-value",
-      configurationKey: undefined,
-      expiresAt: undefined
+  it("disables field editing while pending and restores the draft after a failed save", async () => {
+    let rejectSave!: (error: Error) => void;
+    const { container, onSave } = renderDialog("create");
+    onSave.mockImplementation(() => new Promise<void>((_resolve, reject) => { rejectSave = reject; }));
+    const name = fieldControl<HTMLInputElement>(container, "Technical name");
+    const value = fieldControl<HTMLInputElement>(container, "Value");
+    change(name, "DbConnectionString");
+    change(value, "demonstration-value");
+    flushSync(() => container.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ name: "DbConnectionString", displayName: "DbConnectionString" }));
+    expect(name.disabled).toBe(true);
+    expect(value.disabled).toBe(true);
+    rejectSave(new Error("Demonstration failure"));
+    await waitFor(() => {
+      const alert = container.querySelector("[role='alert']");
+      expect(alert?.textContent).toBe("Demonstration failure");
+      expect(document.activeElement).toBe(alert);
+      expect(name.disabled).toBe(false);
+      expect(value.disabled).toBe(false);
     });
+    expect(name.value).toBe("DbConnectionString");
+    expect(value.value).toBe("demonstration-value");
+  });
+
+  it("keeps a non-text type's description with Configuration key", () => {
+    const described: SecretDescriptorsResponse = {
+      ...configurableDescriptors,
+      types: [{ name: "json", displayName: "JSON", supportedStoreNames: ["configuration", "encrypted"], description: "Fixture type description." }]
+    };
+    const { container } = renderDialog("create", { descriptors: described });
+    const key = fieldControl<HTMLInputElement>(container, "Configuration key");
+    expect(document.getElementById(key.getAttribute("aria-describedby")!)?.textContent).toBe("Fixture type description.");
+  });
+
+  it("uses descriptor defaults, hides a sole Store and focuses missing Value before sending the exact request", () => {
+    const fetch = vi.fn(); vi.stubGlobal("fetch", fetch);
+    const { container, onSave } = renderDialog("create");
+    expect(fieldControl<HTMLSelectElement>(container, "Type").value).toBe("text");
+    expect([...container.querySelectorAll("label")].some(label => directLabelText(label) === "Store")).toBe(false);
+    submit(container); expect(onSave).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(fieldControl(container, "Value"));
+    change(fieldControl(container, "Value"), "authored-value"); submit(container);
+    expect(onSave).toHaveBeenCalledWith({ name: "test-key", displayName: "test-key", description: undefined, typeName: "text", storeName: "encrypted", scope: undefined, tags: [], value: "authored-value", configurationKey: undefined, expiresAt: undefined });
     expect(fetch).not.toHaveBeenCalled();
   });
 
-  it("keeps Store directly recoverable when a Type has no supported stores", () => {
-    const { container } = renderDialog("create", { descriptors: unavailableStoreDescriptors });
-    const dialog = container.querySelector<HTMLElement>("[role='dialog']")!;
-    const type = fieldControl<HTMLSelectElement>(dialog, "Type");
-    const options = moreOptionsButton(dialog);
-    const body = disclosureBody(dialog, options);
-
-    selectOption(type, "JSON");
-    expect(type.value).toBe("json");
-    expect(fieldControl<HTMLSelectElement>(dialog, "Store").value).toBe("");
-    expect(options.getAttribute("aria-expanded")).toBe("true");
-    expect(body.hidden).toBe(false);
-    expect(body.contains(fieldControl<HTMLSelectElement>(dialog, "Store"))).toBe(true);
-    expect(body.contains(type)).toBe(false);
-
-    selectOption(type, "Text");
-    expect(type.value).toBe("text");
-    expect(fieldControl<HTMLSelectElement>(dialog, "Store").value).toBe("encrypted");
+  it("retains native label and invalid-help associations when validation reveals another tab", () => {
+    const { container, onSave } = renderDialog("create");
+    const name = fieldControl<HTMLInputElement>(container, "Technical name");
+    expect(name.labels?.[0]?.control).toBe(name);
+    change(name, "has spaces");
+    expect(name.getAttribute("aria-invalid")).toBe("true");
+    const help = document.getElementById(name.getAttribute("aria-describedby")!);
+    expect(help?.textContent).toContain("Use letters, numbers");
+    flushSync(() => editorTab(container, "Details").click());
+    submit(container);
+    expect(editorTab(container, "Secret").getAttribute("aria-selected")).toBe("true");
+    expect(document.activeElement).toBe(name);
+    expect(onSave).not.toHaveBeenCalled();
+    change(name, "DbConnectionString");
+    expect(name.hasAttribute("aria-invalid")).toBe(false);
+    expect(document.getElementById(name.getAttribute("aria-describedby")!)?.textContent).toContain("Casing is preserved");
   });
 
-  it("uses Configuration key as the required source and trims it on submit", () => {
+  it("opens the store recovery section when a type has no compatible provider", () => {
+    const { container, onSave } = renderDialog("create", { descriptors: unavailableStoreDescriptors });
+    change(fieldControl(container, "Value"), "authored-value"); selectOption(fieldControl(container, "Type"), "JSON"); submit(container);
+    expect(onSave).not.toHaveBeenCalled();
+    expect(editorTab(container, "Storage & lifetime").getAttribute("aria-selected")).toBe("true");
+    expect(document.activeElement?.textContent).toContain("No compatible secret store");
+    flushSync(() => editorTab(container, "Secret").click()); selectOption(fieldControl(container, "Type"), "Text"); submit(container);
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ typeName: "text", storeName: "encrypted", value: "authored-value" }));
+  });
+
+  it("recovers a retained store replaced by a sole compatible descriptor without losing entered material", () => {
+    const { container, render, onSave } = renderDialog("create");
+    change(fieldControl(container, "Value"), "retained-material");
+    const replacement: SecretDescriptorsResponse = { types: [{ name: "text", displayName: "Text", supportedStoreNames: ["configuration"] }], stores: [{ name: "configuration", displayName: "Configuration", isReadOnly: true }] };
+    render("create", { descriptors: replacement });
+    flushSync(() => editorTab(container, "Storage & lifetime").click());
+    const store = fieldControl<HTMLSelectElement>(container, "Store");
+    expect(store.value).toBe("encrypted");
+    expect(store.selectedOptions[0].textContent).toContain("unavailable");
+    selectOption(store, "Configuration"); submit(container);
+    expect(onSave).not.toHaveBeenCalled();
+    expect(editorTab(container, "Secret").getAttribute("aria-selected")).toBe("true");
+    change(fieldControl(container, "Configuration key"), "Config:Primary");
+    render("create", { descriptors });
+    selectOption(fieldControl(container, "Store"), "Encrypted");
+    expect(fieldControl<HTMLInputElement>(container, "Value").value).toBe("retained-material");
+    submit(container);
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ value: "retained-material", configurationKey: undefined, storeName: "encrypted" }));
+  });
+
+  it("validates Configuration key in Secret and sends no hidden Value", () => {
     const { container, onSave } = renderDialog("create", { descriptors: configurableDescriptors });
-    const dialog = container.querySelector<HTMLElement>("[role='dialog']")!;
-    const type = fieldControl<HTMLSelectElement>(dialog, "Type");
-    const store = fieldControl<HTMLSelectElement>(dialog, "Store");
-    const create = dialog.querySelector<HTMLButtonElement>("button[type='submit']")!;
-
-    expect(type.value).toBe("text");
-    expect(store.value).toBe("configuration");
-    expect(fieldControl<HTMLInputElement>(dialog, "Configuration key").value).toBe("");
-    expect(dialog.querySelector(".secrets-value-input input")).toBeNull();
-    expect(create.disabled).toBe(true);
-    change(fieldControl<HTMLInputElement>(dialog, "Configuration key"), "   ");
-    expect(create.disabled).toBe(true);
-    change(fieldControl<HTMLInputElement>(dialog, "Configuration key"), "  Payments:Primary  ");
-    expect(create.disabled).toBe(false);
-
-    flushSync(() => dialog.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
-
-    expect(onSave).toHaveBeenCalledWith({
-      name: "test-key",
-      displayName: "test-key",
-      description: undefined,
-      typeName: "text",
-      storeName: "configuration",
-      scope: undefined,
-      tags: [],
-      value: undefined,
-      configurationKey: "Payments:Primary",
-      expiresAt: undefined
-    });
+    expect(fieldControl<HTMLSelectElement>(container, "Store").value).toBe("configuration");
+    flushSync(() => editorTab(container, "Storage & lifetime").click()); submit(container);
+    expect(editorTab(container, "Secret").getAttribute("aria-selected")).toBe("true");
+    expect(document.activeElement).toBe(fieldControl(container, "Configuration key"));
+    expect(onSave).not.toHaveBeenCalled();
+    change(fieldControl(container, "Configuration key"), "  Payments:Primary  "); submit(container);
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ configurationKey: "Payments:Primary", value: undefined, storeName: "configuration" }));
   });
 
-  it("starts More options collapsed, keeps required fields and context direct, and counts only authored optional configuration", () => {
+  it("uses named mounted panels with contextual guidance and no nested disclosure or redundant type/store prose", () => {
     const { container } = renderDialog("create", { descriptors: scopeDescriptors });
-    const dialog = container.querySelector<HTMLElement>("[role='dialog']")!;
-    const options = moreOptionsButton(dialog);
-    const body = disclosureBody(dialog, options);
-    const name = fieldControl<HTMLInputElement>(dialog, "Technical name");
-    const type = fieldControl<HTMLSelectElement>(dialog, "Type");
-    const value = fieldControl<HTMLInputElement>(dialog, "Value");
-    const expires = fieldControl<HTMLInputElement>(dialog, "Expires");
-
-    expect(options.getAttribute("aria-expanded")).toBe("false");
-    expect(body.hidden).toBe(true);
-    expect(body.contains(fieldControl<HTMLInputElement>(dialog, "Display name"))).toBe(true);
-    expect(body.contains(fieldControl<HTMLTextAreaElement>(dialog, "Description"))).toBe(true);
-    expect(body.contains(fieldControl<HTMLInputElement>(dialog, "Tags"))).toBe(true);
-    expect(body.contains(fieldControl<HTMLSelectElement>(dialog, "Store"))).toBe(true);
-    expect(body.contains(fieldControl<HTMLSelectElement>(dialog, "Scope"))).toBe(true);
-    expect(body.contains(type)).toBe(false);
-    expect(body.contains(value)).toBe(false);
-    expect(body.contains(expires)).toBe(false);
-    expect(name.compareDocumentPosition(type) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(type.compareDocumentPosition(value) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(expires.parentElement?.textContent).toContain("Expires");
-    expect(textNodeOutside(dialog, "Store: Encrypted", body)).not.toBeNull();
-    expect(textNodeOutside(dialog, "Fixture type description.", body)).not.toBeNull();
-    expect(textNodeOutside(dialog, "Fixture store description.", body)).not.toBeNull();
-
-    const scopeHint = [...dialog.querySelectorAll<HTMLParagraphElement>("p")].filter(paragraph => paragraph.textContent?.trim() === SECRET_SCOPE_MATCHING_HINT);
-    expect(scopeHint).toHaveLength(1);
-    expect(body.contains(scopeHint[0])).toBe(false);
-    const scopeSelect = fieldControl<HTMLSelectElement>(dialog, "Scope");
-    const scopeDescriptionIds = scopeSelect.getAttribute("aria-describedby")!.split(/\s+/);
-    expect(scopeDescriptionIds).toHaveLength(2);
-    expect(scopeDescriptionIds).toContain(scopeHint[0].id);
-    expect(document.getElementById(scopeDescriptionIds.find(id => id !== scopeHint[0].id)!)).not.toBeNull();
-
-    change(name, "authored.name");
-    change(value, "authored-source");
-    change(expires, "2030-01-02T03:04");
-    expect(options.textContent).not.toContain("set");
-
-    flushSync(() => options.click());
-    expect(options.getAttribute("aria-expanded")).toBe("true");
-    expect(body.hidden).toBe(false);
-    selectOption(scopeSelect, "Custom…");
-    const customScope = fieldControl<HTMLInputElement>(dialog, "Custom scope value");
-    expect(customScope.getAttribute("aria-describedby")).toBe(scopeDescriptionIds.join(" "));
-    change(fieldControl<HTMLInputElement>(dialog, "Display name"), "Private title");
-    expect(options.textContent).toContain("1 set");
-    expect(options.textContent).not.toContain("Private title");
+    expect([...container.querySelectorAll("[role=tab]")].map(t => t.textContent)).toEqual(["Secret", "Details", "Storage & lifetime"]);
+    expect(container.textContent).not.toContain("More options");
+    expect(container.textContent).not.toContain("Fixture type description.");
+    expect(container.textContent).not.toContain("Fixture store description.");
+    const details = panelFor(container, "Details"); expect(details.hidden).toBe(true);
+    flushSync(() => editorTab(container, "Details").click());
+    expect(details.hidden).toBe(false);
+    change(fieldControl(container, "Display name"), "Private title");
+    expect(editorTab(container, "Details").textContent).toBe("Details (1)");
+    expect(editorTab(container, "Details").textContent).not.toContain("Private title");
+    flushSync(() => editorTab(container, "Storage & lifetime").click());
+    const scope = fieldControl<HTMLSelectElement>(container, "Scope");
+    const descriptionIds = scope.getAttribute("aria-describedby")!.split(/\s+/);
+    expect(descriptionIds).toHaveLength(2);
+    expect(new Set(descriptionIds).size).toBe(2);
+    for (const id of descriptionIds) expect(document.getElementById(id)?.isConnected).toBe(true);
+    const hints = descriptionIds.map(id => document.getElementById(id)?.textContent).join(" ");
+    expect(hints).toContain("Scope does not grant access.");
+    expect(panelFor(container, "Storage & lifetime").contains(document.getElementById(descriptionIds[0]))).toBe(true);
+    expect([...container.querySelectorAll("p")].filter(p => p.textContent?.includes("Scope does not grant access."))).toHaveLength(1);
+    selectOption(scope, "Custom…");
+    const custom = fieldControl<HTMLInputElement>(container, "Custom scope value");
+    expect(custom.getAttribute("aria-describedby")).toBe(scope.getAttribute("aria-describedby"));
+    change(custom, " Team:Production ");
+    expect(custom.value).toBe(" Team:Production ");
   });
 
   it("preserves Value and Configuration key through Store switching and remasks Value on Type change", () => {
@@ -299,40 +304,23 @@ describe("Create dialog regression contract", () => {
     });
   });
 
-  it("retains optional values through manual collapse and reopen without exposing them in the disclosure label", () => {
+  it("preserves all authored values through tab navigation without copying them into labels", () => {
     const { container } = renderDialog("create", { descriptors: switchableDescriptors });
-    const dialog = container.querySelector<HTMLElement>("[role='dialog']")!;
-    const options = moreOptionsButton(dialog);
-    const body = disclosureBody(dialog, options);
-    flushSync(() => options.click());
-    change(fieldControl<HTMLInputElement>(dialog, "Display name"), "Payment token");
-    expect(options.textContent).toContain("1 set");
-    change(fieldControl<HTMLTextAreaElement>(dialog, "Description"), "  keep this description  ");
-    expect(options.textContent).toContain("2 set");
-    change(fieldControl<HTMLInputElement>(dialog, "Tags"), " api, payments, ");
-    expect(options.textContent).toContain("3 set");
-    selectOption(fieldControl<HTMLSelectElement>(dialog, "Scope"), "Custom…");
-    change(fieldControl<HTMLInputElement>(dialog, "Custom scope value"), " Payments:Production ");
-    expect(options.textContent).toContain("4 set");
-    const store = fieldControl<HTMLSelectElement>(dialog, "Store");
-    selectOption(store, "Configuration");
-    expect(options.textContent).toContain("5 set");
-    selectOption(store, "Encrypted");
-    expect(options.textContent).toContain("4 set");
-
-    flushSync(() => options.click());
-    expect(options.getAttribute("aria-expanded")).toBe("false");
-    expect(options.textContent).not.toContain("Payment token");
-    expect(options.textContent).not.toContain("keep this description");
-    expect(options.textContent).not.toContain("Payments:Production");
-    flushSync(() => options.click());
-    expect(options.getAttribute("aria-expanded")).toBe("true");
-    expect(options.textContent).toContain("4 set");
-    expect(fieldControl<HTMLInputElement>(dialog, "Display name").value).toBe("Payment token");
-    expect(fieldControl<HTMLTextAreaElement>(dialog, "Description").value).toBe("  keep this description  ");
-    expect(fieldControl<HTMLInputElement>(dialog, "Tags").value).toBe(" api, payments, ");
-    expect(fieldControl<HTMLInputElement>(dialog, "Custom scope value").value).toBe(" Payments:Production ");
-    expect(body.hidden).toBe(false);
+    change(fieldControl(container, "Value"), "material");
+    flushSync(() => editorTab(container, "Details").click());
+    change(fieldControl(container, "Display name"), "Private title"); change(fieldControl(container, "Description"), "  description  "); change(fieldControl(container, "Tags"), "api, billing");
+    expect(editorTab(container, "Details").textContent).toBe("Details (3)");
+    flushSync(() => editorTab(container, "Storage & lifetime").click());
+    selectOption(fieldControl(container, "Scope"), "Custom…"); change(fieldControl(container, "Custom scope value"), " Team:Production ");
+    change(fieldControl(container, "Expires"), "2030-01-02T03:04");
+    flushSync(() => editorTab(container, "Secret").click());
+    expect(fieldControl<HTMLInputElement>(container, "Value").value).toBe("material");
+    flushSync(() => editorTab(container, "Details").click());
+    expect(fieldControl<HTMLInputElement>(container, "Display name").value).toBe("Private title");
+    expect(fieldControl<HTMLTextAreaElement>(container, "Description").value).toBe("  description  ");
+    expect(fieldControl<HTMLInputElement>(container, "Tags").value).toBe("api, billing");
+    expect(fieldControl<HTMLInputElement>(container, "Custom scope value").value).toBe(" Team:Production ");
+    expect([...container.querySelectorAll("[role=tab]")].map(t => t.textContent).join(" ")).not.toContain("Private title");
   });
 
   it("normalizes Expires and preserves the exact authored source and optional payload", () => {
@@ -352,7 +340,7 @@ describe("Create dialog regression contract", () => {
     flushSync(() => dialog.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
 
     expect(onSave).toHaveBeenCalledWith({
-      name: "payments.api",
+      name: "PAYMENTS.Api",
       displayName: "Payments API",
       description: "API credential",
       typeName: "text",
@@ -365,78 +353,35 @@ describe("Create dialog regression contract", () => {
     });
   });
 
-  it("keeps the focused custom Scope through advisory catalog failure and recovery", () => {
-    const onRetryScopeCatalog = vi.fn();
-    const { container, render } = renderDialog("create", { descriptors: scopeDescriptors, onRetryScopeCatalog });
-    const dialog = container.querySelector<HTMLElement>("[role='dialog']")!;
-    const type = fieldControl<HTMLSelectElement>(dialog, "Type");
-    const value = fieldControl<HTMLInputElement>(dialog, "Value");
-    const create = dialog.querySelector<HTMLButtonElement>("button[type='submit']")!;
-    const options = moreOptionsButton(dialog);
-
-    change(value, "new-secret");
-    expect(create.disabled).toBe(false);
-    flushSync(() => options.click());
-    selectOption(fieldControl<HTMLSelectElement>(dialog, "Scope"), "Custom…");
-    const customScope = fieldControl<HTMLInputElement>(dialog, "Custom scope value");
-    change(customScope, " Payments:Production ");
-    customScope.focus();
-    expect(document.activeElement).toBe(customScope);
-
-    render("create", { descriptors: scopeDescriptors, scopeCatalogError: true, onRetryScopeCatalog });
-    const body = disclosureBody(dialog, options);
-    expect(options.getAttribute("aria-expanded")).toBe("true");
-    expect(body.hidden).toBe(false);
-    expect(dialog.querySelector("[role='alert']")?.textContent).toContain("Scope suggestions could not be refreshed");
-    expect(fieldControl<HTMLInputElement>(dialog, "Custom scope value").value).toBe(" Payments:Production ");
-    expect(create.disabled).toBe(false);
-    expect(type.value).toBe("text");
-    expect(document.activeElement).toBe(customScope);
-
-    render("create", { descriptors: scopeDescriptors, scopeCatalogError: false, onRetryScopeCatalog });
-    expect(options.getAttribute("aria-expanded")).toBe("true");
-    expect(body.hidden).toBe(false);
-    expect(document.activeElement).toBe(customScope);
-    expect(create.disabled).toBe(false);
+  it("keeps focused custom scope and material through descriptor failure and recovery", () => {
+    const { container, render } = renderDialog("create", { descriptors: scopeDescriptors });
+    change(fieldControl(container, "Value"), "material"); flushSync(() => editorTab(container, "Storage & lifetime").click());
+    selectOption(fieldControl(container, "Scope"), "Custom…"); const scope = fieldControl<HTMLInputElement>(container, "Custom scope value"); change(scope, " Team:Production "); scope.focus();
+    render("create", { descriptors: scopeDescriptors, scopeCatalogError: true });
+    expect(document.activeElement).toBe(scope); expect(scope.value).toBe(" Team:Production ");
+    expect(container.textContent).toContain("Scope suggestions could not be refreshed");
+    render("create", { descriptors: scopeDescriptors, scopeCatalogError: false });
+    expect(document.activeElement).toBe(scope); expect(fieldControl<HTMLInputElement>(container, "Value").value).toBe("material");
   });
 
-  it("forces recovery open during advisory catalog failure and holds it open after recovery until dismissed", () => {
-    const onRetryScopeCatalog = vi.fn();
-    const { container, render } = renderDialog("create", { descriptors: scopeDescriptors, onRetryScopeCatalog });
-    const dialog = container.querySelector<HTMLElement>("[role='dialog']")!;
-    const value = fieldControl<HTMLInputElement>(dialog, "Value");
-    const create = dialog.querySelector<HTMLButtonElement>("button[type='submit']")!;
-    const options = moreOptionsButton(dialog);
-    const body = disclosureBody(dialog, options);
-
-    change(value, "new-secret");
-    expect(create.disabled).toBe(false);
-    flushSync(() => options.click());
-    selectOption(fieldControl<HTMLSelectElement>(dialog, "Scope"), "Custom…");
-    change(fieldControl<HTMLInputElement>(dialog, "Custom scope value"), " Payments:Production ");
-    flushSync(() => options.click());
-    expect(options.getAttribute("aria-expanded")).toBe("false");
-    expect(body.hidden).toBe(true);
-
-    render("create", { descriptors: scopeDescriptors, scopeCatalogError: true, onRetryScopeCatalog });
-    expect(options.getAttribute("aria-expanded")).toBe("true");
-    expect(body.hidden).toBe(false);
-    expect(dialog.querySelector("[role='alert']")?.textContent).toContain("Scope suggestions could not be refreshed");
-    expect(fieldControl<HTMLInputElement>(dialog, "Custom scope value").value).toBe(" Payments:Production ");
-    expect(create.disabled).toBe(false);
-
-    render("create", { descriptors: scopeDescriptors, scopeCatalogError: false, onRetryScopeCatalog });
-    expect(options.getAttribute("aria-expanded")).toBe("true");
-    expect(body.hidden).toBe(false);
-    expect(create.disabled).toBe(false);
-    flushSync(() => options.click());
-    expect(options.getAttribute("aria-expanded")).toBe("false");
-    flushSync(() => options.click());
-    expect(fieldControl<HTMLInputElement>(dialog, "Custom scope value").value).toBe(" Payments:Production ");
+  it("can navigate to advisory option recovery and return without discarding the secret", () => {
+    const retry = vi.fn(); const { container, render } = renderDialog("create", { descriptors: scopeDescriptors, onRetryScopeCatalog: retry });
+    const value = fieldControl<HTMLInputElement>(container, "Value");
+    change(value, "material"); value.focus();
+    render("create", { descriptors: scopeDescriptors, scopeCatalogError: true, onRetryScopeCatalog: retry });
+    expect(document.activeElement).toBe(value);
+    expect(editorTab(container, "Secret").getAttribute("aria-selected")).toBe("true");
+    expect(editorTab(container, "Storage & lifetime").textContent).toContain("needs attention");
+    flushSync(() => editorTab(container, "Storage & lifetime").click());
+    expect(panelFor(container, "Storage & lifetime").hidden).toBe(false);
+    const button = [...container.querySelectorAll<HTMLButtonElement>("button")].find(b => b.textContent === "Retry secret options")!; flushSync(() => button.click());
+    expect(retry).toHaveBeenCalledOnce();
+    render("create", { descriptors: scopeDescriptors, scopeCatalogError: false, onRetryScopeCatalog: retry });
+    expect(editorTab(container, "Storage & lifetime").textContent).not.toContain("needs attention");
+    flushSync(() => editorTab(container, "Secret").click());
+    expect(fieldControl<HTMLInputElement>(container, "Value").value).toBe("material");
   });
-});
 
-describe("secret dialog keyboard focus", () => {
   it.each(["create", "rotate"] as const)("focuses, contains, and restores focus for %s", mode => {
     const { container, opener } = renderDialogWithTrigger(mode);
     flushSync(() => {
@@ -500,7 +445,7 @@ describe("secret dialog keyboard focus", () => {
     });
 
     const dialog = container.querySelector<HTMLElement>("[role='dialog']")!;
-    const content = dialog.querySelector<HTMLElement>(".secrets-create-content")!;
+    const content = dialog.querySelector<HTMLElement>(".secrets-editor-fields")!;
     const actions = dialog.querySelector<HTMLElement>(".secrets-create-actions")!;
     expect(content.contains(actions)).toBe(false);
     expect(actions.parentElement).toBe(dialog.querySelector("form"));
@@ -515,7 +460,7 @@ describe("secret dialog keyboard focus", () => {
     await waitFor(() => expect(dialog.querySelector("[role='alert']")).not.toBeNull());
     const alert = dialog.querySelector<HTMLElement>("[role='alert']")!;
     await waitFor(() => expect(document.activeElement).toBe(alert));
-    expect(alert.tabIndex).toBe(0);
+    expect(alert.tabIndex).toBe(-1);
     expect(alert.textContent).toBe("Fixture secret creation failed.");
     expect(technicalName.value).toBe("preserved.secret");
     expect(value.value).toBe("preserved-secret-value");
@@ -613,18 +558,15 @@ function directLabelText(label: HTMLLabelElement) {
     .trim();
 }
 
-function moreOptionsButton(container: ParentNode) {
-  const button = [...container.querySelectorAll<HTMLButtonElement>("button")].find(candidate =>
-    candidate.querySelector(".studio-disclosure-fold-label")?.textContent?.trim() === "More options");
-  if (!button) throw new Error("More options disclosure not found.");
-  return button;
+function editorTab(container: ParentNode, label: string) {
+  const tab = [...container.querySelectorAll<HTMLButtonElement>("[role=tab]")].find(t => t.textContent?.startsWith(label));
+  if (!tab) throw new Error(`Tab not found: ${label}`); return tab;
 }
-
-function disclosureBody(container: HTMLElement, button: HTMLButtonElement) {
-  const bodyId = button.getAttribute("aria-controls");
-  const body = bodyId ? document.getElementById(bodyId) : null;
-  if (!body || !container.contains(body)) throw new Error("More options disclosure body not found.");
-  return body;
+function panelFor(container: ParentNode, label: string) {
+  return document.getElementById(editorTab(container, label).getAttribute("aria-controls")!)!;
+}
+function submit(container: ParentNode) {
+  flushSync(() => container.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
 }
 
 function revealFieldIfHidden(container: HTMLElement, field: HTMLElement) {
@@ -633,16 +575,6 @@ function revealFieldIfHidden(container: HTMLElement, field: HTMLElement) {
   const button = [...container.querySelectorAll<HTMLButtonElement>("button")].find(candidate => candidate.getAttribute("aria-controls") === body.id);
   if (!button) throw new Error("Hidden field has no disclosure control.");
   flushSync(() => button.click());
-}
-
-function textNodeOutside(container: HTMLElement, text: string, excluded: HTMLElement) {
-  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
-  while (walker.nextNode()) {
-    const node = walker.currentNode;
-    const parent = node.parentElement;
-    if (parent && parent.textContent?.trim() === text && !excluded.contains(parent) && !parent.closest("select, option")) return parent;
-  }
-  return null;
 }
 
 function selectOption(select: HTMLSelectElement, label: string) {

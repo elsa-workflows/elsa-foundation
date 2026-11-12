@@ -1,5 +1,5 @@
 using System.Text.Json;
-using Elsa.Studio.Api.Options;
+using Elsa.Studio.Core.Models;
 
 namespace Elsa.Studio.Hosting;
 
@@ -17,12 +17,13 @@ internal static class StudioRuntimeScript
     public const string GlobalName = "window.__ELSA_STUDIO_RUNTIME__";
 
     /// <summary>Builds the browser runtime config object surfaced to the SPA. Contains no server-side secrets.</summary>
-    public static Dictionary<string, object?> BuildRuntimeConfig(IConfiguration configuration, bool authEnabled) =>
+    public static Dictionary<string, object?> BuildRuntimeConfig(IConfiguration configuration, bool authEnabled, StudioBackendAuthority? authority = null) =>
         new()
         {
             // This is the browser-facing URL. Server-side calls use Studio:BackendServerBaseUrl when supplied, with
             // Studio:BackendBaseUrl as the backwards-compatible single-host fallback.
-            ["backendBaseUrl"] = configuration[StudioBackendManagementOptions.BackendBaseUrlConfigurationKey] ?? string.Empty,
+            ["backendBaseUrl"] = (authority is null ? configuration["Studio:BackendBaseUrl"] : authority.BrowserBaseUrl) ?? "",
+            ["backendId"] = configuration["Studio:BackendId"] ?? "legacy",
             ["hostId"] = configuration["Studio:HostId"] ?? "default",
             // Surface the user-auth seam so the shell can attach real bearer tokens (and 401-refresh-retry) against the
             // backend identity endpoints. Omitted endpoints fall back to the SDK defaults (`/_elsa/identity/token`);
@@ -34,12 +35,18 @@ internal static class StudioRuntimeScript
             {
                 ["hostApiEnabled"] = configuration.GetValue("Studio:Attention:HostApiEnabled", defaultValue: false)
             },
-            ["dashboard"] = BuildDashboardRuntimeConfig(configuration)
+            ["dashboard"] = BuildDashboardRuntimeConfig(configuration),
+            ["branding"] = PublicPresentation(configuration, "Studio:Branding", ["ProductName", "Subtitle", "LogoUrl", "FaviconUrl", "HelpUrl", "PrivacyUrl"]),
+            ["appearance"] = PublicPresentation(configuration, "Studio:Appearance", ["WorkspaceStyle", "PaletteId", "Mode", "Navigation"])
         };
 
     /// <summary>Renders the full <c>/studio-runtime.js</c> body.</summary>
     public static string Render(IConfiguration configuration, bool authEnabled) =>
         $"{GlobalName} = {JsonSerializer.Serialize(BuildRuntimeConfig(configuration, authEnabled))};";
+
+    private static Dictionary<string, object?> PublicPresentation(IConfiguration configuration, string section, string[] keys) =>
+        keys.Where(key => configuration[$"{section}:{key}"] is not null)
+            .ToDictionary(key => char.ToLowerInvariant(key[0]) + key[1..], key => (object?)configuration[$"{section}:{key}"]);
 
     private static Dictionary<string, object?> BuildAuthRuntimeConfig(IConfiguration configuration, bool authEnabled)
     {

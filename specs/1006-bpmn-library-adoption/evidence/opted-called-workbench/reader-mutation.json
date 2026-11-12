@@ -1,0 +1,10 @@
+{
+  "name": "remove-exact-consumer-declaration-reader-guard",
+  "sourceSha256": "19009b66b84d31dd67ca5d6bfb1680390fac7c56fa21a48ef5c79ba69e2fbacd",
+  "sourceRestored": true,
+  "compileSucceeded": true,
+  "missingCapabilityIncorrectlyAccepted": true,
+  "controlFailedAsExpected": true,
+  "buildLogSha256": "ea373aa85313b82df98ed60a9c51c5ece91946079d1e24d16b569f6d27a6e6db",
+  "controlLogSha256": "294e839eccf15a78bff4a14f801392e8670da6488509a93ef9a876cc02c20fd8"
+}

@@ -1,6 +1,7 @@
 import { useReducer, useMemo } from "react";
 import type { WorkflowDraft } from "../workflowTypes";
 import type { ScopeFrame } from "../workflowAdapter";
+import { getDraftContentRevision } from "./editorHelpers";
 import { removeActivityPresentation } from "../activityPresentation";
 import type { WorkflowTestRunState, WorkflowTestRunWaitDraftState } from "./editorTypes";
 
@@ -32,6 +33,7 @@ export function forgetRemovedNodes(draft: WorkflowDraft, removedNodeIds: Iterabl
 export interface WorkflowDocumentState {
   // The open draft. null until the definition has loaded.
   draft: WorkflowDraft | null;
+  batchTransaction?: { id: string; applied: boolean };
   // Scope navigation breadcrumb: which nested activity slot the canvas is currently showing.
   frames: ScopeFrame[];
   // Selected activity within the current scope (drives the inspector).
@@ -56,7 +58,12 @@ export const initialWorkflowDocumentState: WorkflowDocumentState = {
 export type WorkflowDraftRecipe = (state: WorkflowDocumentState) => WorkflowDraft | null;
 
 export type WorkflowDocumentAction =
-  // Wholesale draft load: initial load, post-promote reload, JSON apply, and undo/redo restore. Resets
+  // A reviewed Weaver change (spec 1193 FR-008): applied only when the definition, the SHA-256 content revision, the
+  // selection and the scope frame are still exactly what the change was bound to; otherwise refused with zero change.
+  // The frames the caller computed keep the user's scope when it survives and fall back to its nearest ancestor.
+  | { type: "draftComparedAndReplacedByBatch"; transactionId: string; definitionId: string; expectedRevision: string; expectedSelection: string | null; draft: WorkflowDraft; selectedNodeId: string | null; expectedFrames: ScopeFrame[]; frames: ScopeFrame[] }
+
+  // Wholesale draft load: initial load, post-promote reload and JSON apply. Resets
   // scope + selection but leaves testRun/publishedArtifact (they self-invalidate against the new draft).
   | { type: "draftLoaded"; draft: WorkflowDraft | null }
   // Weaver batch apply/undo replaces the whole design, so scope, selection, the pending test run and the
@@ -73,6 +80,7 @@ export type WorkflowDocumentAction =
   // single container child needs multi-frame hops, so there is no single-frame "enter slot" transition.
   | { type: "scopeNavigated"; frames: ScopeFrame[]; selectedNodeId: string | null }
   | { type: "testRunStarted"; testRun: WorkflowTestRunState }
+  | { type: "testRunResultUpdated"; testRun: WorkflowTestRunState }
   | { type: "testRunViewUpdated"; view: WorkflowTestRunState["view"] }
   | { type: "testRunWaitDraftUpdated"; waitId: string; state: WorkflowTestRunWaitDraftState }
   | { type: "testRunCleared" }
@@ -80,6 +88,16 @@ export type WorkflowDocumentAction =
 
 export function workflowDocumentReducer(state: WorkflowDocumentState, action: WorkflowDocumentAction): WorkflowDocumentState {
   switch (action.type) {
+    case "draftComparedAndReplacedByBatch": {
+      const applied = !!state.draft && state.draft.definitionId === action.definitionId
+        && getDraftContentRevision(state.draft) === action.expectedRevision && state.selectedNodeId === action.expectedSelection
+        && JSON.stringify(state.frames) === JSON.stringify(action.expectedFrames);
+      // The last test run and the published-artifact association describe the replaced document, so they are cleared;
+      // designer-history Undo restores the draft, not them.
+      return applied ? { ...state, draft: action.draft, selectedNodeId: action.selectedNodeId, frames: action.frames, testRun: null, publishedArtifactId: null,
+        batchTransaction: { id: action.transactionId, applied: true } }
+        : { ...state, batchTransaction: { id: action.transactionId, applied: false } };
+    }
     case "draftLoaded":
       return { ...state, draft: action.draft, frames: [], selectedNodeId: null };
     case "draftReplacedByBatch":
@@ -105,8 +123,13 @@ export function workflowDocumentReducer(state: WorkflowDocumentState, action: Wo
       return { ...state, frames: action.frames, selectedNodeId: action.selectedNodeId };
     case "testRunStarted":
       return { ...state, testRun: action.testRun };
+    case "testRunResultUpdated":
+      return state.testRun?.view.testRunId === action.testRun.view.testRunId
+        && state.testRun?.endpointContext === action.testRun.endpointContext
+        ? { ...state, testRun: { ...state.testRun, ...action.testRun } } : state;
     case "testRunViewUpdated":
-      return state.testRun ? { ...state, testRun: { ...state.testRun, view: action.view } } : state;
+      return state.testRun?.view.testRunId === action.view.testRunId
+        ? { ...state, testRun: { ...state.testRun, view: action.view } } : state;
     case "testRunWaitDraftUpdated":
       return state.testRun ? {
         ...state,
@@ -127,7 +150,11 @@ export function useWorkflowDocument() {
   const [state, dispatch] = useReducer(workflowDocumentReducer, initialWorkflowDocumentState);
 
   const actions = useMemo(() => ({
-    // Load a freshly fetched / applied draft (or clear it). Used by load(), JSON apply, and undo/redo.
+    compareAndReplaceDraftByBatch(transactionId: string, definitionId: string, expectedRevision: string, expectedSelection: string | null, draft: WorkflowDraft, selectedNodeId: string | null,
+      expectedFrames: ScopeFrame[], frames: ScopeFrame[]) {
+      dispatch({ type: "draftComparedAndReplacedByBatch", transactionId, definitionId, expectedRevision, expectedSelection, draft, selectedNodeId, expectedFrames, frames });
+    },
+    // Load a freshly fetched / applied draft (or clear it). Used by load() and JSON apply.
     loadDraft(draft: WorkflowDraft | null) {
       dispatch({ type: "draftLoaded", draft });
     },
@@ -155,6 +182,9 @@ export function useWorkflowDocument() {
     },
     startTestRun(testRun: WorkflowTestRunState) {
       dispatch({ type: "testRunStarted", testRun });
+    },
+    updateTestRunResult(testRun: WorkflowTestRunState) {
+      dispatch({ type: "testRunResultUpdated", testRun });
     },
     updateTestRunView(view: WorkflowTestRunState["view"]) {
       dispatch({ type: "testRunViewUpdated", view });

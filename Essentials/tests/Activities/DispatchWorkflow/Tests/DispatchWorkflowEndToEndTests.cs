@@ -764,20 +764,23 @@ public sealed class DispatchWorkflowEndToEndTests
     }
 
     [Theory]
-    [InlineData(WorkflowRunKind.TestRun)]
-    [InlineData(WorkflowRunKind.PublishedRun)]
+    [InlineData(WorkflowRunKind.TestRun, false)]
+    [InlineData(WorkflowRunKind.TestRun, true)]
+    [InlineData(WorkflowRunKind.PublishedRun, false)]
+    [InlineData(WorkflowRunKind.PublishedRun, true)]
     public async Task Wait_exhaustion_resumes_parent_once_as_safe_dispatch_failed_and_is_never_redrivable(
-        WorkflowRunKind runKind)
+        WorkflowRunKind runKind, bool control)
     {
         await using var fixture = await DispatchWorkflowRuntimeTestFixture.CreateAsync();
-        var caseSuffix = runKind.ToString().ToLowerInvariant();
+        var caseSuffix = runKind.ToString().ToLowerInvariant() + (control ? "-control" : "");
         var run = await fixture.StartParentAsync(
             caseId: $"wait-delivery-exhaustion-{caseSuffix}",
             parentWorkflowExecutionId: $"parent-wait-delivery-exhaustion-{caseSuffix}",
             parentCorrelationId: "correlation-parent",
             waitForCompletion: true,
             runKind: runKind,
-            testScope: runKind == WorkflowRunKind.TestRun ? NewTestScope($"scope-wait-delivery-exhaustion-{caseSuffix}") : null);
+            testScope: runKind == WorkflowRunKind.TestRun ? NewTestScope($"scope-wait-delivery-exhaustion-{caseSuffix}") : null,
+            controlConsumerVersion: control ? 1 : null);
         await using var scope = fixture.Services.CreateAsyncScope();
         scope.ServiceProvider.GetRequiredService<IPersistenceAccessContextBinder>().Bind(
             PersistenceAccessContext.Scoped(new PersistenceScope(run.Dispatch.TenantId!)));
@@ -821,7 +824,10 @@ public sealed class DispatchWorkflowEndToEndTests
         Assert.Equal(1, sweep.OutboxDeliveredCount);
         Assert.Equal(WorkflowExecutionStatus.Completed, (await fixture.FindWorkflowAsync(run.Start.WorkflowExecutionId))?.Status);
         Assert.Null(await fixture.FindWorkflowAsync(run.Identity.ChildWorkflowExecutionId));
-        var activity = Assert.Single(await fixture.ListActivitiesAsync(run.Start.WorkflowExecutionId));
+        var activity = Assert.Single(await fixture.ListActivitiesAsync(run.Start.WorkflowExecutionId),
+            item => item.InvocationId == run.Dispatch.ParentActivityExecutionId);
+        Assert.Null(activity.ChildControl);
+        Assert.Null(activity.ChildControlInbox);
         Assert.Equal(ActivityExecutionStatus.Completed, activity.Status);
         Assert.Equal(
             new[] { DispatchWorkflowOutcomes.DispatchFailed },
@@ -841,7 +847,7 @@ public sealed class DispatchWorkflowEndToEndTests
         await parentResume.HandleAsync(resumeItem.Intent);
         await parentResume.HandleAsync(resumeItem.Intent);
         Assert.Equal(WorkflowExecutionStatus.Completed, (await fixture.FindWorkflowAsync(run.Start.WorkflowExecutionId))?.Status);
-        Assert.Single(await fixture.ListActivitiesAsync(run.Start.WorkflowExecutionId));
+        Assert.Equal(control ? 2 : 1, (await fixture.ListActivitiesAsync(run.Start.WorkflowExecutionId)).Count);
         var afterResumeRedrive = await scope.ServiceProvider.GetRequiredService<IWorkflowDispatchRedriveStore>().RedriveAsync(
             new WorkflowDispatchRedriveRequest(run.Dispatch.DispatchId, "wait-redrive-after", timeProvider.GetUtcNow()));
         Assert.Equal(WorkflowDispatchRedriveDisposition.NotEligible, afterResumeRedrive.Disposition);

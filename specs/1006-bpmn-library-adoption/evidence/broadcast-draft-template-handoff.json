@@ -1,0 +1,368 @@
+{
+  "schemaVersion": 1,
+  "task": "T049 coherent native binding and atomic per-receipt Test Run template roots with exact selected-store preflight; wrapper/provider-fenced handoff and default qualification remain open",
+  "sourceParentCommit": "9ac6bd18e3a7c40f9c3e44e25cf2fc74dc4953f7",
+  "filesSha256": {
+    "Essentials/src/Workflows/Publishing/Api/EXTENSION_POINTS.md": "5b6484cbadf5e8b962c80f4acb4833b264b0a6f31f02d0ce80dd53b4cf8385de",
+    "Essentials/src/Workflows/Publishing/Api/Services/ActivityDraftTestRunService.cs": "1d8e0cc9bb9a700ff8005b4b9128534c577f609b49fb0328a57a4cb387d5c469",
+    "Essentials/src/Workflows/Runtime/Core/Contracts/ReusableActivityRuntimeStores.cs": "3b35ddd8ec435a0a09583590992c8881ad92f21f6c19f4c6c9a695b01e0d5e2d",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md": "3879ba3a80056c90827663c511828e00ba8d4062342f0b0a91db67d92bb8ac88",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Extensions/RuntimeCoreServiceCollectionExtensions.cs": "e2895e47f7b66cd41c5af6b1bf6232668585046db7252d9e80d71d40c26c93ea",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Executables/InMemoryExecutableActivityTemplateStore.cs": "10ee1488c1a446dcb7700862c496a687ecadaf480fb8e35926c8c4ff8b713355",
+    "Essentials/tests/Workflows/Publishing/Api/Tests/ActivityDraftTestRunServiceTests.cs": "664ac5565471b666464a29081e7d59f3bddca1e5d97c7fe3d60399319cbd814e",
+    "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/EfRuntimeArtifactRegistrationTests.cs": "8b1c54ee63b976b8728ced7dd9950f33816d2e8c9cdd05a39f888bc19a54db9d",
+    "Essentials/tests/Workflows/Runtime/Tests/ExecutableActivityTemplateMaintenanceTests.cs": "74ae70cff1b489fb3a4ced1f123167b35ef4fa59e25696750238cb4eca6326ba",
+    "specs/1006-bpmn-library-adoption/tasks.md": "7d60a4460b73d1a5e5953e43c5acd2e70f65e15699328c6139aeb458cd15d2b8",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Executables/InMemoryRuntimeArtifactStores.cs": "3b51b9a5f4cdb06122ff8ddd8b38dd141979a35d60d1be5b603d60c3127ca730",
+    "Essentials/tests/Workflows/Publishing/Api/Tests/ActivityDraftTestRunServiceTests.AtomicTemplateHandoff.cs": "1174695504f87dba47ce8989caec17d9dfe5bf534f9d1a459aae4f5b5d5c4c57",
+    "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/EfRuntimeArtifactRegistrationTests.NativeBinding.cs": "238cf6c1f1c63cdfdc949a6e9011ea07ed6f14cc4567b45cd6c1fa5b00c406e0",
+    "Essentials/tests/Workflows/Runtime/Tests/ExecutableActivityTemplateMaintenanceTests.Composition.cs": "433c2fe7a40be9ad9d458a6dc558d74435a5b0e9a690d00873fb056dec4a9e10",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Executables/WorkflowExecutableReferenceGarbageCollector.cs": "8c58da46ff1e9911c88566cae3b81b8fe76c30cfdc09715f15706c681cbc9a9b",
+    "Essentials/src/Workflows/Runtime/Core/PublicAPI.Unshipped.txt": "2fe5ff544aaa64721e69e90bf2c05a80e69bcb215472c18ee9ed2a7d5b4ca968",
+    "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Configuration/RuntimeArtifactEntityConfigurations.cs": "27c2cc257c257afd4303f725296a9f2a5ef8b166e81a03a3e38737a08b2dc716",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Executables/InMemoryWorkflowExecutableSourceReferenceStore.cs": "185bcc2ad60490cfb973fb494c240351ad5b9f1d916dfaa03442dae327667909",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Executables/InMemoryWorkflowExecutableStore.cs": "b81f1175d5c18955b89c07cf0cf6df2f0ce10b9e478294935e95664ddeae069e",
+    "Essentials/src/Workflows/Runtime/Core/Contracts/RuntimeArtifactStoreBackend.cs": "795425b265673eedf92e8b6a5d630484433e2d9059954a90722f65419d3557eb",
+    "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/DependencyInjection/RuntimeArtifactsEntityFrameworkCoreRegistration.cs": "712b04a86b9240aab918bc5a1f2e2be3b2e19190bff7da2df431486c2d717ba2"
+  },
+  "checks": [
+    {
+      "project": "Runtime",
+      "passed": 2940,
+      "failed": 0,
+      "skipped": 0,
+      "newCases": 14
+    },
+    {
+      "project": "Runtime EF",
+      "passed": 1454,
+      "failed": 0,
+      "skipped": 0,
+      "newCases": 4
+    },
+    {
+      "project": "Publishing EF",
+      "passed": 171,
+      "failed": 0,
+      "skipped": 0,
+      "newCases": 0
+    },
+    {
+      "project": "Publishing API",
+      "passed": 875,
+      "failed": 0,
+      "skipped": 0,
+      "newCases": 12
+    },
+    {
+      "project": "Publishing",
+      "passed": 61,
+      "failed": 0,
+      "skipped": 0,
+      "newCases": 0
+    }
+  ],
+  "newNativeRuntimeCases": 14,
+  "newEfRegistrationCases": 4,
+  "newNativeTestRunPreparationCases": 12,
+  "focused": {
+    "native": {
+      "passed": 14,
+      "failed": 0,
+      "skipped": 0
+    },
+    "efRegistrationIncludingExisting": {
+      "passed": 25,
+      "failed": 0,
+      "skipped": 0
+    },
+    "apiIncludingExisting": {
+      "passed": 18,
+      "failed": 0,
+      "skipped": 0
+    }
+  },
+  "discovery": {
+    "runtime": {
+      "listed": 2929,
+      "uniqueDisplayNames": 2925,
+      "executed": 2940,
+      "deferredTheories": {
+        "Elsa.Workflows.Runtime.Tests.CheckpointRuleViolationWorkflowFaulterTests.A_refused_commit_faults_the_execution_with_only_its_state_and_an_incident": 2,
+        "Elsa.Workflows.Runtime.Tests.CheckpointRuleViolationWorkflowFaulterTests.A_failure_that_is_not_a_rule_refusal_leaves_the_execution_running": 4,
+        "Elsa.Workflows.Runtime.Tests.ValueEnvelopeEncryptionPredicateTests.Only_a_present_value_under_a_policy_that_requires_encryption_matches": 8
+      },
+      "unmapped": []
+    },
+    "ef": {
+      "listed": 1454,
+      "uniqueDisplayNames": 1452,
+      "executed": 1454,
+      "deferredTheories": {},
+      "unmapped": []
+    },
+    "publishing-ef": {
+      "listed": 171,
+      "uniqueDisplayNames": 169,
+      "executed": 171,
+      "deferredTheories": {},
+      "unmapped": []
+    },
+    "publishing-api": {
+      "listed": 855,
+      "uniqueDisplayNames": 855,
+      "executed": 875,
+      "deferredTheories": {
+        "Elsa.Workflows.Publishing.Api.Tests.PublishWorkflowTriggerIndexingTests.FirstPartyTriggerMatrix_ValidPublicationIndexesEveryCompleteBinding": 4,
+        "Elsa.Workflows.Publishing.Api.Tests.PublishWorkflowTriggerIndexingTests.FirstPartyTriggerMatrix_InvalidPublicationPreservesSeededRegistration": 4,
+        "Elsa.Workflows.Publishing.Api.Tests.PublishWorkflowTriggerIndexingTests.LegacyActionCatalogRow_RepublishProjectsTriggerAndPreservesPriorRegistrationOnFailure": 4,
+        "Elsa.Workflows.Publishing.Api.Tests.PublishWorkflowTriggerIndexingTests.A_publish_time_literal_reader_refuses_a_secret_read_with_the_fixed_code": 10,
+        "Elsa.Workflows.Publishing.Api.Tests.WorkflowExecutableCompilerTests.A_literal_or_expression_on_a_credential_input_is_refused_by_the_credential_literal_rule_ahead_of_VF_ACT_011": 3
+      },
+      "unmapped": []
+    },
+    "publishing": {
+      "listed": 61,
+      "uniqueDisplayNames": 61,
+      "executed": 61,
+      "deferredTheories": {},
+      "unmapped": []
+    }
+  },
+  "mutations": [
+    {
+      "mutation": "native-template-left-unbound",
+      "runs": [
+        {
+          "project": "Runtime",
+          "exitCode": 1,
+          "failed": 6,
+          "passed": 8,
+          "skipped": 0
+        },
+        {
+          "project": "API",
+          "exitCode": 1,
+          "failed": 1,
+          "passed": 11,
+          "skipped": 0
+        }
+      ],
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "native-source-left-without-artifact-fence",
+      "runs": [
+        {
+          "project": "Runtime",
+          "exitCode": 1,
+          "failed": 7,
+          "passed": 7,
+          "skipped": 0
+        }
+      ],
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "native-provider-clock-ignored",
+      "runs": [
+        {
+          "project": "Runtime",
+          "exitCode": 1,
+          "failed": 1,
+          "passed": 13,
+          "skipped": 0
+        }
+      ],
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "native-state-shared-across-root-providers",
+      "runs": [
+        {
+          "project": "Runtime",
+          "exitCode": 1,
+          "failed": 2,
+          "passed": 12,
+          "skipped": 0
+        }
+      ],
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "selected-source-alias-points-outside-owned-group",
+      "runs": [
+        {
+          "project": "Runtime",
+          "exitCode": 1,
+          "failed": 3,
+          "passed": 11,
+          "skipped": 0
+        }
+      ],
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "singleton-group-changed-to-scoped",
+      "runs": [
+        {
+          "project": "Runtime",
+          "exitCode": 1,
+          "failed": 8,
+          "passed": 6,
+          "skipped": 0
+        }
+      ],
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "native-group-not-owned-by-backend",
+      "runs": [
+        {
+          "project": "Runtime",
+          "exitCode": 1,
+          "failed": 1,
+          "passed": 13,
+          "skipped": 0
+        },
+        {
+          "project": "EF",
+          "exitCode": 1,
+          "failed": 2,
+          "passed": 2,
+          "skipped": 0
+        }
+      ],
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "native-group-added-after-EF-selection",
+      "runs": [
+        {
+          "project": "EF",
+          "exitCode": 1,
+          "failed": 3,
+          "passed": 1,
+          "skipped": 0
+        }
+      ],
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "singleton-template-resolves-selected-scoped-replacements",
+      "runs": [
+        {
+          "project": "Runtime",
+          "exitCode": 1,
+          "failed": 6,
+          "passed": 8,
+          "skipped": 0
+        }
+      ],
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "production-selected-store-preflight-removed",
+      "runs": [
+        {
+          "project": "API",
+          "exitCode": 1,
+          "failed": 2,
+          "passed": 10,
+          "skipped": 0
+        }
+      ],
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "template-root-shared-by-hash-instead-of-receipt",
+      "runs": [
+        {
+          "project": "API",
+          "exitCode": 1,
+          "failed": 4,
+          "passed": 8,
+          "skipped": 0
+        }
+      ],
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "atomic-template-handoff-replaced-with-split-writes",
+      "runs": [
+        {
+          "project": "API",
+          "exitCode": 1,
+          "failed": 10,
+          "passed": 2,
+          "skipped": 0
+        }
+      ],
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "cohort-GC-invokes-unqualified-template-ports",
+      "runs": [
+        {
+          "project": "Runtime",
+          "exitCode": 1,
+          "failed": 2,
+          "passed": 12,
+          "skipped": 0
+        }
+      ],
+      "compileError": false,
+      "restored": true
+    }
+  ],
+  "coreApiAdditions": 0,
+  "coreApiRemovals": 0,
+  "schemaChanges": false,
+  "generatedMapsCheck": "passed",
+  "frozenAuthoringFingerprintSha256": "41aa0bb979ea46fc2533b057e3677f408ab54c3411fecfafaa238a2adae38c92",
+  "unchanged": true,
+  "reviewFixes": [
+    "Close mixed-selected-store ghost-write/delete finding by enforcing exact selected tuple preflight at all production atomic/maintenance callers; existing GC guards plus new Test Run guard are exercised by real mixed-DI functional controls. Document caller qualification precondition rather than treating a native owned tuple as proof of arbitrary host DI selection.",
+    "Bind default native stores coherently through an owned singleton group without capturing selected scoped replacements; EF removes/excludes the whole group.",
+    "Use stable per-receipt template roots, fixed receipt expiry and actual winning reference rather than hash-only root reuse and split Save/Ensure helper.",
+    "Native artifact-guard interoperation control now seeds actual workflow material before asking its provider for a deletion guard.",
+    "EF registration controls use their actual scoped accessor/options setup rather than unrelated test helpers or feature-only signing properties."
+  ],
+  "reviews": {
+    "correctness": "final restored source/caller-guard scope and source-bound receipt clean; mixed-ghost finding closed",
+    "standards": "final restored source/catalog/CoreXML and source-bound receipt clean",
+    "acceptance": "final finite native/preparation/registration control scope and source-bound receipt clean",
+    "fullPrRounds": 0
+  },
+  "limits": [
+    "Default native interfaces/readers share one actual singleton-owned material/reference boundary; root providers have independent storage. Exact selected tuple capability is a host/caller precondition, not permission for arbitrary unqualified manual calls against private provider state.",
+    "Production Test Run caller preflights actual selected stores and both cohort collector calls preserve their preflights. Functional mixed native DI tests prove no atomic/raw template write/hidden root/wrapper/dispatch and no unqualified template/reference collection.",
+    "New EF registration cases exercise descriptor/order/selected same-context ownership without new SQLite state writes. Full EF suite passes do not establish new EF service-level recovery.",
+    "Native Test Run fault probes occur before/after the actual in-process atomic operation, followed by receipt-root retry. Recording dispatcher deliberately loses acknowledgement without workflow execution. Concurrency uses an asynchronous preparation barrier; no exactly-once start effect, process-kill, fresh-host, EF service or Studio recovery is claimed.",
+    "Legacy hash-only reference control is a constructed domain row, not an actual legacy execution checkpoint. Existing prepared receipts keep saved artifact/source identities. No execution-checkpoint writer is deleted here.",
+    "Wrapper artifact/source retry, provider lease fencing and actual winning wrapper provenance remain unfinished; content-addressed wrapper material may carry first-winner node metadata. These and EF service recovery, old-writer/quiescence gates and qualified default cohort GC keep T049 open; saved broadcast publication stays disabled.",
+    "T050 exact bookmark/immutable input/schema activation, T051 actual host/fresh-provider recovery, other stories, duplicate-semantics deletion/guards, final current host/Studio, full-PR review/exact-head checks/resulting-main and ADR0063 remain open. #2898/#2907/program production acceptance stays open; Orleans/task-runner deferred."
+  ],
+  "remoteParentChecks": {
+    "head": "9ac6bd18e3a7c40f9c3e44e25cf2fc74dc4953f7",
+    "run": 40401030977,
+    "buildAndTest": "success",
+    "architecture": "success",
+    "generatedMaps": "success",
+    "fullTier": "draft skip is not qualification",
+    "gitGuardianIncident": "38996611 older public source-digest finding; GitGuardian check still failure on parent, no bypass",
+    "boundary": "Last pushed parent only; new source needs exact-head checks."
+  }
+}

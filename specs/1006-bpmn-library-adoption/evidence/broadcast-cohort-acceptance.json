@@ -1,0 +1,202 @@
+{
+  "schemaVersion": 1,
+  "task": "T049 verified native cohort installation; saved-start admission remains open",
+  "sourceParentCommit": "631f5e0a8771a0d57ef075084771402938652c3b",
+  "filesSha256": {
+    "Essentials/src/Workflows/Runtime/Core/Models/RuntimePostCommitOutbox.cs": "21b8279a3502c6b9ea440430f3505b23787ca4f98732ae533fee503978c56098",
+    "Essentials/src/Workflows/Runtime/Core/Models/StimulusDeliverySnapshot.cs": "0956689d7a3403b9d9c1cac72efbaa14bb734439026b8de1d1f0aeef95e07d77",
+    "Essentials/src/Workflows/Runtime/Core/PublicAPI.Unshipped.txt": "dddfdeac3f7f610f348b349821e8a8ba037597865b6309bdc0251e4079b4d585",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md": "91f0c0c21abb9e34cb215e32642985b27955f5b0621e2970424edffe63f9fb4c",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Extensions/RuntimeCoreServiceCollectionExtensions.cs": "22d96606c0a5b934bb80281eaa8dc1240f45d13d72cf9de4aa7b9aa758a2163b",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Checkpoints/InMemoryRuntimeCheckpointCommitStore.cs": "a466b28459accfd49f0a04e2d057ef4f1b4977203475f4b6e478912da91a8e2c",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Executables/InMemoryWorkflowExecutableSourceReferenceStore.cs": "7b46b99b8bdb3971fb6ca6d15f3c8b95077a9c33ea7d1326f2df223986b4a8f6",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Executions/WorkflowExecutableStartSourceResolver.cs": "195ac07103211a8c3a8a32e3026f54f7c09be1d4325775d8058803bf92cec711",
+    "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfRuntimeCheckpointOutboxParticipantStaging.cs": "5189e13185e21d184aec5f5bf22276d67ab2b0647cbcff6c6fe16cb3044478ec",
+    "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfRuntimePostCommitOutboxStore.cs": "7b7b091a8266ab92280196ae76ecfe62346d2c6784241db7f984fd9f12f497d3",
+    "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowExecutableSourceReferenceStore.cs": "c3fae4680bce7c139753d08f2b5705b959f804a389e719070c040e7b4c538b10",
+    "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/RuntimeCheckpointCommitStatefulContractTests.cs": "15bfe32c24a4607d3a8487bf47259df6cf5e9788fd0b049751e6513a04ae680a",
+    "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/StimulusDeliveryStoreTests.cs": "30a8b6a3d34d594344dca611b8b929342e110a4722f9dab81044f1a8091a125c",
+    "Essentials/tests/Workflows/Runtime/Tests/RuntimePostCommitDurableSourceTests.cs": "b6437abe9aaad5d4729eed9746c26a992e2f989845df2e97a098157df311c4eb",
+    "Essentials/tests/Workflows/Runtime/Tests/RuntimePublicApiCompatibilityTests.cs": "aebab4ce1737d11d20fa2c925225d11073113b177cae96a2ea44c2588b5a2cfe",
+    "Essentials/tests/Workflows/Runtime/Tests/StimulusDeliverySnapshotTests.cs": "d6a0588893aece5366b0120bc3b9e1f1104eeba557f519958c614c280e3d32d6",
+    "Essentials/tests/Workflows/Runtime/Tests/StimulusStartSourceCaptureTests.cs": "87b67b5c1498e327b5ee862e480338070889157e10e8cdad8258d3194410a4f8",
+    "specs/1006-bpmn-library-adoption/contracts/broadcast-recipient-snapshot.md": "b47bc25e21534aa5feb7b5b5f448bda77edbb03c855fe9f9ed8e8d0f2f73a584",
+    "specs/1006-bpmn-library-adoption/tasks.md": "4567145b74e413afdfa930cba4b9264aae12c87a10465f00fa18af545221c19d",
+    "Essentials/src/Workflows/Runtime/Core/Exceptions/WorkflowExecutableSourceReadException.cs": "201b61c3b2c76d059b780acee0682cac17f84cbc6aaf491df74faf1a066c7cde",
+    "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/StimulusDeliveryAcceptanceTests.cs": "1f3f210c95741642ebd043df124374757d0239e095ade1910f5d02bb3dac5e24",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Executions/WorkflowStartDispatcher.cs": "15f7b0d4c3143e791bb05954862cd156b6fadc5c55f3116908f87253c16001fa"
+  },
+  "checks": [
+    {
+      "project": "Workflow Runtime",
+      "passed": 2875,
+      "failed": 0,
+      "skipped": 0,
+      "newCases": 9
+    },
+    {
+      "project": "Runtime EF",
+      "passed": 1218,
+      "failed": 0,
+      "skipped": 0,
+      "newCases": 36
+    },
+    {
+      "focusedProviderAndAtomicCompletion": 166,
+      "focusedSourceContract": 79,
+      "coreApiAdditions": 8,
+      "coreApiRemovals": 0,
+      "frozenAuthoringFingerprintSha256": "41aa0bb979ea46fc2533b057e3677f408ab54c3411fecfafaa238a2adae38c92",
+      "unchanged": true
+    }
+  ],
+  "discovery": {
+    "runtime": {
+      "listed": 2864,
+      "uniqueDisplayNames": 2860,
+      "executed": 2875,
+      "deferredTheories": {
+        "Elsa.Workflows.Runtime.Tests.CheckpointRuleViolationWorkflowFaulterTests.A_refused_commit_faults_the_execution_with_only_its_state_and_an_incident": 2,
+        "Elsa.Workflows.Runtime.Tests.CheckpointRuleViolationWorkflowFaulterTests.A_failure_that_is_not_a_rule_refusal_leaves_the_execution_running": 4,
+        "Elsa.Workflows.Runtime.Tests.ValueEnvelopeEncryptionPredicateTests.Only_a_present_value_under_a_policy_that_requires_encryption_matches": 8
+      },
+      "unmapped": []
+    },
+    "ef": {
+      "listed": 1218,
+      "uniqueDisplayNames": 1216,
+      "executed": 1218,
+      "deferredTheories": {},
+      "unmapped": []
+    }
+  },
+  "mutations": [
+    {
+      "name": "memory-skip-canonical-capture",
+      "exitCode": 1,
+      "summary": "Failed!  - Failed:     3, Passed:     3, Skipped:     0, Total:     6, Duration: 809 ms - Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.dll (net10.0)",
+      "compileError": false
+    },
+    {
+      "name": "memory-ignore-publisher-full-pin",
+      "exitCode": 1,
+      "summary": "Failed!  - Failed:     1, Passed:     3, Skipped:     0, Total:     4, Duration: 761 ms - Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.dll (net10.0)",
+      "compileError": false
+    },
+    {
+      "name": "memory-trust-unmarked-winner",
+      "exitCode": 1,
+      "summary": "Failed!  - Failed:     1, Passed:     1, Skipped:     0, Total:     2, Duration: 616 ms - Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.dll (net10.0)",
+      "compileError": false
+    },
+    {
+      "name": "EF-skip-canonical-capture",
+      "exitCode": 1,
+      "summary": "Failed!  - Failed:     3, Passed:     3, Skipped:     0, Total:     6, Duration: 759 ms - Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.dll (net10.0)",
+      "compileError": false
+    },
+    {
+      "name": "EF-ignore-publisher-full-pin",
+      "exitCode": 1,
+      "summary": "Failed!  - Failed:     1, Passed:     3, Skipped:     0, Total:     4, Duration: 744 ms - Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.dll (net10.0)",
+      "compileError": false
+    },
+    {
+      "name": "EF-trust-unmarked-winner",
+      "exitCode": 1,
+      "summary": "Failed!  - Failed:     1, Passed:     1, Skipped:     0, Total:     2, Duration: 610 ms - Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.dll (net10.0)",
+      "compileError": false
+    },
+    {
+      "name": "memory-ignore-deletion-tombstone",
+      "exitCode": 1,
+      "summary": "Failed!  - Failed:     2, Passed:     2, Skipped:     0, Total:     4, Duration: 776 ms - Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.dll (net10.0)",
+      "compileError": false
+    },
+    {
+      "name": "EF-ignore-deletion-tombstone",
+      "exitCode": 1,
+      "summary": "Failed!  - Failed:     2, Passed:     2, Skipped:     0, Total:     4, Duration: 901 ms - Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.dll (net10.0)",
+      "compileError": false
+    },
+    {
+      "name": "EF-omit-actual-material-fence",
+      "exitCode": 1,
+      "summary": "Failed!  - Failed:     1, Passed:     1, Skipped:     0, Total:     2, Duration: 795 ms - Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.dll (net10.0)",
+      "compileError": false
+    },
+    {
+      "name": "memory-omit-actual-material-fence",
+      "exitCode": 1,
+      "summary": "Failed!  - Failed:     1, Passed:     1, Skipped:     0, Total:     2, Duration: 739 ms - Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.dll (net10.0)",
+      "compileError": false
+    },
+    {
+      "name": "EF-trust-foreign-source-reader",
+      "exitCode": 1,
+      "summary": "Failed!  - Failed:     2, Passed:     0, Skipped:     0, Total:     2, Duration: 782 ms - Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.dll (net10.0)",
+      "compileError": false
+    },
+    {
+      "name": "EF-stale-source-after-publisher-read",
+      "exitCode": 1,
+      "summary": "Failed!  - Failed:     1, Passed:     1, Skipped:     0, Total:     2, Duration: 798 ms - Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.dll (net10.0)",
+      "compileError": false
+    },
+    {
+      "name": "atomic-followup-mints-witness",
+      "exitCode": 1,
+      "summary": "Failed!  - Failed:     8, Passed:     0, Skipped:     0, Total:     8, Duration: 752 ms - Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.dll (net10.0)",
+      "compileError": false
+    },
+    {
+      "name": "native-reuses-stale-coalescing-inner",
+      "exitCode": 1,
+      "summary": "Failed!  - Failed:     1, Passed:     2, Skipped:     0, Total:     3, Duration: 80 ms - Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.dll (net10.0)",
+      "compileError": false
+    },
+    {
+      "name": "EF-pending-mints-witness",
+      "exitCode": 1,
+      "summary": "Failed!  - Failed:     1, Passed:     3, Skipped:     0, Total:     4, Duration: 796 ms - Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.dll (net10.0)",
+      "compileError": false
+    },
+    {
+      "name": "EF-checkpoint-mints-witness",
+      "exitCode": 1,
+      "summary": "Failed!  - Failed:     1, Passed:     3, Skipped:     0, Total:     4, Duration: 729 ms - Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.dll (net10.0)",
+      "compileError": false
+    },
+    {
+      "name": "witness-ignored-by-equivalence",
+      "exitCode": 1,
+      "summary": "Failed!  - Failed:     1, Passed:     0, Skipped:     0, Total:     1, Duration: 36 ms - Elsa.Workflows.Runtime.Tests.dll (net10.0)",
+      "compileError": false
+    },
+    {
+      "name": "source-read-loses-domain-context",
+      "exitCode": 1,
+      "summary": "Failed!  - Failed:     2, Passed:     0, Skipped:     0, Total:     2, Duration: 20 ms - Elsa.Workflows.Runtime.Tests.dll (net10.0)",
+      "compileError": false
+    }
+  ],
+  "reviewFixes": [
+    "EF winner replay re-reads source after awaited publisher lookup, refusing peer takeover.",
+    "Canonical native EF reference reads are rebound to the acceptance access context, refusing foreign-scope eligibility.",
+    "Immutable atomic-completion construction rejects caller-minted follow-up acceptance witnesses across native/EF/coalescing.",
+    "Public ordinary selector wraps read failure with artifact/scope/cause context and preserves requested cancellation.",
+    "Publisher complete-pin changed/unchanged controls and mutation checks cover both inner validations."
+  ],
+  "reviews": {
+    "correctness": "final source and receipt clean",
+    "standards": "final source/API/catalog and receipt clean",
+    "acceptance": "final source/control scope and receipt clean",
+    "fullPrRounds": 0
+  },
+  "limits": [
+    "Actual provider/DI/GC controls only; no enabled saved starts, publication or upgraded host/Studio qualification.",
+    "EF committed-acknowledgement loss is injected after the actual database transaction committed; fresh context reuses its exact witness after retirement. This is not process-kill/production evidence.",
+    "Deterministic transaction-start/source-read/deletion schedules do not claim a SQLite peer write inside its immediate transaction.",
+    "Final template/unsupported-guard GC composition, retained admission, T050/T051, T045 and other story gates, deletion/guards, final current host/Studio, whole-PR reviews/checks/resulting-main and ADR0063 remain open."
+  ]
+}

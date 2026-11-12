@@ -2,6 +2,8 @@ using Elsa.Workflows.Runtime.Core.Configuration;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.Executions;
+using Elsa.Workflows.Runtime.Services.Coalescing;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -24,7 +26,12 @@ public sealed class WorkflowExecutableReferenceGarbageCollector : IWorkflowExecu
     private readonly IWorkflowExecutableSourceReferenceStore _sourceReferenceStore;
     private readonly IExecutableActivityTemplateStore _activityTemplateStore;
     private readonly IWorkflowExecutionStateStore _workflowExecutionStateStore;
+    private readonly IWorkflowExecutionStateStore _physicalWorkflowExecutions;
     private readonly IWorkflowDispatchRetentionRootStore? _workflowDispatchRootStore;
+    private readonly IStimulusDeliveryStore? _stimulusDeliveryStore;
+    private readonly IStimulusDeliveryStore? _ordinaryCollectionGuard;
+    private readonly IRuntimePostCommitOutboxStore? _ordinaryOutbox;
+    private readonly bool _requiresOrdinaryProof;
     private readonly TimeProvider _timeProvider;
     private readonly TimeSpan _artifactCreationGracePeriod;
     private readonly TimeSpan _deletionGuardTimeout;
@@ -174,6 +181,7 @@ public sealed class WorkflowExecutableReferenceGarbageCollector : IWorkflowExecu
         _sourceReferenceStore = sourceReferenceStore;
         _activityTemplateStore = activityTemplateStore;
         _workflowExecutionStateStore = workflowExecutionStateStore;
+        _physicalWorkflowExecutions = workflowExecutionStateStore;
         _workflowDispatchRootStore = workflowDispatchRootStore;
         _timeProvider = timeProvider;
         _artifactCreationGracePeriod = artifactCreationGracePeriod;
@@ -181,20 +189,87 @@ public sealed class WorkflowExecutableReferenceGarbageCollector : IWorkflowExecu
         _logger = logger;
     }
 
+    public WorkflowExecutableReferenceGarbageCollector(
+        IWorkflowExecutableStore executableStore, IWorkflowExecutableSourceReferenceStore sourceReferenceStore,
+        IExecutableActivityTemplateStore activityTemplateStore, IWorkflowExecutionStateStore workflowExecutionStateStore,
+        IWorkflowDispatchRetentionRootStore? workflowDispatchRootStore, IOptions<WorkflowExecutableGarbageCollectionOptions> options,
+        TimeProvider timeProvider, ILogger<WorkflowExecutableReferenceGarbageCollector> logger, IStimulusDeliveryStore stimulusDeliveryStore)
+        : this(executableStore, sourceReferenceStore, activityTemplateStore, workflowExecutionStateStore,
+            workflowDispatchRootStore, options, timeProvider, logger)
+    {
+        _stimulusDeliveryStore = stimulusDeliveryStore ?? throw new ArgumentNullException(nameof(stimulusDeliveryStore));
+    }
+
+    public bool SupportsStimulusDeliveryRetention => _stimulusDeliveryStore is not null;
+
+    internal static WorkflowExecutableReferenceGarbageCollector Create(IServiceProvider sp)
+    {
+        var material = sp.GetRequiredService<IWorkflowExecutableStore>();
+        var references = sp.GetRequiredService<IWorkflowExecutableSourceReferenceStore>();
+        var templates = sp.GetRequiredService<IExecutableActivityTemplateStore>();
+        var executions = sp.GetRequiredService<IWorkflowExecutionStateStore>();
+        var physicalExecutions = executions.GetType() == typeof(CoalescingWorkflowExecutionStateStore)
+            ? sp.GetService<CoalescingInner<IWorkflowExecutionStateStore>>()?.Value : executions;
+        var dispatch = sp.GetService<IWorkflowDispatchRetentionRootStore>();
+        var options = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<WorkflowExecutableGarbageCollectionOptions>>();
+        var clock = sp.GetRequiredService<TimeProvider>();
+        var logger = sp.GetRequiredService<ILogger<WorkflowExecutableReferenceGarbageCollector>>();
+        var delivery = sp.GetService<IStimulusDeliveryStore>();
+        var outbox = sp.GetService<IRuntimePostCommitOutboxStore>();
+        var physicalOutbox = outbox?.GetType() == typeof(CoalescingRuntimePostCommitOutboxStore)
+            ? sp.GetService<CoalescingInner<IRuntimePostCommitOutboxStore>>()?.Value : outbox;
+        if (physicalExecutions is not null && physicalOutbox is not null && delivery is not null &&
+            templates.CanMaintainReferences(material, references) && references.CanWriteRootReferences(material) &&
+            delivery.CanRetainExecutables(physicalOutbox, material, references, physicalExecutions))
+            return new WorkflowExecutableReferenceGarbageCollector(material, references, templates, executions, dispatch,
+                options, clock, logger, delivery, physicalExecutions);
+        return new WorkflowExecutableReferenceGarbageCollector(material, references, templates, executions, dispatch,
+            options, clock, logger, delivery ?? physicalOutbox as IStimulusDeliveryStore, physicalOutbox, physicalExecutions ?? executions);
+    }
+
+    private WorkflowExecutableReferenceGarbageCollector(
+        IWorkflowExecutableStore executableStore, IWorkflowExecutableSourceReferenceStore sourceReferenceStore,
+        IExecutableActivityTemplateStore activityTemplateStore, IWorkflowExecutionStateStore workflowExecutionStateStore,
+        IWorkflowDispatchRetentionRootStore? workflowDispatchRootStore, IOptions<WorkflowExecutableGarbageCollectionOptions> options,
+        TimeProvider timeProvider, ILogger<WorkflowExecutableReferenceGarbageCollector> logger,
+        IStimulusDeliveryStore? ordinaryCollectionGuard, IRuntimePostCommitOutboxStore? ordinaryOutbox, IWorkflowExecutionStateStore physicalWorkflowExecutions)
+        : this(executableStore, sourceReferenceStore, activityTemplateStore, workflowExecutionStateStore,
+            workflowDispatchRootStore, options, timeProvider, logger)
+    {
+        _ordinaryCollectionGuard = ordinaryCollectionGuard;
+        _ordinaryOutbox = ordinaryOutbox;
+        _requiresOrdinaryProof = true;
+        _physicalWorkflowExecutions = physicalWorkflowExecutions;
+    }
+
+    internal WorkflowExecutableReferenceGarbageCollector(
+        IWorkflowExecutableStore executableStore, IWorkflowExecutableSourceReferenceStore sourceReferenceStore,
+        IExecutableActivityTemplateStore activityTemplateStore, IWorkflowExecutionStateStore workflowExecutionStateStore,
+        IWorkflowDispatchRetentionRootStore? workflowDispatchRootStore, IOptions<WorkflowExecutableGarbageCollectionOptions> options,
+        TimeProvider timeProvider, ILogger<WorkflowExecutableReferenceGarbageCollector> logger,
+        IStimulusDeliveryStore stimulusDeliveryStore, IWorkflowExecutionStateStore physicalWorkflowExecutions)
+        : this(executableStore, sourceReferenceStore, activityTemplateStore, workflowExecutionStateStore,
+            workflowDispatchRootStore, options, timeProvider, logger, stimulusDeliveryStore)
+    {
+        _physicalWorkflowExecutions = physicalWorkflowExecutions ?? throw new ArgumentNullException(nameof(physicalWorkflowExecutions));
+    }
+
     public ValueTask<WorkflowExecutableReferenceSweepResult> SweepAsync(CancellationToken cancellationToken = default) =>
         SweepAsync(_timeProvider.GetUtcNow(), cancellationToken);
 
     public async ValueTask<WorkflowExecutableReferenceSweepResult> SweepAsync(DateTimeOffset now, CancellationToken cancellationToken = default)
     {
-        var executables = (await _executableStore.ListAllAsync(cancellationToken)).ToArray();
+        var executables = (await LoadRetentionMaterialAsync(cancellationToken)).ToArray();
         var templates = (await _activityTemplateStore.ListAllAsync(cancellationToken)).ToArray();
         HashSet<string> protectedArtifactIds;
         HashSet<string> executionProtectedArtifactIds;
+        HashSet<string> retainedTemplateIds;
         try
         {
             protectedArtifactIds = await LoadProtectedClosureAsync(executables, templates, now, cancellationToken);
             var runtimeRootIds = await ListRuntimeRootIdsAsync(cancellationToken);
             executionProtectedArtifactIds = ResolveProtectedClosure(executables, runtimeRootIds);
+            retainedTemplateIds = ResolveRetainedTemplateIds(executables, templates, executionProtectedArtifactIds);
         }
         catch (Exception exception)
         {
@@ -205,15 +280,6 @@ public sealed class WorkflowExecutableReferenceGarbageCollector : IWorkflowExecu
             return new WorkflowExecutableReferenceSweepResult(0, 0, 0);
         }
 
-        var retainedTemplateHashes = executables
-            .Where(executable => executionProtectedArtifactIds.Contains(executable.Identity.ArtifactId))
-            .Select(executable => executable.CompatibilityMetadata.GetValueOrDefault("activity.templateHash"))
-            .Where(hash => !string.IsNullOrWhiteSpace(hash))
-            .ToHashSet(StringComparer.Ordinal);
-        var retainedTemplateIds = templates
-            .Where(template => retainedTemplateHashes.Contains(template.TemplateHash))
-            .Select(template => template.TemplateId)
-            .ToHashSet(StringComparer.Ordinal);
         var retainedMaterialIds = executionProtectedArtifactIds
             .Concat(retainedTemplateIds)
             .ToHashSet(StringComparer.Ordinal);
@@ -229,8 +295,52 @@ public sealed class WorkflowExecutableReferenceGarbageCollector : IWorkflowExecu
             .ToArray();
         foreach (var reference in doomedReferences)
         {
-            if (await _sourceReferenceStore.TryDeleteDoomedAsync(reference, now, cancellationToken))
-                deletedReferenceIds.Add(reference.SourceReferenceId);
+            if (_stimulusDeliveryStore is null && !_requiresOrdinaryProof)
+            {
+                if (await _sourceReferenceStore.TryDeleteDoomedAsync(reference, now, cancellationToken))
+                    deletedReferenceIds.Add(reference.SourceReferenceId);
+                continue;
+            }
+            if (!executables.Any(executable => executable.Identity.ArtifactId == reference.ArtifactId))
+            {
+                // A template's own native boundary checks all physical referencers, not a stale GC root set.
+                // This composes with cohort acceptance through the artifact fence: either its artifact survives,
+                // retaining its template, or collection removed that artifact and acceptance refuses.
+                if (templates.Any(template => template.TemplateId == reference.ArtifactId) &&
+                    _activityTemplateStore.CanMaintainReferences(_executableStore, _sourceReferenceStore))
+                {
+                    try
+                    {
+                        if (await _activityTemplateStore.TryDeleteDoomedReferenceAsync(reference, now, cancellationToken))
+                            deletedReferenceIds.Add(reference.SourceReferenceId);
+                    }
+                    catch (Exception exception)
+                    {
+                        if (exception is OperationCanceledException && cancellationToken.IsCancellationRequested) throw;
+                        _logger.LogWarning(exception, "Reference GC retained template source {SourceReferenceId} because native maintenance failed", reference.SourceReferenceId);
+                    }
+                }
+                continue;
+            }
+            var guardNow = _timeProvider.GetUtcNow();
+            var guard = await _executableStore.TryBeginDeletionAsync(reference.ArtifactId, Guid.NewGuid().ToString("N"),
+                guardNow + _deletionGuardTimeout, guardNow, cancellationToken);
+            if (guard is null) continue;
+            try
+            {
+                var currentExecutables = await LoadRetentionMaterialAsync(cancellationToken);
+                var currentRuntimeRoots = await ListRuntimeRootIdsAsync(cancellationToken);
+                if (ResolveProtectedClosure(currentExecutables, currentRuntimeRoots).Contains(reference.ArtifactId)) continue;
+                if (await _sourceReferenceStore.TryDeleteDoomedAsync(reference, now, guard, cancellationToken))
+                    deletedReferenceIds.Add(reference.SourceReferenceId);
+            }
+            catch (Exception exception)
+            {
+                if (exception is OperationCanceledException && cancellationToken.IsCancellationRequested) throw;
+                _logger.LogWarning(exception, "Reference GC retained source {SourceReferenceId} because guarded reachability/deletion failed",
+                    reference.SourceReferenceId);
+            }
+            finally { await CancelDeletionConservativelyAsync(guard); }
         }
 
         // Query 2 — form candidates outside the staging grace that no live root's complete dependency closure
@@ -269,7 +379,7 @@ public sealed class WorkflowExecutableReferenceGarbageCollector : IWorkflowExecu
                     continue;
                 }
 
-                var currentExecutables = await _executableStore.ListAllAsync(cancellationToken);
+                var currentExecutables = await LoadRetentionMaterialAsync(cancellationToken);
                 var currentTemplates = await _activityTemplateStore.ListAllAsync(cancellationToken);
                 var currentProtectedArtifactIds = await LoadProtectedClosureAsync(currentExecutables, currentTemplates, now, cancellationToken);
                 if (currentProtectedArtifactIds.Contains(artifactId))
@@ -311,6 +421,21 @@ public sealed class WorkflowExecutableReferenceGarbageCollector : IWorkflowExecu
         var deletedActivityTemplateCount = 0;
         foreach (var templateId in unreferencedTemplateIds)
         {
+            if (_stimulusDeliveryStore is not null || _requiresOrdinaryProof)
+            {
+                if (!_activityTemplateStore.CanMaintainReferences(_executableStore, _sourceReferenceStore)) continue;
+                try
+                {
+                    if (await _activityTemplateStore.TryDeleteUnreferencedAsync(templates.Single(template => template.TemplateId == templateId), cancellationToken))
+                        deletedActivityTemplateCount++;
+                }
+                catch (Exception exception)
+                {
+                    if (exception is OperationCanceledException && cancellationToken.IsCancellationRequested) throw;
+                    _logger.LogWarning(exception, "Reference GC retained template {TemplateId} because native maintenance failed", templateId);
+                }
+                continue;
+            }
             if (await _activityTemplateStore.DeleteAsync(templateId, cancellationToken))
                 deletedActivityTemplateCount++;
         }
@@ -323,6 +448,47 @@ public sealed class WorkflowExecutableReferenceGarbageCollector : IWorkflowExecu
                 deletedActivityTemplateCount);
 
         return new WorkflowExecutableReferenceSweepResult(deletedReferenceIds.Count, deletedArtifactCount, deletedActivityTemplateCount);
+    }
+
+    private static HashSet<string> ResolveRetainedTemplateIds(
+        IReadOnlyCollection<RetentionMaterial> executables,
+        IReadOnlyCollection<ExecutableActivityTemplate> templates,
+        HashSet<string> retainedArtifactIds)
+    {
+        var byId = templates.ToDictionary(template => template.TemplateId, StringComparer.Ordinal);
+        var byHash = templates.ToDictionary(template => template.TemplateHash, StringComparer.Ordinal);
+        var pending = new Queue<ExecutableActivityTemplateIdentity>();
+        foreach (var executable in executables.Where(item => retainedArtifactIds.Contains(item.Identity.ArtifactId) && item.NativeWorkflow is not null).Select(item => item.NativeWorkflow!))
+        {
+            // Draft wrappers carry this on the artifact; ordinary reusable placements carry it on each
+            // boundary node. NodesById is the immutable, fully flattened node snapshot, including nested slots.
+            foreach (var metadata in executable.NodesById.Values.Select(node => node.Metadata).Prepend(executable.CompatibilityMetadata))
+                EnqueueMetadata(metadata);
+        }
+
+        var retained = new HashSet<string>(StringComparer.Ordinal);
+        while (pending.TryDequeue(out var identity))
+        {
+            if (!byId.TryGetValue(identity.TemplateId, out var template) || template.TemplateHash != identity.TemplateHash)
+                throw new InvalidDataException($"Retained activity template dependency '{identity.TemplateId}' is missing or has a different hash.");
+            if (!retained.Add(template.TemplateId)) continue;
+            foreach (var metadata in template.NodesById.Values.Select(node => node.Metadata).Prepend(template.CompatibilityMetadata))
+                EnqueueMetadata(metadata);
+            foreach (var dependency in template.ClosedTemplates)
+                pending.Enqueue(dependency);
+            foreach (var dependency in template.DirectDependencies)
+                pending.Enqueue(new(dependency.TemplateId, dependency.TemplateHash));
+        }
+        // Inlined imported artifacts may legitimately carry provenance for templates not installed on this
+        // host. Do not invent that material. Once a present template declares an exact dependency, however,
+        // an incomplete/mismatched graph is uncertainty and the caller retains the entire sweep.
+        return retained;
+
+        void EnqueueMetadata(IReadOnlyDictionary<string, string> metadata)
+        {
+            if (metadata.TryGetValue("activity.templateHash", out var hash) && !string.IsNullOrWhiteSpace(hash) && byHash.TryGetValue(hash, out var template))
+                pending.Enqueue(new(template.TemplateId, template.TemplateHash));
+        }
     }
 
     private async ValueTask CancelDeletionConservativelyAsync(WorkflowExecutableDeletionGuard guard)
@@ -344,7 +510,7 @@ public sealed class WorkflowExecutableReferenceGarbageCollector : IWorkflowExecu
     }
 
     private async ValueTask<HashSet<string>> LoadProtectedClosureAsync(
-        IReadOnlyCollection<WorkflowExecutable> executables,
+        IReadOnlyCollection<RetentionMaterial> executables,
         IReadOnlyCollection<ExecutableActivityTemplate> templates,
         DateTimeOffset now,
         CancellationToken cancellationToken)
@@ -380,7 +546,17 @@ public sealed class WorkflowExecutableReferenceGarbageCollector : IWorkflowExecu
 
     private async ValueTask<IReadOnlyCollection<string>> ListRuntimeRootIdsAsync(CancellationToken cancellationToken)
     {
-        var roots = (await _workflowExecutionStateStore.ListPinnedExecutableArtifactIdsAsync(cancellationToken)).ToList();
+        if (_requiresOrdinaryProof)
+        {
+            if (_ordinaryCollectionGuard is null || _ordinaryOutbox is null)
+                throw new NotSupportedException("Ordinary GC has no proved physical outbox boundary.");
+            await _ordinaryCollectionGuard.EnsureOrdinaryCollectionAllowedAsync(_ordinaryOutbox, _executableStore, _sourceReferenceStore, _physicalWorkflowExecutions, cancellationToken);
+        }
+        var roots = new List<string>();
+        if (_stimulusDeliveryStore is not null)
+            roots.AddRange(await _stimulusDeliveryStore.ListPinnedExecutableArtifactIdsAsync(
+                _executableStore, _sourceReferenceStore, _physicalWorkflowExecutions, cancellationToken));
+        roots.AddRange(await _workflowExecutionStateStore.ListPinnedExecutableArtifactIdsAsync(cancellationToken));
         if (_workflowDispatchRootStore is not null)
             roots.AddRange(await _workflowDispatchRootStore.ListPinnedExecutableArtifactIdsAsync(cancellationToken));
         return roots;
@@ -406,7 +582,7 @@ public sealed class WorkflowExecutableReferenceGarbageCollector : IWorkflowExecu
     }
 
     private static HashSet<string> ResolveProtectedClosure(
-        IReadOnlyCollection<WorkflowExecutable> executables,
+        IReadOnlyCollection<RetentionMaterial> executables,
         IEnumerable<string> rootArtifactIds)
     {
         var identitiesById = executables.ToDictionary(executable => executable.Identity.ArtifactId, StringComparer.Ordinal);
@@ -430,8 +606,23 @@ public sealed class WorkflowExecutableReferenceGarbageCollector : IWorkflowExecu
             roots.Add(executable.Identity);
         }
 
-        return WorkflowExecutableDependencyGraph.ResolveClosure(roots, executables)
-            .Select(executable => executable.Identity.ArtifactId)
-            .ToHashSet(StringComparer.Ordinal);
+        return executables.All(x => x.Snapshot is not null)
+            ? WorkflowExecutableDependencyGraph.ResolveMaterialClosure(roots, executables.Select(x => x.Snapshot!).ToArray())
+                .Select(x => x.Identity.ArtifactId).ToHashSet(StringComparer.Ordinal)
+            : WorkflowExecutableDependencyGraph.ResolveClosure(roots, executables.Select(x => x.NativeWorkflow!).ToArray())
+                .Select(x => x.Identity.ArtifactId).ToHashSet(StringComparer.Ordinal);
     }
+    private async ValueTask<IReadOnlyCollection<RetentionMaterial>> LoadRetentionMaterialAsync(CancellationToken cancellationToken)
+    {
+        if (_executableStore.SupportsModelMaterial)
+            return (await WorkflowExecutableDependencyGraph.ListMaterialAsync(_executableStore, cancellationToken))
+                .Select(x => new RetentionMaterial(x.Identity, x.CreatedAt, x.NativeWorkflow, x)).ToArray();
+        return (await _executableStore.ListAllAsync(cancellationToken))
+            .Select(x => new RetentionMaterial(x.Identity, x.CreatedAt, x, null)).ToArray();
+    }
+
+    // GC needs a read projection. Legacy native providers need not invent a physical incarnation to supply it.
+    private sealed record RetentionMaterial(WorkflowExecutableIdentity Identity, DateTimeOffset CreatedAt,
+        WorkflowExecutable? NativeWorkflow, RuntimeExecutionMaterial? Snapshot);
+
 }

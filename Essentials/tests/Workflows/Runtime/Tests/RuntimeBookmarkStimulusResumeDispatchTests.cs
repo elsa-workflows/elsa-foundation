@@ -6,6 +6,7 @@ using Elsa.Workflows.Runtime.Resolvers;
 using Elsa.Workflows.Runtime.Services.Bookmarks;
 using Elsa.Workflows.Runtime.Services.Executables;
 using Elsa.Workflows.Runtime.Services.Executions;
+using Elsa.Workflows.Runtime.Services.Triggers;
 using Xunit;
 using Microsoft.Extensions.Time.Testing;
 
@@ -99,6 +100,39 @@ public sealed class RuntimeBookmarkStimulusResumeDispatchTests
         Assert.DoesNotContain(
             typeof(RuntimeResumeBookmarkCommandPayload).GetProperties().Select(property => property.Name),
             propertyName => propertyName.Contains("Method", StringComparison.OrdinalIgnoreCase) || propertyName.Contains("Callback", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task Broadcast_retry_keeps_the_pre_upgrade_mailbox_key_and_distinguishes_exact_bookmarks()
+    {
+        var bookmarks = new InMemoryBookmarkStateStore();
+        var executions = new InMemoryWorkflowExecutionStateStore();
+        var executables = new InMemoryWorkflowExecutableStore();
+        var actors = new RecordingWorkflowExecutionActorProvider();
+        var dispatcher = NewDispatcher(bookmarks, executions, executables, actors);
+        var router = new StimulusRouter(new InMemoryWorkflowTriggerBindingStore(), new GlobalBookmarkStimulusLookup(bookmarks),
+            new NoStarts(), dispatcher, new FakeTimeProvider(_now));
+        await bookmarks.SaveAsync(NewBookmark("bookmark-1"));
+        await executions.SaveAsync(NewWorkflowExecution());
+        await executables.SaveAsync(NewExecutable());
+        await router.RouteAsync(new StimulusDispatchRequest("delivery-status", "sha256:delivery-status:order-123",
+            mode: StimulusRoutingMode.ResumeOnly, idempotencyKey: "publication"));
+        var oldKey = Assert.Single(actors.Agent.Envelopes).IdempotencyKey;
+        // The pre-upgrade command is accepted but still pending. A second exact wait is also present.
+        await bookmarks.SaveAsync(NewBookmark("bookmark-2"));
+        await router.RouteAsync(new StimulusDispatchRequest("delivery-status", "sha256:delivery-status:order-123",
+            mode: StimulusRoutingMode.ResumeOnly, idempotencyKey: "publication") { ResumeAllMatchingBookmarks = true });
+        Assert.Equal(3, actors.Agent.Envelopes.Count);
+        Assert.Equal(oldKey, actors.Agent.Envelopes[1].IdempotencyKey);
+        Assert.NotEqual(oldKey, actors.Agent.Envelopes[2].IdempotencyKey);
+    }
+
+    private sealed class NoStarts : IWorkflowStartDispatcher
+    {
+        public ValueTask<WorkflowExecutionStartDispatchResult> DispatchAsync(WorkflowExecutionStartDispatchRequest request,
+            WorkflowExecutableReferenceScope requiredScope = WorkflowExecutableReferenceScope.Published,
+            WorkflowExecutionCommandDispatchOptions? dispatchOptions = null, CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("Resume-only routing must never dispatch a start.");
     }
 
     [Fact]

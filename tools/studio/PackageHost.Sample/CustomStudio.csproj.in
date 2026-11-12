@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <!-- Supply the exact version from your candidate distribution, on every build command. -->
+    <StudioVersion Condition="'$(StudioVersion)' == ''">__STUDIO_VERSION__</StudioVersion>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Elsa.Studio.Hosting" Version="[$(StudioVersion)]" />
+    <PackageReference Include="Elsa.Studio.Dashboard" Version="[$(StudioVersion)]" />
+    <Content Update="shells.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

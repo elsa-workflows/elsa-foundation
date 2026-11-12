@@ -117,6 +117,7 @@ public sealed class ActivityForkService(
             DraftId = draftId,
             Revision = 1,
             Records = sourceLayout.Records.ToList(),
+            ActivityPresentation = sourceLayout.ActivityPresentation.ToList(),
             CreatedAt = now,
             LastModifiedAt = now
         };

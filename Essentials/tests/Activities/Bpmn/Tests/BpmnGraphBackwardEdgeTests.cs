@@ -21,14 +21,14 @@ public sealed class BpmnGraphBackwardEdgeTests
     {
         // start → a → b → a (loop) / b → end. Only b→a closes the loop.
         var graph = Graph(
-            elements: [Start(), Task("a"), Task("b"), End()],
+            elements: [Start(), Task("a", childNodeId: "node-a"), Task("b"), End()],
             flows:
             [
                 Flow("f1", "start", "a"),
                 Flow("f2", "a", "b"),
                 Flow("f3", "b", "a"),
                 Flow("f4", "b", "end")
-            ]);
+            ], children: ["node-a"]);
 
         Assert.Equal(["f3"], graph.BackwardFlowIds.OrderBy(id => id, StringComparer.Ordinal));
     }
@@ -57,7 +57,7 @@ public sealed class BpmnGraphBackwardEdgeTests
         // Outer loop a→b→c→…→a ; inner loop b→…→b.
         // start → a → b → c ; c → b (inner back) ; c → d ; d → a (outer back) ; d → end.
         var graph = Graph(
-            elements: [Start(), Task("a"), Task("b"), Task("c"), Task("d"), End()],
+            elements: [Start(), Task("a"), Task("b", childNodeId: "node-b"), Task("c"), Task("d"), End()],
             flows:
             [
                 Flow("f1", "start", "a"),
@@ -67,7 +67,7 @@ public sealed class BpmnGraphBackwardEdgeTests
                 Flow("f4", "c", "d"),
                 Flow("outer", "d", "a"),
                 Flow("f5", "d", "end")
-            ]);
+            ], children: ["node-b"]);
 
         Assert.Equal(["inner", "outer"], graph.BackwardFlowIds.OrderBy(id => id, StringComparer.Ordinal));
     }
@@ -132,16 +132,16 @@ public sealed class BpmnGraphBackwardEdgeTests
     [Fact]
     public void LoopBackIntoStartEvent_IsRejectedByTheStartEventRule()
     {
-        var exception = Assert.Throws<BpmnExecutionException>(() => Graph(
+        var exception = Assert.Throws<BpmnHostException>(() => Graph(
             elements: [Start(), Task("a"), End()],
             flows: [Flow("f1", "start", "a"), Flow("loop", "a", "start"), Flow("f2", "a", "end")]));
-        Assert.Contains("cannot have inbound sequence flows", exception.Message);
+        Assert.True(exception.Message.Contains("cannot have inbound sequence flows", StringComparison.Ordinal), exception.ToString());
     }
 
     [Fact]
     public void LoopBackIntoBoundaryEvent_IsRejectedByTheBoundaryRule()
     {
-        var exception = Assert.Throws<BpmnExecutionException>(() => Graph(
+        var exception = Assert.Throws<BpmnHostException>(() => Graph(
             elements:
             [
                 Start(),
@@ -159,13 +159,13 @@ public sealed class BpmnGraphBackwardEdgeTests
                 Flow("f4", "after", "end")
             ],
             children: ["node-host", "node-listener"]));
-        Assert.Contains("cannot have inbound sequence flows", exception.Message);
+        Assert.True(exception.Message.Contains("cannot have inbound sequence flows", StringComparison.Ordinal), exception.ToString());
     }
 
     [Fact]
     public void LoopBackIntoEventGatewayArmedCatch_IsRejectedByTheExactlyOneInboundRule()
     {
-        var exception = Assert.Throws<BpmnExecutionException>(() => Graph(
+        var exception = Assert.Throws<BpmnHostException>(() => Graph(
             elements:
             [
                 Start(),
@@ -184,7 +184,7 @@ public sealed class BpmnGraphBackwardEdgeTests
                 Flow("f4", "catch-a", "end")
             ],
             children: ["node-a", "node-b"]));
-        Assert.Contains("exactly one inbound flow", exception.Message);
+        Assert.True(exception.Message.Contains("exactly one inbound flow", StringComparison.Ordinal), exception.ToString());
     }
 
     private static BpmnElement Start(string elementId = "start") => BpmnRuntimeFixture.StartEvent(elementId);
@@ -213,6 +213,6 @@ public sealed class BpmnGraphBackwardEdgeTests
                 BpmnProcessActivity.StructureKind,
                 BpmnProcessActivity.StructureSchemaVersion,
                 JsonSerializer.SerializeToElement(new BpmnStructure(elements, flows))));
-        return BpmnGraph.From(node);
+        return BpmnGraphAdapter.Build(node);
     }
 }

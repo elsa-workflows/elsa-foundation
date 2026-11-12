@@ -20,7 +20,11 @@ public static class EtlRuntimeIdentity
 
     /// <summary>Stable retained-page identity bound to its invocation, source pin, partition, page, and request.</summary>
     public static string ConnectorHttpPageId(EtlConnectorRunAdmission admission, int partitionOrdinal,
-        long pageSequence, EtlHttpRequest request)
+        long pageSequence, EtlHttpRequest request) => ConnectorHttpPageId(admission, partitionOrdinal, pageSequence, request, 0);
+
+    /// <summary>The retained-page identity of one poll of a continuous shard; generation 0 is the finite identity.</summary>
+    public static string ConnectorHttpPageId(EtlConnectorRunAdmission admission, int partitionOrdinal,
+        long pageSequence, EtlHttpRequest request, long pollGeneration)
     {
         ArgumentNullException.ThrowIfNull(admission);
         ArgumentNullException.ThrowIfNull(admission.Bindings);
@@ -29,11 +33,17 @@ public static class EtlRuntimeIdentity
             throw new ArgumentOutOfRangeException(nameof(partitionOrdinal));
         if (pageSequence < 0)
             throw new ArgumentOutOfRangeException(nameof(pageSequence));
+        if (pollGeneration < 0)
+            throw new ArgumentOutOfRangeException(nameof(pollGeneration));
         if (admission.Bindings.Source is not { Kind: EtlConnectorKind.Http } source)
             throw new ArgumentException("A retained HTTP page requires an HTTP source binding.", nameof(admission));
 
-        return Hash("etl-connector-http-page-v1", InvocationFingerprint(admission.Invocation),
-            ConnectorBinding(source), Number(partitionOrdinal), Number(pageSequence), HttpRequestHash(request));
+        return pollGeneration == 0
+            ? Hash("etl-connector-http-page-v1", InvocationFingerprint(admission.Invocation),
+                ConnectorBinding(source), Number(partitionOrdinal), Number(pageSequence), HttpRequestHash(request))
+            : Hash("etl-connector-http-page-v1", InvocationFingerprint(admission.Invocation),
+                ConnectorBinding(source), Number(partitionOrdinal), Number(pageSequence), HttpRequestHash(request),
+                Number(pollGeneration));
     }
 
     public static string ScopeKey(EtlScope scope)
@@ -84,11 +94,37 @@ public static class EtlRuntimeIdentity
             ConnectorBinding(destination), contentHash, Number(byteLength), Number(recordCount));
     }
 
-    /// <summary>The immutable JSONL filename produced when the file publisher receives the connector effect identity.</summary>
-    public static string ConnectorFileOutputKey(string effectId)
+    /// <summary>The immutable JSONL filename for a connector effect identity; see the kind-aware overload for CSV.</summary>
+    public static string ConnectorFileOutputKey(string effectId) => ConnectorFileOutputKey(effectId, EtlConnectorKind.Jsonl);
+
+    /// <summary>The immutable filename for a connector file effect: the effect identity's hash with its route kind's extension.</summary>
+    public static string ConnectorFileOutputKey(string effectId, EtlConnectorKind kind)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(effectId);
-        return Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(effectId))) + ".jsonl";
+        var extension = kind switch
+        {
+            EtlConnectorKind.Jsonl => ".jsonl",
+            EtlConnectorKind.Csv => ".csv",
+            _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "Only file route kinds have output keys.")
+        };
+        return Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(effectId))) + extension;
+    }
+
+    /// <summary>The opaque key recording a SQL route's applied effect: the effect identity's hash with a <c>.sql</c> suffix.</summary>
+    public static string ConnectorSqlEffectKey(string effectId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(effectId);
+        return Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(effectId))) + ".sql";
+    }
+
+    /// <summary>
+    /// The opaque key recording a RabbitMQ route whose messages the broker confirmed: the effect identity's hash with an
+    /// <c>.amqp</c> suffix (spec 1200).
+    /// </summary>
+    public static string ConnectorRabbitMqEffectKey(string effectId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(effectId);
+        return Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(effectId))) + ".amqp";
     }
 
     private static string? ObjectReference(EtlObjectReference? reference) => reference is null

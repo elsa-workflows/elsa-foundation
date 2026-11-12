@@ -1,0 +1,23 @@
+{
+  "archive": "two-host-i68-evidence.tar.gz",
+  "bytes": 3771916,
+  "sha256": "9805c652d042652251b90a25c75654d10bd437ad738a439a3e63658bd7ea745f",
+  "files": 2178,
+  "protectedValuesAbsent": true,
+  "upload": "passed",
+  "localArchiveAndAllFileHashesVerified": true,
+  "binaries": {
+    "boundaryWorker": {
+      "r5": "Worker.dll dc00283bd77dc919 (crash/takeover, failure-r1)",
+      "r6": "1f6327692aa58642 (failure-r2)",
+      "r7": "cc1cfdcc1b6d971d (f3)",
+      "r8": "05f276dd9288640d (f4, includes fence-renewal fix)"
+    },
+    "workbench": {
+      "r5": "cluster c1",
+      "r6": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.dll 2ef857e586446f1f (fixed; c2-c7, loopfix, p-branch)",
+      "main": "b392aef0a (loopab-main, p-main)"
+    }
+  },
+  "note": "Placement sampling statistics were computed on the database host (150 one-second samples per build); local copies are 4 KB command-output tails."
+}

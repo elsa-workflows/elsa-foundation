@@ -10,7 +10,8 @@ public sealed record DispatchStimulusResponse(
     IReadOnlyCollection<StimulusStartView> Starts,
     IReadOnlyCollection<StimulusResumeView> Resumes,
     int ShedStartCount = 0,
-    int? RetryAfterSeconds = null)
+    int? RetryAfterSeconds = null,
+    int RefusedStartCount = 0)
 {
     public static DispatchStimulusResponse From(StimulusRoutingResult result) =>
         new(
@@ -20,14 +21,18 @@ public sealed record DispatchStimulusResponse(
             result.Starts.Select(StimulusStartView.From).ToArray(),
             result.Resumes.Select(StimulusResumeView.From).ToArray(),
             result.ShedStartCount,
-            result.ShedRetryAfter is { } retryAfter ? Math.Max(1, (int)Math.Ceiling(retryAfter.TotalSeconds)) : null);
+            result.ShedRetryAfter is { } retryAfter ? Math.Max(1, (int)Math.Ceiling(retryAfter.TotalSeconds)) : null,
+            result.RefusedStartCount);
 }
 
-/// <summary>One started, duplicate-skipped or admission-shed start produced by routing a stimulus to the trigger index.</summary>
-public sealed record StimulusStartView(string TriggerBindingId, string ArtifactId, string Status, string? WorkflowExecutionId)
+/// <summary>
+/// One started, duplicate-skipped, admission-shed or input-contract-refused start produced by routing a stimulus to the
+/// trigger index. <see cref="Reason"/> is the input-contract reason code of a refused start.
+/// </summary>
+public sealed record StimulusStartView(string TriggerBindingId, string ArtifactId, string Status, string? WorkflowExecutionId, string? Reason = null)
 {
     public static StimulusStartView From(StimulusStartOutcome outcome) =>
-        new(outcome.TriggerBindingId, outcome.ArtifactId, outcome.Status.ToString(), outcome.WorkflowExecutionId);
+        new(outcome.TriggerBindingId, outcome.ArtifactId, outcome.Status.ToString(), outcome.WorkflowExecutionId, outcome.Reason);
 }
 
 /// <summary>One waiting instance the stimulus fanned in to via the cross-execution bookmark index.</summary>

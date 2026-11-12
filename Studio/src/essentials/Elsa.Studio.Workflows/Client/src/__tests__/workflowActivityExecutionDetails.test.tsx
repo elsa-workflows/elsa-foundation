@@ -15,7 +15,7 @@ import {
   getIncidentStackTrace,
   loadActiveIncidentActivitySummaries
 } from "../workflow-editor/WorkflowInstances";
-import type { ScopeFrame } from "../workflowAdapter";
+import { findNodeScopePath, type ScopeFrame } from "../workflowAdapter";
 import type {
   ActivityCatalogItem,
   ActivityNode,
@@ -28,8 +28,10 @@ import type {
   WorkflowExecutableNode
 } from "../workflowTypes";
 import { bpmnStructureKind } from "../bpmn/bpmnTypes";
+import { runtimeValueContextId, runtimeValuePayloadKey } from "../workflow-editor/RuntimeValueEvidence";
+import type { PreparedAttachedExecution } from "../workflow-editor/prepareAttachedExecution";
 import { buildExecutableActivityGraph, type ExecutableGraphNodeFacts } from "../executableGraph";
-import { bpmnActivity, flowchartActivity, flowchartNode, forEachActivity, forEachNode, leafNode, writeLine } from "./fixtures";
+import { ifActivity, ifNode, bpmnActivity, flowchartActivity, flowchartNode, forEachActivity, forEachNode, leafNode, writeLine } from "./fixtures";
 
 vi.mock("../api/runtime", async importOriginal => ({
   ...(await importOriginal<typeof import("../api/runtime")>()),
@@ -106,6 +108,18 @@ function metadataValue(container: ParentNode, label: string) {
   return [...container.querySelectorAll<HTMLElement>(".wf-activity-meta-item")]
     .find(item => item.querySelector("dt")?.textContent === label)
     ?.querySelector(".wf-activity-meta-value")?.textContent;
+}
+
+function openInputTechnicalDetails(container: ParentNode, name: string) {
+  const button = [...container.querySelectorAll<HTMLButtonElement>("button")]
+    .find(candidate => candidate.getAttribute("aria-label") === `Technical details for ${name}`);
+  expect(button).toBeDefined();
+  const region = document.getElementById(button!.getAttribute("aria-controls")!);
+  expect(region?.hidden).toBe(true);
+  flushSync(() => button!.click());
+  expect(button!.getAttribute("aria-expanded")).toBe("true");
+  expect(region?.hidden).toBe(false);
+  return region!;
 }
 
 function installClipboard(writeText: (value: string) => Promise<void>) {
@@ -387,7 +401,7 @@ describe("WorkflowActivityExecutionDetails", () => {
       .find(section => section.querySelector("h4")?.textContent?.includes("Inputs"));
     expect(inputSection?.querySelectorAll("[role=listitem]")).toHaveLength(1);
     expect(inputSection?.querySelector(".wf-runtime-evidence-count")?.textContent).toBe("1");
-    expect(inputSection?.querySelector(".wf-input-inspection-caption")?.textContent).toBe("Evaluated at runtime");
+    expect(inputSection?.querySelector(".wf-input-inspection-caption")?.textContent).toBe("Runtime values");
     expect(inputSection?.querySelector(".wf-runtime-input .wf-runtime-capture-mode")).toBeNull();
   });
 
@@ -535,12 +549,12 @@ describe("WorkflowActivityExecutionDetails", () => {
   });
 
   it("requires a fresh explicit action for sensitive evidence after a selection change with slash-containing IDs", async () => {
-    vi.mocked(getActivityExecutionInspection).mockResolvedValue(inspection([valueEvidence({
+    vi.mocked(getActivityExecutionInspection).mockImplementation(async (_context, workflowExecutionId, activityExecutionId) => ({ ...inspection([valueEvidence({
       name: "Secret",
       captureMode: "Payload",
       captureState: "payloadCaptured",
       isSensitive: true
-    })]));
+    })]), workflowExecutionId, activityExecutionId }));
     vi.mocked(getActivityExecutionValuePayload).mockResolvedValue({
       evidenceId: "evidence-1",
       captureMode: "Payload",
@@ -600,7 +614,7 @@ describe("WorkflowActivityExecutionDetails", () => {
   it("cancels a payload request and drops its result when the selected activity changes", async () => {
     const oldSnapshot = valueEvidence({ evidenceId: "old-evidence" });
     vi.mocked(getActivityExecutionInspection).mockImplementation(async (_context, _workflowExecutionId, activityExecutionId) =>
-      inspection(activityExecutionId === "ae-1" ? [oldSnapshot] : []));
+      ({ ...inspection(activityExecutionId === "ae-1" ? [oldSnapshot] : []), activityExecutionId }));
 
     let resolvePayload!: (value: { evidenceId: string; captureMode: string; payload: unknown }) => void;
     let payloadSignal: AbortSignal | undefined;
@@ -741,7 +755,7 @@ describe("WorkflowActivityExecutionDetails", () => {
     expect(container.querySelector(".wf-input-inspection-value")?.textContent).not.toContain("Not evaluated");
   });
 
-  it("retains native input disclosures with distinct controlled regions for punctuation-containing keys", async () => {
+  it("keeps compact input details independently controlled for punctuation-containing keys", async () => {
     vi.mocked(getActivityExecutionInspection).mockResolvedValue(inspection([]));
     const pairedCatalog: ActivityCatalogItem[] = [{
       ...catalog[0]!,
@@ -753,21 +767,39 @@ describe("WorkflowActivityExecutionDetails", () => {
     const container = render(<WorkflowActivityExecutionDetails context={context} activity={activity} activityCatalog={pairedCatalog} />);
     await waitFor(() => expect(container.textContent).toContain("No runtime output snapshots were recorded"));
 
-    const summaries = [...container.querySelectorAll<HTMLElement>(".wf-input-inspection-summary")];
-    const ids = summaries.map(summary => summary.getAttribute("aria-controls"));
-    expect(summaries).toHaveLength(2);
+    const buttons = [...container.querySelectorAll<HTMLButtonElement>(".wf-input-inspection-info")];
+    const ids = buttons.map(button => button.getAttribute("aria-controls"));
+    expect(buttons).toHaveLength(2);
     expect(new Set(ids).size).toBe(2);
-    for (const summary of summaries) {
-      const disclosure = summary.parentElement!;
-      expect(disclosure.tagName).toBe("DETAILS");
-      expect(disclosure.hasAttribute("role")).toBe(false);
-      expect(disclosure.closest("[role=listitem]")).not.toBe(disclosure);
-      const region = document.getElementById(summary.getAttribute("aria-controls")!);
-      const rowName = summary.closest("[role=listitem]")?.querySelector("strong")?.textContent;
+    expect(container.textContent).not.toContain("Source & diagnostics");
+    for (const button of buttons) {
+      const region = document.getElementById(button.getAttribute("aria-controls")!)!;
+      const rowName = button.closest("[role=listitem]")?.querySelector("strong")?.textContent;
+      expect(button.tagName).toBe("BUTTON");
+      expect(button.getAttribute("aria-label")).toBe(`Technical details for ${rowName}`);
+      expect(button.getAttribute("aria-expanded")).toBe("false");
+      expect(region.hidden).toBe(true);
+      expect(region.getAttribute("role")).toBe("region");
       expect(region?.querySelector("section")?.getAttribute("aria-label"))
         .toBe(`${rowName} authored source`);
-      expect(disclosure.hasAttribute("open")).toBe(false);
+      expect(region.querySelector("dd")?.textContent).toBe("System.String");
+      expect(region.textContent).toContain("No runtime evaluation was recorded.");
     }
+
+    flushSync(() => buttons[0]!.click());
+    expect(buttons[0]!.getAttribute("aria-expanded")).toBe("true");
+    expect(document.getElementById(ids[0]!)?.hidden).toBe(false);
+    expect(document.getElementById(ids[1]!)?.hidden).toBe(true);
+    buttons[0]!.focus();
+    flushSync(() => buttons[0]!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })));
+    expect(buttons[0]!.getAttribute("aria-expanded")).toBe("false");
+    expect(document.getElementById(ids[0]!)?.hidden).toBe(true);
+    expect(document.activeElement).toBe(buttons[0]);
+
+    rerender(<WorkflowActivityExecutionDetails context={context} activity={activity} activityCatalog={pairedCatalog} focusInputKey="a-b" />);
+    await vi.waitFor(() => expect(document.activeElement).toBe(buttons[1]));
+    expect(buttons[1]!.getAttribute("aria-expanded")).toBe("true");
+    expect(document.getElementById(ids[1]!)?.hidden).toBe(false);
   });
 
   it("shows the capture reason when input values were omitted by policy", async () => {
@@ -856,7 +888,7 @@ describe("WorkflowActivityExecutionDetails", () => {
     );
 
     await waitFor(() => expect(container.textContent).toContain("Hello at runtime"));
-    expect(container.textContent).toContain("Evaluated at runtime");
+    expect(container.textContent).toContain("Runtime values");
     expect(container.textContent).toContain("JavaScript source: variables.message");
     expect(container.textContent).toContain("Compiled binding (Expression)");
     expect(container.textContent).not.toContain("legacy summary must not render");
@@ -1060,8 +1092,8 @@ describe("WorkflowActivityExecutionDetails", () => {
     ])("keeps the authored %s source hidden under %s when the backend did not flag the record", async (_label, expressionType, declared) => {
       const container = renderDeclaredInput(declared, { expressionType, value: authoredSource }, [sourceBinding]);
 
-      await waitFor(() => expect(container.textContent).toContain("Protected source"));
-      expect(container.textContent).toContain("Authored source is protected because this input is sensitive.");
+      const technical = openInputTechnicalDetails(container, "Token");
+      expect(technical.textContent).toContain("Authored source is protected because this input is sensitive.");
       expect(container.innerHTML).not.toContain(authoredSource);
     });
 
@@ -1072,7 +1104,8 @@ describe("WorkflowActivityExecutionDetails", () => {
       const container = renderDeclaredInput({ isSensitive: true, isCredential: true }, { expressionType: "Secret", value });
 
       await waitFor(() => expect(container.textContent).toContain("api-tokens"));
-      expect(container.textContent).not.toContain("Protected source");
+      expect(openInputTechnicalDetails(container, "Token").textContent)
+        .not.toContain("Authored source is protected because this input is sensitive.");
       // Nothing is withheld when there is no compiled binding.
       expect(container.textContent).not.toContain(withheldBindingNote);
     });
@@ -1118,7 +1151,8 @@ describe("WorkflowActivityExecutionDetails", () => {
     it("keeps a Secret Reference hidden when the backend flagged the record", async () => {
       const container = renderDeclaredInput({ isCredential: true }, { expressionType: "Secret", value: { name: "api-tokens" }, isSensitive: true });
 
-      await waitFor(() => expect(container.textContent).toContain("Protected source"));
+      expect(openInputTechnicalDetails(container, "Token").textContent)
+        .toContain("Authored source is protected because this input is sensitive.");
       expect(container.innerHTML).not.toContain("api-tokens");
     });
   });
@@ -1325,6 +1359,125 @@ describe("WorkflowActivityExecutionDetails", () => {
   });
 });
 
+it("rejects mismatched execution evidence before resolving any value payload", async () => {
+  vi.mocked(getActivityExecutionInspection).mockResolvedValue({ ...inspection([valueEvidence({ payload: "FOREIGN_VALUE" })]), activityExecutionId: "foreign" });
+  const container = render(<WorkflowActivityExecutionDetails context={context} activity={activity} activityCatalog={catalog} />);
+  await waitFor(() => expect(container.textContent).toContain("identity did not match"));
+  expect(container.textContent).not.toContain("FOREIGN_VALUE");
+  expect(getActivityExecutionValuePayload).not.toHaveBeenCalled();
+});
+
+it("retains confirmed evidence during a same-occurrence refresh and removes it immediately for another occurrence", async () => {
+  vi.mocked(getActivityExecutionValuePayload).mockResolvedValue({ payload: "confirmed value" } as Awaited<ReturnType<typeof getActivityExecutionValuePayload>>);
+  vi.mocked(getActivityExecutionInspection).mockResolvedValue(inspection([valueEvidence()]));
+  const props = { context, activity, activityCatalog: catalog };
+  const container = render(<WorkflowActivityExecutionDetails {...props} />);
+  await waitFor(() => expect(container.textContent).toContain("confirmed value"));
+  const value = container.querySelector(".wf-input-inspection-value");
+  let release!: (value: ActivityExecutionInspection) => void;
+  vi.mocked(getActivityExecutionInspection).mockImplementationOnce(() => new Promise(resolve => { release = resolve; }));
+  rerender(<WorkflowActivityExecutionDetails {...props} refreshKey={1} />);
+  expect(container.textContent).toContain("confirmed value");
+  expect(container.querySelector(".wf-input-inspection-value")).toBe(value);
+  vi.mocked(getActivityExecutionValuePayload).mockResolvedValue({ payload: "reconciled value" } as Awaited<ReturnType<typeof getActivityExecutionValuePayload>>);
+  release(inspection([valueEvidence({ evidenceId: "new-evidence" })]));
+  await waitFor(() => expect(container.textContent).toContain("reconciled value"));
+  rerender(<WorkflowActivityExecutionDetails {...props} activity={{ ...activity, activityExecutionId: "another-occurrence" }} refreshKey={1} />);
+  expect(container.textContent).not.toContain("reconciled value");
+});
+
+it("lets a slow occurrence inspection finish and coalesces intervening live revisions", async () => {
+  const releases: Array<(value: ActivityExecutionInspection) => void> = [];
+  vi.mocked(getActivityExecutionInspection).mockImplementation(() => new Promise(resolve => releases.push(resolve)));
+  const props = { context, activity, activityCatalog: catalog };
+  const container = render(<WorkflowActivityExecutionDetails {...props} />);
+  for (let revision = 1; revision <= 5; revision++) rerender(<WorkflowActivityExecutionDetails {...props} refreshKey={revision} />);
+  expect(getActivityExecutionInspection).toHaveBeenCalledTimes(1);
+  expect(vi.mocked(getActivityExecutionInspection).mock.calls[0][3]?.aborted).toBe(false);
+  releases[0](inspection([], ["First confirmed outcome"]));
+  await waitFor(() => expect(container.textContent).toContain("First confirmed outcome"));
+  await waitFor(() => expect(getActivityExecutionInspection).toHaveBeenCalledTimes(2));
+  releases[1](inspection([], ["Newest confirmed outcome"]));
+  await waitFor(() => expect(container.textContent).toContain("Newest confirmed outcome"));
+  expect(getActivityExecutionInspection).toHaveBeenCalledTimes(2);
+});
+
+it.each(["occurrence", "workflow", "endpoint"])("cancels a queued inspection when its %s identity changes", async change => {
+  let release!: (value: ActivityExecutionInspection) => void;
+  vi.mocked(getActivityExecutionInspection).mockImplementationOnce(() => new Promise(resolve => { release = resolve; }));
+  const props = { context, activity, activityCatalog: catalog };
+  const container = render(<WorkflowActivityExecutionDetails {...props} />);
+  rerender(<WorkflowActivityExecutionDetails {...props} refreshKey={1} />);
+  const oldSignal = vi.mocked(getActivityExecutionInspection).mock.calls[0][3];
+  const nextActivity = { ...activity, ...(change === "occurrence" ? { activityExecutionId: "new-occurrence" }
+    : change === "workflow" ? { workflowExecutionId: "new-run" } : {}) };
+  vi.mocked(getActivityExecutionInspection).mockResolvedValue({ ...inspection([], ["Current context outcome"]),
+    activityExecutionId: nextActivity.activityExecutionId, workflowExecutionId: nextActivity.workflowExecutionId });
+  rerender(<WorkflowActivityExecutionDetails {...props} context={change === "endpoint" ? { ...context } : context} activity={nextActivity} refreshKey={1} />);
+  expect(oldSignal?.aborted).toBe(true);
+  await waitFor(() => expect(container.textContent).toContain("Current context outcome"));
+  release(inspection([], ["Obsolete context outcome"]));
+  await new Promise(resolve => setTimeout(resolve, 0));
+  expect(container.textContent).not.toContain("Obsolete context outcome");
+  expect(getActivityExecutionInspection).toHaveBeenCalledTimes(2);
+});
+
+it.each([false, true])("keeps other evidence available when a partial response omits incidents (compact: %s)", async compact => {
+  const partial = inspection([], ["Confirmed outcome"]);
+  Reflect.deleteProperty(partial, "incidents");
+  vi.mocked(getActivityExecutionInspection).mockResolvedValue(partial);
+  const container = render(<WorkflowActivityExecutionDetails context={context} activity={activity} activityCatalog={catalog} compact={compact} />);
+  await waitFor(() => expect(container.textContent).toContain("Incident details are unavailable for this execution."));
+  expect(container.textContent).toContain("Confirmed outcome");
+  expect(container.textContent).not.toContain("No incidents recorded for this execution.");
+});
+
+it("uses the next occurrence's prepared value immediately after retrying a previous value", async () => {
+  const snapshot = valueEvidence({ inputKey: "Value" });
+  const prepared: PreparedAttachedExecution = { contextIdentity: runtimeValueContextId(context), workflowExecutionId: activity.workflowExecutionId,
+    execution: activity, inspection: inspection([snapshot]), values: new Map([[runtimeValuePayloadKey(snapshot), { status: "failed", error: "Unavailable" }]]) };
+  const container = render(<WorkflowActivityExecutionDetails context={context} activity={activity} activityCatalog={catalog} prepared={prepared} />);
+  vi.mocked(getActivityExecutionValuePayload).mockResolvedValue({ evidenceId: snapshot.evidenceId!, captureMode: snapshot.captureMode,
+    payload: { kind: "string", preview: "Retried previous value" } });
+  const retry = [...container.querySelectorAll("button")].find(button => button.textContent === "Retry")!;
+  flushSync(() => retry.click());
+  await waitFor(() => expect(container.textContent).toContain("Retried previous value"));
+  const next = { ...activity, activityExecutionId: "next-occurrence" };
+  const nextPrepared: PreparedAttachedExecution = { ...prepared, execution: next,
+    inspection: { ...inspection([snapshot]), activityExecutionId: next.activityExecutionId },
+    values: new Map([[runtimeValuePayloadKey(snapshot), { status: "ready", payload: { kind: "string", preview: "Prepared next value" } }]]) };
+  rerender(<WorkflowActivityExecutionDetails context={context} activity={next} activityCatalog={catalog} prepared={nextPrepared} />);
+  expect(container.textContent).toContain("Prepared next value");
+  expect(container.textContent).not.toContain("Resolving captured value");
+  expect(getActivityExecutionValuePayload).toHaveBeenCalledTimes(1);
+  const returningPrepared: PreparedAttachedExecution = { ...prepared, values: new Map([[runtimeValuePayloadKey(snapshot),
+    { status: "ready", payload: { kind: "string", preview: "Prepared returning value" } }]]) };
+  rerender(<WorkflowActivityExecutionDetails context={context} activity={activity} activityCatalog={catalog} prepared={returningPrepared} />);
+  expect(container.textContent).toContain("Prepared returning value");
+  expect(container.textContent).not.toContain("Resolving captured value");
+  expect(getActivityExecutionValuePayload).toHaveBeenCalledTimes(1);
+});
+
+it("requires a fresh sensitive reveal after navigating away and back with prepared evidence", async () => {
+  const snapshot = valueEvidence({ inputKey: "Secret", name: "Secret", isSensitive: true });
+  const prepare = (value: ActivityExecutionStateSummary): PreparedAttachedExecution => ({ contextIdentity: runtimeValueContextId(context),
+    workflowExecutionId: value.workflowExecutionId, execution: value,
+    inspection: { ...inspection([snapshot]), activityExecutionId: value.activityExecutionId }, values: new Map() });
+  const next = { ...activity, activityExecutionId: "next-occurrence" };
+  const container = render(<WorkflowActivityExecutionDetails context={context} activity={activity} activityCatalog={catalog} prepared={prepare(activity)} />);
+  vi.mocked(getActivityExecutionValuePayload).mockResolvedValue({ evidenceId: snapshot.evidenceId!, captureMode: snapshot.captureMode,
+    payload: { kind: "string", preview: "TOP_SECRET_RAW_VALUE" } });
+  const show = [...container.querySelectorAll("button")].find(button => button.textContent === "Show captured value")!;
+  flushSync(() => show.click());
+  await waitFor(() => expect(container.textContent).toContain("TOP_SECRET_RAW_VALUE"));
+  rerender(<WorkflowActivityExecutionDetails context={context} activity={next} activityCatalog={catalog} prepared={prepare(next)} />);
+  expect(container.textContent).not.toContain("TOP_SECRET_RAW_VALUE");
+  rerender(<WorkflowActivityExecutionDetails context={context} activity={activity} activityCatalog={catalog} prepared={prepare(activity)} />);
+  expect(container.textContent).not.toContain("TOP_SECRET_RAW_VALUE");
+  expect(container.textContent).toContain("Show captured value");
+  expect(getActivityExecutionValuePayload).toHaveBeenCalledTimes(1);
+});
+
 describe("WorkflowIncidentList", () => {
   it("renders a full stack trace disclosure when incident metadata includes one", () => {
     const stackTrace = "System.InvalidOperationException: No value\n   at Elsa.Tests.WriteLine.Execute()";
@@ -1398,6 +1551,19 @@ describe("buildInstanceCanvas", () => {
     expect(navigated).toHaveLength(1);
     return navigated[0];
   }
+
+  it("locates secondary root-slot evidence and renders its owning nested graph read-only", () => {
+    const root = ifNode("if-root", leafNode("sibling"), innerFlowchart);
+    const catalog = [...instanceCatalog, ifActivity];
+    const path = findNodeScopePath(root, "wl-2", node => node.nodeId, catalog)!;
+    expect(path).not.toBeNull();
+    const version = { ...definitionVersion, state: { rootActivity: root } };
+    const before = structuredClone(version);
+    const canvas = buildInstanceCanvas(version, catalog, instanceDetails([]), null, path, () => {});
+    expect(canvas.nodes.map(node => node.id).sort()).toEqual(["wl-1", "wl-2"]);
+    expect(canvas.nodes.every(node => node.draggable === false && node.deletable === false)).toBe(true);
+    expect(version).toEqual(before);
+  });
 
   it("descends through a single flowchart Body child on slot entry", () => {
     const frames = enterForEachBody();

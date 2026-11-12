@@ -23,8 +23,227 @@ using static Elsa.Persistence.EntityFramework.Tests.ProviderFailures;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
 
-public sealed class EfRuntimeArtifactScopeTests
+public sealed partial class EfRuntimeArtifactScopeTests
 {
+    [Theory]
+    [InlineData("valid")] [InlineData("expired")] [InlineData("released")] [InlineData("token")]
+    [InlineData("replaced")] [InlineData("guard")] [InlineData("incarnation")]
+    [InlineData("live-grant-under-guard")]
+    [InlineData("stale-tracked-lease")] [InlineData("stale-tracked-coordination")]
+    [InlineData("after-coordination-lock")] [InlineData("after-lease-lock")]
+    [InlineData("no-transaction")] [InlineData("cancelled")]
+    public async Task Actual_EF_root_commit_fence_validates_current_grants_after_locks_and_rolls_back_refusals(string scenario)
+    {
+        var clock = new Microsoft.Extensions.Time.Testing.FakeTimeProvider(DateTimeOffset.UtcNow);
+        var delay = new RootFenceDelay(clock, scenario);
+        await using var database = await Database.CreateAsync();
+        await using var fixture = database.Open("tenant-a", delay);
+        await fixture.Executable.SaveBatchAsync([Executable("a"), Executable("b")]);
+        var now = clock.GetUtcNow();
+        var first = (await fixture.Executable.TryAcquireRootWriteLeaseAsync("a", "writer", now.AddMinutes(1), now))!;
+        var last = (await fixture.Executable.TryAcquireRootWriteLeaseAsync("b", "writer", now.AddMinutes(1), now))!;
+        if (scenario is "released" or "replaced" or "guard") await fixture.Executable.ReleaseRootWriteLeaseAsync(last);
+        if (scenario == "replaced") Assert.NotNull(await fixture.Executable.TryAcquireRootWriteLeaseAsync("b", "writer", now.AddMinutes(2), now));
+        if (scenario == "guard") Assert.NotNull(await fixture.Executable.TryBeginDeletionAsync("b", "gc", now.AddMinutes(2), now));
+        if (scenario == "live-grant-under-guard")
+        {
+            var current = await fixture.Context.WorkflowExecutableRootWriteLeases.AsNoTracking().SingleAsync(row => row.ArtifactId == EfRelationalIdentity.Encode("b"));
+            await fixture.Executable.ReleaseRootWriteLeaseAsync(last);
+            Assert.NotNull(await fixture.Executable.TryBeginDeletionAsync("b", "gc", now.AddMinutes(2), now));
+            // Construct contradictory persisted authority deliberately: a matching grant must never defeat a deletion guard.
+            fixture.Context.WorkflowExecutableRootWriteLeases.Add(current); await fixture.Context.SaveChangesAsync(); fixture.Context.ChangeTracker.Clear();
+        }
+        if (scenario == "token") last = last with { ConcurrencyToken = "forged" };
+        if (scenario == "incarnation")
+        {
+            var old = await fixture.Context.WorkflowExecutableRootWriteLeases.AsNoTracking().SingleAsync(row => row.ArtifactId == EfRelationalIdentity.Encode("b"));
+            Assert.True(await fixture.Executable.DeleteAsync("b")); await fixture.Executable.SaveAsync(Executable("b"));
+            fixture.Context.WorkflowExecutableRootWriteLeases.Add(old); await fixture.Context.SaveChangesAsync(); fixture.Context.ChangeTracker.Clear();
+        }
+        if (scenario == "stale-tracked-lease")
+        {
+            _ = await fixture.Context.WorkflowExecutableRootWriteLeases.SingleAsync(row => row.ArtifactId == EfRelationalIdentity.Encode("b"));
+            Assert.True(await fixture.Executable.RenewRootWriteLeaseAsync(first, now.AddMinutes(3), now));
+            Assert.True(await fixture.Executable.RenewRootWriteLeaseAsync(last, now.AddMinutes(3), now));
+            clock.Advance(TimeSpan.FromMinutes(2)); // The tracked deadline has lapsed; actual grants remain live.
+        }
+        if (scenario == "stale-tracked-coordination")
+        {
+            _ = await fixture.Context.WorkflowExecutableCoordinations.SingleAsync(row => row.ArtifactId == EfRelationalIdentity.Encode("b"));
+            await using var peer = database.Open("tenant-a");
+            await peer.Context.WorkflowExecutableCoordinations.Where(row => row.ArtifactId == EfRelationalIdentity.Encode("b"))
+                .ExecuteUpdateAsync(update => update.SetProperty(row => row.Revision, row => row.Revision + 1));
+        }
+        if (scenario == "expired") clock.Advance(TimeSpan.FromMinutes(1));
+        var before = await fixture.Context.WorkflowExecutableCoordinations.AsNoTracking().OrderBy(row => row.Id).Select(row => row.Revision).ToArrayAsync();
+        var published = false;
+        var shouldPublish = scenario is "valid" or "stale-tracked-lease" or "stale-tracked-coordination";
+        await using (var transaction = scenario == "no-transaction" ? null : await fixture.Context.Database.BeginTransactionAsync())
+        {
+            delay.Armed = true;
+            var token = new CancellationToken(scenario == "cancelled");
+            async Task Publish()
+            {
+                await fixture.Executable.FenceRootWriteLeasesAsync(new[] { first, last }, clock, token);
+                await fixture.Store.StageCreateOrAdoptAsync(Reference("accepted-root", "b"), token);
+                await fixture.Context.SaveChangesAsync(token); await transaction!.CommitAsync(token); published = true;
+            }
+            if (shouldPublish) await Publish();
+            else if (scenario == "no-transaction") await Assert.ThrowsAsync<InvalidOperationException>(Publish);
+            else if (scenario == "cancelled") await Assert.ThrowsAnyAsync<OperationCanceledException>(Publish);
+            else await Assert.ThrowsAsync<Elsa.Workflows.Runtime.Core.Exceptions.WorkflowExecutableRootWriteLeaseLostException>(Publish);
+            if (!published && transaction is not null) await transaction.RollbackAsync();
+        }
+        delay.Armed = false; fixture.Context.ChangeTracker.Clear();
+        Assert.Equal(shouldPublish, published);
+        Assert.Equal(shouldPublish, await fixture.Store.FindAsync("accepted-root") is not null);
+        var after = await fixture.Context.WorkflowExecutableCoordinations.AsNoTracking().OrderBy(row => row.Id).Select(row => row.Revision).ToArrayAsync();
+        Assert.Equal(shouldPublish ? before.Select(revision => revision + 1) : before, after);
+        if (scenario is "after-coordination-lock" or "after-lease-lock") Assert.Equal(1, delay.Delays);
+    }
+
+    private sealed class RootFenceDelay(Microsoft.Extensions.Time.Testing.FakeTimeProvider clock, string scenario) : DbCommandInterceptor
+    {
+        public bool Armed { get; set; }
+        public int Delays { get; private set; }
+        private int matchedUpdates;
+        public override ValueTask<int> NonQueryExecutedAsync(DbCommand command, CommandExecutedEventData eventData,
+            int result, CancellationToken cancellationToken = default)
+        {
+            var table = scenario == "after-coordination-lock" ? RuntimeArtifactEfModule.WorkflowExecutableCoordinationTableName :
+                scenario == "after-lease-lock" ? RuntimeArtifactEfModule.WorkflowExecutableRootWriteLeaseTableName : null;
+            if (Armed && Delays == 0 && table is not null && command.CommandText.TrimStart().StartsWith("UPDATE", StringComparison.OrdinalIgnoreCase) &&
+                command.CommandText.Contains(table, StringComparison.Ordinal) && ++matchedUpdates == 2)
+            { Delays++; clock.Advance(TimeSpan.FromMinutes(1)); }
+            return ValueTask.FromResult(result);
+        }
+    }
+
+    [Theory]
+    [InlineData(false, "valid")] [InlineData(true, "valid")]
+    [InlineData(false, "wrong-token")] [InlineData(true, "wrong-token")]
+    [InlineData(false, "replaced")] [InlineData(true, "replaced")]
+    [InlineData(false, "expired-with-lease")] [InlineData(true, "expired-with-lease")]
+    [InlineData(false, "restored-reference")] [InlineData(true, "restored-reference")]
+    [InlineData(false, "retired-again")] [InlineData(true, "retired-again")]
+    public async Task Guarded_reference_cleanup_is_fenced_with_actual_artifact_coordination(bool ef, string scenario)
+    {
+        await using var database = await Database.CreateAsync();
+        await using var fixture = database.Open("tenant-a");
+        IWorkflowExecutableStore artifacts = ef ? fixture.Executable : new InMemoryWorkflowExecutableStore();
+        IWorkflowExecutableSourceReferenceStore references = ef ? fixture.Store : new InMemoryWorkflowExecutableSourceReferenceStore(artifacts);
+        var now = DateTimeOffset.UtcNow;
+        await artifacts.SaveAsync(Executable("artifact"));
+        var live = Reference("selected", "artifact"); await references.SaveAsync(live);
+        Assert.True(await references.RetireAsync("selected", now));
+        var retired = (await references.FindAsync("selected"))!;
+        var guard = (await artifacts.TryBeginDeletionAsync("artifact", "cleanup", now.AddSeconds(1), now))!;
+        Assert.NotNull(guard);
+        if (scenario == "wrong-token") guard = new(guard.ArtifactId, guard.OperationId, "wrong");
+        if (scenario == "replaced")
+        {
+            Assert.True(await artifacts.CancelDeletionAsync(guard));
+            Assert.NotNull(await artifacts.TryBeginDeletionAsync("artifact", "replacement", now.AddMinutes(2), now));
+        }
+        if (scenario == "expired-with-lease")
+        {
+            Assert.NotNull(await artifacts.TryAcquireRootWriteLeaseAsync("artifact", "acceptance", now.AddMinutes(2), now.AddSeconds(2)));
+            now = now.AddSeconds(2);
+        }
+        if (scenario is "restored-reference" or "retired-again")
+        {
+            Assert.True(await references.TryRestoreAsync(retired, retired with { DeletedAt = null, DeletedReason = null }));
+            if (scenario == "retired-again") Assert.True(await references.RetireAsync("selected", now.AddSeconds(1), "retired later"));
+        }
+        Assert.Equal(scenario == "valid", await references.TryDeleteDoomedAsync(retired, now, guard));
+        Assert.Equal(scenario == "valid", await references.FindAsync("selected") is null);
+        Assert.NotNull(await artifacts.FindAsync("artifact"));
+    }
+
+    [Theory]
+    [InlineData(false)] [InlineData(true)]
+    public async Task Guarded_reference_cleanup_contextualizes_provider_failure_and_requested_cancellation(bool unrequestedCancellation)
+    {
+        Exception cause = unrequestedCancellation ? new OperationCanceledException("provider cancellation") : new IOException("provider unavailable");
+        var fault = new GuardedReferenceReadFailure(cause);
+        await using var database = await Database.CreateAsync();
+        await using var fixture = database.Open("tenant-a", fault);
+        var now = DateTimeOffset.UtcNow;
+        await fixture.Executable.SaveAsync(Executable("artifact")); await fixture.Store.SaveAsync(Reference("selected", "artifact"));
+        await fixture.Store.RetireAsync("selected", now);
+        var retired = (await fixture.Store.FindAsync("selected"))!;
+        var guard = (await fixture.Executable.TryBeginDeletionAsync("artifact", "cleanup", now.AddMinutes(1), now))!;
+        fault.Armed = true;
+        var failure = await Assert.ThrowsAsync<RuntimeArtifactEntityFrameworkPersistenceException>(() =>
+            fixture.Store.TryDeleteDoomedAsync(retired, now, guard).AsTask());
+        Assert.Same(cause, failure.InnerException); Assert.Equal("selected", failure.Identity);
+        fault.Armed = false; Assert.NotNull(await fixture.Store.FindAsync("selected"));
+        using var cancellation = new CancellationTokenSource(); cancellation.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => fixture.Store.TryDeleteDoomedAsync(retired, now, guard, cancellation.Token).AsTask());
+        Assert.True(await fixture.Store.TryDeleteDoomedAsync(retired, now, guard));
+    }
+
+    private sealed class GuardedReferenceReadFailure(Exception cause) : DbCommandInterceptor
+    {
+        public bool Armed { get; set; }
+        public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(DbCommand command, CommandEventData eventData,
+            InterceptionResult<DbDataReader> result, CancellationToken cancellationToken = default)
+        {
+            if (Armed) throw cause;
+            return ValueTask.FromResult(result);
+        }
+    }
+
+    [Fact]
+    public async Task Guarded_reference_delete_rolls_back_physical_mutation_when_coordination_revision_changes()
+    {
+        var conflict = new AfterGuardedReferenceDelete();
+        await using var database = await Database.CreateAsync();
+        await using var fixture = database.Open("tenant-a", conflict);
+        var now = DateTimeOffset.UtcNow;
+        await fixture.Executable.SaveAsync(Executable("artifact")); await fixture.Store.SaveAsync(Reference("selected", "artifact"));
+        await fixture.Store.RetireAsync("selected", now);
+        var retired = (await fixture.Store.FindAsync("selected"))!;
+        var guard = (await fixture.Executable.TryBeginDeletionAsync("artifact", "cleanup", now.AddMinutes(1), now))!;
+        conflict.Armed = true;
+        Assert.True(await fixture.Store.TryDeleteDoomedAsync(retired, now, guard));
+        Assert.Equal(2, conflict.Deletes); Assert.True(conflict.SawRestoredReferenceBeforeRetry);
+        Assert.Null(await fixture.Store.FindAsync("selected"));
+    }
+
+    // Constructed same-transaction row conflict: SQLite's write transaction excludes a peer write at this point.
+    // Proves rollback of the physical reference mutation and retry; it is not a claim of cross-provider peer races.
+    private sealed class AfterGuardedReferenceDelete : DbCommandInterceptor
+    {
+        public bool Armed { get; set; }
+        public int Deletes { get; private set; }
+        public bool SawRestoredReferenceBeforeRetry { get; private set; }
+        public override async ValueTask<InterceptionResult<int>> NonQueryExecutingAsync(DbCommand command, CommandEventData eventData,
+            InterceptionResult<int> result, CancellationToken cancellationToken = default)
+        {
+            if (Armed && IsReferenceDelete(command) && Deletes == 1)
+            {
+                await using var read = command.Connection!.CreateCommand(); read.Transaction = command.Transaction;
+                read.CommandText = $"SELECT COUNT(*) FROM \"{RuntimeArtifactEfModule.SourceReferenceTableName}\"";
+                SawRestoredReferenceBeforeRetry = Convert.ToInt32(await read.ExecuteScalarAsync(cancellationToken)) == 1;
+            }
+            return result;
+        }
+        public override async ValueTask<int> NonQueryExecutedAsync(DbCommand command, CommandExecutedEventData eventData,
+            int result, CancellationToken cancellationToken = default)
+        {
+            if (Armed && IsReferenceDelete(command) && ++Deletes == 1)
+            {
+                await using var change = command.Connection!.CreateCommand(); change.Transaction = command.Transaction;
+                change.CommandText = $"UPDATE \"{RuntimeArtifactEfModule.WorkflowExecutableCoordinationTableName}\" SET \"Revision\" = \"Revision\" + 1";
+                await change.ExecuteNonQueryAsync(cancellationToken);
+            }
+            return result;
+        }
+        private static bool IsReferenceDelete(DbCommand command) => command.CommandText.TrimStart().StartsWith("DELETE", StringComparison.OrdinalIgnoreCase) &&
+            command.CommandText.Contains(RuntimeArtifactEfModule.SourceReferenceTableName, StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task Malformed_utf16_artifact_identities_round_trip_through_json_and_sqlite_projections()
     {

@@ -1,6 +1,6 @@
 import { NodeToolbar, Position } from "@xyflow/react";
 import { AnchoredPopover } from "@elsa-workflows/studio-ui";
-import { Copy, Plus, Trash2 } from "lucide-react";
+import { Copy, Plus, Power, Trash2 } from "lucide-react";
 import React from "react";
 import type { KeyboardEvent } from "react";
 import type { WorkflowNodeData, WorkflowPortDescriptor } from "../workflowAdapter";
@@ -8,10 +8,12 @@ import { WorkflowNodeActionsContext } from "./contexts";
 import "./workflowNodePresentation.css";
 
 /** Floating, keyboard-accessible actions for one selected authoring node. */
-export function WorkflowNodeContextToolbar({ nodeId, data, selected }: {
+export function WorkflowNodeContextToolbar({ nodeId, data, selected, position = Position.Top, offset = 10 }: {
   nodeId: string;
   data: WorkflowNodeData;
   selected: boolean;
+  position?: Position;
+  offset?: number;
 }) {
   const actions = React.useContext(WorkflowNodeActionsContext);
   const [outcomesOpen, setOutcomesOpen] = React.useState(false);
@@ -22,7 +24,10 @@ export function WorkflowNodeContextToolbar({ nodeId, data, selected }: {
   const openAtEndRef = React.useRef(false);
   const menuId = React.useId();
   const outcomes = actions?.canAddAfter ? data.sourcePorts : [];
-  const toolbarActionCount = (outcomes.length > 0 ? 1 : 0) + 2;
+  const canToggleStart = Boolean(actions?.setWorkflowStart && data.workflowStartEnabled !== undefined);
+  const toggleIndex = outcomes.length > 0 ? 1 : 0;
+  const duplicateIndex = toggleIndex + (canToggleStart ? 1 : 0);
+  const toolbarActionCount = duplicateIndex + 2;
   const activeActionIndex = Math.min(focusedActionIndex, toolbarActionCount - 1);
 
   const closeOutcomes = (restoreFocus = true) => {
@@ -98,7 +103,7 @@ export function WorkflowNodeContextToolbar({ nodeId, data, selected }: {
   };
 
   return (
-    <NodeToolbar nodeId={nodeId} isVisible position={Position.Top} offset={10}>
+    <NodeToolbar nodeId={nodeId} isVisible position={position} offset={offset}>
       <div ref={toolbarRef} className="wf-node-context-toolbar" role="toolbar" aria-label={`Actions for ${data.label}`} aria-orientation="horizontal" onKeyDown={handleToolbarKeyDown}>
         {outcomes.length === 1 ? (
           <button
@@ -154,13 +159,27 @@ export function WorkflowNodeContextToolbar({ nodeId, data, selected }: {
             </AnchoredPopover>
           </>
         ) : null}
+        {canToggleStart ? <button
+          type="button"
+          className="wf-node-context-action"
+          tabIndex={activeActionIndex === toggleIndex ? 0 : -1}
+          aria-label={`Start new workflows from ${data.label}`}
+          aria-pressed={data.workflowStartEnabled}
+          title={data.workflowStartEnabled ? "Disable workflow start" : "Enable workflow start"}
+          onFocus={() => setFocusedActionIndex(toggleIndex)}
+          onMouseDown={event => event.stopPropagation()}
+          onClick={event => {
+            event.stopPropagation();
+            actions.setWorkflowStart?.(nodeId, !data.workflowStartEnabled);
+          }}
+        ><Power size={14} aria-hidden="true" /></button> : null}
         <button
           type="button"
           className="wf-node-context-action"
-          tabIndex={activeActionIndex === (outcomes.length > 0 ? 1 : 0) ? 0 : -1}
+          tabIndex={activeActionIndex === duplicateIndex ? 0 : -1}
           aria-label={`Duplicate ${data.label}`}
           title="Duplicate activity"
-          onFocus={() => setFocusedActionIndex(outcomes.length > 0 ? 1 : 0)}
+          onFocus={() => setFocusedActionIndex(duplicateIndex)}
           onMouseDown={event => event.stopPropagation()}
           onClick={event => {
             event.stopPropagation();
@@ -172,10 +191,10 @@ export function WorkflowNodeContextToolbar({ nodeId, data, selected }: {
         <button
           type="button"
           className="wf-node-context-action wf-node-context-action-delete"
-          tabIndex={activeActionIndex === (outcomes.length > 0 ? 2 : 1) ? 0 : -1}
+          tabIndex={activeActionIndex === duplicateIndex + 1 ? 0 : -1}
           aria-label={`Delete ${data.label}`}
           title="Delete activity"
-          onFocus={() => setFocusedActionIndex(outcomes.length > 0 ? 2 : 1)}
+          onFocus={() => setFocusedActionIndex(duplicateIndex + 1)}
           onMouseDown={event => event.stopPropagation()}
           onClick={event => {
             event.stopPropagation();

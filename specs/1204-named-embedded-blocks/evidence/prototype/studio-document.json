@@ -1,0 +1,97 @@
+{
+  "source": "b8cdec4c2c0961df9a2aa9077f4d99dddd9ad60e",
+  "definitionId": "14tXpYQXTi8",
+  "draft": {
+    "id": "14tXpYQOg1G",
+    "definitionId": "14tXpYQXTi8",
+    "sourceVersionId": null,
+    "state": {
+      "variables": [],
+      "rootActivity": {
+        "nodeId": "sequence-8bcd320c",
+        "activityVersionId": "actver_bWb_anLYn92DlnxVNSiZqgltC3IuZKLxgDgrvw6wLdI",
+        "inputs": [],
+        "outputs": [],
+        "structure": {
+          "kind": "elsa.sequence.structure",
+          "schemaVersion": "1.0.0",
+          "payload": {
+            "activities": [
+              {
+                "nodeId": "sequence-21ba4144",
+                "activityVersionId": "actver_bWb_anLYn92DlnxVNSiZqgltC3IuZKLxgDgrvw6wLdI",
+                "inputs": [],
+                "outputs": [],
+                "structure": {
+                  "kind": "elsa.sequence.structure",
+                  "schemaVersion": "1.0.0",
+                  "payload": {
+                    "activities": [
+                      {
+                        "nodeId": "writeline-4ae0822f",
+                        "activityVersionId": "actver__h2cbDZOVn1wVTbIpHqKUXFwpsG1YgW6JPYQnO_BtOI",
+                        "inputs": [
+                          {
+                            "referenceKey": "text",
+                            "value": {
+                              "value": "First child after nested edit",
+                              "expressionType": "Literal"
+                            }
+                          }
+                        ],
+                        "outputs": [],
+                        "structure": null
+                      },
+                      {
+                        "nodeId": "writeline-da38894e",
+                        "activityVersionId": "actver__h2cbDZOVn1wVTbIpHqKUXFwpsG1YgW6JPYQnO_BtOI",
+                        "inputs": [
+                          {
+                            "referenceKey": "text",
+                            "value": {
+                              "value": "Second retained child",
+                              "expressionType": "Literal"
+                            }
+                          }
+                        ],
+                        "outputs": [],
+                        "structure": null
+                      }
+                    ]
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      "inputs": [],
+      "outputs": [],
+      "strategyOptions": null
+    },
+    "layout": [
+      {
+        "nodeId": "sequence-21ba4144",
+        "x": 0,
+        "y": 0,
+        "width": null,
+        "height": null,
+        "additionalProperties": null
+      }
+    ],
+    "activityPresentation": [
+      {
+        "nodeId": "sequence-21ba4144",
+        "displayName": "Prepare shipment \u00b7 verified",
+        "description": null
+      }
+    ]
+  },
+  "versions": [
+    {
+      "id": "14tYCLIQY4a",
+      "version": "1.0.0",
+      "createdAt": "2026-11-03T21:59:06.767951+00:00"
+    }
+  ]
+}

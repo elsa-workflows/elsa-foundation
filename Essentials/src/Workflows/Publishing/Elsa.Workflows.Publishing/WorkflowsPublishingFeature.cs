@@ -1,3 +1,4 @@
+using Elsa.Workflows.Publishing.Core.Models;
 using CShells.Features;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Design.Core.Contracts;
@@ -42,7 +43,7 @@ namespace Elsa.Workflows.Publishing;
     name: "WorkflowsPublishing",
     DisplayName = "Workflows Publishing",
     Description = "Endpoint-free engine that compiles designed workflow definitions into canonical executables.",
-    DependsOn = new object[] { "WorkflowsRuntimeTriggers", "Events" }
+    DependsOn = new object[] { "WorkflowsRuntimeTriggers", "Events", "WorkflowDesignValidations" }
 )]
 public class WorkflowsPublishingFeature : IShellFeature
 {
@@ -119,7 +120,7 @@ public class WorkflowsPublishingFeature : IShellFeature
         // It is also the publication check permanent deletion requires, so a host that does not compose this
         // feature refuses the operation outright instead of deleting unverified (#1283).
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowDefinitionPermanentDeletionGuard, PublishedWorkflowDeletionGuard>());
-        // Design.Api registers a null-object so NativeEndpoints can resolve the lookup on a design-only
+        // Design.Api registers a null-object so MinimalEndpoints can resolve the lookup on a design-only
         // host. Replace it here so a composed Publishing host actually distinguishes Retracted/Retired.
         services.Replace(ServiceDescriptor.Scoped<IWorkflowDefinitionPublicationStateLookup, WorkflowDefinitionPublicationStateLookup>());
         // #418: WorkflowExecutableCompiler decomposition collaborators. Registered at the compiler's own
@@ -136,11 +137,22 @@ public class WorkflowsPublishingFeature : IShellFeature
         // Spec 261 FR-513: the side-effect profile the compiler would compile, for design-time validators.
         services.TryAddScoped<IActivitySideEffectProfileReader, ActivitySideEffectProfileReader>();
         services.TryAddScoped<WorkflowExecutablePlacementSidecarContext>();
-        services.TryAddSingleton<IActivityTemplateProviderCompilerRegistry, ActivityTemplateProviderCompilerRegistry>();
-        services.TryAddSingleton<IActivityTemplateDependencyDiscovererRegistry, ActivityTemplateDependencyDiscovererRegistry>();
+        services.TryAddScoped<IActivityTemplateProviderCompilerRegistry, ActivityTemplateProviderCompilerRegistry>();
+        services.TryAddScoped<IActivityTemplateDependencyDiscovererRegistry, ActivityTemplateDependencyDiscovererRegistry>();
         services.TryAddSingleton<IActivityPlacementHasher, Sha256ActivityPlacementHasher>();
         services.TryAddScoped<ActivityTemplatePlacer>();
         services.TryAddScoped<IActivityTemplateCompiler, ActivityTemplateCompiler>();
+        services.TryAddScoped<IActivityPublicationReadiness, ActivityPublicationReadiness>();
+        services.TryAddScoped<IActivityPublicationCandidateEvaluator, ActivityPublicationCandidateEvaluator>();
+        services.TryAddScoped<IActivityCatalogProjection, ActivityCatalogProjection>();
+        services.TryAddScoped<IActivityPublicationVersionPolicy, ActivityPublicationVersions>();
+        // A copied shell may carry a parent validator or IServiceCollection registration. Bind
+        // this contribution to this collection without importing unrelated Design composition.
+        foreach (var previous in services.Where(x => x.ServiceType == typeof(IStartupTask) &&
+                     (x.ImplementationType == typeof(ValidateActivityPublishingReplacementContractsStartupTask) ||
+                      x.ImplementationInstance is ValidateActivityPublishingReplacementContractsStartupTask)).ToArray())
+            services.Remove(previous);
+        services.AddSingleton<IStartupTask>(new ValidateActivityPublishingReplacementContractsStartupTask(services));
         services.TryAddSingleton<IActivityTemplateAdmissionPolicy, AcceptAllActivityTemplateAdmissionPolicy>();
         services.TryAddScoped<IExecutableNodeMetadataEnricher, ExecutableNodeMetadataEnricher>();
         // The export producer is destination-agnostic. It reads the executable closure and provenance, while

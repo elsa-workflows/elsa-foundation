@@ -21,10 +21,29 @@ public sealed class EfWorkflowExecutionStateStore(
     IRuntimeRecoveryContinuationCodec continuationCodec,
     TimeProvider? timeProvider = null) : IWorkflowExecutionStateStore, IWorkflowHealthQuery
 {
+    internal RuntimeDbContext Context => context;
+    internal PersistenceAccessContext AccessContext => accessContextAccessor.Current;
     private const string HistoryCursorPurpose = "ef-runtime-workflow-execution-history-v1";
     private const string HealthCursorPurpose = "ef-runtime-workflow-execution-health-history-v1";
     private const string CaptureCursorPurpose = "ef-runtime-workflow-execution-capture-v1";
     private readonly TimeProvider _timeProvider = timeProvider ?? TimeProvider.System;
+
+    public async ValueTask<bool> IsDeletionTombstonedAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
+    {
+        ValidateIdentity(workflowExecutionId, nameof(workflowExecutionId));
+        cancellationToken.ThrowIfCancellationRequested();
+        try
+        {
+            return await EfExecutionLivenessStateStore.IsWorkflowExecutionDeletionTombstonedAsync(
+                context, RequireScope(), workflowExecutionId, cancellationToken);
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (InvalidDataException) { context.ChangeTracker.Clear(); throw; }
+        catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception))
+        {
+            throw Normalize("reading deletion tombstone for", workflowExecutionId, exception);
+        }
+    }
 
     public async ValueTask<WorkflowExecutionState> SaveAsync(WorkflowExecutionState state, CancellationToken cancellationToken = default)
     {
@@ -42,12 +61,18 @@ public sealed class EfWorkflowExecutionStateStore(
             await LockWorkflowExecutionForWriteAsync(context, scope, state.WorkflowExecutionId, cancellationToken);
             await EfExecutionLivenessStateStore.EnsureWorkflowExecutionNotDeletedAsync(context, scope, state.WorkflowExecutionId, cancellationToken);
             var row = await context.WorkflowExecutionStates.SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
+            var writeVersion = ModelWorkWriteVersion.For(context, state, row?.SchemaVersion);
+            if (row is null && state.ModelWorkOrigin is not null)
+                throw new NotSupportedException("Model-owned native workers require initial admission through the conditional runtime checkpoint.");
+            if (row is not null && state.ModelWorkOrigin is not null && state.Status.IsTerminal() &&
+                !ReadChecked(row, scope, state.WorkflowExecutionId).Status.IsTerminal())
+                throw new NotSupportedException("Native model work requires its terminal result in the same checkpoint transaction.");
             if (row is null)
-                context.WorkflowExecutionStates.Add(ToEntity(state, scope, id, NewRevision()));
+                context.WorkflowExecutionStates.Add(ToEntityForWriteVersion(state, scope, id, NewRevision(), writeVersion));
             else
             {
                 _ = ReadChecked(row, scope, state.WorkflowExecutionId);
-                CopyToEntity(row, state, scope, id, checked(row.Revision + 1));
+                CopyToEntityForWriteVersion(row, state, scope, id, checked(row.Revision + 1), writeVersion);
             }
 
             await context.SaveChangesAsync(cancellationToken);
@@ -261,6 +286,28 @@ public sealed class EfWorkflowExecutionStateStore(
                 if (row.ArtifactIdHash != Hash(id) || row.ArtifactIdOrderKey != OrderKey(id)) throw new InvalidDataException("The persisted workflow execution artifact projection is corrupt.");
                 if (seen.Add(id)) ids.Add(id);
             }
+            // This is a retention-root projection, not a native execution read. Model headers retain their
+            // actual material (including settled results) without creating native workflow state.
+            var modelRows = await context.Set<RuntimeModelExecutionEntity>().AsNoTracking()
+                .Where(x => x.ScopeKeyHash == Hash(scope) || x.ScopeKey == Encode(scope)).ToArrayAsync(cancellationToken);
+            foreach (var row in modelRows)
+            {
+                var state = EfRuntimeModelExecutionReader.Read(row, scope, Decode(row.ExecutionId));
+                if (seen.Add(state.Executable.ArtifactId)) ids.Add(state.Executable.ArtifactId);
+            }
+            // An accepted first input can outlive its owner's crash before the first model checkpoint. Its
+            // immutable material must stay rooted after the short admission grant expires, just like a live header.
+            var pendingInputs = await context.SchedulerWorkItems.AsNoTracking()
+                .Where(x => x.ScopeKeyHash == Hash(scope) || x.ScopeKey == Encode(scope)).ToArrayAsync(cancellationToken);
+            foreach (var row in pendingInputs)
+            {
+                var input = EfSchedulerWorkQueueStore.ReadChecked(row, scope);
+                if (input.CommandKind != WorkflowExecutionCommandKind.ExecuteModel) continue;
+                var command = input.Payload?.Deserialize<RuntimeModelExecutionCommand>(new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web))
+                    ?? throw new InvalidDataException("An accepted model input has no material pin.");
+                if (command.InputId != input.CommandId) throw new InvalidDataException("The model input identity differs from its retained queue command.");
+                if (seen.Add(command.Executable.ArtifactId)) ids.Add(command.Executable.ArtifactId);
+            }
             return ids.ToArray();
         }
         catch (OperationCanceledException) { throw; }
@@ -362,6 +409,13 @@ public sealed class EfWorkflowExecutionStateStore(
             {
                 context.ChangeTracker.Clear();
                 await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
+                // Refuse retained control callers before acquiring this candidate's write lock. Sticky caller
+                // tombstones cannot revert; this avoids caller->child / child->caller deletion lock cycles.
+                var retiredControlLinks = await ReadRetiredControlLinksAsync(workflowExecutionId, scope, cancellationToken);
+                if (retiredControlLinks is null) return WorkflowExecutionDeletionResult.DependencyRetained;
+                // A scope-wide header traversal must also precede write locks: two unrelated deletions
+                // must not hold their own root while each scans the other's row under READ COMMITTED.
+                var hintedChildren = await ReadHintedControlChildrenAsync(workflowExecutionId, scope, cancellationToken);
                 // Lock the root before touching any owned rows. Root saves and scheduler enqueue take this same
                 // lock, so a deletion cannot purge the queue and then lose the race to a late enqueue.
                 await LockWorkflowExecutionForWriteAsync(context, scope, workflowExecutionId, cancellationToken);
@@ -380,7 +434,23 @@ public sealed class EfWorkflowExecutionStateStore(
                 if (expectedRevision is { } revision && row.Revision != revision)
                     return WorkflowExecutionDeletionResult.Changed;
 
+                // Capture the ownership revision before the final dependency read. An activity-only fenced
+                // checkpoint can add its first dispatch without updating the workflow row: either the guard sees
+                // it, or final SaveChanges conflicts this captured revision and rolls back the entire deletion.
                 ownershipTombstoneInserted = await RevokeExecutionOwnershipAsync(workflowExecutionId, scope, cancellationToken);
+                var taskScopeHash = Hash(scope);
+                var taskScopeKey = Encode(scope);
+                var taskExecutionKey = Encode(workflowExecutionId);
+                var taskExecutionHash = Hash(workflowExecutionId);
+                if (await context.UserTasks.AnyAsync(x => x.ScopeHash == taskScopeHash && x.ScopeKey == taskScopeKey &&
+                        x.ExecutionHash == taskExecutionHash && x.ExecutionKey == taskExecutionKey && x.Status < (int)Elsa.Workflows.Runtime.Core.UserTasks.UserTaskStatus.Completed, cancellationToken) ||
+                    await HasControlDependenciesAsync(state, scope, retiredControlLinks, hintedChildren, cancellationToken))
+                {
+                    await transaction.RollbackAsync(cancellationToken);
+                    context.ChangeTracker.Clear(); // Never leak the staged tombstone into a later caller SaveChanges.
+                    return WorkflowExecutionDeletionResult.DependencyRetained;
+                }
+
                 await CancelOutstandingBackgroundActivityWorkAsync(workflowExecutionId, scope, _timeProvider.GetUtcNow(), cancellationToken);
 
                 if (removeRunOwnedHistory)
@@ -427,6 +497,113 @@ public sealed class EfWorkflowExecutionStateStore(
         }
 
         return terminalOnly ? WorkflowExecutionDeletionResult.Changed : WorkflowExecutionDeletionResult.NotFound;
+    }
+
+    private async ValueTask<HashSet<string>?> ReadRetiredControlLinksAsync(string workflowExecutionId, string scope,
+        CancellationToken cancellationToken)
+    {
+        var rows = await context.WorkflowDispatches.AsNoTracking().Where(row =>
+            row.ScopeKeyHash == Hash(scope) && row.ScopeKey == Encode(scope) &&
+            row.ChildWorkflowExecutionIdHash == Hash(workflowExecutionId) && row.ChildWorkflowExecutionId == Encode(workflowExecutionId))
+            .ToArrayAsync(cancellationToken);
+        var retired = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var link in rows.Select(row => WorkflowDispatchEfSupport.ReadChecked(row, scope)).Where(IsControlLink))
+        {
+            if (!await EfExecutionLivenessStateStore.IsWorkflowExecutionDeletionTombstonedAsync(
+                    context, scope, link.ParentWorkflowExecutionId, cancellationToken)) return null;
+            retired.Add(link.DispatchId);
+        }
+        return retired;
+    }
+
+    private static bool IsControlLink(WorkflowDispatchRecord dispatch) =>
+        dispatch.Mode == WorkflowDispatchMode.WaitForCompletion &&
+        (dispatch.Metadata.ContainsKey(RuntimeMetadataKeys.ChildControlConsumerKey) ||
+         dispatch.Metadata.ContainsKey(RuntimeMetadataKeys.ChildControlConsumerVersion));
+
+    private async ValueTask<bool> HasControlDependenciesAsync(WorkflowExecutionState state, string scope,
+        HashSet<string> retiredControlLinks, IReadOnlyList<(string WorkflowId, string DispatchHint)> hintedChildren,
+        CancellationToken cancellationToken)
+    {
+        if ((await EfRuntimePostCommitOutboxStore.ReadRetentionSourcesAsync(context, scope, cancellationToken))
+            .Any(source => source.RetainsExecutionForStimulusDelivery(state.WorkflowExecutionId))) return true;
+        var scopeHash = Hash(scope);
+        var scopeKey = Encode(scope);
+        var executionHash = Hash(state.WorkflowExecutionId);
+        var executionKey = Encode(state.WorkflowExecutionId);
+        var rows = await context.WorkflowDispatches.AsNoTracking().Where(row =>
+            row.ScopeKeyHash == scopeHash && row.ScopeKey == scopeKey &&
+            (row.ParentWorkflowExecutionIdHash == executionHash && row.ParentWorkflowExecutionId == executionKey ||
+             row.ChildWorkflowExecutionIdHash == executionHash && row.ChildWorkflowExecutionId == executionKey))
+            .ToArrayAsync(cancellationToken);
+        var links = rows.Select(row => WorkflowDispatchEfSupport.ReadChecked(row, scope)).Where(IsControlLink).ToArray();
+        var incoming = links.Where(link => link.ChildWorkflowExecutionId == state.WorkflowExecutionId).ToArray();
+        if (state.SystemMetadata.TryGetValue(RuntimeMetadataKeys.ChildControlDispatchId, out var hint) &&
+            (incoming.Length != 1 || incoming[0].DispatchId != hint || incoming[0].ParentWorkflowExecutionId != state.ParentWorkflowExecutionId))
+            return true;
+        // Candidate terminal snapshot is revalidated under its write lock. Supported terminal state cannot
+        // admit a new called run after the pre-lock header capture; recheck captured links against current authority.
+        if (hintedChildren.Any(child => !links.Any(link => link.ParentWorkflowExecutionId == state.WorkflowExecutionId &&
+                link.ChildWorkflowExecutionId == child.WorkflowId && link.DispatchId == child.DispatchHint))) return true;
+        if (incoming.Any(link => !retiredControlLinks.Contains(link.DispatchId))) return true;
+        foreach (var link in links.Where(link => link.ParentWorkflowExecutionId == state.WorkflowExecutionId)
+                     .OrderBy(link => link.ChildWorkflowExecutionId, StringComparer.Ordinal))
+        {
+            if (!state.Status.IsTerminal()) return true;
+            // Supported terminal execution is monotonic: its final source/outbox work commits before or with
+            // terminal workflow state. Later deliveries resolve existing responsibility; no new producer runs.
+            // Read that terminal projection and its owed rows in this transaction; do not lock a second root.
+            var child = await ReadLinkedAsync(link.ChildWorkflowExecutionId);
+            if (child is null ? (link.Status != WorkflowDispatchStatus.DispatchFailed && !WorkflowDispatchLifecycle.WasCancelledBeforeAdmission(link)) : !child.Status.IsTerminal())
+                return true;
+            var childHash = Hash(link.ChildWorkflowExecutionId);
+            var childKey = Encode(link.ChildWorkflowExecutionId);
+            var outboxRows = await context.RuntimePostCommitOutbox.AsNoTracking().Where(row =>
+                row.ScopeKeyHash == scopeHash && row.ScopeKey == scopeKey &&
+                (row.WorkflowExecutionIdHash == childHash && row.WorkflowExecutionId == childKey ||
+                 row.WorkflowExecutionIdHash == executionHash && row.WorkflowExecutionId == executionKey))
+                .ToArrayAsync(cancellationToken);
+            if (outboxRows.Select(row => EfRuntimePostCommitOutboxStore.ReadChecked(row, scope)).Any(item =>
+                item.Status != RuntimePostCommitOutboxStatus.Delivered &&
+                (item.Intent.WorkflowExecutionId == link.ChildWorkflowExecutionId ||
+                 item.Intent.Metadata.TryGetValue(RuntimeMetadataKeys.DispatchId, out var id) && id == link.DispatchId)))
+                return true;
+        }
+        return false;
+
+        async ValueTask<WorkflowExecutionState?> ReadLinkedAsync(string id)
+        {
+            var row = await context.WorkflowExecutionStates.AsNoTracking().SingleOrDefaultAsync(candidate =>
+                candidate.Id == CreateId(scope, id) && candidate.ScopeKeyHash == scopeHash && candidate.ScopeKey == scopeKey &&
+                candidate.WorkflowExecutionIdHash == Hash(id) && candidate.WorkflowExecutionId == Encode(id), cancellationToken);
+            return row is null ? null : ReadChecked(row, scope, id);
+        }
+    }
+
+    private async ValueTask<IReadOnlyList<(string WorkflowId, string DispatchHint)>> ReadHintedControlChildrenAsync(
+        string callerId, string scope, CancellationToken cancellationToken)
+    {
+        // Parent identity is retained in the checked workflow payload rather than an indexed projection today.
+        // Deletion is rare; traverse finite same-scope pages, retaining on corrupt or missing authority.
+        var children = new List<(string WorkflowId, string DispatchHint)>();
+        string? after = null;
+        while (true)
+        {
+            var query = context.WorkflowExecutionStates.AsNoTracking().Where(row =>
+                row.ScopeKeyHash == Hash(scope) && row.ScopeKey == Encode(scope));
+            if (after is not null) query = query.Where(row => row.WorkflowExecutionIdOrderKey.CompareTo(after) > 0);
+            var page = await query.OrderBy(row => row.WorkflowExecutionIdOrderKey)
+                .Take(RuntimeStorePageRequest.MaximumLimit).ToArrayAsync(cancellationToken);
+            foreach (var row in page)
+            {
+                var child = ReadChecked(row, scope, Decode(row.WorkflowExecutionId));
+                if (child.ParentWorkflowExecutionId == callerId &&
+                    child.SystemMetadata.TryGetValue(RuntimeMetadataKeys.ChildControlDispatchId, out var hint))
+                    children.Add((child.WorkflowExecutionId, hint));
+            }
+            if (page.Length < RuntimeStorePageRequest.MaximumLimit) return children;
+            after = page[^1].WorkflowExecutionIdOrderKey;
+        }
     }
 
     private async ValueTask DeleteRunOwnedHistoryAsync(
@@ -606,15 +783,31 @@ public sealed class EfWorkflowExecutionStateStore(
 
     // Internal checkpoint staging reuses the same projection as the direct store. Keeping this seam internal
     // prevents the atomic writer from growing a second, subtly different workflow-execution envelope.
-    internal static WorkflowExecutionStateEntity ToEntity(WorkflowExecutionState state, string scope, string id, long revision)
+    internal static WorkflowExecutionStateEntity ToEntity(WorkflowExecutionState state, string scope, string id, long revision) =>
+        ToEntityForWriteVersion(state, scope, id, revision, null);
+
+    internal static WorkflowExecutionStateEntity ToEntityForWriteVersion(WorkflowExecutionState state, string scope, string id, long revision, string? schemaVersion)
     {
         var row = new WorkflowExecutionStateEntity();
-        CopyToEntity(row, state, scope, id, revision);
+        CopyToEntityForWriteVersion(row, state, scope, id, revision, schemaVersion);
         return row;
     }
 
-    internal static void CopyToEntity(WorkflowExecutionStateEntity row, WorkflowExecutionState state, string scope, string id, long revision)
+    internal static void CopyToEntity(WorkflowExecutionStateEntity row, WorkflowExecutionState state, string scope, string id, long revision) =>
+        CopyToEntityForWriteVersion(row, state, scope, id, revision, null);
+
+    internal static void CopyToEntityForWriteVersion(WorkflowExecutionStateEntity row, WorkflowExecutionState state, string scope, string id, long revision, string? schemaVersion)
     {
+        if (!string.IsNullOrEmpty(row.ContentJson))
+        {
+            var previous = ReadChecked(row, scope, state.WorkflowExecutionId);
+            if (previous.ModelWorkOrigin is { } origin ? !origin.IsEquivalentTo(state.ModelWorkOrigin) : state.ModelWorkOrigin is not null)
+                throw new InvalidOperationException("A native worker cannot replace or discard its immutable model invocation address.");
+        }
+        if (state.ModelWorkOrigin is { } work && (work.Scope.Value != scope || work.WorkerExecutionId != state.WorkflowExecutionId ||
+            state.Partition?.Value != scope || state.ParentWorkflowExecutionId is not null ||
+            !WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(work.WorkerExecutable, state.PinnedExecutable)))
+            throw new InvalidOperationException("The native worker state differs from its model invocation address.");
         var timestamp = WorkflowExecutionStateHistory.SortTimestamp(state);
         var tenant = state.TenantId;
         var correlation = state.CorrelationId;
@@ -626,7 +819,9 @@ public sealed class EfWorkflowExecutionStateStore(
         row.CorrelationId = correlation is null ? null : Encode(correlation); row.CorrelationIdHash = correlation is null ? null : Hash(correlation);
         row.ArtifactId = Encode(state.PinnedExecutable.ArtifactId); row.ArtifactIdHash = Hash(state.PinnedExecutable.ArtifactId); row.ArtifactIdOrderKey = OrderKey(state.PinnedExecutable.ArtifactId);
         row.AuthorityPartitionKey = state.Authority is { } authority ? WorkflowExecutionAuthoritySnapshot.PartitionKey(authority.SystemIdentity, authority.RootInitiator, authority.Metadata) : null;
-        row.ContentJson = RuntimeArtifactJson.Serialize(state); row.SchemaVersion = RuntimeWorkflowExecutionEfModule.SchemaVersion; row.Revision = revision;
+        row.ContentJson = RuntimeArtifactJson.Serialize(state);
+        row.SchemaVersion = schemaVersion ?? (state.ModelWorkOrigin is null ? RuntimeWorkflowExecutionEfModule.SchemaVersion : RuntimeWorkflowExecutionEfModule.ModelWorkSchemaVersion);
+        row.Revision = revision;
     }
 
     internal static WorkflowExecutionState ReadChecked(WorkflowExecutionStateEntity row, string scope, string expectedId)

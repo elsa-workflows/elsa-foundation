@@ -25,6 +25,7 @@
     <ProjectReference Include="..\..\..\..\..\..\src\Activities\Design\Import\Elsa3.Activities.Design.Import\Elsa3.Activities.Design.Import.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Activities\Design\Import\Persistence\EntityFrameworkCore\Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Activities\Design\Import\Publishing\Elsa3.Activities.Design.Import.Publishing.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\src\Activities\Design\Import\Reconciliation\Elsa3.Activities.Design.Import.Reconciliation.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Mapping\Elsa3.Mapping.csproj" />
     <!-- The host's composition: the features its one shell enables, by assembly. -->
     <ProjectReference Include="..\..\..\..\..\..\..\..\Essentials\src\Activities\Http\Elsa.Activities.Http.csproj" />
@@ -42,7 +43,7 @@
     <!-- RunJavaScript, whose result a graph body node reads (spec 246 D-8 probe). -->
     <ProjectReference Include="..\..\..\..\..\..\..\..\Essentials\src\Activities\Scripting\Elsa.Activities.Scripting.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\..\..\Essentials\src\Tasks\Elsa.Tasks\Elsa.Tasks.csproj" />
-    <ProjectReference Include="..\..\..\..\..\..\..\..\Essentials\src\Api\Capabilities\Elsa.Api.Capabilities.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\..\..\Essentials\src\Api\Capabilities\Elsa.Api.Capabilities\Elsa.Api.Capabilities.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\..\..\Essentials\src\Foundation\Identity\Elsa.Foundation.Identity\Elsa.Foundation.Identity.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\..\..\Essentials\src\Activities\Runtime\Elsa.Activities.Runtime\Elsa.Activities.Runtime.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\..\..\Essentials\src\Activities\Primitives\Elsa.Activities.Primitives.csproj" />
@@ -66,6 +67,7 @@
     <ProjectReference Include="..\..\..\..\..\..\..\..\Essentials\src\Workflows\Publishing\Persistence\EntityFrameworkCore\Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\..\..\Essentials\src\Workflows\Runtime\Api\Elsa.Workflows.Runtime.Api.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\..\..\Essentials\src\Workflows\Runtime\Resumption\Elsa.Workflows.Runtime.Resumption.csproj" />
+    <ProjectReference Include="../../../../../../../../Essentials/src/Cluster/Readability/Elsa.Cluster.Readability.csproj" />
     <!-- The EF activation switch publishes through the recurring-schedule projection this feature prepares. -->
     <ProjectReference Include="..\..\..\..\..\..\..\..\Essentials\src\Workflows\Runtime\Scheduling\Elsa.Workflows.Runtime.Scheduling.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\..\..\Essentials\src\Workflows\Runtime\Persistence\EntityFrameworkCore\Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj" />

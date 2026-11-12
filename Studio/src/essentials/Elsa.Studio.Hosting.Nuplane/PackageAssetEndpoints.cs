@@ -31,7 +31,7 @@ internal static class PackageAssetEndpoints
         if (lease is null) return Busy(context);
         try
         {
-            await using var scope = await reader.OpenAsync(packageId, context.RequestAborted);
+            await using var scope = await reader.OpenAssetAsync(packageId, context.RequestAborted);
             var content = scope?.Read("staticwebassets/" + path, PackageContentReader.MaximumAssetBytes, context.RequestAborted);
             if (content is null)
             {
@@ -40,6 +40,9 @@ internal static class PackageAssetEndpoints
             }
             var tag = new EntityTagHeaderValue('"' + Convert.ToHexString(SHA256.HashData(content.Bytes)).ToLowerInvariant() + '"');
             var result = Results.File(content.Bytes, ContentType(path), lastModified: content.LastModified, entityTag: tag, enableRangeProcessing: true);
+            // A host filter can replace the result without executing it. The response still owns cleanup;
+            // the result's finally retains early release, and the shared lease disposes idempotently.
+            context.Response.RegisterForDisposeAsync(lease);
             return new PayloadResult(result, lease);
         }
         catch (PackageContentSizeException error)

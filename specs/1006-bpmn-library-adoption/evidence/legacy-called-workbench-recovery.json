@@ -1,0 +1,623 @@
+{
+  "schemaVersion": 1,
+  "task": "T045 actual no-capability legacy Workbench recovery increment; complete T045 remains open",
+  "sourceParentCommit": "2a42af1bbbc112d34711db980e7ea4769689f0ad",
+  "oldHostSourceCommit": "d81a4c88a2924708ea8afcc2db20b8a77b84f703",
+  "oldSourceVerification": {
+    "base": "d81a4c88a2924708ea8afcc2db20b8a77b84f703",
+    "trackedFilesVerified": 12312,
+    "onlyChangedExistingFile": [
+      "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/LegacyBpmnCheckpointEfTests.cs"
+    ],
+    "testOnlyAddedFile": "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/LegacyCheckpointOutcomeWaitActivity.cs",
+    "patchSha256": "fdcfc6365c407bad175eaa0473ea047ae4f6af02e2a24bfd0ed4e0bb45d2b17f",
+    "allOldProductionAndPinsUnchanged": true,
+    "patchReverseCheck": true
+  },
+  "oldBuildSourceRevisionIdExplicit": true,
+  "currentHostSourceCommit": "2a42af1bbbc112d34711db980e7ea4769689f0ad",
+  "currentHostProductionTreeUnchanged": true,
+  "releasedHostPackages": [
+    "Bpmn.Interchange/0.5.0",
+    "Bpmn.Model/0.5.0",
+    "Bpmn.Semantics/0.5.0"
+  ],
+  "releaseBinariesMatchLockedNuGetCache": true,
+  "filesSha256": {
+    "e2e-tests/bpmn/Test-BpmnLegacyCalledUpgrade.ps1": "94e618d7af86af5a8c4d732ccbc4278cb471a660f07bbc2cc5dd7f0197a6d5eb",
+    "e2e-tests/bpmn/test_called_snapshot_reader.py": "f267cdacd1fde40460daf8ca69e1e8b703f3982b30d79f90a2f0b9f31d7a131c",
+    "e2e-tests/_ElsaCommon.ps1": "16905ef3c7503c33308d596290601c2b94cd8e829220a08ab857d0680f6d469f",
+    "e2e-tests/_ServerLifecycle.ps1": "2b09790145f93c0e30ff1c08ff7066a172755236de51d0b7af258ac61060e93d",
+    "e2e-tests/stimuli/_StimuliCommon.ps1": "7afd5ef449e274237db35bc27c787af8d5e4f5e3e236b5a8e7acad9987ec21b7",
+    "e2e-tests/bpmn/run_owned_broadcast_probe.py": "916716d10446ec7650b99ec926dcb08024fc8619fc21402c862e6d47e163b5de",
+    "tools/bpmn/DeliveryRecoveryRead/Program.cs": "8eaa8374dd2ae58b4d979dc5d022f27a8ce75cde68e01a6735089301c9638287",
+    "tools/bpmn/DeliveryRecoveryRead/CalledSnapshotReader.cs": "2c8e21c0f223732112d5b28b4eab98417e6d603e1b61cb1fb14ba1e725ddd71a",
+    "tools/bpmn/DeliveryRecoveryRead/DeliveryRecoveryRead.csproj": "2e7e1246eddc92f28703065038aaa9dd74aec19ec51e1b96d69fbb1632691e99",
+    "tools/bpmn/DeliveryRecoveryRead/packages.lock.json": "eac338b10044cfaecaaf7d9d5af7fb34edd76d7c1d9fca7f3227a02b80225182",
+    "Directory.Packages.props": "7b2feb0ae75708d57f93187541e3790e1a6dabddb42043e28ea34c10a165ffc3",
+    "Directory.Build.props": "97f65f6d3a30a68ae97f27dfa09449bd3ae92096d59f0049b368fac27db36b90",
+    "global.json": "a647fbc942871cef23ce38ef75c362bd02269b0bb634aa348a4537cadc926c3f",
+    "specs/1006-bpmn-library-adoption/tasks.md": "b4f2c7111e125d67bddef7f33600ac799353314270636547a71d3e24135be8d1",
+    "specs/1006-bpmn-library-adoption/evidence/legacy-called-workbench-recovery.md": "dfc08a32731afccd6244ea4f9c17ed4f1bb7f1c0355314f7688bd128afa281bc",
+    "specs/1006-bpmn-library-adoption/evidence/legacy-workbench-called/README.md": "241a369410d97277141ecf10d0d6f58afb71028beb1b92d6b8e6e9ca7a6b0561",
+    "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnProcessRuntime.cs": "048583371facd58258d9b88f54640e0c766f3a934b8d9c52dd2eeae4f66b48e9",
+    "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnWorkLedger.cs": "beeaae7aa7aee9db0bea042c0c27697d75c7de65e5177f8c2581ef32d6df440b",
+    "Essentials/src/Activities/DispatchWorkflow/Runtime/Services/WorkflowDispatchControlBoundary.cs": "3abc10cb37854b3016ba9eae13c18aa9525fd71944f3827fba33853b00a126d4",
+    "Essentials/src/Activities/DispatchWorkflow/Runtime/Services/ChildStartExecutor.cs": "85923e4e75ff0164b7f6ff8c288b288fe5c5166c07a8ca8c1d28b75ad4868a57",
+    "Essentials/src/Activities/DispatchWorkflow/Runtime/Services/WorkflowDispatchCompletionEnricher.cs": "4e88471da1a0bc40a84d228729d5e7642f0a2727080a919a191ee28e62e65cf6",
+    "Essentials/src/Activities/DispatchWorkflow/Runtime/Services/DispatchWorkflowResumeGuard.cs": "10a849d77858fbcb5d4897fb11b4d6648afd015dd42e6ee855781bedd6712de5",
+    "Essentials/src/Activities/DispatchWorkflow/Runtime/Services/WorkflowControlProducerEnricher.cs": "4976b49110fdb49887096dd6562c7a7b16503a33404f142502c24d60260e23b5",
+    "Essentials/src/Workflows/Runtime/Core/Models/ActivityExecutionState.cs": "209497c223fc2cf3ed1b491e776acaba535e7a4de1c560baefccb3466602ae96",
+    "Essentials/src/Workflows/Runtime/Core/Models/WorkflowDispatchRecord.cs": "3dc8474a8342f58f6f781803d3ec75f3265ae7b4c8a42faa31bf874f4096aa75",
+    "Essentials/src/Workflows/Runtime/Core/Constants/RuntimeMetadataKeys.cs": "b93fcd5387e333000261804ee8e9507d0cbfacd998641a59372ae70a1e550b94",
+    "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfRuntimePostCommitOutboxStore.cs": "d224a89077fcaae97177bdc7bdf0989e3c0df4ac51fb040b9c33e16c63435d67",
+    "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowDispatchStore.cs": "431b73abf580af6303dc556b4c6e68d7006ae00c422d021e24c671200122b94e",
+    "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowExecutionStateStore.cs": "8871951b099053d008a51c036d651baf3858ba5df4e79a08b493f8c3f6af8819",
+    "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfActivityExecutionStateStore.cs": "cfc9d0007bef3d9a7cc1bc14dfab64d0ada5172c374311954ab5b6aee91afe7b",
+    "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfBookmarkStateStore.cs": "ad8ae1307ac345820a65664dcb8ddd87608fa12165b6c6b691798e23b8e6cc20",
+    "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfIncidentStateStore.cs": "762a1a1e9f3dd2092bc35790f2c6549bd85ec11eb643849f57507a0d3085299b",
+    "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowExecutableStore.cs": "039a0f9f329b82602aa192f679543aaaaba00c6b94e9635a0985af6196954fe0"
+  },
+  "portableArtifacts": {
+    "specs/1006-bpmn-library-adoption/evidence/legacy-workbench-called/README.md": {
+      "sha256": "241a369410d97277141ecf10d0d6f58afb71028beb1b92d6b8e6e9ca7a6b0561",
+      "bytes": 5540
+    },
+    "specs/1006-bpmn-library-adoption/evidence/legacy-workbench-called/capture-api.json": {
+      "sha256": "3dceaf7edc087c84b0919bc218e31a463b51cd11ab0f30c7341c749ff3af384e",
+      "bytes": 24396
+    },
+    "specs/1006-bpmn-library-adoption/evidence/legacy-workbench-called/capture-checked.json": {
+      "sha256": "1f5564329cc98fcdacf081ad604e91dabb5d66f9317460f3185bd6b2e3152e5d",
+      "bytes": 57307
+    },
+    "specs/1006-bpmn-library-adoption/evidence/legacy-workbench-called/design.json": {
+      "sha256": "b48ed395137e96514872fde36b6b5f2dad46e3679ef722926f26fad5cbbcb877",
+      "bytes": 658
+    },
+    "specs/1006-bpmn-library-adoption/evidence/legacy-workbench-called/design.sqlite.gz": {
+      "sha256": "101c56c6730d43fb75609fc2ddd8b8933e053ad8d8df9e7ef61f2387ba984ba2",
+      "bytes": 111452
+    },
+    "specs/1006-bpmn-library-adoption/evidence/legacy-workbench-called/old-api.json": {
+      "sha256": "376612fae2f99ac58268854e6986f9a38340c97d08713c666c80dd9f8c30b0f8",
+      "bytes": 53487
+    },
+    "specs/1006-bpmn-library-adoption/evidence/legacy-workbench-called/old-checked.json": {
+      "sha256": "1eb42b86ab60bd052cfdfe628c3b67f67b185ed5f017d620b2728ee4e2e4fd11",
+      "bytes": 84066
+    },
+    "specs/1006-bpmn-library-adoption/evidence/legacy-workbench-called/old-host-binaries.json": {
+      "sha256": "f7103b86318e57c1d06c30c9d5ab18feee28abf094efa0813628347a45f2dc62",
+      "bytes": 34490
+    },
+    "specs/1006-bpmn-library-adoption/evidence/legacy-workbench-called/old-resumed-runtime.json": {
+      "sha256": "680a99f1f233750176ea060ff54b825815baa8d649d1495c97fc218e8b1c111c",
+      "bytes": 662
+    },
+    "specs/1006-bpmn-library-adoption/evidence/legacy-workbench-called/old-resumed-runtime.sqlite.gz": {
+      "sha256": "324434f3b08bfbf5ed4140b3d3036cb17c43e6b5e5fb7e11182610a5ed39a46b",
+      "bytes": 231514
+    },
+    "specs/1006-bpmn-library-adoption/evidence/legacy-workbench-called/portability-api.json": {
+      "sha256": "16fbdc1a99fb60da77ed955819ba25cb58393ffc45303dad5d1e15858379da9c",
+      "bytes": 53576
+    },
+    "specs/1006-bpmn-library-adoption/evidence/legacy-workbench-called/portability-checked.json": {
+      "sha256": "73e6bc8c38bc2c70ea657d684e03a179363d07ed12cd26f4e69b3852f3dc480f",
+      "bytes": 84336
+    },
+    "specs/1006-bpmn-library-adoption/evidence/legacy-workbench-called/portability-proof.json": {
+      "sha256": "01f82a9aac611c681f2be21760e174892a0865af5d7fbe2e016dad4ebc10f16c",
+      "bytes": 338
+    },
+    "specs/1006-bpmn-library-adoption/evidence/legacy-workbench-called/portability-resumed-runtime.json": {
+      "sha256": "b949a2cff2dbed5ab24d1f4a13aaea173bf7964f0901730633267883c03c6cf5",
+      "bytes": 706
+    },
+    "specs/1006-bpmn-library-adoption/evidence/legacy-workbench-called/portability-resumed-runtime.sqlite.gz": {
+      "sha256": "dc9c0ba1cbbbc607f713cded981075640865672de00493e73060b70e7e7ab462",
+      "bytes": 232368
+    },
+    "specs/1006-bpmn-library-adoption/evidence/legacy-workbench-called/reader-binaries.json": {
+      "sha256": "fa29f5b17056836fc0097508e8574ad18f5ef37ad505ad9df2ad6562979c8e56",
+      "bytes": 6306
+    },
+    "specs/1006-bpmn-library-adoption/evidence/legacy-workbench-called/reader-controls.json": {
+      "sha256": "7e0311d5526a65c237d696acd937570ea611fa46524f65f0711ea824a6982f84",
+      "bytes": 1535
+    },
+    "specs/1006-bpmn-library-adoption/evidence/legacy-workbench-called/reader-mutation.json": {
+      "sha256": "ede353924d14f2a50d0ac6096d9e35423f7c5ee5775c31ae325abbbe25f22a91",
+      "bytes": 626
+    },
+    "specs/1006-bpmn-library-adoption/evidence/legacy-workbench-called/runtime.json": {
+      "sha256": "5a78563aa05955859f8bed805a1af7fdabe439ec19447216cc76c6e51dcbf216",
+      "bytes": 658
+    },
+    "specs/1006-bpmn-library-adoption/evidence/legacy-workbench-called/runtime.sqlite.gz": {
+      "sha256": "bcf934af937cf21823624e0a94c7bc634b7a227f8e30940953e1d4c06c1d5843",
+      "bytes": 190637
+    },
+    "specs/1006-bpmn-library-adoption/evidence/legacy-workbench-called/upgraded-api.json": {
+      "sha256": "e72de82afa3a8032d90ab5a83ca40e3674483ea1945d7864dcfaaf083ea519cd",
+      "bytes": 53575
+    },
+    "specs/1006-bpmn-library-adoption/evidence/legacy-workbench-called/upgraded-checked.json": {
+      "sha256": "7ad2c7fbc407d5ab734b053fdf5a047659865aa9e34683f638332ac183010cdf",
+      "bytes": 84334
+    },
+    "specs/1006-bpmn-library-adoption/evidence/legacy-workbench-called/upgraded-host-binaries.json": {
+      "sha256": "4f4553457462c21a30543556c0d6dd57a953508787b362921d4e0e484a4d7bf5",
+      "bytes": 34596
+    },
+    "specs/1006-bpmn-library-adoption/evidence/legacy-workbench-called/upgraded-resumed-runtime.json": {
+      "sha256": "512b498b80e31c21e9618f8919b107427b1795a9a200543dff8e93bfac42c423",
+      "bytes": 667
+    },
+    "specs/1006-bpmn-library-adoption/evidence/legacy-workbench-called/upgraded-resumed-runtime.sqlite.gz": {
+      "sha256": "d89330ade54f818bb19ea65c26371381404fc71efd47820014bff786acb3c050",
+      "bytes": 232221
+    }
+  },
+  "apiCases": {
+    "actualCapture": 2,
+    "oldControl": 2,
+    "upgradedControl": 2,
+    "upgradedLegacyBuildUnavailableControl": 2,
+    "oldAndUpgradedCaseResultsEqual": true,
+    "persistenceMode": "Balanced"
+  },
+  "originalPinsAndInvocationsRetained": true,
+  "checkedClosedSnapshots": 4,
+  "legacyBuildUnavailableDuringColdRecovery": {
+    "legacyBuildAbsentBeforeColdStart": true,
+    "legacyPrivateTmpAliasAbsentBeforeColdStart": true,
+    "actualApiPassed": true,
+    "legacyBuildStillAbsentAfterActualContinuation": true,
+    "oldOutputRestored": true,
+    "snapshotSha256": "9564bddf9b83c8ccf78cbc0f5ce2e42fb3a239671a7eb233e087b4d83ae2e354",
+    "writerExitedBeforeBackup": true
+  },
+  "normalizedActualOutcomeComparison": {
+    "old": [
+      {
+        "name": "normal-completion",
+        "parentWorkflow": "14hm6QpmjQC",
+        "childWorkflow": "wfexec:dispatch:v1:78d13eed204e7004ecad9d49de85f205279407d7d80c8f77f6f26b5c4a3cf9c5",
+        "parentPin": {
+          "artifactId": "artifact-80709f0bab35",
+          "definitionId": "14hm6QcKjdx",
+          "definitionVersionId": "14hm6QcPlsf",
+          "artifactVersion": "1.0.0",
+          "artifactHash": "sha256:80709f0bab35ceeabaa42c592965b9e72cf78889a8b880860ed381b9a7cc9217"
+        },
+        "childPin": {
+          "artifactId": "artifact-1cfb9ccbd0a1",
+          "definitionId": "14hm6PIHVFD",
+          "definitionVersionId": "14hm6PJfN0n",
+          "artifactVersion": "1.0.0",
+          "artifactHash": "sha256:1cfb9ccbd0a1fe766803995e1f99db40c1359c597bd5d3ff53110316e30df4e2"
+        },
+        "parentStatus": 3,
+        "childStatus": 3,
+        "callId": "14hm6SRBk6G",
+        "waitId": "14hm6Xh9mpN",
+        "callStatus": 4,
+        "waitStatus": 4,
+        "dispatchId": "dispatch:v1:78d13eed204e7004ecad9d49de85f205279407d7d80c8f77f6f26b5c4a3cf9c5",
+        "dispatchStatus": 2,
+        "callOutcome": "Completed",
+        "tailStatus": 4,
+        "tailFault": null,
+        "tailIncidents": [],
+        "noCapability": true,
+        "physicalWaitCount": 0
+      },
+      {
+        "name": "ordinary-fault",
+        "parentWorkflow": "14hm6Y43yf6",
+        "childWorkflow": "wfexec:dispatch:v1:a2ca808300c09c193702dbbf0f07308b0d7a10222c2ffcd44d0fb8cab417b616",
+        "parentPin": {
+          "artifactId": "artifact-7e85cf7a80ba",
+          "definitionId": "14hm6XxuHfK",
+          "definitionVersionId": "14hm6Xy19h9",
+          "artifactVersion": "1.0.0",
+          "artifactHash": "sha256:7e85cf7a80ba6c64b2121b1f8ee02c5b3433e1af8c3a1c09c205178c30f98c65"
+        },
+        "childPin": {
+          "artifactId": "artifact-8d891393938b",
+          "definitionId": "14hm6XriOLA",
+          "definitionVersionId": "14hm6XroOrG",
+          "artifactVersion": "1.0.0",
+          "artifactHash": "sha256:8d891393938b4181016f443b4ac31f917337cff424919158e3db1e3b874577fa"
+        },
+        "parentStatus": 3,
+        "childStatus": 4,
+        "callId": "14hm6Y8Kzqu",
+        "waitId": "14hm6cXRneV",
+        "callStatus": 4,
+        "waitStatus": 4,
+        "dispatchId": "dispatch:v1:a2ca808300c09c193702dbbf0f07308b0d7a10222c2ffcd44d0fb8cab417b616",
+        "dispatchStatus": 3,
+        "callOutcome": "Faulted",
+        "tailStatus": 5,
+        "tailFault": {
+          "code": "workflow.fault",
+          "exceptionType": "Elsa.Activities.Runtime.Core.Models.ActivityFault",
+          "message": "Actual legacy called child ordinary fault.",
+          "sanitizedStackTrace": null,
+          "isRetryable": false,
+          "metadata": {}
+        },
+        "tailIncidents": [
+          {
+            "failureType": "ActivityReturnedFault",
+            "message": "Actual legacy called child ordinary fault.",
+            "isBlocking": true,
+            "resolution": "FaultWorkflow"
+          }
+        ],
+        "noCapability": true,
+        "physicalWaitCount": 0
+      }
+    ],
+    "upgraded": [
+      {
+        "name": "normal-completion",
+        "parentWorkflow": "14hm6QpmjQC",
+        "childWorkflow": "wfexec:dispatch:v1:78d13eed204e7004ecad9d49de85f205279407d7d80c8f77f6f26b5c4a3cf9c5",
+        "parentPin": {
+          "artifactId": "artifact-80709f0bab35",
+          "definitionId": "14hm6QcKjdx",
+          "definitionVersionId": "14hm6QcPlsf",
+          "artifactVersion": "1.0.0",
+          "artifactHash": "sha256:80709f0bab35ceeabaa42c592965b9e72cf78889a8b880860ed381b9a7cc9217"
+        },
+        "childPin": {
+          "artifactId": "artifact-1cfb9ccbd0a1",
+          "definitionId": "14hm6PIHVFD",
+          "definitionVersionId": "14hm6PJfN0n",
+          "artifactVersion": "1.0.0",
+          "artifactHash": "sha256:1cfb9ccbd0a1fe766803995e1f99db40c1359c597bd5d3ff53110316e30df4e2"
+        },
+        "parentStatus": 3,
+        "childStatus": 3,
+        "callId": "14hm6SRBk6G",
+        "waitId": "14hm6Xh9mpN",
+        "callStatus": 4,
+        "waitStatus": 4,
+        "dispatchId": "dispatch:v1:78d13eed204e7004ecad9d49de85f205279407d7d80c8f77f6f26b5c4a3cf9c5",
+        "dispatchStatus": 2,
+        "callOutcome": "Completed",
+        "tailStatus": 4,
+        "tailFault": null,
+        "tailIncidents": [],
+        "noCapability": true,
+        "physicalWaitCount": 0
+      },
+      {
+        "name": "ordinary-fault",
+        "parentWorkflow": "14hm6Y43yf6",
+        "childWorkflow": "wfexec:dispatch:v1:a2ca808300c09c193702dbbf0f07308b0d7a10222c2ffcd44d0fb8cab417b616",
+        "parentPin": {
+          "artifactId": "artifact-7e85cf7a80ba",
+          "definitionId": "14hm6XxuHfK",
+          "definitionVersionId": "14hm6Xy19h9",
+          "artifactVersion": "1.0.0",
+          "artifactHash": "sha256:7e85cf7a80ba6c64b2121b1f8ee02c5b3433e1af8c3a1c09c205178c30f98c65"
+        },
+        "childPin": {
+          "artifactId": "artifact-8d891393938b",
+          "definitionId": "14hm6XriOLA",
+          "definitionVersionId": "14hm6XroOrG",
+          "artifactVersion": "1.0.0",
+          "artifactHash": "sha256:8d891393938b4181016f443b4ac31f917337cff424919158e3db1e3b874577fa"
+        },
+        "parentStatus": 3,
+        "childStatus": 4,
+        "callId": "14hm6Y8Kzqu",
+        "waitId": "14hm6cXRneV",
+        "callStatus": 4,
+        "waitStatus": 4,
+        "dispatchId": "dispatch:v1:a2ca808300c09c193702dbbf0f07308b0d7a10222c2ffcd44d0fb8cab417b616",
+        "dispatchStatus": 3,
+        "callOutcome": "Faulted",
+        "tailStatus": 5,
+        "tailFault": {
+          "code": "workflow.fault",
+          "exceptionType": "Elsa.Activities.Runtime.Core.Models.ActivityFault",
+          "message": "Actual legacy called child ordinary fault.",
+          "sanitizedStackTrace": null,
+          "isRetryable": false,
+          "metadata": {}
+        },
+        "tailIncidents": [
+          {
+            "failureType": "ActivityReturnedFault",
+            "message": "Actual legacy called child ordinary fault.",
+            "isBlocking": true,
+            "resolution": "FaultWorkflow"
+          }
+        ],
+        "noCapability": true,
+        "physicalWaitCount": 0
+      }
+    ],
+    "portability": [
+      {
+        "name": "normal-completion",
+        "parentWorkflow": "14hm6QpmjQC",
+        "childWorkflow": "wfexec:dispatch:v1:78d13eed204e7004ecad9d49de85f205279407d7d80c8f77f6f26b5c4a3cf9c5",
+        "parentPin": {
+          "artifactId": "artifact-80709f0bab35",
+          "definitionId": "14hm6QcKjdx",
+          "definitionVersionId": "14hm6QcPlsf",
+          "artifactVersion": "1.0.0",
+          "artifactHash": "sha256:80709f0bab35ceeabaa42c592965b9e72cf78889a8b880860ed381b9a7cc9217"
+        },
+        "childPin": {
+          "artifactId": "artifact-1cfb9ccbd0a1",
+          "definitionId": "14hm6PIHVFD",
+          "definitionVersionId": "14hm6PJfN0n",
+          "artifactVersion": "1.0.0",
+          "artifactHash": "sha256:1cfb9ccbd0a1fe766803995e1f99db40c1359c597bd5d3ff53110316e30df4e2"
+        },
+        "parentStatus": 3,
+        "childStatus": 3,
+        "callId": "14hm6SRBk6G",
+        "waitId": "14hm6Xh9mpN",
+        "callStatus": 4,
+        "waitStatus": 4,
+        "dispatchId": "dispatch:v1:78d13eed204e7004ecad9d49de85f205279407d7d80c8f77f6f26b5c4a3cf9c5",
+        "dispatchStatus": 2,
+        "callOutcome": "Completed",
+        "tailStatus": 4,
+        "tailFault": null,
+        "tailIncidents": [],
+        "noCapability": true,
+        "physicalWaitCount": 0
+      },
+      {
+        "name": "ordinary-fault",
+        "parentWorkflow": "14hm6Y43yf6",
+        "childWorkflow": "wfexec:dispatch:v1:a2ca808300c09c193702dbbf0f07308b0d7a10222c2ffcd44d0fb8cab417b616",
+        "parentPin": {
+          "artifactId": "artifact-7e85cf7a80ba",
+          "definitionId": "14hm6XxuHfK",
+          "definitionVersionId": "14hm6Xy19h9",
+          "artifactVersion": "1.0.0",
+          "artifactHash": "sha256:7e85cf7a80ba6c64b2121b1f8ee02c5b3433e1af8c3a1c09c205178c30f98c65"
+        },
+        "childPin": {
+          "artifactId": "artifact-8d891393938b",
+          "definitionId": "14hm6XriOLA",
+          "definitionVersionId": "14hm6XroOrG",
+          "artifactVersion": "1.0.0",
+          "artifactHash": "sha256:8d891393938b4181016f443b4ac31f917337cff424919158e3db1e3b874577fa"
+        },
+        "parentStatus": 3,
+        "childStatus": 4,
+        "callId": "14hm6Y8Kzqu",
+        "waitId": "14hm6cXRneV",
+        "callStatus": 4,
+        "waitStatus": 4,
+        "dispatchId": "dispatch:v1:a2ca808300c09c193702dbbf0f07308b0d7a10222c2ffcd44d0fb8cab417b616",
+        "dispatchStatus": 3,
+        "callOutcome": "Faulted",
+        "tailStatus": 5,
+        "tailFault": {
+          "code": "workflow.fault",
+          "exceptionType": "Elsa.Activities.Runtime.Core.Models.ActivityFault",
+          "message": "Actual legacy called child ordinary fault.",
+          "sanitizedStackTrace": null,
+          "isRetryable": false,
+          "metadata": {}
+        },
+        "tailIncidents": [
+          {
+            "failureType": "ActivityReturnedFault",
+            "message": "Actual legacy called child ordinary fault.",
+            "isBlocking": true,
+            "resolution": "FaultWorkflow"
+          }
+        ],
+        "noCapability": true,
+        "physicalWaitCount": 0
+      }
+    ]
+  },
+  "readerControls": {
+    "passed": true,
+    "controls": [
+      {
+        "name": "actual-frozen-capture",
+        "exitCode": 0,
+        "databaseSha256": "d0fcbe5132a0ae93f50e67c3186fa95ea7994caf892feb98e038bb5e2bff43b4",
+        "outputSha256": "1f5564329cc98fcdacf081ad604e91dabb5d66f9317460f3185bd6b2e3152e5d",
+        "unchanged": true
+      },
+      {
+        "name": "wrong-snapshot-hash",
+        "exitCode": 2,
+        "databaseSha256": "d0fcbe5132a0ae93f50e67c3186fa95ea7994caf892feb98e038bb5e2bff43b4",
+        "outputSha256": "c492062f3e27c654296cbc2d7b2e1dce16f2a95d70f58f39c1b5dbdcf46a46d4",
+        "unchanged": true
+      },
+      {
+        "name": "foreign-captured-pin",
+        "exitCode": 2,
+        "databaseSha256": "d0fcbe5132a0ae93f50e67c3186fa95ea7994caf892feb98e038bb5e2bff43b4",
+        "outputSha256": "c492062f3e27c654296cbc2d7b2e1dce16f2a95d70f58f39c1b5dbdcf46a46d4",
+        "unchanged": true
+      },
+      {
+        "name": "owed-orphan-hidden-behind-canonical-source",
+        "exitCode": 2,
+        "databaseSha256": "4cff4bf8c2961d11c7983b23f15d2d4ce8a9e8cd0a93033aebe3ec3a07e6f27f",
+        "outputSha256": "c492062f3e27c654296cbc2d7b2e1dce16f2a95d70f58f39c1b5dbdcf46a46d4",
+        "unchanged": true
+      },
+      {
+        "name": "legacy-dispatch-acquires-control-declaration",
+        "exitCode": 2,
+        "databaseSha256": "ff268eeab41d78e0423a284c8dcb7977719fe97a7991c56bd8651e665aa2e176",
+        "outputSha256": "c492062f3e27c654296cbc2d7b2e1dce16f2a95d70f58f39c1b5dbdcf46a46d4",
+        "unchanged": true
+      }
+    ],
+    "originalCaptureUnchanged": true,
+    "scope": "default"
+  },
+  "readerMutation": {
+    "sourceSha256": "2c8e21c0f223732112d5b28b4eab98417e6d603e1b61cb1fb14ba1e725ddd71a",
+    "sourceRestored": true,
+    "compileSucceeded": true,
+    "orphanIncorrectlyAccepted": true,
+    "controlFailedAsExpected": true,
+    "buildLogSha256": "63302bac07a9ef32684e3918a88a1fdc6f1a0d8091545fcc0d1087b15a373981",
+    "controlLogSha256": "177234f348ef11b8a1a2f691027be4c14fd305301b1948c273d5032acc042989",
+    "failureMessage": "Reader control owed-orphan-hidden-behind-canonical-source returned unexpected status 0.",
+    "precedingControlsPassed": 3,
+    "laterCapabilityControlReached": false,
+    "initialSidecarMaskedMutationExcluded": true
+  },
+  "captureAndRecoveryOwnedProcessesExited": true,
+  "coherentRuntimeAndDesignCopiesRequired": true,
+  "identityAndTokenDatabasesNeverPublished": true,
+  "bothActualHostsContainNoRecoveryProbe": true,
+  "scopeLimits": [
+    "Actual public authoring/publish/start and normal Event continuation on source-built Workbench, with complete original module stores.",
+    "Two no-capability legacy ordinary completion/fault cases in Balanced mode; no full new opted-in called-control matrix or final Studio claim.",
+    "No arbitrary alteration, distributed-provider/process-cluster recovery, production acceptance or running-binary rollback claim.",
+    "Positive snapshots compare exact pins/selected original invocations, physical waits, actual fault/incident/control absence; whole old/new result databases differ in incidental new execution IDs/timestamps/catalog records."
+  ],
+  "excludedAttempts": [
+    "Old build high-load MSBuild workers disappeared; two-worker isolated compiler build passed.",
+    "Initial archived build inherited enclosing source suffix and was discarded; qualified old binary explicitly names D81.",
+    "Initial API fixture assumed items wrapper instead of legacy bare array.",
+    "Fresh Design catalog paired with old Runtime was refused by existing reference guard; coherent private control passed, final bundle separates complete Design/Publishing from identity.",
+    "Initial reader incorrectly required null incident resolution; final actual default Fault strategy/action FaultWorkflow is required.",
+    "Initial orphan fixture left sidecar, masking intended guard-removal mutation; final fixtures are explicitly closed and backed up with positive no-sidecar/integrity/canonical-source assertions."
+  ],
+  "inheritedEvidence": "Foundation EF1710/class32 and earlier Studio/architecture/package evidence remain original source-bound observations. This increment changes scripts/read-only tooling/spec evidence only; production source and root dependencies stay unchanged.",
+  "oldCapturedCheckpointsUnchanged": {
+    "deferred-fault.sqlite.gz": {
+      "compressedSha256": "bc8290630360944deaf4b8dcd95a35ee6f03bfaf2a39171944f2ab89cbeed114",
+      "databaseSha256": "9fb85f497dc6cc1d2fd8836a3120875fdda9da57619d80bec094d6f085f4de51",
+      "receiptSha256": "f1829d951f4d48104800d77a291e12f33f228a91f1079185de8c0d84af4ca111"
+    },
+    "listener-rearm-outcome.sqlite.gz": {
+      "compressedSha256": "972d66fd92c6e17b62e738a5b0b0c6907ce2f18f6c3aed09dba30b960be6c518",
+      "databaseSha256": "aaa978cdf13b22b65e7b59f18b860749e5164edd8304d10cd2556de216dd8404",
+      "receiptSha256": "276a402ca42780be010162a9cc0fd39b739dc1f170f44bda0a6bb591d1cec7c6"
+    },
+    "listener-rearm.sqlite.gz": {
+      "compressedSha256": "217102f444b01fd9a970aff53ed75f48f9f043cd76de876b774a01e7f17da017",
+      "databaseSha256": "d7a674b085de74faeedf2f35082a0cfd454bb5dc7030d7ad621dd5788f58083d",
+      "receiptSha256": "ed4c3c8577655ee70b53ab8c9c59098460390ef34ae1f3db196459faefae5e73"
+    },
+    "parallel-mi-outcome.sqlite.gz": {
+      "compressedSha256": "a5e3c499c1afa90a8114f0ba00e5a2f9e99982208d84615b7d3489a49eaf42e3",
+      "databaseSha256": "2f2efebe2d6856cf4653d1339eb986be8717f8ebd50b9830f96e6c4ad16a44a1",
+      "receiptSha256": "1056c29067953c365127bd71a500604d50f0e6305535977d83059fef1ddb8c68"
+    },
+    "parallel-mi.sqlite.gz": {
+      "compressedSha256": "6aa83b9e172ad0fc08a7c046b611fa74928aabcd5924701529f343388d953170",
+      "databaseSha256": "7026c2b7d69e0d8a6ab649d3ff8856076257c8b1c143d7cb972440e40d339734",
+      "receiptSha256": "91738281dd197a5c8e62794914c18d158638e32a9daa26b36369be8ef01ccb25"
+    },
+    "queued-late-fault.sqlite.gz": {
+      "compressedSha256": "820cce74e45099f65494568799d9b009ea2ed8bc79a140a5ef4ffcf97490e879",
+      "databaseSha256": "aae3c9fb08fd213b426ed5dede4fce3ea632d641d947b3b7f141a196354e6235",
+      "receiptSha256": "c6aa235d7649d6733ca0f6a352bd6ec3af0867dc9ea8b280a5c1084fe77332d5"
+    },
+    "queued-loser.sqlite.gz": {
+      "compressedSha256": "ce051448a84c5263f78a477724cff7e985aa619bea2c85442cb470bdd528fda5",
+      "databaseSha256": "71e98ed339a85926b434aa3f75613e8da883db0d118942ed4fb117ef6d097fa6",
+      "receiptSha256": "0bbc348c2306da431780d6fe03bb060f195b6bfdac9d2972ed5acf7baa6e728b"
+    },
+    "resolved-race.sqlite.gz": {
+      "compressedSha256": "e1c8a5254550c1fe72e8ed76c0f701d40376824d3cdd7f2e79c507104824863f",
+      "databaseSha256": "fd6762b2d731e79c1e080fa8902d76579f20ea080e0c103eb8332f4f88f6cd7f",
+      "receiptSha256": "9ebbfc0c3fbb3d8ce573ffcad810b815d547234d491c5b4d80e8dd8a61850d79"
+    }
+  },
+  "historicalReceiptsUnchanged": {
+    "specs/1006-bpmn-library-adoption/evidence/called-claims-ef-recovery.md": {
+      "sha256": "3da63c23e32031ee4eca95ec68d4a5c7e783540e8978f77047b8880ea4b0f39c"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/called-claims-ef-recovery.json": {
+      "sha256": "c431833915876e87f14e870d9c3a36e5f48116a809e13ca4d89a8217e5fb5c89"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/called-sibling-isolation-ef-recovery.md": {
+      "sha256": "68de3ac215f0bec96d8a0805c428afe305afc2384e45b3823664a4417c9c9dee"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/called-sibling-isolation-ef-recovery.json": {
+      "sha256": "ff1048018893b9ad23cd6de935237cbeda5ccbb544f7ba04ead0717fdd6083fa"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/called-control-ordering-ef-recovery.md": {
+      "sha256": "2be96b85cc6ac52f8cef669aaeabb9ab00a133375c013c847377cdb231e51f24"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/called-control-ordering-ef-recovery.json": {
+      "sha256": "9806f2cd428502d3a598f5243e5e9d04df37d5bf0a4fdb92309d1c6d3f374228"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/called-escalation-ef-recovery.md": {
+      "sha256": "1fa9853a54fa900cb385f88220df397f88574cfece31b989e62efc036696879b"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/called-escalation-ef-recovery.json": {
+      "sha256": "2ee096ba168651be34199ebbd36ead1e0ff00f542d78304c8e9ce2e68a563219"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/called-coded-error-ef-recovery.md": {
+      "sha256": "44f9ca29cec8a993923047c78267c8414e969d3e61c9a8e419fca7ec101b9998"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/called-coded-error-ef-recovery.json": {
+      "sha256": "23bdc27c52eb1112b50a5e2fe9537fca90ce9a57e8120116c6f382ef345f212e"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/native-parent-ef-qualification.md": {
+      "sha256": "b92f48d2834db3710e1d577d825cadcbc01d36a5a9a733a0dedcdc46f5bf5a47"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/native-parent-ef-qualification.json": {
+      "sha256": "8b6338efdb1fd0df5249bd084fb2225b11bfa2df65aa309db64374dcd33511d4"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/combined-outcome-ef-recovery.md": {
+      "sha256": "957d261394ee1bc9fed0cfb6bd999ef186ed1ff023bbd4abad28784c68ead1ff"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/combined-outcome-ef-recovery.json": {
+      "sha256": "aea0a590025f4d65c9b563d44b0b4774c4992103b77a822da5fed01bd0ce6c15"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/ordered-outcome-and-error-mapping.md": {
+      "sha256": "ba62cb1f2422815b2ad451384bd8e2dfa06fe7e9ee2d508d0a7c8af3c9cd7976"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/ordered-outcome-and-error-mapping.json": {
+      "sha256": "9b98cfcc71a21a537e4577537dac3bbb41b2511c563bcc3a7ff8aa8458a88f56"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/legacy-outcome-fault-replay.md": {
+      "sha256": "bcfba4adabb8d223484d861e10f023dd6abd879e15c50e65cf1b6572eac4896c"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/legacy-outcome-fault-replay.json": {
+      "sha256": "7d45e6d512a09779ae38a88bc977370b307620d5811c860e0497c07eb0030e0c"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/broadcast-delivery-reconciliation.md": {
+      "sha256": "716f2384c1d7a771155a8fe4f78b7d683252276e1eb0a4dba14e8325af4682c5"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/broadcast-delivery-reconciliation.json": {
+      "sha256": "8c2494c50096b654b70050be62d9e39322572eb237156fbb5cd42d1e9072e081"
+    }
+  },
+  "frozenAuthoringFingerprintSha256": "41aa0bb979ea46fc2533b057e3677f408ab54c3411fecfafaa238a2adae38c92",
+  "productionSourceChanged": false,
+  "duplicateSemanticWriterDeleted": false,
+  "reviews": {
+    "type": "three independent bounded component audits; not full PR",
+    "remainingActionable": []
+  },
+  "fullPrRounds": 0,
+  "remainingGates": [
+    "T045 complete new called-control public Workbench matrix",
+    "T029 ordinary compensation and final current Studio",
+    "T032 deletion only after remaining actual-host/Studio proof; T033/T034/T035 guards/audits",
+    "T036/T037/T038 final qualification/full-PR/green exact-head required checks/protected delivery/resulting-main; separate ADR0063",
+    "Independent #2898/#2907/program production acceptance; Orleans/task-runner deferred"
+  ]
+}

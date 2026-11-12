@@ -3,10 +3,13 @@ import type { StudioAiContributionApi, StudioEndpointContext } from "@elsa-workf
 import { WorkflowManagementPage } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/pages";
 import "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/styles.css";
 import "../../src/essentials/Elsa.Studio.Workflows/Client/src/styles.css";
+import { minimalWorkflowNames, minimalWorkflowDescriptions } from "./minimalStudioData";
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 const continuationToken = "opaque-cursor/next+002";
 const longIdentifiers = new URLSearchParams(window.location.search).get("long-identities") === "1";
+const visualStudy = new URLSearchParams(window.location.search).get("visual-study") === "1";
+const savedVersion = new URLSearchParams(window.location.search).get("saved-version") === "1";
 const folder = {
   id: "folder-operations",
   parentId: null,
@@ -20,17 +23,17 @@ function definition(id: string, name: string) {
   return {
     id,
     name,
-    description: "Browser workflow fixture",
+    description: visualStudy ? minimalWorkflowDescriptions[minimalWorkflowNames.indexOf(name)] ?? "Browser workflow fixture" : "Browser workflow fixture",
     createdAt: "2026-10-20T00:00:00Z",
     lastModifiedAt: "2026-10-20T00:00:00Z",
     deletedAt: null,
     draftId: longIdentifiers ? `draft-${"immutable-identifier-".repeat(7)}` : `draft-${id}`,
     draftSourceVersionId: longIdentifiers ? `source-${"published-version-".repeat(6)}` : null,
-    latestVersionId: longIdentifiers ? `latest-${"immutable-version-".repeat(6)}` : null,
-    latestVersion: null,
+    latestVersionId: longIdentifiers ? `latest-${"immutable-version-".repeat(6)}` : savedVersion ? `version-${id}` : null,
+    latestVersion: savedVersion ? "1.0.0" : null,
     publishedVersionId: longIdentifiers ? `published-${"release-reference-".repeat(6)}` : null,
     publishedVersion: null,
-    versionCount: 0,
+    versionCount: savedVersion ? 1 : 0,
     folderId: folder.id,
     folderBreadcrumb: [{ id: folder.id, name: folder.name }]
   };
@@ -98,7 +101,7 @@ const context = {
         recordDefinitionPageRequest(url);
         const query = new URL(url, window.location.origin).searchParams;
         const searchTerm = query.get("searchTerm") ?? "";
-        const response: DefinitionPage = searchTerm === "renewal"
+        const response: DefinitionPage = visualStudy && !searchTerm ? { items: minimalWorkflowNames.map((name, index) => definition(`wf-study-${index + 1}`, name)), nextContinuationToken: null } : searchTerm === "renewal"
           ? query.get("continuationToken") === continuationToken
             ? { items: [definition("workflow-page-two", "Second page renewal")], nextContinuationToken: null }
             : { items: [definition("workflow-page-one", "First page renewal")], nextContinuationToken: continuationToken }

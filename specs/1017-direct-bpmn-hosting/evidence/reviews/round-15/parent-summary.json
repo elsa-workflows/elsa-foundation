@@ -1,0 +1,42 @@
+{
+  "head": "d8969d8e5272b00cb403477ead0cd9521a67f651",
+  "executingProductSource": "9d4221e872c7f991e3a46919d8810a97ffee4e83",
+  "probeSourceSha256": "eaf2c477ce7f6fbc8d1423dd422cc0566700c105c9bbd81f7426bf631bf4826d",
+  "independentlyRepeatedByParent": true,
+  "newPublicMaterialOperations": 3,
+  "rawInfrastructureFailures": [
+    {
+      "operation": "FindMaterialAsync",
+      "kind": "io",
+      "rawType": "System.IO.IOException"
+    },
+    {
+      "operation": "FindMaterialAsync",
+      "kind": "unrequested-cancellation",
+      "rawType": "System.OperationCanceledException"
+    },
+    {
+      "operation": "ListMaterialPageAsync",
+      "kind": "io",
+      "rawType": "System.IO.IOException"
+    },
+    {
+      "operation": "ListMaterialPageAsync",
+      "kind": "unrequested-cancellation",
+      "rawType": "System.OperationCanceledException"
+    },
+    {
+      "operation": "SaveModelAsync",
+      "kind": "io",
+      "rawType": "System.IO.IOException"
+    },
+    {
+      "operation": "SaveModelAsync",
+      "kind": "unrequested-cancellation",
+      "rawType": "System.OperationCanceledException"
+    }
+  ],
+  "normalizedProviderControls": 3,
+  "requestedCancellationControls": 3,
+  "scope": "Actual EF SQLite connection-open fault injection against qualified DLLs. No writes, host outage/data loss/HTTP or upgraded-host recovery claim. Existing native leak is a pre-existing comparison, not a new finding."
+}

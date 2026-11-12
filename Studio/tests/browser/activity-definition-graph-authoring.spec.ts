@@ -65,7 +65,7 @@ test("Activity Definition graph authoring shares the designer without workflow l
   });
 
   await page.getByRole("tab", { name: "Public Interface" }).click();
-  await expect(page.getByRole("tabpanel", { name: "Public Interface" })).toContainText("Choose the activity outcome for each way the designer can finish.");
+  await expect(page.getByRole("tabpanel", { name: "Public Interface" }).getByRole("heading", { name: "Completion paths", exact: true })).toBeVisible();
   const source = page.getByRole("combobox", { name: "Designer outcome" });
   const target = page.getByRole("combobox", { name: "Activity outcome" });
   await source.selectOption("completed");

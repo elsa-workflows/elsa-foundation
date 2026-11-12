@@ -25,7 +25,8 @@ internal static class EfRuntimeCheckpointParticipantStaging
         string scope,
         DateTimeOffset occurredAt,
         Dictionary<string, WorkflowTestScopeRecord> touchedTestScopes,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        WorkflowExecutableIdentity? requiredExistingRoot = null)
     {
         var id = EfWorkflowExecutionStateStore.CreateId(scope, change.StateId);
         var row = await context.WorkflowExecutionStates.SingleOrDefaultAsync(candidate =>
@@ -35,26 +36,32 @@ internal static class EfRuntimeCheckpointParticipantStaging
             candidate.WorkflowExecutionIdHash == EfRuntimeOperationalStoreSupport.Hash(change.StateId) &&
             candidate.WorkflowExecutionId == EfRuntimeOperationalStoreSupport.Encode(change.StateId),
             cancellationToken);
+        var previous = row is null ? null : EfWorkflowExecutionStateStore.ReadChecked(row, scope, change.StateId);
+        if (requiredExistingRoot is not null && (previous is null || previous.PinnedExecutable != requiredExistingRoot || previous.ModelWorkOrigin is not null))
+            throw new ExistingRootLeaseRequiredException();
+        var writeVersion = ModelWorkWriteVersion.For(context, change.State, row?.SchemaVersion);
 
         if (row is null)
         {
             if (WorkflowTestScopeAdmission.ScopeRequiredToStart(change.State, executionExists: false) is { } testScope)
                 await EfRuntimeCheckpointTestScopeParticipantStaging.AssertOpenAndStageAsync(
                     context, testScope, occurredAt, scope, touchedTestScopes, cancellationToken);
-            context.WorkflowExecutionStates.Add(EfWorkflowExecutionStateStore.ToEntity(
+            context.WorkflowExecutionStates.Add(EfWorkflowExecutionStateStore.ToEntityForWriteVersion(
                 change.State,
                 scope,
                 id,
-                1));
+                1, writeVersion));
             return;
         }
 
         if (change.Metadata.ContainsKey(TestRunDeliveryReceipt.MetadataKey) && change.State.TestScope is { } resumeScope)
             await EfRuntimeCheckpointTestScopeParticipantStaging.AssertOpenAndStageAsync(
                 context, resumeScope, occurredAt, scope, touchedTestScopes, cancellationToken);
-        _ = EfWorkflowExecutionStateStore.ReadChecked(row, scope, change.StateId);
-        EfWorkflowExecutionStateStore.CopyToEntity(row, change.State, scope, id, checked(row.Revision + 1));
+        EfWorkflowExecutionStateStore.CopyToEntityForWriteVersion(row, change.State, scope, id, checked(row.Revision + 1), writeVersion);
     }
+
+    // Raised only during staging, before any SaveChanges, so a missing/replaced root can retry under its lease.
+    internal sealed class ExistingRootLeaseRequiredException : Exception { }
 
     public static async ValueTask StageSchedulerAsync(
         RuntimeDbContext context,
@@ -411,7 +418,11 @@ internal static class EfRuntimeCheckpointParticipantStaging
             throw new RuntimeSchedulerWorkConsumeConflictException(consumed.WorkflowExecutionId, consumed.WorkItemId);
     }
 
-    public static async ValueTask StageExecutionFenceAsync(
+    /// <summary>
+    /// Reads the ownership row, validates the fence and bumps the row's revision at the caller's save. Returns the
+    /// cursor that describes the row once the caller's transaction has committed.
+    /// </summary>
+    public static async ValueTask<ExecutionFenceCursor> StageExecutionFenceAsync(
         RuntimeDbContext context,
         string scope,
         string workflowExecutionId,
@@ -437,5 +448,97 @@ internal static class EfRuntimeCheckpointParticipantStaging
         // Revision is the provider-neutral optimistic fence. Touching it in the same transaction makes a concurrent
         // lease transition fail the whole checkpoint instead of allowing state and marker rows to commit together.
         row!.Revision = checked(row.Revision + 1);
+        return new(row.Revision, state!.ExecutionLease!.ExpiresAt, row.SchemaVersion);
     }
+
+    /// <summary>
+    /// Whether a fence may be checked from <paramref name="cursor"/> without reading the row: its revision is known
+    /// and its lease time has not run out, by the clock the fence validator uses.
+    /// </summary>
+    public static bool IsUsable(ExecutionFenceCursor cursor, TimeProvider timeProvider) =>
+        cursor.Revision > 0 && cursor.ExpiresAt > timeProvider.GetUtcNow();
+
+    /// <summary>
+    /// Stages the same revision bump as <see cref="StageExecutionFenceAsync"/> without reading the row: a stand-in
+    /// for the ownership row that carries its key, the cursor's revision and the row's schema stamp, with the
+    /// revision as its only change. The stamp is not written. It is there for the schema write gate, which looks at
+    /// the stamp of every row a save changes and so decides about this bump as it would about the row's own.
+    /// The caller's save then writes the statement the read path writes, at the same place in the same batch, so
+    /// the row is locked exactly where it is locked without a cursor.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// It is the same check as reading the row. The cursor names a revision at which the row held the expected lease
+    /// (<see cref="EfExecutionFenceCursors"/>), every writer of an ownership row increases its revision, and no
+    /// code path of the runtime deletes one. So a row still at that revision still holds that lease, and a row at
+    /// any other revision makes the save fail with a concurrency conflict on the stand-in, as a lease transition
+    /// under the read path does. The caller then reads the row, which decides whether and why the commit is refused.
+    /// </para>
+    /// <para>
+    /// What this gives up: the bump cannot also compare the lease columns, so an ownership row that was deleted and
+    /// inserted again outside the runtime, and has reached the cursor's revision under another lease, would pass
+    /// while the cursor's lease time lasts. Nothing in the runtime deletes an ownership row: run deletion keeps it
+    /// as a tombstone. The same holds when the database loses a write it acknowledged, as after a failover to a
+    /// replica that lags or a restore under running nodes: the row can return to an earlier revision and reach the
+    /// cursor's revision again under another lease, and the bump would match. Reading the row does not have that
+    /// gap, because it compares the lease itself. By owner decision on #2564 the EF runtime needs a database that
+    /// keeps every commit it acknowledged. The gap lasts at most until the lease time in the cursor passes: a
+    /// cursor is renewed only by a save of the row with that lease, and such a save reads the row. Both cases
+    /// are read from the code; no test runs them.
+    /// </para>
+    /// <para>
+    /// The stand-in is not the row and must not outlive the save: the caller detaches it right after, on success
+    /// and on failure. The context must not track the row already; a caller with a pending change to it reads.
+    /// </para>
+    /// </remarks>
+    public static ExecutionLivenessStateEntity StageExecutionFenceBump(
+        RuntimeDbContext context,
+        string scope,
+        string workflowExecutionId,
+        ExecutionFenceCursor cursor)
+    {
+        var bump = new ExecutionLivenessStateEntity
+        {
+            Id = EfRuntimeOperationalStoreSupport.CompositeId(scope, workflowExecutionId, RuntimeExecutionOwnershipStateId.For(workflowExecutionId)),
+            Revision = cursor.Revision,
+            SchemaVersion = cursor.SchemaVersion
+        };
+        var entry = context.ExecutionLivenessStates.Attach(bump);
+        bump.Revision = checked(cursor.Revision + 1);
+        entry.Property(row => row.Revision).IsModified = true;
+        return bump;
+    }
+
+    /// <summary>
+    /// Reads the ownership row and throws <see cref="RuntimeStaleFencingTokenException"/> unless it holds the expected
+    /// lease, unexpired. It writes nothing and tracks nothing.
+    /// </summary>
+    public static async ValueTask EnsureExecutionFenceAsync(
+        RuntimeDbContext context,
+        string scope,
+        string workflowExecutionId,
+        RuntimeExecutionFence expected,
+        TimeProvider timeProvider,
+        CancellationToken cancellationToken)
+    {
+        var operationalStateId = RuntimeExecutionOwnershipStateId.For(workflowExecutionId);
+        var row = await EfExecutionLivenessStateStore.WorkflowExecutionDeletionOwnershipRows(context, scope, workflowExecutionId)
+            .SingleOrDefaultAsync(cancellationToken);
+        var state = row is null ? null : EfExecutionLivenessStateStore.Read(row, scope, workflowExecutionId, operationalStateId);
+        RuntimeExecutionFenceValidator.EnsureCurrent(workflowExecutionId, expected, state, timeProvider.GetUtcNow());
+    }
+
+    /// <summary>How many times a fenced unit of work runs when each failure is a <see cref="IsFenceRenewalConflict"/>.</summary>
+    public const int MaxFenceRenewalAttempts = 3;
+
+    /// <summary>
+    /// Whether every entry a save conflicted on is an execution-liveness row. In a unit of work whose only write to
+    /// that table is its fence bump, staged by <see cref="StageExecutionFenceAsync"/> or by
+    /// <see cref="StageExecutionFenceBump"/>, that means the fence row alone. A conflict on the latter's bump never
+    /// reaches this filter: the commit store answers it first by running the commit again with a read of the row. The
+    /// owner's lease heartbeat bumps that row's revision without changing the lease, so the unit of work can run
+    /// again. The next attempt checks the fence again, so a real ownership change still fails as stale.
+    /// </summary>
+    public static bool IsFenceRenewalConflict(DbUpdateConcurrencyException exception) =>
+        exception.Entries.Count != 0 && exception.Entries.All(entry => entry.Entity is ExecutionLivenessStateEntity);
 }

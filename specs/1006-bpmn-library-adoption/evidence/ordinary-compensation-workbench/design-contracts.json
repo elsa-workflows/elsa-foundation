@@ -1,0 +1,104 @@
+{
+  "sourceRevision": "3815806acb51475903f3ee3b44cf263ac572db26",
+  "oracleSha256": "41aa0bb979ea46fc2533b057e3677f408ab54c3411fecfafaa238a2adae38c92",
+  "closedSnapshotSha256": "ba437005fa787635f2d810b06e346adc429e0d22ed84064742c2f512254c1950",
+  "immutableSnapshot": true,
+  "publishedIdentities": [
+    {
+      "activityTypeKey": "Elsa.Activities.Bpmn.Activities.BpmnDecision",
+      "versionId": "actver_BiyxxAYzfcTQS6YVZOr6eyDS1miqMrhvnbY1T10r-KQ",
+      "publishedVersion": "1.0.0+81f6ae7a47497a9f1f5704bd6b5f9b21fa1566a0",
+      "hash": "E832FB16E03545EEB5925F419364564444733BEF546607B27DA73D886C5A2ED4",
+      "publicationId": "actver_BiyxxAYzfcTQS6YVZOr6eyDS1miqMrhvnbY1T10r-KQ",
+      "publishedAt": "2026-10-27 22:42:05.694132+00:00",
+      "providerFingerprint": "sha256:f5b6e63fce76a20f37ca10503176822db8909ed61e7a3ba2d91c6e010bbfb50f"
+    },
+    {
+      "activityTypeKey": "Elsa.Activities.Bpmn.Activities.BpmnProcess",
+      "versionId": "actver_0XrufdkM-Qm0vrQmd0O7xc2c6tey0g5DIWlxzwX-TH4",
+      "publishedVersion": "1.0.0+81f6ae7a47497a9f1f5704bd6b5f9b21fa1566a0",
+      "hash": "F4C9E2E9B9FAD10AE5ECAFDC7C29D686FDD779473B6885F7D4DB3CA63DADDF4E",
+      "publicationId": "actver_0XrufdkM-Qm0vrQmd0O7xc2c6tey0g5DIWlxzwX-TH4",
+      "publishedAt": "2026-10-27 22:42:05.700794+00:00",
+      "providerFingerprint": "sha256:e8b6c9e85f70ac40cfadc1f0bb351e62f8edbf44c8e6d6b151069d8611665bc5"
+    }
+  ],
+  "actualFingerprint": [
+    {
+      "activityTypeKey": "Elsa.Activities.Bpmn.Activities.BpmnDecision",
+      "alias": "Elsa.Activities.Bpmn.Activities.BpmnDecision",
+      "category": "BPMN",
+      "executionType": "Action",
+      "inputs": [
+        {
+          "key": "Outcome",
+          "name": "Outcome",
+          "type": "String",
+          "collectionKind": "Single",
+          "defaultSyntax": null,
+          "defaultValue": null,
+          "isNullable": true,
+          "isRequired": false,
+          "uiHint": null,
+          "uiSpecifications": null
+        }
+      ],
+      "outputs": [],
+      "outcomes": {
+        "declared": false,
+        "dynamic": null,
+        "ports": []
+      },
+      "structure": null,
+      "version": "1.0.0"
+    },
+    {
+      "activityTypeKey": "Elsa.Activities.Bpmn.Activities.BpmnProcess",
+      "alias": "Elsa.Activities.Bpmn.Activities.BpmnProcess",
+      "category": "BPMN",
+      "executionType": "Action",
+      "inputs": [
+        {
+          "key": "CanStartWorkflow",
+          "name": "CanStartWorkflow",
+          "type": "Boolean",
+          "collectionKind": "Single",
+          "defaultSyntax": null,
+          "defaultValue": true,
+          "isNullable": false,
+          "isRequired": false,
+          "uiHint": null,
+          "uiSpecifications": null
+        }
+      ],
+      "outputs": [],
+      "outcomes": {
+        "declared": true,
+        "dynamic": null,
+        "ports": [
+          "Done"
+        ]
+      },
+      "structure": {
+        "kind": "elsa.bpmn.structure",
+        "schemaVersion": "1.0.0",
+        "mode": "bpmn",
+        "slots": [
+          {
+            "name": "Bpmn.Activities",
+            "property": "activities",
+            "displayName": "Activities",
+            "cardinality": "many",
+            "collectionProperty": null,
+            "childProperty": null,
+            "labelProperty": null,
+            "slotNameTemplate": null
+          }
+        ],
+        "supportsScopedVariables": true
+      },
+      "version": "1.0.0"
+    }
+  ],
+  "matchesFrozenFingerprint": true
+}

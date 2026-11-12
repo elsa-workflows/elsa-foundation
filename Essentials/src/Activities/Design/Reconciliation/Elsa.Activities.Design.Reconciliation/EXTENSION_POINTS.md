@@ -27,6 +27,28 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Activities.Design
 
 ---
 
+## Replacement contracts
+
+### `IActivityReconciliationDiagnosticStore` *(Core contract — `Elsa.Activities.Design.Core`)*
+- **Default:** `InMemoryActivityReconciliationDiagnosticStore` *(intra-domain — default)*, registered with `TryAddSingleton` by `ActivitiesDesignReconciliationFeature`. It keeps this node's entries in memory; the next pass rebuilds them after a restart.
+- **Signature:**
+  ```
+  void Record(string definitionVersionId, IReadOnlyList<ActivityDiagnostic> diagnostics);
+  void Clear(string definitionVersionId);
+  IReadOnlyList<ActivityDiagnostic> Find(string definitionVersionId);
+  IReadOnlyDictionary<string, IReadOnlyList<ActivityDiagnostic>> List();
+  ```
+- **What it holds:** the source-owned versions the latest complete pass refused, each with its diagnostics, keyed by definition version id.
+- **Consumed by:** `ActivityVersionReconciler` (this feature): `Record` on a refusal, `Clear` when the version publishes, and, at the end of a complete pass with a publishing bridge, `Clear` for every entry that pass did not refuse (a version fixed, or replaced by a next version and no longer contributed).
+- **Replace when:** refusals must survive a restart or be read from elsewhere. The store is one node's view: each node's complete pass clears the entries it did not refuse, so a store shared by several nodes must partition its entries per node. Register the replacement before the feature, or use `services.Replace(...)`.
+
+### `IActivitySourceVersionPublisher` *(Core contract — `Elsa.Activities.Design.Core`)*
+- **Kind:** optional bridge, at most one. Without it the reconciler persists catalog rows only.
+- **Implementation:** `SourceOwnedActivityVersionPublisher` *(cross-domain contribution)* in `Elsa.Workflows.Publishing.Api` — see [its catalog](../../../../Workflows/Publishing/Api/EXTENSION_POINTS.md).
+- **Outcome:** `PublishAsync` returns `ActivitySourceVersionPublicationResult`: published (or already published), or refused with that version's `ActivityDiagnostic`s. On a refusal the reconciler logs one warning per diagnostic (a refusal without an error diagnostic also gets `activity.source.publication-refused`), records them in `IActivityReconciliationDiagnosticStore`, leaves the version out of what the pass has seen, and goes on with the remaining candidates. A failure to commit content that passed still throws and fails the pass.
+
+---
+
 ## Events
 
 Every `IEvent` type in the `Elsa.Activities.Design.Core.Reconciliation` namespace has a `### <EventClassName>` heading here, and every such heading names one; review keeps the two in step.

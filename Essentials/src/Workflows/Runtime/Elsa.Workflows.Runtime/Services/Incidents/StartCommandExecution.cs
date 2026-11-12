@@ -58,7 +58,7 @@ internal static class StartCommandExecution
             payload.CorrelationId,
             payload.ParentWorkflowExecutionId,
             payload.TenantId,
-            PersistenceModeOf(envelope.Command))
+            SystemMetadataOf(envelope.Command))
         {
             RunKind = payload.RunKind,
             PinnedSource = payload.PinnedSource,
@@ -69,11 +69,15 @@ internal static class StartCommandExecution
         };
     }
 
-    // The mode the start dispatcher decided for the run goes with it, as its first commit would have recorded it.
-    private static Dictionary<string, string> PersistenceModeOf(WorkflowExecutionCommand command) =>
-        command.Metadata.TryGetValue(RuntimeMetadataKeys.PersistenceMode, out var mode)
-            ? new Dictionary<string, string> { [RuntimeMetadataKeys.PersistenceMode] = mode }
-            : new Dictionary<string, string>();
+    // Preserve the same bounded system facts as the first start checkpoint, even if start faults before that commit.
+    private static Dictionary<string, string> SystemMetadataOf(WorkflowExecutionCommand command)
+    {
+        var metadata = new Dictionary<string, string>();
+        foreach (var key in new[] { RuntimeMetadataKeys.PersistenceMode, RuntimeMetadataKeys.ChildControlDispatchId })
+            if (command.Metadata.TryGetValue(key, out var value))
+                metadata[key] = value;
+        return metadata;
+    }
 
     /// <summary>
     /// Whether a dispatched child may be faulted into existence. The ordinary enrichers project its dispatch and resume its

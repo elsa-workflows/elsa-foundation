@@ -1,0 +1,11 @@
+{
+  "blob": "m5-attribution-and-builds-r1.tar.xz",
+  "bytes": 47664,
+  "sha256": "24483e2529307ca5b9a94d579b1553c249191dba0932df699e0eb411fa5ff6df",
+  "files": 110,
+  "protectedValuesAbsent": true,
+  "attributionOnStatus": "passed",
+  "attributionOffStatus": "passed",
+  "upload": "passed",
+  "localArchiveAndAllFileHashesVerified": true
+}

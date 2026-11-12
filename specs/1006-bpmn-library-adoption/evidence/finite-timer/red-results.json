@@ -1,0 +1,45 @@
+{
+  "originalTrxSha256": "994806f157686dfdf785ff50980cae705a632e1c996c9d3e8eb8932f56e0b83e",
+  "counters": {
+    "total": "3",
+    "executed": "3",
+    "passed": "1",
+    "failed": "2",
+    "error": "0",
+    "timeout": "0",
+    "aborted": "0",
+    "inconclusive": "0",
+    "passedButRunAborted": "0",
+    "notRunnable": "0",
+    "notExecuted": "0",
+    "disconnected": "0",
+    "warning": "0",
+    "completed": "0",
+    "inProgress": "0",
+    "pending": "0"
+  },
+  "results": [
+    {
+      "testName": "Elsa.Tasks.Tests.TaskScheduleTests.A_configured_infinite_wait_does_not_run_when_the_clock_advances",
+      "outcome": "Passed",
+      "duration": "00:00:00.2039736",
+      "error": null
+    },
+    {
+      "testName": "Elsa.Tasks.Tests.TaskScheduleTests.A_finite_tick_exactly_one_millisecond_late_runs_and_schedules_its_next_run",
+      "outcome": "Failed",
+      "duration": "00:00:05.0037135",
+      "error": "System.TimeoutException : The operation has timed out."
+    },
+    {
+      "testName": "Elsa.Tasks.Tests.TaskScheduleTests.Early_finite_callbacks_keep_waiting_until_the_original_deadline",
+      "outcome": "Failed",
+      "duration": "00:00:05.2138000",
+      "error": "System.TimeoutException : The operation has timed out."
+    }
+  ],
+  "productionSourceSha256": "9ebfa43e0cc1c017841e6dd914dbf0007712f83bf0738428f05123f87d0e017d",
+  "sameTestSourceSha256": "79ef549b37794ef95a26bb56bd0a616d0ac95d06c3080831df0d873b31acd9a8",
+  "monotonicClockSeamPresentInBoth": true,
+  "actualSystemThreadingTimer": true
+}

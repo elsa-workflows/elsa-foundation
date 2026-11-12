@@ -361,15 +361,15 @@ jobs:
                 exit 1
               fi
             done
-            # studio-ui must additionally ship its design tokens.
+            # studio-ui ships tokens and the actual public component stylesheet.
             if [[ "$tgz" == *studio-ui-* ]]; then
-              if ! grep -qx "package/dist/tokens.css" <<< "$contents"; then
-                echo "  MISSING: package/dist/tokens.css in $tgz" >&2
+              if ! grep -qx "package/dist/tokens.css" <<< "$contents" || ! grep -qx "package/dist/styles.css" <<< "$contents"; then
+                echo "  MISSING: package/dist/tokens.css or styles.css in $tgz" >&2
                 exit 1
               fi
             fi
-            # studio-workflows must additionally ship its bundled stylesheet.
-            if [[ "$tgz" == *studio-workflows-* ]]; then
+            # Workflow and code editor consumers use a public bundled stylesheet.
+            if [[ "$tgz" == *studio-workflows-* || "$tgz" == *studio-code-editor-* ]]; then
               if ! grep -qx "package/dist/style.css" <<< "$contents"; then
                 echo "  MISSING: package/dist/style.css in $tgz" >&2
                 exit 1

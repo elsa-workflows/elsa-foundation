@@ -230,7 +230,15 @@ public sealed class ForEach : StructuralActivity, IRuntimeStructuralActivity, IR
 
         public int Count => _isJson ? _jsonArray.GetArrayLength() : _materialized!.Count;
 
-        public object? ItemAt(int index) => _isJson ? UnwrapJsonScalar(_jsonArray[index]) : _materialized![index];
+        public object? ItemAt(int index) => _isJson ? JsonItemAt(index) : _materialized![index];
+
+        // The JSON item is handed on as-is: ToEnvelope clones it into the iteration frame, so a number keeps
+        // its exact JSON text instead of being narrowed to a CLR double (#3421). JSON null stays an explicit null.
+        private object? JsonItemAt(int index)
+        {
+            var item = _jsonArray[index];
+            return item.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined ? null : item;
+        }
 
         public static ForEachCollection Resolve(object? collection) =>
             collection switch
@@ -243,8 +251,7 @@ public sealed class ForEach : StructuralActivity, IRuntimeStructuralActivity, IR
             };
 
         // A literal/expression collection arrives as a JsonElement (the runtime materializes 'object'
-        // inputs as JSON). An array is kept as-is for O(1) count/index; each item is unwrapped to its
-        // scalar CLR value at access time so the body observes a plain item rather than a JsonElement.
+        // inputs as JSON). An array is kept as-is for O(1) count/index; each item stays a JsonElement.
         private static ForEachCollection ResolveJson(JsonElement element) =>
             element.ValueKind switch
             {
@@ -253,17 +260,6 @@ public sealed class ForEach : StructuralActivity, IRuntimeStructuralActivity, IR
                 _ => throw new ControlFlowExecutionException($"ForEach collection input JSON value kind '{element.ValueKind}' is not an array.")
             };
     }
-
-    private static object? UnwrapJsonScalar(JsonElement element) =>
-        element.ValueKind switch
-        {
-            JsonValueKind.String => element.GetString(),
-            JsonValueKind.Number => element.TryGetInt64(out var integer) ? integer : element.GetDouble(),
-            JsonValueKind.True => true,
-            JsonValueKind.False => false,
-            JsonValueKind.Null or JsonValueKind.Undefined => null,
-            _ => element
-        };
 
     private static IRuntimeActivityExecutionContext RequireRuntimeContext(IActivityExecutionContext context)
     {

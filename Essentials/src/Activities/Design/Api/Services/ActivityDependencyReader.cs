@@ -197,6 +197,14 @@ public sealed class ActivityDependencyReader(
         {
             throw CursorExpired(exception);
         }
+        catch (ActivityDependencyProjectionUnavailableException exception)
+        {
+            throw new ActivityAuthoringException(
+                503, "activity.dependency.unavailable", "Activity usage is unavailable",
+                "Usage information has not been initialized. Ask an administrator to rebuild the usage index, then try again.",
+                innerException: exception,
+                recovery: new(Relation: "retry", Instruction: "Ask an administrator to restart the host to rebuild usage information, then retry this query."));
+        }
 
         if (last is null) throw OperationFailed("The dependency projection returned no snapshot.");
         var nextCursor = hasMore || last.NextOffset is not null ? await EncodeCursorAsync(rootVersionId, query, watermark!, position, cancellationToken) : null;

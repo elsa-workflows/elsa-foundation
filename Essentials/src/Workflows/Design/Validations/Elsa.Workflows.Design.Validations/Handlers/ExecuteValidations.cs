@@ -1,6 +1,7 @@
 using Elsa.Events.Core.Contracts;
 using Elsa.Workflows.Design.Validations.Core.Contracts;
 using Elsa.Workflows.Design.Validations.Core.Events;
+using Elsa.Workflows.Design.Validations.Core.Models;
 
 namespace Elsa.Workflows.Design.Validations.Handlers;
 
@@ -14,12 +15,25 @@ public sealed class ExecuteValidations(IEnumerable<IDraftValidator> validators) 
 {
     public async Task Handle(DraftValidating domainEvent, CancellationToken cancellationToken)
     {
+        var findings = new List<ValidationError>();
         foreach (var validator in validators)
         {
             var errors = await validator.Validate(domainEvent.Draft, cancellationToken);
-
-            foreach (var error in errors)
-                domainEvent.Errors.Add(error);
+            findings.AddRange(errors);
+        }
+        // Source admission still returns its complete findings to publication and direct consumers.
+        // On the composed draft panel, retain the existing whole-variable owner's stable rule ID.
+        var resolvedVariablePaths = findings.Where(error => error.Type == "Expressions/UnresolvedVariable")
+            .Select(error => error.Path).ToHashSet(StringComparer.Ordinal);
+        var inputRefusals = new HashSet<(string Path, string Type)>();
+        foreach (var error in findings)
+        {
+            if (error.Type == "Variable/UnresolvableReference" && resolvedVariablePaths.Contains(error.Path))
+                continue;
+            if (error.Type is "Inputs/CredentialLiteral" or "Inputs/ConnectionReference" &&
+                !inputRefusals.Add((error.Path, error.Type)))
+                continue;
+            domainEvent.Errors.Add(error);
         }
     }
 }

@@ -4,6 +4,8 @@ using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Entities;
 
+[assembly: System.Runtime.CompilerServices.InternalsVisibleTo("Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Tests")]
+
 // The single, discoverable declaration of this module. EfModuleCatalog.Discover reads this,
 // and EfModuleBinding.For derives the registration class's binding from it (#1872).
 [assembly: EfModule(
@@ -29,10 +31,14 @@ using Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Entities;
 // EF materializes this context's rows directly, so the family declares no upcasters (same section).
 // An atomic write's receipt holds the result it replays to a retrying caller, deserialized into that result, so it is
 // content; its fingerprint is checked over the stored bytes first (#2140).
-[assembly: EfSchemaContent(WorkflowsDesignEfModule.SchemaFamily, typeof(WorkflowDefinitionDraft), nameof(WorkflowDefinitionDraft.StateSource))]
 [assembly: EfSchemaContent(WorkflowsDesignEfModule.SchemaFamily, typeof(WorkflowDefinitionVersion), nameof(WorkflowDefinitionVersion.StateSource))]
 [assembly: EfSchemaContent(WorkflowsDesignEfModule.SchemaFamily, typeof(WorkflowDefinitionDraftLayout),
     nameof(WorkflowDefinitionDraftLayout.RecordsJson), nameof(WorkflowDefinitionDraftLayout.ActivityPresentationJson))]
 [assembly: EfSchemaContent(WorkflowsDesignEfModule.SchemaFamily, typeof(WorkflowDefinitionVersionLayout),
     nameof(WorkflowDefinitionVersionLayout.RecordsJson), nameof(WorkflowDefinitionVersionLayout.ActivityPresentationJson))]
 [assembly: EfSchemaContent(WorkflowsDesignEfModule.SchemaFamily, typeof(DesignOperationEntity), nameof(DesignOperationEntity.ResultJson))]
+
+[assembly: EfSchemaContent(WorkflowsDesignEfModule.SchemaFamily, typeof(WorkflowTemplateEntity), nameof(WorkflowTemplateEntity.ContentJson))]
+[assembly: EfSchemaContent(WorkflowsDesignEfModule.SchemaFamily, typeof(WorkflowTagEntity), nameof(WorkflowTagEntity.ValuesJson))]
+[assembly: EfSchemaContent(WorkflowsDesignEfModule.SchemaFamily, typeof(WorkflowLibraryViewEntity), nameof(WorkflowLibraryViewEntity.ContentJson))]
+[assembly: EfSchemaContent(WorkflowsDesignEfModule.SchemaFamily, typeof(WorkflowLibraryAuditEntity), nameof(WorkflowLibraryAuditEntity.BeforeJson), nameof(WorkflowLibraryAuditEntity.AfterJson))]

@@ -1,0 +1,29 @@
+{
+  "source": "1842ae257e15b66cf50647b0620b92c5b4ff3beb",
+  "screenshots": {
+    "studio-layout/legacy-run.png": "0c15fff8a10dc9d8a1d485cec5f0f5990ae1e5c542151d4a6ca1c20c0c62d29d",
+    "studio-layout/open.png": "a800c1e43066bc6e99dd7b9e67b336e229077563cfc45fb70c812f552df6477d",
+    "studio-layout/published-run.png": "b8159895e8f6d6e7c55a8367376a7e26919f41721bc34751f372675bcf20254e",
+    "studio-layout/published.png": "c5e6df131a0dc93aa16ae48f158c1a3435579108fa509a469abc45a88ebc5c47",
+    "studio-layout/restarted-published-run.png": "20970842b172110271c2950888b8d355a9d903974fa3794f40cc63689f44ed9f",
+    "studio-layout/test-run.png": "3f66eeb6e451eccc2c200873f32f003d5c78f8881ca513050d9278ff94a6810e",
+    "studio-original/legacy-run.png": "fc446b429aca2c49c94093b2af99d65b6b31d9cef33dc819cbb1b0912a12eec1",
+    "studio-original/open.png": "92b496f832cc010825af6ce7a7ff97c13adaa9bcd0be636571fb3f499918fb41",
+    "studio-original/published-run.png": "7e02cb965f93a76b5b16f6c164e29de0fff3ef33ecc4170d9e11c5fded6fd935",
+    "studio-original/published.png": "e459e0a17a527e9f97ffb845fe9acf3ead07dafebbbb683c6fc7a3ab059a8676",
+    "studio-original/restarted-test-run.png": "a319a1c77ae0e356be1c1d0584ada854dbfc559bf1c09742a79c41bd311a79c2",
+    "studio-original/test-run.png": "eb8452e53e7d465165971cbf0c5b2bdade81302e8ba43fd14b478954811441dc"
+  },
+  "all12VisuallyInspected": true,
+  "observations": [
+    "Current backend selector remains Default backend throughout both original saved-store journeys.",
+    "Opening JSON/XML exactly match frozen originals; decision label edit, Save and publish versions3/4 succeed.",
+    "Both Published Runs and both Test Runs complete with correct kinds and no incidents; original old runs remain inspectable.",
+    "Original Test Run and layout Published Run remain inspected after actual host restart; full API views of all four new runs are identical before/after restart.",
+    "Saved authoring and Published Run DI are preserved. Test Run uses the explicitly retained earlier fallback geometry; first-class direct-model Studio acceptance remains separate."
+  ],
+  "backendScopedTestRunUrls": [
+    "/workflows/instances/14pAumT3m8E?backend=legacy",
+    "/workflows/instances/14pBFcWEMZP?backend=legacy"
+  ]
+}

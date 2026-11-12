@@ -1,4 +1,4 @@
-using Elsa.Primitives.Identity;
+using Elsa.Workflows.Runtime.Services.Executions;
 using Elsa.Workflows.Runtime.Contracts;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -19,15 +19,42 @@ public sealed class RuntimeCoalescingDrainScopeFactory(
     PersistenceModeOptions options,
     TimeProvider timeProvider) : IRuntimeCoalescingDrainScopeFactory
 {
-    public IRuntimeCoalescingDrainScope Begin(string workflowExecutionId, ResolvedPersistenceMode mode)
+    public IRuntimeCoalescingDrainScope Begin(string workflowExecutionId, ResolvedPersistenceMode mode) =>
+        Begin(workflowExecutionId, mode, observedRunState: null);
+
+    /// <summary>
+    /// Begins a scope whose session starts from the workflow execution state the caller has just read for this run,
+    /// under the run's lease, so the drain does not read it again before it has a state of its own.
+    /// </summary>
+    internal IRuntimeCoalescingDrainScope Begin(string workflowExecutionId, ResolvedPersistenceMode mode, RunStateObservation? observedRunState)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
         ArgumentNullException.ThrowIfNull(mode);
 
+        // The caller read the run's state through the registered store, which answers from an ambient session of the
+        // same run when one has a state of its own. Such a session is one an earlier drain left behind in a flow that
+        // captured it, and its state may never have been stored. Then the read says nothing about the store. The
+        // caller's read and this call see the same ambient session, because nothing pushes one in between.
+        if (sessionAccessor.Current is { } ambient && StringComparer.Ordinal.Equals(ambient.WorkflowExecutionId, workflowExecutionId))
+            observedRunState = null;
+
         // A nested owner gets a fresh memo. The parent cannot resume reusing its old baseline after the child exits.
         sessionAccessor.Current?.DisableDurableValuePageReuse();
+        // The nested drain can write the parent run's rows past the parent's session. The default accessor ends what
+        // the parent observed of the store on push. This also covers a host that replaced the accessor.
+        sessionAccessor.Current?.EndStoreObservations();
 
         var session = new RuntimeCoalescingSession(workflowExecutionId, innerQueue.Value, options, innerOutboxStore.Value, mode, timeProvider);
+        // Only a session this factory created answers reads from what the drain observed of the store, because the
+        // guards around those answers are here and in the scope below. It also needs the coalescing commit store in
+        // front of every commit: that store records what a commit sends, and without it the session would report a
+        // row it just committed as absent, or a state it just replaced as current.
+        if (checkpointCommitter.CommitsThroughCoalescingStore)
+        {
+            session.BeginEmptyBaselines();
+            if (observedRunState is not null)
+                session.BeginRunStateSnapshot(observedRunState);
+        }
         // A legacy provider may not support identity deletion. Never discover that after a folded commit has landed:
         // disable buffering before the drain begins, leaving queue operations and checkpoint writes durable.
         if (!innerQueue.Value.SupportsTargetedDeletion)
@@ -42,6 +69,7 @@ public sealed class RuntimeCoalescingDrainScopeFactory(
         RuntimeCheckpointCommitter checkpointCommitter,
         TimeProvider timeProvider) : IRuntimeCoalescingDrainScope
     {
+        private RuntimeCheckpointCommit? preparedFlush;
         public RuntimeCoalescingSession Session => session;
 
         public async ValueTask FlushAtQuiescenceAsync(CancellationToken cancellationToken = default)
@@ -54,7 +82,7 @@ public sealed class RuntimeCoalescingDrainScopeFactory(
             // durable queue with the overlay consumption and end the segment; no folded commit is required — unless an
             // earlier cap flush left durably persisted outbox items whose overlay outcome still has to be written back,
             // in which case the (empty-state) flush commit below carries that reconciliation.
-            if (!session.HasBufferedChanges && !session.RequiresDurableOutboxReconciliation)
+            if (preparedFlush is null && !session.HasBufferedChanges && !session.RequiresDurableOutboxReconciliation)
             {
                 await session.AdvanceInnerQueueAsync(consumeInFlightClaims: true, cancellationToken);
                 session.ClearBuffer();
@@ -62,7 +90,10 @@ public sealed class RuntimeCoalescingDrainScopeFactory(
                 return;
             }
 
-            var flushCommit = BuildFlushCommit();
+            // An uncertain outcome must retry exactly the same identity/timestamp/envelope. A fresh synthetic commit
+            // would mint another canonical source after a peer may already have delivered the first one.
+            var flushCommit = preparedFlush ??= BuildFlushCommit();
+            session.PrepareQuiescenceFlush(flushCommit.CommitId);
 
             // Routed through the committer so ownership fencing gates the single durable write. The coalescing
             // commit-store decorator recognises the CoalescedFlush marker, applies the folded state to the durable
@@ -87,7 +118,7 @@ public sealed class RuntimeCoalescingDrainScopeFactory(
 
             var now = timeProvider.GetUtcNow();
             var checkpoint = new RuntimeCheckpoint(
-                CheckpointId: ShortIdentityGenerator.Generate(now),
+                CheckpointId: RuntimeExecutionIdGenerator.NewId(now),
                 Name: RuntimeCoalescingMetadataKeys.FlushCheckpointName,
                 WorkflowExecutionId: session.WorkflowExecutionId,
                 OccurredAt: now,
@@ -98,7 +129,7 @@ public sealed class RuntimeCoalescingDrainScopeFactory(
                 });
 
             return new RuntimeCheckpointCommit(
-                CommitId: ShortIdentityGenerator.Generate(now),
+                CommitId: RuntimeExecutionIdGenerator.NewId(now),
                 Checkpoint: checkpoint,
                 StateChanges: foldedState,
                 PostCommitIntents: remainingIntents,
@@ -108,6 +139,9 @@ public sealed class RuntimeCoalescingDrainScopeFactory(
         public ValueTask DisposeAsync()
         {
             session.DisableDurableValuePageReuse();
+            // A drain that threw leaves its session active. A flow that still holds it must not get answers once
+            // the drain, and soon its lease, are gone.
+            session.EndStoreObservations();
             scopeHandle.Dispose();
             return ValueTask.CompletedTask;
         }

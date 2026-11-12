@@ -2,6 +2,7 @@ import React from "react";
 
 export default React;
 
+export const Activity = React.Activity;
 export const Children = React.Children;
 export const Component = React.Component;
 export const Fragment = React.Fragment;

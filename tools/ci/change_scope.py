@@ -30,6 +30,10 @@ INCLUDE = (
     ".claude/**",
     "Studio/.agents/**",
     "Studio/.claude/**",
+    # Standalone pre-merge gate tooling (python, run by hand or by the initiative skills); nothing a build reads. Accepted
+    # gap: RetiredPersistenceFamilyGuardTests scans tools/ for retired persistence-family names in .py/.json/.yml/.sh files,
+    # so a change here is no longer checked by it before merge; it would only fail on the push to main.
+    "tools/initiatives/**",
     "*.md",  # root-level only; see _matches
 )
 
@@ -111,6 +115,11 @@ def self_test() -> int:
         ([".github/workflows/ci.yml"], False),
         (["tools/maps/Elsa.Maps.Generator/Program.cs"], False),
         (["docs/x.md", "Essentials/src/X.cs"], False),
+        (["tools/initiatives/check_decision_docs.py"], True),
+        (["tools/initiatives/check_decision_docs.py", "docs/adr/0001-x.md"], True),
+        (["tools/initiatives/Directory.Build.props"], False),
+        (["tools/initiatives/Gate.cs"], False),
+        (["tools/ci/change_scope.py"], False),
         ([], False),
     ]
     failures = [(paths, want) for paths, want in cases if classify(paths)[0] != want]

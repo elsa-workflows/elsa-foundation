@@ -1,11 +1,12 @@
 # Studio hosting extraction contract
 
-Selected implementation target for [#3355](https://github.com/elsa-workflows/elsa-foundation/issues/3355),
-[Program #3340](https://github.com/elsa-workflows/elsa-foundation/issues/3340). Source baseline:
-`621d9492357cdee5adcef4c5b866555ce1c9e298`. These signatures/boundaries are the contract to implement,
-not a claim that the new production packages already exist.
+**Implementation status:** The accepted M0 contract is implemented by the public Hosting, Hosting.Nuplane and Hosting.Themes packages. The source-linked disposition below records the extraction choices. Use the [runnable custom-host guide](../../Studio/docs/custom-hosting.md) for current consumer setup and the [program ledger](../program-goals/studio-hosting-package-reuse.md) for reviewed source, actual candidate/runtime and resulting-main receipts. Historical implementation sequencing below is not a publication claim.
 
-## Work-unit plan and gates
+Accepted M0 selection for [#3355](https://github.com/elsa-workflows/elsa-foundation/issues/3355),
+[Program #3340](https://github.com/elsa-workflows/elsa-foundation/issues/3340). Source baseline:
+`621d9492357cdee5adcef4c5b866555ce1c9e298`. The following sections retain the accepted boundaries and original implementation sequence; current implementation and consumer proof are linked above.
+
+## M0 work-unit plan and gates
 
 This is architecture development after the three completed qualification spikes. Cover every Web C# file,
 frontend ownership category, package direction, small consumer API and configuration/storage/lifetime seam.
@@ -57,19 +58,19 @@ Hosting. No aggregate/re-export package or separate permanent browser-assets pac
 All types/DTOs declared in a row's file follow that row unless explicitly replaced below. Their HTTP JSON shape
 is retained independently of their C# namespace/visibility. The inventory records all 20 Web C# files at the
 pre-adoption snapshot (`d55f5f5229ab4aaeaa728a85f6d41d9050af0a71`). #3356 removes the three local loader/catalog
-wrappers below; #3359 removes four duplicate HTTP/store/asset adapters. Removed source links are pinned to that snapshot so the original disposition stays traceable.
+wrappers below; #3359 removes four duplicate HTTP/store/asset adapters; #3360 moves the theme implementation and removes the now-unused host writer. Removed source links are pinned to that snapshot so the original disposition stays traceable.
 
 | Current file | Target and decision |
 |---|---|
 | [Program.cs](../../Studio/src/apps/Elsa.Studio.Web/Program.cs) | Keep only app/distribution choices, early ConsoleStream capture, selected module assemblies and public Add/Use/Map calls. No copied endpoint/auth/store/loader implementation. |
 | [ActiveShellStudioApiEndpoint.cs](../../Studio/src/essentials/Elsa.Studio.Hosting/ActiveShellStudioApiEndpoint.cs) | Hosting internal. Keep high-priority manifest/registry routes and use the configured Studio shell with a tracked scope across async reads. |
-| [ConfigFileWriter.cs](../../Studio/src/apps/Elsa.Studio.Web/ConfigFileWriter.cs) | Split coordination from IO: Hosting owns the one process-lifetime gate exposed by StudioBuilder.ConfigurationMutationGate. Each addon keeps its small stateless atomic-write helper private and receives that same gate at registration. No production friend grant, duplicate static gate or public generic file utility. |
+| [ConfigFileWriter.cs](https://github.com/elsa-workflows/elsa-foundation/blob/d55f5f5229ab4aaeaa728a85f6d41d9050af0a71/Studio/src/apps/Elsa.Studio.Web/ConfigFileWriter.cs) | Split coordination from IO: Hosting owns the one process-lifetime gate exposed by StudioBuilder.ConfigurationMutationGate. Each addon keeps its small stateless atomic-write helper private and receives that same gate at registration. No production friend grant, duplicate static gate or public generic file utility. |
 | [ElsaFeatureManagementApi.cs](https://github.com/elsa-workflows/elsa-foundation/blob/d55f5f5229ab4aaeaa728a85f6d41d9050af0a71/Studio/src/apps/Elsa.Studio.Web/ElsaFeatureManagementApi.cs) | Nuplane addon internal HTTP/DTO adapter over the existing feature-management application service/catalog contracts. Adopt masking/full-state validation and keyed revision semantics from #3351. |
 | [ElsaModuleManagementApi.cs](https://github.com/elsa-workflows/elsa-foundation/blob/d55f5f5229ab4aaeaa728a85f6d41d9050af0a71/Studio/src/apps/Elsa.Studio.Web/ElsaModuleManagementApi.cs) | Nuplane addon internal HTTP/DTO adapter. Keep upload/feed/registry behavior and permissions; replace direct directory pruning with qualified maintenance. |
-| [ElsaThemeStoreApi.cs](../../Studio/src/apps/Elsa.Studio.Web/ElsaThemeStoreApi.cs) | Themes addon internal endpoints, validation and JSON models. Keep reserved IDs, lifecycle/default constraints and asset limits; implement source modes with #3368. |
-| [Models/ThemeConfiguration.cs](../../Studio/src/apps/Elsa.Studio.Web/Models/ThemeConfiguration.cs) | Replace app-only type with public StudioThemeStoreOptions in Themes, retaining existing Themes configuration keys plus explicit writable-store paths. |
+| [ThemeStoreApi.cs](../../Studio/src/essentials/Elsa.Studio.Hosting.Themes/ThemeStoreApi.cs) (formerly ElsaThemeStoreApi.cs) | Themes addon internal endpoints, validation and JSON models. Keep reserved IDs, lifecycle/default constraints and asset limits; source modes were qualified in #3368. |
+| [StudioThemeStoreOptions.cs](../../Studio/src/essentials/Elsa.Studio.Hosting.Themes/StudioThemeStoreOptions.cs) (formerly Models/ThemeConfiguration.cs) | Public options in Themes retain existing Themes configuration keys plus explicit writable-store paths and typed source mode. |
 | [NuplaneStaticWebAssetsEndpoint.cs](https://github.com/elsa-workflows/elsa-foundation/blob/d55f5f5229ab4aaeaa728a85f6d41d9050af0a71/Studio/src/apps/Elsa.Studio.Web/NuplaneStaticWebAssetsEndpoint.cs) | Nuplane addon internal. Preserve URLs/revalidation/ranges while holding admission through package access; no unprotected physical-path result. |
-| [Services/ThemeConfigurationService.cs](../../Studio/src/apps/Elsa.Studio.Web/Services/ThemeConfigurationService.cs) | Themes addon internal root service; keep source/store precedence and validate options before IO. |
+| [ThemeDirectorySource.cs](../../Studio/src/essentials/Elsa.Studio.Hosting.Themes/ThemeDirectorySource.cs) (formerly Services/ThemeConfigurationService.cs) | Themes addon internal root service; keep source/store precedence and validate options before IO. Managed state remains separate from directory-enriched read projections. |
 | [StudioAssetCaching.cs](../../Studio/src/essentials/Elsa.Studio.Hosting/StudioAssetCaching.cs) | Hosting internal static/fallback behavior. Preserve and test actual revalidation; the asset spike's consumer headers are not delivered Hosting behavior. |
 | [StudioBackendManagementBridge.cs](../../Studio/src/essentials/Elsa.Studio.Hosting/StudioBackendManagementBridge.cs) | Hosting internal bridge/client/DTOs. Reuse existing Api backend options/status/routes; keep server-only credentials and fail-closed availability projection. |
 | [StudioBridgeAuth.cs](../../Studio/src/essentials/Elsa.Studio.Hosting/StudioBridgeAuth.cs) | Hosting internal named scheme/handlers/cache and stable permission policies. Root ownership, first-request checks and trusted query-token paths remain explicit. |
@@ -80,7 +81,7 @@ wrappers below; #3359 removes four duplicate HTTP/store/asset adapters. Removed 
 | [StudioRuntimeScript.cs](../../Studio/src/essentials/Elsa.Studio.Hosting/StudioRuntimeScript.cs) | Hosting internal. Retain the explicit allowlist/global name and existing configuration keys. No arbitrary IConfiguration serialization or browser management key. |
 | [StudioShellActivation.cs](../../Studio/src/essentials/Elsa.Studio.Hosting/StudioShellActivation.cs) | Hosting internal selected-shell activation before routing/authorization. Preserve best-effort static availability; pin shell-service use and handle lookup/disposal races. |
 | [StudioShellFeatureConfigurationStore.cs](https://github.com/elsa-workflows/elsa-foundation/blob/d55f5f5229ab4aaeaa728a85f6d41d9050af0a71/Studio/src/apps/Elsa.Studio.Web/StudioShellFeatureConfigurationStore.cs) | Nuplane addon internal implementation of the existing store contract; configure the same shell/file the host uses, keep the shared gate/atomicity, revisions and deterministic reload. Remove app-specific snapshots/exceptions where shared contracts replace them. |
-| [ThemeStoreStudioFeatures.cs](../../Studio/src/apps/Elsa.Studio.Web/ThemeStoreStudioFeatures.cs) | Themes addon. Keep IDs ThemeStoreCore, ThemePicker and ThemeManagement and their dependency/gating behavior. Feature classes remain public for framework discovery; name/helper/DTO implementation stays internal. |
+| [ThemeStoreStudioFeatures.cs](../../Studio/src/essentials/Elsa.Studio.Hosting.Themes/ThemeStoreStudioFeatures.cs) | Themes addon. Keep IDs ThemeStoreCore, ThemePicker and ThemeManagement and their dependency/gating behavior. Feature classes remain public for framework discovery; name/helper/DTO implementation stays internal. |
 
 CShells 0.0.31 uses Assembly.GetExportedTypes in
 [FeatureDiscovery](https://github.com/valence-works/cshells/blob/b7611aadb49789d3b282749df18ffe68d0eacec5/src/CShells/Features/FeatureDiscovery.cs).
@@ -127,7 +128,7 @@ any intended intermediate-package/PrivateAssets graph separately. A separately n
 supported customization; normal same-path overlays collide in the SDK. Preserve actual caching behavior against
 emitted filenames, not an assumption that every bundle is hashed.
 
-## Public composition API to implement
+## Public composition API
 
 Keep the public surface limited to consumer composition, configuration and required framework feature types.
 The target entry points are:
@@ -149,7 +150,7 @@ provides BuiltInsOnly, DirectoryOnly and AddToBuiltIns for typed callbacks/valid
 cache, store implementation, reload observer, generic writer or duplicate feature-management contracts.
 
 A basic custom host using Dashboard is this target code, with references to Hosting and the existing Dashboard
-package. It is normative planned API usage; it becomes executable product code in the implementation/consumer leaves.
+package. It is the accepted composition shape, now exercised by the standalone sample and independent consumer qualification.
 
 ```csharp
 using CShells.DependencyInjection;
@@ -261,7 +262,7 @@ buffer sizes/concurrency or qualify protected streaming. Keep the final full bro
 #3356 aligns the selected CShells/Nuplane/manifest families and removes the three local wrappers. #3357 implements
 Hosting boot/discovery/runtime/middleware and the scope/configuration cases; #3358 implements auth/bridge preservation.
 #3359 implements the optional admin adapters, validation/stores and safe pruning. #3368 fixes source modes before
-#3360 moves that implementation into Themes; add that dependency when this contract is accepted. #3361 owns frontend source/build/archives; #3362 makes Web thin; #3363/#3364 prove
+#3360 moves that implementation into Themes and adopts the public addon in Web, preserving the #3368 dependency. #3361 owns frontend source/build/archives; #3362 makes Web thin; #3363/#3364 prove
 actual package-only/default/custom-frontend/custom-module/optional/auth/storage journeys. #3365 inventories the
 full dependency/asset closure and automates both qualification profiles. #3366 supplies final guidance and exit audit.
 

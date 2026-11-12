@@ -1,0 +1,44 @@
+{
+  "preIncrementSourceRevision": "0cbcb86269cf5ac1868c397e43a97d458a08f9b9",
+  "sourceSha256": {
+    "Essentials/src/Activities/DispatchWorkflow/Runtime/Activities/DispatchWorkflow.cs": "b2e176eb3bd6d1e1ac928abbb41eba51ca0fe76b8227e5b2ad5dfc3f93c037ad",
+    "Essentials/src/Activities/DispatchWorkflow/Runtime/DispatchWorkflowRuntimeFeature.cs": "c93a9a4d005dcbdd5f308c89084a3172a0d3ce6c974e6cb5afe5d034f47c9c49",
+    "Essentials/src/Activities/DispatchWorkflow/Runtime/Services/ChildStartExecutor.cs": "85923e4e75ff0164b7f6ff8c288b288fe5c5166c07a8ca8c1d28b75ad4868a57",
+    "Essentials/src/Activities/DispatchWorkflow/Runtime/Services/WorkflowDispatchControlBoundary.cs": "f0495f88b92c3f5726791feb7e815e575396212fe6c356ba3c788edc5a9fb997",
+    "Essentials/src/Activities/DispatchWorkflow/Runtime/Services/WorkflowDispatchControlBoundaryInitializer.cs": "c96c8b73dcdcf5a8803616a7c1a01a334ae5096e4c85cb83b1d73a8bd6f58abf",
+    "Essentials/src/Workflows/Publishing/Elsa.Workflows.Publishing/Services/ExecutableNodeCompiler.cs": "9b3abfaafa83893d68959d7d97479f0a6ea66919cd014e76332df88071b5cfa3",
+    "Essentials/src/Workflows/Runtime/Core/Attributes/ActivityChildControlConsumerAttribute.cs": "1d06a6a55ec47d64bc1bb7db663e23aaae74832807979c96136348cfd552eca7",
+    "Essentials/src/Workflows/Runtime/Core/Constants/RuntimeMetadataKeys.cs": "b93fcd5387e333000261804ee8e9507d0cbfacd998641a59372ae70a1e550b94",
+    "Essentials/src/Workflows/Runtime/Core/Contracts/IRuntimeWorkflowControlBoundary.cs": "3a18afccbdd08afe7c75865080a464a5cef6e64ad2fb5146368d7175ae9f5ca0",
+    "Essentials/src/Workflows/Runtime/Core/Exceptions/WorkflowControlBoundaryException.cs": "b095e2f2fbd7a09a5756a251adc3a560e01b52016b86529ade5e5af239570a13",
+    "Essentials/src/Workflows/Runtime/Core/Models/RuntimeChildControl.cs": "f94b5634281f4a4995313fd5b92105fdcc4e4d5007b4d8f423343fddca6bf586",
+    "Essentials/src/Workflows/Runtime/Core/Models/RuntimeChildControlTarget.cs": "37b73586c549f58231f3001b4f07842c7982245940a29c3374cd4462f9da1c42",
+    "Essentials/src/Workflows/Runtime/Core/PublicAPI.Unshipped.txt": "b295ba8611916656fb97afe0f2ed3ea1edfcc68dd4137cf5f79014c0b0525133",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Incidents/StartCommandExecution.cs": "c19f092efa98b3e20338057aff471e5b59306ed271ae7a90b5eec1ad21ef06e0",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/WorkHandlers/WorkflowCheckpointSchedulerWorkHandler.cs": "67532ff22ad768c7a6d8bc08659634d4b00cc5e9c9a5324968bf0877c845b095",
+    "Essentials/tests/Activities/DispatchWorkflow/Tests/DispatchWorkflowRuntimeTestFixture.cs": "0c8d2520734c15086e4c5fcd97a49443d226010013ef876c16e62c42834cb0d8",
+    "Essentials/tests/Activities/DispatchWorkflow/Tests/WorkflowControlBoundaryTests.cs": "89d47805e799efb3b17110fe9fd0eea50dff5df8a979474ad32e1e5c5169b49f",
+    "Essentials/tests/Workflows/Publishing/Api/Tests/WorkflowExecutableCompilerTests.cs": "69cf985b6845eaaaa74587fce5fe35ecb29b024582ece402e1ce70bd1ab8fb87"
+  },
+  "tests": {
+    "targetedBoundaryAdmission": 34,
+    "dispatchWorkflowWhole": 274,
+    "publishingApiWhole": 863,
+    "workflowsRuntimeWhole": 2610,
+    "failed": 0,
+    "skipped": 0
+  },
+  "controls": [
+    "Actual initial Execute sees admitted Started and exact target",
+    "Ordinary actual child sees no capability",
+    "Missing workflow-system hint was red before explicit preservation",
+    "Omit root scheduling provenance: exact3 negative cases red; restored green"
+  ],
+  "trackedCoreApiDeclarationsAdded": 25,
+  "limits": [
+    "Admission/address resolution only",
+    "No producer staging/outbox/inbox/BPMN consumer yet",
+    "No arbitrary root alteration qualification",
+    "Not final complete-PR review"
+  ]
+}

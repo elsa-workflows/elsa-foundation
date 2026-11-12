@@ -6,7 +6,41 @@ namespace Elsa.Activities.Bpmn.Interchange.Models;
 public sealed record BpmnImportAnalysis(
     IReadOnlyCollection<string> ProcessIds,
     IReadOnlyDictionary<string, int> ElementCounts,
-    IReadOnlyCollection<BpmnImportIssue> Issues);
+    IReadOnlyCollection<BpmnImportIssue> Issues)
+{
+    /// <summary>Foundation binding assessment, distinct from the library's ability to retain the BPMN descriptor.</summary>
+    public IReadOnlyList<BpmnImportCapability> Capabilities { get; init; } = [];
+
+    /// <summary>Whether the binding references were checked against the visible host activity catalog.</summary>
+    public bool HostInventoryVerified { get; init; }
+
+    /// <summary>Verified available bindings without degradation; normal publication validation still applies.</summary>
+    public bool CanExecute => HostInventoryVerified && Capabilities.All(capability => capability.Availability == BpmnImportCapabilityAvailability.Available) &&
+                              Issues.All(issue => issue.Severity == BpmnImportIssueSeverity.Info);
+}
+
+public sealed record BpmnImportCapability(string ElementId, string Capability, BpmnImportCapabilityAvailability Availability, string Reason)
+{
+    public string? BindingRef { get; init; }
+
+    /// <summary>The exact binding the document retained for this task, proposed to the author; null when the document retained none.</summary>
+    public BpmnRetainedBinding? RetainedBinding { get; init; }
+}
+
+/// <summary>
+/// A task binding a document carried in <c>elsa:taskBinding</c>: the exact activity version and the keys of its literal
+/// inputs. Import proposes it and keeps the task <see cref="BpmnImportCapabilityAvailability.RequiresBinding"/> until the
+/// author confirms the element through <see cref="BpmnImportOptions.ConfirmedBindings"/>.
+/// </summary>
+public sealed record BpmnRetainedBinding(string ActivityVersionId, IReadOnlyList<string> InputKeys);
+
+public enum BpmnImportCapabilityAvailability
+{
+    Unknown,
+    Available,
+    RequiresBinding,
+    Unsupported
+}
 
 public sealed record BpmnImportIssue(
     BpmnImportIssueSeverity Severity,
@@ -32,6 +66,12 @@ public sealed record BpmnImportOptions
 
     /// <summary>Prefix for generated activity/element node ids; defaults to the process id.</summary>
     public string? NodeIdPrefix { get; init; }
+
+    /// <summary>
+    /// Element ids whose retained task binding the author confirmed. Only these become bound children; every other retained
+    /// binding stays a proposal. A confirmed binding is still checked against the visible host catalog.
+    /// </summary>
+    public IReadOnlyCollection<string> ConfirmedBindings { get; init; } = [];
 }
 
 /// <summary>
@@ -63,3 +103,13 @@ public sealed record BpmnExportOptions
     /// <summary>The BPMN process id to emit; defaults to the node id of the exported process.</summary>
     public string? ProcessId { get; init; }
 }
+
+/// <summary>The exported document and every task binding left out of it, each with why.</summary>
+public sealed record BpmnExportResult(string Xml, IReadOnlyList<BpmnExportOmission> Omissions);
+
+/// <summary>
+/// A task binding export did not carry. <see cref="Code"/> is one of <c>catalog-unavailable</c>, <c>unresolvable-version</c>,
+/// <c>unresolvable-input</c>, <c>duplicate-input</c>, <c>sensitive-input</c>, <c>non-literal-input</c>, <c>unsupported-input-setting</c>,
+/// <c>unsupported-output</c>, <c>structured-child</c>, <c>oversized-binding</c> or <c>ambiguous-element</c>; <see cref="ReferenceKey"/> names the input when one input decided it.
+/// </summary>
+public sealed record BpmnExportOmission(string ElementId, string Code, string Message, string? ReferenceKey = null);

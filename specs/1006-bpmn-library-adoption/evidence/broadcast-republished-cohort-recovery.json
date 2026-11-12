@@ -1,0 +1,123 @@
+{
+  "schemaVersion": 1,
+  "task": "T051 bounded saved old publication, actual post-acceptance collection, republish and standard-host recovery; overall qualification remains open",
+  "sourceParentCommit": "d909b25ae28d87e359889063a91b979bf8ff8e4a",
+  "filesSha256": {
+    "e2e-tests/bpmn/RecoveryProbe/BpmnRecoveryProbeFeature.cs": "9de5657e1fc3c3143d17d10f6569146a0b5abb89b59cf8e40a2882308ca48185",
+    "e2e-tests/bpmn/RecoveryProbe/README.md": "77ee6b4e2bd756671ecb8eeb8856d054a236ad6e4e18ec8c9e91a37054c2e949",
+    "e2e-tests/bpmn/Test-BpmnBroadcastRecovery.ps1": "fea200cce40a82ba55d721f98d0e3155739925f4d916af080dfbca7a9356e759",
+    "e2e-tests/bpmn/Test-BpmnPublicationRetentionControls.ps1": "19966173b810fbf1413a1c518e85934dba93aa3ff819807c61e50bb01b4fb4fa",
+    "e2e-tests/bpmn/test_inspect_broadcast_recovery.py": "726167eb50436c19bbbaa4b9205a9b689b69c07d7d8d926693cd2f9683d88de9",
+    "tools/bpmn/DeliveryRecoveryRead/Program.cs": "963b16c50d74d59ead444022d92d97e4308d924d1752f2f0554fba29fde9af62"
+  },
+  "hostReceiptsSha256": {
+    "broadcast-republished-cohort-host.json": "01d003b7bfcd5c997ec55f37bb18eb5605521dfa6a15a7e82899d7047882cf29",
+    "broadcast-republished-cohort-renewed-claim.json": "1947730d8ce23883a3b1602c598c3a39d0559d08b1406fea752173d93528ad25",
+    "broadcast-republished-cohort-after-source-commit.json": "d0072e8cc9c2381f26eb18b66d87bcec5f770e30793c1b2ed92e351c3d6eba41"
+  },
+  "sourceBindingsCheckedPerCase": 1381,
+  "checks": [
+    {
+      "name": "actual saved old publication/collection/republish/crash recovery",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "actual pre-dispatch renewal and committed-completion regressions",
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "actual extracted retention guard, two positive observations and nineteen invalid inputs",
+      "passed": 21,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "actual extracted renewal guard controls",
+      "passed": 9,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "checked source/publisher/material/reference observer controls",
+      "passed": 14,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "owned process controls",
+      "passed": 10,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "actual cleanup failure controls",
+      "passed": 3,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "separate locked probe, standard and reader builds",
+      "passed": 3,
+      "failed": 0
+    }
+  ],
+  "retention": {
+    "publicSameDefinitionSlotDistinctArtifactReplacement": true,
+    "oldSourceRetiredAndNoOtherLiveReference": true,
+    "oldStartNotYetExecutedBeforeOrAfterActualCollection": true,
+    "noOtherOldExecutionOrDispatchRoots": true,
+    "allExecutableDependencyAndTemplateHashRoutesAbsent": true,
+    "installedSingletonTemplateCountBeforeCollection": 33,
+    "templateDirectClosedAndMetadataEdgesAbsent": true,
+    "templateIdentityAliasExcluded": true,
+    "actualSelectedCollectorSupportsRetention": true,
+    "actualGraceSeconds": 0,
+    "stagingProtectedBySchedulingGateUntilAllRootWritesFinish": true,
+    "unrelatedControlArtifactAndReferencePhysicallyPresentBeforeAndDeletedAfter": true,
+    "entireCheckedSourceProjectionUnchangedAcrossCollectionAndOwnedCrash": true,
+    "retiredPublicExecuteStatus": 409,
+    "retiredPublicExecuteProblem": {
+      "type": "https://elsa.dev/problems/runtime-request",
+      "title": "Runtime request failed",
+      "status": 409,
+      "detail": "Workflow executable artifact 'artifact-fd96dcbbe5ee' has no live Published reference.",
+      "errors": null
+    },
+    "standardDifferentOwnerFenceAfterCrash": 2,
+    "recoveredExactOriginalArtifactHashSourcePublicationAndVersion": true,
+    "replacementAndLaterBindingUnstarted": true,
+    "oppositeGcAcceptanceRaceQualified": false,
+    "productionRetentionPolicyQualified": false
+  },
+  "verificationIterations": [
+    "binding observation property typo fixed before execution",
+    "first actual case refused an overstrict no-template assumption; checked Workbench inventory has standalone catalog templates, so qualification now excludes all alternative edges and identity aliases while allowing those singleton templates",
+    "second actual case passed; explicit required-inventory/projection guards and nineteen invalid-input controls were then added",
+    "portability gate found machine-local catalog display SourceId paths before publication; the reader now omits only that unnecessary display field while retaining full checked validation and exact identity projections, then all three cases reran against the final reader"
+  ],
+  "supportingQualification": {
+    "deliveredCommit": "fc5948641590f4f74d79e234a2a3f8f91f5b81d6",
+    "receipt": "broadcast-competing-proposal-recovery.json",
+    "architecturePassed": 590,
+    "ServerLockedRestoreAndMapCheckPassed": true,
+    "inheritedNotRerun": true,
+    "reason": "test-only feature/observer/scenario changes; no production or project graph changes"
+  },
+  "reviews": {
+    "type": "three independent component source/actual/portable audits; not full PR",
+    "remainingActionable": []
+  },
+  "frozenAuthoringFingerprintSha256": "41aa0bb979ea46fc2533b057e3677f408ab54c3411fecfafaa238a2adae38c92",
+  "productionSourceChanged": false,
+  "remainingGates": [
+    "supported redrive, same-artifact behavior and scopes, remaining retention/GC race orders and other T051",
+    "remaining T045/native-composite, historical upgraded-host recovery and final current Studio",
+    "legacy writer/duplicate semantics deletion and guards, full-PR review, required exact-head checks/protected merge/resulting-main",
+    "separate ADR0063 and independent production #2898/#2907/program evidence; Orleans/task-runner deferred"
+  ],
+  "fullPrRounds": 0
+}

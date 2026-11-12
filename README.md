@@ -64,7 +64,9 @@ For faster inner-loop work, open or build one of the committed
 the completion gate.
 
 To build and run the backend from source, check readiness, and execute a sample workflow, follow the
-[backend source quickstart](docs/contributing/backend-source-quickstart.md).
+[backend source quickstart](docs/contributing/backend-source-quickstart.md). To pair that Workbench with
+Studio from `Studio/` in this repository, follow the
+[Studio source quickstart](Studio/docs/contributing/studio-source-quickstart.md).
 
 ## Supported management APIs
 
@@ -72,13 +74,19 @@ Management-client APIs are owned by their Elsa domains and can be composed direc
 `Elsa.Workbench` is a reference composition, not the implementation home of a server-wide management facade.
 
 The canonical areas are Workflow Design, Activity Design, Expressions, Publishing, Runtime, and
-[API Capabilities](Essentials/src/Api/Capabilities/README.md). An authenticated client loads one shell-relative
+[API Capabilities](Essentials/src/Api/Capabilities/Elsa.Api.Capabilities/README.md). An authenticated client loads one shell-relative
 `GET /capabilities` document, then follows the advertised domain links. Omitted domain features advertise no
 capability and expose no routes; endpoint-level action permissions remain authoritative.
 
 See the [domain-owned API specification](specs/220-domain-owned-apis/spec.md),
 [OpenAPI contract](specs/220-domain-owned-apis/contracts/management-api.openapi.yaml), and
 [validation quickstart](specs/220-domain-owned-apis/quickstart.md) for composition and compatibility details.
+
+Opt-in [direct BPMN hosting](Essentials/src/Activities/Bpmn/Api/README.md) adds model publication,
+execution, human completion, cancellation and service-incident retry APIs. Native workflows can embed a
+published model with `RunBpmn`; the [host adapter](Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/README.md)
+describes its binding profiles, compatibility and recovery evidence. Existing Studio BPMN authoring is
+preserved; first-class direct-model Studio support remains tracked by the execution-model program.
 
 ## Run with Docker
 

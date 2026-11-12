@@ -27,7 +27,21 @@ public sealed record ActivityAuthoringDescriptorView(
     /// Optional designer icon from <c>[Activity(Icon)]</c>: a lucide name, <c>asset:package/path</c>,
     /// or <c>ext:name</c>. Null when the activity does not declare one or the value was unsafe.
     /// </summary>
-    string? IconName = null);
+    string? IconName = null)
+{
+    /// <summary>Portable authoring facets, including collection-derived outcome rules; never runtime admission rules.</summary>
+    public IReadOnlyCollection<ActivityDesignFacet> DesignFacets { get; init; } = [];
+
+    /// <summary>Optional v1 elsa.activity-palette presentation hints; never runtime admission rules.</summary>
+    public JsonElement? PaletteHints { get; init; }
+
+    /// <summary>
+    /// The runtime type a compiled node carries for this CLR activity when it declares <c>public const string ActivityType</c>
+    /// (for example <c>Elsa.HttpEndpoint</c>, whose <see cref="ActivityTypeKey"/> is the CLR full name). Null when the activity
+    /// declares none, so the node's stamped type equals <see cref="ActivityTypeKey"/>.
+    /// </summary>
+    public string? RuntimeActivityType { get; init; }
+}
 
 /// <summary>
 /// Provenance of a persisted catalog entry: which reconciliation source produced the version

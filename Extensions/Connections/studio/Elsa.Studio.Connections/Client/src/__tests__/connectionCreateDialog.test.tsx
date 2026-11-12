@@ -2,7 +2,7 @@ import React from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { StudioDialogApi, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import { StudioHttpError, type StudioDialogApi, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { ConnectionCreateDialog, resolveApiKeyPlacement } from "../ConnectionCreateDialog";
 import { ConnectionsPage } from "../ConnectionsPage";
 import type { ConnectionDescriptorsResponse, ConnectionMetadata } from "../connectionTypes";
@@ -16,6 +16,79 @@ afterEach(() => {
 });
 
 describe("connection credential creation", () => {
+  it.each(["Backend API", "api/key", "café", "a".repeat(129), "   "])("explains and blocks invalid connection name %j", async name => {
+    const { container, calls } = renderApiKeyDialog();
+    await waitFor(() => container.textContent?.includes("Payments API") === true);
+    chooseSecret(container, "API key", "payments.api");
+    changeText(container, "Base URL", "https://api.example");
+    changeText(container, "Name", name);
+    const input = control<HTMLInputElement>(container, "Name");
+    flushSync(() => input.dispatchEvent(new FocusEvent("focusout", { bubbles: true })));
+    expect(input.getAttribute("aria-invalid")).toBe("true");
+    expect(document.getElementById(input.getAttribute("aria-describedby")!.split(" ").at(-1)!)?.textContent).toMatch(/required|128|Spaces are not allowed/);
+    expect(button(container, "Create").disabled).toBe(true);
+    flushSync(() => container.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
+    expect(calls.some(call => call.url === "/connections")).toBe(false);
+    expect(input.value).toBe(name);
+    changeText(container, "Name", "  Backend.API-1_test  ");
+    expect(button(container, "Create").disabled).toBe(false);
+    clickButton(container, "Create");
+    await waitFor(() => calls.some(call => call.url === "/connections"));
+    expect(calls.find(call => call.url === "/connections")?.body).toMatchObject({ name: "Backend.API-1_test" });
+  });
+
+  it.each(["name", "settings.allowedHosts", "settings.queryName"])("associates server %s errors and preserves inputs for correction", async field => {
+    let attempts = 0;
+    const postJson = vi.fn(async (url: string) => {
+      if (url === "/secrets/picker") return pickerResponse();
+      if (++attempts === 1) throw new StudioHttpError(400, "Correct the highlighted field.", { [field]: ["Use a valid value."] });
+      return createdConnection();
+    });
+    const { container } = renderDialog({ context: endpointContext(postJson), descriptors: apiKeyDescriptors });
+    await waitFor(() => container.textContent?.includes("Payments API") === true);
+    changeText(container, "Name", "retained.connection");
+    chooseSecret(container, "API key", "payments.api");
+    changeText(container, "Base URL", "https://api.example");
+    clickButton(container, "Create");
+    const label = field === "name" ? "Name" : field === "settings.queryName" ? "Query name" : "Allowed hosts";
+    await waitFor(() => container.textContent?.includes("Use a valid value.") === true);
+    expect(control(container, label).getAttribute("aria-invalid")).toBe("true");
+    await waitFor(() => document.activeElement === control(container, label));
+    expect(container.querySelector(".studio-advanced-section button")?.getAttribute("aria-expanded")).toBe(field === "name" ? "false" : "true");
+    expect(container.querySelector(".studio-advanced-section")?.textContent?.includes("Error")).toBe(field !== "name");
+    expect(control<HTMLInputElement>(container, "Name").value).toBe("retained.connection");
+    expect(control<HTMLSelectElement>(container, "Existing Secret for API key").value).toBe("payments.api");
+    expect(control<HTMLInputElement>(container, "Base URL").value).toBe("https://api.example");
+    expect(container.textContent).not.toContain(rawSecretValue);
+    const correction = control<HTMLInputElement>(container, label);
+    changeText(container, label, field === "name" ? "corrected.connection" : "api.example");
+    expect(control(container, label)).toBe(correction);
+    if (field === "settings.queryName") expect(document.activeElement).toBe(correction);
+    clickButton(container, "Create");
+    await waitFor(() => attempts === 2);
+  });
+
+  it("explains missing required credentials and clears their error when supplied", async () => {
+    const { container } = renderApiKeyDialog();
+    await waitFor(() => container.textContent?.includes("Payments API") === true);
+    const picker = control<HTMLSelectElement>(container, "Existing Secret for API key");
+    flushSync(() => picker.dispatchEvent(new FocusEvent("focusout", { bubbles: true })));
+    expect(picker.getAttribute("aria-invalid")).toBe("true");
+    expect(container.textContent).toContain("API key is required.");
+    chooseSecret(container, "API key", "payments.api");
+    expect(picker.getAttribute("aria-invalid")).not.toBe("true");
+  });
+
+  it("explains a missing descriptor-required setting after blur", () => {
+    const { container } = renderDialog({ descriptors: apiKeyDescriptorsWithAudience });
+    const input = control<HTMLInputElement>(container, "Audience (required)");
+    flushSync(() => input.dispatchEvent(new FocusEvent("focusout", { bubbles: true })));
+    expect(input.getAttribute("aria-invalid")).toBe("true");
+    expect(container.textContent).toContain("Audience is required.");
+    changeText(container, "Audience (required)", "payments");
+    expect(input.getAttribute("aria-invalid")).not.toBe("true");
+  });
+
   it("puts the required API key before optional settings and keeps the existing Secret path metadata-only", async () => {
     const { container, calls } = renderApiKeyDialog();
 

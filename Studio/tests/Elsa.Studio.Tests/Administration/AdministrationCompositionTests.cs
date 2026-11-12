@@ -3,6 +3,7 @@ using Elsa.Studio.Hosting;
 using Elsa.Studio.Hosting.Nuplane;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -43,7 +44,9 @@ public sealed class AdministrationCompositionTests
         var preview = await maintenance.PruneAsync(new());
         Assert.False(preview.InventoryComplete);
         Assert.Equal("Unknown", preview.ProtectionKnowledge);
-        Assert.Contains(preview.Diagnostics, diagnostic => diagnostic.Code == "EnrollmentRequired");
+        // Linux image filesystems may refuse native inspection before enrollment is inspected.
+        Assert.Contains(preview.Diagnostics, diagnostic => diagnostic.Code == "EnrollmentRequired"
+            || OperatingSystem.IsLinux() && diagnostic.Code == "UnsupportedFilesystem");
     }
 
     [Fact]
@@ -73,9 +76,20 @@ public sealed class AdministrationCompositionTests
 internal sealed class AdministrationHost : IAsyncDisposable
 {
     private readonly bool _keepFiles;
-    private AdministrationHost(string? root, bool keepFiles)
+    private WebApplicationBuilder? _builder;
+    private AdministrationHost(string? root, bool keepFiles, bool nativeStore)
     {
-        Root = root ?? Directory.CreateTempSubdirectory("studio-admin-").FullName;
+        if (root is not null) Root = root;
+        else if (nativeStore && OperatingSystem.IsLinux())
+        {
+            // Nuplane qualifies ext4 on Linux. Keep its integration roots on the
+            // workspace volume rather than an image-dependent /tmp mount. The
+            // native preview below still refuses an unsupported filesystem.
+            var workspace = Environment.GetEnvironmentVariable("RUNNER_TEMP");
+            if (string.IsNullOrWhiteSpace(workspace)) workspace = AppContext.BaseDirectory;
+            Root = Directory.CreateDirectory(Path.Combine(workspace, $"studio-admin-{Guid.NewGuid():N}")).FullName;
+        }
+        else Root = Directory.CreateTempSubdirectory("studio-admin-").FullName;
         _keepFiles = keepFiles;
     }
     public string Root { get; }
@@ -84,12 +98,12 @@ internal sealed class AdministrationHost : IAsyncDisposable
     public string ShellsFile => Path.Combine(Root, "config", "studio-shells.json");
     public const string Credential = "private-feature-credential-sentinel";
 
-    public static async Task<AdministrationHost> StartAsync(Action<NuplaneBuilder>? configureNuplane = null, bool addAdministration = true, bool managedFeatures = false, Action<WebApplicationBuilder>? beforeStudio = null, Action<WebApplicationBuilder>? afterStudio = null, bool nativeStore = false, bool loadPackages = false, Action<WebApplication>? configurePipeline = null, string? root = null, bool keepFiles = false, Action<StudioNuplaneOptions>? configureAdministration = null)
+    public static async Task<AdministrationHost> StartAsync(Action<NuplaneBuilder>? configureNuplane = null, bool addAdministration = true, bool managedFeatures = false, Action<WebApplicationBuilder>? beforeStudio = null, Action<WebApplicationBuilder>? afterStudio = null, bool nativeStore = false, bool loadPackages = false, Action<WebApplication>? configurePipeline = null, string? root = null, bool keepFiles = false, Action<StudioNuplaneOptions>? configureAdministration = null, Action<IEndpointRouteBuilder>? mapAdministration = null, Action<StudioBuilder>? configureStudio = null)
     {
-        var host = new AdministrationHost(root, keepFiles);
+        var host = new AdministrationHost(root, keepFiles, nativeStore);
         try
         {
-            var builder = WebApplication.CreateSlimBuilder(new WebApplicationOptions { ContentRootPath = host.Root, EnvironmentName = Environments.Production });
+            var builder = host._builder = WebApplication.CreateSlimBuilder(new WebApplicationOptions { ContentRootPath = host.Root, EnvironmentName = Environments.Production });
             builder.Logging.ClearProviders();
             builder.WebHost.UseTestServer();
             builder.Configuration.Sources.Clear();
@@ -106,6 +120,7 @@ internal sealed class AdministrationHost : IAsyncDisposable
             else builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?> { ["CShells:Shells:Authoring:Features:StudioApi"] = "true" });
             beforeStudio?.Invoke(builder);
             var studio = builder.AddElsaStudio(options => { options.ShellName = "Authoring"; options.ShellsFile = managedFeatures ? "config/studio-shells.json" : null; });
+            configureStudio?.Invoke(studio);
             if (addAdministration) studio.AddElsaStudioNuplane(configureAdministration, configureNuplane: nuplane =>
             {
                 if (nativeStore)
@@ -123,7 +138,11 @@ internal sealed class AdministrationHost : IAsyncDisposable
             configurePipeline?.Invoke(host.App);
             host.App.UseElsaStudio();
             host.App.MapElsaStudio();
-            if (addAdministration) host.App.MapElsaStudioNuplane();
+            if (addAdministration)
+            {
+                if (mapAdministration is null) host.App.MapElsaStudioNuplane();
+                else mapAdministration(host.App);
+            }
             if (nativeStore)
             {
                 Directory.CreateDirectory(Path.Combine(host.Root, "native-store", "installs"));
@@ -132,9 +151,9 @@ internal sealed class AdministrationHost : IAsyncDisposable
                 if (preview.Membership == "Unenrolled")
                 {
                     var enrolled = await maintenance.EnrollAsync(new("default", preview.RootIdentity!, 1, true, ["studio"], []));
-                    Assert.Equal("Complete", enrolled.Status);
+                    Assert.True(enrolled.Status == "Complete", $"Native store enrollment: {enrolled.Status ?? "<unknown>"}; {string.Join("; ", enrolled.Diagnostics)}");
                 }
-                else Assert.Equal("Complete", preview.Membership);
+                else Assert.True(preview.Membership == "Complete", $"Native store preview: {preview.Membership ?? "<unknown>"}; {string.Join("; ", preview.Diagnostics)}");
             }
             await host.App.StartAsync();
             host.Client = host.App.GetTestClient();
@@ -154,6 +173,13 @@ internal sealed class AdministrationHost : IAsyncDisposable
         {
             try { await App.StopAsync(); }
             finally { await App.DisposeAsync(); }
+        }
+        else if (_builder is not null)
+        {
+            // Build transfers these resources to the application. A refused composition
+            // never makes that transfer, so the fixture must release both owners.
+            _builder.Configuration.Dispose();
+            (_builder.Environment.ContentRootFileProvider as IDisposable)?.Dispose();
         }
         if (!_keepFiles) Directory.Delete(Root, recursive: true);
     }

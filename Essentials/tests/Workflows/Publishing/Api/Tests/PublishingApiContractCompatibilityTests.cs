@@ -62,6 +62,7 @@ public sealed class PublishingApiContractCompatibilityTests
         // JSON wire shape did not. #1659 moved both on purpose: the two workflow preflight views gained the
         // trailing nullable TargetSlotOwner and PublicationSlotOwnerView joined the surface, an additive wire change.
         // #2862 adds optional start selection/action fields and twelve Test Drive wire contracts.
+        // Draft Test Runs add optional Layout coordinates to the unshipped request constructor; executable behavior stays unchanged.
         // #1407 adds the nullable Descriptor init property to trigger conflicts, preserving the positional contract.
         var legacyTypes = ContractTypes.Where(type => type != typeof(ActivityPublishingDiagnosticView) &&
                                                        type != typeof(ActivityPublishingProblemDetails) &&
@@ -71,10 +72,11 @@ public sealed class PublishingApiContractCompatibilityTests
         var legacyHash = PublicShapeHash(legacyTypes);
         var actualHash = PublicShapeHash(ContractTypes);
         Assert.True(
-            legacyHash == "5fc3b46d8e356ae9057b60e70499351717a1dc1866ce2866996df50c8bcfbbca",
+            legacyHash == "f150e2f01767f0fc6f3eb30de9fcd169517a6268dbe83648bea18bb899df3e6b",
             $"The Publishing API legacy public-shape hash changed to {legacyHash}; complete surface {actualHash}.");
         Assert.True(
-            actualHash == "40880ecd14c21f1393d6fe682ac27a2ad2f1974d9e4ad1e3014b686f2153c829",
+            // #3922 adds only null-omitted AuthoredPath to the modern located diagnostic; legacy surface above is unchanged.
+            actualHash == "637bc06baf5a03d0955b94a5746abc80267bf6cf4c1a3ca0784cbc353e91f117",
             $"The Publishing API public-shape hash changed to {actualHash}.");
     }
 

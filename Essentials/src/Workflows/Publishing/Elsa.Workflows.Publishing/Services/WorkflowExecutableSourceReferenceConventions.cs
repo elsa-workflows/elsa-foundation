@@ -42,14 +42,25 @@ public static class WorkflowExecutableActivityPresentationSidecar
     public static IReadOnlyList<WorkflowExecutableActivityPresentationRecord> CopyFrom(
         IEnumerable<ActivityPresentationRecord>? records,
         WorkflowExecutable executable)
+        => CopyFrom(records, executable, null);
+
+    public static IReadOnlyList<WorkflowExecutableActivityPresentationRecord> CopyFrom(
+        IEnumerable<ActivityPresentationRecord>? records,
+        WorkflowExecutable executable,
+        IEnumerable<WorkflowExecutableActivityPresentationRecord>? placedPresentation)
     {
         var byAuthoredId = executable.Nodes
             .Append(executable.RootActivity)
             .DistinctBy(node => node.ExecutableNodeId, StringComparer.Ordinal)
             .Where(node => !string.IsNullOrWhiteSpace(node.AuthoredActivityId))
+            .Where(node => !node.Metadata.ContainsKey("activity.templateNodeId") ||
+                StringComparer.Ordinal.Equals(node.ExecutableNodeId, node.AuthoredActivityId) ||
+                StringComparer.Ordinal.Equals(node.ExecutableNodeId, executable.RootActivity.ExecutableNodeId))
             .GroupBy(node => node.AuthoredActivityId, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);
-        var result = new List<WorkflowExecutableActivityPresentationRecord>();
+        var executableIds = executable.Nodes.Append(executable.RootActivity)
+            .Select(node => node.ExecutableNodeId).ToHashSet(StringComparer.Ordinal);
+        var result = (placedPresentation ?? []).Where(record => executableIds.Contains(record.ExecutableNodeId)).ToList();
         foreach (var record in ActivityPresentationRecord.NormalizeCollection(records))
         {
             if (!byAuthoredId.TryGetValue(record.NodeId, out var nodes))
@@ -61,7 +72,8 @@ public static class WorkflowExecutableActivityPresentationSidecar
                 record.Description)));
         }
 
-        return result;
+        // The workflow's call-site name takes precedence over a template root's name.
+        return result.GroupBy(record => record.ExecutableNodeId, StringComparer.Ordinal).Select(group => group.Last()).ToArray();
     }
 }
 

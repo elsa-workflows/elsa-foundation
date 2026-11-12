@@ -38,8 +38,8 @@ Independent test: public authentication inside shell scopes, manual reload and a
 - [x] T010 Remove Web's two superseded files/manual registration/mapping from Studio/src/apps/Elsa.Studio.Web/; update remaining policy users to the Api contract.
 - [x] T011 Run the whole Studio project, public behavior matrix and causal controls; restore sources exactly and compare discovery/execution counts.
 - [x] T012 Run packed Api consumer, isolated actual Web smoke, architecture/maps/inventory/locked-restore gates; retain precise evidence on the PR.
-- [ ] T013 Update Hosting README and docs/reports/studio-hosting-contract.md, reconcile implemented spec status, complete independent review and exact-head CI.
-- [ ] T014 Verify actual resulting main, then close #3358 and update Program #3340 board/evidence.
+- [x] T013 Update Hosting README and docs/reports/studio-hosting-contract.md, reconcile implemented spec status, complete independent review and exact-head CI.
+- [x] T014 Verify actual resulting main, then close #3358 and update Program #3340 board/evidence.
 
 ## Dependencies and execution
 
@@ -47,3 +47,7 @@ T001 -> T002 -> US1/US2 -> root sharing/lifetime qualification -> Web adoption -
 Auth and bridge fixture rewiring can be prepared independently once the public common entry points exist, but
 one implementation leaf remains active. Do not delegate implementation or create duplicate issues for this checklist.
 All three stories are required; no final browser/optional/package-only completion claim belongs to this leaf.
+
+## Final record reconciliation
+
+T013, T014 were delivered through [the reviewed delivery receipt](https://github.com/elsa-workflows/elsa-foundation/pull/3383) and merged commit `2fd983021891056b092e69914073cfb4c38862af`, verified as an ancestor of current main. #3366 reconciles these previously stale checkboxes from actual delivery/main/candidate evidence; it does not invent a new execution or formal approval. The current organization protocol governs review/merge authorization.

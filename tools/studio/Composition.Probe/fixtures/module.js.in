@@ -1,0 +1,18 @@
+import React from "react";
+import { createHttpClient } from "@elsa-workflows/studio-sdk";
+
+export const moduleMarker = "__MARKER__";
+
+export function register(api) {
+  if (typeof createHttpClient !== "function") throw new Error("The public shared Studio SDK is unavailable");
+  const path = "/qualification/custom";
+  api.navigation.add({ id: "acme-composition", label: "Acme module", path, order: 20, placement: "main" });
+  for (const route of ["/", path]) {
+    api.routes.add({
+      id: `acme-composition:${route}`, label: "Acme module", path: route,
+      component: () => React.createElement("section", { className: "acme-composition-proof" },
+        React.createElement("h2", null, "Acme module"),
+        React.createElement("p", { "data-testid": "acme-module-marker" }, moduleMarker))
+    });
+  }
+}

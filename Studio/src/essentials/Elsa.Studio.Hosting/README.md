@@ -96,7 +96,8 @@ Browser source/tool inputs are excluded from .NET content and packages.
 The reference Web project removes its obsolete generated wwwroot/studio subtree during build so existing
 checkouts adopt Hosting's payload without retaining a conflicting copy.
 
-Optional administration/themes and final thin distribution remain their separately scoped program leaves.
+Optional administration/themes are separate public packages; the thin reference distribution composes the same APIs.
+See the [standalone package-host recipe and migration guide](../../../docs/custom-hosting.md) for explicit candidate versions/preview sources, module selection and supported limits.
 The package declares no domain events, contributor contracts or scheduled tasks; its
 private resolver implementations use existing CShells contracts. Public composition/options/coordination and
 Api policy surface are tracked. Tests use public APIs/HTTP without a production friend; see
@@ -109,3 +110,18 @@ shell configuration as host-owned/read-only, even if a previously loaded file st
 and other installed options remain unchanged. Addons must also check actual configuration-provider ownership
 before writing; a file path alone does not establish that its values control the running shell.
 
+
+## Branding
+
+The standard browser supports public host branding and independent Linen/palette/appearance defaults.
+See the [integrator guide](../../../docs/branding.md) for configuration, image-led login layouts,
+custom artwork, replacement presentation and shared module styling.
+
+
+## Backend connections
+
+Base Hosting connects to the single `Studio:BackendBaseUrl` endpoint and discovers its API capabilities. It has no profile store or management UI. `Studio:BackendId` optionally names the configured connection (default `legacy`). A resource link naming another backend is refused before any resource request; returning Home discards that stale resource link.
+
+Install and enable the optional [Backends module](../Elsa.Studio.Backends/README.md) for profiles, selection and Settings → Backends. Disabling its CShells feature removes its server API and public settings. Omitting its package also removes its frontend assets and Preferences dependency. `Studio:Api:DisabledModuleIds` only suppresses the client module and its projected settings; it does not disable the server feature.
+
+See [module connection extensions](../../../docs/connection-extensions.md) for runtime settings, authority replacement and frontend lifecycle contracts.

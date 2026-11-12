@@ -69,6 +69,9 @@ internal static class StructuralParentEvaluationSupport
         ActivityInputSnapshot freshSnapshot;
         try
         {
+            // Re-materialization reads the node's inputs again, member reads (#4078) included, so it is guarded as
+            // activity start and bookmark resume are: a runtime that cannot select members refuses here.
+            SchedulerWorkHandlerHelpers.EnsureMemberSelectionSupported(executable, serviceProvider);
             freshSnapshot = await inputRematerializer.MaterializeAsync(
                 executable,
                 executableNode,
@@ -323,7 +326,8 @@ internal static class StructuralParentEvaluationSupport
         IReadOnlyCollection<ActivitySubtreeCancellationPlan> subtreeCancellations,
         IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot> valueSnapshots,
         CancellationToken cancellationToken,
-        IReadOnlyCollection<IncidentState>? incidentChanges = null)
+        IReadOnlyCollection<IncidentState>? incidentChanges = null,
+        StructuralChildControlContribution? childControlContribution = null)
     {
         var occurredAt = timeProvider.GetUtcNow();
         var (workItem, activityExecutionId, metadata) = (source.WorkItem, source.Payload.ActivityExecutionId, source.Metadata);
@@ -401,7 +405,7 @@ internal static class StructuralParentEvaluationSupport
                 .ToArray(),
             Metadata: metadata);
 
-        await checkpointCommitter.CommitAsync(commit, cancellationToken);
+        await checkpointCommitter.CommitAsync(childControlContribution?.Apply(commit) ?? commit, cancellationToken);
     }
 
     /// <summary>
@@ -414,13 +418,19 @@ internal static class StructuralParentEvaluationSupport
         IActivityCommandPayload payload,
         ActivityExecutionState state,
         IReadOnlyCollection<string> outcomeNames,
-        DateTimeOffset completedAt)
+        DateTimeOffset completedAt,
+        string? completedChildActivityExecutionId = null)
     {
         var normalizedOutcomeNames = SchedulerWorkHandlerHelpers.NormalizeOutcomeNames(outcomeNames, defaultToDone: true);
         var metadata = state.Metadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
         metadata[RuntimeMetadataKeys.InvokeReason] = payload.Reason;
         metadata[RuntimeMetadataKeys.InvokeSchedulerWorkItemId] = workItem.WorkItemId;
         metadata[RuntimeMetadataKeys.CompletionOutcomeNames] = JsonSerializer.Serialize(normalizedOutcomeNames);
+        // Only the current successful direct-child completion may supply this causal edge. Notification and
+        // other callbacks must not retain a marker left by an earlier fault evaluation or attempt.
+        metadata.Remove(RuntimeMetadataKeys.CompletedChildActivityExecutionId);
+        if (completedChildActivityExecutionId is not null)
+            metadata[RuntimeMetadataKeys.CompletedChildActivityExecutionId] = completedChildActivityExecutionId;
 
         return RuntimeContainerScopeService.CloseOwnedFrames(state with
         {
@@ -452,7 +462,8 @@ internal static class StructuralParentEvaluationSupport
         RuntimeStateChange<WorkflowExecutionState>? workflowVariableWriteBack,
         CancellationToken cancellationToken,
         IReadOnlyCollection<RuntimeStateChange<ActivityExecutionState>>? additionalActivityExecutions = null,
-        IReadOnlyCollection<RuntimeSchedulerWorkItem>? ancestorNotifications = null)
+        IReadOnlyCollection<RuntimeSchedulerWorkItem>? ancestorNotifications = null,
+        StructuralChildControlContribution? childControlContribution = null)
     {
         var occurredAt = timeProvider.GetUtcNow();
         var (workItem, activityExecutionId, metadata) = (source.WorkItem, source.Payload.ActivityExecutionId, source.Metadata);
@@ -515,7 +526,7 @@ internal static class StructuralParentEvaluationSupport
                 .ToArray(),
             Metadata: metadata);
 
-        await checkpointCommitter.CommitAsync(commit, cancellationToken);
+        await checkpointCommitter.CommitAsync(childControlContribution?.Apply(commit) ?? commit, cancellationToken);
     }
 
     internal sealed record SubtreeCancellationCommitChanges(

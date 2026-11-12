@@ -21,10 +21,15 @@ import {
   withLiteralValue,
   withSyntax
 } from "../activityProperties";
+import {
+  readWorkflowInputExpressionArguments,
+  withWorkflowInputExpressionArgument,
+  withoutPortableExpressionParameter
+} from "../workflowInputArgumentBindings";
 import { canonicalizeStateForWire, expandStateFromWire } from "../activityInputWire";
 import { clearSecretOnlyInput, isMaskedInput, planInputSyntaxTransition, showsMaskedValue } from "../maskedInput";
 import { updateActivity } from "../workflowAdapter";
-import type { ActivityNode } from "../workflowTypes";
+import type { ActivityNode, WorkflowInput } from "../workflowTypes";
 
 const textDescriptor = {
   name: "Text",
@@ -35,6 +40,126 @@ const textDescriptor = {
 };
 
 describe("activity property values", () => {
+  it("exposes a selected workflow input as an explicit JavaScript argument and can remove it", () => {
+    const inputDefinition = withWorkflowInputExpressionArgument(
+      {
+        language: "JavaScript",
+        source: "`Started Order ID: ${args.OrderId}`",
+        resultType: { alias: "String", collectionKind: "Single" },
+        parameters: { Existing: { kind: "Literal", value: "preserve me" } },
+        options: { mode: "strict" },
+        capabilityProfile: "binding-pure-v1"
+      },
+      "JavaScript",
+      textDescriptor,
+      { referenceKey: "input-order", name: "OrderId", displayName: "Order ID" } as WorkflowInput
+    );
+
+    expect(inputDefinition).toMatchObject({
+      language: "JavaScript",
+      source: "`Started Order ID: ${args.OrderId}`",
+      resultType: { alias: "String", collectionKind: "Single" },
+      parameters: {
+        Existing: { kind: "Literal", value: "preserve me" },
+        OrderId: { kind: "WorkflowRequest", memberKey: "OrderId" }
+      },
+      options: { mode: "strict" },
+      capabilityProfile: "binding-pure-v1"
+    });
+    expect(readWorkflowInputExpressionArguments(inputDefinition, "JavaScript")).toEqual([
+      { argumentName: "OrderId", memberKey: "OrderId" }
+    ]);
+    expect(withoutPortableExpressionParameter(inputDefinition, "JavaScript", "OrderId")?.parameters).toEqual({
+      Existing: { kind: "Literal", value: "preserve me" }
+    });
+  });
+
+  it.each([
+    ["System.String", "String"],
+    ["Contoso.Sales.Order, Contoso.Contracts", "Contoso.Sales.Order"],
+    ["system.string", "system.string"]
+  ])("keeps the portable result type alias canonical for descriptor type %s", (typeName, expectedAlias) => {
+    const definition = withWorkflowInputExpressionArgument(
+      "args.OrderId",
+      "JavaScript",
+      { ...textDescriptor, typeName } as StudioActivityInputDescriptor,
+      { referenceKey: "input-order", name: "OrderId", displayName: "Order ID" } as WorkflowInput
+    );
+
+    expect(definition?.resultType.alias).toBe(expectedAlias);
+  });
+
+  it("removes assembly qualifiers from generic arguments in the portable result type alias", () => {
+    const definition = withWorkflowInputExpressionArgument(
+      "args.Orders",
+      "JavaScript",
+      {
+        ...textDescriptor,
+        typeName: "System.Collections.Generic.List`1[[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]], System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e"
+      } as StudioActivityInputDescriptor,
+      { referenceKey: "input-orders", name: "Orders", displayName: "Orders" } as WorkflowInput
+    );
+
+    expect(definition?.resultType.alias).toBe("System.Collections.Generic.List`1[[System.String]]");
+    expect(definition?.resultType.alias).not.toContain("System.Private.CoreLib");
+  });
+
+  it("preserves separators between nested generic arguments while removing their assembly qualifiers", () => {
+    const definition = withWorkflowInputExpressionArgument(
+      "args.Orders",
+      "JavaScript",
+      {
+        ...textDescriptor,
+        typeName: "System.Collections.Generic.List`1[[System.Collections.Generic.Dictionary`2[[System.String, System.Private.CoreLib],[System.Int32, System.Private.CoreLib]], System.Private.CoreLib]], System.Private.CoreLib"
+      } as StudioActivityInputDescriptor,
+      { referenceKey: "input-orders", name: "Orders", displayName: "Orders" } as WorkflowInput
+    );
+
+    expect(definition?.resultType.alias).toBe("System.Collections.Generic.List`1[[System.Collections.Generic.Dictionary`2[[System.String],[System.Int32]]]]");
+    expect(definition?.resultType.alias).not.toContain("System.Private.CoreLib");
+  });
+
+  it("refuses to replace a JavaScript argument already bound to another source", () => {
+    const definition = {
+      language: "JavaScript",
+      source: "args.OrderId",
+      resultType: { alias: "String", collectionKind: "Single" },
+      parameters: { OrderId: { kind: "Literal", value: "manual" } },
+      options: {},
+      capabilityProfile: "binding-pure-v1"
+    };
+
+    expect(withWorkflowInputExpressionArgument(
+      definition,
+      "JavaScript",
+      textDescriptor,
+      { referenceKey: "input-order", name: "OrderId", displayName: "Order ID" } as WorkflowInput
+    )).toBeNull();
+  });
+
+  it.each(["constructor", "toString", "__proto__"])("binds an argument named %s without confusing it with an object prototype", name => {
+    const definition = withWorkflowInputExpressionArgument(
+      "args[\"input\"]",
+      "JavaScript",
+      textDescriptor,
+      { referenceKey: "input-prototype-name", name, displayName: name } as WorkflowInput
+    );
+
+    expect(definition).not.toBeNull();
+    expect(Object.prototype.hasOwnProperty.call(definition!.parameters, name)).toBe(true);
+    expect(definition!.parameters[name]).toEqual({ kind: "WorkflowRequest", memberKey: name });
+  });
+
+  it("does not convert a malformed object-valued expression into a string binding", () => {
+    const malformed = { language: "JavaScript", source: "args.OrderId", parameters: {} };
+    expect(withWorkflowInputExpressionArgument(
+      malformed,
+      "JavaScript",
+      textDescriptor,
+      { referenceKey: "input-order", name: "OrderId", displayName: "Order ID" } as WorkflowInput
+    )).toBeNull();
+  });
+
   it("reads missing wrapped inputs as empty literal values with the descriptor type", () => {
     expect(readWrappedInput(activity("write"), textDescriptor)).toEqual({
       typeName: "System.String",

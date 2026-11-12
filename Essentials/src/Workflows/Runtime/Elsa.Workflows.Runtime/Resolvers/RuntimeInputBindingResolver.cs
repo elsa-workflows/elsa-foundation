@@ -30,6 +30,10 @@ public sealed class RuntimeInputBindingResolver : IRuntimeInputBindingResolver
             {
                 Envelope = WithholdSecretRead(binding)
             },
+            // Member selection is not interpreted by this runtime yet (#4078): refuse the read instead of reading the
+            // whole source value its role payload names.
+            RuntimeInputBindingSource.WorkflowRequestMember or RuntimeInputBindingSource.VariableMember or RuntimeInputBindingSource.ActivityResultMember =>
+                throw RuntimeReadSelectionDiagnostics.Unsupported(binding),
             _ => throw new ArgumentOutOfRangeException(nameof(binding), binding.Source, "Unsupported runtime input binding source.")
         };
     }
@@ -143,10 +147,20 @@ public sealed class RuntimeInputBindingResolver : IRuntimeInputBindingResolver
             throw new InvalidOperationException($"Activity result '{reference.ProjectionKey}' for input '{binding.InputName}' has no readable payload.");
 
         var value = result.InlineValue.Value;
-        foreach (var segment in projection.Path.Split('.', StringSplitOptions.RemoveEmptyEntries))
+        // Match completion projection: '$' selects the result, and a literal JSON member wins
+        // over interpreting dots inside its name as nested navigation.
+        if (!StringComparer.Ordinal.Equals(projection.Path, "$"))
         {
-            if (value.ValueKind != JsonValueKind.Object || !TryGetProperty(value, segment, out value))
-                throw new InvalidOperationException($"Committed result from producer node '{reference.ProducerExecutableNodeId}' has no projection path '{projection.Path}'.");
+            if (value.ValueKind == JsonValueKind.Object && value.TryGetProperty(projection.Path, out var exact))
+                value = exact;
+            else
+            {
+                foreach (var segment in projection.Path.Split('.', StringSplitOptions.RemoveEmptyEntries))
+                {
+                    if (value.ValueKind != JsonValueKind.Object || !TryGetProperty(value, segment, out value))
+                        throw new InvalidOperationException($"Committed result from producer node '{reference.ProducerExecutableNodeId}' has no projection path '{projection.Path}'.");
+                }
+            }
         }
 
         var projectedType = binding.ConversionPlan?.SourceType ?? binding.TargetType;

@@ -27,7 +27,7 @@ public sealed record EtlConnectorBatchReservation(EtlConnectorBatchDescriptor Ba
 public sealed record EtlConnectorReservationResult(EtlStoreStatus Status, EtlConnectorBatchReservation? Reservation);
 
 /// <summary>A verified immutable body and stable effect identity for one pinned destination.</summary>
-/// <remarks>Body identifies retained input to delivery, not proof of remote receipt. Kind is HTTP or JSONL.</remarks>
+/// <remarks>Body identifies retained input to delivery, not proof of remote receipt. Kind is HTTP, JSONL or CSV.</remarks>
 public sealed record EtlConnectorRouteOutput(EtlConnectorKind Kind, EtlObjectReference Body, long RecordCount, string EffectId);
 
 /// <summary>Complete transformation result for an owed batch. Absent routes must have zero records.</summary>
@@ -36,5 +36,5 @@ public sealed record EtlConnectorBatchOutput(long AcceptedRecords, long Rejected
     EtlConnectorRouteOutput? Main, EtlConnectorRouteOutput? Errors);
 public sealed record EtlConnectorOutputResult(EtlStoreStatus Status, EtlConnectorBatchOutput? Output);
 
-/// <summary>Fixed publication slots for JSONL routes; absent or HTTP routes must remain false.</summary>
+/// <summary>Fixed publication slots for file (JSONL or CSV) routes; absent or HTTP routes must remain false.</summary>
 public sealed record EtlConnectorFilePublications(bool Main, bool Errors);

@@ -1,8 +1,10 @@
 using Elsa.Studio.Api.Authorization;
+using Elsa.Studio.Backends;
 using Elsa.Studio.ConsoleStream;
 using Elsa.Studio.ConsoleStream.Extensions;
 using Elsa.Studio.Web;
 using Elsa.Studio.Hosting;
+using Elsa.Studio.Hosting.Themes;
 using Elsa.Studio.Hosting.Nuplane;
 
 // Install the console stream capture hook before the host is created so that, when the ConsoleStream
@@ -12,17 +14,12 @@ ConsoleStreamHookInstaller.InstallConsoleStreamHookIfEnabled(args);
 
 var builder = WebApplication.CreateBuilder(args);
 var studio = builder.AddElsaStudio(options => options.QueryTokenPathPrefixes = [ConsoleStreamStudioServiceCollectionExtensions.HubPath]);
+builder.Services.AddStudioBackendsHostConfiguration(builder.Configuration);
 studio.AddElsaStudioNuplane(options => options.DirectoryFeedName ??= "studio-local-packages");
 var configuration = builder.Configuration;
 ConsoleStreamHookInstaller.InstallConsoleStreamHookIfEnabled(configuration);
 
-// Theme configuration. Bound from the "Themes" section, which the Configuration API populates from
-// appsettings.json, environment variables (Themes__ThemesDirectory, etc.), and any other registered source.
-var themeConfig = new ThemeConfiguration();
-configuration.GetSection("Themes").Bind(themeConfig);
-_ = themeConfig.GetThemesMode();
-builder.Services.AddSingleton(themeConfig);
-builder.Services.AddSingleton<ThemeConfigurationService>();
+studio.AddElsaStudioThemes();
 
 studio.ConfigureShells(shells => shells.WithStudioFeatureAssemblies());
 

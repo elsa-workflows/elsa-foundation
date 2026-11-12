@@ -1,0 +1,87 @@
+{
+  "schemaVersion": 1,
+  "purpose": "Finite actual original-reader refusal using provider-generated fixtures; not actual workflow host recovery",
+  "sourceParentCommit": "bbdee782cfbd6c7d7c61083a8ced81738b3c270d",
+  "oldReaderSourceCommit": "674b9f11db79521226e8c3c0f5b6772bb69688df",
+  "oldReaderAssembliesSha256": {
+    "DeliveryPreflight.dll": "41645c3b05756a62d91f9cfc56e97c0dbe5367508e9daa21867613418d03844e",
+    "Elsa.Workflows.Runtime.Core.dll": "db0ae12f9db204b7d03d4c38da6ff9c0eb74c4e6b0f0db858d795703e9393ce9",
+    "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.dll": "3f75a3140726813377a5f098e609b39907179aa1e8a8017ca9d84cd680f6e5f2",
+    "Elsa.Persistence.EntityFramework.dll": "388ee10a8bdab7ffa44281a01d7f50e5d8f516e62877d13dc453602e54c26427"
+  },
+  "results": [
+    {
+      "fixture": "before-selection",
+      "oldReaderExitCode": 2,
+      "oldReaderResult": {
+        "status": "InventoryUnavailable",
+        "failureType": "EfSchemaVersionSkewException",
+        "reason": "The supplied store could not be classified by the runtime provider; responsibility is unresolved.",
+        "providerChecked": false
+      },
+      "v1ControlExitCode": 0,
+      "v1ControlResult": {
+        "outboxRows": 1,
+        "publishRows": 0,
+        "identityDigestEncoding": "UTF-16LE code units",
+        "classifications": {},
+        "status": "NoLegacyPublishResponsibilityOwed",
+        "providerChecked": true,
+        "publishes": []
+      },
+      "captures": [
+        {
+          "path": "specs/1006-bpmn-library-adoption/evidence/broadcast-storage/before-selection.sqlite.gz",
+          "databaseSha256": "dfca82d90a4ec92afef9e4bfab4d82b0d5101fd5dc94e56baad7539e4f247322",
+          "compressedSha256": "89b615a141bdbda46dcc93e5af4e04364c9d7a0ee7f4b881898d342d49fd0936",
+          "sizeBytes": 18800
+        },
+        {
+          "path": "specs/1006-bpmn-library-adoption/evidence/broadcast-storage/before-selection-v1-control.sqlite.gz",
+          "databaseSha256": "2ca8c92193f5850f45630e74c29883ffbed56b752c1c1fe0d9515e456d6b3755",
+          "compressedSha256": "1228abf2ba7e4f78a8f60ce43169b4b13fb0858fec9c390bd47c0ac70879b811",
+          "sizeBytes": 18760
+        }
+      ]
+    },
+    {
+      "fixture": "after-selection",
+      "oldReaderExitCode": 2,
+      "oldReaderResult": {
+        "status": "InventoryUnavailable",
+        "failureType": "EfSchemaVersionSkewException",
+        "reason": "The supplied store could not be classified by the runtime provider; responsibility is unresolved.",
+        "providerChecked": false
+      },
+      "v1ControlExitCode": 0,
+      "v1ControlResult": {
+        "outboxRows": 1,
+        "publishRows": 0,
+        "identityDigestEncoding": "UTF-16LE code units",
+        "classifications": {},
+        "status": "NoLegacyPublishResponsibilityOwed",
+        "providerChecked": true,
+        "publishes": []
+      },
+      "captures": [
+        {
+          "path": "specs/1006-bpmn-library-adoption/evidence/broadcast-storage/after-selection.sqlite.gz",
+          "databaseSha256": "40b267b32fa8460ac49a569d99321af0bd13cb18faf99794ea6bba9c867d0b62",
+          "compressedSha256": "a945fe4cb549ab0e7135e9010046465fc112feed0f158eadbbe28e8044039812",
+          "sizeBytes": 19878
+        },
+        {
+          "path": "specs/1006-bpmn-library-adoption/evidence/broadcast-storage/after-selection-v1-control.sqlite.gz",
+          "databaseSha256": "9252eea840ee763e3294fa4a76920c0cc718a9010b007c62744523f523410b14",
+          "compressedSha256": "516e530e76ab112e6acd62dffdd5d60bad8185d92b8f3938817041df1af5add0",
+          "sizeBytes": 20063
+        }
+      ]
+    }
+  ],
+  "limitations": [
+    "These fixtures use real RuntimeSqliteDbContext and checked provider writers with constructed workflow/source state.",
+    "They prove the original binary reader refuses the new family before first selection and after whole-cohort installation; they do not prove recipient dispatch, legacy workflow recovery, production quiescence or Studio.",
+    "The v1 controls remove only the three additive delivery fields and restore the family stamp; all physical projections and retained legacy fields remain."
+  ]
+}

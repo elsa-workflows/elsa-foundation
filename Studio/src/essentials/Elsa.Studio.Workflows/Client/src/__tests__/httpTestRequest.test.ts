@@ -34,6 +34,53 @@ describe("published HTTP test request helpers", () => {
       .toThrow("This endpoint is not in the latest published workflow. Publish your changes, then try again.");
   });
 
+  it("reads Path and SupportedMethods from the published input-sources payload shape", () => {
+    const executable = httpPingExecutable();
+    const sources = publishedHttpPingInputSources({
+      path: "/ux-qa-ping",
+      methods: ["GET", "POST", "PUT", "HEAD", "DELETE"]
+    });
+
+    expect(findPublishedHttpEndpoint(executable, "root", sources)).toEqual({
+      authoredActivityId: "root",
+      routeTemplate: "/ux-qa-ping",
+      supportedMethods: ["GET", "POST", "PUT", "HEAD", "DELETE"],
+      responseMode: "sync"
+    });
+  });
+
+  it("recovers published literals when compiled values are summaries or authored Object methods", () => {
+    const executable = httpPingExecutable();
+    const summaryOnly = publishedHttpPingInputSources({
+      path: "/ux-qa-ping",
+      methods: ["GET", "POST", "PUT", "HEAD", "DELETE"],
+      compiledPath: { valueKind: 3 },
+      compiledMethods: { valueKind: 2 }
+    });
+    const authoredOnly: WorkflowExecutableInputSources = {
+      ...publishedHttpPingInputSources({ path: "/ux-qa-ping", methods: ["GET", "POST"] }),
+      compiledInputs: []
+    };
+    const stringifiedMethods = publishedHttpPingInputSources({
+      path: "/ux-qa-ping",
+      methods: '["GET","POST","PUT","HEAD","DELETE"]'
+    });
+
+    expect(findPublishedHttpEndpoint(executable, "root", summaryOnly)?.routeTemplate).toBe("/ux-qa-ping");
+    expect(findPublishedHttpEndpoint(executable, "root", summaryOnly)?.supportedMethods).toEqual([
+      "GET", "POST", "PUT", "HEAD", "DELETE"
+    ]);
+    expect(findPublishedHttpEndpoint(executable, "root", authoredOnly)?.supportedMethods).toEqual(["GET", "POST"]);
+    expect(findPublishedHttpEndpoint(executable, "root", stringifiedMethods)?.supportedMethods).toEqual([
+      "GET", "POST", "PUT", "HEAD", "DELETE"
+    ]);
+  });
+
+  it("returns null when the published endpoint still has no usable Path literal", () => {
+    const executable = httpPingExecutable();
+    expect(findPublishedHttpEndpoint(executable, "root", publishedHttpPingInputSources({ path: "", methods: ["GET"] }))).toBeNull();
+  });
+
   it("uses permitted compiled endpoint inputs from the selected published reference", () => {
     const executable = executableWithEndpoint({
       authoredActivityId: "endpoint-1",
@@ -255,6 +302,94 @@ describe("published HTTP test request helpers", () => {
   });
 
 });
+
+function httpPingExecutable(): WorkflowExecutableDetails {
+  return {
+    artifactId: "artifact-ca2981d0ace2",
+    artifactHash: "hash",
+    createdAt: "2026-10-31T00:00:00Z",
+    rootActivityType: "Elsa.HttpEndpoint",
+    rootActivityVersion: "1.1.0",
+    nodeCount: 1,
+    resumeTargetCount: 0,
+    chosenReference: { sourceReferenceId: "publication-1", selection: "newest-live", layout: [] },
+    references: [],
+    rootActivity: {
+      executableNodeId: "root",
+      authoredActivityId: "root",
+      activityType: "Elsa.HttpEndpoint",
+      activityTypeVersion: "1.1.0",
+      inputBindings: [
+        { inputName: "Path", inputKey: "Path", source: "Literal", literalValue: null },
+        { inputName: "SupportedMethods", inputKey: "SupportedMethods", source: "Literal", literalValue: null },
+        { inputName: "ResponseMode", inputKey: "ResponseMode", source: "Literal", literalValue: null }
+      ],
+      childSlots: []
+    }
+  };
+}
+
+function publishedHttpPingInputSources({
+  path,
+  methods,
+  compiledPath,
+  compiledMethods
+}: {
+  path: string;
+  methods: string[] | string;
+  compiledPath?: unknown;
+  compiledMethods?: unknown;
+}): WorkflowExecutableInputSources {
+  const methodList = Array.isArray(methods) ? methods : ["GET", "POST", "PUT", "HEAD", "DELETE"];
+  return {
+    artifactId: "artifact-ca2981d0ace2",
+    sourceReferenceId: "publication-1",
+    accessState: "allowed",
+    authoredInputs: [
+      { executableNodeId: "root", inputKey: "Path", expressionType: "Literal", value: path, accessState: "allowed" },
+      { executableNodeId: "root", inputKey: "SupportedMethods", expressionType: "Object", value: Array.isArray(methods) ? JSON.stringify(methods) : methods, accessState: "allowed" },
+      { executableNodeId: "root", inputKey: "ResponseMode", expressionType: "Literal", value: "Sync", accessState: "allowed" }
+    ],
+    compiledInputs: [
+      {
+        executableNodeId: "root",
+        accessState: "allowed",
+        binding: {
+          inputName: "Path",
+          inputKey: "Path",
+          source: "Literal",
+          summary: JSON.stringify(path),
+          literalValue: compiledPath === undefined ? path : compiledPath,
+          metadata: { referenceKey: "Path" }
+        }
+      },
+      {
+        executableNodeId: "root",
+        accessState: "allowed",
+        binding: {
+          inputName: "SupportedMethods",
+          inputKey: "SupportedMethods",
+          source: "Literal",
+          summary: JSON.stringify(methodList),
+          literalValue: compiledMethods === undefined ? methods : compiledMethods,
+          metadata: { referenceKey: "SupportedMethods" }
+        }
+      },
+      {
+        executableNodeId: "root",
+        accessState: "allowed",
+        binding: {
+          inputName: "ResponseMode",
+          inputKey: "ResponseMode",
+          source: "Literal",
+          summary: '"Sync"',
+          literalValue: "Sync",
+          metadata: { referenceKey: "ResponseMode" }
+        }
+      }
+    ]
+  };
+}
 
 function executableWithEndpoint(endpoint: Partial<WorkflowExecutableNode> & Pick<WorkflowExecutableNode, "authoredActivityId" | "inputBindings">): WorkflowExecutableDetails {
   return {

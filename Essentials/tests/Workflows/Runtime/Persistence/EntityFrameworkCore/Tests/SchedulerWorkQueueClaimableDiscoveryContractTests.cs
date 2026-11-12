@@ -56,6 +56,14 @@ public sealed class SchedulerWorkQueueClaimableDiscoveryContractTests
         await ReadsTheNextItemAClaimWouldTakeAsync(backend.Queue);
     }
 
+    [Theory]
+    [MemberData(nameof(Stores))]
+    public async Task One_item_is_deferred_by_identity_behind_an_earlier_head(string store)
+    {
+        await using var backend = await QueueBackend.CreateAsync(store);
+        await DefersOneItemByIdentityBehindAnEarlierHeadAsync(backend.Queue);
+    }
+
     /// <summary>
     /// The #2188 scenario at the pump's default bounds: more than a page of older executions whose queued work is hidden
     /// by a live claim or a backoff, and one newer execution whose work is claimable. Before the fix the older ones

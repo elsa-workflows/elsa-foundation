@@ -432,7 +432,7 @@ public sealed class FlowchartGraph
         node.Metadata.TryGetValue(TriggerNodeMetadata.ExecutionTypeKey, out var executionType) &&
         StringComparer.Ordinal.Equals(executionType, TriggerNodeMetadata.TriggerExecutionType);
 
-    private static string? NormalizeStartNodeId(string? startNodeId)
+    internal static string? NormalizeStartNodeId(string? startNodeId)
     {
         if (string.IsNullOrWhiteSpace(startNodeId))
             return null;

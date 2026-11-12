@@ -1,0 +1,135 @@
+{
+  "schemaVersion": 1,
+  "task": "T051 bounded actual local/correlation/TestRun receiver isolation; overall qualification remains open",
+  "sourceParentCommit": "0334c31ed31c854aa3a5d11868562cd7b2edc144",
+  "filesSha256": {
+    "e2e-tests/bpmn/RecoveryProbe/README.md": "8ec73e9b4a6147d1bcee7508d09068f9a58b92e195e78da92b84728995a1e786",
+    "e2e-tests/bpmn/Test-BpmnBroadcastRecovery.ps1": "a3e3f8a1026b9d1f6db100a322a7b3d884c016adcc30796815838f54d93211cf",
+    "e2e-tests/bpmn/Test-BpmnScopeControls.ps1": "f14785a9274c4af71349da03cf0039785958da8c549d9580b446daa2f24d1c3e",
+    "tools/bpmn/DeliveryRecoveryRead/Program.cs": "5a6e22c8b61ead2e40bbe23dd97021ab0dc8470373ffbb849ca90e8fa9a28a74"
+  },
+  "hostReceiptsSha256": {
+    "broadcast-scope-local-host.json": "f6bca82fa2d573fba9efd1547bda95ea9655eaa235a9bc656935f142cf105fbe",
+    "broadcast-scope-correlation-scope-host.json": "7deb64320e519896bbcb0f42105d443d68aff61197f125b83079d7a0468cd088",
+    "broadcast-scope-after-cohort-host.json": "917a1603028cac2fad92d8f7aa99218d9a31a5bf97011fbff2a82d470beb5071"
+  },
+  "sourceBindingsCheckedPerCase": 1384,
+  "binaryBindingsCheckedPerCase": 631,
+  "checks": [
+    {
+      "name": "actual local native publisher-only recovery",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "actual correlation-A catches and correlation-B published native start recovery",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "actual ordinary post-cohort regression",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "actual extracted eligibility/live wait/exact private callback guards, two actual positives plus 52 invalid evidence controls",
+      "passed": 54,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "checked source/publisher/material/reference controls",
+      "passed": 14,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "owned process and broker controls",
+      "passed": 10,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "actual cleanup failure controls",
+      "passed": 3,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "fresh locked reader build",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0
+    }
+  ],
+  "hostBuildReuse": {
+    "receipt": "broadcast-same-artifact-recovery.json",
+    "exactRuntimeClosuresUnchanged": true,
+    "currentCompileSourceInputsChecked": 1304,
+    "notFreshlyRebuilt": true,
+    "reason": "No host production/probe compilation input or project graph changed; only runner/controls/reader observations."
+  },
+  "local": {
+    "nativeParallelTwoEventWaitsAndGatedPublish": true,
+    "IsLocalEvent": true,
+    "savedStarts": 0,
+    "savedResumes": 2,
+    "allResumesPublishingExecution": true,
+    "preexistingPublishedAndTwoOpenMatchingTestScopesExcluded": true
+  },
+  "correlation": {
+    "nativePublisherCorrelation": "A",
+    "selectedBpmnCatchesCorrelation": "A",
+    "excludedPublishedCatchesCorrelation": "B",
+    "eligibleNativePublishedStartCorrelation": "B",
+    "savedStarts": 1,
+    "savedResumes": 2,
+    "preexistingTwoOpenMatchingTestScopesExcluded": true
+  },
+  "privateTestRun": {
+    "actualSameArtifactScopesPerCase": 3,
+    "originalTwoOfficialWaitViewsAvailableBeforeCrash": true,
+    "thirdOfficialExactPrivateDeliveriesBeforeCrash": 2,
+    "receiptsDurable": true,
+    "firstReplay": "AlreadyDelivered",
+    "requestedWaitRetiredSiblingGenerationUnchanged": true,
+    "exactRequestedActivityCompletedAtOneExtraAttempt": true,
+    "otherScopesNormalSourceAndWorkflowsUnchanged": true,
+    "thirdLibraryJoinCompleted": true,
+    "allExcludedFullPhysicalAndApiFactsUnchangedAfterRestart": true
+  },
+  "limitations": [
+    "Publishing registers only process-local InMemoryWorkflowTestRunStore: its TestRun API handle is lost on host restart although durable runtime scope/execution remains. Private API callbacks qualify before crash; this increment does not implement or claim Publishing handle recovery.",
+    "No new policy is asserted for PublishEvent executed inside a TestRun publisher.",
+    "Observer guard invalid inputs do not constitute production mutations; current actual runs are separate."
+  ],
+  "initialFailuresCorrected": [
+    "Reader activity IDs must use ActivityExecutionState.Execution; build now passes. Initial two runs used earlier compiled projection and are not qualified.",
+    "Initial private API attempt after restart exposed the existing process-local Publishing handle limitation. Third actual TestRun is privately driven with its original live handle, while two original matching live scopes and the completed third are retained unchanged through real recovery.",
+    "Count-only callback evidence was strengthened to exact requested wait retirement, unchanged sibling generation and corresponding one-attempt completed activity before final runs."
+  ],
+  "reviews": {
+    "type": "three independent component source/actual/portable audits; not full PR",
+    "remainingActionable": []
+  },
+  "supportingQualification": {
+    "deliveredCommit": "fc5948641590f4f74d79e234a2a3f8f91f5b81d6",
+    "receipt": "broadcast-competing-proposal-recovery.json",
+    "architecturePassed": 590,
+    "ServerLockedRestoreAndMapCheckPassed": true,
+    "inheritedNotRerun": true,
+    "reason": "No production source or project graph changes"
+  },
+  "frozenAuthoringFingerprintSha256": "41aa0bb979ea46fc2533b057e3677f408ab54c3411fecfafaa238a2adae38c92",
+  "productionSourceChanged": false,
+  "remainingGates": [
+    "supported redrive applicability, remaining retention/GC acceptance orders and other T051",
+    "remaining T045/native-composite, actual historical upgraded-host recovery and final current Studio",
+    "legacy writer/duplicate semantics deletion and guards, full-PR review, required exact-head checks/protected merge/resulting-main",
+    "separate ADR0063 and independent production #2898/#2907/program evidence; Orleans/task-runner deferred"
+  ],
+  "fullPrRounds": 0
+}

@@ -1,3 +1,6 @@
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+
 namespace Elsa.Persistence.EntityFramework;
 
 /// <summary>
@@ -7,6 +10,14 @@ namespace Elsa.Persistence.EntityFramework;
 public static class EfMigrationsHistory
 {
     public const string TablePrefix = "__EFMigrationsHistory_";
+
+    /// <summary>Installs migration-history compatibility before context options are frozen by pooling.</summary>
+    public static void EnsureAdded(DbContextOptionsBuilder builder)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        if (builder.Options.FindExtension<EfMigrationHistoryOptionsExtension>() is null)
+            ((IDbContextOptionsBuilderInfrastructure)builder).AddOrUpdateExtension(new EfMigrationHistoryOptionsExtension());
+    }
 
     public static string TableName(string module)
     {
