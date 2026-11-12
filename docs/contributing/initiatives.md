@@ -363,7 +363,8 @@ whose base is an `initiative/*` branch, or the branch of a proposal stacked on o
   gate. Code Review does not merge initiative proposals ([org review and merge rules][org-agents-review]). Each
   accepted proposal is one squash commit, so the branch reads as a decision log. The coordinator also pushes the merges
   of `main`, the ADR index updates, any renumbering of merged items and, with the recorded delegate, the kick-off's
-  meeting agendas; nobody else pushes to the branch. When the coordinator authored or committed to a proposal, the recorded delegate, or else a non-author approver, stands in:
+  meeting agendas; nobody else pushes to the branch. When the coordinator authored or committed to a proposal, the
+  recorded delegate, or else a non-author approver, stands in:
   they run the gate, push what it needs and merge the proposal, because an author never merges their own PR. A stand-in
   who is not the recorded delegate does not edit the board: they post the `main` commit and the merge commit in a
   pointer comment, and the coordinator records them at the next sync.
