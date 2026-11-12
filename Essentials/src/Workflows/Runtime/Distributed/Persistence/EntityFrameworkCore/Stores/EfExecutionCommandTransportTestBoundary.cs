@@ -16,7 +16,7 @@ internal sealed class EfExecutionCommandTransportTestBoundary(ExecutionCommandTr
             if (scope.Value != entry.Scope.Partition.Value || !ReferenceEquals(actualTransport, physicalTransport) ||
                 physicalTransport is not EfExecutionCommandTransport actual || !actual.Uses(context, scope, entry.Scope.TenantId)) return false;
         }
-        catch (InvalidOperationException) { return false; }
+        catch (Exception exception) when (exception is InvalidOperationException or ArgumentException) { return false; }
         var gate = ExecutionCommandTransportWriteVersion.Gate(context);
         var state = gate?.StateOf(ExecutionCommandTransportEfModule.SchemaFamily);
         return gate?.DatabaseIdentity is not null && state is { WritesRefused: false } &&

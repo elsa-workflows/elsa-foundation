@@ -129,6 +129,23 @@ public sealed class SelectedTestTransportTests
         Assert.Single(await fixture.Transport(context).LeaseAsync("execution", "node", Now, TimeSpan.FromMinutes(1), 1));
     }
 
+    [Theory]
+    [InlineData(WorkflowExecutionCommandKind.Start)]
+    [InlineData(WorkflowExecutionCommandKind.Checkpoint)]
+    public async Task Nested_business_input_names_do_not_declare_selected_entry_control(WorkflowExecutionCommandKind kind)
+    {
+        await using var fixture = await Fixture.CreateAsync(gated: false);
+        await using var context = fixture.Open();
+        var envelope = new WorkflowExecutionCommandEnvelope("ordinary-envelope", "execution",
+            new("ordinary", "execution", kind, Now, JsonSerializer.SerializeToElement(new
+            { inputs = new { testEntry = "business data", testContext = new { value = 1 } } }), new Dictionary<string, string>()),
+            "ordinary", WorkflowExecutionCommandDeliveryMode.AtLeastOnce, Now, partition: new("partition"));
+        await fixture.Transport(context).SendAsync("execution", envelope, Now);
+        Assert.Equal("1.0.0", (await context.CommandTransportItems.AsNoTracking().SingleAsync()).SchemaVersion);
+        Assert.Equal("1.0.0", (await context.CommandStreamHeads.AsNoTracking().SingleAsync()).SchemaVersion);
+        Assert.Single(await fixture.Transport(context).LeaseAsync("execution", "node", Now, TimeSpan.FromMinutes(1), 1));
+    }
+
     [Fact]
     public async Task A_live_predecessor_gate_refuses_selected_append_and_claim_without_durable_mutation()
     {
@@ -177,6 +194,7 @@ public sealed class SelectedTestTransportTests
     [InlineData("transport-privileged")]
     [InlineData("transport-other-scope")]
     [InlineData("tenant-mismatch")]
+    [InlineData("tenant-whitespace")]
     public async Task Provider_qualification_refuses_privilege_or_tenant_scope_mismatch_on_the_actual_transport(string mismatch)
     {
         await using var fixture = await Fixture.CreateAsync();
@@ -189,8 +207,8 @@ public sealed class SelectedTestTransportTests
         var boundary = new EfExecutionCommandTransportTestBoundary(context,
             mismatch == "boundary-privileged" ? new PrivilegedAccessor() : ordinary, actual);
         var entry = Entry();
-        if (mismatch == "tenant-mismatch") entry = new(entry.ContextId, entry.ContextFingerprint, entry.Executable,
-            entry.ExecutableNodeId, new("scope", Now.AddMinutes(10), "other", new("partition")), entry.Authority);
+        if (mismatch is "tenant-mismatch" or "tenant-whitespace") entry = new(entry.ContextId, entry.ContextFingerprint, entry.Executable,
+            entry.ExecutableNodeId, new("scope", Now.AddMinutes(10), mismatch == "tenant-whitespace" ? " partition " : "other", new("partition")), entry.Authority);
         Assert.False(boundary.CanTransportTestEntry(entry, actual));
     }
 

@@ -10,10 +10,11 @@ namespace Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.Sto
 
 internal static class ExecutionCommandTransportWriteVersion
 {
+    // testContext is reserved until the owned-context slice introduces its typed payload property.
     internal static bool Requires(WorkflowExecutionCommandEnvelope? envelope) =>
         envelope?.Command.Kind is WorkflowExecutionCommandKind.Start or WorkflowExecutionCommandKind.Checkpoint &&
         envelope?.Command.Payload is { ValueKind: JsonValueKind.Object } payload && payload.EnumerateObject().Any(x =>
-            (x.Name.Equals("testEntry", StringComparison.OrdinalIgnoreCase) || x.Name.Equals("testContext", StringComparison.OrdinalIgnoreCase)) &&
+            (x.Name.Equals(nameof(WorkflowExecutionState.TestEntry), StringComparison.OrdinalIgnoreCase) || x.Name.Equals("testContext", StringComparison.OrdinalIgnoreCase)) &&
             x.Value.ValueKind is not (JsonValueKind.Null or JsonValueKind.Undefined));
 
     internal static EfSchemaModuleGate? Gate(ExecutionCommandTransportDbContext context) =>
