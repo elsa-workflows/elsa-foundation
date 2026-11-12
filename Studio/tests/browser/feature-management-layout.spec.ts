@@ -170,10 +170,33 @@ test("Feature categories stay discoverable and contained with long labels and ma
         const geometry = await rail.evaluate(element => {
           const rect = element.getBoundingClientRect();
           const list = element.parentElement!.querySelector(".feature-management-list-column")!.getBoundingClientRect();
+          const categoryButtons = Array.from(element.querySelectorAll<HTMLButtonElement>(".feature-management-category-options > button"));
+          const labelsFit = () => categoryButtons.every(button => {
+            const box = button.getBoundingClientRect();
+            return Array.from(button.querySelectorAll("span")).every(label => {
+              const text = label.getBoundingClientRect();
+              return text.top >= box.top - 1 && text.bottom <= box.bottom + 1;
+            });
+          });
+          const labelsContained = labelsFit();
+          // Revert the old flex sizing in the wide scrollable rail: the vertical guard
+          // must detect compressed multiline labels, then pass with production sizing.
+          let revertedLabelsContained: boolean | null = null;
+          if (element.parentElement!.getBoundingClientRect().width >= 960) {
+            const previous = categoryButtons.map(button => button.style.flexShrink);
+            try {
+              categoryButtons.forEach(button => { button.style.flexShrink = "1"; });
+              revertedLabelsContained = labelsFit();
+            } finally {
+              categoryButtons.forEach((button, index) => { button.style.flexShrink = previous[index]; });
+            }
+          }
           return {
             width: element.parentElement!.getBoundingClientRect().width,
             beside: rect.right <= list.left,
             above: rect.bottom <= list.top,
+            labelsContained,
+            revertedLabelsContained,
             controlsFit: Array.from(element.querySelectorAll("button,input")).every(control => {
               const box = control.getBoundingClientRect();
               return box.left >= rect.left && box.right <= rect.right + 1 && control.scrollWidth <= control.clientWidth;
@@ -182,6 +205,8 @@ test("Feature categories stay discoverable and contained with long labels and ma
           };
         });
         expect(geometry.controlsFit).toBe(true);
+        expect(geometry.labelsContained).toBe(true);
+        if (geometry.width >= 960) expect(geometry.revertedLabelsContained).toBe(false);
         expect(geometry.overflow).toBeLessThanOrEqual(1);
         expect(geometry.width >= 960 ? geometry.beside : geometry.above).toBe(true);
         await longCategory.scrollIntoViewIfNeeded();
