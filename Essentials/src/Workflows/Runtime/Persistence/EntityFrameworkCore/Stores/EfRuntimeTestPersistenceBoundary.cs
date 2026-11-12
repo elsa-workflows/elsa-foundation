@@ -35,6 +35,6 @@ internal sealed class EfRuntimeTestPersistenceBoundary(RuntimeDbContext context,
             bool Ready(string family, string minimum) => gate.StateOf(family) is { WritesRefused: false } state &&
                 Version.Parse(state.WriteVersion) >= Version.Parse(minimum);
         }
-        catch (InvalidOperationException) { return false; }
+        catch (Exception exception) when (exception is InvalidOperationException or ArgumentException) { return false; }
     }
 }
