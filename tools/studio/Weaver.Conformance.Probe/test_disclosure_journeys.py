@@ -12,7 +12,7 @@ from disclosure_journeys import (require_native_denial, require_no_adapter_admis
 
 
 class DisclosureQualificationTests(unittest.TestCase):
-    def stream(self, code="agent.context.incomplete", status=400, *, http=200, extra=None):
+    def stream(self, code="weaver.context.incomplete", status=400, *, http=200, extra=None):
         values = [{"kind": "contextAdmitted", "payload": {"attachments": [], "diagnostics": [
             {"contributorId": "host", "code": code, "required": True, "message": "Localized diagnostic"}]}},
             {"kind": "error", "error": {"code": code, "statusCode": status, "message": "Localized aggregate"}}]
@@ -28,10 +28,10 @@ class DisclosureQualificationTests(unittest.TestCase):
 
     def test_wrong_auth_session_provider_or_result_only_failure_never_qualifies(self):
         for phase in ("accepted-message", "accepted-receipt"):
-            for code, status in (("agent.session.forbidden", 403), ("agent.session.unavailable", 404),
-                                 ("agent.turn.source_missing", 409), ("agent.provider.anthropic.turn_failed", 502),
-                                 ("agent.context.incomplete", 401), ("agent.context.incomplete", 403),
-                                 ("agent.history.provenance_unavailable", 409), ("agent.result.disclosure_denied", 403)):
+            for code, status in (("weaver.session.forbidden", 403), ("weaver.session.unavailable", 404),
+                                 ("weaver.turn.source_missing", 409), ("weaver.provider.anthropic.turn_failed", 502),
+                                 ("weaver.context.incomplete", 401), ("weaver.context.incomplete", 403),
+                                 ("weaver.history.provenance_unavailable", 409), ("weaver.result.disclosure_denied", 403)):
                 with self.subTest(phase=phase, code=code, status=status):
                     with self.assertRaises(RuntimeError): require_native_denial(self.stream(code, status), phase)
             with self.assertRaises(RuntimeError): require_native_denial(self.stream(http=401), phase)
@@ -153,7 +153,7 @@ for _name, _mutate in {
     "nonrequired_diagnostic": lambda stream: stream.frames[0].value["payload"]["diagnostics"][0].update(required=False),
     "numeric_required": lambda stream: stream.frames[0].value["payload"]["diagnostics"][0].update(required=1),
     "foreign_contributor": lambda stream: stream.frames[0].value["payload"]["diagnostics"][0].update(contributorId="unrelated"),
-    "mismatched_diagnostic_code": lambda stream: stream.frames[0].value["payload"]["diagnostics"][0].update(code="agent.result.disclosure_denied"),
+    "mismatched_diagnostic_code": lambda stream: stream.frames[0].value["payload"]["diagnostics"][0].update(code="weaver.result.disclosure_denied"),
 }.items():
     setattr(DisclosureQualificationTests, "test_history_first_refusal_rejects_" + _name, _reject_context_mutation(_mutate))
 

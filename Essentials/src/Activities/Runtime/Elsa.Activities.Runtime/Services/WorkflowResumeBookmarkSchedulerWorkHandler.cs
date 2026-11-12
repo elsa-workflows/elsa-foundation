@@ -104,6 +104,8 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
         }
 
         SchedulerWorkHandlerHelpers.ValidatePinnedExecutable(workItem, resumePayload.PinnedExecutable, executable.Identity);
+        // Before the bookmark is consumed, so a waiting run with member reads is not resumed on a runtime that cannot select.
+        SchedulerWorkHandlerHelpers.EnsureMemberSelectionSupported(executable, serviceProvider);
 
         var executableNode = SchedulerWorkHandlerHelpers.ResolveExecutableNode(workItem, executable, resumePayload.ExecutableNodeId, "ResumeBookmark");
         if (executableNode.ActivityContract is null)

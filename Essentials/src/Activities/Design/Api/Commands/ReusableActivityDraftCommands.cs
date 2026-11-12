@@ -55,7 +55,7 @@ public sealed record CreateReusableActivityDraft(
 
 /// <summary>
 /// The wire request for cloning or creating a reusable activity draft.
-/// <see cref="Layout"/> is wrapped so NativeEndpoints treats an omitted body array as absent rather
+/// <see cref="Layout"/> is wrapped so MinimalEndpoints treats an omitted body array as absent rather
 /// than falling through to an empty query collection.
 /// </summary>
 public sealed record CreateReusableActivityDraftRequest(

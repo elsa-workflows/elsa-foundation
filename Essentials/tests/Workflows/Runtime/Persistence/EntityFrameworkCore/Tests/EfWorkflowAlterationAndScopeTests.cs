@@ -727,6 +727,45 @@ public sealed class EfWorkflowAlterationAndScopeTests
     }
 
     [Fact]
+    public async Task A_replayed_alteration_checkpoint_answered_from_its_marker_before_it_runs_still_counts_as_the_jobs_checkpoint()
+    {
+        // #2564: a commit on a context with a pending change reads its marker before it runs. A replay answered by
+        // that read is the job's checkpoint all the same, so the alteration store accepts the callback.
+        await using var db = await Database.CreateAsync();
+        await using var fixture = db.Open("tenant-a");
+        var plan = Plan();
+        await fixture.Store.AdmitAsync(plan);
+        await fixture.Store.CaptureAsync(plan.PlanId, 0,
+            [new WorkflowAlterationCapturedTarget("execution-1", "tenant-a")], null);
+        await fixture.Store.SealAsync(plan.PlanId, 1, plan.CreatedAt.AddMinutes(1));
+        var job = (await fixture.Store.ClaimNextAsync(plan.PlanId, "worker", plan.CreatedAt.AddMinutes(2),
+            TimeSpan.FromMinutes(1)))!;
+        var terminal = new WorkflowAlterationJobTerminalChange(
+            job.JobId, job.Claim!.Token, WorkflowAlterationJobStatus.Succeeded, [],
+            WorkflowAlterationIdentity.CreateCheckpointCommitId(job.JobId, 1), plan.CreatedAt.AddMinutes(3));
+        var checkpoint = CheckpointFor(job, terminal);
+        var store = new EfRuntimeCheckpointCommitStore(fixture.Context, new Accessor("tenant-a"));
+
+        async ValueTask CommitCheckpointAsync(CancellationToken cancellationToken) =>
+            _ = await store.CommitAsync(checkpoint, new(RuntimeCheckpointPersistenceMode.Immediate), cancellationToken);
+        await fixture.Store.CommitTerminalJobChangeAtomicallyAsync(terminal, CommitCheckpointAsync);
+
+        async ValueTask ReplayWithAPendingChangeAsync(CancellationToken cancellationToken)
+        {
+            var row = await fixture.Context.WorkflowAlterationJobs.SingleAsync(cancellationToken);
+            fixture.Context.Entry(row).Property(candidate => candidate.Revision).IsModified = true;
+            await CommitCheckpointAsync(cancellationToken);
+            // The replay did not run an attempt, which would have cleared the tracker.
+            Assert.True(fixture.Context.ChangeTracker.HasChanges());
+        }
+        await fixture.Store.CommitTerminalJobChangeAtomicallyAsync(terminal, ReplayWithAPendingChangeAsync);
+
+        var stored = (await fixture.Store.FindJobAsync(job.JobId))!;
+        Assert.Equal(WorkflowAlterationJobStatus.Succeeded, stored.Status);
+        Assert.Equal(job.Revision + 1, stored.Revision);
+    }
+
+    [Fact]
     public async Task Alteration_callback_rejects_a_different_ef_context_before_the_checkpoint_writes()
     {
         await using var db = await Database.CreateAsync();

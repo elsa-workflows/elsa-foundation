@@ -1,13 +1,13 @@
 # Activity Data Selection: program and delivery plan
 
-**Status:** Owner-authorized delivery plan, 5 November 2026; production contracts/specification follow the bounded proof.
+**Status:** Owner-authorized delivery plan, 5 November 2026; reviewed production artifacts are in [spec 1215](../../specs/1215-activity-data-selection/spec.md).
 **Date:** 2026-11-05
 **Planning baseline:** `origin/main` at `8e2acfd4d85a937e888ad378fdb7c6a742a80bda`.
 **Establishment refresh:** `697e9a342998282a08a598ad7137b2e90c9435c2`; source gaps and existing issue ownership rechecked.
 **Program:** [#3882](https://github.com/elsa-workflows/elsa-foundation/issues/3882) · [current goal](../program-goals/activity-data-selection.md).
 **Existing feature:** [#3094 — Author activity-output references in Studio](https://github.com/elsa-workflows/elsa-foundation/issues/3094).
 **Program-goal state:** **Activity Data Selection**, authorized by the owner's "Proceed as proposed" instruction.
-**Product owner:** Sipke. Codex coordinates establishment and the first proof; executable ownership is claimed per issue.
+**Product owner:** Sipke. Codex coordinates delivery through M5 under the 5 November all-milestones continuation; executable ownership is claimed per issue.
 
 ## Recommendation
 
@@ -71,7 +71,7 @@ These are source findings, not execution acceptance. The live issue/PR observati
 | Area | Existing basis | Work or uncertainty |
 |---|---|---|
 | Value semantics | Accepted [ADR 0045](../adr/0045-workflow-value-flow-uses-role-owned-bindings-and-immutable-invocation-records.md) distinguishes immutable results from variables and resolves causal occurrences. | Preserve its rules; a reference never means the newest execution of a node. |
-| Direct result input | [RuntimeInputBindingCompiler](../../Essentials/src/Workflows/Publishing/Elsa.Workflows.Publishing/Services/RuntimeInputBindingCompiler.cs) compiles `ActivityResult` with producer, projection, scope and optionality. | It selects a declared projection key; arbitrary nested member paths are not currently a field on that reference. |
+| Direct result input | [RuntimeInputBindingCompiler](../../Essentials/src/Workflows/Publishing/Elsa.Workflows.Publishing/Services/RuntimeInputBindingCompiler.cs) compiles `ActivityResult` with producer, projection and optionality; a declared producer scope is optional and legacy, and the server's own bindings carry none ([binding contract](../../specs/1215-activity-data-selection/contracts/binding-contract.md#1-authored-wire)). | It selects a declared projection key; arbitrary nested member paths are not currently a field on that reference. |
 | Expression bindings | [ExpressionDefinition](../../Essentials/src/Expressions/Core/Models/ExpressionDefinition.cs) supports activity-result parameters. [#3501](https://github.com/elsa-workflows/elsa-foundation/issues/3501) and merged [PR #3502](https://github.com/elsa-workflows/elsa-foundation/pull/3502) delivered a workflow-input argument picker. | Reuse portable parameter handling. Define nested selection separately from the installed language adapter used for transformations. |
 | Source discovery | [PersistedExpressionAuthoringContextSource](../../Essentials/src/Workflows/Design/Api/Services/PersistedExpressionAuthoringContextSource.cs) supplies typed available outputs; [expressionToolingClient](../../Studio/src/essentials/Elsa.Studio.Workflows/Client/src/expression-tooling/expressionToolingClient.ts) projects them to Studio. | Prove current-draft, non-code input usage. CLR member discovery is bounded; it is not general dynamic JSON-schema discovery. |
 | Main canvas | #3094 identifies Sequence/structure-owned availability and omitted Flowchart producers. | Prove a simple linear Flowchart in the first milestone; specify general graph availability before production expansion. |
@@ -84,12 +84,23 @@ covering PR was found. Establishment links it to #3882 while preserving its orig
 23 October restart in [ADR 0080](../adr/0080-elsa-4-simplification-decisions.md); its bookkeeping is separate
 work. This program must not silently enlarge or repair that program.
 
+The M2 handoff refresh confirms that #3094 has no native blockers. Its original "before compensation M3"
+sequencing note is historical: [#3046 completed](https://github.com/elsa-workflows/elsa-foundation/issues/3046#issuecomment-6297263367)
+with #3126/#3127 and Implemented spec 258. Preserve compensation-handler own/prior forward-result visibility
+through its structure hook and existing causal/restart controls; do not wait for closure of the broader
+compensation program or absorb its later qualification work. M1/M2 and shared-authority gates still apply.
+
 The [ADR 0089 amendment PR #3420](https://github.com/elsa-workflows/elsa-foundation/pull/3420) was draft and
 unmerged when inspected. The picker must not settle proposed ambient activity-name/occurrence syntax.
 Broader ADR 0046 coercion also remains proposed outside its accepted output-capture slice. Link existing
 decisions; route any needed semantic amendment through its normal agreement process.
 
 ## Milestones and handoff gates
+
+The owner's 5 November instruction, **"Set a goal to deliver all milestones"**, continues this plan
+through M1–M5, normal review/merge and resulting-main qualification. The
+[program receipt](https://github.com/elsa-workflows/elsa-foundation/issues/3882#issuecomment-6667218844)
+records that authorization without expanding scope or waiving milestone gates.
 
 ### M0 — Establish the scoped program ([#3883](https://github.com/elsa-workflows/elsa-foundation/issues/3883))
 
@@ -147,6 +158,10 @@ adopted only through the reviewed production spec and normal delivery process.
 Follow [specification → plan → tasks](../contributing/task-paths.md#feature-development), reviewing each
 artifact before the next. Allocate the next [spec number](../reference/spec-lifecycle.md) against the tree,
 archives and open PR allocations when this phase starts.
+
+The reviewed [spec 1215 package](../../specs/1215-activity-data-selection/plan.md) records the qualified
+M1 research exit, contract choices, 51 tasks and remaining exact-head review/merge/resulting-main gates.
+Approval takes effect on M2 merge; product acceptance remains M3–M5 work.
 
 Specify the source tree, target eligibility, member/path identity, source labels, types, nullability,
 cardinality, host capability, canonical binding and compatibility diagnostics. Define current-revision
@@ -245,7 +260,7 @@ and the org-wide [Issue Bus Lite](https://github.com/elsa-workflows/.github/blob
 claims and delivery. This proposal does not create initiative membership for #3094. A future change that
 belongs to an existing initiative follows that initiative's agreement rules for that specific change.
 
-Planning considered framework constitution v6.1.0 and Elsa constitution v6.3.0: preserve module boundaries,
+Planning considered framework constitution v6.1.0 and Elsa constitution v6.4.0: preserve module boundaries,
 artifact-only execution, explicit value roles and meaningful risk-based tests. No exception is proposed.
 Draft/provisional framework §2.24 and Elsa §E2.8 versioning/Model X and §E2.9 remain unratified; this proposal
 does not ratify them. Recheck affected gates during the formal spec/plan review.

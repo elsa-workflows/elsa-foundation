@@ -5,7 +5,7 @@ import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { authSessionEndedEvent } from "@elsa-workflows/studio-sdk";
 import type { Node } from "@xyflow/react";
 import { useEditorRunCanvas, type EditorRunCanvas } from "../workflow-editor/useEditorRunCanvas";
-import { AttachedTestRunStatus } from "../workflow-editor/AttachedTestRunStatus";
+import { AttachedTestRunControls } from "../workflow-editor/AttachedTestRunControls";
 import type { WorkflowTestRunState } from "../workflow-editor/editorTypes";
 import type { WorkflowNodeData } from "../workflowAdapter";
 import type { ActivityExecutionStateSummary, WorkflowExecutableDetails, WorkflowInstanceDetails } from "../workflowTypes";
@@ -52,7 +52,7 @@ afterEach(() => { flushSync(() => root.unmount()); container.remove(); });
 
 function Probe() {
   latest = useEditorRunCanvas(props);
-  return <><AttachedTestRunStatus view={props.testRun!.view} canvas={latest} onOpenDetails={() => {}} onOpenRun={() => {}} />
+  return <><AttachedTestRunControls canvas={latest} />
     <div data-node-status={latest.nodes[0]?.data.runtime?.status ?? "authoring"} />
   </>;
 }
@@ -68,7 +68,7 @@ async function settle() {
 }
 
 function click(label: string) {
-  const button = [...container.querySelectorAll("button")].find(item => item.textContent === label);
+  const button = [...container.querySelectorAll("button")].find(item => (item.getAttribute("aria-label") ?? item.textContent) === label);
   expect(button).toBeDefined();
   flushSync(() => button!.dispatchEvent(new MouseEvent("click", { bubbles: true })));
 }
@@ -281,7 +281,8 @@ describe("execution attached to the editor canvas", () => {
     await settle();
     expect(api.instance).not.toHaveBeenCalled();
     expect(latest.nodes).toBe(nodes);
-    expect(container.textContent).toContain("Test Run rejected");
+    expect(container.querySelector("[aria-label='Execution controls']")?.textContent).toBe("");
+    expect(container.querySelector('button[aria-label="Refresh execution"]')).toBeNull();
   });
 
   it("captures the dispatched snapshot before awaiting the server, without saving or publishing", async () => {

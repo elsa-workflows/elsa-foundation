@@ -6,6 +6,7 @@ import argparse
 from contextlib import contextmanager
 import json
 import os
+import re
 from pathlib import Path
 import shutil
 import signal
@@ -18,13 +19,19 @@ import urllib.request
 ROOT = Path(__file__).resolve().parents[2]
 PROJECTS = {'desktop-light', 'desktop-dark', 'narrow-light', 'narrow-dark'}
 CAPTURES = {
+    'tabbed Secrets authoring and metadata': ['reference', 'secret-section', 'first-invalid-field', 'storage-section', 'details-section', 'persisted-list', 'persisted-metadata', 'metadata-390', 'storage-390', 'configuration-reference', 'configuration-metadata'],
+    'business decisions authoring and explanations': ['reference', 'decisions-list', 'decisions-search', 'decision-create', 'decision-table', 'decision-case-editor', 'decision-case-expectation', 'decision-cases', 'decision-regression', 'decision-published', 'decision-explanation', 'decision-clone', 'decision-conflict', 'decision-history', 'decisions-no-matches', 'decision-imported', 'decision-table-320', 'decision-table-320-scrolled', 'decision-picker', 'decision-picker-new-tab', 'decision-picker-saved-tab', 'decision-picker-selected-toast', 'decision-picker-returned'],
     'feature filtering and settings dialogs': ['reference', 'features-server-no-matches', 'features-server-populated', 'features-studio-no-matches', 'features-studio-populated', 'feature-settings-dialog', 'feature-impact-dialog'],
     'collections and connection creation': ['reference', 'no-matches', 'connections-list', 'secret-create', 'secret-list', 'secret-detail', 'secret-duplicate', 'invalid-name', 'completed'],
+    'publication blockers explain how to correct agent settings': ['reference', 'blocked', 'instructions-focused', 'model-blocked', 'model-focused', 'completed'],
     'save template toast': ['reference', 'save-form', 'saved-toast', 'template-list', 'reopened-template'],
     'workflow template metadata defaults': ['reference', 'template-defaults', 'template-edits', 'template-catalog-entry', 'template-persisted'],
-    'user tasks inbox and response': ['reference', 'tasks-empty', 'tasks-list', 'task-detail', 'task-actions', 'task-history', 'task-forms', 'task-form-versions', 'task-form-editor', 'task-form-actions', 'completed'],
+    'user tasks inbox and response': ['reference', 'tasks-empty', 'tasks-list', 'task-detail', 'task-actions', 'task-history', 'task-forms', 'task-form-versions', 'task-form-editor', 'task-form-actions', 'completed', 'tasks-return', 'task-not-found', 'task-tab-return'],
     'executable designer parity': ['reference', 'definition-sequence', 'executable-sequence', 'nested-sequence', 'draft-sequence', 'empty-sequence', 'compensation', 'flowchart', 'bpmn'],
+    'choose data for activity outputs': ['reference', 'choose-data-entry', 'chooser-open', 'output-reference', 'not-selectable', 'replace-chooser', 'chooser-320'],
     'agent authoring and navigation': ['reference', 'agents-list', 'agent-create', 'agent-designer', 'agent-model', 'advanced-settings', 'inputs', 'outputs', 'input-general', 'input-presentation', 'input-advanced', 'output-general', 'output-presentation', 'output-advanced', 'completed'],
+    'user task authoring and workflow result': ['reference', 'form-authoring', 'published-form', 'task-authoring', 'form-selection', 'json-output-definitions', 'renamed-output', 'removed-output', 'output-picker', 'frozen-task-form', 'run-outcomes', 'run-outcomes-readable', 'run-output-reached', 'workflow-result', 'task-fault-causes', 'task-fault-details', 'prefill-fault'],
+    'compact runtime Inputs retain exact captured values and accessible technical details': ['reference', 'compact-values', 'technical-details', 'nested-values', 'details-closed', 'technical-details-320', 'compact-values-320'],
 }
 JOURNEYS = set(CAPTURES)
 
@@ -59,8 +66,11 @@ def command(args, log, *, cwd=ROOT, env=None):
             stop_group(process)
 
 
-def verdict(report, artifacts):
+def verdict(report, artifacts, journeys=None):
     """An exit code alone cannot certify that every intended journey actually ran."""
+    journeys = JOURNEYS if journeys is None else set(journeys)
+    if not journeys or not journeys <= JOURNEYS:
+        raise ValueError("Unknown or empty journey inventory")
     rows = []
     def walk(suites):
         for suite in suites:
@@ -69,7 +79,7 @@ def verdict(report, artifacts):
                     rows.append((test.get('projectName'), spec.get('title'), test))
             walk(suite.get('suites', []))
     walk(report.get('suites', []))
-    expected = {(project, journey) for project in PROJECTS for journey in JOURNEYS}
+    expected = {(project, journey) for project in PROJECTS for journey in journeys}
     actual = [(project, title) for project, title, _ in rows]
     if len(actual) != len(expected) or set(actual) != expected:
         raise ValueError(f'Incomplete acceptance inventory: expected {sorted(expected)}, got {actual}')
@@ -149,21 +159,22 @@ def prepare_host(project, destination):
         shutil.copy2(project.parent / name, destination / name)
 
 
-def run(output):
+def run(output, journey=None):
     output.mkdir(parents=True, exist_ok=False)
     sha = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()
     dirty = subprocess.check_output(['git', 'status', '--porcelain'], cwd=ROOT, text=True).strip()
     report = {'sourceSha': sha, 'headSha': os.environ.get('UX_PR_HEAD_SHA', sha), 'dirty': bool(dirty),
               'kind': 'composed-source', 'startedAt': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
-              'status': 'failed', 'stage': 'build', 'visualApproval': 'requires independent review'}
+              'status': 'failed', 'stage': 'build', 'visualApproval': 'requires independent review',
+              'journeys': [journey] if journey else sorted(JOURNEYS)}
     try:
         if dirty:
             raise ValueError('Commit source changes before acceptance; a dirty run cannot certify a revision')
         backend_project = ROOT / 'Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj'
         studio_project = ROOT / 'Studio/src/apps/Elsa.Studio.Web/Elsa.Studio.Web.csproj'
-        command(['dotnet', 'build', str(backend_project), '-p:RestoreLockedMode=true', '-v:q', '-nologo'], output / 'backend-build.log')
+        command(['dotnet', 'build', str(backend_project), '-p:RestoreLockedMode=true', '-v:q', '-nologo', '-m:1', '/nr:false'], output / 'backend-build.log')
         command(['pnpm', 'build'], output / 'frontend-build.log', cwd=ROOT / 'Studio')
-        command(['dotnet', 'build', str(studio_project), '-p:RestoreLockedMode=true', '-v:q', '-nologo'], output / 'studio-build.log')
+        command(['dotnet', 'build', str(studio_project), '-p:RestoreLockedMode=true', '-v:q', '-nologo', '-m:1', '/nr:false'], output / 'studio-build.log')
         with tempfile.TemporaryDirectory(prefix='elsa-ux-acceptance-') as temporary:
             data = Path(temporary)
             backend, studio = data / 'workbench', data / 'studio'
@@ -190,9 +201,11 @@ def run(output):
                     browser_env = dict(os.environ, UX_ACCEPTANCE_OWNED='1', ELSA_STUDIO_URL=studio_url,
                                        ELSA_WORKBENCH_URL=backend_url, UX_BACKEND_URL=backend_url,
                                        UX_ACCEPTANCE_OUT=str(output), UX_SOURCE_SHA=sha)
-                    command(['pnpm', 'exec', 'playwright', 'test', '--config', 'tests/acceptance/playwright.config.ts'],
-                            output / 'journeys.log', cwd=ROOT / 'Studio', env=browser_env)
-                    report['executed'] = verdict(json.loads((output / 'playwright.json').read_text()), output)
+                    browser_command = ['pnpm', 'exec', 'playwright', 'test', '--config', 'tests/acceptance/playwright.config.ts']
+                    if journey:
+                        browser_command.extend(['--grep', re.escape(journey).replace(r'\ ', ' ')])
+                    command(browser_command, output / 'journeys.log', cwd=ROOT / 'Studio', env=browser_env)
+                    report['executed'] = verdict(json.loads((output / 'playwright.json').read_text()), output, [journey] if journey else None)
         end_sha = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()
         end_dirty = subprocess.check_output(['git', 'status', '--porcelain'], cwd=ROOT, text=True).strip()
         if sha != end_sha or dirty != end_dirty:
@@ -212,8 +225,9 @@ def run(output):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, required=True, help='New evidence directory outside disposable stores')
+    parser.add_argument('--journey', choices=sorted(JOURNEYS), help='Run one complete journey across all four projects; the default still requires every journey')
     args = parser.parse_args()
     def terminate(_signum, _frame):
         raise InterruptedError('Acceptance interrupted; owned hosts will be stopped')
     signal.signal(signal.SIGTERM, terminate)
-    run(args.output.resolve())
+    run(args.output.resolve(), args.journey)

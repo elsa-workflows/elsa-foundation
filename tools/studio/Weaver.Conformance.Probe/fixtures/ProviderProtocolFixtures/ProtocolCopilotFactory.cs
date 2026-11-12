@@ -1,6 +1,6 @@
 using System.Runtime.CompilerServices;
 using System.Text.Json;
-using Elsa.Agent.GitHubCopilot.Services;
+using Elsa.Weaver.GitHubCopilot.Services;
 using Microsoft.Extensions.AI;
 
 namespace Acme.Weaver.ProtocolFixtures;

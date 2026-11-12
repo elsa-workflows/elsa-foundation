@@ -2,6 +2,8 @@ using Elsa.Connections.Core.Contracts;
 using Elsa.Connections.Core.Models;
 using Elsa.Secrets.Core.Contracts;
 using Elsa.Secrets.Core.Models;
+using Elsa.Secrets.Core.Options;
+using Microsoft.Extensions.Options;
 
 namespace Elsa.Integrations.Connectors.OAuth2;
 
@@ -49,7 +51,9 @@ public sealed record OAuth2AuthenticationScheme
         OAuth2GrantStorePolicy.EnsureWritable(store);
 }
 
-internal sealed class OAuth2SchemeProvider(ISecretStoreRegistry stores) : IAuthenticationSchemeProvider
+internal sealed class OAuth2SchemeProvider(
+    ISecretStoreRegistry stores,
+    IOptions<WritableSecretStoreOptions> writableSecretStore) : IAuthenticationSchemeProvider
 {
     public AuthSchemeDescriptor Descriptor { get; } = new(
         HttpAuthSchemes.OAuth2,
@@ -58,6 +62,7 @@ internal sealed class OAuth2SchemeProvider(ISecretStoreRegistry stores) : IAuthe
             new AuthSchemeField(OAuth2SettingKeys.GrantType, "Grant type", Sensitive: false, "text"),
             new AuthSchemeField(OAuth2SettingKeys.TokenUrl, "Token URL", Sensitive: false, "url"),
             new AuthSchemeField(OAuth2SettingKeys.AuthorizationUrl, "Authorization URL", Sensitive: false, "url", Required: false),
+            new AuthSchemeField(OAuth2SettingKeys.ScopesUrl, "Scopes URL", Sensitive: false, "url", Required: false),
             new AuthSchemeField(OAuth2SettingKeys.Scopes, "Scopes", Sensitive: false, "text", Required: false),
             new AuthSchemeField(OAuth2SettingKeys.ClientId, "Client ID", Sensitive: false, "text"),
             new AuthSchemeField(OAuth2SecretFields.ClientSecret, "Client secret", Sensitive: true, "password", Required: false),
@@ -72,9 +77,7 @@ internal sealed class OAuth2SchemeProvider(ISecretStoreRegistry stores) : IAuthe
     {
         _ = tenantId;
         _ = cancellationToken;
-        if (!stores.TryGet(SecretStoreNames.Encrypted, out var store) || store is null)
-            throw new InvalidOperationException("OAuth2 grants require a writable secret store.");
-        OAuth2GrantStorePolicy.EnsureWritable(store.Descriptor);
+        DefaultWritableSecretStore.GetRequiredWritable(stores, writableSecretStore.Value.DefaultWritableStoreName);
         return ValueTask.CompletedTask;
     }
 }

@@ -1,9 +1,10 @@
 # Activity Data Selection
 
-- **Status:** Active; owner authorization, 5 November 2026. Establishment precedes the bounded proof;
-  reviewed production contracts/specification precede implementation.
+- **Status:** Active; shared-foundation implementation in #3922. Bounded M1 research and M2 production
+  agreement are closed; production acceptance remains outstanding.
 - **Area:** Foundation value binding/source discovery and Studio eligible-input authoring.
-- **Steward:** Sipke. Codex coordinates the first proof; executable ownership is recorded by a valid claim per leaf.
+- **Steward:** Sipke. Codex coordinates delivery through M5 under the owner's 5 November continuation;
+  executable ownership is recorded by a valid claim per leaf.
 - **Program:** [#3882](https://github.com/elsa-workflows/elsa-foundation/issues/3882).
 - **Delivery plan:** [Activity Data Selection](../plans/activity-data-selection.md).
 
@@ -21,14 +22,18 @@ the delivery plan owns the detailed milestone gates and evidence matrix. This pa
 
 [ADR 0080 D0](../adr/0080-elsa-4-simplification-decisions.md#d0--focus) records the scoped owner instruction,
 "Proceed as proposed". Run alongside active programs, displace none, preserve Foundation/Studio
-consolidation's priority one, and coordinate shared Studio/runtime changes. Keep one integration lane;
-parallel Foundation/picker work follows the committed shared contract and uses separate worktrees/leaves.
+consolidation's priority one, and coordinate shared Studio/runtime changes. The owner's
+[9 November continuation](https://github.com/elsa-workflows/elsa-foundation/issues/3882#issuecomment-6739568560)
+uses one implementation worker at a time: finish the Foundation leaf and its resulting-main qualification
+before starting the remaining delivery leaves. Keep each leaf in an isolated worktree.
 
 - Reuse [feature #3094](https://github.com/elsa-workflows/elsa-foundation/issues/3094). Preserve its compensation
   relationship and narrower independently deliverable whole-output slice instead of duplicating the feature.
 - [Studio Expression Developer Experience #2310](studio-expression-developer-experience.md) retains text
   code-authoring scope. Share existing SDK, editor adapters, portable bindings and the delivered #3501/#3502 picker.
 - [Native Compensation #3035](native-compensation.md) and its consumers retain their semantics and ownership.
+  #3094's original "before M3" note is historical: [#3046 is completed](https://github.com/elsa-workflows/elsa-foundation/issues/3046#issuecomment-6297263367).
+  Retain compensation regression coverage; closing the still-open compensation program is not a prerequisite here.
 - Accepted [ADR 0045](../adr/0045-workflow-value-flow-uses-role-owned-bindings-and-immutable-invocation-records.md)
   governs causal occurrences. This program does not decide draft ADR 0089 activity-name/occurrence syntax or the
   broader proposed ADR 0046 coercion model. Governed amendments follow their existing agreement process;
@@ -55,12 +60,39 @@ Native sub-issues link all three initial tasks and #3094 to #3882. M1 is blocked
 M1. #3094 retains its narrower criteria and follows the applicable contract gates, rather than acquiring
 unrelated scope from the new parent. New issues start `needs-triage`; assignment does not promote them to Ready.
 
-M0 establishment merged and its resulting main qualified. The current objective is review and closeout
-of the bounded [M1 customer proof](../reports/activity-data-selection-m1.md): actual persisted runtime
+The owner instructed **"Set a goal to deliver all milestones"** on 5 November, recorded on
+[#3882](https://github.com/elsa-workflows/elsa-foundation/issues/3882#issuecomment-6667218844).
+The active delivery objective includes M1–M5, review/merge and resulting-main qualification within the
+existing scope. M0 merged and its initial resulting main qualified. The
+[M1 research report](../reports/activity-data-selection-m1.md) merged: supporting persisted runtime
 controls work, while the requested no-expression UI journey fails at identified binding/source seams.
-M2 consumes the accepted findings through its own reviewed specification, plan and tasks before parallel
-production workers start. The experiment adopts no production contract or implementation. A separate
-Project board is optional and does not delay the first result.
+M1 [closed as bounded research](https://github.com/elsa-workflows/elsa-foundation/issues/3884#issuecomment-6670165196)
+after backend/full and Studio qualification passed at post-report descendant `e8476790`. Its
+[receipt](https://github.com/elsa-workflows/elsa-foundation/pull/3893#issuecomment-6670164301) preserves
+failed/not-run product criteria and the newer-main qualification limit; cancelled runs are not passes.
+
+[Spec 1215](../../specs/1215-activity-data-selection/spec.md), its plan/contracts and 51 tasks completed
+sequential independent review. [PR #3897](https://github.com/elsa-workflows/elsa-foundation/pull/3897) received
+formal approval, passed its required exact-head checks and merged as `f50b72075`. M2
+[closed after resulting-source qualification](https://github.com/elsa-workflows/elsa-foundation/issues/3885#issuecomment-6676152380)
+at exact descendant `f6ebd0e10`: all selected GitHub jobs succeeded and the unchanged aggregate predicates
+passed separately; the queued hosted aggregates were not relabelled passed. This does not qualify later main.
+
+Foundation [#3922](https://github.com/elsa-workflows/elsa-foundation/issues/3922) owns T004–T010 under
+its [specific claim](https://github.com/elsa-workflows/elsa-foundation/issues/3922#issuecomment-6676170172),
+with one implementation worker and a coordinating reviewer.
+[PR #3948](https://github.com/elsa-workflows/elsa-foundation/pull/3948) is the shared-analysis
+foundation leaf: T004–T010 source and Evaluate Decision whole-`$result` description, without runtime
+member binding or Studio chooser/inspector. Its
+[local qualification receipt](https://github.com/elsa-workflows/elsa-foundation/pull/3948#issuecomment-6728799519)
+preserves the exact source heads for 21 owning whole suites and seven mutation proofs; it is not a
+protected-CI pass on the integrated candidate. The branch now integrates main `8d03b1623`, whose
+[CI run passed](https://github.com/elsa-workflows/elsa-foundation/actions/runs/42604146302).
+Integrated-candidate checks, formal Code Review round 2 and resulting-main qualification remain pending;
+the private author loop remains capped/unconverged at round 3. Spec 1215 remains unimplemented and
+T003/T004–T010 stay unchecked. No production journey is accepted by these source changes or historical
+receipts. #3094 and the remaining runtime, Studio, expression/editing, causal/restart and final UX work
+retain their own gates.
 
 ## Completion
 

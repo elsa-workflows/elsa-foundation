@@ -201,6 +201,7 @@ Ordinary edits still follow the coordinator's snapshot semantics; this is not a 
   child metadata and dependency claims after tenant/liveness/input-contract validation.
 - **Known implementation:** `BpmnEmbeddingPinSource` *(cross-domain — `Elsa.Activities.Bpmn.Design`)* contributes
   exact live, tenant-matched published model identity/incarnation metadata and dependency claims for `RunBpmn`.
+- **Known implementation:** `DecisionPinSource` *(cross-domain — `Elsa.Decisions.Workflows.Design`)* resolves a permitted published decision once and contributes its exact frozen artifact/profile/semantics metadata. Decision identity is not a child workflow-executable dependency claim.
 - **Boundary:** Collection occurs after node compilation and before executable hashing. The compiler canonicalizes
   declared workflow inputs and exact direct dependencies into behavioral identity, then validates every reachable
   child graph by full artifact ID/hash before publication can activate the candidate.
@@ -230,16 +231,16 @@ Ordinary edits still follow the coordinator's snapshot semantics; this is not a 
 
 | Contract | Kind and registration | Consumer | Known implementation |
 |---|---|---|---|
-| `IActivityTemplateProviderCompiler` | Contributor keyed by stable provider identity and manifest schema. Provider features register implementations; `IActivityTemplateProviderCompilerRegistry` rejects ambiguous ownership. | `ActivityTemplateCompiler` performs deterministic provider compilation before executable hashing. | `GraphActivityProvider` *(cross-domain — Activities Graph Design)*; `SpecialistActivityProvider` *(cross-domain — Specialist Design)* |
-| `IActivityTemplateDependencyDiscoverer` | Contributor keyed by stable provider identity and manifest schema. Provider features register implementations; `IActivityTemplateDependencyDiscovererRegistry` resolves the exact discoverer. | `ActivityTemplateCompiler` discovers exact direct dependencies before compilation. | `GraphActivityProvider` *(cross-domain — Activities Graph Design)*; `SpecialistActivityProvider` *(cross-domain — Specialist Design)* |
+| `IActivityTemplateProviderCompiler` | Contributor keyed by stable provider identity and manifest schema. Provider features register implementations; `IActivityTemplateProviderCompilerRegistry` rejects ambiguous ownership. | `ActivityTemplateCompiler` performs deterministic provider compilation before executable hashing. | `GraphActivityProvider` *(cross-domain — Activities Graph Design)*; `AgentActivityProvider` *(cross-domain — Agent Design)* |
+| `IActivityTemplateDependencyDiscoverer` | Contributor keyed by stable provider identity and manifest schema. Provider features register implementations; `IActivityTemplateDependencyDiscovererRegistry` resolves the exact discoverer. | `ActivityTemplateCompiler` discovers exact direct dependencies before compilation. | `GraphActivityProvider` *(cross-domain — Activities Graph Design)*; `AgentActivityProvider` *(cross-domain — Agent Design)* |
 
 The Activity Graph implementation and its feature registration are documented in the
 [contributing-feature catalog](../../../Activities/Graph/Design/EXTENSION_POINTS.md).
 
 The provider/compiler/discovery registries are scoped. Contributors that read selected persistence
 access or scoped model metadata must remain in the publication operation; stateless singleton
-contributors remain supported. The specialist registrations are documented in their
-[contributing-feature catalog](../../../../../Extensions/Agent/src/Specialists/Design/EXTENSION_POINTS.md).
+contributors remain supported. The agent registrations are documented in their
+[contributing-feature catalog](../../../../../Extensions/Agent/src/Design/EXTENSION_POINTS.md).
 
 ## Cross-domain seams consumed by the engine
 

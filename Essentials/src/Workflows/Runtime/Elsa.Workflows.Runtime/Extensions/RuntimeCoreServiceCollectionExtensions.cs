@@ -114,7 +114,26 @@ public static class RuntimeCoreServiceCollectionExtensions
             typeof(DecideInterventionAlterationHandler));
         services.TryAddScoped<IWorkflowAlterationCheckpointWriter, RuntimeWorkflowAlterationCheckpointWriter>();
         services.TryAddScoped<WorkflowAlterationJobExecutor>();
-        services.TryAddScoped<IWorkflowAlterationActorCommandExecutor, WorkflowAlterationActorCommandExecutor>();
+        // Composed by factory because the lease is an internal collaborator: a job reads its run and commits under the
+        // run's ownership lease, so its checkpoint is fenced like a drain's (#2667).
+        services.TryAddScoped<IWorkflowAlterationActorCommandExecutor>(serviceProvider =>
+        {
+            var timeProvider = serviceProvider.GetRequiredService<TimeProvider>();
+            return new WorkflowAlterationActorCommandExecutor(
+                serviceProvider.GetRequiredService<IWorkflowAlterationStore>(),
+                serviceProvider.GetRequiredService<IWorkflowAlterationPayloadProtector>(),
+                serviceProvider.GetRequiredService<IWorkflowExecutionStateStore>(),
+                serviceProvider.GetRequiredService<WorkflowAlterationJobExecutor>(),
+                serviceProvider.GetService<IActivityExecutionStateStore>(),
+                serviceProvider.GetService<IWorkflowSchedulerWorkQueue>(),
+                timeProvider,
+                new AlterationLeaseRunner(
+                    serviceProvider.GetRequiredService<IRuntimeExecutionOwnershipService>(),
+                    serviceProvider.GetRequiredService<IRuntimeExecutionOwnershipContextAccessor>(),
+                    serviceProvider.GetRequiredService<IPersistenceOperationScopeFactory>(),
+                    timeProvider,
+                    serviceProvider.GetService<ILogger<AlterationLeaseRunner>>()));
+        });
         services.TryAddScoped<WorkflowAlterationPlanService>();
         services.TryAddScoped<IWorkflowAlterationJobDispatcher, WorkflowAlterationJobDispatcher>();
         services.TryAddScoped<WorkflowAlterationTargetCaptureTask>();
@@ -241,7 +260,25 @@ public static class RuntimeCoreServiceCollectionExtensions
         // Scoped: one per scheduler work item's scope, holding only the values resolved for the executions it handles.
         // A replacement contract: the activities runtime fails shell activation on a second one.
         services.TryAddScoped<IRuntimeSecretMask, DefaultRuntimeSecretMask>();
-        services.TryAddSingleton<IWorkflowSchedulerPoisonStore, InMemoryWorkflowSchedulerPoisonStore>();
+        // #4032: the in-memory poison store can check a run's ownership fence only against the in-memory ownership store,
+        // and only when that is the registered one. It looks when it is first asked whether it can record fenced, not
+        // here: until then it needs nothing of the ownership store. A provider's ownership store is scoped, and this
+        // singleton must not resolve one from the root provider, so the lookup runs in scopes of its own. It keeps
+        // the store only when two scopes yield the same in-memory instance, which is the singleton the ownership
+        // service writes to, as registered above. A store of another type, and an in-memory store a host registered
+        // scoped or transient, are not kept: the poison store then records unfenced. A copy from a throwaway scope
+        // holds no lease, so checking against it would refuse the record of a drain that owns its run.
+        services.TryAddSingleton<IWorkflowSchedulerPoisonStore>(serviceProvider => new InMemoryWorkflowSchedulerPoisonStore(
+            () =>
+            {
+                using var first = serviceProvider.CreateScope();
+                using var second = serviceProvider.CreateScope();
+                return first.ServiceProvider.GetService<IExecutionLivenessStateStore>() is InMemoryExecutionLivenessStateStore ownershipStateStore &&
+                       ReferenceEquals(ownershipStateStore, second.ServiceProvider.GetService<IExecutionLivenessStateStore>())
+                    ? ownershipStateStore
+                    : null;
+            },
+            serviceProvider.GetRequiredService<TimeProvider>()));
         services.TryAddSingleton<IRuntimeVolatileWaitPolicy, DefaultRuntimeVolatileWaitPolicy>();
         services.TryAddScoped<IRuntimeGeneratorEmissionScheduler, RuntimeGeneratorEmissionScheduler>();
         services.TryAddScoped<IWorkflowSchedulerPauseGate, WorkflowSchedulerPauseGate>();
@@ -443,6 +480,8 @@ public static class RuntimeCoreServiceCollectionExtensions
                 serviceProvider.GetRequiredService<IRuntimeAdmissionLoadSignal>())
             { ModelProtocols = serviceProvider.GetService<RuntimeExecutionProtocolSelector>(),
                 DrainControls = serviceProvider.GetRequiredService<DrainControlContext>(),
+                OwnershipContextAccessor = serviceProvider.GetRequiredService<IRuntimeExecutionOwnershipContextAccessor>(),
+                OwnershipService = serviceProvider.GetRequiredService<IRuntimeExecutionOwnershipService>(),
                 HasResumptionRedriver = serviceProvider.GetServices<IWorkflowDispatchDurabilityEvidence>().Any(evidence =>
                     string.Equals(evidence.Component, WorkflowDispatchDurabilityComponents.Resumption, StringComparison.Ordinal)) });
         services.TryAddSingleton<IWorkflowSchedulerDrainPolicy, ImmediateWorkflowSchedulerDrainPolicy>();
@@ -489,6 +528,11 @@ public static class RuntimeCoreServiceCollectionExtensions
         services.TryAddScoped<RuntimeActivityInputSnapshotMaterializer>();
         services.TryAddScoped<WorkflowIntrinsicExecutor>();
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IRuntimeActivityConsumerCapability, IntrinsicActivityConsumerCapability>());
+        // Member selection (#4078) is advertised beside the materializer that implements it, and only while it is the one
+        // composed. The capability reads the final registrations (this collection, which the container is built from)
+        // when it is first constructed, and resolves nothing.
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IRuntimeActivityConsumerCapability, InputMemberSelectionCapability>(
+            _ => new InputMemberSelectionCapability(services)));
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IWorkflowSchedulerDrainObserver, NoopWorkflowSchedulerDrainObserver>());
         // Registered before BlockingIncidentWorkflowFaultObserver: the blocking incident it projects from a parked
         // poison record must be visible to the fault observer within the same drain notification pass.

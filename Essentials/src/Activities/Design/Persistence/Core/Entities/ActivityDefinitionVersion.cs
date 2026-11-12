@@ -116,6 +116,7 @@ public sealed class ActivityDefinitionVersion(string version, string definitionI
         new(source.Version, definitionId ?? source.DefinitionId, executionType: source.ExecutionType)
         {
             Id = source.Id,
+            TenantId = (source as TenantEntity)?.TenantId,
             ProviderKey = source.ProviderKey,
             ProviderSchemaVersion = source.ProviderSchemaVersion,
             ConsumerKey = source.ConsumerKey,
