@@ -155,7 +155,7 @@ The tables below are the relational shape. A document provider stores the same r
 | `journal` | partition, position, instance, entries | One row per instance-commit: what happened, as one compact value. The truth about the past. Feeds the viewer's tables. Written according to the history level |
 | `projection` | partition, position | How far the projector has got. Its own row, so the projector never touches the fence row |
 
-This is the proposed shape, and the interfaces in this sketch are the proposed contract: at the evidence commit the prototype still says step and run (`IStep`, `StepAsync`, `IRun`) and has no `Describe`. Not in the prototype yet: the instance's `sub_status`, `root`, `correlation`, `tenant`, `created` and `updated`, the message's `headers`, and the subscription's `kind` (the prototype tells a start subscription by the start spec on its row). The prototype also keeps `fault`, `history`, `suspended` and `children` on the instance row, a `revision` on each journal row and a `died` flag on the partition row; at the evidence commit `jobs` is still called `runs`.
+This is the proposed shape, and the interfaces in this sketch are the proposed contract: at the evidence commit the prototype still says step and run (`IStep`, `StepAsync`, `IRun`) and has no `Describe`; its `UpgradeState` takes the stored string, and it declares a `StateType`. Not in the prototype yet: the instance's `sub_status`, `root`, `correlation`, `tenant`, `created` and `updated`, the message's `headers`, and the subscription's `kind` (the prototype tells a start subscription by the start spec on its row). The prototype also keeps `fault`, `history`, `suspended` and `children` on the instance row, a `revision` on each journal row and a `died` flag on the partition row; at the evidence commit `jobs` is still called `runs`.
 
 The viewer's tables are projections of the journal. There is no outbox, dispatcher, scheduler queue, per-run lease, commit marker, dispatch record or timer table.
 
@@ -249,12 +249,14 @@ public interface ITurn
     object State { get; set; }
     string Send(InstanceRef target, string kind, object? payload = null, SendOptions? options = null);   // returns the message id
     void Recall(string message);                              // delete a message to self, e.g. a timer
-    InstanceRef Start(StartSpec spec, Placement placement = Placement.WithParent);
+    InstanceRef Start(StartSpec spec, Placement placement = Placement.WithParent, bool detached = false);   // detached: not cancelled with the parent
     void StartJob(string key, object? arguments = null);           // start a background job
     void CancelJob(string key);
     void Hold(Message message);                               // hand it to the next turn again
     void Subscribe(string key, string wait, bool keep = false); // keep: also get events published earlier
     void Unsubscribe(string key, string wait);
+    string Publish(string key, string? payload, TimeSpan keep);  // the one way a turn publishes an event
+    bool Redelivered(Message message);                        // the message may have been handled before a crash
     void Record(JournalEntry entry);                          // common envelope plus the model's payload
     void Emit(string channel, object item);                   // live, not durable
     void Rebind(string definition);                           // migrate to another definition version
@@ -386,7 +388,7 @@ The projector runs as a background worker, off the hot path, in its own transact
 3. **No lost message.** A committed message is delivered to a turn whose commit consumes it, as long as some node owns the partition.
 4. **Once in state.** A message changes its target's committed state at most once, including an outside command retried after it was handled, within its window.
 5. **No early or lost timer.** A message is not delivered before it is due and is delivered after.
-6. **Journal order.** A partition's journal has no gap among the rows written, and the projector never passes an unwritten position.
+6. **Journal order.** In a partition, the journal rows present plus the rows removed by deletes equal the position, and the projector never passes an unwritten position.
 7. **Takeover.** After a take at epoch `e + 1`, nothing prepared under `e` commits, and the new owner sees everything that did commit.
 8. **Index matches state.** The subscriptions of an instance are exactly the waits in its committed state.
 9. **Memory matches rows.** At its current epoch, what an owner holds in memory for an instance equals the committed row plus its own uncommitted turn.
@@ -492,6 +494,7 @@ The test: give Elsa 3 users a reason to move and nothing that stops them, and gi
 
 ### Open owner questions
 
+- **Where the architecture section lives.** GitBook publishes `website/docs/`, not `docs/`. Recommended: the proposed pages in `docs/architecture/` now, and a shorter published section in `website/docs/` at the switch.
 - **SQL Server's default fence (E9).** The fence in the batch deadlocks takes with stale commits on SQL Server; the fix (the checked fence there) is not applied. Open for the owner: the checked fence as SQL Server's default.
 
 ### Earlier open questions
