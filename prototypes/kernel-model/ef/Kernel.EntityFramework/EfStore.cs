@@ -14,6 +14,12 @@ public sealed class PartitionEntity
     public bool Died { get; set; }          // the last take found another owner's lease expired
 }
 
+public sealed class NodeEntity
+{
+    public string Id { get; set; } = "";
+    public long SeenAt { get; set; }        // database time of the last heartbeat
+}
+
 public sealed class InstanceEntity
 {
     public string Id { get; set; } = "";
@@ -74,6 +80,7 @@ public sealed class JournalEntity
 public sealed class KernelDb(DbContextOptions<KernelDb> options) : DbContext(options)
 {
     public DbSet<PartitionEntity> Partitions => Set<PartitionEntity>();
+    public DbSet<NodeEntity> Nodes => Set<NodeEntity>();
     public DbSet<InstanceEntity> Instances => Set<InstanceEntity>();
     public DbSet<MessageEntity> Messages => Set<MessageEntity>();
     public DbSet<SubscriptionEntity> Subscriptions => Set<SubscriptionEntity>();
@@ -89,6 +96,7 @@ public sealed class KernelDb(DbContextOptions<KernelDb> options) : DbContext(opt
             e.Property(p => p.Epoch).IsConcurrencyToken();      // the fence, when it rides in the batch
             e.Property(p => p.Position).IsConcurrencyToken();
         });
+        model.Entity<NodeEntity>(e => e.ToTable("Nodes"));
         model.Entity<InstanceEntity>(e =>
         {
             e.ToTable("Instances");
@@ -184,6 +192,17 @@ public sealed class EfStore(Func<KernelDb> create, bool postgres, bool fenceInBa
             await db.Database.ExecuteSqlRawAsync($"""UPDATE "Messages" SET "Attempts" = "Attempts" + 1 WHERE "Partition" = {"{0}"} AND "Trial" = {"{1}"} AND "Done" = {False}""", [partition, rows[0].Epoch - 1], cancellationToken);
         await transaction.CommitAsync(cancellationToken);
         return new Lease(rows[0].Epoch, rows[0].Position, rows[0].Now);
+    }
+
+    public async ValueTask<Cluster> HeartbeatAsync(string node, TimeSpan window, CancellationToken cancellationToken = default)
+    {
+        await using var db = create();
+        var now = await db.Database.SqlQueryRaw<long>(
+            $"""INSERT INTO "Nodes" ("Id", "SeenAt") VALUES ({"{0}"}, {Now}) ON CONFLICT ("Id") DO UPDATE SET "SeenAt" = excluded."SeenAt" RETURNING "SeenAt" AS "Value" """,
+            node).ToListAsync(cancellationToken);
+        var nodes = await db.Nodes.CountAsync(n => n.SeenAt >= now[0] - (long)window.TotalMilliseconds, cancellationToken);
+        var free = await db.Partitions.Where(p => p.Owner == null || p.LeaseUntil < now[0]).Select(p => p.Id).ToListAsync(cancellationToken);
+        return new Cluster(nodes, free, now[0]);
     }
 
     public async ValueTask ReleaseAsync(int partition, long epoch, CancellationToken cancellationToken = default)

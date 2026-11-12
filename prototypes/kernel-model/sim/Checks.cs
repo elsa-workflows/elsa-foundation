@@ -191,6 +191,7 @@ public sealed partial class World
     {
         foreach (var (id, children) in Oracle.Parents)
         {
+            if (Parked.Contains(id)) continue;
             if (State<ParentState>(id) is not { } state)
             {
                 if (!Store.Instances.ContainsKey(id) && !waiting[id].Any()) return $"I3 the start of {id} is lost";
@@ -313,8 +314,8 @@ public sealed partial class World
             for (var p = 0; p < Config.Partitions; p++)
             {
                 foreach (var (node, _) in slots.Where(s => s.Partition == p && Of(s.Node, p).Worker.Owns)) Watch(Of(node, p).Worker.BeatAsync());   // a stale owner learns that it is one
-                if (!slots.Any(s => s.Partition == p && Of(s.Node, p).Worker.Owns)) Watch(Of((p + round) % Config.Nodes, p).Worker.TakeAsync());
             }
+            for (var n = 0; n < Config.Nodes; n++) Watch(Balancers[(n + round) % Config.Nodes].RoundAsync());   // every node beats and asks for its share
             for (var pass = 0; pass < 8; pass++)
                 foreach (var (node, partition) in slots)
                 {
@@ -341,12 +342,27 @@ public sealed partial class World
                 }
             if (Check() is { } violation) return violation;
             if (Store.Messages.Values.Any(m => !m.Done && m.Message.Kind != "expire") || slots.Select(s => Of(s.Node, s.Partition)).Any(a => a.Worker.Owns && (a.Worker.NeedsFlush || a.Worker.Ready.Any() || a.Runs.Count > 0))) continue;
+            if (Unfair() is not null) continue;
             if (published) return End();
             if (Meet() is { } missed) return missed;
             published = true;
         }
         var left = Store.Messages.Values.Where(m => !m.Done).Select(m => $"{m.Message.Id} ({m.Message.Kind} to {m.Message.Target}, seen {m.Seen}, attempts {m.Attempts})").Take(5);
-        return $"IDLE not idle after 150 rounds without faults; waiting: {string.Join("; ", left)}";
+        return $"IDLE not idle after 150 rounds without faults; waiting: {string.Join("; ", left)}{(Unfair() is { } unfair ? "; " + unfair : "")}";
+    }
+
+    // Fair share, once faults stop: every partition has one owner at its current epoch, and no node holds more than its share.
+    private string? Unfair()
+    {
+        var share = (Config.Partitions + Config.Nodes - 1) / Config.Nodes;
+        var owned = new int[Config.Nodes];
+        for (var p = 0; p < Config.Partitions; p++)
+        {
+            var owners = Enumerable.Range(0, Config.Nodes).Where(n => Of(n, p).Worker.Owns && Of(n, p).Worker.Epoch == Store.Partitions[p].Epoch).ToList();
+            if (owners.Count != 1) return $"partition {p} has {owners.Count} owners";
+            owned[owners[0]]++;
+        }
+        return owned.Max() > share ? $"the nodes own [{string.Join(", ", owned)}] partitions; the share is {share}" : null;
     }
 
     // I13: an event and a subscription that are both committed must have met. Then every wait left gets an event.

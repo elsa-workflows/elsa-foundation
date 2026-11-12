@@ -19,6 +19,7 @@ public sealed record Act(string Kind, int A = 0, int B = 0, string S = "", Messa
         "skew" => $"the wall clock of node {A} jumps {B} ms",
         "crash" => $"node {A} crashes and restarts{(Flag ? "; the old process lives on" : "")}",
         "release" => $"actor {A} releases its partition",
+        "balance" => $"node {A} balances: heartbeat, release the surplus, take up to its share",
         "pause" => $"node {A} pauses",
         "resume" => $"node {A} resumes",
         "project" => $"the projector reads partition {A}",
@@ -77,8 +78,17 @@ public sealed class Wire(World world, Actor actor) : IKernelStore
     {
         if (world.Auto)
         {
-            try { return op(); }
-            catch (Exception e) { return ValueTask.FromException<T>(e); }
+            try
+            {
+                var done = op();
+                world.Log?.Invoke($"        actor {actor.Id}: {text} -> {(done.IsCompletedSuccessfully ? Wire.Describe(done.Result) : "failed")}");
+                return done;
+            }
+            catch (Exception e)
+            {
+                world.Log?.Invoke($"        actor {actor.Id}: {text} -> {e.Message}");
+                return ValueTask.FromException<T>(e);
+            }
         }
         var answer = new TaskCompletionSource<T>();     // continuations run inline when the simulation delivers the answer
         actor.Calls.Add(new Call(kind, text, () => op().Result, r => answer.SetResult((T)r!), answer.SetException));
@@ -89,6 +99,7 @@ public sealed class Wire(World world, Actor actor) : IKernelStore
         Send("take", $"take p{partition}", () => world.Take(partition, node, lease));
 
     public ValueTask ReleaseAsync(int partition, long epoch, CancellationToken cancellationToken = default) => world.Store.ReleaseAsync(partition, epoch);
+    public ValueTask<Cluster> HeartbeatAsync(string node, TimeSpan window, CancellationToken cancellationToken = default) => world.Store.HeartbeatAsync(node, window);
 
     public ValueTask<Committed> CommitAsync(CommitBatch batch, CancellationToken cancellationToken = default) =>
         Send("commit", $"commit p{batch.Partition} e{batch.Epoch} @{batch.Position} [{string.Join(", ", batch.Steps.Select(Describe))}]"
@@ -135,6 +146,8 @@ public sealed partial class World
     public readonly int[,] Current;
     public readonly long[] Skew, Projected;
     public readonly int[] Incarnation;
+    public readonly Balancer[] Balancers;
+    private readonly TrialGate[] _gates;
     public readonly bool[] Paused;
     public readonly List<string> Faults = [];
     private readonly List<Task> _watched = [];
@@ -152,10 +165,19 @@ public sealed partial class World
         Paused = new bool[config.Nodes];
         Projected = new long[config.Partitions];
         Incarnation = new int[config.Nodes];
+        Balancers = new Balancer[config.Nodes];
+        _gates = Enumerable.Range(0, config.Nodes).Select(_ => new TrialGate()).ToArray();
         for (var node = 0; node < config.Nodes; node++)
+        {
             for (var partition = 0; partition < config.Partitions; partition++)
                 Spawn(node, partition);
+            Balance(node);
+        }
     }
+
+    // One balancer per process: the workers of the node's current incarnation. Its heartbeat window spans two rounds of the settling loop.
+    private void Balance(int node) =>
+        Balancers[node] = new Balancer(Of(node, 0).Worker.Node, Store, Enumerable.Range(0, Config.Partitions).Select(p => Of(node, p).Worker).ToList(), TimeSpan.FromSeconds(25), Config.Flaws);
 
     public Actor Of(int node, int partition) => Actors[Current[node, partition]];
     public IEnumerable<Actor> Alive => Actors.Where(a => !a.Dead);
@@ -172,7 +194,7 @@ public sealed partial class World
         // A node's name is unique per process start: a restarted process is not its predecessor (finding F9).
         actor.Worker = new Worker(Config.Flaws.HasFlag(Flaw.StableNodeName) ? "node" + node : $"node{node}.{Incarnation[node]}", partition, new Wire(this, actor), models, new WorkerOptions
         {
-            Lease = TimeSpan.FromSeconds(10), Horizon = TimeSpan.FromSeconds(2), PollLimit = 3, MaxBatch = 4, MaxAttempts = Config.Attempts, TrialGroup = Config.Group,
+            Lease = TimeSpan.FromSeconds(10), Horizon = TimeSpan.FromSeconds(2), PollLimit = 3, MaxBatch = 4, MaxAttempts = Config.Attempts, TrialGroup = Config.Group, Gate = _gates[node],
             Monotonic = () => Time + node * 7919,       // every node counts at the database's rate from its own zero
             WallClock = () => Time + Skew[node],
             Flaws = Config.Flaws,
@@ -205,13 +227,17 @@ public sealed partial class World
         return taken;
     }
 
-    // Invariant 14, the "alone" half: while rows are on trial at the current epoch, the owner starts nothing but them.
+    // Invariant 14, the "alone" half: while rows are on trial at the current epoch of a partition this process owns, the
+    // process starts nothing but them. A death kills every worker of the process, so alone means alone in the process.
     private void Alone(Actor actor, string instance, string what)
     {
-        var partition = Store.Partitions[actor.Partition];
-        if (actor.Worker.Epoch != partition.Epoch) return;
-        var trial = Store.Messages.Values.Where(m => !m.Done && m.Trial == partition.Epoch && m.Message.Target.Partition == actor.Partition).ToList();
-        if (trial.Count > 0 && !trial.Exists(m => m.Message.Target.Id == instance)) Faults.Add($"I14 {what} started on actor {actor.Id} while {trial[0].Message.Id} was on trial");
+        foreach (var sibling in Actors.Where(a => !a.Dead && a.Worker.Node == actor.Worker.Node))
+        {
+            var partition = Store.Partitions[sibling.Partition];
+            if (!sibling.Worker.Owns || sibling.Worker.Epoch != partition.Epoch) continue;
+            var trial = Store.Messages.Values.Where(m => !m.Done && m.Trial == partition.Epoch && m.Message.Target.Partition == sibling.Partition).ToList();
+            if (trial.Count > 0 && !trial.Exists(m => m.Message.Target.Id == instance)) Faults.Add($"I14 {what} started on actor {actor.Id} while {trial[0].Message.Id} was on trial in partition {sibling.Partition} of the same process");
+        }
     }
 
     private ValueTask<object?> Work(Actor actor, IRun run, CancellationToken cancel)
@@ -227,6 +253,7 @@ public sealed partial class World
     {
         Paused[node] = false;
         Incarnation[node]++;
+        _gates[node] = new TrialGate();     // a new process; a zombie keeps the old one
         foreach (var actor in Actors.Where(a => a.Node == node && !a.Dead).ToList())
         {
             // The old process is gone, or (zombie) lives on with its memory beside the new one under the same name.
@@ -234,6 +261,7 @@ public sealed partial class World
             else actor.Zombie = true;
             if (Current[node, actor.Partition] == actor.Id) Spawn(node, actor.Partition);
         }
+        Balance(node);
     }
 
     private void Watch(Task task)
@@ -272,6 +300,13 @@ public sealed partial class World
                     default: return null;
                 }
                 return actor.Calls.Count > calls ? $"call {actor.Calls.Count - 1}: {actor.Calls[^1].Text}" : "nothing to send";
+            }
+            case "balance":
+            {
+                if (Paused[act.A]) return null;
+                var calls = Actors.Sum(a => a.Calls.Count);
+                Watch(Balancers[act.A].RoundAsync());
+                return $"{Actors.Sum(a => a.Calls.Count) - calls} takes sent";
             }
             case "step":
             {
@@ -369,7 +404,8 @@ public sealed class Generator(int seed, World world)
         var roll = r.Next(100);
         switch (roll)
         {
-            case < 6: return new Act("take", actor.Id);
+            case < 3: return new Act("take", actor.Id);
+            case < 6: return new Act("balance", r.Next(world.Config.Nodes));
             case < 16: return new Act("poll", actor.Id);
             case < 22: return new Act("load", actor.Id);
             case < 36:

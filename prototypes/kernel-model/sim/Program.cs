@@ -148,6 +148,8 @@ int Mutations(int seeds)
         // behaviours of draft 1, or of a literal reading of draft 2: the findings of FINDINGS.md
         Flaw.WallClockTimers, Flaw.DeleteOutsideCommands, Flaw.HandOverWhileBehind, Flaw.BumpAllInherited, Flaw.RunBeforeMark,
         Flaw.VolatileRunTicket, Flaw.PollRace, Flaw.MeetWithoutTicket,
+        // round 3: the rule of each new piece
+        Flaw.GreedyBalancer, Flaw.TrialPerPartition,
     ];
     var missed = 0;
     foreach (var mutation in mutations)

@@ -112,4 +112,8 @@ public enum Flaw
     EveryTakeCounts = 1 << 18,
     CorrelationForgets = 1 << 20,   // read by the simulation: the correlation model does not keep events for later waits
     StableNodeName = 1 << 19,      // read by the simulation: a restarted process keeps its predecessor's name
+
+    // Round 3: each piece's rule, switched off.
+    GreedyBalancer = 1 << 21,      // a node takes every free partition and never releases a surplus
+    TrialPerPartition = 1 << 22,   // a trial is alone in its partition only, not in its process
 }

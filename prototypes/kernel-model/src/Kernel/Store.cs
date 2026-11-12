@@ -16,6 +16,9 @@ public sealed record Lease(long Epoch, long Position, long Now);
 
 public sealed record Polled(IReadOnlyList<Stored> Messages, long Now);
 
+/// <summary>What a heartbeat sees: how many nodes were heard from within the window, and which partitions nobody holds.</summary>
+public sealed record Cluster(int Nodes, IReadOnlyList<int> Free, long Now);
+
 /// <summary>
 /// One instance's part of a commit. <c>Expected</c> is the revision the row must have; null means the row is new.
 /// <c>Consumed</c> messages are deleted; <c>Done</c> ones (outside commands, which carry keep_until) are marked done.
@@ -57,6 +60,12 @@ public interface IKernelStore
     /// start, or a restarted process would look like its predecessor taking again.
     /// </summary>
     ValueTask<Lease?> TakeAsync(int partition, string node, TimeSpan lease, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Say that this node is alive (the <c>node</c> row) and look at the cluster: the nodes heard from within
+    /// <paramref name="window"/>, and the partitions that have no owner or whose lease has expired. Liveness only.
+    /// </summary>
+    ValueTask<Cluster> HeartbeatAsync(string node, TimeSpan window, CancellationToken cancellationToken = default);
 
     /// <summary>Give the partition up, if this is still its epoch. A release is not a death.</summary>
     ValueTask ReleaseAsync(int partition, long epoch, CancellationToken cancellationToken = default);

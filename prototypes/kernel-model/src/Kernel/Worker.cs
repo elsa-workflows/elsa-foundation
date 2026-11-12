@@ -15,6 +15,9 @@ public sealed record WorkerOptions
     /// </summary>
     public int TrialGroup { get; init; } = 1;
 
+    /// <summary>Shared by the workers of one process: a death kills all of them, so a trial must be alone in the process.</summary>
+    public TrialGate? Gate { get; init; }
+
     /// <summary>A monotonic clock in milliseconds. Only differences are used: the database tells the time.</summary>
     public Func<long> Monotonic { get; init; } = static () => Environment.TickCount64;
 
@@ -59,7 +62,14 @@ public sealed class Worker
         _store = store;
         _models = models.ToDictionary(m => m.Key, StringComparer.Ordinal);
         _options = options ?? new WorkerOptions();
+        _gate = _options.Gate ?? new TrialGate();
+        _gate.Workers.Add(this);
     }
+
+    private readonly TrialGate _gate;
+
+    // Finding F11: another worker of this process has a trial in flight, so this one starts nothing.
+    private bool Blocked => _gate.Holder is { } holder && holder != this && !Has(Flaw.TrialPerPartition);
 
     public string Node { get; }
     public int Partition { get; }
@@ -81,7 +91,7 @@ public sealed class Worker
     public IEnumerable<string> Trial => _trial.Select(i => i.Message.Id);
     public bool NeedsMeet => _meets.Exists(i => !Awaits(i) && !i.Taken);
     public IEnumerable<string> Ready => _slots.Where(s => s.Value.Loaded && !s.Value.Busy && Deliverable(s.Value).Count > 0).Select(s => s.Key)
-        .Where(id => _trial.Count == 0 || OnTrial(id));    // while a trial runs, nothing else does
+        .Where(id => !Blocked && (_trial.Count == 0 || OnTrial(id)));    // while a trial runs, nothing else in the process does
 
     // What is in memory, for tests of invariant 9.
     public IEnumerable<(string Id, InstanceRow? Row, string? State, bool Busy)> Instances =>
@@ -142,6 +152,7 @@ public sealed class Worker
         _cancelling.Clear();
         _caughtUp = false;
         _trial.Clear();
+        _gate.Release(this);
     }
 
     private void Observe(long now) => _anchor = Math.Max(_anchor, now - _options.Monotonic());
@@ -231,7 +242,7 @@ public sealed class Worker
     /// </summary>
     private List<Item> NextTrial()
     {
-        if (_trial.Count > 0) return [];
+        if (_trial.Count > 0 || Blocked) return [];
         var suspects = _items.Values.Where(i => i.Durable && !i.Marked && !i.Taken && i.Suspect).OrderBy(i => i.Seq).ToList();
         if (suspects.Count == 0 || Has(Flaw.BumpAllInherited)) return suspects;
         var (attempts, group, skipped) = (suspects[0].Attempts, new List<Item>(), new HashSet<string>());
@@ -289,7 +300,7 @@ public sealed class Worker
     public void Run(string instance)
     {
         if (!Owns || !_slots.TryGetValue(instance, out var slot) || !slot.Loaded || slot.Busy) return;
-        if (_trial.Count > 0 && !OnTrial(instance)) return;
+        if (Blocked || (_trial.Count > 0 && !OnTrial(instance))) return;
         var due = Deliverable(slot);
         if (due.Count == 0) return;
         slot.Inbox.RemoveAll(due.Contains);
@@ -345,7 +356,7 @@ public sealed class Worker
 
     private void StartRun(Item ticket)
     {
-        if (ticket.Cancel is not null || ticket.Taken || Awaits(ticket) || (_trial.Count > 0 && !_trial.Contains(ticket))) return;
+        if (ticket.Cancel is not null || ticket.Taken || Awaits(ticket) || Blocked || (_trial.Count > 0 && !_trial.Contains(ticket))) return;
         ticket.Cancel = new CancellationTokenSource();
         _ = DriveRun(ticket, ticket.Message.Read<RunTicket>());
     }
@@ -416,6 +427,7 @@ public sealed class Worker
         if (units.Count == 0 && marks.Count == 0 && trial.Count == 0 && !beat) return;
         _queue.RemoveRange(0, units.Count);
         if (!Has(Flaw.BumpAllInherited)) _trial.UnionWith(trial);      // from here on nothing else starts
+        if (_trial.Count > 0) _gate.Holder = this;
         var generation = _generation;
         _flushing = true;
         var outcome = await CommitAsync(units, marks, trial, generation, cancellationToken);
@@ -524,15 +536,34 @@ public sealed class Worker
         }
     }
 
+    /// <summary>A trial ended somewhere in the process: off-step work that waited for it may start.</summary>
+    internal void Unblocked()
+    {
+        foreach (var ticket in _items.Values.Where(i => i.Key is not null).ToList()) StartRun(ticket);
+    }
+
     private void Forget(Item item)
     {
         _items.Remove(item.Message.Id);
-        if (_trial.Remove(item) && _trial.Count == 0)      // the trial is over: what waited for it may start
-            foreach (var ticket in _items.Values.Where(i => i.Key is not null).ToList()) StartRun(ticket);
+        if (_trial.Remove(item) && _trial.Count == 0) _gate.Release(this);     // the trial is over: what waited for it may start
         if (item.Durable && _polling && !Has(Flaw.PollRace)) _consumed.Add(item.Message.Id);
         if (item.Key is not null) item.Cancel?.Cancel();
         if (_slots.TryGetValue(item.Message.Target.Id, out var slot)) slot.Inbox.Remove(item);
         _meets.Remove(item);
+    }
+}
+
+/// <summary>One per process. At most one of its workers has a trial in flight, and then the others start nothing.</summary>
+public sealed class TrialGate
+{
+    internal readonly List<Worker> Workers = [];
+    internal Worker? Holder;
+
+    internal void Release(Worker worker)
+    {
+        if (Holder != worker) return;
+        Holder = null;
+        foreach (var each in Workers) each.Unblocked();
     }
 }
 

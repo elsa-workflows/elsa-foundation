@@ -31,6 +31,7 @@ public sealed class InMemoryStore(int partitions, Func<long> clock, Flaw flaws =
     public Dictionary<(string Key, string Id), EventRow> EventRows { get; } = [];
     public Dictionary<(int Partition, long Position), JournalRow> Journal { get; } = [];
     public List<string> Ghost { get; } = [];
+    public Dictionary<string, long> Nodes { get; } = new(StringComparer.Ordinal);
 
     /// <summary>A row the database refuses, every time: a value too long.</summary>
     public Func<InstanceRow, bool>? Refuses { get; set; }
@@ -117,6 +118,16 @@ public sealed class InMemoryStore(int partitions, Func<long> clock, Flaw flaws =
                 if (epoch && position) Ghost.Add("I9 " + what);
                 throw new StoreException(Failure.Unknown, what);
             }
+        }
+    }
+
+    public ValueTask<Cluster> HeartbeatAsync(string node, TimeSpan window, CancellationToken cancellationToken = default)
+    {
+        lock (_gate)
+        {
+            var now = Nodes[node] = clock();
+            var free = Enumerable.Range(0, Partitions.Length).Where(p => Partitions[p].Owner is null || Partitions[p].LeaseUntil < now).ToList();
+            return new(new Cluster(Nodes.Values.Count(seen => seen >= now - (long)window.TotalMilliseconds), free, now));
         }
     }
 
