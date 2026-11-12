@@ -40,7 +40,8 @@ for (const theme of ["light", "dark"]) {
     await expect(page.getByLabel("Inspector panel", { exact: true }).getByText("Current: 1", { exact: true })).toBeVisible();
   });
 
-  test(`keeps the existing canvas and viewport when attaching and detaching a run (${theme})`, async ({ page }) => {
+  // TEMPORARY (#4040): repeat the flaky case in CI. Reverted before review.
+  for (const attempt of Array.from({ length: 25 }, (_, index) => index + 1)) test(`keeps the existing canvas and viewport when attaching and detaching a run (${theme}) #${attempt}`, async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 950 });
     await page.goto(`/?mode=activity-duplicate-editor&run-canvas=unique&theme=${theme}`);
     const canvas = page.getByLabel("Workflow canvas", { exact: true });
@@ -83,7 +84,17 @@ for (const theme of ["light", "dark"]) {
     await expect(page.getByText("Captured snapshot · read only. Your draft edits are preserved.", { exact: true })).toBeVisible();
     await expect(node).toHaveAccessibleName(/Run state: Completed/);
     await expect.poll(() => node.evaluate(element => (element as HTMLElement).style.transform)).toBe(capturedPosition);
+    // A measured snapshot node must stay visible while the editor re-renders. A hidden frame lets a click
+    // fall through to the pane, which clears the selection instead of selecting the node (#4040).
+    await node.evaluate(element => {
+      const hidden = { count: 0 };
+      (window as unknown as { snapshotNodeHidden: typeof hidden }).snapshotNodeHidden = hidden;
+      new MutationObserver(records => {
+        if (records.some(record => record.oldValue?.includes("visibility: hidden")) || (element as HTMLElement).style.visibility === "hidden") hidden.count += 1;
+      }).observe(element, { attributes: true, attributeFilter: ["style"], attributeOldValue: true });
+    });
     await node.click();
+    await expect(node).toHaveAccessibleName(/Run state: Completed\. Selected\./);
     await page.keyboard.press("Delete");
     await page.keyboard.press("ControlOrMeta+d");
     await expect(node).toHaveCount(1);
@@ -93,6 +104,7 @@ for (const theme of ["light", "dark"]) {
     const inspector = page.getByLabel("Inspector panel", { exact: true });
     await inspector.getByRole("tab", { name: "Configuration", exact: true }).click();
     await expect(inspector.locator("fieldset[disabled]")).toHaveCount(1);
+    expect(await page.evaluate(() => (window as unknown as { snapshotNodeHidden: { count: number } }).snapshotNodeHidden.count)).toBe(0);
     const editorViews = page.getByRole("tablist", { name: "Editor view tabs" });
     for (const view of ["Properties", "Variables", "Inputs", "Outputs"]) {
       await editorViews.getByRole("tab", { name: view, exact: true }).click();
