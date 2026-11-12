@@ -1,6 +1,6 @@
 # Workflow contribution to Weaver
 
-This optional server module owns workflow context admission, installed guidance, tool validation, permission requirements, review payloads and completion evidence. It specializes the generic Agent feature for composition while provider adapters depend only on Agent contracts.
+This optional server module owns workflow context admission, installed guidance, tool validation, permission requirements, review payloads and completion evidence. It specializes the generic Weaver feature for composition while provider adapters depend only on Weaver contracts.
 
 The accepted M1 subset reads a bounded snapshot of an open workflow and prepares one reviewed designer position change. For explanation and troubleshooting, the snapshot also carries the designer's own validation diagnostics, graph activities by definition and version, and the selected activity's declared properties: expression types and bounded content, credential and sensitive values only as withheld, and Secret References by name, type and scope. Expression interpretation, semantic diagnostics and edits are unconditionally unavailable; routing them to the owning Expression Module is deferred to [#3711](https://github.com/elsa-workflows/elsa-foundation/issues/3711). See [Explain and troubleshoot](EXTENSION_POINTS.md#explain-and-troubleshoot-spec-1193-slice-d). `workflow_set_designer_position` contract `1` takes `{ activityId, x, y }`. It targets the exact definition/revision and browser generation, requires `workflows/design:manage`, and always requires explicit review. A server execution request cannot apply this browser operation.
 
@@ -14,7 +14,7 @@ A persisted workflow version has its own context source and read-only tool: the 
 
 ## Cross-domain contributions
 
-See [the module extension-point catalog](EXTENSION_POINTS.md) for its `IWeaverContextProvider`, `IWeaverCapabilityProvider`, `IWeaverTool` and `IWeaverClientTool` contributions, and [Agent foundation](../../Elsa.Weaver/EXTENSION_POINTS.md) for their generic lifecycle.
+See [the module extension-point catalog](EXTENSION_POINTS.md) for its `IWeaverContextProvider`, `IWeaverCapabilityProvider`, `IWeaverTool` and `IWeaverClientTool` contributions, and [Weaver foundation](../../Elsa.Weaver/EXTENSION_POINTS.md) for their generic lifecycle.
 
 
 Current context and retained results are re-admitted by `workflows.context` under the native

@@ -21,23 +21,23 @@ internal sealed partial class DefaultWeaverToolRegistry(IInlineEventPublisher ev
         var tools = collecting.Tools.ToList();
         var duplicate = tools.GroupBy(x => x.Descriptor.Name, StringComparer.OrdinalIgnoreCase).FirstOrDefault(x => x.Count() > 1);
         if (duplicate is not null)
-            throw new WeaverContributionException($"Duplicate agent tool name '{duplicate.Key}'.");
+            throw new WeaverContributionException($"Duplicate Weaver tool name '{duplicate.Key}'.");
         foreach (var tool in tools)
         {
             var descriptor = tool.Descriptor;
             if (!ToolNameRegex().IsMatch(descriptor.Name ?? string.Empty))
-                throw new WeaverContributionException($"Invalid agent tool name '{descriptor.Name}'; expected ^[a-zA-Z0-9_-]+$.");
+                throw new WeaverContributionException($"Invalid Weaver tool name '{descriptor.Name}'; expected ^[a-zA-Z0-9_-]+$.");
             if (string.IsNullOrWhiteSpace(descriptor.ModuleId) || string.IsNullOrWhiteSpace(descriptor.ContractVersion))
-                throw new WeaverContributionException($"Agent tool '{descriptor.Name}' has no installed owner or contract version.");
+                throw new WeaverContributionException($"Weaver tool '{descriptor.Name}' has no installed owner or contract version.");
             try
             {
                 using var schema = JsonDocument.Parse(descriptor.JsonSchema);
                 if (schema.RootElement.ValueKind != JsonValueKind.Object)
-                    throw new WeaverContributionException($"Agent tool '{descriptor.Name}' requires an object input schema.");
+                    throw new WeaverContributionException($"Weaver tool '{descriptor.Name}' requires an object input schema.");
             }
             catch (JsonException ex)
             {
-                throw new WeaverContributionException($"Agent tool '{descriptor.Name}' has invalid JSON schema.", ex);
+                throw new WeaverContributionException($"Weaver tool '{descriptor.Name}' has invalid JSON schema.", ex);
             }
         }
         return _tools = tools;

@@ -234,7 +234,7 @@ internal static class WorkflowLibraryContext
             : $"Workflow organization is unavailable: {reason ?? result?.Message}. Ordinary list support remains.";
         return new("workflows:library-organization", "workflows.library", null, "Workflow library authority", OrganizationKind,
             WeaverContextSensitivity.Internal, "permissions", summary, content, new Dictionary<string, string>())
-        { ModuleId = ModuleId, SchemaVersion = "1", Origin = WeaverContextOrigin.AuthoritativeRead, AgentScopes = [] };
+        { ModuleId = ModuleId, SchemaVersion = "1", Origin = WeaverContextOrigin.AuthoritativeRead, WeaverScopes = [] };
     }
 
     /// <summary>The installed library commands, or why there is none to use.</summary>

@@ -43,7 +43,9 @@ internal static class OAuth2TestSupport
         OAuth2ClientCredentialBinding credentials = OAuth2ClientCredentialBinding.Secret,
         Action<MockOAuthServer>? configureServer = null,
         TimeProvider? timeProvider = null,
-        Action<IServiceCollection>? configureServices = null)
+        Action<IServiceCollection>? configureServices = null,
+        string? clientSecretStoreName = null,
+        bool inlineClientSecret = false)
     {
         var server = new MockOAuthServer();
         configureServer?.Invoke(server);
@@ -95,13 +97,18 @@ internal static class OAuth2TestSupport
                 NamedCredentialName = NamedCredentialName
             };
         }
+        else if (inlineClientSecret)
+        {
+            secretFields[OAuth2SecretFields.ClientSecret] = new() { Value = server.ExpectedClientSecret };
+        }
         else
         {
             await secrets.CreateAsync(TenantId, new CreateSecretRequest
             {
                 Name = "oauth2-client-secret",
                 Value = server.ExpectedClientSecret,
-                TypeName = SecretTypeNames.Text
+                TypeName = SecretTypeNames.Text,
+                StoreName = clientSecretStoreName ?? SecretStoreNames.Encrypted
             });
             secretFields[OAuth2SecretFields.ClientSecret] = new() { ExistingSecretName = "oauth2-client-secret" };
         }

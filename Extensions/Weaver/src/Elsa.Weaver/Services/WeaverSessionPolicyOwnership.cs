@@ -171,7 +171,7 @@ internal sealed class WeaverDurableRecoveryValidator(IServiceScopeFactory scopes
         }
         catch (Exception failure) when (failure is not OperationCanceledException)
         {
-            logger?.LogDebug("Durable agent recovery support could not be evaluated at activation ({FailureType}).", failure.GetType().Name);
+            logger?.LogDebug("Durable Weaver recovery support could not be evaluated at activation ({FailureType}).", failure.GetType().Name);
             return Task.CompletedTask;
         }
         if (refused)

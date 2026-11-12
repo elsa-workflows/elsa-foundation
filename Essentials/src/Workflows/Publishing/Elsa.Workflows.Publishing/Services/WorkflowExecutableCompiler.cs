@@ -259,6 +259,7 @@ public sealed class WorkflowExecutableCompiler(
                     ResourceId = source.SourceId
                 };
 
+            compiledRoot = MemberReadSelectionPinner.Pin(compiledRoot, sourceAnalysis.MemberReads);
 
             IReadOnlyCollection<ExecutableDependencyClaim> dependencyClaims = [];
             if (metadataEnricher is not null)

@@ -246,6 +246,26 @@ test("an unrelated custom activity does not look up a decision table", async ({ 
   await capture(page, testInfo, "3979-unrelated-custom-activity");
 });
 
+test("expanded Inputs dialog takes focus, traps Tab, and restores the trigger", async ({ page }) => {
+  const inspector = await openInspector(page);
+  const expand = inspector.getByRole("button", { name: "Open expanded Inputs editor" });
+  await expand.click();
+  const dialog = page.getByRole("dialog", { name: "Inputs" });
+  await expect(dialog).toBeVisible();
+  await expect.poll(() => page.evaluate(() => {
+    const open = document.querySelector("[role='dialog'][aria-modal='true']");
+    return !!open && open.contains(document.activeElement);
+  })).toBe(true);
+  await page.keyboard.press("Shift+Tab");
+  await expect.poll(() => page.evaluate(() => {
+    const open = document.querySelector("[role='dialog'][aria-modal='true']");
+    return !!open && open.contains(document.activeElement);
+  })).toBe(true);
+  await page.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
+  await expect(expand).toBeFocused();
+});
+
 test("closing the expanded Inputs editor keeps the inline InvalidValue row error", async ({ page }, testInfo) => {
   const inspector = await openInspector(page);
   await inspector.getByLabel("amount", { exact: true }).fill("950");

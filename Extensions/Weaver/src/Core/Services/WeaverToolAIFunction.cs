@@ -111,5 +111,5 @@ internal sealed class WeaverToolDeclarationAIFunction(WeaverToolDescriptor descr
     public override JsonElement JsonSchema { get; } = WeaverToolAIFunctions.ParseSchema(descriptor.JsonSchema);
 
     protected override ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
-        => throw new NotSupportedException($"Tool '{descriptor.Name}' is declaration-only; the agent orchestrator dispatches it through the policy-aware invoker.");
+        => throw new NotSupportedException($"Tool '{descriptor.Name}' is declaration-only; the Weaver orchestrator dispatches it through the policy-aware invoker.");
 }

@@ -1,4 +1,4 @@
-import React, { useEffect, useId, useMemo, useRef, useState } from "react";
+import React, { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ElsaStudioModuleApi, StudioExpressionEditorContribution, StudioExpressionEditorProps } from "@elsa-workflows/studio-sdk";
 import { StudioAlert, StudioButton } from "@elsa-workflows/studio-ui";
 import { ValueInput } from "./CasePanel";
@@ -43,6 +43,7 @@ export function DecisionInputsEditor({
   api,
   value,
   disabled = false,
+  initialFocus,
   context,
   onChange,
   onValidationChange
@@ -65,6 +66,8 @@ export function DecisionInputsEditor({
   const [jsonDraft, setJsonDraft] = useState(jsonExternal);
   const [jsonError, setJsonError] = useState("");
   const jsonFocused = useRef(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const placedInitialFocus = useRef(false);
   const shownTable = useRef({ pin: tablePin, table });
   shownTable.current = { pin: tablePin, table };
   const blocking = extras.length > 0 || mismatches.length > 0 || invalids.length > 0 || missing.length > 0 || !!jsonError || !!error;
@@ -118,12 +121,22 @@ export function DecisionInputsEditor({
     return () => { active = false; };
   }, [api, pin, freshness]);
 
+  useLayoutEffect(() => {
+    if (!initialFocus || placedInitialFocus.current || loading) return;
+    const first = rootRef.current?.querySelector<HTMLElement>(
+      "input:not(:disabled), textarea:not(:disabled), select:not(:disabled)"
+    );
+    if (!first) return;
+    placedInitialFocus.current = true;
+    first.focus();
+  }, [initialFocus, loading, table]);
+
   const commit = (next: Record<string, Scalar>) => onChange(next);
   const updateClause = (name: string, clause: Table["inputs"][number], next: Scalar) =>
     commit({ ...values, [name]: writtenDecisionInput(clause, next) });
   const updateExtra = (name: string, next: Scalar) => commit({ ...values, [name]: next });
 
-  return <div className="decision-inputs-editor">
+  return <div className="decision-inputs-editor" ref={rootRef}>
     {!parsed ? <p className="decision-muted">Select a decision to load its input fields from the table. JSON stays available below.</p> : null}
     {loading ? <p role="status">Loading input fields…</p> : null}
     {unpublished ? <StudioAlert tone="warning">This decision has no published version. Publish it before Review &amp; publish; these fields follow the current draft table.</StudioAlert> : null}

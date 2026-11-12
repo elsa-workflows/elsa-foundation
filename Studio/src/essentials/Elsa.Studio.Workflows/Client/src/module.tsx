@@ -16,7 +16,7 @@ import {
   httpWorkflowTestStimulusEditor,
   schedulingWorkflowTestStimulusEditor
 } from "./workflowTestStimulusEditors";
-import { registerWorkflowAgent } from "./workflowAgent";
+import { registerWorkflowWeaver } from "./workflowWeaver";
 import { compensationTargetPropertyEditor } from "./CompensationTargetEditor";
 
 const WorkflowTagsRoute = lazy(() => import("./workflow-editor/WorkflowTagsPage").then(module => ({ default: module.WorkflowTagsRoute })));
@@ -54,7 +54,7 @@ export type { WorkflowConnectSource, WorkflowDesignerPanelContext } from "./work
 export type { EnumWorkflowRunInputEditorOptions } from "./workflowRunInputEditorContributions";
 export type { ActivityDefinitionsObservation } from "./activityDefinitionObservability";
 export { capabilityIds, resolveCapabilityLink } from "./api/capabilities";
-export { workflowExecutableAttachment, workflowRunAttachment, workflowVersionAttachment } from "./workflowAgentContext";
+export { workflowExecutableAttachment, workflowRunAttachment, workflowVersionAttachment } from "./workflowWeaverContext";
 
 /** A screen that edits one resource named by a query parameter; its list view (no parameter) may open in several tabs. */
 function workspaceResource(kind: string, parameter: string): StudioRouteWorkspaceOptions {
@@ -75,7 +75,7 @@ const activityDefinitionWorkspace: StudioRouteWorkspaceOptions = {
 export function register(api: ElsaStudioModuleApi) {
   setDialogs(api.dialogs);
   setNotifications(api.notifications);
-  const weaver = registerWorkflowAgent(api.weaver);
+  const weaver = registerWorkflowWeaver(api.weaver);
   const operationAvailability = () => ({
     publishing: evaluateBackendRequirements(api.backendSession,[{id:"elsa.api.publishing",contractVersion:"1",relations:["publication-snapshot-preflight","workflow-publish"]}]),
     testRuns: evaluateBackendRequirements(api.backendSession,[{id:"elsa.api.publishing",contractVersion:"1",relations:["workflow-draft-test-runs","workflow-test-run-status"]}])

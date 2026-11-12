@@ -15,7 +15,7 @@ using Elsa.Weaver.Services;
 namespace Elsa.Weaver.Tests;
 
 /// <summary>
-/// Issue #414 item 7: the agent providers logged the raw exception object at Debug while the
+/// Issue #414 item 7: the Weaver providers logged the raw exception object at Debug while the
 /// client-facing error was redacted via <c>Normalize</c>/<c>NormalizeMessage</c> — so an exception
 /// embedding the API key/token reached the log sink unredacted. These tests capture everything a
 /// sink can render (formatted message, state, and the exception's full <c>ToString()</c> including

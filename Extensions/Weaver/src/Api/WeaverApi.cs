@@ -18,7 +18,7 @@ using System.Security.Cryptography;
 
 namespace Elsa.Weaver.Api;
 
-/// <summary>Maps the provider-agnostic Agent REST and SSE surface using ordinary ASP.NET Core endpoints.</summary>
+/// <summary>Maps the provider-agnostic Weaver REST and SSE surface using ordinary ASP.NET Core endpoints.</summary>
 public static class WeaverApi
 {
     private const string OwnerId = "Elsa.Weaver.Api";
@@ -28,7 +28,7 @@ public static class WeaverApi
     {
         ArgumentNullException.ThrowIfNull(endpoints);
 
-        // The Agent operations keep their own reads, writes, failure-carrying response envelopes,
+        // The Weaver operations keep their own reads, writes, failure-carrying response envelopes,
         // and the SSE stream, so every operation stays on the group's raw seam; the group supplies
         // the shared metadata the mapper used to inline per endpoint.
         var api = endpoints.MapEndpointGroup(OwnerId, WeaverJsonContext.Default, jsonContentType: "application/json");
@@ -94,9 +94,9 @@ public static class WeaverApi
     }
 
     /// <summary>
-    /// Any route on a session another process owns answers 409 agent.session.owned_elsewhere with a retry hint; a session
-    /// this process lost during the call answers 409 agent.session.ownership_lost; a session whose recorded state is
-    /// unreadable or fails verification answers 409 agent.session.unavailable_state with its reason. Nothing was applied in
+    /// Any route on a session another process owns answers 409 weaver.session.owned_elsewhere with a retry hint; a session
+    /// this process lost during the call answers 409 weaver.session.ownership_lost; a session whose recorded state is
+    /// unreadable or fails verification answers 409 weaver.session.unavailable_state with its reason. Nothing was applied in
     /// any case. Session authorization runs on the plain owner columns first, so only the owner reaches these outcomes.
     /// </summary>
     private static async Task DispatchAsync(HttpContext context, Func<HttpContext, Task> dispatch)
@@ -165,7 +165,7 @@ public static class WeaverApi
         catch (Exception failure) when (failure is not OperationCanceledException)
         {
             context.RequestServices.GetService<ILoggerFactory>()?.CreateLogger(OwnerId)
-                .LogDebug("Durable agent recovery support could not be evaluated ({FailureType}).", failure.GetType().Name);
+                .LogDebug("Durable Weaver recovery support could not be evaluated ({FailureType}).", failure.GetType().Name);
             return WeaverRecoveryModes.Unsupported;
         }
     }
@@ -196,7 +196,7 @@ public static class WeaverApi
         var providers = context.RequestServices.GetRequiredService<IWeaverProviderRegistry>();
         if (providers.Active is null)
         {
-            await WriteAsync(context, WeaverApiResponse<WeaverCreateSessionResponse>.Failure(new("weaver.provider.not_found", "No agent harness is enabled.", 404)), WeaverJsonContext.Default.WeaverApiResponseWeaverCreateSessionResponse, 404);
+            await WriteAsync(context, WeaverApiResponse<WeaverCreateSessionResponse>.Failure(new("weaver.provider.not_found", "No Weaver harness is enabled.", 404)), WeaverJsonContext.Default.WeaverApiResponseWeaverCreateSessionResponse, 404);
             return;
         }
         var diagnostics = await providers.Active.GetDiagnosticsAsync(context.RequestAborted);
@@ -271,7 +271,7 @@ public static class WeaverApi
         }
         if (!result.Succeeded || result.Page is not { } page)
         {
-            await WriteSessionListFailureAsync(context, new("weaver.session.query_unsupported", "The installed agent session service cannot answer owner-scoped session queries.", 409));
+            await WriteSessionListFailureAsync(context, new("weaver.session.query_unsupported", "The installed Weaver session service cannot answer owner-scoped session queries.", 409));
             return;
         }
         await WriteAsync(context, WeaverApiResponse<WeaverSessionListResponse>.Success(new(page.Items.Select(x => x.ToResponse()).ToList(), page.Next)),
@@ -357,10 +357,10 @@ public static class WeaverApi
         {
             WeaverSessionPolicyOutcome.StaleRevision => new("weaver.session.policy_stale", "The session policy changed since the expected revision. Read the session back before retrying.", 409),
             WeaverSessionPolicyOutcome.Busy => new("weaver.session.busy", "Finish or resolve the current work before changing the session autonomy.", 409),
-            WeaverSessionPolicyOutcome.SessionClosed => new("weaver.session.closed", "The agent session is closed or expired.", 409),
+            WeaverSessionPolicyOutcome.SessionClosed => new("weaver.session.closed", "The Weaver session is closed or expired.", 409),
             WeaverSessionPolicyOutcome.InvalidMode => new(AutonomyInvalidCode, "The requested autonomy mode is not defined.", 400),
-            WeaverSessionPolicyOutcome.NotFound => new("weaver.session.not_found", $"Agent session '{sessionId}' was not found.", 404),
-            _ => new("weaver.session.autonomy_unsupported", "The installed agent session services cannot change the session autonomy.", 409)
+            WeaverSessionPolicyOutcome.NotFound => new("weaver.session.not_found", $"Weaver session '{sessionId}' was not found.", 404),
+            _ => new("weaver.session.autonomy_unsupported", "The installed Weaver session services cannot change the session autonomy.", 409)
         });
     }
 
@@ -531,7 +531,7 @@ public static class WeaverApi
 
     /// <summary>
     /// Preview: withdraws the owner's prompt that never started (Pending to Cancelled, reason <c>withdrawn</c>); refused
-    /// with 409 <c>agent.message.not_pending</c> once it started, or while a turn is registered for the session.
+    /// with 409 <c>weaver.message.not_pending</c> once it started, or while a turn is registered for the session.
     /// </summary>
     private static async Task HandleWithdrawMessageAsync(HttpContext context)
     {
@@ -593,7 +593,7 @@ public static class WeaverApi
             // The feature exposes its domain cause to this transport caller. Keep the causal
             // exception on the server; the browser receives only the fixed recovery disposition.
             context.RequestServices.GetRequiredService<ILoggerFactory>().CreateLogger(OwnerId)
-                .LogError(failure, "Agent disclosure {Operation} failed for session {SessionId}.", "stream", sessionId);
+                .LogError(failure, "Weaver disclosure {Operation} failed for session {SessionId}.", "stream", sessionId);
             await WriteEventAsync(context, new(WeaverProviderPrimitives.NewId(), WeaverStreamEventKind.Error, null, null,
                 new("weaver.history.provenance_unavailable", "Complete disclosure history could not be retained or authorized. Recorded effects remain unchanged; retry when storage and authority are available.", 503), DateTimeOffset.UtcNow));
         }
@@ -618,7 +618,7 @@ public static class WeaverApi
         }
         if (!string.IsNullOrWhiteSpace(request.MessageId) && await context.RequestServices.GetRequiredService<IWeaverSessionService>().FindMessageAsync(request.SessionId, request.MessageId, context.RequestAborted) is null)
         {
-            await WriteAsync(context, WeaverApiResponse<WeaverFeedback>.Failure(new("weaver.message.not_found", $"Agent message '{request.MessageId}' was not found in session '{request.SessionId}'.", 404)), WeaverJsonContext.Default.WeaverApiResponseWeaverFeedback, 404);
+            await WriteAsync(context, WeaverApiResponse<WeaverFeedback>.Failure(new("weaver.message.not_found", $"Weaver message '{request.MessageId}' was not found in session '{request.SessionId}'.", 404)), WeaverJsonContext.Default.WeaverApiResponseWeaverFeedback, 404);
             return;
         }
         var feedback = new WeaverFeedback(WeaverProviderPrimitives.NewId(), session!.Id, request.MessageId, request.Rating > 0 ? "positive" : "negative", request.Comment, actorId, DateTimeOffset.UtcNow);
@@ -704,7 +704,7 @@ public static class WeaverApi
             return;
         }
         var result = await proposals.ExecuteAsync(proposalId, actorId, request.Revision, context.RequestAborted);
-        // A refusal recorded as a terminal outcome, such as 409 agent.proposal.policy_stale or agent.proposal.expired, keeps
+        // A refusal recorded as a terminal outcome, such as 409 weaver.proposal.policy_stale or weaver.proposal.expired, keeps
         // its own error code and status and also carries the authoritative non-success outcome.
         var failureData = result.Succeeded ? null : await FindTerminalExecutionFailureAsync(proposals, proposalId, context.RequestAborted);
         var response = result.Succeeded ? WeaverApiResponse<WeaverProposalExecutionResult>.Success(result.Value!)
@@ -811,7 +811,7 @@ public static class WeaverApi
             new(actorId, tenantId, sessionId, Math.Clamp(take ?? 100, 1, WeaverAuditOwnerQuery.MaxTake)), context.RequestAborted);
         if (!result.Succeeded)
         {
-            var unsupported = new WeaverError("weaver.audit.query_unsupported", "The installed agent audit reader cannot answer owner-scoped audit queries.", 409);
+            var unsupported = new WeaverError("weaver.audit.query_unsupported", "The installed Weaver audit reader cannot answer owner-scoped audit queries.", 409);
             await WriteAsync(context, WeaverApiResponse<IReadOnlyCollection<WeaverAuditEvent>>.Failure(unsupported), WeaverJsonContext.Default.WeaverApiResponseIReadOnlyCollectionWeaverAuditEvent, unsupported.StatusCode);
             return;
         }
@@ -825,7 +825,7 @@ public static class WeaverApi
             WeaverAuditEventKind.ContextDenied,
             sessionId,
             null,
-            "Agent request denied by policy.",
+            "Weaver request denied by policy.",
             DateTimeOffset.UtcNow,
             decision.Violations.Select((violation, index) => new { Key = $"{index}:{violation.Code}", violation.Message }).ToDictionary(x => x.Key, x => x.Message)),
             context.RequestAborted);

@@ -4,6 +4,7 @@ import { ArrowLeft, RefreshCw } from "lucide-react";
 import { StudioAlert, StudioButton, StudioPage, StudioPageHeader, StudioResultState } from "@elsa-workflows/studio-ui";
 import { actor, read, mutate, message, statusOf, type TaskActor, type TaskItem } from "./taskApi";
 import { TaskStatus } from "./TaskStatus";
+import { useTaskPeople } from "./taskPeople";
 import { readTaskBrowseLocation, taskCollectionPath } from "./taskNavigation";
 
 const responsePendingNotice = "Your response is recorded. The workflow will continue when delivery completes. You can leave this page.";
@@ -41,6 +42,7 @@ export function TaskDetail({ api, id, identity, onClose, accessNotice }: { api: 
   const [targetKind, setTargetKind] = useState("user"); const [target, setTarget] = useState("");
   const content = useRef<HTMLDivElement>(null); const focused = useRef<string | null>(null);
   useStudioWorkspaceTitle(task?.title, "User task");
+  const person = useTaskPeople(api, identity);
   useEffect(() => {
     if (!task?.id || focused.current === task.id) return;
     const heading = content.current?.querySelector("h1");
@@ -118,8 +120,10 @@ export function TaskDetail({ api, id, identity, onClose, accessNotice }: { api: 
   }, [task?.decision]);
   useEffect(() => { if (!guarded) notifyStudioNavigationGuardReleased(); }, [guarded]);
   const frame = (children: React.ReactNode) => <StudioPage className="user-tasks" aria-label={task?.title ?? "Task details"} aria-busy={busy}><div ref={content} className="user-task-detail">{children}</div></StudioPage>;
-  const back = onClose ? <StudioButton variant="ghost" disabled={busy || Boolean(attempt.current)} onClick={() => { void canLeave().then(allowed => { if (allowed) onClose(); }); }}><ArrowLeft size={16} aria-hidden="true" />Back to task list</StudioButton> : null;
-  if (missing) return frame(<><StudioPageHeader title="User task" actions={back} /><StudioResultState title="Task not found" description="It may no longer be assigned to you or available to your group." /></>);
+  const leave = () => { void canLeave().then(allowed => { if (allowed) onClose?.(); }); };
+  const back = onClose ? <StudioButton variant="ghost" disabled={busy || Boolean(attempt.current)} onClick={() => leave()}><ArrowLeft size={16} aria-hidden="true" />Back to task list</StudioButton> : null;
+  if (missing) return frame(<><StudioPageHeader title="User task" actions={back} /><StudioResultState title="Task not found" description="It may no longer be assigned to you or available to your group."
+    actions={onClose ? <StudioButton variant="primary" onClick={leave}>Back to task list</StudioButton> : undefined} /></>);
   if (!task) return frame(<><StudioPageHeader title="User task" actions={back} />{notice ? <p role="alert">{notice}</p> : <p role="status">Loading task…</p>}<StudioButton onClick={() => void refresh()}>Retry</StudioButton></>);
   const terminal = task.status === "Completed" || task.status === "Cancelled";
   const pending = task.status === "CompletionPending";
@@ -127,21 +131,24 @@ export function TaskDetail({ api, id, identity, onClose, accessNotice }: { api: 
   const canComplete = identity.canAct && own && !terminal && !pending && !stale;
   const renderers = task.form ? api.userTaskForms?.list().filter(item => item.provider === task.form?.provider) ?? [] : [];
   const Renderer = renderers.length === 1 ? renderers[0].component : null;
+  const claimable = !own && Boolean(task.groupId) && task.status === "Open" && identity.canAct;
+  const releasable = task.claimantId === identity.userId && task.status === "Claimed" && identity.canAct;
+  const respondable = own && !terminal && !pending && task.actions.length > 0;
   return frame(<>
     <StudioPageHeader title={task.title} description={task.description ? <span className="user-task-description">{task.description}</span> : undefined} actions={<>{back}<StudioButton onClick={() => void refresh()} disabled={busy}><RefreshCw size={16} aria-hidden="true" />Refresh task</StudioButton></>}><TaskStatus status={task.status} /></StudioPageHeader>
     {accessNotice}
     {notice ? <p role={stale || Object.keys(errors).length ? "alert" : "status"}>{notice}</p> : null}
-    {task.form ? Renderer ? <Renderer form={task.form} value={data} onChange={next => { edited.current = true; setData(next); if (validationNotice) { setNotice(""); setValidationNotice(false); } setErrors(previous => Object.fromEntries(Object.entries(previous).filter(([key]) => Object.is(data[key], next[key])))); }} readOnly={!canComplete || busy || Boolean(attempt.current)} errors={errors} />
+    {task.form ? Renderer ? <div className="user-task-response" data-final={terminal || undefined}><Renderer form={task.form} value={data} onChange={next => { edited.current = true; setData(next); if (validationNotice) { setNotice(""); setValidationNotice(false); } setErrors(previous => Object.fromEntries(Object.entries(previous).filter(([key]) => Object.is(data[key], next[key])))); }} readOnly={!canComplete || busy || Boolean(attempt.current)} errors={errors} /></div>
       : <StudioResultState tone="danger" title="Form integration unavailable" description="Install the matching form integration before completing this task." /> : null}
-    <div className="user-task-actions">
-      {!own && task.groupId && task.status === "Open" && identity.canAct ? <StudioButton disabled={busy || stale} onClick={() => void act("claim")}>Claim task</StudioButton> : null}
-      {task.claimantId === identity.userId && task.status === "Claimed" && identity.canAct ? <StudioButton disabled={busy || stale || Boolean(attempt.current)} onClick={() => void act("release")}>Release task</StudioButton> : null}
-      {own && !terminal && !pending ? task.actions.map((action, index) => <StudioButton variant={index === 0 ? "primary" : "default"} key={action} disabled={!canComplete || busy || Boolean(task.form && !Renderer) || Boolean(attempt.current && attempt.current.action !== action)} onClick={() => void act("complete", action)}>{attempt.current?.action === action ? `Retry ${action}` : action}</StudioButton>) : null}
-    </div>
+    {(claimable || releasable || respondable) && <div className="user-task-actions">
+      {claimable ? <StudioButton disabled={busy || stale} onClick={() => void act("claim")}>Claim task</StudioButton> : null}
+      {releasable ? <StudioButton disabled={busy || stale || Boolean(attempt.current)} onClick={() => void act("release")}>Release task</StudioButton> : null}
+      {respondable ? task.actions.map((action, index) => <StudioButton variant={index === 0 ? "primary" : "default"} key={action} disabled={!canComplete || busy || Boolean(task.form && !Renderer) || Boolean(attempt.current && attempt.current.action !== action)} onClick={() => void act("complete", action)}>{attempt.current?.action === action ? `Retry ${action}` : action}</StudioButton>) : null}
+    </div>}
     {identity.canManage && !terminal && !pending ? <fieldset disabled={busy || stale || Boolean(attempt.current)}><legend>Reassign task</legend>
       <label>Assign to <select value={targetKind} onChange={event => setTargetKind(event.target.value)}><option value="user">User</option><option value="group">Group</option></select></label>
       <label>{targetKind === "user" ? "User ID" : "Group ID"}<input value={target} onChange={event => setTarget(event.target.value)} /></label>
       <StudioButton disabled={!target.trim()} onClick={() => void act("reassign")}>Reassign</StudioButton></fieldset> : null}
-    <details><summary>History</summary><ol>{task.history.map((entry, index) => <li key={`${entry.at}-${index}`}>{entry.operation}{entry.action ? ` · ${entry.action}` : ""} · {entry.actorId} · <time dateTime={entry.at}>{new Date(entry.at).toLocaleString()}</time></li>)}</ol></details>
+    <details><summary>History</summary><ol>{task.history.map((entry, index) => <li key={`${entry.at}-${index}`}>{entry.operation}{entry.action ? ` · ${entry.action}` : ""} · {person(entry.actorId)} · <time dateTime={entry.at}>{new Date(entry.at).toLocaleString()}</time></li>)}</ol></details>
   </>);
 }

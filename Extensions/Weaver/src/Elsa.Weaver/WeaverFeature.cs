@@ -9,8 +9,8 @@ namespace Elsa.Weaver;
 [ManifestFeatureCategory("Weaver")]
 [ShellFeature(
     name: "Weaver",
-    DisplayName = "Foundation Agent Abstractions",
-    Description = "Registers provider-agnostic agent sessions, policy, context, proposal, streaming, feedback, audit, and provider facade contracts.",
+    DisplayName = "Foundation Weaver Abstractions",
+    Description = "Registers provider-agnostic Weaver sessions, policy, context, proposal, streaming, feedback, audit, and provider facade contracts.",
     DependsOn = new object[] { "Events" }
 )]
 public class WeaverFeature : IShellFeature

@@ -222,7 +222,7 @@ DURABLE_STORE_FEATURE = "WeaverEntityFrameworkCore"
 DURABLE_STORE_DEPENDENCY = "Secrets"
 
 
-def enable_durable_agent_store(run, database, encryption_key, *, lease_seconds=15):
+def enable_durable_weaver_store(run, database, encryption_key, *, lease_seconds=15):
     """Configure the packaged EF session store on SQLite in the backend's runtime JSON, without rebuilding it.
 
     The caller must stop its own backend first and start a new generation afterwards; this helper never starts or stops
@@ -247,7 +247,7 @@ def enable_durable_agent_store(run, database, encryption_key, *, lease_seconds=1
     path.chmod(0o600)
     selected = {"feature": DURABLE_STORE_FEATURE, "dependsOn": DURABLE_STORE_DEPENDENCY, "provider": "Sqlite",
                 "database": str(database), "leaseSeconds": lease_seconds}
-    profile["durableAgentStore"] = dict(selected)
+    profile["durableWeaverStore"] = dict(selected)
     return selected
 
 

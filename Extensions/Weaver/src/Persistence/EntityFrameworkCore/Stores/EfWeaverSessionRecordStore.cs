@@ -100,7 +100,7 @@ internal sealed partial class EfWeaverSessionRecordStore(
                     .Select(x => (long?)x.Version).SingleOrDefaultAsync(cancellationToken);
                 if (version == session.Version) return read;
             }
-            throw new WeaverContributionException($"Agent session '{sessionId}' kept changing while it was read; nothing was hydrated.");
+            throw new WeaverContributionException($"Weaver session '{sessionId}' kept changing while it was read; nothing was hydrated.");
         });
         if (rows is null) return null;
         try
@@ -270,7 +270,7 @@ internal sealed partial class EfWeaverSessionRecordStore(
                         if (writesPendingAudits) setters.SetProperty(x => x.PendingAuditsPayload, pendingAudits);
                     }, cancellationToken);
                 if (applied != 1)
-                    throw new InvalidOperationException($"Agent session '{sessionId}' changed while this write held its row lock.");
+                    throw new InvalidOperationException($"Weaver session '{sessionId}' changed while this write held its row lock.");
                 await transaction.CommitAsync(cancellationToken);
                 return Owned(write.Fence, lease);
             }
@@ -365,7 +365,7 @@ internal sealed partial class EfWeaverSessionRecordStore(
         }
         catch (Exception exception) when (exception is not (ArgumentException or OperationCanceledException))
         {
-            throw new WeaverContributionException($"Agent session '{sessionId}' could not encode its {operation}; nothing was changed.", exception);
+            throw new WeaverContributionException($"Weaver session '{sessionId}' could not encode its {operation}; nothing was changed.", exception);
         }
     }
 
@@ -376,7 +376,7 @@ internal sealed partial class EfWeaverSessionRecordStore(
     private static DateTimeOffset Time(long ticks) => new(ticks, TimeSpan.Zero);
 
     private static Func<Exception?, ValueTask<T>> Exhausted<T>(string sessionId, string operation) => conflict =>
-        throw new WeaverContributionException($"Agent session '{sessionId}' could not complete its {operation}: the bounded store retries were exhausted; nothing was changed.", conflict);
+        throw new WeaverContributionException($"Weaver session '{sessionId}' could not complete its {operation}: the bounded store retries were exhausted; nothing was changed.", conflict);
 
     /// <summary>
     /// §2.23.5: a provider or infrastructure failure leaves this store as an <see cref="WeaverContributionException"/> that
@@ -392,7 +392,7 @@ internal sealed partial class EfWeaverSessionRecordStore(
         catch (Exception exception) when (exception is not (OperationCanceledException or ObjectDisposedException or WeaverContributionException
                                               or WeaverSessionUnavailableException))
         {
-            var subject = sessionId is null ? "The agent session record store" : $"Agent session '{sessionId}'";
+            var subject = sessionId is null ? "The Weaver session record store" : $"Weaver session '{sessionId}'";
             throw new WeaverContributionException($"{subject} could not complete its {operation}; nothing was changed.", exception);
         }
     }

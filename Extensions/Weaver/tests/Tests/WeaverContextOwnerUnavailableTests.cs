@@ -12,7 +12,7 @@ namespace Elsa.Weaver.Tests;
 /// <summary>
 /// Context admission whose owner could not decide (spec 1193, story 5 scenario 3): collection, a turn's initial admission
 /// and the per-tool re-admission all fail as unavailable (503) with the owner's code and the engine's fixed message.
-/// Every other required refusal keeps <c>agent.context.incomplete</c> (400) exactly.
+/// Every other required refusal keeps <c>weaver.context.incomplete</c> (400) exactly.
 /// </summary>
 public sealed class WeaverContextOwnerUnavailableTests
 {
@@ -254,7 +254,7 @@ public sealed class WeaverContextOwnerUnavailableTests
 
         private static WeaverContextAttachment Attachment() => new("owned-context", Module, "resource", "Owned resource", "owned.context",
             WeaverContextSensitivity.Internal, "selection", "Bounded owned resource", null, new Dictionary<string, string>())
-        { ModuleId = Module, SchemaVersion = "1", Target = new(Module, "owned-resource", "resource", "revision-1"), AgentScopes = ["owned/read"] };
+        { ModuleId = Module, SchemaVersion = "1", Target = new(Module, "owned-resource", "resource", "revision-1"), WeaverScopes = ["owned/read"] };
     }
 
     /// <summary>An unrelated event handler that writes a marked diagnostic straight into the public collection.</summary>

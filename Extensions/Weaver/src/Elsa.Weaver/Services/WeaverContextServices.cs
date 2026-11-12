@@ -54,7 +54,7 @@ internal sealed class DefaultWeaverContextSanitizer : IWeaverContextSanitizer
                 References = new Dictionary<string, string>(),
                 Target = null,
                 Client = null,
-                AgentScopes = [],
+                WeaverScopes = [],
                 Scope = "redacted"
             }
             : x).ToList());
@@ -101,7 +101,7 @@ internal sealed class DefaultWeaverContextCollector(
             {
                 Content = x.Content is null ? null : JsonSerializer.SerializeToElement(x.Content).Clone(),
                 References = new System.Collections.ObjectModel.ReadOnlyDictionary<string, string>(x.References.ToDictionary()),
-                AgentScopes = Array.AsReadOnly(x.AgentScopes.ToArray())
+                WeaverScopes = Array.AsReadOnly(x.WeaverScopes.ToArray())
             }).ToList();
             if (attachments.Count > 32 || attachments.Any(x => x.Summary.Length > 4096 || JsonSerializer.Serialize(x.Content).Length > 32768))
                 diagnostics.Add(new("host", "weaver.context.budget_exceeded", "The module context exceeds the supported candidate budget; use a bounded contribution or authorized detail tool.", true));

@@ -42,7 +42,7 @@ class AutonomyEvidenceTests(unittest.TestCase):
                 "textTruncation": "none", "trailingIncompleteUtf8Bytes": 0, "rawBody": body}
 
     def with_preflights(self, fixture):
-        path = fixture[0] / "agent-streams.json"
+        path = fixture[0] / "weaver-streams.json"
         original = json.loads(path.read_text())[0]["rawBody"]
         split = original.index('data: {"id": "event-size-started"')
         rows = [self.stream("", "native-preflight-1", method="OPTIONS", resource_type="Other"),
@@ -113,7 +113,7 @@ class AutonomyEvidenceTests(unittest.TestCase):
                        {"id": "event-resume-completed", "kind": "completed"}]
         else:
             frames.append({"id": "event-size", "kind": "contributedResult", "resultKind": "moduleResult", "error": None, "payload": result})
-        write("agent-streams", [self.stream("".join("data: " + json.dumps(value) + "\n\n" for value in frames))])
+        write("weaver-streams", [self.stream("".join("data: " + json.dumps(value) + "\n\n" for value in frames))])
         write("autonomy-native-bootstrap", {"status": 200, "value": {"data": {"capabilities": [
             {"id": "acme.home.read", "moduleId": w["moduleId"]}, {"id": w["sizeCapability"], "moduleId": w["moduleId"]}]}}})
         create_body = {"autonomyMode": initial}
@@ -155,7 +155,7 @@ class AutonomyEvidenceTests(unittest.TestCase):
             requests.append({"url": url, "method": "POST", "body": request})
             write("autonomy-size-execute", {"url": url, "status": 200, "request": request, "response": response})
             write("autonomy-size-execute-http", {"url": url, "status": 200, "rawBody": json.dumps(response)})
-        write("agent-requests", requests)
+        write("weaver-requests", requests)
         write("autonomy-network", network)
         detail = lambda name, policy, messages: write(name, {"status": 200, "url": base + "/_elsa/weaver/sessions/session-1",
             "value": {"data": {"sessionId": "session-1", "status": "active", "policy": policy, "messages": messages}}})
@@ -241,7 +241,7 @@ class AutonomyEvidenceTests(unittest.TestCase):
 
     def test_captured_other_preflight_and_legacy_preflight_require_the_observed_initiator(self):
         for resource_type in ("Other", "Preflight"):
-            fixture = self.with_preflights(self.fixture()); path = fixture[0] / "agent-streams.json"
+            fixture = self.with_preflights(self.fixture()); path = fixture[0] / "weaver-streams.json"
             rows = json.loads(path.read_text())
             rows[0]["requestObservation"]["resourceType"] = resource_type
             self.assertEqual("OPTIONS", rows[0]["requestObservation"]["method"])
@@ -250,7 +250,7 @@ class AutonomyEvidenceTests(unittest.TestCase):
             path.write_text(json.dumps(rows)); self.verify(fixture)
             for initiator in (None, "script", "other"):
                 with self.subTest(resource_type=resource_type, initiator=initiator):
-                    fixture = self.with_preflights(self.fixture()); path = fixture[0] / "agent-streams.json"
+                    fixture = self.with_preflights(self.fixture()); path = fixture[0] / "weaver-streams.json"
                     rows = json.loads(path.read_text())
                     rows[0]["requestObservation"].update(resourceType=resource_type, initiatorType=initiator)
                     path.write_text(json.dumps(rows))
@@ -262,7 +262,7 @@ class AutonomyEvidenceTests(unittest.TestCase):
                          "repeated-response", "boolean-count", "wrong-source", "nonempty", "unobserved-body", "missing-data-count", "failed-data-metadata",
                          "capture-error", "validation-error", "network-error", "canceled", "open", "failed", "http401", "http200"):
             with self.subTest(mutation=mutation):
-                fixture = self.with_preflights(self.fixture()); path = fixture[0] / "agent-streams.json"
+                fixture = self.with_preflights(self.fixture()); path = fixture[0] / "weaver-streams.json"
                 rows = json.loads(path.read_text()); row = rows[0]
                 if mutation == "get": row["requestObservation"].update(method="GET", resourceType="Fetch"); row["responseObservation"]["resourceType"] = "Fetch"
                 elif mutation == "missing-method": row["requestObservation"].pop("method")
@@ -302,7 +302,7 @@ class AutonomyEvidenceTests(unittest.TestCase):
     def test_failed_get_or_unknown_metadata_is_not_filtered_as_a_preflight(self):
         for mutation in ("401", "204", "500", "method", "resource-type", "request-id", "identity", "capture", "validation", "missing-byte-count", "malformed-content-type", "network", "nonterminal-abort", "open"):
             with self.subTest(mutation=mutation):
-                fixture = self.with_preflights(self.fixture()); path = fixture[0] / "agent-streams.json"
+                fixture = self.with_preflights(self.fixture()); path = fixture[0] / "weaver-streams.json"
                 rows = json.loads(path.read_text()); row = rows[1]
                 if mutation.isdigit(): row["status"] = int(mutation)
                 elif mutation == "method": row["requestObservation"].pop("method")
@@ -321,7 +321,7 @@ class AutonomyEvidenceTests(unittest.TestCase):
 
     def test_complete_native_approval_pause_abort_is_preserved_without_hiding_failed_get(self):
         for provider, key in (("copilot", "reviewed-size-control"), ("anthropic", "reviewed-size-control"), ("copilot", "automatic-to-manual")):
-            fixture = self.fixture(provider, key); path = fixture[0] / "agent-streams.json"
+            fixture = self.fixture(provider, key); path = fixture[0] / "weaver-streams.json"
             body = json.loads(path.read_text())[0]["rawBody"]
             split = body.index('data: {"id": "event-resume-message"')
             pause = self.stream(body[:split], "native-pause")
@@ -344,7 +344,7 @@ class AutonomyEvidenceTests(unittest.TestCase):
         for provider in ("copilot", "anthropic"):
             with self.subTest(provider=provider):
                 fixture = self.fixture(provider, "reviewed-size-control")
-                streams = json.loads((fixture[0] / "agent-streams.json").read_text())
+                streams = json.loads((fixture[0] / "weaver-streams.json").read_text())
                 contributed = [json.loads(raw.removeprefix("data: "))["payload"]["toolName"] for raw in streams[0]["rawBody"].strip().split("\n\n")
                                if json.loads(raw.removeprefix("data: ")).get("kind") == "contributedResult"]
                 self.assertEqual([self.witness["readTool"]], contributed)
@@ -357,7 +357,7 @@ class AutonomyEvidenceTests(unittest.TestCase):
             with self.subTest(provider=provider):
                 self.verify(self.fixture(provider), provider)
                 fixture = self.fixture(provider)
-                path = fixture[0] / "agent-streams.json"; streams = json.loads(path.read_text())
+                path = fixture[0] / "weaver-streams.json"; streams = json.loads(path.read_text())
                 streams[0]["rawBody"] = streams[0]["rawBody"].split('data: {"id": "event-size"')[0]
                 path.write_text(json.dumps(streams))
                 with self.assertRaises(RuntimeError): self.verify(fixture, provider)
@@ -368,7 +368,7 @@ class AutonomyEvidenceTests(unittest.TestCase):
             output = fixture[0]
             response = json.loads((output / "autonomy-size-execute.json").read_text())
             result = response["response"]["data"]["toolResult"]
-            path = output / "agent-streams.json"; streams = json.loads(path.read_text())
+            path = output / "weaver-streams.json"; streams = json.loads(path.read_text())
             streams[0]["rawBody"] += "data: " + json.dumps({"id": "optional-size", "kind": "contributedResult", "resultKind": "moduleResult", "payload": result}) + "\n\n"
             path.write_text(json.dumps(streams))
             self.verify(fixture, provider)
@@ -379,7 +379,7 @@ class AutonomyEvidenceTests(unittest.TestCase):
                     structured = output / "autonomy-size-execute.json"; raw = output / "autonomy-size-execute-http.json"
                     response, http = json.loads(structured.read_text()), json.loads(raw.read_text())
                     result = copy.deepcopy(response["response"]["data"]["toolResult"])
-                    sse_path = output / "agent-streams.json"; streams = json.loads(sse_path.read_text())
+                    sse_path = output / "weaver-streams.json"; streams = json.loads(sse_path.read_text())
                     streams[0]["rawBody"] += "data: " + json.dumps({"id": "optional-size", "kind": "contributedResult", "resultKind": "moduleResult", "payload": result}) + "\n\n"
                     sse_path.write_text(json.dumps(streams))
                     if mutation == "missing-structured": structured.unlink()
@@ -408,7 +408,7 @@ class AutonomyEvidenceTests(unittest.TestCase):
                              "duplicate-execute", "wrong-execute-path", "optional-sse-mismatch", "optional-sse-duplicate", "missing-journal", "missing-continuation"):
                 with self.subTest(provider=provider, mutation=mutation):
                     fixture = self.fixture(provider, "reviewed-size-control"); output, observation, _, trace = fixture
-                    path = output / "agent-streams.json"; streams = json.loads(path.read_text())
+                    path = output / "weaver-streams.json"; streams = json.loads(path.read_text())
                     values = [json.loads(raw.removeprefix("data: ")) for raw in streams[0]["rawBody"].strip().split("\n\n")]
                     proposal = next(row["payload"] for row in values if row["kind"] == "proposalCreated")
                     prepared = proposal["preparedInvocation"]
@@ -419,7 +419,7 @@ class AutonomyEvidenceTests(unittest.TestCase):
                     elif mutation == "prepared-version": prepared["toolContractVersion"] = "2"
                     elif mutation == "prepared-turn": prepared["turnId"] = "another-turn"
                     elif mutation in ("duplicate-execute", "wrong-execute-path"):
-                        requests_path = output / "agent-requests.json"; requests = json.loads(requests_path.read_text())
+                        requests_path = output / "weaver-requests.json"; requests = json.loads(requests_path.read_text())
                         if mutation == "duplicate-execute": requests.append(copy.deepcopy(requests[-1]))
                         else: requests[-1]["url"] = requests[-1]["url"].replace("proposal-1", "proposal-2")
                         requests_path.write_text(json.dumps(requests))
@@ -464,7 +464,7 @@ class AutonomyEvidenceTests(unittest.TestCase):
                 elif mutation == "page-error": observation["pageErrors"] = ["Error"]
                 elif mutation == "trace-tail": trace["incompleteTailBytes"] = 1
                 else:
-                    path = output / "agent-streams.json"; streams = json.loads(path.read_text())
+                    path = output / "weaver-streams.json"; streams = json.loads(path.read_text())
                     if mutation == "sse-http": streams[0]["status"] = 401
                     elif mutation == "sse-capture": streams[0]["captureError"] = "unavailable"
                     elif mutation == "sse-error": streams[0]["rawBody"] += 'data: {"id":"error","kind":"error","error":{"code":"weaver.turn.busy"}}\n\n'
@@ -478,7 +478,7 @@ class AutonomyEvidenceTests(unittest.TestCase):
             with self.subTest(mutation=mutation):
                 fixture = self.fixture(key="automatic-to-manual")
                 output, _, _, trace = fixture
-                path = output / "agent-streams.json"; streams = json.loads(path.read_text())
+                path = output / "weaver-streams.json"; streams = json.loads(path.read_text())
                 values = [json.loads(raw.removeprefix("data: ")) for raw in streams[0]["rawBody"].strip().split("\n\n")]
                 proposal = next(row["payload"] for row in values if row["kind"] == "proposalCreated")
                 if mutation == "wrong-target": proposal["preparedInvocation"]["target"]["resourceId"] = "other"
@@ -510,14 +510,14 @@ class AutonomyEvidenceTests(unittest.TestCase):
                     path = Path(observation["ownerAfter"]["path"]); value = json.loads(path.read_text()); value["value"][mutation] = "medium" if mutation == "size" else "rev-9"
                     path.write_text(json.dumps(value)); observation["ownerAfter"] = retained(path)
                 elif mutation == "receipt":
-                    path = output / "agent-streams.json"; value = json.loads(path.read_text()); value[0]["rawBody"] = value[0]["rawBody"].replace('"after": {"moduleId"', '"otherAfter": {"moduleId"'); path.write_text(json.dumps(value))
+                    path = output / "weaver-streams.json"; value = json.loads(path.read_text()); value[0]["rawBody"] = value[0]["rawBody"].replace('"after": {"moduleId"', '"otherAfter": {"moduleId"'); path.write_text(json.dumps(value))
                 else:
                     path = Path(observation["autonomy"]["sessionAfter"]["path"]); value = json.loads(path.read_text()); value["value"]["data"]["messages"] = value["value"]["data"]["messages"][:2]; path.write_text(json.dumps(value)); observation["autonomy"]["sessionAfter"] = retained(path)
                 with self.assertRaises(RuntimeError): self.verify(fixture)
 
     def test_automatic_mode_never_issues_extra_execute_to_obtain_proof(self):
         fixture = self.fixture(); output = fixture[0]
-        path = output / "agent-requests.json"; value = json.loads(path.read_text())
+        path = output / "weaver-requests.json"; value = json.loads(path.read_text())
         value.append({"method": "POST", "url": "http://127.0.0.1:52001/_elsa/weaver/proposals/extra/execute", "body": {}})
         path.write_text(json.dumps(value))
         with self.assertRaises(RuntimeError): self.verify(fixture)
@@ -546,7 +546,7 @@ class AutonomyEvidenceTests(unittest.TestCase):
             with self.subTest(mutation=mutation):
                 fixture = self.fixture(key="manual-to-automatic"); output, observation, _, _ = fixture
                 if mutation == "new-session":
-                    path = output / "agent-requests.json"; value = json.loads(path.read_text()); value.append(copy.deepcopy(value[0])); path.write_text(json.dumps(value))
+                    path = output / "weaver-requests.json"; value = json.loads(path.read_text()); value.append(copy.deepcopy(value[0])); path.write_text(json.dumps(value))
                 elif mutation == "source":
                     path = output / "autonomy-size-message.json"; value = json.loads(path.read_text()); value["response"]["data"]["message"]["context"][0]["contributorId"] = "other"; path.write_text(json.dumps(value))
                 elif mutation == "accepted-target":
@@ -578,7 +578,7 @@ class AutonomyEvidenceTests(unittest.TestCase):
                     elif mutation == "wrong-module": request["source"]["moduleId"] = "Foreign"
                     else: request["requestedCapabilities"] = [self.witness["sizeCapability"]]
                     path.write_text(json.dumps(value))
-                    requests_path = output / "agent-requests.json"; requests = json.loads(requests_path.read_text()); requests[2]["body"] = request; requests_path.write_text(json.dumps(requests))
+                    requests_path = output / "weaver-requests.json"; requests = json.loads(requests_path.read_text()); requests[2]["body"] = request; requests_path.write_text(json.dumps(requests))
                 with self.assertRaises(RuntimeError): self.verify(fixture)
 
     def test_owner_changed_at_review_is_not_a_reviewed_outcome(self):
@@ -610,7 +610,7 @@ class AutonomyEvidenceTests(unittest.TestCase):
             "wrong-revision-body": "only the requested mode and the revision acknowledged at creation",
             "wrong-mode-body": "only the requested mode and the revision acknowledged at creation",
             "extra-body-field": "only the requested mode and the revision acknowledged at creation",
-            "foreign-session": "unrecognized native Agent request",
+            "foreign-session": "unrecognized native Weaver request",
             "busy-409": "did not acknowledge the mode change with HTTP 200",
             "error-envelope": "did not acknowledge the mode change with HTTP 200",
             "raw-mismatch": "did not acknowledge the mode change with HTTP 200",
@@ -625,7 +625,7 @@ class AutonomyEvidenceTests(unittest.TestCase):
                 with self.subTest(key=key, mutation=mutation):
                     fixture = self.fixture("anthropic", key); output, observation, _, _ = fixture
                     a = observation["autonomy"]
-                    def requests(change): self.edit(output, "agent-requests", change)
+                    def requests(change): self.edit(output, "weaver-requests", change)
                     def exchange(change):
                         a["policyUpdate"] = self.edit(output, "autonomy-mode-update", change)
                         http = output / "autonomy-mode-update-http.json"; raw = json.loads(http.read_text())
@@ -662,7 +662,7 @@ class AutonomyEvidenceTests(unittest.TestCase):
                     url = "http://127.0.0.1:52001/_elsa/weaver/sessions/session-1/autonomy"
                     put = {"url": url, "method": "PUT", "body": {"autonomyMode": initial, "expectedRevision": 0}}
                     if mutation == "put":
-                        self.edit(output, "agent-requests", lambda value: value.insert(2, put))
+                        self.edit(output, "weaver-requests", lambda value: value.insert(2, put))
                         message = "exactly one acknowledged PUT"
                     elif mutation == "retained-exchange":
                         self.write(output, "autonomy-mode-update", {"url": url, "method": "PUT", "status": 200, "request": put["body"], "response": {}})
@@ -760,7 +760,7 @@ class AutonomyEvidenceTests(unittest.TestCase):
                 elif mutation == "size-private-approval": accepted("size", lambda value: value["acceptedPolicy"].update(requiresApprovalForMutations=False))
                 elif mutation == "read-denied-capabilities": accepted("read", lambda value: value.update(deniedCapabilityIds=["acme.secret"]))
                 elif mutation == "detail-retention-label": a["sessionAfter"] = detail("session-after", lambda value: value["policy"].update(retentionLabel="Private"))
-                elif mutation == "stream-private-policy": self.edit(output, "agent-streams", lambda value: value[0].update(rawBody=
+                elif mutation == "stream-private-policy": self.edit(output, "weaver-streams", lambda value: value[0].update(rawBody=
                     'data: {"id": "event-private", "kind": "messageDelta", "payload": {"allowedContextKinds": ["*"]}}\n\n' + value[0]["rawBody"]))
                 elif mutation == "read-relabeled": accepted("read", lambda value: value["acceptedPolicy"].update(revision=1))
                 elif mutation == "history-size": a["sessionAfter"] = detail("session-after", lambda value: value["messages"][1].update(acceptedPolicyRevision=0))
@@ -841,7 +841,7 @@ console.log(JSON.stringify(observations));
         with tempfile.TemporaryDirectory() as directory:
             for value in values:
                 with self.subTest(scenario=value["scenario"]):
-                    path = Path(directory) / "agent-streams.json"; path.write_text(json.dumps(value["rows"]))
+                    path = Path(directory) / "weaver-streams.json"; path.write_text(json.dumps(value["rows"]))
                     if value["scenario"] == "valid":
                         frames, _ = _frames(Path(directory), "session-1", "http://127.0.0.1:52001")
                         self.assertEqual(["native-unit"], [row["id"] for row in frames])
@@ -1031,7 +1031,7 @@ class AutonomyManifestTests(unittest.TestCase):
             self.assertEqual("failed", json.loads((Path(directory) / "autonomy-mode-qualification.json").read_text())["status"])
 
     def test_browser_failure_is_raised_with_its_precise_retained_cause(self):
-        for failure, cause in (({"type": "AutonomyFailure", "message": "HTTP 409 agent.session.busy", "cause": "autonomy.update_refused"}, "autonomy.update_refused"),
+        for failure, cause in (({"type": "AutonomyFailure", "message": "HTTP 409 weaver.session.busy", "cause": "autonomy.update_refused"}, "autonomy.update_refused"),
                                ({"type": "TimeoutError", "message": "locator timeout"}, "browser.failed"), (None, "browser.failed")):
             with self.subTest(cause=cause, failure=failure), tempfile.TemporaryDirectory() as directory:
                 root = Path(directory); trace = root / "trace.jsonl"; trace.write_bytes(b"")

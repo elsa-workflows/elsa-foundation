@@ -28,11 +28,11 @@ internal static class WeaverSessionAuthorization
         if (owner is null)
             return (null, NotFound(sessionId));
         if (!WeaverEndpointActor.CanAccess(owner.ActorId, owner.TenantId, user))
-            return (null, new("weaver.session.forbidden", "The agent session is not available to the current principal.", 403));
+            return (null, new("weaver.session.forbidden", "The Weaver session is not available to the current principal.", 403));
 
         var session = await sessions.FindAsync(sessionId, ct);
         return session is null ? (null, NotFound(sessionId)) : (session, null);
     }
 
-    private static WeaverError NotFound(string sessionId) => new("weaver.session.not_found", $"Agent session '{sessionId}' was not found.", 404);
+    private static WeaverError NotFound(string sessionId) => new("weaver.session.not_found", $"Weaver session '{sessionId}' was not found.", 404);
 }

@@ -1,4 +1,5 @@
 using CShells.Features;
+using CShells.Lifecycle;
 using Elsa.Expressions.Core.Contracts;
 using Elsa.Expressions.Core.Models;
 using Elsa.Secrets.Core.Contracts;
@@ -10,6 +11,7 @@ using Elsa.Secrets.Services;
 using Elsa.Secrets.Stores;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Hosting;
 using Xunit;
 
 namespace Elsa.Secrets.Tests;
@@ -26,6 +28,9 @@ public sealed class SecretsFeatureRegistrationTests
         Assert.IsType<InMemorySecretRepository>(provider.GetRequiredService<ISecretRepository>());
         Assert.Contains(provider.GetServices<ISecretStore>(), x => x is EncryptedSecretStore);
         Assert.Contains(provider.GetServices<ISecretStore>(), x => x is ConfigurationSecretStore);
+        var validator = Assert.IsType<DefaultWritableSecretStoreValidator>(provider.GetRequiredService<DefaultWritableSecretStoreValidator>());
+        Assert.Contains(provider.GetServices<IHostedService>(), service => ReferenceEquals(service, validator));
+        Assert.Contains(provider.GetServices<IShellInitializer>(), service => service is DefaultWritableSecretStoreValidator);
         var secretDescriptor = provider.GetServices<IExpressionDescriptorProvider>()
             .SelectMany(x => x.GetDescriptors())
             .Single(x => x.TypeName == "Secret");

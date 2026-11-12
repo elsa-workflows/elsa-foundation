@@ -65,7 +65,7 @@ import { getReadOnlyFitViewOptions } from "./readOnlyMinimap";
 import { FitReadOnlyFlowView, useReadOnlyFlowNodes } from "./useReadOnlyFlowCanvas";
 import { WorkflowReadOnlyMiniMap } from "./WorkflowReadOnlyMiniMap";
 import { RetainFlowViewport } from "../graph-authoring/RetainFlowViewport";
-import type { WorkflowAgentController } from "../workflowAgent";
+import type { WorkflowWeaverController } from "../workflowWeaver";
 import { useWorkflowInspectionContext } from "./useWorkflowInspectionContext";
 import { WorkflowExecutableCanvasHeader } from "./WorkflowExecutableCanvasHeader";
 import {
@@ -95,8 +95,8 @@ type SourceDefinitionState =
 export function WorkflowExecutableInspectorWorkbench({ context, ai, weaver, runInputEditors, artifactId, sourceReferenceId, onSelectReference, onIdentityChange }: {
   context: StudioEndpointContext;
   ai: StudioWeaverRegistry;
-  /** The Workflows module's agent state: the inspector contributes the exact Executable it shows (spec 1193 FR-028). */
-  weaver?: WorkflowAgentController;
+  /** The Workflows module's Weaver state: the inspector contributes the exact Executable it shows (spec 1193 FR-028). */
+  weaver?: WorkflowWeaverController;
   runInputEditors: StudioWorkflowRunInputEditorContribution[];
   artifactId: string;
   sourceReferenceId: string | null;
@@ -229,7 +229,7 @@ export function WorkflowExecutableInspectorWorkbench({ context, ai, weaver, runI
   const explain = () => {
     if (!data || !explainAction) return;
     // The inspector contributes the exact Executable itself (workflows.executable-inspector), so the prompt attaches none;
-    // without the Workflows agent state the prompt attaches the same identity.
+    // without the Workflows Weaver state the prompt attaches the same identity.
     if (dispatchAiAction(ai, explainAction, {
       artifactId: data.detail.artifactId,
       artifactHash: data.detail.artifactHash,

@@ -10,7 +10,7 @@ using Xunit;
 namespace Elsa.Weaver.Persistence.ProviderTests;
 
 /// <summary>
-/// One fresh database per provider for the agent record store scenarios.
+/// One fresh database per provider for the Weaver record store scenarios.
 /// Unavailable Docker skips unless ELSA_REQUIRE_NATIVE_PROVIDER_MATRIX demands the matrix.
 /// </summary>
 internal static class ProviderDatabase

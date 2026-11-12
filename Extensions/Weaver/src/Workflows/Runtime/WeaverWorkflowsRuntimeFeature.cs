@@ -10,7 +10,7 @@ namespace Elsa.Weaver.Workflows.Runtime;
 [ManifestFeatureCategory("Workflows")]
 [ShellFeature(
     name: "WeaverWorkflowsRuntime",
-    DisplayName = "Foundation Workflows Runtime Agent",
+    DisplayName = "Foundation Workflows Runtime Weaver",
     Description = "Registers read-only Weaver context and tools for workflow Executables and exact workflow Runs, read through Workflows Runtime Core under the host's runtime read permission.",
     DependsOn = new object[] { typeof(WeaverFeature) }
 )]
