@@ -77,7 +77,7 @@
   .user-task-table :is(tbody, tr, td) { display: block; }
   .user-task-table tbody tr { padding: var(--studio-space-3); }
   .user-task-table td { height: auto; padding: var(--studio-space-1, .25rem) 0; }
-  .user-task-table td[data-label]:not(:first-child)::before { display: block; margin-bottom: .15rem; content: attr(data-label); color: var(--studio-text-muted); font-size: var(--studio-label-size); font-weight: 600; }
+  .user-task-table td[data-label]:not(:first-child)::before { display: block; margin-bottom: .15rem; content: attr(data-label) / ""; color: var(--studio-text-muted); font-size: var(--studio-label-size); font-weight: 600; }
   .user-task-table td[data-empty] { display: none; }
   .user-task-table .user-task-link { min-width: 0; font-weight: 600; }
 }
