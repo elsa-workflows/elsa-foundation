@@ -1,6 +1,6 @@
 # Variable Reads And Writes Share One Versioned Lifecycle
 
-Status: proposed. It follows from analysis A-2. It completes the stale read-modify-write proposal of ADR 0090 §7,
+Status: accepted (2026-11-12). It follows from analysis A-2. It completes the stale read-modify-write proposal of ADR 0090 §7,
 rather than replacing it.
 
 Its implementation is planned through the initiative's own specs (S-10), not through a program goal. If accepted, it
