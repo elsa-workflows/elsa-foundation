@@ -125,6 +125,15 @@ replacement and precision handling:
   conversion contract**; the implementing spec defines the surface. A script that only **computes** with such a value,
   without writing it, still gets a warning — the engine cannot prevent a lossy computation
   (`9007199254740993 + 1` is still `9007199254740992`), only its silent persistence.
+- **How a loss is handled is a replaceable policy; the default refuses.** The handling of a precision loss is one
+  policy, provided by a feature and set for the whole host. It belongs to the JavaScript engine integration, because
+  the loss happens where a value crosses from .NET into the JavaScript engine; the engine can tell there which values
+  exceed what a JavaScript number holds, before the script runs. Other expression languages do not have this problem.
+  The default policy refuses, as above. A host that wants different handling, for example a warning, installs another
+  policy. There is no per-workflow override; one can be added later if a real need shows up.
+- **A lossy value passed to a host function is not a write.** When a script passes a value that lost precision as an
+  argument to a registered .NET function (for example `lookupOrder(order.id)`), the engine logs a warning and does not
+  refuse the call. Working with such values is the script author's responsibility.
 - **The refusal of a whole-array write says what was lost.** When a changed array is written as a whole and an element
   in it lost precision, the refusal diagnostic:
   - names the array path and says that the array was written as a whole;
@@ -148,23 +157,22 @@ This changes the frozen-value contract of spec 095
 that a loop item is frozen. Approving this amendment approves that change; `ScriptValueIsolationTests` changes with it.
 
 **V10. Live .NET objects in scripts are opt-in.** By default a script sees JSON and registered .NET functions that
-exchange JSON (D-5). A host may opt in to exposing objects it explicitly registers, each a transient resource for that
-attempt (V7). The opt-in is a separate script profile (ADR 0083, for example `binding-readonly-interop-v1`), not a
-host switch on the default profile, so one profile name always means one behaviour and a published executable records
-which one it uses. General access to .NET types (Jint's `AllowClr`) is a further, separately named profile that a
-host may enable deliberately; it is never the default. This follows the platform principle: guardrails and
-diagnostics, not restrictions.
+exchange JSON (D-5). A host may opt in to .NET interop: objects it exposes, each a transient resource for that attempt
+(V7), and, deliberately, general access to .NET types (Jint's `AllowClr`). It is never the default. The opt-in is one
+replaceable engine strategy that the host enables through a feature, not a set of named profiles chosen per script or
+per expression. This follows the platform principle: guardrails and diagnostics, not restrictions.
 
-A host developer can also enable general .NET access for JavaScript input-binding expressions. The default for an
-input binding stays JSON. The opt-in comes with these guardrails:
-- **Opt-in at two levels.** The host enables a separately named binding profile, and an expression selects it. The
-  executable pins it like any profile, so one profile name never means different behaviour on different hosts.
-- **Visible.** The same publish warning and Studio marker as for general .NET access in script activities (ADR 0083).
-- **Effect boundary.** An expression that selects this profile is treated as possibly effectful: the engine commits
-  before and after its evaluation. Only expressions that opt in pay for this.
+**One switch for scripts and input-binding expressions.** When a host enables .NET interop for JavaScript, script
+activities and JavaScript input-binding expressions get it alike: a JavaScript input expression takes the same input
+as a script in a JavaScript script activity. The default for both stays JSON. The opt-in comes with these guardrails:
+- **Visible.** A publish warning and a Studio marker on every node that uses general .NET access (ADR 0083).
 - **Stored value.** A binding may use .NET objects while it evaluates. What it returns is a storable value under this
   ADR, or it is refused. No live object enters the input snapshot (V7).
 - **Elsa state.** Direct writes to Elsa-owned workflow state stay blocked in input bindings (D-3).
+
+The opt-in's own design, in its implementing spec, settles two further points: whether an input-binding expression
+that uses .NET access is treated as possibly effectful, with a commit before and after its evaluation, and how a
+published executable records that it needs .NET access, so it never runs silently on a host without it.
 
 **JSON values and .NET objects may coexist.** The default representation is a convenience, not an exclusive mode.
 Under an opt-in that allows .NET objects, a script or an input-binding expression may work with plain JavaScript
@@ -172,7 +180,7 @@ values, host-exposed .NET objects, or both in the same script or expression, con
 Enabling .NET interop does not turn every value into a .NET proxy. The implementing spec defines how an author obtains
 each representation. The boundaries above still apply: the host controls which .NET capabilities it exposes, durable
 values follow their conversion, persistence and write-back contracts, input bindings never write Elsa-owned workflow
-state, and a known precision loss at a write needs explicit acceptance (V9).
+state, and a known precision loss at a write follows the host's precision policy (V9).
 
 **V12. One seam for how values reach a script, with pinned profiles.** How a value enters a script and how its
 changes come back is one seam with named, pinned implementations (V3's rule: one name keeps one behaviour):
@@ -182,11 +190,10 @@ changes come back is one seam with named, pinned implementations (V3's rule: one
 | JSON (default) | Plain JavaScript objects and real arrays | The changes the script makes (V9) |
 | .NET objects (opt-in) | Plain JavaScript values as in the default, alongside live .NET objects the host exposes through Jint interop | JSON values as in the default (V9); a live object only by explicit write-back (`variables.order = …`), because changes to a live object are not observed |
 
-- The engine sets the default, JSON out of the box, and a script activity may choose another profile (reconciliation
-  row 17b).
-- Input-binding expressions use JSON by default. A host may enable a separately named .NET profile for them, which an
-  expression selects, under V10's guardrails: possibly effectful with a commit before and after, a storable result or a
-  refusal, and no writes to Elsa-owned state; such a binding has no write-back (row 17a).
+- The engine sets the default, JSON out of the box. A host that enables .NET interop (V10) enables it for script
+  activities and input-binding expressions alike (reconciliation rows 17a and 17b).
+- An input-binding expression under the opt-in follows V10's guardrails: a storable result or a refusal, and no writes
+  to Elsa-owned state; such a binding has no write-back (row 17a).
 - Publication and Studio show a clear warning when a script activity or an input-binding expression uses .NET objects
   (row 17).
 - A faster implementation of the JSON profile, such as a view that converts each value only when it is read, may be
@@ -203,7 +210,7 @@ input and output adapter and inside registered functions (D-5).
   contract and does not force every consumer into .NET interop: JavaScript receives its JSON representation by
   default.
 - Explicitly selected typed access stays available: working with a value as a .NET object, with its properties and
-  methods, through a host-enabled, pinned profile (V10, V12), never by default. It follows the explicit conversion,
+  methods, through the host-enabled opt-in (V10, V12), never by default. It follows the explicit conversion,
   persistence and write-back rules of this ADR. A .NET engineer may also register their own aliases and expose their
   properties and methods to scripts.
 - This is not a rule that only JSON kinds exist across Studio and every scripting language; durable storage is
@@ -363,6 +370,12 @@ today. Its date-heavy scripts are already refused.
   function is already .NET code that a binding calls, so the restriction takes a capability away without keeping .NET
   out of bindings. And under faithful-or-refuse, an Elsa 3 input expression that uses .NET access would have to be
   refused at conversion. The guardrails of V10 keep the default plain and make the opt-in visible and bounded instead.
+- **Named .NET profiles, selected per script or per expression and pinned by the executable.** Not chosen. One
+  switch that applies to scripts and input-binding expressions alike is simpler: a JavaScript expression behaves as
+  the same JavaScript in a script activity does, and an author never has to know which profile an expression uses.
+- **A fixed refuse-or-warn rule for precision loss, or a per-workflow override.** Not chosen. Teams may want
+  different handling, so the handling is a replaceable host policy with refusal as the default (V9). A per-workflow
+  override adds a second level of configuration without evidence that anyone needs it.
 - **Shipping a minimal .NET interop together with the defaults.** Not chosen: the interop is not needed to deliver
   the defaults, and core needs go through registered functions that exchange plain values. Building it alongside them
   would put an optional capability on the path of required work. .NET objects stay disabled in scripts until the
