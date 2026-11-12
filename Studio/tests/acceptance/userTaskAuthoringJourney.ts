@@ -227,7 +227,8 @@ export async function userTaskAuthoringJourney(page: Page, info: TestInfo, captu
   await page.getByRole("button", { name: "Refresh task", exact: true }).click();
   await expect(page.getByRole("button", { name: "Back to task list", exact: true })).toBeEnabled();
   const completed = await get(`/runtime/workflows/instances/${runId}`);
-  expect(completed.outputs.RenamedData).toMatchObject({ isRedacted: false, captureMode: "DiagnosticSnapshot", value: { kind: "object", properties: [{ name: "Note", value: { preview: "Approved with case preserved" } }] } });
+  // The output carries its declared JSON type, not SetOutput's dynamic authoring type (#4069).
+  expect(completed.outputs.RenamedData).toMatchObject({ isRedacted: false, captureMode: "DiagnosticSnapshot", value: { kind: "object", typeName: jsonAlias, properties: [{ name: "Note", value: { preview: "Approved with case preserved" } }] } });
   await page.setViewportSize(authoringViewport); await page.goto(`/workflows/instances/${runId}`);
   const runtimeTask = page.locator(`.react-flow__node[data-id="${taskNodeId}"]`);
   await expect(runtimeTask.locator('.source[data-handleid="Approve"]')).toBeVisible();
@@ -354,6 +355,7 @@ export async function userTaskAuthoringJourney(page: Page, info: TestInfo, captu
   if (await maximize.isVisible()) await maximize.click();
   const result = page.getByRole("region", { name: "Workflow outputs", exact: true });
   await expect(result).toContainText("RenamedData"); await expect(result).toContainText("Approved with case preserved");
+  await expect(result.locator(".wf-runtime-snapshot-node > summary").first()).toHaveText("JSON");
   const resultValue = result.locator(".wf-runtime-snapshot-property code");
   expect((await resultValue.boundingBox())!.width).toBeGreaterThan(150);
   await result.scrollIntoViewIfNeeded(); await expectRunTabsUnclipped(); await capture(page, info, "workflow-result");

@@ -66,10 +66,6 @@ html[data-workspace-style] :is(.wf-property-row, .wf-form-field) select {
   background-color: var(--studio-surface-muted);
 }
 
-html[data-workspace-style] :is(.wf-property-row, .wf-form-field) :is(input, textarea, select)[aria-invalid="true"] {
-  border-color: var(--studio-danger-fg);
-}
-
 html[data-workspace-style] :is(.wf-icon-button, .wf-run-button, .wf-panel-action-button) {
   border-color: transparent;
   background: transparent;

@@ -45,14 +45,16 @@ public sealed class ExecutableNodeCompiler(
         IReadOnlyDictionary<string, ActivityDefinitionVersion> activityRows,
         IReadOnlyDictionary<string, ExecutableNode>? placedActivities = null,
         IEnumerable<VariableDefinition>? workflowVariables = null,
-        IEnumerable<InputDefinition>? workflowInputs = null) =>
+        IEnumerable<InputDefinition>? workflowInputs = null,
+        IEnumerable<OutputDefinition>? workflowOutputs = null) =>
         CompileNode(
             rootActivity,
             projection,
             activityRows,
             placedActivities ?? new Dictionary<string, ExecutableNode>(),
             workflowVariables as IReadOnlyCollection<VariableDefinition> ?? workflowVariables?.ToArray() ?? [],
-            workflowInputs as IReadOnlyCollection<InputDefinition> ?? workflowInputs?.ToArray() ?? []);
+            workflowInputs as IReadOnlyCollection<InputDefinition> ?? workflowInputs?.ToArray() ?? [],
+            workflowOutputs as IReadOnlyCollection<OutputDefinition> ?? workflowOutputs?.ToArray() ?? []);
 
     /// <summary>
     /// Compiles the unbound root of a source-owned activity template through the same descriptor and
@@ -105,6 +107,7 @@ public sealed class ExecutableNodeCompiler(
         IReadOnlyDictionary<string, ExecutableNode> placedActivities,
         IReadOnlyCollection<VariableDefinition> workflowVariables,
         IReadOnlyCollection<InputDefinition> workflowInputs,
+        IReadOnlyCollection<OutputDefinition> workflowOutputs,
         ActivityChildOutcomeProjection? outcomeProjection = null)
     {
         if (!Enum.IsDefined(activity.ExecutionPlacement))
@@ -122,7 +125,7 @@ public sealed class ExecutableNodeCompiler(
         }
 
         if (activity.Intrinsic is not null)
-            return CompileIntrinsicNode(activity, projection, activityRows, placedActivities, workflowVariables, workflowInputs);
+            return CompileIntrinsicNode(activity, projection, activityRows, placedActivities, workflowVariables, workflowInputs, workflowOutputs);
 
         var activityVersion = activityRows[activity.ActivityVersionId];
         var descriptor = new RuntimeActivityDescriptor(
@@ -141,7 +144,7 @@ public sealed class ExecutableNodeCompiler(
         projectedInputs.States = LowerWorkflowInputReads(projectedInputs.States, workflowInputs);
         inputBindingCompiler.EnsureSecretBindingsAdmissible(activity.NodeId, descriptor, projectedInputs.States);
         var inputBindings = inputBindingCompiler.CompileAll(activity.NodeId, projectedInputs.Definitions, projectedInputs.States);
-        var childSlots = CompileChildSlots(activityType, activity.NodeId, projection.ChildProjections(activity), projection, activityRows, placedActivities, workflowVariables, workflowInputs);
+        var childSlots = CompileChildSlots(activityType, activity.NodeId, projection.ChildProjections(activity), projection, activityRows, placedActivities, workflowVariables, workflowInputs, workflowOutputs);
         var executionType = clrActivityType is not null && ActivityTypeMetadata.IsTrigger(clrActivityType)
             ? TriggerNodeMetadata.TriggerExecutionType
             : activityVersion.ExecutionType.ToString();
@@ -335,7 +338,8 @@ public sealed class ExecutableNodeCompiler(
         IReadOnlyDictionary<string, ActivityDefinitionVersion> activityRows,
         IReadOnlyDictionary<string, ExecutableNode> placedActivities,
         IReadOnlyCollection<VariableDefinition> workflowVariables,
-        IReadOnlyCollection<InputDefinition> workflowInputs)
+        IReadOnlyCollection<InputDefinition> workflowInputs,
+        IReadOnlyCollection<OutputDefinition> workflowOutputs)
     {
         var intrinsic = activity.Intrinsic!;
         var runtimeKind = intrinsic.Kind switch
@@ -384,25 +388,31 @@ public sealed class ExecutableNodeCompiler(
         if (secretInputKey is not null)
             throw SecretBindingDiagnostics.IntrinsicInputRefused(activity.NodeId, secretInputKey);
 
-        var bindings = inputTypes.ToDictionary(
-            input => input.Key,
-            input => inputBindingCompiler.Compile(
-                activity.NodeId,
-                new InputDefinition(
-                    input.Key,
-                    input.Key,
-                    input.Value,
-                    StorageDriverType: null,
-                    DisplayName: input.Key,
-                    Category: null,
-                    IsNullable: false,
-                    IsRequired: true),
-                authoredInputs[input.Key].Value),
-            StringComparer.Ordinal);
+        RuntimeInputBinding CompileInput(string key, TypeReference type) => inputBindingCompiler.Compile(
+            activity.NodeId,
+            new InputDefinition(
+                key,
+                key,
+                type,
+                StorageDriverType: null,
+                DisplayName: key,
+                Category: null,
+                IsNullable: false,
+                IsRequired: true),
+            authoredInputs[key].Value);
+        var bindings = inputTypes.ToDictionary(input => input.Key, input => CompileInput(input.Key, input.Value), StringComparer.Ordinal);
         if (intrinsic.Variable is not null)
         {
             var key = WorkflowIntrinsicInputKeys.Value;
             bindings[key] = PinIntrinsicSourceConversion(activity.NodeId, bindings[key], projection, workflowVariables, workflowInputs);
+        }
+        else if (runtimeKind == WorkflowIntrinsicKind.SetOutput &&
+                 ResolveDeclaredOutputType(bindings[WorkflowIntrinsicInputKeys.Name], valueType, workflowOutputs) is { } declaredType)
+        {
+            // The same rule as a variable target: the declared workflow output owns the assignment contract, so the
+            // value is published, validated and stored as the output's declared type rather than Studio's dynamic fallback.
+            var key = WorkflowIntrinsicInputKeys.Value;
+            bindings[key] = PinIntrinsicSourceConversion(activity.NodeId, CompileInput(key, declaredType), projection, workflowVariables, workflowInputs);
         }
         foreach (var literalKey in LiteralIntrinsicKeys(runtimeKind))
         {
@@ -439,7 +449,7 @@ public sealed class ExecutableNodeCompiler(
                 ["authoredNodeId"] = activity.NodeId,
                 [TriggerNodeMetadata.ExecutionTypeKey] = ActivityExecutionType.Action.ToString()
             },
-            childSlots: CompileChildSlots(activityType, activity.NodeId, projection.ChildProjections(activity), projection, activityRows, placedActivities, workflowVariables, workflowInputs),
+            childSlots: CompileChildSlots(activityType, activity.NodeId, projection.ChildProjections(activity), projection, activityRows, placedActivities, workflowVariables, workflowInputs, workflowOutputs),
             structure: CompileStructure(activity.NodeId, activityStructureService.CompileExecutableStructure(activity)),
             activityContract: null,
             intrinsicKind: runtimeKind,
@@ -489,6 +499,28 @@ public sealed class ExecutableNodeCompiler(
             throw new ArgumentException($"Workflow intrinsic node '{nodeId}' input '{binding.InputKey}': {exception.Message}", exception);
         }
     }
+
+    /// <summary>
+    /// The declared type of the workflow output a SetOutput names, when the node was authored with the dynamic
+    /// <c>Elsa.Any</c> value type and the output is declared with a concrete one. A name that matches no
+    /// declaration keeps the authored type; the designer reports that output as renamed or removed.
+    /// </summary>
+    private static TypeReference? ResolveDeclaredOutputType(
+        RuntimeInputBinding nameBinding,
+        TypeReference? authoredType,
+        IReadOnlyCollection<OutputDefinition> workflowOutputs)
+    {
+        if (authoredType is not null && !IsDynamicType(authoredType))
+            return null;
+        if (nameBinding.Source != RuntimeInputBindingSource.Literal ||
+            nameBinding.Literal is not { Presence: ValuePresence.Present, InlineValue.ValueKind: JsonValueKind.String } literal)
+            return null;
+        var name = literal.InlineValue.Value.GetString();
+        var declared = workflowOutputs.Where(output => StringComparer.Ordinal.Equals(output.Name, name)).Take(2).ToArray();
+        return declared is [{ Type: { } type }] && !IsDynamicType(type) ? type : null;
+    }
+
+    private static bool IsDynamicType(TypeReference type) => StringComparer.OrdinalIgnoreCase.Equals(type.Alias, "Elsa.Any");
 
     private TypeReference ResolveIntrinsicVariableType(
         string nodeId,
@@ -729,12 +761,13 @@ public sealed class ExecutableNodeCompiler(
         IReadOnlyDictionary<string, ActivityDefinitionVersion> activityRows,
         IReadOnlyDictionary<string, ExecutableNode> placedActivities,
         IReadOnlyCollection<VariableDefinition> workflowVariables,
-        IReadOnlyCollection<InputDefinition> workflowInputs)
+        IReadOnlyCollection<InputDefinition> workflowInputs,
+        IReadOnlyCollection<OutputDefinition> workflowOutputs)
     {
         return childSlots
             .Select(slot =>
             {
-                var children = slot.Activities.Select(activity => CompileNode(activity, projection, activityRows, placedActivities, workflowVariables, workflowInputs,
+                var children = slot.Activities.Select(activity => CompileNode(activity, projection, activityRows, placedActivities, workflowVariables, workflowInputs, workflowOutputs,
                     slot.OutcomeProjections.SingleOrDefault(outcomes => StringComparer.Ordinal.Equals(outcomes.NodeId, activity.NodeId)))).ToArray();
                 var context = new OperatorActivitySchedulingCapabilityCompilationContext(
                     parentActivityType,

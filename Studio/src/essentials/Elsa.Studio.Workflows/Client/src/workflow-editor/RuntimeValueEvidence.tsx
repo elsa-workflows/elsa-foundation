@@ -10,6 +10,7 @@ import type {
   DiagnosticSnapshotUnknownNode
 } from "../workflowTypes";
 import { runtimeValueTypeLabel } from "../runtimeValueFormatting";
+import { formatTypeName } from "../activityProperties";
 
 export interface RuntimeValueEvidenceResolutionScope {
   context: StudioEndpointContext;
@@ -287,7 +288,7 @@ function DiagnosticSnapshotObject({ node, depth, expandRoot }: { node: Diagnosti
 
   return (
     <details className="wf-runtime-snapshot-node" open={expandRoot && depth === 0}>
-      <summary>{node.typeName || "Object"}{node.truncated ? " (truncated)" : ""}</summary>
+      <summary>{node.typeName ? formatTypeName(node.typeName) : "Object"}{node.truncated ? " (truncated)" : ""}</summary>
       <div className="wf-runtime-snapshot-children">
         {properties.map(property => (
           <div className="wf-runtime-snapshot-property" key={property.name}>
