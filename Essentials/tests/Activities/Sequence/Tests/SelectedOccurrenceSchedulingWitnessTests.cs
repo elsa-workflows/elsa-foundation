@@ -54,30 +54,31 @@ public sealed class SelectedOccurrenceSchedulingWitnessTests
         Assert.All(run.ActivityStates.Where(x => x != parent), child => Assert.Equal(parent.Execution.ActivityExecutionId, child.ParentActivityExecutionId));
     }
 
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task Closed_capture_needs_a_real_enclosing_invocation(bool selectedOnly)
+    [Fact]
+    public async Task Closed_capture_writes_to_the_enclosing_invocation()
     {
         await using var harness = Harness();
-        var candidate = Candidate(Echo(capture: true), closed: true);
-        var run = selectedOnly ? await ScheduleSelected(harness, candidate) : await harness.RunAsync(candidate);
-        if (!selectedOnly)
-        {
-            run.AssertWorkflowCompleted();
-            Assert.Equal(4, run.ActivityStates.Count);
-            var captured = await harness.Services.GetRequiredService<IDurableValueStateStore>().FindAsync(harness.ExecutionId,
-                ActivityExecutionScopeKeys.Variable(run.State("container").InvocationId, "counter"));
-            Assert.NotNull(captured);
-            Assert.Equal(42, captured.InlineValue!.Value.GetInt32());
-            return;
-        }
+        var run = await harness.RunAsync(Candidate(Echo(capture: true), closed: true));
+        run.AssertWorkflowCompleted();
+        Assert.Equal(4, run.ActivityStates.Count);
+        var captured = await harness.Services.GetRequiredService<IDurableValueStateStore>().FindAsync(harness.ExecutionId,
+            ActivityExecutionScopeKeys.Variable(run.State("container").InvocationId, "counter"));
+        Assert.NotNull(captured);
+        Assert.Equal(42, captured.InlineValue!.Value.GetInt32());
+    }
+
+    [Fact]
+    public async Task Parentless_closed_capture_faults_without_an_enclosing_invocation()
+    {
+        await using var harness = Harness();
+        var run = await ScheduleSelected(harness, Candidate(Echo(capture: true), closed: true));
         Assert.Equal(WorkflowExecutionStatus.Faulted, run.WorkflowState!.Status);
         var selected = Assert.Single(run.ActivityStates);
         Assert.Equal("selected", selected.Execution.ExecutableNodeId);
         Assert.Null(selected.ParentActivityExecutionId);
         Assert.Equal(ActivityExecutionStatus.Faulted, selected.Status);
-        Assert.Contains("not the nearest closed activity execution scope", selected.Fault!.Message, StringComparison.Ordinal);
+        Assert.Equal(typeof(InvalidOperationException).FullName, selected.Fault!.ExceptionType);
+        Assert.Contains("not the nearest closed activity execution scope", selected.Fault.Message, StringComparison.Ordinal);
     }
 
     private static WorkflowExecutionHarness Harness() => WorkflowExecutionHarness.Create()
