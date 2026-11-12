@@ -11,6 +11,7 @@ public sealed class PartitionEntity
     public long Epoch { get; set; }
     public long LeaseUntil { get; set; }
     public long Position { get; set; }
+    public bool Died { get; set; }          // the last take found another owner's lease expired
 }
 
 public sealed class InstanceEntity
@@ -40,6 +41,7 @@ public sealed class MessageEntity
     public long Due { get; set; }           // 0 when the message is due at once
     public long Seen { get; set; }
     public int Attempts { get; set; }
+    public long Trial { get; set; }         // the epoch at which it was last put on trial; 0 when never
     public long? KeepUntil { get; set; }
     public bool Done { get; set; }
 }
@@ -139,13 +141,6 @@ public sealed class EfStore(Func<KernelDb> create, bool postgres, bool fenceInBa
     /// <summary>Set for SQL Server and MySQL (with postgres: true, as the database assigns seq there too); null for PostgreSQL and SQLite.</summary>
     public Engine? Engine { get; init; }
 
-    private sealed class TakeRow
-    {
-        public long Epoch { get; set; }
-        public long Position { get; set; }
-        public long Now { get; set; }
-    }
-
     private sealed class PollRow
     {
         public long Now { get; set; }
@@ -159,6 +154,7 @@ public sealed class EfStore(Func<KernelDb> create, bool postgres, bool fenceInBa
         public long? Due { get; set; }
         public long? Seen { get; set; }
         public int? Attempts { get; set; }
+        public long? Trial { get; set; }
         public long? KeepUntil { get; set; }
     }
 
@@ -180,11 +176,28 @@ public sealed class EfStore(Func<KernelDb> create, bool postgres, bool fenceInBa
     public async ValueTask<Lease?> TakeAsync(int partition, string node, TimeSpan lease, CancellationToken cancellationToken = default)
     {
         await using var db = create();
-        if (Engine is not null) return await Engine.TakeAsync(db, partition, node, (long)lease.TotalMilliseconds, cancellationToken);
-        var rows = await db.Database.SqlQueryRaw<TakeRow>(
-            $"""UPDATE "Partitions" SET "Owner" = {"{0}"}, "Epoch" = "Epoch" + 1, "LeaseUntil" = {Now} + {"{1}"} WHERE "Id" = {"{2}"} AND ("Owner" IS NULL OR "LeaseUntil" < {Now} OR "Owner" = {"{0}"}) RETURNING "Epoch", "Position", {Now} AS "Now" """,
-            node, (long)lease.TotalMilliseconds, partition).ToListAsync(cancellationToken);
-        return rows.Count == 1 ? new Lease(rows[0].Epoch, rows[0].Position, rows[0].Now) : null;
+        await using var transaction = await (Engine?.BeginAsync(db, cancellationToken) ?? db.Database.BeginTransactionAsync(cancellationToken));
+        Engine.TakeRow? taken;
+        if (Engine is not null) taken = await Engine.TakeAsync(db, partition, node, (long)lease.TotalMilliseconds, cancellationToken);
+        else
+        {
+            var rows = await db.Database.SqlQueryRaw<Engine.TakeRow>(
+                $"""UPDATE "Partitions" SET "Died" = ("Owner" IS NOT NULL AND "Owner" <> {"{0}"}), "Owner" = {"{0}"}, "Epoch" = "Epoch" + 1, "LeaseUntil" = {Now} + {"{1}"} WHERE "Id" = {"{2}"} AND ("Owner" IS NULL OR "LeaseUntil" < {Now} OR "Owner" = {"{0}"}) RETURNING "Epoch", "Position", {Now} AS "Now", "Died" """,
+                node, (long)lease.TotalMilliseconds, partition).ToListAsync(cancellationToken);
+            taken = rows.Count == 1 ? rows[0] : null;
+        }
+        if (taken is null) return null;
+        // Taken from another owner, so its lease had expired: one more attempt for what it had on trial.
+        if (taken.Died)
+            await db.Database.ExecuteSqlRawAsync(Q($"""UPDATE "Messages" SET "Attempts" = "Attempts" + 1 WHERE "Partition" = {"{0}"} AND "Trial" = {"{1}"} AND "Done" = {False}"""), [partition, taken.Epoch - 1], cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        return new Lease(taken.Epoch, taken.Position, taken.Now);
+    }
+
+    public async ValueTask ReleaseAsync(int partition, long epoch, CancellationToken cancellationToken = default)
+    {
+        await using var db = create();
+        await db.Database.ExecuteSqlRawAsync(Q("""UPDATE "Partitions" SET "Owner" = NULL WHERE "Id" = {0} AND "Epoch" = {1}"""), [partition, epoch], cancellationToken);
     }
 
     public async ValueTask<Committed> CommitAsync(CommitBatch batch, CancellationToken cancellationToken = default)
@@ -226,8 +239,6 @@ public sealed class EfStore(Func<KernelDb> create, bool postgres, bool fenceInBa
 
             var sends = batch.Steps.Sum(s => s.Sent.Count);
             var seq = postgres || sends == 0 ? 0 : await db.Database.SqlQueryRaw<long>("""SELECT COALESCE(MAX("Seq"), 0) AS "Value" FROM "Messages" """).SingleAsync(cancellationToken);
-            if (batch.Bumped.Count > 0)
-                await db.Messages.Where(m => batch.Bumped.Contains(m.Id)).ExecuteUpdateAsync(s => s.SetProperty(m => m.Attempts, m => m.Attempts + 1), cancellationToken);
 
             var (position, sent) = (batch.Position, new List<MessageEntity>());
             foreach (var step in batch.Steps)
@@ -256,6 +267,11 @@ public sealed class EfStore(Func<KernelDb> create, bool postgres, bool fenceInBa
             }
             foreach (var id in batch.Seen)
                 db.Attach(new MessageEntity { Id = id, Seen = batch.Epoch }).Property(m => m.Seen).IsModified = true;
+            foreach (var id in batch.Trial)
+            {
+                var tried = db.Attach(new MessageEntity { Id = id, Seen = batch.Epoch, Trial = batch.Epoch });
+                (tried.Property(m => m.Seen).IsModified, tried.Property(m => m.Trial).IsModified) = (true, true);
+            }
 
             await db.SaveChangesAsync(cancellationToken);       // one batch; EF checks every affected-row count
             await transaction.CommitAsync(cancellationToken);
@@ -292,14 +308,14 @@ public sealed class EfStore(Func<KernelDb> create, bool postgres, bool fenceInBa
         // A plain read. The left join returns database time even when no message does.
         var rows = await db.Database.SqlQueryRaw<PollRow>(Engine?.Poll ??
             $"""
-             SELECT t.now AS "Now", m."Id", m."Seq", m."Target", m."Kind", m."Payload", m."Sender", m."Start", m."Due", m."Seen", m."Attempts", m."KeepUntil"
+             SELECT t.now AS "Now", m."Id", m."Seq", m."Target", m."Kind", m."Payload", m."Sender", m."Start", m."Due", m."Seen", m."Attempts", m."Trial", m."KeepUntil"
              FROM (SELECT {Now} AS now) t
              LEFT JOIN "Messages" m ON m."Partition" = {"{0}"} AND m."Seen" < {"{1}"} AND m."Done" = {False} AND m."Due" <= t.now + {"{2}"}
              ORDER BY m."Seq" LIMIT {"{3}"}
              """, partition, epoch, (long)horizon.TotalMilliseconds, limit).ToListAsync(cancellationToken);
         var messages = rows.Where(r => r.Id is not null).Select(r => new Stored(
             new Message(r.Id!, new InstanceRef(r.Target!), r.Kind!, r.Payload, r.Sender, r.Start is null ? null : Json.Read<StartSpec>(r.Start), r.Due == 0 ? null : r.Due, r.KeepUntil),
-            r.Seq!.Value, r.Seen!.Value, r.Attempts!.Value)).ToList();
+            r.Seq!.Value, r.Seen!.Value, r.Attempts!.Value, r.Trial!.Value)).ToList();
         return new Polled(messages, rows[0].Now);
     }
 
@@ -311,8 +327,8 @@ public sealed class EfStore(Func<KernelDb> create, bool postgres, bool fenceInBa
         var seq = postgres ? ("", "") : (""", "Seq" """, """, (SELECT COALESCE(MAX("Seq"), 0) + 1 FROM "Messages")""");
         return await db.Database.ExecuteSqlRawAsync(
             $$"""
-              INSERT INTO "Messages" ("Id", "Partition", "Target", "Kind", "Payload", "Sender", "Start", "Due", "Seen", "Attempts", "KeepUntil", "Done"{{seq.Item1}})
-              VALUES ({0}, {1}, {2}, {3}, CAST({4} AS TEXT), CAST({5} AS TEXT), CAST({6} AS TEXT), {7}, 0, 0, CAST({8} AS BIGINT), {{False}}{{seq.Item2}})
+              INSERT INTO "Messages" ("Id", "Partition", "Target", "Kind", "Payload", "Sender", "Start", "Due", "Seen", "Attempts", "Trial", "KeepUntil", "Done"{{seq.Item1}})
+              VALUES ({0}, {1}, {2}, {3}, CAST({4} AS TEXT), CAST({5} AS TEXT), CAST({6} AS TEXT), {7}, 0, 0, 0, CAST({8} AS BIGINT), {{False}}{{seq.Item2}})
               ON CONFLICT ("Id") DO NOTHING
               """,
             [m.Id, m.Partition, m.Target, m.Kind, m.Payload!, m.Sender!, m.Start!, m.Due, m.KeepUntil!], cancellationToken) == 1;

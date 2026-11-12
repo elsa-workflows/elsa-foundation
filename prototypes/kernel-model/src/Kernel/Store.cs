@@ -4,7 +4,7 @@ namespace Kernel;
 public sealed record InstanceRow(string Id, string Model, string Definition, InstanceStatus Status, string State, long Revision, string? Parent, string? Fault = null, string? Runs = null);
 
 /// <summary>A message row as a poll returns it.</summary>
-public sealed record Stored(Message Message, long Seq, long Seen, int Attempts);
+public sealed record Stored(Message Message, long Seq, long Seen, int Attempts, long Trial);
 
 public sealed record SubscriptionRow(string Key, string Instance, string Wait);
 
@@ -27,7 +27,7 @@ public sealed record StepCommit(
 /// <summary>What the owner of <c>Partition</c> at <c>Epoch</c>, believing the position is <c>Position</c>, writes in one transaction.</summary>
 public sealed record CommitBatch(
     int Partition, long Epoch, long Position, TimeSpan Lease, bool HandOver, IReadOnlyList<StepCommit> Steps,
-    IReadOnlyList<string> Seen, IReadOnlyList<string> Bumped)
+    IReadOnlyList<string> Seen, IReadOnlyList<string> Trial)
 {
     /// <summary>How far the position moves: one per journal row.</summary>
     public int Positions => Steps.Count(s => s.Journal is not null);
@@ -50,8 +50,16 @@ public sealed class StoreException(Failure failure, string message, Exception? i
 
 public interface IKernelStore
 {
-    /// <summary>Take the partition if it is free, expired or already mine. Every take bumps the epoch.</summary>
+    /// <summary>
+    /// Take the partition if it is free, expired or already mine. Every take bumps the epoch. A take from another
+    /// owner can only succeed because that owner's lease expired: that is a death, and in the same transaction every
+    /// message the dead owner had on trial gets one more attempt. <paramref name="node"/> must be unique per process
+    /// start, or a restarted process would look like its predecessor taking again.
+    /// </summary>
     ValueTask<Lease?> TakeAsync(int partition, string node, TimeSpan lease, CancellationToken cancellationToken = default);
+
+    /// <summary>Give the partition up, if this is still its epoch. A release is not a death.</summary>
+    ValueTask ReleaseAsync(int partition, long epoch, CancellationToken cancellationToken = default);
 
     /// <summary>The fenced commit. Throws <see cref="StoreException"/>; anything else thrown counts as an unknown outcome.</summary>
     ValueTask<Committed> CommitAsync(CommitBatch batch, CancellationToken cancellationToken = default);

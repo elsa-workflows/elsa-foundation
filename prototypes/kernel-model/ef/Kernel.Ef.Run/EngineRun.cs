@@ -39,7 +39,7 @@ static class EngineRun
     }
 
     private static IExecutionModel[] Models() =>
-        [new Counter(), new Parent(), new Child(), new Waiter(), new Sequence(), new Runner((_, _) => new ValueTask<object?>((object?)null)), new Fragile(() => { })];
+        [new Counter(), new Parent(), new Child(), new Waiter(), new Sequence(), new Correlation(), new CWaiter(2), new Runner((_, _) => new ValueTask<object?>((object?)null)), new Fragile(() => { })];
 
     private static async Task Drain(Worker worker, bool poll)
     {
@@ -872,4 +872,5 @@ sealed class Tally(IKernelStore inner) : IKernelStore
     public ValueTask<IReadOnlyList<EventRow>> FindEventsAsync(IReadOnlyCollection<string> keys, CancellationToken cancellationToken = default) => Call("events", () => inner.FindEventsAsync(keys, cancellationToken));
     public ValueTask<IReadOnlyList<JournalRow>> ReadJournalAsync(int partition, long after, int take, CancellationToken cancellationToken = default) => inner.ReadJournalAsync(partition, after, take, cancellationToken);
     public ValueTask<int> SweepAsync(CancellationToken cancellationToken = default) => inner.SweepAsync(cancellationToken);
+    public async ValueTask ReleaseAsync(int partition, long epoch, CancellationToken cancellationToken = default) => await Call("release", async () => { await inner.ReleaseAsync(partition, epoch, cancellationToken); return 0; });
 }

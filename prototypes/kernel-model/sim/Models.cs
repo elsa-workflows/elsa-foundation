@@ -233,7 +233,7 @@ public sealed class Runner(Func<IRun, CancellationToken, ValueTask<object?>> wor
     }
 }
 
-// ---- an instance that goes wrong: its step throws, its row is refused, or its step kills the process --------------------
+// ---- an instance that goes wrong: its step throws, its row is refused, its step or its off-step work kills the process ----
 
 public sealed class FragileState
 {
@@ -247,11 +247,18 @@ public sealed class Fragile(Action die) : Model<FragileState>
     public static readonly StartSpec Spec = new("fragile", "f");
     public override string Key => "fragile";
 
+    public override ValueTask<object?> RunAsync(IRun run, CancellationToken cancellationToken)
+    {
+        die();      // off-step work that kills the process as soon as it starts
+        return new ValueTask<object?>((object?)null);
+    }
+
     protected override void Step(IStep step, FragileState state)
     {
         foreach (var message in step.Inbox)
         {
             state.Hits++;
+            if (message.Kind == "dierun") step.Run(message.Id);
             if (message.Kind == "throw") throw new InvalidOperationException("the step threw");
             if (message.Kind == "spoil") state.Note = Sour;     // the store refuses a row that carries this
             if (message.Kind == "die") die();

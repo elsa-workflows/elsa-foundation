@@ -109,4 +109,7 @@ public enum Flaw
     PollRace = 1 << 15,
     HandOverWhileBehind = 1 << 16,
     BumpAllInherited = 1 << 17,
+    EveryTakeCounts = 1 << 18,
+    CorrelationForgets = 1 << 20,   // read by the simulation: the correlation model does not keep events for later waits
+    StableNodeName = 1 << 19,      // read by the simulation: a restarted process keeps its predecessor's name
 }

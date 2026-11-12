@@ -22,7 +22,8 @@ public abstract class Engine
     /// <summary>The poll, with {0} partition, {1} epoch, {2} horizon in milliseconds and {3} limit.</summary>
     public abstract string Poll { get; }
 
-    public abstract ValueTask<Lease?> TakeAsync(KernelDb db, int partition, string node, long lease, CancellationToken cancellationToken);
+    /// <summary>The take's UPDATE, inside the store's transaction: epoch, position, database time and whether another owner's lease expired; null when not taken.</summary>
+    public abstract ValueTask<TakeRow?> TakeAsync(KernelDb db, int partition, string node, long lease, CancellationToken cancellationToken);
 
     /// <summary>The isolation level of the kernel's transactions; null is the server's default.</summary>
     public System.Data.IsolationLevel? Isolation { get; init; }
@@ -72,6 +73,7 @@ public abstract class Engine
         public long Epoch { get; set; }
         public long Position { get; set; }
         public long Now { get; set; }
+        public bool Died { get; set; }
     }
 
     public sealed class FenceRow
@@ -105,21 +107,22 @@ public sealed class SqlServerEngine : Engine
 
     public override string Poll =>
         $"""
-         SELECT TOP ({"{3}"}) t.now AS "Now", m."Id", m."Seq", m."Target", m."Kind", m."Payload", m."Sender", m."Start", m."Due", m."Seen", m."Attempts", m."KeepUntil"
+         SELECT TOP ({"{3}"}) t.now AS "Now", m."Id", m."Seq", m."Target", m."Kind", m."Payload", m."Sender", m."Start", m."Due", m."Seen", m."Attempts", m."Trial", m."KeepUntil"
          FROM (SELECT {Now} AS now) t
          LEFT JOIN "Messages" m{(ReadPast ? " WITH (READPAST)" : "")} ON m."Partition" = {"{0}"} AND m."Seen" < {"{1}"} AND m."Done" = 0 AND m."Due" <= t.now + {"{2}"}
          ORDER BY m."Seq"
          """;
 
-    public override async ValueTask<Lease?> TakeAsync(KernelDb db, int partition, string node, long lease, CancellationToken cancellationToken)
+    public override async ValueTask<TakeRow?> TakeAsync(KernelDb db, int partition, string node, long lease, CancellationToken cancellationToken)
     {
+        // T-SQL has no boolean expressions: CASE. Every SET expression reads the row as it was before the UPDATE.
         var rows = await db.Database.SqlQueryRaw<TakeRow>(
             $"""
-             UPDATE "Partitions" SET "Owner" = {"{0}"}, "Epoch" = "Epoch" + 1, "LeaseUntil" = {Now} + {"{1}"}
-             OUTPUT inserted."Epoch" AS "Epoch", inserted."Position" AS "Position", {Now} AS "Now"
+             UPDATE "Partitions" SET "Died" = CASE WHEN "Owner" IS NOT NULL AND "Owner" <> {"{0}"} THEN 1 ELSE 0 END, "Owner" = {"{0}"}, "Epoch" = "Epoch" + 1, "LeaseUntil" = {Now} + {"{1}"}
+             OUTPUT inserted."Epoch" AS "Epoch", inserted."Position" AS "Position", {Now} AS "Now", inserted."Died" AS "Died"
              WHERE "Id" = {"{2}"} AND ("Owner" IS NULL OR "LeaseUntil" < {Now} OR "Owner" = {"{0}"})
              """, node, lease, partition).ToListAsync(cancellationToken);
-        return rows.Count == 1 ? new Lease(rows[0].Epoch, rows[0].Position, rows[0].Now) : null;
+        return rows.Count == 1 ? rows[0] : null;
     }
 
     public override async ValueTask<long?> FenceAsync(KernelDb db, CommitBatch batch, bool unfenced, CancellationToken cancellationToken)
@@ -141,8 +144,8 @@ public sealed class SqlServerEngine : Engine
         {
             return await db.Database.ExecuteSqlRawAsync(
                 """
-                INSERT INTO "Messages" ("Id", "Partition", "Target", "Kind", "Payload", "Sender", "Start", "Due", "Seen", "Attempts", "KeepUntil", "Done")
-                VALUES (@id, @partition, @target, @kind, @payload, @sender, @start, @due, 0, 0, @keep, 0)
+                INSERT INTO "Messages" ("Id", "Partition", "Target", "Kind", "Payload", "Sender", "Start", "Due", "Seen", "Attempts", "Trial", "KeepUntil", "Done")
+                VALUES (@id, @partition, @target, @kind, @payload, @sender, @start, @due, 0, 0, 0, @keep, 0)
                 """,
                 [
                     new SqlParameter("@id", m.Id), new SqlParameter("@partition", m.Partition), new SqlParameter("@target", m.Target), new SqlParameter("@kind", m.Kind),
@@ -187,7 +190,7 @@ public sealed class MySqlEngine : Engine
 
     public override string Poll => Sql(
         $"""
-         SELECT t.now AS "Now", m."Id", m."Seq", m."Target", m."Kind", m."Payload", m."Sender", m."Start", m."Due", m."Seen", m."Attempts", m."KeepUntil"
+         SELECT t.now AS "Now", m."Id", m."Seq", m."Target", m."Kind", m."Payload", m."Sender", m."Start", m."Due", m."Seen", m."Attempts", m."Trial", m."KeepUntil"
          FROM (SELECT {Now} AS now) t
          LEFT JOIN "Messages" m ON m."Partition" = {"{0}"} AND m."Seen" < {"{1}"} AND m."Done" = 0 AND m."Due" <= t.now + {"{2}"}
          ORDER BY m."Seq" LIMIT {"{3}"}
@@ -200,18 +203,17 @@ public sealed class MySqlEngine : Engine
         e.HasAlternateKey(m => m.Seq);
     });
 
-    public override async ValueTask<Lease?> TakeAsync(KernelDb db, int partition, string node, long lease, CancellationToken cancellationToken)
+    public override async ValueTask<TakeRow?> TakeAsync(KernelDb db, int partition, string node, long lease, CancellationToken cancellationToken)
     {
-        // There is no RETURNING. The take and the read of what it wrote are one transaction, so the row lock of the
-        // UPDATE is still held when the SELECT reads epoch and position: nobody else's take can be read by mistake.
-        await using var transaction = await BeginAsync(db, cancellationToken);
+        // There is no RETURNING. The take and the read of what it wrote are in the store's one transaction, so the row
+        // lock of the UPDATE is still held when the SELECT reads epoch and position: nobody else's take can be read by
+        // mistake. MySQL evaluates SET assignments left to right, so "Died" must come before "Owner" changes.
         var taken = await db.Database.ExecuteSqlRawAsync(Sql(
-            $"""UPDATE "Partitions" SET "Owner" = {"{0}"}, "Epoch" = "Epoch" + 1, "LeaseUntil" = {Now} + {"{1}"} WHERE "Id" = {"{2}"} AND ("Owner" IS NULL OR "LeaseUntil" < {Now} OR "Owner" = {"{0}"})"""),
+            $"""UPDATE "Partitions" SET "Died" = ("Owner" IS NOT NULL AND "Owner" <> {"{0}"}), "Owner" = {"{0}"}, "Epoch" = "Epoch" + 1, "LeaseUntil" = {Now} + {"{1}"} WHERE "Id" = {"{2}"} AND ("Owner" IS NULL OR "LeaseUntil" < {Now} OR "Owner" = {"{0}"})"""),
             [node, lease, partition], cancellationToken);
         if (taken != 1) return null;
-        var row = await db.Database.SqlQueryRaw<TakeRow>(Sql($"""SELECT "Epoch", "Position", {Now} AS "Now" FROM "Partitions" WHERE "Id" = {"{0}"}"""), partition).ToListAsync(cancellationToken);
-        await transaction.CommitAsync(cancellationToken);
-        return new Lease(row[0].Epoch, row[0].Position, row[0].Now);
+        var row = await db.Database.SqlQueryRaw<TakeRow>(Sql($"""SELECT "Epoch", "Position", {Now} AS "Now", "Died" FROM "Partitions" WHERE "Id" = {"{0}"}"""), partition).ToListAsync(cancellationToken);
+        return row[0];
     }
 
     public override async ValueTask<long?> FenceAsync(KernelDb db, CommitBatch batch, bool unfenced, CancellationToken cancellationToken)
@@ -230,8 +232,8 @@ public sealed class MySqlEngine : Engine
         // INSERT IGNORE: a duplicate key is not an error and changes no row.
         await db.Database.ExecuteSqlRawAsync(Sql(
             """
-            INSERT IGNORE INTO "Messages" ("Id", "Partition", "Target", "Kind", "Payload", "Sender", "Start", "Due", "Seen", "Attempts", "KeepUntil", "Done")
-            VALUES (@id, @partition, @target, @kind, @payload, @sender, @start, @due, 0, 0, @keep, 0)
+            INSERT IGNORE INTO "Messages" ("Id", "Partition", "Target", "Kind", "Payload", "Sender", "Start", "Due", "Seen", "Attempts", "Trial", "KeepUntil", "Done")
+            VALUES (@id, @partition, @target, @kind, @payload, @sender, @start, @due, 0, 0, 0, @keep, 0)
             """),
             [
                 new MySqlParameter("@id", m.Id), new MySqlParameter("@partition", m.Partition), new MySqlParameter("@target", m.Target), new MySqlParameter("@kind", m.Kind),
