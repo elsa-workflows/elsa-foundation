@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>Kernel.Ef.Conformance</RootNamespace>
+    <NoWarn>$(NoWarn);EF1002</NoWarn>
+    <ServerGarbageCollection>true</ServerGarbageCollection>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Kernel.EntityFramework/Kernel.EntityFramework.csproj" />
+    <ProjectReference Include="../../conformance/Kernel.Store.Conformance/Kernel.Store.Conformance.csproj" />
+  </ItemGroup>
+</Project>
