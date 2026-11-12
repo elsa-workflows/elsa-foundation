@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>Kernel.Store.Conformance</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- The toy execution models of the simulation drive the stress test and the cost runs. -->
+    <Compile Include="../../sim/Models.cs" Link="Models.cs" />
+    <ProjectReference Include="../../src/Kernel/Kernel.csproj" />
+  </ItemGroup>
+</Project>
