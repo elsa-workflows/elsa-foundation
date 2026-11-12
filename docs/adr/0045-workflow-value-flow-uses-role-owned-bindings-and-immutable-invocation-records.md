@@ -276,7 +276,7 @@ so a value an expression produced, once committed, does not change.
 binding may also read metadata of the running workflow instance: its correlation ID or its instance ID
 (`{"kind":"WorkflowInstance","member":"correlationId"|"instanceId"}`). This is a fifth canonical parameter
 kind beside literal, workflow request, variable and activity result; it is not an ambient accessor, because an
-expression sees the value only through the parameter it declares, and the binding-pure-v1 profile is unchanged.
+expression sees the value only through the parameter it declares, and the capability profile (now `binding-readonly-v1`, ADR 0083) is unchanged by it.
 The value comes from committed runtime state, never live memory: the instance ID is the workflow execution ID,
 and the correlation ID is the latest committed identity durable value, which the workflow-started checkpoint
 seeds from the start request and a `SetCorrelationId` intrinsic replaces. An instance without a correlation ID
