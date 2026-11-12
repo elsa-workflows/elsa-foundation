@@ -56,29 +56,38 @@ export async function timelineSelectionJourney(page: Page, info: TestInfo, captu
   await page.goto(`/workflows/instances/${run.workflowExecutionId}?tab=activity&selected=${first.activityExecutionId}`);
   const panel = page.getByLabel("Run details panel", { exact: true });
   const timelineTab = panel.getByRole("tab", { name: "Timeline", exact: true });
+  async function settledCapture(name: string) {
+    await expect(page.getByText("Resolving execution scope…", { exact: true })).toHaveCount(0);
+    await expect(page.getByText("Loading visible execution evidence…", { exact: true })).toHaveCount(0);
+    await expect(page.getByText("Loading recorded executions…", { exact: true })).toHaveCount(0);
+    await capture(page, info, name);
+  }
   await timelineTab.click();
   const entries = panel.getByRole("list", { name: "Execution timeline", exact: true }).getByRole("button");
   await expect(entries).toHaveCount(3);
-  await capture(page, info, "timeline-populated");
+  await settledCapture("timeline-populated");
   await entries.nth(2).click();
   await expect(timelineTab).toHaveAttribute("aria-selected", "true");
   await expect(entries.nth(2)).toHaveAttribute("data-selected", "true");
   await expect(entries.nth(2)).toBeFocused();
-  await capture(page, info, "timeline-click");
+  await expect(page.locator('.wf-node[data-runtime-node-id="second"]')).toHaveAttribute("aria-pressed", "true");
+  await settledCapture("timeline-click");
   await entries.nth(1).press("Enter");
   await expect(timelineTab).toHaveAttribute("aria-selected", "true");
   await expect(entries.nth(1)).toHaveAttribute("data-selected", "true");
   await expect(entries.nth(2)).toHaveAttribute("data-selected", "false");
   await expect(entries.nth(1)).toBeFocused();
-  await capture(page, info, "timeline-keyboard");
+  await expect(page.locator('.wf-node[data-runtime-node-id="first"]')).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator('.wf-node[data-runtime-node-id="second"]')).toHaveAttribute("aria-pressed", "false");
+  await settledCapture("timeline-keyboard");
 
   await panel.getByRole("tab", { name: "Activity", exact: true }).click();
   const technical = panel.locator(".wf-activity-execution-details");
   await technical.locator("summary").click();
   await expect(technical).toContainText(first.activityExecutionId);
   await expect(technical).not.toContainText(second.activityExecutionId);
-  await capture(page, info, "activity-details");
+  await settledCapture("activity-details");
   await timelineTab.click();
   await expect(entries.nth(1)).toHaveAttribute("data-selected", "true");
-  await capture(page, info, "timeline-return");
+  await settledCapture("timeline-return");
 }
