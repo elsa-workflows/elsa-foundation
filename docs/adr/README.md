@@ -74,7 +74,7 @@ An ADR proposed from an [initiative](../contributing/initiatives.md) follows its
 | 0080 | [Elsa 4 simplification decisions](0080-elsa-4-simplification-decisions.md) | Accepted |
 | 0081 | [Mediate agent harness capabilities through Elsa tools](0081-mediate-agent-harness-capabilities.md) | (none) |
 | 0082 | [Activity Presentation Is Source-Owned Metadata](0082-activity-presentation-is-source-owned-metadata.md) | Accepted |
-| 0083 | [JavaScript Binding Grammar Is Selected by Host Policy and Pinned at Publish](0083-javascript-binding-grammar-is-pinned-at-publish.md) | Proposed |
+| 0083 | [JavaScript Binding Grammar Is Selected by Host Policy and Pinned at Publish](0083-javascript-binding-grammar-is-pinned-at-publish.md) | Proposed; amendment accepted 2026-11-12 |
 | 0084 | [Runtime Commits Append One Journal Row And The Per-Activity Tables Become Read Models](0084-runtime-commit-journal.md) | Proposed |
 | 0085 | [Elsa 3.8/3.9 Parity: Identity Administration and Scope](0085-elsa-3-parity-identity-administration-and-scope.md) | Accepted |
 | 0086 | [Native And BPMN Compensation Stay Separate Semantics Over Shared Runtime Identity](0086-native-and-bpmn-compensation-stay-separate.md) | Accepted |
@@ -82,6 +82,8 @@ An ADR proposed from an [initiative](../contributing/initiatives.md) follows its
 | 0088 | [Rules owns its execution domain](0088-rules-owns-its-execution-domain.md) | Accepted |
 | 0089 | [Scripts Read Variables By Name And Publish Pins Them As Declared Parameters](0089-scripts-read-variables-by-name-and-publish-pins-them-as-declared-parameters.md) | Proposed |
 | 0090 | [Activities Change Variables As A Unit Of Work Committed With The Step](0090-activities-change-variables-as-a-unit-of-work-committed-with-the-step.md) | Proposed |
+| 0092 | [Variable Reads And Writes Share One Versioned Lifecycle](0092-variable-reads-and-writes-share-one-versioned-lifecycle.md) | Accepted |
+| 0093 | [Background Execution Eligibility Is One Set Of Criteria](0093-background-execution-eligibility-is-one-set-of-criteria.md) | Accepted |
 | 0094 | [Agent-owned content uses shared revisions and provider-derived activities](0094-agent-definitions-own-authored-content-and-providers-publish-activities.md) | Accepted |
 | EB-0001 | [Extension Builder Git identity](EB-0001-extension-builder-git-identity.md) | Accepted |
 | EB-0002 | [Extension Builder managed repository remotes](EB-0002-extension-builder-managed-repository-remotes.md) | Accepted |
