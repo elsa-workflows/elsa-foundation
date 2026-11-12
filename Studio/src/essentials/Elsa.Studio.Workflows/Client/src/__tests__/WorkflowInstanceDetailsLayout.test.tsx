@@ -123,7 +123,8 @@ describe("Run detail page layout", () => {
     const page = container.querySelector(".wf-page--run-workbench");
     expect(page).toBeTruthy();
     expect(page?.querySelector(":scope > .studio-page-header")).toBeTruthy();
-    await vi.waitFor(() => expect(page?.querySelector(".studio-page-header")?.textContent).toContain("Run · Invoice settlement"));
+    await vi.waitFor(() => expect(page?.querySelector(".studio-page-header h2")?.textContent).toBe("Run · Invoice settlement"));
+    expect(page?.querySelector(".studio-page-header h2")?.getAttribute("title")).toBe("Run · Invoice settlement");
     expect(page?.querySelector(".wf-page-context")?.textContent).toContain("run-1");
     expect(page?.querySelector(".wf-status-line")).toBeNull();
     expect(page?.querySelector(".studio-result-state[data-tone='danger']")).toBeNull();
