@@ -19,6 +19,7 @@ The scope comprises:
 - #3443's planning comments of 30 and 31 October;
 - the `/user-tasks` and `/agents` rows that the [claim](https://github.com/elsa-workflows/elsa-foundation/issues/3443#issuecomment-6605270638) adds;
 - the screens merged since: `/settings/backends` (PR #3600) and the BPMN pages (PR #3603).
+- the 12 November source refresh adds the composed Decisions surfaces under FR-001/later leaf22; source discovery is not live-host acceptance.
 
 The prerequisites #3440, #3441 and #3442 are complete.
 
@@ -321,6 +322,7 @@ Negative cases:
   | Activity definitions (Activities Design; Workflows.Publishing; Elsa3) | "Exact catalog/version/dependency inspection and supported draft/import/upgrade proposals" | Read; Reviewed draft add, update and discard, and upgrade plans (its leaf spec). Import (C); publish (H); other definition and version operations, and test runs (L); contract proposals (W) |
   | User tasks (`Elsa.Studio.UserTasks`, Workflows Runtime) | post-M0: read; claim, release, reassign | Read; Reviewed claim, release and reassign (its leaf spec; reassign may be escalated, FR-025). Decisions (H); prefill values and responses (C); form authoring (W) |
   | Agents (user-defined; `Elsa.Agent`) | post-M0: read | Read (its leaf spec). Review decisions (H); the decider's identity (C); authoring (O: #3519) |
+  | Decisions (`Elsa.Studio.Decisions`, Decisions) | added after the earlier inventory: the composed `/decisions` library, exact decision/draft/version, table/model editors, saved cases, evaluation and rule-explanation surfaces; workflow decision-version/input editors | Module-owned authorized reads and bounded guidance through later leaf22. Carry exact selection, revisions and unsaved-state provenance; never execute/evaluate user data or mutate/publish merely to answer. The leaf spec must inventory supported owner operations and explicit limitations before implementation; all common authority, redaction, recovery and both-adapter evidence gates apply. |
   | BPMN (Activities BPMN) | post-M0: read | Read (its leaf spec). Run and work operations, artifact registration, interchange management (T); direct publish (H); process authoring (W) |
   | Expressions (Expression Modules) | "Language-owned guidance and exact expression edits without runtime evaluation or live-value capture" | Read; Local expression edits in the draft's working state, as spec 1193's Operation Batch (its leaf spec, with #3711) |
   | Workflow rows (Workflows): definitions list, new workflow, workflow draft, Executables, Runs; Reusable Workflow Templates and library tags, favorites and views | "Preserve search/folder/status/page/selection; read exact resources and propose supported lifecycle changes"; "Carry caller attachment; return typed metadata suggestions or reviewed creation"; "Grounded explain/troubleshoot; atomic visible working-state edits, validation, dirty state and whole-batch undo"; "Inspect immutable compiled structure and selected source reference; dispatch remains a distinct authorized effect"; "Carry exact run/activity-execution/incident/scope; authorized evidence and supported wait/stop/recovery operations"; post-M0: templates and library tags, favorites and views (#3443, 31 October, items 1–2) | Delivered by #3442. Reviewed run wait/stop/recovery controls, supported library deletes and Executables lifecycle including dispatch (later M4 leaf 21, FR-025); edits to published or historical versions and Executables (O: spec 1193) |
@@ -608,6 +610,7 @@ Negative cases:
   | 19 | Weather | a client-asserted page context, through a small package |
   | 20 | ExtensionBuilder | installed-module guidance |
   | 21 | Workflow rows | supported run wait/stop/recovery controls, library deletes and Executables lifecycle including dispatch, handed back by spec 1193; retain exact occurrence, authority and owner-confirmed outcomes |
+  | 22 | Decisions | newly composed module-owned reads and bounded guidance for exact library/draft/version/table/model/case/evaluation and nested workflow-editor contexts; its own spec and sub-issue are mandatory under FR-025, and live inventory qualification remains required |
 
 ### Key Entities
 

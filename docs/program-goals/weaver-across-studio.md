@@ -187,3 +187,16 @@ provider-protocol and opt-in live evidence distinctly; source probes and histori
 not current end-to-end acceptance. Meaningful risk-based regressions, required exact-head CI/review,
 resulting-main verification, updated existing catalogs and module-author guidance support closure.
 Keep unsupported/deferred boundaries explicit on #3428 until they are resolved or owner-amended.
+
+
+The [12 November resume](https://github.com/elsa-workflows/elsa-foundation/issues/3428#issuecomment-6837492732)
+reactivates this Program only. The current native M4 and M5 children are #3443 and #3444;
+the 9 November triage folded duplicate wrappers #3433/#3434 without completing either milestone.
+Project65 archives those closed wrappers and retains the open feature/leaf states.
+The owner-authorized Weaver rename is the current source boundary: user-defined agents keep
+`Elsa.Agent.*`, the Studio assistant uses `Elsa.Weaver.*` / `api.weaver`, and the additive
+store upgrade must be demonstrated with actual post-rename Weaver1.0/1.1 writers.
+Historical Agent-store captures remain unchanged evidence of their original sources. The source
+inventory adds Decisions to spec1203 FR-001/later leaf22; actual composed support remains unverified.
+The [single bounded Azure verification grant](https://github.com/elsa-workflows/elsa-foundation/issues/3428#issuecomment-6837783960)
+is at most1CPU/3GiB/90minutes with stop/deallocation; it grants no fleet or other paused-stream restart.

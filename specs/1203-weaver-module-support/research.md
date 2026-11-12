@@ -81,3 +81,17 @@ The approved [specification](spec.md) supplies scope and owner decisions. This r
 ## Post-design gate result
 
 No unresolved owner decision or constitutional exception is identified. The plan keeps Core/implementation boundaries, scoped authority, replacement diagnostics, shared discovery/persistence mechanisms and risk-based proof. Implementation and contract freeze are still gated by independent review and demonstrated journeys, not this research record.
+
+
+## 12 November source inventory reconciliation
+
+At current main `dff7c490d0e5501b22d4ba89beb389c956d4f423`, the normal Studio shell selects
+`DecisionsStudio` (`Studio/src/apps/Elsa.Studio.Web/shells.json`), and Workbench selects the
+Decisions design/runtime/API/EF features (`Essentials/apps/Elsa.Workbench/shells.json`).
+`Extensions/Decisions/studio/Elsa.Studio.Decisions/Client/src/module.tsx` registers `/decisions`
+with exact decision/version workspace identity, a decision-version property editor and a decision-input
+expression editor; its source has no Weaver contribution registration. The owning page also composes
+table/model editing, cases, evaluation and rule explanation. FR-001 assigns this new module to the
+mandatory later leaf22 under FR-025. That leaf gets its own spec/issue when it starts; this source
+inventory does not start another implementation lane or imply support. The real normal-host inventory
+and feature/removal observations remain T045 gates, and dated M0 evidence remains unchanged.
