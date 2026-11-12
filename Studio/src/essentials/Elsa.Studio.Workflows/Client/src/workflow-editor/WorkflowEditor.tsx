@@ -70,6 +70,7 @@ import { AttachedTestRunControls } from "./AttachedTestRunControls";
 import { useTestRunObservation } from "./useTestRunObservation";
 import { useTestRunRestoration } from "./useTestRunRestoration";
 import { usePinnedEditorDocument } from "./usePinnedEditorDocument";
+import { selectAttachedRunEditorNode } from "./selectAttachedRunEditorNode";
 import { useEditorRunCanvas } from "./useEditorRunCanvas";
 import { useAttachedExecutionSelection } from "./useAttachedExecutionSelection";
 import { activateWorkflowCanvasNode } from "./workflowAccessibility";
@@ -330,6 +331,14 @@ export function WorkflowEditor({
     palettePresent: !inlineSteps || availableDesignerPanels.some(panel => panel.side === "left")
   });
   const { setInspectorCollapsed } = sidePanelLayout;
+  const revealRunInspectorOnSelectRef = useRef(false);
+  const selectAndInspect = useCallback((nodeId: string | null) => {
+    selectAttachedRunEditorNode(nodeId, select, revealRunInspectorOnSelectRef.current, () => {
+      setInspectorView("run-data");
+      setActiveRightPanelId("inspector");
+      setInspectorCollapsed(false);
+    });
+  }, [select, setInspectorCollapsed]);
   useEffect(() => {
     setActiveInspectorTabId(current =>
       resolveActivityInspectorTabId(current, inspectedSupportsScopedVariables, inspectedSlots.length > 0
@@ -439,7 +448,7 @@ export function WorkflowEditor({
     selectedNodeId,
     editDraft,
     editDraftAndSelect,
-    select,
+    select: selectAndInspect,
     resetToRoot,
     setStatus,
     setError
@@ -522,10 +531,8 @@ export function WorkflowEditor({
     });
   }, [catalogByVersion, runCanvas.nodes, scope?.slot.activities, scopeOwner]);
   const edges = runCanvas.edges;
-  const selectEditorNode = (nodeId: string | null) => {
-    select(nodeId);
-    if (runCanvas.attached) { setInspectorView("run-data"); setActiveRightPanelId("inspector"); setInspectorCollapsed(false); }
-  };
+  revealRunInspectorOnSelectRef.current = runCanvas.attached || editorDoc.pinned;
+  const selectEditorNode = selectAndInspect;
   const selectedCanvasNodeIds = useMemo(() => {
     const selected = nodes.filter(node => node.selected).map(node => node.id);
     return selected.length > 0 ? selected : (selectedNodeId ? [selectedNodeId] : []);
@@ -1745,6 +1752,10 @@ export function WorkflowEditor({
                 event.preventDefault();
                 closeActivityContextMenu();
               },
+              onNodePointerDown: editorDoc.pinned ? (_, node) => {
+                closeActivityContextMenu();
+                selectAndInspect(node.id);
+              } : undefined,
               onNodeClick: (_, node) => {
                 closeActivityContextMenu();
                 selectEditorNode(node.id);
