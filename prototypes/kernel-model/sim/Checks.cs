@@ -57,7 +57,7 @@ public sealed partial class World
     public static long Bystanders;      // how many of those had done nothing wrong, over all runs
     public static readonly System.Collections.Concurrent.ConcurrentDictionary<string, int> Seen = new();     // what happened, over all runs: coverage
 
-    public static void Count(string what) => Seen.AddOrUpdate(what, 1, (_, n) => n + 1);
+    public static void Count(string what, int times = 1) => Seen.AddOrUpdate(what, times, (_, n) => n + times);
 
     private T? State<T>(string id) where T : class =>
         Store.Instances.GetValueOrDefault(id) is not { State: var json } || json == "null" ? null
@@ -155,6 +155,8 @@ public sealed partial class World
         {
             var (worker, partition) = (actor.Worker, Store.Partitions[actor.Partition]);
             if (!worker.Owns || worker.Epoch != partition.Epoch) continue;
+            // I21: no more idle instances in memory than the bound.
+            if (worker.Idle > 2) return $"I21 actor {actor.Id} holds {worker.Idle} idle instances; the bound is 2";
             if (!worker.Flushing && worker.Position != partition.Position)
                 return $"I9 actor {actor.Id} believes partition {actor.Partition} is at {worker.Position}; it is at {partition.Position}";
             foreach (var (id, row, state, busy) in worker.Instances)
@@ -503,6 +505,7 @@ public sealed partial class World
         }
         foreach (var row in Store.Instances.Values.Where(i => i.Model == "tree" && i.Parent is not null && i.Status == InstanceStatus.Cancelled))
             Count("tree descendant cancelled" + (row.Id[..row.Id.IndexOf('/')] != row.Parent![..row.Parent!.IndexOf('/')] ? ", in another partition" : ", with its parent") + (_late.Contains(row.Id) ? ", created after its parent ended" : ""));
+        Count("instances evicted", (int)Actors.Sum(a => a.Worker.Evicted));
         // I17: a terminate reaches every descendant, in any partition, including those whose start was on its way.
         if (Store.Instances.Values.FirstOrDefault(i => i.Model == "tree" && i.Status == InstanceStatus.Running) is { } alive)
             return $"I17 tree instance {alive.Id} still runs after its root was terminated";

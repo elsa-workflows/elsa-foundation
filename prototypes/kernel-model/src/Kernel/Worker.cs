@@ -7,6 +7,9 @@ public sealed record WorkerOptions
     public int PollLimit { get; init; } = 500;
     public int MaxBatch { get; init; } = 500;
 
+    /// <summary>How many idle instances are kept in memory. Above it the least recently used are dropped, and loaded by key again when a message comes.</summary>
+    public int MaxInstances { get; init; } = int.MaxValue;
+
     /// <summary>How many partitions the database has: needed to place a child in another one.</summary>
     public int Partitions { get; init; } = 1;
     /// <summary>How many owners may be lost with a message on trial before it is parked.</summary>
@@ -82,6 +85,9 @@ public sealed class Worker
     public long Epoch { get; private set; }
     public long Position { get; private set; }
     public bool Owns => Epoch != 0;
+    public long Evicted { get; private set; }
+    public int Idle => _slots.Values.Count(s => s.Loaded && !s.Busy && s.Inbox.Count == 0 && s.Replies.Count == 0);    // for tests
+    private long _used;
 
     /// <summary>Database time as far as this worker knows: the latest reading plus what its monotonic clock has counted since.</summary>
     public long Now => Has(Flaw.WallClockTimers) ? _options.WallClock!() : _anchor + _options.Monotonic();
@@ -343,7 +349,8 @@ public sealed class Worker
         _loading = false;
         var found = rows.ToDictionary(r => r.Id, StringComparer.Ordinal);
         foreach (var id in ids)
-            if (_slots.TryGetValue(id, out var slot) && !slot.Loaded) (slot.Row, slot.Loaded) = (found.GetValueOrDefault(id), true);
+            if (_slots.TryGetValue(id, out var slot) && !slot.Loaded) (slot.Row, slot.Loaded, slot.Used) = (found.GetValueOrDefault(id), true, ++_used);
+        Evict();
     }
 
     // ---- steps ---------------------------------------------------------------------------------------------------
@@ -357,7 +364,7 @@ public sealed class Worker
         if (due.Count == 0) return;
         slot.Inbox.RemoveAll(due.Contains);
         foreach (var item in due) (item.Taken, item.Held) = (true, false);
-        slot.Busy = true;
+        (slot.Busy, slot.Used) = (true, ++_used);
         var creator = slot.Row is null ? due.FindIndex(i => i.Message.Start is not null) : -1;
         var spec = creator < 0 ? null : due[creator].Message.Start;
         if (slot.Row is { } current && Kinds.IsControl(due[0].Message.Kind) && (current.Status == InstanceStatus.Running || current.Children is not null))
@@ -628,6 +635,23 @@ public sealed class Worker
         slot.Busy = false;
         if (!Has(Flaw.EmitBeforeCommit)) Release(unit);
         if (slot.Row is null && slot.Inbox.Count == 0) _slots.Remove(unit.Instance);
+        Evict();
+    }
+
+    /// <summary>
+    /// Evictable: its committed row is all there is to it. Not while a step or commit is in flight (a load would read
+    /// the row before that commit), not while messages wait for it, not while a caller waits for its output.
+    /// </summary>
+    private bool Evictable(Slot slot) => slot.Loaded && (!slot.Busy || Has(Flaw.EvictBusy)) && slot.Inbox.Count == 0 && slot.Replies.Count == 0;
+
+    private void Evict()
+    {
+        var idle = _slots.Where(s => Evictable(s.Value)).ToList();
+        foreach (var (id, _) in idle.OrderBy(s => s.Value.Used).Take(idle.Count - _options.MaxInstances).ToList())
+        {
+            _slots.Remove(id);
+            Evicted++;
+        }
     }
 
     /// <summary>
@@ -699,6 +723,7 @@ internal sealed class Slot
     public InstanceRow? Row;        // the committed row; null while the instance does not exist
     public object? State;           // the live state between steps, equal to Row.State
     public bool Loaded, Busy;
+    public long Used;               // when a step last started or it was loaded: the least recent idle one goes first
     public readonly List<Item> Inbox = [];
     public object? Ambient;                         // from the starter on this node; gone with this memory
     public readonly HashSet<string> Replies = [];   // callers waiting for what the instance emits

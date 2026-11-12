@@ -151,7 +151,7 @@ int Mutations(int seeds)
         Flaw.WallClockTimers, Flaw.DeleteOutsideCommands, Flaw.HandOverWhileBehind, Flaw.BumpAllInherited, Flaw.RunBeforeMark,
         Flaw.VolatileRunTicket, Flaw.PollRace, Flaw.MeetWithoutTicket,
         // round 3: the rule of each new piece
-        Flaw.GreedyBalancer, Flaw.TrialPerPartition, Flaw.ProjectorBlindWrite, Flaw.EmitBeforeCommit, Flaw.ReplyTwice, Flaw.NoDeadline, Flaw.DeliverWhileSuspended, Flaw.NoShelf, Flaw.SuspendDuringTrial, Flaw.TerminateRootOnly, Flaw.HoldLoses, Flaw.HoldKeepsTrial, Flaw.SkipUpgrade, Flaw.StepNewerState, Flaw.RebindForgotten, Flaw.StartWithoutRead, Flaw.CancelKnownChildren,
+        Flaw.GreedyBalancer, Flaw.TrialPerPartition, Flaw.ProjectorBlindWrite, Flaw.EmitBeforeCommit, Flaw.ReplyTwice, Flaw.NoDeadline, Flaw.DeliverWhileSuspended, Flaw.NoShelf, Flaw.SuspendDuringTrial, Flaw.TerminateRootOnly, Flaw.HoldLoses, Flaw.HoldKeepsTrial, Flaw.SkipUpgrade, Flaw.StepNewerState, Flaw.RebindForgotten, Flaw.StartWithoutRead, Flaw.CancelKnownChildren, Flaw.EvictBusy,
     ];
     var missed = 0;
     // A deploy in progress meets an older owner only now and then: this one runs 1,000 actions a seed.

@@ -239,7 +239,7 @@ public sealed partial class World
             Lease = TimeSpan.FromSeconds(10), Horizon = TimeSpan.FromSeconds(2), PollLimit = 3, MaxBatch = 4, MaxAttempts = Config.Attempts, TrialGroup = Config.Group, Gate = _gates[node],
             Monotonic = () => Time + node * 7919,       // every node counts at the database's rate from its own zero
             WallClock = () => Time + Skew[node],
-            Flaws = Config.Flaws, Partitions = Config.Partitions,
+            Flaws = Config.Flaws, Partitions = Config.Partitions, MaxInstances = 2,
             Transport = new Transport(this, Config.Flaws.HasFlag(Flaw.StableNodeName) ? "node" + node : $"node{node}.{Incarnation[node]}"),
             OnStep = (instance, inbox, _) =>
             {

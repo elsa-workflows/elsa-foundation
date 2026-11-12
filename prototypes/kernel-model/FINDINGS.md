@@ -621,3 +621,18 @@ The owner's requirement of 12 November: a workflow handles an HTTP request and p
   have reported back: a child whose start is still on its way is missed and waits for ever. Caught, seed 5 (`END
   parent 0/par5 did not finish`). The flaw is in the model, not the kernel: what it shows is that the kernel's order
   (one sender, one target) lets a model cancel what it started without waiting to hear from it.
+
+## 19. A bound on instances in memory. Run
+
+- **Built:** `WorkerOptions.MaxInstances`. After each commit and each load, the owner drops the least recently used
+  idle instances above the bound; a message for a dropped instance loads it by key again (the existing load path).
+  Idle means: loaded, no step or commit in flight, no message waiting for it, no caller waiting for its output. The
+  `Ambient` goes with the activation; a run in flight keeps its instance in memory through its ticket.
+- **In the simulation:** two idle instances per worker, so eviction is constant: 319,913 evictions in 4,000 seeds.
+- **Invariant 21:** no worker holds more idle instances than the bound; invariant 9 (memory matches rows) holds for
+  every reload. `--flaw EvictBusy` (an instance whose commit is in flight may be dropped): caught, seed 4 (`IDLE`),
+  and at seed 67 as the race it causes: `I9 instance 1/c0 is at revision 2, the commit expected 1`. The reload read
+  the row before the commit in flight landed, and the next step was prepared on the old revision.
+- **Not solved, reasoned:** an instance with a caller waiting is never dropped, but the owner does not know when that
+  caller gave up. A reply address should carry the caller's deadline, so the owner can drop the address and with it
+  the pin.
