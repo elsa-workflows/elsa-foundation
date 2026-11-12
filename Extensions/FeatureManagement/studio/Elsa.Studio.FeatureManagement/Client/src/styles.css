@@ -12,7 +12,6 @@
   --fm-tone-advanced: color-mix(in srgb, var(--studio-accent, var(--primary, #2563eb)) 55%, var(--studio-success, var(--success, #16a34a)));
   --fm-tone-experimental: var(--studio-warning, var(--warning, #d97706));
   --fm-tone-danger: var(--studio-danger, var(--danger, #dc2626));
-  --fm-overlay-strong: color-mix(in srgb, var(--studio-text, var(--foreground, #0f172a)) 38%, transparent);
   display: flex;
   flex-direction: column;
   container-type: inline-size;

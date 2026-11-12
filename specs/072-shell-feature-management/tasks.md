@@ -47,4 +47,4 @@
 - [x] T023 Extend module behavior tests for search/selection/reset/counts, no-match recovery, host isolation and no mutation/network reads; preserve existing suites.
 - [x] T024 Extend the composed Features journey for keyboard navigation, category filtering/recovery and viewport containment; preserve settings and impact proof.
 - [ ] T025 Run affected whole light suites and a regression bite-proof, then obtain current-head hosted CI/composed evidence and independent correctness/standards/UX acceptance.
-- [ ] T026 Record PR evidence, complete gated merge and verify descendant main; mark this refinement Implemented only after acceptance.
+- [ ] T026 Record final acceptance evidence, complete gated merge and verify descendant main. Implementation status alone does not establish delivery acceptance.

@@ -105,7 +105,7 @@ A Studio user can click Apply to persist staged feature changes for the backend-
 
 ## Category navigation refinement (#4212, 2026-11-12)
 
-**Status:** Planned. This refinement does not change the original implementation status above.
+**Status:** Implemented in this PR; delivery acceptance is pending current-head hosted proof and independent visual review. This refinement does not change the original implementation status above.
 
 Sipke selected the Category rail reference and authorized its production implementation on 12 November. The goal is to explore a large catalogue without repeatedly opening a menu. The reference is the selected Category rail design retained with #4212, using the shared controls in [module UI guidance](../../Studio/docs/module-ui.md).
 
