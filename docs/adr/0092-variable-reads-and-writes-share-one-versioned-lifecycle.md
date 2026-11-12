@@ -154,8 +154,9 @@ node opts in to `Fault` (decision 6):
 
 - During input materialization, the engine records every variable an input binding or input expression actually read:
   the input read set. Once D-7 is written into ADR 0089 (computed names fall back to a run-time lookup), this includes
-  computed names, because the read is observed at run time, not predicted by static analysis. Until then, ADR 0045 §5,
-  ADR 0089 decision 5 and ADR 0090 §3 still refuse computed names, and only resolvable names occur.
+  computed names, because the read is observed at run time, not predicted by static analysis. Until then, ADR 0089
+  decision 5 and ADR 0090 §3 still refuse computed names, and only resolvable names occur (ADR 0045 §5 no longer
+  forbids them).
 - During execution, every session read is added to the attempt's session reads.
 - A variable that was visible but not read is **not** in the read set.
 
@@ -406,7 +407,7 @@ A merge policy is not part of this decision.
   input read set for that evaluation.
 - **ADR 0045 §4.** "Reads occur when the consumer invocation materializes its inputs" stays true, and those reads are
   now recorded with versions.
-- **ADR 0045 §5, ADR 0089 decision 5, ADR 0090 §3.** They still refuse computed names. D-7 changes that through the
+- **ADR 0089 decision 5, ADR 0090 §3.** They still refuse computed names (ADR 0045 §5 no longer does). D-7 changes that through the
   ADR 0089 amendment; decision 3 follows whatever that amendment allows.
 - **ADR 0048 §4.** Commits stay totally ordered per execution (as amended with spec 266). Each variable gets its own
   version beside the frame revision. Captures write against the invocation's read set.
