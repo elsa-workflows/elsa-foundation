@@ -12,6 +12,7 @@ Use the constitution files in `.specify/memory/` for gates, allowed exceptions, 
 - [Refactoring methodology](refactoring-methodology.md) - the three-step method behind framework §2.18.
 - [Elsa domain tree](elsa-domain-tree.md) - the purpose of each root-level Elsa domain pinned in Elsa §E2.1.
 - [Elsa type naming](elsa-naming.md) - the full text, senses and origins of the Elsa §E6 naming rules R1-R8.
+- [Package and identifier renames](package-renames.md) - the old-to-new map of every pre-GA clean break that renamed packages or persisted identifiers, starting with the Weaver move of 9 November 2026.
 - [Agent preferences](agent-preferences.md) - committed catalog of local agent preference file rules and templates; personal selections belong in `.agent-prefs/`.
 - [Git operating models](git-operating-models.md) - maintainer organization-branch and contributor fork workflows; no publication-time model selection is required.
 - [Spec lifecycle](spec-lifecycle.md) - how specs under `specs/` are numbered, the closed status vocabulary, when a spec reaches a terminal status, and why specs are never moved or deleted.
@@ -28,3 +29,9 @@ Use the constitution files in `.specify/memory/` for gates, allowed exceptions, 
 - [Generic OAuth2 connector](elsa-integrations-oauth2.md) - Elsa Integrations `#2727` scheme (`oauth2`) for the foundation `http` connection: callback path, CAS refresh, secret masking, and `Elsa.Integrations.Sdk` v1.
 - [Slack connector](elsa-integrations-slack.md) - Elsa Integrations `#3322` Slack Web API activities on the foundation `http` connection: BYO Slack app, scopes, and `{PublicBaseUrl}/_elsa/connections/oauth/callback`.
 - [Microsoft 365 connector](elsa-integrations-microsoft365.md) - Elsa Integrations `#3330` Microsoft Graph v1.0 activities on the foundation `http` connection: BYO Entra app, delegated scopes, and `{PublicBaseUrl}/_elsa/connections/oauth/callback`.
+
+## Proposed designs
+
+These pages describe designs that are under review. They are not the current architecture and are not approved.
+
+- [Kernel walkthrough](https://vowful-mustard-pd8t.here.now/) - an interactive, illustrated walk through the proposed clean-slate execution kernel: the three layers (actor runtime, durable actors, actor types such as a workflow instance), the storage contract, the fenced commit, messages and the inbox, persistence modes, synchronous HTTP, the projector and the viewer's read path, the cost model, and the decisions of 12 November 2026. Design draft 4; not yet approved.

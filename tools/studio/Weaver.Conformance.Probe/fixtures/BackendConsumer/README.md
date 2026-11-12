@@ -1,6 +1,6 @@
 # Package-only backend application
 
-`consumers.prepare_consumers(run)` replaces `__BACKEND_REFERENCES__` with exact PackageReferences from the retained candidate identities and `run.pin(...)` for public infrastructure. This baseline references both real provider adapters, the public Agent/Identity/Preferences contracts and native authoring services. Neither resource package nor the protocol fixture is an application reference. The actual protocol archive is staged in the native runtime feed.
+`consumers.prepare_consumers(run)` replaces `__BACKEND_REFERENCES__` with exact PackageReferences from the retained candidate identities and `run.pin(...)` for public infrastructure. This baseline references both real provider adapters, the public Weaver/Identity/Preferences contracts and native authoring services. Neither resource package nor the protocol fixture is an application reference. The actual protocol archive is staged in the native runtime feed.
 
 The application uses public CShells/Nuplane registration, native ModularityApi endpoints, normal Identity/SQLite module wiring and a separate application-owned SQLite/OpenIddict TokenDb. It contains no Workbench helpers or private management mapping. The root Nuplane ingress/coordinator/admin instances are shared into shell scopes. Native-loaded factories share the baseline provider implementation assemblies, in addition to Core/CShells contracts, so they replace the actual adapter's public factory interface.
 
@@ -19,10 +19,10 @@ configure_runtime(run, backend_url=owned_backend_origin,
 
 This writes exact CORS/return origins, native initial-admin seed settings and the first-party issuer into private runtime JSON. No password is written to a public receipt. `enroll=True` authorizes the separate Studio protected store's enrollment. The backend uses a fresh ordinary Nuplane store, matching Foundation.Host/Workbench and its existing manifest contributor; it performs no enrollment or cutover. The only native credentials are obtained later through normal login cookie and `/_elsa/identity/token`; the consumer does not mint fixture tokens.
 
-The ordinary shell selects `FoundationAgentEffects` for its in-memory Agent store. `configure_runtime` explicitly enables
-all three fixture privilege classes under `Elsa:Agent:Privileges`, matching Workbench's base policy without changing the
+The ordinary shell selects `WeaverEffects` for its in-memory Weaver store. `configure_runtime` explicitly enables
+all three fixture privilege classes under `Elsa:Weaver:Privileges`, matching Workbench's base policy without changing the
 product's default-off options. Later operator controls can call
-`configure_agent_privileges(run, administrative=False, irrecoverable=False, activation=False)` (or another explicit
+`configure_weaver_privileges(run, administrative=False, irrecoverable=False, activation=False)` (or another explicit
 boolean combination). It atomically replaces only those host options in private backend JSON and preserves unrelated
 configuration, credentials and the Studio file. It returns only the three booleans. A file update is not proof of a live
 policy change: the driver must observe the actual sessionless bootstrap after the configuration provider reloads.
@@ -61,9 +61,9 @@ permission bypass or additional fixture grant is added here. Explicit non-admin 
 their exact native grants and fresh normal login. Package/feature selection is not evidence of an available endpoint:
 the native held/finalized matrix must observe the catalog, Attention and capabilities with the actual signed-in user.
 
-The application also discovers `FoundationAgentEntityFrameworkCore`, `FoundationAgentEfEffects` and `Secrets` from their
+The application also discovers `WeaverEntityFrameworkCore`, `WeaverEfEffects` and `Secrets` from their
 existing package assemblies; the baseline shell does not select them. For the #3441 restart inventory,
-`consumers.enable_durable_agent_store(run, database, key)` removes common effects and selects EF effects alongside the store
+`consumers.enable_durable_weaver_store(run, database, key)` removes common effects and selects EF effects alongside the store
 and Secrets in runtime `shells.json` while the driver's own backend is stopped: SQLite over a new database file under the
 run's output root, a private Secrets key that is never returned or retained in a receipt, and the store's 15-second lease.
 The helper refuses missing/already-durable effects selection rather than composing two siblings or guessing a store.
@@ -108,9 +108,9 @@ delegates every call unchanged. Only Weaver's library writes reach it: the HTTP 
 decisions whatever `IWorkflowLibraryCommands` is installed, so the driver's own owner writes and reads never pass through
 the seam. The seam changes no product code.
 
-Spec 1193 slice F adds `Elsa.Agent.Workflows.Runtime` to the packaged references and selects its shell feature
-`FoundationWorkflowsRuntimeAgent` in the baseline shell, beside `FoundationWorkflowsAgent`; its assembly is listed with the
-other agent assemblies. `inspection_journeys.py` adds no seam: it deselects each agent feature once, through the ordinary
+Spec 1193 slice F adds `Elsa.Weaver.Workflows.Runtime` to the packaged references and selects its shell feature
+`WeaverWorkflowsRuntime` in the baseline shell, beside `WeaverWorkflows`; its assembly is listed with the
+other Weaver assemblies. `inspection_journeys.py` adds no seam: it deselects each Weaver feature once, through the ordinary
 native feature apply, for its deployment-shape control and selects it again.
 
 `QualificationRunCapture.cs` is a test-only host feature for the spec 1193 workflow-run inventory (T045). No baseline shell

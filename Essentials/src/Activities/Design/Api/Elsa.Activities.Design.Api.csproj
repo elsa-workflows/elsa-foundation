@@ -18,10 +18,16 @@
     <ProjectReference Include="..\..\..\Serialization\Core\Elsa.Serialization.Core.csproj" />
     <ProjectReference Include="..\..\..\Tasks\Core\Elsa.Tasks.Core.csproj" />
     <ProjectReference Include="..\Core\Elsa.Activities.Design.Core.csproj" />
+    <ProjectReference Include="..\..\..\Workflows\Design\Validations\Core\Elsa.Workflows.Design.Validations.Core.csproj" />
+    <ProjectReference Include="..\..\Runtime\Core\Elsa.Activities.Runtime.Core.csproj" />
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="NativeEndpoints" />
+    <PackageReference Include="ValenceWorks.MinimalEndpoints" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Elsa.Activities.Design.Api.Tests" />
   </ItemGroup>
 
 </Project>

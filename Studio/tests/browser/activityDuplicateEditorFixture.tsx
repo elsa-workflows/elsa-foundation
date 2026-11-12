@@ -9,6 +9,9 @@ import type {
   StudioEndpointContext,
   StudioExpressionEditorContribution
 } from "@elsa-workflows/studio-sdk";
+import { createNotificationController } from "@elsa-workflows/studio-sdk";
+import { setNotifications } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/notifications";
+import { ToastHost } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/ui/feedback/ToastHost";
 import { activityGraphDiagnosticFocusEvent } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/activityGraphDiagnosticFocus";
 import { ActivityGraphImplementationEditor } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/ActivityGraphImplementationEditor";
 import { WorkflowEditor } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowEditor";
@@ -75,7 +78,8 @@ const writeLineCatalog: ActivityCatalogItem = {
   ports: adaptivePorts === "branches" ? [
     { type: "outcome", name: "True", displayName: "True", isBrowsable: true },
     { type: "outcome", name: "False", displayName: "False", isBrowsable: true }
-  ] : [{ name: "Done", displayName: "Done", isBrowsable: true }],
+  ] : adaptivePorts === "outcomes" ? ["Approve", "Reject", "Unmatched"].map(name => ({ type: "outcome", name, displayName: name, isBrowsable: true }))
+    : [{ name: "Done", displayName: "Done", isBrowsable: true }],
   available: true
 };
 const runEtlCatalog: ActivityCatalogItem = {
@@ -154,8 +158,9 @@ function editorDraft(): WorkflowDraft {
     } else {
       root.structure!.payload.activities = [adaptivePorts === "dense" ? { ...notifyBuyer, activityVersionId: denseOutcomeCatalog.activityVersionId } : notifyBuyer, leafNode("write-two"), leafNode("write-three")];
       root.structure!.payload.connections = [{ id: "flow-write-one-write-two",
-        source: { nodeId: "write-one", port: adaptivePorts === "branches" ? "True" : "Done" }, target: { nodeId: "write-two" } },
-      ...(adaptivePorts === "branches" ? [{ id: "flow-false", source: { nodeId: "write-one", port: "False" }, target: { nodeId: "write-three" } }] : [])];
+        source: { nodeId: "write-one", port: adaptivePorts === "branches" ? "True" : adaptivePorts === "outcomes" ? "Approve" : "Done" }, target: { nodeId: "write-two" } },
+      ...(adaptivePorts === "branches" ? [{ id: "flow-false", source: { nodeId: "write-one", port: "False" }, target: { nodeId: "write-three" } }] : []),
+      ...(adaptivePorts === "outcomes" ? [{ id: "flow-reject", source: { nodeId: "write-one", port: "Reject" }, target: { nodeId: "write-three" } }] : [])];
       if (adaptivePorts === "dense") root.structure!.payload.connections = Array.from({ length: 30 }, (_, index) => ({
         id: `flow-case-${index + 1}`, source: { nodeId: "write-one", port: `Case ${index + 1}` }, target: { nodeId: "write-two" }
       }));
@@ -208,6 +213,9 @@ function editorDraft(): WorkflowDraft {
     ] : collectionSlotsFixture === "switch-ports" ? [
       { nodeId: "collection-owner", x: 120, y: 160 },
       { nodeId: "write-one", x: 540, y: 40 }, { nodeId: "write-two", x: 540, y: 360 }
+    ] : adaptivePorts === "outcomes" ? [
+      // A User Task-style decision laid out left to right, as the composed User Task journey lays it out (#4064).
+      { nodeId: "write-one", x: 100, y: 200 }, { nodeId: "write-two", x: 560, y: 80 }, { nodeId: "write-three", x: 560, y: 320 }
     ] : adaptivePorts ? [
       { nodeId: "write-one", x: 200, y: 80 },
       { nodeId: "write-two", x: adaptivePorts === "offset" ? 305 : 200, y: adaptivePorts === "offset" ? 430 : adaptivePorts === "dense" ? 1100 : 320 },
@@ -266,6 +274,12 @@ export function ActivityDuplicateEditorFixture() {
 }
 
 function ActivityDuplicateEditorFixtureContent() {
+  const [notifications] = useState(() => {
+    const controller = createNotificationController();
+    controller.setScope("editor-fixture");
+    setNotifications(controller.api);
+    return controller;
+  });
   const instanceHost = new URLSearchParams(window.location.search).get("host") === "instance";
   const executableHost = new URLSearchParams(window.location.search).get("host") === "executable";
   const motionFixture = new URLSearchParams(window.location.search).has("execution-motion");
@@ -273,7 +287,7 @@ function ActivityDuplicateEditorFixtureContent() {
   const context = useMemo(() => createEditorContext(instanceHost || motionFixture ? live.current : undefined), [instanceHost, motionFixture]);
   const activityHost = new URLSearchParams(window.location.search).get("host") === "activity";
   const ai = useMemo(() => ({
-    promptActions: { list: () => [] },
+    promptActions: { list: () => new URLSearchParams(window.location.search).has("toolbar-explain") ? [{ id: "weaver.workflows.explain-instance", label: "Explain run", createPrompt: () => ({ message: "Explain this run", mode: "enqueue", attachments: [] }) }] : [] },
     providerAvailability: { get: () => false, subscribe: () => () => undefined },
     dispatchPrompt: () => undefined
   } as unknown as StudioAiContributionApi), []);
@@ -297,6 +311,7 @@ function ActivityDuplicateEditorFixtureContent() {
               onBack={() => undefined}
             />}
       </QueryClientProvider>
+      <ToastHost controller={notifications} navigate={path => window.history.pushState({}, "", path)} />
     </div>
   );
 }
@@ -331,6 +346,8 @@ export function createEditorContext(live?: { status: string; disconnected: boole
   let draft = persistFixture && new URLSearchParams(window.location.search).get("host") !== "activity" && sessionStorage.getItem(adaptiveStorageKey)
     ? JSON.parse(sessionStorage.getItem(adaptiveStorageKey)!) as WorkflowDraft : editorDraft();
   const runCanvas = new URLSearchParams(window.location.search).get("run-canvas");
+  const hostPersistenceMode = new URLSearchParams(window.location.search).get("host-persistence-mode");
+  const iterationFixture = new URLSearchParams(window.location.search).has("iteration-provenance");
   const motionFixture = new URLSearchParams(window.location.search).has("execution-motion");
   const paletteFixtures: ActivityCatalogItem[] = new URLSearchParams(window.location.search).has("palette-context") ? [
     bpmnActivity,
@@ -369,6 +386,8 @@ export function createEditorContext(live?: { status: string; disconnected: boole
     workflowExecutionId: "editor-execution", executableNodeId: `exec-${node.nodeId}`, authoredActivityId: node.nodeId,
     activityType: catalog.find(item => item.activityVersionId === node.activityVersionId)?.activityTypeKey ?? "unknown", activityTypeVersion: "1.0.0",
     parentActivityExecutionId: parent ? `activity-exec-${parent}` : null,
+    ...(iterationFixture && node.nodeId === "write-one" ? { iterationId: `iteration-${index + 1}`,
+      provenance: { parentActivityExecutionId: parent ? `activity-exec-${parent}` : null, iterationId: `iteration-${index + 1}` } } : {}),
     ...(motionFixture ? { outcomeNames: ["Done"], provenance: { parentActivityExecutionId: parent ? `activity-exec-${parent}` : null,
       schedulingActivityExecutionId: `activity-exec-${predecessors.get(node.nodeId) ?? parent}`,
       schedulingCause: draft.state.rootActivity?.structure?.kind === "elsa.sequence.structure" ? "ActivityCompletion" : "continuation" } } : {}),
@@ -384,6 +403,7 @@ export function createEditorContext(live?: { status: string; disconnected: boole
     baseUrl: "browser-activity-duplicate-editor",
     http: {
       getJson: async (url: string) => {
+        if (hostPersistenceMode && url === "/runtime/workflows/persistence-mode") return { persistenceMode: hostPersistenceMode };
         if (live?.disconnected && url.startsWith("/runtime/")) throw new Error("Fixture connection dropped");
         if (url === "/capabilities") {
           return {
@@ -396,6 +416,7 @@ export function createEditorContext(live?: { status: string; disconnected: boole
                   { rel: "workflow-test-run-waits", href: "publishing/test-runs/{testRunId}/waits", templated: true }
                 ] },
                 { id: "elsa.api.runtime", contractVersion: "1", links: [
+                  ...(hostPersistenceMode ? [{ rel: "runtime-persistence-mode", href: "runtime/workflows/persistence-mode" }] : []),
                   { rel: "workflow-instance", href: "runtime/workflows/instances/{workflowExecutionId}", templated: true },
                   { rel: "workflow-executable", href: "runtime/workflows/executables/{artifactId}", templated: true },
                   { rel: "activity-execution", href: "runtime/workflows/instances/{workflowExecutionId}/activities/{activityExecutionId}", templated: true },
@@ -431,7 +452,7 @@ export function createEditorContext(live?: { status: string; disconnected: boole
           return {
             definition: {
               id: "definition-1",
-              name: "Order confirmation",
+              name: new URLSearchParams(window.location.search).has("toolbar-long-name") ? "Order processing and customer notification across all regional fulfillment centers" : "Order confirmation",
               description: "Notifies the buyer.",
               createdAt: "2026-10-14T00:00:00Z",
               lastModifiedAt: "2026-10-14T00:00:00Z",
@@ -485,6 +506,7 @@ export function createEditorContext(live?: { status: string; disconnected: boole
             && (!ancestor || record.parentActivityExecutionId === ancestor));
           const anchor = query.get("anchorActivityExecutionId");
           const items = filtered.map((execution, index) => ({ execution, position: index + 1,
+            ...(execution.iterationId ? { iterationPosition: index + 1 } : {}),
             ...(motionFixture ? { attempt: null } : {}), previousActivityExecutionId: filtered[index - 1]?.activityExecutionId ?? null, nextActivityExecutionId: filtered[index + 1]?.activityExecutionId ?? null }));
           return { totalCount: items.length, previousCursor: null, nextCursor: null,
             items: query.get("limit") === "1" ? [anchor ? items.find(item => item.execution.activityExecutionId === anchor) : items.at(-1)].filter(Boolean) : items };

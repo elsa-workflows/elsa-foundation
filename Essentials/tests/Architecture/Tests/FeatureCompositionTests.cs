@@ -72,11 +72,11 @@ public sealed class FeatureCompositionTests
                 "WorkflowsRuntimeWorkflowExecutionEntityFrameworkCorePersistence",
                 "WorkflowsRuntimeTestScopeEntityFrameworkCorePersistence"
             ]),
-        new("A shell runs exactly one agent harness.", ["AnthropicAgent"], ["GitHubCopilotAgent"]),
-        new("Agent effects select the variation matching the selected session record store.",
-            ["FoundationAgentEffects"], ["FoundationAgentEfEffects", "FoundationAgentEntityFrameworkCore"]),
+        new("A shell runs exactly one Weaver harness.", ["WeaverAnthropic"], ["WeaverGitHubCopilot"]),
+        new("Weaver effects select the variation matching the selected session record store.",
+            ["WeaverEffects"], ["WeaverEfEffects", "WeaverEntityFrameworkCore"]),
         new("Agent source-only persistence and combined source/journal persistence select the same source ports.",
-            ["AgentSourcesEntityFrameworkCore"], ["SpecialistsEntityFrameworkCore"]),
+            ["AgentSourcesEntityFrameworkCore"], ["AgentEntityFrameworkCore"]),
     ];
 
     [Fact]
@@ -425,6 +425,7 @@ public sealed class FeatureCompositionTests
                 ["JsonActivityReconciliation"] = new() { ["Options:SourceId"] = "composition", ["Options:FilePath"] = activities },
                 ["JsonWorkflowReconciliation"] = new() { ["Options:SourceId"] = "composition", ["Options:FolderPath"] = workflows },
                 ["JsonWorkflowArtifactReconciliation"] = new() { ["Options:SourceId"] = "composition", ["Options:FolderPath"] = workflows },
+                ["Elsa3JsonReconciliation"] = new() { ["Options:SourceId"] = "composition", ["Options:FolderPath"] = Directory.CreateDirectory(Path.Join(directory, "elsa3")).FullName },
                 ["FileSystemDistributedLocking"] = new() { ["LocksFolderPath"] = Path.Join(directory, "locks") },
                 ["EtlRuntime"] = new() { ["SnapshotRoot"] = Path.Join(directory, "etl-snapshots") },
                 // Medallion's providers connect when a lock is taken, not when they are constructed, and nothing takes one here.

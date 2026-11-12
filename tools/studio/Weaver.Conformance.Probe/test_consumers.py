@@ -13,7 +13,7 @@ import zipfile
 
 from artifacts import BACKEND_PACKAGES
 from consumers import (COMMON_EFFECTS_FEATURE, DURABLE_EFFECTS_FEATURE, DURABLE_STORE_FEATURE, backend_features,
-                       configure_agent_privileges, configure_runtime, enable_durable_agent_store, references,
+                       configure_weaver_privileges, configure_runtime, enable_durable_weaver_store, references,
                        select_native_archives, stage_native_archives)
 
 DI = "Microsoft.Extensions.DependencyInjection.Abstractions"
@@ -81,7 +81,7 @@ class RuntimeClosureTests(unittest.TestCase):
         self.assertTrue(first == signing_key())  # Never put private key material in an assertion message.
         self.assertNotIn("EnrollOwnedStore", json.loads((backend / "appsettings.json").read_text())["Qualification"])
         self.assertEqual({"Administrative": True, "Irrecoverable": True, "Activation": True},
-                         json.loads((backend / "appsettings.json").read_text())["Elsa"]["Agent"]["Privileges"])
+                         json.loads((backend / "appsettings.json").read_text())["Elsa"]["Weaver"]["Privileges"])
         self.assertIs(True, json.loads((studio / "appsettings.json").read_text())["Qualification"]["EnrollOwnedStore"])
         for directory in (backend, studio):
             for name in ("appsettings.json", "shells.json"):
@@ -165,7 +165,7 @@ class RuntimeClosureTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "selected net10.0 target"): self.select()
 
 
-class AgentConsumerConfigurationTests(unittest.TestCase):
+class WeaverConsumerConfigurationTests(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
@@ -173,7 +173,7 @@ class AgentConsumerConfigurationTests(unittest.TestCase):
         self.backend, self.studio = self.root / "backend", self.root / "studio"
         self.backend.mkdir(); self.studio.mkdir()
         self.settings = {"Qualification": {"StudioOrigin": "http://127.0.0.1:18002"},
-                         "Elsa": {"Agent": {"RetainOption": True}}}
+                         "Elsa": {"Weaver": {"RetainOption": True}}}
         self.path = self.backend / "appsettings.json"
         self.path.write_text(json.dumps(self.settings))
         self.studio_settings = self.studio / "appsettings.json"
@@ -186,8 +186,8 @@ class AgentConsumerConfigurationTests(unittest.TestCase):
         self.assertIn(COMMON_EFFECTS_FEATURE, features)
         self.assertNotIn(DURABLE_EFFECTS_FEATURE, features)
         self.assertNotIn(DURABLE_STORE_FEATURE, features)
-        self.assertIn("FoundationAgentApi", features)
-        self.assertIn("FoundationWorkflowsAgent", features)
+        self.assertIn("WeaverApi", features)
+        self.assertIn("WeaverWorkflows", features)
 
     def test_attention_composition_requires_its_exact_product_candidate(self):
         products = {name: {"version": "4.0.0-fixture.1"} for name in BACKEND_PACKAGES}
@@ -219,15 +219,15 @@ class AgentConsumerConfigurationTests(unittest.TestCase):
         before = {path.name: path.read_bytes() for path in self.backend.iterdir()}
         configure_runtime(self.run, backend_url="http://127.0.0.1:18001", studio_url="http://127.0.0.1:18002",
                           admin_username="private-fixture", admin_password=secrets.token_urlsafe(24) + "!aA1")
-        configure_agent_privileges(self.run, administrative=False, irrecoverable=True, activation=False)
+        configure_weaver_privileges(self.run, administrative=False, irrecoverable=True, activation=False)
         self.assertTrue(before == {path.name: path.read_bytes() for path in self.backend.iterdir()})
         observed = json.loads((content / "appsettings.json").read_text())
-        self.assertEqual({"Administrative": False, "Irrecoverable": True, "Activation": False}, observed["Elsa"]["Agent"]["Privileges"])
+        self.assertEqual({"Administrative": False, "Irrecoverable": True, "Activation": False}, observed["Elsa"]["Weaver"]["Privileges"])
         features = json.loads((content / "shells.json").read_text())["CShells"]["Shells"]["Authoring"]["Features"]
         self.assertEqual(str(protocol / "command.json"), features["AcmeCopilotProtocolFixture"]["CommandFile"])
-        selected = enable_durable_agent_store(self.run, content / "agent.db", secrets.token_urlsafe(48))
+        selected = enable_durable_weaver_store(self.run, content / "weaver.db", secrets.token_urlsafe(48))
         features = json.loads((content / "shells.json").read_text())["CShells"]["Shells"]["Authoring"]["Features"]
-        self.assertEqual(str(content / "agent.db"), selected["database"])
+        self.assertEqual(str(content / "weaver.db"), selected["database"])
         self.assertIn(DURABLE_EFFECTS_FEATURE, features)
         self.assertNotIn(COMMON_EFFECTS_FEATURE, features)
         self.assertTrue(before == {path.name: path.read_bytes() for path in self.backend.iterdir()})
@@ -241,7 +241,7 @@ class AgentConsumerConfigurationTests(unittest.TestCase):
         self.run.profiles["backend"]["contentRoot"] = content
         before = self.path.read_bytes()
         with self.assertRaisesRegex(RuntimeError, "ordinary file"):
-            configure_agent_privileges(self.run, administrative=True, irrecoverable=True, activation=True)
+            configure_weaver_privileges(self.run, administrative=True, irrecoverable=True, activation=True)
         self.assertEqual(before, self.path.read_bytes())
 
     def test_private_policy_profiles_preserve_other_configuration_and_studio(self):
@@ -250,15 +250,15 @@ class AgentConsumerConfigurationTests(unittest.TestCase):
         self.path.write_text(json.dumps(self.settings))
         for enabled in ((False, False, False), (True, False, False), (True, True, True)):
             with self.subTest(enabled=enabled):
-                selected = configure_agent_privileges(self.run, administrative=enabled[0], irrecoverable=enabled[1], activation=enabled[2])
+                selected = configure_weaver_privileges(self.run, administrative=enabled[0], irrecoverable=enabled[1], activation=enabled[2])
                 settings = json.loads(self.path.read_text())
                 self.assertEqual(dict(zip(("Administrative", "Irrecoverable", "Activation"), enabled)), selected)
-                self.assertEqual(selected, settings["Elsa"]["Agent"].pop("Privileges"))
+                self.assertEqual(selected, settings["Elsa"]["Weaver"].pop("Privileges"))
                 self.assertTrue(settings == self.settings)  # Do not include the private value in a failed assertion message.
                 self.assertTrue(private_value not in json.dumps(selected))
                 self.assertEqual("{}", self.studio_settings.read_text())
                 self.assertEqual(0, self.path.stat().st_mode & 0o077)
-                self.assertEqual([], list(self.backend.glob(".agent-privileges-*")))
+                self.assertEqual([], list(self.backend.glob(".weaver-privileges-*")))
 
     def test_invalid_privilege_values_leave_the_original_file_unchanged(self):
         before = self.path.read_bytes()
@@ -268,16 +268,16 @@ class AgentConsumerConfigurationTests(unittest.TestCase):
                     options = dict(administrative=True, irrecoverable=True, activation=True)
                     options[member] = invalid
                     with self.assertRaisesRegex(RuntimeError, "explicit boolean"):
-                        configure_agent_privileges(self.run, **options)
+                        configure_weaver_privileges(self.run, **options)
                     self.assertEqual(before, self.path.read_bytes())
 
     def test_failed_atomic_replacement_preserves_the_original_and_removes_private_temporary_file(self):
         before = self.path.read_bytes()
         with patch.object(Path, "replace", side_effect=OSError("fixture replacement failure")):
             with self.assertRaises(OSError):
-                configure_agent_privileges(self.run, administrative=True, irrecoverable=False, activation=False)
+                configure_weaver_privileges(self.run, administrative=True, irrecoverable=False, activation=False)
         self.assertEqual(before, self.path.read_bytes())
-        self.assertEqual([], list(self.backend.glob(".agent-privileges-*")))
+        self.assertEqual([], list(self.backend.glob(".weaver-privileges-*")))
 
     def test_policy_writer_refuses_foreign_and_symlinked_configuration_without_writing(self):
         outside = tempfile.TemporaryDirectory()
@@ -287,13 +287,13 @@ class AgentConsumerConfigurationTests(unittest.TestCase):
         foreign_path.write_text("{}")
         self.run.profiles["backend"]["published"] = foreign
         with self.assertRaisesRegex(RuntimeError, "owned"):
-            configure_agent_privileges(self.run, administrative=True, irrecoverable=True, activation=True)
+            configure_weaver_privileges(self.run, administrative=True, irrecoverable=True, activation=True)
         self.assertEqual("{}", foreign_path.read_text())
         self.run.profiles["backend"]["published"] = self.backend
         self.path.unlink()
         self.path.symlink_to(foreign_path)
         with self.assertRaisesRegex(RuntimeError, "owned backend"):
-            configure_agent_privileges(self.run, administrative=True, irrecoverable=True, activation=True)
+            configure_weaver_privileges(self.run, administrative=True, irrecoverable=True, activation=True)
         self.assertTrue(self.path.is_symlink())
         self.assertEqual("{}", foreign_path.read_text())
 

@@ -3,6 +3,7 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Contracts.Alterations;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Models.Alterations;
+using Elsa.Workflows.Runtime.Services.Executions;
 
 namespace Elsa.Workflows.Runtime.Services.Alterations.Handlers;
 
@@ -68,7 +69,12 @@ public sealed class MigrateWorkflowAlterationHandler(
         if (!compatibility.IsCompatible)
             return Reject(compatibility.Findings.First().Code);
 
-        var quiescence = await _quiescenceProbe.ProbeAsync(workflow.WorkflowExecutionId, _ownershipContextAccessor?.Current?.ToFence(), cancellationToken);
+        // The probe exempts the lease this alteration holds. A lease borrowed from an owner stands in for that owner,
+        // so it is not offered for exemption. The runtime's own probe applies the same rule from the stored lease;
+        // withholding the fence here keeps the rule with a replacement probe too.
+        var ownLease = _ownershipContextAccessor?.Current;
+        var exemptFence = ownLease is null || BorrowedLeaseMark.StandsInForAnOwner(ownLease) ? null : ownLease.ToFence();
+        var quiescence = await _quiescenceProbe.ProbeAsync(workflow.WorkflowExecutionId, exemptFence, cancellationToken);
         if (!quiescence.IsQuiescent)
             return Reject(quiescence.Findings.First().Code);
 

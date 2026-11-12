@@ -1,5 +1,7 @@
 # Proposed contract: outcomes, module codes and durable representation
 
+**Current naming and upgrade baseline (12 November 2026)**: the owner-authorized [#4027 rename](../../../docs/reference/package-renames.md) moves the Studio assistant to `Elsa.Weaver.*` and `api.weaver`; user-defined agents keep `Elsa.Agent.*`. This is an identifier/input reconciliation, not a scope or acceptance waiver. The rename starts a fresh Weaver store. The additive upgrade in this work unit is post-rename, pre-effects Weaver1.0 → Weaver1.1, with genuine actual-writer evidence. Pre-rename Agent-store captures remain unchanged historical evidence and cannot qualify that upgrade. All legacy digest, protected-content, counter-lifetime, hold/finalization and no-replay requirements apply within the Weaver family. Contracts remain Preview until the required composed and independent-package journeys pass.
+
 **Status**: Proposed Preview for leaf0, not frozen.
 **Authority**: spec1203 FR014/016/018/023 and story1. Prior recovery meanings: [1189](../../1189-weaver-recovery/contracts/recovery.md).
 
@@ -9,14 +11,14 @@ Preserve positional constructors and every existing enum ordinal.
 
 | Surface | Addition/default |
 | --- | --- |
-| AgentActionProposalStatus | Append Performed =12 |
-| AgentEffectScope | Append NoPersistedEffect =2; existing ClientWorkingState0 and ServerPersisted1 remain |
-| AgentToolDescriptor | CanPerformWithoutPersistence bool, false; omit false |
+| WeaverActionProposalStatus | Append Performed =12 |
+| WeaverEffectScope | Append NoPersistedEffect =2; existing ClientWorkingState0 and ServerPersisted1 remain |
+| WeaverToolDescriptor | CanPerformWithoutPersistence bool, false; omit false |
 | Tool and context descriptors | ModuleCodes nullable read-only collection of strings; null is undeclared compatibility, omitted; empty is a declared closed set accepting no code |
-| AgentEffectReceipt | ModuleCode nullable string, omitted when null |
-| AgentError | OwnerUnavailable bool, false/omitted; public value alone is not provenance |
+| WeaverEffectReceipt | ModuleCode nullable string, omitted when null |
+| WeaverError | OwnerUnavailable bool, false/omitted; public value alone is not provenance |
 
-Prepared class members and defaults are defined in [privilege-policy.md](privilege-policy.md). No principal is a model/persistence member. Use existing AgentProposalExecutionResult.Status and Executed; no second outcome enum is added.
+Prepared class members and defaults are defined in [privilege-policy.md](privilege-policy.md). No principal is a model/persistence member. Use existing WeaverProposalExecutionResult.Status and Executed; no second outcome enum is added.
 
 Code declarations are copied/validated at catalog admission. Codes are bounded dotted ASCII identifiers, outside reserved agent namespace, max128characters, ordinal membership, no blank/duplicate declaration entries. Every new M4 tool/source declares a set. Module packages map native codes and safe text into it; core never interprets native code meanings.
 
@@ -47,14 +49,14 @@ Use one small internal source-bound normalizer and private provenance like the e
 2. For a declaring source, preserve a genuine owner-unavailable semantic before inspecting raw code syntax. Replace an out-of-set/malformed/reserved code and its message with safe fixed generic values. Invalid syntax must not turn genuine unavailability into forbidden.
 3. Ordinary replacement code is module.code.unsupported; genuine-unavailable replacement is module.owner.unavailable, outside agent namespace. Use fixed engine text, including existing OwnerUnavailableMessage. Preserve original refusal/result/diagnostic classification and status.
 4. Normalize typed Code, Error/Violation/Diagnostic.Message, ToolResult.Content and execution Summary before freeze, persistence, HTTP/SSE, provider, review or audit. Never log raw unknown codes/messages.
-5. Forward the normalized AgentError object rather than reconstructing Failure(code,message,status) and dropping metadata/provenance. Arbitrary deserialized flags do not become fresh owner authority.
+5. Forward the normalized WeaverError object rather than reconstructing Failure(code,message,status) and dropping metadata/provenance. Arbitrary deserialized flags do not become fresh owner authority.
 6. Undeclared sources retain explicit legacy pass-through/dotted-owner-code behavior. Engine-generated errors remain engine errors, not module-set inputs.
 
 Opaque module JSON is not parsed for native messages or codes by Weaver. Module-owned mapping/allowlists and the existing disclosure owner must keep it safe. Generic replacement does not authorize unsafe opaque data, discard a genuine resource receipt wholesale, or automatically change its outcome to uncertain. The generic canary fixture supplies safe owner payloads and canaries in the typed channels; module cases separately prove their opaque projections.
 
-## Agent1.1 data
+## Weaver1.1 data
 
-Store new classes, receipt module code and performed status/scope in existing records; no relational schema change. Add1.1.0 to the existing Agent family with identity1.0→1.1 content upcast. Authenticate/unprotect before defaults; never decrypt/re-encrypt inside the upcaster. Preserve purpose strings and disclosure canonical bytes.
+Store new classes, receipt module code and performed status/scope in existing records; no relational schema change. Add1.1.0 to the existing Weaver family with identity1.0→1.1 content upcast. Authenticate/unprotect before defaults; never decrypt/re-encrypt inside the upcaster. Preserve purpose strings and disclosure canonical bytes.
 
 Read all declared columns of a protected row through the chain together. Contentless snapshot/key/owner/counter records still require readable stamps. Audit owner association/list and owned session/proposal-count projections must not bypass readability validation.
 
@@ -80,6 +82,6 @@ An existing audit sequence counter1.0 remains readable for as long as that count
 
 ## SemVer and freeze
 
-The approved spec classifies performed semantics and the default administrative veto as Major. Optional declarations/error support/receipt member and Agent1.1 expansion are Minor; later exact3779 native cleanup is Patch. Keep the existing computed pre-GA4.0 preview line under ADR0080D4/E5; no project version or new magnitude engine.
+The approved spec classifies performed semantics and the default administrative veto as Major. Optional declarations/error support/receipt member and Weaver1.1 expansion are Minor; later exact3779 native cleanup is Patch. Keep the existing computed pre-GA4.0 preview line under ADR0080D4/E5; no project version or new magnitude engine.
 
 Record the manual public API/behavior/binary compatibility assessment and migration guidance. An unbuilt magnitude gate is not evidence of compatibility. No release, release tag, feed publish or line change is part of this plan. Freeze only after current composed/backend and independent immutable-package journeys demonstrate these surfaces.

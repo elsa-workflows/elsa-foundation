@@ -3,13 +3,13 @@ import {
   registerHomeWidget,
   studioBackendCapabilitiesChangedEvent,
   type ElsaStudioModuleApi,
-  type StudioAgentContextAttachment,
-  type StudioAgentContextCollection,
-  type StudioAgentPayload,
-  type StudioAgentPreparedInvocation,
-  type StudioAgentToolAvailability,
-  type StudioAgentPromptRequest,
-  type StudioAgentResultRendererProps
+  type StudioWeaverContextAttachment,
+  type StudioWeaverContextCollection,
+  type StudioWeaverPayload,
+  type StudioWeaverPreparedInvocation,
+  type StudioWeaverToolAvailability,
+  type StudioWeaverPromptRequest,
+  type StudioWeaverResultRendererProps
 } from "@elsa-workflows/studio-sdk";
 import "./module.css";
 import { registerEffects } from "./effects";
@@ -50,7 +50,7 @@ function snapshot(value: unknown): WidgetSnapshot {
   return { widgetId, revision: data.revision, visible: data.visible };
 }
 
-function resultPayload(payload: StudioAgentPayload | null | undefined): VisibilityPayload | null {
+function resultPayload(payload: StudioWeaverPayload | null | undefined): VisibilityPayload | null {
   if (!payload || payload.schemaVersion !== "1" || ![readResultType, changeResultType].includes(payload.typeId)) return null;
   const data = record(payload.data);
   try {
@@ -70,7 +70,7 @@ function sizeSnapshot(value: unknown): SizeSnapshot {
   return { widgetId, revision: data.revision, size: data.size as WidgetSize };
 }
 
-function sizeResultPayload(payload: StudioAgentPayload | null | undefined): SizePayload | null {
+function sizeResultPayload(payload: StudioWeaverPayload | null | undefined): SizePayload | null {
   if (payload?.typeId !== sizeResultType || payload.schemaVersion !== "1") return null;
   const data = record(payload.data);
   if (!data || !["small", "medium"].includes(data.beforeSize as string)) return null;
@@ -93,7 +93,7 @@ export function register(api: ElsaStudioModuleApi) {
   // The open settings page's unsaved size choice and its working generation. Gone once the page unmounts or reloads;
   // the module reports that and never reconstructs it.
   let sizeChoice: { generation: string; set(size: WidgetSize): void } | null = null;
-  function choiceAvailability(invocation: StudioAgentPreparedInvocation): StudioAgentToolAvailability {
+  function choiceAvailability(invocation: StudioWeaverPreparedInvocation): StudioWeaverToolAvailability {
     return sizeChoice && invocation.client?.generationId === sizeChoice.generation
       ? { status: "available" }
       : { status: "unavailable", reason: "The Acme settings page that held this unsaved size choice is closed. Nothing was applied." };
@@ -118,7 +118,7 @@ export function register(api: ElsaStudioModuleApi) {
     return value;
   }
 
-  function attachment(value: WidgetSnapshot, id: string): StudioAgentContextAttachment {
+  function attachment(value: WidgetSnapshot, id: string): StudioWeaverContextAttachment {
     return {
       id, moduleId, schemaVersion: "1", source: moduleId, sourceId: widgetId,
       label: "Acme status card", contentType: "acme.home.widget", sensitivity: "internal", scope: route,
@@ -133,11 +133,11 @@ export function register(api: ElsaStudioModuleApi) {
     if (toolName === sizeTool) await refreshSize();
     await refresh();
     const requestId = crypto.randomUUID();
-    const request: StudioAgentPromptRequest = {
+    const request: StudioWeaverPromptRequest = {
       message: JSON.stringify({ toolName, arguments: args }), mode: "enqueue", requestId,
       source: { moduleId, actionId: toolName, label }
     };
-    api.agent.dispatchPrompt(request);
+    api.weaver.dispatchPrompt(request);
   }
 
   function useWidgetObservation() {
@@ -229,7 +229,7 @@ export function register(api: ElsaStudioModuleApi) {
     </section>;
   }
 
-  function WidgetResult({ preparedInvocation, toolResult }: StudioAgentResultRendererProps) {
+  function WidgetResult({ preparedInvocation, toolResult }: StudioWeaverResultRendererProps) {
     const payload = toolResult?.payload ?? preparedInvocation?.preview;
     const value = resultPayload(payload);
     const target = toolResult?.receipt?.after ?? preparedInvocation?.target;
@@ -262,7 +262,7 @@ export function register(api: ElsaStudioModuleApi) {
     </section>;
   }
 
-  function WidgetSizeResult({ preparedInvocation, toolResult }: StudioAgentResultRendererProps) {
+  function WidgetSizeResult({ preparedInvocation, toolResult }: StudioWeaverResultRendererProps) {
     const value = sizeResultPayload(toolResult?.payload ?? preparedInvocation?.preview);
     const receipt = toolResult?.receipt;
     const target = receipt?.after ?? preparedInvocation?.target;
@@ -298,8 +298,8 @@ export function register(api: ElsaStudioModuleApi) {
     defaultVisible: false, defaultSize: "S", supportedSizes: ["S", "M"], component: StatusCard });
   api.navigation.add({ id: "acme.home.settings", label: "Acme status card", path: route, placement: "main", order: 900 });
   api.routes.add({ id: "acme.home.settings", label: "Acme status card", path: route, component: SettingsPage });
-  api.agent.contextProviders.add({ id: "acme.home.context", moduleId, displayName: "Acme status card", surfaces, sensitivity: "internal",
-    async collect({ signal }): Promise<StudioAgentContextCollection> {
+  api.weaver.contextProviders.add({ id: "acme.home.context", moduleId, displayName: "Acme status card", surfaces, sensitivity: "internal",
+    async collect({ signal }): Promise<StudioWeaverContextCollection> {
       try { return { attachments: [attachment(await refresh(signal), `acme-home:${widgetId}`)], diagnostics: [] }; }
       catch (failure) {
         if (signal?.aborted) throw failure;
@@ -308,22 +308,22 @@ export function register(api: ElsaStudioModuleApi) {
         throw failure;
       }
     } });
-  api.agent.capabilities.add({ id: "acme.home.read", moduleId, displayName: "Read Acme status card", description: "Read this card's current personal visibility and revision.", kind: "answer", risk: "read-only", surfaces });
-  api.agent.capabilities.add({ id: "acme.home.visibility", moduleId, displayName: "Review Acme status card visibility", description: "Review a visibility change to this personal card.", kind: "proposal", risk: "review-required", surfaces });
-  api.agent.capabilities.add({ id: "acme.home.size", moduleId, displayName: "Resize Acme status card", description: "Change the personal card's small or medium size under the current review policy.", kind: "action", risk: "review-required", surfaces });
-  api.agent.toolSlots.add({ id: "acme.home.tools", moduleId, displayName: "Acme status card", surfaces, invocationModes: ["read-only", "proposal"] });
+  api.weaver.capabilities.add({ id: "acme.home.read", moduleId, displayName: "Read Acme status card", description: "Read this card's current personal visibility and revision.", kind: "answer", risk: "read-only", surfaces });
+  api.weaver.capabilities.add({ id: "acme.home.visibility", moduleId, displayName: "Review Acme status card visibility", description: "Review a visibility change to this personal card.", kind: "proposal", risk: "review-required", surfaces });
+  api.weaver.capabilities.add({ id: "acme.home.size", moduleId, displayName: "Resize Acme status card", description: "Change the personal card's small or medium size under the current review policy.", kind: "action", risk: "review-required", surfaces });
+  api.weaver.toolSlots.add({ id: "acme.home.tools", moduleId, displayName: "Acme status card", surfaces, invocationModes: ["read-only", "proposal"] });
   for (const [id, displayName, description, risk, invocationModes, inputSchema] of [
     [readTool, "Read Acme status card", "Read the owning personal widget setting.", "read-only", ["read-only"], { type: "object", additionalProperties: false }],
     [writeTool, "Set Acme status card visibility", "Prepare an exact reviewed personal visibility change.", "review-required", ["proposal"], { type: "object", required: ["visible"], properties: { visible: { type: "boolean" } }, additionalProperties: false }]
-  ] as const) api.agent.toolContracts.add({ id, slotId: "acme.home.tools", moduleId, displayName, description, surfaces, contractVersion: "1", executionLocation: "server", risk,
+  ] as const) api.weaver.toolContracts.add({ id, slotId: "acme.home.tools", moduleId, displayName, description, surfaces, contractVersion: "1", executionLocation: "server", risk,
     inputSchema, resourceTargetSchema: { type: "object" }, resultSchema: { type: "object" }, invocationModes: [...invocationModes], resultRendererIds: ["acme.home.widget-result"] });
-  api.agent.resultRenderers.add({ id: "acme.home.widget-result", moduleId, displayName: "Acme status card", resultTypes: [readResultType, changeResultType], schemaVersions: ["1"], component: WidgetResult });
-  api.agent.toolContracts.add({ id: sizeTool, slotId: "acme.home.tools", moduleId, displayName: "Resize Acme status card",
+  api.weaver.resultRenderers.add({ id: "acme.home.widget-result", moduleId, displayName: "Acme status card", resultTypes: [readResultType, changeResultType], schemaVersions: ["1"], component: WidgetResult });
+  api.weaver.toolContracts.add({ id: sizeTool, slotId: "acme.home.tools", moduleId, displayName: "Resize Acme status card",
     description: "Resize only this personal card; the current review policy governs application.", surfaces, contractVersion: "1", executionLocation: "server", risk: "review-required",
     inputSchema: { type: "object", required: ["size"], properties: { size: { enum: ["small", "medium"] } }, additionalProperties: false },
     resourceTargetSchema: { type: "object" }, resultSchema: { type: "object" }, invocationModes: ["proposal"], resultRendererIds: ["acme.home.widget-size-result"] });
-  api.agent.resultRenderers.add({ id: "acme.home.widget-size-result", moduleId, displayName: "Acme card size", resultTypes: [sizeResultType], schemaVersions: ["1"], component: WidgetSizeResult });
-  api.agent.toolContracts.add({ id: previewTool, slotId: "acme.home.tools", moduleId, displayName: "Choose Acme card size",
+  api.weaver.resultRenderers.add({ id: "acme.home.widget-size-result", moduleId, displayName: "Acme card size", resultTypes: [sizeResultType], schemaVersions: ["1"], component: WidgetSizeResult });
+  api.weaver.toolContracts.add({ id: previewTool, slotId: "acme.home.tools", moduleId, displayName: "Choose Acme card size",
     description: "Change only the open settings page's unsaved size choice; saving stays explicit.", surfaces: [route], contractVersion: "1",
     executionLocation: "clientWorkingState", risk: "review-required", invocationModes: ["proposal"],
     inputSchema: { type: "object", required: ["size"], properties: { size: { enum: ["small", "medium"] } }, additionalProperties: false },

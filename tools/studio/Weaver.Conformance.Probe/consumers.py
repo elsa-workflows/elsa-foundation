@@ -22,8 +22,8 @@ BACKEND_EXTERNAL = (
 STUDIO_EXTERNAL = ("CShells.Nuplane", "Nuplane", "Nuplane.Admin", "Nuplane.Loading", "Nuplane.Sources.Directory")
 BACKEND_SHARED = (
     "Nuplane.Abstractions", "Nuplane.Loading.Abstractions", "CShells.Abstractions",
-    "CShells.AspNetCore.Abstractions", "Elsa.Agent.Core", "Elsa.Foundation.Identity.Core",
-    "Elsa.Studio.Preferences.Core", "Elsa.Agent.GitHubCopilot", "Elsa.Agent.Anthropic",
+    "CShells.AspNetCore.Abstractions", "Elsa.Weaver.Core", "Elsa.Foundation.Identity.Core",
+    "Elsa.Studio.Preferences.Core", "Elsa.Weaver.GitHubCopilot", "Elsa.Weaver.Anthropic",
     "Microsoft.Extensions.AI.Abstractions",
 )
 STUDIO_SHARED = (
@@ -31,11 +31,11 @@ STUDIO_SHARED = (
     "CShells.AspNetCore.Abstractions", "Elsa.Studio.Core", "Elsa.Studio.Api", "Elsa.Events.Core", "Elsa.Pipelines.Core",
 )
 PROTOCOL_FEATURES = {
-    "copilot": ("GitHubCopilotAgent", "AcmeCopilotProtocolFixture"),
-    "anthropic": ("AnthropicAgent", "AcmeAnthropicProtocolFixture"),
+    "copilot": ("WeaverGitHubCopilot", "AcmeCopilotProtocolFixture"),
+    "anthropic": ("WeaverAnthropic", "AcmeAnthropicProtocolFixture"),
 }
-COMMON_EFFECTS_FEATURE = "FoundationAgentEffects"
-DURABLE_EFFECTS_FEATURE = "FoundationAgentEfEffects"
+COMMON_EFFECTS_FEATURE = "WeaverEffects"
+DURABLE_EFFECTS_FEATURE = "WeaverEfEffects"
 
 
 def sha(path):
@@ -179,8 +179,8 @@ def backend_features(published):
         "ActivitiesDesignApi", "ActivitiesDesignReconciliation", "ClrActivityReconciliation",
         "ActivitiesFlowchart", "ActivitiesPrimitives", "ActivitiesRuntime",
         "WorkflowsPublishing", "WorkflowsPublishingApi", "WorkflowsRuntimeApi", "WorkflowsRuntimeTriggers",
-        "WorkflowsRuntimeResumption", "FoundationAgentAbstractions", "FoundationAgentApi", COMMON_EFFECTS_FEATURE,
-        "FoundationWorkflowsAgent", "FoundationWorkflowsRuntimeAgent", "ModularityApi",
+        "WorkflowsRuntimeResumption", "Weaver", "WeaverApi", COMMON_EFFECTS_FEATURE,
+        "WeaverWorkflows", "WeaverWorkflowsRuntime", "ModularityApi",
     )}
     for feature, database in (
         ("FoundationIdentityAspNetCoreIdentityEntityFrameworkCore", "iam.db"),
@@ -229,11 +229,11 @@ def select_protocol_profile(run, name):
     profile["protocolProfile"] = name
 
 
-DURABLE_STORE_FEATURE = "FoundationAgentEntityFrameworkCore"
+DURABLE_STORE_FEATURE = "WeaverEntityFrameworkCore"
 DURABLE_STORE_DEPENDENCY = "Secrets"
 
 
-def enable_durable_agent_store(run, database, encryption_key, *, lease_seconds=15):
+def enable_durable_weaver_store(run, database, encryption_key, *, lease_seconds=15):
     """Configure the packaged EF session store on SQLite in the backend's runtime JSON, without rebuilding it.
 
     The caller must stop its own backend first and start a new generation afterwards; this helper never starts or stops
@@ -263,11 +263,11 @@ def enable_durable_agent_store(run, database, encryption_key, *, lease_seconds=1
     selected = {"feature": DURABLE_STORE_FEATURE, "effectsFeature": DURABLE_EFFECTS_FEATURE,
                 "dependsOn": DURABLE_STORE_DEPENDENCY, "provider": "Sqlite",
                 "database": str(database), "leaseSeconds": lease_seconds}
-    profile["durableAgentStore"] = dict(selected)
+    profile["durableWeaverStore"] = dict(selected)
     return selected
 
 
-def configure_agent_privileges(run, *, administrative, irrecoverable, activation):
+def configure_weaver_privileges(run, *, administrative, irrecoverable, activation):
     """Write only trusted host options; the driver must observe bootstrap to prove a live reload.
 
     This is fixture operator configuration, never a session or model-supplied command. The atomic private replacement
@@ -277,10 +277,10 @@ def configure_agent_privileges(run, *, administrative, irrecoverable, activation
     check(all(type(value) is bool for value in privileges.values()), "Fixture privilege classes need explicit boolean values")
     path = _runtime_configuration(run, run.profiles["backend"], "appsettings.json")
     settings = json.loads(path.read_text())
-    settings.setdefault("Elsa", {}).setdefault("Agent", {})["Privileges"] = privileges
+    settings.setdefault("Elsa", {}).setdefault("Weaver", {})["Privileges"] = privileges
     temporary = None
     try:
-        with tempfile.NamedTemporaryFile(mode="w", dir=path.parent, prefix=".agent-privileges-", delete=False) as stream:
+        with tempfile.NamedTemporaryFile(mode="w", dir=path.parent, prefix=".weaver-privileges-", delete=False) as stream:
             temporary = Path(stream.name)
             json.dump(settings, stream, indent=2)
             stream.write("\n")
@@ -323,7 +323,7 @@ def configure_runtime(run, *, backend_url, studio_url, admin_username, admin_pas
     check(len(artifacts["RecoveryContinuationSigningKey"].encode()) >= 32,
           "Owned runtime artifact paging needs its private persistent signing key")
     write_json(backend / "shells.json", document)
-    configure_agent_privileges(run, administrative=True, irrecoverable=True, activation=True)
+    configure_weaver_privileges(run, administrative=True, irrecoverable=True, activation=True)
     settings = json.loads((studio / "appsettings.json").read_text())
     settings["Studio"].update(BackendBaseUrl=backend_url.rstrip("/"), BackendServerBaseUrl=backend_url.rstrip("/"))
     settings["Qualification"]["EnrollOwnedStore"] = bool(enroll)

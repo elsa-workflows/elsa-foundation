@@ -70,7 +70,7 @@ def rows(provider="copilot", tools=(READ_TOOL, LAYOUT_TOOL, BATCH_TOOL)):
 
 
 # The exact envelope target both adapters' native streams carried in the 499853897 witness: the engine serializes the
-# optional presentation members of AgentResourceTarget as null.
+# optional presentation members of WeaverResourceTarget as null.
 WIRE_TARGET = {**TARGET, "displayName": None, "route": None}
 
 
@@ -117,7 +117,7 @@ class TurnTests(unittest.TestCase):
         changes = {
             "not-completed": lambda v: v.__setitem__(-1, {"kind": "error", "error": {}}),
             "no-context": lambda v: [v.remove(f) for f in [f for f in v if f["kind"] == "contextAdmitted"]],
-            "diagnostic": lambda v: v[1]["payload"].update(diagnostics=[{"code": "agent.workflow.catalog_unavailable", "required": False}]),
+            "diagnostic": lambda v: v[1]["payload"].update(diagnostics=[{"code": "weaver.workflow.catalog_unavailable", "required": False}]),
             "no-catalog": lambda v: v[1]["payload"].update(attachments=[i for i in v[1]["payload"]["attachments"] if i["contentType"] != "workflow.catalog"]),
             "no-permissions": lambda v: v[2]["payload"].update(attachments=[i for i in v[2]["payload"]["attachments"] if i["contentType"] != "workflow.permissions"]),
             "client-catalog": lambda v: attachment(v, "workflow.catalog").update(origin="clientSnapshot"),
@@ -295,9 +295,9 @@ class BrowserTests(unittest.TestCase):
 
 class PlaceholderTests(unittest.TestCase):
     def generation(self, **changes):
-        value = {"generation": "g-1", "workflowAgent": {"assembly": "Elsa.Agent.Workflows", "activityAuthoringCatalogs": ["HttpActivityAuthoringCatalog"],
-                 "types": ["DefaultWorkflowAgentContextProvider", "FoundationWorkflowsAgentFeature", "WorkflowActivityCatalog", "WorkflowAgentGraph"]}}
-        value["workflowAgent"].update(changes)
+        value = {"generation": "g-1", "workflowWeaver": {"assembly": "Elsa.Weaver.Workflows", "activityAuthoringCatalogs": ["HttpActivityAuthoringCatalog"],
+                 "types": ["DefaultWorkflowWeaverContextProvider", "WeaverWorkflowsFeature", "WorkflowActivityCatalog", "WorkflowWeaverGraph"]}}
+        value["workflowWeaver"].update(changes)
         return value
 
     def test_the_packaged_consumer_ships_and_composes_no_placeholder(self):
@@ -307,7 +307,7 @@ class PlaceholderTests(unittest.TestCase):
         for name in sorted(LEGACY_PLACEHOLDERS):
             with self.subTest(placeholder=name):
                 with self.assertRaises(RuntimeError):
-                    require_no_placeholders(self.generation(types=["DefaultWorkflowAgentContextProvider", "WorkflowActivityCatalog", name]))
+                    require_no_placeholders(self.generation(types=["DefaultWorkflowWeaverContextProvider", "WorkflowActivityCatalog", name]))
         for name, value in (("absent", {"generation": "g-1"}), ("empty", self.generation(types=[])),
                             ("foreign", self.generation(types=["SomethingElse"])),
                             ("no-catalog", self.generation(activityAuthoringCatalogs=[])),
@@ -365,7 +365,7 @@ class GateTests(unittest.TestCase):
 
 class AdmittedContextTests(unittest.TestCase):
     # The accepted-message wire the native API returned in the f32dd0a8f witness for the second tenant's request: the
-    # admitted context lives at data.message.context, beside data.warnings, as Studio's agent client reads it.
+    # admitted context lives at data.message.context, beside data.warnings, as Studio's Weaver client reads it.
     ACCEPTED = {"data": {"message": {"id": "m-1", "role": "user", "status": "pending", "context": [
         {"contentType": "workflow.request", "origin": "clientSnapshot", "target": None},
         {"contentType": "workflow.catalog", "origin": "authoritativeRead", "target": None, "content": {"status": "available"}},

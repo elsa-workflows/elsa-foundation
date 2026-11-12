@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import type {
-  ElsaStudioModuleApi, StudioAgentContextCollection, StudioAgentPayload, StudioAgentPreparedInvocation,
-  StudioAgentResourceTarget, StudioAgentResultRendererProps
+  ElsaStudioModuleApi, StudioWeaverContextCollection, StudioWeaverPayload, StudioWeaverPreparedInvocation,
+  StudioWeaverResourceTarget, StudioWeaverResultRendererProps
 } from "@elsa-workflows/studio-sdk";
 
 const moduleId = "Acme.Home";
@@ -21,7 +21,7 @@ const permissions = ["studio/preferences:read", "studio/preferences:write"];
 const profiles = [
   { id: "acme_home_admin_visibility", label: "Administrative visibility", risk: "admin", description: "Review an administrative personal visibility change." },
   { id: "acme_home_irrecoverable_visibility", label: "Administrative and irrecoverable classes", risk: "admin", description: "Review a personal visibility change requiring both configured classes." },
-  { id: "acme_home_omitted_admin_visibility", label: "Admin risk with omitted administrative class", risk: "admin", description: "The module supplies Irrecoverable; Agent must include Administrative for Admin risk." },
+  { id: "acme_home_omitted_admin_visibility", label: "Admin risk with omitted administrative class", risk: "admin", description: "The module supplies Irrecoverable; Weaver must include Administrative for Admin risk." },
   { id: "acme_home_raised_risk_visibility", label: "Risk raised during preparation", risk: "review-required", description: "The owner raises ReviewRequired to Admin while preparing the exact change." },
   { id: "acme_home_activation_visibility", label: "Activation class", risk: "review-required", description: "Review a personal visibility change requiring the configured Activation class." }
 ] as const;
@@ -48,13 +48,13 @@ function widget(value: unknown): Widget {
     throw new Error("The owning widget observation is incompatible.");
   return data as unknown as Widget;
 }
-function preview(payload: StudioAgentPayload | null | undefined): CheckPreview | null {
+function preview(payload: StudioWeaverPayload | null | undefined): CheckPreview | null {
   if (payload?.typeId !== checkType || payload.schemaVersion !== "1") return null;
   const data = record(payload.data);
   return data && exact(data, ["widgetId", "hostId", "revision", "expectedVisible"]) && owner(data) && typeof data.expectedVisible === "boolean"
     ? data as unknown as CheckPreview : null;
 }
-function check(payload: StudioAgentPayload | null | undefined): Check | null {
+function check(payload: StudioWeaverPayload | null | undefined): Check | null {
   if (payload?.typeId !== checkType || payload.schemaVersion !== "1") return null;
   const data = record(payload.data);
   return data && exact(data, ["widgetId", "hostId", "revision", "expectedVisible", "actualVisible", "passed", "ran", "callNumber"])
@@ -77,10 +77,10 @@ function observations(value: unknown): Observations {
   });
   return data as unknown as Observations;
 }
-function own(target: StudioAgentResourceTarget | null | undefined, revision: string) {
+function own(target: StudioWeaverResourceTarget | null | undefined, revision: string) {
   return target?.moduleId === moduleId && target.resourceType === "home-widget" && target.resourceId === widgetId && target.revision === revision;
 }
-function frozenCheck(value: StudioAgentPreparedInvocation | undefined): CheckPreview | null {
+function frozenCheck(value: StudioWeaverPreparedInvocation | undefined): CheckPreview | null {
   const proposed = preview(value?.preview);
   const args = record(value?.arguments);
   return value && proposed && value.moduleId === moduleId && value.toolName === checkTool && value.toolContractVersion === "1"
@@ -88,7 +88,7 @@ function frozenCheck(value: StudioAgentPreparedInvocation | undefined): CheckPre
     && identifier(value.invocationId) && identifier(value.toolCallId) && own(value.target, proposed.revision)
     && args && exact(args, ["expectedVisible"]) && args.expectedVisible === proposed.expectedVisible ? proposed : null;
 }
-function acceptedCheck(props: StudioAgentResultRendererProps): Check | null {
+function acceptedCheck(props: StudioWeaverResultRendererProps): Check | null {
   const prepared = props.preparedInvocation;
   const proposed = frozenCheck(prepared);
   const result = props.toolResult;
@@ -105,7 +105,7 @@ function acceptedCheck(props: StudioAgentResultRendererProps): Check | null {
     && ["widgetId", "hostId", "revision", "expectedVisible", "actualVisible", "passed", "ran", "callNumber"]
       .every(field => Object.is(record(value)![field], record(evidence)![field])) ? value : null;
 }
-function verify(value: Check, invocation: StudioAgentPreparedInvocation, current: Widget, observed: Observations): Verification {
+function verify(value: Check, invocation: StudioWeaverPreparedInvocation, current: Widget, observed: Observations): Verification {
   const runs = observed.runs.filter(run => run.invocationId === invocation.invocationId);
   const details = { ranCount: observed.ranCount, matchingRuns: runs.length };
   if (runs.length > 1) return { ...details, state: "duplicate", message: "The owner recorded multiple runs for this invocation. Do not repeat it; inspect the shared operation." };
@@ -161,7 +161,7 @@ export function registerEffects(api: ElsaStudioModuleApi) {
       try {
         await readWidget(active.signal); // Availability only. The registered context source rereads/admit-checks the actual request.
         if (active.signal.aborted || lifetime.current !== active) return;
-        api.agent.dispatchPrompt({ message: JSON.stringify({ toolName, arguments: args }), mode: "enqueue", requestId: crypto.randomUUID(),
+        api.weaver.dispatchPrompt({ message: JSON.stringify({ toolName, arguments: args }), mode: "enqueue", requestId: crypto.randomUUID(),
           source: { moduleId, actionId: toolName, label } });
         setQueued("Request queued for Weaver. Review its operation status in the assistant.");
       } catch { if (!active.signal.aborted && lifetime.current === active) setError(unavailable); }
@@ -196,7 +196,7 @@ export function registerEffects(api: ElsaStudioModuleApi) {
     </section>;
   }
 
-  function CheckResult(props: StudioAgentResultRendererProps) {
+  function CheckResult(props: StudioWeaverResultRendererProps) {
     const { preparedInvocation: invocation, toolResult } = props;
     const proposed = frozenCheck(invocation);
     const value = acceptedCheck(props);
@@ -238,9 +238,9 @@ export function registerEffects(api: ElsaStudioModuleApi) {
 
   api.navigation.add({ id: "acme.home.effects", label: "Acme widget effects", path: route, placement: "main", order: 901 });
   api.routes.add({ id: "acme.home.effects", label: "Acme widget effects", path: route, component: EffectsPage });
-  api.agent.contextProviders.add({ id: "acme.home.effects-context", moduleId, displayName: "Acme widget effects", surfaces: [route], sensitivity: "internal",
+  api.weaver.contextProviders.add({ id: "acme.home.effects-context", moduleId, displayName: "Acme widget effects", surfaces: [route], sensitivity: "internal",
     required: true, moduleCodes: codes,
-    async collect({ signal }): Promise<StudioAgentContextCollection> {
+    async collect({ signal }): Promise<StudioWeaverContextCollection> {
       try {
         const value = await readWidget(signal);
         return { attachments: [{ id: `acme-home-effects:${widgetId}`, moduleId, schemaVersion: "1", source: moduleId, sourceId: widgetId,
@@ -253,18 +253,18 @@ export function registerEffects(api: ElsaStudioModuleApi) {
         return { attachments: [], diagnostics: [{ contributorId: "acme.home.effects-context", code: "acme.home.effects.owner_unavailable", message: unavailable, required: true }] };
       }
     } });
-  api.agent.capabilities.add({ id: "acme.home.effects", moduleId, displayName: "Review Acme widget effects", description: "Review classed visibility and a real non-persisting widget check.",
+  api.weaver.capabilities.add({ id: "acme.home.effects", moduleId, displayName: "Review Acme widget effects", description: "Review classed visibility and a real non-persisting widget check.",
     kind: "proposal", risk: "admin", surfaces: [route], requiredPermissions: permissions });
-  api.agent.toolSlots.add({ id: "acme.home.effects-tools", moduleId, displayName: "Acme widget effects", surfaces: [route], invocationModes: ["proposal"] });
+  api.weaver.toolSlots.add({ id: "acme.home.effects-tools", moduleId, displayName: "Acme widget effects", surfaces: [route], invocationModes: ["proposal"] });
   const targetSchema = { type: "object", required: ["moduleId", "resourceType", "resourceId", "revision"], properties: {
     moduleId: { const: moduleId }, resourceType: { const: "home-widget" }, resourceId: { const: widgetId }, revision: { type: "string", minLength: 1 } } };
   const visibilitySchema = { type: "object", required: ["widgetId", "revision", "visible", "beforeVisible", "hostId"], properties: {
     widgetId: { const: widgetId }, revision: { type: "string", minLength: 1 }, visible: { type: "boolean" }, beforeVisible: { type: "boolean" }, hostId: { type: "string", minLength: 1 } }, additionalProperties: false };
-  for (const profile of profiles) api.agent.toolContracts.add({ id: profile.id, slotId: "acme.home.effects-tools", moduleId, displayName: profile.label,
+  for (const profile of profiles) api.weaver.toolContracts.add({ id: profile.id, slotId: "acme.home.effects-tools", moduleId, displayName: profile.label,
     description: profile.description, surfaces: [route], contractVersion: "1", executionLocation: "server", risk: profile.risk, requiredPermissions: permissions, moduleCodes: codes,
     inputSchema: { type: "object", required: ["visible"], properties: { visible: { type: "boolean" } }, additionalProperties: false },
     resourceTargetSchema: targetSchema, resultSchema: visibilitySchema, invocationModes: ["proposal"], resultRendererIds: ["acme.home.widget-result"] });
-  api.agent.toolContracts.add({ id: checkTool, slotId: "acme.home.effects-tools", moduleId, displayName: "Check Acme widget", surfaces: [route],
+  api.weaver.toolContracts.add({ id: checkTool, slotId: "acme.home.effects-tools", moduleId, displayName: "Check Acme widget", surfaces: [route],
     description: "Evaluate actual widget visibility, record a run and leave the native widget revision unchanged.", contractVersion: "1", executionLocation: "server", risk: "admin",
     requiredPermissions: permissions, moduleCodes: codes, canPerformWithoutPersistence: true,
     inputSchema: { type: "object", required: ["expectedVisible"], properties: { expectedVisible: { type: "boolean" } }, additionalProperties: false }, resourceTargetSchema: targetSchema,
@@ -272,5 +272,5 @@ export function registerEffects(api: ElsaStudioModuleApi) {
       widgetId: { const: widgetId }, revision: { type: "string", minLength: 1 }, hostId: { type: "string", minLength: 1 }, expectedVisible: { type: "boolean" },
       actualVisible: { type: "boolean" }, passed: { type: "boolean" }, ran: { const: true }, callNumber: { type: "integer", minimum: 1 } }, additionalProperties: false },
     invocationModes: ["proposal"], resultRendererIds: [checkRenderer] });
-  api.agent.resultRenderers.add({ id: checkRenderer, moduleId, displayName: "Acme widget check", resourceTypes: ["home-widget"], resultTypes: [checkType], schemaVersions: ["1"], component: CheckResult });
+  api.weaver.resultRenderers.add({ id: checkRenderer, moduleId, displayName: "Acme widget check", resourceTypes: ["home-widget"], resultTypes: [checkType], schemaVersions: ["1"], component: CheckResult });
 }

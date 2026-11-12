@@ -32,6 +32,14 @@
           "Elsa.Primitives": "[4.0.0-dev, )"
         }
       },
+      "elsa.activities.design.persistence.core": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Activities.Design.Core": "[4.0.0-dev, )",
+          "Elsa.Primitives": "[4.0.0-dev, )",
+          "Elsa.Workflows.Design.Persistence.Core": "[4.0.0-dev, )"
+        }
+      },
       "elsa.activities.dispatchworkflow.runtime": {
         "type": "Project",
         "dependencies": {
@@ -117,7 +125,10 @@
       "elsa.workflows.design.validations.core": {
         "type": "Project",
         "dependencies": {
+          "Elsa.Activities.Design.Core": "[4.0.0-dev, )",
           "Elsa.Events.Core": "[4.0.0-dev, )",
+          "Elsa.Expressions.Core": "[4.0.0-dev, )",
+          "Elsa.Primitives": "[4.0.0-dev, )",
           "Elsa.Workflows.Design.Core": "[4.0.0-dev, )"
         }
       },
@@ -125,6 +136,7 @@
         "type": "Project",
         "dependencies": {
           "Elsa.Activities.Design.Core": "[4.0.0-dev, )",
+          "Elsa.Activities.Design.Persistence.Core": "[4.0.0-dev, )",
           "Elsa.Activities.Runtime.Core": "[4.0.0-dev, )",
           "Elsa.Events.Core": "[4.0.0-dev, )",
           "Elsa.Mediator.Core": "[4.0.0-dev, )",

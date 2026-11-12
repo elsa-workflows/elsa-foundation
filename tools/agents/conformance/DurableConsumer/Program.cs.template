@@ -1,7 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
-using Acme.Specialist.ModelFixture;
+using Acme.Agent.ModelFixture;
 using CShells;
 using CShells.Configuration;
 using CShells.DependencyInjection;
@@ -11,10 +11,10 @@ using Elsa.Activities.Runtime;
 using Elsa.Activities.Runtime.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Runtime.Services;
-using Elsa.Agent.Specialists;
-using Elsa.Agent.Specialists.Core.Contracts;
-using Elsa.Agent.Specialists.Core.Models;
-using Elsa.Agent.Specialists.Persistence.EntityFrameworkCore;
+using Elsa.Agent;
+using Elsa.Agent.Core.Contracts;
+using Elsa.Agent.Core.Models;
+using Elsa.Agent.Persistence.EntityFrameworkCore;
 using Elsa.Events;
 using Elsa.Cluster.Readability;
 using Elsa.Cluster.Core.Contracts;
@@ -51,35 +51,35 @@ services.AddLogging();
 services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
 services.AddEfSchemaReadability();
 services.AddCShells(builder => builder.WithAssemblies(typeof(DurablePackageHostFeature).Assembly,
-        typeof(SpecialistsRuntimeFeature).Assembly, typeof(SpecialistsEntityFrameworkCoreFeature).Assembly,
+        typeof(AgentRuntimeFeature).Assembly, typeof(AgentEntityFrameworkCoreFeature).Assembly,
         typeof(RuntimeEntityFrameworkCoreFeature).Assembly, typeof(ActivitiesRuntimeFeature).Assembly,
         typeof(SerializationFeature).Assembly, typeof(SecretsFeature).Assembly, typeof(EventsFeature).Assembly,
         typeof(TasksFeature).Assembly, typeof(WorkflowsRuntimeResumptionFeature).Assembly, typeof(FileSystemLockingFeature).Assembly)
-    .AddShell("specialist-durable-package", shell => shell
+    .AddShell("agent-durable-package", shell => shell
         .WithFeature<DurablePackageHostFeature>(feature => { feature.Role = role; feature.Directory = directory; feature.Persistence = persistence; })
-        .WithFeature<SpecialistsRuntimeFeature>(feature => { feature.AllowNewOperations = role == "start"; feature.StreamResponses = streaming; })
+        .WithFeature<AgentRuntimeFeature>(feature => { feature.AllowNewOperations = role == "start"; feature.StreamResponses = streaming; })
         .WithFeature<BackgroundActivitiesFeature>(feature => { feature.RunWorkers = false; feature.LeaseDurationSeconds = 5; feature.RenewalIntervalSeconds = 1; })
         .WithFeature<WorkflowsRuntimeResumptionFeature>(feature => { feature.SweepIntervalSeconds = 3600; feature.MaxBackoffIntervalMinutes = 120; })
-        .WithFeature<SpecialistsEntityFrameworkCoreFeature>(feature => { feature.Provider = "Sqlite"; feature.ConnectionString = connection; })
+        .WithFeature<AgentEntityFrameworkCoreFeature>(feature => { feature.Provider = "Sqlite"; feature.ConnectionString = connection; })
         .WithFeature<RuntimeEntityFrameworkCoreFeature>(feature =>
         {
             feature.Provider = "Sqlite"; feature.ConnectionString = connection;
-            feature.RecoveryContinuationSigningKey = "synthetic-specialist-durable-recovery-signing-key-v1";
-            feature.HierarchyCursorSigningKey = "synthetic-specialist-durable-hierarchy-signing-key-v1";
+            feature.RecoveryContinuationSigningKey = "synthetic-agent-durable-recovery-signing-key-v1";
+            feature.HierarchyCursorSigningKey = "synthetic-agent-durable-hierarchy-signing-key-v1";
         })
-        .WithFeature<SecretsFeature>(feature => feature.EncryptionKey = Convert.ToBase64String(SHA256.HashData(Encoding.UTF8.GetBytes("synthetic-specialist-durable-content-key-v1"))))
+        .WithFeature<SecretsFeature>(feature => feature.EncryptionKey = Convert.ToBase64String(SHA256.HashData(Encoding.UTF8.GetBytes("synthetic-agent-durable-content-key-v1"))))
         .WithFeature<FileSystemLockingFeature>(feature => feature.LocksFolderPath = locks)));
 await using var host = services.BuildServiceProvider();
-var activated = await host.GetRequiredService<IShellRegistry>().GetOrActivateAsync("specialist-durable-package");
+var activated = await host.GetRequiredService<IShellRegistry>().GetOrActivateAsync("agent-durable-package");
 await using var scope = activated.BeginScope();
 var provider = scope.ServiceProvider;
 Check(provider.GetRequiredService<IPersistenceAccessContextAccessor>().Current.RequireScope().Value == "default", "ordinary selected persistence scope");
-var turns = provider.GetRequiredService<ISpecialistTurnStore>();
-Check((await turns.GetCapabilitiesAsync()).IsDurable, "file-backed specialist journal reports durable storage");
-await provider.GetRequiredService<ISchemaDormancyCheck>().EnsureAvailableAsync([new SchemaVersionRequirement("RuntimePostCommitOutbox", "2.0.0")], "SpecialistDurablePackageProbe");
+var turns = provider.GetRequiredService<IAgentTurnStore>();
+Check((await turns.GetCapabilitiesAsync()).IsDurable, "file-backed agent journal reports durable storage");
+await provider.GetRequiredService<ISchemaDormancyCheck>().EnsureAvailableAsync([new SchemaVersionRequirement("RuntimePostCommitOutbox", "2.0.0")], "AgentDurablePackageProbe");
 Check(true, "normal host observes finalized physical-source schema before work");
 if (role == "worker") provider.GetRequiredService<ModelObservations>().DispatchCounterDirectory = counter;
-else Check(!provider.GetServices<ISpecialistModelClientFactory>().Any(), "coordinator/recovery/verifier has no model contribution");
+else Check(!provider.GetServices<IAgentModelClientFactory>().Any(), "coordinator/recovery/verifier has no model contribution");
 const string executionId = "durable-package-run";
 var handoffPath = Path.Combine(directory, "handoff.json");
 if (role == "start")
@@ -105,10 +105,10 @@ if (role == "start")
     var states = await provider.GetRequiredService<IActivityExecutionStateStore>().ListAllAsync(executionId);
     var parent = states.Single(state => state.Execution.ExecutableNodeId == node.ExecutableNodeId);
     var handle = parent.PrivateState!.Value.InlineValue!.Value.GetString()!;
-    var invocation = new SpecialistInvocationIdentity(workflow.TenantId, workflow.Partition!.Value, executionId, parent.InvocationId, parent.OperationKey,
+    var invocation = new AgentInvocationIdentity(workflow.TenantId, workflow.Partition!.Value, executionId, parent.InvocationId, parent.OperationKey,
         identity.ArtifactId, identity.ArtifactHash, node.DescriptorPayload.GetProperty("definitionVersionId").GetString()!, node.DescriptorPayload.GetProperty("templateHash").GetString()!);
     var turn = await turns.ReadAsync(handle, invocation, default);
-    Check(workflow.Status == WorkflowExecutionStatus.Running && turn?.Status == SpecialistTurnStatus.Prepared, "native checkpoint retained staged turn and owed background child");
+    Check(workflow.Status == WorkflowExecutionStatus.Running && turn?.Status == AgentTurnStatus.Prepared, "native checkpoint retained staged turn and owed background child");
     Check(Calls() == 0, "start process performed no model request");
     await File.WriteAllTextAsync(handoffPath, JsonSerializer.Serialize(new DurableHandoff(handle, invocation, node.ExecutableNodeId)));
 }
@@ -122,7 +122,7 @@ else
         if (role == "recover")
         {
             Check(File.Exists(Path.Combine(directory, "crash.json")), "worker process left the exact accepted-before-receipt crash marker");
-            Check(before.Status == SpecialistTurnStatus.Accepted && before.ProtectedResult is not null, "accepted journal survived worker process loss");
+            Check(before.Status == AgentTurnStatus.Accepted && before.ProtectedResult is not null, "accepted journal survived worker process loss");
             using var lost = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(directory, "worker-claim.json")));
             using var crash = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(directory, "crash.json")));
             var expiry = crash.RootElement.GetProperty("claimExpires").GetDateTimeOffset();
@@ -200,7 +200,7 @@ else
         Check(workflow?.Status == WorkflowExecutionStatus.Completed && parent?.Status == ActivityExecutionStatus.Completed, "native workflow and facade completion survived process boundaries");
         Check(parent!.Completion!.Result.InlineValue!.Value.GetProperty("Article").GetString() == "draft about moss gardens", "exact validated typed business result retained");
         var accepted = (await turns.ReadAsync(handoff.Handle, handoff.Identity, default))!;
-        Check(accepted.Status == SpecialistTurnStatus.Accepted && accepted.Applications?.Count == 1, "one accepted journal turn and one process application");
+        Check(accepted.Status == AgentTurnStatus.Accepted && accepted.Applications?.Count == 1, "one accepted journal turn and one process application");
         Check(accepted.Conversation is not null, "continuity-enabled accepted turn retained its conversation admission");
         var conversation = await turns.ReadConversationAsync(accepted.Conversation!.ConversationId, handoff.Identity, default);
         var reference = parent.Completion!.Result.InlineValue!.Value.GetProperty("Conversation");
@@ -218,9 +218,9 @@ Check(!AppDomain.CurrentDomain.GetAssemblies().Any(assembly => assembly.GetName(
 await File.WriteAllTextAsync(Path.Combine(directory, role + "-receipt.json"), JsonSerializer.Serialize(new { role, persistence = persistence.ToString(), processId = Environment.ProcessId, checks, liveModel = false, durableJournal = true }));
 Console.WriteLine(JsonSerializer.Serialize(new { role, passed = checks.Count, processId = Environment.ProcessId, liveModel = false, durableJournal = true }));
 
-public sealed record DurableHandoff(string Handle, SpecialistInvocationIdentity Identity, string ParentNodeId);
+public sealed record DurableHandoff(string Handle, AgentInvocationIdentity Identity, string ParentNodeId);
 
-[ShellFeature("SpecialistDurablePackageHost", DependsOn = new object[] { "SpecialistsEntityFrameworkCore", "WorkflowsRuntimeEntityFrameworkCore", "Events", "Tasks", "FileSystemDistributedLocking" })]
+[ShellFeature("AgentDurablePackageHost", DependsOn = new object[] { "AgentEntityFrameworkCore", "WorkflowsRuntimeEntityFrameworkCore", "Events", "Tasks", "FileSystemDistributedLocking" })]
 public sealed class DurablePackageHostFeature : IShellFeature
 {
     public string Role { get; set; } = "start";
@@ -251,7 +251,7 @@ public sealed class CrashAfterAcceptanceActivator(IActivityActivator inner, ISer
     public async ValueTask<ActivityActivationLease> ActivateAsync(ActivityActivationRequest request, CancellationToken cancellationToken = default)
     {
         var lease = await inner.ActivateAsync(request, cancellationToken);
-        if (request.Contract.Activation.Capability != SpecialistRuntimeIds.TurnCapability) return lease;
+        if (request.Contract.Activation.Capability != AgentRuntimeIds.TurnCapability) return lease;
         if (lease.Activity is IDisposable or IAsyncDisposable) throw new InvalidOperationException("The crash fixture requires the fixed non-disposable model leaf.");
         return new(lease.Activity, new CrashScope(lease, services, directory));
     }
@@ -260,11 +260,11 @@ public sealed class CrashAfterAcceptanceActivator(IActivityActivator inner, ISer
         public async ValueTask DisposeAsync()
         {
             var handoff = JsonSerializer.Deserialize<DurableHandoff>(await File.ReadAllTextAsync(Path.Combine(directory, "handoff.json")))!;
-            var turn = await services.GetRequiredService<ISpecialistTurnStore>().ReadAsync(handoff.Handle, handoff.Identity, default);
+            var turn = await services.GetRequiredService<IAgentTurnStore>().ReadAsync(handoff.Handle, handoff.Identity, default);
             using var claim = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(directory, "worker-claim.json")));
             var work = await services.GetRequiredService<IBackgroundActivityWorkStore>().FindAsync(handoff.Identity.WorkflowExecutionId, claim.RootElement.GetProperty("WorkId").GetString()!);
-            if (turn?.Status != SpecialistTurnStatus.Accepted || turn.ProtectedResult is null || work?.Status != BackgroundActivityWorkStatus.Claimed)
-                throw new InvalidOperationException("The crash boundary requires accepted specialist content and an unreceipted native claim.");
+            if (turn?.Status != AgentTurnStatus.Accepted || turn.ProtectedResult is null || work?.Status != BackgroundActivityWorkStatus.Claimed)
+                throw new InvalidOperationException("The crash boundary requires accepted agent content and an unreceipted native claim.");
             await inner.DisposeAsync();
             await File.WriteAllTextAsync(Path.Combine(directory, "crash.json"), JsonSerializer.Serialize(new { phase = "journal-accepted-before-native-receipt", processId = Environment.ProcessId, claimExpires = work.VisibleUntil }));
             Environment.Exit(197);
@@ -274,7 +274,7 @@ public sealed class CrashAfterAcceptanceActivator(IActivityActivator inner, ISer
 
 
 // Fault injection through the public dispatcher replacement port. Handler contributions, source
-// requirements, persistence owners and the real specialist handler remain untouched.
+// requirements, persistence owners and the real agent handler remain untouched.
 public sealed class CrashAfterApplicationDispatcher(IRuntimePostCommitIntentDispatcher inner, IServiceProvider services, string directory) : IRuntimePostCommitIntentDispatcher
 {
     public bool RequiresDurableSource(string kind) => inner.RequiresDurableSource(kind);
@@ -282,9 +282,9 @@ public sealed class CrashAfterApplicationDispatcher(IRuntimePostCommitIntentDisp
     public async ValueTask DispatchAsync(PostCommitDeliveryContext source, CancellationToken cancellationToken = default)
     {
         await inner.DispatchAsync(source, cancellationToken);
-        if (source.Intent.Kind != "elsa.specialist.applied/1") return;
+        if (source.Intent.Kind != "elsa.agent.applied/1") return;
         var handoff = JsonSerializer.Deserialize<DurableHandoff>(await File.ReadAllTextAsync(Path.Combine(directory, "handoff.json"), cancellationToken))!;
-        var turn = await services.GetRequiredService<ISpecialistTurnStore>().ReadAsync(handoff.Handle, handoff.Identity, cancellationToken);
+        var turn = await services.GetRequiredService<IAgentTurnStore>().ReadAsync(handoff.Handle, handoff.Identity, cancellationToken);
         var physical = await services.GetRequiredService<IPostCommitOutboxLookupStore>().FindDurableAsync(source.SourceOutboxItemId, cancellationToken);
         if (turn?.Applications?.Count != 1 || turn.Applications.Single().SourceId != source.SourceOutboxItemId ||
             physical?.Status != RuntimePostCommitOutboxStatus.Delivering || physical.DeliveryFencingToken != source.Claim.FencingToken)

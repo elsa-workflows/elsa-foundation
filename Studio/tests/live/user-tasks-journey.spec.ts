@@ -9,11 +9,12 @@ test.skip(!process.env.ELSA_STUDIO_URL || !receiptPath, "Set ELSA_STUDIO_URL and
 test.setTimeout(120_000);
 type Receipt = { taskId: string; title: string; executionId: string; definitionId: string; baseUrl: string; artifactId: string; sourceReferenceId: string };
 
-for (const width of [1440, 390]) test(`real Studio inbox validates and completes the selected action once (${width}px)`, async ({ page }, testInfo) => {
+for (const width of [1440, 390]) for (const theme of ["light", "dark"]) test(`real Studio inbox validates and completes the selected action once (${width}px ${theme})`, async ({ page }, testInfo) => {
+  await page.addInitScript(mode => { localStorage.setItem("elsa-studio-theme-mode", mode); localStorage.setItem("elsa-studio-workspace-style", "linen"); }, theme);
   const receipt = JSON.parse(readFileSync(receiptPath!, "utf8")) as Receipt;
   await page.setViewportSize({ width, height: 1000 }); await signIn(page);
   let taskId = receipt.taskId; let executionId = receipt.executionId;
-  if (width === 390) {
+  if (width === 390 || theme === "dark") {
     const start = await page.request.post(`${receipt.baseUrl}/runtime/workflows/executables/${receipt.artifactId}/execute`, { data: { sourceReferenceId: receipt.sourceReferenceId } });
     expect(start.ok()).toBe(true); executionId = (await start.json()).workflowExecutionId;
     await expect.poll(async () => {
@@ -24,6 +25,14 @@ for (const width of [1440, 390]) test(`real Studio inbox validates and completes
   }
   await page.goto("/user-tasks?backend=legacy");
   const row = page.locator(`a[href*="/user-tasks/${taskId}"]`); await expect(row).toBeVisible();
+  await expect(page.locator("html")).toHaveAttribute("data-theme-mode", theme);
+  const search = page.getByRole("searchbox", { name: "Search tasks", exact: true });
+  await search.fill("no matching task for this acceptance run");
+  await expect(page.getByRole("heading", { name: "No matching tasks", exact: true })).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath("no-matches.png") });
+  await page.getByRole("button", { name: "Clear search", exact: true }).last().click();
+  await expect(row).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath("task-list.png") });
   await row.focus(); await page.keyboard.press("Enter");
   await expect(page.getByRole("heading", { name: receipt.title, exact: true })).toBeVisible();
   await expect.poll(() => page.getByRole("heading", { name: receipt.title, exact: true })
@@ -33,6 +42,11 @@ for (const width of [1440, 390]) test(`real Studio inbox validates and completes
   await expect(page.getByText("This field is required.", { exact: true }).first()).toBeVisible();
   await page.getByLabel(/^Amount/).fill("42"); await page.getByLabel(/^Confirmed/).selectOption("false"); await page.getByLabel(/^Note/).fill("Studio case preserved");
   await expectAccessible(page, ".user-tasks");
+  const detail = page.getByRole("region", { name: receipt.title, exact: true });
+  await detail.getByRole("heading").scrollIntoViewIfNeeded();
+  await page.screenshot({ path: testInfo.outputPath("task-detail-top.png") });
+  await detail.getByRole("button", { name: "Approve", exact: true }).scrollIntoViewIfNeeded();
+  await page.screenshot({ path: testInfo.outputPath("task-response.png") });
   const sent = page.waitForRequest(request => request.method() === "POST" && request.url().endsWith(`/runtime/user-tasks/${taskId}/complete`));
   await page.getByRole("button", { name: "Approve", exact: true }).press("Enter");
   const request = (await sent).postDataJSON(); expect(request.data).toEqual({ AccountID: "A-107", AmountUSD: 42, Confirmed: false, Note: "Studio case preserved" });
@@ -40,6 +54,7 @@ for (const width of [1440, 390]) test(`real Studio inbox validates and completes
   const duplicate = await page.request.post(`${receipt.baseUrl}/runtime/user-tasks/${taskId}/complete`, { data: request }); expect(duplicate.ok()).toBe(true);
   const task = await duplicate.json(); expect(task.history.filter((entry: { operation: string }) => entry.operation === "accepted")).toHaveLength(1);
   expect(task.history.filter((entry: { operation: string }) => entry.operation === "completed")).toHaveLength(1);
+  await expect.poll(async () => (await (await page.request.get(`${receipt.baseUrl}/runtime/workflows/instances/${executionId}`)).json()).instance.status, { timeout: 30_000 }).toBe("Completed");
   const run = await (await page.request.get(`${receipt.baseUrl}/runtime/workflows/instances/${executionId}`)).json();
   expect(run.instance.status).toBe("Completed");
   expect(run.activities.filter((item: { executableNodeId: string; status: string }) => item.executableNodeId.startsWith("branch-") && item.status === "Completed").map((item: { executableNodeId: string }) => item.executableNodeId)).toEqual(["branch-0"]);
@@ -47,9 +62,16 @@ for (const width of [1440, 390]) test(`real Studio inbox validates and completes
   await page.getByRole("button", { name: "Refresh task", exact: true }).press("Enter");
   await expect(page.getByRole("button", { name: "Approve", exact: true })).toHaveCount(0);
   await expect(page.getByText("Your response is recorded. The workflow will continue when delivery completes.", { exact: true })).toHaveCount(0);
-  const screenshot = testInfo.outputPath(`user-task-${width}.png`);
+  await page.getByRole("region", { name: receipt.title, exact: true }).getByText("History", { exact: true }).click();
+  await page.getByRole("region", { name: receipt.title, exact: true }).locator("details li").last().scrollIntoViewIfNeeded();
+  await page.screenshot({ path: testInfo.outputPath("task-history.png") });
+  await page.getByRole("region", { name: receipt.title, exact: true }).getByRole("heading").scrollIntoViewIfNeeded();
+  const screenshot = testInfo.outputPath(`user-task-${width}-${theme}.png`);
   await page.screenshot({ path: screenshot });
   await testInfo.attach(`user-task-${width}`, { path: screenshot, contentType: "image/png" });
+  await detail.getByRole("button", { name: "Back to task list", exact: true }).click();
+  await expect(page.getByRole("region", { name: receipt.title, exact: true })).toHaveCount(0);
+  await expect(row).toHaveCount(0);
 });
 
 test("authors reusable forms, assignment and connected action paths in the normal Studio designer", async ({ page }, testInfo) => {
@@ -58,11 +80,21 @@ test("authors reusable forms, assignment and connected action paths in the norma
   const who = await (await page.request.get(`${base}/runtime/user-task-identity`)).json();
   const suffix = String(Date.now()); const formId = `studio-form-${suffix}`; const title = `Studio authored approval ${suffix}`;
   await page.goto("/user-tasks/forms?backend=legacy");
+  await expect(page.getByRole("table", { name: "Reusable task forms", exact: true })).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath("forms-list.png") });
+  await page.getByRole("button", { name: "Create form version", exact: true }).first().click();
   await page.getByLabel("Form ID", { exact: true }).fill(formId); await page.getByLabel("Name", { exact: true }).fill(title);
   await page.getByRole("button", { name: "Add field", exact: true }).click();
   await page.getByLabel("Key", { exact: true }).fill("Reason"); await page.getByLabel("Label", { exact: true }).fill("Reason");
-  await page.getByLabel("Required", { exact: true }).check(); await page.getByRole("button", { name: "Publish form version", exact: true }).click();
-  await expect(page.getByText("The immutable form version is available to new tasks.", { exact: true })).toBeVisible();
+  await page.getByLabel("Required", { exact: true }).check();
+  await page.screenshot({ path: testInfo.outputPath("form-editor.png") });
+  await page.setViewportSize({ width: 390, height: 1000 });
+  await page.screenshot({ path: testInfo.outputPath("form-editor-narrow.png") });
+  await page.getByRole("button", { name: "Cancel", exact: true }).scrollIntoViewIfNeeded();
+  await page.screenshot({ path: testInfo.outputPath("form-actions-narrow.png") });
+  await page.setViewportSize({ width: 1600, height: 1100 });
+  await page.getByRole("button", { name: "Publish form version", exact: true }).click();
+  await expect(page.getByRole("status").filter({ hasText: `Published ${title} version 1. New tasks can use it.` })).toBeVisible();
   await page.goto("/workflows/definitions?backend=legacy");
   await page.getByRole("button", { name: /^(Create|Create workflow)$/ }).first().click();
   const dialog = page.getByRole("dialog", { name: "Create Workflow", exact: true });
@@ -77,7 +109,7 @@ test("authors reusable forms, assignment and connected action paths in the norma
   await page.getByRole("textbox", { name: "Title", exact: true }).fill(title);
   await page.getByLabel("Task assignee", { exact: true }).selectOption(who.userId);
   await page.getByLabel("Task form", { exact: true }).selectOption(formId);
-  await page.getByRole("textbox", { name: "Form Version", exact: true }).fill("1");
+  await expect(page.getByLabel("Task form version", { exact: true })).toHaveValue("1");
   await page.getByRole("button", { name: "Add action", exact: true }).click();
   await page.getByLabel("Action 3", { exact: true }).fill("Request More Info"); await page.getByLabel("Action 3", { exact: true }).press("Tab");
   const actions = ["Approve", "Reject", "Request More Info"]; const branchIds: string[] = [];
@@ -104,6 +136,7 @@ test("authors reusable forms, assignment and connected action paths in the norma
   await expect.poll(async () => { const response = await page.request.get(`${base}/runtime/user-tasks?view=mine`); const task = (await response.json()).items.find((item: { title: string }) => item.title === title); id = task?.id ?? ""; return id; }, { timeout: 30_000 }).not.toBe("");
   await page.goto(`/user-tasks/${id}?backend=legacy`); await page.getByLabel(/^Reason/).fill("Authored in Studio"); await page.getByRole("button", { name: "Approve", exact: true }).click();
   await expect.poll(async () => (await (await page.request.get(`${base}/runtime/user-tasks/${id}`)).json()).status, { timeout: 30_000 }).toBe("Completed");
+  await expect.poll(async () => (await (await page.request.get(`${base}/runtime/workflows/instances/${executionId}`)).json()).instance.status, { timeout: 30_000 }).toBe("Completed");
   const run = await (await page.request.get(`${base}/runtime/workflows/instances/${executionId}`)).json(); expect(run.instance.status).toBe("Completed");
   expect(run.activities.filter((item: { executableNodeId: string; status: string }) => branchIds.includes(item.executableNodeId) && item.status === "Completed").map((item: { executableNodeId: string }) => item.executableNodeId)).toEqual([branchIds[0]]);
   const screenshot = testInfo.outputPath("studio-authored-user-task.png");

@@ -8,7 +8,7 @@ against the project graph; this script trusts that check and only refuses JSON i
 
 Usage:
   test_tiers.py select --tier pr|full|push|nightly [--manifest <file>] [--base <sha> --head <sha>]
-                       [--github-output <file>] [--summary <file>]
+                       [--event <github event>] [--github-output <file>] [--summary <file>]
   test_tiers.py check-docs [--root <dir>]
   test_tiers.py --self-test
 
@@ -18,17 +18,27 @@ Tiers:
   full     the integration shards and the EF container shards (`Full tier`).
   push     a push to main: the PR shards plus, once the switch is on, the integration shards (FR-010).
   nightly  push plus the EF container shards.
+
+With `--event pull_request` and a base, only the units and container suites whose test project the change can affect
+are kept, and a shard left empty is dropped (tools/ci/affected_tests.py, issue #3787). Every other event, a merge-queue
+entry included, keeps everything.
 """
 
 from __future__ import annotations
 
 import argparse
+import contextlib
+import io
 import json
 import re
 import os
 import subprocess
 import sys
+import tempfile
 from collections.abc import Callable
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import affected_tests  # noqa: E402
 
 MANIFEST = "tools/ci/test-tiers.json"
 RULESET = "main-2"
@@ -76,10 +86,19 @@ def unit_run(manifest: dict, unit: str) -> dict:
     return {"project": project, "group": group, "filter": class_filter(chosen.get("classes", []), negate=False)}
 
 
-def test_matrix(manifest: dict, shards: list[dict], prefix: str) -> dict:
+Keep = Callable[[str], bool]
+
+
+def _all(project: str) -> bool:
+    return True
+
+
+def test_matrix(manifest: dict, shards: list[dict], prefix: str, keep: Keep = _all) -> dict:
     include = []
     for shard in shards:
-        runs = [unit_run(manifest, unit) for unit in shard["units"]]
+        runs = [run for run in (unit_run(manifest, unit) for unit in shard["units"]) if keep(run["project"])]
+        if not runs:
+            continue
         include.append({
             "shard": f"{prefix}{shard['name']}",
             "whole": sorted(run["project"] for run in runs if not run["filter"]),
@@ -88,30 +107,56 @@ def test_matrix(manifest: dict, shards: list[dict], prefix: str) -> dict:
     return {"include": include}
 
 
-def container_matrix(manifest: dict) -> dict:
+def container_matrix(manifest: dict, keep: Keep = _all) -> dict:
     suites = {suite["suite"]: suite for suite in manifest["containerSuites"]}
     secrets = manifest.get("secretsCompositionSuite", {}).get("suite")
+    secrets_project = manifest.get("secretsCompositionSuite", {}).get("project", "")
     include = []
     for shard in manifest["shards"].get("containers", []):
         unknown = [name for name in shard["suites"] if name not in suites and name != secrets]
         if unknown:
             raise ManifestError(f"{MANIFEST}: container shard `{shard['name']}` names unknown suites {unknown}")
+        kept = [suites[name] for name in shard["suites"] if name in suites and keep(suites[name]["project"])]
+        with_secrets = secrets in shard["suites"] and keep(secrets_project)
+        if not kept and not with_secrets:
+            continue
         include.append({
             "shard": shard["name"],
-            "suites": [suites[name] for name in shard["suites"] if name in suites],
-            "secrets": secrets in shard["suites"],
-            "secretsProject": manifest.get("secretsCompositionSuite", {}).get("project", ""),
+            "suites": kept,
+            "secrets": with_secrets,
+            "secretsProject": secrets_project,
         })
     return {"include": include}
 
 
-def select(manifest: dict, tier: str) -> dict[str, dict]:
+def build_proof_shard(manifest: dict) -> list[dict]:
+    """One PR shard cut to its quickest whole project. Every PR shard builds the whole solution. When a pull request
+    keeps no PR-tier test but changes a solution project that neither Architecture guards nor Core-only builds, this
+    shard keeps the solution build, and the compile-break check it gives (#543), in `Build & test`."""
+    medians = {entry["project"]: entry.get("medianMinutes") for entry in manifest["projects"]}
+    best = None
+    for shard in manifest["shards"]["pr"]:
+        for unit in shard["units"]:
+            if "#" in unit:
+                continue
+            minutes = medians.get(unit)
+            cost = minutes if isinstance(minutes, (int, float)) else float("inf")
+            if best is None or cost < best[0]:
+                best = (cost, shard["name"], unit)
+    return [{"name": best[1], "units": [best[2]]}] if best else manifest["shards"]["pr"][:1]
+
+
+def select(manifest: dict, tier: str, keep: Keep = _all, build_proof: bool = False) -> dict[str, dict]:
+    """`keep` says which test projects run: all of them unless a pull request narrows it. With `build_proof`, a PR
+    tier that keeps no shard still gets one, cut to its quickest project, so the solution is still built."""
     switch = bool(manifest.get("integrationLeavesPrTier"))
     shards = manifest["shards"]
     empty = {"include": []}
-    pr = test_matrix(manifest, shards["pr"], "")
-    integration = test_matrix(manifest, shards["integration"], "")
-    containers = container_matrix(manifest)
+    pr = test_matrix(manifest, shards["pr"], "", keep)
+    if build_proof and not pr["include"]:
+        pr = test_matrix(manifest, build_proof_shard(manifest), "")
+    integration = test_matrix(manifest, shards["integration"], "", keep)
+    containers = container_matrix(manifest, keep)
     if tier == "pr":
         return {"pr": pr, "integration": empty, "container": empty}
     if tier == "full":
@@ -185,7 +230,60 @@ def summary_table(matrices: dict[str, dict]) -> str:
     return "\n".join(lines) + "\n"
 
 
-def run_select(args: argparse.Namespace, fetch: Callable[[str], object] = gh_fetch) -> int:
+def _selected_projects(matrices: dict[str, dict]) -> set[str]:
+    projects = set()
+    for name, matrix in matrices.items():
+        for entry in matrix["include"]:
+            if name == "container":
+                projects.update(suite["project"] for suite in entry["suites"])
+                if entry["secrets"]:
+                    projects.add(entry["secretsProject"])
+            else:
+                projects.update(entry["whole"])
+                projects.update(run["project"] for run in entry["split"])
+    return projects
+
+
+def affected_summary(decision: affected_tests.Decision | None, matrices: dict[str, dict], totals: dict[str, dict],
+                     build_proof: bool, limit: int = 40) -> str:
+    """Why this run's shards were chosen, for the step summary."""
+    lines = ["### Affected tests", ""]
+    if decision is None:
+        lines.append("Every shard. Only a pull request narrows the tests; a push to main, the nightly run, a manual "
+                     "dispatch and a merge-queue entry run everything.")
+    elif decision.everything:
+        lines.append(f"Every shard: {decision.reason}.")
+    else:
+        def listed(title: str, items: set[str]) -> None:
+            ordered = sorted(items)
+            lines.append(f"{title} ({len(ordered)}):")
+            lines.append("")
+            lines.extend(f"- `{item}`" for item in ordered[:limit])
+            if not ordered:
+                lines.append("- none")
+            if len(ordered) > limit:
+                lines.append(f"- and {len(ordered) - limit} more")
+            lines.append("")
+        lines.append("Only the test projects this pull request can affect. Architecture guards, Core-only and "
+                     "Generated maps fresh still run, and the merge queue runs every shard before it lands.")
+        lines.append("")
+        listed("Changed projects", decision.changed_projects)
+        if decision.placed_elsewhere:
+            listed("Paths no project owns, counted for the projects that read them", set(decision.placed_elsewhere))
+        listed("Selected test projects", _selected_projects(matrices))
+        if build_proof:
+            lines.append("No PR-tier test is affected, but the change reaches a solution project that neither "
+                         "Architecture guards nor Core-only builds, so one PR shard is kept, cut to its quickest "
+                         "project, to build the solution.")
+            lines.append("")
+    for name, total in totals.items():
+        if total["include"]:
+            lines.append(f"- {name}: {len(matrices[name]['include'])} of {len(total['include'])} shards")
+    return "\n".join(lines) + "\n\n"
+
+
+def run_select(args: argparse.Namespace, fetch: Callable[[str], object] = gh_fetch,
+               decide: Callable[..., affected_tests.Decision] = affected_tests.compute) -> int:
     with open(args.manifest, encoding="utf-8") as handle:
         manifest = load(handle.read())
     if args.base and switch_turned_on(git_show(args.base, MANIFEST), manifest):
@@ -199,7 +297,15 @@ def run_select(args: argparse.Namespace, fetch: Callable[[str], object] = gh_fet
                   f"require `{FULL_TIER_CONTEXT}`. Integration-tier projects may leave the PR tier only after the full "
                   f"tier is a required check (FR-011). Ask an admin to add it, then re-run.", file=sys.stderr)
             return 1
-    matrices = select(manifest, args.tier)
+    decision = None
+    if getattr(args, "event", None) == "pull_request":
+        decision = decide(args.base, args.head, always_run=set(manifest.get("ownJobs", {})))
+    keep = decision.keeps if decision else _all
+    matrices = select(manifest, args.tier, keep)
+    build_proof = bool(decision and decision.unbuilt and not matrices["pr"]["include"]
+                       and args.tier in ("pr", "push", "nightly"))
+    if build_proof:
+        matrices = select(manifest, args.tier, keep, build_proof=True)
     if args.github_output:
         with open(args.github_output, "a", encoding="utf-8") as output:
             for name, matrix in matrices.items():
@@ -207,6 +313,7 @@ def run_select(args: argparse.Namespace, fetch: Callable[[str], object] = gh_fet
                 output.write(f"{name}_count={len(matrix['include'])}\n")
     if args.summary:
         with open(args.summary, "a", encoding="utf-8") as summary:
+            summary.write(affected_summary(decision, matrices, select(manifest, args.tier), build_proof))
             summary.write(summary_table(matrices))
     print(json.dumps({name: len(matrix["include"]) for name, matrix in matrices.items()}))
     return 0
@@ -235,9 +342,30 @@ def _job_name(block: str) -> str:
     return match.group(1).strip().strip('"') if match else ""
 
 
+MERGE_GROUP_TRIGGER = re.compile(r"^  merge_group:[ \t]*\n    types: \[checks_requested\][ \t]*$", re.M)
+# Pull requests to main and to an initiative branch run the same jobs and the same tier selection
+# (docs/contributing/merging.md#ci-tiers); no other base joins without a change here.
+PR_BASES = ("main", "'initiative/**'")
+
+
+def _pr_bases(trigger: str) -> list[str]:
+    block = re.search(r"^  pull_request:[ \t]*\n((?:    .*\n)+)", trigger, re.M)
+    branches = re.search(r"^    branches:[ \t]*\n((?:      - .*\n)+)", block.group(1), re.M) if block else None
+    return [line.strip()[2:].strip() for line in branches.group(1).splitlines()] if branches else []
+
+
 def check_workflows(ci: str, ci_full: str) -> list[str]:
-    """A required context must never be skippable, and no labeled trigger may sit on a required workflow (research R8)."""
+    """A required context must never be skippable, the merge queue must get every required context, and no labeled
+    trigger may sit on a required workflow (research R8)."""
     problems = []
+    bases = _pr_bases(ci.split("\njobs:\n", 1)[0] + "\n")
+    if sorted(bases) != sorted(PR_BASES):
+        problems.append(f"{CI}: `pull_request.branches` must be exactly {', '.join(PR_BASES)} (found "
+                        f"{', '.join(bases) or 'none'}): pull requests to an initiative branch run the CI a pull request "
+                        f"to main runs")
+    if not MERGE_GROUP_TRIGGER.search(ci.split("\njobs:\n", 1)[0]):
+        problems.append(f"{CI}: the required checks must also run on `merge_group: types: [checks_requested]`, or every "
+                        f"merge-queue entry waits for checks that never report")
     build = [block for block in _jobs(ci).values() if _job_name(block) == "Build & test" or "'Build & test'" in _job_name(block)]
     if len(build) != 1:
         problems.append(f"{CI}: expected exactly one job named `Build & test`, found {len(build)}")
@@ -245,7 +373,7 @@ def check_workflows(ci: str, ci_full: str) -> list[str]:
         block = build[0]
         if not any(condition in block for condition in (
                 "if: ${{ !cancelled() }}",
-                "if: ${{ !cancelled() && github.event.action != 'ready_for_review' && (github.event_name != 'workflow_dispatch' || inputs.suite == 'ci') }}")):
+                "if: ${{ !cancelled() && (github.event_name != 'workflow_dispatch' || inputs.suite == 'ci') }}")):
             problems.append(f"{CI}: `Build & test` must run with `if: ${{{{ !cancelled() }}}}` so it always reports")
         needs = re.search(r"^    needs:\s*\[([^\]]*)\]", block, re.M)
         for job in ("plan-tiers", "pr-shard", "architecture-guards", "core-only", "plan-scope",
@@ -268,10 +396,35 @@ def check_workflows(ci: str, ci_full: str) -> list[str]:
         block = full[0]
         if not any(condition in block for condition in (
                 "if: ${{ !cancelled() }}",
-                "if: ${{ !cancelled() && github.event_name == 'pull_request' }}")):
-            problems.append(f"{CI_FULL}: the `Full tier` job must run with `if: ${{{{ !cancelled() }}}}`")
+                "if: ${{ !cancelled() && (github.event_name == 'pull_request' || github.event_name == 'merge_group') }}")):
+            problems.append(f"{CI_FULL}: the `Full tier` job must run with `if: ${{{{ !cancelled() }}}}` on pull requests "
+                            f"and merge-queue entries")
         if "needs.plan-full.result != 'success'" not in _job_name(block) or 'PLAN" != success' not in block:
             problems.append(f"{CI_FULL}: the `Full tier` job must be named `Full tier` and fail when the plan did not succeed")
+    # #3708: the latest ready suite must execute all required contexts, not rename/skip
+    # the PR tier and maps while leaving their green results in an earlier draft suite.
+    for job in ("plan-tiers", "build-and-test", "generated-maps"):
+        block = _jobs(ci).get(job, "")
+        if not block:
+            problems.append(f"{CI}: missing `{job}` required for complete ready runs")
+        # A folded/quoted scalar may put the exclusion on a continuation line.
+        # Stop at the next job-level field; step-level conditions are unrelated.
+        for field in ("name", "if"):
+            match = re.search(rf"^    {field}:[ \t]*(.*)$", block, re.M)
+            if not match:
+                continue
+            value = [match.group(1)]
+            for line in block[match.end():].splitlines():
+                if line.strip() and len(line) - len(line.lstrip()) <= 4:
+                    break
+                if line.strip() and not line.lstrip().startswith("#"):
+                    value.append(line.strip())
+            if "ready_for_review" in " ".join(value):
+                problems.append(f"{CI}: `{job}` must run unchanged on the ready transition")
+                break
+    concurrency = ci.split("\njobs:\n", 1)[0]
+    if re.search(r"^.*ready_for_review.*(?:'ready'|'head').*$", concurrency, re.M):
+        problems.append(f"{CI}: ready and head events must share one PR concurrency group")
     for path, text in ((CI, ci), (CI_FULL, ci_full)):
         # Comments explain why there is no label trigger; only YAML outside them counts.
         trigger = "\n".join(line.split("#", 1)[0] for line in text.split("\njobs:\n", 1)[0].splitlines())
@@ -372,6 +525,77 @@ def self_test() -> int:
     check("push: no containers", not select(_fixture(True), "push")["container"]["include"])
     check("nightly: containers", len(select(_fixture(), "nightly")["container"]["include"]) == 1)
 
+    # Affected-only selection on pull requests (#3787).
+    only = lambda *projects: (lambda project: project in projects)  # noqa: E731
+    m = select(_fixture(), "pr", only("t/B/B.Tests.csproj"))
+    check("affected: an unaffected unit is dropped from its shard",
+          [(e["shard"], e["whole"]) for e in m["pr"]["include"]] == [("pr-1", ["t/B/B.Tests.csproj"])])
+    m = select(_fixture(), "full", only("t/Big/Big.Tests.csproj"))
+    check("affected: a split group follows its project",
+          [e["shard"] for e in m["integration"]["include"]] == ["int-1"]
+          and m["integration"]["include"][0]["whole"] == [] and len(m["integration"]["include"][0]["split"]) == 1)
+    check("affected: a container shard with no affected suite is dropped", not m["container"]["include"])
+    m = select(_fixture(), "full", only("t/S/S.Tests.csproj"))
+    check("affected: the Secrets proof follows its project",
+          m["container"]["include"] == [{"shard": "ef-1", "suites": [], "secrets": True,
+                                         "secretsProject": "t/S/S.Tests.csproj"}])
+    m = select(_fixture(), "full", only("t/Db/Db.Tests.csproj"))
+    check("affected: a suite follows its project", [s["suite"] for s in m["container"]["include"][0]["suites"]] == ["db"]
+          and not m["container"]["include"][0]["secrets"])
+    m = select(_fixture(), "full", only())
+    check("affected: nothing affected leaves empty matrices",
+          all(not matrix["include"] for matrix in m.values()))
+    m = select(_fixture() | {"projects": [{"project": "t/A/A.Tests.csproj", "medianMinutes": 2.0},
+                                          {"project": "t/B/B.Tests.csproj", "medianMinutes": 0.1}]},
+               "pr", only(), build_proof=True)
+    check("affected: the build proof keeps one shard, cut to its quickest whole project",
+          [(e["shard"], e["whole"], e["split"]) for e in m["pr"]["include"]] == [("pr-1", ["t/B/B.Tests.csproj"], [])])
+    m = select(_fixture(), "pr", only("t/A/A.Tests.csproj"), build_proof=True)
+    check("affected: no build proof when a PR shard already builds the solution",
+          [e["whole"] for e in m["pr"]["include"]] == [["t/A/A.Tests.csproj"]])
+
+    def selected(event: str, decision: affected_tests.Decision, tier: str = "full") -> tuple[dict, list[str], str]:
+        with tempfile.TemporaryDirectory() as scratch:
+            manifest, output, summary = (os.path.join(scratch, name) for name in ("m.json", "out", "summary"))
+            with open(manifest, "w", encoding="utf-8") as handle:
+                json.dump(_fixture(True), handle)
+            calls: list[str] = []
+            args = argparse.Namespace(manifest=manifest, tier=tier, base=None, head="h", event=event,
+                                      github_output=output, summary=summary)
+            with contextlib.redirect_stdout(io.StringIO()):
+                run_select(args, decide=lambda *a, **k: calls.append(event) or decision)
+            with open(output, encoding="utf-8") as handle:
+                outputs = dict(line.split("=", 1) for line in handle.read().splitlines())
+            with open(summary, encoding="utf-8") as handle:
+                return outputs, calls, handle.read()
+
+    known = {"t/A/A.Tests.csproj", "t/B/B.Tests.csproj", "t/C/C.Tests.csproj", "t/Big/Big.Tests.csproj",
+             "t/Db/Db.Tests.csproj", "t/S/S.Tests.csproj"}
+    nothing = affected_tests.Decision(False, "affected projects only", {"src/X/X.csproj"}, {"src/X/X.csproj"},
+                                      known=known)
+    outputs, _, summary = selected("pull_request", nothing, "pr")
+    check("run_select: a PR tier that affects nothing writes pr_count=0",
+          outputs.get("pr_count") == "0" and outputs.get("pr_matrix") == '{"include":[]}'
+          and "build the solution" not in summary)
+    unbuilt = affected_tests.Decision(False, "affected projects only", {"src/X/X.csproj"}, {"src/X/X.csproj"},
+                                      unbuilt={"src/X/X.csproj"}, known=known)
+    outputs, _, summary = selected("pull_request", unbuilt, "pr")
+    check("run_select: an unbuilt solution project keeps one build-proof shard and says so",
+          outputs.get("pr_count") == "1" and "build the solution" in summary)
+    outputs, calls, summary = selected("pull_request", nothing)
+    check("run_select: a pull request that affects nothing writes zero counts",
+          outputs.get("integration_count") == "0" and outputs.get("container_count") == "0"
+          and outputs.get("integration_matrix") == '{"include":[]}' and calls == ["pull_request"])
+    check("run_select: the summary names the changed projects and the shard counts",
+          "`src/X/X.csproj`" in summary and "integration: 0 of 1 shards" in summary)
+    for event in ("merge_group", "push", "schedule", "workflow_dispatch"):
+        outputs, calls, summary = selected(event, nothing)
+        check(f"run_select: {event} selects everything without diffing",
+              outputs.get("integration_count") == "1" and outputs.get("container_count") == "1" and not calls)
+    outputs, _, summary = selected("pull_request", affected_tests.Decision(True, "`global.json` is a shared build input"))
+    check("run_select: a select-everything decision keeps every shard and says why",
+          outputs.get("integration_count") == "1" and "global.json" in summary)
+
     for name, mutate in [
         ("whole split project refused", lambda f: f["shards"]["pr"][0]["units"].append("t/Big/Big.Tests.csproj")),
         ("unknown group refused", lambda f: f["shards"]["pr"][0]["units"].append("t/Big/Big.Tests.csproj#nope")),
@@ -404,7 +628,9 @@ def self_test() -> int:
     check("job entry: keeps only test projects, with forward slashes",
           entry == {"shard": "core-only", "whole": ["t/A/A.Tests.csproj"], "split": []})
 
-    good_ci = ("on:\n  pull_request:\njobs:\n  build-and-test:\n    name: Build & test\n"
+    good_ci = ("on:\n  pull_request:\n    branches:\n      - main\n      - 'initiative/**'\n  merge_group:\n    types: [checks_requested]\njobs:\n  plan-tiers:\n    name: Plan tiers\n"
+               "  generated-maps:\n    name: Generated maps fresh\n"
+               "  build-and-test:\n    name: Build & test\n"
                "    needs: [plan-tiers, pr-shard, architecture-guards, core-only, plan-scope, studio-lint-and-test, studio-browser-tests, studio-dotnet-build-and-test, studio-ux-acceptance]\n    if: ${{ !cancelled() }}\n")
     good_ci += ("    steps:\n      - name: Studio proofs\n        env:\n"
                 "          STUDIO_SELECTED: ${{ needs.plan-scope.outputs.studio }}\n"
@@ -413,12 +639,42 @@ def self_test() -> int:
                 "          STUDIO_DOTNET: ${{ needs.studio-dotnet-build-and-test.result }}\n"
                 "          STUDIO_UX: ${{ needs.studio-ux-acceptance.result }}\n"
                 "        run: python3 tools/ci/studio_gate.py\n")
-    good_full = ("on:\n  pull_request:\n    types: [opened, reopened, synchronize, ready_for_review]\njobs:\n  full-tier:\n"
+    good_full = ("on:\n  pull_request:\n    types: [opened, reopened, synchronize, ready_for_review]\n"
+                 "  merge_group:\n    types: [checks_requested]\njobs:\n  full-tier:\n"
                  "    name: \"${{ (needs.plan-full.result != 'success' || x) && 'Full tier' || 'Full tier (not run: draft)' }}\"\n"
                  "    if: ${{ !cancelled() }}\n    steps:\n      - run: if [[ \"$PLAN\" != success ]]; then exit 1; fi\n")
+    queue_full = good_full.replace("if: ${{ !cancelled() }}",
+                                   "if: ${{ !cancelled() && (github.event_name == 'pull_request' || github.event_name == 'merge_group') }}")
     check("workflows: the real shape passes", not check_workflows(good_ci, good_full))
+    check("workflows: pull requests to an initiative branch must run CI",
+          bool(check_workflows(good_ci.replace("      - 'initiative/**'\n", ""), good_full)))
+    check("workflows: pull requests to main must run CI",
+          bool(check_workflows(good_ci.replace("      - main\n", "", 1), good_full)))
+    check("workflows: no other pull-request base joins unnoticed",
+          bool(check_workflows(good_ci.replace("      - main\n", "      - main\n      - 'release/**'\n", 1), good_full)))
     check("workflows: a skippable Build & test fails",
           bool(check_workflows(good_ci.replace("if: ${{ !cancelled() }}", "if: ${{ needs.x.outputs.y }}"), good_full)))
+    check("workflows: a ready-only skip of the required PR context fails",
+          bool(check_workflows(good_ci.replace("if: ${{ !cancelled() }}",
+               "if: ${{ !cancelled() && github.event.action != 'ready_for_review' }}"), good_full)))
+    check("workflows: ready cannot rename or skip maps",
+          bool(check_workflows(good_ci + "  generated-maps:\n    name: Generated maps fresh\n"
+               "    if: github.event.action != 'ready_for_review'\n", good_full)))
+    check("workflows: a folded ready-only maps skip fails",
+          bool(check_workflows(good_ci.replace("    name: Generated maps fresh\n",
+               "    name: Generated maps fresh\n    if: >-\n"
+               "      github.event.action != 'ready_for_review' && github.event_name == 'pull_request'\n"), good_full)))
+    check("workflows: a multiline ready-only maps name fails",
+          bool(check_workflows(good_ci.replace("    name: Generated maps fresh\n",
+               "    name: >-\n      ${{ github.event.action == 'ready_for_review'\n"
+               "        && 'Maps already requested' || 'Generated maps fresh' }}\n"), good_full)))
+    check("workflows: ready cannot skip the PR-tier plan",
+          bool(check_workflows(good_ci.replace("  plan-tiers:\n", "  plan-tiers:\n    if: github.event.action != 'ready_for_review'\n"), good_full)))
+    check("workflows: deleting maps cannot leave a required context missing",
+          bool(check_workflows(good_ci.replace("  generated-maps:\n    name: Generated maps fresh\n", ""), good_full)))
+    check("workflows: ready and pushes cannot leave superseded runs in separate groups",
+          bool(check_workflows("concurrency:\n  group: ${{ github.event.action == 'ready_for_review' && 'ready' || 'head' }}\n"
+               + good_ci, good_full)))
     check("workflows: Build & test without the shards fails",
           bool(check_workflows(good_ci.replace("pr-shard, ", ""), good_full)))
     check("workflows: disconnected UX verdict fails",
@@ -431,6 +687,16 @@ def self_test() -> int:
           not check_workflows(good_ci, "# There is no `labeled` trigger here.\n" + good_full))
     check("workflows: a labeled trigger fails",
           bool(check_workflows(good_ci, good_full.replace("ready_for_review]", "ready_for_review, labeled]"))))
+    check("workflows: a Full tier for pull requests and the merge queue passes", not check_workflows(good_ci, queue_full))
+    check("workflows: a Full tier for pull requests only fails",
+          bool(check_workflows(good_ci, queue_full.replace(" || github.event_name == 'merge_group'", ""))))
+    check("workflows: no merge_group trigger fails",
+          bool(check_workflows(good_ci.replace("  merge_group:\n    types: [checks_requested]\n", ""), good_full)))
+    check("workflows: a merge_group trigger without checks_requested fails",
+          bool(check_workflows(good_ci.replace("[checks_requested]", "[destroyed]"), good_full)))
+    check("workflows: a merge_group mention in a comment is not a trigger",
+          bool(check_workflows(good_ci.replace("  merge_group:\n    types: [checks_requested]\n",
+                                               "  # merge_group:\n  #   types: [checks_requested]\n"), good_full)))
     check("workflows: a Full tier that ignores a failed plan fails",
           bool(check_workflows(good_ci, good_full.replace("needs.plan-full.result != 'success' || ", ""))))
 
@@ -466,6 +732,7 @@ def main() -> int:
     sel.add_argument("--manifest", default=MANIFEST)
     sel.add_argument("--base")
     sel.add_argument("--head")
+    sel.add_argument("--event", help="the GitHub event; only pull_request narrows the shards to affected projects")
     sel.add_argument("--github-output")
     sel.add_argument("--summary")
     ent = sub.add_parser("entry")

@@ -23,6 +23,72 @@ namespace Elsa.Workflows.Publishing.Api.Tests;
 
 public sealed class SourceOwnedActivityVersionPublisherTests
 {
+    [Theory]
+    [InlineData("tenant-A", "tenant-B")]
+    [InlineData("tenant-A", null)]
+    [InlineData(null, "tenant-A")]
+    public async Task Mixed_source_ownership_is_refused_before_the_already_published_fast_path(string? definitionTenant, string? versionTenant)
+    {
+        var definition = Definition();
+        definition.TenantId = definitionTenant;
+        var version = Version("version-1", "1.0.0");
+        version.TenantId = versionTenant;
+        var command = new RecordingCommand();
+        var store = new PeerPublicationStore(() => new ActivityDefinitionVersionPublication
+        {
+            Id = version.Id, DefinitionVersionId = version.Id, DirectDependencyCount = 0, ClosedTemplateCount = 0, RuntimeRequirements = []
+        }, alreadyPublished: true);
+
+        await Assert.ThrowsAsync<ArgumentException>(() => CreatePublisher(command, store).PublishAsync(definition, version));
+
+        Assert.Equal(0, store.Reads);
+        Assert.Empty(command.Commits);
+    }
+
+    [Fact]
+    public async Task A_global_publication_does_not_satisfy_a_private_source_publication()
+    {
+        var definition = Definition();
+        var version = Version("version-1", "1.0.0");
+        definition.TenantId = version.TenantId = "tenant-A";
+        var command = new RecordingCommand();
+        var store = new PeerPublicationStore(() => new ActivityDefinitionVersionPublication
+        {
+            Id = version.Id, DefinitionVersionId = version.Id, DirectDependencyCount = 0, ClosedTemplateCount = 0, RuntimeRequirements = []
+        }, alreadyPublished: true);
+
+        await Assert.ThrowsAsync<ArgumentException>(() => CreatePublisher(command, store).PublishAsync(definition, version));
+
+        Assert.Empty(command.Commits);
+    }
+
+    [Fact]
+    public async Task Tenant_ownership_does_not_change_source_behavior_hash_or_template_identity()
+    {
+        var command = new RecordingCommand();
+        var publisher = CreatePublisher(command);
+        await publisher.PublishAsync(Definition(), Version("version-1", "1.0.0"));
+        var definition = Definition();
+        var version = Version("version-1", "1.0.0");
+        definition.TenantId = version.TenantId = "tenant-A";
+
+        await publisher.PublishAsync(definition, version);
+
+        var global = command.Commits[0];
+        var privateCommit = command.Commits[1];
+        Assert.Null(global.Definition.TenantId);
+        Assert.Null(global.SourceReference.TenantId);
+        Assert.Equal("tenant-A", privateCommit.Definition.TenantId);
+        Assert.Equal("tenant-A", privateCommit.AuthoringState.TenantId);
+        Assert.Equal("tenant-A", privateCommit.CatalogVersion.TenantId);
+        Assert.Equal("tenant-A", privateCommit.Publication.TenantId);
+        Assert.Equal("tenant-A", privateCommit.Layout.TenantId);
+        Assert.Equal("tenant-A", privateCommit.SourceReference.TenantId);
+        Assert.Equal(global.CatalogVersion.Hash, privateCommit.CatalogVersion.Hash);
+        Assert.Equal(global.ExecutableTemplate.TemplateHash, privateCommit.ExecutableTemplate.TemplateHash);
+        Assert.Equal(global.ExecutableTemplate.TemplateId, privateCommit.ExecutableTemplate.TemplateId);
+    }
+
     [Fact]
     public async Task Publishes_provider_source_authority_and_stable_clr_template()
     {
@@ -261,15 +327,28 @@ public sealed class SourceOwnedActivityVersionPublisherTests
     }
 
     [Fact]
+    public async Task Replaced_core_evaluator_can_compile_provider_content_without_registering_the_default_compiler()
+    {
+        var command = new RecordingCommand();
+        var compiler = new FakeTemplateCompiler();
+        var evaluator = new ActivityPublicationCandidateEvaluator(compiler, new ActivityPublicationReadiness([new FakeActivationStrategy()],
+            new RuntimeDurableValueStorageDriverRegistry([new JsonRuntimeDurableValueStorageDriver()])));
+        var result = await CreatePublisher(command, evaluator: evaluator).PublishAsync(Definition(), ProviderVersion("version-1"));
+        Assert.True(result.IsPublished);
+        Assert.Single(compiler.Requests);
+        Assert.Same(compiler.Template, Assert.Single(command.Commits).ExecutableTemplate);
+    }
+
+    [Fact]
     public async Task Provider_backed_content_the_compiler_refuses_is_not_written()
     {
         var command = new RecordingCommand();
-        var compiler = new FakeTemplateCompiler { Diagnostic = Error("specialist.model.capability") };
+        var compiler = new FakeTemplateCompiler { Diagnostic = Error("agent.model.capability") };
 
         var result = await CreatePublisher(command, templateCompiler: compiler).PublishAsync(Definition(), ProviderVersion("version-1"));
 
         Assert.False(result.IsPublished);
-        Assert.Equal("specialist.model.capability", Assert.Single(result.Diagnostics).Code);
+        Assert.Equal("agent.model.capability", Assert.Single(result.Diagnostics).Code);
         Assert.Empty(command.Commits);
     }
 
@@ -480,7 +559,8 @@ public sealed class SourceOwnedActivityVersionPublisherTests
         IActivityTemplateCompiler? templateCompiler = null,
         IActivityDraftValidator? validator = null,
         bool withProviderValidator = true,
-        IEnumerable<IActivityActivationStrategy>? strategies = null)
+        IEnumerable<IActivityActivationStrategy>? strategies = null,
+        IActivityPublicationCandidateEvaluator? evaluator = null)
     {
         var types = TestWellKnownTypeRegistry.Create();
         var structure = new DefaultActivityStructureService([]);
@@ -497,7 +577,7 @@ public sealed class SourceOwnedActivityVersionPublisherTests
             templateCompiler,
             validator ?? (withProviderValidator ? new FakeValidator() : null),
             strategies ?? [new FakeActivationStrategy()],
-            new RuntimeDurableValueStorageDriverRegistry([new JsonRuntimeDurableValueStorageDriver()]));
+            new RuntimeDurableValueStorageDriverRegistry([new JsonRuntimeDurableValueStorageDriver()]), publicationEvaluator: evaluator);
     }
 
     private static ActivityVersionAlreadyPublishedException AlreadyPublished() =>

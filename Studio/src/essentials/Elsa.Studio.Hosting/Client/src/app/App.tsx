@@ -41,7 +41,7 @@ import type {
   StudioNavigationContribution,
   StudioNavigationPlacement,
   StudioNavigationSection,
-  StudioAgentPromptRequest,
+  StudioWeaverPromptRequest,
   StudioPanelContribution,
   StudioFeatureAreaContribution,
   StudioContributionAvailability
@@ -52,7 +52,7 @@ import type { AuthProviderManager } from "../sdk";
 import { getStudioRuntimeConfig, getStudioRuntimeSettings } from "./runtime";
 import { StudioAuthBoundary, createStudioAuthManager, createStudioEndpointContext } from "./auth/studioAuth";
 import { disposeStudioModuleInstance, initializeStudioModules, registerStudioModuleInstances, type StudioLoadedModule } from "./loader";
-import { copyAgentPromptOrigin, isAgentRegistryCurrent, retireAgentRegistryGeneration } from "./agent/agentRegistrationOrigins";
+import { copyWeaverPromptOrigin, isWeaverRegistryCurrent, retireWeaverRegistryGeneration } from "./weaver/weaverRegistrationOrigins";
 import type {StudioConnectionController, StudioManagedBackendSession, StudioShellContribution} from "../sdk";
 import {watchStudioModuleChanges} from "./moduleReset";
 import {ConfiguredBackendConnection,reloadConnectionOnPageRestore} from "./connection";
@@ -102,8 +102,8 @@ import elsaLogo from "../assets/images/icon.png";
 import { WeaverSurface } from "./weaver";
 import "./styles.css";
 import "./themes/workspaceStyles.css";
-import { AgentLauncher, createAgentClient, type AgentSessionIndicatorSession } from "./agent";
-import "./agent/agent.css";
+import { WeaverLauncher, createWeaverClient, type WeaverSessionIndicatorSession } from "./weaver";
+import "./weaver/weaverControls.css";
 import "./weaver/weaver.css";
 import { HostAuthContext } from "./auth/HostAuthContext";
 import { useWorkspaceTabs } from "./workspace/useWorkspaceTabs";
@@ -196,9 +196,9 @@ function AppContent({ authManager,backendSession,connections,modules,manifest }:
   const [themeCapabilities, setThemeCapabilities] = useState<ThemeStoreCapabilities>(defaultThemeStoreCapabilities);
   const [assistantOpen, setAssistantOpen] = useState(false);
   useNotificationScope(backendSession, notificationController, notificationStorage);
-  const [agentSessions, setAgentSessions] = useState<AgentSessionIndicatorSession[]>([]);
-  const [incomingPrompt, setIncomingPrompt] = useState<(StudioAgentPromptRequest & { id: string }) | null>(null);
-  const incomingPromptRef = useRef<(StudioAgentPromptRequest & { id: string }) | null>(null);
+  const [weaverSessions, setWeaverSessions] = useState<WeaverSessionIndicatorSession[]>([]);
+  const [incomingPrompt, setIncomingPrompt] = useState<(StudioWeaverPromptRequest & { id: string }) | null>(null);
+  const incomingPromptRef = useRef<(StudioWeaverPromptRequest & { id: string }) | null>(null);
   const contentRef = useRef<HTMLElement>(null);
   const workspaceBaseId = useId();
   const runtimeConfig = getStudioRuntimeConfig();
@@ -216,23 +216,23 @@ function AppContent({ authManager,backendSession,connections,modules,manifest }:
   // Cross-surface prompt dispatch (e.g. an "Explain this workflow" action) opens the Weaver dock and forwards the prompt.
   useEffect(() => {
     if (!api) return;
-    const unsubscribe = api.agent.onPrompt(prompt => {
+    const unsubscribe = api.weaver.onPrompt(prompt => {
       const pending = incomingPromptRef.current;
       // React may batch synchronous dispatches before the dock consumes either. Explicitly
       // settle the displaced intent; this transport slot is not a durable prompt queue.
       const incoming = { ...prompt, id: `prompt-${Date.now()}-${Math.random()}` };
-      copyAgentPromptOrigin(prompt, incoming);
+      copyWeaverPromptOrigin(prompt, incoming);
       incomingPromptRef.current = incoming;
       setAssistantOpen(true);
       setIncomingPrompt(incoming);
-      if (pending?.requestId && pending.requestId !== prompt.requestId) api.agent.publishPromptResult({ requestId: pending.requestId, status: "cancelled", text: "" });
+      if (pending?.requestId && pending.requestId !== prompt.requestId) api.weaver.publishPromptResult({ requestId: pending.requestId, status: "cancelled", text: "" });
     });
     return () => {
       unsubscribe();
       const pending = incomingPromptRef.current;
       incomingPromptRef.current = null;
       setIncomingPrompt(null);
-      if (pending?.requestId) api.agent.publishPromptResult({ requestId: pending.requestId, status: "cancelled", text: "" });
+      if (pending?.requestId) api.weaver.publishPromptResult({ requestId: pending.requestId, status: "cancelled", text: "" });
     };
   }, [api]);
 
@@ -243,22 +243,22 @@ function AppContent({ authManager,backendSession,connections,modules,manifest }:
     setIncomingPrompt(current => current?.id === id ? null : current);
   }, []);
 
-  // Probe the agent provider once so provider-gated affordances (e.g. the workflow "Risks" action) can be
+  // Probe the Weaver provider once so provider-gated affordances (e.g. the workflow "Risks" action) can be
   // disabled before the user opens the Weaver dock. "unavailable"/"disabled" mean the provider can deliver
   // nothing; a failed probe is treated the same. The Weaver dock refreshes this on its own bootstrap.
   useEffect(() => {
     if (!api) return;
     let disposed = false;
-    if (evaluateBackendRequirements(api.backendSession,[{id:"elsa.api.agent",contractVersion:"1"}]).state !== "available") {
-      api.agent.providerAvailability.set(false);
+    if (evaluateBackendRequirements(api.backendSession,[{id:"elsa.api.weaver",contractVersion:"1"}]).state !== "available") {
+      api.weaver.providerAvailability.set(false);
       return;
     }
-    void createAgentClient(api.backend).bootstrap()
+    void createWeaverClient(api.backend).bootstrap()
       .then(result => {
-        if (!disposed) api.agent.providerAvailability.set(result.enabled && result.providerStatus !== "unavailable" && result.providerStatus !== "disabled");
+        if (!disposed) api.weaver.providerAvailability.set(result.enabled && result.providerStatus !== "unavailable" && result.providerStatus !== "disabled");
       })
       .catch(() => {
-        if (!disposed) api.agent.providerAvailability.set(false);
+        if (!disposed) api.weaver.providerAvailability.set(false);
       });
     return () => { disposed = true; };
   }, [api]);
@@ -352,7 +352,7 @@ function AppContent({ authManager,backendSession,connections,modules,manifest }:
         }
 
         await registerStudioModuleInstances(modules,registry);
-        if (disposed || !isAgentRegistryCurrent(registry)) { retireAgentRegistryGeneration(registry); return; }
+        if (disposed || !isWeaverRegistryCurrent(registry)) { retireWeaverRegistryGeneration(registry); return; }
         registerBuiltInContributions(registry);
 
         if (!disposed) {
@@ -361,7 +361,7 @@ function AppContent({ authManager,backendSession,connections,modules,manifest }:
           setState("ready");
         }
       } catch (e) {
-        if (loadingRegistry) retireAgentRegistryGeneration(loadingRegistry);
+        if (loadingRegistry) retireWeaverRegistryGeneration(loadingRegistry);
         if (!disposed) {
           setError(e instanceof Error ? e.message : String(e));
           setState("failed");
@@ -373,7 +373,7 @@ function AppContent({ authManager,backendSession,connections,modules,manifest }:
 
     return () => {
       disposed = true;
-      if (loadingRegistry) retireAgentRegistryGeneration(loadingRegistry);
+      if (loadingRegistry) retireWeaverRegistryGeneration(loadingRegistry);
     };
     // runtimeConfig reads the stable window.__ELSA_STUDIO_RUNTIME__ global (constant for the page lifetime), so it is
     // intentionally not a dependency — listing it would re-run boot on every render for a value that never changes.
@@ -533,7 +533,7 @@ function AppContent({ authManager,backendSession,connections,modules,manifest }:
         backendBaseUrl={backendBaseUrl}
         backendAction={(api?.shell?.list().some(slot=>slot.placement==="connection") ?? modules.some(item=>item.instance.shell?.some(slot=>slot.placement==="connection"))) ? <ShellContributions api={api} modules={modules} placement="connection" navigate={navigateTo}/> : undefined}
         enabledFeatures={enabledFeatures}
-        assistantAction={evaluateBackendRequirements(backendSession,[{id:"elsa.api.agent",contractVersion:"1"}]).state === "available" ? <AgentLauncher open={assistantOpen} sessions={agentSessions} onClick={() => setAssistantOpen(current => !current)} /> : null}
+        assistantAction={evaluateBackendRequirements(backendSession,[{id:"elsa.api.weaver",contractVersion:"1"}]).state === "available" ? <WeaverLauncher open={assistantOpen} sessions={weaverSessions} onClick={() => setAssistantOpen(current => !current)} /> : null}
         notificationAction={<NotificationCenter navigate={navigateTo} />}
         themeAction={themeCapabilities.pickerEnabled ? <ThemeSwitcher /> : null}
         accountAction={<UserMenu />}
@@ -570,7 +570,7 @@ function AppContent({ authManager,backendSession,connections,modules,manifest }:
         />
       </ShellFrame>
       {assistantOpen ? (
-        <WeaverSurface key={registryGeneration} api={api!} surface={{ route: path }} variant="dock" onClose={() => setAssistantOpen(false)} onSessionIndicatorChange={setAgentSessions} incomingPrompt={incomingPrompt} onPromptConsumed={consumeIncomingPrompt} />
+        <WeaverSurface key={registryGeneration} api={api!} surface={{ route: path }} variant="dock" onClose={() => setAssistantOpen(false)} onSessionIndicatorChange={setWeaverSessions} incomingPrompt={incomingPrompt} onPromptConsumed={consumeIncomingPrompt} />
       ) : null}
     </ThemeProvider>
   );

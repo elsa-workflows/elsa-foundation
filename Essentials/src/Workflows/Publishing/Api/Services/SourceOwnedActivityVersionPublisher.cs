@@ -1,3 +1,4 @@
+using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Publishing.Services;
 using System.Security.Cryptography;
 using System.Text.Json;
@@ -17,6 +18,7 @@ using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Services;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Microsoft.Extensions.Logging;
+using Elsa.Workflows.Design.Validations.Core.Models;
 
 namespace Elsa.Workflows.Publishing.Api.Services;
 
@@ -43,13 +45,18 @@ public sealed class SourceOwnedActivityVersionPublisher(
     IActivityTemplateCompiler? templateCompiler = null,
     IActivityDraftValidator? validator = null,
     IEnumerable<IActivityActivationStrategy>? activityActivationStrategies = null,
-    IRuntimeDurableValueStorageDriverRegistry? storageDrivers = null) : IActivitySourceVersionPublisher
+    IRuntimeDurableValueStorageDriverRegistry? storageDrivers = null,
+    IActivityPublicationCandidateEvaluator? publicationEvaluator = null,
+    IActivityPublicationReadiness? readiness = null,
+    IActivityCatalogProjection? catalogProjection = null) : IActivitySourceVersionPublisher
 {
     /// <summary>The diagnostic subject kind of a source-owned version; its id is the definition version id.</summary>
     public const string SubjectKind = "ActivitySourceVersion";
 
     private readonly IActivityTemplateProviderCompiler[] _providerCompilers = providerCompilers?.ToArray() ?? [];
-    private readonly ActivityPublicationReviewPolicy _reviewPolicy = new(activityActivationStrategies, storageDrivers);
+    private readonly IActivityPublicationReadiness _readiness = readiness ?? new ActivityPublicationReadiness(activityActivationStrategies, storageDrivers);
+    private readonly IActivityCatalogProjection _catalogProjection = catalogProjection ?? new ActivityCatalogProjection();
+    private IActivityPublicationCandidateEvaluator? _evaluator = publicationEvaluator;
 
     public async Task<ActivitySourceVersionPublicationResult> PublishAsync(
         IActivityDefinition definition,
@@ -60,11 +67,17 @@ public sealed class SourceOwnedActivityVersionPublisher(
         if (StringComparer.Ordinal.Equals(version.ProviderKey, WellKnownActivityContentAuthorities.Design) ||
             StringComparer.Ordinal.Equals(version.SourceKind, "ActivityDefinitionDraft"))
             throw new InvalidOperationException("The source-owned publication bridge cannot publish Design-owned activity content.");
-        if (await publicationStore.FindAsync(version.Id, cancellationToken) is not null)
-            return ActivitySourceVersionPublicationResult.Published;
-        var now = timeProvider.GetUtcNow();
         var catalogVersion = ActivityDefinitionVersion.From(version);
         var persistedDefinition = ActivityDefinition.From(definition);
+        if (!StringComparer.Ordinal.Equals(persistedDefinition.TenantId, catalogVersion.TenantId))
+            throw new ArgumentException("Source activity publication ownership does not align.", nameof(version));
+        if (await publicationStore.FindAsync(version.Id, cancellationToken) is { } existing)
+        {
+            if (!StringComparer.Ordinal.Equals(existing.TenantId, catalogVersion.TenantId))
+                throw new ArgumentException("Existing source activity publication ownership does not align.", nameof(version));
+            return ActivitySourceVersionPublicationResult.Published;
+        }
+        var now = timeProvider.GetUtcNow();
         catalogVersion.Definition = persistedDefinition;
         var contract = ToContract(version);
         var sourceReferenceId = StableId("activity-source-ref", version.Id);
@@ -90,7 +103,18 @@ public sealed class SourceOwnedActivityVersionPublisher(
         }
         else
         {
-            template = CompileSourceOwnedTemplate(catalogVersion, version, now);
+            try
+            {
+                template = CompileSourceOwnedTemplate(catalogVersion, version, now);
+            }
+            catch (ActivityDataSelectionRejectedException refusal)
+            {
+                var subject = new ActivityDiagnosticSubject(SubjectKind, version.Id, definition.Id, version.Id);
+                return ActivitySourceVersionPublicationResult.Refused(refusal.Findings.Select(finding => new ActivityDiagnostic(
+                    finding.Type, ActivityDiagnosticSeverity.Error, finding.Message, subject,
+                    Location: Endpoints.ActivityDataSelectionPublicationProblems.Location(finding.Path, version.ProviderKey),
+                    Metadata: new Dictionary<string, string>(StringComparer.Ordinal) { ["authoredPath"] = finding.Path })).ToArray());
+            }
             publication = CreatePublication(
                 catalogVersion,
                 persistedDefinition,
@@ -121,7 +145,8 @@ public sealed class SourceOwnedActivityVersionPublisher(
             version.Version,
             now,
             now,
-            WorkflowExecutableReferenceScope.Published);
+            WorkflowExecutableReferenceScope.Published,
+            TenantId: catalogVersion.TenantId);
         var authoring = new ActivityDefinitionAuthoringState
         {
             Id = StableId("activity-authority", definition.Id),
@@ -191,7 +216,7 @@ public sealed class SourceOwnedActivityVersionPublisher(
             new(version.ProviderKey, version.ProviderSchemaVersion, version.DescriptorPayload));
         // The same subject shape the evaluator and the template compiler give this candidate.
         var subject = new ActivityDiagnosticSubject(SubjectKind, version.Id, definition.Id, Revision: 0);
-        if (templateCompiler is null || validator is null)
+        if ((_evaluator is null && templateCompiler is null) || validator is null)
             return Refusal(subject, "activity.source.provider-compilation-unavailable",
                 "Provider-backed source content needs the activity draft validator and template compiler, and one is not registered.",
                 "Enable Activities Design API and Workflows Publishing so source content is validated and compiled like Studio content.");
@@ -205,7 +230,7 @@ public sealed class SourceOwnedActivityVersionPublisher(
                     SubjectKind = SubjectKind
                 },
                 cancellationToken);
-            evaluated = await new ActivityPublicationCandidateEvaluator(templateCompiler, _reviewPolicy).EvaluateAsync(
+            evaluated = await (_evaluator ??= new ActivityPublicationCandidateEvaluator(templateCompiler!, _readiness)).EvaluateAsync(
                 new(definition, candidate, version.Id, version.Version, 0),
                 validation,
                 cancellationToken);
@@ -257,6 +282,7 @@ public sealed class SourceOwnedActivityVersionPublisher(
         DateTimeOffset now)
     {
         var root = nodeCompiler.CompileSourceOwnedRoot(catalogVersion);
+        ActivityTemplateDataSelectionGuard.Validate(root, version.Inputs.Select(input => input.Name), hasSourceAnalysis: false);
         var resumeTargets = nodeCompiler.BuildResumeTargets(root)
             .ToDictionary(
                 x => x.Key,
@@ -292,40 +318,11 @@ public sealed class SourceOwnedActivityVersionPublisher(
             now);
     }
 
-    private static ActivityDefinitionVersionPublication CreatePublication(
-        ActivityDefinitionVersion catalogVersion,
-        ActivityDefinition definition,
-        IActivityDefinitionVersion version,
-        Elsa.Activities.Design.Core.Models.ActivityContract contract,
-        ActivityDefinitionVersionResolutionKind resolutionKind,
-        ExecutableActivityTemplate template,
-        string sourceReferenceId,
-        ActivityResourceMeasurements measurements,
-        DateTimeOffset now) => new()
-        {
-            Id = version.Id,
-            TenantId = catalogVersion.TenantId,
-            DefinitionVersionId = version.Id,
-            DefinitionId = definition.Id,
-            Version = version.Version,
-            ActivityTypeKey = definition.ActivityTypeKey,
-            ResolutionKind = resolutionKind,
-            Contract = contract,
-            Provider = new(version.ProviderKey, version.ProviderSchemaVersion, version.DescriptorPayload),
-            TemplateId = template.TemplateId,
-            TemplateHash = template.TemplateHash,
-            SourceReferenceId = sourceReferenceId,
-            ProviderFingerprint = template.ProviderFingerprint,
-            DirectDependencyCount = template.DirectDependencies.Count,
-            ClosedTemplateCount = template.ClosedTemplates.Count,
-            RuntimeRequirements = template.RuntimeRequirements.Select(x => new ActivityRuntimeRequirementDeclaration(x.ConsumerKey, x.SchemaVersion)).ToArray(),
-            ResourceMeasurements = measurements,
-            ResumeTargetCount = template.ResumeTargets.Count,
-            Lifecycle = ActivityDefinitionVersionLifecycle.Active,
-            PublishedAt = now,
-            CreatedAt = now,
-            LastModifiedAt = now
-        };
+    private ActivityDefinitionVersionPublication CreatePublication(ActivityDefinitionVersion catalogVersion, ActivityDefinition definition, IActivityDefinitionVersion version,
+        Elsa.Activities.Design.Core.Models.ActivityContract contract, ActivityDefinitionVersionResolutionKind resolutionKind, ExecutableActivityTemplate template,
+        string sourceReferenceId, ActivityResourceMeasurements measurements, DateTimeOffset now) =>
+        _catalogProjection.Publication(definition, contract, new(version.ProviderKey, version.ProviderSchemaVersion, version.DescriptorPayload),
+            version.Id, version.Version, template.ProviderFingerprint, sourceReferenceId, template, measurements, now, resolutionKind);
 
     /// <summary>
     /// Reads the publication of the version back and compares it. A read that fails counts as not identical, so the caller

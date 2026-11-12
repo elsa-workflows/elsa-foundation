@@ -1,6 +1,6 @@
 using System.Text;
 using System.Text.Json;
-using Elsa.Agent.Core.Models;
+using Elsa.Weaver.Core.Models;
 using Elsa.Studio.Preferences.Core.Models;
 
 namespace Acme.Home.Weaver;
@@ -17,7 +17,7 @@ internal sealed class WidgetRunJournal(WidgetEffectsSettings settings)
     private readonly object sync = new();
     private readonly List<WidgetRun> memory = [];
 
-    internal WidgetRun Record(StudioPreferenceKey key, AgentPreparedToolInvocation invocation, string revision, bool passed)
+    internal WidgetRun Record(StudioPreferenceKey key, WeaverPreparedToolInvocation invocation, string revision, bool passed)
     {
         lock (sync)
         {
@@ -75,7 +75,7 @@ internal sealed class WidgetRunJournal(WidgetEffectsSettings settings)
     }
 
     private static WidgetRun Entry(IReadOnlyCollection<WidgetRun> rows, StudioPreferenceKey key,
-        AgentPreparedToolInvocation invocation, string revision, bool passed) => new(key.SubjectId, key.TenantId, key.StudioHostId,
+        WeaverPreparedToolInvocation invocation, string revision, bool passed) => new(key.SubjectId, key.TenantId, key.StudioHostId,
         invocation.InvocationId, invocation.ToolCallId, invocation.ToolName, revision, passed,
         rows.Count(row => row.Actor == key.SubjectId && row.Tenant == key.TenantId && row.Host == key.StudioHostId) + 1);
 

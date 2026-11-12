@@ -1,7 +1,7 @@
 using System.Security.Claims;
 using System.Text.Json;
-using Elsa.Agent.Core;
-using Elsa.Agent.Core.Models;
+using Elsa.Weaver.Core;
+using Elsa.Weaver.Core.Models;
 using Elsa.Foundation.Identity.Core.Authentication;
 using Elsa.Foundation.Identity.Core.Authorization;
 using Elsa.Studio.Preferences.Core;
@@ -87,7 +87,7 @@ internal sealed class WidgetEffectOwner(IServiceProvider services, IHttpContextA
         if (principal?.Identity?.IsAuthenticated != true)
             throw WidgetEffects.Refusal(WidgetEffects.Unavailable, "Current owner authority is unavailable.", 503, true);
         bool Current() => ReferenceEquals(http.HttpContext, context) && ReferenceEquals(context!.User, principal);
-        var sources = services.GetServices<IAgentPrincipalSource>().ToArray();
+        var sources = services.GetServices<IWeaverPrincipalSource>().ToArray();
         var permissions = services.GetServices<IPermissionAuthorizationService>().ToArray();
         if (sources.Length != 1 || permissions.Length != 1)
             throw WidgetEffects.Refusal(WidgetEffects.Unavailable, "Current owner authority is unavailable.", 503, true);
@@ -136,7 +136,7 @@ internal sealed class WidgetEffectOwner(IServiceProvider services, IHttpContextA
         catch (WidgetRefusal error) { throw WidgetEffects.Translate(error); }
     }
 
-    internal async Task<AgentToolResult> ApplyAsync(AgentPreparedToolInvocation invocation, bool visible, CancellationToken ct)
+    internal async Task<WeaverToolResult> ApplyAsync(WeaverPreparedToolInvocation invocation, bool visible, CancellationToken ct)
     {
         await AuthorizeAsync(invocation.ActorId, invocation.TenantId, true, ct);
         try
@@ -148,7 +148,7 @@ internal sealed class WidgetEffectOwner(IServiceProvider services, IHttpContextA
         catch (WidgetRefusal error) { throw WidgetEffects.Translate(error); }
     }
 
-    internal async Task<AgentToolResult> CheckAsync(AgentPreparedToolInvocation invocation, bool expectedVisible, CancellationToken ct)
+    internal async Task<WeaverToolResult> CheckAsync(WeaverPreparedToolInvocation invocation, bool expectedVisible, CancellationToken ct)
     {
         var before = await ObserveAsync(invocation.ActorId, invocation.TenantId, true, ct);
         if (!WidgetContract.SameTarget(invocation.Target, before))
@@ -163,14 +163,14 @@ internal sealed class WidgetEffectOwner(IServiceProvider services, IHttpContextA
         { throw new WidgetFixtureException("The widget check ran but confirmation is unavailable.", error); }
         if (after.Document.Revision != before.Document.Revision || !JsonElement.DeepEquals(after.Document.Value, before.Document.Value))
             return new(invocation.ToolCallId, invocation.ToolName, false, "The widget check ran but its original resource observation changed. Do not replay it.");
-        var payload = new AgentPayload(WidgetEffects.CheckResult, "1", JsonSerializer.SerializeToElement(new
+        var payload = new WeaverPayload(WidgetEffects.CheckResult, "1", JsonSerializer.SerializeToElement(new
         {
             widgetId = WidgetContract.WidgetId, revision = after.Document.Revision, hostId = host.Id,
             expectedVisible, actualVisible = before.Visible, passed, ran = true, callNumber = ran.CallNumber
         }));
         return new(invocation.ToolCallId, invocation.ToolName, true, passed ? "The widget check ran and passed." : "The widget check ran and failed its business condition.", payload)
         {
-            Receipt = new(invocation.InvocationId, invocation.Target!, WidgetContract.Target(after), AgentEffectScope.NoPersistedEffect,
+            Receipt = new(invocation.InvocationId, invocation.Target!, WidgetContract.Target(after), WeaverEffectScope.NoPersistedEffect,
                 new(WidgetEffects.CheckResult, "1", payload.Data.Clone())) { ModuleCode = passed ? WidgetEffects.Passed : WidgetEffects.Failed }
         };
     }

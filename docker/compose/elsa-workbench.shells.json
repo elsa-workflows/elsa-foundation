@@ -38,9 +38,9 @@
           "Events": {},
           "Expressions": {},
           "FileSystemDistributedLocking": {},
-          "FoundationAgentAbstractions": {},
-          "FoundationAgentEffects": {},
-          "FoundationAgentApi": {},
+          "Weaver": {},
+          "WeaverEffects": {},
+          "WeaverApi": {},
           "FoundationIdentityAbstractions": {},
           "FoundationIdentityApi": {},
           "FoundationIdentityAspNetCoreIdentity": {
@@ -61,9 +61,9 @@
           "FoundationIdentityOidc": {
             "IsDefault": false
           },
-          "FoundationWorkflowsAgent": {},
-          "FoundationWorkflowsRuntimeAgent": {},
-          "GitHubCopilotAgent": {
+          "WeaverWorkflows": {},
+          "WeaverWorkflowsRuntime": {},
+          "WeaverGitHubCopilot": {
             "Enabled": true,
             "GitHubTokenEnvironmentVariable": "COPILOT_GITHUB_TOKEN",
             "Model": "auto",

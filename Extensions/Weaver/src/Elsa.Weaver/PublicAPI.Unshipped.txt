@@ -1,0 +1,22 @@
+#nullable enable
+Elsa.Weaver.WeaverPrivilegePolicyOptions
+Elsa.Weaver.WeaverPrivilegePolicyOptions.WeaverPrivilegePolicyOptions() -> void
+Elsa.Weaver.WeaverPrivilegePolicyOptions.Activation.get -> bool
+Elsa.Weaver.WeaverPrivilegePolicyOptions.Activation.set -> void
+Elsa.Weaver.WeaverPrivilegePolicyOptions.Administrative.get -> bool
+Elsa.Weaver.WeaverPrivilegePolicyOptions.Administrative.set -> void
+Elsa.Weaver.WeaverPrivilegePolicyOptions.Irrecoverable.get -> bool
+Elsa.Weaver.WeaverPrivilegePolicyOptions.Irrecoverable.set -> void
+const Elsa.Weaver.WeaverPrivilegePolicyOptions.SectionName = "Elsa:Weaver:Privileges" -> string!
+Elsa.Weaver.WeaverEffectsFeature
+Elsa.Weaver.WeaverEffectsFeature.WeaverEffectsFeature() -> void
+override Elsa.Weaver.WeaverEffectsFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void
+Elsa.Weaver.Extensions.WeaverServiceCollectionExtensions
+Elsa.Weaver.WeaverFeature
+Elsa.Weaver.WeaverFeature.WeaverFeature() -> void
+static Elsa.Weaver.Extensions.WeaverServiceCollectionExtensions.AddWeaver(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+virtual Elsa.Weaver.WeaverFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void
+Elsa.Weaver.Extensions.WeaverPersistenceSelection
+static Elsa.Weaver.Extensions.WeaverPersistenceSelection.SelectWeaverAuditStore<TStore>(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, System.Func<System.IServiceProvider!, TStore!>! factory) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+static Elsa.Weaver.Extensions.WeaverPersistenceSelection.SelectWeaverSessionRecordStore(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, System.Func<System.IServiceProvider!, Elsa.Weaver.Core.Contracts.IWeaverSessionRecordStore!>! factory) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+static Elsa.Weaver.Extensions.WeaverPersistenceSelection.SelectWeaverSessionRecordStore(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, System.Func<System.IServiceProvider!, Elsa.Weaver.Core.Contracts.IWeaverSessionRecordStore!>! factory, System.Type? requiredEffectsFeatureType) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!

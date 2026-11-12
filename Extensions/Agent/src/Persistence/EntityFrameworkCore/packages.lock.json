@@ -154,34 +154,20 @@
         "resolved": "10.0.10",
         "contentHash": "jSOCVxEwCd4Aq925kJVz1kSO1EpX2OHYKL04qVREXkDU7Ce3pVDdHPYm+fEy8y/th2kJf/DAstRHpJAqoNWP8w=="
       },
-      "elsa.agent": {
+      "elsa.activities.runtime.core": {
         "type": "Project",
         "dependencies": {
-          "CShells.Abstractions": "[0.0.31, )",
-          "Elsa.Agent.Core": "[4.0.0-dev, )",
-          "Elsa.Cluster.Core": "[4.0.0-dev, )",
           "Elsa.Events.Core": "[4.0.0-dev, )",
-          "Microsoft.Extensions.DependencyInjection.Abstractions": "[10.0.12, )",
-          "Microsoft.Extensions.Logging.Abstractions": "[10.0.12, )",
-          "Microsoft.Extensions.Options": "[10.0.10, )"
+          "Elsa.Expressions.Core": "[4.0.0-dev, )",
+          "Elsa.Primitives": "[4.0.0-dev, )"
         }
       },
       "elsa.agent.core": {
         "type": "Project",
         "dependencies": {
-          "Elsa.Events.Core": "[4.0.0-dev, )",
           "Elsa.Primitives": "[4.0.0-dev, )",
           "Microsoft.Extensions.AI.Abstractions": "[10.10.1, )",
-          "Microsoft.Extensions.Configuration.Abstractions": "[10.0.10, )"
-        }
-      },
-      "elsa.cluster.core": {
-        "type": "Project",
-        "dependencies": {
-          "Elsa.Primitives": "[4.0.0-dev, )",
-          "Microsoft.Extensions.DependencyInjection.Abstractions": "[10.0.12, )",
-          "Microsoft.Extensions.Options": "[10.0.10, )",
-          "Microsoft.Extensions.Primitives": "[10.0.12, )"
+          "Microsoft.Extensions.DependencyInjection.Abstractions": "[10.0.12, )"
         }
       },
       "elsa.events.core": {
@@ -189,6 +175,12 @@
         "dependencies": {
           "Elsa.Pipelines.Core": "[4.0.0-dev, )",
           "Microsoft.Extensions.DependencyInjection.Abstractions": "[10.0.12, )"
+        }
+      },
+      "elsa.expressions.core": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Primitives": "[4.0.0-dev, )"
         }
       },
       "elsa.persistence.core": {
@@ -225,10 +217,28 @@
       "elsa.primitives": {
         "type": "Project"
       },
-      "elsa.secrets.core": {
+      "elsa.serialization.core": {
         "type": "Project",
         "dependencies": {
+          "Elsa.Events.Core": "[4.0.0-dev, )",
           "Elsa.Primitives": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.tasks.core": {
+        "type": "Project",
+        "dependencies": {
+          "Microsoft.Extensions.DependencyInjection.Abstractions": "[10.0.12, )"
+        }
+      },
+      "elsa.workflows.runtime.core": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Activities.Runtime.Core": "[4.0.0-dev, )",
+          "Elsa.Expressions.Core": "[4.0.0-dev, )",
+          "Elsa.Primitives": "[4.0.0-dev, )",
+          "Elsa.Serialization.Core": "[4.0.0-dev, )",
+          "Microsoft.Extensions.DependencyInjection.Abstractions": "[10.0.12, )",
+          "Microsoft.Extensions.Logging.Abstractions": "[10.0.12, )"
         }
       },
       "CShells": {

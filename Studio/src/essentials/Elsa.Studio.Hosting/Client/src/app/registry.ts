@@ -1,6 +1,6 @@
 import {
   createEndpointContext,
-  createAgentRegistry,
+  createWeaverRegistry,
   createContributionRegistry,
   createDashboardWidgetRegistry,
   registerActivityIcons,
@@ -26,7 +26,7 @@ import {
 } from "../sdk";
 import { dialogController } from "./dialogs";
 import { notificationController } from "./notifications";
-import { initializeAgentRegistryGeneration } from "./agent/agentRegistrationOrigins";
+import { initializeWeaverRegistryGeneration } from "./weaver/weaverRegistrationOrigins";
 
 type RegistryItem<T> = T extends StudioContributionRegistry<infer Item> ? Item : never;
 
@@ -56,9 +56,9 @@ export function createStudioRegistry(
   const featureAreas = createFeatureAreaRegistry(navigation, routes);
   const dashboardWidgets = createDashboardWidgetRegistry({hostPolicy});
   // One dispatcher/availability instance serves both names during producer migration.
-  const agent = createAgentRegistry({hostPolicy});
-  initializeAgentRegistryGeneration(agent);
-  const ai = { dispatchPrompt: agent.dispatchPrompt, onPrompt: agent.onPrompt, publishPromptResult: agent.publishPromptResult, onPromptResult: agent.onPromptResult };
+  const weaverRegistry = createWeaverRegistry({hostPolicy});
+  initializeWeaverRegistryGeneration(weaverRegistry);
+  const ai = { dispatchPrompt: weaverRegistry.dispatchPrompt, onPrompt: weaverRegistry.onPrompt, publishPromptResult: weaverRegistry.publishPromptResult, onPromptResult: weaverRegistry.onPromptResult };
 
   return {
     host: hostContext,
@@ -84,7 +84,7 @@ export function createStudioRegistry(
     workflowTestStimulusEditors: createContributionRegistry<RegistryItem<NonNullable<ElsaStudioModuleApi["workflowTestStimulusEditors"]>>>({ slot: studioSlots.workflowTestStimulusEditors,hostPolicy }),
     workflowRunRelatedLinks: createContributionRegistry<RegistryItem<NonNullable<ElsaStudioModuleApi["workflowRunRelatedLinks"]>>>({ slot: studioSlots.workflowRunRelatedLinks,hostPolicy }),
     settingEditors: createContributionRegistry<RegistryItem<NonNullable<ElsaStudioModuleApi["settingEditors"]>>>({ slot: studioSlots.settingEditors,hostPolicy }),
-    agent,
+    weaver: weaverRegistry,
     workflowDesigner: {
       nodeRenderers: createContributionRegistry({ slot: studioSlots.workflowDesignerNodeRenderers,hostPolicy }),
       toolboxItems: createContributionRegistry({ slot: studioSlots.workflowDesignerToolboxItems,hostPolicy }),

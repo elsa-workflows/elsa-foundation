@@ -5,7 +5,7 @@ import type {
   StudioModuleManifest
 } from "../sdk";
 import type {StudioModuleHostContext, StudioModuleInstance} from "../sdk";
-import { beginAgentModuleRegistration, isAgentRegistryCurrent, retireAgentModuleRegistration, retireAgentRegistryGeneration } from "./agent/agentRegistrationOrigins";
+import { beginWeaverModuleRegistration, isWeaverRegistryCurrent, retireWeaverModuleRegistration, retireWeaverRegistryGeneration } from "./weaver/weaverRegistrationOrigins";
 
 export interface StudioLoadedModule {manifest: StudioModuleManifest; instance: StudioModuleInstance}
 
@@ -61,8 +61,8 @@ export async function initializeStudioModules(manifests: StudioModuleManifest[],
 
 export async function registerStudioModuleInstances(instances: readonly StudioLoadedModule[], api: ElsaStudioModuleApi) {
   for (const {manifest,instance} of instances) {
-    if (!isAgentRegistryCurrent(api)) return;
-    const registration = beginAgentModuleRegistration(api, manifest.id);
+    if (!isWeaverRegistryCurrent(api)) return;
+    const registration = beginWeaverModuleRegistration(api, manifest.id);
     try {
       await instance.register(registration.api);
       if (!registration.pending()) continue;
@@ -71,7 +71,7 @@ export async function registerStudioModuleInstances(instances: readonly StudioLo
       addDiagnostic(api,manifest.id,"loaded","Module activated.");
     } catch (error) {
       registration.fail();
-      if (instance.connection) { retireAgentRegistryGeneration(api); throw error; }
+      if (instance.connection) { retireWeaverRegistryGeneration(api); throw error; }
       addDiagnostic(api,manifest.id,"failed",error instanceof Error ? error.message : String(error));
     }
   }
@@ -94,8 +94,8 @@ export async function loadStudioModules(
   const loadStyle = options.loadStyle ?? defaultLoadStyle;
 
   for (const manifest of manifests) {
-    if (!isAgentRegistryCurrent(api)) break;
-    retireAgentModuleRegistration(api, manifest.id);
+    if (!isWeaverRegistryCurrent(api)) break;
+    retireWeaverModuleRegistration(api, manifest.id);
     if (!isVersionRangeCompatible(manifest.requiredHostVersion, options.hostVersion)) {
       diagnostics.push(addDiagnostic(api, manifest.id, "incompatible", `Requires host ${manifest.requiredHostVersion}.`));
       continue;
@@ -114,8 +114,8 @@ export async function loadStudioModules(
 
       const module = await importModule(addModuleVersion(manifest.entry, moduleVersion));
       if (!("register" in module)) throw new Error("This module requires the host initialization lifecycle.");
-      if (!isAgentRegistryCurrent(api)) break;
-      const registration = beginAgentModuleRegistration(api, manifest.id);
+      if (!isWeaverRegistryCurrent(api)) break;
+      const registration = beginWeaverModuleRegistration(api, manifest.id);
       try { await module.register(registration.api); if (!registration.complete()) continue; }
       catch (error) { registration.fail(); throw error; }
       diagnostics.push(addDiagnostic(api, manifest.id, "loaded", "Module activated."));

@@ -1,5 +1,7 @@
 # Implementation Plan: Weaver generic effects and module-owned operations
 
+**Current naming and upgrade baseline (12 November 2026)**: the owner-authorized [#4027 rename](../../docs/reference/package-renames.md) moves the Studio assistant to `Elsa.Weaver.*` and `api.weaver`; user-defined agents keep `Elsa.Agent.*`. This is an identifier/input reconciliation, not a scope or acceptance waiver. The rename starts a fresh Weaver store. The additive upgrade in this work unit is post-rename, pre-effects Weaver1.0 → Weaver1.1, with genuine actual-writer evidence. Pre-rename Agent-store captures remain unchanged historical evidence and cannot qualify that upgrade. All legacy digest, protected-content, counter-lifetime, hold/finalization and no-replay requirements apply within the Weaver family. Contracts remain Preview until the required composed and independent-package journeys pass.
+
 **Branch**: agent/codex/3443-weaver-effects-plan
 **Date**: 2026-11-04
 **Status**: Approved for task generation after independent plan review on 2026-11-04; proposed contracts remain Preview until demonstrated freeze
@@ -8,7 +10,7 @@
 
 ## Summary
 
-Deliver leaf 0 through the existing Agent lifecycle: current host privileges, an authenticated principal seam, truthful performed results, closed module codes, live contribution discovery and Agent durable-format 1.1.0. Keep domain operations, guidance, validation, result payloads and application semantics in their owning modules.
+Deliver leaf 0 through the existing Weaver lifecycle: current host privileges, an authenticated principal seam, truthful performed results, closed module codes, live contribution discovery and Weaver durable-format 1.1.0. Keep domain operations, guidance, validation, result payloads and application semantics in their owning modules.
 
 This plan resolves PD1–PD3 for generic leaf 0 and the owner prerequisites for stories 2–4. Leaf 0 does not implement Secrets or Connections journeys. Their native sub-issues follow this plan's approval, and their implementations run sequentially after leaf 0. Later leaves retain FR025's separate specification step. All FR020 records and follow-ups remain required.
 
@@ -19,10 +21,10 @@ The proposed public surfaces remain Preview. Demonstrated composed-host and inde
 | Concern | Choice |
 | --- | --- |
 | Language/platform | C#/.NET 10; TypeScript/React; Python 3 conformance driver |
-| Existing packages | Agent Core, Agent implementation/API/EF; Cluster Core/shared readability; Studio Hosting/SDK; owning Secrets/Connections Core, implementation and API |
-| Storage | Existing in-memory owner; existing Agent EF records on SQLite, SQL Server, PostgreSQL and MySQL |
+| Existing packages | Weaver Core, Weaver implementation/API/EF; Cluster Core/shared readability; Studio Hosting/SDK; owning Secrets/Connections Core, implementation and API |
+| Storage | Existing in-memory owner; existing Weaver EF records on SQLite, SQL Server, PostgreSQL and MySQL |
 | New production projects in leaf 0 | None; new common feature and EF variation stay in their existing packages |
-| Tests | Existing Agent, persistence/provider, Workbench, Studio unit/browser and complete package-conformance suites |
+| Tests | Existing Weaver, persistence/provider, Workbench, Studio unit/browser and complete package-conformance suites |
 | Constraints | One session owner, no effect replay, no new schema fleet, no domain registry, no module-specific provider adapters |
 | Scope | Generic leaf 0; proposed owner seams for leaves 1–3; SDK read seams for the built-in-screen satellite remain leaf 5 |
 
@@ -34,7 +36,7 @@ Both ratified documents are loaded: framework6.1.0 and Elsa6.3.0. Their Gate ind
 
 | Gate | Application |
 | --- | --- |
-| Framework2.1/2.18 | Public Agent contracts/models stay in Agent Core; no EF or Studio implementation reference there. Owner contracts stay in their own Core and authorization composition in their own API. |
+| Framework2.1/2.18 | Public Weaver contracts/models stay in Weaver Core; no EF or Studio implementation reference there. Owner contracts stay in their own Core and authorization composition in their own API. |
 | 2.5/2.19 | Public nonsealed features, virtual ConfigureServices; distinct common/EF identities. Actual-type static metadata is validated. |
 | 2.5.1 | Execution, principal lookup, policy/admission and module authorization are scoped. Immutable selection metadata/options monitoring may be singleton; no singleton captures a principal or module callback. |
 | 2.6.1/2.6.2/2.11 | Existing named collections remain the discovery path. New replacement contracts diagnose duplicates; Secrets fan-in has one aggregator and independent sources. |
@@ -49,16 +51,16 @@ No constitutional exception is planned. Independent correctness and standards ro
 
 ## PD1: feature and package composition
 
-1. Add FoundationAgentEffectsFeature in Elsa.Agent, feature identity FoundationAgentEffects, inheriting FoundationAgentAbstractionsFeature. It registers common behavior and immutable metadata of the actual feature instance. It declares no EF-family requirement.
-2. Add FoundationAgentEfEffectsFeature in the existing Agent EF package. It inherits common behavior, has its own identity FoundationAgentEfEffects, directly declares RequiresSchemaVersion Agent1.1.0, and requires the existing Agent EF store feature. It does not depend on the common sibling identity.
+1. Add WeaverEffectsFeature in Elsa.Weaver, feature identity WeaverEffects, inheriting WeaverFeature. It registers common behavior and immutable metadata of the actual feature instance. It declares no EF-family requirement.
+2. Add WeaverEfEffectsFeature in the existing Weaver EF package. It inherits common behavior, has its own identity WeaverEfEffects, directly declares RequiresSchemaVersion Weaver1.1.0, and requires the existing Weaver EF store feature. It does not depend on the common sibling identity.
 3. Select exactly one variation. Workbench/probe ordinary composition selects common; each durable overlay removes common and selects EF along with the existing store. Existing base/API/store features gain no static requirement.
-4. Extend the existing owned record-store selection, retaining its two-argument binary surface, with an additive overload accepting the store's required effects feature Type. Every AddAgentStores path supplies the EF effects Type; the private built-in memory marker supplies the common Type. An explicit legacy two-argument/null selection has undeclared effects support and remains legacy-only; selecting effects alongside it is a configuration error. Custom stores declare their supported variation through the new overload. Common code never references EF or infers a runtime store type.
-5. Validate the final collection, not registration order: reject both siblings, duplicate selections, wrong-store selection and unowned replacement. Legacy-only Agent/store compositions may omit effects; they cannot accept new behavior.
+4. Extend the existing owned record-store selection, retaining its two-argument binary surface, with an additive overload accepting the store's required effects feature Type. Every AddWeaverStores path supplies the EF effects Type; the private built-in memory marker supplies the common Type. An explicit legacy two-argument/null selection has undeclared effects support and remains legacy-only; selecting effects alongside it is a configuration error. Custom stores declare their supported variation through the new overload. Common code never references EF or infers a runtime store type.
+5. Validate the final collection, not registration order: reject both siblings, duplicate selections, wrong-store selection and unowned replacement. Legacy-only Weaver/store compositions may omit effects; they cannot accept new behavior.
 6. A specialized feature must directly repeat its required/base static declarations. Extra stricter declarations are allowed. Use SchemaVersionRequirement.DeclaredBy and exact declaration inclusion; do not create another semantic-version engine. This keeps actual-type catalog and execution checks aligned.
 
 CShells0.0.31 rejects distinct classes with one feature name and resolves dependency identities exactly. Class inheritance does not substitute a dependency identity. Verify actual discovery/composition in tests.
 
-Leaves 1 and 2 use Elsa.Agent.Secrets / FoundationSecretsAgentFeature and Elsa.Agent.Connections / FoundationConnectionsAgentFeature, each inheriting Agent abstractions and requiring its owning API composition. Neither may auto-resolve the memory effects sibling. Owning Studio packages register their contributions through the SDK. Exact later-leaf features are decided in their own specifications.
+Leaves 1 and 2 use Elsa.Weaver.Secrets / FoundationSecretsWeaverFeature and Elsa.Weaver.Connections / FoundationConnectionsWeaverFeature, each inheriting Weaver abstractions and requiring its owning API composition. Neither may auto-resolve the memory effects sibling. Owning Studio packages register their contributions through the SDK. Exact later-leaf features are decided in their own specifications.
 
 ## PD2: contracts and admission
 
@@ -66,15 +68,15 @@ Leaves 1 and 2 use Elsa.Agent.Secrets / FoundationSecretsAgentFeature and Elsa.A
 
 ### Policy and identity
 
-Bind AgentPrivilegePolicyOptions from Elsa:Agent:Privileges using live host configuration. The three values default false; Workbench base configuration enables all three and Production does not override them. Bootstrap reports a read-only snapshot. Never use a session policy or startup-captured feature value as current authority.
+Bind WeaverPrivilegePolicyOptions from Elsa:Weaver:Privileges using live host configuration. The three values default false; Workbench base configuration enables all three and Production does not override them. Bootstrap reports a read-only snapshot. Never use a session policy or startup-captured feature value as current authority.
 
 Normalize a new preparation's class set, add Administrative for effective Admin risk, then freeze/hash it. Null/empty classes preserve the exact legacy digest shape. A legacy Admin preparation receives a live administrative veto and effective review label without payload or digest rewriting. New Admin preparations are new-format classed data; they are distinct from legacy records.
 
-IAgentPrincipalSource returns the genuine current authenticated principal for the exact actor/tenant, or null. Agent API implements it; direct/non-HTTP hosts may replace it. No principal enters prepared arguments, records, audit, provider data or digests. Approval calls no principal source or module. Current permission checks remain owner API decisions.
+IWeaverPrincipalSource returns the genuine current authenticated principal for the exact actor/tenant, or null. Weaver API implements it; direct/non-HTTP hosts may replace it. No principal enters prepared arguments, records, audit, provider data or digests. Approval calls no principal source or module. Current permission checks remain owner API decisions.
 
 ### Selected-feature admission
 
-AgentEffectsAdmission checks the selected feature's static requirements through the shared checker. Empty requirements need no invented family observation. Missing/unfinalized EF observation refuses with schema-version-not-finalized; an absent effects selection refuses new behavior. No descriptor declares a schema version or selects a fleet.
+WeaverEffectsAdmission checks the selected feature's static requirements through the shared checker. Empty requirements need no invented family observation. Missing/unfinalized EF observation refuses with schema-version-not-finalized; an absent effects selection refuses new behavior. No descriptor declares a schema version or selects a fleet.
 
 Apply this admission at new-behavior entry/acceptance sites: tool discovery/preparation/execution, classed preparation creation, fresh and retained context disclosure, and both executor receipt boundaries. The descriptor only declares its optional behavior; the requirement always belongs to the selected feature. Legacy unclassed behavior remains available, subject to current authority and the independent legacy-Admin veto.
 
@@ -90,9 +92,9 @@ Expose a bounded backend support projection from existing tool/context registrie
 
 Browser inventory is client-asserted and never grants server authority. An unavailable/failed inventory means unknown, not an empty successful list. Identify a module through its registry identity/display name or module-owned selection metadata; never infer its identity or guidance from a route or the historical M0 list. An unresolved route contributes route-only context.
 
-## PD2: Agent durable format
+## PD2: Weaver durable format
 
-Add Agent1.1.0 to the existing family with an identity upcaster over protected content. Default new nullable members only after authenticated unprotect. Preserve purpose strings, canonical disclosure bytes and old approval digests. No relational migration is needed for these fields/enums.
+Add Weaver1.1.0 to the existing family with an identity upcaster over protected content. Default new nullable members only after authenticated unprotect. Preserve purpose strings, canonical disclosure bytes and old approval digests. No relational migration is needed for these fields/enums.
 
 Use chain readability/upcasting for every declared content row and readable-version checks for contentless snapshot, key, owner and counter records. Keep minimal plain owner/identity lookups before authorization; validate owned full rows/projections only after the exact owner filter. A foreign unreadable record retains shared403/404 and causes no hydration/settlement.
 
@@ -100,7 +102,7 @@ Choose the admitted WriteVersion inside each actual metadata attempt using the e
 
 The session payload ExecuteUpdate path currently bypasses SaveChanges interception and does not stamp SchemaVersion. Keep the initial owner/fence-guarded raw row lock and version increment, load the tracked session after that lock, then save every content-bearing session/paused/pending-audit change and its admitted stamp with the children through the existing interceptor in the same metadata transaction. Preserve the existing conflict predicates and lease behavior; do not increment Version twice. Raw lease/fence/counter-only bookkeeping may retain its stamp. This needs no new shared raw-write guard API.
 
-Use existing EfSchemaFinalizationGates.FindModuleGate(actualContextType).StateOf("Agent") for EfSchemaFamilyWriteState.WriteVersion/WritesRefused. Keep the existing IEfSchemaFleet/ClusterSchemaFleet and EfSchemaFinalizationObservations/readability composition; no parallel fleet. Existing EfSchemaActivationRefusedException refuses an old host after unreadable finalization; EfSchemaWriteRefusedException/EfSchemaFamilyWritesRefusedException remain the write refusals. Record their exact reason and source, not a new availability algorithm.
+Use existing EfSchemaFinalizationGates.FindModuleGate(actualContextType).StateOf("Weaver") for EfSchemaFamilyWriteState.WriteVersion/WritesRefused. Keep the existing IEfSchemaFleet/ClusterSchemaFleet and EfSchemaFinalizationObservations/readability composition; no parallel fleet. Existing EfSchemaActivationRefusedException refuses an old host after unreadable finalization; EfSchemaWriteRefusedException/EfSchemaFamilyWritesRefusedException remain the write refusals. Record their exact reason and source, not a new availability algorithm.
 
 On a verified forward gate-adoption mismatch, rollback and retry only the bounded metadata attempt through the existing retry seam, selecting a fresh stamp/entities. Never retry owner dispatch. Other schema failures/corruption are refusals, not retry guesses. Existing audit counter1.0 is never restamped and remains readable forever; new rows use that attempt's admitted stamp.
 
@@ -151,7 +153,7 @@ Separate deterministic component, deterministic provider-protocol and live-provi
 
 ## Source structure and complexity
 
-Implementation stays in existing Agent Core/implementation/API/EF and Studio Hosting/SDK projects, plus existing owning module projects for their prerequisites. New generic contracts, feature classes and the selection overload are indexed in their package PublicAPI.Unshipped and catalogs.
+Implementation stays in existing Weaver Core/implementation/API/EF and Studio Hosting/SDK projects, plus existing owning module projects for their prerequisites. New generic contracts, feature classes and the selection overload are indexed in their package PublicAPI.Unshipped and catalogs.
 
 Documentation here: plan.md, research.md, data-model.md, quickstart.md and contracts/privilege-policy.md, outcomes.md, owner-operations.md. Tasks are generated only after this plan is reviewed. Glossary changes belong to leaf0 implementation under FR021.
 

@@ -2,7 +2,7 @@
 
 Each case runs once on the actual selected Copilot or Anthropic adapter. The Python cases reuse
 the original M1 driver operations (deny, stale, authority, cancel, duplicate delivery) with the
-module's size operation and the owning Agent HTTP/SSE routes; the browser cases reuse the original
+module's size operation and the owning Weaver HTTP/SSE routes; the browser cases reuse the original
 resource, workflow and lost-confirmation journeys. The fixture's pre-call gate and the browser ACK
 interception only coordinate those real paths. Verifiers read retained bytes: an HTTP status,
 selector label or provider text alone never establishes an outcome. Nothing here qualifies a
@@ -21,7 +21,7 @@ import time
 from urllib.parse import quote, urlparse
 import uuid
 
-from agent_transport import AgentTransportError, _json as strict_json
+from weaver_transport import WeaverTransportError, _json as strict_json
 from artifacts import TOOL, check, sha
 from case_records import _current_function_results, _normalized_result, _same_json, correlate_browser_protocol, retained
 from journey_runtime import BASE_GRANTS, atomic_json, browser_inputs, private_policy_keys, same
@@ -37,15 +37,15 @@ BROWSER_CASES = {"interrupted-after-effect": ("lost-confirmation", True, None),
                  "workflow-review-control": ("workflow", True, "full-auto")}
 # Driver-owned expected outcomes. Each record states its observed outcome; any other value fails.
 EXPECTED_OUTCOMES = {
-    "denied-result-continuation": {"decision": "denied", "execute": "agent.proposal.closed", "continuation": "denied", "effects": 0},
-    "duplicate-effect-delivery": {"execute": "executed", "repeatExecute": "retained", "repeatDelivery": "agent.message.no_pending", "effects": 1},
+    "denied-result-continuation": {"decision": "denied", "execute": "weaver.proposal.closed", "continuation": "denied", "effects": 0},
+    "duplicate-effect-delivery": {"execute": "executed", "repeatExecute": "retained", "repeatDelivery": "weaver.message.no_pending", "effects": 1},
     "cancel-before-effect": {"terminal": "turnCancelled", "gate": "protocol.gate.cancelled", "effects": 0},
     "interrupted-after-effect": {"lostDelivery": "net::ERR_FAILED", "uncertain": True, "lateConfirmation": "executed", "replays": 0},
     "stale-target-continuation": {"execute": "acme.home.stale", "continuation": "refused", "revisionAdvanced": True, "effects": 0},
-    "authority-refusal-continuation": {"execute": "agent.proposal.forbidden", "continuation": "refused", "readRetained": True, "effects": 0},
+    "authority-refusal-continuation": {"execute": "weaver.proposal.forbidden", "continuation": "refused", "readRetained": True, "effects": 0},
     "visibility-review-control": {"policy": "full-auto", "atDecision": "review", "application": "executed", "effects": 1},
     "workflow-review-control": {"policy": "full-auto", "atDecision": "review", "application": "executed", "explicitSave": True, "publishRequests": 0},
-    "busy-policy-lifecycle": {"busy": ["review", "approved", "receipt-continuation"], "busyCode": "agent.session.busy", "settled": "full-auto", "effects": 1},
+    "busy-policy-lifecycle": {"busy": ["review", "approved", "receipt-continuation"], "busyCode": "weaver.session.busy", "settled": "full-auto", "effects": 1},
 }
 REVIEWED = ("sessionId", "turnId", "commandId", "proposalId", "invocationId", "toolCallId")
 CORRELATION_KEYS = {key: REVIEWED for key in EXPECTED_OUTCOMES}
@@ -87,7 +87,7 @@ def _path(root, reference):
 
 
 def _exchange(root, reference, method, path, status):
-    """One retained AgentTransport exchange: exact method/route/status and its parsed native body."""
+    """One retained WeaverTransport exchange: exact method/route/status and its parsed native body."""
     record = strict_json(_path(root, reference).read_text())
     check(isinstance(record, dict) and record.get("method") == method and record.get("path") == path
           and isinstance(record.get("rawBody"), str) and not record.get("transportErrorType"),
@@ -95,7 +95,7 @@ def _exchange(root, reference, method, path, status):
     need(record.get("status") == status, "lifecycle.native_status",
          f"{method} {path} returned {record.get('status')}; expected {status}")
     value = strict_json(record["rawBody"]) if record["rawBody"] else None
-    check(isinstance(value, dict), "A native Agent response must be a JSON envelope")
+    check(isinstance(value, dict), "A native Weaver response must be a JSON envelope")
     return value, record
 
 
@@ -127,11 +127,11 @@ def _size_owner(root, reference, witness):
 
 
 def _session_path(session):
-    return "/_elsa/agent/sessions/" + quote(session, safe="")
+    return "/_elsa/weaver/sessions/" + quote(session, safe="")
 
 
 def _proposal_path(proposal, action):
-    return "/_elsa/agent/proposals/" + quote(proposal, safe="") + "/" + action
+    return "/_elsa/weaver/proposals/" + quote(proposal, safe="") + "/" + action
 
 
 def _trace(root, reference):
@@ -145,7 +145,7 @@ def _trace(root, reference):
 
 def _verify_open(root, o, witness):
     session, command_id, target = o["sessionId"], o["commandId"], o["targetSize"]
-    created, _ = _exchange(root, o["refs"]["create"], "POST", "/_elsa/agent/sessions", 200)
+    created, _ = _exchange(root, o["refs"]["create"], "POST", "/_elsa/weaver/sessions", 200)
     data = created.get("data") or {}
     policy = data.get("policy")
     need(data.get("sessionId") == session and isinstance(policy, dict) and policy.get("autonomyMode") == o["autonomy"]
@@ -249,7 +249,7 @@ def _provider(root, o, witness, proposal, provider, *, continued=True):
 def _lifecycle_result(result, prepared, status):
     payload = result.get("payload") or {}
     data = payload.get("data") if isinstance(payload.get("data"), dict) else {}
-    need(result.get("succeeded") is False and not result.get("receipt") and payload.get("typeId") == "agent.operation-outcome"
+    need(result.get("succeeded") is False and not result.get("receipt") and payload.get("typeId") == "weaver.operation-outcome"
          and payload.get("schemaVersion") == "1"
          and {key.lower(): value for key, value in data.items()} == {"status": status, "invocationid": prepared["invocationId"]},
          "lifecycle.continuation_result", "The originating turn did not receive the exact " + status + " outcome")
@@ -340,14 +340,14 @@ def _refusal_case(root, o, witness, provider, key):
         denied, _ = _exchange(root, refs["deny"], "POST", _proposal_path(proposal["id"], "deny"), 200)
         need((denied.get("data") or {}).get("status") == "denied", "lifecycle.decision", "Native review did not deny the proposal")
         closed, _ = _exchange(root, refs["closedExecute"], "POST", _proposal_path(proposal["id"], "execute"), 409)
-        need((closed.get("error") or {}).get("code") == "agent.proposal.closed" and (closed.get("data") or {}).get("status") == "denied"
+        need((closed.get("error") or {}).get("code") == "weaver.proposal.closed" and (closed.get("data") or {}).get("status") == "denied"
              and (closed.get("data") or {}).get("executed") is False, "lifecycle.refusal_cause", "A denied proposal was not retained closed")
         outcome.update(decision="denied", execute=closed["error"]["code"])
         settled = before
     else:
         approved, _ = _exchange(root, refs["approve"], "POST", _proposal_path(proposal["id"], "approve"), 200)
         need((approved.get("data") or {}).get("status") == "approved", "lifecycle.decision", "Native review did not approve the proposal")
-        expected = ("acme.home.stale", 409) if key == "stale-target-continuation" else ("agent.proposal.forbidden", 403)
+        expected = ("acme.home.stale", 409) if key == "stale-target-continuation" else ("weaver.proposal.forbidden", 403)
         refused, _ = _exchange(root, refs["execute"], "POST", _proposal_path(proposal["id"], "execute"), expected[1])
         need((refused.get("error") or {}).get("code") == expected[0], "lifecycle.refusal_cause", "Wrong native refusal; expected " + expected[0])
         outcome["execute"] = refused["error"]["code"]
@@ -425,7 +425,7 @@ def verify_duplicate(root, o, witness, provider):
          "The originating turn received another result than the original receipt")
     repeat = _sse(root, refs["repeatDelivery"], o["sessionId"])
     error = repeat[-1].get("error") or {}
-    need(repeat[-1]["kind"] == "error" and error.get("code") == "agent.message.no_pending"
+    need(repeat[-1]["kind"] == "error" and error.get("code") == "weaver.message.no_pending"
          and not any(value["kind"] in ("started", "messageDelta", "contributedResult", "proposalCreated") for value in repeat),
          "lifecycle.repeat_delivery", "A repeated delivery was admitted as another continuation")
     _stored_once(_session(root, refs["session"], o["sessionId"])["messages"], first["toolResult"])
@@ -437,7 +437,7 @@ def verify_duplicate(root, o, witness, provider):
 
 
 BUSY_PHASES = (("busyReview", "review"), ("busyApproved", "approved"), ("busyContinuation", "receipt-continuation"))
-# The retention order _run_busy produces on one AgentTransport: each busy attempt and its detail sit strictly between
+# The retention order _run_busy produces on one WeaverTransport: each busy attempt and its detail sit strictly between
 # the transitions that define its phase (review paused -> approve -> execute -> continuation and settlement).
 BUSY_SEQUENCE = ("initialStream", "busyReview", "busyReviewDetail", "approve", "busyApproved", "busyApprovedDetail", "execute",
                  "busyContinuation", "busyContinuationDetail", "continuation", "settled", "acknowledge")
@@ -447,7 +447,7 @@ _TRANSPORT_RECEIPT = re.compile(r"(\d{4,})-[a-z-]+\.json")
 def _verify_busy_order(root, refs):
     """Proves when each busy attempt happened from the transport's own retained exchange ordinals.
 
-    AgentTransport names each receipt ``NNNN-<kind>.json`` from one monotonically increasing sequence, so the
+    WeaverTransport names each receipt ``NNNN-<kind>.json`` from one monotonically increasing sequence, so the
     ordinals of a single transport are its exchange order. Labels alone cannot prove a phase: the three busy
     exchanges are byte-identical, so a reordered, relabelled or foreign set is refused here."""
     phases = dict(BUSY_PHASES)
@@ -480,7 +480,7 @@ def verify_busy(root, o, witness, provider):
     phases = []
     for name, phase in BUSY_PHASES:
         value, record = _exchange(root, refs[name], "PUT", _session_path(session) + "/autonomy", 409)
-        need(same(record.get("requestBody"), body) and (value.get("error") or {}).get("code") == "agent.session.busy" and value.get("data") is None,
+        need(same(record.get("requestBody"), body) and (value.get("error") or {}).get("code") == "weaver.session.busy" and value.get("data") is None,
              "lifecycle.busy_missing", "Retained " + phase + " work did not block the policy change as busy")
         need(same(_session(root, refs[name + "Detail"], session).get("policy"), created), "lifecycle.policy_relabelled",
              "A refused policy change altered the acknowledged policy")
@@ -507,7 +507,7 @@ def verify_busy(root, o, witness, provider):
     after = _size_owner(root, refs["ownerAfter"], witness)
     need(after["size"] == o["targetSize"] and after["revision"] == executed["toolResult"]["receipt"]["after"]["revision"],
          "lifecycle.duplicate_effect", "The owner does not hold exactly the one original receipt")
-    outcome = {"busy": phases, "busyCode": "agent.session.busy", "settled": policy["autonomyMode"], "effects": 1}
+    outcome = {"busy": phases, "busyCode": "weaver.session.busy", "settled": policy["autonomyMode"], "effects": 1}
     return _record(root, provider, "busy-policy-lifecycle", outcome, _correlation(provider, o, turn, proposal),
                    refs["ownerBefore"], refs["ownerAfter"], list(refs.values()))
 
@@ -697,12 +697,12 @@ def _browser_owner(output, name):
 
 
 def _browser_requests(output, session):
-    requests = _browser_json(output, "agent-requests")
+    requests = _browser_json(output, "weaver-requests")
     check(isinstance(requests, list), "Native requests were not retained")
     counts = {}
     for row in requests:
         path = urlparse(row.get("url", "")).path
-        kind = ("create" if path == "/_elsa/agent/sessions" else "message" if path == _session_path(session) + "/messages"
+        kind = ("create" if path == "/_elsa/weaver/sessions" else "message" if path == _session_path(session) + "/messages"
                 else "autonomy" if path.endswith("/autonomy") else path.rsplit("/", 1)[-1])
         counts[kind] = counts.get(kind, 0) + 1
     need(not counts.get("autonomy") and not counts.get("deny") and counts.get("create") == 1, "lifecycle.native_requests",
@@ -917,7 +917,7 @@ def execute_lifecycle_case(runtime, provider, key):
     except LifecycleCaseFailure as error:
         error.observation = error.observation or observation
         raise
-    except AgentTransportError as error:
+    except WeaverTransportError as error:
         raise LifecycleCaseFailure(str(error), "lifecycle.native_transport", error.receipt or observation) from None
     record.update(source=runtime.run.source)
     runtime.run.assert_immutable_inputs()

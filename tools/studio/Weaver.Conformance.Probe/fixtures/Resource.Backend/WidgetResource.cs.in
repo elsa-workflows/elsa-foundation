@@ -1,6 +1,6 @@
 using System.Security.Claims;
 using System.Text.Json;
-using Elsa.Agent.Core.Models;
+using Elsa.Weaver.Core.Models;
 using Elsa.Foundation.Identity.Core.Authentication;
 using Elsa.Foundation.Identity.Core.Authorization;
 using Elsa.Studio.Preferences.Core;
@@ -34,29 +34,29 @@ internal static class WidgetContract
     internal static readonly string[] Scopes = [Route, "/", "/dashboard", "/overview"];
     internal static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
-    internal static AgentResourceTarget Target(WidgetObservation state) => new(Module, ResourceType, WidgetId, state.Document.Revision)
+    internal static WeaverResourceTarget Target(WidgetObservation state) => new(Module, ResourceType, WidgetId, state.Document.Revision)
         { DisplayName = "Acme status card", Route = Route };
     internal static object State(WidgetObservation state) => new { widgetId = WidgetId, revision = state.Document.Revision, visible = state.Visible, hostId = state.Key.StudioHostId };
-    internal static AgentPayload ReadPayload(WidgetObservation state) => new(ReadResult, "1", JsonSerializer.SerializeToElement(State(state), Json));
-    internal static AgentPayload Preview(WidgetObservation state, bool visible) => new(ChangeResult, "1", JsonSerializer.SerializeToElement(new
+    internal static WeaverPayload ReadPayload(WidgetObservation state) => new(ReadResult, "1", JsonSerializer.SerializeToElement(State(state), Json));
+    internal static WeaverPayload Preview(WidgetObservation state, bool visible) => new(ChangeResult, "1", JsonSerializer.SerializeToElement(new
         { widgetId = WidgetId, beforeVisible = state.Visible, visible, revision = state.Document.Revision, hostId = state.Key.StudioHostId }, Json));
-    internal static AgentPayload Changed(WidgetObservation after, bool beforeVisible) => new(ChangeResult, "1", JsonSerializer.SerializeToElement(new
+    internal static WeaverPayload Changed(WidgetObservation after, bool beforeVisible) => new(ChangeResult, "1", JsonSerializer.SerializeToElement(new
         { widgetId = WidgetId, beforeVisible, visible = after.Visible, revision = after.Document.Revision, hostId = after.Key.StudioHostId }, Json));
     internal static object SizeState(WidgetObservation state) => new
         { widgetId = WidgetId, revision = state.Document.Revision, size = WidgetResource.Size(state), hostId = state.Key.StudioHostId };
-    internal static AgentPayload SizePreview(WidgetObservation state, string size) => new(SizeResult, "1", JsonSerializer.SerializeToElement(new
+    internal static WeaverPayload SizePreview(WidgetObservation state, string size) => new(SizeResult, "1", JsonSerializer.SerializeToElement(new
         { widgetId = WidgetId, beforeSize = WidgetResource.Size(state), size, revision = state.Document.Revision, hostId = state.Key.StudioHostId }, Json));
-    internal static AgentPayload SizeChanged(WidgetObservation after, string beforeSize) => new(SizeResult, "1", JsonSerializer.SerializeToElement(new
+    internal static WeaverPayload SizeChanged(WidgetObservation after, string beforeSize) => new(SizeResult, "1", JsonSerializer.SerializeToElement(new
         { widgetId = WidgetId, beforeSize, size = WidgetResource.Size(after), revision = after.Document.Revision, hostId = after.Key.StudioHostId }, Json));
-    internal static bool SameTarget(AgentResourceTarget? target, WidgetObservation state) => target is not null &&
+    internal static bool SameTarget(WeaverResourceTarget? target, WidgetObservation state) => target is not null &&
         target.ModuleId == Module && target.ResourceType == ResourceType && target.ResourceId == WidgetId && target.Revision == state.Document.Revision;
-    internal static bool IsOwn(AgentContextAttachment item) => item.ModuleId == Module || item.ContentType.StartsWith("acme.home.", StringComparison.Ordinal);
+    internal static bool IsOwn(WeaverContextAttachment item) => item.ModuleId == Module || item.ContentType.StartsWith("acme.home.", StringComparison.Ordinal);
     internal static void Refuse(string code, string message, int status = 409) => throw new WidgetRefusal(new("acme.home." + code, message, status));
 }
 
-internal sealed class WidgetRefusal(AgentError error) : Exception(error.Message)
+internal sealed class WidgetRefusal(WeaverError error) : Exception(error.Message)
 {
-    internal AgentError Error { get; } = error;
+    internal WeaverError Error { get; } = error;
 }
 
 // This full-document observation never crosses the module boundary.
@@ -197,7 +197,7 @@ internal sealed class WidgetResource(
         return parsed.RootElement.Clone();
     }
 
-    internal async Task<AgentToolResult> ApplySizeAsync(AgentPreparedToolInvocation invocation, string size, CancellationToken ct)
+    internal async Task<WeaverToolResult> ApplySizeAsync(WeaverPreparedToolInvocation invocation, string size, CancellationToken ct)
     {
         WidgetSizeValidation.Canonical(size);
         var before = await ObserveAsync(invocation.ActorId, invocation.TenantId, true, ct);
@@ -229,17 +229,17 @@ internal sealed class WidgetResource(
             var payload = WidgetContract.SizeChanged(after, beforeSize);
             return new(invocation.ToolCallId, invocation.ToolName, true, "Acme status card size is " + size + " in your saved Home layout.", payload)
             {
-                Receipt = new(invocation.InvocationId, invocation.Target!, WidgetContract.Target(after), AgentEffectScope.ServerPersisted,
+                Receipt = new(invocation.InvocationId, invocation.Target!, WidgetContract.Target(after), WeaverEffectScope.ServerPersisted,
                     new(WidgetContract.SizeResult, "1", payload.Data.Clone()))
             };
         }
         catch (Exception) { return Uncertain(invocation); }
     }
 
-    internal Task<AgentToolResult> ApplyAsync(AgentPreparedToolInvocation invocation, bool visible, CancellationToken ct) =>
+    internal Task<WeaverToolResult> ApplyAsync(WeaverPreparedToolInvocation invocation, bool visible, CancellationToken ct) =>
         ApplyAsync(invocation, visible, ct, null);
 
-    internal async Task<AgentToolResult> ApplyAsync(AgentPreparedToolInvocation invocation, bool visible, CancellationToken ct, Func<Task>? beforeWrite)
+    internal async Task<WeaverToolResult> ApplyAsync(WeaverPreparedToolInvocation invocation, bool visible, CancellationToken ct, Func<Task>? beforeWrite)
     {
         var before = await ObserveAsync(invocation.ActorId, invocation.TenantId, true, ct);
         if (!WidgetContract.SameTarget(invocation.Target, before)) WidgetContract.Refuse("stale", "The reviewed personal layout revision has changed.");
@@ -275,13 +275,13 @@ internal sealed class WidgetResource(
             var payload = WidgetContract.Changed(after, before.Visible);
             return new(invocation.ToolCallId, invocation.ToolName, true, visible ? "Acme status card is visible in your saved Home layout." : "Acme status card is hidden in your saved Home layout.", payload)
             {
-                Receipt = new(invocation.InvocationId, invocation.Target!, WidgetContract.Target(after), AgentEffectScope.ServerPersisted,
+                Receipt = new(invocation.InvocationId, invocation.Target!, WidgetContract.Target(after), WeaverEffectScope.ServerPersisted,
                     new(WidgetContract.ChangeResult, "1", payload.Data.Clone()))
             };
         }
         catch (Exception) { return Uncertain(invocation); }
     }
 
-    private static AgentToolResult Uncertain(AgentPreparedToolInvocation invocation) => new(invocation.ToolCallId, invocation.ToolName, false,
+    private static WeaverToolResult Uncertain(WeaverPreparedToolInvocation invocation) => new(invocation.ToolCallId, invocation.ToolName, false,
         "The personal layout may have changed, but owner confirmation is unavailable. Do not replay this change; reread Home.");
 }
