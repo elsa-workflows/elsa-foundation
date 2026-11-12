@@ -1,6 +1,6 @@
 # Clean-slate execution kernel: design record
 
-Status: a proposed design, not approved. No product code exists for it. It supersedes the journal-first approach of ADR 0098 (#4176). Program: #4229.
+Status: a proposed design, not approved. No product code exists for it. It supersedes the journal-first approach proposed as ADR 0098 in open PR #4176 (not merged). Program: #4229.
 
 | File | What |
 |---|---|
@@ -14,4 +14,4 @@ The walkthrough is also published at https://vowful-mustard-pd8t.here.now/. To r
 cat walkthrough-src/01-head.html walkthrough-src/02-body1.html walkthrough-src/03-body2.html walkthrough-src/04-body3.html walkthrough-src/05-script.html > walkthrough.html
 ```
 
-The standalone model that tested the design is `prototypes/kernel-model/`.
+The standalone model that tested the design (`prototypes/kernel-model/`) is on local branches and is not published yet; it lands on main in later PRs of program #4229.
