@@ -29,3 +29,9 @@ Use the constitution files in `.specify/memory/` for gates, allowed exceptions, 
 - [Generic OAuth2 connector](elsa-integrations-oauth2.md) - Elsa Integrations `#2727` scheme (`oauth2`) for the foundation `http` connection: callback path, CAS refresh, secret masking, and `Elsa.Integrations.Sdk` v1.
 - [Slack connector](elsa-integrations-slack.md) - Elsa Integrations `#3322` Slack Web API activities on the foundation `http` connection: BYO Slack app, scopes, and `{PublicBaseUrl}/_elsa/connections/oauth/callback`.
 - [Microsoft 365 connector](elsa-integrations-microsoft365.md) - Elsa Integrations `#3330` Microsoft Graph v1.0 activities on the foundation `http` connection: BYO Entra app, delegated scopes, and `{PublicBaseUrl}/_elsa/connections/oauth/callback`.
+
+## Proposed designs
+
+These pages describe designs that are under review. They are not the current architecture and are not approved.
+
+- [Kernel walkthrough](https://vowful-mustard-pd8t.here.now/) - an interactive, illustrated walk through the proposed clean-slate execution kernel: the three layers (actor runtime, durable actors, actor types such as a workflow instance), the storage contract, the fenced commit, messages and the inbox, persistence modes, synchronous HTTP, the projector and the viewer's read path, the cost model, and the decisions of 12 November 2026. Design draft 4; not yet approved.
