@@ -1,7 +1,10 @@
 namespace Kernel;
 
-/// <summary><c>Runs</c> is the kernel's part of the row: the keys of the off-step work in flight, as a JSON array, or null.</summary>
-public sealed record InstanceRow(string Id, string Model, string Definition, InstanceStatus Status, string State, long Revision, string? Parent, string? Fault = null, string? Runs = null, History History = History.Full, bool Suspended = false);
+/// <summary>
+/// The kernel's part of the row: <c>Runs</c>, the keys of the off-step work in flight, and <c>Children</c>, the instances
+/// it started that have not finished, each a JSON array or null.
+/// </summary>
+public sealed record InstanceRow(string Id, string Model, string Definition, InstanceStatus Status, string State, long Revision, string? Parent, string? Fault = null, string? Runs = null, History History = History.Full, bool Suspended = false, string? Children = null);
 
 /// <summary>A message row as a poll returns it.</summary>
 public sealed record Stored(Message Message, long Seq, long Seen, int Attempts, long Trial);
@@ -25,10 +28,11 @@ public sealed record Cluster(int Nodes, IReadOnlyList<int> Free, long Now);
 /// <summary>
 /// One instance's part of a commit. <c>Expected</c> is the revision the row must have; null means the row is new.
 /// <c>Consumed</c> messages are deleted; <c>Done</c> ones (outside commands, which carry keep_until) are marked done.
+/// <c>Unsubscribe</c> deletes every subscription of the instance: it was ended by force and the kernel holds no list of them.
 /// </summary>
 public sealed record StepCommit(
     string Instance, InstanceRow? Row, long? Expected, IReadOnlyList<string> Consumed, IReadOnlyList<string> Done, IReadOnlyList<Message> Sent,
-    IReadOnlyList<SubscriptionRow> Subscribed, IReadOnlyList<SubscriptionRow> Unsubscribed, string? Journal);
+    IReadOnlyList<SubscriptionRow> Subscribed, IReadOnlyList<SubscriptionRow> Unsubscribed, string? Journal, bool Unsubscribe = false);
 
 /// <summary>What the owner of <c>Partition</c> at <c>Epoch</c>, believing the position is <c>Position</c>, writes in one transaction.</summary>
 public sealed record CommitBatch(

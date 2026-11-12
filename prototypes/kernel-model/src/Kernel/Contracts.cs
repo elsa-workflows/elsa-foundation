@@ -8,12 +8,20 @@ public readonly record struct InstanceRef(string Id)
 {
     public int Partition => int.Parse(Id.AsSpan(0, Id.IndexOf('/')), CultureInfo.InvariantCulture);
     public static InstanceRef In(int partition, string name) => new($"{partition}/{name}");
+
+    /// <summary>A partition for a name, the same on every node.</summary>
+    public static int Spread(string name, int partitions)
+    {
+        var hash = 2166136261;
+        foreach (var c in name) hash = (hash ^ c) * 16777619;
+        return (int)(hash % (uint)partitions);
+    }
     public override string ToString() => Id;
 }
 
 public enum InstanceStatus { Running, Finished, Faulted, Cancelled }
 
-public enum Placement { WithParent }
+public enum Placement { WithParent, Spread }
 
 /// <summary>What each commit of an instance leaves in the journal: the model's entries, only that its state changed, or nothing.</summary>
 public enum History { Full, State, Minimal }
@@ -49,8 +57,9 @@ public static class Kinds
     // What anyone may tell the kernel to do with an instance. The kernel handles them alone, in order; no model sees them.
     public const string Suspend = "kernel.suspend";     // deliver nothing but kernel messages until a resume
     public const string Resume = "kernel.resume";
+    public const string Terminate = "kernel.terminate";   // end it, its runs and its waits, and every instance it started
 
-    public static bool IsControl(string kind) => kind is Suspend or Resume;
+    public static bool IsControl(string kind) => kind is Suspend or Resume or Terminate;
 }
 
 public interface IExecutionModel
@@ -134,4 +143,5 @@ public enum Flaw
     DeliverWhileSuspended = 1 << 27, // a suspended instance is given its messages
     NoShelf = 1 << 28,             // a suspect that cannot be tried keeps its row unseen
     SuspendDuringTrial = 1 << 29,  // an instance may be suspended while it has a message on trial
+    TerminateRootOnly = 1 << 30,   // a terminate ends its instance and not the instances it started
 }

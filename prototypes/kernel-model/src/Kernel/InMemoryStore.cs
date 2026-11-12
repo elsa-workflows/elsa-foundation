@@ -106,6 +106,7 @@ public sealed class InMemoryStore(int partitions, Func<long> clock, Flaw flaws =
                 }
                 foreach (var subscription in step.Subscribed) Subscriptions.Add(subscription);
                 foreach (var subscription in step.Unsubscribed) Subscriptions.Remove(subscription);
+                if (step.Unsubscribe) Subscriptions.RemoveWhere(s => s.Instance == step.Instance);
                 if (step.Journal is not null) Journal[(batch.Partition, ++next)] = new JournalRow(batch.Partition, next, step.Instance, step.Row?.Revision ?? 0, step.Journal);
             }
             foreach (var id in batch.Seen)

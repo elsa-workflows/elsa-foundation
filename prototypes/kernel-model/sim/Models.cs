@@ -330,3 +330,43 @@ public sealed class Http(int actor, Func<IRun, CancellationToken, ValueTask<obje
         step.Emit(Request.Response, answer);
     }
 }
+
+// ---- a tree of instances that never ends by itself: only a terminate ends it ---------------------------------------------
+
+public sealed record TreeInput(int Depth, int Fanout);
+
+public sealed class TreeState
+{
+    public int Depth { get; set; }
+    public int Fanout { get; set; }
+    public bool Started { get; set; }
+    public List<string> Children { get; set; } = [];
+    public List<string> Log { get; set; } = [];
+}
+
+/// <summary>Inner nodes start children, every other one in another partition; a leaf holds off-step work and a wait.</summary>
+public sealed class Tree(Func<IRun, CancellationToken, ValueTask<object?>> work) : Model<TreeState>
+{
+    public override string Key => "tree";
+    public static StartSpec Spec(int depth, int fanout) => new("tree", "t", Json.Write(new TreeInput(depth, fanout)));
+
+    public override object CreateState(StartSpec start) => Json.Read<TreeInput>(start.Input!) is var input ? new TreeState { Depth = input.Depth, Fanout = input.Fanout } : null!;
+    public override ValueTask<object?> RunAsync(IRun run, CancellationToken cancellationToken) => work(run, cancellationToken);
+
+    protected override void Step(IStep step, TreeState state)
+    {
+        foreach (var message in step.Inbox)
+        {
+            if (message.Kind == Kinds.Start && !state.Started)
+            {
+                state.Started = true;
+                for (var i = 0; i < state.Fanout && state.Depth > 0; i++)
+                    state.Children.Add(step.Start(Spec(state.Depth - 1, state.Fanout), i % 2 == 0 ? Placement.Spread : Placement.WithParent).Id);
+                if (state.Depth > 0) continue;
+                step.Run("hold");
+                step.Subscribe("tk", "w");
+            }
+            else state.Log.Add(message.Kind);
+        }
+    }
+}

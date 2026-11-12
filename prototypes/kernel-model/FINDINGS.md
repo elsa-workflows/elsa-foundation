@@ -508,3 +508,22 @@ The owner's requirement of 12 November: a workflow handles an HTTP request and p
   suspend to it waits.
 - **Side effect, run:** innocent messages parked at the threshold fell from 154 to 1 in 5,000 seeds of 1,000 actions.
   A trial no longer waits for its instance's load. Section 21 measures this.
+
+## 13. Forced termination of a tree. Run
+
+- **Built:** `kernel.terminate`, handled by the kernel alone. The instance ends Cancelled (if it still ran), its
+  off-step work is cancelled (tickets deleted), all its subscriptions are deleted (`StepCommit.Unsubscribe`: the
+  kernel holds no list of them), its parent is told, and a terminate goes to every child in the kernel's list
+  (`InstanceRow.Children`: added by `Start`, removed when a child-finished is handled). A terminate also passes a
+  suspension, and still goes on to the children of an instance that has finished. `Placement.Spread` puts a child in
+  a partition hashed from its name (`WorkerOptions.Partitions`).
+- **Why a child being created is reached, reasoned and then run:** the child's start and its terminate come from one
+  sender to one target, so they are handled in that order (invariant 11), wherever the child lives.
+- **In the simulation:** a `Tree` model that never ends by itself: inner nodes start children, every other one spread;
+  a leaf holds off-step work and a wait. Outsiders terminate random tree nodes and runners; the settling phase
+  terminates only the roots.
+- **Invariant 17:** after the roots are terminated, no tree instance runs, none still lists children, and no wait of
+  a terminated instance is left (I8 at every action, the end check for subscriptions).
+  `--flaw TerminateRootOnly`: caught, seed 1 (`END the subscription of 1/tr32~1.1~1.0 to tk is left behind`).
+- **Coverage, run, 4,000 seeds:** 13,568 descendants cancelled in another partition than their parent's, 19,643 in
+  the same; 431 of them were created after their parent had already been terminated.

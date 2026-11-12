@@ -9,7 +9,7 @@ internal sealed class Step : IStep
     private readonly List<SubscriptionRow> _subscribed = [], _unsubscribed = [];
     private readonly List<object> _entries = [];
     private readonly List<(string, object?)> _emitted = [];
-    private readonly List<string> _runs, _cancelled = [];
+    private readonly List<string> _runs, _children, _cancelled = [];
     private readonly long _revision;
     private InstanceStatus _status = InstanceStatus.Running;
     private object? _output;
@@ -25,8 +25,12 @@ internal sealed class Step : IStep
         Instance = new InstanceInfo(new InstanceRef(id), row?.Model ?? spec!.Model, row?.Definition ?? spec!.Definition, row is null ? spec!.Parent : row.Parent);
         Inbox = taken.Skip(from).Select(i => i.Message).ToList();   // messages ahead of the one that creates the target had no target
         _runs = row?.Runs is { } runs ? Json.Read<List<string>>(runs) : [];
+        _children = row?.Children is { } children ? Json.Read<List<string>>(children) : [];
         foreach (var message in Inbox)
+        {
             if (message.Kind == Kinds.RunFinished) _runs.Remove(message.Read<RunFinished>().Key);    // its result is being handled: no longer in flight
+            if (message.Kind == Kinds.ChildFinished) _children.Remove(message.Read<ChildFinished>().Child);
+        }
         _revision = (row?.Revision ?? 0) + 1;
     }
 
@@ -53,9 +57,12 @@ internal sealed class Step : IStep
 
     public InstanceRef Start(StartSpec spec, Placement placement = Placement.WithParent)
     {
-        var child = new InstanceRef($"{Id}~{_revision}.{_ordinal}");
+        // With its parent by default, so a call tree talks in memory and commits together; spread, for a wide fan-out.
+        var name = $"{Id[(Id.IndexOf('/') + 1)..]}~{_revision}.{_ordinal}";
+        var child = InstanceRef.In(placement == Placement.Spread ? InstanceRef.Spread(name, _worker.Partitions) : Instance.Ref.Partition, name);
         Send(child, Kinds.Start, null, new SendOptions(Start: spec with { Parent = Id }));
-        _fresh.Add(_sent[^1].Id);   // the id was minted here, so the target cannot exist: no read
+        _children.Add(child.Id);    // the kernel's list: whom a terminate goes on to
+        if (child.Partition == Instance.Ref.Partition) _fresh.Add(_sent[^1].Id);   // minted and owned here, so it cannot exist: no read
         return child;
     }
 
@@ -89,7 +96,8 @@ internal sealed class Step : IStep
     {
         var created = Slot.Row is null;
         var history = Slot.Row?.History ?? Spec!.History;
-        var row = new InstanceRow(Id, Instance.Model, Instance.Definition, _status, Json.Write(State), _revision, Instance.Parent, Runs: _runs.Count == 0 ? null : Json.Write(_runs), History: history);
+        var row = new InstanceRow(Id, Instance.Model, Instance.Definition, _status, Json.Write(State), _revision, Instance.Parent, Runs: _runs.Count == 0 ? null : Json.Write(_runs), History: history,
+            Children: _children.Count == 0 ? null : Json.Write(_children));
         if (_status != InstanceStatus.Running && row.Parent is not null) _sent.Add(Worker.Finished(row, _output is null ? null : Json.Write(_output)));
         var unit = new Unit(Slot, Id) { Consumed = Taken, Cancelled = _cancelled, Spec = Spec, Status = _status, Revision = _revision, Emitted = _emitted };
         // An ephemeral instance that ends in the step that created it, and leaves nothing for anyone else, is never written.

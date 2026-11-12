@@ -14,6 +14,7 @@ public sealed class Oracle
     public readonly Dictionary<string, List<string>> CWaiters = new();                 // waiters through correlation instances
     public readonly HashSet<string> Published = [];                                      // correlation instances that were sent an event
     public readonly Dictionary<string, (string Mode, bool Ephemeral, int PostedBy, bool Cancel)> Https = new();   // instances that answer requests
+    public readonly HashSet<string> Trees = [];                                          // roots of trees started from outside
 
     public bool Accepts(Message m) => m.Kind != "cancel" || (Runners.TryGetValue(m.Target.Id, out var keys) && keys.Contains(m.Read<string>()));
 
@@ -28,6 +29,7 @@ public sealed class Oracle
             case "waiter": Waiters[target] = Json.Read<List<string>>(m.Start.Input!); break;
             case "cwaiter": CWaiters[target] = Json.Read<List<string>>(m.Start.Input!); break;
             case "correlation": Published.Add(target); break;
+            case "tree": Trees.Add(target); break;
             case "http": Https[target] = (Json.Read<HttpInput>(m.Start.Input!).Mode, m.Start.Ephemeral, -1, false); break;
             case "sequence": var input = Json.Read<SequenceInput>(m.Start.Input!); Sequences[target] = (input.Count, input.Mode, posted); break;
             case "runner": List(Runners, target).Add(m.Read<string>()); break;
@@ -43,6 +45,7 @@ public sealed partial class World
 {
     public readonly Oracle Oracle = new();
     private readonly Dictionary<string, (long Revision, InstanceStatus Status)> _known = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _late = new(StringComparer.Ordinal);   // instances whose row first appeared after their parent had ended
     private readonly Dictionary<(Type, string), object> _parsed = new();
     private readonly Dictionary<string, int> _attempts = new(StringComparer.Ordinal);  // per message, as last seen
     public readonly HashSet<string> Parked = new(StringComparer.Ordinal);               // instances parked by the rule of invariant 14
@@ -119,6 +122,7 @@ public sealed partial class World
             if (!commits.ContainsKey(row.Id) && row.History != History.Minimal) return $"I2 {row.Id} has a row and no journal row";
             if (_known.TryGetValue(row.Id, out var before) && (row.Revision < before.Revision || (before.Status != InstanceStatus.Running && row.Status != before.Status)))
                 return $"I10 {row.Id} went from revision {before.Revision} {before.Status} to revision {row.Revision} {row.Status}";
+            if (!_known.ContainsKey(row.Id) && row.Parent is { } up && Store.Instances.GetValueOrDefault(up) is { Status: not InstanceStatus.Running }) _late.Add(row.Id);
             _known[row.Id] = (row.Revision, row.Status);
             if (row.Status != InstanceStatus.Faulted) continue;
             // I14: parked for losing owners only at the threshold; otherwise only an instance that really fails is parked.
@@ -233,7 +237,9 @@ public sealed partial class World
     private string? Waits()
     {
         var rows = Store.Subscriptions.ToLookup(s => s.Instance, s => s.Key);
-        if (rows.FirstOrDefault(g => !Oracle.Waiters.ContainsKey(g.Key)) is { } stray) return $"I8 {stray.Key} has a subscription and is no waiter";
+        // A running tree leaf waits; nothing else that is no waiter may, and a terminated leaf's wait is gone with its commit.
+        if (rows.FirstOrDefault(g => !Oracle.Waiters.ContainsKey(g.Key) && Store.Instances.GetValueOrDefault(g.Key) is not { Model: "tree", Status: InstanceStatus.Running }) is { } stray)
+            return $"I8 {stray.Key} has a subscription and is {(Store.Instances.GetValueOrDefault(stray.Key) is { } row ? row.Status.ToString() : "no waiter")}";
         foreach (var id in Oracle.Waiters.Keys)
         {
             var state = State<WaiterState>(id);
@@ -405,6 +411,9 @@ public sealed partial class World
     // I13: an event and a subscription that are both committed must have met. Then every wait left gets an event.
     private string? Meet()
     {
+        foreach (var root in Oracle.Trees)      // only the roots: the kernel must reach the rest
+            if (Store.Instances.GetValueOrDefault(root) is { } row && (row.Status == InstanceStatus.Running || row.Children is not null))
+                Store.AddAsync(new Message("end-" + root, new InstanceRef(root), Kinds.Terminate, KeepUntil: Time + 3_600_000)).AsTask().Wait();
         foreach (var (id, _) in Oracle.Https.Where(h => h.Value.Mode == Http.Wait))   // whatever still waits is resumed, with nobody asking
             if (Store.Instances.GetValueOrDefault(id)?.Status == InstanceStatus.Running) Store.AddAsync(new Message("last-" + id, new InstanceRef(id), "resume", KeepUntil: Time + 3_600_000)).AsTask().Wait();
         var left = Oracle.Waiters.Keys.Where(id => Store.Instances.GetValueOrDefault(id)?.Status == InstanceStatus.Running)
@@ -447,9 +456,16 @@ public sealed partial class World
         foreach (var (id, keys) in Oracle.Runners)
         {
             var log = State<RunnerState>(id)?.Log ?? [];
-            if (!Parked.Contains(id) && keys.Find(k => !log.Contains("start " + k) || !(log.Contains("result " + k) || log.Contains("cancel " + k))) is { } key)
+            if (!Parked.Contains(id) && Store.Instances.GetValueOrDefault(id)?.Status != InstanceStatus.Cancelled && keys.Find(k => !log.Contains("start " + k) || !(log.Contains("result " + k) || log.Contains("cancel " + k))) is { } key)
                 return $"I12 run {key} of {id} has neither a result nor a cancel: [{string.Join(", ", log)}]";
         }
+        foreach (var row in Store.Instances.Values.Where(i => i.Model == "tree" && i.Parent is not null && i.Status == InstanceStatus.Cancelled))
+            Count("tree child cancelled" + (row.Id[..row.Id.IndexOf('/')] != row.Parent![..row.Parent!.IndexOf('/')] ? ", in another partition" : ", with its parent") + (_late.Contains(row.Id) ? ", created after its parent ended" : ""));
+        // I17: a terminate reaches every descendant, in any partition, including those whose start was on its way.
+        if (Store.Instances.Values.FirstOrDefault(i => i.Model == "tree" && i.Status == InstanceStatus.Running) is { } alive)
+            return $"I17 tree instance {alive.Id} still runs after its root was terminated";
+        if (Store.Instances.Values.FirstOrDefault(i => i.Model == "tree" && i.Children is not null) is { } parent)
+            return $"I17 terminated tree instance {parent.Id} still lists children {parent.Children}";
         if (Store.Instances.Values.FirstOrDefault(i => i.Suspended) is { } suspended) return $"END {suspended.Id} is still suspended after its resume";
         foreach (var (process, request, instance) in Asked)
         {

@@ -6,6 +6,9 @@ public sealed record WorkerOptions
     public TimeSpan Horizon { get; init; } = TimeSpan.FromSeconds(10);
     public int PollLimit { get; init; } = 500;
     public int MaxBatch { get; init; } = 500;
+
+    /// <summary>How many partitions the database has: needed to place a child in another one.</summary>
+    public int Partitions { get; init; } = 1;
     /// <summary>How many owners may be lost with a message on trial before it is parked.</summary>
     public int MaxAttempts { get; init; } = 3;
 
@@ -102,6 +105,7 @@ public sealed class Worker
     public IEnumerable<(string Id, bool Durable, bool Taken)> Messages => _items.Values.Select(i => (i.Message.Id, i.Durable, i.Taken));
 
     internal bool Has(Flaw flaw) => (_options.Flaws & flaw) != 0;
+    internal int Partitions => _options.Partitions;
 
     /// <summary>A step cancelled a run. Its ticket may be in memory, or still on its way in with a poll.</summary>
     internal void Cancelling(string ticket)
@@ -342,12 +346,12 @@ public sealed class Worker
         slot.Busy = true;
         var creator = slot.Row is null ? due.FindIndex(i => i.Message.Start is not null) : -1;
         var spec = creator < 0 ? null : due[creator].Message.Start;
-        if (slot.Row is { Status: not InstanceStatus.Running })
+        if (slot.Row is { } current && Kinds.IsControl(due[0].Message.Kind) && (current.Status == InstanceStatus.Running || current.Children is not null))
+            Enqueue(Control(slot, instance, due[0]));       // a terminate still goes on to the children of a finished instance
+        else if (slot.Row is { Status: not InstanceStatus.Running })
             Enqueue(new Unit(slot, instance) { Consumed = due, Status = slot.Row.Status });    // a finished target: consumed and dropped
         else if (due.Find(i => i.Attempts >= _options.MaxAttempts && i.Message.Kind != Kinds.RunFinished) is { } poison)
             Enqueue(Park(slot, instance, due, spec, $"message {poison.Message.Id} was on trial when {poison.Attempts} owners were lost"));
-        else if (slot.Row is not null && Kinds.IsControl(due[0].Message.Kind))
-            Enqueue(Control(slot, instance, due[0]));
         else if (slot.Row is null && spec is null)                   // no target and no start spec: dropped and journalled
             Enqueue(new Unit(slot, instance) { Consumed = due, Journal = Json.Write(due.Select(i => "dropped " + i.Message.Id)), Status = null });
         else
@@ -385,14 +389,38 @@ public sealed class Worker
         return unit;
     }
 
-    /// <summary>The kernel's own step: suspend or resume. A message that changes nothing is consumed and dropped.</summary>
-    private static Unit Control(Slot slot, string instance, Item item)
+    /// <summary>The kernel's own step: suspend, resume or terminate. A message that changes nothing is consumed and dropped.</summary>
+    private Unit Control(Slot slot, string instance, Item item)
     {
         var row = slot.Row!;
+        if (item.Message.Kind == Kinds.Terminate) return Terminate(slot, instance, item, row);
         var suspended = item.Message.Kind == Kinds.Suspend;
+        if (row.Status != InstanceStatus.Running) return new Unit(slot, instance) { Consumed = [item], Status = row.Status };
         if (row.Suspended == suspended) return new Unit(slot, instance) { Consumed = [item], State = slot.State };
         var next = row with { Suspended = suspended, Revision = row.Revision + 1 };
         return new Unit(slot, instance) { Row = next, Expected = row.Revision, Consumed = [item], State = slot.State, Revision = next.Revision, Journal = Journal(row.History, [item.Message.Kind]) };
+    }
+
+    /// <summary>
+    /// Forced termination: the instance ends Cancelled (if it still ran), its off-step work is cancelled, its waits are
+    /// deleted, its parent is told, and a terminate goes to every child it started that has not finished. A child whose
+    /// start is still on its way gets the terminate after the start: one sender, one target, in the order sent.
+    /// </summary>
+    private Unit Terminate(Slot slot, string instance, Item item, InstanceRow row)
+    {
+        var running = row.Status == InstanceStatus.Running;
+        var next = row with { Status = running ? InstanceStatus.Cancelled : row.Status, Revision = row.Revision + 1, Runs = null, Children = null, Suspended = false };
+        var children = row.Children is { } list && !Has(Flaw.TerminateRootOnly) ? Json.Read<List<string>>(list) : [];
+        var unit = new Unit(slot, instance)
+        {
+            Row = next, Expected = row.Revision, Consumed = [item], Status = next.Status, Revision = next.Revision, Unsubscribe = running,
+            Journal = Journal(row.History, ["terminated"]),
+            Sent = children.Select((child, i) => new Message($"{instance}#{next.Revision}.{i:D4}", new InstanceRef(child), Kinds.Terminate, Sender: instance)).ToList(),
+            Cancelled = (row.Runs is { } runs ? Json.Read<List<string>>(runs) : []).Select(key => TicketId(instance, key)).ToList(),
+        };
+        foreach (var ticket in unit.Cancelled) Cancelling(ticket);
+        if (running && row.Parent is not null) unit.Sent.Add(Finished(next, null));
+        return unit;
     }
 
     /// <summary>What a commit leaves in the journal at a history level. At Minimal no row is written and the position does not move.</summary>
@@ -509,7 +537,7 @@ public sealed class Worker
             units.Select(u => new StepCommit(u.Instance, u.Row, u.Expected,
                 Has(Flaw.KeepConsumedMessages) ? [] : [.. u.Consumed.Where(i => i.Durable && i.Message.KeepUntil is null).Select(i => i.Message.Id), .. Has(Flaw.VolatileRunTicket) ? [] : u.Cancelled],
                 Has(Flaw.KeepConsumedMessages) ? [] : u.Consumed.Where(i => i.Durable && i.Message.KeepUntil is not null).Select(i => i.Message.Id).ToList(),
-                u.Sent.Where(m => !u.Volatile.Contains(m.Id)).ToList(), u.Subscribed, u.Unsubscribed, u.Journal)).ToList(),
+                u.Sent.Where(m => !u.Volatile.Contains(m.Id)).ToList(), u.Subscribed, u.Unsubscribed, u.Journal, u.Unsubscribe)).ToList(),
             marks.Select(i => i.Message.Id).ToList(), trial.Select(i => i.Message.Id).ToList());
         while (true)
         {
@@ -685,6 +713,7 @@ internal sealed class Unit(Slot? slot, string instance)
     public List<Message> Sent = [];
     public HashSet<string> Fresh = [], Volatile = [];
     public List<SubscriptionRow> Subscribed = [], Unsubscribed = [];
+    public bool Unsubscribe;
 
     public bool Durable => Row is not null || Journal is not null || Cancelled.Count > 0 || Consumed.Exists(i => i.Durable) || Sent.Exists(m => !Volatile.Contains(m.Id));
 }

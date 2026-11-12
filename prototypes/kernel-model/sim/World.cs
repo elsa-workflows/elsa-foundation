@@ -223,6 +223,7 @@ public sealed partial class World
         [
             new Counter(), new Parent(), new Child(), new Waiter(), new Sequence(), new Correlation(Config.Flaws.HasFlag(Flaw.CorrelationForgets)), new CWaiter(Config.Partitions),
             new Runner((run, cancel) => Work(actor, run, cancel)), new Fragile(() => Dying = node), new Http(actor.Id, (run, cancel) => Work(actor, run, cancel)),
+            new Tree((run, cancel) => Work(actor, run, cancel)),
         ];
         // A node's name is unique per process start: a restarted process is not its predecessor (finding F9).
         actor.Worker = new Worker(Config.Flaws.HasFlag(Flaw.StableNodeName) ? "node" + node : $"node{node}.{Incarnation[node]}", partition, wire, models, new WorkerOptions
@@ -230,7 +231,7 @@ public sealed partial class World
             Lease = TimeSpan.FromSeconds(10), Horizon = TimeSpan.FromSeconds(2), PollLimit = 3, MaxBatch = 4, MaxAttempts = Config.Attempts, TrialGroup = Config.Group, Gate = _gates[node],
             Monotonic = () => Time + node * 7919,       // every node counts at the database's rate from its own zero
             WallClock = () => Time + Skew[node],
-            Flaws = Config.Flaws,
+            Flaws = Config.Flaws, Partitions = Config.Partitions,
             Transport = new Transport(this, Config.Flaws.HasFlag(Flaw.StableNodeName) ? "node" + node : $"node{node}.{Incarnation[node]}"),
             OnStep = (instance, inbox, _) =>
             {
@@ -596,9 +597,17 @@ public sealed class Generator(int seed, World world)
         return open.Count == 0 ? new Act("tick", r.Next(50)) : new Act("disconnect", S: open[r.Next(open.Count)], Flag: r.Next(2) == 0);
     }
 
-    // The kernel's own commands, from outside: suspend or resume an instance that exists.
+    // The kernel's own commands, from outside: start a tree, terminate a tree node or a runner, suspend or resume anything.
     private Act Control(Random r)
     {
+        var roll = r.Next(10);
+        if (roll < 3) return new Act("add", M: new Message($"x{_serial}", InstanceRef.In(r.Next(world.Config.Partitions), "tr" + _serial++), Kinds.Start, Start: Tree.Spec(r.Next(1, 3), r.Next(1, 3)), KeepUntil: world.Time + 3_600_000));
+        if (roll < 6)
+        {
+            var ends = world.Store.Instances.Values.Where(i => i.Status == InstanceStatus.Running && i.Model is "tree" or "runner").Select(i => i.Id).Order(StringComparer.Ordinal).ToList();
+            if (ends.Count == 0) return new Act("tick", r.Next(50));
+            return new Act("add", M: new Message($"x{_serial++}", new InstanceRef(ends[r.Next(ends.Count)]), Kinds.Terminate, KeepUntil: world.Time + 3_600_000));
+        }
         var rows = world.Store.Instances.Values.Where(i => i.Status == InstanceStatus.Running).Select(i => i.Id).Order(StringComparer.Ordinal).ToList();
         if (rows.Count == 0) return new Act("tick", r.Next(50));
         var target = rows[r.Next(rows.Count)];
