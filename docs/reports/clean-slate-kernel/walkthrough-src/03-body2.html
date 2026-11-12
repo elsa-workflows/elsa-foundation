@@ -122,7 +122,7 @@
       <tr><td>StateMachine</td><td>Events fire guarded transitions; exit, transition and entry actions run</td><td>The active configuration of every region</td><td><b>Statechart engine</b>: one event per turn; later events wait with <code>Hold</code> while an action is suspended. A native composite (recommended; #3815's design milestone decides), so it works as a root and nested</td></tr>
     </tbody>
   </table></div>
-  <p class="note">The plan: extract the graph engine and port the prototype's Flowchart to it (its All join after a decision does not fire today), a BPMN spike that hosts the Bpmn.Semantics interpreter on the kernel, then a StateMachine spike with nested states and parallel regions. Each step is gated by new simulation invariants and mutation checks, and none may move the cost table.</p>
+  <p class="note">The plan: extract the graph engine and port the prototype's Flowchart to it (by the prototype's own reasoning, its All join after a decision does not fire; the first step shows it with a test), a BPMN spike that hosts the Bpmn.Semantics interpreter on the kernel, then a StateMachine spike with nested states and parallel regions. Each step is gated by new simulation invariants and mutation checks, and none may move the cost table.</p>
   <h3>Background jobs</h3>
   <figure>
     <div class="fig">
@@ -247,7 +247,7 @@
     <li data-on="client h-req route na"><b>A resume arrives at node A.</b><p>Node B owns the waiting workflow.</p></li>
     <li data-on="h-msg wait db"><b>A adds the resume message</b><p>and holds the request open with a reply address.</p></li>
     <li data-on="lost nb"><b>Node B dies.</b><p>After its lease runs out another node takes the partition and resumes the workflow from the rows, as usual.</p></li>
-    <li data-on="h-503 wait client"><b>The request ends with 503.</b><p>By default, never a hang and never two responses. The workflow's later output is not sent to a caller that is gone.</p></li>
+    <li data-on="h-503 wait client"><b>The request ends with 503.</b><p>By default, never a hang and never two responses. The workflow's later output is not sent to a caller that is gone. In the prototype an owner lost on another node is noticed only at the deadline (504): that signal is not built yet.</p></li>
   </ol>
   </div>
   <ul>
