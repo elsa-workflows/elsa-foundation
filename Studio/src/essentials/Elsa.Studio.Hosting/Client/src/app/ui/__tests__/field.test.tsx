@@ -104,3 +104,10 @@ it("keeps a standalone choice individually named and activates it from its capti
   expect(input.checked).toBe(true);
   expect(container.querySelector("fieldset")).toBeNull();
 });
+
+
+it("separates metadata from the caption in an RTL legend without changing the control name", () => {
+  const { container } = mount(<div dir="rtl"><fields.StudioField label="Translated label" meta="Optional"><input /></fields.StudioField></div>);
+  expect(container.querySelector("legend")?.textContent).toBe("Translated label Optional");
+  expect(container.querySelector("input")?.labels?.[0].textContent).toBe("Translated label");
+});

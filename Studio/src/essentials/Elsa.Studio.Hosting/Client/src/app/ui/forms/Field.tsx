@@ -33,7 +33,7 @@ export const StudioFormField = forwardRef<HTMLDivElement, FieldProps & {
     <fieldset className="studio-form-control" role="presentation">
       <legend className="studio-form-legend">
         <label id={labelId} htmlFor={id} className="studio-field-label">{label}</label>
-        {meta ? <span className="studio-field-meta">{meta}</span> : null}
+        {meta ? <>{" "}<span className="studio-field-meta">{meta}</span></> : null}
       </legend>
       <div className="studio-form-body" data-leading={Boolean(leading)} data-trailing={Boolean(trailing)}>
         {leading ? <div className="studio-form-adornment">{leading}</div> : null}

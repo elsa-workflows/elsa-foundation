@@ -56,7 +56,7 @@
 }
 
 .studio-form-legend .studio-field-label strong { font: inherit; }
-.studio-field-meta { margin-inline-start: 6px; }
+.studio-field-meta { display: inline-block; margin-inline: 6px; unicode-bidi: isolate; }
 .studio-form-body { display: flex; align-items: stretch; min-inline-size: 0; }
 .studio-form-value { flex: 1 1 0; min-inline-size: 0; }
 
