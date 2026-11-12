@@ -9,7 +9,7 @@ const record = (value: unknown): value is Fields => value !== null && typeof val
 
 /** Explicit ordinary Set/variable transfers; the server still admits the complete proposed document. */
 export function transferNativeBlockResults(context: NativeBlockContext, proposed: NativeBlockDocument,
-  ownerId: string, blockId: string, selected: Set<string>, refuse: Refuse): NativeBlockDocument {
+  ownerId: string, blockId: string, selected: Set<string>, refuse: Refuse, flowchartStart?: string): NativeBlockDocument {
   const locations: { node: ActivityNode; parent: ActivityNode | null; moved: boolean }[] = [];
   const visit = (node: ActivityNode, parent: ActivityNode | null = null, moved = false) => {
     moved ||= selected.has(node.nodeId);
@@ -37,11 +37,15 @@ export function transferNativeBlockResults(context: NativeBlockContext, proposed
     const value = argument.value;
     if (!record(value) || typeof value.language !== "string" || typeof value.source !== "string" || !record(value.parameters)) return;
     for (const [key, parameter] of Object.entries(value.parameters))
-      if (record(parameter) && parameter.$type === "ActivityResult" && typeof parameter.producerNodeId === "string" && moved.has(parameter.producerNodeId))
+      if (record(parameter) && parameter.kind === "ActivityResult" && typeof parameter.producerNodeId === "string" && moved.has(parameter.producerNodeId))
         references.push({ argument: value.parameters, binding: parameter, consumerId, path: `${path}.value.parameters.${key}`, parameter: true });
   };
   locations.filter(item => !item.moved).forEach(({ node }) => node.inputs.forEach((input, index) => {
-    if (record(input)) inspect(input.value, node.nodeId, `nodes.${node.nodeId}.inputs[${index}]`);
+    if (!record(input)) return;
+    const count = references.length;
+    inspect(input.value, node.nodeId, `nodes.${node.nodeId}.inputs[${index}]`);
+    if (references.length !== count && input.conversion != null)
+      refuse("unproven-result-conversion", `nodes.${node.nodeId}.inputs[${index}].conversion`, "Keep this producer and reader together: transferring an authored conversion requires a separately proved conversion plan.");
   }));
   // Resource-owned output mappings cannot be rewritten by a graph-document-only edit.
   const inspectOutside = (value: unknown, path: string) => {
@@ -67,6 +71,15 @@ export function transferNativeBlockResults(context: NativeBlockContext, proposed
   const transfers = new Map<string, { producerId: string; projection: string; scope?: string; key: string; nodeId: string }>();
   const occupied = new Set([...locations.map(item => item.node.nodeId), ...context.document.layout.map(item => item.nodeId),
     ...context.document.activityPresentation.map(item => item.nodeId), ...(Array.isArray(declarations) ? declarations.map(item => (item as Fields).referenceKey as string) : [])]);
+  for (const { node } of locations) if (node.structure?.kind === flowchartStructureKind) {
+    const payload = node.structure.payload;
+    for (const field of [payload.nodeMetadata, payload.connectionMetadata]) if (record(field)) Object.keys(field).forEach(id => occupied.add(id));
+    if (Array.isArray(payload.connections)) for (const edge of payload.connections) if (record(edge)) {
+      if (typeof edge.id === "string" && edge.id.trim()) occupied.add(edge.id.trim());
+      else if (record(edge.source) && record(edge.target) && typeof edge.source.nodeId === "string" && typeof edge.target.nodeId === "string")
+        occupied.add(`${edge.source.nodeId}:${typeof edge.source.port === "string" && edge.source.port.trim() || "Done"}->${edge.target.nodeId}`);
+    }
+  }
   const allocate = (suffix: string) => {
     let index = 1;
     while (occupied.has(`${blockId}-${suffix}-${index}`)) index++;
@@ -97,7 +110,7 @@ export function transferNativeBlockResults(context: NativeBlockContext, proposed
       if (scopeKind === flowchartStructureKind) {
         const edges = owner.structure!.payload.connections as { source: { nodeId: string; port?: string }; target: { nodeId: string } }[];
         const visited = new Set<string>();
-        let next = typeof owner.structure!.payload.startNodeId === "string" ? owner.structure!.payload.startNodeId : originalChildren[0]?.nodeId;
+        let next = flowchartStart;
         while (typeof next === "string" && !visited.has(next)) {
           visited.add(next);
           const outgoing = edges.filter(edge => edge.source.nodeId === next);
@@ -165,7 +178,7 @@ export function transferNativeBlockResults(context: NativeBlockContext, proposed
         return { ...(input as Fields), value: { ...oldInput.value, expressionType: "Variable", value: { referenceKey: transfer.key, declaringScopeId: ownerId } } };
       if (reference.parameter && record(oldInput.value.value) && oldInput.value.value.parameters === reference.argument && record(input) && record(input.value) && record(input.value.value) && record(input.value.value.parameters))
         for (const [key, binding] of Object.entries(reference.argument)) if (binding === reference.binding)
-          input.value.value.parameters = { ...input.value.value.parameters, [key]: { $type: "Variable", declaringScopeNodeId: ownerId, variableKey: transfer.key } };
+          input.value.value.parameters = { ...input.value.value.parameters, [key]: { kind: "Variable", declaringScopeNodeId: ownerId, variableKey: transfer.key } };
       return input;
     });
   }

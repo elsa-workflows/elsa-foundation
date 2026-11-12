@@ -263,7 +263,8 @@ export function planExtractNativeBlock(context: NativeBlockContext, request: Ext
     children.splice(first, 0, composite);
     const layout = [...translateLayout(context.document.layout, selected, { x: -position.x, y: -position.y }), { nodeId: block.nodeId, ...position }];
     const document = edited(context, withActivities(owner, children), layout, [...context.document.activityPresentation, presentation]);
-    return ready(context, transferNativeBlockResults(context, document, scope.owner.nodeId, block.nodeId, selected, refuse), [block.nodeId]);
+    return ready(context, transferNativeBlockResults(context, document, scope.owner.nodeId, block.nodeId, selected, refuse,
+      scope.kind === "flowchart" ? effectiveStart(scope.owner) : undefined), [block.nodeId]);
   });
 }
 
@@ -468,7 +469,7 @@ function assertUnreferenced(context: NativeBlockContext, owner: ActivityNode, bl
           });
           continue;
         }
-        if (value.$type === "Variable" && (key === "$type" || key === "variableKey")) continue;
+        if (value.kind === "Variable" && typeof value.declaringScopeNodeId === "string" && typeof value.variableKey === "string" && (key === "kind" || key === "variableKey")) continue;
         // Literal scalars are data, even when text happens to contain the wrapper ID. Objects can
         // carry typed references; those and conflicting syntax markers stay conservative.
         if (key === "value" && literal && (child === null || typeof child !== "object")) continue;

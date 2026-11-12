@@ -28,8 +28,8 @@ try {
     const read = { producerNodeId: "producer", projectionKey: "$result", producerScopeId: "scope:root" };
     const producer = node("producer", loop ? "Variable" : "Literal", loop ? { referenceKey: "counter" } : 42);
     const consumer = node("consumer", parameter ? "JavaScript" : "ActivityResult", parameter ? {
-      language: "JavaScript", source: "prior + 1", capabilityProfile: "binding-pure-v1",
-      parameters: { prior: { $type: "ActivityResult", producerNodeId: "producer", projectionKey: "$result" } }
+      language: "JavaScript", source: "prior + 1", resultType: { alias: "Int32", collectionKind: "single" }, options: {}, capabilityProfile: "binding-pure-v1",
+      parameters: { prior: { kind: "ActivityResult", producerNodeId: "producer", projectionKey: "$result" } }
     } : read);
     const answer = { nodeId: "answer", activityVersionId: "elsa.intrinsic.set-output@1", intrinsic: { kind: "setOutput", valueType: { alias: "Elsa.Any", collectionKind: "single" } }, outputs: [],
       inputs: [{ referenceKey: "name", value: argument("Literal", "answer") }, { referenceKey: "value", value: argument("ActivityResult", { producerNodeId: "consumer", projectionKey: "$result", producerScopeId: "scope:root" }) }] };
@@ -42,7 +42,7 @@ try {
     const variables = [];
     const scope = [];
     if (loop) {
-      const increment = { nodeId: "increment", activityVersionId: "elsa.intrinsic.set@1", inputs: [{ referenceKey: "value", value: argument("JavaScript", "getVariable('counter') + 1") }], outputs: [],
+      const increment = { nodeId: "increment", activityVersionId: "elsa.intrinsic.set@1", inputs: [{ referenceKey: "value", value: argument("JavaScript", "getVariable('Counter') + 1") }], outputs: [],
         intrinsic: { kind: "set", valueType: { alias: "Elsa.Any", collectionKind: "single" }, variable: { referenceKey: "counter" } } };
       body.structure.payload.activities = [increment, producer, consumer];
       if (kind === "flowchart") Object.assign(body.structure.payload, { startNodeId: "increment", connections: [
@@ -50,7 +50,7 @@ try {
         { id: "consume", source: { nodeId: "producer", port: "Done" }, target: { nodeId: "consumer" } }
       ] });
       const repeat = adapter.createActivityNode(fixtures.whileActivity, "loop");
-      repeat.inputs = [{ referenceKey: "Condition", value: argument("JavaScript", "getVariable('counter') < 3") }];
+      repeat.inputs = [{ referenceKey: "Condition", value: argument("JavaScript", "getVariable('Counter') < 3") }];
       repeat.structure.payload.body = body;
       answer.inputs[1].value = argument("Variable", { referenceKey: "counter" });
       rootActivity = adapter.createActivityNode(fixtures.sequenceActivity, "root");
@@ -68,10 +68,11 @@ try {
     if (applied.status !== "ready") throw new Error(JSON.stringify(applied));
     const inverse = planner.planUngroupNativeBlock({ ...context, document: applied.document }, "block");
     if (inverse.status !== "ready") throw new Error(JSON.stringify(inverse));
-    cases.push({ name: `${kind}-${profile}`, expected: loop ? "3" : parameter ? "43" : "42", loop, ownerId: body.nodeId, variables, context, request, grouped: applied.document, ungrouped: inverse.document });
+    cases.push({ name: `${kind}-${profile}`, expected: loop ? "3" : parameter ? "43" : "42", loop, ownerId: body.nodeId, variables,
+      context: { document, scope, referenceContext: [variables], sourceKey: context.sourceKey, canEdit: true }, request, grouped: applied.document, ungrouped: inverse.document });
   }
   const output = resolve(repository, "specs/1204-named-embedded-blocks/contracts/native-result-transfer-cases.json");
-  const bytes = JSON.stringify({ formatVersion: 1, kind: "pure-planner-golden-documents-not-runtime-evidence", versions: {
+  const bytes = JSON.stringify({ formatVersion: 1, kind: "pure-planner-golden-documents-not-runtime-evidence", catalog, versions: {
     [fixtures.sequenceActivity.activityVersionId]: "Elsa.Activities.Sequence.Activities.Sequence",
     [fixtures.flowchartActivity.activityVersionId]: "Elsa.Activities.Flowchart.Activities.Flowchart",
     [fixtures.whileActivity.activityVersionId]: fixtures.whileActivity.activityTypeKey,

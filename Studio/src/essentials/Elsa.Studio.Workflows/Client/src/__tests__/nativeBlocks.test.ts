@@ -58,13 +58,15 @@ describe("pure native block planning", () => {
   it("matches the exact planner documents consumed by real publication and runtime regressions", () => {
     const moduleUrl = import.meta.url;
     const fixture = JSON.parse(readFileSync(new URL("../../../../../../../specs/1204-named-embedded-blocks/contracts/native-result-transfer-cases.json", moduleUrl), "utf8")) as {
-      cases: { context: NativeBlockContext; request: Parameters<typeof planExtractNativeBlock>[1]; grouped: unknown; ungrouped: unknown }[];
+      catalog: NativeBlockContext["catalog"];
+      cases: { context: Omit<NativeBlockContext, "catalog">; request: Parameters<typeof planExtractNativeBlock>[1]; grouped: unknown; ungrouped: unknown }[];
     };
     expect(fixture.cases).toHaveLength(6);
     for (const test of fixture.cases) {
-      const plan = accepted(planExtractNativeBlock(test.context, test.request));
+      const context = { ...test.context, catalog: fixture.catalog };
+      const plan = accepted(planExtractNativeBlock(context, test.request));
       expect(plan.document).toEqual(test.grouped);
-      expect(accepted(planUngroupNativeBlock({ ...test.context, document: plan.document }, "block")).document).toEqual(test.ungrouped);
+      expect(accepted(planUngroupNativeBlock({ ...context, document: plan.document }, "block")).document).toEqual(test.ungrouped);
     }
   });
 
@@ -100,15 +102,15 @@ describe("pure native block planning", () => {
     ctx.catalog.push({ ...action, activityVersionId: "elsa.intrinsic.set@1", intrinsic: { kind: "Set", valueInputKey: "value" } });
     const children = payload(ctx).activities as ActivityNode[];
     children[3].inputs = [{ referenceKey: "text", value: { expressionType: "JavaScript", value: {
-      language: "JavaScript", source: "prior + 1", capabilityProfile: "binding-pure-v1", parameters: {
-        prior: { $type: "ActivityResult", producerNodeId: "b", projectionKey: "$result" },
-        literal: { $type: "Literal", value: { producerNodeId: "b", projectionKey: "$result" } }
+      language: "JavaScript", source: "prior + 1", resultType: { alias: "Int32", collectionKind: "single" }, options: {}, capabilityProfile: "binding-pure-v1", parameters: {
+        prior: { kind: "ActivityResult", producerNodeId: "b", projectionKey: "$result" },
+        literal: { kind: "Literal", value: { producerNodeId: "b", projectionKey: "$result" } }
       }
     } } }];
     const plan = accepted(extract(ctx));
     const input = ((planPayload(plan).activities as ActivityNode[])[2].inputs[0] as { value: { value: { source: string; parameters: unknown } } }).value.value;
     expect(input.source).toBe("prior + 1");
-    expect(input.parameters).toEqual({ prior: { $type: "Variable", declaringScopeNodeId: "root", variableKey: "new-block-result-1" }, literal: { $type: "Literal", value: { producerNodeId: "b", projectionKey: "$result" } } });
+    expect(input.parameters).toEqual({ prior: { kind: "Variable", declaringScopeNodeId: "root", variableKey: "new-block-result-1" }, literal: { kind: "Literal", value: { producerNodeId: "b", projectionKey: "$result" } } });
     accepted(planUngroupNativeBlock({ ...ctx, document: plan.document }, "new-block"));
   });
 
@@ -122,6 +124,46 @@ describe("pure native block planning", () => {
     else children[3].inputs = [{ referenceKey: "text", value: binding }];
     const before = structuredClone(ctx);
     refused(extract(ctx), fault === "missing-set" ? "unavailable-result-transfer" : fault === "resource" ? "resource-result-crossing" : "unproven-result-transfer");
+    expect(ctx).toEqual(before);
+  });
+
+  it("reserves existing connection and orphan metadata identities through extraction and Ungroup", () => {
+    const ctx = flow();
+    ctx.catalog.push({ ...action, activityVersionId: "elsa.intrinsic.set@1", intrinsic: { kind: "Set", valueInputKey: "value" } });
+    const edges = payload(ctx).connections as ReturnType<typeof edge>[];
+    edges[1].id = "new-block-capture-1";
+    payload(ctx).nodeMetadata = { "new-block-capture-2": { policyKind: "missing-policy", configuration: {} } };
+    payload(ctx).connectionMetadata = { "new-block-capture-3": { retain: true } };
+    (payload(ctx).activities as ActivityNode[])[3].inputs = [{ referenceKey: "text", value: { expressionType: "ActivityResult", value: { producerNodeId: "b", projectionKey: "$result" } } }];
+    const plan = accepted(extract(ctx));
+    const body = (planPayload(plan).activities as ActivityNode[])[1].structure!.payload;
+    expect((body.activities as ActivityNode[])[1].nodeId).toBe("new-block-capture-4");
+    expect((body.connections as ReturnType<typeof edge>[]).map(connection => connection.id)).toEqual(["new-block-capture-1", "new-block-capture-4"]);
+    const inverse = accepted(planUngroupNativeBlock({ ...ctx, document: plan.document }, "new-block"));
+    const restored = inverse.document.rootActivity.structure!.payload;
+    expect(restored.nodeMetadata).toEqual(payload(ctx).nodeMetadata);
+    expect(restored.connectionMetadata).toEqual(payload(ctx).connectionMetadata);
+    expect((restored.activities as ActivityNode[]).map(node => node.nodeId)).not.toContain("new-block-capture-2");
+  });
+
+  it.each([null, "", "   ", " a "])("uses the canonical Flowchart entry with non-topological array order: %j", start => {
+    const ctx = flow();
+    ctx.catalog.push({ ...action, activityVersionId: "elsa.intrinsic.set@1", intrinsic: { kind: "Set", valueInputKey: "value" } });
+    const children = payload(ctx).activities as ActivityNode[];
+    children[3].inputs = [{ referenceKey: "text", value: { expressionType: "ActivityResult", value: { producerNodeId: "b", projectionKey: "$result" } } }];
+    payload(ctx).activities = [children[3], children[1], children[0], children[2]];
+    payload(ctx).startNodeId = start;
+    const plan = accepted(extract(ctx));
+    expect(planPayload(plan).startNodeId).toBe("a");
+    accepted(planUngroupNativeBlock({ ...ctx, document: plan.document }, "new-block"));
+  });
+
+  it.each(["Xml", "None", "Explicit", "Auto"])("refuses an unproved authored conversion instead of losing it: %s", mode => {
+    const ctx = context();
+    ctx.catalog.push({ ...action, activityVersionId: "elsa.intrinsic.set@1", intrinsic: { kind: "Set", valueInputKey: "value" } });
+    (payload(ctx).activities as ActivityNode[])[3].inputs = [{ referenceKey: "text", conversion: { mode }, value: { expressionType: "ActivityResult", value: { producerNodeId: "b", projectionKey: "$result" } } }];
+    const before = structuredClone(ctx);
+    refused(extract(ctx), "unproven-result-conversion");
     expect(ctx).toEqual(before);
   });
 
