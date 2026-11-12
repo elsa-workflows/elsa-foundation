@@ -1,10 +1,14 @@
+import { tabbedSecretsJourney } from "./tabbedSecretsJourney";
 import { templateToastJourney } from "./templateToastJourney";
 import { executableDesignerJourney } from "./executableDesignerJourney";
+import { compactInputsJourney } from "./compactInputsJourney";
 import { writeFileSync } from "node:fs";
-import { expect, test, type Page, type TestInfo } from "@playwright/test";
+import { expect, test, type APIRequestContext, type Page, type TestInfo } from "@playwright/test";
+import { userTaskAuthoringJourney } from "./userTaskAuthoringJourney";
 import { userTasksJourney } from "./userTasksJourney";
 import { decisionsJourney } from "./decisionsJourney";
 import { structuredLogsJourney } from "./structuredLogsJourney";
+import { chooseDataJourney } from "./chooseDataJourney";
 
 async function capture(page: Page, info: TestInfo, name: string) {
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
@@ -26,19 +30,70 @@ async function signIn(page: Page) {
 }
 
 const browserErrors = new WeakMap<Page, string[]>();
-const createdWorkflows = new WeakMap<Page, Array<{ url: string; authorization: string; id: string }>>();
+type CreatedWorkflow = { url: string; authorization?: string; id: string };
+const createdWorkflows = new WeakMap<Page, CreatedWorkflow[]>();
+const ownedCleanups = new WeakMap<Page, Array<() => Promise<void>>>();
 
 test("user tasks inbox and response", async ({ page }, info) => userTasksJourney(page, info, capture));
+test("user task authoring and workflow result", async ({ page }, info) => {
+  const creations: CreatedWorkflow[] = [];
+  createdWorkflows.set(page, creations);
+  await userTaskAuthoringJourney(page, info, capture, id => {
+    creations.push({ url: `${process.env.UX_BACKEND_URL}/design/workflows/definitions`, id });
+  }, cleanup => { ownedCleanups.get(page)!.push(cleanup); });
+});
 test("business decisions authoring and explanations", async ({ page }, info) => decisionsJourney(page, info, capture));
 test("structured logs table accessibility", async ({ page }, info) => structuredLogsJourney(page, info, capture));
 
-test.afterEach(async ({ page }) => {
-  // Teardown has its own timeout budget, so a failed interaction still leaves the disposable store empty.
-  for (const creation of createdWorkflows.get(page) ?? []) {
-    const removed = await page.request.delete(`${creation.url}/${encodeURIComponent(creation.id)}`, { headers: { Authorization: creation.authorization } });
-    expect(removed.ok()).toBe(true);
+test.afterEach(async ({ page, playwright }, info) => {
+  const creations = createdWorkflows.get(page) ?? [];
+  const failures: Error[] = [];
+  const outcomes: Array<{ id: string; url: string; status?: number; error?: string }> = [];
+  let cleanup: APIRequestContext | undefined;
+  // Journeys that create their own records register a bounded cleanup; each one runs even if an earlier one fails.
+  // They run first, so an open task is closed while its workflow definition still exists.
+  for (const ownedCleanup of ownedCleanups.get(page) ?? []) {
+    try { await ownedCleanup(); }
+    catch (error) { failures.push(error instanceof Error ? error : new Error(String(error))); }
   }
-  expect(browserErrors.get(page), "Uncaught browser errors").toEqual([]);
+  // This hook and request context outlive a timed-out body. Delete only registered, case-owned IDs.
+  try {
+    if (creations.length) {
+      cleanup = await playwright.request.newContext({ storageState: await page.context().storageState(), timeout: 5_000 });
+      for (const creation of creations) {
+        const url = `${creation.url}/${encodeURIComponent(creation.id)}`;
+        try {
+          const removed = await cleanup.delete(url, {
+            timeout: 5_000,
+            headers: creation.authorization ? { Authorization: creation.authorization } : undefined
+          });
+          outcomes.push({ id: creation.id, url, status: removed.status() });
+          if (!removed.ok()) failures.push(new Error(`Cleanup for owned workflow ${creation.id} returned HTTP ${removed.status()}`));
+        } catch (error) {
+          const details = String(error);
+          const message = creation.authorization ? details.replaceAll(creation.authorization, "[redacted]") : details;
+          outcomes.push({ id: creation.id, url, error: message });
+          failures.push(new Error(`Cleanup for owned workflow ${creation.id} failed: ${message}`, { cause: error }));
+        }
+      }
+    }
+  } catch (error) {
+    failures.push(new Error(`Could not initialize cleanup for owned workflows ${creations.map(item => item.id).join(", ")}`, { cause: error }));
+  } finally {
+    if (cleanup) {
+      try { await cleanup.dispose(); }
+      catch (error) { failures.push(new Error("Could not dispose the workflow cleanup request context", { cause: error })); }
+    }
+  }
+  if (creations.length) {
+    try {
+      await info.attach("workflow-cleanup.json", { body: JSON.stringify({ requestTimeoutMs: 5_000, ownedIds: creations.map(item => item.id), primaryErrors: info.errors, outcomes }, null, 2), contentType: "application/json" });
+    } catch (error) { failures.push(new Error("Could not retain the workflow cleanup results", { cause: error })); }
+  }
+  try { expect(browserErrors.get(page), "Uncaught browser errors").toEqual([]); }
+  catch (error) { failures.push(error instanceof Error ? error : new Error(String(error))); }
+  // Playwright retains the body failure separately; cleanup failures must also fail the case.
+  if (failures.length) throw new AggregateError(failures, failures.map(error => error.message).join("; "));
 });
 
 test.beforeEach(async ({ page }, info) => {
@@ -51,6 +106,7 @@ test.beforeEach(async ({ page }, info) => {
   }, { mode: info.project.use.colorScheme ?? "light", reportedAppearance });
   const errors: string[] = [];
   browserErrors.set(page, errors);
+  ownedCleanups.set(page, []);
   page.on("pageerror", error => errors.push(error.message));
   // Keep browser runtime errors actionable without accepting an assertion-only green result.
   await info.attach("source", { body: process.env.UX_SOURCE_SHA ?? "unknown", contentType: "text/plain" });
@@ -141,7 +197,7 @@ test("collections and connection creation", async ({ page }, info) => {
   await page.goto("/security/secrets");
   const secretName = `DbConnectionString-${stamp}`;
   await page.getByRole("button", { name: "Create secret", exact: true }).first().click();
-  const secret = page.getByRole("dialog", { name: "Create secret", exact: true });
+  const secret = page.getByRole("region", { name: "Create secret", exact: true });
   const technicalName = secret.getByLabel("Technical name", { exact: true });
   await technicalName.fill(` ${secretName} `);
   await technicalName.press("Tab");
@@ -158,10 +214,10 @@ test("collections and connection creation", async ({ page }, info) => {
   await secretRow.getByRole("button", { name: `Copy technical name ${secretName}`, exact: true }).click();
   await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(secretName);
   await secretRow.getByRole("button", { name: `Edit ${secretName}`, exact: true }).click();
-  const editor = page.getByRole("dialog", { name: "Edit secret", exact: true });
+  const editor = page.getByRole("region", { name: "Edit secret", exact: true });
   await expect(editor.locator("code")).toHaveText(secretName);
   await capture(page, info, "secret-detail");
-  await editor.getByRole("button", { name: "Close editor", exact: true }).click();
+  await editor.getByRole("button", { name: "Back to secrets", exact: true }).click();
   await page.getByRole("button", { name: "Create secret", exact: true }).first().click();
   await technicalName.fill(secretName.toUpperCase());
   await secret.getByLabel("Value", { exact: true }).fill("disposable-duplicate-value");
@@ -170,6 +226,8 @@ test("collections and connection creation", async ({ page }, info) => {
   await expect(technicalName).toHaveValue(secretName.toUpperCase());
   await capture(page, info, "secret-duplicate");
   await secret.getByRole("button", { name: "Cancel", exact: true }).click();
+  // The failed duplicate leaves an unsaved draft, so leaving asks before discarding it.
+  await page.getByRole("dialog", { name: "Discard secret edits?", exact: true }).getByRole("button", { name: "Discard changes", exact: true }).click();
   await expect(secret).toBeHidden();
   await expect(page.getByRole("button", { name: "Create secret", exact: true }).first()).toBeFocused();
 
@@ -221,7 +279,7 @@ test("agent authoring and navigation", async ({ page }, info) => {
   await page.getByRole("textbox", { name: /^Purpose/ }).fill("Proofread a supplied text.");
   await capture(page, info, "agent-create");
   await page.getByRole("button", { name: "Create and edit", exact: true }).click();
-  const editor = page.getByTestId("specialist-editor");
+  const editor = page.getByTestId("agent-editor");
   const instructions = editor.getByRole("textbox", { name: /^Instructions/ });
   await expect(instructions).toBeVisible();
   await instructions.fill("Proofread the supplied text and return concise suggestions.");
@@ -229,7 +287,7 @@ test("agent authoring and navigation", async ({ page }, info) => {
   await expect(page.locator(".ad-save-chip")).toHaveText("Saved", { timeout: 30_000 });
   await page.reload();
   await expect(instructions).toHaveValue("Proofread the supplied text and return concise suggestions.");
-  const advanced = editor.locator("details.agent-specialist-advanced");
+  const advanced = editor.locator("details.agent-advanced");
   await expect(advanced).not.toHaveAttribute("open");
   await page.getByRole("tab", { name: "Designer", exact: true }).scrollIntoViewIfNeeded();
   await capture(page, info, "agent-designer");
@@ -314,7 +372,7 @@ test("publication blockers explain how to correct agent settings", async ({ page
   await page.getByRole("textbox", { name: "Name", exact: true }).fill(`Publication guidance ${info.project.name} ${Date.now()}`);
   await page.getByRole("textbox", { name: /^Purpose/ }).fill("Verify publication guidance without calling a model.");
   await page.getByRole("button", { name: "Create and edit", exact: true }).click();
-  const editor = page.getByTestId("specialist-editor");
+  const editor = page.getByTestId("agent-editor");
   const instructions = editor.getByRole("textbox", { name: /^Instructions/ });
   await instructions.fill("");
   await instructions.press("Tab");
@@ -357,7 +415,7 @@ test("publication blockers explain how to correct agent settings", async ({ page
 });
 
 test("save template toast", async ({ page }, info) => {
-  await templateToastJourney(page, info, capture);
+  await templateToastJourney(page, info, capture, cleanup => { ownedCleanups.get(page)!.push(cleanup); });
 });
 
 test("workflow template metadata defaults", async ({ page }, info) => {
@@ -467,4 +525,16 @@ test("workflow template metadata defaults", async ({ page }, info) => {
 
 test("executable designer parity", async ({ page }, info) => {
   await executableDesignerJourney(page, info, capture);
+});
+
+test("choose data for activity outputs", async ({ page }, info) => {
+  await chooseDataJourney(page, info, capture, cleanup => { ownedCleanups.get(page)!.push(cleanup); });
+});
+
+test("tabbed Secrets authoring and metadata", async ({ page }, info) => {
+  await tabbedSecretsJourney(page, info, capture, cleanup => { ownedCleanups.get(page)!.push(cleanup); });
+});
+
+test("compact runtime Inputs retain exact captured values and accessible technical details", async ({ page }, info) => {
+  await compactInputsJourney(page, info, capture, cleanup => { ownedCleanups.get(page)!.push(cleanup); });
 });

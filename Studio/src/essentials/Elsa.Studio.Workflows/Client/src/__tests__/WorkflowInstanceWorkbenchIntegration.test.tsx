@@ -3,8 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import type { ReactFlowInstance } from "@xyflow/react";
-import type { StudioAgentRegistry, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
-import { WorkflowInstanceDetailsWorkbench } from "../workflow-editor/WorkflowInstances";
+import type { StudioWeaverRegistry, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import { getIncidentRootCause, WorkflowInstanceDetailsWorkbench } from "../workflow-editor/WorkflowInstances";
 import type { ActivityExecutionBrowsePage } from "../api/runtime";
 import type {
   ActivityExecutionInspection,
@@ -174,7 +174,7 @@ describe("workflow run workbench incident navigation", () => {
     api.getExecutable.mockImplementationOnce(() => pending.promise);
     renderWorkbench();
     await vi.waitFor(() => expect(api.getExecutable).toHaveBeenCalledTimes(1));
-    click(buttonByText(container, "Refresh"));
+    click(container.querySelector<HTMLButtonElement>('button[aria-label="Refresh execution"]')!);
     await vi.waitFor(() => expect(api.getWorkflowInstance).toHaveBeenCalledTimes(2));
     // Let the refreshed observation commit while the first metadata load still owns its slot.
     await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
@@ -190,7 +190,7 @@ describe("workflow run workbench incident navigation", () => {
     renderWorkbench();
     await vi.waitFor(() => expect(container.textContent).toContain("catalog unavailable"));
     expect(api.listActivities).toHaveBeenCalledTimes(1);
-    click(buttonByText(container, "Refresh"));
+    click(container.querySelector<HTMLButtonElement>('button[aria-label="Refresh execution"]')!);
     await vi.waitFor(() => expect(api.listActivities).toHaveBeenCalledTimes(2));
     pending.resolve({ activities: [sequenceActivity, writeLine] });
     await vi.waitFor(() => expect(container.querySelector(".wf-instance-detail-workbench")).toBeTruthy());
@@ -204,7 +204,7 @@ describe("workflow run workbench incident navigation", () => {
       : activityInspection({ provenance: { parentActivityExecutionId: "slow-parent" } as ActivityExecutionInspection["provenance"] }));
     renderWorkbench("activity", "execution-target");
     await vi.waitFor(() => expect(container.textContent).toContain("Resolving execution scope"));
-    click(buttonByText(container, "Refresh"));
+    click(container.querySelector<HTMLButtonElement>('button[aria-label="Refresh execution"]')!);
     await vi.waitFor(() => expect(container.textContent).toContain("interrupted by refresh"));
     expect(buttonByText(container, "Retry execution scope")).toBeTruthy();
     pending.resolve(activityInspection({ activityExecutionId: "slow-parent", provenance: {} as ActivityExecutionInspection["provenance"] }));
@@ -212,6 +212,29 @@ describe("workflow run workbench incident navigation", () => {
     await new Promise(resolve => setTimeout(resolve, 0));
     expect(container.textContent).toContain("interrupted by refresh");
     expect(container.querySelector(".wf-activity-overview")).toBeNull();
+  });
+
+  it("keeps pending exact-execution ancestry when the active Activity tab is activated again", async () => {
+    api.supportsActivityExecutionBrowsing.mockResolvedValue(true);
+    api.browseActivityExecutions.mockImplementation(async (_context, _run, request: { anchorActivityExecutionId?: string }) => ({
+      items: [{ execution: request.anchorActivityExecutionId === "slow-parent" ? { ...activityExecution(), activityExecutionId: "slow-parent" } : activityExecution(), position: 1 }],
+      totalCount: 1, previousCursor: null, nextCursor: null
+    }));
+    const pending = deferred<ActivityExecutionInspection>();
+    api.getActivityExecutionInspection.mockImplementation(async (_context, _run, id: string) => id === "slow-parent" ? pending.promise
+      : activityInspection({ provenance: { parentActivityExecutionId: "slow-parent" } as ActivityExecutionInspection["provenance"] }));
+    renderWorkbench("activity", "execution-target");
+    await vi.waitFor(() => expect(container.textContent).toContain("Resolving execution scope"));
+    const activeTab = container.querySelector<HTMLButtonElement>("[data-tab-id='activity']");
+    expect(activeTab?.getAttribute("aria-selected")).toBe("true");
+    click(activeTab);
+    expect(container.textContent).toContain("Resolving execution scope");
+    expect(buttonByText(container, "Retry execution scope")).toBeFalsy();
+    pending.resolve(activityInspection({ activityExecutionId: "slow-parent", provenance: {} as ActivityExecutionInspection["provenance"] }));
+    await vi.waitFor(() => expect(container.querySelector(".wf-activity-execution-details")).toBeTruthy());
+    expect(container.textContent).not.toContain("interrupted");
+    expect(container.textContent).not.toContain("Resolving execution scope");
+    expect(container.querySelector("[data-tab-id='activity']")?.getAttribute("aria-selected")).toBe("true");
   });
 
   it.each(["Timeline", "Collapse run details panel", "Restore run details panel", "Back to workflow run canvas"])("makes pending ancestry retryable after %s", async action => {
@@ -422,7 +445,7 @@ describe("workflow run workbench incident navigation", () => {
     click(container.querySelector<HTMLButtonElement>("[data-tab-id='issues']"));
     click(buttonByText(container, "View input evidence"));
     await vi.waitFor(() => expect(container.querySelector("[data-tab-id='activity']")?.getAttribute("aria-selected")).toBe("true"));
-    await vi.waitFor(() => expect(container.querySelector<HTMLDetailsElement>(".wf-input-inspection-row details")?.open).toBe(true));
+    await vi.waitFor(() => expect(container.querySelector(".wf-input-inspection-info")?.getAttribute("aria-expanded")).toBe("true"));
   });
 
   it("reframes and refocuses the same affected activity on each explicit activation", async () => {
@@ -531,7 +554,7 @@ describe("workflow run workbench incident navigation", () => {
     await vi.waitFor(() => expect(container.textContent).toContain("You do not have permission to inspect this activity execution"));
     expect(container.querySelector(".wf-instance-incident[data-selected='true']")).toBeTruthy();
 
-    click(buttonByText(container, "Refresh"));
+    click(container.querySelector<HTMLButtonElement>('button[aria-label="Refresh execution"]')!);
     await vi.waitFor(() => expect(api.getWorkflowInstance).toHaveBeenCalledTimes(2));
     await vi.waitFor(() => expect(container.textContent).not.toContain("You do not have permission to inspect this activity execution"));
     await vi.waitFor(() => expect(container.querySelector(".wf-instance-incident-summary")).toBeTruthy());
@@ -540,7 +563,7 @@ describe("workflow run workbench incident navigation", () => {
     click(buttonByText(container, "View input evidence"));
     await vi.waitFor(() => expect(api.supportsActivityExecutionInspection).toHaveBeenCalledTimes(4));
     await vi.waitFor(() => expect(api.getActivityExecutionInspection).toHaveBeenCalledTimes(2));
-    click(buttonByText(container, "Refresh"));
+    click(container.querySelector<HTMLButtonElement>('button[aria-label="Refresh execution"]')!);
     await vi.waitFor(() => expect(api.getWorkflowInstance).toHaveBeenCalledTimes(3));
     await vi.waitFor(() => expect(container.querySelector(".wf-instance-incident-summary")).toBeTruthy());
     expect(container.querySelector(".wf-instance-incident[data-selected='true']")).toBeNull();
@@ -647,7 +670,7 @@ describe("workflow run workbench incident navigation", () => {
     renderWorkbench();
     await vi.waitFor(() => expect(container.querySelector(".wf-instance-detail-workbench")).toBeTruthy());
     click(buttonByText(container, "View input evidence"));
-    await vi.waitFor(() => expect(container.querySelector<HTMLDetailsElement>(".wf-input-inspection-row details")?.open).toBe(true));
+    await vi.waitFor(() => expect(container.querySelector(".wf-input-inspection-info")?.getAttribute("aria-expanded")).toBe("true"));
 
     click(container.querySelector<HTMLButtonElement>("[data-tab-id='issues']"));
     click([...container.querySelectorAll<HTMLButtonElement>(".wf-instance-incident-summary")]
@@ -655,8 +678,8 @@ describe("workflow run workbench incident navigation", () => {
     click(container.querySelector<HTMLButtonElement>("[data-tab-id='activity']"));
 
     await vi.waitFor(() => expect(container.textContent).toContain("execution-second"));
-    await vi.waitFor(() => expect(container.querySelector(".wf-input-inspection-row details")).toBeTruthy());
-    expect(container.querySelector<HTMLDetailsElement>(".wf-input-inspection-row details")?.open).toBe(false);
+    await vi.waitFor(() => expect(container.querySelector(".wf-input-inspection-info")).toBeTruthy());
+    expect(container.querySelector(".wf-input-inspection-info")?.getAttribute("aria-expanded")).toBe("false");
   });
 
   it("clears a denied incident lookup message when a healthy activity is selected", async () => {
@@ -725,7 +748,7 @@ describe("workflow run workbench incident navigation", () => {
     click(buttonByText(container, "View input evidence"));
     await vi.waitFor(() => expect(api.getActivityExecutionInspection).toHaveBeenCalledTimes(1));
 
-    click(buttonByText(container, "Refresh"));
+    click(container.querySelector<HTMLButtonElement>('button[aria-label="Refresh execution"]')!);
     await vi.waitFor(() => expect(api.getWorkflowInstance).toHaveBeenCalledTimes(2));
     await vi.waitFor(() => expect(container.textContent).toContain("RefreshedFailure"));
     click(container.querySelector<HTMLButtonElement>("[data-tab-id='timeline']"));
@@ -794,7 +817,7 @@ describe("workflow run workbench incident navigation", () => {
     click(buttonByText(container, "Load more affected activities (1)"));
     await vi.waitFor(() => expect(api.getActivityExecutionInspection).toHaveBeenCalledTimes(lastIndex + 1));
 
-    click(buttonByText(container, "Refresh"));
+    click(container.querySelector<HTMLButtonElement>('button[aria-label="Refresh execution"]')!);
     await vi.waitFor(() => expect(api.getWorkflowInstance).toHaveBeenCalledTimes(2));
     await vi.waitFor(() => expect(container.textContent).toContain("ResolvedFailure-50"));
     click(container.querySelector<HTMLButtonElement>("[data-tab-id='timeline']"));
@@ -1155,7 +1178,7 @@ function renderWorkbench(
 ) {
   flushSync(() => root.render(<WorkflowInstanceDetailsWorkbench
     context={{} as StudioEndpointContext}
-    ai={{ promptActions: { list: () => [] } } as unknown as StudioAgentRegistry}
+    ai={{ promptActions: { list: () => [] } } as unknown as StudioWeaverRegistry}
     workflowExecutionId="run-1"
     initialActivityExecutionId={initialActivityExecutionId}
     initialInspectorTab={initialInspectorTab}
@@ -1364,6 +1387,34 @@ function bookmarkSummary(bookmarkId: string): ActivityExecutionInspection["bookm
 }
 
 
+it("shows the short flowchart cause while retaining the original technical message", () => {
+  const message = "Flowchart faulted because child node 'review-purchase' faulted: a faulted child cannot complete, so its execution path — and any downstream join that requires it — can no longer proceed.";
+  const row = incident({ failureType: "ActivityFaulted", message });
+  expect(getIncidentRootCause(row)).toBe("Activity 'review-purchase' failed. Review its incident to correct the cause.");
+  expect(row.message).toBe(message);
+  expect(getIncidentRootCause(incident({ message: "Other failure", metadata: { "runtime.faultInnerMessage": "Select a task assignee or a group." } }))).toBe("Select a task assignee or a group.");
+});
+
+it("shows workflow outputs in run details while preserving payload format and redaction", async () => {
+  api.getWorkflowInstance.mockResolvedValue({ ...workflowDetails(), outputs: {
+    ReviewData: { value: { kind: "object", properties: [{ name: "Note", value: { kind: "string", preview: "Approved" } }] }, captureMode: "DiagnosticSnapshot", isRedacted: false, capturedAt: "2026-11-04T10:00:00Z" },
+    Payload: { value: { kind: "object", Note: "Raw payload" }, captureMode: "Payload", isRedacted: false, capturedAt: "2026-11-04T10:00:00Z" },
+    Secret: { value: "must-never-render", isRedacted: true, redactionReason: "Hidden by policy", capturedAt: "2026-11-04T10:00:00Z" }
+  } });
+  renderWorkbench("details");
+  await vi.waitFor(() => expect(container.querySelector('[aria-label="Workflow outputs"]')?.textContent).toContain("Approved"));
+  const outputs = container.querySelector('[aria-label="Workflow outputs"]')!;
+  expect(outputs.textContent).toContain("ReviewData"); expect(outputs.textContent).toContain("Note");
+  expect(outputs.textContent).toContain('"kind": "object"'); expect(outputs.textContent).toContain("Raw payload");
+  expect(outputs.textContent).toContain("Hidden by policy"); expect(outputs.textContent).not.toContain("must-never-render");
+});
+
+it.each([undefined, {}])("distinguishes unavailable workflow output evidence from no captured outputs (%s)", async outputs => {
+  api.getWorkflowInstance.mockResolvedValue({ ...workflowDetails(), outputs });
+  renderWorkbench("details");
+  await vi.waitFor(() => expect(container.querySelector('[aria-label="Workflow outputs"]')?.textContent).toContain(outputs ? "No workflow outputs have been captured." : "Workflow output inspection is unavailable on this host."));
+});
+
 it.each(["chooser", "arrow", "ambiguous", "denied401", "denied403", "missing404", "failed"])("preserves exact scope evidence and deliberate focus during %s navigation", async mode => {
   api.supportsActivityExecutionBrowsing.mockResolvedValue(true);
   const make = (id: string, node: string, authored: string, parent: string | null) => ({ ...activityExecution(), activityExecutionId: id,
@@ -1525,14 +1576,14 @@ it.each(["empty", "mismatched"])("does not revive an unavailable prepared child 
   await vi.waitFor(() => expect(container.textContent).toContain("PREPARED_CHILD_VALUE"));
 
   phase = "unavailable";
-  click(buttonByText(container, "Refresh"));
+  click(container.querySelector<HTMLButtonElement>('button[aria-label="Refresh execution"]')!);
   await vi.waitFor(() => expect(container.querySelector(".wf-activity-overview")).toBeNull());
   expect(container.textContent).not.toContain("PREPARED_CHILD_VALUE");
   expect(container.textContent).not.toContain("This execution scope is unavailable");
 
   phase = "pending";
   const beforeRefresh = api.browseActivityExecutions.mock.calls.length;
-  click(buttonByText(container, "Refresh"));
+  click(container.querySelector<HTMLButtonElement>('button[aria-label="Refresh execution"]')!);
   await vi.waitFor(() => expect(api.browseActivityExecutions.mock.calls.slice(beforeRefresh).some(call => childAnchor(call[2]))).toBe(true));
   expect(container.querySelector(".wf-activity-overview")).toBeNull();
   expect(container.textContent).not.toContain("PREPARED_CHILD_VALUE");

@@ -1,0 +1,16 @@
+name: Install Playwright Chromium
+description: >-
+  Download Playwright's Chromium and install only the system packages the runner image lacks, retrying apt and the
+  download within a bound, then prove the browser launches (#4162). Replaces `playwright install --with-deps chromium`,
+  which always runs apt and so failed whenever a runner could not resolve the Ubuntu mirrors.
+inputs:
+  working-directory:
+    description: Directory whose node_modules holds Playwright.
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Install Chromium and missing system packages
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: python3 "$GITHUB_WORKSPACE/tools/ci/install_playwright_chromium.py" --playwright ./node_modules/.bin/playwright

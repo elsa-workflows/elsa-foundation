@@ -28,20 +28,20 @@ Native controls, each a fresh session and turn:
   control, which no package registers); the read completes and the Run reads back byte-equal;
 - unknown-run, unknown-activity and runtime-denied (an actor without workflows/runtime:read) are refused at admission with
   the module's own texts;
-- runtime-agent-absent: with the Runtime-side agent feature deselected, a workflows.run reference is explicitly unavailable
-  (agent.context.kind_unsupported); the feature is selected again afterwards.
+- runtime-weaver-absent: with the Runtime-side Weaver feature deselected, a workflows.run reference is explicitly unavailable
+  (weaver.context.kind_unsupported); the feature is selected again afterwards.
 
 The packaged consumer cannot prune activity evidence (its in-memory runtime stores keep a Run's evidence for the process
 lifetime) and composes activity execution inspection as part of WorkflowsRuntimeApi, so a pruned execution and a backend
-without activity execution inspection are proven by WorkflowRunInspectionTests (Runtime API) and WorkflowRunAgentTests
-(Elsa.Agent.Workflows.Runtime.Tests); natively the Fault's state view is reported unavailable by reason and the Runtime-side
+without activity execution inspection are proven by WorkflowRunInspectionTests (Runtime API) and WorkflowRunWeaverTests
+(Elsa.Weaver.Workflows.Runtime.Tests); natively the Fault's state view is reported unavailable by reason and the Runtime-side
 deployment shape is deselected. The deselection reloads the shell, which empties the consumer's in-memory run stores, so it
 runs after the browser journey, last. The canary is searched, raw, in every disclosed payload, stream frame, adapter trace and
-retained evidence file of the case, and in the browser journey's own agent traffic. The Write Line writes its text to the
+retained evidence file of the case, and in the browser journey's own Weaver traffic. The Write Line writes its text to the
 backend's console, which is the host's own process log and not a Weaver disclosure; it is not part of the case evidence.
 
 In the actual packaged Studio (browser.mjs, workflow-run) the run page, with the Write Line's activity execution (the captured
-canary) selected, discloses the exact Run and selection and its Explain action reads it; the page's own agent traffic and
+canary) selected, discloses the exact Run and selection and its Explain action reads it; the page's own Weaver traffic and
 streams are searched raw for the canary. Frame orders are each adapter's own, pinned from earlier witnesses (explain_journeys.READ_FRAMES).
 Nothing is retried.
 """
@@ -63,7 +63,7 @@ import uuid
 from artifacts import TOOL, check, sha
 from explain_journeys import READ_FRAMES
 from authorization_journeys import select_command
-from inspection_journeys import (ADMISSION_REFUSAL, MUTATING_TOOLS, RUNTIME_AGENT_FEATURE, RUNTIME_DENIED, _completed, _frames, _kinds, _owned,
+from inspection_journeys import (ADMISSION_REFUSAL, MUTATING_TOOLS, RUNTIME_WEAVER_FEATURE, RUNTIME_DENIED, _completed, _frames, _kinds, _owned,
                                  _called_once, _offered, _refused_at_admission, _session, _without_feature, require_admissions, require_unchanged)
 from journey_runtime import BASE_GRANTS, safe_browser_failure, same
 from owner_resources import owner_path, seed_faulted_run
@@ -97,7 +97,7 @@ TEXTS = {
 RUN_LIMITED = 10
 RUN_LIMITED_GRANTS = [*BASE_GRANTS, CAPABILITIES_READ, "workflows/runtime:read", "workflows/activity-executions:inspect"]
 RUN_NATIVE = ("explain-fault", "explain-activity", "in-progress", "not-permitted", "controls-refused", "unknown-run", "unknown-activity",
-              "runtime-denied", "runtime-agent-absent")
+              "runtime-denied", "runtime-weaver-absent")
 BROWSER_JOURNEY = "workflow-run"
 BROWSER_OBSERVATIONS = {"runContext": True, "selectionBound": True, "explainCompleted": True, "readOnly": True, "canaryAbsentInPage": True}
 REASONS = ("notCaptured", "pruned", "unsupported", "notPermitted")
@@ -405,10 +405,10 @@ def _native(runtime, name, seed, canary):
 def _absent(runtime, name, seed):
     """The deployment-shape control. It reloads the shell, which empties the consumer's in-memory run stores, so it runs last."""
     def absent():
-        value, refs = _refused_at_admission(runtime, name + "-runtime-agent-absent", runtime.backend, run_attachment(seed["faulted"]["workflowExecutionId"]),
+        value, refs = _refused_at_admission(runtime, name + "-runtime-weaver-absent", runtime.backend, run_attachment(seed["faulted"]["workflowExecutionId"]),
                                             None, TEXTS["kind-unsupported"])
-        return {"control": "runtime-agent-absent", **value}, refs
-    return _without_feature(runtime, name + "-runtime-agent", RUNTIME_AGENT_FEATURE, absent)
+        return {"control": "runtime-weaver-absent", **value}, refs
+    return _without_feature(runtime, name + "-runtime-weaver", RUNTIME_WEAVER_FEATURE, absent)
 
 
 def _browser(runtime, name, seed, canary):
@@ -416,7 +416,7 @@ def _browser(runtime, name, seed, canary):
     root = runtime.output(name)
     output = root / "observation"
     faulted, n = seed["faulted"], seed["nodes"]
-    # The canary travels in the private configuration only (never browser-inputs evidence): the page searches its own agent
+    # The canary travels in the private configuration only (never browser-inputs evidence): the page searches its own Weaver
     # traffic for it, raw.
     workflow = {"run": {"workflowExecutionId": faulted["workflowExecutionId"], "path": faulted["instancePath"],
                         "activityExecutionId": faulted["activities"][n["sensitive"]]["detail"]["activityExecutionId"], "canary": canary}}
@@ -510,7 +510,7 @@ def _case(runtime, provider):
         evidence += native_evidence
         browser, browser_evidence = _browser(runtime, name + "-browser", seed, canary)
         evidence += browser_evidence
-        native["runtime-agent-absent"], absent_evidence = _absent(runtime, name, seed)
+        native["runtime-weaver-absent"], absent_evidence = _absent(runtime, name, seed)
         evidence += absent_evidence
     finally:
         evidence += runtime.apply_features(name + "-deselect-seam", {SEAM_FEATURE: (False, {})})
@@ -592,7 +592,7 @@ def require_workflow_run(section, owned_root=None, *, source=None):
                   and (native.get("in-progress") or {}).get("inProgress") is True
                   and controls.get("unchanged") is True and isinstance(controls.get("offered"), list) and not MUTATING_TOOLS & set(controls["offered"])
                   and RUN_TOOL in controls["offered"] and not any(word in str(name) for name in controls["offered"] for word in RUN_CONTROL_WORDS)
-                  and (native.get("runtime-agent-absent") or {}).get("code") == ADMISSION_REFUSAL["code"]
+                  and (native.get("runtime-weaver-absent") or {}).get("code") == ADMISSION_REFUSAL["code"]
                   and search.get("found") == 0 and type(search.get("files")) is int and search["files"] > 0
                   and same((observed.get("browser") or {}).get("observations"), BROWSER_OBSERVATIONS),
                   "Workflow Run record differs: " + row["id"])
@@ -605,7 +605,7 @@ def synthetic_native():
     value["explain-activity"].update(values={"text": "withheld"}, canaryCaptured=True)
     value["in-progress"]["inProgress"] = True
     value["controls-refused"].update(unchanged=True, offered=[RUN_TOOL])
-    value["runtime-agent-absent"]["code"] = ADMISSION_REFUSAL["code"]
+    value["runtime-weaver-absent"]["code"] = ADMISSION_REFUSAL["code"]
     return value
 
 

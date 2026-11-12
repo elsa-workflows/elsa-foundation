@@ -42,7 +42,10 @@ internal static class OAuth2TestSupport
         OAuth2AuthenticationScheme scheme,
         OAuth2ClientCredentialBinding credentials = OAuth2ClientCredentialBinding.Secret,
         Action<MockOAuthServer>? configureServer = null,
-        TimeProvider? timeProvider = null)
+        TimeProvider? timeProvider = null,
+        Action<IServiceCollection>? configureServices = null,
+        string? clientSecretStoreName = null,
+        bool inlineClientSecret = false)
     {
         var server = new MockOAuthServer();
         configureServer?.Invoke(server);
@@ -76,8 +79,9 @@ internal static class OAuth2TestSupport
         if (timeProvider is not null)
             services.Replace(ServiceDescriptor.Singleton(timeProvider));
 
-        services.AddHttpClient(HttpActivityConstants.HttpClientName)
-            .ConfigurePrimaryHttpMessageHandler(() => new NonDisposingHandler(server));
+        BindMockHttpClient(services, HttpActivityConstants.HttpClientName, server);
+        BindMockHttpClient(services, OAuth2HttpClientNames.HttpClientName, server);
+        configureServices?.Invoke(services);
 
         var provider = services.BuildServiceProvider();
         var scope = provider.CreateAsyncScope();
@@ -93,13 +97,18 @@ internal static class OAuth2TestSupport
                 NamedCredentialName = NamedCredentialName
             };
         }
+        else if (inlineClientSecret)
+        {
+            secretFields[OAuth2SecretFields.ClientSecret] = new() { Value = server.ExpectedClientSecret };
+        }
         else
         {
             await secrets.CreateAsync(TenantId, new CreateSecretRequest
             {
                 Name = "oauth2-client-secret",
                 Value = server.ExpectedClientSecret,
-                TypeName = SecretTypeNames.Text
+                TypeName = SecretTypeNames.Text,
+                StoreName = clientSecretStoreName ?? SecretStoreNames.Encrypted
             });
             secretFields[OAuth2SecretFields.ClientSecret] = new() { ExistingSecretName = "oauth2-client-secret" };
         }
@@ -156,17 +165,19 @@ internal static class OAuth2TestSupport
         return Assert.IsAssignableFrom<IActivityCompletionTransition<SendHttpRequestResult>>(transition);
     }
 
-    public static async Task AuthorizeAsync(OAuth2Harness harness, MockOAuthServer server)
-    {
-        var tokens = harness.Services.GetRequiredService<OAuth2TokenService>();
-        var resolver = harness.Services.GetRequiredService<IConnectionResolver>();
-        await using var connection = await resolver.ResolveAsync(new ConnectionResolveRequest
+    public static ValueTask<IResolvedConnection> ResolveAsync(OAuth2Harness harness) =>
+        harness.Services.GetRequiredService<IConnectionResolver>().ResolveAsync(new ConnectionResolveRequest
         {
             TenantId = TenantId,
             Name = ConnectionName,
             RequiredType = ConnectionTypeNames.Http,
             Owner = ConnectionOwners.Tenant
         });
+
+    public static async Task AuthorizeAsync(OAuth2Harness harness, MockOAuthServer server)
+    {
+        var tokens = harness.Services.GetRequiredService<OAuth2TokenService>();
+        await using var connection = await ResolveAsync(harness);
         var started = await tokens.BeginAuthorizationCodeAsync(connection);
         var code = server.ApproveAuthorization(new Uri(started.AuthorizationUrl));
         var callback = harness.Services.GetRequiredService<IEnumerable<IOAuthCallbackHandler>>();
@@ -181,6 +192,10 @@ internal static class OAuth2TestSupport
         Assert.NotNull(handled);
         Assert.Equal(200, handled.StatusCode);
     }
+
+    private static void BindMockHttpClient(IServiceCollection services, string name, MockOAuthServer server) =>
+        services.AddHttpClient(name)
+            .ConfigurePrimaryHttpMessageHandler(() => new NonDisposingHandler(server));
 
     private sealed class FixedPartition(string value) : IWorkflowExecutionPartitionAccessor
     {

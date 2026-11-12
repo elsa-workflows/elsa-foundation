@@ -100,7 +100,7 @@ preflight that read decision before committing. Replacement details readers can 
 checks only organization metadata.
 `IWorkflowDefinitionAuthorizer` in Workflow Design Core exposes the same current per-definition
 read/manage decisions to other participating modules. Its HTTP implementation checks typed native
-resources and tenant-scoped existence; definition GET honors the selected replacement before
+resources and tenant-scoped existence; the definition GET and the version GET honor the selected replacement before
 returning details. See the [owner authorization contract](EXTENSION_POINTS.md#iworkflowdefinitionauthorizer-contract--elsaworkflowsdesigncore).
 See the [visibility contract](EXTENSION_POINTS.md#overridable-contracts).
 
