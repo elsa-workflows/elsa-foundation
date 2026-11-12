@@ -193,7 +193,7 @@ export function ActivityDefinitionVersionLifecycleDialog({
       <StudioField className="ad-dialog-field" label={<><span>Type semantic version <code>{version.version.version}</code> to confirm</span></>}><input value={confirmation} onChange={event => setConfirmation(event.target.value)} autoComplete="off" /></StudioField>
     </section> : null}
 
-    <StudioField className="ad-dialog-field" label={<></>}><textarea value={reason} onChange={event => setReason(event.target.value)} rows={3} /><span>Reason <small>Required and recorded by the server</small></span></StudioField>
+    <StudioField className="ad-dialog-field" label={<><span>Reason </span></>}><textarea value={reason} onChange={event => setReason(event.target.value)} rows={3} /><small>Required and recorded by the server</small></StudioField>
     <label className="ad-contract-check"><input type="checkbox" checked={reviewed} onChange={event => setReviewed(event.target.checked)} /> I reviewed the exact identities, lifecycle preconditions, recommendation decision, and consequences above.</label>
     {error ? <div className="ad-inline-error" role="alert">{error}</div> : null}
     <footer><button type="button" onClick={onClose} disabled={submitting}>Cancel</button><button type="button" className="ad-primary-action" onClick={() => void submit()} disabled={!canSubmit}>{submitting ? "Applying and reconciling…" : submitLabel(action)}</button></footer>

@@ -165,7 +165,7 @@ describe("IntrinsicInspector", () => {
       descriptor={descriptorFor(setOutputActivity)} editors={builtInPropertyEditors} expressionEditors={[]}
       expressionDescriptors={[literalDescriptor]} expressionDescriptorStatus="ready" descriptorStatus="ready"
       visibleVariables={[]} scopeStatus="ready" workflowState={{ outputs: [{ name: "ReviewData", type: { alias: "System.Text.Json.JsonElement", collectionKind: "Single" } }] }} onChange={vi.fn()} />);
-    const row = [...container.querySelectorAll(".wf-property-row")].find(item => item.getAttribute("aria-label") === "Value")!;
+    const row = [...container.querySelectorAll(".wf-property-row")].find(item => item.getAttribute("aria-label") === "Value property")!;
     expect(row.querySelector(".wf-property-row-header")?.textContent).toContain("JSON");
   });
 

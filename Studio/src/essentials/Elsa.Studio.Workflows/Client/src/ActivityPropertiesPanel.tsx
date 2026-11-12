@@ -1126,7 +1126,7 @@ function PropertyRow({
   );
 
   return (
-    <div ref={rowRef} className="wf-property-row" role="group" aria-label={input.displayName || input.name}>
+    <div ref={rowRef} className="wf-property-row" role="group" aria-label={`${input.displayName || input.name} property`}>
       <div className="wf-property-row-header">
         {editorPresentsField ? null : <span className="wf-property-row-caption">{input.displayName || input.name}</span>}
         <div className="wf-property-row-header-meta">

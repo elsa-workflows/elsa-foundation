@@ -19,7 +19,7 @@ export function ValueInput({ clause, value, onChange, label, unset = false }: { 
     if (next === "unset") return;
     onChange(next === "null" ? { kind: "null", value: null } : initial(clause.type));
   };
-  return <div role="group" aria-label={label} className={unset ? "decision-value-field is-unset" : "decision-value-field"}><div className="decision-value-controls">
+  return <div role="group" aria-label={`${label} controls`} className={unset ? "decision-value-field is-unset" : "decision-value-field"}><div className="decision-value-controls">
     <StudioField label={`${label} value kind`}><select aria-label={`${label} value kind`} value={kind} onChange={event => confirm(event.target.value)}>
       {unset ? <option value="unset">Not set</option> : null}
       <option value={clause.type}>{clause.type === "number" ? "Number" : clause.type === "boolean" ? "Boolean" : "Text"}</option>
