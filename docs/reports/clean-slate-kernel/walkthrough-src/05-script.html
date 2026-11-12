@@ -100,7 +100,7 @@
   const rows = [
     { name: "Ephemeral", a: "no commit", b: "0 round trips", commits: () => false },
     { name: "Balanced", a: "one commit, at the end", b: "3 round trips (2)", commits: n => n === 9 },
-    { name: "Durable", a: "a commit per activity", b: "33 round trips (22)", commits: () => true }
+    { name: "Durable", a: "a commit per activity, 11 in all", b: "33 round trips (22)", commits: () => true }
   ];
   rows.forEach((r, ri) => {
     const y = 26 + ri * 78;

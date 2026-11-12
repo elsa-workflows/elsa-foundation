@@ -83,7 +83,7 @@
       <tr><td>Mutation check: the kernel broken one rule at a time</td><td>37 single breakages, 35 caught alone; the other two caught in the combined runs with the rule that covers each. Native model: 5 of 5</td><td>Re-run on 12 November</td></tr>
       <tr><td>Store conformance, 57 semantic cases: in memory and SQLite (either fence)</td><td>In memory 56 pass, 1 skipped. SQLite 54 pass, 1 skipped, 2 reference cases differ where the contract is silent</td><td>Re-run on 12 November</td></tr>
       <tr><td>Store conformance: PostgreSQL, SQL Server, MySQL, MongoDB, either fence</td><td>PostgreSQL 54 pass, 3 differ; SQL Server and MySQL 53 pass, 3 differ, 1 skipped; MongoDB 57 pass</td><td>Merge run; not re-run</td></tr>
-      <tr><td>Stress: 40 s, 5,000 messages, killed connections, stalls</td><td>Every property holds on all five engines; 0 deadlocks on PostgreSQL, SQL Server and MySQL</td><td>Merge run; not re-run</td></tr>
+      <tr><td>Stress: 40 s, 5,000 messages, killed connections, stalls</td><td>Every property holds on all five engines; 0 deadlocks on PostgreSQL, SQL Server (checked fence) and MySQL. SQL Server with the fence in the batch: 127 deadlocks on takes in one run, safety held</td><td>Merge run; not re-run</td></tr>
       <tr><td>Stress with the fence broken on purpose</td><td>Violations on every engine: PostgreSQL 228, SQL Server 26, MySQL 611, SQLite 238, MongoDB 390</td><td>Merge run; not re-run</td></tr>
     </tbody>
   </table></div>
@@ -113,7 +113,7 @@
       <tr><td class="n">4</td><td>Batching under load</td><td>A commit waits for the one before it: latency rises a little, throughput a lot</td><td>Rows per flush</td></tr>
       <tr><td class="n">5</td><td>Balanced: one commit per wait</td><td>After a crash, activities since the last commit run again; outside side effects may repeat</td><td>Persistence mode; Durable for what must not repeat</td></tr>
       <tr><td class="n">6</td><td>Background jobs do not block the instance</td><td>It can run more than once; external calls need idempotency keys</td><td>None: inherent, as in Temporal</td></tr>
-      <tr><td class="n">7</td><td>The run viewer costs nothing on the hot path</td><td>Studio lags the run while the projector catches up; the projector's writes still cost calls</td><td>History level per workflow</td></tr>
+      <tr><td class="n">7</td><td>The run viewer costs nothing on the hot path</td><td>The run view stays current by reading the journal tail (decided, not built); lists over projected rows lag the projector; its writes still cost calls</td><td>History level per workflow</td></tr>
       <tr><td class="n">8</td><td>Instances only talk through messages: no races</td><td>No code reads another instance's state; a question is a message or a lagging projection</td><td>None: it is the design</td></tr>
       <tr><td class="n">9</td><td>State is a snapshot: no determinism rules for authors</td><td>History is a record, not the source; old state needs upgrade code</td><td>State versions, <code>UpgradeState</code></td></tr>
       <tr><td class="n">10</td><td>State is opaque: any model fits</td><td>The kernel cannot search inside state; indexes cost writes</td><td><code>Describe</code>; indexed fields per workflow</td></tr>
@@ -171,6 +171,7 @@
       <ul>
         <li>What the store contract says about subscribing twice and removing what is absent</li>
         <li>Tenant and trace headers; <code>Describe</code> for lists</li>
+        <li>SQL Server's default fence: the fence in the batch deadlocks takes with stale commits there (E9); the checked fence is the suggested fix</li>
         <li>StateMachine as a native composite: recommended, decided by #3815's design milestone</li>
         <li>The default join for a Flowchart node with several inbound connections</li>
         <li>BPMN's scope for its first release</li>
@@ -199,7 +200,7 @@
       </ul></div>
   </div>
   <p class="note">Standalone jobs (Elsa.Jobs on the kernel) are in neither column: their release is decided in the design proposal.</p>
-  <p>Next: the three-layer restructuring with the Orleans adapter, then the design proposal (a new ADR, a program plan and a list of ADRs to retire), then the Fable review. No product code until the design is approved.</p>
+  <p>Next: finish the three-layer restructuring, extract the graph engine, run the BPMN and StateMachine spikes, then the design proposal (a new ADR, a program plan and a list of ADRs to retire), then the Fable review. No product code until the design is approved.</p>
 </section>
 </main>
 </div>
