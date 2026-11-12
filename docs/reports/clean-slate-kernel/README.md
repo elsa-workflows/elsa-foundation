@@ -11,6 +11,7 @@ Status: a proposed design, not approved. No product code exists for it. It super
 The walkthrough is also published at https://vowful-mustard-pd8t.here.now/. To rebuild it after editing a part:
 
 ```bash
+cd docs/reports/clean-slate-kernel
 cat walkthrough-src/01-head.html walkthrough-src/02-body1.html walkthrough-src/03-body2.html walkthrough-src/04-body3.html walkthrough-src/05-script.html > walkthrough.html
 ```
 

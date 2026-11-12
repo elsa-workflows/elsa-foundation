@@ -40,7 +40,7 @@
     <span class="chip">Standalone model, not product code</span>
     <span class="chip warn">Design not yet approved</span>
     <span class="chip">Fable review pending</span>
-    <span class="chip ok">Four branches merged; gates reported green</span>
+    <span class="chip ok">Prototype: four branches merged on local branches; gates green</span>
   </div>
 </header>
 
@@ -84,7 +84,7 @@
         <text class="ts" x="522" y="114">by operations</text>
       </g>
       <g><path class="edge both" d="M120,152 L120,178"/></g>
-      <text class="tm" x="330" y="170" text-anchor="middle">IExecutionModel · IStep</text>
+      <text class="tm" x="330" y="170" text-anchor="middle">IExecutionModel · ITurn</text>
       <!-- layer 2 -->
       <g data-pick="l2" tabindex="0" role="button" aria-label="Layer 2, durable actors">
         <rect class="b2" x="20" y="180" width="620" height="150" rx="10"/>
@@ -198,7 +198,7 @@
 <span class="k">public interface</span> IScopeActivation : IAsyncDisposable
 {
     ValueTask WokenAsync(ActorId actor, CancellationToken ct);
-    ValueTask&lt;TimeSpan?&gt; RunAsync(CancellationToken ct);        <span class="c">// passes until idle; when to call again</span>
+    ValueTask&lt;TimeSpan?&gt; RunAsync(CancellationToken ct);        <span class="c">// one pass: turns until idle; when to call again</span>
 }</code></pre>
   <p class="note">A sketch. The code is not yet split this way; that restructuring is the next piece of work.</p>
   <figure>

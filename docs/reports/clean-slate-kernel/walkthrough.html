@@ -4,9 +4,6 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Elsa Kernel Walkthrough</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
 <style>
 /* Layout idea: a technical field guide. Sticky chapter rail on the left, one reading column,
    diagrams drawn as engineering schematics; blue = the durable layer and whatever is "lit" now. */
@@ -28,9 +25,9 @@
   --st: #93650a;
   --st-soft: #f8f0dc;
   --code-bg: #eef1f5;
-  --display: "IBM Plex Sans Condensed", "Arial Narrow", system-ui, sans-serif;
-  --sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
-  --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --display: "Avenir Next Condensed", "Arial Narrow", system-ui, sans-serif;
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
@@ -270,7 +267,7 @@ ol.stmts code { font-size: 12.5px; }
     <span class="chip">Standalone model, not product code</span>
     <span class="chip warn">Design not yet approved</span>
     <span class="chip">Fable review pending</span>
-    <span class="chip ok">Four branches merged; gates reported green</span>
+    <span class="chip ok">Prototype: four branches merged on local branches; gates green</span>
   </div>
 </header>
 
@@ -314,7 +311,7 @@ ol.stmts code { font-size: 12.5px; }
         <text class="ts" x="522" y="114">by operations</text>
       </g>
       <g><path class="edge both" d="M120,152 L120,178"/></g>
-      <text class="tm" x="330" y="170" text-anchor="middle">IExecutionModel · IStep</text>
+      <text class="tm" x="330" y="170" text-anchor="middle">IExecutionModel · ITurn</text>
       <!-- layer 2 -->
       <g data-pick="l2" tabindex="0" role="button" aria-label="Layer 2, durable actors">
         <rect class="b2" x="20" y="180" width="620" height="150" rx="10"/>
@@ -428,7 +425,7 @@ ol.stmts code { font-size: 12.5px; }
 <span class="k">public interface</span> IScopeActivation : IAsyncDisposable
 {
     ValueTask WokenAsync(ActorId actor, CancellationToken ct);
-    ValueTask&lt;TimeSpan?&gt; RunAsync(CancellationToken ct);        <span class="c">// passes until idle; when to call again</span>
+    ValueTask&lt;TimeSpan?&gt; RunAsync(CancellationToken ct);        <span class="c">// one pass: turns until idle; when to call again</span>
 }</code></pre>
   <p class="note">A sketch. The code is not yet split this way; that restructuring is the next piece of work.</p>
   <figure>
@@ -686,7 +683,7 @@ ol.stmts code { font-size: 12.5px; }
     ValueTask&lt;object?&gt; ExecuteJobAsync(IJob job, CancellationToken ct);
     InstanceSummary Describe(object state);
 }</code></pre>
-  <pre><code><span class="k">public interface</span> IStep
+  <pre><code><span class="k">public interface</span> ITurn
 {
     InstanceInfo Instance { get; }
     IReadOnlyList&lt;Message&gt; Inbox { get; }
@@ -777,7 +774,7 @@ ol.stmts code { font-size: 12.5px; }
       <text class="ts" x="480" y="258" text-anchor="middle">Both sides derive the same delivery id, ev:{event}:{instance}:{wait}, so the double is refused.</text>
     </svg>
     </div>
-    <figcaption>Default since your decision: events are not kept. Only a wait that asks for kept events (BPMN message correlation) pays for the event row and the owed read.</figcaption>
+    <figcaption>Default since the owner's decision of 12 November: events are not kept. Only a wait that asks for kept events (BPMN message correlation) pays for the event row and the owed read.</figcaption>
   </figure>
   <h3>The alternative: correlation as an ordinary instance per key</h3>
   <p>Built as a 50-line model with no kernel change: subscribing and publishing are messages to the key's instance, which holds the waits and the kept events. It passed every run. It costs a hop, measured on PostgreSQL for one waiter, one event:</p>
@@ -915,7 +912,7 @@ ol.stmts code { font-size: 12.5px; }
       <tr><td>SQLite</td><td class="n">5</td><td>Calls into the engine, where EF sends one command per row.</td></tr>
     </tbody>
   </table></div>
-  <p class="note">Measured by agent runs on the model. I re-ran the SQLite figures myself; the other engines' figures are as the agents reported them.</p>
+  <p class="note">Measured by the prototype's own cost runs, as reported in its findings. The SQLite figures were re-run independently; the other engines' figures are as the agents reported them.</p>
 </section>
 
 <!-- 14 ─────────────────────────────────────────── -->
@@ -942,12 +939,14 @@ ol.stmts code { font-size: 12.5px; }
   <div class="tablewrap"><table>
     <thead><tr><th>Gate</th><th>Result</th><th>Checked by</th></tr></thead>
     <tbody>
-      <tr><td>Simulation, round 3: 20,000 runs × 1,000 actions</td><td>0 failed; 12 innocent instances parked</td><td>Re-run by me</td></tr>
-      <tr><td>Simulation after the merge: 200,000 × 300 and 20,000 × 1,000, with and without native instances</td><td>0 failed</td><td>Merge agent, not yet re-run by me</td></tr>
-      <tr><td>Mutation check: the kernel broken on purpose, one rule at a time</td><td>All but two caught alone; those two caught with the rule that covers each</td><td>Merge agent; round 3 re-run by me</td></tr>
-      <tr><td>Store conformance: 57 semantic cases</td><td>Pass on in-memory, SQLite, PostgreSQL, SQL Server, MySQL, MongoDB, with either fence</td><td>Merge agent</td></tr>
-      <tr><td>Stress: 40 s, 5,000 messages, killed connections, stalls</td><td>Every property holds on all five engines, 0 deadlocks</td><td>Merge agent</td></tr>
-      <tr><td>Stress with the fence broken on purpose</td><td>Violations on every engine: PostgreSQL 228, SQL Server 26, MySQL 611, SQLite 238, MongoDB 390</td><td>Merge agent</td></tr>
+      <tr><td>Simulation after the merge: 200,000 runs × 300 actions</td><td>0 failed, 0 parked</td><td>Re-run on 12 November</td></tr>
+      <tr><td>Simulation: 20,000 runs × 1,000 actions</td><td>0 failed; 12 innocent instances parked</td><td>Re-run on 12 November</td></tr>
+      <tr><td>The same with native instances in the mix</td><td>0 failed; 15 innocent instances parked</td><td>Re-run on 12 November</td></tr>
+      <tr><td>Mutation check: the kernel broken one rule at a time</td><td>37 breakages; 35 caught alone; the other two caught with the rule that covers each. Native model: 5 of 5</td><td>Re-run on 12 November</td></tr>
+      <tr><td>Store conformance, 57 semantic cases: in memory and SQLite (either fence)</td><td>In memory 56 pass, 1 skipped. SQLite 54 pass, 1 skipped, 2 reference cases differ where the contract is silent</td><td>Re-run on 12 November</td></tr>
+      <tr><td>Store conformance: PostgreSQL, SQL Server, MySQL, MongoDB</td><td>Pass</td><td>Merge run; not re-run</td></tr>
+      <tr><td>Stress: 40 s, 5,000 messages, killed connections, stalls</td><td>Every property holds on all five engines, 0 deadlocks</td><td>Merge run; not re-run</td></tr>
+      <tr><td>Stress with the fence broken on purpose</td><td>Violations on every engine: PostgreSQL 228, SQL Server 26, MySQL 611, SQLite 238, MongoDB 390</td><td>Merge run; not re-run</td></tr>
     </tbody>
   </table></div>
   <p class="note">The last row shows the test can fail: with the fence switched off, every engine produces violations.</p>
@@ -957,7 +956,7 @@ ol.stmts code { font-size: 12.5px; }
 <section class="ch" id="tradeoffs">
   <div class="num">15</div>
   <h2>Trade-offs and the chosen defaults</h2>
-  <p>You set the order to optimise in: <b>correctness, then database calls per workflow, then latency, then flexibility</b>. Defaults accepted on 12 November:</p>
+  <p>The owner set the order to optimise in: <b>correctness, then database calls per workflow, then latency, then flexibility</b>. Defaults accepted on 12 November:</p>
   <div class="chips">
     <span class="chip">Side effects at least once in Balanced</span>
     <span class="chip">History: Full</span>

@@ -50,7 +50,7 @@
       <tr><td>SQLite</td><td class="n">5</td><td>Calls into the engine, where EF sends one command per row.</td></tr>
     </tbody>
   </table></div>
-  <p class="note">Measured by agent runs on the model. I re-ran the SQLite figures myself; the other engines' figures are as the agents reported them.</p>
+  <p class="note">Measured by the prototype's own cost runs, as reported in its findings. The SQLite figures were re-run independently; the other engines' figures are as the agents reported them.</p>
 </section>
 
 <!-- 14 ─────────────────────────────────────────── -->
@@ -77,12 +77,14 @@
   <div class="tablewrap"><table>
     <thead><tr><th>Gate</th><th>Result</th><th>Checked by</th></tr></thead>
     <tbody>
-      <tr><td>Simulation, round 3: 20,000 runs × 1,000 actions</td><td>0 failed; 12 innocent instances parked</td><td>Re-run by me</td></tr>
-      <tr><td>Simulation after the merge: 200,000 × 300 and 20,000 × 1,000, with and without native instances</td><td>0 failed</td><td>Merge agent, not yet re-run by me</td></tr>
-      <tr><td>Mutation check: the kernel broken on purpose, one rule at a time</td><td>All but two caught alone; those two caught with the rule that covers each</td><td>Merge agent; round 3 re-run by me</td></tr>
-      <tr><td>Store conformance: 57 semantic cases</td><td>Pass on in-memory, SQLite, PostgreSQL, SQL Server, MySQL, MongoDB, with either fence</td><td>Merge agent</td></tr>
-      <tr><td>Stress: 40 s, 5,000 messages, killed connections, stalls</td><td>Every property holds on all five engines, 0 deadlocks</td><td>Merge agent</td></tr>
-      <tr><td>Stress with the fence broken on purpose</td><td>Violations on every engine: PostgreSQL 228, SQL Server 26, MySQL 611, SQLite 238, MongoDB 390</td><td>Merge agent</td></tr>
+      <tr><td>Simulation after the merge: 200,000 runs × 300 actions</td><td>0 failed, 0 parked</td><td>Re-run on 12 November</td></tr>
+      <tr><td>Simulation: 20,000 runs × 1,000 actions</td><td>0 failed; 12 innocent instances parked</td><td>Re-run on 12 November</td></tr>
+      <tr><td>The same with native instances in the mix</td><td>0 failed; 15 innocent instances parked</td><td>Re-run on 12 November</td></tr>
+      <tr><td>Mutation check: the kernel broken one rule at a time</td><td>37 breakages; 35 caught alone; the other two caught with the rule that covers each. Native model: 5 of 5</td><td>Re-run on 12 November</td></tr>
+      <tr><td>Store conformance, 57 semantic cases: in memory and SQLite (either fence)</td><td>In memory 56 pass, 1 skipped. SQLite 54 pass, 1 skipped, 2 reference cases differ where the contract is silent</td><td>Re-run on 12 November</td></tr>
+      <tr><td>Store conformance: PostgreSQL, SQL Server, MySQL, MongoDB</td><td>Pass</td><td>Merge run; not re-run</td></tr>
+      <tr><td>Stress: 40 s, 5,000 messages, killed connections, stalls</td><td>Every property holds on all five engines, 0 deadlocks</td><td>Merge run; not re-run</td></tr>
+      <tr><td>Stress with the fence broken on purpose</td><td>Violations on every engine: PostgreSQL 228, SQL Server 26, MySQL 611, SQLite 238, MongoDB 390</td><td>Merge run; not re-run</td></tr>
     </tbody>
   </table></div>
   <p class="note">The last row shows the test can fail: with the fence switched off, every engine produces violations.</p>
@@ -92,7 +94,7 @@
 <section class="ch" id="tradeoffs">
   <div class="num">15</div>
   <h2>Trade-offs and the chosen defaults</h2>
-  <p>You set the order to optimise in: <b>correctness, then database calls per workflow, then latency, then flexibility</b>. Defaults accepted on 12 November:</p>
+  <p>The owner set the order to optimise in: <b>correctness, then database calls per workflow, then latency, then flexibility</b>. Defaults accepted on 12 November:</p>
   <div class="chips">
     <span class="chip">Side effects at least once in Balanced</span>
     <span class="chip">History: Full</span>

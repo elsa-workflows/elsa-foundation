@@ -79,7 +79,7 @@
     ValueTask&lt;object?&gt; ExecuteJobAsync(IJob job, CancellationToken ct);
     InstanceSummary Describe(object state);
 }</code></pre>
-  <pre><code><span class="k">public interface</span> IStep
+  <pre><code><span class="k">public interface</span> ITurn
 {
     InstanceInfo Instance { get; }
     IReadOnlyList&lt;Message&gt; Inbox { get; }
@@ -170,7 +170,7 @@
       <text class="ts" x="480" y="258" text-anchor="middle">Both sides derive the same delivery id, ev:{event}:{instance}:{wait}, so the double is refused.</text>
     </svg>
     </div>
-    <figcaption>Default since your decision: events are not kept. Only a wait that asks for kept events (BPMN message correlation) pays for the event row and the owed read.</figcaption>
+    <figcaption>Default since the owner's decision of 12 November: events are not kept. Only a wait that asks for kept events (BPMN message correlation) pays for the event row and the owed read.</figcaption>
   </figure>
   <h3>The alternative: correlation as an ordinary instance per key</h3>
   <p>Built as a 50-line model with no kernel change: subscribing and publishing are messages to the key's instance, which holds the waits and the kept events. It passed every run. It costs a hop, measured on PostgreSQL for one waiter, one event:</p>
