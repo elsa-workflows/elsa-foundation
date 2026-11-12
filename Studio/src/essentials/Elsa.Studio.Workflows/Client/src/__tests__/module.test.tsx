@@ -3700,6 +3700,8 @@ describe("workflows module", () => {
     await click(buttonByLabel(container, "Expand run details panel"));
     expect(container.textContent).toContain("WriteLine");
     await click(container.querySelector(".wf-timeline-entry"));
+    expect(container.querySelector("[data-tab-id='timeline']")?.getAttribute("aria-selected")).toBe("true");
+    await click(buttonByText(container, "Activity"));
     expect(container.querySelector("[data-tab-id='activity']")?.getAttribute("aria-selected")).toBe("true");
     await waitForText(container, "Activity Execution ID");
     expect(container.textContent).toContain("Activity Execution ID");
@@ -3769,6 +3771,7 @@ describe("workflows module", () => {
     const openTab = async (tab: "Activity" | "Issues" | "Details") => {
       if (tab === "Activity") {
         await click(container.querySelector(".wf-timeline-entry"));
+        await click(buttonByText(container, "Activity"));
       } else {
         await click(buttonByText(container, tab));
       }
