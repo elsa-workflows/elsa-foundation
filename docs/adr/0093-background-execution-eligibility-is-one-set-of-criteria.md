@@ -1,11 +1,11 @@
 # Background Execution Eligibility Is One Set Of Criteria, Declared By The Activity And Enforced In One Place
 
-Status: proposed. It follows from analysis A-2.
+Status: accepted (2026-11-12). It follows from analysis A-2.
 
 It records the eligibility rules of spec 241
 ([native durable background activities](../../specs/241-native-durable-offload/spec.md)) as an architecture
 decision, adds four criteria, and requires the rules to live in one place. It depends on
-[ADR 0092](0092-variable-reads-and-writes-share-one-versioned-lifecycle.md) (proposed) for how a background step's
+[ADR 0092](0092-variable-reads-and-writes-share-one-versioned-lifecycle.md) for how a background step's
 reads and writes are protected.
 
 ## Context
