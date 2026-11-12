@@ -147,6 +147,9 @@ jobs:
       - name: Check the package publish gate
         run: python3 -m unittest discover -s tools/ci -p 'test_await_ci_result.py'
 
+      - name: Check the resilient Chromium installer
+        run: python3 -m unittest discover -s tools/ci -p 'test_install_playwright_chromium.py'
+
       # Same files and rules as CatalogLinkGuardTests, without the build. It is the documentation-reading check a
       # documentation-only PR can still break (by moving or deleting a doc a catalog or module README links to).
       - name: Check catalog and module README links
@@ -1079,8 +1082,9 @@ jobs:
         uses: ./.github/actions/setup-studio
 
       - name: Install Chromium
-        run: pnpm exec playwright install --with-deps chromium
-        working-directory: Studio
+        uses: ./.github/actions/install-chromium
+        with:
+          working-directory: Studio
 
       - name: Run browser tests
         id: browser-tests
@@ -1116,8 +1120,9 @@ jobs:
           global-json-file: global.json
       - uses: ./.github/actions/setup-studio
       - name: Install Chromium
-        run: pnpm exec playwright install --with-deps chromium
-        working-directory: Studio
+        uses: ./.github/actions/install-chromium
+        with:
+          working-directory: Studio
       - name: Verify acceptance tooling and gate failure controls
         run: |
           python3 -m unittest discover -s tools/ux-acceptance -p 'test_*.py'
@@ -1213,8 +1218,9 @@ jobs:
           -o "$RUNNER_TEMP/studio-reference-web"
 
       - name: Install Chromium for package consumer qualification
-        run: pnpm exec playwright install --with-deps chromium
-        working-directory: Studio
+        uses: ./.github/actions/install-chromium
+        with:
+          working-directory: Studio
 
       - name: Qualify actual Studio packages and causal controls
         run: |
@@ -1442,8 +1448,9 @@ jobs:
         uses: ./.github/actions/setup-studio
 
       - name: Install driver browser tooling
-        working-directory: Studio
-        run: pnpm exec playwright install --with-deps chromium
+        uses: ./.github/actions/install-chromium
+        with:
+          working-directory: Studio
 
       - name: Verify driver refusal controls
         run: python3 -m unittest discover -s tools/studio/Weaver.Conformance.Probe -p 'test_*.py'
@@ -1519,8 +1526,9 @@ jobs:
         run: node --test tools/contributor-pair-proof/diagnostics.test.mjs
 
       - name: Install Chromium
-        working-directory: tools/contributor-pair-proof
-        run: ./node_modules/.bin/playwright install --with-deps chromium
+        uses: ./.github/actions/install-chromium
+        with:
+          working-directory: tools/contributor-pair-proof
 
       - name: Run the published image pair journey
         id: published-pair-journey
