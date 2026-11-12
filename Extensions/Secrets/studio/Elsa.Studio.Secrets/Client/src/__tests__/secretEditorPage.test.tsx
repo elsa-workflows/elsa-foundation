@@ -49,7 +49,8 @@ describe("standalone secret editor lifetime and navigation", () => {
   it("confirms one accepted create without carrying a replayable confirmation in the return URL", async () => {
     const { host, navigate, notifications } = renderEditor(); await ready(host); fill(host); submit(host);
     await vi.waitFor(() => expect(navigate).toHaveBeenCalledOnce());
-    expect(notifications.notify).toHaveBeenCalledExactlyOnceWith({ level: "success", title: "Secret created." });
+    expect(notifications.notify).toHaveBeenCalledOnce();
+    expect(notifications.notify).toHaveBeenCalledWith({ level: "success", title: "Secret created." });
     expect(new URL(navigate.mock.calls[0][0], window.location.origin).searchParams.has("notice")).toBe(false);
   });
   it("does not confirm a write that settles after the editor has unmounted", async () => {
