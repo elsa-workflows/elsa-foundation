@@ -9,11 +9,23 @@ const viewport = vi.hoisted(() => ({ x: 0, y: 0, zoom: 1 }));
 const fitView = vi.hoisted(() => vi.fn(async (_options: FitViewOptions) => true));
 const getViewport = vi.hoisted(() => vi.fn(() => ({ x: viewport.x, y: viewport.y, zoom: viewport.zoom })));
 const pane = vi.hoisted(() => ({ initialized: true, width: 800, height: 600 }));
+type FixtureNode = { id: string; position: { x: number; y: number }; data: Record<string, unknown>; selected?: boolean; box: { x: number; y: number; width: number; height: number } };
+const graphNodes = vi.hoisted(() => ({ items: [] as FixtureNode[] }));
+const getNodes = vi.hoisted(() => vi.fn(() => graphNodes.items));
+const getNodesBounds = vi.hoisted(() => vi.fn((nodes: FixtureNode[]) => {
+  const left = Math.min(...nodes.map(node => node.box.x)), top = Math.min(...nodes.map(node => node.box.y));
+  const right = Math.max(...nodes.map(node => node.box.x + node.box.width)), bottom = Math.max(...nodes.map(node => node.box.y + node.box.height));
+  return { x: left, y: top, width: right - left, height: bottom - top };
+}));
+const setViewport = vi.hoisted(() => vi.fn(async (next: { x: number; y: number; zoom: number }) => {
+  viewport.x = next.x; viewport.y = next.y; viewport.zoom = next.zoom;
+  return true;
+}));
 
 vi.mock("@xyflow/react", async importOriginal => ({
   ...await importOriginal<typeof import("@xyflow/react")>(),
   useNodesInitialized: () => pane.initialized,
-  useReactFlow: () => ({ fitView, getViewport }),
+  useReactFlow: () => ({ fitView, getViewport, getNodes, getNodesBounds, setViewport }),
   useStore: (selector: (state: { width: number; height: number }) => unknown) => selector({ width: pane.width, height: pane.height })
 }));
 
@@ -30,6 +42,11 @@ async function settleAutoFit() {
 beforeEach(() => {
   fitView.mockClear();
   getViewport.mockClear();
+  setViewport.mockClear();
+  graphNodes.items = [
+    { id: "task", position: { x: 0, y: 0 }, data: {}, box: { x: 0, y: 0, width: 240, height: 96 } },
+    { id: "output", position: { x: 420, y: 8 }, data: {}, box: { x: 420, y: 8, width: 240, height: 80 } }
+  ];
   viewport.x = 0;
   viewport.y = 0;
   viewport.zoom = 1;
@@ -105,4 +122,49 @@ it("fits a sparse mobile graph with room for external outcome labels", () => {
   const options = fitView.mock.calls[0][0];
   const view = getViewportForBounds({ x: 0, y: 0, width: 220, height: 260 }, pane.width, pane.height, 0.1, 2, options.padding ?? 0);
   expect(view.x + (220 + 88) * view.zoom).toBeLessThanOrEqual(pane.width);
+});
+
+describe("FitReadOnlyFlowView with a readable minimum zoom (#4064)", () => {
+  it("fits the whole graph when the overview is already readable", async () => {
+    pane.width = 1200; pane.height = 700;
+    flushSync(() => root.render(<FitReadOnlyFlowView nodeCount={2} minReadableZoom={1} />));
+    await settleAutoFit();
+    expect(fitView).not.toHaveBeenCalled();
+    expect(setViewport).toHaveBeenCalledTimes(1);
+    expect(setViewport.mock.calls[0][0].zoom).toBeGreaterThanOrEqual(1);
+  });
+
+  it("keeps outcome labels readable on a narrow pane and re-fits on resize while untouched", async () => {
+    pane.width = 340; pane.height = 600;
+    flushSync(() => root.render(<FitReadOnlyFlowView nodeCount={2} minReadableZoom={1} />));
+    await settleAutoFit();
+    expect(setViewport.mock.calls[0][0].zoom).toBe(1);
+
+    pane.width = 1200;
+    flushSync(() => root.render(<FitReadOnlyFlowView nodeCount={2} minReadableZoom={1} />));
+    await settleAutoFit();
+    expect(setViewport).toHaveBeenCalledTimes(2);
+    expect(setViewport.mock.calls[1][0].zoom).toBeGreaterThanOrEqual(1);
+  });
+
+  it("centres the selected activity when the graph cannot fit legibly", async () => {
+    graphNodes.items[1]!.selected = true;
+    pane.width = 340; pane.height = 600;
+    flushSync(() => root.render(<FitReadOnlyFlowView nodeCount={2} minReadableZoom={1} />));
+    await settleAutoFit();
+    const view = setViewport.mock.calls[0][0];
+    expect(420 * view.zoom + view.x).toBeGreaterThanOrEqual(0);
+    expect(660 * view.zoom + view.x).toBeLessThanOrEqual(340);
+  });
+
+  it("does not take the viewport back after the user moves it", async () => {
+    pane.width = 340; pane.height = 600;
+    flushSync(() => root.render(<FitReadOnlyFlowView nodeCount={2} minReadableZoom={1} />));
+    await settleAutoFit();
+    viewport.x += 40;
+    pane.height = 520;
+    flushSync(() => root.render(<FitReadOnlyFlowView nodeCount={2} minReadableZoom={1} />));
+    await settleAutoFit();
+    expect(setViewport).toHaveBeenCalledTimes(1);
+  });
 });
