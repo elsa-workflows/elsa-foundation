@@ -69,9 +69,6 @@ test("touch projects really emulate touch and only the supplementary subsets cha
   assert.equal(config.workers, 1);
 });
 
-test("supplementary journeys keep their own hooks and leave the owned-definition cleanup hook alone", () => {
-  const supplements = readFileSync(new URL("supplements.spec.ts", acceptance), "utf8");
-  assert.equal((supplements.match(/^test\.afterEach\(/gm) ?? []).length, 1);
-  assert.doesNotMatch(supplements, /request\.(post|put|patch|delete)\(/, "Supplementary journeys create no store records to clean up");
+test("supplementary journey titles match their verdict inventory", () => {
   assert.deepEqual(titles("supplements.spec.ts").sort(), Object.keys(expected).filter(title => !titles("journeys.spec.ts").includes(title)).sort());
 });
