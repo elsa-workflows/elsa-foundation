@@ -244,7 +244,9 @@ internal sealed class ActivityDataSelectionAnalyzer(
                 return null;
             }
             var input = matches[0];
-            var value = binding.Role == "Input"
+            // A workflow's inputs are its request members, keyed by name, and publication lowers a stored Input read to
+            // that request read; so a workflow offers the request read itself. A reusable body keeps offering Input.
+            var value = binding.Role == "Input" && !context.WorkflowBoundary
                 ? new ArgumentValue(new VariableReference(input.ReferenceKey), "Input")
                 : new ArgumentValue(JsonSerializer.SerializeToElement(new { memberKey = context.WorkflowBoundary ? input.Name : input.ReferenceKey, path = binding.Path }), "WorkflowRequest");
             return new($"input:{input.ReferenceKey}", input.DisplayName, null, value,

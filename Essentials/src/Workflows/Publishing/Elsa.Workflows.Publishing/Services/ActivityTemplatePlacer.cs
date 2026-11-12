@@ -664,23 +664,7 @@ public sealed class ActivityTemplatePlacer(
 
     // Studio picks a graph input as Input {referenceKey}. Inside a closed-scope body the request is the
     // graph's own inputs, keyed by reference key, so the pick is a request read of that key.
-    private static ArgumentState ToGraphInputRead(ArgumentState state)
-    {
-        if (!StringComparer.OrdinalIgnoreCase.Equals(state.Value.ExpressionType, "Input"))
-            return state;
-        var value = state.Value.Value is JsonElement element ? element : JsonSerializer.SerializeToElement(state.Value.Value);
-        if (value.ValueKind != JsonValueKind.Object ||
-            !value.TryGetProperty("referenceKey", out var referenceKey) ||
-            referenceKey.ValueKind != JsonValueKind.String)
-            return state;
-
-        return state with
-        {
-            Value = new ArgumentValue(
-                JsonSerializer.SerializeToElement(new { memberKey = referenceKey.GetString() }),
-                "WorkflowRequest")
-        };
-    }
+    private static ArgumentState ToGraphInputRead(ArgumentState state) => InputReadLowering.Lower(state, referenceKey => referenceKey);
 
     private ExecutableActivityStructure? RewriteStructure(
         ExecutableActivityStructure? structure,
