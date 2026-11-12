@@ -160,7 +160,7 @@ not fall back to an issuer-less legacy link. Admission and revision-coordination
 
 The token service retains `TokenIssueRequest`'s canonical-user/provider fields. Non-user issuance additionally
 requires a validated `SubjectIssuer`. Existing canonical-user UTF-8 v1 store keys are preserved; issuer-qualified
-external entries use v2 keys, also used as their public first-party subject, with the original subject retained
+external entries use a v2 domain encoding exact UTF-16 code units, also used as their public first-party subject, with the original subject retained
 as trusted provenance. First-party validation checks its signed token id against the persisted scoped subject;
 refresh checks the payload's scope before redemption and retains the live canonical-user eligibility check.
 Issuer-less external credentials cannot acquire missing origin by inference.
