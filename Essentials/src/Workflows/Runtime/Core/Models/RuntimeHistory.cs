@@ -4,7 +4,7 @@ namespace Elsa.Workflows.Runtime.Core.Models;
 
 public enum RuntimeHistoryAuthority { Unspecified, CommittedTransition, DeliveryObservation }
 public enum RuntimeHistoryBookmarkStatus { Active, Consumed, Removed, Superseded, Unknown }
-public enum RuntimeHistoryPriorState { Unknown, CreationMetadata, CreationEvent }
+public enum RuntimeHistoryCreationEvidence { Unknown, CreationMetadata, CreationEvent }
 
 /// <summary>Immutable capture policy pinned before a new execution is admitted; absence means legacy uncaptured work.</summary>
 public sealed record RuntimeHistoryCapturePolicy
@@ -89,7 +89,7 @@ public sealed record RuntimeHistoryHead(string WorkflowExecutionId, long FirstSe
 public sealed record RuntimeHistoryBookmark(ActivityExecutionBookmarkSummary Bookmark, string? ExecutableNodeId,
     RuntimeHistoryBookmarkStatus Status, string? CreatedHistoryEventId, string? EndedHistoryEventId,
     string LastHistoryEventId, long LastSequence, long FirstRecordedSequence, DateTimeOffset? EndedAt,
-    string? Reason, string? SelectedBookmarkId, RuntimeHistoryPriorState PriorState)
+    string? Reason, string? SelectedBookmarkId, RuntimeHistoryCreationEvidence PriorState)
 {
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? SupersededByActivityExecutionId { get; init; }

@@ -22,6 +22,8 @@ RuntimeHistoryBookmarkStatus: Active, Consumed, Removed, Superseded, Unknown. Re
 
 RuntimeHistoryBookmarkMutation carries the existing safe ActivityExecutionBookmarkSummary, status, reason and selected-winner handle where known. No raw BookmarkState/payload is copied.
 
+The creation-availability enum is `RuntimeHistoryCreationEvidence` (Unknown, CreationMetadata, CreationEvent); the bookmark model keeps its `PriorState` member key.
+
 RuntimeHistoryBookmark retains that safe summary, optional node, status, nullable creation/end event references, last event/sequence, stable first-recorded sequence for inventory paging, optional end instant/reason/winner and an explicit creation/prior-state availability. Known creation metadata from the real handle may remain available without a captured creation event; neither is fabricated.
 
 RuntimeHistoryHead retains exact run, first/last sequence, last covered physical checkpoint/instant, pinned policy, captured-from-start/has-gaps and purged-through position. Provider revision/scope are persistence details. Ingress appends can advance event sequence but cannot advance runtime-covered checkpoint or change Required policy.

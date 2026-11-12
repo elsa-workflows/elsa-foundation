@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Xunit;
 
@@ -221,6 +222,26 @@ public sealed class RuntimeHistoryContractTests
         Assert.Empty(page.Items);
         Assert.Equal(100, page.ScannedThroughSequence);
         Assert.Equal("next-window", page.NextContinuationToken);
+    }
+
+    [Fact]
+    public void Provider_unavailability_preserves_its_cause_and_localizing_context()
+    {
+        var cause = new IOException("Provider unavailable");
+        var failure = new RuntimeHistoryUnavailableException("run", "read-page", cause);
+
+        Assert.Same(cause, failure.InnerException);
+        Assert.Equal("run", failure.WorkflowExecutionId);
+        Assert.Equal("read-page", failure.Operation);
+    }
+
+    [Fact]
+    public void Provider_unavailability_requires_a_cause_and_localizing_context()
+    {
+        var cause = new IOException("Provider unavailable");
+        Assert.Throws<ArgumentException>(() => new RuntimeHistoryUnavailableException(" ", "read-page", cause));
+        Assert.Throws<ArgumentException>(() => new RuntimeHistoryUnavailableException("run", " ", cause));
+        Assert.Throws<ArgumentNullException>(() => new RuntimeHistoryUnavailableException("run", "read-page", null!));
     }
 
     private static RuntimeHistoryBatch Batch(RuntimeHistoryEvent @event) => new(Policy, "checkpoint", At, true, [new(@event, 0)]);
