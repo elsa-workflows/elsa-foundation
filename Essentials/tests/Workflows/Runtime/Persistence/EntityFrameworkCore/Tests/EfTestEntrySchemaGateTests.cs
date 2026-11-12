@@ -56,6 +56,29 @@ public sealed partial class EfSchedulerWorkQueueStoreTests
         Assert.NotNull(await queue.ClaimAsync(new("ordinary-workflow", "ordinary-worker", now, TimeSpan.FromMinutes(1))));
     }
 
+    [Fact]
+    public async Task Test_entry_predecessor_gate_refuses_operational_writes_for_a_peers_protected_root()
+    {
+        await using var fixture = await TestGateFixture.CreateAsync();
+        var now = DateTimeOffset.UtcNow;
+        var state = TestExecution(now);
+        await using (var peer = fixture.Open(ungated: true))
+        {
+            peer.WorkflowExecutionStates.Add(EfWorkflowExecutionStateStore.ToEntity(state, "tenant-a",
+                EfWorkflowExecutionStateStore.CreateId("tenant-a", state.WorkflowExecutionId), 1));
+            await peer.SaveChangesAsync();
+        }
+        // Admission is unavailable on this host, but a peer's protected root already exists in shared storage.
+        await using var context = fixture.Open();
+        var timers = new EfDurableTimerStore(context, new FixedAccessor("tenant-a"), new TestFormatCodec());
+        await Assert.ThrowsAsync<EfSchemaWriteRefusedException>(() => timers.SaveAsync(new("timer", state.WorkflowExecutionId,
+            "Delay", "wait", now.AddMinutes(1), now)).AsTask());
+        Assert.Empty(await context.DurableTimers.AsNoTracking().ToArrayAsync());
+        context.ChangeTracker.Clear();
+        await timers.SaveAsync(new("ordinary-timer", "ordinary", "Delay", "wait", now.AddMinutes(1), now));
+        Assert.Equal("1.0.0", (await context.DurableTimers.AsNoTracking().SingleAsync()).SchemaVersion);
+    }
+
     [Theory]
     [InlineData("executions")]
     [InlineData("scheduler")]
@@ -146,6 +169,19 @@ public sealed partial class EfSchedulerWorkQueueStoreTests
             if (command.CommandText.Contains(RuntimeWorkflowExecutionEfModule.TableName, StringComparison.Ordinal)) Count++;
             return ValueTask.FromResult(result);
         }
+    }
+
+    [Fact]
+    public async Task Test_entry_boundary_refuses_an_invalid_tenant_scope_value_without_throwing()
+    {
+        await using var fixture = await TestGateFixture.CreateAsync();
+        await fixture.FinalizeAsync();
+        await using var context = fixture.Open();
+        var selected = TestProviderTuple(context);
+        var entry = selected.Entry;
+        selected = selected with { Entry = new(entry.ContextId, entry.ContextFingerprint, entry.Executable, entry.ExecutableNodeId,
+            new(entry.Scope.ScopeId, entry.Scope.ExpiresAt, " tenant-a ", entry.Scope.Partition), entry.Authority) };
+        Assert.False(new EfRuntimeTestPersistenceBoundary(context, new FixedAccessor("tenant-a")).CanPersistTestEntry(selected));
     }
 
     private sealed class PrivilegedTestAccessor : IPersistenceAccessContextAccessor

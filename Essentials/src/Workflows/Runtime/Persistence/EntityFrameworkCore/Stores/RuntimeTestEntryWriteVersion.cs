@@ -27,7 +27,7 @@ internal static class RuntimeTestEntryWriteVersion
     // testContext is reserved for the upcoming owned-context slice; matching it raises format only, never authority.
     internal static bool HasEntry(JsonElement? payload) => payload is { ValueKind: JsonValueKind.Object } value &&
         value.EnumerateObject().Any(x =>
-            (x.Name.Equals("testEntry", StringComparison.OrdinalIgnoreCase) || x.Name.Equals("testContext", StringComparison.OrdinalIgnoreCase)) &&
+            (x.Name.Equals(nameof(WorkflowExecutionState.TestEntry), StringComparison.OrdinalIgnoreCase) || x.Name.Equals("testContext", StringComparison.OrdinalIgnoreCase)) &&
             x.Value.ValueKind is not (JsonValueKind.Null or JsonValueKind.Undefined));
 
     internal static bool ContentHasEntry(string content)
