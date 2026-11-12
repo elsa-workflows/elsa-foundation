@@ -70,7 +70,7 @@ import { AttachedTestRunControls } from "./AttachedTestRunControls";
 import { useTestRunObservation } from "./useTestRunObservation";
 import { useTestRunRestoration } from "./useTestRunRestoration";
 import { usePinnedEditorDocument } from "./usePinnedEditorDocument";
-import { selectAttachedRunEditorNode } from "./selectAttachedRunEditorNode";
+import { selectAttachedRunEditorNode, shouldSelectAttachedRunEditorNodeOnPointerDown } from "./selectAttachedRunEditorNode";
 import { useEditorRunCanvas } from "./useEditorRunCanvas";
 import { useAttachedExecutionSelection } from "./useAttachedExecutionSelection";
 import { activateWorkflowCanvasNode } from "./workflowAccessibility";
@@ -531,7 +531,7 @@ export function WorkflowEditor({
     });
   }, [catalogByVersion, runCanvas.nodes, scope?.slot.activities, scopeOwner]);
   const edges = runCanvas.edges;
-  revealRunInspectorOnSelectRef.current = runCanvas.attached || editorDoc.pinned;
+  revealRunInspectorOnSelectRef.current = runCanvas.attached;
   const selectEditorNode = selectAndInspect;
   const selectedCanvasNodeIds = useMemo(() => {
     const selected = nodes.filter(node => node.selected).map(node => node.id);
@@ -1752,7 +1752,8 @@ export function WorkflowEditor({
                 event.preventDefault();
                 closeActivityContextMenu();
               },
-              onNodePointerDown: editorDoc.pinned ? (_, node) => {
+              onNodePointerDown: runCanvas.attached ? (event, node) => {
+                if (!shouldSelectAttachedRunEditorNodeOnPointerDown(event)) return;
                 closeActivityContextMenu();
                 selectAndInspect(node.id);
               } : undefined,
