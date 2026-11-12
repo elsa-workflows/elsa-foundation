@@ -9,7 +9,7 @@ Parent: [#3849](https://github.com/elsa-workflows/elsa-foundation/issues/3849). 
 - [11 November](https://github.com/elsa-workflows/elsa-foundation/issues/3849#issuecomment-6794241516): Inputs lands first; Timeline's Data tab and history API build on #4108 rather than the closed #3881 branch.
 - [12 November](https://github.com/elsa-workflows/elsa-foundation/issues/3849#issuecomment-6837576668): resume remaining work after reconciling what landed.
 
-These decisions authorize multiple partial PRs for this one feature, superseding the old single-PR plan. Use `Part of #3849` on partial slices; only the accepted complete feature may close the parent. The original valid claim remains on #3849. No new program, deployment or release is authorized.
+These decisions authorize multiple PRs for this one feature, superseding the old single-PR plan. Use `Part of #3849` without an automatic closing keyword on every slice, including the final delivery PR. Explicitly close the parent only after resulting-main verification. The original valid claim remains on #3849. No new program, deployment or release is authorized.
 
 ## Verified baseline
 
