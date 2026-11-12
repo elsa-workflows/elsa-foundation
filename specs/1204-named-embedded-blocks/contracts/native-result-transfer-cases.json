@@ -662,7 +662,7 @@
                           "expressionType": "JavaScript",
                           "value": {
                             "language": "JavaScript",
-                            "source": "prior + 1",
+                            "source": "args.prior + 1",
                             "resultType": {
                               "alias": "Object",
                               "collectionKind": "single"
@@ -813,7 +813,7 @@
                         "expressionType": "JavaScript",
                         "value": {
                           "language": "JavaScript",
-                          "source": "prior + 1",
+                          "source": "args.prior + 1",
                           "resultType": {
                             "alias": "Object",
                             "collectionKind": "single"
@@ -962,7 +962,7 @@
                         "expressionType": "JavaScript",
                         "value": {
                           "language": "JavaScript",
-                          "source": "prior + 1",
+                          "source": "args.prior + 1",
                           "resultType": {
                             "alias": "Object",
                             "collectionKind": "single"
@@ -1108,7 +1108,7 @@
                                         "expressionType": "JavaScript",
                                         "value": {
                                           "language": "JavaScript",
-                                          "source": "counter + 1",
+                                          "source": "args.counter + 1",
                                           "resultType": {
                                             "alias": "Int32",
                                             "collectionKind": "single"
@@ -1315,7 +1315,7 @@
                                               "expressionType": "JavaScript",
                                               "value": {
                                                 "language": "JavaScript",
-                                                "source": "counter + 1",
+                                                "source": "args.counter + 1",
                                                 "resultType": {
                                                   "alias": "Int32",
                                                   "collectionKind": "single"
@@ -1530,7 +1530,7 @@
                                       "expressionType": "JavaScript",
                                       "value": {
                                         "language": "JavaScript",
-                                        "source": "counter + 1",
+                                        "source": "args.counter + 1",
                                         "resultType": {
                                           "alias": "Int32",
                                           "collectionKind": "single"
@@ -2209,7 +2209,7 @@
                           "expressionType": "JavaScript",
                           "value": {
                             "language": "JavaScript",
-                            "source": "prior + 1",
+                            "source": "args.prior + 1",
                             "resultType": {
                               "alias": "Object",
                               "collectionKind": "single"
@@ -2400,7 +2400,7 @@
                         "expressionType": "JavaScript",
                         "value": {
                           "language": "JavaScript",
-                          "source": "prior + 1",
+                          "source": "args.prior + 1",
                           "resultType": {
                             "alias": "Object",
                             "collectionKind": "single"
@@ -2574,7 +2574,7 @@
                         "expressionType": "JavaScript",
                         "value": {
                           "language": "JavaScript",
-                          "source": "prior + 1",
+                          "source": "args.prior + 1",
                           "resultType": {
                             "alias": "Object",
                             "collectionKind": "single"
@@ -2755,7 +2755,7 @@
                                         "expressionType": "JavaScript",
                                         "value": {
                                           "language": "JavaScript",
-                                          "source": "counter + 1",
+                                          "source": "args.counter + 1",
                                           "resultType": {
                                             "alias": "Int32",
                                             "collectionKind": "single"
@@ -2987,7 +2987,7 @@
                                               "expressionType": "JavaScript",
                                               "value": {
                                                 "language": "JavaScript",
-                                                "source": "counter + 1",
+                                                "source": "args.counter + 1",
                                                 "resultType": {
                                                   "alias": "Int32",
                                                   "collectionKind": "single"
@@ -3242,7 +3242,7 @@
                                       "expressionType": "JavaScript",
                                       "value": {
                                         "language": "JavaScript",
-                                        "source": "counter + 1",
+                                        "source": "args.counter + 1",
                                         "resultType": {
                                           "alias": "Int32",
                                           "collectionKind": "single"

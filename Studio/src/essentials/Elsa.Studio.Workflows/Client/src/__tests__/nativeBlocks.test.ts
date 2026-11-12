@@ -109,14 +109,14 @@ describe("pure native block planning", () => {
     ctx.catalog.push({ ...action, activityVersionId: "elsa.intrinsic.set@1", intrinsic: { kind: "Set", valueInputKey: "value" } });
     const children = payload(ctx).activities as ActivityNode[];
     children[3].inputs = [{ referenceKey: "text", value: { expressionType: "JavaScript", value: {
-      language: "JavaScript", source: "prior + 1", resultType: { alias: "Int32", collectionKind: "single" }, options: {}, capabilityProfile: "binding-pure-v1", parameters: {
+      language: "JavaScript", source: "args.prior + 1", resultType: { alias: "Int32", collectionKind: "single" }, options: {}, capabilityProfile: "binding-pure-v1", parameters: {
         prior: { kind: "ActivityResult", producerNodeId: "b", projectionKey: "$result" },
         literal: { kind: "Literal", value: { producerNodeId: "b", projectionKey: "$result" } }
       }
     } } }];
     const plan = accepted(extract(ctx));
     const input = ((planPayload(plan).activities as ActivityNode[])[2].inputs[0] as { value: { value: { source: string; parameters: unknown } } }).value.value;
-    expect(input.source).toBe("prior + 1");
+    expect(input.source).toBe("args.prior + 1");
     expect(input.parameters).toEqual({ prior: { kind: "Variable", declaringScopeNodeId: "root", variableKey: "new-block-result-1" }, literal: { kind: "Literal", value: { producerNodeId: "b", projectionKey: "$result" } } });
     accepted(planUngroupNativeBlock({ ...ctx, document: plan.document }, "new-block"));
   });
@@ -226,6 +226,9 @@ describe("pure native block planning", () => {
     'variables["Block result 1"]',
     'prior.toString()',
     'unknown + 1',
+    'prior + 1',
+    'args.missing + 1',
+    'args.prior.value',
     'globalThis',
     'getBlockResult1',
     '`value ${prior}`'
@@ -250,7 +253,7 @@ describe("pure native block planning", () => {
     ctx.catalog.push({ ...action, activityVersionId: "elsa.intrinsic.set@1", intrinsic: { kind: "Set", valueInputKey: "value" } });
     const children = payload(ctx).activities as ActivityNode[];
     children[3].inputs = [{ referenceKey: "text", value: { expressionType: "JavaScript", value: {
-      language: "JavaScript", source: "prior + 1", resultType: { alias: "Object", collectionKind: "single" }, options: {}, capabilityProfile: "binding-pure-v1",
+      language: "JavaScript", source: "args.prior + 1", resultType: { alias: "Object", collectionKind: "single" }, options: {}, capabilityProfile: "binding-pure-v1",
       parameters: { prior: { kind: "ActivityResult", producerNodeId: "b", projectionKey: "$result" } }
     } } }];
     const plan = accepted(extract(ctx));
