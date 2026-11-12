@@ -700,3 +700,41 @@ Round 2 left this open: at 1,000 actions about 7 percent of seeds parked an inno
 - **Proposed, reasoned, not built:** an owner with a trial in flight renews its lease on a short timer, so only a
   stalled or dead process lets it expire. In the simulation the host renews only when a random action says so; a
   real host can do this without risk, because a renewal is a fenced commit that changes nothing.
+
+## 22. The final runs of round 3. Run
+
+All at commit `fca58696ed` plus the documentation, on the machine shared with other agents' runs.
+
+- **Simulation:** 200,000 seeds of 300 actions (60 million actions, 102 s): 0 failed, 0 innocent instances parked.
+  20,000 seeds of 1,000 actions (20 million actions, 71 s): 0 failed, 12 innocent instances parked (round 2: 1,412).
+- **Coverage of the 200,000 seeds, run:** 907,384 owners lost; 1,365,825 messages put on trial and 295,565 attempts
+  charged; 15,584,687 evictions; 5,297 deletes; 271,503 children cancelled by their parent (54,093 across
+  partitions); 1,274,251 tree descendants terminated (521,942 across partitions; 10,869 created after their parent had
+  ended); start events before the registrar's insert 24,784, between its insert and its read 20,574, after 4,539;
+  HTTP requests that started an instance: 247,488 answered, 151,063 lost by a reset, 224,743 timed out, 94,954
+  disconnected; that resumed one from any node: 39,934 answered, 4,378 lost, 245,719 timed out, 7,869 ended
+  Cancelled, 596 ended Finished without an answer, 66,388 disconnected; a version-1 owner held a version-2 row at
+  1,576 moments.
+- **Mutation check, 20,000 seeds:** 39 mutations. Every one is caught except `FenceWithoutPosition` and
+  `DeleteWithoutCount`, as in rounds 1 and 2, and both are caught together with the rule that covers them (seed 19,
+  seed 1). The round-3 flaws, first failing seed: `GreedyBalancer` 2, `TrialPerPartition` 22, `ProjectorBlindWrite`
+  25, `EmitBeforeCommit` 1, `ReplyTwice` 1, `NoDeadline` 31, `DeliverWhileSuspended` 2, `NoShelf` 70,
+  `SuspendDuringTrial` 2016, `TerminateRootOnly` 1, `HoldLoses` 1, `HoldKeepsTrial` 4, `SkipUpgrade` 30,
+  `StepNewerState` 225 (at 1,000 actions), `RebindForgotten` 5, `StartWithoutRead` 9, `CancelKnownChildren` 2,
+  `EvictBusy` 4, `DeleteLeavesJournal` 6, `ProjectorStopsAtGap` 6. Seeds named in sections 9 to 20 were found at
+  their pieces' commits and some have moved since, as the actions that later pieces added changed the random stream.
+- **Cost, run:** PostgreSQL round trips are what section 5 measured, row for row (balanced 3 and 2, durable 30 and 20,
+  from another node 9 and 7, parent with three children 12 and 8, 100 instances 3 and 2). SQLite is unchanged
+  except the parent with three children, 49 to 57 calls: the simulation's child now reports that it started (section
+  18), one more message per child, and SQLite sends one command per row. The heartbeat, the projector, start
+  subscriptions and deletes are not in the cost run.
+- **PostgreSQL stress (explicit fence), the test of section 4 on the round-3 store:**
+
+| Run | Backends killed | Stalls | Takeovers (p0, p1) | Steps run | Instance commits | End state |
+|---|---|---|---|---|---|---|
+| 40 s, 5,000 messages | 553 | 311 | 256, 242 | 10,188 | 9,005 | all properties hold |
+| 60 s, 8,000 messages | 943 | 469 | 434, 391 | 16,552 | 14,455 | all properties hold |
+| 15 s, 1,500 messages, fence broken on purpose | 255 | 93 | 12,338, 12,432 | 25,415 | 601 | 482 violations: journal rows beyond the position, messages left, counter tokens missing |
+
+  The stress test drives the models of round 1 only; it does not exercise the heartbeat, the projector, kernel
+  commands, start subscriptions, reply addresses or deletes on PostgreSQL.

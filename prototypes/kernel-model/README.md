@@ -1,6 +1,6 @@
 # Kernel model
 
-A standalone model of the execution kernel sketch (draft 2, 12 November 2026) and a simulation that tries to break it.
+A standalone model of the execution kernel sketch ([DESIGN.md](DESIGN.md), draft 3 as revised by round 3) and a simulation that tries to break it.
 It tests the design before product code exists. It shares nothing with the Elsa runtime and builds as its own
 repository: the folder has its own `Directory.Build.*`, `Directory.Packages.props`, `NuGet.config`, `global.json` and
 `.editorconfig`.
@@ -11,7 +11,7 @@ What was found is in [FINDINGS.md](FINDINGS.md).
 
 | Path | What |
 |---|---|
-| `src/Kernel` | The kernel: contracts, storage interface, partition worker, in-memory store. No clock, thread, timer or random number of its own |
+| `src/Kernel` | The kernel: contracts, storage interface, partition worker, balancer, projector, reply addresses for live output, in-memory store. No clock, thread, timer or random number of its own |
 | `sim` | Toy execution models, the deterministic simulation, the invariant checks, the shrinker and the mutation check |
 | `ef/Kernel.EntityFramework` | The storage interface on Entity Framework Core for PostgreSQL and SQLite |
 | `ef/Kernel.Ef.Run` | The cost measurement and the concurrent stress test |
@@ -23,6 +23,8 @@ dotnet build sim -c Release
 dotnet sim/bin/Release/net10.0/Kernel.Sim.dll --seeds 100000              # 100,000 seeds of 300 actions each
 dotnet sim/bin/Release/net10.0/Kernel.Sim.dll --seed 626 --flaw HandOverWhileBehind   # replay one seed; prints a shrunk trace when it fails
 dotnet sim/bin/Release/net10.0/Kernel.Sim.dll --mutations --seeds 20000   # break the kernel on purpose, one flaw at a time
+dotnet sim/bin/Release/net10.0/Kernel.Sim.dll --seeds 4000 --coverage      # also count what happened (requests answered, trees terminated, ...)
+dotnet sim/bin/Release/net10.0/Kernel.Sim.dll --seeds 5000 --actions 1000 --faults 2   # scale lost calls, wrong answers, crashes, pauses and long silences
 
 dotnet build ef/Kernel.Ef.Run -c Release
 dotnet ef/Kernel.Ef.Run/bin/Release/net10.0/Kernel.Ef.Run.dll cost sqlite
@@ -41,10 +43,13 @@ A seed fixes everything: the number of nodes, every action and every fault. `--f
 
 - Several nodes run against one in-memory store. Each `(node, partition)` pair is an *actor* with its own worker.
 - One action happens at a time, chosen from the seed: a worker takes, polls, loads, runs one step, flushes, beats or
-  reads events; a store call executes; its answer arrives, arrives as "connection lost" although it executed, or the
-  call never executes; an outsider adds a message, retries an old one, hands a start to an owner in memory, publishes
-  an event; off-step work completes; time passes; a wall clock jumps; a node crashes and restarts, with or without its
-  old process living on; a node pauses or resumes; the projector reads; the sweep runs.
+  reads events; a node balances; a store call executes; its answer arrives, arrives as "connection lost" although it
+  executed, or the call never executes; an outsider adds a message, retries an old one, hands a start to an owner in
+  memory, publishes an event, registers a start subscription, suspends, resumes, terminates, rebinds or deletes an
+  instance; a request starts or resumes an HTTP workflow, or its caller goes away; the transport between nodes
+  delivers, repeats or drops a reply; off-step work completes; time passes; a wall clock jumps; a node crashes and
+  restarts, with or without its old process living on, sometimes at another model version; a node pauses or resumes;
+  a projector runs a round; the sweep runs.
 - A store call is on a wire: the request executes at one moment and the answer arrives at another. A worker's
   continuation runs inline when the simulation delivers the answer, so there are no threads.
 - After every action the invariants are checked against the rows, the owners' memory and an oracle of what was sent.
