@@ -78,7 +78,8 @@ const writeLineCatalog: ActivityCatalogItem = {
   ports: adaptivePorts === "branches" ? [
     { type: "outcome", name: "True", displayName: "True", isBrowsable: true },
     { type: "outcome", name: "False", displayName: "False", isBrowsable: true }
-  ] : [{ name: "Done", displayName: "Done", isBrowsable: true }],
+  ] : adaptivePorts === "outcomes" ? ["Approve", "Reject", "Unmatched"].map(name => ({ type: "outcome", name, displayName: name, isBrowsable: true }))
+    : [{ name: "Done", displayName: "Done", isBrowsable: true }],
   available: true
 };
 const runEtlCatalog: ActivityCatalogItem = {
@@ -157,8 +158,9 @@ function editorDraft(): WorkflowDraft {
     } else {
       root.structure!.payload.activities = [adaptivePorts === "dense" ? { ...notifyBuyer, activityVersionId: denseOutcomeCatalog.activityVersionId } : notifyBuyer, leafNode("write-two"), leafNode("write-three")];
       root.structure!.payload.connections = [{ id: "flow-write-one-write-two",
-        source: { nodeId: "write-one", port: adaptivePorts === "branches" ? "True" : "Done" }, target: { nodeId: "write-two" } },
-      ...(adaptivePorts === "branches" ? [{ id: "flow-false", source: { nodeId: "write-one", port: "False" }, target: { nodeId: "write-three" } }] : [])];
+        source: { nodeId: "write-one", port: adaptivePorts === "branches" ? "True" : adaptivePorts === "outcomes" ? "Approve" : "Done" }, target: { nodeId: "write-two" } },
+      ...(adaptivePorts === "branches" ? [{ id: "flow-false", source: { nodeId: "write-one", port: "False" }, target: { nodeId: "write-three" } }] : []),
+      ...(adaptivePorts === "outcomes" ? [{ id: "flow-reject", source: { nodeId: "write-one", port: "Reject" }, target: { nodeId: "write-three" } }] : [])];
       if (adaptivePorts === "dense") root.structure!.payload.connections = Array.from({ length: 30 }, (_, index) => ({
         id: `flow-case-${index + 1}`, source: { nodeId: "write-one", port: `Case ${index + 1}` }, target: { nodeId: "write-two" }
       }));
@@ -211,6 +213,9 @@ function editorDraft(): WorkflowDraft {
     ] : collectionSlotsFixture === "switch-ports" ? [
       { nodeId: "collection-owner", x: 120, y: 160 },
       { nodeId: "write-one", x: 540, y: 40 }, { nodeId: "write-two", x: 540, y: 360 }
+    ] : adaptivePorts === "outcomes" ? [
+      // A User Task-style decision laid out left to right, as the composed User Task journey lays it out (#4064).
+      { nodeId: "write-one", x: 100, y: 200 }, { nodeId: "write-two", x: 560, y: 80 }, { nodeId: "write-three", x: 560, y: 320 }
     ] : adaptivePorts ? [
       { nodeId: "write-one", x: 200, y: 80 },
       { nodeId: "write-two", x: adaptivePorts === "offset" ? 305 : 200, y: adaptivePorts === "offset" ? 430 : adaptivePorts === "dense" ? 1100 : 320 },
@@ -282,7 +287,7 @@ function ActivityDuplicateEditorFixtureContent() {
   const context = useMemo(() => createEditorContext(instanceHost || motionFixture ? live.current : undefined), [instanceHost, motionFixture]);
   const activityHost = new URLSearchParams(window.location.search).get("host") === "activity";
   const ai = useMemo(() => ({
-    promptActions: { list: () => [] },
+    promptActions: { list: () => new URLSearchParams(window.location.search).has("toolbar-explain") ? [{ id: "weaver.workflows.explain-instance", label: "Explain run", createPrompt: () => ({ message: "Explain this run", mode: "enqueue", attachments: [] }) }] : [] },
     providerAvailability: { get: () => false, subscribe: () => () => undefined },
     dispatchPrompt: () => undefined
   } as unknown as StudioAiContributionApi), []);
@@ -447,7 +452,7 @@ export function createEditorContext(live?: { status: string; disconnected: boole
           return {
             definition: {
               id: "definition-1",
-              name: "Order confirmation",
+              name: new URLSearchParams(window.location.search).has("toolbar-long-name") ? "Order processing and customer notification across all regional fulfillment centers" : "Order confirmation",
               description: "Notifies the buyer.",
               createdAt: "2026-10-14T00:00:00Z",
               lastModifiedAt: "2026-10-14T00:00:00Z",

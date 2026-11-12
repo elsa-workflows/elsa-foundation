@@ -12,6 +12,7 @@ Use the constitution files in `.specify/memory/` for gates, allowed exceptions, 
 - [Refactoring methodology](refactoring-methodology.md) - the three-step method behind framework §2.18.
 - [Elsa domain tree](elsa-domain-tree.md) - the purpose of each root-level Elsa domain pinned in Elsa §E2.1.
 - [Elsa type naming](elsa-naming.md) - the full text, senses and origins of the Elsa §E6 naming rules R1-R8.
+- [Package and identifier renames](package-renames.md) - the old-to-new map of every pre-GA clean break that renamed packages or persisted identifiers, starting with the Weaver move of 9 November 2026.
 - [Agent preferences](agent-preferences.md) - committed catalog of local agent preference file rules and templates; personal selections belong in `.agent-prefs/`.
 - [Git operating models](git-operating-models.md) - maintainer organization-branch and contributor fork workflows; no publication-time model selection is required.
 - [Spec lifecycle](spec-lifecycle.md) - how specs under `specs/` are numbered, the closed status vocabulary, when a spec reaches a terminal status, and why specs are never moved or deleted.

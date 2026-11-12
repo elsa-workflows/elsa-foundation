@@ -30,6 +30,10 @@ public sealed class RuntimeInputBindingResolver : IRuntimeInputBindingResolver
             {
                 Envelope = WithholdSecretRead(binding)
             },
+            // Member selection is not interpreted by this runtime yet (#4078): refuse the read instead of reading the
+            // whole source value its role payload names.
+            RuntimeInputBindingSource.WorkflowRequestMember or RuntimeInputBindingSource.VariableMember or RuntimeInputBindingSource.ActivityResultMember =>
+                throw RuntimeReadSelectionDiagnostics.Unsupported(binding),
             _ => throw new ArgumentOutOfRangeException(nameof(binding), binding.Source, "Unsupported runtime input binding source.")
         };
     }

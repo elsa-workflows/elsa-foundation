@@ -12,6 +12,12 @@ Errors (exit code 1):
   - status line: a new or changed ADR has no status (a `Status:` line, a `status:` front-matter key, or a
     `## Status` heading followed by a value), or a new or changed spec.md has no `**Status**:` line holding exactly
     one spec-lifecycle value, optionally followed by ` — ` and prose.
+  - alternatives: a newly added ADR has no `Alternatives considered` (or `Options considered`) section, or that
+    section is empty. The heading may be a hash heading (`## Alternatives considered`) or a bold run-in label
+    (`**Alternatives considered.**`) with content after it. This is a presence check, like the status line; it never
+    judges whether the alternatives are good, and it runs only on ADRs this branch adds, not on a pre-existing ADR it
+    merely amends. A heading or list quoted inside a fenced code block does not count. Specs do not carry their own
+    section: they refer to the alternatives in the ADRs they apply.
 Warnings (exit code 0): `ADR NNNN` references in new or changed docs, specs, CONTEXT.md or constitution files that
 match no ADR in the tree. A reference can name a number the board has reserved but that is not drafted yet, so it is
 reported, not failed.
@@ -39,6 +45,10 @@ SPEC_STATUS = re.compile(r"^\*\*Status\*\*:\s*(?P<value>.+?)\s*$", re.MULTILINE)
 SPEC_STATUS_VALUE = re.compile(
     r"^(?:Draft|Approved|In progress|Implemented|Superseded|Abandoned)(?:\s+—\s+.*)?$", re.IGNORECASE)
 ADR_REFERENCE = re.compile(r"\bADRs?[\s-]+(?P<list>\d{4}(?:\s*(?:,|/|&|\band\b|\bor\b)\s*\d{4})*)")
+ADR_ALTERNATIVES_HEADING = re.compile(
+    r"^(?P<hashes>#+)[ \t]*(?:alternatives|options)[ \t]+considered\b.*$", re.IGNORECASE | re.MULTILINE)
+ADR_ALTERNATIVES_BOLD = re.compile(
+    r"^[ \t>*-]*\*\*[ \t]*(?:alternatives|options)[ \t]+considered\b", re.IGNORECASE | re.MULTILINE)
 STATUS_WINDOW = 25  # lines from the top of an ADR in which its status must appear
 REFERENCE_SCOPE = ("docs", "specs", "CONTEXT.md", ".specify/memory")
 
@@ -84,6 +94,60 @@ def spec_status_error(path: str, text: str) -> str | None:
     return None
 
 
+def strip_fenced_code(text: str) -> str:
+    """Drop fenced code blocks (``` or ~~~) so an example heading or list inside one is not read as an
+    Alternatives section or its content."""
+    kept: list[str] = []
+    fence: str | None = None
+    for line in text.splitlines(keepends=True):
+        opener = re.match(r"[ \t]*(`{3,}|~{3,})", line)
+        if fence is None:
+            if opener:
+                fence = opener[1][0]  # ` or ~
+            else:
+                kept.append(line)
+        elif re.match(rf"[ \t]*{fence}{{3,}}[ \t]*$", line):
+            fence = None  # a bare closing fence; drop it and read prose again
+    return "".join(kept)
+
+
+def bold_label_has_content(text: str, start: int) -> bool:
+    """Whether a bold run-in alternatives label has content: on its own line after the label, or on a
+    following line before the next heading. `start` is the end of the label match."""
+    line_end = text.find("\n", start)
+    rest_of_line = text[start:] if line_end == -1 else text[start:line_end]
+    if re.search(r"[0-9A-Za-z]", rest_of_line):
+        return True  # content on the label's own line, e.g. **Alternatives considered.** We chose X
+    if line_end == -1:
+        return False
+    for line in text[line_end + 1:].splitlines():
+        if not line.strip():
+            continue
+        return re.match(r"^#+\s", line) is None  # content unless the next thing is a new heading
+    return False
+
+
+def adr_alternatives_error(path: str, text: str) -> str | None:
+    text = strip_fenced_code(text)  # a heading or list quoted in a fenced example is not a real section
+    if any(bold_label_has_content(text, bold.end()) for bold in ADR_ALTERNATIVES_BOLD.finditer(text)):
+        return None  # a bold run-in label (e.g. **Alternatives considered.**) that carries content
+    match = ADR_ALTERNATIVES_HEADING.search(text)
+    if match is None:
+        if ADR_ALTERNATIVES_BOLD.search(text):
+            return f"alternatives: {path} has an empty 'Alternatives considered' section"
+        return f"alternatives: {path} has no 'Alternatives considered' section"
+    level = len(match["hashes"])
+    for line in text[match.end():].splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        heading = re.match(r"^(#+)\s", line)
+        if heading and len(heading[1]) <= level:
+            break  # a sibling or parent heading with nothing in between: the section is empty
+        return None  # prose or a deeper subheading counts as content
+    return f"alternatives: {path} has an empty 'Alternatives considered' section"
+
+
 def unresolved_references(path: str, text: str, adr_numbers: set[str]) -> list[str]:
     cited = {number for m in ADR_REFERENCE.finditer(text) for number in re.findall(r"\d{4}", m["list"])}
     return [f"reference: {path} cites ADR {number}, which is not in docs/adr/" for number in sorted(cited - adr_numbers)]
@@ -96,18 +160,24 @@ def check(tree: dict[str, str], changed: set[str], base_paths: list[str]) -> tup
     paths = sorted(tree)
     errors = collisions(paths, base_paths, adr_number, "ADR") + collisions(paths, base_paths, spec_number, "spec")
     warnings: list[str] = []
+    base_set = set(base_paths)
     adr_numbers = {found[0] for found in map(adr_number, paths) if found}
     for path in sorted(changed):
         if path not in tree:
             continue  # deleted
         text = tree[path]
-        error = None
         if adr_number(path):
-            error = adr_status_error(path, text)
+            status = adr_status_error(path, text)
+            if status:
+                errors.append(status)
+            if path not in base_set:  # the section is required only on ADRs this branch adds, not on amendments
+                alternatives = adr_alternatives_error(path, text)
+                if alternatives:
+                    errors.append(alternatives)
         elif spec_number(path) and path.endswith("/spec.md"):
             error = spec_status_error(path, text)
-        if error:
-            errors.append(error)
+            if error:
+                errors.append(error)
         if path.endswith(".md"):
             warnings.extend(unresolved_references(path, text, adr_numbers))
     return errors, warnings
@@ -137,15 +207,18 @@ def load(root: Path, base: str) -> tuple[dict[str, str], set[str], list[str]]:
 
 
 def self_test() -> int:
-    adr_ok = "# ADR\n\nStatus: proposed (2026-11-06)\n"
+    alts = "\n## Alternatives considered\n\n- Do nothing: rejected because the gap is real.\n"
+    adr_ok = "# ADR\n\nStatus: proposed (2026-11-06)\n" + alts
     spec_ok = "# Spec\n\n**Status**: Draft — **provisional**. Waits on ADR 0091.\n"
     legacy = ["specs/1203-a/spec.md", "specs/1203-b/spec.md"]
     cases = [
         ("clean", {"docs/adr/0091-a.md": adr_ok, "specs/1207-x/spec.md": spec_ok}, {"docs/adr/0091-a.md"}, [], 0, 0),
-        ("front matter status", {"docs/adr/0091-a.md": "---\nstatus: accepted\n---\n# ADR\n"},
+        ("front matter status", {"docs/adr/0091-a.md": "---\nstatus: accepted\n---\n# ADR\n" + alts},
          {"docs/adr/0091-a.md"}, [], 0, 0),
-        ("status heading", {"docs/adr/0020-a.md": "# ADR\n\n## Status\n\nAccepted\n"}, {"docs/adr/0020-a.md"}, [], 0, 0),
-        ("status list item", {"docs/adr/0044-a.md": "# ADR\n\n- Status: Accepted\n"}, {"docs/adr/0044-a.md"}, [], 0, 0),
+        ("status heading", {"docs/adr/0020-a.md": "# ADR\n\n## Status\n\nAccepted\n" + alts},
+         {"docs/adr/0020-a.md"}, [], 0, 0),
+        ("status list item", {"docs/adr/0044-a.md": "# ADR\n\n- Status: Accepted\n" + alts},
+         {"docs/adr/0044-a.md"}, [], 0, 0),
         ("adr collision with main", {"docs/adr/0091-a.md": adr_ok, "docs/adr/0091-b.md": ""},
          {"docs/adr/0091-a.md"}, ["docs/adr/0091-b.md"], 1, 0),
         ("legacy duplicate untouched", dict.fromkeys(legacy, ""), set(), legacy, 0, 0),
@@ -154,11 +227,50 @@ def self_test() -> int:
          {"specs/1201-a/spec.md"}, ["specs/1201-b/spec.md"], 1, 1),
         ("three-digit spec number", {"specs/095-a/spec.md": spec_ok, "specs/0095-b/spec.md": ""},
          {"specs/095-a/spec.md"}, ["specs/0095-b/spec.md"], 1, 1),
-        ("missing adr status", {"docs/adr/0092-a.md": "# ADR\n\nNo status here.\n"}, {"docs/adr/0092-a.md"}, [], 1, 0),
-        ("empty status line", {"docs/adr/0092-a.md": "# ADR\n\nStatus:\n\n## Context\n"}, {"docs/adr/0092-a.md"}, [], 1, 0),
-        ("empty status heading", {"docs/adr/0092-a.md": "# ADR\n\n## Status\n\n## Context\n"},
+        ("missing adr status", {"docs/adr/0092-a.md": "# ADR\n\nNo status here.\n" + alts},
          {"docs/adr/0092-a.md"}, [], 1, 0),
-        ("bold status line", {"docs/adr/0092-a.md": "# ADR\n\n**Status:** Accepted\n"}, {"docs/adr/0092-a.md"}, [], 0, 0),
+        ("empty status line", {"docs/adr/0092-a.md": "# ADR\n\nStatus:\n\n## Context\n" + alts},
+         {"docs/adr/0092-a.md"}, [], 1, 0),
+        ("empty status heading", {"docs/adr/0092-a.md": "# ADR\n\n## Status\n\n## Context\n" + alts},
+         {"docs/adr/0092-a.md"}, [], 1, 0),
+        ("bold status line", {"docs/adr/0092-a.md": "# ADR\n\n**Status:** Accepted\n" + alts},
+         {"docs/adr/0092-a.md"}, [], 0, 0),
+        ("missing alternatives", {"docs/adr/0092-a.md": "# ADR\n\nStatus: accepted\n"}, {"docs/adr/0092-a.md"}, [], 1, 0),
+        ("empty alternatives section",
+         {"docs/adr/0092-a.md": "# ADR\n\nStatus: accepted\n\n## Alternatives considered\n\n## Next steps\n\nx\n"},
+         {"docs/adr/0092-a.md"}, [], 1, 0),
+        ("options considered accepted",
+         {"docs/adr/0092-a.md": "# ADR\n\nStatus: accepted\n\n## Options considered\n\n- A vs B.\n"},
+         {"docs/adr/0092-a.md"}, [], 0, 0),
+        ("alternatives subheading counts",
+         {"docs/adr/0092-a.md": "# ADR\n\nStatus: accepted\n\n## Alternatives considered\n\n### Option A\n\nRejected.\n"},
+         {"docs/adr/0092-a.md"}, [], 0, 0),
+        ("heading must say considered",
+         {"docs/adr/0092-a.md": "# ADR\n\nStatus: accepted\n\n## Alternatives to this process\n\nprose\n"},
+         {"docs/adr/0092-a.md"}, [], 1, 0),
+        ("bold alternatives label",
+         {"docs/adr/0092-a.md": "# ADR\n\nStatus: accepted\n\n**Alternatives considered.** We chose X over Y.\n"},
+         {"docs/adr/0092-a.md"}, [], 0, 0),
+        ("bold options list item",
+         {"docs/adr/0092-a.md": "# ADR\n\nStatus: accepted\n\n- **Options considered:** X vs Y.\n"},
+         {"docs/adr/0092-a.md"}, [], 0, 0),
+        ("empty bold alternatives label",
+         {"docs/adr/0092-a.md": "# ADR\n\nStatus: accepted\n\n**Alternatives considered.**\n\n## Next steps\n\nx\n"},
+         {"docs/adr/0092-a.md"}, [], 1, 0),
+        ("modified legacy adr without section",
+         {"docs/adr/0003-a.md": "# ADR\n\nStatus: accepted\n\nClarified a stale reference.\n"},
+         {"docs/adr/0003-a.md"}, ["docs/adr/0003-a.md"], 0, 0),
+        ("new adr without section still fails",
+         {"docs/adr/0094-a.md": "# ADR\n\nStatus: accepted\n\nNo alternatives here.\n"},
+         {"docs/adr/0094-a.md"}, [], 1, 0),
+        ("fenced example is not section content",
+         {"docs/adr/0092-a.md":
+          "# ADR\n\nStatus: accepted\n\n## Alternatives considered\n\n```\n- Example: X vs Y.\n```\n\n## Next steps\n\nx\n"},
+         {"docs/adr/0092-a.md"}, [], 1, 0),
+        ("heading inside a fence does not count",
+         {"docs/adr/0092-a.md":
+          "# ADR\n\nStatus: accepted\n\n```\n## Alternatives considered\n\n- A vs B.\n```\n\nText.\n"},
+         {"docs/adr/0092-a.md"}, [], 1, 0),
         ("bad spec status", {"specs/1208-x/spec.md": "**Status**: Pending\n"}, {"specs/1208-x/spec.md"}, [], 1, 0),
         ("spec status prefix only", {"specs/1208-x/spec.md": "**Status**: Drafting\n"}, {"specs/1208-x/spec.md"}, [], 1, 0),
         ("missing spec status", {"specs/1208-x/spec.md": "# Spec\n"}, {"specs/1208-x/spec.md"}, [], 1, 0),

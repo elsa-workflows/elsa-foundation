@@ -42,7 +42,7 @@ for (const width of [1440, 390]) for (const theme of ["light", "dark"]) test(`re
   await expect(page.getByText("This field is required.", { exact: true }).first()).toBeVisible();
   await page.getByLabel(/^Amount/).fill("42"); await page.getByLabel(/^Confirmed/).selectOption("false"); await page.getByLabel(/^Note/).fill("Studio case preserved");
   await expectAccessible(page, ".user-tasks");
-  const detail = page.getByRole("complementary", { name: receipt.title, exact: true });
+  const detail = page.getByRole("region", { name: receipt.title, exact: true });
   await detail.getByRole("heading").scrollIntoViewIfNeeded();
   await page.screenshot({ path: testInfo.outputPath("task-detail-top.png") });
   await detail.getByRole("button", { name: "Approve", exact: true }).scrollIntoViewIfNeeded();
@@ -62,15 +62,16 @@ for (const width of [1440, 390]) for (const theme of ["light", "dark"]) test(`re
   await page.getByRole("button", { name: "Refresh task", exact: true }).press("Enter");
   await expect(page.getByRole("button", { name: "Approve", exact: true })).toHaveCount(0);
   await expect(page.getByText("Your response is recorded. The workflow will continue when delivery completes.", { exact: true })).toHaveCount(0);
-  await page.getByRole("button", { name: "Refresh", exact: true }).click();
-  await expect(row).toHaveCount(0);
-  await page.getByRole("complementary", { name: receipt.title, exact: true }).getByText("History", { exact: true }).click();
-  await page.getByRole("complementary", { name: receipt.title, exact: true }).locator("details li").last().scrollIntoViewIfNeeded();
+  await page.getByRole("region", { name: receipt.title, exact: true }).getByText("History", { exact: true }).click();
+  await page.getByRole("region", { name: receipt.title, exact: true }).locator("details li").last().scrollIntoViewIfNeeded();
   await page.screenshot({ path: testInfo.outputPath("task-history.png") });
-  await page.getByRole("complementary", { name: receipt.title, exact: true }).getByRole("heading").scrollIntoViewIfNeeded();
+  await page.getByRole("region", { name: receipt.title, exact: true }).getByRole("heading").scrollIntoViewIfNeeded();
   const screenshot = testInfo.outputPath(`user-task-${width}-${theme}.png`);
   await page.screenshot({ path: screenshot });
   await testInfo.attach(`user-task-${width}`, { path: screenshot, contentType: "image/png" });
+  await detail.getByRole("button", { name: "Back to task list", exact: true }).click();
+  await expect(page.getByRole("region", { name: receipt.title, exact: true })).toHaveCount(0);
+  await expect(row).toHaveCount(0);
 });
 
 test("authors reusable forms, assignment and connected action paths in the normal Studio designer", async ({ page }, testInfo) => {
@@ -93,7 +94,7 @@ test("authors reusable forms, assignment and connected action paths in the norma
   await page.screenshot({ path: testInfo.outputPath("form-actions-narrow.png") });
   await page.setViewportSize({ width: 1600, height: 1100 });
   await page.getByRole("button", { name: "Publish form version", exact: true }).click();
-  await expect(page.getByText("The immutable form version is available to new tasks.", { exact: true })).toBeVisible();
+  await expect(page.getByRole("status").filter({ hasText: `Published ${title} version 1. New tasks can use it.` })).toBeVisible();
   await page.goto("/workflows/definitions?backend=legacy");
   await page.getByRole("button", { name: /^(Create|Create workflow)$/ }).first().click();
   const dialog = page.getByRole("dialog", { name: "Create Workflow", exact: true });
@@ -108,7 +109,7 @@ test("authors reusable forms, assignment and connected action paths in the norma
   await page.getByRole("textbox", { name: "Title", exact: true }).fill(title);
   await page.getByLabel("Task assignee", { exact: true }).selectOption(who.userId);
   await page.getByLabel("Task form", { exact: true }).selectOption(formId);
-  await page.getByRole("textbox", { name: "Form Version", exact: true }).fill("1");
+  await expect(page.getByLabel("Task form version", { exact: true })).toHaveValue("1");
   await page.getByRole("button", { name: "Add action", exact: true }).click();
   await page.getByLabel("Action 3", { exact: true }).fill("Request More Info"); await page.getByLabel("Action 3", { exact: true }).press("Tab");
   const actions = ["Approve", "Reject", "Request More Info"]; const branchIds: string[] = [];

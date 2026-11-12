@@ -195,7 +195,8 @@ describe("workflows module", () => {
     expect(api.expressionEditors.list()).toEqual([
       expect.objectContaining({ id: "studio.workflows.variable-reference", createDefaultValue: expect.any(Function) }),
       expect.objectContaining({ id: "elsa.object-expression-editor", createDefaultValue: expect.any(Function) }),
-      expect.objectContaining({ id: "studio.workflows.input-reference", createDefaultValue: expect.any(Function) })
+      expect.objectContaining({ id: "studio.workflows.input-reference", createDefaultValue: expect.any(Function) }),
+      expect.objectContaining({ id: "studio.workflows.activity-result-reference", createDefaultValue: expect.any(Function) })
     ]);
   });
 
@@ -328,7 +329,7 @@ describe("workflows module", () => {
     const dispatchPrompt = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
     const { api, container, unmount } = await renderRegisteredRoute("/workflows/definitions", testApi => {
-      testApi.agent.promptActions.add({
+      testApi.weaver.promptActions.add({
         id: "weaver.workflows.explain-definition",
         label: "Explain workflow definition",
         placement: "selection",
@@ -339,7 +340,7 @@ describe("workflows module", () => {
           attachments: [{ id: "definition-context", source: "workflow", label: "Definition", contentType: "workflow.definition", sensitivity: "internal", scope: "selection", sourceId: (context as { id: string }).id }]
         })
       });
-      testApi.agent.dispatchPrompt = dispatchPrompt;
+      testApi.weaver.dispatchPrompt = dispatchPrompt;
     });
 
     await waitForText(container, "Latest version");
@@ -1687,9 +1688,11 @@ describe("workflows module", () => {
 
     await fill(container.querySelector<HTMLInputElement>(".wf-property-row input[type='text']"), "Hello from properties");
     await click(buttonByLabel(container, "Open expanded Text editor"));
-    expect(container.querySelector("[role='dialog']")?.textContent).toContain("Property editor");
-    await fill(textareaByLabel(container, "Text expanded value"), "Hello from expanded editor\nwith more room");
-    await click(buttonByText(container, "Close"));
+    const expandedDialog = document.body.querySelector<HTMLElement>(".wf-property-editor-dialog");
+    expect(expandedDialog).not.toBeNull();
+    expect(expandedDialog?.textContent).toContain("Property editor");
+    await fill(textareaByLabel(expandedDialog!, "Text expanded value"), "Hello from expanded editor\nwith more room");
+    await click(buttonByText(expandedDialog!, "Close"));
 
     await click(buttonByText(container, "Save"));
 
@@ -2523,7 +2526,11 @@ describe("workflows module", () => {
     // Identity panel: workflow name as title, hash as a secondary address, node/resume-target counts.
     expect(container.textContent).toContain("sha256:abc");
     expect(container.textContent).toContain("Resume targets");
-    expect(container.textContent).toContain("Executable Inspector");
+    await vi.waitFor(() => expect(container.querySelector("h2")?.textContent).toBe("Hello World · 2.0.0"));
+    expect(container.querySelector(".studio-page-eyebrow")?.textContent).toBe("Inspector");
+    expect(container.querySelector('[aria-label="Copy Artifact ID"]')).toBeTruthy();
+    expect(container.querySelector(".wf-instance-canvas-shell h3")?.textContent).toContain("Hello World");
+    expect(container.querySelector(".wf-instance-canvas-shell h3")?.textContent).not.toContain("artifact-1");
     await waitForText(container, "Hello World");
     const inspector = container.querySelector(".wf-instance-inspector");
     expect(inspector?.querySelector("h3")?.textContent).toBe("Hello World");
@@ -2562,6 +2569,55 @@ describe("workflows module", () => {
     expect(new URLSearchParams(window.location.search).get("ref")).toBe("ref-0");
     expect(fetchMock.mock.calls.map(([url]) => String(url))).toContain("https://server.example/runtime/workflows/executables/artifact-1");
 
+    await unmount();
+  });
+
+  it("does not keep the previous workflow name while a different executable loads", async () => {
+    vi.stubGlobal("ResizeObserver", class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    });
+    let releaseNextExecutable: ((value: Response) => void) | undefined;
+    const nextExecutable = new Promise<Response>(resolve => {
+      releaseNextExecutable = resolve;
+    });
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/executables/artifact-1")) return response(executableDetail());
+      if (url.includes("/executables/artifact-2")) return nextExecutable;
+      if (url.includes("/activities")) return response({ activities: [] });
+      if (url.includes("/definitions/definition-1")) {
+        return response({ definition: definition({ latestVersionId: "version-2", latestVersion: "2.0.0" }), draft: null, versions: [] });
+      }
+      if (url.includes("/definitions/definition-2")) {
+        return response({ definition: definition({ id: "definition-2", name: "Invoice settlement" }), draft: null, versions: [] });
+      }
+      return response(null, 404);
+    }));
+    const { container, unmount } = await renderRegisteredRoute("/workflows/executables/artifact-1");
+
+    await vi.waitFor(() => expect(container.querySelector("h2")?.textContent).toBe("Hello World · 2.0.0"));
+
+    window.history.pushState({}, "", "/workflows/executables/artifact-2");
+    window.dispatchEvent(new PopStateEvent("popstate"));
+
+    await vi.waitFor(() => expect(container.querySelector("h2")?.textContent).toBe("Executable artifact-2"));
+    expect(container.querySelector("h2")?.textContent).not.toContain("Hello World");
+
+    releaseNextExecutable?.(response(executableDetail({
+      artifactId: "artifact-2",
+      chosenReference: { sourceReferenceId: "ref-2", selection: "newest-live", layout: [] },
+      references: [executableReference({
+        sourceReferenceId: "ref-2",
+        artifactId: "artifact-2",
+        definitionId: "definition-2",
+        artifactVersion: "1.0.0",
+        sourceVersion: "1.0.0"
+      })]
+    })));
+
+    await vi.waitFor(() => expect(container.querySelector("h2")?.textContent).toBe("Invoice settlement · 1.0.0"));
     await unmount();
   });
 
@@ -2788,7 +2844,7 @@ describe("workflows module", () => {
           await waitForText(container, "Review & publish");
           await click(buttonByText(container, "Artifacts"));
         }
-        await waitForText(container, scenario.surface === "inspector" ? "Executable Inspector" : scenario.artifactId);
+        await waitForText(container, scenario.surface === "inspector" ? "Hello World · 2.0.0" : scenario.artifactId);
         await click(scenario.surface === "artifacts"
           ? await waitForButtonByLabel(container, `Run executable ${scenario.artifactId}`)
           : await waitForButtonByText(container, "Run"));
@@ -3116,7 +3172,7 @@ describe("workflows module", () => {
     const dispatchPrompt = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
     const { container, unmount } = await renderRegisteredRoute("/workflows/executables", api => {
-      api.agent.promptActions.add({
+      api.weaver.promptActions.add({
         id: "weaver.workflows.explain-executable",
         label: "Explain executable",
         placement: "selection",
@@ -3127,7 +3183,7 @@ describe("workflows module", () => {
           attachments: [{ id: "executable-context", source: "workflow", label: "Executable", contentType: "workflow.executable", sensitivity: "internal", scope: "selection", sourceId: (context as { artifactId: string }).artifactId }]
         })
       });
-      api.agent.dispatchPrompt = dispatchPrompt;
+      api.weaver.dispatchPrompt = dispatchPrompt;
     });
 
     await waitForText(container, "artifact-1");
@@ -3552,22 +3608,23 @@ describe("workflows module", () => {
     }));
     const dispatchPrompt = vi.fn();
     const { api, container, unmount } = await renderRegisteredRoute("/workflows/instances/wfexec-1", configured => {
-      configured.agent.promptActions.add({ id: "weaver.workflows.explain-instance", label: "Explain run", placement: "selection", contextKind: "workflow-instance",
+      configured.weaver.promptActions.add({ id: "weaver.workflows.explain-instance", label: "Explain run", placement: "selection", contextKind: "workflow-instance",
         createPrompt: context => ({ message: "Explain", mode: "enqueue", attachments: [], context } as never) });
-      configured.agent.dispatchPrompt = dispatchPrompt;
+      configured.weaver.dispatchPrompt = dispatchPrompt;
     });
     const runContext = async () => {
-      const provider = api.agent.contextProviders.list().find(item => item.id === "workflows.run-inspector")!;
+      const provider = api.weaver.contextProviders.list().find(item => item.id === "workflows.run-inspector")!;
       const result = await provider.collect({ surface: { route: "/workflows" }, mode: "explain" } as never);
       return Array.isArray(result) ? result : result.attachments;
     };
     await vi.waitFor(async () => expect(await runContext()).toHaveLength(1));
     const [attachment] = await runContext();
     // One exact Workflow Instance, never "the latest run"; with nothing selected its revision is the instance identity.
-    expect(attachment).toMatchObject({ id: "workflows.run:wfexec-1", contentType: "workflows.run", client: { clientId: api.agent.clientId },
+    expect(attachment).toMatchObject({ id: "workflows.run:wfexec-1", contentType: "workflows.run", client: { clientId: api.weaver.clientId },
       target: { moduleId: "Elsa.Studio.Workflows", resourceType: "workflow-run", resourceId: "wfexec-1", revision: "wfexec-1" },
       content: { workflowExecutionId: "wfexec-1", activityExecutionId: null } });
-    const explain = [...container.querySelectorAll(".wf-toolbar button")].find(item => item.textContent?.includes("Explain"))!;
+    await click(container.querySelector('button[aria-label="More run actions"]'));
+    const explain = [...document.querySelectorAll('[role="menuitem"]')].find(item => item.textContent?.includes("Explain"))!;
     await click(explain);
     expect(dispatchPrompt).toHaveBeenCalledWith(expect.objectContaining({
       context: { workflowExecutionId: "wfexec-1", activityExecutionId: null, status: "Faulted", attached: true }
@@ -3619,7 +3676,7 @@ describe("workflows module", () => {
     const { container, unmount } = await renderRegisteredRoute("/workflows/instances/wfexec-1");
 
     await waitForText(container, "Pinned Runtime executable");
-    await waitForText(container, "Review workflow definition");
+    await waitForText(container, "Open definition");
     await waitForText(container, "Run · Order fulfillment");
     expect(container.querySelector(".studio-page-header h2")?.textContent).toBe("Run · Order fulfillment");
     expect(container.textContent).toContain("Workflow Instance ID");
@@ -3628,7 +3685,7 @@ describe("workflows module", () => {
     expect(runInspector).not.toBeNull();
     expect(runInspector?.textContent).not.toContain("Workflow Instance ID");
     expect([...runInspector!.querySelectorAll("button")].filter(button => button.textContent?.includes("Explain"))).toHaveLength(0);
-    await click(buttonByText(container, "Review workflow definition"));
+    await click(buttonByText(container, "Open definition"));
     expect(window.location.pathname).toBe("/workflows/definitions");
     expect(new URLSearchParams(window.location.search).get("definition")).toBe("definition-1");
     window.history.replaceState({}, "", "/workflows/instances/wfexec-1");
@@ -3690,8 +3747,8 @@ describe("workflows module", () => {
     const { container, unmount } = await renderRegisteredRoute("/workflows/instances/wfexec-1", undefined, true);
 
     await waitForText(container, "Pinned Runtime executable");
-    await waitForText(container, "Review workflow definition");
-    await click(buttonByText(container, "Review workflow definition"));
+    await waitForText(container, "Open definition");
+    await click(buttonByText(container, "Open definition"));
     await waitForEditor(container);
 
     expect(window.location.pathname).toBe("/workflows/definitions");
@@ -3721,8 +3778,8 @@ describe("workflows module", () => {
 
     for (const tab of ["Activity", "Issues", "Details"] as const) {
       await openTab(tab);
-      await waitForText(container, "Review workflow definition");
-      await click(buttonByText(container, "Review workflow definition"));
+      await waitForText(container, "Open definition");
+      await click(buttonByText(container, "Open definition"));
       await waitForEditor(container);
       expect(window.location.pathname).toBe("/workflows/definitions");
       expect(container.querySelector(".wf-instance-detail-workbench")).toBeNull();
@@ -5471,14 +5528,14 @@ async function openCreateDialogWithSuggest() {
 
   const captured: { requestId?: string } = {};
   const rendered = await renderRegisteredRoute("/workflows/definitions", api => {
-    api.agent.promptActions.add({
+    api.weaver.promptActions.add({
       id: "weaver.workflows.suggest-create-metadata",
       label: "Suggest name and description",
       placement: "field-adornment",
       contextKind: "workflow-create-draft",
       createPrompt: () => ({ message: "suggest", mode: "enqueue", attachments: [] })
     });
-    api.agent.dispatchPrompt = request => { captured.requestId = request.requestId; };
+    api.weaver.dispatchPrompt = request => { captured.requestId = request.requestId; };
   });
 
   await waitForText(rendered.container, "Hello World");
@@ -5489,7 +5546,7 @@ async function openCreateDialogWithSuggest() {
 
   const publishSuggestion = async (result: { text: string; status?: "completed" | "cancelled" | "failed"; autoApply?: boolean }) => {
     expect(captured.requestId).toBeTruthy();
-    flushSync(() => rendered.api.agent.publishPromptResult({ requestId: captured.requestId!, status: "completed", ...result }));
+    flushSync(() => rendered.api.weaver.publishPromptResult({ requestId: captured.requestId!, status: "completed", ...result }));
     await flushPromises();
   };
 

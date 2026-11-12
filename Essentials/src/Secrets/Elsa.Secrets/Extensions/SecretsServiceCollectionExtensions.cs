@@ -1,5 +1,7 @@
+using CShells.Lifecycle;
 using Elsa.Expressions.Core.Contracts;
 using Elsa.Secrets.Core.Contracts;
+using Elsa.Secrets.Core.Options;
 using Elsa.Secrets.Expressions;
 using Elsa.Secrets.Options;
 using Elsa.Secrets.Services;
@@ -8,8 +10,10 @@ using Elsa.Secrets.Types;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Primitives;
 
 namespace Elsa.Secrets.Extensions;
@@ -27,8 +31,15 @@ public static class SecretsServiceCollectionExtensions
             services.Configure<SecretsOptions>(options =>
             {
                 options.EncryptionKey = section[nameof(SecretsOptions.EncryptionKey)];
+                var storeName = section[nameof(SecretsOptions.DefaultWritableStoreName)];
+                if (!string.IsNullOrWhiteSpace(storeName))
+                    options.DefaultWritableStoreName = storeName;
             });
         }
+
+        services.AddOptions<WritableSecretStoreOptions>()
+            .Configure<IOptions<SecretsOptions>>((options, secrets) =>
+                options.DefaultWritableStoreName = DefaultWritableSecretStore.ResolveName(secrets.Value.DefaultWritableStoreName));
 
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddSingleton<ISecretNameValidator, DefaultSecretNameValidator>();
@@ -49,6 +60,14 @@ public static class SecretsServiceCollectionExtensions
 
         services.TryAddEnumerable(ServiceDescriptor.Singleton<ISecretStore, EncryptedSecretStore>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<ISecretStore, ConfigurationSecretStore>());
+        if (!services.Any(descriptor => descriptor.ServiceType == typeof(DefaultWritableSecretStoreValidator)))
+        {
+            services.AddShellInitializer<DefaultWritableSecretStoreValidator>(LifecyclePhase.Prepare, 0);
+            // AddShellInitializer registers the initializer transiently; this last-wins registration makes the shell and
+            // the hosted-service paths resolve one instance.
+            services.AddSingleton<DefaultWritableSecretStoreValidator>();
+            services.AddSingleton<IHostedService>(provider => provider.GetRequiredService<DefaultWritableSecretStoreValidator>());
+        }
         services.TryAddEnumerable(ServiceDescriptor.Singleton<ISecretTypeProvider, TextSecretTypeProvider>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<ISecretTypeProvider, RsaKeySecretTypeProvider>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<ISecretTypeProvider, X509CertificateSecretTypeProvider>());

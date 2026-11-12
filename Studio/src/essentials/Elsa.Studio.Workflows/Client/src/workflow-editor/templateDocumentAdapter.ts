@@ -12,7 +12,7 @@ export function createTemplateDocumentAdapter(): WorkflowEditorDocumentAdapter {
   const serialize = <T,>(action: () => Promise<T>) => { const next = queue.then(action, action); queue = next.catch(() => undefined); return next; };
   return {
     // The persisted template revision is also the expected revision of the user's explicit save.
-    agentResource: { resourceType: "workflow-template", contentType: "workflows.template-editor", revision: () => current?.revision ?? null },
+    weaverResource: { resourceType: "workflow-template", contentType: "workflows.template-editor", revision: () => current?.revision ?? null },
     load: async (context, id) => { current = await getWorkflowTemplate(context, id); pendingMetadata = null; return details(current); },
     save: (context, draft: WorkflowDraft) => serialize(async () => {
       if (!current || current.id !== draft.id) throw new Error("The template document is not loaded.");
