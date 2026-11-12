@@ -803,7 +803,10 @@ public sealed class EfWorkflowExecutionStateStore(
             var previous = ReadChecked(row, scope, state.WorkflowExecutionId);
             if (previous.ModelWorkOrigin is { } origin ? !origin.IsEquivalentTo(state.ModelWorkOrigin) : state.ModelWorkOrigin is not null)
                 throw new InvalidOperationException("A native worker cannot replace or discard its immutable model invocation address.");
+            if (previous.TestEntry is { } admitted ? !admitted.Matches(state.TestEntry) : state.TestEntry is not null)
+                throw new InvalidOperationException("A workflow execution cannot replace or discard its admitted test entry.");
         }
+        ValidateTestEntry(state);
         if (state.ModelWorkOrigin is { } work && (work.Scope.Value != scope || work.WorkerExecutionId != state.WorkflowExecutionId ||
             state.Partition?.Value != scope || state.ParentWorkflowExecutionId is not null ||
             !WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(work.WorkerExecutable, state.PinnedExecutable)))
@@ -853,6 +856,7 @@ public sealed class EfWorkflowExecutionStateStore(
             throw new InvalidDataException("The persisted workflow execution state content is not valid current JSON.", exception);
         }
         Validate(state);
+        ValidateTestEntry(state);
         if (state.TenantId is not null && !StringComparer.Ordinal.Equals(state.TenantId, scope))
             throw new InvalidDataException("The persisted workflow execution tenant does not match its persistence scope.");
         if (!StringComparer.Ordinal.Equals(state.WorkflowExecutionId, expectedId) || !StringComparer.Ordinal.Equals(row.WorkflowExecutionId, Encode(expectedId)) || row.WorkflowExecutionIdHash != Hash(expectedId) || row.WorkflowExecutionIdOrderKey != OrderKey(expectedId))
@@ -895,6 +899,16 @@ public sealed class EfWorkflowExecutionStateStore(
     {
         if ((encoded is null) != (value is null) || (hash is null) != (value is null) || value is not null && (encoded != Encode(value) || hash != Hash(value)))
             throw new InvalidDataException("The persisted workflow execution optional projection is corrupt.");
+    }
+
+    private static void ValidateTestEntry(WorkflowExecutionState state)
+    {
+        if (state.TestEntry is { } entry && (state.RunKind != WorkflowRunKind.TestRun ||
+            !WorkflowTestScope.ContextEquals(state.TestScope, entry.Scope) || state.Partition != entry.Scope.Partition ||
+            state.TenantId != entry.Scope.TenantId || !WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(entry.Executable, state.PinnedExecutable) ||
+            state.Authority is null || !WorkflowExecutionAuthoritySnapshot.Matches(entry.Authority,
+                state.Authority.SystemIdentity, state.Authority.RootInitiator, state.Authority.Metadata)))
+            throw new InvalidOperationException("The execution header differs from its admitted test authority and exact pin.");
     }
 
     private static void Validate(WorkflowExecutionState state)

@@ -402,6 +402,10 @@ internal static class EfRuntimeCheckpointParticipantStaging
             throw new RuntimeSchedulerWorkConsumeConflictException(consumed.WorkflowExecutionId, consumed.WorkItemId);
         }
 
+        // ExecuteDelete does not pass through the context's SaveChanges format guard.
+        if (Version.Parse(existing.SchemaVersion) >= Version.Parse(RuntimeSchedulerWorkEfModule.TestEntrySchemaVersion))
+            RuntimeTestEntryWriteVersion.Require(context, RuntimeSchedulerWorkEfModule.SchemaFamily, existing.SchemaVersion);
+
         // The conditional delete below is the atomic form of ConsumedSchedulerWorkItem.IsFencedBy: the same owner and
         // token predicate, evaluated by the provider in the write itself. Do not include Revision: an in-flight renewal
         // is allowed to replay the same owner/token consume. A successor reclaim changes ClaimToken and is rejected by this

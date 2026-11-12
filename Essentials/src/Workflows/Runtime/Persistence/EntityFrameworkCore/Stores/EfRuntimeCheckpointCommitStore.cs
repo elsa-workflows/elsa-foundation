@@ -30,6 +30,9 @@ public sealed class EfRuntimeCheckpointCommitStore(
 {
     internal IRuntimeCoalescingSessionAccessor? CoalescingSessions { private get; init; }
 
+    internal bool Uses(RuntimeDbContext expected, PersistenceScope scope) =>
+        ReferenceEquals(context, expected) && accessContextAccessor.Current.RequireScope() == scope;
+
     /// <summary>
     /// The fence cursors of the service provider this store belongs to. With them a fenced commit does not read
     /// the ownership row when its lease has a usable cursor. Without them it reads the row on every commit.

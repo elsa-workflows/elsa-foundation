@@ -1,4 +1,5 @@
 using Elsa.Persistence.EntityFramework;
+using Elsa.Persistence.Schema;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.Executions;
@@ -51,7 +52,7 @@ public sealed partial class EfSchedulerWorkQueueStoreTests
         await fixture.Store.EnqueueAsync(input);
         var before = await fixture.Context.SchedulerWorkItems.AsNoTracking().SingleAsync();
         Assert.Equal("2.0.0", before.SchemaVersion);
-        Assert.Throws<EfSchemaVersionSkewException>(() => RuntimeOperationalStateEfModule.Chain.EnsureReadable(before.SchemaVersion));
+        Assert.Throws<EfSchemaVersionSkewException>(() => EfSchemaChain.For(new EfSchemaFamilyDescriptor(RuntimeSchedulerWorkEfModule.SchemaFamily, "Workflows.Runtime", "1.0.0", typeof(EfSchedulerWorkQueueStoreTests).Assembly)).EnsureReadable(before.SchemaVersion));
 
         await using var restarted = database.Open("tenant-a");
         var drainer = new WorkflowSchedulerDrainer(restarted.Store, [new NoopWorkflowSchedulerWorkHandler()],

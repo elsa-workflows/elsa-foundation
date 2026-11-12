@@ -26,6 +26,8 @@ public sealed class EfRuntimePostCommitOutboxStore : IRuntimePostCommitOutboxSto
     IStimulusDeliveryStore
 {
     private readonly RuntimeDbContext context;
+    internal PersistenceAccessContext AccessContext => accessContextAccessor.Current;
+
     internal bool Uses(RuntimeDbContext expected, PersistenceScope scope) =>
         ReferenceEquals(context, expected) && accessContextAccessor.Current.Scope == scope;
     private readonly IPersistenceAccessContextAccessor accessContextAccessor;
@@ -410,6 +412,8 @@ public sealed class EfRuntimePostCommitOutboxStore : IRuntimePostCommitOutboxSto
             await context.SaveChangesAsync(cancellationToken); // Acquire the unique missing-owner fence before source CAS.
             return;
         }
+        if (Version.Parse(row.SchemaVersion) >= Version.Parse(RuntimeOperationalStateEfModule.TestEntrySchemaVersion))
+            RuntimeTestEntryWriteVersion.Require(context, RuntimeOperationalStateEfModule.SchemaFamily, row.SchemaVersion);
         var touched = await context.ExecutionLivenessStates.Where(candidate => candidate.Id == row.Id && candidate.Revision == row.Revision)
             .ExecuteUpdateAsync(update => update.SetProperty(candidate => candidate.Revision, row.Revision + 1), cancellationToken);
         if (touched != 1) throw new DbUpdateConcurrencyException("Cohort execution ownership changed before acceptance.");

@@ -175,6 +175,7 @@ public static class RuntimeEntityFrameworkCoreRegistration
             services.AddRuntimeRecurringTriggerScheduleEntityFrameworkCore();
             services.AddRuntimeWorkflowActivationAuthorityEntityFrameworkCore();
             UseEntityFrameworkActivationSwitch(services);
+            services.TryAddScoped<IRuntimeTestPersistenceBoundary, EfRuntimeTestPersistenceBoundary>();
 
             // Execution deletion is a capability of the complete, transactionally coupled EF family. Individual
             // EF store registrations intentionally do not advertise that the corresponding run-owned graph can be
