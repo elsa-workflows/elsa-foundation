@@ -2,6 +2,7 @@ using CShells.AspNetCore.Features;
 using CShells.Features;
 using Elsa.Activities.Bpmn.Interchange.Endpoints.DirectPublication;
 using Elsa.Activities.Bpmn.Interchange.Services;
+using Elsa.Activities.Bpmn.Internal;
 using Elsa.Api.AspNetCore;
 using Elsa.Api.Capabilities;
 using Elsa.Api.Capabilities.Models;
@@ -28,9 +29,11 @@ public class ActivitiesBpmnDirectPublishingFeature : IWebShellFeature
         services.AddElsaEndpoints();
         services.AddDynamicEndpointApiExplorerRefresh();
         services.TryAddScoped<BpmnAuthoredDirectPublisher>();
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IBpmnDocumentDirectAdmission, BpmnDirectDocumentAdmission>());
         services.TryAddKeyedScoped<IEndpointFaultRenderer, BpmnDirectPublishingFaultRenderer>(BpmnDirectPublishingApi.Owner);
         ApiCapabilityRegistration.Add(services, new ApiCapabilityDeclaration("elsa.api.bpmn-publishing", 1,
             [new("bpmn-authored-publish", "interchange/bpmn/versions/{versionId}/publish-direct", true),
+                new("bpmn-authored-document-publish", "interchange/bpmn/versions/{versionId}/publish-direct", true),
                 new("bpmn-authored-service-publish", "interchange/bpmn/versions/{versionId}/publish-direct", true),
                 // Claim-required human bindings project to format 6; older publishers refuse claimRequired: true.
                 new("bpmn-authored-claim-publish", "interchange/bpmn/versions/{versionId}/publish-direct", true)],

@@ -1,4 +1,5 @@
 using Elsa.Activities.Bpmn.Interchange.Services;
+using Elsa.Activities.Bpmn.Internal;
 using Elsa.Api.Capabilities.Models;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Routing;
@@ -26,16 +27,18 @@ public sealed class BpmnDirectPublishingFeatureTests
         var descriptors = builder.Services.Where(value => value.ServiceType == typeof(BpmnAuthoredDirectPublisher)).ToArray();
         if (enabled) Assert.Equal(ServiceLifetime.Scoped, Assert.Single(descriptors).Lifetime);
         else Assert.Empty(descriptors);
+        Assert.Equal(enabled ? 1 : 0, builder.Services.Count(value => value.ServiceType == typeof(IBpmnDocumentDirectAdmission)));
         await using var app = builder.Build();
         interchange.MapEndpoints(app, null);
         if (enabled) publishing.MapEndpoints(app, null);
         var routes = ((IEndpointRouteBuilder)app).DataSources.SelectMany(source => source.Endpoints)
             .OfType<RouteEndpoint>().Select(endpoint => endpoint.RoutePattern.RawText).ToArray();
-        Assert.Equal(enabled ? 4 : 3, routes.Length);
+        Assert.Equal(enabled ? 5 : 4, routes.Length);
+        Assert.Single(routes, route => route!.EndsWith("interchange/bpmn/authoring-capabilities", StringComparison.Ordinal));
         Assert.Equal(enabled, routes.Any(route => route!.EndsWith("publish-direct", StringComparison.Ordinal)));
         var capabilities = app.Services.GetServices<ApiCapabilityDeclaration>()
             .Where(value => value.CapabilityId == "elsa.api.bpmn-publishing").ToArray();
-        if (enabled) Assert.Equal(["bpmn-authored-claim-publish", "bpmn-authored-publish", "bpmn-authored-service-publish"], Assert.Single(capabilities).Links.Select(link => link.Rel));
+        if (enabled) Assert.Equal(["bpmn-authored-claim-publish", "bpmn-authored-document-publish", "bpmn-authored-publish", "bpmn-authored-service-publish"], Assert.Single(capabilities).Links.Select(link => link.Rel));
         else Assert.Empty(capabilities);
     }
 }

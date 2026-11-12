@@ -32,6 +32,16 @@
   payload type. Both handlers retain Unknown child-result facts and refuse executable compilation. Schema 1's
   result-order proof is not reused, and no Publishing or Graph admission authority is replaced.
 
+## Optional complete-source Direct assessment
+
+- Private BPMN-owned contributor: `IBpmnDocumentDirectAdmission.CanPromote(WorkflowDefinitionState)`.
+- Consumer: `BpmnDocumentAdmissionValidator`; the optional Interchange Direct publishing feature
+  registers `BpmnDirectDocumentAdmission` as an enumerable scoped contributor. Ordinary composition has none.
+- It assesses the entire physical closed workflow using the same strict projection as Direct publication.
+  This content assessment suppresses only that validator's document execution diagnostic. Native
+  compilation, other validators, source authorization and immutable pin authorization remain independent.
+- Profiles remain the existing human formats 1/6 and service format 3; unsupported mixed content refuses.
+
 ## Published model references
 
 - Owning contract: Publishing Core `IExecutableCompilationSource`.

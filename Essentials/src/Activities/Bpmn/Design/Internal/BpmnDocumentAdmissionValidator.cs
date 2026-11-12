@@ -9,13 +9,20 @@ using Elsa.Workflows.Design.Validations.Core.Models;
 namespace Elsa.Activities.Bpmn.Internal;
 
 /// <summary>Retention is available before complete-source execution is qualified.</summary>
-internal sealed class BpmnDocumentAdmissionValidator(IEnumerable<IActivityStructureHandler> handlers) : IDraftValidator
+internal sealed class BpmnDocumentAdmissionValidator(IEnumerable<IActivityStructureHandler> handlers,
+    IEnumerable<IBpmnDocumentDirectAdmission>? directAdmissions = null) : IDraftValidator
 {
     private readonly DefaultActivityStructureService _structures = new(handlers);
+    private readonly IBpmnDocumentDirectAdmission[] _directAdmissions = (directAdmissions ?? []).ToArray();
 
     public ValueTask<IEnumerable<ValidationError>> Validate(IWorkflowDefinitionDraft draft, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        // Whole physical content can qualify for the separately composed direct publisher.
+        // This receipt neither opens native compilation nor replaces any other validator.
+        if (draft.State.RootActivity?.Structure is { Kind: BpmnActivityIdentities.StructureKind, SchemaVersion: BpmnAuthoredDocument.SchemaVersion } &&
+            _directAdmissions.Any(admission => admission.CanPromote(draft.State)))
+            return ValueTask.FromResult<IEnumerable<ValidationError>>([]);
         var errors = new List<ValidationError>();
         var pending = new Stack<ActivityNode>();
         if (draft.State.RootActivity is { } root) pending.Push(root);
