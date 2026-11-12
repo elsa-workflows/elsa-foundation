@@ -120,7 +120,9 @@ replacement and precision handling:
   known as such: the JavaScript number, written as JSON, differs from the stored one. When such a value reaches
   anything the step **writes**
   (copied, returned, or inside a replaced array), the write is **refused by default with a diagnostic** naming the path
-  and both values; a warning alone is insufficient, because silent precision loss corrupts data. A designer who intends
+  and both values, and saying plainly why: JavaScript cannot hold the value exactly, because it exceeds the largest
+  integer a JavaScript number holds exactly (2^53 − 1, `9007199254740991`). A warning alone is insufficient, because
+  silent precision loss corrupts data. A designer who intends
   the loss accepts it explicitly to allow the write. That acceptance is a deliberate choice **recorded in the published
   conversion contract**; the implementing spec defines the surface. A script that only **computes** with such a value,
   without writing it, still gets a warning — the engine cannot prevent a lossy computation
@@ -129,8 +131,9 @@ replacement and precision handling:
   policy, provided by a feature and set for the whole host. It belongs to the JavaScript engine integration, because
   the loss happens where a value crosses from .NET into the JavaScript engine; the engine can tell there which values
   exceed what a JavaScript number holds, before the script runs. Other expression languages do not have this problem.
-  The default policy refuses, as above. A host that wants different handling, for example a warning, installs another
-  policy. There is no per-workflow override; one can be added later if a real need shows up.
+  Elsa ships one policy, which refuses as above, and it has no options. A host that wants different handling, for
+  example a warning, writes its own policy and installs it in place of the default. There is no per-workflow override;
+  one can be added later if a real need shows up.
 - **A lossy value passed to a host function is not a write.** When a script passes a value that lost precision as an
   argument to a registered .NET function (for example `lookupOrder(order.id)`), the engine logs a warning and does not
   refuse the call. Working with such values is the script author's responsibility.
@@ -373,9 +376,11 @@ today. Its date-heavy scripts are already refused.
 - **Named .NET profiles, selected per script or per expression and pinned by the executable.** Not chosen. One
   switch that applies to scripts and input-binding expressions alike is simpler: a JavaScript expression behaves as
   the same JavaScript in a script activity does, and an author never has to know which profile an expression uses.
-- **A fixed refuse-or-warn rule for precision loss, or a per-workflow override.** Not chosen. Teams may want
-  different handling, so the handling is a replaceable host policy with refusal as the default (V9). A per-workflow
-  override adds a second level of configuration without evidence that anyone needs it.
+- **A fixed refuse-or-warn rule for precision loss, built-in options to choose between them, or a per-workflow
+  override.** Not chosen. Teams may want different handling, so the handling is a replaceable host policy (V9). Elsa
+  ships only the refusing policy: offering options would mean building and maintaining an implementation for each one,
+  while a team that wants a warning can write that policy itself. A per-workflow override adds a second level of
+  configuration without evidence that anyone needs it.
 - **Shipping a minimal .NET interop together with the defaults.** Not chosen: the interop is not needed to deliver
   the defaults, and core needs go through registered functions that exchange plain values. Building it alongside them
   would put an optional capability on the path of required work. .NET objects stay disabled in scripts until the
