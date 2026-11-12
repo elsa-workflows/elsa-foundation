@@ -34,6 +34,14 @@ public interface IActivityStructureHandler
     IReadOnlyCollection<ActivityChildProjection> ProjectChildren(ActivityNode activity);
 
     /// <summary>
+    /// Projects physical ownership for authoring-metadata retention, without widening lexical children.
+    /// The default preserves existing handlers' child projection; document owners can include native
+    /// roots outside the selected lexical scope and compact header identities without activity bodies.
+    /// </summary>
+    ActivityOwnershipProjection ProjectOwnership(ActivityNode activity) =>
+        new(ProjectChildren(activity).SelectMany(slot => slot.Activities).ToArray(), []);
+
+    /// <summary>
     /// Projects public-contract members referenced by structure-owned relationships such as
     /// Flowchart outcome ports. Values and expressions must never be included.
     /// </summary>

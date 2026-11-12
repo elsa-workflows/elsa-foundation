@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Elsa.Activities.Bpmn.Design;
+using Elsa.Activities.Bpmn.Core;
 using Elsa.Activities.Bpmn.Internal;
 using Elsa.Activities.Bpmn.Models;
 using Elsa.Activities.Sequence;
@@ -43,6 +44,30 @@ public sealed class BpmnDocumentScopeProjectionTests : IDisposable
     }
 
     public void Dispose() => _provider.Dispose();
+
+    [Fact]
+    public void Malformed_scope_view_JSON_keeps_its_parser_cause_scope_identity_and_original_source()
+    {
+        var owner = Owner();
+        var original = owner.Structure!.Payload.GetRawText();
+        var view = View(Children(owner), "A");
+        var payload = JsonNode.Parse(view.Structure!.Payload.GetRawText())!.AsObject();
+        payload["variables"] = "malformed";
+        var invalid = view with { Structure = new(BpmnDocumentScopeView.Kind, BpmnDocumentScopeView.SchemaVersion,
+            JsonSerializer.SerializeToElement(payload, Json)) };
+        foreach (var action in new Action[] {
+            () => _structures.ProjectChildren(invalid), () => _structures.ProjectScopedVariables(invalid),
+            () => _structures.ReplaceChildren(invalid, []), () => _structures.CompileExecutableStructure(invalid)
+        })
+        {
+            var exception = Assert.Throws<BpmnDocumentSourceException>(action);
+            Assert.IsAssignableFrom<InvalidOperationException>(exception);
+            Assert.IsType<JsonException>(exception.InnerException);
+            Assert.Contains(view.NodeId, exception.Message, StringComparison.Ordinal);
+            Assert.Contains("scope 'A'", exception.Message, StringComparison.Ordinal);
+        }
+        Assert.Equal(original, owner.Structure.Payload.GetRawText());
+    }
 
     [Theory]
     [InlineData(false)]

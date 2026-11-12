@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.Activities.Bpmn.Core;
 using Elsa.Activities.Bpmn.Models;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
@@ -52,11 +53,16 @@ public sealed class BpmnStructureHandlerTests : IDisposable
         {
             var payload = JsonSerializer.SerializeToElement(new Dictionary<string, object?> { [spelling] = "retained source authority" });
             var source = new ActivityNode("process", "bpmn-version", [], [], new(BpmnProcessActivity.StructureKind, BpmnProcessActivity.StructureSchemaVersion, payload));
-            Assert.Contains(spelling, Assert.Throws<JsonException>(() => _handler.ProjectChildren(source)).Message, StringComparison.Ordinal);
-            Assert.Throws<JsonException>(() => _handler.ProjectScopedVariables(source));
-            Assert.Throws<JsonException>(() => _handler.ReplaceChildren(source, []));
-            Assert.Throws<JsonException>(() => _handler.CompileExecutableStructure(source));
-            Assert.Throws<JsonException>(() => _handler.RemapExecutableStructure(source.Structure!, new Dictionary<string, string>()));
+            var failure = Assert.Throws<BpmnDocumentSourceException>(() => _handler.ProjectChildren(source));
+            Assert.Contains(spelling, failure.Message, StringComparison.Ordinal);
+            Assert.Contains(source.NodeId, failure.Message, StringComparison.Ordinal);
+            Assert.Contains(spelling, Assert.IsType<JsonException>(failure.InnerException).Message, StringComparison.Ordinal);
+            Assert.Throws<BpmnDocumentSourceException>(() => _handler.ProjectScopedVariables(source));
+            Assert.Throws<BpmnDocumentSourceException>(() => _handler.ReplaceChildren(source, []));
+            Assert.Throws<BpmnDocumentSourceException>(() => _handler.CompileExecutableStructure(source));
+            var remapFailure = Assert.Throws<BpmnDocumentSourceException>(() => _handler.RemapExecutableStructure(source.Structure!, new Dictionary<string, string>()));
+            Assert.Contains(source.Structure!.Kind, remapFailure.Message, StringComparison.Ordinal);
+            Assert.Contains(spelling, Assert.IsType<JsonException>(remapFailure.InnerException).Message, StringComparison.Ordinal);
             Assert.Equal(payload.GetRawText(), source.Structure!.Payload.GetRawText());
         }
     }

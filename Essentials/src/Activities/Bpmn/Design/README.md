@@ -38,6 +38,16 @@ only owned native configuration and headers into that owner, refuses foreign sna
 composes sibling edits. Native Sequence bodies keep their own child slots. Independent standard
 processes remain outside the selected process's lexical tree and have separate query views.
 
+The separate [ownership projection](../../../Workflows/Design/Api/EXTENSION_POINTS.md#iactivitystructurehandler-core--elsaworkflowsdesigncore)
+exposes all physical native roots and compact-header node IDs for presentation retention, including
+independent processes. EF metadata pruning uses that projection without exposing those processes to
+selected-process lexical queries. Removed physical ownership still prunes its presentation records.
+
+Malformed JSON and XML at these parser boundaries throw the existing BPMN Core
+`BpmnDocumentSourceException` with the original `JsonException` / `XmlException` as `InnerException`
+and the owning node/process or view/scope identifiers. This changes neither schema-1 handling nor
+explicit structural rejections; unsupported but well-formed XML remains retained.
+
 The structure listing exposes the exact schema 2 retention payload; transient scope views expose no
 authoring payload schema. These handlers provide no execution or result-order capability. Their
 child-result facts remain Unknown, including linear-looking XML; schema 1's separately proven

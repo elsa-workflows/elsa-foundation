@@ -55,16 +55,28 @@ internal sealed class BpmnDocumentStructureHandler : IActivityStructureHandler
     public ActivityChildResultFacts AssessChildResult(ActivityNode activity, string producerChildNodeId, string consumerChildNodeId) =>
         new(ActivityChildResultAvailability.Unknown) { EarlierProducerRunCanReachConsumer = null };
 
+    /// <exception cref="BpmnDocumentSourceException">Malformed source retains its parser cause and node/process identity.</exception>
     public IReadOnlyCollection<ActivityChildProjection> ProjectChildren(ActivityNode activity) =>
         BpmnDocumentScopeProjection.Project(activity, Read(activity).ProcessId);
 
+    /// <exception cref="BpmnDocumentSourceException">Malformed source retains its parser cause and node/process identity.</exception>
+    public ActivityOwnershipProjection ProjectOwnership(ActivityNode activity)
+    {
+        var source = Read(activity);
+        return new(source.Activities, source.ScopeHeaders.Select(header => header.NodeId).ToArray());
+    }
+
+    /// <exception cref="BpmnDocumentSourceException">Malformed source retains its parser cause and node/process identity.</exception>
     public IReadOnlyCollection<VariableDefinition> ProjectScopedVariables(ActivityNode activity) => Read(activity).Variables;
 
+    /// <exception cref="BpmnDocumentSourceException">Malformed source retains its parser cause and node/process identity.</exception>
     public ActivityNode ReplaceChildren(ActivityNode activity, IReadOnlyCollection<ActivityChildProjection> childProjections)
     {
         return BpmnDocumentScopeProjection.Replace(activity, Read(activity).ProcessId, childProjections);
     }
 
+    /// <exception cref="BpmnDocumentSourceException">Malformed source retains its parser cause and node/process identity.</exception>
+    /// <exception cref="NotSupportedException">Complete-source execution remains closed.</exception>
     public ActivityNodeStructure CompileExecutableStructure(ActivityNode activity)
     {
         Read(activity);
@@ -89,7 +101,9 @@ internal sealed class BpmnDocumentStructureHandler : IActivityStructureHandler
         }
         catch (JsonException exception)
         {
-            throw new InvalidOperationException("Invalid complete-document BPMN authoring payload.", exception);
+            var processId = structure.Payload.TryGetProperty("processId", out var id) && id.ValueKind == JsonValueKind.String
+                ? id.GetString() : "<unavailable>";
+            throw new BpmnDocumentSourceException($"Invalid complete-document BPMN JSON on node '{activity.NodeId}', process '{processId}'.", exception);
         }
 
         RejectCompetingFields(document.AdditionalProperties);
@@ -97,7 +111,7 @@ internal sealed class BpmnDocumentStructureHandler : IActivityStructureHandler
             document.Activities is null || document.Bindings is null || document.Variables is null || document.ScopeHeaders is null)
             throw Invalid("documentXml, processId, activities, bindings and variables are required");
 
-        var xml = ParseXml(document.DocumentXml);
+        var xml = ParseXml(document.DocumentXml, document.ProcessId, activity.NodeId);
         XNamespace model = ModelNamespace;
         if (xml.Root?.Name != model + "definitions")
             throw Invalid("source must contain BPMN definitions");
@@ -176,7 +190,8 @@ internal sealed class BpmnDocumentStructureHandler : IActivityStructureHandler
         return document;
     }
 
-    internal static XDocument ParseXml(string source)
+    /// <exception cref="BpmnDocumentSourceException">Wraps XML parser failures with their original cause and owning identifiers.</exception>
+    internal static XDocument ParseXml(string source, string scopeId, string? nodeId = null)
     {
         try
         {
@@ -185,7 +200,8 @@ internal sealed class BpmnDocumentStructureHandler : IActivityStructureHandler
         }
         catch (XmlException exception)
         {
-            throw new InvalidOperationException("Invalid complete-document BPMN XML source.", exception);
+            throw new BpmnDocumentSourceException($"Invalid complete-document BPMN XML for process/scope '{scopeId}'" +
+                (nodeId is null ? "." : $" on node '{nodeId}'."), exception);
         }
     }
 
