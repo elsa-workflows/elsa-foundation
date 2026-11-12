@@ -134,7 +134,9 @@ public sealed class PersistedExpressionAuthoringContextSource(
         IReadOnlyDictionary<string, string> inputNames, ActivityNode? root, CancellationToken ct)
     {
         var shape = ToShape(source.Shape);
-        if (source.Binding?.ExpressionType == "Input")
+        // A declared input is offered as an Input read in a reusable body and as the request read of its name in a
+        // workflow; either way the source is that input.
+        if (source.Binding?.ExpressionType is "Input" or "WorkflowRequest" && source.Id.StartsWith("input:", StringComparison.Ordinal))
         {
             var key = source.Id["input:".Length..];
             return new(source.Id, inputNames.GetValueOrDefault(key, source.DisplayName), ExpressionSymbolKind.WorkflowInput, shape);

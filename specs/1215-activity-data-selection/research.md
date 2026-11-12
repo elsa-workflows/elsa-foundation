@@ -519,7 +519,7 @@ runtime cannot be retrofitted; it refuses by failing to read.
 |---|---|---|
 | `VariableMember` | Requires an explicit `declaringScopeId`; legacy `Variable` defaults to the workflow scope (`RuntimeInputBindingCompiler.cs:619-632`, `ParseVariableReference`). Current items are the owning structure's scoped variables. Placement remaps the scope as for `VariableRead` (`PlacedReferenceRemapper.cs:83-99`, `RemapScope`). Delivered in slice D1. | Always `DeferredFit`: a declared type yields `serialization-profile-unbound` (`ClrActivitySerializedShapeSource.cs:151-165`); variables can hold JSON from other writers. |
 | `WorkflowRequestMember` | Payload `memberKey` only; legacy dotted `Path` must be null. An open request (no declared inputs) is always deferred (`ActivityDataSelectionAnalyzer.cs:237-240`). | Always `DeferredFit`. A CLR value supplied at start is serialized with default JSON options (PascalCase) by `WorkflowExecutionStartCommandPayload.ToJsonValues` (`Essentials/src/Workflows/Runtime/Core/Models/WorkflowExecutionStartDispatch.cs:710-713`). That one function seeds both request inputs (`WR/Services/Executions/WorkflowStartDispatcher.cs:467`) and start-time variables (`:503`), so a CLR-seeded request **or variable** may carry `CustomerId` where an author types `customerId`: exact segments then read `Absent`. Rule chosen (slice D): exact stored names; normalising CLR seeding is a separate follow-up. |
-| `InputMember` | Authored only. Placement must lower it to `WorkflowRequestMember` with all segments; today's `Input` lowering keeps only `referenceKey` (`ActivityTemplatePlacer.cs:667-683`). A workflow-level `Input` read publishes as an unevaluated expression (#4087, §11 item 4); that is fixed before slice D2. | Always `DeferredFit`. |
+| `InputMember` | Authored only. Placement must lower it to `WorkflowRequestMember` with all segments; `Input` reads are lowered by `InputReadLowering` (`WP/InputReadLowering.cs`), keyed by reference key in a placed body (`ActivityTemplatePlacer.ToGraphInputRead`) and by the declared input's name at workflow level (`ExecutableNodeCompiler`, #4087, §11 item 4); D2 extends it to carry `memberPath`. | Always `DeferredFit`. |
 
 None of the three can be `Known` today, so all depend on the runtime fit helper, and the issue's acceptance names
 only activity results. They belong to this leaf (T012 lists all four) but in a later slice than
@@ -571,12 +571,20 @@ named pass on main and pin current behaviour. Rows that slices A–C deliberatel
    poisoned without retry and the run blocked or faulted (§3). Destructive, so the upgrade rule in §3 applies.
 3. *How a failed input read surfaces.* Scheduler poison, `SchedulerWorkPoisoned` incident, cause only in text and
    metadata (§7 table).
-4. *Workflow-level `Input`.* Publishes, but as an expression of language `Input`, not lowered to a request read
-   (`PublishWorkflowRequestHandlerTests.MemberReadAdmission.cs`, with the expression validator stubbed valid). No
-   runtime evaluator handles `Input`, so the run would fail (not run). The analyzer nonetheless offers `Input` for
-   workflow documents (`ActivityDataSelectionAnalyzer.cs:229-231`): an existing defect to file separately.
-   Consequence for slice D: `InputMember` belongs only in closed-scope graph bodies, lowered by placement; at workflow
-   level the analyzer emits `WorkflowRequestMember`.
+4. *Workflow-level `Input`.* Published as an expression of language `Input`, not lowered to a request read. A
+   composed host does not refuse it either: the expression validator skips reference kinds such as `Input`
+   (`WDV/Validators/ExpressionDraftSemanticValidator.cs:30-38`). At run time the materializer hands the expression to
+   the portable evaluator, which refuses it for having no capability profile, so the reader's input read is poisoned
+   before it starts. The analyzer offered `Input` for workflow documents, and Studio's `Input` reference editor writes
+   it. Filed as #4087 and **fixed**: publication lowers a workflow-level `Input { referenceKey }` read to
+   `WorkflowRequest { memberKey = name of the declared input with that reference key }` in `ExecutableNodeCompiler`,
+   for ordinary, structure-projected and intrinsic inputs, through `InputReadLowering`, the helper the placer's body
+   lowering also uses. A reference key that names no declared input is left as authored and refused as
+   `ActivityData/UnknownInput`. A workflow now offers the request read; a reusable body still offers `Input`. Run end
+   to end with the input supplied and with it omitted and defaulted (`WorkflowInputReadPublicationRunTests`).
+   Consequence for slice D2: `InputMember` lowers to `WorkflowRequestMember` through the same helper, keyed by name
+   at workflow level and by reference key in a placed body; at workflow level the analyzer offers
+   `WorkflowRequestMember`.
 5. *Typed whole result as null.* Refused at completion (VF-ACT-006); the note's assumption holds (§4).
 6. *Conversion.* `Elsa.Any`, `Object` and `JsonElement` sources cannot be planned onto `String` (VF-COER); `Elsa.Any`
    onto `Elsa.Any` is identity. An identity plan checks only the envelope's type label and passes a number, object or

@@ -153,14 +153,14 @@ public sealed class MemberReadPublicationRunTests
                     [new(new FlowchartEndpoint("producer", "Done"), new FlowchartEndpoint("reader", null))], "producer"), Web)));
     }
 
-    private static WorkflowExecutionHarness Harness() => WorkflowExecutionHarness.Create()
+    internal static WorkflowExecutionHarness Harness() => WorkflowExecutionHarness.Create()
         .WithFeature(services => new SerializationFeature().ConfigureServices(services))
         .WithFeature(services => new ActivitiesFlowchartFeature().ConfigureServices(services))
         .WithFeature(services => new ActivitiesSequenceFeature().ConfigureServices(services))
         .Build(Enumerable.Range(1, 16).Select(index => $"actexec-{index}"));
 
     /// <summary>The real analysis and publication compiler over a fixed catalog; nothing is stored.</summary>
-    private sealed class Publication : IDisposable
+    internal sealed class Publication : IDisposable
     {
         private readonly ServiceProvider _provider;
         private readonly IServiceScope _scope;
@@ -207,9 +207,9 @@ public sealed class MemberReadPublicationRunTests
                 new ExecutableNodeCompiler(structures, registry, inputs, outputs));
         }
 
-        public ValueTask<WorkflowExecutable> Compile(ActivityNode root, VariableDefinition[]? variables = null) => _compiler.CompileAsync(
+        public ValueTask<WorkflowExecutable> Compile(ActivityNode root, VariableDefinition[]? variables = null, InputDefinition[]? inputs = null) => _compiler.CompileAsync(
             new("version", WorkflowExecutableReferenceScope.Published, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow, null, "artifact-")
-            { Source = new("definition", "version", "1.0.0", new(variables ?? [], root, [], [], null), "WorkflowDefinitionVersion", "version", "1.0.0") });
+            { Source = new("definition", "version", "1.0.0", new(variables ?? [], root, inputs ?? [], [], null), "WorkflowDefinitionVersion", "version", "1.0.0") });
 
         public void Dispose()
         {

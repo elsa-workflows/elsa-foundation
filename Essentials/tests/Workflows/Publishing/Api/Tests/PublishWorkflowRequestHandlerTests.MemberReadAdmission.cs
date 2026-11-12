@@ -341,31 +341,4 @@ public sealed partial class PublishWorkflowRequestHandlerTests
             ValueTask.FromResult(ActivityTransition.Complete(new CustomerRecord("c-1", new CustomerAddress("Main"))));
     }
 
-    /// <summary>
-    /// A workflow-level <c>Input</c> read on an ordinary activity input is what the analyzer offers for a declared
-    /// workflow input. Pins what publication does with it on main, which decides where <c>InputMember</c> can appear.
-    /// </summary>
-    [Fact]
-    public async Task A_workflow_level_Input_read_on_an_ordinary_input_publishes_as_an_expression_of_language_Input()
-    {
-        var read = new WorkflowArgumentState("Text", new ArgumentValue(
-            JsonSerializer.SerializeToElement(new { referenceKey = "customer" }), "Input"), null, null, null, null);
-        var version = new WorkflowDefinitionVersion("definition-1", "1.0.0")
-        {
-            Id = "version-1",
-            Definition = new WorkflowDefinition { Id = "definition-1", Name = "Demo" },
-            State = new WorkflowDefinitionState([], Node("consumer", read),
-                [new InputDefinition("customer", "customer", new TypeReference("String"), null, "Customer", null, IsNullable: false)], [], null)
-        };
-
-        var publication = await Handler(version).Handle(new PublishWorkflow(version.Id), CancellationToken.None);
-
-        var executable = Assert.IsType<WorkflowExecutable>(await _store.FindAsync(publication.ArtifactId));
-        var binding = executable.RootActivity.InputBindings["Text"];
-        // Not lowered to a request read: the compiler treats the unknown kind as an expression language. No runtime
-        // evaluator is registered for "Input", so this binding cannot resolve at run time (not run here).
-        Assert.Equal(RuntimeInputBindingSource.Expression, binding.Source);
-        Assert.Equal("Input", binding.Expression!.Language);
-        Assert.Null(binding.WorkflowRequest);
-    }
 }
