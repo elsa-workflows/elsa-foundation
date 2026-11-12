@@ -37,11 +37,11 @@ not *inline dispatch*. Nothing runs until a drain claims the item, and the item 
 committed. The decision above is unchanged: the commit still dispatches nothing, and every other kind of post-commit work,
 and every composition whose queue does not share that unit of work, keeps the outbox.
 
-## Proposed D-2 amendment
+## D-2 amendment
 
-**Status: proposed.** This extends atomic recording to background admissions. The accepted status above does not accept this amendment.
-Identity/retry semantics belong to [ADR 0045](0045-workflow-value-flow-uses-role-owned-bindings-and-immutable-invocation-records.md#proposed-d-2-execution-contract);
-flush cadence belongs to [ADR 0032](0032-runtime-checkpoint-cadence-is-policy-driven-per-workflow.md#proposed-d-2-amendment).
+**Status: accepted (2026-11-12).** This extends atomic recording to background admissions.
+Identity/retry semantics belong to [ADR 0045](0045-workflow-value-flow-uses-role-owned-bindings-and-immutable-invocation-records.md#d-2-execution-contract);
+flush cadence belongs to [ADR 0032](0032-runtime-checkpoint-cadence-is-policy-driven-per-workflow.md#d-2-amendment).
 
 Stage a background admission with the workflow-state changes and pinned inputs it depends on. Publish them through
 one atomic durable checkpoint: before commit a worker cannot claim the work; after commit its preceding state and

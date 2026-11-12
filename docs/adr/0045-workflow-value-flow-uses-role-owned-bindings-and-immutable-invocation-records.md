@@ -2,9 +2,8 @@
 
 Status: accepted (2026-07-16; ratified through an architect grilling session)
 
-**Amendment proposed (decision D-2).** The [proposed execution contract](#proposed-d-2-execution-contract) below
-refines §3–§6. Its status is **proposed**, separately from the accepted decision above. It is neither agreed nor
-implemented.
+**Amendment accepted (2026-11-12, decision D-2).** The [execution contract](#d-2-execution-contract) below refines
+§3–§6. It is agreed and not yet implemented.
 
 Elsa's canonical workflow and activity model will not use `IMemoryBlock`,
 `IMemoryBlockReference`, a memory register, or a universal runtime value-reference interface.
@@ -310,9 +309,9 @@ the importer emits a precise migration diagnostic. Any unavoidable temporary exe
 in an explicitly named compatibility module with a retirement plan, consistent with constitution
 §E2.7.
 
-## Proposed D-2 execution contract
+## D-2 execution contract
 
-**Status: proposed.** If accepted, this section supersedes conflicting execution/recovery wording in §3–§6,
+**Status: accepted (2026-11-12).** This section supersedes conflicting execution/recovery wording in §3–§6,
 including the earlier assertion that re-materializing inputs on redelivery is deterministic. It does not choose the
 script completion API or adopt the other proposed ADR amendments. Shared text is reconciled with those amendments
 before this section is accepted.
@@ -388,18 +387,11 @@ Elsa access nor the activity body's `ReplaySafe` marker proves that its inputs a
 can have effects. This contract covers the functions registered for the binding profile. A decision that admits
 another host call path into an evaluation states how that path is classified.
 
-**Not decided by this contract: how a registered function is classified.** This contract fixes what the engine does
-around a possibly effectful evaluation. Whether calling a registered function makes an input evaluation possibly
-effectful belongs to the function-effect decision in this ADR's §5, which is not settled. Two rules are proposed:
-
-- **No declaration.** Functions carry no effect declaration, and every registered function is possibly effectful.
-  Every input evaluation that calls a function takes the before/after boundary, also when the function is pure.
-  A hint is reconsidered only if measurements show that this cost matters, and it may then only change where the
-  engine records state.
-- **Optional effectful declaration.** A function without a declaration is effect-free, and calling it adds no
-  boundary. A host may declare a function effectful when registering it; only an evaluation that calls a declared
-  function takes the before/after boundary. An effectful function registered without the declaration gets no
-  boundary, so after a crash its effect can repeat with the rest of the unflushed segment.
+**How a registered function is classified** follows the function-effect decision in this ADR's §5 (decision D-6):
+a function without a declaration is effect-free, and calling it adds no boundary. A host may declare a function
+effectful when registering it; only an evaluation that calls a declared function takes the before/after boundary.
+An effectful function registered without the declaration gets no boundary, so after a crash its effect can repeat
+with the rest of the unflushed segment. A call is never refused or skipped because of what it does.
 
 Under either rule, classification never prohibits, skips or deduplicates a call; ordinary capability, access and
 value-contract validation still applies. The rest of this contract holds under both.
@@ -417,7 +409,7 @@ Apply the before/after rule to a possibly effectful activity evaluation too: per
 activation/user code, then persist the successful transition before advancing dependent work. Fault/cancellation
 persists its applicable recovery record instead. Effectful constructors/hydration belong inside that activation
 boundary. Other evaluations may defer logical transitions under
-[ADR 0032](0032-runtime-checkpoint-cadence-is-policy-driven-per-workflow.md#proposed-d-2-amendment).
+[ADR 0032](0032-runtime-checkpoint-cadence-is-policy-driven-per-workflow.md#d-2-amendment).
 Do not hold a database transaction open while user code runs. Fencing guards workflow-state acceptance; it cannot
 prevent an obsolete worker's external effects.
 
@@ -470,8 +462,8 @@ halfway through is not eligible merely because it produced some data.
 
 ### 6. Publish background admissions with preceding state
 
-Use [ADR 0020's admission rule](0020-runtime-checkpoint-commit-post-commit-work.md#proposed-d-2-amendment) for atomic
-visibility and [ADR 0032](0032-runtime-checkpoint-cadence-is-policy-driven-per-workflow.md#proposed-d-2-amendment) for
+Use [ADR 0020's admission rule](0020-runtime-checkpoint-commit-post-commit-work.md#d-2-amendment) for atomic
+visibility and [ADR 0032](0032-runtime-checkpoint-cadence-is-policy-driven-per-workflow.md#d-2-amendment) for
 bounded flushing. A worker cannot claim work ahead of its required durable state and pinned inputs. Lost wake-up
 notifications cannot lose committed work. This is not a frozen view of every variable at admission: later worker
 reads may observe later eligible commits, with stale read-modify-write checks still applied. Use the same causal and
@@ -487,7 +479,7 @@ crash/redelivery tests and provider proofs appropriate to each path:
 |---|---|
 | Crash before/after effectful inputs | No call before identity commit; repetition retains the logical key before result commit; no re-evaluation after result commit. |
 | Two external operations in one pass | Distinct stable operation keys; no implied per-call skipping or exactly-once effects. |
-| Repeatable body, possibly effectful input | Body marker cannot remove input boundaries; a function without a declaration follows the function-effect rule that is chosen (section 3). |
+| Repeatable body, possibly effectful input | Body marker cannot remove input boundaries; a function without a declaration is effect-free and adds no boundary (section 3, D-6). |
 | Retry, re-execution, refresh and resume | Stable versus new identities/snapshots remain explicit; earlier dependencies and history are retained. |
 | Structural redelivery and later iteration | Same cause reuses its recorded snapshot; new evaluation gets a new identity and eligible current values; no duplicate probe. |
 | Fault/cancel after earlier successful evaluations | Discard only current pending successful changes, not earlier progress or external effects. |
@@ -504,8 +496,8 @@ transactions, dependencies, retry/refresh and retained-completion resolution; an
 and provider precedence. Concrete record layouts, operation-key API, finite dispatch bound and checkpoint integration
 belong to those specs. Return gaps to this ADR. All specs are defined before implementation starts.
 
-How a registered function is classified is not settled by this contract; section 3 states both proposed rules.
-Reconcile that rule, route-by-return and the pending ADR 0092/0093 text before marking shared clauses agreed. No new constitutional gate or exception is proposed.
+How a registered function is classified follows D-6 (section 3). Route-by-return follows §6, and the variable lifecycle
+and background eligibility follow ADR 0092 and ADR 0093. No new constitutional gate or exception is proposed.
 
 ## Reconciliation with existing work units
 
