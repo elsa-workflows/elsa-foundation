@@ -60,7 +60,7 @@ The donor has approximately18k generated migration lines. Regenerate against the
 - Code, generated artifacts and registration changes receive meaningful behavior/whole-project checks as applicable. S01 adds no product behavior and needs no extra local .NET/browser campaign; let the actual CI selector apply every required check, including any checks selected by contract paths.
 - Use current hosted CI routing and required checks. The expired November6 Azure grants and the old Mac-heavy-work restriction are not new resource authorization. No Azure worker is restarted by this plan.
 - Visible changes require the existing composed-host downloadable evidence and independent actual image inspection. Reference images, old screenshots and machine test success are distinct from visual acceptance.
-- Keep the parent spec In progress and the feature open until all required tasks, runtime/provider/UX proof, final review and resulting-main gates pass.
+- Keep the parent spec In progress through partial slices. Set it to Implemented in the final qualified delivery PR; keep #3849 and the delivery goal open until resulting-main/post-merge verification also passes.
 
 ## Slice receipts
 
