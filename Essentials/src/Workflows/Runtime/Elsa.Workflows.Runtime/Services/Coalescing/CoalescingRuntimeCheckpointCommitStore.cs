@@ -56,6 +56,8 @@ public sealed class CoalescingRuntimeCheckpointCommitStore : IRuntimeCheckpointC
 
     private readonly IRuntimeCheckpointCommitStore _inner;
 
+    public bool SupportsHistory => _inner.SupportsHistory;
+    public bool CanCommitHistory(IRuntimeHistoryStore selectedStore) => _inner.CanCommitHistory(selectedStore);
     public bool SupportsExactBookmarkResume => _inner.SupportsExactBookmarkResume;
     bool IRuntimeCheckpointCommitStore.SupportsModelParentAdmission => _inner.SupportsModelParentAdmission;
     bool IRuntimeCheckpointCommitStore.SupportsModelCheckpoint => _inner.SupportsModelCheckpoint;
@@ -186,6 +188,7 @@ public sealed class CoalescingRuntimeCheckpointCommitStore : IRuntimeCheckpointC
             var foldedCommit = commit with
             {
                 StateChanges = foldedState.WithPostCommitOutbox(outbox),
+                HistoryBatches = session.FoldHistoryBatchesWith(commit),
                 PostCommitIntents = [],
             };
 

@@ -16,6 +16,15 @@ public sealed record RuntimeCheckpointCommit(
 {
     public string WorkflowExecutionId => Checkpoint.WorkflowExecutionId;
 
+    /// <summary>Optional ordered logical history groups. Null preserves legacy replay/wire shapes.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<RuntimeHistoryBatch>? HistoryBatches
+    {
+        get => _historyBatches;
+        init => _historyBatches = value is null ? null : Array.AsReadOnly(value.ToArray());
+    }
+    private readonly IReadOnlyList<RuntimeHistoryBatch>? _historyBatches;
+
     /// <summary>Optional model decision written with the fence, consumed input and outbox in one transaction.</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public RuntimeModelStateChange? ModelState { get; init; }
