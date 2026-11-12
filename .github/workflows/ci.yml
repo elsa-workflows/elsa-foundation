@@ -8,6 +8,12 @@ name: CI
 # Path filters live in tools/ci/workflow-paths.json and are applied by plan-scope.
 # Pull requests to an initiative branch (docs/contributing/initiatives.md) run exactly what a pull request to main runs,
 # diffed against the initiative branch: the same tier selection and the same documentation-only fast path.
+#
+# Cost rules: a push to main runs the PR tier, not the full tier (the PR and the merge queue already ran it; the
+# nightly run below runs it again on main). The heavy proofs of a ready PR (the full tier, the Studio browser and UX
+# proofs, the Weaver witness) run when it opens ready, is reopened or marked ready, in the merge queue, when it has the
+# `full-tier` label or changes the tiers, or when the repository variable CI_FULL_TIER_EVERY_PUSH is 'true'
+# (tools/ci/workflow_scope.py, heavy_now). A later push runs the PR tier, and `Full tier` reports as deferred.
 
 on:
   pull_request:
@@ -66,6 +72,8 @@ jobs:
     outputs:
       weaver: ${{ steps.scope.outputs.weaver }}
       studio: ${{ steps.scope.outputs.studio }}
+      studio-heavy: ${{ steps.scope.outputs.studio-heavy }}
+      heavy: ${{ steps.scope.outputs.heavy }}
       published-images: ${{ steps.scope.outputs.published-images }}
       studio-order: ${{ steps.scope.outputs.studio-order }}
       backend-source: ${{ steps.scope.outputs.backend-source }}
@@ -76,6 +84,8 @@ jobs:
           persist-credentials: false
       - name: Select jobs from the event and changed paths
         id: scope
+        env:
+          CI_FULL_TIER_EVERY_PUSH: ${{ vars.CI_FULL_TIER_EVERY_PUSH }}
         run: python3 tools/ci/workflow_scope.py
 
   # Python only, so the shards start within a minute: the change scope, the cheap guards, and the shard matrix.
@@ -191,7 +201,9 @@ jobs:
         run: |
           case "$GITHUB_EVENT_NAME" in
             # A merge-queue entry runs the PR tier here and the full tier through plan-full, as a ready PR does.
-            pull_request | merge_group) tier="pr" ;;
+            # A push to main also runs the PR tier only: the full tier already ran on the PR (and in the queue), and
+            # the nightly run covers main. This halves what each merge costs.
+            pull_request | merge_group | push) tier="pr" ;;
             schedule) tier="nightly" ;;
             workflow_dispatch) [[ "$DISPATCH_TIER" == pr ]] && tier="pr" || tier="nightly" ;;
             *) tier="push" ;;
@@ -289,6 +301,7 @@ jobs:
       - name: Verify selected Studio proofs before the docs-only fast path
         env:
           STUDIO_SELECTED: ${{ needs.plan-scope.outputs.studio }}
+          STUDIO_HEAVY: ${{ needs.plan-scope.outputs.studio-heavy }}
           STUDIO_FRONTEND: ${{ needs.studio-lint-and-test.result }}
           STUDIO_BROWSER: ${{ needs.studio-browser-tests.result }}
           STUDIO_DOTNET: ${{ needs.studio-dotnet-build-and-test.result }}
@@ -924,10 +937,15 @@ jobs:
 
   # A pull request, or a merge-queue entry: the queue is where the full tier proves the exact merge result.
   plan-full:
+    needs: plan-scope
     if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
     name: Plan full tier
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    permissions:
+      contents: read
+      checks: read        # a deferred push looks for an earlier green full tier on this PR
+      pull-requests: read
     outputs:
       run: ${{ steps.decide.outputs.run }}
       docs_only: ${{ steps.scope.outputs.docs_only }}
@@ -958,8 +976,32 @@ jobs:
           BASE_SHA: ${{ github.event_name == 'pull_request' && format('{0}^1', github.sha) || github.event_name == 'merge_group' && github.event.merge_group.base_sha || '' }}
           DRAFT: ${{ github.event.pull_request.draft }}
           DOCS_ONLY: ${{ steps.scope.outputs.docs_only }}
+          # tools/ci/workflow_scope.py decides this for every heavy proof (see heavy_now): the ready transition, the
+          # full-tier label, a change to the tiers, or CI_FULL_TIER_EVERY_PUSH.
+          HEAVY: ${{ needs.plan-scope.outputs.heavy }}
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
+          # A push is only deferred when this PR's newest commit with a completed, green full tier differs from this head by
+          # documentation only (the classifier of the docs-only fast path). Any code change since then, a ready run that a
+          # quick follow-up push cancelled, a rewritten history, or a failed lookup all run the full tier on this push.
+          prior_full_tier_passed() {
+            local sha
+            for sha in $(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/commits?per_page=100" --paginate --jq '.[].sha' | tail -n 30 | tac); do
+              if gh api "repos/$GITHUB_REPOSITORY/commits/$sha/check-runs?filter=latest&per_page=100" \
+                  --jq '[.check_runs[] | select(.name | test("^(Integration|EF container) shard")) | .conclusion] | length > 0 and all(. == "success")' \
+                  | grep -qx true; then
+                # Newest green commit decides: nothing but documentation may have changed since it.
+                rm -f "$RUNNER_TEMP/since-green.out"
+                python3 tools/ci/change_scope.py --base "$sha" --head "$HEAD_SHA" --github-output "$RUNNER_TEMP/since-green.out" > /dev/null 2>&1 \
+                  && grep -qx 'docs_only=true' "$RUNNER_TEMP/since-green.out"
+                return
+              fi
+            done
+            return 1
+          }
           # The spec's "Manifest change" edge case: a draft that changes the tiers runs both tiers.
           tier_change=$(git diff --name-only --no-renames "$BASE_SHA...$GITHUB_SHA" -- \
             tools/ci/test-tiers.json tools/ci/test_tiers.py tools/ci/affected_tests.py tools/ci/test_results.py \
@@ -968,12 +1010,19 @@ jobs:
             run=false; reason="documentation only (spec 257)"
           elif [[ "$GITHUB_EVENT_NAME" == merge_group ]]; then
             run=true; reason="merge queue: the full tier proves the merge result"
-          elif [[ "$DRAFT" != true ]]; then
-            run=true; reason="the pull request is ready for review"
-          elif [[ -n "$tier_change" ]]; then
-            run=true; reason="this draft changes the tiers ($tier_change)"
+          elif [[ "$DRAFT" == true ]]; then
+            if [[ -n "$tier_change" ]]; then
+              run=true; reason="this draft changes the tiers ($tier_change)"
+            else
+              run=false; reason="draft: the full tier runs once the pull request is ready for review"
+            fi
+          elif [[ "$HEAVY" == true ]]; then
+            run=true; reason="the pull request is ready for review and this run carries the heavy proofs"
+          elif ! prior_full_tier_passed; then
+            run=true; reason="no earlier commit of this pull request has a green full tier that differs from this head by documentation only, so this push runs it"
           else
-            run=false; reason="draft: the full tier runs once the pull request is ready for review"
+            run=false
+            reason="deferred: the full tier already passed on an earlier commit and only documentation changed since. It runs again in the merge queue and nightly on main. To run it on a later push, add the \`full-tier\` label before pushing, or run \`gh workflow run ci.yml --ref <branch> -f tier=full\`."
           fi
           echo "run=$run" >> "$GITHUB_OUTPUT"
           printf '### Full tier\n\n%s\n' "$reason" >> "$GITHUB_STEP_SUMMARY"
@@ -1017,6 +1066,9 @@ jobs:
           fi
           if [[ "$RUN" == false && "$DRAFT" == true ]]; then
             echo "Not run: draft. The full tier runs once the pull request is marked ready for review."; exit 0
+          fi
+          if [[ "$RUN" == false ]]; then
+            echo "Deferred: the full tier already passed on an earlier commit and only documentation changed since; it runs again in the merge queue and nightly on main."; exit 0
           fi
           if [[ "$RUN" != true ]]; then
             echo "::error::Plan full tier gave no decision (run='$RUN')."; exit 1
@@ -1063,7 +1115,7 @@ jobs:
 
   studio-browser-tests:
     needs: plan-scope
-    if: needs.plan-scope.outputs.studio == 'true'
+    if: needs.plan-scope.outputs.studio-heavy == 'true'
     name: Studio browser tests (Chromium ${{ matrix.shard }}/2)
     runs-on: ubuntu-latest
     # Keep the complete inventory within the budget as it grows; no cases are omitted.
@@ -1108,7 +1160,7 @@ jobs:
   studio-ux-acceptance:
     name: UX acceptance (composed Studio)
     needs: plan-scope
-    if: needs.plan-scope.outputs.studio == 'true'
+    if: needs.plan-scope.outputs.studio-heavy == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 35
     steps:
@@ -1147,7 +1199,7 @@ jobs:
     if: needs.plan-scope.outputs.studio == 'true'
     name: Studio .NET build & test
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 30
     env:
       # Local CI artifacts share one prerelease version, including their Modularity project dependencies.
       STUDIO_PACKAGE_VERSION: 4.0.0-studio-ci.${{ github.run_id }}.${{ github.run_attempt }}
@@ -1424,7 +1476,7 @@ jobs:
     if: needs.plan-scope.outputs.weaver == 'true'
     name: Weaver independent package witness
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 45
     env:
       WEAVER_VERSION: 4.0.0-weaver-ci.${{ github.run_id }}.${{ github.run_attempt }}
     steps:
