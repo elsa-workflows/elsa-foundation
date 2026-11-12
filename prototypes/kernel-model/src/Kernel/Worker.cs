@@ -18,6 +18,9 @@ public sealed record WorkerOptions
     /// <summary>Shared by the workers of one process: a death kills all of them, so a trial must be alone in the process.</summary>
     public TrialGate? Gate { get; init; }
 
+    /// <summary>Where live output goes: to callers on this process, or over the runtime's transport to other nodes.</summary>
+    public IReplyTransport? Transport { get; init; }
+
     /// <summary>A monotonic clock in milliseconds. Only differences are used: the database tells the time.</summary>
     public Func<long> Monotonic { get; init; } = static () => Environment.TickCount64;
 
@@ -143,6 +146,9 @@ public sealed class Worker
         Epoch = 0;
         _polling = _loading = _flushing = _meeting = false;
         foreach (var item in _items.Values.ToList()) item.Cancel?.Cancel();
+        // Every caller this memory knows of is told at once; a new owner answers only what is still in the rows.
+        foreach (var to in _slots.Values.SelectMany(s => s.Replies).Concat(_items.Values.Select(i => i.Message.ReplyTo).OfType<string>()).Distinct().ToList())
+            Send(to, "lost", null, null, error: "lost");
         _slots.Clear();
         _items.Clear();
         _meets.Clear();
@@ -185,10 +191,11 @@ public sealed class Worker
     /// A message handed to the owner in memory and never written: a start without a caller's key. <paramref name="fresh"/>
     /// says the target's id was just minted, so no read is needed to know that it does not exist.
     /// </summary>
-    public bool Post(Message message, bool fresh = false)
+    public bool Post(Message message, bool fresh = false, object? ambient = null)
     {
         if (!Owns || message.Target.Partition != Partition) return false;
         Hold(message, long.MaxValue / 2 + ++_local, durable: false, marked: true, fresh: fresh);
+        if (_slots.TryGetValue(message.Target.Id, out var slot)) slot.Ambient = ambient;     // lives with the instance in this memory, nowhere else
         return true;
     }
 
@@ -309,11 +316,11 @@ public sealed class Worker
         var creator = slot.Row is null ? due.FindIndex(i => i.Message.Start is not null) : -1;
         var spec = creator < 0 ? null : due[creator].Message.Start;
         if (slot.Row is { Status: not InstanceStatus.Running })
-            Enqueue(new Unit(slot, instance) { Consumed = due });    // a finished target: consumed and dropped
+            Enqueue(new Unit(slot, instance) { Consumed = due, Status = slot.Row.Status });    // a finished target: consumed and dropped
         else if (due.Find(i => i.Attempts >= _options.MaxAttempts && i.Message.Kind != Kinds.RunFinished) is { } poison)
             Enqueue(Park(slot, instance, due, spec, $"message {poison.Message.Id} was on trial when {poison.Attempts} owners were lost"));
         else if (slot.Row is null && spec is null)                   // no target and no start spec: dropped and journalled
-            Enqueue(new Unit(slot, instance) { Consumed = due, Journal = Json.Write(due.Select(i => "dropped " + i.Message.Id)) });
+            Enqueue(new Unit(slot, instance) { Consumed = due, Journal = Json.Write(due.Select(i => "dropped " + i.Message.Id)), Status = null });
         else
             _ = Drive(new Step(this, slot, instance, due, Math.Max(creator, 0), spec));
     }
@@ -344,7 +351,7 @@ public sealed class Worker
         var row = slot.Row is { } r ? r with { Status = InstanceStatus.Faulted, Revision = r.Revision + 1, Fault = error }
             : spec is null ? null
             : new InstanceRow(instance, spec.Model, spec.Definition, InstanceStatus.Faulted, "null", 1, spec.Parent, error, History: spec.History);
-        var unit = new Unit(slot, instance) { Row = row, Expected = slot.Row?.Revision, Consumed = taken, Journal = row is null ? null : Journal(row.History, ["parked: " + error]) };
+        var unit = new Unit(slot, instance) { Row = row, Expected = slot.Row?.Revision, Consumed = taken, Journal = row is null ? null : Journal(row.History, ["parked: " + error]), Status = row?.Status };
         if (row?.Parent is not null) unit.Sent.Add(Finished(row, null));
         return unit;
     }
@@ -413,6 +420,7 @@ public sealed class Worker
     private void Enqueue(Unit unit)
     {
         if (Has(Flaw.DeliverBeforeCommit)) HandOver(unit, null, hold: true);
+        if (Has(Flaw.EmitBeforeCommit)) Release(unit);
         if (unit.Durable) _queue.Add(unit);
         else Apply(unit, null, true);   // nothing to write: an ephemeral run, or messages that were never rows
     }
@@ -526,7 +534,30 @@ public sealed class Worker
         if (unit.Row is not null) slot.Row = unit.Row;
         slot.State = unit.Row is { Status: InstanceStatus.Running } ? unit.State : null;
         slot.Busy = false;
+        if (!Has(Flaw.EmitBeforeCommit)) Release(unit);
         if (slot.Row is null && slot.Inbox.Count == 0) _slots.Remove(unit.Instance);
+    }
+
+    /// <summary>
+    /// Live output, released only now: the step's commit has landed, or it had nothing to write. A message that carried a
+    /// reply address joins the instance's callers; they get what the step emitted, and the end when the instance ends.
+    /// </summary>
+    private void Release(Unit unit)
+    {
+        if (unit.Slot is not { } slot) return;
+        foreach (var item in unit.Consumed)
+            if (item.Message.ReplyTo is { } to) slot.Replies.Add(to);
+        for (var i = 0; i < unit.Emitted.Count; i++)
+            foreach (var to in slot.Replies) Send(to, $"{unit.Instance}#{unit.Revision}.{i}", unit.Emitted[i].Channel, unit.Emitted[i].Item);
+        if (unit.Status == InstanceStatus.Running) return;
+        foreach (var to in slot.Replies) Send(to, unit.Instance + "#end", null, null, unit.Status, unit.Status is null ? "missing" : null);
+        slot.Replies.Clear();
+    }
+
+    private void Send(string to, string key, string? channel, object? item, InstanceStatus? status = null, string? error = null)
+    {
+        var (node, request) = ReplyTo.Parse(to);
+        _options.Transport?.Send(node, new Reply(request, key, channel, item, status, error));
     }
 
     /// <summary>For a recipient in the same partition the owner hands the message over in memory; its row says seen already.</summary>
@@ -577,6 +608,8 @@ internal sealed class Slot
     public object? State;           // the live state between steps, equal to Row.State
     public bool Loaded, Busy;
     public readonly List<Item> Inbox = [];
+    public object? Ambient;                         // from the starter on this node; gone with this memory
+    public readonly HashSet<string> Replies = [];   // callers waiting for what the instance emits
 }
 
 internal sealed class Item(Message message, long seq)
@@ -602,6 +635,9 @@ internal sealed class Unit(Slot? slot, string instance)
     public object? State;
     public StartSpec? Spec;
     public string? Journal;
+    public InstanceStatus? Status = InstanceStatus.Running;     // after this unit; null when the instance does not exist
+    public long Revision;
+    public List<(string Channel, object? Item)> Emitted = [];
     public List<Item> Consumed = [];
     public List<string> Cancelled = [];
     public List<Message> Sent = [];

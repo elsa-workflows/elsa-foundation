@@ -265,3 +265,68 @@ public sealed class Fragile(Action die) : Model<FragileState>
         }
     }
 }
+
+// ---- a workflow that handles an HTTP request and writes the response itself -------------------------------------------
+
+public sealed class HttpState
+{
+    public string Mode { get; set; } = "";
+    public bool Started { get; set; }
+    public int Steps { get; set; }
+    public List<string> Answers { get; set; } = [];
+    public List<string> Ambient { get; set; } = [];     // which process saw the starter's ambient, in which step
+}
+
+public sealed record HttpInput(string Mode);
+
+/// <summary>
+/// respond: answers and finishes in its first step. early: answers, then goes on for a step. timer, run: waits for a
+/// short timer or off-step work, then answers. wait: waits for a resume, which may come from another node with a reply
+/// address, then for a short timer, then answers. Every answer names the actor that ran the step, so an answer from a step that never committed shows.
+/// </summary>
+public sealed class Http(int actor, Func<IRun, CancellationToken, ValueTask<object?>> work) : Model<HttpState>
+{
+    public const string Respond = "respond", Early = "early", Timer = "timer", Work = "run", Wait = "wait";
+    public static readonly string[] Starts = [Respond, Early, Timer, Work];
+    public override string Key => "http";
+
+    public static StartSpec Spec(string mode, bool ephemeral = false) => new("http", "h", Json.Write(new HttpInput(mode)), Ephemeral: ephemeral);
+    public override object CreateState(StartSpec start) => new HttpState { Mode = Json.Read<HttpInput>(start.Input!).Mode };
+    public override ValueTask<object?> RunAsync(IRun run, CancellationToken cancellationToken) => work(run, cancellationToken);
+
+    protected override void Step(IStep step, HttpState state)
+    {
+        state.Steps++;
+        if (step.Ambient is { } ambient) state.Ambient.Add(Equals(ambient, "amb:" + step.Instance.Ref.Id) ? $"seen@{actor}" : $"wrong {ambient}@{actor}");
+        foreach (var message in step.Inbox)
+            switch (message.Kind)
+            {
+                case Kinds.Start when !state.Started:
+                    state.Started = true;
+                    if (state.Mode is Respond or Early) Answer(step, state);
+                    if (state.Mode == Respond) step.SetStatus(InstanceStatus.Finished);
+                    if (state.Mode == Early) step.Send(step.Instance.Ref, "continue");     // the response is out; the workflow goes on
+                    if (state.Mode == Timer) step.Send(step.Instance.Ref, "timer", null, new SendOptions(Delay: TimeSpan.FromMilliseconds(300)));
+                    if (state.Mode == Work) step.Run("work");
+                    break;
+                case "resume" when state.Mode == Wait:      // resumed, perhaps by a request on another node: a short wait, then the answer
+                    step.Send(step.Instance.Ref, "timer", null, new SendOptions(Delay: TimeSpan.FromMilliseconds(300)));
+                    break;
+                case "continue" or "timer" or Kinds.RunFinished:
+                    if (state.Mode != Early) Answer(step, state);
+                    step.SetStatus(InstanceStatus.Finished);
+                    break;
+                case "cancel":
+                    step.SetStatus(InstanceStatus.Cancelled);
+                    break;
+            }
+    }
+
+    private void Answer(IStep step, HttpState state)
+    {
+        var answer = $"{step.Instance.Ref}:{state.Steps}@{actor}";
+        state.Answers.Add(answer);
+        step.Record(answer);
+        step.Emit(Request.Response, answer);
+    }
+}

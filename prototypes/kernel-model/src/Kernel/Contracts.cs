@@ -26,7 +26,7 @@ public sealed record SendOptions(TimeSpan? Delay = null, StartSpec? Start = null
 /// <summary>A message. Times are database time in milliseconds.</summary>
 public sealed record Message(
     string Id, InstanceRef Target, string Kind, string? Payload = null, string? Sender = null,
-    StartSpec? Start = null, long? Due = null, long? KeepUntil = null)
+    StartSpec? Start = null, long? Due = null, long? KeepUntil = null, string? ReplyTo = null)
 {
     public T Read<T>() => Json.Read<T>(Payload!);
 }
@@ -69,6 +69,8 @@ public interface IStep
     InstanceInfo Instance { get; }
     IReadOnlyList<Message> Inbox { get; }
     object State { get; set; }
+    object? Ambient { get; }                    // what the starter on this node gave: this activation only, never stored
+    void Emit(string channel, object? item);    // live output to whoever waits: released when the step's commit lands
     void Send(InstanceRef target, string kind, object? payload = null, SendOptions? options = null);
     InstanceRef Start(StartSpec spec, Placement placement = Placement.WithParent);
     void Run(string key, object? arguments = null);
@@ -120,4 +122,7 @@ public enum Flaw
     GreedyBalancer = 1 << 21,      // a node takes every free partition and never releases a surplus
     TrialPerPartition = 1 << 22,   // a trial is alone in its partition only, not in its process
     ProjectorBlindWrite = 1 << 23, // the projector's write does not check that its position is still where it read it
+    EmitBeforeCommit = 1 << 24,    // what a step emits is released when the step ends, before its commit lands
+    ReplyTwice = 1 << 25,          // a request takes a second answer that arrives after its first
+    NoDeadline = 1 << 26,          // a request waits until something answers it
 }

@@ -24,6 +24,11 @@ public sealed record Act(string Kind, int A = 0, int B = 0, string S = "", Messa
         "resume" => $"node {A} resumes",
         "project" => $"the projector of actor {A} runs a round",
         "sweep" => "the sweep runs",
+        "request" => $"a request on actor {A} starts {M!.Target} ({S}) and waits for its response",
+        "resume-request" => $"a request on node {A} sends {M!.Id} (resume to {M.Target}) with a reply address and waits",
+        "disconnect" => $"the caller of request {S} goes away{(Flag ? " and asks for a cancel" : "")}",
+        "deliver" => $"the transport delivers reply {B}{(Flag ? " and keeps a copy to deliver again" : "")}",
+        "drop" => $"the transport drops reply {B}",
         _ => $"actor {A}: {Kind}",
     };
 }
@@ -67,6 +72,7 @@ public sealed class Actor(int id, int node, int partition)
     public int Partition => partition;
     public Worker Worker = null!;
     public Projector Projector = null!;
+    public TrialGate Gate = null!;
     public bool Dead, Zombie;
     public readonly List<Call> Calls = [];
     public readonly Dictionary<string, TaskCompletionSource<object?>> Runs = new(StringComparer.Ordinal);
@@ -154,6 +160,9 @@ public sealed partial class World
     public readonly long[] Skew;
     public readonly int[] Incarnation;
     public readonly Balancer[] Balancers;
+    public readonly Dictionary<string, Requests> Processes = new(StringComparer.Ordinal);   // by process name: the requests open there
+    public readonly List<(string Process, Request Request, string Instance)> Asked = [];
+    public readonly List<(string Node, Reply Reply)> Deliveries = [];                   // on the transport between nodes
     private readonly TrialGate[] _gates;
     public readonly bool[] Paused;
     public readonly List<string> Faults = [];
@@ -182,8 +191,24 @@ public sealed partial class World
     }
 
     // One balancer per process: the workers of the node's current incarnation. Its heartbeat window spans two rounds of the settling loop.
-    private void Balance(int node) =>
+    private void Balance(int node)
+    {
+        Processes[Of(node, 0).Worker.Node] = new Requests(Config.Flaws);
         Balancers[node] = new Balancer(Of(node, 0).Worker.Node, Store, Enumerable.Range(0, Config.Partitions).Select(p => Of(node, p).Worker).ToList(), TimeSpan.FromSeconds(25), Config.Flaws);
+    }
+
+    /// <summary>A process is alive while any of its workers is.</summary>
+    public bool Running(string process) => Actors.Exists(a => !a.Dead && a.Worker.Node == process);
+
+    /// <summary>The runtime's transport: a call inside one process; between nodes it may drop, delay or repeat.</summary>
+    private sealed class Transport(World world, string self) : IReplyTransport
+    {
+        public void Send(string node, Reply reply)
+        {
+            if (node == self) world.Processes[node].Receive(reply);
+            else world.Deliveries.Add((node, reply));
+        }
+    }
 
     public Actor Of(int node, int partition) => Actors[Current[node, partition]];
     public IEnumerable<Actor> Alive => Actors.Where(a => !a.Dead);
@@ -197,7 +222,7 @@ public sealed partial class World
         IExecutionModel[] models =
         [
             new Counter(), new Parent(), new Child(), new Waiter(), new Sequence(), new Correlation(Config.Flaws.HasFlag(Flaw.CorrelationForgets)), new CWaiter(Config.Partitions),
-            new Runner((run, cancel) => Work(actor, run, cancel)), new Fragile(() => Dying = node),
+            new Runner((run, cancel) => Work(actor, run, cancel)), new Fragile(() => Dying = node), new Http(actor.Id, (run, cancel) => Work(actor, run, cancel)),
         ];
         // A node's name is unique per process start: a restarted process is not its predecessor (finding F9).
         actor.Worker = new Worker(Config.Flaws.HasFlag(Flaw.StableNodeName) ? "node" + node : $"node{node}.{Incarnation[node]}", partition, wire, models, new WorkerOptions
@@ -206,6 +231,7 @@ public sealed partial class World
             Monotonic = () => Time + node * 7919,       // every node counts at the database's rate from its own zero
             WallClock = () => Time + Skew[node],
             Flaws = Config.Flaws,
+            Transport = new Transport(this, Config.Flaws.HasFlag(Flaw.StableNodeName) ? "node" + node : $"node{node}.{Incarnation[node]}"),
             OnStep = (instance, inbox, _) =>
             {
                 Log?.Invoke($"        actor {actor.Id} steps {instance} with [{string.Join(", ", inbox.Select(m => m.Kind + " " + m.Id))}]");
@@ -282,6 +308,7 @@ public sealed partial class World
     public string? Apply(Act act)
     {
         var outcome = Do(act);
+        foreach (var requests in Processes.Values) requests.Expire(Time);     // a caller's own deadline
         if (outcome is null || Dying is not { } node) return outcome;
         Dying = null;
         Crash(node, zombie: false);
@@ -382,6 +409,42 @@ public sealed partial class World
             }
             case "sweep":
                 return $"{Store.SweepAsync().Result} rows deleted";
+            case "request":
+            {
+                if (Live(act.A) is not { } actor || !actor.Worker.Owns) return null;
+                var request = act.M!.ReplyTo![(act.M.ReplyTo.IndexOf('|') + 1)..];
+                var asked = act.M with { ReplyTo = ReplyTo.Of(actor.Worker.Node, request) };
+                if (!actor.Worker.Post(asked, fresh: true, ambient: "amb:" + asked.Target.Id)) return null;
+                Asked.Add((actor.Worker.Node, Processes[actor.Worker.Node].Open(request, Time + 30_000), asked.Target.Id));
+                Oracle.Https[asked.Target.Id] = (act.S, asked.Start!.Ephemeral, actor.Id, false);
+                return "";
+            }
+            case "resume-request":
+            {
+                if (Paused[act.A] || !Oracle.Https.ContainsKey(act.M!.Target.Id)) return null;
+                var process = Of(act.A, 0).Worker.Node;
+                var request = act.M.ReplyTo!;
+                var asked = act.M with { ReplyTo = ReplyTo.Of(process, request) };
+                var added = Store.AddAsync(asked).Result;
+                Asked.Add((process, Processes[process].Open(request, Time + 30_000), asked.Target.Id));
+                return added ? "added" : "duplicate key";
+            }
+            case "disconnect":
+            {
+                if (Asked.Find(a => a.Request.Id == act.S) is not { Request: not null } asked || asked.Request.Done || !Running(asked.Process)) return null;
+                Processes[asked.Process].Disconnect(act.S);
+                if (!act.Flag) return "";
+                Oracle.Https[asked.Instance] = Oracle.Https[asked.Instance] with { Cancel = true };
+                return Store.AddAsync(new Message("cancel-" + act.S, new InstanceRef(asked.Instance), "cancel", KeepUntil: Time + 3_600_000)).Result ? "cancel added" : "duplicate key";
+            }
+            case "deliver" or "drop":
+            {
+                if (act.B >= Deliveries.Count) return null;
+                var (node, reply) = Deliveries[act.B];
+                if (act.Kind == "drop" || !act.Flag) Deliveries.RemoveAt(act.B);
+                if (act.Kind == "deliver" && Processes.TryGetValue(node, out var requests) && Running(node)) requests.Receive(reply);
+                return $"{reply.Key} for {node}|{reply.Request}";
+            }
             default:
                 throw new InvalidOperationException(act.Kind);
         }
@@ -403,7 +466,7 @@ public sealed class Generator(int seed, World world)
         var r = _random;
         var alive = world.Alive.ToList();
         var actor = alive[r.Next(alive.Count)];
-        var roll = r.Next(100);
+        var roll = r.Next(106);
         switch (roll)
         {
             case < 3: return new Act("take", actor.Id);
@@ -443,7 +506,14 @@ public sealed class Generator(int seed, World world)
                 return new Act("finish", pick.Id, S: pick.key);
             }
             case < 99: return new Act("project", actor.Id);
-            default: return new Act("sweep");
+            case < 100: return new Act("sweep");
+            case < 103: return Asking(r, alive);
+            default:
+            {
+                if (world.Deliveries.Count == 0) return new Act("tick", r.Next(50));
+                var (index, fault) = (r.Next(world.Deliveries.Count), r.Next(100));
+                return fault < 25 ? new Act("drop", B: index) : new Act("deliver", B: index, Flag: fault < 40);
+            }
         }
     }
 
@@ -493,6 +563,33 @@ public sealed class Generator(int seed, World world)
             default:
                 return new Act("add", M: To("f" + r.Next(3), r.Next(3) == 0 ? Bad[r.Next(4)] : "ok", null, Fragile.Spec));
         }
+    }
+
+    // HTTP: a request that starts an instance on the receiving node; a waiting instance; a request that resumes one,
+    // perhaps from another node; a caller that goes away.
+    private Act Asking(Random r, List<Actor> alive)
+    {
+        var n = _serial++;
+        var roll = r.Next(100);
+        if (roll < 45)
+        {
+            var owners = alive.Where(a => a.Worker.Owns).ToList();
+            if (owners.Count == 0) return new Act("tick", r.Next(50));
+            var owner = owners[r.Next(owners.Count)];
+            var mode = Http.Starts[r.Next(Http.Starts.Length)];
+            var spec = Http.Spec(mode, ephemeral: mode == Http.Respond && r.Next(2) == 0);
+            return new Act("request", owner.Id, S: mode, M: new Message($"x{n}", InstanceRef.In(owner.Partition, "h" + n), Kinds.Start, Start: spec, ReplyTo: "|q" + n));
+        }
+        if (roll < 60)
+            return new Act("add", M: new Message($"x{n}", InstanceRef.In(r.Next(world.Config.Partitions), "hw" + n), Kinds.Start, Start: Http.Spec(Http.Wait), KeepUntil: world.Time + 3_600_000));
+        if (roll < 85)
+        {
+            var waiting = world.Oracle.Https.Where(h => h.Value.Mode == Http.Wait).Select(h => h.Key).Order(StringComparer.Ordinal).ToList();
+            if (waiting.Count == 0) return new Act("tick", r.Next(50));
+            return new Act("resume-request", r.Next(world.Config.Nodes), M: new Message($"x{n}", new InstanceRef(waiting[r.Next(waiting.Count)]), "resume", KeepUntil: world.Time + 3_600_000, ReplyTo: "q" + n));
+        }
+        var open = world.Asked.Where(a => !a.Request.Done).Select(a => a.Request.Id).ToList();
+        return open.Count == 0 ? new Act("tick", r.Next(50)) : new Act("disconnect", S: open[r.Next(open.Count)], Flag: r.Next(2) == 0);
     }
 
     private static string Mode(Random r) => r.Next(3) switch { 0 => Sequence.Ephemeral, 1 => Sequence.Balanced, _ => Sequence.Durable };

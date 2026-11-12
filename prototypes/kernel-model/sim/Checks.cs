@@ -13,6 +13,7 @@ public sealed class Oracle
     public readonly Dictionary<string, bool> Fragiles = new();                          // target -> a bad message was sent
     public readonly Dictionary<string, List<string>> CWaiters = new();                 // waiters through correlation instances
     public readonly HashSet<string> Published = [];                                      // correlation instances that were sent an event
+    public readonly Dictionary<string, (string Mode, bool Ephemeral, int PostedBy, bool Cancel)> Https = new();   // instances that answer requests
 
     public bool Accepts(Message m) => m.Kind != "cancel" || (Runners.TryGetValue(m.Target.Id, out var keys) && keys.Contains(m.Read<string>()));
 
@@ -27,6 +28,7 @@ public sealed class Oracle
             case "waiter": Waiters[target] = Json.Read<List<string>>(m.Start.Input!); break;
             case "cwaiter": CWaiters[target] = Json.Read<List<string>>(m.Start.Input!); break;
             case "correlation": Published.Add(target); break;
+            case "http": Https[target] = (Json.Read<HttpInput>(m.Start.Input!).Mode, m.Start.Ephemeral, -1, false); break;
             case "sequence": var input = Json.Read<SequenceInput>(m.Start.Input!); Sequences[target] = (input.Count, input.Mode, posted); break;
             case "runner": List(Runners, target).Add(m.Read<string>()); break;
             case "fragile": Fragiles[target] = Fragiles.GetValueOrDefault(target) || m.Kind is "throw" or "spoil" or "die"; break;
@@ -45,6 +47,9 @@ public sealed partial class World
     private readonly Dictionary<string, int> _attempts = new(StringComparer.Ordinal);  // per message, as last seen
     public readonly HashSet<string> Parked = new(StringComparer.Ordinal);               // instances parked by the rule of invariant 14
     public static long Bystanders;      // how many of those had done nothing wrong, over all runs
+    public static readonly System.Collections.Concurrent.ConcurrentDictionary<string, int> Seen = new();     // what happened, over all runs: coverage
+
+    public static void Count(string what) => Seen.AddOrUpdate(what, 1, (_, n) => n + 1);
 
     private T? State<T>(string id) where T : class =>
         Store.Instances.GetValueOrDefault(id) is not { State: var json } || json == "null" ? null
@@ -74,7 +79,7 @@ public sealed partial class World
         // I14, the counting half: attempts change only in a take (see World.Take).
         foreach (var row in Store.Messages.Values)
             if (row.Attempts != _attempts.GetValueOrDefault(row.Message.Id)) return $"I14 the attempts of {row.Message.Id} changed to {row.Attempts} outside a take";
-        return Journal() ?? Memory() ?? Counters(waiting) ?? Trees(waiting) ?? Waits() ?? Sequences(waiting) ?? Runs() ?? Correlated();
+        return Journal() ?? Memory() ?? Counters(waiting) ?? Trees(waiting) ?? Waits() ?? Sequences(waiting) ?? Runs() ?? Correlated() ?? Answers();
     }
 
     // I6: no gap in a partition's journal. I2, I10: an instance's row and its journal rows agree; a row never goes back.
@@ -261,6 +266,24 @@ public sealed partial class World
         return null;
     }
 
+    // I15: a caller gets at most one response and at most one end, and a response only from a step that committed or had
+    // nothing to commit. A step had nothing to commit only if its instance is ephemeral and was never written.
+    private readonly HashSet<string> _answered = new(StringComparer.Ordinal);
+    private string? Answers()
+    {
+        foreach (var (process, request, instance) in Asked)
+        {
+            if (request.Responses + request.Ends > 1) return $"I15 request {request.Id} on {process} got {request.Responses} responses and {request.Ends} ends";
+            if (request.Answer is not string answer || !_answered.Add(request.Id)) continue;
+            var committed = Store.Journal.Values.Any(j => j.Instance == instance && j.Entries.Contains($"\"{answer}\""));
+            var unwritten = Oracle.Https[instance].Ephemeral && !Store.Instances.ContainsKey(instance);
+            if (!committed && !unwritten) return $"I15 request {request.Id} was answered {answer}, which no commit of {instance} wrote";
+        }
+        foreach (var (id, (_, _, posted, _)) in Oracle.Https)
+            if (State<HttpState>(id) is { } state && state.Ambient.Find(a => a != $"seen@{posted}") is { } stray) return $"I15 {id} was started by actor {posted} and a step saw the ambient as {stray}";
+        return null;
+    }
+
     // I13 through correlation instances: no wait is given two events, and one that was given an event has finished.
     private string? Correlated()
     {
@@ -324,6 +347,10 @@ public sealed partial class World
                 foreach (var (node, _) in slots.Where(s => s.Partition == p && Of(s.Node, p).Worker.Owns)) Watch(Of(node, p).Worker.BeatAsync());   // a stale owner learns that it is one
             }
             for (var n = 0; n < Config.Nodes; n++) Watch(Balancers[(n + round) % Config.Nodes].RoundAsync());   // every node beats and asks for its share
+            foreach (var (node, reply) in Deliveries.ToList())      // the transport delivers what it still carries
+                if (Processes.TryGetValue(node, out var requests) && Running(node)) requests.Receive(reply);
+            Deliveries.Clear();
+            foreach (var requests in Processes.Values) requests.Expire(Time);
             for (var pass = 0; pass < 8; pass++)
                 foreach (var (node, partition) in slots)
                 {
@@ -376,6 +403,8 @@ public sealed partial class World
     // I13: an event and a subscription that are both committed must have met. Then every wait left gets an event.
     private string? Meet()
     {
+        foreach (var (id, _) in Oracle.Https.Where(h => h.Value.Mode == Http.Wait))   // whatever still waits is resumed, with nobody asking
+            if (Store.Instances.GetValueOrDefault(id)?.Status == InstanceStatus.Running) Store.AddAsync(new Message("last-" + id, new InstanceRef(id), "resume", KeepUntil: Time + 3_600_000)).AsTask().Wait();
         var left = Oracle.Waiters.Keys.Where(id => Store.Instances.GetValueOrDefault(id)?.Status == InstanceStatus.Running)
             .Select(id => (Id: id, State<WaiterState>(id)!.Waits)).Where(w => w.Waits.Count > 0).ToList();
         foreach (var (id, waits) in left)
@@ -418,6 +447,17 @@ public sealed partial class World
             var log = State<RunnerState>(id)?.Log ?? [];
             if (!Parked.Contains(id) && keys.Find(k => !log.Contains("start " + k) || !(log.Contains("result " + k) || log.Contains("cancel " + k))) is { } key)
                 return $"I12 run {key} of {id} has neither a result nor a cancel: [{string.Join(", ", log)}]";
+        }
+        foreach (var (process, request, instance) in Asked)
+        {
+            if (!request.Done && Running(process)) return $"I15 request {request.Id} on {process} for {instance} still waits";
+            Count("request " + (request.Answer is not null ? "answered" : request.Error ?? $"ended {request.Status}") + (Oracle.Https[instance].PostedBy < 0 ? ", resume" : ", start"));
+        }
+        foreach (var (id, (mode, ephemeral, posted, cancel)) in Oracle.Https)
+        {
+            var row = Store.Instances.GetValueOrDefault(id);
+            if (row is null ? posted < 0 : row.Status is not (InstanceStatus.Finished or InstanceStatus.Faulted) && !(cancel && row.Status == InstanceStatus.Cancelled))
+                return $"END {id} ({mode}) ended as {row?.Status.ToString() ?? "no row"}{(cancel ? " after a cancel" : "")}";
         }
         foreach (var (id, bad) in Oracle.Fragiles)
             if (!Parked.Contains(id) && Store.Instances.GetValueOrDefault(id)?.Status != (bad ? InstanceStatus.Faulted : InstanceStatus.Running)) return $"I14 {id} ended as {Store.Instances.GetValueOrDefault(id)?.Status.ToString() ?? "no row"}";

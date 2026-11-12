@@ -8,6 +8,7 @@ internal sealed class Step : IStep
     private readonly HashSet<string> _fresh = [], _volatile = [], _started = [];
     private readonly List<SubscriptionRow> _subscribed = [], _unsubscribed = [];
     private readonly List<object> _entries = [];
+    private readonly List<(string, object?)> _emitted = [];
     private readonly List<string> _runs, _cancelled = [];
     private readonly long _revision;
     private InstanceStatus _status = InstanceStatus.Running;
@@ -36,6 +37,8 @@ internal sealed class Step : IStep
     public InstanceInfo Instance { get; }
     public IReadOnlyList<Message> Inbox { get; }
     public object State { get; set; } = null!;
+    public object? Ambient => Slot.Ambient;
+    public void Emit(string channel, object? item) => _emitted.Add((channel, item));
 
     private string Id => Instance.Ref.Id;
 
@@ -88,7 +91,7 @@ internal sealed class Step : IStep
         var history = Slot.Row?.History ?? Spec!.History;
         var row = new InstanceRow(Id, Instance.Model, Instance.Definition, _status, Json.Write(State), _revision, Instance.Parent, Runs: _runs.Count == 0 ? null : Json.Write(_runs), History: history);
         if (_status != InstanceStatus.Running && row.Parent is not null) _sent.Add(Worker.Finished(row, _output is null ? null : Json.Write(_output)));
-        var unit = new Unit(Slot, Id) { Consumed = Taken, Cancelled = _cancelled, Spec = Spec };
+        var unit = new Unit(Slot, Id) { Consumed = Taken, Cancelled = _cancelled, Spec = Spec, Status = _status, Revision = _revision, Emitted = _emitted };
         // An ephemeral instance that ends in the step that created it, and leaves nothing for anyone else, is never written.
         if (created && Spec!.Ephemeral && _status != InstanceStatus.Running && _sent.Count == 0 && _subscribed.Count == 0) return unit;
         if (_subscribed.Count > 0)

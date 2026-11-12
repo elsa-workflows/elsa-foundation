@@ -65,6 +65,7 @@ public sealed class MessageEntity
     public long Trial { get; set; }         // the epoch at which it was last put on trial; 0 when never
     public long? KeepUntil { get; set; }
     public bool Done { get; set; }
+    public string? ReplyTo { get; set; }    // a caller waiting on another node for what the step that consumes it emits
 }
 
 public sealed class SubscriptionEntity
@@ -192,6 +193,7 @@ public sealed class EfStore(Func<KernelDb> create, bool postgres, bool fenceInBa
         public int? Attempts { get; set; }
         public long? Trial { get; set; }
         public long? KeepUntil { get; set; }
+        public string? ReplyTo { get; set; }
     }
 
     // Database time in milliseconds.
@@ -320,13 +322,13 @@ public sealed class EfStore(Func<KernelDb> create, bool postgres, bool fenceInBa
         // A plain read. The left join returns database time even when no message does.
         var rows = await db.Database.SqlQueryRaw<PollRow>(
             $"""
-             SELECT t.now AS "Now", m."Id", m."Seq", m."Target", m."Kind", m."Payload", m."Sender", m."Start", m."Due", m."Seen", m."Attempts", m."Trial", m."KeepUntil"
+             SELECT t.now AS "Now", m."Id", m."Seq", m."Target", m."Kind", m."Payload", m."Sender", m."Start", m."Due", m."Seen", m."Attempts", m."Trial", m."KeepUntil", m."ReplyTo"
              FROM (SELECT {Now} AS now) t
              LEFT JOIN "Messages" m ON m."Partition" = {"{0}"} AND m."Seen" < {"{1}"} AND m."Done" = {False} AND m."Due" <= t.now + {"{2}"}
              ORDER BY m."Seq" LIMIT {"{3}"}
              """, partition, epoch, (long)horizon.TotalMilliseconds, limit).ToListAsync(cancellationToken);
         var messages = rows.Where(r => r.Id is not null).Select(r => new Stored(
-            new Message(r.Id!, new InstanceRef(r.Target!), r.Kind!, r.Payload, r.Sender, r.Start is null ? null : Json.Read<StartSpec>(r.Start), r.Due == 0 ? null : r.Due, r.KeepUntil),
+            new Message(r.Id!, new InstanceRef(r.Target!), r.Kind!, r.Payload, r.Sender, r.Start is null ? null : Json.Read<StartSpec>(r.Start), r.Due == 0 ? null : r.Due, r.KeepUntil, r.ReplyTo),
             r.Seq!.Value, r.Seen!.Value, r.Attempts!.Value, r.Trial!.Value)).ToList();
         return new Polled(messages, rows[0].Now);
     }
@@ -338,11 +340,11 @@ public sealed class EfStore(Func<KernelDb> create, bool postgres, bool fenceInBa
         var seq = postgres ? ("", "") : (""", "Seq" """, """, (SELECT COALESCE(MAX("Seq"), 0) + 1 FROM "Messages")""");
         return await db.Database.ExecuteSqlRawAsync(
             $$"""
-              INSERT INTO "Messages" ("Id", "Partition", "Target", "Kind", "Payload", "Sender", "Start", "Due", "Seen", "Attempts", "Trial", "KeepUntil", "Done"{{seq.Item1}})
-              VALUES ({0}, {1}, {2}, {3}, CAST({4} AS TEXT), CAST({5} AS TEXT), CAST({6} AS TEXT), {7}, 0, 0, 0, CAST({8} AS BIGINT), {{False}}{{seq.Item2}})
+              INSERT INTO "Messages" ("Id", "Partition", "Target", "Kind", "Payload", "Sender", "Start", "Due", "Seen", "Attempts", "Trial", "KeepUntil", "Done", "ReplyTo"{{seq.Item1}})
+              VALUES ({0}, {1}, {2}, {3}, CAST({4} AS TEXT), CAST({5} AS TEXT), CAST({6} AS TEXT), {7}, 0, 0, 0, CAST({8} AS BIGINT), {{False}}, CAST({9} AS TEXT){{seq.Item2}})
               ON CONFLICT ("Id") DO NOTHING
               """,
-            [m.Id, m.Partition, m.Target, m.Kind, m.Payload!, m.Sender!, m.Start!, m.Due, m.KeepUntil!], cancellationToken) == 1;
+            [m.Id, m.Partition, m.Target, m.Kind, m.Payload!, m.Sender!, m.Start!, m.Due, m.KeepUntil!, m.ReplyTo!], cancellationToken) == 1;
     }
 
     public async ValueTask<IReadOnlyList<InstanceRow>> LoadAsync(IReadOnlyCollection<string> ids, CancellationToken cancellationToken = default)
@@ -410,7 +412,7 @@ public sealed class EfStore(Func<KernelDb> create, bool postgres, bool fenceInBa
     private static MessageEntity ToEntity(Message m, long seen, long seq) => new()
     {
         Id = m.Id, Seq = seq, Partition = m.Target.Partition, Target = m.Target.Id, Kind = m.Kind, Payload = m.Payload, Sender = m.Sender,
-        Start = m.Start is null ? null : Json.Write(m.Start), Due = m.Due ?? 0, Seen = seen, KeepUntil = m.KeepUntil,
+        Start = m.Start is null ? null : Json.Write(m.Start), Due = m.Due ?? 0, Seen = seen, KeepUntil = m.KeepUntil, ReplyTo = m.ReplyTo,
     };
 
     /// <summary>What a failure means: it did not happen and may be retried, it did not happen and never will, or nobody knows.</summary>

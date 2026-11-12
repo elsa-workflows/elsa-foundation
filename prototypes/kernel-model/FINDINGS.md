@@ -390,3 +390,86 @@ and one hop shorter. Reasoned, and these decide it:
 
 For keys that are narrow and quiet (a correlation id, an approval) the instance version is the simpler thing and
 needs nothing from the kernel. So the tables were not removed.
+
+# Round 3 (pieces of draft 3 that were not built)
+
+Sections 1 to 8 describe the kernel at commit `a4f7c49b65`. Round 3 adds the missing pieces one commit at a time, each
+with a check that fails when its rule is switched off by a `Flaw`. The simulation's actions and their mix changed, so
+seeds named in rounds 1 and 2 may have moved; their flaws still replay. Every piece passed 20,000 seeds of 300 actions,
+5,000 of 1,000 and the mutation check before its commit. Run.
+
+## 9. Fair share of partitions. Run
+
+- **Built:** a `node` row per process (`IKernelStore.HeartbeatAsync`: write the heartbeat, count the nodes heard from
+  within a window, list the partitions that are free or expired) and `Balancer`: release what is above the share,
+  take free partitions up to it. Share = partitions / nodes, rounded up. The simulation's nodes balance at random
+  moments beside the old random takes, and the settling phase is driven by balancers only.
+- **Check:** once faults stop, every partition has one owner at its current epoch and no node holds more than its
+  share. `--flaw GreedyBalancer` (take every free partition, never release): caught, seed 1.
+- **Window, run:** a heartbeat window shorter than the time between heartbeats makes nodes see each other every other
+  round, and the balancer oscillates (seed 2 shrank to zero actions). The window must span more than one beat.
+
+### F11. A trial was alone in its partition, not in its process (invariant 14). Run
+
+- **Found by:** `GreedyBalancer`, seed 14: one node owned both partitions; off-step work in partition 1 killed the
+  process again and again, and every death also counted against the message on trial in partition 0. An innocent
+  child-finished message reached the threshold and its parent was parked.
+- **Sketch sentence:** "A death therefore counts against the message that was on trial and not against its
+  neighbours." A process that owns several partitions dies for all of them at once, so its trials are neighbours.
+- **Fix:** `TrialGate`, one per process: at most one of its workers has a trial in flight, and while it has, the
+  process starts no other step and no other off-step work. The check "alone" is now per process (`World.Alone`).
+  `--flaw TrialPerPartition`: caught, seed 42 (`I14 a step of 1/c0 started on actor 15 while x2 was on trial in
+  partition 0 of the same process`).
+- **Cost, reasoned:** after a node dies, each survivor recovers the partitions it inherits one trial at a time for
+  the whole process, not per partition. A trial is two commits; groups (`TrialGroup`) shorten it.
+- **Not solved, reasoned:** off-step work started before a trial and still running during it can kill the process,
+  and the death counts against the trial. The simulation's fatal work dies at its start, so it cannot show this.
+
+## 10. Projector and history levels. Run
+
+- **Built:** `Projector`: read its position from the `projection` row, read the journal after it, stop at the first
+  position not written, and in one transaction write the view rows and move the position, only if the position is
+  still where it read it (`IKernelStore.ProjectedAsync`, `ProjectAsync`). The view is one row per instance: last
+  revision and number of commits. `History` (Full, State, Minimal) on `StartSpec` and the instance row: Full writes
+  the model's entries, State an empty entry list, Minimal no journal row.
+- **In the simulation:** every actor has a projector on its own faulty wire, so projectors run on nodes that do not
+  own the partition, several at once, and die between their read and their write. Sequences and parents get a random
+  level.
+- **Check (I6, now at each level):** an instance at Full or State has one journal row per revision, at Minimal none;
+  every view row counts exactly the journal rows of its instance up to the projector's position; at the end the
+  projector reaches the partition's position. `--flaw ProjectorBlindWrite` (the write does not check the position):
+  caught, seed 13 (`I6 the view of 1/r0 says revision 1 after 2 commits`).
+
+## 11. Synchronous HTTP: `Emit`, `Ambient`, start-and-observe, reply addresses. Run
+
+The owner's requirement of 12 November: a workflow handles an HTTP request and produces the response itself.
+
+- **Built:** `IStep.Emit(channel, item)` and `IStep.Ambient`. What a step emits rides with its unit and is released
+  only when the commit lands, or at once when the step writes nothing (`Worker.Release`). A message may carry
+  `ReplyTo` (node and request id); when a step consumes it, the address joins the instance's callers in the owner's
+  memory, gets every item emitted from then on, and the end when the instance ends. A start handed over in memory by
+  `Worker.Post` carries the caller's address and the `Ambient`, which lives in that memory and nowhere else. A reset
+  tells every caller it knows of that the instance is lost; a missing or finished target answers at once. Replies go
+  through `IReplyTransport` (actor-runtime layer: a call inside a process, not durable between nodes). The caller side
+  is `Requests`/`Request`: the first response or the first end answers, anything later is ignored, and a deadline
+  ends the wait.
+- **In the simulation:** an `Http` model with five modes, one per case: answers and finishes in its first step (also
+  ephemeral, never written); answers and goes on; waits for a timer or off-step work, then answers; waits for a resume
+  that a request on any node sends with a reply address, then for a timer, then answers. Callers disconnect, some with
+  a cancel. The transport between nodes drops 25 percent of replies, delivers 15 percent twice, and delays all of them.
+- **Invariant 15:** a caller receives at most one response and at most one end signal; it receives the response only
+  if the step that emitted it committed (its answer is in a journal row) or wrote nothing (an ephemeral instance with
+  no row); it never waits for ever (at the end no request on a living process is open); a step sees the ambient only
+  on the process that started the instance.
+- **Flaws:** `EmitBeforeCommit` caught, seed 1 (`I15 request q2 was answered 0/h2:1@0, which no commit of 0/h2
+  wrote`); `ReplyTwice` caught, seed 1; `NoDeadline` caught, seed 13 (`I15 request q49 ... still waits`).
+- **Coverage, run, 4,000 seeds that reached their end:** started requests: 5,933 answered, 3,636 lost by a reset,
+  4,488 timed out, 2,217 disconnected; resumed from any node: 1,058 answered, 113 lost, 4,592 timed out, 176 ended
+  Cancelled, 13 ended Finished without an answer, 1,481 disconnected.
+- **What the check showed, run:** `NoDeadline` was caught only at seed 10,750 while the resumed instance answered in
+  the step that consumed the resume: a reply is then lost only if both the response and the end are dropped. When the
+  instance waits after the resume (case 4 with case 5), the address lives only in the owner's memory, and a crash
+  there leaves the caller with nothing but its deadline (seed 13). So the deadline is load-bearing, not a nicety.
+- **Choices, reasoned:** a reset tells callers "lost" even when the rows still hold the request's message; a new
+  owner answers that message later, and the caller has already ended. A caller prefers a quick 503 to a late 200.
+  "Respond before the commit" (the sketch's opt-out) is not built.

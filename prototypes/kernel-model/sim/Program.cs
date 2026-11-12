@@ -99,6 +99,7 @@ bool Sweep(int from, int seeds, Flaw flaws)
         if (violation is not null) failures.Add((seed, violation));
     });
     Console.WriteLine($"{seeds} seeds from {from}, {acts} actions, {clock.Elapsed.TotalSeconds:F1} s, flaws: {flaws}: {failures.Count} failed; {World.Bystanders} innocent instances parked at the threshold");
+    if (args.Contains("--coverage")) Console.WriteLine("  coverage (seeds that reached the end): " + string.Join("; ", World.Seen.OrderBy(s => s.Key).Select(s => $"{s.Key}: {s.Value}")));
     foreach (var group in failures.GroupBy(f => f.Violation.Split(' ')[0]).OrderByDescending(g => g.Count()))
     {
         var first = group.MinBy(f => f.Seed);
@@ -149,7 +150,7 @@ int Mutations(int seeds)
         Flaw.WallClockTimers, Flaw.DeleteOutsideCommands, Flaw.HandOverWhileBehind, Flaw.BumpAllInherited, Flaw.RunBeforeMark,
         Flaw.VolatileRunTicket, Flaw.PollRace, Flaw.MeetWithoutTicket,
         // round 3: the rule of each new piece
-        Flaw.GreedyBalancer, Flaw.TrialPerPartition, Flaw.ProjectorBlindWrite,
+        Flaw.GreedyBalancer, Flaw.TrialPerPartition, Flaw.ProjectorBlindWrite, Flaw.EmitBeforeCommit, Flaw.ReplyTwice, Flaw.NoDeadline,
     ];
     var missed = 0;
     foreach (var mutation in mutations)
