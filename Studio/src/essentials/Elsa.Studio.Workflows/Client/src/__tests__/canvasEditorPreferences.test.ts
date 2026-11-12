@@ -1,0 +1,123 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { ElsaStudioModuleApi } from "@elsa-workflows/studio-sdk";
+import { createCanvasEditorPreferences } from "../graph-authoring/canvasEditorPreferences";
+
+const missing = Object.assign(new Error("Not composed"), { status: 404 });
+function api(subject = "user", tenantId = "tenant", hostId = "studio", baseUrl = "https://backend.example") {
+  return { backend: { baseUrl, http: { getJson: vi.fn(async () => { throw missing; }), putJson: vi.fn(async () => { throw missing; }) } },
+    runtime: { hostId, identity: { subject, tenantId } } } as unknown as Pick<ElsaStudioModuleApi, "backend" | "runtime">;
+}
+const document = (editorId: string, revision = "rev-1") => ({ namespace: "workflow-authoring", schemaVersion: 1, revision, value: { editorId } });
+
+describe("canvas editor saved preference", () => {
+  beforeEach(() => localStorage.clear());
+  it("falls back for an absent endpoint, isolates user/tenant/host/backend and keeps unavailable editor ids", async () => {
+    const initial = api();
+    await createCanvasEditorPreferences(initial).save("uninstalled.editor");
+    expect(await createCanvasEditorPreferences(api()).load()).toBe("uninstalled.editor");
+    for (const other of [api("other"), api("user", "other"), api("user", "tenant", "other"), api("user", "tenant", "studio", "https://other.example")])
+      expect(await createCanvasEditorPreferences(other).load()).toBeNull();
+    expect(initial.backend.http.putJson).toHaveBeenCalledWith("/_elsa/studio/preferences/workflow-authoring",
+      { schemaVersion: 1, value: { editorId: "uninstalled.editor" } }, { headers: { "X-Elsa-Studio-Host-Id": "studio", "If-None-Match": "*" } });
+  });
+
+  it("keeps anonymous preferences on the device without invoking HTTP", async () => {
+    const anonymous = api("anonymous");
+    const store = createCanvasEditorPreferences(anonymous);
+    const write = store.save("A".repeat(128));
+    expect(await store.load()).toBe("A".repeat(128));
+    await write;
+    expect(anonymous.backend.http.putJson).not.toHaveBeenCalled();
+    expect(anonymous.backend.http.getJson).not.toHaveBeenCalled();
+  });
+
+  it.each(["", "x".repeat(129), "a/b", "with space", "é", "line\n"])("refuses invalid id %j before any write", async id => {
+    const current = api();
+    await expect(createCanvasEditorPreferences(current).save(id)).rejects.toThrow("Invalid");
+    expect(current.backend.http.putJson).not.toHaveBeenCalled();
+    expect(localStorage.length).toBe(0);
+  });
+
+  it.each([null, { schemaVersion: 2, value: { editorId: "x" } }, { schemaVersion: 1, value: { editorId: "x", extra: true } },
+    { schemaVersion: 1, value: { editorId: "a/b" } }, { schemaVersion: 1, value: [] }])("refuses invalid or newer local values %j", async invalid => {
+    const store = createCanvasEditorPreferences(api("anonymous"));
+    await store.save("example");
+    localStorage.setItem(localStorage.key(0)!, JSON.stringify(invalid));
+    expect(await store.load()).toBeNull();
+  });
+
+  it("serializes writes and uses the preceding successful revision", async () => {
+    const current = api();
+    let release!: (value: unknown) => void;
+    const firstResponse = new Promise<unknown>(resolve => { release = resolve; });
+    const put = vi.fn().mockReturnValueOnce(firstResponse).mockResolvedValueOnce(document("second", "rev-2"));
+    current.backend.http.putJson = put;
+    const store = createCanvasEditorPreferences(current);
+    const first = store.save("first"), second = store.save("second");
+    await Promise.resolve();
+    expect(put).toHaveBeenCalledTimes(1);
+    release(document("first"));
+    await Promise.all([first, second]);
+    expect(put.mock.calls[1][2].headers).toEqual({ "X-Elsa-Studio-Host-Id": "studio", "If-Match": '"rev-1"' });
+  });
+
+  it.each([409, 412, 403])("propagates status %s without local overrides and keeps the queue usable", async status => {
+    const current = api();
+    const conflict = Object.assign(new Error("Refused"), { status });
+    current.backend.http.getJson = vi.fn().mockResolvedValue(document("saved"));
+    const put = vi.fn().mockRejectedValueOnce(conflict).mockResolvedValueOnce(document("retry", "rev-2"));
+    current.backend.http.putJson = put;
+    const store = createCanvasEditorPreferences(current);
+    expect(await store.load()).toBe("saved");
+    const refused = store.save("conflicting"), retry = store.save("retry");
+    await expect(refused).rejects.toBe(conflict);
+    await retry;
+    expect(put.mock.calls.map(call => call[2].headers["If-Match"])).toEqual(['"rev-1"', '"rev-1"']);
+    expect(localStorage.length).toBe(0);
+  });
+
+  it("queues a write behind an in-flight read instead of sending an obsolete precondition", async () => {
+    const current = api();
+    let release!: (value: unknown) => void;
+    current.backend.http.getJson = vi.fn().mockReturnValue(new Promise(resolve => { release = resolve; }));
+    const put = vi.fn().mockResolvedValue(document("chosen", "rev-2"));
+    current.backend.http.putJson = put;
+    const store = createCanvasEditorPreferences(current);
+    const read = store.load(), write = store.save("chosen");
+    await Promise.resolve();
+    expect(put).not.toHaveBeenCalled();
+    release(document("saved"));
+    await Promise.all([read, write]);
+    expect(put.mock.calls[0][2].headers["If-Match"]).toBe('"rev-1"');
+  });
+
+  it("rejects a mismatched backend document before adopting its revision", async () => {
+    const current = api();
+    current.backend.http.getJson = vi.fn().mockResolvedValue({ ...document("saved", "poisoned"), namespace: "another" });
+    const put = vi.fn().mockResolvedValue(document("chosen"));
+    current.backend.http.putJson = put;
+    const store = createCanvasEditorPreferences(current);
+    expect(await store.load()).toBeNull();
+    await store.save("chosen");
+    expect(put.mock.calls[0][2].headers["If-None-Match"]).toBe("*");
+  });
+
+  it("retains its known conditional revision across a temporary read outage", async () => {
+    const current = api();
+    current.backend.http.getJson = vi.fn().mockResolvedValueOnce(document("saved")).mockRejectedValueOnce(new Error("Offline"));
+    const put = vi.fn().mockResolvedValue(document("chosen", "rev-2"));
+    current.backend.http.putJson = put;
+    const store = createCanvasEditorPreferences(current);
+    expect(await store.load()).toBe("saved");
+    await store.load();
+    await store.save("chosen");
+    expect(put.mock.calls[0][2].headers["If-Match"]).toBe('"rev-1"');
+  });
+
+  it("does not silently accept an incompatible successful write response", async () => {
+    const current = api();
+    current.backend.http.putJson = vi.fn().mockResolvedValue({ ...document("chosen"), schemaVersion: 2 });
+    await expect(createCanvasEditorPreferences(current).save("chosen")).rejects.toThrow("incompatible");
+    expect(localStorage.length).toBe(0);
+  });
+});
