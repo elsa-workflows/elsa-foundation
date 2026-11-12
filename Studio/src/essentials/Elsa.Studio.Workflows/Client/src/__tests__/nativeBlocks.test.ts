@@ -5,6 +5,13 @@ import type { ActivityCatalogItem, ActivityNode } from "../workflowTypes";
 import { flowchartActivity, sequenceActivity, writeLine, whileActivity, whileNode } from "./fixtures";
 import { compensationScopeStructureKind } from "../compensationScope";
 import { readFileSync } from "node:fs";
+import { preservesJavaScriptWithAddedVariable } from "../../../../../../../Extensions/ExpressionEditors.JavaScript/studio/Elsa.Studio.ExpressionEditors.JavaScript/Client/src/variableAdditionPreservation";
+
+const expressionScopePreservation = { revision: "javascript-variable-addition-v1", allowsVariableAddition: preservesJavaScriptWithAddedVariable };
+function cloneContext(context: NativeBlockContext): NativeBlockContext {
+  const { expressionScopePreservation: support, ...data } = context;
+  return { ...structuredClone(data), ...(support ? { expressionScopePreservation: support } : {}) };
+}
 
 const action: ActivityCatalogItem = { ...writeLine, ports: [{ name: "Done", isBrowsable: true }] };
 const outcomes = (item: ActivityCatalogItem, names: string[]) => ({ ...item, ports: names.map(name => ({ name })), designFacets: [...item.designFacets ?? [], { kind: "elsa.outcomes", schemaVersion: "1", payload: { ports: names.map(name => ({ name })) } }] });
@@ -17,7 +24,7 @@ function container(kind: "sequence" | "flowchart", children: ActivityNode[], ext
   return result;
 }
 function context(rootActivity = container("sequence", [node("a"), node("b"), node("c"), node("d")])): NativeBlockContext {
-  return { document: { rootActivity, layout: [{ nodeId: "a", x: 400, y: 350 }, { nodeId: "b", x: 100, y: 80, additionalProperties: { preserve: true } }, { nodeId: "c", x: 300, y: 180 }], activityPresentation: [{ nodeId: "b", displayName: "Original", description: "Unchanged", extra: "keep" } as never] }, catalog: structuredClone(catalog), scope: [], canEdit: true, referenceContext: [], sourceKey: "workflow:1/revision:3" };
+  return { document: { rootActivity, layout: [{ nodeId: "a", x: 400, y: 350 }, { nodeId: "b", x: 100, y: 80, additionalProperties: { preserve: true } }, { nodeId: "c", x: 300, y: 180 }], activityPresentation: [{ nodeId: "b", displayName: "Original", description: "Unchanged", extra: "keep" } as never] }, catalog: structuredClone(catalog), scope: [], canEdit: true, referenceContext: [], sourceKey: "workflow:1/revision:3", expressionScopePreservation };
 }
 const request = { nodeId: "new-block", activityVersionId: sequenceActivity.activityVersionId, displayName: "  Review order  ", description: " Details " };
 function accepted(plan: NativeBlockPlan) {
@@ -63,7 +70,7 @@ describe("pure native block planning", () => {
     };
     expect(fixture.cases).toHaveLength(6);
     for (const test of fixture.cases) {
-      const context = { ...test.context, catalog: fixture.catalog };
+      const context = { ...test.context, catalog: fixture.catalog, expressionScopePreservation };
       const plan = accepted(planExtractNativeBlock(context, test.request));
       expect(plan.document).toEqual(test.grouped);
       expect(accepted(planUngroupNativeBlock({ ...context, document: plan.document }, "block")).document).toEqual(test.ungrouped);
@@ -77,7 +84,7 @@ describe("pure native block planning", () => {
     children[1].outputs = [{ referenceKey: "existing", value: { expressionType: "Variable", value: { referenceKey: "retained" } } }];
     children[3].inputs = [{ referenceKey: "text", future: "retain", value: { expressionType: "ActivityResult", value: { producerNodeId: "b", projectionKey: "$result", producerScopeId: "scope:root" } } }];
     payload(ctx).variables = [{ referenceKey: "new-block-result-1", name: "Existing", type: { alias: "Int32" } }];
-    const before = structuredClone(ctx);
+    const before = cloneContext(ctx);
     const plan = accepted(extract(ctx));
     expect(ctx).toEqual(before);
     const root = plan.document.rootActivity.structure!.payload;
@@ -122,7 +129,7 @@ describe("pure native block planning", () => {
     if (fault === "nested-producer") { children[1] = container("sequence", [node("inner")]); children[1].nodeId = "b"; }
     if (fault === "resource") ctx.referenceContext = [{ outputMappings: [{ source: binding }] }];
     else children[3].inputs = [{ referenceKey: "text", value: binding }];
-    const before = structuredClone(ctx);
+    const before = cloneContext(ctx);
     refused(extract(ctx), fault === "missing-set" ? "unavailable-result-transfer" : fault === "resource" ? "resource-result-crossing" : "unproven-result-transfer");
     expect(ctx).toEqual(before);
   });
@@ -162,7 +169,7 @@ describe("pure native block planning", () => {
     const ctx = context();
     ctx.catalog.push({ ...action, activityVersionId: "elsa.intrinsic.set@1", intrinsic: { kind: "Set", valueInputKey: "value" } });
     (payload(ctx).activities as ActivityNode[])[3].inputs = [{ referenceKey: "text", conversion: { mode }, value: { expressionType: "ActivityResult", value: { producerNodeId: "b", projectionKey: "$result" } } }];
-    const before = structuredClone(ctx);
+    const before = cloneContext(ctx);
     refused(extract(ctx), "unproven-result-conversion");
     expect(ctx).toEqual(before);
   });
@@ -205,18 +212,60 @@ describe("pure native block planning", () => {
       parameters: { name: { kind: "Literal", value: "Block result 1" } }
     } } }];
     children[3].inputs = [{ referenceKey: "text", value: { expressionType: "ActivityResult", value: { producerNodeId: "b", projectionKey: "$result" } } }];
-    const before = structuredClone(ctx);
+    const before = cloneContext(ctx);
     refused(extract(ctx), "opaque-result-scope");
     expect(ctx).toEqual(before);
     children[3].inputs = [];
     accepted(extract(ctx));
   });
 
+  it.each([
+    '("getBlock result 1", globalThis["get" + "Variable"]?.("Block result 1") ?? 0)',
+    'Object.keys(globalThis).length /* getBlock result 1 */',
+    'prior + 1 /* getBlock result 1 */',
+    'variables["Block result 1"]',
+    'prior.toString()',
+    'unknown + 1',
+    'globalThis',
+    'getBlockResult1',
+    '`value ${prior}`'
+  ])("refuses an unproved expression observer before introducing a transfer: %s", source => {
+    const ctx = context();
+    ctx.catalog.push({ ...action, activityVersionId: "elsa.intrinsic.set@1", intrinsic: { kind: "Set", valueInputKey: "value" } });
+    const children = payload(ctx).activities as ActivityNode[];
+    children[0].inputs = [{ referenceKey: "text", value: { expressionType: "JavaScript", value: {
+      language: "JavaScript", source, resultType: { alias: "Object", collectionKind: "single" }, options: {}, capabilityProfile: "binding-pure-v1",
+      parameters: { prior: { kind: "Literal", value: 42 }, globalThis: { kind: "Literal", value: 0 }, getBlockResult1: { kind: "Literal", value: 0 } }
+    } } }];
+    children[3].inputs = [{ referenceKey: "text", value: { expressionType: "ActivityResult", value: { producerNodeId: "b", projectionKey: "$result" } } }];
+    const before = cloneContext(ctx);
+    refused(extract(ctx), "opaque-result-scope");
+    expect(ctx).toEqual(before);
+    children[3].inputs = [];
+    accepted(extract(ctx));
+  });
+
+  it("requires an expression module's preservation support and invalidates its stale verdict", () => {
+    const ctx = context();
+    ctx.catalog.push({ ...action, activityVersionId: "elsa.intrinsic.set@1", intrinsic: { kind: "Set", valueInputKey: "value" } });
+    const children = payload(ctx).activities as ActivityNode[];
+    children[3].inputs = [{ referenceKey: "text", value: { expressionType: "JavaScript", value: {
+      language: "JavaScript", source: "prior + 1", resultType: { alias: "Object", collectionKind: "single" }, options: {}, capabilityProfile: "binding-pure-v1",
+      parameters: { prior: { kind: "ActivityResult", producerNodeId: "b", projectionKey: "$result" } }
+    } } }];
+    const plan = accepted(extract(ctx));
+    ctx.expressionScopePreservation = undefined;
+    refused(extract(ctx), "opaque-result-scope");
+    refused(applyNativeBlockPlan(ctx, plan), "stale-source");
+    ctx.expressionScopePreservation = { ...expressionScopePreservation, revision: "changed" };
+    refused(applyNativeBlockPlan(ctx, plan), "stale-source");
+  });
+
   it.each(["sequence", "flowchart"] as const)("refuses an outside member reader before extracting its %s producer", kind => {
     const ctx = kind === "sequence" ? context() : flow();
     const consumer = (payload(ctx).activities as ActivityNode[])[3];
     consumer.inputs = [{ referenceKey: "CustomerId", value: { expressionType: "ActivityResultMember", value: { producerNodeId: "b", projectionKey: "$result", memberPath: ["customerId"] } } }];
-    const before = structuredClone(ctx);
+    const before = cloneContext(ctx);
     const plan = extract(ctx);
     refused(plan, "member-result-scope-crossing");
     expect(plan).toMatchObject({ diagnostics: [{ path: "nodes.d.inputs[0].value" }] });
@@ -240,7 +289,7 @@ describe("pure native block planning", () => {
     const ctx = context(container("sequence", [node("a"), nested, node("c")]));
     const binding = { expressionType: "activityresultmember", value: { producerNodeId: "producer", projectionKey: "$result", memberPath: ["customerId"] } };
     ctx.referenceContext = [{ outputMappings: [{ source: binding }] }];
-    const before = structuredClone(ctx);
+    const before = cloneContext(ctx);
     refused(extract(ctx), "member-result-scope-crossing");
     expect(ctx).toEqual(before);
     ctx.referenceContext = [{ value: { expressionType: "Literal", value: binding } }];
@@ -254,7 +303,7 @@ describe("pure native block planning", () => {
     b.outputs = [{ referenceKey: "result", target: { nodeId: "external", key: "result" } }];
     b.executionSettings = { retry: 2 };
     payload(ctx).variables = [{ referenceKey: "total", initialValue: 0 }];
-    const before = structuredClone(ctx);
+    const before = cloneContext(ctx);
     const plan = accepted(extract(ctx));
     const children = planPayload(plan).activities as ActivityNode[];
     expect(children.map(x => x.nodeId)).toEqual(["a", "new-block", "d"]);
@@ -289,7 +338,7 @@ describe("pure native block planning", () => {
   });
 
   it.each([["a", "c"], [], ["b", "b"], ["gone"]])("refuses an invalid/noncontiguous Sequence selection %j without mutation", (...ids) => {
-    const ctx = context(); const before = structuredClone(ctx);
+    const ctx = context(); const before = cloneContext(ctx);
     refused(extract(ctx, ids), ids.join() === "a,c" ? "noncontiguous-sequence" : "stale-selection");
     expect(ctx).toEqual(before);
   });
@@ -396,7 +445,7 @@ describe("linear Flowchart transformation", () => {
     Object.assign(connections[0].target, { extra: "inbound" });
     payload(ctx).connectionMetadata = { "a-b": { label: "Entry" }, "b-c": { label: "Internal", configuration: {}, isDefault: false }, "c-d": { label: "Exit" } };
     payload(ctx).nodeMetadata = { b: { policyKind: null, configuration: {} } };
-    const before = structuredClone(ctx);
+    const before = cloneContext(ctx);
     const plan = accepted(extract(ctx));
     const outer = planPayload(plan);
     const block = (outer.activities as ActivityNode[])[1];
@@ -453,7 +502,7 @@ describe("linear Flowchart transformation", () => {
     if (fault === "multiple-entry") connections.push(edge("a", "c"));
     if (fault === "bad-endpoint") connections[0].target.nodeId = "gone";
     if (fault === "bad-vertices") connections[0].vertices[0].x = Infinity;
-    const before = structuredClone(ctx);
+    const before = cloneContext(ctx);
     const plan = extract(ctx);
     expect(plan.status, fault).toBe("refused");
     expect(ctx).toEqual(before);
@@ -605,7 +654,7 @@ describe("native blocks alongside compensation steps", () => {
     ["sequence", false], ["sequence", true], ["flowchart", false], ["flowchart", true]
   ] as const)("extracts and ungroups a nested %s with handler=%s without changing step records", (kind, withHandler) => {
     const { ctx } = compensationContext(kind, withHandler);
-    const before = structuredClone(ctx);
+    const before = cloneContext(ctx);
     const plan = accepted(planExtractNativeBlock(ctx, {
       ...request, selectedNodeIds: ["b", "c"],
       activityVersionId: (kind === "sequence" ? sequenceActivity : flowchartActivity).activityVersionId
@@ -669,7 +718,7 @@ describe("native blocks alongside compensation steps", () => {
     if (fault === "array-row") steps.push([] as never);
     if (fault === "bad-forward") steps[0].activity = { nodeId: "invalid" };
     if (fault === "bad-handler") steps[0].compensation = { nodeId: "invalid" };
-    const before = structuredClone(ctx);
+    const before = cloneContext(ctx);
     refused(extract(ctx), "malformed-children");
     expect(ctx).toEqual(before);
   });

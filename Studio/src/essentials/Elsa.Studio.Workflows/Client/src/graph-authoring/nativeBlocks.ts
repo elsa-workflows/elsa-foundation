@@ -19,6 +19,12 @@ export interface NativeBlockContext {
   referenceContext: unknown[];
   /** Host resource/revision identity, including changes outside the normalized graph document. */
   sourceKey: string;
+  /** Expression-module verdict, supplied by the composing host; absence refuses variable introduction around portable expressions. */
+  expressionScopePreservation?: {
+    /** Changes when the contributing expression support changes. Included in preview staleness checks. */
+    revision: string;
+    allowsVariableAddition(expression: Readonly<Record<string, unknown>>): boolean;
+  };
 }
 
 export interface NativeBlockDiagnostic {
@@ -82,7 +88,7 @@ function guarded(action: () => NativeBlockPlan): NativeBlockPlan {
 }
 
 function source(context: NativeBlockContext) {
-  return signature([context.sourceKey, context.canEdit, context.document, context.referenceContext, context.scope, context.catalog]);
+  return signature([context.sourceKey, context.canEdit, context.document, context.referenceContext, context.scope, context.catalog, context.expressionScopePreservation?.revision]);
 }
 
 function ready(context: NativeBlockContext, document: NativeBlockDocument, selection: string[]): NativeBlockPlan {

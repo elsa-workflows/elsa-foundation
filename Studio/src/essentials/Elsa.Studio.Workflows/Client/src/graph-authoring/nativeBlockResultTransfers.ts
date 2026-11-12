@@ -70,7 +70,7 @@ export function transferNativeBlockResults(context: NativeBlockContext, proposed
       if (!record(expression) || typeof expression.language !== "string" || typeof expression.source !== "string"
         || !record(expression.resultType) || !record(expression.options) || !record(expression.parameters)
         || expression.capabilityProfile !== "binding-pure-v1"
-        || (expression.language.toLowerCase() === "javascript" && /\bvariables\b|\bgetVariable\b|\bget[A-Z_$][\w$]*\s*\(/.test(expression.source)))
+        || !context.expressionScopePreservation?.allowsVariableAddition(expression))
         refuse("opaque-result-scope", path, "Adding a result variable cannot preserve an opaque or ambient scope read. Keep the producer and reader together or use explicit expression parameters.");
       return;
     }

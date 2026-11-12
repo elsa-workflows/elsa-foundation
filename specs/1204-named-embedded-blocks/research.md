@@ -67,3 +67,7 @@ The current built-in mapping table has no FlowNode/Container entry. Resolver fal
 ## Delivery structure
 
 Native issue types are Program, Epic, Feature and Task; this organization's available native types do not include Spike, so S001 uses native Task plus `type:spike`. Bug issues will be created only for reproduced defects. No invented checkpoint issues. The native hierarchy and Project are scheduling surfaces; spec/plan/tasks remain canonical requirements/design and issue/PR comments hold receipts.
+
+## Current-main integration: expression observation when adding variables
+
+Introducing even a freshly named variable can change JavaScript ambient-snapshot selection: the runtime can match getter markers in inert strings/comments before executing source. A token blacklist is not an absence proof. Following Studio ADR 0002, Workflows now asks a language-neutral, revision-bound preservation contribution and refuses if absent. The JavaScript expression module owns a deliberately finite parameter/numeric-operand admission profile; it does not evaluate source or claim general JavaScript safety. T003 host composition and real-host behavioral qualification remain required.

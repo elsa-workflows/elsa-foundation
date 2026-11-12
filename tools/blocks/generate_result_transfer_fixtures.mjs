@@ -13,6 +13,8 @@ const server = await createServer({ root: client, configFile: false, optimizeDep
 try {
   const planner = await server.ssrLoadModule(resolve(client, "src/graph-authoring/nativeBlocks.ts"));
   const adapter = await server.ssrLoadModule(resolve(client, "src/workflowAdapter.ts"));
+  const { preservesJavaScriptWithAddedVariable } = await server.ssrLoadModule(resolve(repository, "Extensions/ExpressionEditors.JavaScript/studio/Elsa.Studio.ExpressionEditors.JavaScript/Client/src/variableAdditionPreservation.ts"));
+  const expressionScopePreservation = { revision: "javascript-variable-addition-v1", allowsVariableAddition: preservesJavaScriptWithAddedVariable };
   const fixtures = await server.ssrLoadModule(resolve(client, "src/__tests__/fixtures.ts"));
   const catalog = [fixtures.sequenceActivity, fixtures.flowchartActivity].map(item => ({ ...item,
     ports: [{ name: "Done" }, { name: "Break" }], designFacets: [...item.designFacets ?? [], { kind: "elsa.outcomes", schemaVersion: "1", payload: { ports: [{ name: "Done" }, { name: "Break" }] } }] }));
@@ -64,7 +66,7 @@ try {
       scope.push(...frames);
     }
     const document = { rootActivity, layout: [], activityPresentation: [] };
-    const context = { document, catalog, scope, referenceContext: [variables], sourceKey: `fixture:${kind}:${profile}`, canEdit: true };
+    const context = { document, catalog, scope, expressionScopePreservation, referenceContext: [variables], sourceKey: `fixture:${kind}:${profile}`, canEdit: true };
     const request = { nodeId: "block", displayName: "Producer block", activityVersionId: body.activityVersionId, selectedNodeIds: loop ? ["increment", "producer"] : ["producer"] };
     const plan = planner.planExtractNativeBlock(context, request);
     const applied = planner.applyNativeBlockPlan(context, plan);
