@@ -944,10 +944,10 @@ internal sealed class DefaultWeaverTurnOrchestrator(
                         $"Weaver disclosure 'admit-tool' for session '{invocation.SessionId}' could not be established.", cause));
                     current = new(null, new("weaver.tool.admission_unavailable", "Current tool admission could not be established.", 503), true);
                 }
-                if (current.Error is { } refusal)
+                if (current.Error is { } admissionRefusal)
                 {
-                    if (!current.StopProvider) return WeaverToolDispatch.Denied(refusal);
-                    stop(refusal);
+                    if (!current.StopProvider) return WeaverToolDispatch.Denied(admissionRefusal);
+                    stop(admissionRefusal);
                     throw new OperationCanceledException("Provider disclosure stopped before tool dispatch.", cancellationToken);
                 }
                 invocation = current.Invocation!;
