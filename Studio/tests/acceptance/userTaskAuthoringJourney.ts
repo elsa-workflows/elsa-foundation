@@ -208,7 +208,12 @@ export async function userTaskAuthoringJourney(page: Page, info: TestInfo, captu
     await expect.poll(async () => {
       const box = await outcomeLabels.filter({ hasText: new RegExp(`^${label}$`) }).boundingBox();
       const pane = await runCanvas.locator(".react-flow__pane").boundingBox();
-      return Boolean(box && pane && box.x >= pane.x && box.x + box.width <= pane.x + pane.width && box.y >= pane.y && box.y + box.height <= pane.y + pane.height);
+      // The zoom controls and MiniMap float over the pane, so a label under one of them is not readable.
+      const panels = await Promise.all((await runCanvas.locator(".react-flow__panel:visible").all()).map(panel => panel.boundingBox()));
+      const underPanel = panels.some(panel => box && panel && box.x < panel.x + panel.width && box.x + box.width > panel.x
+        && box.y < panel.y + panel.height && box.y + box.height > panel.y);
+      return Boolean(box && pane && !underPanel && box.x >= pane.x && box.x + box.width <= pane.x + pane.width
+        && box.y >= pane.y && box.y + box.height <= pane.y + pane.height);
     }, { message: `${label} is readable inside the run canvas's first view` }).toBe(true);
   }
   await capture(page, info, "run-outcomes-initial");
