@@ -2,6 +2,7 @@ using System.Collections.Immutable;
 using System.Security.Claims;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Models;
@@ -33,6 +34,27 @@ namespace Elsa.Workflows.Design.Api.Tests.Unit;
 
 public sealed class ActivityDataContextEndpointTests
 {
+    [Theory]
+    [InlineData("{}")]
+    [InlineData("{\"includeSources\":true,\"take\":100,\"shapeLimits\":{\"maximumDepth\":4,\"maximumMembers\":128}}")]
+    public async Task Omitted_query_members_use_the_same_whole_value_defaults_as_an_explicit_empty_path(string queryJson)
+    {
+        using var host = new Host();
+        var before = host.Drafts.Draft.State;
+        var explicitRequest = host.Request() with { Query = new() };
+        var expected = await host.Invoke(explicitRequest);
+        var wire = JsonNode.Parse(JsonSerializer.Serialize(explicitRequest, Web))!;
+        wire["query"] = JsonNode.Parse(queryJson);
+
+        var actual = await host.InvokeJson(wire.ToJsonString());
+
+        Assert.Equal("supported", actual.Body.State);
+        Assert.Equal(expected.Body.ContextRevision, actual.Body.ContextRevision);
+        Assert.Equal(expected.Json, actual.Json);
+        Assert.Equal("no-store", actual.CacheControl);
+        Assert.Same(before, host.Drafts.Draft.State);
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -380,13 +402,15 @@ public sealed class ActivityDataContextEndpointTests
         internal ActivityDataContextRequest Request() => new("1", "workflow", "draft", WorkflowDraftView.From(Drafts.Draft, []).AuthoringRevision,
             "working-document", "consumer", "CustomerId");
         internal async Task<Response> Invoke(ActivityDataContextRequest request, ClaimsPrincipal? principal = null)
+            => await InvokeJson(JsonSerializer.Serialize(request, Web), principal);
+        internal async Task<Response> InvokeJson(string requestJson, ClaimsPrincipal? principal = null)
         {
             using var scope = Services.CreateScope();
             var context = new DefaultHttpContext { RequestServices = scope.ServiceProvider, User = principal ?? Principal() };
             context.Request.Method = "POST";
             context.Request.Path = "/design/workflows/activity-data/context";
             context.Request.ContentType = "application/json";
-            context.Request.Body = new MemoryStream(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(request, Web)));
+            context.Request.Body = new MemoryStream(Encoding.UTF8.GetBytes(requestJson));
             context.Response.Body = new MemoryStream();
             await endpoint.RequestDelegate!(context);
             context.Response.Body.Position = 0;
