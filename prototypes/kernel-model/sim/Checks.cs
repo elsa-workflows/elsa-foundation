@@ -414,7 +414,7 @@ public sealed partial class World
                     using (_pass = new CancellationTokenSource())
                     {
                         if (Dying is not null) _pass.Cancel();
-                        Watch(worker.WokenAsync(null).AsTask());
+                        Watch(actor.Runtime.WakeAsync(InstanceRef.In(partition, "")).AsTask());     // over the runtime's wake signal
                         Watch(actor.Runtime.PassAsync(partition, _pass.Token).AsTask());
                     }
                     _pass = null;
