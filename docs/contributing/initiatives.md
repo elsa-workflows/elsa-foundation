@@ -418,6 +418,11 @@ follow their own subsection below where it differs.
   they run the gate, push what it needs and merge the proposal, because an author never merges their own PR. A stand-in
   who is not the recorded delegate does not edit the board: they post the `main` commit and the merge commit in a
   pointer comment, and the coordinator records them at the next sync.
+- **Merging closes the issues the PR fixes.** GitHub closes an issue from `Fixes #n`, `Closes #n` or `Resolves #n`
+  only when the PR merges into the default branch, and the initiative reaches `main` only when it lands. Whoever merges
+  a PR into the initiative branch therefore closes, right after the merge, every issue it fixes
+  (`gh pr view <n> --json closingIssuesReferences`), with a comment naming the PR and the merge commit. The closed
+  issues show the initiative's progress while it is still on its branch; the sync closes any that a merge left open.
 - **Accepted text is amended in place.** Until it lands, an agreed ADR or spec that must change is edited on the branch
   through an amendment PR that follows the agreement rule. No superseding ADR is written for something `main` has never
   seen. Landing closes the initiative: once its branch has landed and been archived, its ADRs and specs are ordinary
@@ -515,7 +520,8 @@ moves its board row to implementation, recording the branch commit it starts fro
   does not merge it (the [org rule][org-agents-review] for `initiative/*` bases stands). The coordinator merges it
   into the initiative branch once Code Review approved it and its checks pass. It changes no decision, so it needs
   no architecture agreement and no pre-merge gate; if it would change a decision or a requirement, that change goes
-  through the spec or ADR as an amendment first.
+  through the spec or ADR as an amendment first. After merging it, the coordinator closes the issues it fixes, as
+  above.
 - An implementation that finds an agreed ADR or spec does not work in code follows *Provisional specs*: the finding
   goes back to the document's PR as an amendment, and the implementation waits for it.
 - When the spec's tasks are done, its `**Status**` becomes `Implemented` in the last implementation PR, and the board
