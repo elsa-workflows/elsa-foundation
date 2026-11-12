@@ -319,8 +319,8 @@ before this section is accepted.
 ### Scope
 
 Decision D-3 supplies the evaluation transaction. Variable versions, conflicts and resolution remain in ADR 0092;
-background capability admission remains in ADR 0093. Outcome selection remains subject to the route-by-return
-proposal for outcomes. These dependencies are not accepted by being referenced here.
+background capability admission remains in ADR 0093. Outcome selection follows §6: a script selects outcomes by returning a recognized
+completion form, and routing by return value ends.
 
 ### 1. Recover durable progress; distinguish retry from new work
 
