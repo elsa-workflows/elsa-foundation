@@ -81,7 +81,7 @@
   const stmts = document.getElementById("stmts");
   const note = document.getElementById("commit-note");
   const notes = {
-    tok: "EF Core sends the fence and the writes in one batch, with epoch and position as concurrency tokens. It reads the affected-row count before it sends COMMIT, so a stale owner's batch rolls back. 2 round trips on PostgreSQL; the lease time comes from the node's clock.",
+    tok: "EF Core sends the writes and the fence in one batch, the fence last because EF orders the statements by table; on SQL Server this lets a take deadlock with a stale commit (E9), which the checked fence avoids. It uses epoch and position as concurrency tokens. It reads the affected-row count before it sends COMMIT, so a stale owner's batch rolls back. 2 round trips on PostgreSQL; the lease time comes from the node's clock.",
     first: "The fence goes alone and returns the database's time. Only when its count checks out are the writes sent. 3 round trips on PostgreSQL; the lease time comes from the database."
   };
   const setMode = mode => {
@@ -100,7 +100,7 @@
   const rows = [
     { name: "Ephemeral", a: "no commit", b: "0 round trips", commits: () => false },
     { name: "Balanced", a: "one commit, at the end", b: "3 round trips (2)", commits: n => n === 9 },
-    { name: "Durable", a: "a commit per activity, 11 in all", b: "33 round trips (22)", commits: () => true }
+    { name: "Durable", a: "a commit per activity, 11 in all: the ten WriteLines and their Sequence", b: "33 round trips (22)", commits: () => true }
   ];
   rows.forEach((r, ri) => {
     const y = 26 + ri * 78;

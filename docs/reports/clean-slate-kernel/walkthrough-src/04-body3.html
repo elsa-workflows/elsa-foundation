@@ -83,7 +83,7 @@
       <tr><td>Mutation check: the kernel broken one rule at a time</td><td>37 single breakages, 35 caught alone; the other two caught in the combined runs with the rule that covers each. Native model: 5 of 5</td><td>Re-run on 12 November</td></tr>
       <tr><td>Store conformance, 57 semantic cases: in memory and SQLite (either fence)</td><td>In memory 56 pass, 1 skipped. SQLite 54 pass, 1 skipped, 2 reference cases differ where the contract is silent</td><td>Re-run on 12 November</td></tr>
       <tr><td>Store conformance: PostgreSQL, SQL Server, MySQL, MongoDB, either fence</td><td>PostgreSQL 54 pass, 3 differ; SQL Server and MySQL 53 pass, 3 differ, 1 skipped; MongoDB 57 pass</td><td>Merge run; not re-run</td></tr>
-      <tr><td>Stress: 40 s, 5,000 messages, killed connections, stalls</td><td>Every property holds on all five engines; 0 deadlocks on PostgreSQL, SQL Server (checked fence) and MySQL. SQL Server with the fence in the batch: 127 deadlocks on takes in one run, safety held</td><td>Merge run; not re-run</td></tr>
+      <tr><td>Stress: 40 s, 5,000 messages, killed connections, stalls</td><td>Every property holds on all five engines; 0 deadlocks on PostgreSQL, SQL Server (checked fence) and MySQL. SQL Server with the fence in the batch: 127 deadlocks on takes in one run on the engines branch (ENGINES.md E9; one on MySQL), safety held; not re-run after the merge</td><td>Merge run; not re-run</td></tr>
       <tr><td>Stress with the fence broken on purpose</td><td>Violations on every engine: PostgreSQL 228, SQL Server 26, MySQL 611, SQLite 238, MongoDB 390</td><td>Merge run; not re-run</td></tr>
     </tbody>
   </table></div>
@@ -200,7 +200,7 @@
       </ul></div>
   </div>
   <p class="note">Standalone jobs (Elsa.Jobs on the kernel) are in neither column: their release is decided in the design proposal.</p>
-  <p>Next: finish the three-layer restructuring, extract the graph engine, run the BPMN and StateMachine spikes, then the design proposal (a new ADR, a program plan and a list of ADRs to retire), then the Fable review. No product code until the design is approved.</p>
+  <p>Next: finish the three-layer restructuring, build the card decisions and the Orleans adapter, extract the graph engine, run the BPMN, StateMachine, agent and standalone-jobs spikes, then the design proposal (a new ADR, a program plan and a list of ADRs to retire), then the Fable review. No product code until the design is approved.</p>
 </section>
 </main>
 </div>

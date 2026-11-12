@@ -58,7 +58,7 @@
     <div class="card l2"><h4>Timers</h4><p>A message with a future <code>due</code>. The poll returns database time; the owner anchors it and schedules on a monotonic clock. Cancel a timer by deleting its message, whose id the sender knows.</p></div>
     <div class="card l3"><h4>Creating instances</h4><p>A message may carry a start spec: if its target does not exist, the owner creates it on delivery. Starting a child, starting on an event and signal-with-start are all this one mechanism.</p></div>
     <div class="card l3"><h4>Placement</h4><p>A start without a caller's key goes into a partition the starting node owns and runs there, with no hop. A keyed start hashes the key to a partition. A child goes into its parent's partition, so a call tree commits together.</p></div>
-    <div class="card"><h4>Poison</h4><p>A new owner puts its predecessor's held messages on trial, in a group that halves with every attempt. If that owner is lost too, the next take adds one attempt to exactly the messages on trial, so a poison message ends up alone and a death stops counting against its neighbours. Past the threshold it is parked and its instance faulted, so a message that kills its process cannot walk the cluster.</p></div>
+    <div class="card"><h4>Poison</h4><p>A new owner puts its predecessor's held messages on trial, one at a time by default (an optional larger group halves with every attempt). If that owner is lost too, the next take adds one attempt to exactly the messages on trial, so a poison message ends up alone and a death stops counting against its neighbours. Past the threshold it is parked and its instance faulted, so a message that kills its process cannot walk the cluster.</p></div>
     <div class="card"><h4>Edge cases</h4><p>A message to an instance that does not exist and carries no start spec is dropped and journalled. A message to a finished instance is consumed and dropped. A turn that throws parks its instance at once; retries are the model's business.</p></div>
   </div>
 </section>
@@ -79,16 +79,17 @@
     ValueTask&lt;object?&gt; ExecuteJobAsync(IJob job, CancellationToken ct);
     InstanceSummary Describe(object state);
 }</code></pre>
+  <p class="note">The proposed contract. At the evidence commit the prototype still says step and run (<code>IStep</code>, <code>StepAsync</code>, <code>IRun</code>) and has no <code>Describe</code>.</p>
   <pre><code><span class="k">public interface</span> ITurn
 {
     InstanceInfo Instance { get; }
     IReadOnlyList&lt;Message&gt; Inbox { get; }
     IAmbient Ambient { get; }   <span class="c">// this activation only</span>
     object State { get; set; }
-    void Send(...);  InstanceRef Start(...);
+    string Send(...);  void Recall(id);  InstanceRef Start(...);
     void StartJob(key, args);  void CancelJob(key);
     void Hold(message);
-    void Subscribe(key, wait);  void Unsubscribe(...);
+    void Subscribe(key, wait, keep);  void Unsubscribe(...);
     void Record(entry);         <span class="c">// journal</span>
     void Emit(channel, item);   <span class="c">// live, not durable</span>
     void Rebind(definition);  void SetStatus(...);
@@ -241,7 +242,7 @@
     <li data-on="h-pollB ib nb db"><b>B runs the turn.</b><p>B finds the message by poll or wake hint, marks it seen and runs the turn.</p></li>
     <li data-on="h-commitB ib db"><b>B commits.</b><p>The turn that wrote the response commits, so the response may now be released.</p></li>
     <li data-on="h-reply ib wait"><b>B replies to A.</b><p>Over the runtime's transport between nodes, the same one wake-ups use. It is not durable. On one node this is all in process.</p></li>
-    <li data-on="h-respB wait client"><b>A answers the request.</b><p>One hop paid, because B owns the instance. Moving the instance to the receiving node, as Elsa 3 does, is left out unless measurements show the hop matters.</p></li>
+    <li data-on="h-respB wait client"><b>A answers the request.</b><p>One hop paid, because B owns the instance. Moving the instance to the receiving node is left out unless measurements show the hop matters.</p></li>
   </ol>
   <ol class="steps" data-set="d" hidden>
     <li data-on="client h-req route na"><b>A resume arrives at node A.</b><p>Node B owns the waiting workflow.</p></li>

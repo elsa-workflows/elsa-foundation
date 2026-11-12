@@ -351,7 +351,7 @@ ol.stmts code { font-size: 12.5px; }
       <text class="ts" x="840" y="422" text-anchor="middle">runtime conformance suite (planned)</text>
     </svg>
     </div>
-    <figcaption>Every guarantee lives in layer 2. Layer 1 only says where an actor runs and wakes it up; layer 3 only says what an actor does with its messages. The two seams and the storage contract are the only ways in.</figcaption>
+    <figcaption>Every guarantee lives in layer 2. Layer 1 only says where an actor runs and wakes it up; layer 3 only says what an actor does with its messages. The two seams and the storage contract are the only ways in. Built in the prototype: the built-in partition runtime, the durable layer and the workflow instance with the native model; the other runtimes, models and actor types shown are planned or samples.</figcaption>
   </figure>
   <div class="grid">
     <div class="card l1" data-pick-card="l1"><h4>1 · Actor runtime</h4>
@@ -394,7 +394,7 @@ ol.stmts code { font-size: 12.5px; }
     <dt>Pass</dt><dd>The runtime's call into a partition it hosts: it runs the turns that are due and commits them in batches. One pass holds many turns.</dd>
     <dt>Partition</dt><dd>A fixed bucket of instances (64 on server databases, 1 on SQLite). Its owner is the only node that writes its instances.</dd>
     <dt>Epoch</dt><dd>A counter on the partition row, raised every time a node takes the partition. Work started under an older epoch is thrown away.</dd>
-    <dt>Position</dt><dd>How many instance commits a partition has made. The commit checks it, so two commits can never land at the same position.</dd>
+    <dt>Position</dt><dd>How many journal rows a partition has written (a turn at the Minimal history level writes none). The commit checks it, so two commits can never land at the same position.</dd>
     <dt>Fence</dt><dd>The conditional update at the start of every commit: it lands only while the epoch and position are still the ones the owner expects.</dd>
     <dt>Lease</dt><dd>How long the owner may hold the partition without writing (10 s). It decides who should write; the fence decides who can.</dd>
     <dt>Message</dt><dd>A row in the inbox table: target, kind, payload, an order key <code>seq</code>, optionally a due time (a timer) and a start spec (create the target if missing).</dd>
@@ -507,7 +507,7 @@ ol.stmts code { font-size: 12.5px; }
     <figcaption>Arrows point from a row to the row it refers to. The partition row is the hottest row in the system: every commit of the partition updates it, which is what makes it the fence.</figcaption>
   </figure>
   <div class="grid">
-    <div class="card st" data-pick-card="partition"><h4>partition</h4><div class="mono">id, owner, epoch, lease_until, position</div><p>The fence. <code>epoch</code> changes only on a take; <code>position</code> counts instance commits. Times are in milliseconds; under the default fence <code>lease_until</code> is written from the owner's clock and compared with database time at a take.</p></div>
+    <div class="card st" data-pick-card="partition"><h4>partition</h4><div class="mono">id, owner, epoch, lease_until, position</div><p>The fence. <code>epoch</code> changes only on a take; <code>position</code> counts journal rows. Times are in milliseconds; under the default fence <code>lease_until</code> is written from the owner's clock and compared with database time at a take.</p></div>
     <div class="card" data-pick-card="node"><h4>node</h4><div class="mono">id, seen_at</div><p>A heartbeat, so nodes can count each other and take a fair share of partitions. Liveness only, never correctness.</p></div>
     <div class="card l3" data-pick-card="instance"><h4>instance</h4><div class="mono">id, partition, model, definition, status, sub_status, state, state_version, jobs, revision, parent, root, correlation, tenant, created, updated</div><p><code>state</code> is opaque, owned by the model. <code>jobs</code> lists background jobs in flight. Lists and counts read this row directly. The proposed shape: <code>sub_status</code>, <code>root</code>, <code>correlation</code>, <code>tenant</code>, <code>created</code> and <code>updated</code> are not in the prototype yet. The prototype keeps <code>fault</code>, <code>history</code>, <code>suspended</code> and <code>children</code> instead, and still calls <code>jobs</code> <code>runs</code>; its partition row has a <code>died</code> flag and its journal rows a <code>revision</code>.</p></div>
     <div class="card l2" data-pick-card="message"><h4>message</h4><div class="mono">seq, id, partition, target, kind, payload, headers, sender, reply_to, start, due, seen, trial, attempts, keep_until, done</div><p>The inbox. <code>seq</code> from the database gives the order; the unique <code>id</code> makes adding idempotent; a future <code>due</code> makes it a timer or a retry; <code>start</code> creates the target if missing. The <code>headers</code> column is proposed, not in the prototype yet.</p></div>
@@ -579,14 +579,14 @@ ol.stmts code { font-size: 12.5px; }
     <button type="button" data-mode="first" aria-pressed="false">Fence first (3 round trips)</button>
   </div>
   <ol class="stmts" id="stmts">
-    <li class="fence" data-o-tok="1" data-o-first="1" data-rt-tok="RT 1" data-rt-first="RT 1"><span class="rt"></span><span><b>Fence.</b> <code>UPDATE partition SET position = n + k, lease_until = … WHERE id = p AND epoch = e AND position = n</code>. Also renews the lease, so a busy partition needs no heartbeat.</span></li>
+    <li class="fence" data-o-tok="7" data-o-first="1" data-rt-tok="RT 1" data-rt-first="RT 1"><span class="rt"></span><span><b>Fence.</b> <code>UPDATE partition SET position = n + k, lease_until = … WHERE id = p AND epoch = e AND position = n</code>. Also renews the lease, so a busy partition needs no heartbeat.</span></li>
     <li class="check" data-o-tok="8" data-o-first="2" data-rt-tok="check" data-rt-first="check"><span class="rt"></span><span><b>Exactly one row changed?</b> If not, roll back and reset. This check must come before COMMIT is sent.</span></li>
-    <li data-o-tok="2" data-o-first="3" data-rt-tok="RT 1" data-rt-first="RT 2"><span class="rt"></span><span>Insert or update the <i>k</i> instance rows, each update <code>WHERE revision = r</code>.</span></li>
-    <li data-o-tok="3" data-o-first="4" data-rt-tok="RT 1" data-rt-first="RT 2"><span class="rt"></span><span>Delete the consumed messages, or mark them <code>done</code> when they carry <code>keep_until</code>. Check the count.</span></li>
-    <li data-o-tok="4" data-o-first="5" data-rt-tok="RT 1" data-rt-first="RT 2"><span class="rt"></span><span>Mark <code>seen = e</code> on messages held in memory and not consumed.</span></li>
-    <li data-o-tok="5" data-o-first="6" data-rt-tok="RT 1" data-rt-first="RT 2"><span class="rt"></span><span>Insert the sent messages. Each id is derived from the sender and its revision, with a fixed-width ordinal, so a repeat is refused and order holds.</span></li>
-    <li data-o-tok="6" data-o-first="7" data-rt-tok="RT 1" data-rt-first="RT 2"><span class="rt"></span><span>Insert and delete subscriptions.</span></li>
-    <li data-o-tok="7" data-o-first="8" data-rt-tok="RT 1" data-rt-first="RT 2"><span class="rt"></span><span>Insert <i>k</i> journal rows at positions <i>n</i> + 1 … <i>n</i> + <i>k</i>.</span></li>
+    <li data-o-tok="1" data-o-first="3" data-rt-tok="RT 1" data-rt-first="RT 2"><span class="rt"></span><span>Insert or update the <i>k</i> instance rows, each update <code>WHERE revision = r</code>.</span></li>
+    <li data-o-tok="2" data-o-first="4" data-rt-tok="RT 1" data-rt-first="RT 2"><span class="rt"></span><span>Delete the consumed messages, or mark them <code>done</code> when they carry <code>keep_until</code>. Check the count.</span></li>
+    <li data-o-tok="3" data-o-first="5" data-rt-tok="RT 1" data-rt-first="RT 2"><span class="rt"></span><span>Mark <code>seen = e</code> on messages held in memory and not consumed.</span></li>
+    <li data-o-tok="4" data-o-first="6" data-rt-tok="RT 1" data-rt-first="RT 2"><span class="rt"></span><span>Insert the sent messages. Each id is derived from the sender and its revision, with a fixed-width ordinal, so a repeat is refused and order holds.</span></li>
+    <li data-o-tok="5" data-o-first="7" data-rt-tok="RT 1" data-rt-first="RT 2"><span class="rt"></span><span>Insert and delete subscriptions.</span></li>
+    <li data-o-tok="6" data-o-first="8" data-rt-tok="RT 1" data-rt-first="RT 2"><span class="rt"></span><span>Insert <i>k</i> journal rows at positions <i>n</i> + 1 … <i>n</i> + <i>k</i>.</span></li>
     <li class="commitrow" data-o-tok="9" data-o-first="9" data-rt-tok="RT 2" data-rt-first="RT 3"><span class="rt"></span><span><b>COMMIT.</b></span></li>
   </ol>
   <p id="commit-note" class="note"></p>
@@ -662,7 +662,7 @@ ol.stmts code { font-size: 12.5px; }
     <div class="card l2"><h4>Timers</h4><p>A message with a future <code>due</code>. The poll returns database time; the owner anchors it and schedules on a monotonic clock. Cancel a timer by deleting its message, whose id the sender knows.</p></div>
     <div class="card l3"><h4>Creating instances</h4><p>A message may carry a start spec: if its target does not exist, the owner creates it on delivery. Starting a child, starting on an event and signal-with-start are all this one mechanism.</p></div>
     <div class="card l3"><h4>Placement</h4><p>A start without a caller's key goes into a partition the starting node owns and runs there, with no hop. A keyed start hashes the key to a partition. A child goes into its parent's partition, so a call tree commits together.</p></div>
-    <div class="card"><h4>Poison</h4><p>A new owner puts its predecessor's held messages on trial, in a group that halves with every attempt. If that owner is lost too, the next take adds one attempt to exactly the messages on trial, so a poison message ends up alone and a death stops counting against its neighbours. Past the threshold it is parked and its instance faulted, so a message that kills its process cannot walk the cluster.</p></div>
+    <div class="card"><h4>Poison</h4><p>A new owner puts its predecessor's held messages on trial, one at a time by default (an optional larger group halves with every attempt). If that owner is lost too, the next take adds one attempt to exactly the messages on trial, so a poison message ends up alone and a death stops counting against its neighbours. Past the threshold it is parked and its instance faulted, so a message that kills its process cannot walk the cluster.</p></div>
     <div class="card"><h4>Edge cases</h4><p>A message to an instance that does not exist and carries no start spec is dropped and journalled. A message to a finished instance is consumed and dropped. A turn that throws parks its instance at once; retries are the model's business.</p></div>
   </div>
 </section>
@@ -683,16 +683,17 @@ ol.stmts code { font-size: 12.5px; }
     ValueTask&lt;object?&gt; ExecuteJobAsync(IJob job, CancellationToken ct);
     InstanceSummary Describe(object state);
 }</code></pre>
+  <p class="note">The proposed contract. At the evidence commit the prototype still says step and run (<code>IStep</code>, <code>StepAsync</code>, <code>IRun</code>) and has no <code>Describe</code>.</p>
   <pre><code><span class="k">public interface</span> ITurn
 {
     InstanceInfo Instance { get; }
     IReadOnlyList&lt;Message&gt; Inbox { get; }
     IAmbient Ambient { get; }   <span class="c">// this activation only</span>
     object State { get; set; }
-    void Send(...);  InstanceRef Start(...);
+    string Send(...);  void Recall(id);  InstanceRef Start(...);
     void StartJob(key, args);  void CancelJob(key);
     void Hold(message);
-    void Subscribe(key, wait);  void Unsubscribe(...);
+    void Subscribe(key, wait, keep);  void Unsubscribe(...);
     void Record(entry);         <span class="c">// journal</span>
     void Emit(channel, item);   <span class="c">// live, not durable</span>
     void Rebind(definition);  void SetStatus(...);
@@ -845,7 +846,7 @@ ol.stmts code { font-size: 12.5px; }
     <li data-on="h-pollB ib nb db"><b>B runs the turn.</b><p>B finds the message by poll or wake hint, marks it seen and runs the turn.</p></li>
     <li data-on="h-commitB ib db"><b>B commits.</b><p>The turn that wrote the response commits, so the response may now be released.</p></li>
     <li data-on="h-reply ib wait"><b>B replies to A.</b><p>Over the runtime's transport between nodes, the same one wake-ups use. It is not durable. On one node this is all in process.</p></li>
-    <li data-on="h-respB wait client"><b>A answers the request.</b><p>One hop paid, because B owns the instance. Moving the instance to the receiving node, as Elsa 3 does, is left out unless measurements show the hop matters.</p></li>
+    <li data-on="h-respB wait client"><b>A answers the request.</b><p>One hop paid, because B owns the instance. Moving the instance to the receiving node is left out unless measurements show the hop matters.</p></li>
   </ol>
   <ol class="steps" data-set="d" hidden>
     <li data-on="client h-req route na"><b>A resume arrives at node A.</b><p>Node B owns the waiting workflow.</p></li>
@@ -945,7 +946,7 @@ ol.stmts code { font-size: 12.5px; }
       <tr><td>Mutation check: the kernel broken one rule at a time</td><td>37 single breakages, 35 caught alone; the other two caught in the combined runs with the rule that covers each. Native model: 5 of 5</td><td>Re-run on 12 November</td></tr>
       <tr><td>Store conformance, 57 semantic cases: in memory and SQLite (either fence)</td><td>In memory 56 pass, 1 skipped. SQLite 54 pass, 1 skipped, 2 reference cases differ where the contract is silent</td><td>Re-run on 12 November</td></tr>
       <tr><td>Store conformance: PostgreSQL, SQL Server, MySQL, MongoDB, either fence</td><td>PostgreSQL 54 pass, 3 differ; SQL Server and MySQL 53 pass, 3 differ, 1 skipped; MongoDB 57 pass</td><td>Merge run; not re-run</td></tr>
-      <tr><td>Stress: 40 s, 5,000 messages, killed connections, stalls</td><td>Every property holds on all five engines; 0 deadlocks on PostgreSQL, SQL Server (checked fence) and MySQL. SQL Server with the fence in the batch: 127 deadlocks on takes in one run, safety held</td><td>Merge run; not re-run</td></tr>
+      <tr><td>Stress: 40 s, 5,000 messages, killed connections, stalls</td><td>Every property holds on all five engines; 0 deadlocks on PostgreSQL, SQL Server (checked fence) and MySQL. SQL Server with the fence in the batch: 127 deadlocks on takes in one run on the engines branch (ENGINES.md E9; one on MySQL), safety held; not re-run after the merge</td><td>Merge run; not re-run</td></tr>
       <tr><td>Stress with the fence broken on purpose</td><td>Violations on every engine: PostgreSQL 228, SQL Server 26, MySQL 611, SQLite 238, MongoDB 390</td><td>Merge run; not re-run</td></tr>
     </tbody>
   </table></div>
@@ -1062,7 +1063,7 @@ ol.stmts code { font-size: 12.5px; }
       </ul></div>
   </div>
   <p class="note">Standalone jobs (Elsa.Jobs on the kernel) are in neither column: their release is decided in the design proposal.</p>
-  <p>Next: finish the three-layer restructuring, extract the graph engine, run the BPMN and StateMachine spikes, then the design proposal (a new ADR, a program plan and a list of ADRs to retire), then the Fable review. No product code until the design is approved.</p>
+  <p>Next: finish the three-layer restructuring, build the card decisions and the Orleans adapter, extract the graph engine, run the BPMN, StateMachine, agent and standalone-jobs spikes, then the design proposal (a new ADR, a program plan and a list of ADRs to retire), then the Fable review. No product code until the design is approved.</p>
 </section>
 </main>
 </div>
@@ -1149,7 +1150,7 @@ ol.stmts code { font-size: 12.5px; }
   const stmts = document.getElementById("stmts");
   const note = document.getElementById("commit-note");
   const notes = {
-    tok: "EF Core sends the fence and the writes in one batch, with epoch and position as concurrency tokens. It reads the affected-row count before it sends COMMIT, so a stale owner's batch rolls back. 2 round trips on PostgreSQL; the lease time comes from the node's clock.",
+    tok: "EF Core sends the writes and the fence in one batch, the fence last because EF orders the statements by table; on SQL Server this lets a take deadlock with a stale commit (E9), which the checked fence avoids. It uses epoch and position as concurrency tokens. It reads the affected-row count before it sends COMMIT, so a stale owner's batch rolls back. 2 round trips on PostgreSQL; the lease time comes from the node's clock.",
     first: "The fence goes alone and returns the database's time. Only when its count checks out are the writes sent. 3 round trips on PostgreSQL; the lease time comes from the database."
   };
   const setMode = mode => {
@@ -1168,7 +1169,7 @@ ol.stmts code { font-size: 12.5px; }
   const rows = [
     { name: "Ephemeral", a: "no commit", b: "0 round trips", commits: () => false },
     { name: "Balanced", a: "one commit, at the end", b: "3 round trips (2)", commits: n => n === 9 },
-    { name: "Durable", a: "a commit per activity, 11 in all", b: "33 round trips (22)", commits: () => true }
+    { name: "Durable", a: "a commit per activity, 11 in all: the ten WriteLines and their Sequence", b: "33 round trips (22)", commits: () => true }
   ];
   rows.forEach((r, ri) => {
     const y = 26 + ri * 78;
