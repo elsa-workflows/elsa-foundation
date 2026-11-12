@@ -6,6 +6,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="../../sim/Models.cs" Link="Models.cs" />
+    <Compile Include="../../sim/Correlation.cs" Link="Correlation.cs" />
     <ProjectReference Include="../Kernel.EntityFramework/Kernel.EntityFramework.csproj" />
   </ItemGroup>
 </Project>

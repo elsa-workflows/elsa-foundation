@@ -11,6 +11,8 @@ public sealed class Oracle
     public readonly Dictionary<string, (int Count, string Mode, bool Posted)> Sequences = new();
     public readonly Dictionary<string, List<string>> Runners = new();                  // target -> keys told to go
     public readonly Dictionary<string, bool> Fragiles = new();                          // target -> a bad message was sent
+    public readonly Dictionary<string, List<string>> CWaiters = new();                 // waiters through correlation instances
+    public readonly HashSet<string> Published = [];                                      // correlation instances that were sent an event
 
     public bool Accepts(Message m) => m.Kind != "cancel" || (Runners.TryGetValue(m.Target.Id, out var keys) && keys.Contains(m.Read<string>()));
 
@@ -23,6 +25,8 @@ public sealed class Oracle
             case "counter": List(Counters, target).Add(m.Read<Add>().Token); break;
             case "parent": Parents[target] = Json.Read<ParentInput>(m.Start.Input!).Children; break;
             case "waiter": Waiters[target] = Json.Read<List<string>>(m.Start.Input!); break;
+            case "cwaiter": CWaiters[target] = Json.Read<List<string>>(m.Start.Input!); break;
+            case "correlation": Published.Add(target); break;
             case "sequence": var input = Json.Read<SequenceInput>(m.Start.Input!); Sequences[target] = (input.Count, input.Mode, posted); break;
             case "runner": List(Runners, target).Add(m.Read<string>()); break;
             case "fragile": Fragiles[target] = Fragiles.GetValueOrDefault(target) || m.Kind is "throw" or "spoil" or "die"; break;
@@ -70,7 +74,7 @@ public sealed partial class World
         // I14, the counting half: attempts change only in a take (see World.Take).
         foreach (var row in Store.Messages.Values)
             if (row.Attempts != _attempts.GetValueOrDefault(row.Message.Id)) return $"I14 the attempts of {row.Message.Id} changed to {row.Attempts} outside a take";
-        return Journal() ?? Memory() ?? Counters(waiting) ?? Trees(waiting) ?? Waits() ?? Sequences(waiting) ?? Runs();
+        return Journal() ?? Memory() ?? Counters(waiting) ?? Trees(waiting) ?? Waits() ?? Sequences(waiting) ?? Runs() ?? Correlated();
     }
 
     // I6: no gap in a partition's journal. I2, I10: an instance's row and its journal rows agree; a row never goes back.
@@ -248,6 +252,22 @@ public sealed partial class World
         return null;
     }
 
+    // I13 through correlation instances: no wait is given two events, and one that was given an event has finished.
+    private string? Correlated()
+    {
+        foreach (var id in Oracle.CWaiters.Keys)
+        {
+            if (Parked.Contains(id) || State<WaiterState>(id) is not { } state) continue;
+            if (state.Got.Count > 1) return $"I13 {id} was given [{string.Join(", ", state.Got)}]";
+            if ((Store.Instances[id].Status == InstanceStatus.Finished) != (state.Got.Count == 1)) return $"I2 {id} is {Store.Instances[id].Status} having been given {state.Got.Count} events";
+        }
+        return null;
+    }
+
+    // The correlation instances of a waiter's keys; null when one of them was parked (then the wait is dead with it).
+    private List<string>? Hubs(string waiter) =>
+        Oracle.CWaiters[waiter].Select(key => Correlation.Of(key, Config.Partitions).Id).ToList() is var hubs && hubs.Exists(Parked.Contains) ? null : hubs;
+
     // I12: a run's result is applied exactly once; a cancelled run's result never is.
     private string? Runs()
     {
@@ -320,7 +340,7 @@ public sealed partial class World
                         if (actor.Runs.Remove(key, out var work)) work.TrySetResult("done");
                 }
             if (Check() is { } violation) return violation;
-            if (Store.Messages.Values.Any(m => !m.Done) || slots.Select(s => Of(s.Node, s.Partition)).Any(a => a.Worker.Owns && (a.Worker.NeedsFlush || a.Worker.Ready.Any() || a.Runs.Count > 0))) continue;
+            if (Store.Messages.Values.Any(m => !m.Done && m.Message.Kind != "expire") || slots.Select(s => Of(s.Node, s.Partition)).Any(a => a.Worker.Owns && (a.Worker.NeedsFlush || a.Worker.Ready.Any() || a.Runs.Count > 0))) continue;
             if (published) return End();
             if (Meet() is { } missed) return missed;
             published = true;
@@ -339,12 +359,19 @@ public sealed partial class World
                 return $"I13 event {e.Id} for key {e.Key} and the wait of {id} are both committed and never met";
         foreach (var (id, waits) in left)
             Events.PublishAsync(Store, new EventRow(waits[0], "last-" + id, null, Time + 3_600_000)).AsTask().Wait();
+        // The same through correlation instances: a subscription and an event for one key, both committed, must have met.
+        foreach (var (id, keys) in Oracle.CWaiters)
+        {
+            if (Parked.Contains(id) || Hubs(id) is not { } hubs || Store.Instances.GetValueOrDefault(id)?.Status != InstanceStatus.Running) continue;
+            if (hubs.Find(Oracle.Published.Contains) is { } hub) return $"I13 the wait of {id} and an event sent to {hub} never met";
+            Store.AddAsync(Correlation.Published("last-" + id, keys[0], Config.Partitions, new Publish("last-" + id, null, 3_600_000), Time + 3_600_000)).AsTask().Wait();
+        }
         return null;
     }
 
     private string? End()
     {
-        if (Store.Messages.Values.FirstOrDefault(m => !m.Done) is { } message) return $"END message {message.Message.Id} was never consumed";
+        if (Store.Messages.Values.FirstOrDefault(m => !m.Done && m.Message.Kind != "expire") is { } message) return $"END message {message.Message.Id} was never consumed";
         if (Store.Subscriptions.FirstOrDefault(s => !Parked.Contains(s.Instance)) is { } subscription) return $"END the subscription of {subscription.Instance} to {subscription.Key} is left behind";
         foreach (var (id, children) in Oracle.Parents)
         {
@@ -355,6 +382,8 @@ public sealed partial class World
         }
         foreach (var id in Oracle.Waiters.Keys)
             if (!Parked.Contains(id) && Store.Instances.GetValueOrDefault(id) is not { Status: InstanceStatus.Finished }) return $"END waiter {id} did not finish";
+        foreach (var id in Oracle.CWaiters.Keys)
+            if (!Parked.Contains(id) && Hubs(id) is not null && Store.Instances.GetValueOrDefault(id) is not { Status: InstanceStatus.Finished }) return $"END waiter {id} (through correlation) did not finish";
         foreach (var (id, (count, mode, posted)) in Oracle.Sequences)
         {
             var row = Store.Instances.GetValueOrDefault(id);

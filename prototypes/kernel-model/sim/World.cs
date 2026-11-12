@@ -166,7 +166,7 @@ public sealed partial class World
         var actor = new Actor(Actors.Count, node, partition);
         IExecutionModel[] models =
         [
-            new Counter(), new Parent(), new Child(), new Waiter(), new Sequence(),
+            new Counter(), new Parent(), new Child(), new Waiter(), new Sequence(), new Correlation(Config.Flaws.HasFlag(Flaw.CorrelationForgets)), new CWaiter(Config.Partitions),
             new Runner((run, cancel) => Work(actor, run, cancel)), new Fragile(() => Dying = node),
         ];
         // A node's name is unique per process start: a restarted process is not its predecessor (finding F9).
@@ -417,6 +417,13 @@ public sealed class Generator(int seed, World world)
             new($"x{n}", InstanceRef.In(p, name), kind, payload is null ? null : Json.Write(payload), null, start, null, keep);
         switch (r.Next(100))
         {
+            case < 4:
+            {
+                List<string> keys = r.Next(2) == 0 ? ["q" + r.Next(3)] : ["q0", "q" + r.Next(1, 3)];
+                return new Act("add", M: To("cw" + n, Kinds.Start, null, new StartSpec("cwaiter", "w", Json.Write(keys))));
+            }
+            case < 7:
+                return new Act("add", M: Correlation.Published("x" + n, "q" + r.Next(3), world.Config.Partitions, new Publish("e" + n, null, 3_600_000), keep));
             case < 34:
             {
                 var forward = r.Next(4) == 0 ? InstanceRef.In(r.Next(world.Config.Partitions), "c" + r.Next(2)).Id : null;

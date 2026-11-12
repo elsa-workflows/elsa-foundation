@@ -340,3 +340,53 @@ The simulation checks 1 by recomputing every take (`World.Take`), 2 at every sta
 - **Not solved, reasoned:** a suspect that is off-step work holds its trial until its result is handled. Long work
   that was in flight at a crash therefore holds up its partition while it is tried. A group lets up to `g` such runs
   restart together.
+
+## 8. Correlation as an ordinary instance per key
+
+Built as a model on the kernel with no kernel change: `sim/Correlation.cs`, 50 lines for the instance and 25 for a
+waiter that uses it. Subscribing, unsubscribing and publishing are messages to the key's instance, which carry a start
+spec so the first one creates it. The instance holds the waits and the events it keeps, forwards an event to every
+wait, gives a new wait the events that came before it, and drops a kept event on a timer to itself.
+
+### Invariant 13 against it. Run
+
+- 20,000 seeds of 300 actions and 10,000 of 1,000 pass with both versions in every run: waits and events cross in
+  either order, with takeovers, crashes and retried publishes in between. It passed on its first run.
+- The check bites: `--flaw CorrelationForgets` (a new wait is not given earlier events) fails 2,557 of 5,000 seeds,
+  first seed 2: `I13 the wait of 0/cw57 and an event sent to 0/key:q0 never met`.
+
+### Cost. Run, PostgreSQL round trips (in brackets: the fence as concurrency tokens)
+
+One waiter started on its owner, one event, the waiter finishes. Both orders cost the same.
+
+| Version | Commits | Round trips |
+|---|---|---|
+| Tables (`subscription`, `event`, the owed read) | 4 | 17 (13) |
+| Instance, key in the waiter's partition | 6 | 21 (15) |
+| Instance, key in another partition | 9 | 33 (24) |
+
+With more than a few partitions the key is almost always in another partition, so the instance version costs about
+twice the round trips, and the event passes two polls on its way (publisher to key, key to waiter) where the table
+version passes one.
+
+### Kernel size. Counted on the source, not by removing it
+
+The table version is about 85 lines of the kernel (`MeetAsync` and its ticket, the three storage operations, the
+subscription lists of a step and a commit, the in-memory tables), about 45 lines of the EF store, two tables, finding
+F6 and invariants 8 and 13 as rules of the kernel. The instance version is none of that.
+
+### Which to keep
+
+**The tables, in the kernel; the instance version stays as a model for whoever wants it.** Measured: it is cheaper
+and one hop shorter. Reasoned, and these decide it:
+
+- **A hot or broad key.** Every wait and every event of a key goes through one instance, and its whole state (all
+  waits, all kept events) is rewritten at each commit. A key with many waiters, or many events inside the keep
+  window, makes that state large. In the tables these are rows.
+- **A parked key.** If the key's instance is parked, every message to it is consumed and dropped: the key is dead for
+  everyone. A parked waiter in the table version harms only itself.
+- **Rows that stay.** A key's instance never finishes (a finished one would swallow the next subscribe), so one row
+  per key ever used remains until something deletes it.
+
+For keys that are narrow and quiet (a correlation id, an approval) the instance version is the simpler thing and
+needs nothing from the kernel. So the tables were not removed.

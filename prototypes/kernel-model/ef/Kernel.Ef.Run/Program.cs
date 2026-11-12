@@ -57,7 +57,7 @@ static Func<KernelDb> Factory(bool postgres, string connection, params IIntercep
 }
 
 static IExecutionModel[] Models() =>
-    [new Counter(), new Parent(), new Child(), new Waiter(), new Sequence(), new Runner((_, _) => new ValueTask<object?>((object?)null)), new Fragile(() => { })];
+    [new Counter(), new Parent(), new Child(), new Waiter(), new Sequence(), new Correlation(), new CWaiter(2), new Runner((_, _) => new ValueTask<object?>((object?)null)), new Fragile(() => { })];
 
 // A host that drives one worker until it has nothing left to do.
 static async Task Drain(Worker worker, bool poll)
@@ -91,7 +91,7 @@ static async Task Cost(bool postgres, string connection, bool fenceInBatch)
     Message Start(string mode, int count = 10) => new($"m{++n}", InstanceRef.In(0, $"{mode}{n}"), Kinds.Start, Start: Sequence.Spec(count, mode));
 
     Console.WriteLine($"\n{(postgres ? "PostgreSQL" : "SQLite")}, fence {(fenceInBatch ? "in the SaveChanges batch (concurrency tokens)" : "as its own checked statement")}");
-    Console.WriteLine($"{"run",-58} {"commands",8} {"begin",6} {"commit",6} {"round trips",11}");
+    Console.WriteLine($"{"run",-66} {"commands",8} {"begin",6} {"commit",6} {"round trips",11}");
     async Task Row(string name, Func<Task> body)
     {
         counter.Reset();
@@ -99,7 +99,7 @@ static async Task Cost(bool postgres, string connection, bool fenceInBatch)
         // PostgreSQL: Npgsql sends BEGIN with the first command of the transaction, so a round trip is a command or a COMMIT/ROLLBACK.
         // SQLite: there is no wire; BEGIN, each command and COMMIT are each one call into the engine.
         var trips = counter.Commands + counter.Transactions.Ended + (postgres ? 0 : counter.Transactions.Begun);
-        Console.WriteLine($"{name,-58} {counter.Commands,8} {counter.Transactions.Begun,6} {counter.Transactions.Ended,6} {trips,11}");
+        Console.WriteLine($"{name,-66} {counter.Commands,8} {counter.Transactions.Begun,6} {counter.Transactions.Ended,6} {trips,11}");
     }
 
     foreach (var mode in new[] { Sequence.Ephemeral, Sequence.Balanced, Sequence.Durable })
@@ -119,6 +119,45 @@ static async Task Cost(bool postgres, string connection, bool fenceInBatch)
         owner.Post(new Message($"m{++n}", InstanceRef.In(0, $"parent{n}"), Kinds.Start, Start: new StartSpec("parent", "p", Json.Write(new ParentInput(3, 0)))), fresh: true);
         await Drain(owner, poll: false);
     });
+    // Waiting for an event: through the subscription and event tables, and through a correlation instance per key.
+    var other = new Worker("other", 1, store, Models());
+    await other.TakeAsync();
+    await other.PollAsync();
+    string Key(int partition) => Enumerable.Range(0, 1000).Select(i => $"k{partition}-{n}-{i}").First(k => Correlation.Of(k, 2).Partition == partition);
+    Message Waiter(string model, string key) => new($"m{++n}", InstanceRef.In(0, $"{model}{n}"), Kinds.Start, Start: new StartSpec(model, "w", Json.Write(new List<string> { key })));
+    foreach (var first in new[] { "subscribe", "publish" })
+    {
+        await Row($"wait by table: {first} first", async () =>
+        {
+            var key = Key(0);
+            if (first == "publish") await Events.PublishAsync(store, new EventRow(key, $"e{++n}", null, keep));
+            owner.Post(Waiter("waiter", key), fresh: true);
+            await Drain(owner, poll: false);
+            if (first == "subscribe") await Events.PublishAsync(store, new EventRow(key, $"e{++n}", null, keep));
+            await Drain(owner, poll: true);
+        });
+        foreach (var hub in new[] { 0, 1 })
+            await Row($"wait by instance: {first} first, key in {(hub == 0 ? "the same" : "another")} partition", async () =>
+            {
+                var (key, hubOwner) = (Key(hub), hub == 0 ? owner : other);
+                var publish = Correlation.Published($"m{++n}", key, 2, new Publish($"e{n}", null, 3_600_000), keep);
+                if (first == "publish")
+                {
+                    await store.AddAsync(publish);
+                    await Drain(hubOwner, poll: true);
+                }
+                owner.Post(Waiter("cwaiter", key), fresh: true);
+                await Drain(owner, poll: false);
+                if (hub == 1) await Drain(other, poll: true);       // the subscribe message crosses to the key's partition
+                if (first == "subscribe")
+                {
+                    await store.AddAsync(publish);
+                    await Drain(hubOwner, poll: true);
+                }
+                if (hub == 1) await Drain(owner, poll: true);       // the event crosses back to the waiter
+                if (hub == 1) await Drain(other, poll: true);       // and the unsubscribe crosses to the key again
+            });
+    }
     await Row("100 balanced instances started at once", async () =>
     {
         for (var i = 0; i < 100; i++) owner.Post(Start(Sequence.Balanced), fresh: true);
@@ -126,8 +165,8 @@ static async Task Cost(bool postgres, string connection, bool fenceInBatch)
     });
 
     await using var check = create();
-    var unfinished = await check.Instances.CountAsync(i => i.Status != InstanceStatus.Finished);
-    var left = await check.Messages.CountAsync(m => !m.Done);
+    var unfinished = await check.Instances.CountAsync(i => i.Status != InstanceStatus.Finished && i.Model != "correlation");
+    var left = await check.Messages.CountAsync(m => !m.Done && m.Kind != "expire");
     Console.WriteLine($"check: {await check.Instances.CountAsync()} instances, {unfinished} not finished, {left} messages left, position {(await check.Partitions.SingleAsync(p => p.Id == 0)).Position}");
 }
 
