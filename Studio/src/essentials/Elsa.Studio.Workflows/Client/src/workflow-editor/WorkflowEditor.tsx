@@ -70,7 +70,7 @@ import { AttachedTestRunControls } from "./AttachedTestRunControls";
 import { useTestRunObservation } from "./useTestRunObservation";
 import { useTestRunRestoration } from "./useTestRunRestoration";
 import { usePinnedEditorDocument } from "./usePinnedEditorDocument";
-import { selectAttachedRunEditorNode, shouldSelectAttachedRunEditorNodeOnPointerDown } from "./selectAttachedRunEditorNode";
+import { selectAttachedRunEditorNode, selectAttachedRunEditorNodeOnCanvasPointerDown } from "./selectAttachedRunEditorNode";
 import { useEditorRunCanvas } from "./useEditorRunCanvas";
 import { useAttachedExecutionSelection } from "./useAttachedExecutionSelection";
 import { activateWorkflowCanvasNode } from "./workflowAccessibility";
@@ -524,12 +524,15 @@ export function WorkflowEditor({
     const activities = new Map((scope?.slot.activities ?? (scopeOwner ? [scopeOwner] : [])).map(activity => [activity.nodeId, activity]));
     return runCanvas.nodes.map(node => {
       const activity = activities.get(node.data.runtimeNodeId ?? node.id);
-      return activity ? { ...node, data: { ...node.data,
+      const withActivity = activity ? { ...node, data: { ...node.data,
         collectionSlots: getCollectionSlots(activity, catalogByVersion.get(activity.activityVersionId)),
         workflowStartEnabled: getWorkflowStartEnabled(activity, catalogByVersion.get(activity.activityVersionId))
       } } : node;
+      const selected = withActivity.id === selectedNodeId || !!withActivity.selected;
+      if (withActivity.selected === selected && withActivity.domAttributes?.["aria-pressed"] === selected) return withActivity;
+      return { ...withActivity, selected, domAttributes: { ...withActivity.domAttributes, "aria-pressed": selected } };
     });
-  }, [catalogByVersion, runCanvas.nodes, scope?.slot.activities, scopeOwner]);
+  }, [catalogByVersion, runCanvas.nodes, scope?.slot.activities, scopeOwner, selectedNodeId]);
   const edges = runCanvas.edges;
   revealRunInspectorOnSelectRef.current = runCanvas.attached;
   const selectEditorNode = selectAndInspect;
@@ -1722,7 +1725,14 @@ export function WorkflowEditor({
               onKeyDownCapture: event => activateWorkflowCanvasNode(event, nodeId => {
                 closeActivityContextMenu();
                 selectEditorNode(nodeId);
-              })
+              }),
+              onPointerDownCapture: event => {
+                selectAttachedRunEditorNodeOnCanvasPointerDown(event, runCanvas.attached, nodeId => {
+                  closeActivityContextMenu();
+                  // Reveal after this pointer gesture so React Flow can finish click/select first.
+                  window.setTimeout(() => selectAndInspect(nodeId), 0);
+                });
+              }
             }}
             edgeActions={edgeActions}
             availabilityLookup={availabilityLookup}
@@ -1752,11 +1762,6 @@ export function WorkflowEditor({
                 event.preventDefault();
                 closeActivityContextMenu();
               },
-              onNodePointerDown: runCanvas.attached ? (event, node) => {
-                if (!shouldSelectAttachedRunEditorNodeOnPointerDown(event)) return;
-                closeActivityContextMenu();
-                selectAndInspect(node.id);
-              } : undefined,
               onNodeClick: (_, node) => {
                 closeActivityContextMenu();
                 selectEditorNode(node.id);

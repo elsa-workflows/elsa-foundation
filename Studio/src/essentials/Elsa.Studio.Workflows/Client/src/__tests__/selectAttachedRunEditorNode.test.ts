@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   selectAttachedRunEditorNode,
+  selectAttachedRunEditorNodeOnCanvasPointerDown,
   shouldSelectAttachedRunEditorNodeOnPointerDown
 } from "../workflow-editor/selectAttachedRunEditorNode";
 
@@ -37,7 +38,9 @@ describe("shouldSelectAttachedRunEditorNodeOnPointerDown", () => {
 
   function nodeWithInnerControl() {
     const node = document.createElement("div");
+    node.className = "react-flow__node";
     node.setAttribute("role", "button");
+    node.setAttribute("data-id", "write");
     const label = document.createElement("span");
     const control = document.createElement("button");
     const controlLabel = document.createElement("span");
@@ -47,21 +50,58 @@ describe("shouldSelectAttachedRunEditorNodeOnPointerDown", () => {
     return { node, label, control, controlLabel };
   }
 
-  it("accepts a primary-button press on the node", () => {
-    const { node, label } = nodeWithInnerControl();
-    expect(shouldSelectAttachedRunEditorNodeOnPointerDown({ button: 0, target: node, currentTarget: node })).toBe(true);
-    expect(shouldSelectAttachedRunEditorNodeOnPointerDown({ button: 0, target: label, currentTarget: node })).toBe(true);
+  it("accepts a press on a .react-flow__node with role=button as a node press", () => {
+    const { node } = nodeWithInnerControl();
+    expect(shouldSelectAttachedRunEditorNodeOnPointerDown({ button: 0, target: node })).toBe(true);
+  });
+
+  it("accepts a primary-button press on the node label", () => {
+    const { label } = nodeWithInnerControl();
+    expect(shouldSelectAttachedRunEditorNodeOnPointerDown({ button: 0, target: label })).toBe(true);
   });
 
   it("ignores a secondary-button press", () => {
     const { node, label } = nodeWithInnerControl();
-    expect(shouldSelectAttachedRunEditorNodeOnPointerDown({ button: 2, target: node, currentTarget: node })).toBe(false);
-    expect(shouldSelectAttachedRunEditorNodeOnPointerDown({ button: 2, target: label, currentTarget: node })).toBe(false);
+    expect(shouldSelectAttachedRunEditorNodeOnPointerDown({ button: 2, target: node })).toBe(false);
+    expect(shouldSelectAttachedRunEditorNodeOnPointerDown({ button: 2, target: label })).toBe(false);
   });
 
   it("ignores a press that starts on an inner control", () => {
-    const { node, control, controlLabel } = nodeWithInnerControl();
-    expect(shouldSelectAttachedRunEditorNodeOnPointerDown({ button: 0, target: control, currentTarget: node })).toBe(false);
-    expect(shouldSelectAttachedRunEditorNodeOnPointerDown({ button: 0, target: controlLabel, currentTarget: node })).toBe(false);
+    const { control, controlLabel } = nodeWithInnerControl();
+    expect(shouldSelectAttachedRunEditorNodeOnPointerDown({ button: 0, target: control })).toBe(false);
+    expect(shouldSelectAttachedRunEditorNodeOnPointerDown({ button: 0, target: controlLabel })).toBe(false);
+  });
+});
+
+describe("selectAttachedRunEditorNodeOnCanvasPointerDown", () => {
+  afterEach(() => {
+    document.body.replaceChildren();
+  });
+
+  function flowNode() {
+    const node = document.createElement("div");
+    node.className = "react-flow__node";
+    node.setAttribute("role", "button");
+    node.setAttribute("data-id", "write");
+    document.body.append(node);
+    return node;
+  }
+
+  it("selects from data-id when a run is attached", () => {
+    const onSelect = vi.fn();
+    expect(selectAttachedRunEditorNodeOnCanvasPointerDown({ button: 0, target: flowNode() }, true, onSelect)).toBe(true);
+    expect(onSelect).toHaveBeenCalledWith("write");
+  });
+
+  it("does not select when no run is attached", () => {
+    const onSelect = vi.fn();
+    expect(selectAttachedRunEditorNodeOnCanvasPointerDown({ button: 0, target: flowNode() }, false, onSelect)).toBe(false);
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it("does not select on a secondary-button press", () => {
+    const onSelect = vi.fn();
+    expect(selectAttachedRunEditorNodeOnCanvasPointerDown({ button: 2, target: flowNode() }, true, onSelect)).toBe(false);
+    expect(onSelect).not.toHaveBeenCalled();
   });
 });

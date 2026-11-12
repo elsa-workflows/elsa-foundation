@@ -3436,6 +3436,79 @@ describe("workflows module", () => {
     await unmount();
   });
 
+  it("selects an attached-run canvas node from WorkflowEditor pointerdown capture", async () => {
+    vi.stubGlobal("ResizeObserver", class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    });
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (init?.method === "POST" && urlPath(url) === "/publishing/workflows/drafts/test-runs") return response(testRunView());
+      if (init?.method === "POST" && urlPath(url) === "/_elsa/publishing/workflows/drafts/test-runs") return response(null, 404);
+      if (url.includes("/design/activities/catalog")) return response({ activities: [catalogActivity(writeLineDescriptor())] });
+      if (url.includes("/expressions/descriptors")) return response({ items: [
+        { type: "Literal", displayName: "Literal", editingMode: "literal" },
+        { type: "JavaScript", displayName: "JavaScript", editingMode: "text" }
+      ] });
+      if (url.includes("/activities")) return response({ activities: [
+        flowchartActivity(),
+        activity({
+          activityVersionId: "write-line-v1",
+          activityTypeKey: "Elsa.Activities.Primitives.Activities.WriteLine",
+          category: "Primitives",
+          displayName: "Write Line",
+          executionType: "Action"
+        })
+      ] });
+      if (url.includes("/definitions/definition-1")) return response({
+        definition: definition(),
+        draft: draftWithFlowchartRoot([
+          { nodeId: "write-line-1", activityVersionId: "write-line-v1", inputs: [], outputs: [], structure: null }
+        ]),
+        versions: []
+      });
+      return response({ items: [definition()] });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { container, unmount } = await renderRegisteredRoute("/workflows/definitions?definition=definition-1");
+
+    await waitForCanvasNode(container, "Write Line");
+    const unattachedNode = container.querySelector<HTMLElement>(".wf-canvas .react-flow__node[data-id='write-line-1']");
+    expect(unattachedNode).toBeTruthy();
+    dispatchCanvasNodePointerDown(unattachedNode!, 0);
+    await flushPromises();
+    await flushPromises();
+    expect(container.querySelector("[aria-label='Activity view']")).toBeNull();
+    expect(unattachedNode!.getAttribute("aria-pressed")).toBe("false");
+
+    await waitForText(container, "Test Run");
+    await click(buttonByText(container, "Test Run"));
+    await waitForEnabledButton(container, "Start Test Run");
+    await click(buttonByText(container, "Start Test Run"));
+    await waitForText(container, "Latest test run");
+    expect(container.querySelector("[aria-label='Inspector panel tabs'] [role='tab'][aria-selected='true']")?.textContent).toContain("Runtime");
+
+    const attachedNode = container.querySelector<HTMLElement>(".wf-canvas .react-flow__node[data-id='write-line-1']")!;
+    dispatchCanvasNodePointerDown(attachedNode, 2);
+    await flushPromises();
+    await flushPromises();
+    expect(container.querySelector("[aria-label='Inspector panel tabs'] [role='tab'][aria-selected='true']")?.textContent).toContain("Runtime");
+    expect(container.querySelector("[aria-label='Activity view'] [aria-selected='true']")?.textContent).not.toBe("Run data");
+
+    dispatchCanvasNodePointerDown(attachedNode, 0);
+    await flushPromises();
+    flushSync(() => {});
+    await flushPromises();
+    expect(container.querySelector("[aria-label='Inspector panel tabs'] [role='tab'][aria-selected='true']")?.textContent).toContain("Inspector");
+    expect(container.querySelector("[aria-label='Activity view'] [aria-selected='true']")?.textContent).toBe("Run data");
+    await vi.waitFor(() => {
+      expect(container.querySelector(".wf-canvas .react-flow__node[data-id='write-line-1']")?.getAttribute("aria-pressed")).toBe("true");
+    });
+
+    await unmount();
+  });
+
   it("shows compile rejection reasons for designer test runs", async () => {
     vi.stubGlobal("ResizeObserver", class {
       observe() {}
@@ -6142,6 +6215,17 @@ async function click(element: Element | null) {
   element.click();
   await flushPromises();
   flushSync(() => {});
+}
+
+function dispatchCanvasNodePointerDown(node: HTMLElement, button: number) {
+  flushSync(() => {
+    node.dispatchEvent(new MouseEvent("pointerdown", {
+      bubbles: true,
+      cancelable: true,
+      button,
+      buttons: button === 0 ? 1 : 0
+    }));
+  });
 }
 
 // jsdom doesn't implement DataTransfer; a minimal stand-in is enough for the drag handlers, which only
