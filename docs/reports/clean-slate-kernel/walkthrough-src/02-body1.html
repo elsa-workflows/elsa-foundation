@@ -346,7 +346,7 @@
 <section class="ch" id="commit">
   <div class="num">06</div>
   <h2>The commit</h2>
-  <p>The owner of partition <i>p</i> at epoch <i>e</i>, which believes the position is <i>n</i>, commits <i>k</i> instance turns in one transaction. Two ways to send it were built and measured; switch between them.</p>
+  <p>The owner of partition <i>p</i> at epoch <i>e</i>, which believes the position is <i>n</i>, commits a batch of instance turns in one transaction, <i>k</i> of which write a journal row. Two ways to send it were built and measured; switch between them.</p>
   <div class="seg" role="group" aria-label="How the fence is sent">
     <button type="button" data-mode="tok" aria-pressed="true">Fence in the batch (2 round trips)</button>
     <button type="button" data-mode="first" aria-pressed="false">Fence first (3 round trips)</button>
