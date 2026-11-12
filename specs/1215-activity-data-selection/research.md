@@ -249,10 +249,12 @@ cannot run member reads.
 
 **Every silent path found, and how it closes.** (a) Selection on an old kind ignored by an older reader: closed by
 new enum members (§2). (b) Node-payload hash collision: closed by explicit arms plus a throwing default. (c)
-`PlacedReferenceRemapper` passes unknown kinds through unchanged (`:106-107`), so a placed member read would keep its
-template-local producer id; an `isOptional` read would then resolve to null. It is caught loudly at workflow
+`PlacedReferenceRemapper` passed unknown kinds through unchanged, so a placed member read would have kept its
+template-local producer id; an `isOptional` read would then resolve to null. (Corrected: since slice A the remapper
+refuses every member read it has no arm for, `WP/PlacedReferenceRemapper.cs:78`; slice C added the result arm and
+slice D1 the variable arm, so only request member reads are still refused.) It was also caught at workflow
 publication, because the data-selection guard reads payloads, not `Source` (`WP/ActivityTemplateDataSelectionGuard.cs:48-53`),
-and refuses an unknown producer (`:84-90`); the remapper still needs member arms. (d) A replacement
+and refuses an unknown producer. (d) A replacement
 `IRuntimeActivityInputMaterializer` or `IRuntimeInputBindingResolver` built before this change (both registered with
 `TryAdd`, `WR/Extensions/RuntimeCoreServiceCollectionExtensions.cs:524-525`) could read `binding.ActivityResult` and
 ignore the selection: closed by keeping member kinds away from the replaceable resolver (§7) and by tying the
@@ -302,7 +304,12 @@ pass, run right after the analysis in both `WorkflowExecutableCompiler` and `Act
 admitted paths to `Known` from facts the analysis returns per input; the linker then plans conversion from
 `Selection.SelectedType` instead of the projection type. `DeferredFit` gets no plan; an explicit, non-Auto
 conversion request on a `DeferredFit` read is refused at publish (binding contract §3). Intrinsic member reads stay
-without a plan (`ExecutableNodeCompiler.cs:452`) and are checked by the intrinsic payload validation.
+without a plan (`ExecutableNodeCompiler.cs:446-447`) and are checked by the intrinsic payload validation.
+(Corrected in slice D1: the linker plans activity results only, so it can refuse this only for result member reads.
+A variable member read is always deferred and the linker never sees a conversion request on it: whole-value
+`Variable` compilation drops the authored conversion entirely, `WP/RuntimeInputBindingCompiler.cs:619`. The
+refusal for variable member reads is therefore in the binding compiler, as
+`ValueConversionRejectionReason.SelectedMemberContractUnknown`. Whole-value `Variable` behaviour is unchanged.)
 
 **As delivered in slice C (result member reads).**
 - *Known-absent classification (decision 5):* the CLR reader is unchanged; the analyzer refuses on the shape's stable
@@ -510,9 +517,9 @@ runtime cannot be retrofitted; it refuses by failing to read.
 
 | Kind | Differs from the result case | Shape facts |
 |---|---|---|
-| `VariableMember` | Requires an explicit `declaringScopeId`; legacy `Variable` defaults to the workflow scope (`RuntimeInputBindingCompiler.cs:605-622`). Current items are the owning structure's scoped variables. Placement must remap the scope (`PlacedReferenceRemapper.cs:147-154`). | Always `DeferredFit`: a declared type yields `serialization-profile-unbound` (`ClrActivitySerializedShapeSource.cs:150-166`); variables can hold JSON from other writers. |
-| `WorkflowRequestMember` | Payload `memberKey` only; legacy dotted `Path` must be null. An open request (no declared inputs) is always deferred (`ActivityDataSelectionAnalyzer.cs:219-222`). | Always `DeferredFit`. Request seeding uses default JSON options for CLR values (comment at `ClrActivitySerializedShapeSource.cs:161-163`), so a CLR-seeded request may carry `CustomerId` where an author types `customerId`: exact segments then read `Absent`. |
-| `InputMember` | Authored only. Placement must lower it to `WorkflowRequestMember` with all segments; today's `Input` lowering keeps only `referenceKey` (`ActivityTemplatePlacer.cs:665-684`). Whether a workflow-level `Input` binding publishes at all was not established (§11). | Always `DeferredFit`. |
+| `VariableMember` | Requires an explicit `declaringScopeId`; legacy `Variable` defaults to the workflow scope (`RuntimeInputBindingCompiler.cs:619-632`, `ParseVariableReference`). Current items are the owning structure's scoped variables. Placement remaps the scope as for `VariableRead` (`PlacedReferenceRemapper.cs:83-99`, `RemapScope`). Delivered in slice D1. | Always `DeferredFit`: a declared type yields `serialization-profile-unbound` (`ClrActivitySerializedShapeSource.cs:151-165`); variables can hold JSON from other writers. |
+| `WorkflowRequestMember` | Payload `memberKey` only; legacy dotted `Path` must be null. An open request (no declared inputs) is always deferred (`ActivityDataSelectionAnalyzer.cs:237-240`). | Always `DeferredFit`. A CLR value supplied at start is serialized with default JSON options (PascalCase) by `WorkflowExecutionStartCommandPayload.ToJsonValues` (`Essentials/src/Workflows/Runtime/Core/Models/WorkflowExecutionStartDispatch.cs:710-713`). That one function seeds both request inputs (`WR/Services/Executions/WorkflowStartDispatcher.cs:467`) and start-time variables (`:503`), so a CLR-seeded request **or variable** may carry `CustomerId` where an author types `customerId`: exact segments then read `Absent`. Rule chosen (slice D): exact stored names; normalising CLR seeding is a separate follow-up. |
+| `InputMember` | Authored only. Placement must lower it to `WorkflowRequestMember` with all segments; today's `Input` lowering keeps only `referenceKey` (`ActivityTemplatePlacer.cs:667-683`). A workflow-level `Input` read publishes as an unevaluated expression (#4087, §11 item 4); that is fixed before slice D2. | Always `DeferredFit`. |
 
 None of the three can be `Known` today, so all depend on the runtime fit helper, and the issue's acceptance names
 only activity results. They belong to this leaf (T012 lists all four) but in a later slice than
@@ -528,7 +535,7 @@ runtime can run: half-enabled and reachable.
 | A. Member-read model (T011; hashing part of T013; requirement derivation of T016; model and hash part of T017) | Enum members, `RuntimeReadSelection`, constructor overload and invariants, `Selection` serialization, hash arms with throwing default, fingerprint append, inspection view, derived requirement, PublicAPI. | Nothing compiles a member binding; the resolver throws for one; no capability is advertised, so preflight, import and placement report the requirement unmet. Locally there is no front-door guard until slice B: a hand-built member executable runs up to its reader, whose input read is refused before construction (run: `MemberReadRefusalTests`). | Invariant rows; round trip; corpus goldens unchanged; distinct hashes for distinct paths, modes, types and delimiter-bearing names; old-reader controls (§11); requirement derived for member, absent for whole. | Low–medium: public shape and hash rendering. Delivered (receipt in [tasks](tasks.md)). |
 | B. Runtime selection (T014, T015, capability and guards of T016, runtime part of T017) | Selector, materializer and intrinsic integration inline and external, fit before snapshot, reason codes (one dedicated exception type, `VF-SEL` code first), capability with composition check, front-door and drain guards, and the `RequiresActivityHistory` update so request and variable member reads stop fetching activity history (§7). | Still no publication path emits member bindings; only hand-built executables reach it, and those now run correctly. | Unit rows for every outcome in §7, exact and literal names; inline/external parity; intrinsic; constructor counter and no snapshot commit on failure; retry reuse; real engine harness in a Sequence and a top-level Flowchart; guards refuse start, resume and queued work without the capability. | High: materialization order, external values, protection. Delivered: capability by composed materializer rather than a composition check, guards at activity start and bookmark resume (§8); receipt in [tasks](tasks.md). |
 | C. Publish result member reads (T012, T013, T017 for `ActivityResultMember`) | Authored parse, analyzer offer and admission, compiler branch and old-kind refusal, pin pass, linker on the selected type, remapper arms, contract text (§5). | Enables the feature for API clients; the Studio member picker (T022) stays gated in its own leaf. | Offer-equals-admission rows; refusal before any write through the real publish handler; template placement; real host publish → run in a Sequence and a top-level Flowchart, inline and external (acceptance 1). | Medium–high. Delivered behind the `MemberReads` setting, off by default (§3 "As delivered in slice C"); receipt in [tasks](tasks.md). |
-| D. Other families (T012, T013 for the rest) | `VariableMember`, `WorkflowRequestMember`, `InputMember` and its placement lowering. | Each kind refused until its row lands. | Deferred-fit rows; placement lowering keeps segments; reopen and publish. | Medium. |
+| D. Other families (T012, T013 for the rest) | `VariableMember`, `WorkflowRequestMember`, `InputMember` and its placement lowering. | Each kind refused until its row lands. | Deferred-fit rows; placement lowering keeps segments; reopen and publish. | Medium. Split: D1 `VariableMember` (delivered, receipt in [tasks](tasks.md)); the #4087 fix; D2 `WorkflowRequestMember`, `InputMember`, the code-first rename (decision 12). |
 
 ### 11. Open decisions and what reading could not establish
 
@@ -545,7 +552,7 @@ runtime can run: half-enabled and reachable.
 | 9 | Fit for `Known` reads | Always run the fit check before the snapshot. | A second deserialization per member read; whole-value reads do not pay it. |
 | 10 | Capability and replaced materializer | Decided in slice B: advertise only while the built-in materializer is composed, so a replaced one advertises nothing and member executables are refused before they run (§8). Was: fail composition. | A custom materializer that delegates correctly to the built-in one cannot advertise; an explicit opt-in can come later. |
 | 11 | Path size bound | 64 segments (existing query bound) and 4 096 UTF-16 code units in total. | Arbitrary; a long dictionary key could exceed it where JSON itself would not. |
-| 12 | Name clash | Keep the code-first builder's `WorkflowRequestMember<T>` (`WorkflowValue.cs:28`), which writes the legacy dotted `WorkflowRequest` path (`WorkflowBuilder.cs:117-123`), and document it. | Same name, different wire meaning, in the same product as the new discriminant (ADR 0080 D5 plain names). |
+| 12 | Name clash | Was: keep the code-first builder's `WorkflowRequestMember<T>` (`WorkflowValue.cs:28`), which writes the legacy dotted `WorkflowRequest` path (`WorkflowBuilder.cs:117-123`), and document it. Reversed, pending slice D2: rename the code-first type (two source files; Design Core has no PublicAPI baseline). | Same name, different wire meaning, in the same product as the new discriminant (ADR 0080 D5 plain names). |
 
 **Where the spec disagrees with the code or with #4053/#4059.** Binding contract §1 and the data model keep an
 optional legacy scope on `ActivityResultMember` (decision 2). Binding contract §6 says an old compiler can publish an
