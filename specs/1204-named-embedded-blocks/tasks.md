@@ -6,6 +6,8 @@
 
 Native sub-issues are durable work units; these checklists are the canonical task/acceptance map. One implementation leaf is active at a time. Evidence belongs to that leaf/PR, not new checkpoint issues. A checked task requires its actual acceptance; source preparation is insufficient.
 
+Owner triage on 9 November folded duplicate T004/#3753 into Feature #3745 and T007/#3756 into Program #3610. Their closure as not planned removes duplicate tracking, not the original acceptance obligations. The T004 and T007 identifiers and serial dependencies below remain in force.
+
 ## Phase 1 — Establishment and prototype
 
 **Goal:** prove the selected native composition and exact delivery contract before production completion.
@@ -28,7 +30,7 @@ Native sub-issues are durable work units; these checklists are the canonical tas
 **Goal:** real BPMN subprocess extraction with preserved supported binding/interchange semantics.
 **Independent test:** same-lane native task extraction, nested edit/save/run and separately audited XML/DI/binding round trip; unsafe selections/exports refuse without silent degradation.
 
-- [ ] T004 [#3753](https://github.com/elsa-workflows/elsa-foundation/issues/3753) Implement the bounded BPMN transformation in shared Studio authoring and required native binding-retention/refusal support in existing BPMN interchange; preserve elements/flows/child nodes and add plain start/end events. Run native and interchange regressions plus composed evidence. Depends on T003.
+- [ ] T004 [Feature #3745](https://github.com/elsa-workflows/elsa-foundation/issues/3745) Implement the bounded BPMN transformation in shared Studio authoring and required native binding-retention/refusal support in existing BPMN interchange; preserve elements/flows/child nodes and add plain start/end events. Run native and interchange regressions plus composed evidence. Depends on T003.
 
 ## Phase 4 — User Story 3
 
@@ -40,7 +42,7 @@ Native sub-issues are durable work units; these checklists are the canonical tas
 
 ## Phase 5 — Cross-cutting qualification and delivery
 
-- [ ] T007 [#3756](https://github.com/elsa-workflows/elsa-foundation/issues/3756) Complete `quickstart.md` journeys on rebuilt composed hosts, both resource editors and supported structures; add meaningful regressions/bite proofs and safe receipts. Cover themes, narrow/keyboard, unavailable modules, permissions/source authority, exact historical names/material and two-call-site isolation. Complete affected whole suites, source e2e, architecture/maps, exact-head review/CI and resulting-main proof. Update delivered documentation/glossary and spec lifecycle in the final implementation PR; close parents only with mapped evidence. Depends on T006.
+- [ ] T007 [Program #3610](https://github.com/elsa-workflows/elsa-foundation/issues/3610) Complete `quickstart.md` journeys on rebuilt composed hosts, both resource editors and supported structures; add meaningful regressions/bite proofs and safe receipts. Cover themes, narrow/keyboard, unavailable modules, permissions/source authority, exact historical names/material and two-call-site isolation. Complete affected whole suites, source e2e, architecture/maps, exact-head review/CI and resulting-main proof. Update delivered documentation/glossary and spec lifecycle in the final implementation PR; close parents only with mapped evidence. Depends on T006.
 
 ## Acceptance mapping
 
