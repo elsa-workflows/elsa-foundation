@@ -38,7 +38,7 @@ CI runs in two tiers (spec 263). [`tools/ci/test-tiers.json`](../../tools/ci/tes
   - **Building the solution.** Every PR shard builds the whole solution, which is what catches a compile break (#543). When a PR keeps no PR shard but changes a solution project that neither Architecture guards nor Core-only builds, one PR shard still runs, cut to its quickest project.
   - **Nothing affected still reports.** `Build & test` passes on an explicit `pr_count` of 0 once Architecture guards and Core-only pass. `Full tier` passes on two zero counts. `Generated maps fresh` always runs.
   - **The trade-off.** A dependency the selection cannot see, such as a test that builds a path from variables, is missed on the PR. Pushes to `main`, the nightly run, manual runs and the merge queue run every shard. Once the owner enables the merge queue, it catches such a miss before it lands; until then, the push run on `main` is where a miss shows up.
-- **Pull requests to an initiative branch** (`initiative/*`, see [Initiatives](initiatives.md)). A PR that carries implementation runs both tiers as a PR to `main` does, against the initiative branch as its base; a PR whose whole diff is documentation (ADRs, specs, agendas, skills, `tools/initiatives/**`, judged by the documentation-only classifier) runs no tier: the first job, `Initiative gate`, skips every other job. PRs to `main` start the same jobs as before; `test_tiers.py check-workflows` guards that the gate skips only on its explicit decision.
+- **Pull requests to an initiative branch** (`initiative/*`, see [Initiatives](initiatives.md)) run the same CI as a pull request to `main`, with the initiative branch as the base the change is diffed against: the same tier selection, the same documentation-only fast path, and the same draft rule for `Full tier`. A PR stacked on a proposal branch does not target `initiative/*` and runs no CI until it does. `test_tiers.py check-workflows` keeps the pull-request targets at exactly `main` and `initiative/**`.
 - **The tier rule.** A test project that reaches Testcontainers, directly or through a referenced test project, is integration tier. So is one that launches a child host (a Workbench host, a child host process, a worker, a probe or the `dotnet-elsa` CLI) and takes 2 minutes or more. Every other project is PR tier. A new test project needs an entry in the manifest; `Generated maps fresh` fails until it has one. Check locally with `dotnet run --project tools/maps/Elsa.Maps.Generator -- test-tiers-check`.
 
 Focused source proofs also run as jobs in `CI`: Studio frontend/browser/.NET validation, the
@@ -125,9 +125,9 @@ These steps restate [Issue Bus Lite][org-agents-review] for convenience; the org
   not relax the normal Code Review approval and CI requirements on the exact head. A delivery PR that only advances an already agreed spec's lifecycle status follows
   the normal merge path without reopening its architectural agreement.
 - **Initiative branches.** A PR whose base is an `initiative/*` branch, or the branch of a proposal PR stacked on one,
-  is an initiative proposal. It carries no required CI checks (a PR that carries implementation still runs the CI
-  tiers, see [CI tiers](#ci-tiers); a documentation-only one runs none), Code Review does not merge it, and the
-  initiative's coordinator merges it after the agreement rule and the [pre-merge gate](initiatives.md#the-pre-merge-gate) (a
+  is an initiative proposal. It carries no required CI checks (a PR to `initiative/*` still runs CI as a PR to
+  `main` does, see [CI tiers](#ci-tiers)), Code Review does not merge it, and the initiative's
+  coordinator merges it after the agreement rule and the [pre-merge gate](initiatives.md#the-pre-merge-gate) (a
   stacked child is merged into its parent by the parent's author), per the
   [org review and merge rules][org-agents-review]. Its author runs the review loop on the draft as usual, posts the
   evidence and requests the approvers instead of Code Review; it stays a draft until agreement. The landing PR from an

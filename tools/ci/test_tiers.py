@@ -343,12 +343,26 @@ def _job_name(block: str) -> str:
 
 
 MERGE_GROUP_TRIGGER = re.compile(r"^  merge_group:[ \t]*\n    types: \[checks_requested\][ \t]*$", re.M)
+# Pull requests to main and to an initiative branch run the same jobs and the same tier selection
+# (docs/contributing/merging.md#ci-tiers); no other base joins without a change here.
+PR_BASES = ("main", "'initiative/**'")
+
+
+def _pr_bases(trigger: str) -> list[str]:
+    block = re.search(r"^  pull_request:[ \t]*\n((?:    .*\n)+)", trigger, re.M)
+    branches = re.search(r"^    branches:[ \t]*\n((?:      - .*\n)+)", block.group(1), re.M) if block else None
+    return [line.strip()[2:].strip() for line in branches.group(1).splitlines()] if branches else []
 
 
 def check_workflows(ci: str, ci_full: str) -> list[str]:
     """A required context must never be skippable, the merge queue must get every required context, and no labeled
     trigger may sit on a required workflow (research R8)."""
     problems = []
+    bases = _pr_bases(ci.split("\njobs:\n", 1)[0] + "\n")
+    if sorted(bases) != sorted(PR_BASES):
+        problems.append(f"{CI}: `pull_request.branches` must be exactly {', '.join(PR_BASES)} (found "
+                        f"{', '.join(bases) or 'none'}): pull requests to an initiative branch run the CI a pull request "
+                        f"to main runs")
     if not MERGE_GROUP_TRIGGER.search(ci.split("\njobs:\n", 1)[0]):
         problems.append(f"{CI}: the required checks must also run on `merge_group: types: [checks_requested]`, or every "
                         f"merge-queue entry waits for checks that never report")
@@ -359,9 +373,8 @@ def check_workflows(ci: str, ci_full: str) -> list[str]:
         block = build[0]
         if not any(condition in block for condition in (
                 "if: ${{ !cancelled() }}",
-                "if: ${{ !cancelled() && (github.event_name != 'workflow_dispatch' || inputs.suite == 'ci') }}",
-                f"if: ${{{{ !cancelled() && {GATE_OPEN} && (github.event_name != 'workflow_dispatch' || inputs.suite == 'ci') }}}}")):
-            problems.append(f"{CI}: `Build & test` must run with `if: ${{{{ !cancelled() ... }}}}` (no other gate than the initiative gate's explicit false) so it always reports")
+                "if: ${{ !cancelled() && (github.event_name != 'workflow_dispatch' || inputs.suite == 'ci') }}")):
+            problems.append(f"{CI}: `Build & test` must run with `if: ${{{{ !cancelled() }}}}` so it always reports")
         needs = re.search(r"^    needs:\s*\[([^\]]*)\]", block, re.M)
         for job in ("plan-tiers", "pr-shard", "architecture-guards", "core-only", "plan-scope",
                     "studio-lint-and-test", "studio-browser-tests", "studio-dotnet-build-and-test", "studio-ux-acceptance"):
@@ -383,9 +396,8 @@ def check_workflows(ci: str, ci_full: str) -> list[str]:
         block = full[0]
         if not any(condition in block for condition in (
                 "if: ${{ !cancelled() }}",
-                "if: ${{ !cancelled() && (github.event_name == 'pull_request' || github.event_name == 'merge_group') }}",
-                f"if: ${{{{ !cancelled() && {GATE_OPEN} && (github.event_name == 'pull_request' || github.event_name == 'merge_group') }}}}")):
-            problems.append(f"{CI_FULL}: the `Full tier` job must run with `if: ${{{{ !cancelled() ... }}}}` on pull requests "
+                "if: ${{ !cancelled() && (github.event_name == 'pull_request' || github.event_name == 'merge_group') }}")):
+            problems.append(f"{CI_FULL}: the `Full tier` job must run with `if: ${{{{ !cancelled() }}}}` on pull requests "
                             f"and merge-queue entries")
         if "needs.plan-full.result != 'success'" not in _job_name(block) or 'PLAN" != success' not in block:
             problems.append(f"{CI_FULL}: the `Full tier` job must be named `Full tier` and fail when the plan did not succeed")
@@ -421,257 +433,6 @@ def check_workflows(ci: str, ci_full: str) -> list[str]:
     return problems
 
 
-# Initiative branches ------------------------------------------------------------------------------------------------
-#
-# A pull request to initiative/* runs CI only when it carries implementation (docs/contributing/merging.md#ci-tiers).
-# The `initiative-gate` job decides (change_scope.py --gate); every other job skips on its explicit run=false. The check
-# below proves that on the real ci.yml by evaluating each job's `if:` the way GitHub does, in dependency order: a job
-# with no status function in its condition also needs every ancestor to have succeeded, a skipped job's outputs are
-# empty, and !cancelled()/always()/failure() lift that implicit success() requirement.
-
-GATE_JOB = "initiative-gate"
-GATE_OPEN = f"needs.{GATE_JOB}.outputs.run != 'false'"
-GATE_NAME = "Initiative gate"  # merging.md#ci-tiers names it; check_docs keeps the two in step
-
-
-class ExpressionError(Exception):
-    pass
-
-
-def _job_if(block: str) -> str:
-    """A job's `if:` (plain or a folded scalar), without the ${{ }} wrapper; "" when it has none."""
-    match = re.search(r"^    if:[ \t]*(.*)$", block, re.M)
-    if not match:
-        return ""
-    value = match.group(1).strip()
-    if value in (">-", ">", "|", "|-"):
-        lines = []
-        for line in block[match.end():].splitlines()[1:]:
-            if line.strip() and len(line) - len(line.lstrip()) <= 4:
-                break
-            lines.append(line.strip())
-        value = " ".join(lines).strip()
-    if value.startswith("${{") and value.endswith("}}"):
-        value = value[3:-2].strip()
-    return value
-
-
-def _job_needs(block: str) -> list[str]:
-    inline = re.search(r"^    needs:[ \t]*\[([^\]]*)\]", block, re.M)
-    if inline:
-        return [need.strip() for need in inline.group(1).split(",") if need.strip()]
-    single = re.search(r"^    needs:[ \t]*([A-Za-z0-9_-]+)[ \t]*$", block, re.M)
-    if single:
-        return [single.group(1)]
-    listed = re.search(r"^    needs:[ \t]*\n((?:      - .*\n)+)", block, re.M)
-    return [line.strip()[2:].strip() for line in listed.group(1).splitlines()] if listed else []
-
-
-_TOKEN = re.compile(r"\s*(?:(?P<str>'(?:[^']|'')*')|(?P<op>&&|\|\||==|!=|!|\(|\))"
-                    r"|(?P<name>[A-Za-z_][A-Za-z0-9_.-]*\(\)|[A-Za-z_][A-Za-z0-9_.-]*))")
-
-
-def evaluate(expression: str, context: Callable[[str], object]) -> object:
-    """A GitHub Actions expression over string literals, names, ==, !=, !, && and || (the subset ci.yml's job
-    conditions use), with GitHub's semantics: && and || return an operand, == and != compare strings ignoring case."""
-    tokens, position, end = [], 0, len(expression.rstrip())
-    while position < end:
-        match = _TOKEN.match(expression, position)
-        if not match or match.end() == position:
-            raise ExpressionError(f"cannot read `{expression[position:]}` in `{expression}`")
-        position = match.end()
-        tokens.append((match.lastgroup, match.group(match.lastgroup)))
-    index = 0
-
-    def peek() -> tuple[str, str] | None:
-        return tokens[index] if index < len(tokens) else None
-
-    def take() -> tuple[str, str]:
-        nonlocal index
-        if index >= len(tokens):
-            raise ExpressionError(f"unexpected end of `{expression}`")
-        index += 1
-        return tokens[index - 1]
-
-    def truthy(value: object) -> bool:
-        return value not in ("", None, False, 0)
-
-    def text(value: object) -> str:
-        return ("true" if value else "false") if isinstance(value, bool) else str(value or "")
-
-    def primary() -> object:
-        kind, value = take()
-        if (kind, value) == ("op", "!"):
-            return not truthy(primary())
-        if (kind, value) == ("op", "("):
-            result = either()
-            if take() != ("op", ")"):
-                raise ExpressionError(f"unbalanced parentheses in `{expression}`")
-            return result
-        if kind == "str":
-            return value[1:-1].replace("''", "'")
-        if kind == "name":
-            return context(value)
-        raise ExpressionError(f"unexpected `{value}` in `{expression}`")
-
-    def comparison() -> object:
-        left = primary()
-        while peek() in (("op", "=="), ("op", "!=")):
-            operator = take()[1]
-            same = text(left).lower() == text(primary()).lower()
-            left = same if operator == "==" else not same
-        return left
-
-    def both() -> object:
-        left = comparison()
-        while peek() == ("op", "&&"):
-            take()
-            right = comparison()
-            left = right if truthy(left) else left
-        return left
-
-    def either() -> object:
-        left = both()
-        while peek() == ("op", "||"):
-            take()
-            right = both()
-            left = left if truthy(left) else right
-        return left
-
-    result = either()
-    if index != len(tokens):
-        raise ExpressionError(f"trailing `{tokens[index][1]}` in `{expression}`")
-    return result
-
-
-def simulate(ci: str, event: str, outputs: dict[str, dict[str, str]], draft: bool = False,
-             failed: frozenset[str] = frozenset()) -> dict[str, bool]:
-    """Which jobs of a workflow start for `event` (not workflow_dispatch). A started job succeeds with the given outputs,
-    or fails without outputs when it is in `failed`. success() and failure() look at every ancestor, not only the
-    direct needs: GitHub skips a job without a status function when any job it transitively needs did not succeed
-    (actions/runner#491)."""
-    jobs = _jobs(ci)
-    results: dict[str, str] = {}
-    started: dict[str, bool] = {}
-    ancestry: dict[str, set[str]] = {}
-
-    def visit(job: str, trail: tuple[str, ...] = ()) -> None:
-        if job in results:
-            return
-        if job in trail or job not in jobs:
-            raise ExpressionError(f"`{job}` is missing or part of a cycle ({' -> '.join(trail + (job,))})")
-        needs = _job_needs(jobs[job])
-        for need in needs:
-            visit(need, trail + (job,))
-        ancestors = ancestry[job] = set(needs).union(*(ancestry[need] for need in needs))
-
-        def context(name: str) -> object:
-            if name == "cancelled()":
-                return False
-            if name == "always()":
-                return True
-            if name == "success()":
-                return all(results[ancestor] == "success" for ancestor in ancestors)
-            if name == "failure()":
-                return any(results[ancestor] == "failure" for ancestor in ancestors)
-            if name == "github.event_name":
-                return event
-            if name == "github.event.pull_request.draft":
-                return draft
-            if name in ("inputs.suite", "inputs.tier"):
-                return ""
-            parts = name.split(".")
-            if parts[0] == "needs" and len(parts) >= 3 and parts[1] in needs:
-                if parts[2] == "result" and len(parts) == 3:
-                    return results[parts[1]]
-                if parts[2] == "outputs" and len(parts) == 4:
-                    return outputs.get(parts[1], {}).get(parts[3], "") if results[parts[1]] == "success" else ""
-            raise ExpressionError(f"`{job}`: unknown name `{name}`")
-
-        condition = _job_if(jobs[job])
-        if re.search(r"\b(?:success|failure|cancelled|always)\(\)", condition):
-            expression = condition
-        else:
-            expression = f"success() && ({condition})" if condition else "success()"
-        runs = bool(evaluate(expression, context))
-        started[job] = runs
-        results[job] = ("failure" if job in failed else "success") if runs else "skipped"
-
-    for job in jobs:
-        visit(job)
-    return started
-
-
-# What the planning jobs report for a change that carries implementation: some shards affected, the full tier on.
-_CODE_OUTPUTS = {
-    "plan-scope": {"studio": "false", "weaver": "false", "published-images": "false", "studio-order": "false",
-                   "backend-source": "false"},
-    "plan-tiers": {"docs_only": "false", "pr_count": "1", "integration_count": "1", "container_count": "1"},
-    "plan-full": {"run": "true", "docs_only": "false", "integration_count": "1", "container_count": "1"},
-}
-# The tier jobs a ready pull request that carries implementation starts, to main and to an initiative branch alike.
-TIER_JOBS = ("plan-scope", "plan-tiers", "pr-shard", "architecture-guards", "core-only", "build-and-test",
-             "generated-maps", "plan-full", "integration-shard", "ef-container-shard", "full-tier")
-
-
-def _raises(action: Callable[[], object], error: type[Exception]) -> bool:
-    try:
-        action()
-    except error:
-        return True
-    return False
-
-
-def check_initiative_gate(ci: str) -> list[str]:
-    """Docs-only PR to initiative/*: only the gate starts. Code PR to it: the PR and full tiers start, as on main.
-    Any other run: the gate says run=true and the jobs start as they did before; only an explicit false skips, and a
-    gate that fails still starts every required context, so none passes by being skipped."""
-    problems = []
-    trigger = ci.split("\njobs:\n", 1)[0]
-    pull_request = re.search(r"^  pull_request:[ \t]*\n((?: {4,}.*\n)+)", trigger, re.M)
-    if not pull_request or not re.search(r"^      - 'initiative/\*\*'[ \t]*$", pull_request.group(1), re.M):
-        problems.append(f"{CI}: `pull_request.branches` must include 'initiative/**' so implementation PRs to an "
-                        f"initiative branch run CI")
-    jobs = _jobs(ci)
-    gate = jobs.get(GATE_JOB, "")
-    if not gate or _job_needs(gate) or _job_if(gate):
-        problems.append(f"{CI}: `{GATE_JOB}` must be an unconditional first job with no needs")
-        return problems
-    if "python3 tools/ci/change_scope.py --gate" not in gate or "run: ${{ steps.gate.outputs.run }}" not in gate:
-        problems.append(f"{CI}: `{GATE_JOB}` must output run from `change_scope.py --gate`")
-    if _job_name(gate) != GATE_NAME:
-        problems.append(f"{CI}: `{GATE_JOB}` must be named `{GATE_NAME}`, the name merging.md#ci-tiers uses")
-    try:
-        closed = {GATE_JOB: {"run": "false"}}
-        started = []
-        for draft in (False, True):
-            started += [job for job, runs in simulate(ci, "pull_request", closed, draft=draft).items()
-                        if runs and job != GATE_JOB and job not in started]
-        if started:
-            problems.append(f"{CI}: a documentation-only PR to an initiative branch starts {', '.join(started)}; "
-                            f"only `{GATE_JOB}` may run")
-        code = simulate(ci, "pull_request", {GATE_JOB: {"run": "true"}, **_CODE_OUTPUTS})
-        missing = [job for job in TIER_JOBS if not code.get(job)]
-        if missing:
-            problems.append(f"{CI}: a ready PR that carries implementation does not start {', '.join(missing)}")
-        # Only an explicit 'false' skips: a gate that reports nothing starts every job, and a gate that fails still
-        # starts every required context, which then gives its own verdict rather than passing as skipped.
-        for event in ("pull_request", "merge_group", "push", "schedule"):
-            opened = simulate(ci, event, {GATE_JOB: {"run": "true"}, **_CODE_OUTPUTS})
-            silent = simulate(ci, event, _CODE_OUTPUTS)
-            if {j: r for j, r in opened.items() if j != GATE_JOB} != {j: r for j, r in silent.items() if j != GATE_JOB}:
-                problems.append(f"{CI}: on {event}, jobs must skip only on an explicit run=false from `{GATE_JOB}`")
-            broken = simulate(ci, event, _CODE_OUTPUTS, failed=frozenset({GATE_JOB}))
-            required = ["build-and-test", "generated-maps"] + (["full-tier"] if event in ("pull_request", "merge_group") else [])
-            skipped = [job for job in required if not broken.get(job)]
-            if skipped:
-                problems.append(f"{CI}: on {event}, a failed `{GATE_JOB}` skips {', '.join(skipped)}; a required check "
-                                f"must still start and give its own verdict")
-    except ExpressionError as error:
-        problems.append(f"{CI}: cannot evaluate the job conditions: {error}")
-    return problems
-
-
 def check_docs(read: Callable[[str], str | None]) -> list[str]:
     """The CI tiers section exists, the PR-driving skills link to it, and its literals match the workflows."""
     problems = []
@@ -680,7 +441,7 @@ def check_docs(read: Callable[[str], str | None]) -> list[str]:
     if section is None:
         problems.append(f"{MERGING}: no `## CI tiers` section")
     else:
-        for literal in (DISPATCH, "PR tier", "full tier", "gh pr ready", "draft", MANIFEST, GATE_NAME, "initiative/"):
+        for literal in (DISPATCH, "PR tier", "full tier", "gh pr ready", "draft", MANIFEST):
             if literal.lower() not in section.lower():
                 problems.append(f"{MERGING}#ci-tiers does not mention `{literal}`")
     for skill in SKILLS:
@@ -867,7 +628,7 @@ def self_test() -> int:
     check("job entry: keeps only test projects, with forward slashes",
           entry == {"shard": "core-only", "whole": ["t/A/A.Tests.csproj"], "split": []})
 
-    good_ci = ("on:\n  pull_request:\n  merge_group:\n    types: [checks_requested]\njobs:\n  plan-tiers:\n    name: Plan tiers\n"
+    good_ci = ("on:\n  pull_request:\n    branches:\n      - main\n      - 'initiative/**'\n  merge_group:\n    types: [checks_requested]\njobs:\n  plan-tiers:\n    name: Plan tiers\n"
                "  generated-maps:\n    name: Generated maps fresh\n"
                "  build-and-test:\n    name: Build & test\n"
                "    needs: [plan-tiers, pr-shard, architecture-guards, core-only, plan-scope, studio-lint-and-test, studio-browser-tests, studio-dotnet-build-and-test, studio-ux-acceptance]\n    if: ${{ !cancelled() }}\n")
@@ -885,6 +646,12 @@ def self_test() -> int:
     queue_full = good_full.replace("if: ${{ !cancelled() }}",
                                    "if: ${{ !cancelled() && (github.event_name == 'pull_request' || github.event_name == 'merge_group') }}")
     check("workflows: the real shape passes", not check_workflows(good_ci, good_full))
+    check("workflows: pull requests to an initiative branch must run CI",
+          bool(check_workflows(good_ci.replace("      - 'initiative/**'\n", ""), good_full)))
+    check("workflows: pull requests to main must run CI",
+          bool(check_workflows(good_ci.replace("      - main\n", "", 1), good_full)))
+    check("workflows: no other pull-request base joins unnoticed",
+          bool(check_workflows(good_ci.replace("      - main\n", "      - main\n      - 'release/**'\n", 1), good_full)))
     check("workflows: a skippable Build & test fails",
           bool(check_workflows(good_ci.replace("if: ${{ !cancelled() }}", "if: ${{ needs.x.outputs.y }}"), good_full)))
     check("workflows: a ready-only skip of the required PR context fails",
@@ -933,57 +700,9 @@ def self_test() -> int:
     check("workflows: a Full tier that ignores a failed plan fails",
           bool(check_workflows(good_ci, good_full.replace("needs.plan-full.result != 'success' || ", ""))))
 
-    # Initiative branches: GitHub's expression rules, then the real ci.yml in the three directions and its regressions.
-    names = {"a": "", "b": "x", "t": True, "f": False}.get
-    check("expressions: && and || return an operand", evaluate("a || b", names) == "x" and evaluate("b && a", names) == "")
-    check("expressions: == ignores case and ! binds tightest",
-          evaluate("'Main' == 'main' && !f", names) is True and evaluate("!t || t", names) is True)
-    check("expressions: an unknown token is refused", _raises(lambda: evaluate("a ~ b", names), ExpressionError))
-    chain = ("on:\n  push:\njobs:\n  a:\n    name: A\n  b:\n    needs: a\n    if: ${{ !cancelled() }}\n"
-             "  c:\n    needs: b\n  d:\n    needs: [b]\n    if: ${{ !cancelled() }}\n")
-    ran = simulate(chain, "push", {}, failed=frozenset({"a"}))
-    check("simulate: a failed ancestor skips a job without a status function (actions/runner#491)",
-          ran == {"a": True, "b": True, "c": False, "d": True})
-    real_ci = _read_file(CI) or ""
-    check("initiative: the real ci.yml passes", bool(real_ci) and not check_initiative_gate(real_ci))
-    if real_ci:
-        def starts(event: str, outputs: dict, draft: bool = False) -> set[str]:
-            return {job for job, runs in simulate(real_ci, event, outputs, draft=draft).items() if runs}
-
-        check("initiative: a docs-only PR to an initiative branch starts only the gate",
-              starts("pull_request", {GATE_JOB: {"run": "false"}}) == {GATE_JOB}
-              and starts("pull_request", {GATE_JOB: {"run": "false"}}, draft=True) == {GATE_JOB})
-        check("initiative: a code PR to an initiative branch starts the PR and full tiers",
-              set(TIER_JOBS) <= starts("pull_request", {GATE_JOB: {"run": "true"}, **_CODE_OUTPUTS}))
-        for event in ("pull_request", "merge_group", "push", "schedule"):
-            check(f"initiative: run=true on {event} (main) starts what a silent gate does",
-                  starts(event, {GATE_JOB: {"run": "true"}, **_CODE_OUTPUTS}) - {GATE_JOB}
-                  == starts(event, _CODE_OUTPUTS) - {GATE_JOB})
-        gate_if = "if: ${{ !cancelled() && needs.initiative-gate.outputs.run != 'false' }}\n"
-        regressions = {
-            "a job that starts without the gate": real_ci.replace("    needs: initiative-gate\n    " + gate_if, "", 1),
-            "an aggregate that ignores the gate": real_ci.replace(
-                "    if: ${{ !cancelled() && needs.initiative-gate.outputs.run != 'false' && (github.event_name == 'pull_request'",
-                "    if: ${{ !cancelled() && (github.event_name == 'pull_request'"),
-            "jobs that need run == 'true' (a failed gate would skip required checks)":
-                real_ci.replace("needs.initiative-gate.outputs.run != 'false'", "needs.initiative-gate.outputs.run == 'true'"),
-            "no initiative/** trigger": real_ci.replace("      - 'initiative/**'\n", ""),
-            "no gate job": real_ci.replace("  initiative-gate:\n", "  initiative-gate-renamed:\n"),
-            "a required context that a failed gate skips": real_ci.replace(
-                "    needs: initiative-gate\n    if: ${{ !cancelled() && needs.initiative-gate.outputs.run != 'false' && "
-                "(github.event_name != 'workflow_dispatch' || inputs.suite == 'ci') }}\n    runs-on: ubuntu-latest\n"
-                "    timeout-minutes: 15",
-                "    needs: initiative-gate\n    if: ${{ needs.initiative-gate.outputs.run != 'false' && "
-                "(github.event_name != 'workflow_dispatch' || inputs.suite == 'ci') }}\n    runs-on: ubuntu-latest\n"
-                "    timeout-minutes: 15"),
-            "a renamed gate job": real_ci.replace("    name: Initiative gate\n", "    name: Initiative check\n"),
-        }
-        for name, text in regressions.items():
-            check(f"initiative: {name} fails", text != real_ci and bool(check_initiative_gate(text)))
-
     docs = {
         MERGING: f"# Merging\n\n## CI tiers\n\nThe PR tier and the full tier, per {MANIFEST}. Open a draft, then "
-                 f"`gh pr ready <n>`. Run `{DISPATCH}`. A PR to `initiative/*`: `{GATE_NAME}`.\n\n## Review and merge\n",
+                 f"`gh pr ready <n>`. Run `{DISPATCH}`.\n\n## Review and merge\n",
         CI: "      tier:\n        description: Which tier\n        type: choice\n        options: [full, pr]\n",
         **{skill: f"See [CI tiers](../../../docs/contributing/{DOCS_ANCHOR})." for skill in SKILLS},
     }
@@ -993,8 +712,6 @@ def self_test() -> int:
     check("docs: a renamed dispatch option fails",
           bool(check_docs(lambda p: docs[CI].replace("[full, pr]", "[everything, pr]") if p == CI else docs.get(p))))
     check("docs: a missing section fails", bool(check_docs(lambda p: "# Merging\n" if p == MERGING else docs.get(p))))
-    check("docs: a section without the initiative gate fails",
-          bool(check_docs(lambda p: docs[MERGING].replace(GATE_NAME, "the gate") if p == MERGING else docs.get(p))))
     check("docs: a section without the dispatch command fails",
           bool(check_docs(lambda p: docs[MERGING].replace(DISPATCH, "run it by hand") if p == MERGING else docs.get(p))))
 
@@ -1042,7 +759,6 @@ def main() -> int:
         if args.command in ("check-workflows", "check-docs"):
             if args.command == "check-workflows":
                 problems = check_workflows(_read_file(CI) or "", _read_file(CI_FULL) or "")
-                problems += check_initiative_gate(_read_file(CI) or "")
             else:
                 problems = check_docs(_read_file)
             for problem in problems:

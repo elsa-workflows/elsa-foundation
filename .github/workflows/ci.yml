@@ -6,8 +6,8 @@ name: CI
 # A merge-queue entry (merge_group) runs both tiers on the exact merge result and reports all three
 # required checks. Focused manual runs select a suite below.
 # Path filters live in tools/ci/workflow-paths.json and are applied by plan-scope.
-# Pull requests to an initiative branch (docs/contributing/initiatives.md) run here only when they carry
-# implementation: the Initiative gate job skips every other job for a documentation-only one (ADRs, specs, agendas).
+# Pull requests to an initiative branch (docs/contributing/initiatives.md) run exactly what a pull request to main runs,
+# diffed against the initiative branch: the same tier selection and the same documentation-only fast path.
 
 on:
   pull_request:
@@ -59,37 +59,8 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
 
 jobs:
-  # Decision documents on an initiative branch stay check-free; implementation PRs to it run the tiers as a PR to main
-  # does. run=false only for a documentation-only pull request whose base is initiative/* (change_scope.py's classifier,
-  # the same one as the docs-only fast path). A run that is not a PR to initiative/* gets run=true without reading a
-  # diff, and the jobs below skip only on an explicit 'false'. A gate that gives nothing changes nothing; a gate that fails still starts the
-  # required contexts below (!cancelled()), so none of them passes by being skipped: each gives its own verdict, and
-  # Build & test goes red on a code change because GitHub skips the shards under a failed ancestor. test_tiers.py
-  # check-workflows proves that the contexts start and that run=true starts what a silent gate does. The
-  # merge commit's first parent is the PR's base tip, so a depth-2 checkout is enough for the diff.
-  initiative-gate:
-    name: Initiative gate
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    outputs:
-      run: ${{ steps.gate.outputs.run }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 2
-          persist-credentials: false
-      - name: Decide whether this run validates anything
-        id: gate
-        env:
-          BASE_REF: ${{ github.base_ref }}
-        run: >-
-          python3 tools/ci/change_scope.py --gate --event "$GITHUB_EVENT_NAME" --base-ref "$BASE_REF"
-          --base "$GITHUB_SHA^1" --head "$GITHUB_SHA" --github-output "$GITHUB_OUTPUT" --summary "$GITHUB_STEP_SUMMARY"
-
   plan-scope:
     name: Select focused validation
-    needs: initiative-gate
-    if: ${{ !cancelled() && needs.initiative-gate.outputs.run != 'false' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
@@ -109,8 +80,7 @@ jobs:
 
   # Python only, so the shards start within a minute: the change scope, the cheap guards, and the shard matrix.
   plan-tiers:
-    needs: initiative-gate
-    if: ${{ !cancelled() && needs.initiative-gate.outputs.run != 'false' && (github.event_name != 'workflow_dispatch' || inputs.suite == 'ci') }}
+    if: (github.event_name != 'workflow_dispatch' || inputs.suite == 'ci')
     name: Plan tiers
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -142,12 +112,12 @@ jobs:
         # Pull requests and merge-queue entries only; every other event is a full run. The classifier exits 0 whatever
         # it finds, and a diff it cannot read classifies as a full run.
         #
-        # BASE_SHA is the first parent of the merge commit GitHub tests: the base branch today (main, or an initiative/*
-        # branch). The diff from it is exactly what the pull request would change. pull_request.base.sha is the base from
-        # when the PR was opened or last retargeted, so on an older PR it also counted everything merged into main since,
-        # and a documentation-only PR got a full run (#2683: one docs file, classified by an .editorconfig change on
-        # main). A merge-queue entry's base is merge_group.base_sha, the commit the entry was built on; its head,
-        # GITHUB_SHA, is the merge result.
+        # BASE_SHA is the first parent of the merge commit GitHub tests: the base branch today (main or initiative/*).
+        # The diff from it is exactly what the pull request would change. pull_request.base.sha is the base from when the
+        # PR was opened or last retargeted, so on an older PR it also counted everything merged into main since, and a
+        # documentation-only PR got a full run (#2683: one docs file, classified by an .editorconfig change on main). A
+        # merge-queue entry's base is merge_group.base_sha, the commit the entry was built on; its head, GITHUB_SHA, is
+        # the merge result.
         # The same base serves the quarantine guard and the switch check below.
         env:
           BASE_SHA: ${{ github.event_name == 'pull_request' && format('{0}^1', github.sha) || github.event_name == 'merge_group' && github.event.merge_group.base_sha || '' }}
@@ -303,8 +273,8 @@ jobs:
   # core-only leg. !cancelled() rather than always(): a superseded run must not turn into a red aggregate.
   build-and-test:
     name: "${{ github.event_name == 'workflow_dispatch' && inputs.suite != 'ci' && 'Build & test (not requested)' || 'Build & test' }}"
-    needs: [initiative-gate, plan-tiers, pr-shard, architecture-guards, core-only, plan-scope, studio-lint-and-test, studio-browser-tests, studio-dotnet-build-and-test, studio-ux-acceptance]
-    if: ${{ !cancelled() && needs.initiative-gate.outputs.run != 'false' && (github.event_name != 'workflow_dispatch' || inputs.suite == 'ci') }}
+    needs: [plan-tiers, pr-shard, architecture-guards, core-only, plan-scope, studio-lint-and-test, studio-browser-tests, studio-dotnet-build-and-test, studio-ux-acceptance]
+    if: ${{ !cancelled() && (github.event_name != 'workflow_dispatch' || inputs.suite == 'ci') }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
@@ -747,8 +717,7 @@ jobs:
   # hide another.
   generated-maps:
     name: "${{ github.event_name == 'workflow_dispatch' && inputs.suite != 'ci' && 'Generated maps (not requested)' || 'Generated maps fresh' }}"
-    needs: initiative-gate
-    if: ${{ !cancelled() && needs.initiative-gate.outputs.run != 'false' && (github.event_name != 'workflow_dispatch' || inputs.suite == 'ci') }}
+    if: (github.event_name != 'workflow_dispatch' || inputs.suite == 'ci')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -952,8 +921,7 @@ jobs:
 
   # A pull request, or a merge-queue entry: the queue is where the full tier proves the exact merge result.
   plan-full:
-    needs: initiative-gate
-    if: ${{ !cancelled() && needs.initiative-gate.outputs.run != 'false' && (github.event_name == 'pull_request' || github.event_name == 'merge_group') }}
+    if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
     name: Plan full tier
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -1022,8 +990,8 @@ jobs:
 
   full-tier:
     name: "${{ github.event_name != 'pull_request' && github.event_name != 'merge_group' && 'Full tier (not requested)' || (needs.plan-full.result != 'success' || needs.plan-full.outputs.run == 'true' || !github.event.pull_request.draft) && 'Full tier' || 'Full tier (not run: draft)' }}"
-    needs: [initiative-gate, plan-full, integration-shard, ef-container-shard]
-    if: ${{ !cancelled() && needs.initiative-gate.outputs.run != 'false' && (github.event_name == 'pull_request' || github.event_name == 'merge_group') }}
+    needs: [plan-full, integration-shard, ef-container-shard]
+    if: ${{ !cancelled() && (github.event_name == 'pull_request' || github.event_name == 'merge_group') }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
