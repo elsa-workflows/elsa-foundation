@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_publish_commit": "b9c2a6e64af2570097725e46ba4fdcfb9dddca68",
+  "last_publish_commit": "6d8b311bf47eb91e1e280e503ed537efcf9245ef",
   "packages": [
     {
       "package_id": "Elsa.Activities.Bpmn",
@@ -904,8 +904,8 @@
     },
     {
       "package_id": "Elsa.Workflows.Design.Api",
-      "version": "4.0.39-preview",
-      "commit": "87b8b41fc2650b18866e9c8da3fed3ba6a5a86d8"
+      "version": "4.0.40-preview",
+      "commit": "6d8b311bf47eb91e1e280e503ed537efcf9245ef"
     },
     {
       "package_id": "Elsa.Workflows.Design.CodeGeneration",
@@ -949,8 +949,8 @@
     },
     {
       "package_id": "Elsa.Workflows.Design.Validations",
-      "version": "4.0.24-preview",
-      "commit": "b9c2a6e64af2570097725e46ba4fdcfb9dddca68"
+      "version": "4.0.25-preview",
+      "commit": "6d8b311bf47eb91e1e280e503ed537efcf9245ef"
     },
     {
       "package_id": "Elsa.Workflows.Design.Validations.Core",
@@ -964,8 +964,8 @@
     },
     {
       "package_id": "Elsa.Workflows.Publishing",
-      "version": "4.0.54-preview",
-      "commit": "b9c2a6e64af2570097725e46ba4fdcfb9dddca68"
+      "version": "4.0.55-preview",
+      "commit": "6d8b311bf47eb91e1e280e503ed537efcf9245ef"
     },
     {
       "package_id": "Elsa.Workflows.Publishing.Api",
@@ -984,8 +984,8 @@
     },
     {
       "package_id": "Elsa.Workflows.Runtime",
-      "version": "4.0.100-preview",
-      "commit": "b9c2a6e64af2570097725e46ba4fdcfb9dddca68"
+      "version": "4.0.101-preview",
+      "commit": "6d8b311bf47eb91e1e280e503ed537efcf9245ef"
     },
     {
       "package_id": "Elsa.Workflows.Runtime.Api",
@@ -994,8 +994,8 @@
     },
     {
       "package_id": "Elsa.Workflows.Runtime.Core",
-      "version": "4.0.82-preview",
-      "commit": "e81b0da15e5b8f20076927c94375f28f92d31313"
+      "version": "4.0.83-preview",
+      "commit": "6d8b311bf47eb91e1e280e503ed537efcf9245ef"
     },
     {
       "package_id": "Elsa.Workflows.Runtime.Distributed",
@@ -1019,8 +1019,8 @@
     },
     {
       "package_id": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore",
-      "version": "4.0.58-preview",
-      "commit": "b9c2a6e64af2570097725e46ba4fdcfb9dddca68"
+      "version": "4.0.59-preview",
+      "commit": "6d8b311bf47eb91e1e280e503ed537efcf9245ef"
     },
     {
       "package_id": "Elsa.Workflows.Runtime.Reconciliation",
