@@ -1,5 +1,6 @@
 import { writeFileSync } from "node:fs";
 import { expect, test, type Browser, type Locator, type Page, type Route, type TestInfo } from "@playwright/test";
+import { isReadOnlyConsoleNegotiation } from "./consoleNegotiation.mjs";
 
 // Supplementary composed journeys for grouped navigation (#3863). Each runs once in its own project
 // (playwright.config.ts) against hosts tools/ux-acceptance/run.py owns; none creates definitions or other
@@ -310,14 +311,20 @@ test("restricted principal settings access", async ({ page }, info) => {
     const authorization = request.headers().authorization;
     if (authorization?.startsWith("Bearer ") && new URL(request.url()).origin === backendOrigin) bearer = authorization;
   });
-  // Record every page request from the start; only the sign-in form POST itself may write.
+  // Record every page request from the start. Sign-in and the empty SignalR transport
+  // negotiation are separate from data writes; neither exemption covers hub messages.
   const writes: Array<{ method: string; url: string }> = [];
+  const transportNegotiations: Array<{ method: string; url: string }> = [];
   let signInPosts = 0, observed = 0;
-  const record = (request: { method(): string; url(): string }) => {
+  const record = (request: { method(): string; url(): string; postData(): string | null }) => {
     const url = new URL(request.url());
-    if (request.method() === "POST" && url.pathname === "/_elsa/identity/login" && observed === 0) { signInPosts++; return; }
+    if (request.method() === "POST" && url.origin === backendOrigin && url.pathname === "/_elsa/identity/login" && observed === 0) { signInPosts++; return; }
     if (signInPosts === 0) return;
     observed++;
+    if (isReadOnlyConsoleNegotiation(request.method(), request.url(), request.postData(), backend)) {
+      transportNegotiations.push({ method: request.method(), url: `${url.origin}${url.pathname}` });
+      return;
+    }
     if (!["GET", "HEAD", "OPTIONS"].includes(request.method())) writes.push({ method: request.method(), url: `${url.origin}${url.pathname}` });
   };
   page.on("request", record);
@@ -392,9 +399,9 @@ test("restricted principal settings access", async ({ page }, info) => {
   await expect(appearance).toHaveAttribute("aria-current", "page");
   await capture(page, info, "restricted-keyboard-recovery");
   page.off("request", record);
-  await attachJson(info, "restricted-network.json", { signInPosts, observedRequestsAfterSignIn: observed, writes, denials, expectedWritesAfterSignIn: [] });
+  await attachJson(info, "restricted-network.json", { signInPosts, observedRequestsAfterSignIn: observed, transportNegotiations, writes, denials, expectedWritesAfterSignIn: [] });
   expect(observed, "The browsing after sign-in made real requests").toBeGreaterThan(0);
-  expect(writes, "No write request after sign-in").toEqual([]);
+  expect(writes, "No data write after sign-in; empty console transport negotiations are recorded separately").toEqual([]);
 });
 
 test("activity availability load failures and recovery", async ({ page }, info) => {

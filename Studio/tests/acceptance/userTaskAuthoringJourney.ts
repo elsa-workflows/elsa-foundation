@@ -58,8 +58,10 @@ export async function userTaskAuthoringJourney(page: Page, info: TestInfo, captu
     await page.setViewportSize({ width: 1600, height: 1100 });
     if (projectViewport.width < 800) await page.getByRole("button", { name: "Restore inspector panel", exact: true }).click();
   };
-  await page.getByRole("button", { name: "More tools", exact: true }).click();
-  await page.getByRole("link", { name: "Forms", exact: true }).click();
+  const operate = page.locator(".sidebar").getByRole("navigation", { name: "Operate", exact: true });
+  const operateToggle = operate.getByRole("button", { name: "Operate", exact: true });
+  if (await operateToggle.getAttribute("aria-expanded") === "false") await operateToggle.click();
+  await operate.getByRole("link", { name: "Forms", exact: true }).click();
   await expect(page).toHaveURL(/\/user-tasks\/forms(?:\?|$)/);
   await page.getByRole("button", { name: "Create form version", exact: true }).first().click();
   await expect(page.getByRole("textbox", { name: "Form ID", exact: true })).toBeFocused();
