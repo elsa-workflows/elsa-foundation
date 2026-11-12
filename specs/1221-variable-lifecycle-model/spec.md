@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-09
 
-**Status**: Draft — **provisional**. Approval waits on the ADR PR listed under *Approval*.
+**Status**: Approved — agreed 2026-11-12, together with the ADR it applies (#3411).
 
 **Initiative**: part of [#3052](https://github.com/elsa-workflows/elsa-foundation/issues/3052), spec row **S-10**,
 analysis **A-2**, decisions **D-8** and **D-9**.
