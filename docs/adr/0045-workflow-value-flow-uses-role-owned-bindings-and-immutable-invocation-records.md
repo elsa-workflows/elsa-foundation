@@ -1,6 +1,7 @@
 # Workflow Value Flow Uses Role-Owned Bindings And Immutable Invocation Records
 
-Status: accepted (2026-07-16; ratified through an architect grilling session)
+Status: accepted (2026-07-16; ratified through an architect grilling session). §5 amended (accepted 2026-11-12; decisions D-1, D-5, D-6 and
+D-15): expressions no longer need to be deterministic.
 
 Elsa's canonical workflow and activity model will not use `IMemoryBlock`,
 `IMemoryBlockReference`, a memory register, or a universal runtime value-reference interface.
@@ -167,8 +168,11 @@ data requires an explicit optional value, union, or branch merge.
 JavaScript, Liquid, and other expression languages remain first-class. Their canonical definition
 contains a language identifier, source string, expected result type, explicit named parameter
 bindings, and evaluator options. Input-binding expressions cannot retain CLR delegates or captured
-closures, discover workflow values through ambient name-based accessors, mutate variables, or expose
-mutating host functions.
+closures, or change engine-owned workflow state: variables, workflow outputs, correlation ID, instance name or
+outcomes. They read workflow values only through the read surface defined in
+[ADR 0089](0089-scripts-read-variables-by-name-and-publish-pins-them-as-declared-parameters.md), and evaluate against
+a read-only Elsa context. (This section stays neutral on how that read surface works; ADR 0089 and its amendments
+define it.)
 
 Stateful scripts are activities that receive inputs and return typed results. Their results can feed
 an explicit `Set` operation. This decision supersedes the canonical-model portion of ADR 0030 that
@@ -177,15 +181,102 @@ isolated migration compatibility while the new model is introduced. (Proposed am
 [ADR 0090](0090-activities-change-variables-as-a-unit-of-work-committed-with-the-step.md)
 would let RunJavaScript change variables as a declared write form; input-binding expressions stay pure.)
 
-Time, randomness, and other nondeterministic data enter an expression as explicit pinned parameters
-or through a separately specified deterministic runtime capability. Merely marking an expression
-read-only is not enough if its evaluator can reach mutable ambient state.
+Expressions do not have to be deterministic. They may read the current time, generate random values and create
+GUIDs. See the amendment below.
+
+**Amendment (decisions D-1, D-5 and D-6): the execution contract replaces expression determinism.** This amendment replaces the original rule of this section, which admitted time, randomness and other
+nondeterministic data only as pinned parameters or through a separately specified deterministic capability. That
+rule is withdrawn. The withdrawn design for such a capability (the ADR 0088 draft) is not needed.
+
+*Why.* Elsa 4 resumes from committed state, not by replaying history, so an expression does not have to produce the
+same value twice. What a user relies on is the execution contract: a recorded step never runs again, recovery
+runs forward from the last recorded point, and a re-run is a new execution with new values, whether it starts at the
+beginning or from a point midway (an activity rescheduled or scheduled through a runtime alteration,
+[ADR 0049](0049-runtime-alterations-use-snapshotted-atomic-jobs.md)). History is never rewritten. A midway re-run is
+a re-execution: a new invocation that reads fresh inputs, while retrying the same invocation keeps its inputs
+(ADR 0092 decision 8). Code that copies the old input snapshot on a reschedule does not meet this rule. Idempotency of external effects belongs to
+the workflow designer; the engine supplies stable invocation identities to build idempotency keys from. Around an
+external effect it knows of (D-6 and D-5 say which) the engine commits right before and right after it, so the effect lies
+between two recorded points.
+This sentence states the guarantee only: how the engine provides it is the execution-contract details amendment of
+§3, ADR 0032 and ADR 0020 (see *Follow-ups* below). §3 already provides the part that matters here: a committed input snapshot is reused on retry and resumption,
+so a value an expression produced, once committed, does not change.
+
+- **D-1: clock, randomness and GUIDs.** Input-binding expressions and scripts (RunJavaScript) may read the current
+  time, generate random values and create GUIDs.
+  - Evaluators run in UTC with the invariant culture. The current time comes from an injectable clock, so tests can
+    control it; spec 095 names the .NET type.
+  - UTC is the engine's clock, not a restriction on what a workflow stores. A time with its offset
+    (`DateTimeOffset`) keeps that offset, and a workflow may store an IANA time zone ID (for example
+    `Europe/Amsterdam`) and convert explicitly with a built-in date helper. The ADR 0046 amendment, *Dates*, owns
+    every date and time-zone rule; the implementing spec defines the helpers.
+  - The engine provides built-in helpers for dates and GUIDs. Elsa 3 functions for the same purpose, such as
+    `newGuid()` and `new Date()`, convert directly, and their names alone never cause a refusal.
+  - An evaluation that was never durably recorded may produce different values when it runs again. A deliberately
+    repeated evaluation, such as a loop condition on each pass, produces fresh values.
+- **D-5: functions implemented in .NET.** A host may install functions into an expression engine whose
+  implementation is .NET code, as `getVariable` already is. By default only JSON values cross the boundary between
+  the script and such a function. Live .NET objects do not cross it by default. A host may opt in to .NET interop
+  through one replaceable engine strategy that a feature provides. The ADR 0046 amendment (V10) states the rule.
+  - **Input-binding expressions.** By default input-binding expressions get no live objects. When a host enables .NET
+    interop, it applies to input-binding expressions as it does to script activities: a JavaScript input expression
+    takes the same input as a script in a JavaScript script activity.
+    - Whether such an expression is treated as possibly effectful, with a commit before and after its evaluation, is
+      decided by the opt-in's implementing spec.
+    - It may use .NET objects while it evaluates, but what it returns is a storable value under ADR 0046, or the
+      evaluation is refused. No live object enters the input snapshot.
+    - Direct writes to Elsa-owned workflow state stay blocked, as for every input-binding expression.
+    - The publish warning and the Studio marker that ADR 0083 defines for general .NET access in script activities
+      apply to such a binding in the same way.
+  - **Names.** Installed functions follow one naming rule, modelled on the type alias registry (ADR 0035):
+    - reserved: the read roots (`variables`, `input`, `activities`, `workflow`, `args`) and Elsa's built-in functions;
+    - module and host functions use a namespace prefix, and a duplicate registration fails at startup instead of
+      silently overriding another;
+    - a script that declares a reserved name (`const variables = …`) gets a publish diagnostic.
+- **D-6: idempotency belongs to the designer.** An effect outside Elsa's own state, such as an HTTP call or a .NET
+  service call, cannot be rolled back by Elsa. The engine supplies stable invocation identities; the workflow designer
+  owns idempotency (see *Why*). A call is never refused or skipped because of what it does.
+  - **Undeclared functions are effect-free.** A registered function without a declaration is treated as effect-free:
+    no commits are placed around an input evaluation because it calls one. Elsa's built-in functions, such as
+    `newGuid()`, carry no declaration.
+  - **The effectful declaration.** A host may declare a function effectful when it registers it. Only then does the
+    engine place a commit before and after an input evaluation that calls it. This is one optional flag for the host
+    developer; workflow engineers never see it. It is the only effect metadata a function carries: there are no
+    effect profiles.
+  - The declaration never refuses, skips or deduplicates a call. It narrows the window in which an effect can repeat
+    and does not close it: a call can succeed before its result is committed and then run again. Idempotency stays
+    with the designer either way.
+  - *Accepted cost.* An effectful function registered without the declaration gets no boundary: after a crash its
+    effect can repeat anywhere in the step. External business operations belong in activities, not in functions
+    called from input bindings.
+
+*Unchanged by this amendment:*
+- the canonical serialized definition;
+- the read-only Elsa context during input evaluation;
+- the first paragraph of this section;
+- the rule for stateful scripts below. Whether scripts and activities may change engine-owned state is
+  decided outside this amendment, in [ADR 0090](0090-activities-change-variables-as-a-unit-of-work-committed-with-the-step.md)
+  and the decisions that follow from it.
+
+*Follow-ups owned elsewhere:*
+- **ADR 0083 and spec 095's expression contract:** a new capability-profile name or version. `binding-pure-v1` still
+  forbids time and randomness and is replaced there. The function effect profiles of spec 095 (R115 to R119) go with
+  it, in the same amendment; the single effectful declaration of D-6 replaces them.
+- **The execution-contract details of §3, ADR 0032 and ADR 0020.** They define how the engine keeps the guarantee
+  stated in *Why*, that it commits right before and right after an external effect:
+  - a stable identity for an input evaluation that may have effects;
+  - the durability boundary around it;
+  - a review of the per-pass input re-materialization amendment of §3, whose re-materialized snapshot is said to recompute "deterministically" on
+    redelivery, which no longer holds for an expression that reads the clock;
+  - an audit of evaluation sites that evaluate twice and expect the same result.
+- **The replay justification of the `Inline` activity,** which relies on `binding-pure-v1`, is revisited in the
+  implementing spec.
 
 **Amendment (issue #2717): workflow-instance metadata as a declared parameter.** An expression parameter
 binding may also read metadata of the running workflow instance: its correlation ID or its instance ID
 (`{"kind":"WorkflowInstance","member":"correlationId"|"instanceId"}`). This is a fifth canonical parameter
 kind beside literal, workflow request, variable and activity result; it is not an ambient accessor, because an
-expression sees the value only through the parameter it declares, and the binding-pure-v1 profile is unchanged.
+expression sees the value only through the parameter it declares, and the capability profile (now `binding-readonly-v1`, ADR 0083) is unchanged by it.
 The value comes from committed runtime state, never live memory: the instance ID is the workflow execution ID,
 and the correlation ID is the latest committed identity durable value, which the workflow-started checkpoint
 seeds from the start request and a `SetCorrelationId` intrinsic replaces. An instance without a correlation ID
@@ -403,6 +494,15 @@ Rejected as the preferred facade. The method-call experience is worth a tightly 
 authoring-only carrier. The explicit foundational builder remains available for infrastructure and
 dynamic authoring.
 
+### Treat every registered function as possibly effectful (no function metadata)
+
+Considered for the §5 amendment (D-6) and not chosen. With no metadata at all, the durability boundary of input
+evaluation would have to treat every registered .NET function as possibly effectful. Every step whose inputs call
+any function, including built-ins such as `newGuid()`, would then pay two commits, with no way to opt out, although
+most functions called from expressions have no side effects. The boundary would still not make an effect
+exactly-once, so the designer needs idempotency either way. An optional effectful declaration keeps the default
+cheap and gives the commit-around-effects guarantee a consumer: it is what turns the guarantee on for a function.
+
 ### Keep obsolete memory interfaces as forwarding shims
 
 Rejected. Shims would allow new canonical code to keep depending on the old model and spread
@@ -417,8 +517,9 @@ bidirectional conversions through the runtime.
 - Durable values are stored by the invocation, result, variable scope, activity state, or trigger
   record that owns their semantics.
 - Runtime validation becomes stricter: missing causal outputs, unsafe parallel writes, unbound
-  required inputs, impure expressions, nonpersistable durable values, and activity-contract mismatch
-  fail explicitly.
+  required inputs, expressions that change engine-owned state, nonpersistable durable values, and
+  activity-contract mismatch fail explicitly. (Since the §5 amendment, nondeterministic expressions
+  are no longer refused.)
 - Existing activity argument wrappers, expression memory APIs, runtime input seeding, output
   publication, JavaScript variable write-back, tests, and Elsa 3 importer mappings require migration.
 - The concrete removal map includes `IMemoryBlock`, `IMemoryBlockReference`, `IMemoryRegister`,
