@@ -42,11 +42,11 @@ public static class Stress
 
         var calm = false;
         var stop = new CancellationTokenSource();
-        long steps = 0, kills = 0, stalls = 0, releases = 0, takes = 0;
+        long turns = 0, kills = 0, stalls = 0, releases = 0, takes = 0;
         var options = new WorkerOptions
         {
             Lease = o.Lease, Horizon = TimeSpan.FromSeconds(2), PollLimit = 40, MaxBatch = 40, MaxAttempts = 1_000_000,
-            OnStep = (_, _, _) => Interlocked.Increment(ref steps),
+            OnTurn = (_, _, _) => Interlocked.Increment(ref turns),
         };
 
         var loops = Enumerable.Range(0, o.Nodes).SelectMany(node => Enumerable.Range(0, o.Partitions).Select(partition => Task.Run(async () =>
@@ -70,7 +70,7 @@ public static class Stress
                     await worker.PollAsync();
                     await worker.LoadAsync();
                     await worker.MeetAsync();
-                    foreach (var id in worker.Ready.ToList()) worker.Run(id);
+                    foreach (var id in worker.Ready.ToList()) worker.RunTurn(id);
                     if (worker.NeedsFlush) await worker.FlushAsync();
                     else await worker.BeatAsync();
                     if (calm) await Task.Delay(2);
@@ -199,7 +199,7 @@ public static class Stress
         await chaos;
         if (provided.Chaos.Length > 0) output.WriteLine("  " + provided.Chaos);
         foreach (var (error, n) in killErrors) output.WriteLine($"  the connection killer failed x{n}: {error}");
-        output.WriteLine($"chaos over after {watch.Elapsed.TotalSeconds:0} s: {kills} connections killed, {faulty.Before} + {faulty.After} calls failed before + after executing, {stalls} stalls, {releases} releases, {steps} steps so far; settling");
+        output.WriteLine($"chaos over after {watch.Elapsed.TotalSeconds:0} s: {kills} connections killed, {faulty.Before} + {faulty.After} calls failed before + after executing, {stalls} stalls, {releases} releases, {turns} turns so far; settling");
 
         var deadline = DateTime.UtcNow + o.Settle;
         var keys = waiters.Select(w => "k" + w[(w.IndexOf("/w", StringComparison.Ordinal) + 2)..]).ToList();
@@ -285,7 +285,7 @@ public static class Stress
         wrong.AddRange(RoundThree(rows, lifecycles, deleted, onEvents));
 
         output.WriteLine($"round 3: {lifecycles.Count} trees terminated ({deleted.Count} deleted), {onEvents.Count} instances started by an event");
-        output.WriteLine($"{o.Messages} outside messages, {rows.Count} instances, {steps} steps run, {store.Commits.Count} commits answered landed, {store.Refused} refused by the fence or a count, {journal.Count} journal rows, {expected.Sum(e => e.Value.Count)} counter tokens checked, {takes} takes by workers");
+        output.WriteLine($"{o.Messages} outside messages, {rows.Count} instances, {turns} turns run, {store.Commits.Count} commits answered landed, {store.Refused} refused by the fence or a count, {journal.Count} journal rows, {expected.Sum(e => e.Value.Count)} counter tokens checked, {takes} takes by workers");
         foreach (var (kind, n) in store.Failures.OrderByDescending(f => f.Value).Take(12)) output.WriteLine($"  commit failure x{n}: {kind}");
         output.WriteLine(wrong.Count == 0 ? "end state: all properties hold" : $"end state: {wrong.Count} violations\n  " + string.Join("\n  ", wrong.Take(25)));
         return wrong.Count == 0 ? 0 : 1;

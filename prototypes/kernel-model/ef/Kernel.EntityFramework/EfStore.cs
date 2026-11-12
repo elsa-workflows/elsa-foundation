@@ -28,7 +28,7 @@ public sealed class InstanceEntity
     public string Definition { get; set; } = "";
     public InstanceStatus Status { get; set; }
     public string State { get; set; } = "";
-    public string? Runs { get; set; }
+    public string? Jobs { get; set; }
     public long Revision { get; set; }
     public string? Parent { get; set; }
     public string? Fault { get; set; }
@@ -68,7 +68,7 @@ public sealed class MessageEntity
     public long Trial { get; set; }         // the epoch at which it was last put on trial; 0 when never
     public long? KeepUntil { get; set; }
     public bool Done { get; set; }
-    public string? ReplyTo { get; set; }    // a caller waiting on another node for what the step that consumes it emits
+    public string? ReplyTo { get; set; }    // a caller waiting on another node for what the turn that consumes it emits
 }
 
 public sealed class SubscriptionEntity
@@ -303,38 +303,38 @@ public sealed class EfStore(Func<KernelDb> create, bool postgres, bool fenceInBa
                 now = fence[0];
             }
 
-            var sends = batch.Steps.Sum(s => s.Sent.Count);
+            var sends = batch.Turns.Sum(s => s.Sent.Count);
             var seq = postgres || sends == 0 ? 0 : await db.Database.SqlQueryRaw<long>("""SELECT COALESCE(MAX("Seq"), 0) AS "Value" FROM "Messages" """).SingleAsync(cancellationToken);
 
             var (position, sent) = (batch.Position, new List<MessageEntity>());
-            foreach (var step in batch.Steps)
+            foreach (var turn in batch.Turns)
             {
                 // An ended instance: its row at the expected revision, in the batch, so a revision that does not match is a
                 // count that does not match (not landed), as for an update. Its journal rows go after the batch, below.
-                if (step.Delete) db.Attach(new InstanceEntity { Id = step.Instance, Revision = step.Expected!.Value }).State = EntityState.Deleted;
-                if (step.Row is { } row)
+                if (turn.Delete) db.Attach(new InstanceEntity { Id = turn.Instance, Revision = turn.Expected!.Value }).State = EntityState.Deleted;
+                if (turn.Row is { } row)
                 {
                     var entity = new InstanceEntity
                     {
                         Id = row.Id, Partition = batch.Partition, Model = row.Model, Definition = row.Definition, Status = row.Status,
-                        State = row.State, Runs = row.Runs, Revision = row.Revision, Parent = row.Parent, Fault = row.Fault, History = row.History, Suspended = row.Suspended, Children = row.Children, StateVersion = row.StateVersion,
+                        State = row.State, Jobs = row.Jobs, Revision = row.Revision, Parent = row.Parent, Fault = row.Fault, History = row.History, Suspended = row.Suspended, Children = row.Children, StateVersion = row.StateVersion,
                     };
-                    if (step.Expected is not { } expected) db.Add(entity);
+                    if (turn.Expected is not { } expected) db.Add(entity);
                     else db.Update(entity).Property(i => i.Revision).OriginalValue = expected;
                 }
-                foreach (var id in step.Consumed) db.Remove(new MessageEntity { Id = id });
-                foreach (var id in step.Done) db.Attach(new MessageEntity { Id = id }).Entity.Done = true;
-                foreach (var id in step.Held ?? [])     // its step ran: no longer on trial
+                foreach (var id in turn.Consumed) db.Remove(new MessageEntity { Id = id });
+                foreach (var id in turn.Done) db.Attach(new MessageEntity { Id = id }).Entity.Done = true;
+                foreach (var id in turn.Held ?? [])     // its turn ran: no longer on trial
                     db.Attach(new MessageEntity { Id = id, Trial = 0 }).Property(m => m.Trial).IsModified = true;
-                foreach (var message in step.Sent)
+                foreach (var message in turn.Sent)
                 {
                     sent.Add(ToEntity(message, batch.HandOver && message.Target.Partition == batch.Partition ? batch.Epoch : 0, postgres ? 0 : ++seq));
                     db.Add(sent[^1]);
                 }
-                foreach (var s in step.Subscribed) db.Add(new SubscriptionEntity { Key = s.Key, Instance = s.Instance, Wait = s.Wait, Partition = batch.Partition });
-                foreach (var s in step.Unsubscribed) db.Remove(new SubscriptionEntity { Key = s.Key, Instance = s.Instance, Wait = s.Wait });
-                if (step.Journal is not null)
-                    db.Add(new JournalEntity { Partition = batch.Partition, Position = ++position, Instance = step.Instance, Revision = step.Delete ? -1 : step.Row?.Revision ?? 0, Entries = step.Journal });
+                foreach (var s in turn.Subscribed) db.Add(new SubscriptionEntity { Key = s.Key, Instance = s.Instance, Wait = s.Wait, Partition = batch.Partition });
+                foreach (var s in turn.Unsubscribed) db.Remove(new SubscriptionEntity { Key = s.Key, Instance = s.Instance, Wait = s.Wait });
+                if (turn.Journal is not null)
+                    db.Add(new JournalEntity { Partition = batch.Partition, Position = ++position, Instance = turn.Instance, Revision = turn.Delete ? -1 : turn.Row?.Revision ?? 0, Entries = turn.Journal });
             }
             foreach (var id in batch.Seen)
                 db.Attach(new MessageEntity { Id = id, Seen = batch.Epoch }).Property(m => m.Seen).IsModified = true;
@@ -350,12 +350,12 @@ public sealed class EfStore(Func<KernelDb> create, bool postgres, bool fenceInBa
             // statements of their own, one round trip each and only in a commit that has them. They come after the batch,
             // so that with the fence in the batch they run only once the fence has held (E1: a stale owner is told "not
             // landed" before it touches anything else), and with either fence they lock after the partition row (E9).
-            foreach (var step in batch.Steps)
+            foreach (var turn in batch.Turns)
             {
-                if (step.Unsubscribe)       // ended by force: its waits go, whatever they are
-                    await db.Database.ExecuteSqlRawAsync(Q("""DELETE FROM "Subscriptions" WHERE "Instance" = {0}"""), [step.Instance], cancellationToken);
-                if (step.Delete)
-                    await db.Database.ExecuteSqlRawAsync(Q("""DELETE FROM "Journal" WHERE "Partition" = {0} AND "Instance" = {1} AND "Revision" > 0"""), [batch.Partition, step.Instance], cancellationToken);
+                if (turn.Unsubscribe)       // ended by force: its waits go, whatever they are
+                    await db.Database.ExecuteSqlRawAsync(Q("""DELETE FROM "Subscriptions" WHERE "Instance" = {0}"""), [turn.Instance], cancellationToken);
+                if (turn.Delete)
+                    await db.Database.ExecuteSqlRawAsync(Q("""DELETE FROM "Journal" WHERE "Partition" = {0} AND "Instance" = {1} AND "Revision" > 0"""), [batch.Partition, turn.Instance], cancellationToken);
             }
             await transaction.CommitAsync(cancellationToken);
             return new Committed(true, now, sent.Select(m => m.Seq).ToList());
@@ -431,7 +431,7 @@ public sealed class EfStore(Func<KernelDb> create, bool postgres, bool fenceInBa
     {
         await using var db = create();
         var rows = await db.Instances.AsNoTracking().Where(i => ids.Contains(i.Id)).ToListAsync(cancellationToken);
-        return rows.Select(i => new InstanceRow(i.Id, i.Model, i.Definition, i.Status, i.State, i.Revision, i.Parent, i.Fault, i.Runs, i.History, i.Suspended, i.Children, i.StateVersion)).ToList();
+        return rows.Select(i => new InstanceRow(i.Id, i.Model, i.Definition, i.Status, i.State, i.Revision, i.Parent, i.Fault, i.Jobs, i.History, i.Suspended, i.Children, i.StateVersion)).ToList();
     }
 
     public async ValueTask PublishAsync(EventRow @event, CancellationToken cancellationToken = default)

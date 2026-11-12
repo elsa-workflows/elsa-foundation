@@ -13,11 +13,11 @@ public sealed record Act(string Kind, int A = 0, int B = 0, string S = "", Messa
         "add" => $"outside adds {M!.Id} ({M.Kind} to {M.Target}{(S == "" ? "" : ", " + S)})",
         "post" => $"actor {A} is handed {M!.Id} in memory (start of {M.Target})",
         "publish" => $"outside publishes event e{B} for key {S}",
-        "step" => $"actor {A} runs a step of {S}",
+        "turn" => $"actor {A} runs a turn of {S}",
         "exec" => $"the database executes call {B} of actor {A}",
         "lose" => $"call {B} of actor {A} never reaches the database ({(Flag ? "deadlock victim" : "connection lost")})",
         "answer" => $"actor {A} gets the answer to call {B}{(Flag ? " as 'connection lost'" : "")}",
-        "finish" => $"the work of run {S} completes on actor {A}",
+        "finish" => $"job {S} completes on actor {A}",
         "tick" => $"{A} ms pass",
         "skew" => $"the wall clock of node {A} jumps {B} ms",
         "crash" => $"node {A} crashes and restarts{(Flag ? "; the old process lives on" : "")}",
@@ -81,7 +81,7 @@ public sealed class Actor(int id, int node, int partition)
     public bool Dead, Zombie;
     public int Version;
     public readonly List<Call> Calls = [];
-    public readonly Dictionary<string, TaskCompletionSource<object?>> Runs = new(StringComparer.Ordinal);
+    public readonly Dictionary<string, TaskCompletionSource<object?>> Jobs = new(StringComparer.Ordinal);
 }
 
 /// <summary>What a worker sees as its store: the shared in-memory store behind a wire the simulation controls.</summary>
@@ -115,7 +115,7 @@ public sealed class Wire(World world, Actor actor) : IKernelStore
     public ValueTask<Cluster> HeartbeatAsync(string node, TimeSpan window, CancellationToken cancellationToken = default) => world.Store.HeartbeatAsync(node, window);
 
     public ValueTask<Committed> CommitAsync(CommitBatch batch, CancellationToken cancellationToken = default) =>
-        Send("commit", $"commit p{batch.Partition} e{batch.Epoch} @{batch.Position} [{string.Join(", ", batch.Steps.Select(Describe))}]"
+        Send("commit", $"commit p{batch.Partition} e{batch.Epoch} @{batch.Position} [{string.Join(", ", batch.Turns.Select(Describe))}]"
             + (batch.Seen.Count > 0 ? $" seen [{string.Join(", ", batch.Seen)}]" : "") + (batch.Trial.Count > 0 ? $" on trial [{string.Join(", ", batch.Trial)}]" : ""),
             () => world.Store.CommitAsync(batch) is var landed && landed.Result.Landed && batch.Trial.Count > 0 ? Counted(landed, batch.Trial.Count) : landed);
 
@@ -147,9 +147,9 @@ public sealed class Wire(World world, Actor actor) : IKernelStore
     public ValueTask<int> SweepAsync(CancellationToken cancellationToken = default) => world.Store.SweepAsync();
     public ValueTask<IReadOnlyList<ViewRow>> ReadViewsAsync(IReadOnlyCollection<string> instances, CancellationToken cancellationToken = default) => world.Store.ReadViewsAsync(instances);
 
-    private static string Describe(StepCommit step) =>
-        (step.Row is { } row ? $"{row.Id} r{row.Revision} {row.Status}" : step.Instance == "" ? "tickets" : $"{step.Instance} (no row)")
-        + string.Concat(step.Consumed.Concat(step.Done).Select(id => " -" + id)) + (step.Sent.Count > 0 ? $" +{string.Join(" +", step.Sent.Select(m => m.Id))}" : "");
+    private static string Describe(TurnCommit turn) =>
+        (turn.Row is { } row ? $"{row.Id} r{row.Revision} {row.Status}" : turn.Instance == "" ? "tickets" : $"{turn.Instance} (no row)")
+        + string.Concat(turn.Consumed.Concat(turn.Done).Select(id => " -" + id)) + (turn.Sent.Count > 0 ? $" +{string.Join(" +", turn.Sent.Select(m => m.Id))}" : "");
 
     public static string Describe(object? result) => result switch
     {
@@ -241,8 +241,8 @@ public sealed partial class World
         IExecutionModel[] models =
         [
             new Counter(Versions[node]), new Parent(Config.Flaws.HasFlag(Flaw.CancelKnownChildren)), new Child(), new Waiter(), new Sequence(), new Correlation(Config.Flaws.HasFlag(Flaw.CorrelationForgets)), new CWaiter(Config.Partitions),
-            new Runner((run, cancel) => Work(actor, run, cancel)), new Fragile(() => Dying = node), new Http(actor.Id, (run, cancel) => Work(actor, run, cancel)),
-            new Tree((run, cancel) => Work(actor, run, cancel)), new OnEvent(), NativeModelFor(actor),
+            new Runner((job, cancel) => Work(actor, job, cancel)), new Fragile(() => Dying = node), new Http(actor.Id, (job, cancel) => Work(actor, job, cancel)),
+            new Tree((job, cancel) => Work(actor, job, cancel)), new OnEvent(), NativeModelFor(actor),
         ];
         // A node's name is unique per process start: a restarted process is not its predecessor (finding F9).
         actor.Worker = new Worker(Config.Flaws.HasFlag(Flaw.StableNodeName) ? "node" + node : $"node{node}.{Incarnation[node]}", partition, wire, models, new WorkerOptions
@@ -252,13 +252,13 @@ public sealed partial class World
             WallClock = () => Time + Skew[node],
             Flaws = Config.Flaws, Partitions = Config.Partitions, MaxInstances = 2,
             Transport = new Transport(this, Config.Flaws.HasFlag(Flaw.StableNodeName) ? "node" + node : $"node{node}.{Incarnation[node]}"),
-            OnStep = (instance, inbox, _) =>
+            OnTurn = (instance, inbox, _) =>
             {
-                Log?.Invoke($"        actor {actor.Id} steps {instance} with [{string.Join(", ", inbox.Select(m => m.Kind + " " + m.Id))}]");
-                Alone(actor, instance.Id, "a step of " + instance);
+                Log?.Invoke($"        actor {actor.Id} turns {instance} with [{string.Join(", ", inbox.Select(m => m.Kind + " " + m.Id))}]");
+                Alone(actor, instance.Id, "a turn of " + instance);
                 // I16: while its committed row says suspended, the current owner gives an instance nothing.
                 if (actor.Worker.Epoch == Store.Partitions[actor.Partition].Epoch && Store.Instances.GetValueOrDefault(instance.Id) is { Suspended: true })
-                    Faults.Add($"I16 actor {actor.Id} ran a step of {instance} while it was suspended: [{string.Join(", ", inbox.Select(m => m.Id))}]");
+                    Faults.Add($"I16 actor {actor.Id} ran a turn of {instance} while it was suspended: [{string.Join(", ", inbox.Select(m => m.Id))}]");
                 foreach (var message in inbox)
                     if (message.Due > Time) Faults.Add($"I5 {message.Id} was delivered to {instance} {message.Due - Time} ms before it was due");
             },
@@ -299,11 +299,11 @@ public sealed partial class World
         }
     }
 
-    private ValueTask<object?> Work(Actor actor, IRun run, CancellationToken cancel)
+    private ValueTask<object?> Work(Actor actor, IJob job, CancellationToken cancel)
     {
-        Alone(actor, run.Instance.Id, $"run {run.Key} of {run.Instance}");
+        Alone(actor, job.Instance.Id, $"job {job.Key} of {job.Instance}");
         var done = new TaskCompletionSource<object?>();
-        actor.Runs[run.Instance.Id + "!" + run.Key] = done;
+        actor.Jobs[job.Instance.Id + "!" + job.Key] = done;
         cancel.Register(() => done.TrySetCanceled());
         return new ValueTask<object?>(done.Task);
     }
@@ -338,7 +338,7 @@ public sealed partial class World
         if (outcome is null || Dying is not { } node) return outcome;
         Dying = null;
         Crash(node, zombie: false);
-        return outcome + $"; the step killed node {node}";
+        return outcome + $"; the turn killed node {node}";
     }
 
     private string? Do(Act act)
@@ -369,10 +369,10 @@ public sealed partial class World
                 Watch(Balancers[act.A].RoundAsync());
                 return $"{Actors.Sum(a => a.Calls.Count) - calls} takes sent";
             }
-            case "step":
+            case "turn":
             {
                 if (Live(act.A) is not { } actor || !actor.Worker.Ready.Contains(act.S)) return null;
-                actor.Worker.Run(act.S);
+                actor.Worker.RunTurn(act.S);
                 return "";
             }
             case "exec" or "lose" or "answer":
@@ -429,7 +429,7 @@ public sealed partial class World
             }
             case "finish":
             {
-                if (Live(act.A) is not { } actor || !actor.Runs.Remove(act.S, out var work)) return null;
+                if (Live(act.A) is not { } actor || !actor.Jobs.Remove(act.S, out var work)) return null;
                 return work.TrySetResult("done") ? "" : "it was cancelled already";
             }
             case "tick":
@@ -503,7 +503,7 @@ public sealed class Generator(int seed, World world)
     private static readonly string[] Bad = ["throw", "spoil", "die", "dierun"];
     private readonly Random _random = new(seed);
     private readonly List<Message> _outside = [];
-    private readonly List<(string Target, string Key)> _runs = [];
+    private readonly List<(string Target, string Key)> _jobs = [];
     private int _serial;
 
     /// <summary>Scales lost calls, wrong answers, crashes and pauses. At 1 the random stream is the default one.</summary>
@@ -528,7 +528,7 @@ public sealed class Generator(int seed, World world)
                 var ready = alive.SelectMany(a => a.Worker.Ready.Select(id => (a.Id, id))).OrderBy(x => x.Id).ThenBy(x => x.id, StringComparer.Ordinal).ToList();
                 if (ready.Count == 0) return new Act("poll", actor.Id);
                 var pick = ready[r.Next(ready.Count)];
-                return new Act("step", pick.Id, S: pick.id);
+                return new Act("turn", pick.Id, S: pick.id);
             }
             case < 46: return new Act("flush", actor.Id);
             case < 47: return new Act("release", actor.Id);
@@ -552,7 +552,7 @@ public sealed class Generator(int seed, World world)
             case < 96: return new Act(r.Next(2) == 0 ? "pause" : "resume", r.Next(world.Config.Nodes));
             case < 97:
             {
-                var running = alive.SelectMany(a => a.Runs.Keys.Select(key => (a.Id, key))).OrderBy(x => x.Id).ThenBy(x => x.key, StringComparer.Ordinal).ToList();
+                var running = alive.SelectMany(a => a.Jobs.Keys.Select(key => (a.Id, key))).OrderBy(x => x.Id).ThenBy(x => x.key, StringComparer.Ordinal).ToList();
                 if (running.Count == 0) return new Act("tick", r.Next(50));
                 var pick = running[r.Next(running.Count)];
                 return new Act("finish", pick.Id, S: pick.key);
@@ -609,9 +609,9 @@ public sealed class Generator(int seed, World world)
             }
             case < 92:
                 return new Act("add", M: To("r" + r.Next(2), "go", "k" + n, Runner.Spec));
-            case < 95 when _runs.Count > 0:
+            case < 95 when _jobs.Count > 0:
             {
-                var (target, key) = _runs[r.Next(_runs.Count)];
+                var (target, key) = _jobs[r.Next(_jobs.Count)];
                 return new Act("add", M: new Message($"x{n}", new InstanceRef(target), "cancel", Json.Write(key), KeepUntil: keep));
             }
             default:
@@ -695,6 +695,6 @@ public sealed class Generator(int seed, World world)
     {
         if (act is not { Kind: "add", S: "", M: { } message }) return;
         _outside.Add(message);
-        if (message.Kind == "go") _runs.Add((message.Target.Id, message.Read<string>()));
+        if (message.Kind == "go") _jobs.Add((message.Target.Id, message.Read<string>()));
     }
 }

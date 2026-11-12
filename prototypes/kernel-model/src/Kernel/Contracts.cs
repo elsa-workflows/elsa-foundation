@@ -43,21 +43,21 @@ public sealed record InstanceInfo(InstanceRef Ref, string Model, string Definiti
 
 public sealed record ChildFinished(string Child, InstanceStatus Status, string? Output);
 
-public sealed record RunFinished(string Key, string? Result, string? Error);
+public sealed record JobFinished(string Key, string? Result, string? Error);
 
 public static class Kinds
 {
     public const string Start = "start";
     public const string ChildFinished = "child-finished";
-    public const string RunFinished = "run-finished";
+    public const string JobFinished = "job-finished";
     public const string Event = "event";
-    public const string Run = "kernel.run";    // a run's ticket: the intent while the work is in flight, the result afterwards
+    public const string Job = "kernel.job";    // a job's ticket: the intent while the work is in flight, the result afterwards
     public const string Meet = "kernel.meet";  // "read the events for the keys this commit subscribed"
 
     // What anyone may tell the kernel to do with an instance. The kernel handles them alone, in order; no model sees them.
     public const string Suspend = "kernel.suspend";     // deliver nothing but kernel messages until a resume
     public const string Resume = "kernel.resume";
-    public const string Terminate = "kernel.terminate";   // end it, its runs and its waits, and every instance it started
+    public const string Terminate = "kernel.terminate";   // end it, its jobs and its waits, and every instance it started
     public const string Delete = "kernel.delete";         // remove an ended instance: its row, its waits, its journal rows
 
     public static bool IsControl(string kind) => kind is Suspend or Resume or Terminate or Delete;
@@ -76,19 +76,19 @@ public interface IExecutionModel
     /// Called on load; the next commit writes it at <see cref="StateVersion"/>.
     /// </summary>
     object UpgradeState(string state, int fromVersion);
-    ValueTask StepAsync(IStep step, CancellationToken cancellationToken);
-    ValueTask<object?> RunAsync(IRun run, CancellationToken cancellationToken);
+    ValueTask TurnAsync(ITurn turn, CancellationToken cancellationToken);
+    ValueTask<object?> ExecuteJobAsync(IJob job, CancellationToken cancellationToken);
 }
 
-/// <summary>Off-step work: it may execute more than once; its result changes state once.</summary>
-public interface IRun
+/// <summary>A background job: it may execute more than once; its result changes state once.</summary>
+public interface IJob
 {
     InstanceRef Instance { get; }
     string Key { get; }
     string? Arguments { get; }
 }
 
-public interface IStep
+public interface ITurn
 {
     InstanceInfo Instance { get; }
     IReadOnlyList<Message> Inbox { get; }
@@ -96,9 +96,9 @@ public interface IStep
     object? Ambient { get; }                    // what the starter on this node gave: this activation only, never stored
 
     /// <summary>
-    /// Live output to whoever waits. Released when the step's commit lands, or at once when it has nothing to write
+    /// Live output to whoever waits. Released when the turn's commit lands, or at once when it has nothing to write
     /// (the owner's default of 12 November). A caller whose route opts out (<see cref="ReplyTo.Of"/>) gets it when the
-    /// step ends instead, so it may see output of a step whose commit is then lost.
+    /// turn ends instead, so it may see output of a turn whose commit is then lost.
     /// </summary>
     void Emit(string channel, object? item);
 
@@ -107,8 +107,8 @@ public interface IStep
 
     /// <summary>
     /// Takes back a message this instance sent to itself and has not been given yet: a timer, a retry (merge, friction
-    /// F-N4). Its row is deleted with this step's commit, as a cancelled run's ticket is. The model vouches that it has
-    /// not received it; one that is in this step's inbox is consumed anyway, and the call does nothing.
+    /// F-N4). Its row is deleted with this turn's commit, as a cancelled job's ticket is. The model vouches that it has
+    /// not received it; one that is in this turn's inbox is consumed anyway, and the call does nothing.
     /// </summary>
     void Recall(string message);
 
@@ -117,9 +117,9 @@ public interface IStep
     /// that has no parent (merge, friction F-N5): it reports to nobody, and since its id is minted here it needs no read.
     /// </summary>
     InstanceRef Start(StartSpec spec, Placement placement = Placement.WithParent, bool detached = false);
-    void Run(string key, object? arguments = null);
-    void CancelRun(string key);
-    void Hold(Message message);                 // not consumed: handed to the next step again, in its place in the order
+    void StartJob(string key, object? arguments = null);
+    void CancelJob(string key);
+    void Hold(Message message);                 // not consumed: handed to the next turn again, in its place in the order
 
     /// <summary>
     /// A wait for events of <paramref name="key"/> published from its commit on. <paramref name="keep"/> also gives it
@@ -130,14 +130,14 @@ public interface IStep
     void Unsubscribe(string key, string wait);
 
     /// <summary>
-    /// True when this message was held by an owner before this one, so a step that took it may have run already and
+    /// True when this message was held by an owner before this one, so a turn that took it may have run already and
     /// its result been lost (merge, friction F-N6). A first delivery is false. It may say true for a message whose
     /// earlier owner never ran it: "may have run", never "did run".
     /// </summary>
     bool Redelivered(Message message);
 
     /// <summary>
-    /// NATIVE N1: publish an event from a step. The commit carries a ticket to self; after it lands the owner inserts the
+    /// NATIVE N1: publish an event from a turn. The commit carries a ticket to self; after it lands the owner inserts the
     /// event and delivers it to the subscriptions it finds, as <see cref="Events.PublishAsync"/> does for an outsider.
     /// Returns the event's id, derived from the instance and its revision. <paramref name="keep"/> is how long the event
     /// stays for waits that ask for kept events; the waits that exist when it is published get it either way.
@@ -145,7 +145,7 @@ public interface IStep
     string Publish(string key, string? payload, TimeSpan keep);
 
     void Record(object entry);
-    void Rebind(string definition);             // from the next step on, the instance belongs to another definition (version)
+    void Rebind(string definition);             // from the next turn on, the instance belongs to another definition (version)
     void SetStatus(InstanceStatus status, string? subStatus = null, object? output = null);
 }
 
@@ -177,7 +177,7 @@ public enum Flaw : long
     WallClockTimers = 1 << 10,
     DeleteOutsideCommands = 1 << 11,
     RunBeforeMark = 1 << 12,
-    VolatileRunTicket = 1 << 13,
+    VolatileJobTicket = 1 << 13,
     MeetWithoutTicket = 1 << 14,
     PollRace = 1 << 15,
     HandOverWhileBehind = 1 << 16,
@@ -190,7 +190,7 @@ public enum Flaw : long
     GreedyBalancer = 1 << 21,      // a node takes every free partition and never releases a surplus
     TrialPerPartition = 1 << 22,   // a trial is alone in its partition only, not in its process
     ProjectorBlindWrite = 1 << 23, // the projector's write does not check that its position is still where it read it
-    EmitBeforeCommit = 1 << 24,    // what a step emits is released when the step ends, before its commit lands
+    EmitBeforeCommit = 1 << 24,    // what a turn emits is released when the turn ends, before its commit lands
     ReplyTwice = 1 << 25,          // a request takes a second answer that arrives after its first
     NoDeadline = 1 << 26,          // a request waits until something answers it
     DeliverWhileSuspended = 1 << 27, // a suspended instance is given its messages
@@ -200,7 +200,7 @@ public enum Flaw : long
     HoldLoses = 1L << 31,          // a held message is consumed like the rest
     HoldKeepsTrial = 1L << 32,     // a held message that was on trial stays on trial in its row
     SkipUpgrade = 1L << 33,        // a row at an older state version is read as the current one
-    StepNewerState = 1L << 34,     // a model steps a row that a newer version of it wrote
+    TurnNewerState = 1L << 34,     // a model turns a row that a newer version of it wrote
     RebindForgotten = 1L << 35,    // a rebind is not written to the row
     StartWithoutRead = 1L << 36,   // read by the simulation: a registrar of a start subscription does not read the events kept
     CancelKnownChildren = 1L << 37, // read by the simulation: a parent cancels only the children that have reported back

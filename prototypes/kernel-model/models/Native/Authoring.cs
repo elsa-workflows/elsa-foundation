@@ -34,7 +34,7 @@ public sealed record ExpressionBinding(string Text) : Binding;
 [AttributeUsage(AttributeTargets.Property)]
 public sealed class InputAttribute : Attribute;
 
-/// <summary>Elsa 4's background placement: the leaf runs as off-step work (the kernel's <c>Run</c>), not inside the step.</summary>
+/// <summary>Elsa 4's background placement: the leaf runs as a background job (the kernel's <c>StartJob</c>), not inside the turn.</summary>
 [AttributeUsage(AttributeTargets.Class)]
 public sealed class BackgroundAttribute : Attribute;
 
@@ -304,7 +304,7 @@ internal static class Hydrator
         return activity;
     }
 
-    /// <summary>The materialized inputs of a leaf, for off-step work that cannot read variables.</summary>
+    /// <summary>The materialized inputs of a leaf, for a background job that cannot read variables.</summary>
     public static JsonObject Snapshot(Node node, Func<Binding, JsonNode?> evaluate)
     {
         var snapshot = new JsonObject();

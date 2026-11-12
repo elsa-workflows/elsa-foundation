@@ -35,7 +35,7 @@ public sealed class SendNotification : Activity
     protected override ValueTask<Transition> ExecuteAsync(ActivityContext context) => new(Complete());
 }
 
-/// <summary>Slow external work. Background: it runs as the kernel's off-step work, so the instance still takes a cancel or a timer meanwhile.</summary>
+/// <summary>Slow external work. Background: it runs as the kernel's background job, so the instance still takes a cancel or a timer meanwhile.</summary>
 [Background]
 public sealed class CallService : Activity<string>
 {
@@ -346,7 +346,7 @@ public sealed class HttpEndpoint : StatefulActivity<HttpRequest, HttpWaitState, 
 {
     [Input] public string Path { get; set; } = "";
     [Input] public string Method { get; set; } = "POST";
-    /// <summary>The route's opt-out of the release rule: its caller is answered when the step ends, not after its commit.</summary>
+    /// <summary>The route's opt-out of the release rule: its caller is answered when the turn ends, not after its commit.</summary>
     [Input] public bool RespondBeforeCommit { get; set; }
 
     protected override ValueTask<Transition> ExecuteAsync(StartContext<HttpRequest> context) =>

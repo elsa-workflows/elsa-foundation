@@ -91,7 +91,7 @@ public static class Smoke
     {
         long Now() => Environment.TickCount64;
 
-        Console.WriteLine("HTTP 1 and 5: a request starts the workflow; the response is released after the commit of its step");
+        Console.WriteLine("HTTP 1 and 5: a request starts the workflow; the response is released after the commit of its turn");
         foreach (var mode in new[] { Modes.Ephemeral, Modes.Balanced })
         {
             var store = new InMemoryStore(1, Now);
@@ -113,7 +113,7 @@ public static class Smoke
             var rowsAtRelease = -1;
             network.OnAnswer = _ => rowsAtRelease = store.Instances.Count;
             var response = await owner.Http.SendAsync(new HttpRequest("POST", "early"), owner.Worker, Modes.Balanced, () => owner.PumpAsync());
-            Check(response.StatusCode == 200 && rowsAtRelease == 0, "opt-out: released before the commit of a step that commits");
+            Check(response.StatusCode == 200 && rowsAtRelease == 0, "opt-out: released before the commit of a turn that commits");
         }
 
         Console.WriteLine("HTTP 2: respond, then continue");
@@ -140,7 +140,7 @@ public static class Smoke
             var released = false;
             network.OnAnswer = _ => released = true;
             var response = await owner.Http.SendAsync(new HttpRequest("POST", path), owner.Worker, Modes.Balanced, () => owner.PumpAsync(until: () => released));
-            Check(response.StatusCode == 200, $"{(path == "quotes" ? "off-step work" : "a 20 ms Delay")} first; the request waited: '{response.Body}'");
+            Check(response.StatusCode == 200, $"{(path == "quotes" ? "a background job" : "a 20 ms Delay")} first; the request waited: '{response.Body}'");
         }
 
         Console.WriteLine("HTTP 4: a second request resumes the workflow waiting at an HttpEndpoint");
@@ -164,7 +164,7 @@ public static class Smoke
             var first = await a.Http.SendAsync(Post("orders", new { id = 43 }), a.Worker, Modes.Balanced, () => a.PumpAsync());
             var second = await b.Http.SendAsync(Post("orders/43/approve", new { by = "kim" }), b.Worker, Modes.Balanced, async () =>
             {
-                await a.PumpAsync(poll: true);      // the owner, on node A, runs the step and sends the response to node B's address
+                await a.PumpAsync(poll: true);      // the owner, on node A, runs the turn and sends the response to node B's address
                 await b.PumpAsync();
             });
             Check(first.StatusCode == 200 && second.Body?.GetValue<string>() == "approved 43 by kim" && network.Hops == 1,
@@ -179,7 +179,7 @@ public static class Smoke
             var lost = await owner.Http.SendAsync(Post("orders/44/approve", new { by = "lee" }), owner.Worker, Modes.Balanced, async () =>
             {
                 await owner.Worker.PollAsync();
-                await owner.Worker.TakeAsync();     // the owner resets before the step runs: what it held is lost
+                await owner.Worker.TakeAsync();     // the owner resets before the turn runs: what it held is lost
                 await owner.PumpAsync(poll: true);
             });
             var finished = store.Instances.Values.Single().Status;

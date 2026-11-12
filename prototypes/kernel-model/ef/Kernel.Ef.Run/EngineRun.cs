@@ -49,7 +49,7 @@ static class EngineRun
             var busy = worker.NeedsLoad || worker.NeedsMeet || worker.NeedsFlush || worker.Ready.Any();
             await worker.LoadAsync();
             await worker.MeetAsync();
-            foreach (var id in worker.Ready.ToList()) worker.Run(id);
+            foreach (var id in worker.Ready.ToList()) worker.RunTurn(id);
             await worker.FlushAsync();
             idle = busy ? 0 : idle + 1;
         }
@@ -75,11 +75,11 @@ static class EngineRun
         var (calm, stopped) = (false, false);
         bool Calm() => calm || (signal != "" && File.Exists(signal + ".calm"));
         bool Stopped() => stopped || (signal != "" && File.Exists(signal + ".stop"));
-        long steps = 0, kills = 0, stalls = 0;
+        long turns = 0, kills = 0, stalls = 0;
         var options = new WorkerOptions
         {
             Lease = TimeSpan.FromMilliseconds(target.Int("lease", 150)), Horizon = TimeSpan.FromSeconds(2), PollLimit = 40, MaxBatch = 40, MaxAttempts = 1_000_000,
-            OnStep = (_, _, _) => Interlocked.Increment(ref steps),
+            OnTurn = (_, _, _) => Interlocked.Increment(ref turns),
         };
 
         var loops = Enumerable.Range(0, nodes).SelectMany(node => Enumerable.Range(0, partitions).Select(partition => Task.Run(async () =>
@@ -96,7 +96,7 @@ static class EngineRun
                 await worker.PollAsync();
                 await worker.LoadAsync();
                 await worker.MeetAsync();
-                foreach (var id in worker.Ready.ToList()) worker.Run(id);
+                foreach (var id in worker.Ready.ToList()) worker.RunTurn(id);
                 if (worker.NeedsFlush) await worker.FlushAsync();
                 else await worker.BeatAsync();
                 if (!Calm() && random.Next(25) == 0)
@@ -111,7 +111,7 @@ static class EngineRun
         if (workersOnly)
         {
             await Task.WhenAll(loops);
-            Console.WriteLine($"{name}: {stalls} stalls, {steps} steps run");
+            Console.WriteLine($"{name}: {stalls} stalls, {turns} turns run");
             tally.Print();
             return 0;
         }
@@ -214,7 +214,7 @@ static class EngineRun
         calm = true;
         if (signal != "") File.WriteAllText(signal + ".calm", "");
         await chaos;
-        Console.WriteLine($"chaos over after {clock.Elapsed.TotalSeconds:F0} s: {kills} sessions killed, {stalls} stalls, {steps} steps so far; letting it settle");
+        Console.WriteLine($"chaos over after {clock.Elapsed.TotalSeconds:F0} s: {kills} sessions killed, {stalls} stalls, {turns} turns so far; letting it settle");
         var patience = DateTime.UtcNow.AddSeconds(target.Int("patience", 180));
         for (var left = 1; left > 0 && DateTime.UtcNow < patience; await Task.Delay(500))
             try
@@ -274,12 +274,12 @@ static class EngineRun
         wrong.AddRange(RoundThree(kernelRows, lifecycles, deleted, onEvents));
         Console.WriteLine($"round 3: {lifecycles.Count} trees terminated ({deleted.Count} deleted), {onEvents.Count} instances started by an event");
 
-        Console.WriteLine($"{messages} outside messages, {rows.Count} instances, {steps} steps run, {journal.Count} commits of instances, {expected.Sum(e => e.Value.Count)} counter tokens checked");
+        Console.WriteLine($"{messages} outside messages, {rows.Count} instances, {turns} turns run, {journal.Count} commits of instances, {expected.Sum(e => e.Value.Count)} counter tokens checked");
         Console.WriteLine($"producer: {addRetries} retried inserts {string.Join(", ", addFailures.Select(f => $"{f.Key} x{f.Value}"))}");
         tally.Print();
         if (target.FenceInBatch) Console.WriteLine($"E1: {ef.KeyViolationsAsFence} key violations were the fence (counted in 'commit fenced')");
         Console.WriteLine($"deadlocks: the engine counted {await target.DeadlocksAsync(admin) - deadlocksBefore}, the store saw {tally.Sum(target.DeadlockCode)} (commit {tally.Sum("commit", target.DeadlockCode)}, poll {tally.Sum("poll", target.DeadlockCode)}, other {tally.Sum(target.DeadlockCode) - tally.Sum("commit", target.DeadlockCode) - tally.Sum("poll", target.DeadlockCode)})");
-        Console.WriteLine($"SUMMARY | {target.Engine} | {await target.DescribeAsync()} | {(target.Has("unfenced") ? "broken" : target.FenceInBatch ? "batch" : "checked")} | {seconds} s, {messages} | kills {kills} | stalls {stalls} | takeovers {string.Join(", ", takeovers)} | steps {steps} | commits {journal.Count} | deadlocks {tally.Sum(target.DeadlockCode)} | retries {tally.Sum("commit", "Transient")} | resets {tally.Sum("commit", "fenced") + tally.Sum("commit", "Unknown")} (fenced {tally.Sum("commit", "fenced")}, unknown {tally.Sum("commit", "Unknown")}) | definite {tally.Sum("commit", "Definite")} | {(wrong.Count == 0 ? "holds" : wrong.Count + " violations")}");
+        Console.WriteLine($"SUMMARY | {target.Engine} | {await target.DescribeAsync()} | {(target.Has("unfenced") ? "broken" : target.FenceInBatch ? "batch" : "checked")} | {seconds} s, {messages} | kills {kills} | stalls {stalls} | takeovers {string.Join(", ", takeovers)} | turns {turns} | commits {journal.Count} | deadlocks {tally.Sum(target.DeadlockCode)} | retries {tally.Sum("commit", "Transient")} | resets {tally.Sum("commit", "fenced") + tally.Sum("commit", "Unknown")} (fenced {tally.Sum("commit", "fenced")}, unknown {tally.Sum("commit", "Unknown")}) | definite {tally.Sum("commit", "Definite")} | {(wrong.Count == 0 ? "holds" : wrong.Count + " violations")}");
         Console.WriteLine(wrong.Count == 0 ? "end state: all properties hold" : $"end state: {wrong.Count} violations\n  " + string.Join("\n  ", wrong.Take(20)));
         return wrong.Count == 0 ? 0 : 1;
     }
@@ -407,7 +407,7 @@ static class EngineRun
             var lease = (await store.TakeAsync(0, "probe", TimeSpan.FromSeconds(30)))!;
             var sent = Enumerable.Range(0, count).Select(i => new Message($"0/a#1.{i.ToString(format)}", InstanceRef.In(1, "b"), "add")).ToList();
             var row = new InstanceRow("0/a", "counter", "c", InstanceStatus.Running, "{}", 1, null);
-            var committed = await store.CommitAsync(new CommitBatch(0, lease.Epoch, lease.Position, TimeSpan.FromSeconds(30), true, [new StepCommit("0/a", row, null, [], [], sent, [], [], "[]")], [], []));
+            var committed = await store.CommitAsync(new CommitBatch(0, lease.Epoch, lease.Position, TimeSpan.FromSeconds(30), true, [new TurnCommit("0/a", row, null, [], [], sent, [], [], "[]")], [], []));
             var polled = await store.PollAsync(1, 1, TimeSpan.Zero, 10000);
             var same = polled.Messages.Select(m => m.Message.Id).SequenceEqual(sent.Select(m => m.Id));
             var returned = committed.Seqs.SequenceEqual(polled.Messages.OrderBy(m => sent.FindIndex(s => s.Id == m.Message.Id)).Select(m => m.Seq));
@@ -498,7 +498,7 @@ static class EngineRun
         await target.ResetAsync(2);
         var lease = (await store.TakeAsync(0, "definite", TimeSpan.FromSeconds(30)))!;
         var position = lease.Position;
-        StepCommit Unit(string id) => new(id, new InstanceRow(id, "counter", "c", InstanceStatus.Running, "{}", 1, null), null, [], [], [new Message(id + "#1.0000", InstanceRef.In(1, "b"), "add")], [], [], "[]");
+        TurnCommit Unit(string id) => new(id, new InstanceRow(id, "counter", "c", InstanceStatus.Running, "{}", 1, null), null, [], [], [new Message(id + "#1.0000", InstanceRef.In(1, "b"), "add")], [], [], "[]");
         async Task<string> Commit(params string[] ids)
         {
             try
@@ -926,7 +926,7 @@ sealed class Tally(IKernelStore inner) : IKernelStore
     {
         // A batch that names one message twice is the worker's doing, not the engine's: say which lists it is in.
         var named = batch.Seen.Select(id => (id, list: "seen"))
-            .Concat(batch.Steps.SelectMany(s => s.Consumed.Select(id => (id, list: "consumed")).Concat(s.Done.Select(id => (id, list: "done"))).Concat(s.Sent.Select(m => (id: m.Id, list: "sent")))))
+            .Concat(batch.Turns.SelectMany(s => s.Consumed.Select(id => (id, list: "consumed")).Concat(s.Done.Select(id => (id, list: "done"))).Concat(s.Sent.Select(m => (id: m.Id, list: "sent")))))
             .GroupBy(x => x.id).Where(g => g.Count() > 1).ToList();
         if (named.Count > 0)
         {

@@ -41,14 +41,14 @@ public static class Reference
             Call("ship", "shipping").Capture("shipped"),
             Set("done", "output", Expr("'shipped ' + order.id"))));
 
-    /// <summary>Case 3: off-step work comes before the response; the request keeps waiting.</summary>
+    /// <summary>Case 3: a background job comes before the response; the request keeps waiting.</summary>
     public static Workflow WaitBeforeResponse() =>
         Workflow("http-wait-before", Sequence("root",
             HttpEndpoint("http-in", "quotes"),
             Call("quote", "pricing", milliseconds: 20).Capture("quote"),
             Respond("answer", Var("quote"))));
 
-    /// <summary>Case 3 with a short Delay instead of off-step work.</summary>
+    /// <summary>Case 3 with a short Delay instead of a background job.</summary>
     public static Workflow DelayBeforeResponse() =>
         Workflow("http-delay-before", Sequence("root",
             HttpEndpoint("http-in", "slow"),

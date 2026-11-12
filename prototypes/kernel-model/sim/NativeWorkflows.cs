@@ -6,7 +6,7 @@ namespace Kernel.Sim.Native;
 
 /// <summary>
 /// The native workflows of the simulation's mix. Their final variables do not depend on the order in which events,
-/// timers, children and runs arrive, so a run with faults can be compared with a run without.
+/// timers, children and job results arrive, so a run with faults can be compared with a run without.
 /// </summary>
 public static class NativeWorkflows
 {

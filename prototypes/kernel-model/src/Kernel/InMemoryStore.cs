@@ -71,60 +71,60 @@ public sealed class InMemoryStore(int partitions, Func<long> clock, Flaw flaws =
             {
                 // Everything is checked before anything is written: a statement that fails aborts the transaction.
                 var at = batch.Position;
-                foreach (var step in batch.Steps)
+                foreach (var turn in batch.Turns)
                 {
-                    if (step.Delete && Instances.GetValueOrDefault(step.Instance)?.Revision != step.Expected) Diverged($"instance {step.Instance} to delete is not at revision {step.Expected}");
-                    if (step.Row is { } row)
+                    if (turn.Delete && Instances.GetValueOrDefault(turn.Instance)?.Revision != turn.Expected) Diverged($"instance {turn.Instance} to delete is not at revision {turn.Expected}");
+                    if (turn.Row is { } row)
                     {
                         if (Refuses?.Invoke(row) == true) throw new StoreException(Failure.Definite, $"the row of {row.Id} was refused");
                         var revision = Instances.GetValueOrDefault(row.Id)?.Revision;
-                        if (revision != step.Expected) Diverged($"instance {row.Id} is at revision {revision?.ToString() ?? "none"}, the commit expected {step.Expected?.ToString() ?? "none"}");
+                        if (revision != turn.Expected) Diverged($"instance {row.Id} is at revision {revision?.ToString() ?? "none"}, the commit expected {turn.Expected?.ToString() ?? "none"}");
                     }
-                    foreach (var id in step.Consumed.Concat(step.Done).Concat(step.Held ?? []))
+                    foreach (var id in turn.Consumed.Concat(turn.Done).Concat(turn.Held ?? []))
                         if (!Has(Flaw.DeleteWithoutCount) && Messages.GetValueOrDefault(id) is not { Done: false }) Diverged($"consumed message {id} is not there");
-                    foreach (var message in step.Sent)
+                    foreach (var message in turn.Sent)
                         if (Messages.ContainsKey(message.Id)) Diverged($"sent message {message.Id} exists already");
-                    if (step.Journal is not null && Journal.ContainsKey((batch.Partition, ++at))) Diverged($"journal position {at} is written already");
+                    if (turn.Journal is not null && Journal.ContainsKey((batch.Partition, ++at))) Diverged($"journal position {at} is written already");
                 }
                 (p.Position, p.LeaseUntil) = (batch.Position + batch.Positions, now + (long)batch.Lease.TotalMilliseconds);
             }
 
             var (next, seqs) = (batch.Position, new List<long>());
-            foreach (var step in batch.Steps)
+            foreach (var turn in batch.Turns)
             {
-                if (step.Row is not null) Instances[step.Row.Id] = step.Row;
-                if (step.Delete)
+                if (turn.Row is not null) Instances[turn.Row.Id] = turn.Row;
+                if (turn.Delete)
                 {
-                    Instances.Remove(step.Instance);
-                    foreach (var key in Journal.Where(j => j.Value.Instance == step.Instance && j.Value.Revision > 0 && !Has(Flaw.DeleteLeavesJournal)).Select(j => j.Key).ToList())
+                    Instances.Remove(turn.Instance);
+                    foreach (var key in Journal.Where(j => j.Value.Instance == turn.Instance && j.Value.Revision > 0 && !Has(Flaw.DeleteLeavesJournal)).Select(j => j.Key).ToList())
                     {
                         Journal.Remove(key);
                         Deleted[batch.Partition]++;
                     }
                 }
-                foreach (var id in step.Consumed) Messages.Remove(id);
-                foreach (var id in step.Done)
+                foreach (var id in turn.Consumed) Messages.Remove(id);
+                foreach (var id in turn.Done)
                 {
                     // An outside command stays as a marker until its window has passed, so a late retry meets a duplicate key.
                     if (Has(Flaw.DeleteOutsideCommands)) Messages.Remove(id);
                     else if (Messages.GetValueOrDefault(id) is { } done) done.Done = true;
                 }
-                foreach (var message in step.Sent)
+                foreach (var message in turn.Sent)
                 {
                     // Messages the owner hands over in memory to its own partition are written as seen already.
                     Messages[message.Id] = new MessageRow(message, ++_seq, batch.HandOver && message.Target.Partition == batch.Partition ? batch.Epoch : 0);
                     seqs.Add(_seq);
                 }
-                foreach (var subscription in step.Subscribed) Subscriptions.Add(subscription);
-                foreach (var subscription in step.Unsubscribed) Subscriptions.Remove(subscription);
-                if (step.Unsubscribe) Subscriptions.RemoveWhere(s => s.Instance == step.Instance);
-                if (step.Journal is not null) Journal[(batch.Partition, ++next)] = new JournalRow(batch.Partition, next, step.Instance, step.Delete ? -1 : step.Row?.Revision ?? 0, step.Journal);
+                foreach (var subscription in turn.Subscribed) Subscriptions.Add(subscription);
+                foreach (var subscription in turn.Unsubscribed) Subscriptions.Remove(subscription);
+                if (turn.Unsubscribe) Subscriptions.RemoveWhere(s => s.Instance == turn.Instance);
+                if (turn.Journal is not null) Journal[(batch.Partition, ++next)] = new JournalRow(batch.Partition, next, turn.Instance, turn.Delete ? -1 : turn.Row?.Revision ?? 0, turn.Journal);
             }
             foreach (var id in batch.Seen)
                 if (Messages.GetValueOrDefault(id) is { } seen) seen.Seen = batch.Epoch;
             foreach (var id in batch.Trial)
                 if (Messages.GetValueOrDefault(id) is { } tried) (tried.Seen, tried.Trial) = (batch.Epoch, batch.Epoch);
-            foreach (var id in batch.Steps.SelectMany(s => s.Held ?? []))
+            foreach (var id in batch.Turns.SelectMany(s => s.Held ?? []))
                 if (!Has(Flaw.HoldKeepsTrial) && Messages.GetValueOrDefault(id) is { } held) held.Trial = 0;
             return new(new Committed(fenced, now, seqs));
 

@@ -1,7 +1,7 @@
 namespace Kernel;
 
-/// <summary>What a model sees of one step, and the collector of what the step did. Nothing leaves it before <see cref="Seal"/>.</summary>
-internal sealed class Step : IStep
+/// <summary>What a model sees of one turn, and the collector of what the turn did. Nothing leaves it before <see cref="Seal"/>.</summary>
+internal sealed class Turn : ITurn
 {
     private readonly Worker _worker;
     private readonly List<Message> _sent = [];
@@ -10,14 +10,14 @@ internal sealed class Step : IStep
     private readonly List<object> _entries = [];
     private readonly List<(string, object?)> _emitted = [];
     private readonly HashSet<SubscriptionRow> _kept = [];
-    private readonly List<string> _runs, _children, _cancelled = [];
+    private readonly List<string> _jobs, _children, _cancelled = [];
     private readonly long _revision;
     private InstanceStatus _status = InstanceStatus.Running;
     private object? _output;
     private int _ordinal;
     private string? _definition;
 
-    internal Step(Worker worker, Slot slot, string id, List<Item> taken, int from, StartSpec? spec)
+    internal Turn(Worker worker, Slot slot, string id, List<Item> taken, int from, StartSpec? spec)
     {
         _worker = worker;
         Slot = slot;
@@ -26,11 +26,11 @@ internal sealed class Step : IStep
         var row = slot.Row;
         Instance = new InstanceInfo(new InstanceRef(id), row?.Model ?? spec!.Model, row?.Definition ?? spec!.Definition, row is null ? spec!.Parent : row.Parent);
         Inbox = taken.Skip(from).Select(i => i.Message).ToList();   // messages ahead of the one that creates the target had no target
-        _runs = row?.Runs is { } runs ? Json.Read<List<string>>(runs) : [];
+        _jobs = row?.Jobs is { } jobs ? Json.Read<List<string>>(jobs) : [];
         _children = row?.Children is { } children ? Json.Read<List<string>>(children) : [];
         foreach (var message in Inbox)
         {
-            if (message.Kind == Kinds.RunFinished) _runs.Remove(message.Read<RunFinished>().Key);    // its result is being handled: no longer in flight
+            if (message.Kind == Kinds.JobFinished) _jobs.Remove(message.Read<JobFinished>().Key);    // its result is being handled: no longer in flight
             if (message.Kind == Kinds.ChildFinished) _children.Remove(message.Read<ChildFinished>().Child);
         }
         _revision = (row?.Revision ?? 0) + 1;
@@ -65,9 +65,9 @@ internal sealed class Step : IStep
     public void Recall(string message)
     {
         if (!message.StartsWith(Id + "#", StringComparison.Ordinal)) throw new InvalidOperationException($"Message '{message}' was not sent by {Id}.");
-        if (Inbox.Any(m => m.Id == message) || _cancelled.Contains(message)) return;     // given to this step: consumed with it
-        if (_sent.RemoveAll(m => m.Id == message) > 0) return;      // sent by this step: never written
-        _cancelled.Add(message);        // its row goes with this commit, as a cancelled run's ticket does
+        if (Inbox.Any(m => m.Id == message) || _cancelled.Contains(message)) return;     // given to this turn: consumed with it
+        if (_sent.RemoveAll(m => m.Id == message) > 0) return;      // sent by this turn: never written
+        _cancelled.Add(message);        // its row goes with this commit, as a cancelled job's ticket does
         _worker.Cancelling(message);
     }
 
@@ -82,20 +82,20 @@ internal sealed class Step : IStep
         return child;
     }
 
-    public void Run(string key, object? arguments = null)
+    public void StartJob(string key, object? arguments = null)
     {
-        if (_runs.Contains(key)) throw new InvalidOperationException($"Run '{key}' is in flight already.");
-        _runs.Add(key);
+        if (_jobs.Contains(key)) throw new InvalidOperationException($"Job '{key}' is in flight already.");
+        _jobs.Add(key);
         _started.Add(key);
         // Finding F4: the intent is also a message to self, a ticket, so after a crash the inbox alone says what to do next.
-        // Its id is derived from instance and key, so a later step can delete it without holding it.
-        Send(Worker.TicketId(Id, key), Instance.Ref, Kinds.Run, new RunTicket(Instance.Model, key, arguments is null ? null : Json.Write(arguments)));
-        if (_worker.Has(Flaw.VolatileRunTicket)) _volatile.Add(_sent[^1].Id);
+        // Its id is derived from instance and key, so a later turn can delete it without holding it.
+        Send(Worker.TicketId(Id, key), Instance.Ref, Kinds.Job, new JobTicket(Instance.Model, key, arguments is null ? null : Json.Write(arguments)));
+        if (_worker.Has(Flaw.VolatileJobTicket)) _volatile.Add(_sent[^1].Id);
     }
 
-    public void CancelRun(string key)
+    public void CancelJob(string key)
     {
-        if (!_runs.Remove(key)) return;     // not in flight: never started, done, or its result is in this step's inbox
+        if (!_jobs.Remove(key)) return;     // not in flight: never started, done, or its result is in this turn's inbox
         var ticket = Worker.TicketId(Id, key);
         if (_started.Remove(key)) _sent.RemoveAll(m => m.Id == ticket);
         else _cancelled.Add(ticket);
@@ -104,7 +104,7 @@ internal sealed class Step : IStep
 
     public void Hold(Message message)
     {
-        if (!Inbox.Contains(message)) throw new InvalidOperationException($"Message '{message.Id}' is not in this step's inbox.");
+        if (!Inbox.Contains(message)) throw new InvalidOperationException($"Message '{message.Id}' is not in this turn's inbox.");
         _held.Add(message.Id);
     }
 
@@ -126,19 +126,19 @@ internal sealed class Step : IStep
     public void Rebind(string definition) => _definition = _worker.Has(Flaw.RebindForgotten) ? null : definition;
     public void SetStatus(InstanceStatus status, string? subStatus = null, object? output = null) => (_status, _output) = (status, output);
 
-    /// <summary>The step's end is its commit, and the only one.</summary>
+    /// <summary>The turn's end is its commit, and the only one.</summary>
     internal Unit Seal(int version)
     {
         var created = Slot.Row is null;
         var history = Slot.Row?.History ?? Spec!.History;
         if (_status != InstanceStatus.Running || _worker.Has(Flaw.HoldLoses)) _held.Clear();     // nothing is held into an ended instance
         foreach (var message in Inbox)
-            if (message.Kind == Kinds.RunFinished && _held.Contains(message.Id)) _runs.Add(message.Read<RunFinished>().Key);   // a held result: still in flight
-        var row = new InstanceRow(Id, Instance.Model, _definition ?? Instance.Definition, _status, Json.Write(State), _revision, Instance.Parent, Runs: _runs.Count == 0 ? null : Json.Write(_runs), History: history,
+            if (message.Kind == Kinds.JobFinished && _held.Contains(message.Id)) _jobs.Add(message.Read<JobFinished>().Key);   // a held result: still in flight
+        var row = new InstanceRow(Id, Instance.Model, _definition ?? Instance.Definition, _status, Json.Write(State), _revision, Instance.Parent, Jobs: _jobs.Count == 0 ? null : Json.Write(_jobs), History: history,
             Children: _children.Count == 0 ? null : Json.Write(_children), StateVersion: version);
         if (_status != InstanceStatus.Running && row.Parent is not null) _sent.Add(Worker.Finished(row, _output is null ? null : Json.Write(_output)));
         var unit = new Unit(Slot, Id) { Consumed = Taken.FindAll(i => !_held.Contains(i.Message.Id)), Held = Taken.FindAll(i => _held.Contains(i.Message.Id)), Cancelled = _cancelled, Spec = Spec, Status = _status, Revision = _revision, Emitted = _emitted };
-        // An ephemeral instance that ends in the step that created it, and leaves nothing for anyone else, is never written.
+        // An ephemeral instance that ends in the turn that created it, and leaves nothing for anyone else, is never written.
         if (created && Spec!.Ephemeral && _status != InstanceStatus.Running && _sent.Count == 0 && _subscribed.Count == 0) return unit;
         if (_kept.Count > 0)
         {

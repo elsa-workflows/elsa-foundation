@@ -61,11 +61,11 @@ public sealed class Context(ProvidedStore provided)
 
     public async Task<Stored?> Row(int partition, string id) => (await All(partition)).FirstOrDefault(m => m.Message.Id == id);
 
-    public Task<Committed> Commit(Lease lease, int partition, IReadOnlyList<StepCommit> steps, IReadOnlyList<string>? seen = null, IReadOnlyList<string>? trial = null, bool handOver = false, TimeSpan? leaseFor = null) =>
-        S.CommitAsync(new CommitBatch(partition, lease.Epoch, lease.Position, leaseFor ?? LeaseOf(partition, lease.Epoch), handOver, steps, seen ?? [], trial ?? [])).AsTask();
+    public Task<Committed> Commit(Lease lease, int partition, IReadOnlyList<TurnCommit> turns, IReadOnlyList<string>? seen = null, IReadOnlyList<string>? trial = null, bool handOver = false, TimeSpan? leaseFor = null) =>
+        S.CommitAsync(new CommitBatch(partition, lease.Epoch, lease.Position, leaseFor ?? LeaseOf(partition, lease.Epoch), handOver, turns, seen ?? [], trial ?? [])).AsTask();
 
-    public Task<Committed> Commit(int partition, long epoch, long position, IReadOnlyList<StepCommit> steps, IReadOnlyList<string>? seen = null, IReadOnlyList<string>? trial = null) =>
-        S.CommitAsync(new CommitBatch(partition, epoch, position, LeaseOf(partition, epoch), false, steps, seen ?? [], trial ?? [])).AsTask();
+    public Task<Committed> Commit(int partition, long epoch, long position, IReadOnlyList<TurnCommit> turns, IReadOnlyList<string>? seen = null, IReadOnlyList<string>? trial = null) =>
+        S.CommitAsync(new CommitBatch(partition, epoch, position, LeaseOf(partition, epoch), false, turns, seen ?? [], trial ?? [])).AsTask();
 
     /// <summary>A commit that must land. Transient failures are tried again, as the kernel does.</summary>
     public async Task<Committed> Lands(Func<Task<Committed>> commit, string what = "the commit")
@@ -121,17 +121,17 @@ public static class Make
     public static InstanceRow Row(string id, long revision, string state = "{}", InstanceStatus status = InstanceStatus.Running) =>
         new(id, "m", "d", status, state, revision, null);
 
-    public static StepCommit Step(string instance, InstanceRow? row = null, long? expected = null, IReadOnlyList<string>? consumed = null, IReadOnlyList<string>? done = null,
+    public static TurnCommit Turn(string instance, InstanceRow? row = null, long? expected = null, IReadOnlyList<string>? consumed = null, IReadOnlyList<string>? done = null,
         IReadOnlyList<Message>? sent = null, IReadOnlyList<SubscriptionRow>? subscribed = null, IReadOnlyList<SubscriptionRow>? unsubscribed = null, string? journal = "[]",
         bool unsubscribe = false, IReadOnlyList<string>? held = null) =>
         new(instance, row, expected, consumed ?? [], done ?? [], sent ?? [], subscribed ?? [], unsubscribed ?? [], journal, unsubscribe, held);
 
     /// <summary>A delete of an ended instance at its revision, as the kernel writes it: its waits go too, and its own journal row says so.</summary>
-    public static StepCommit Delete(string instance, long expected, IReadOnlyList<string>? consumed = null) =>
+    public static TurnCommit Delete(string instance, long expected, IReadOnlyList<string>? consumed = null) =>
         new(instance, null, expected, consumed ?? [], [], [], [], [], "[\"deleted\"]", Unsubscribe: true, Delete: true);
 
-    /// <summary>A new instance, created with a journal row: the commonest step.</summary>
-    public static StepCommit New(string instance, IReadOnlyList<Message>? sent = null) => Step(instance, Row(instance, 1), sent: sent);
+    /// <summary>A new instance, created with a journal row: the commonest turn.</summary>
+    public static TurnCommit New(string instance, IReadOnlyList<Message>? sent = null) => Turn(instance, Row(instance, 1), sent: sent);
 }
 
 /// <summary>The semantic tests of each <see cref="IKernelStore"/> operation, as the contract and the in-memory store define them.</summary>
@@ -241,7 +241,7 @@ public static class Semantics
             var lease = await c.Take(0);
             var sent = new[] { Make.M("0/i#1.0000", 0, target: "j"), Make.M("0/i#1.0001", 1, target: "k") };
             var sub = new SubscriptionRow("key", "0/i", "w");
-            var result = await c.Lands(() => c.Commit(lease, 0, [Make.Step("0/i", Make.Row("0/i", 1, "{\"n\":1}"), consumed: ["in"], done: ["cmd"], sent: sent, subscribed: [sub], journal: "[\"j\"]")],
+            var result = await c.Lands(() => c.Commit(lease, 0, [Make.Turn("0/i", Make.Row("0/i", 1, "{\"n\":1}"), consumed: ["in"], done: ["cmd"], sent: sent, subscribed: [sub], journal: "[\"j\"]")],
                 seen: ["held"], trial: ["tried"]));
             Context.Equal(2, result.Seqs.Count, "seqs returned");
             Context.That(result.Seqs[0] < result.Seqs[1], "seqs are not increasing in the order sent");
@@ -265,7 +265,7 @@ public static class Semantics
             await c.S.AddAsync(Make.M("held", 0));
             var old = await c.Take(0);
             await c.Take(0);
-            await c.Refused(() => c.Commit(old, 0, [Make.Step("0/i", Make.Row("0/i", 1), consumed: ["in"], sent: [Make.M("0/i#1.0000", 1)], subscribed: [new("key", "0/i", "w")])], seen: ["held"]));
+            await c.Refused(() => c.Commit(old, 0, [Make.Turn("0/i", Make.Row("0/i", 1), consumed: ["in"], sent: [Make.M("0/i#1.0000", 1)], subscribed: [new("key", "0/i", "w")])], seen: ["held"]));
             await NothingWritten(c);
         }),
         new("commit: refused for a wrong position, and writes nothing", Level.Required, async c =>
@@ -273,43 +273,43 @@ public static class Semantics
             await c.S.AddAsync(Make.M("in", 0));
             await c.S.AddAsync(Make.M("held", 0));
             var lease = await c.Take(0);
-            await c.Refused(() => c.Commit(0, lease.Epoch, lease.Position + 5, [Make.Step("0/i", Make.Row("0/i", 1), consumed: ["in"], sent: [Make.M("0/i#1.0000", 1)], subscribed: [new("key", "0/i", "w")])], seen: ["held"]));
+            await c.Refused(() => c.Commit(0, lease.Epoch, lease.Position + 5, [Make.Turn("0/i", Make.Row("0/i", 1), consumed: ["in"], sent: [Make.M("0/i#1.0000", 1)], subscribed: [new("key", "0/i", "w")])], seen: ["held"]));
             await NothingWritten(c);
         }),
         Atomic("an update at the wrong revision", async (c, _) =>
         {
             var taken = await c.Take(0);
             await c.Lands(() => c.Commit(0, taken.Epoch, 0, [Make.New("0/b")]));
-            return Make.Step("0/b", Make.Row("0/b", 3), expected: 2);
+            return Make.Turn("0/b", Make.Row("0/b", 3), expected: 2);
         }),
         Atomic("a create of a row that exists", async (c, _) =>
         {
             var taken = await c.Take(0);
             await c.Lands(() => c.Commit(0, taken.Epoch, 0, [Make.New("0/b")]));
-            return Make.Step("0/b", Make.Row("0/b", 1));
+            return Make.Turn("0/b", Make.Row("0/b", 1));
         }),
-        Atomic("a consume of a message that is not there", (_, _) => Task.FromResult(Make.Step("0/b", Make.Row("0/b", 1), consumed: ["ghost"]))),
+        Atomic("a consume of a message that is not there", (_, _) => Task.FromResult(Make.Turn("0/b", Make.Row("0/b", 1), consumed: ["ghost"]))),
         Atomic("a consume of a message that is done", async (c, now) =>
         {
             await c.S.AddAsync(Make.M("cmd", 0, keep: now + 60_000));
             var taken = await c.Take(0);
-            await c.Lands(() => c.Commit(0, taken.Epoch, 0, [Make.Step("0/b", Make.Row("0/b", 1), done: ["cmd"])]));
-            return Make.Step("0/c", Make.Row("0/c", 1), done: ["cmd"]);
+            await c.Lands(() => c.Commit(0, taken.Epoch, 0, [Make.Turn("0/b", Make.Row("0/b", 1), done: ["cmd"])]));
+            return Make.Turn("0/c", Make.Row("0/c", 1), done: ["cmd"]);
         }),
         Atomic("a send of a message id that exists", async (c, _) =>
         {
             await c.S.AddAsync(Make.M("dup", 1));
-            return Make.Step("0/b", Make.Row("0/b", 1), sent: [Make.M("dup", 1)]);
+            return Make.Turn("0/b", Make.Row("0/b", 1), sent: [Make.M("dup", 1)]);
         }),
         new("commit: revision checks", Level.Required, async c =>
         {
             var lease = await c.Take(0);
             await c.Lands(() => c.Commit(lease, 0, [Make.New("0/i")]));
-            await c.Lands(() => c.Commit(0, lease.Epoch, 1, [Make.Step("0/i", Make.Row("0/i", 2, "{\"v\":2}"), expected: 1)]), "an update at the right revision");
-            await c.Refused(() => c.Commit(0, lease.Epoch, 2, [Make.Step("0/i", Make.Row("0/i", 3), expected: 1)]), "an update at an old revision");
+            await c.Lands(() => c.Commit(0, lease.Epoch, 1, [Make.Turn("0/i", Make.Row("0/i", 2, "{\"v\":2}"), expected: 1)]), "an update at the right revision");
+            await c.Refused(() => c.Commit(0, lease.Epoch, 2, [Make.Turn("0/i", Make.Row("0/i", 3), expected: 1)]), "an update at an old revision");
             Context.Equal(2L, (await c.S.LoadAsync(["0/i"])).Single().Revision, "revision after a refused update");
-            // A step may commit without a journal row (a history level that records nothing): the position stays.
-            await c.Lands(() => c.Commit(0, lease.Epoch, 2, [Make.Step("0/i", Make.Row("0/i", 3), expected: 2, journal: null)]), "an update without a journal row");
+            // A turn may commit without a journal row (a history level that records nothing): the position stays.
+            await c.Lands(() => c.Commit(0, lease.Epoch, 2, [Make.Turn("0/i", Make.Row("0/i", 3), expected: 2, journal: null)]), "an update without a journal row");
             await c.Lands(() => c.Commit(0, lease.Epoch, 2, []), "a commit at the unchanged position");
         }),
         new("commit: consumed is deleted, done stays as a marker that refuses a second add", Level.Required, async c =>
@@ -318,13 +318,13 @@ public static class Semantics
             await c.S.AddAsync(Make.M("eat", 0));
             await c.S.AddAsync(Make.M("cmd", 0, keep: keep));
             var lease = await c.Take(0);
-            await c.Lands(() => c.Commit(lease, 0, [Make.Step("0/i", Make.Row("0/i", 1), consumed: ["eat"], done: ["cmd"])]));
+            await c.Lands(() => c.Commit(lease, 0, [Make.Turn("0/i", Make.Row("0/i", 1), consumed: ["eat"], done: ["cmd"])]));
             Context.Equal(0, (await c.All(0)).Count, "rows polled after consuming both");
             Context.That(await c.S.AddAsync(Make.M("eat", 0)), "a consumed message's id cannot be added again");
             Context.That(!await c.S.AddAsync(Make.M("cmd", 0, keep: keep)), "a done command was added again inside its window");
-            await c.Refused(() => c.Commit(0, lease.Epoch, 1, [Make.Step("0/j", Make.Row("0/j", 1), done: ["cmd"])]), "marking a done command done again");
-            await c.Lands(() => c.Commit(0, lease.Epoch, 1, [Make.Step("0/j", Make.Row("0/j", 1), consumed: ["eat"])]), "consuming the re-added message");
-            await c.Refused(() => c.Commit(0, lease.Epoch, 2, [Make.Step("0/k", Make.Row("0/k", 1), consumed: ["eat"])]), "consuming a message twice");
+            await c.Refused(() => c.Commit(0, lease.Epoch, 1, [Make.Turn("0/j", Make.Row("0/j", 1), done: ["cmd"])]), "marking a done command done again");
+            await c.Lands(() => c.Commit(0, lease.Epoch, 1, [Make.Turn("0/j", Make.Row("0/j", 1), consumed: ["eat"])]), "consuming the re-added message");
+            await c.Refused(() => c.Commit(0, lease.Epoch, 2, [Make.Turn("0/k", Make.Row("0/k", 1), consumed: ["eat"])]), "consuming a message twice");
         }),
         new("commit: seen and trial marks", Level.Required, async c =>
         {
@@ -383,7 +383,7 @@ public static class Semantics
             await c.Lands(() => c.Commit(a, 0, [Make.New("0/s", [Make.M("0/s#1.0000", 1)])]));
             await Task.Delay(PastShort);
             var b = await c.Take(0, "b");
-            await c.Lands(() => c.Commit(b, 0, [Make.Step("0/s", Make.Row("0/s", 2), expected: 1, sent: [Make.M("0/s#2.0000", 1)])]));
+            await c.Lands(() => c.Commit(b, 0, [Make.Turn("0/s", Make.Row("0/s", 2), expected: 1, sent: [Make.M("0/s#2.0000", 1)])]));
             var rows = (await c.All(1)).ToDictionary(r => r.Message.Id);
             Context.That(rows["0/s#1.0000"].Seq < rows["0/s#2.0000"].Seq, $"the later send has key {rows["0/s#2.0000"].Seq}, the earlier {rows["0/s#1.0000"].Seq}");
         }),
@@ -500,7 +500,7 @@ public static class Semantics
         {
             var lease = await c.Take(0);
             var faulted = new InstanceRow("0/f", "model", "def", InstanceStatus.Faulted, "{\"s\":[1,2]}", 1, "0/p", "it broke", "[\"k1\"]");
-            await c.Lands(() => c.Commit(lease, 0, [Make.Step("0/f", faulted), Make.New("0/g")]));
+            await c.Lands(() => c.Commit(lease, 0, [Make.Turn("0/f", faulted), Make.New("0/g")]));
             var rows = (await c.S.LoadAsync(["0/f", "0/g", "0/missing"])).OrderBy(r => r.Id, StringComparer.Ordinal).ToList();
             Context.Equal(2, rows.Count, "rows loaded");
             Context.Equal(faulted, rows[0], "the faulted row");
@@ -513,9 +513,9 @@ public static class Semantics
         {
             var lease = await c.Take(0);
             SubscriptionRow s1 = new("k1", "0/a", "w"), s2 = new("k1", "0/b", "w"), s3 = new("k2", "0/a", "w");
-            await c.Lands(() => c.Commit(lease, 0, [Make.Step("0/a", Make.Row("0/a", 1), subscribed: [s1, s3]), Make.Step("0/b", Make.Row("0/b", 1), subscribed: [s2])]));
+            await c.Lands(() => c.Commit(lease, 0, [Make.Turn("0/a", Make.Row("0/a", 1), subscribed: [s1, s3]), Make.Turn("0/b", Make.Row("0/b", 1), subscribed: [s2])]));
             Context.Equal("0/a,0/b", string.Join(",", (await c.S.FindSubscriptionsAsync("k1")).Select(s => s.Instance).Order(StringComparer.Ordinal)), "subscriptions of k1");
-            await c.Lands(() => c.Commit(0, lease.Epoch, 2, [Make.Step("0/a", Make.Row("0/a", 2), expected: 1, unsubscribed: [s1])]));
+            await c.Lands(() => c.Commit(0, lease.Epoch, 2, [Make.Turn("0/a", Make.Row("0/a", 2), expected: 1, unsubscribed: [s1])]));
             Context.Equal(s2, (await c.S.FindSubscriptionsAsync("k1")).Single(), "k1 after unsubscribing 0/a");
             Context.Equal(s3, (await c.S.FindSubscriptionsAsync("k2")).Single(), "k2");
             Context.Equal(0, (await c.S.FindSubscriptionsAsync("k3")).Count, "a key nobody waits for");
@@ -524,14 +524,14 @@ public static class Semantics
         {
             var lease = await c.Take(0);
             SubscriptionRow s = new("k", "0/a", "w");
-            await c.Lands(() => c.Commit(lease, 0, [Make.Step("0/a", Make.Row("0/a", 1), subscribed: [s])]));
-            await c.Lands(() => c.Commit(0, lease.Epoch, 1, [Make.Step("0/a", Make.Row("0/a", 2), expected: 1, subscribed: [s])]));
+            await c.Lands(() => c.Commit(lease, 0, [Make.Turn("0/a", Make.Row("0/a", 1), subscribed: [s])]));
+            await c.Lands(() => c.Commit(0, lease.Epoch, 1, [Make.Turn("0/a", Make.Row("0/a", 2), expected: 1, subscribed: [s])]));
             Context.Equal(1, (await c.S.FindSubscriptionsAsync("k")).Count, "subscriptions after subscribing twice");
         }),
         new("subscriptions: unsubscribing what is not there changes nothing", Level.Reference, async c =>
         {
             var lease = await c.Take(0);
-            await c.Lands(() => c.Commit(lease, 0, [Make.Step("0/a", Make.Row("0/a", 1), unsubscribed: [new("k", "0/a", "w")])]));
+            await c.Lands(() => c.Commit(lease, 0, [Make.Turn("0/a", Make.Row("0/a", 1), unsubscribed: [new("k", "0/a", "w")])]));
         }),
         new("events: publish is create-only, find honours keep_until", Level.Required, async c =>
         {
@@ -549,7 +549,7 @@ public static class Semantics
         {
             var lease = await c.Take(0);
             var wait = new SubscriptionRow("k", "0/w", "w");
-            await c.Lands(() => c.Commit(lease, 0, [Make.Step("0/w", Make.Row("0/w", 1), subscribed: [wait])]));
+            await c.Lands(() => c.Commit(lease, 0, [Make.Turn("0/w", Make.Row("0/w", 1), subscribed: [wait])]));
             var e = new EventRow("k", "e1", "p", await c.Now() + 60_000);
             await Events.PublishAsync(c.S, e);
             Context.That(!await c.S.AddAsync(Events.Deliver(e, wait)), "the subscriber's delivery was added beside the publisher's");
@@ -560,7 +560,7 @@ public static class Semantics
         new("journal: rows at positions n+1..n+k, read after a position", Level.Required, async c =>
         {
             var lease = await c.Take(0);
-            await c.Lands(() => c.Commit(lease, 0, [Make.New("0/a"), Make.Step("0/b", Make.Row("0/b", 1), journal: null), Make.Step("0/c", null, journal: "[\"dropped\"]"), Make.New("0/d")]));
+            await c.Lands(() => c.Commit(lease, 0, [Make.New("0/a"), Make.Turn("0/b", Make.Row("0/b", 1), journal: null), Make.Turn("0/c", null, journal: "[\"dropped\"]"), Make.New("0/d")]));
             var rows = await c.S.ReadJournalAsync(0, 0, 10);
             Context.Equal("1:0/a:1,2:0/c:0,3:0/d:1", string.Join(",", rows.Select(r => $"{r.Position}:{r.Instance}:{r.Revision}")), "journal rows");
             Context.Equal("2", string.Join(",", (await c.S.ReadJournalAsync(0, 1, 1)).Select(r => r.Position)), "one row after position 1");
@@ -577,7 +577,7 @@ public static class Semantics
             await c.S.PublishAsync(new EventRow("k", "old", null, now + 300));
             await c.S.PublishAsync(new EventRow("k", "new", null, now + 600_000));
             var lease = await c.Take(0);
-            await c.Lands(() => c.Commit(lease, 0, [Make.Step("0/a", Make.Row("0/a", 1), done: ["old-done", "new-done"])]));
+            await c.Lands(() => c.Commit(lease, 0, [Make.Turn("0/a", Make.Row("0/a", 1), done: ["old-done", "new-done"])]));
             await Task.Delay(PastShort);
             Context.Equal(2, await c.S.SweepAsync(), "rows swept");
             Context.Equal("old-open,plain", string.Join(",", (await c.All(0)).Select(m => m.Message.Id).Order(StringComparer.Ordinal)), "rows left");
@@ -593,7 +593,7 @@ public static class Semantics
             if (c.Provided.Refused(Make.Row("0/bad", 1)) is not { } bad) throw new SkipException("the provider cannot make a row its store refuses");
             try
             {
-                await c.Commit(lease, 0, [Make.Step("0/bad", bad)]);
+                await c.Commit(lease, 0, [Make.Turn("0/bad", bad)]);
                 throw new ConformanceException("the refused row was not refused");
             }
             catch (StoreException e) { Context.Equal(Failure.Definite, e.Failure, "failure of a refused row"); }
@@ -650,7 +650,7 @@ public static class Semantics
             var lease = await c.Take(0);
             var row = new InstanceRow("0/r", "model", "def", InstanceStatus.Running, "{}", 1, "0/p", null, "[\"k\"]", History.State, Suspended: true, Children: "[\"0/c\",\"1/d\"]", StateVersion: 3);
             var minimal = new InstanceRow("0/m", "model", "def", InstanceStatus.Running, "{}", 1, null, History: History.Minimal);
-            await c.Lands(() => c.Commit(lease, 0, [Make.Step("0/r", row), Make.Step("0/m", minimal, journal: null)]));
+            await c.Lands(() => c.Commit(lease, 0, [Make.Turn("0/r", row), Make.Turn("0/m", minimal, journal: null)]));
             var rows = (await c.S.LoadAsync(["0/r", "0/m"])).ToDictionary(r => r.Id);
             Context.Equal(row, rows["0/r"], "the row with every column set");
             Context.Equal(minimal, rows["0/m"], "a row at history Minimal");
@@ -680,7 +680,7 @@ public static class Semantics
             Context.Equal(start, (await c.S.FindSubscriptionsAsync("k")).Single(), "the start subscription after two registrations");
             var lease = await c.Take(0);
             var wait = new SubscriptionRow("k", "0/w", "w");
-            await c.Lands(() => c.Commit(lease, 0, [Make.Step("0/w", Make.Row("0/w", 1), subscribed: [wait])]));
+            await c.Lands(() => c.Commit(lease, 0, [Make.Turn("0/w", Make.Row("0/w", 1), subscribed: [wait])]));
             var found = (await c.S.FindSubscriptionsAsync("k")).OrderBy(x => x.Instance, StringComparer.Ordinal).ToList();
             Context.Equal(2, found.Count, "subscriptions of the key");
             Context.Equal(start, found[0], "the start subscription");
@@ -690,7 +690,7 @@ public static class Semantics
         {
             var lease = await c.Take(0);
             await c.Lands(() => c.Commit(lease, 0, [Make.New("0/d"), Make.New("0/o")]));
-            await c.Lands(() => c.Commit(0, lease.Epoch, 2, [Make.Step("0/d", Make.Row("0/d", 2, status: InstanceStatus.Finished), expected: 1)]));
+            await c.Lands(() => c.Commit(0, lease.Epoch, 2, [Make.Turn("0/d", Make.Row("0/d", 2, status: InstanceStatus.Finished), expected: 1)]));
             await c.Lands(() => c.Commit(0, lease.Epoch, 3, [Make.Delete("0/d", 2)]), "the delete");
             Context.Equal(0, (await c.S.LoadAsync(["0/d"])).Count, "rows of the deleted instance");
             Context.Equal(1, (await c.S.LoadAsync(["0/o"])).Count, "rows of the other instance");
@@ -704,13 +704,13 @@ public static class Semantics
             await c.Lands(() => c.Commit(0, taken.Epoch, 0, [Make.New("0/b")]));
             return Make.Delete("0/b", 2);
         }),
-        Atomic("a hold of a message that is not there", (_, _) => Task.FromResult(Make.Step("0/b", Make.Row("0/b", 1), held: ["ghost"]))),
+        Atomic("a hold of a message that is not there", (_, _) => Task.FromResult(Make.Turn("0/b", Make.Row("0/b", 1), held: ["ghost"]))),
         new("commit: unsubscribing all removes every wait of the instance, and only its", Level.Required, async c =>
         {
             var lease = await c.Take(0);
             SubscriptionRow a1 = new("k1", "0/a", "w1"), a2 = new("k2", "0/a", "w2"), b1 = new("k1", "0/b", "w1");
-            await c.Lands(() => c.Commit(lease, 0, [Make.Step("0/a", Make.Row("0/a", 1), subscribed: [a1, a2]), Make.Step("0/b", Make.Row("0/b", 1), subscribed: [b1])]));
-            await c.Lands(() => c.Commit(0, lease.Epoch, 2, [Make.Step("0/a", Make.Row("0/a", 2, status: InstanceStatus.Cancelled), expected: 1, unsubscribe: true)]));
+            await c.Lands(() => c.Commit(lease, 0, [Make.Turn("0/a", Make.Row("0/a", 1), subscribed: [a1, a2]), Make.Turn("0/b", Make.Row("0/b", 1), subscribed: [b1])]));
+            await c.Lands(() => c.Commit(0, lease.Epoch, 2, [Make.Turn("0/a", Make.Row("0/a", 2, status: InstanceStatus.Cancelled), expected: 1, unsubscribe: true)]));
             Context.Equal(b1, (await c.S.FindSubscriptionsAsync("k1")).Single(), "k1 after 0/a was ended");
             Context.Equal(0, (await c.S.FindSubscriptionsAsync("k2")).Count, "k2 after 0/a was ended");
         }),
@@ -720,7 +720,7 @@ public static class Semantics
             await c.S.AddAsync(Make.M("t", 0));
             var a = await c.Take(0, "a", Short);
             await c.Lands(() => c.Commit(a, 0, [], trial: ["h", "t"]));
-            await c.Lands(() => c.Commit(a, 0, [Make.Step("0/i", Make.Row("0/i", 1), held: ["h"])]), "the step that held it");
+            await c.Lands(() => c.Commit(a, 0, [Make.Turn("0/i", Make.Row("0/i", 1), held: ["h"])]), "the turn that held it");
             var held = (await c.Row(0, "h"))!;
             Context.Equal((a.Epoch, 0L), (held.Seen, held.Trial), "seen and trial of the held message");
             await Task.Delay(PastShort);
@@ -732,7 +732,7 @@ public static class Semantics
         {
             var lease = await c.Take(0);
             await c.Lands(() => c.Commit(lease, 0, [Make.New("0/a"), Make.New("0/b")]));
-            await c.Lands(() => c.Commit(0, lease.Epoch, 2, [Make.Step("0/a", Make.Row("0/a", 2), expected: 1)]));
+            await c.Lands(() => c.Commit(0, lease.Epoch, 2, [Make.Turn("0/a", Make.Row("0/a", 2), expected: 1)]));
             Context.Equal(new Projection(0, 3), await c.S.ProjectedAsync(0), "projection of partition 0 before a round");
             Context.Equal(new Projection(0, 0), await c.S.ProjectedAsync(1), "projection of partition 1");
             var rows = await c.S.ReadJournalAsync(0, 0, 10);
@@ -741,7 +741,7 @@ public static class Semantics
             Context.Equal(new Projection(3, 3), await c.S.ProjectedAsync(0), "projection after the round");
             var views = (await c.S.ReadViewsAsync(["0/a", "0/b", "0/none"])).OrderBy(v => v.Instance, StringComparer.Ordinal).ToList();
             Context.Equal("0/a:2:2,0/b:1:1", string.Join(",", views.Select(v => $"{v.Instance}:{v.Revision}:{v.Commits}")), "view rows");
-            await c.Lands(() => c.Commit(0, lease.Epoch, 3, [Make.Step("0/a", Make.Row("0/a", 3), expected: 2), Make.Delete("0/b", 1)]));
+            await c.Lands(() => c.Commit(0, lease.Epoch, 3, [Make.Turn("0/a", Make.Row("0/a", 3), expected: 2), Make.Delete("0/b", 1)]));
             var next = await c.S.ReadJournalAsync(0, 3, 10);
             Context.That(await c.S.ProjectAsync(0, 3, 5, next), "the second round did not move");
             views = (await c.S.ReadViewsAsync(["0/a", "0/b"])).ToList();
@@ -768,14 +768,14 @@ public static class Semantics
             await c.S.AddAsync(Make.M("m", 0));
             var old = await c.Take(0);
             var wait = new SubscriptionRow("k", "0/d", "w");
-            await c.Lands(() => c.Commit(old, 0, [Make.Step("0/d", Make.Row("0/d", 1, status: InstanceStatus.Finished), subscribed: [wait])], trial: ["m"]));
+            await c.Lands(() => c.Commit(old, 0, [Make.Turn("0/d", Make.Row("0/d", 1, status: InstanceStatus.Finished), subscribed: [wait])], trial: ["m"]));
             var now = await c.Take(0);
             await c.Lands(() => c.Commit(now, 0, [Make.New("0/x")]), "the successor's commit");
             for (var attempt = 0; ; attempt++)
             {
                 try
                 {
-                    var result = await c.Commit(0, old.Epoch, 1, [Make.Delete("0/d", 1), Make.Step("0/h", Make.Row("0/h", 1), held: ["m"])]);
+                    var result = await c.Commit(0, old.Epoch, 1, [Make.Delete("0/d", 1), Make.Turn("0/h", Make.Row("0/h", 1), held: ["m"])]);
                     Context.That(!result.Landed, "the stale owner's commit landed");
                     break;
                 }
@@ -789,7 +789,7 @@ public static class Semantics
         }),
     ];
 
-    private static Case Atomic(string bad, Func<Context, long, Task<StepCommit>> arrange) =>
+    private static Case Atomic(string bad, Func<Context, long, Task<TurnCommit>> arrange) =>
         new($"commit: atomic, refused whole for {bad}", Level.Required, async c =>
         {
             var now = await c.Now();
@@ -797,19 +797,19 @@ public static class Semantics
             await c.S.AddAsync(Make.M("cmd", 0, keep: now + 60_000));
             await c.S.AddAsync(Make.M("held", 0));
             await c.S.AddAsync(Make.M("tried", 0));
-            var badStep = await arrange(c, now);
+            var badTurn = await arrange(c, now);
             var lease = await c.Take(0);
             var before = await c.S.ReadJournalAsync(0, 0, 100);
-            var good = Make.Step("0/a", Make.Row("0/a", 1), consumed: ["in"], done: ["cmd"], sent: [Make.M("0/a#1.0000", 1)], subscribed: [new("key", "0/a", "w")]);
-            c.Notes.Add(await c.Refused(() => c.Commit(lease, 0, [good, badStep], seen: ["held"], trial: ["tried"])));
-            Context.Equal(0, (await c.S.LoadAsync(["0/a"])).Count, "the good step's instance row");
+            var good = Make.Turn("0/a", Make.Row("0/a", 1), consumed: ["in"], done: ["cmd"], sent: [Make.M("0/a#1.0000", 1)], subscribed: [new("key", "0/a", "w")]);
+            c.Notes.Add(await c.Refused(() => c.Commit(lease, 0, [good, badTurn], seen: ["held"], trial: ["tried"])));
+            Context.Equal(0, (await c.S.LoadAsync(["0/a"])).Count, "the good turn's instance row");
             var rows = (await c.All(0)).ToDictionary(r => r.Message.Id);
-            Context.That(rows.ContainsKey("in"), "the good step's consumed message is gone");
-            Context.That(rows.ContainsKey("cmd") || badStep.Done.Contains("cmd"), "the good step's command is done");
+            Context.That(rows.ContainsKey("in"), "the good turn's consumed message is gone");
+            Context.That(rows.ContainsKey("cmd") || badTurn.Done.Contains("cmd"), "the good turn's command is done");
             Context.Equal((0L, 0L), (rows["held"].Seen, rows["held"].Trial), "the seen mark");
             Context.Equal((0L, 0L), (rows["tried"].Seen, rows["tried"].Trial), "the trial mark");
-            Context.That(await c.Row(1, "0/a#1.0000") is null, "the good step's sent message");
-            Context.Equal(0, (await c.S.FindSubscriptionsAsync("key")).Count, "the good step's subscription");
+            Context.That(await c.Row(1, "0/a#1.0000") is null, "the good turn's sent message");
+            Context.Equal(0, (await c.S.FindSubscriptionsAsync("key")).Count, "the good turn's subscription");
             Context.Equal(before.Count, (await c.S.ReadJournalAsync(0, 0, 100)).Count, "journal rows");
             await c.Lands(() => c.Commit(0, lease.Epoch, before.Count, [Make.New("0/z")]), "a commit at the unchanged position");
         });

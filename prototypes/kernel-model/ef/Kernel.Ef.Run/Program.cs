@@ -38,7 +38,7 @@ if (args is ["probe", var probe])
     var lease = (await store.TakeAsync(0, "probe", TimeSpan.FromSeconds(30)))!;
     var sent = Enumerable.Range(0, 12).Select(i => new Message($"0/a#1.{i}", InstanceRef.In(1, "b"), "add")).ToList();
     var row = new InstanceRow("0/a", "counter", "c", InstanceStatus.Running, "{}", 1, null);
-    await store.CommitAsync(new CommitBatch(0, lease.Epoch, lease.Position, TimeSpan.FromSeconds(30), true, [new StepCommit("0/a", row, null, [], [], sent, [], [], "[]")], [], []));
+    await store.CommitAsync(new CommitBatch(0, lease.Epoch, lease.Position, TimeSpan.FromSeconds(30), true, [new TurnCommit("0/a", row, null, [], [], sent, [], [], "[]")], [], []));
     var polled = await store.PollAsync(1, 1, TimeSpan.Zero, 100);
     Console.WriteLine("sent:     " + string.Join(" ", sent.Select(m => m.Id)));
     Console.WriteLine("by seq:   " + string.Join(" ", polled.Messages.Select(m => m.Message.Id)));
@@ -70,7 +70,7 @@ static async Task Drain(Worker worker, bool poll)
         var busy = worker.NeedsLoad || worker.NeedsMeet || worker.NeedsFlush || worker.Ready.Any();
         await worker.LoadAsync();
         await worker.MeetAsync();
-        foreach (var id in worker.Ready.ToList()) worker.Run(id);
+        foreach (var id in worker.Ready.ToList()) worker.RunTurn(id);
         await worker.FlushAsync();
         idle = busy ? 0 : idle + 1;
     }
@@ -185,11 +185,11 @@ static async Task<int> Stress(string connection, int seconds, int messages, bool
 
     var calm = false;
     var stop = new CancellationTokenSource();
-    long steps = 0, kills = 0, stalls = 0;
+    long turns = 0, kills = 0, stalls = 0;
     var options = new WorkerOptions
     {
         Lease = TimeSpan.FromMilliseconds(150), Horizon = TimeSpan.FromSeconds(2), PollLimit = 40, MaxBatch = 40, MaxAttempts = 1_000_000,
-        OnStep = (_, _, _) => Interlocked.Increment(ref steps),
+        OnTurn = (_, _, _) => Interlocked.Increment(ref turns),
     };
 
     // Each worker believes it may own its partition and is driven by its own loop. A stall longer than the lease lets
@@ -208,7 +208,7 @@ static async Task<int> Stress(string connection, int seconds, int messages, bool
             await worker.PollAsync();
             await worker.LoadAsync();
             await worker.MeetAsync();
-            foreach (var id in worker.Ready.ToList()) worker.Run(id);
+            foreach (var id in worker.Ready.ToList()) worker.RunTurn(id);
             if (worker.NeedsFlush) await worker.FlushAsync();
             else await worker.BeatAsync();
             if (!calm && random.Next(25) == 0)
@@ -286,7 +286,7 @@ static async Task<int> Stress(string connection, int seconds, int messages, bool
     await producer;
     calm = true;
     await chaos;
-    Console.WriteLine($"chaos over: {kills} backends terminated, {stalls} stalls, {steps} steps so far; letting it settle");
+    Console.WriteLine($"chaos over: {kills} backends terminated, {stalls} stalls, {turns} turns so far; letting it settle");
     var patience = DateTime.UtcNow.AddSeconds(180);
     for (var left = 1; left > 0 && DateTime.UtcNow < patience; await Task.Delay(500))
     {
@@ -336,7 +336,7 @@ static async Task<int> Stress(string connection, int seconds, int messages, bool
         if (rows.TryGetValue(id, out var row) && !Json.Read<SequenceState>(row.State).Done.SequenceEqual(Enumerable.Range(1, count))) wrong.Add($"I4 {id} did [{string.Join(", ", Json.Read<SequenceState>(row.State).Done)}] of {count}");
     foreach (var row in rows.Values.Where(r => r.Status == InstanceStatus.Faulted).Take(5)) wrong.Add($"I14 {row.Id} was parked: {row.Fault}");
 
-    Console.WriteLine($"{messages} outside messages, {rows.Count} instances, {steps} steps run, {journal.Count} commits of instances, {expected.Sum(e => e.Value.Count)} counter tokens checked");
+    Console.WriteLine($"{messages} outside messages, {rows.Count} instances, {turns} turns run, {journal.Count} commits of instances, {expected.Sum(e => e.Value.Count)} counter tokens checked");
     Console.WriteLine(wrong.Count == 0 ? "end state: all properties hold" : $"end state: {wrong.Count} violations\n  " + string.Join("\n  ", wrong.Take(20)));
     return wrong.Count == 0 ? 0 : 1;
 }

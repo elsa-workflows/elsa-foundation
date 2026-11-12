@@ -1,10 +1,10 @@
 namespace Kernel;
 
 /// <summary>
-/// The kernel's part of the row: <c>Runs</c>, the keys of the off-step work in flight, and <c>Children</c>, the instances
+/// The kernel's part of the row: <c>Jobs</c>, the keys of the background jobs in flight, and <c>Children</c>, the instances
 /// it started that have not finished, each a JSON array or null.
 /// </summary>
-public sealed record InstanceRow(string Id, string Model, string Definition, InstanceStatus Status, string State, long Revision, string? Parent, string? Fault = null, string? Runs = null, History History = History.Full, bool Suspended = false, string? Children = null, int StateVersion = 1);
+public sealed record InstanceRow(string Id, string Model, string Definition, InstanceStatus Status, string State, long Revision, string? Parent, string? Fault = null, string? Jobs = null, History History = History.Full, bool Suspended = false, string? Children = null, int StateVersion = 1);
 
 /// <summary>A message row as a poll returns it.</summary>
 public sealed record Stored(Message Message, long Seq, long Seen, int Attempts, long Trial);
@@ -35,21 +35,21 @@ public sealed record Cluster(int Nodes, IReadOnlyList<int> Free, long Now);
 /// <summary>
 /// One instance's part of a commit. <c>Expected</c> is the revision the row must have; null means the row is new.
 /// <c>Consumed</c> messages are deleted; <c>Done</c> ones (outside commands, which carry keep_until) are marked done.
-/// <c>Held</c> messages stay, and are no longer on trial: their step ran and did not kill the process.
+/// <c>Held</c> messages stay, and are no longer on trial: their turn ran and did not kill the process.
 /// <c>Delete</c> removes the instance's row (at revision <c>Expected</c>) and its journal rows; its own journal row says so.
 /// <c>Unsubscribe</c> deletes every subscription of the instance: it was ended by force and the kernel holds no list of them.
 /// </summary>
-public sealed record StepCommit(
+public sealed record TurnCommit(
     string Instance, InstanceRow? Row, long? Expected, IReadOnlyList<string> Consumed, IReadOnlyList<string> Done, IReadOnlyList<Message> Sent,
     IReadOnlyList<SubscriptionRow> Subscribed, IReadOnlyList<SubscriptionRow> Unsubscribed, string? Journal, bool Unsubscribe = false, IReadOnlyList<string>? Held = null, bool Delete = false);
 
 /// <summary>What the owner of <c>Partition</c> at <c>Epoch</c>, believing the position is <c>Position</c>, writes in one transaction.</summary>
 public sealed record CommitBatch(
-    int Partition, long Epoch, long Position, TimeSpan Lease, bool HandOver, IReadOnlyList<StepCommit> Steps,
+    int Partition, long Epoch, long Position, TimeSpan Lease, bool HandOver, IReadOnlyList<TurnCommit> Turns,
     IReadOnlyList<string> Seen, IReadOnlyList<string> Trial)
 {
     /// <summary>How far the position moves: one per journal row.</summary>
-    public int Positions => Steps.Count(s => s.Journal is not null);
+    public int Positions => Turns.Count(s => s.Journal is not null);
 }
 
 /// <summary><c>Landed</c> is false when the fence matched nothing. <c>Seqs</c> are those of the inserted messages, in order.</summary>

@@ -34,14 +34,14 @@ public sealed record WorkerOptions
     public Func<long>? WallClock { get; init; }     // read only under Flaw.WallClockTimers
     public Flaw Flaws { get; init; }
 
-    /// <summary>Called when a step starts, with the worker's idea of database time. For tests.</summary>
-    public Action<InstanceRef, IReadOnlyList<Message>, long>? OnStep { get; init; }
+    /// <summary>Called when a turn starts, with the worker's idea of database time. For tests.</summary>
+    public Action<InstanceRef, IReadOnlyList<Message>, long>? OnTurn { get; init; }
 }
 
 /// <summary>
-/// The owner of one partition on one node. It holds instances and their messages in memory, runs steps and
+/// The owner of one partition on one node. It holds instances and their messages in memory, runs turns and
 /// hands their results to one committer. It is a single-threaded state machine: the host calls
-/// <see cref="TakeAsync"/>, <see cref="PollAsync"/>, <see cref="LoadAsync"/>, <see cref="Run"/>,
+/// <see cref="TakeAsync"/>, <see cref="PollAsync"/>, <see cref="LoadAsync"/>, <see cref="RunTurn"/>,
 /// <see cref="MeetAsync"/> and <see cref="FlushAsync(CancellationToken)"/> one at a time, in any order, and decides
 /// when. Nothing here reads a clock, starts a thread or picks at random.
 /// </summary>
@@ -55,7 +55,7 @@ public sealed class Worker
     private readonly Dictionary<string, Slot> _slots = new(StringComparer.Ordinal);
     private readonly Dictionary<string, Item> _items = new(StringComparer.Ordinal);    // every message held, by id
     private readonly List<Item> _meets = [];
-    private readonly HashSet<string> _cancelling = new(StringComparer.Ordinal);        // tickets of runs cancelled by a commit in flight
+    private readonly HashSet<string> _cancelling = new(StringComparer.Ordinal);        // tickets of jobs cancelled by a commit in flight
     private readonly HashSet<string> _consumed = new(StringComparer.Ordinal);          // while a poll is in flight
     private readonly HashSet<string> _behind = new(StringComparer.Ordinal);            // own rows written while catching up, not yet polled
     private readonly List<Unit> _queue = [];
@@ -114,7 +114,7 @@ public sealed class Worker
     internal bool Has(Flaw flaw) => (_options.Flaws & flaw) != 0;
     internal int Partitions => _options.Partitions;
 
-    /// <summary>A step cancelled a run. Its ticket may be in memory, or still on its way in with a poll.</summary>
+    /// <summary>A turn cancelled a job. Its ticket may be in memory, or still on its way in with a poll.</summary>
     internal void Cancelling(string ticket)
     {
         _cancelling.Add(ticket);
@@ -233,18 +233,18 @@ public sealed class Worker
             _meets.Add(item);
             return;
         }
-        if (message.Kind == Kinds.Run && attempts >= _options.MaxAttempts)
+        if (message.Kind == Kinds.Job && attempts >= _options.MaxAttempts)
         {
-            // Off-step work that was on trial when too many owners were lost is parked: its result is an error.
-            var error = $"the run was on trial when {attempts} owners were lost";
-            item.Message = message with { Kind = Kinds.RunFinished, Payload = Json.Write(new RunFinished(message.Read<RunTicket>().Key, null, error)) };
+            // A job that was on trial when too many owners were lost is parked: its result is an error.
+            var error = $"the job was on trial when {attempts} owners were lost";
+            item.Message = message with { Kind = Kinds.JobFinished, Payload = Json.Write(new JobFinished(message.Read<JobTicket>().Key, null, error)) };
         }
-        else if (message.Kind == Kinds.Run)
+        else if (message.Kind == Kinds.Job)
         {
             item.Ticket = true;
-            item.Key = message.Read<RunTicket>().Key;
+            item.Key = message.Read<JobTicket>().Key;
             item.Taken = _cancelling.Contains(message.Id);
-            StartRun(item);
+            StartJob(item);
         }
         if (!_slots.TryGetValue(message.Target.Id, out var slot)) _slots[message.Target.Id] = slot = new Slot { Loaded = fresh };
         Insert(slot, item);
@@ -271,7 +271,7 @@ public sealed class Worker
     /// write it back older). Kernel messages still pass.
     /// </summary>
     private bool Withheld(Slot slot) => slot.Row is { } row
-        && ((row.Suspended && !Has(Flaw.DeliverWhileSuspended)) || (row.StateVersion > _models[row.Model].StateVersion && !Has(Flaw.StepNewerState)));
+        && ((row.Suspended && !Has(Flaw.DeliverWhileSuspended)) || (row.StateVersion > _models[row.Model].StateVersion && !Has(Flaw.TurnNewerState)));
 
     /// <summary>
     /// Finding F2: suspects are tried apart from everything else. A fenced commit writes that they are on trial at this
@@ -297,7 +297,7 @@ public sealed class Worker
     }
 
     /// <summary>
-    /// A trial holds up the process until its members are consumed, so a suspect is tried only when its step can run at
+    /// A trial holds up the process until its members are consumed, so a suspect is tried only when its turn can run at
     /// once: its instance is loaded, has nothing in flight, is not suspended, and no kernel message waits ahead of it.
     /// </summary>
     private bool CanTry(Item suspect) =>
@@ -356,10 +356,10 @@ public sealed class Worker
         Evict();
     }
 
-    // ---- steps ---------------------------------------------------------------------------------------------------
+    // ---- turns ---------------------------------------------------------------------------------------------------
 
-    /// <summary>Run one step of an instance that is in <see cref="Ready"/>.</summary>
-    public void Run(string instance)
+    /// <summary>Run one turn of an instance that is in <see cref="Ready"/>.</summary>
+    public void RunTurn(string instance)
     {
         if (!Owns || !_slots.TryGetValue(instance, out var slot) || !slot.Loaded || slot.Busy) return;
         if (Blocked || (_trial.Count > 0 && !OnTrial(instance))) return;
@@ -374,32 +374,32 @@ public sealed class Worker
             Enqueue(Control(slot, instance, due[0]));       // a terminate still goes on to the children of a finished instance
         else if (slot.Row is { Status: not InstanceStatus.Running })
             Enqueue(new Unit(slot, instance) { Consumed = due, Status = slot.Row.Status });    // a finished target: consumed and dropped
-        else if (due.Find(i => i.Attempts >= _options.MaxAttempts && i.Message.Kind != Kinds.RunFinished) is { } poison)
+        else if (due.Find(i => i.Attempts >= _options.MaxAttempts && i.Message.Kind != Kinds.JobFinished) is { } poison)
             Enqueue(Park(slot, instance, due, spec, $"message {poison.Message.Id} was on trial when {poison.Attempts} owners were lost"));
         else if (slot.Row is null && spec is null)                   // no target and no start spec: dropped and journalled
             Enqueue(new Unit(slot, instance) { Consumed = due, Journal = Json.Write(due.Select(i => "dropped " + i.Message.Id)), Status = null });
         else
-            _ = Drive(new Step(this, slot, instance, due, Math.Max(creator, 0), spec));
+            _ = Drive(new Turn(this, slot, instance, due, Math.Max(creator, 0), spec));
     }
 
-    private async Task Drive(Step step)
+    private async Task Drive(Turn turn)
     {
         var generation = _generation;
         Unit unit;
         try
         {
-            var model = _models[step.Instance.Model];
-            step.State = step.Slot.State ?? (step.Slot.Row is { } row
+            var model = _models[turn.Instance.Model];
+            turn.State = turn.Slot.State ?? (turn.Slot.Row is { } row
                 ? row.StateVersion < model.StateVersion && !Has(Flaw.SkipUpgrade) ? model.UpgradeState(row.State, row.StateVersion) : Json.Read(row.State, model.StateType)
-                : model.CreateState(step.Spec!));
-            _options.OnStep?.Invoke(step.Instance.Ref, step.Inbox, Now);
-            await model.StepAsync(step, CancellationToken.None);
-            unit = step.Seal(model.StateVersion);
+                : model.CreateState(turn.Spec!));
+            _options.OnTurn?.Invoke(turn.Instance.Ref, turn.Inbox, Now);
+            await model.TurnAsync(turn, CancellationToken.None);
+            unit = turn.Seal(model.StateVersion);
         }
         catch (Exception e)
         {
             if (generation != _generation) return;
-            unit = Park(step.Slot, step.Instance.Ref.Id, step.Taken, step.Spec, e.Message);   // a step that throws parks its instance
+            unit = Park(turn.Slot, turn.Instance.Ref.Id, turn.Taken, turn.Spec, e.Message);   // a turn that throws parks its instance
         }
         if (generation == _generation) Enqueue(unit);   // otherwise it ran under an older epoch: discarded
     }
@@ -415,7 +415,7 @@ public sealed class Worker
         return unit;
     }
 
-    /// <summary>The kernel's own step: suspend, resume or terminate. A message that changes nothing is consumed and dropped.</summary>
+    /// <summary>The kernel's own turn: suspend, resume or terminate. A message that changes nothing is consumed and dropped.</summary>
     private Unit Control(Slot slot, string instance, Item item)
     {
         var row = slot.Row!;
@@ -432,21 +432,21 @@ public sealed class Worker
     }
 
     /// <summary>
-    /// Forced termination: the instance ends Cancelled (if it still ran), its off-step work is cancelled, its waits are
+    /// Forced termination: the instance ends Cancelled (if it still ran), its background jobs are cancelled, its waits are
     /// deleted, its parent is told, and a terminate goes to every child it started that has not finished. A child whose
     /// start is still on its way gets the terminate after the start: one sender, one target, in the order sent.
     /// </summary>
     private Unit Terminate(Slot slot, string instance, Item item, InstanceRow row)
     {
         var running = row.Status == InstanceStatus.Running;
-        var next = row with { Status = running ? InstanceStatus.Cancelled : row.Status, Revision = row.Revision + 1, Runs = null, Children = null, Suspended = false };
+        var next = row with { Status = running ? InstanceStatus.Cancelled : row.Status, Revision = row.Revision + 1, Jobs = null, Children = null, Suspended = false };
         var children = row.Children is { } list && !Has(Flaw.TerminateRootOnly) ? Json.Read<List<string>>(list) : [];
         var unit = new Unit(slot, instance)
         {
             Row = next, Expected = row.Revision, Consumed = [item], Status = next.Status, Revision = next.Revision, Unsubscribe = running,
             Journal = Journal(row.History, ["terminated"]),
             Sent = children.Select((child, i) => new Message($"{instance}#{next.Revision}.{i:D4}", new InstanceRef(child), Kinds.Terminate, Sender: instance)).ToList(),
-            Cancelled = (row.Runs is { } runs ? Json.Read<List<string>>(runs) : []).Select(key => TicketId(instance, key)).ToList(),
+            Cancelled = (row.Jobs is { } jobs ? Json.Read<List<string>>(jobs) : []).Select(key => TicketId(instance, key)).ToList(),
         };
         foreach (var ticket in unit.Cancelled) Cancelling(ticket);
         if (running && row.Parent is not null) unit.Sent.Add(Finished(next, null));
@@ -460,26 +460,26 @@ public sealed class Worker
     internal static Message Finished(InstanceRow row, string? output) =>
         new($"{row.Id}#{row.Revision}.end", new InstanceRef(row.Parent!), Kinds.ChildFinished, Json.Write(new ChildFinished(row.Id, row.Status, output)), row.Id);
 
-    // ---- off-step work -------------------------------------------------------------------------------------------
+    // ---- background jobs -------------------------------------------------------------------------------------------
 
-    private void StartRun(Item ticket)
+    private void StartJob(Item ticket)
     {
         if (ticket.Cancel is not null || ticket.Taken || Awaits(ticket) || Blocked || (_trial.Count > 0 && !_trial.Contains(ticket))) return;
         ticket.Cancel = new CancellationTokenSource();
-        _ = DriveRun(ticket, ticket.Message.Read<RunTicket>());
+        _ = DriveJob(ticket, ticket.Message.Read<JobTicket>());
     }
 
-    private async Task DriveRun(Item ticket, RunTicket run)
+    private async Task DriveJob(Item ticket, JobTicket job)
     {
         var generation = _generation;
         string? result = null, error = null;
-        try { result = Json.Write(await _models[run.Model].RunAsync(new RunContext(ticket.Message.Target, run.Key, run.Arguments), ticket.Cancel!.Token)); }
+        try { result = Json.Write(await _models[job.Model].ExecuteJobAsync(new JobContext(ticket.Message.Target, job.Key, job.Arguments), ticket.Cancel!.Token)); }
         catch (Exception e) { error = e.Message; }
         if (generation != _generation || ticket.Taken) return;      // reset, or cancelled beside completion
-        // The ticket becomes the result: same id, so it is consumed once, by the step that handles it.
-        ticket.Message = ticket.Message with { Kind = Kinds.RunFinished, Payload = Json.Write(new RunFinished(run.Key, result, error)) };
+        // The ticket becomes the result: same id, so it is consumed once, by the turn that handles it.
+        ticket.Message = ticket.Message with { Kind = Kinds.JobFinished, Payload = Json.Write(new JobFinished(job.Key, result, error)) };
         ticket.Ticket = false;
-        // Finding F7: a result goes ahead of whatever else waits, so a step never sees a cancel first and the result after it.
+        // Finding F7: a result goes ahead of whatever else waits, so a turn never sees a cancel first and the result after it.
         ticket.Seq = 0;
         if (_slots.TryGetValue(ticket.Message.Target.Id, out var slot) && slot.Inbox.Remove(ticket)) slot.Inbox.Insert(0, ticket);
     }
@@ -568,8 +568,8 @@ public sealed class Worker
         // through the table like everything else. Handing it over in memory would let it overtake older rows.
         var handOver = _caughtUp || Has(Flaw.HandOverWhileBehind);
         var batch = new CommitBatch(Partition, Epoch, Position, _options.Lease, handOver,
-            units.Select(u => new StepCommit(u.Instance, u.Row, u.Expected,
-                Has(Flaw.KeepConsumedMessages) ? [] : [.. u.Consumed.Where(i => i.Durable && i.Message.KeepUntil is null).Select(i => i.Message.Id), .. Has(Flaw.VolatileRunTicket) ? [] : u.Cancelled],
+            units.Select(u => new TurnCommit(u.Instance, u.Row, u.Expected,
+                Has(Flaw.KeepConsumedMessages) ? [] : [.. u.Consumed.Where(i => i.Durable && i.Message.KeepUntil is null).Select(i => i.Message.Id), .. Has(Flaw.VolatileJobTicket) ? [] : u.Cancelled],
                 Has(Flaw.KeepConsumedMessages) ? [] : u.Consumed.Where(i => i.Durable && i.Message.KeepUntil is not null).Select(i => i.Message.Id).ToList(),
                 u.Sent.Where(m => !u.Volatile.Contains(m.Id)).ToList(), u.Subscribed, u.Unsubscribed, u.Journal, u.Unsubscribe,
                 u.Held.Where(i => i.Durable).Select(i => i.Message.Id).ToList(), u.Delete)).ToList(),
@@ -604,7 +604,7 @@ public sealed class Worker
             var seqs = new Queue<long>(result.Seqs);
             foreach (var unit in units) Apply(unit, seqs, handOver);
             foreach (var item in marks.Concat(trial))
-                if (item.Key is not null && _items.ContainsKey(item.Message.Id)) StartRun(item);
+                if (item.Key is not null && _items.ContainsKey(item.Message.Id)) StartJob(item);
             return Outcome.Landed;
         }
     }
@@ -624,13 +624,13 @@ public sealed class Worker
     private void Apply(Unit unit, Queue<long>? seqs, bool handOver)
     {
         foreach (var item in unit.Consumed) Forget(item);
-        foreach (var item in unit.Held)     // back in its place; its step ran, so it is no suspect and no longer on trial
+        foreach (var item in unit.Held)     // back in its place; its turn ran, so it is no suspect and no longer on trial
         {
             (item.Taken, item.Held, item.Suspect, item.Marked) = (false, true, false, true);
             Insert(unit.Slot!, item);
             if (_trial.Remove(item) && _trial.Count == 0) _gate.Release(this);
         }
-        foreach (var id in unit.Cancelled)      // a cancelled run's ticket goes whether or not this owner had taken it into memory yet
+        foreach (var id in unit.Cancelled)      // a cancelled job's ticket goes whether or not this owner had taken it into memory yet
         {
             _cancelling.Remove(id);
             if (_items.TryGetValue(id, out var ticket)) Forget(ticket);
@@ -651,7 +651,7 @@ public sealed class Worker
     }
 
     /// <summary>
-    /// Evictable: its committed row is all there is to it. Not while a step or commit is in flight (a load would read
+    /// Evictable: its committed row is all there is to it. Not while a turn or commit is in flight (a load would read
     /// the row before that commit), not while messages wait for it, not while a caller waits for its output.
     /// </summary>
     private bool Evictable(Slot slot) => slot.Loaded && (!slot.Busy || Has(Flaw.EvictBusy)) && slot.Inbox.Count == 0 && slot.Replies.Count == 0;
@@ -667,8 +667,8 @@ public sealed class Worker
     }
 
     /// <summary>
-    /// Live output, released only now: the step's commit has landed, or it had nothing to write. A message that carried a
-    /// reply address joins the instance's callers; they get what the step emitted, and the end when the instance ends.
+    /// Live output, released only now: the turn's commit has landed, or it had nothing to write. A message that carried a
+    /// reply address joins the instance's callers; they get what the turn emitted, and the end when the instance ends.
     /// </summary>
     private void Release(Unit unit, bool early = false)
     {
@@ -700,10 +700,10 @@ public sealed class Worker
         }
     }
 
-    /// <summary>A trial ended somewhere in the process: off-step work that waited for it may start.</summary>
+    /// <summary>A trial ended somewhere in the process: background jobs that waited for it may start.</summary>
     internal void Unblocked()
     {
-        foreach (var ticket in _items.Values.Where(i => i.Key is not null).ToList()) StartRun(ticket);
+        foreach (var ticket in _items.Values.Where(i => i.Key is not null).ToList()) StartJob(ticket);
     }
 
     private void Forget(Item item)
@@ -734,9 +734,9 @@ public sealed class TrialGate
 internal sealed class Slot
 {
     public InstanceRow? Row;        // the committed row; null while the instance does not exist
-    public object? State;           // the live state between steps, equal to Row.State
+    public object? State;           // the live state between turns, equal to Row.State
     public bool Loaded, Busy;
-    public long Used;               // when a step last started or it was loaded: the least recent idle one goes first
+    public long Used;               // when a turn last started or it was loaded: the least recent idle one goes first
     public readonly List<Item> Inbox = [];
     public object? Ambient;                         // from the starter on this node; gone with this memory
     public readonly HashSet<string> Replies = [];   // callers waiting for what the instance emits
@@ -750,12 +750,12 @@ internal sealed class Item(Message message, long seq)
     public bool Marked;             // its row says seen at this epoch
     public bool Suspect;            // another owner had it: it is tried apart before anything else is believed of it
     public bool Shelved;            // a suspect whose row says seen at this epoch, not yet tried
-    public bool Again;              // its row was seen at an earlier epoch: a step may have run with it (IStep.Redelivered)
-    public bool Held;               // a step handed it back: it waits for something new to come with
+    public bool Again;              // its row was seen at an earlier epoch: a turn may have run with it (ITurn.Redelivered)
+    public bool Held;               // a turn handed it back: it waits for something new to come with
     public int Attempts;
     public bool Ticket;             // a kernel message, not (yet) for the model
-    public bool Taken;              // a step or a commit in flight has it
-    public string? Key;             // of a run
+    public bool Taken;              // a turn or a commit in flight has it
+    public string? Key;             // of a job
     public CancellationTokenSource? Cancel;
 }
 
@@ -781,6 +781,6 @@ internal sealed class Unit(Slot? slot, string instance)
     public bool Durable => Row is not null || Journal is not null || Cancelled.Count > 0 || Consumed.Exists(i => i.Durable) || Sent.Exists(m => !Volatile.Contains(m.Id));
 }
 
-internal sealed record RunTicket(string Model, string Key, string? Arguments);
+internal sealed record JobTicket(string Model, string Key, string? Arguments);
 
-internal sealed record RunContext(InstanceRef Instance, string Key, string? Arguments) : IRun;
+internal sealed record JobContext(InstanceRef Instance, string Key, string? Arguments) : IJob;

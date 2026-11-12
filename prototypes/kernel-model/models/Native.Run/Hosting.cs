@@ -47,7 +47,7 @@ public sealed class Owner
             var busy = Worker.NeedsLoad || Worker.NeedsMeet || Worker.NeedsFlush || Worker.Ready.Any();
             await Worker.LoadAsync();
             await Worker.MeetAsync();
-            foreach (var id in Worker.Ready.ToList()) Worker.Run(id);
+            foreach (var id in Worker.Ready.ToList()) Worker.RunTurn(id);
             await Worker.FlushAsync();
             if (until is null)
             {
@@ -106,8 +106,8 @@ public sealed class Sizing(IKernelStore inner) : IKernelStore
     public ValueTask<Committed> CommitAsync(CommitBatch batch, CancellationToken cancellationToken = default)
     {
         Commits++;
-        foreach (var step in batch.Steps)
-            if (step.Row is { } row)
+        foreach (var turn in batch.Turns)
+            if (turn.Row is { } row)
             {
                 Rows++;
                 StateBytes += row.State.Length;

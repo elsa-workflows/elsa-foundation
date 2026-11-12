@@ -59,7 +59,7 @@ public sealed class FaultyStore(IKernelStore inner, double rate, int seed) : IKe
 /// </summary>
 public sealed class RecordingStore(IKernelStore inner) : IKernelStore
 {
-    public sealed record Landed(int Partition, long Epoch, long Position, int Positions, string Steps);
+    public sealed record Landed(int Partition, long Epoch, long Position, int Positions, string Turns);
 
     public ConcurrentQueue<Landed> Commits { get; } = new();
     public ConcurrentDictionary<string, int> Failures { get; } = new();
@@ -71,7 +71,7 @@ public sealed class RecordingStore(IKernelStore inner) : IKernelStore
         try
         {
             var result = await inner.CommitAsync(batch, cancellationToken);
-            if (result.Landed) Commits.Enqueue(new Landed(batch.Partition, batch.Epoch, batch.Position, batch.Positions, string.Join(" ", batch.Steps.Select(s => s.Instance))));
+            if (result.Landed) Commits.Enqueue(new Landed(batch.Partition, batch.Epoch, batch.Position, batch.Positions, string.Join(" ", batch.Turns.Select(s => s.Instance))));
             else Interlocked.Increment(ref _refused);
             return result;
         }
@@ -101,7 +101,7 @@ public sealed class RecordingStore(IKernelStore inner) : IKernelStore
             {
                 var (before, after) = (moved[i - 1], moved[i]);
                 if (after.Position < before.Position + before.Positions)
-                    wrong.Add($"I1 partition {partition.Key}: two commits landed over position {after.Position + 1} (epoch {before.Epoch} at {before.Position}+{before.Positions} [{before.Steps}], epoch {after.Epoch} at {after.Position}+{after.Positions} [{after.Steps}])");
+                    wrong.Add($"I1 partition {partition.Key}: two commits landed over position {after.Position + 1} (epoch {before.Epoch} at {before.Position}+{before.Positions} [{before.Turns}], epoch {after.Epoch} at {after.Position}+{after.Positions} [{after.Turns}])");
                 if (after.Epoch < before.Epoch)
                     wrong.Add($"I1 partition {partition.Key}: a commit prepared under epoch {after.Epoch} landed at position {after.Position} after one under epoch {before.Epoch} at {before.Position}");
             }

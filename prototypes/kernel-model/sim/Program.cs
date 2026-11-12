@@ -105,7 +105,7 @@ bool Sweep(int from, int seeds, Flaw flaws)
         if (violation is not null) failures.Add((seed, violation));
     });
     Console.WriteLine($"{seeds} seeds from {from}, {acts} actions, {clock.Elapsed.TotalSeconds:F1} s, flaws: {flaws}: {failures.Count} failed; {World.Bystanders} innocent instances parked at the threshold"
-        + (NativeSwitch.On ? $"; native: {World.NativeInstances} finished instances matched a run without faults, {World.NativeReruns} External effects ran again under the same committed attempt ({World.NativeRerunsFlagged} of them told that their step may have run before)" : ""));
+        + (NativeSwitch.On ? $"; native: {World.NativeInstances} finished instances matched a run without faults, {World.NativeReruns} External effects ran again under the same committed attempt ({World.NativeRerunsFlagged} of them told that their turn may have run before)" : ""));
     if (args.Contains("--coverage")) Console.WriteLine("  coverage (seeds that reached the end): " + string.Join("; ", World.Seen.OrderBy(s => s.Key).Select(s => $"{s.Key}: {s.Value}")));
     foreach (var group in failures.GroupBy(f => f.Violation.Split(' ')[0]).OrderByDescending(g => g.Count()))
     {
@@ -138,7 +138,7 @@ int Backlog(int messages)
         {
             second.PollAsync().Wait();
             second.LoadAsync().Wait();
-            foreach (var id in second.Ready.ToList()) second.Run(id);
+            foreach (var id in second.Ready.ToList()) second.RunTurn(id);
             second.FlushAsync().Wait();
         }
         Console.WriteLine($"{messages} messages held by a dead owner, trial group {group}: {commits} commits to recover them");
@@ -185,13 +185,13 @@ int Mutations(int seeds)
         Flaw.DeleteWithoutCount | Flaw.PollWithoutSkip, Flaw.EveryTakeCounts,
         // behaviours of draft 1, or of a literal reading of draft 2: the findings of FINDINGS.md
         Flaw.WallClockTimers, Flaw.DeleteOutsideCommands, Flaw.HandOverWhileBehind, Flaw.BumpAllInherited, Flaw.RunBeforeMark,
-        Flaw.VolatileRunTicket, Flaw.PollRace, Flaw.MeetWithoutTicket,
+        Flaw.VolatileJobTicket, Flaw.PollRace, Flaw.MeetWithoutTicket,
         // round 3: the rule of each new piece
-        Flaw.GreedyBalancer, Flaw.TrialPerPartition, Flaw.ProjectorBlindWrite, Flaw.EmitBeforeCommit, Flaw.ReplyTwice, Flaw.NoDeadline, Flaw.DeliverWhileSuspended, Flaw.NoShelf, Flaw.SuspendDuringTrial, Flaw.TerminateRootOnly, Flaw.HoldLoses, Flaw.HoldKeepsTrial, Flaw.SkipUpgrade, Flaw.StepNewerState, Flaw.RebindForgotten, Flaw.StartWithoutRead, Flaw.CancelKnownChildren, Flaw.EvictBusy, Flaw.DeleteLeavesJournal, Flaw.ProjectorStopsAtGap,
+        Flaw.GreedyBalancer, Flaw.TrialPerPartition, Flaw.ProjectorBlindWrite, Flaw.EmitBeforeCommit, Flaw.ReplyTwice, Flaw.NoDeadline, Flaw.DeliverWhileSuspended, Flaw.NoShelf, Flaw.SuspendDuringTrial, Flaw.TerminateRootOnly, Flaw.HoldLoses, Flaw.HoldKeepsTrial, Flaw.SkipUpgrade, Flaw.TurnNewerState, Flaw.RebindForgotten, Flaw.StartWithoutRead, Flaw.CancelKnownChildren, Flaw.EvictBusy, Flaw.DeleteLeavesJournal, Flaw.ProjectorStopsAtGap,
     ];
     var missed = 0;
     // A deploy in progress meets an older owner only now and then: this one runs 1,000 actions a seed.
-    Flaw[] Longer = [Flaw.StepNewerState];
+    Flaw[] Longer = [Flaw.TurnNewerState];
     foreach (var mutation in mutations)
     {
         var clock = Stopwatch.StartNew();

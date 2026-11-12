@@ -29,13 +29,13 @@ public sealed partial class World
 {
     public readonly NativeOracle Native;
     public static long NativeReruns;        // External effects that ran again under the same committed attempt, over all runs
-    public static long NativeRerunsFlagged; // of those, the ones whose step the kernel said may have run before (IStep.Redelivered)
+    public static long NativeRerunsFlagged; // of those, the ones whose turn the kernel said may have run before (ITurn.Redelivered)
     public static long NativeInstances;     // native instances compared with a run without faults, over all runs
 
     private NativeModel NativeModelFor(Actor actor) => new(NativeWorkflows.Registry, new NativeOptions
     {
         Flaws = Config.NativeFlaws,
-        Gate = async (run, cancel) => await Work(actor, run, cancel),
+        Gate = async (job, cancel) => await Work(actor, job, cancel),
         OnExternal = (instance, frame, _, attempt, again) => External(instance.Id, frame, attempt, again),
     });
 
@@ -129,7 +129,7 @@ public sealed partial class World
         {
             Interlocked.Increment(ref NativeReruns);
             if (again) Interlocked.Increment(ref NativeRerunsFlagged);
-            else Faults.Add($"N6 {instance}: the External activity of frame {frame} ran again and its step was not told that it may have run before");
+            else Faults.Add($"N6 {instance}: the External activity of frame {frame} ran again and its turn was not told that it may have run before");
         }
         var mode = Native.Started.TryGetValue(instance, out var started) ? started.Mode : Modes.Balanced;
         if (mode == Modes.Durable && !Native.Attempts.Contains($"{key}:{Math.Max(attempt, 1)}"))
@@ -232,7 +232,7 @@ public static class NativeReference
             worker.PollAsync().Wait();
             worker.LoadAsync().Wait();
             worker.MeetAsync().Wait();
-            foreach (var ready in worker.Ready.ToList()) worker.Run(ready);
+            foreach (var ready in worker.Ready.ToList()) worker.RunTurn(ready);
             worker.FlushAsync().Wait();
             foreach (var s in store.Subscriptions.Where(s => s.Instance == id.Id).ToList())
                 if (published.Add(s.Key)) Events.PublishAsync(store, new EventRow(s.Key, "e-" + s.Key, null, time + 3_600_000)).AsTask().Wait();

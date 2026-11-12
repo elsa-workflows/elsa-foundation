@@ -143,7 +143,7 @@ static class Cost
             network.OnAnswer = null;
             return response.Body?.GetValue<string>() == "accepted 7" && owner.State(id!)!.Variables["output"]?.GetValue<string>() == "shipped 7";
         });
-        foreach (var (path, what) in new[] { ("quotes", "off-step work"), ("slow", "a 20 ms Delay") })
+        foreach (var (path, what) in new[] { ("quotes", "a background job"), ("slow", "a 20 ms Delay") })
             foreach (var mode in new[] { Modes.Ephemeral, Modes.Balanced })
                 await Row($"{what} before the response (case 3)", mode, async () =>
                 {

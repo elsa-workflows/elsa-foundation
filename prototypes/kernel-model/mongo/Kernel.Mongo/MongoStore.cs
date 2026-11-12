@@ -151,7 +151,7 @@ public sealed class MongoStore : IKernelStore
         try
         {
             session.StartTransaction(Transaction);
-            var sends = batch.Steps.Sum(s => s.Sent.Count);
+            var sends = batch.Turns.Sum(s => s.Sent.Count);
             var leaseMs = (long)batch.Lease.TotalMilliseconds;
             var models = new List<BulkWriteModel>();
             var checks = new List<(int Index, bool Delete, long Expected, bool Fence)>();
@@ -203,61 +203,61 @@ public sealed class MongoStore : IKernelStore
             }
 
             var (key, position, seqs) = (clock - sends, batch.Position, new List<long>(sends));
-            foreach (var step in batch.Steps)
+            foreach (var turn in batch.Turns)
             {
-                if (step.Delete)
+                if (turn.Delete)
                 {
                     // Round 3: an ended instance goes at its revision (a count that must be 1, as for an update), with its
                     // journal documents. All in the one bulk write: with the fence in the batch it stops at the fence first.
                     checks.Add((models.Count, true, 1, false));
-                    models.Add(new BulkWriteDeleteOneModel<BsonDocument>(_instances.CollectionNamespace, new BsonDocument { { "_id", step.Instance }, { "revision", step.Expected!.Value } }));
-                    models.Add(new BulkWriteDeleteManyModel<BsonDocument>(_journal.CollectionNamespace, new BsonDocument { { "partition", batch.Partition }, { "instance", step.Instance }, { "revision", new BsonDocument("$gt", 0L) } }));
+                    models.Add(new BulkWriteDeleteOneModel<BsonDocument>(_instances.CollectionNamespace, new BsonDocument { { "_id", turn.Instance }, { "revision", turn.Expected!.Value } }));
+                    models.Add(new BulkWriteDeleteManyModel<BsonDocument>(_journal.CollectionNamespace, new BsonDocument { { "partition", batch.Partition }, { "instance", turn.Instance }, { "revision", new BsonDocument("$gt", 0L) } }));
                 }
-                if (step.Row is { } row)
+                if (turn.Row is { } row)
                 {
                     var doc = ToDocument(row, batch.Partition);
-                    if (step.Expected is not { } expected) models.Add(new BulkWriteInsertOneModel<BsonDocument>(_instances.CollectionNamespace, doc));
+                    if (turn.Expected is not { } expected) models.Add(new BulkWriteInsertOneModel<BsonDocument>(_instances.CollectionNamespace, doc));
                     else
                     {
                         checks.Add((models.Count, false, 1, false));
                         models.Add(new BulkWriteReplaceOneModel<BsonDocument>(_instances.CollectionNamespace, new BsonDocument { { "_id", row.Id }, { "revision", expected } }, doc));
                     }
                 }
-                if (step.Consumed.Count > 0)
+                if (turn.Consumed.Count > 0)
                 {
-                    checks.Add((models.Count, true, step.Consumed.Count, false));
-                    models.Add(new BulkWriteDeleteManyModel<BsonDocument>(_messages.CollectionNamespace, new BsonDocument { { "_id", new BsonDocument("$in", new BsonArray(step.Consumed)) }, { "done", false } }));
+                    checks.Add((models.Count, true, turn.Consumed.Count, false));
+                    models.Add(new BulkWriteDeleteManyModel<BsonDocument>(_messages.CollectionNamespace, new BsonDocument { { "_id", new BsonDocument("$in", new BsonArray(turn.Consumed)) }, { "done", false } }));
                 }
-                if (step.Done.Count > 0)
+                if (turn.Done.Count > 0)
                 {
-                    checks.Add((models.Count, false, step.Done.Count, false));
-                    models.Add(new BulkWriteUpdateManyModel<BsonDocument>(_messages.CollectionNamespace, new BsonDocument { { "_id", new BsonDocument("$in", new BsonArray(step.Done)) }, { "done", false } }, new BsonDocument("$set", new BsonDocument("done", true))));
+                    checks.Add((models.Count, false, turn.Done.Count, false));
+                    models.Add(new BulkWriteUpdateManyModel<BsonDocument>(_messages.CollectionNamespace, new BsonDocument { { "_id", new BsonDocument("$in", new BsonArray(turn.Done)) }, { "done", false } }, new BsonDocument("$set", new BsonDocument("done", true))));
                 }
-                foreach (var message in step.Sent)
+                foreach (var message in turn.Sent)
                 {
                     seqs.Add(++key);
                     var seen = batch.HandOver && message.Target.Partition == batch.Partition ? batch.Epoch : 0;
                     models.Add(new BulkWriteInsertOneModel<BsonDocument>(_messages.CollectionNamespace, ToDocument(message, key, seen)));
                 }
-                foreach (var s in step.Subscribed)
+                foreach (var s in turn.Subscribed)
                     models.Add(new BulkWriteReplaceOneModel<BsonDocument>(_subscriptions.CollectionNamespace, new BsonDocument("_id", SubscriptionId(s)), ToDocument(s, batch.Partition), isUpsert: true));
-                foreach (var s in step.Unsubscribed)
+                foreach (var s in turn.Unsubscribed)
                     models.Add(new BulkWriteDeleteOneModel<BsonDocument>(_subscriptions.CollectionNamespace, new BsonDocument("_id", SubscriptionId(s))));
-                if (step.Unsubscribe)       // ended by force: every wait of the instance goes
-                    models.Add(new BulkWriteDeleteManyModel<BsonDocument>(_subscriptions.CollectionNamespace, new BsonDocument("instance", step.Instance)));
-                if (step.Held is { Count: > 0 } held)
+                if (turn.Unsubscribe)       // ended by force: every wait of the instance goes
+                    models.Add(new BulkWriteDeleteManyModel<BsonDocument>(_subscriptions.CollectionNamespace, new BsonDocument("instance", turn.Instance)));
+                if (turn.Held is { Count: > 0 } held)
                 {
-                    // Its step ran: still there, not done, and no longer on trial. A count, like a consume.
+                    // Its turn ran: still there, not done, and no longer on trial. A count, like a consume.
                     checks.Add((models.Count, false, held.Count, false));
                     models.Add(new BulkWriteUpdateManyModel<BsonDocument>(_messages.CollectionNamespace, new BsonDocument { { "_id", new BsonDocument("$in", new BsonArray(held)) }, { "done", false } }, new BsonDocument("$set", new BsonDocument("trial", 0L))));
                 }
-                if (step.Journal is not null)
+                if (turn.Journal is not null)
                 {
                     position++;
                     models.Add(new BulkWriteInsertOneModel<BsonDocument>(_journal.CollectionNamespace, new BsonDocument
                     {
                         { "_id", new BsonDocument { { "p", batch.Partition }, { "n", position } } }, { "partition", batch.Partition }, { "position", position },
-                        { "instance", step.Instance }, { "revision", step.Delete ? -1L : step.Row?.Revision ?? 0L }, { "entries", step.Journal },
+                        { "instance", turn.Instance }, { "revision", turn.Delete ? -1L : turn.Row?.Revision ?? 0L }, { "entries", turn.Journal },
                     }));
                 }
             }
@@ -398,7 +398,7 @@ public sealed class MongoStore : IKernelStore
         if (ids.Count == 0) return [];
         var docs = await _instances.Find(new BsonDocument("_id", new BsonDocument("$in", new BsonArray(ids))), new FindOptions { BatchSize = ids.Count + 1 }).ToListAsync(cancellationToken);
         return docs.Select(d => new InstanceRow(d["_id"].AsString, d["model"].AsString, d["definition"].AsString, (InstanceStatus)d["status"].AsInt32, d["state"].AsString,
-            d["revision"].AsInt64, Str(d["parent"]), Str(d["fault"]), Str(d["runs"]), (History)d.GetValue("history", 0).AsInt32, d.GetValue("suspended", false).AsBoolean,
+            d["revision"].AsInt64, Str(d["parent"]), Str(d["fault"]), Str(d["jobs"]), (History)d.GetValue("history", 0).AsInt32, d.GetValue("suspended", false).AsBoolean,
             Str(d.GetValue("children", BsonNull.Value)), d.GetValue("stateVersion", 1).AsInt32)).ToList();
     }
 
@@ -521,7 +521,7 @@ public sealed class MongoStore : IKernelStore
     private static BsonDocument ToDocument(InstanceRow row, int partition) => new()
     {
         { "_id", row.Id }, { "partition", partition }, { "model", row.Model }, { "definition", row.Definition }, { "status", (int)row.Status },
-        { "state", row.State }, { "runs", (BsonValue?)row.Runs ?? BsonNull.Value }, { "revision", row.Revision },
+        { "state", row.State }, { "jobs", (BsonValue?)row.Jobs ?? BsonNull.Value }, { "revision", row.Revision },
         { "parent", (BsonValue?)row.Parent ?? BsonNull.Value }, { "fault", (BsonValue?)row.Fault ?? BsonNull.Value },
         { "history", (int)row.History }, { "suspended", row.Suspended }, { "children", (BsonValue?)row.Children ?? BsonNull.Value }, { "stateVersion", row.StateVersion },
     };

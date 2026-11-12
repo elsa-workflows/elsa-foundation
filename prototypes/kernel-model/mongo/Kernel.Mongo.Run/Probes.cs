@@ -102,13 +102,13 @@ public static class Probes
         var (epoch, position) = (lease.Epoch, lease.Position);
         var n = 0;
 
-        async Task Try(string name, int steps, int stateBytes, int sends)
+        async Task Try(string name, int turns, int stateBytes, int sends)
         {
-            var batch = new CommitBatch(0, epoch, position, TimeSpan.FromMinutes(5), false, Enumerable.Range(0, steps).Select(_ =>
+            var batch = new CommitBatch(0, epoch, position, TimeSpan.FromMinutes(5), false, Enumerable.Range(0, turns).Select(_ =>
             {
                 var id = $"0/big{++n}";
                 var sent = Enumerable.Range(0, sends).Select(i => new Message($"{id}#1.{i:D4}", InstanceRef.In(1, "sink"), "k")).ToList();
-                return new StepCommit(id, new InstanceRow(id, "m", "d", InstanceStatus.Running, new string('s', stateBytes), 1, null), null, [], [], sent, [], [], "[\"j\"]");
+                return new TurnCommit(id, new InstanceRow(id, "m", "d", InstanceStatus.Running, new string('s', stateBytes), 1, null), null, [], [], sent, [], [], "[\"j\"]");
             }).ToList(), [], []);
             counter.Reset();
             var watch = Stopwatch.StartNew();
@@ -121,18 +121,18 @@ public static class Probes
             }
             catch (StoreException e) { outcome = $"{e.Failure}: {e.InnerException?.GetType().Name}: {e.Message.Split('\n')[0][..Math.Min(160, e.Message.Split('\n')[0].Length)]}"; }
             var reading = counter.Read();
-            var documents = steps * (2 + sends) + 1;
-            Console.WriteLine($"{name,-52} {documents,7} documents, {(long)steps * stateBytes / 1024 / 1024,5} MiB of state: {watch.ElapsedMilliseconds,6} ms, {reading.RoundTrips} round trips ({reading.Detail}): {outcome}");
+            var documents = turns * (2 + sends) + 1;
+            Console.WriteLine($"{name,-52} {documents,7} documents, {(long)turns * stateBytes / 1024 / 1024,5} MiB of state: {watch.ElapsedMilliseconds,6} ms, {reading.RoundTrips} round trips ({reading.Detail}): {outcome}");
         }
 
-        await Try("one step", 1, 200, 2);
-        await Try("the kernel's default batch: 500 steps", 500, 200, 2);
-        await Try("2,000 steps", 2_000, 200, 2);
-        await Try("10,000 steps", 10_000, 200, 2);
-        await Try("50,000 steps", 50_000, 200, 2);
-        await Try("100 steps of 1 MiB of state", 100, 1024 * 1024, 0);
-        await Try("one step of 15 MiB of state", 1, 15 * 1024 * 1024, 0);
-        await Try("one step of 17 MiB of state", 1, 17 * 1024 * 1024, 0);
+        await Try("one turn", 1, 200, 2);
+        await Try("the kernel's default batch: 500 turns", 500, 200, 2);
+        await Try("2,000 turns", 2_000, 200, 2);
+        await Try("10,000 turns", 10_000, 200, 2);
+        await Try("50,000 turns", 50_000, 200, 2);
+        await Try("100 turns of 1 MiB of state", 100, 1024 * 1024, 0);
+        await Try("one turn of 15 MiB of state", 1, 15 * 1024 * 1024, 0);
+        await Try("one turn of 17 MiB of state", 1, 17 * 1024 * 1024, 0);
         await client.DropDatabaseAsync(database);
         return 0;
     }

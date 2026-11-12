@@ -2,8 +2,8 @@ using System.Text.Json.Nodes;
 
 namespace Kernel.Native;
 
-// HTTP on the kernel's live output (merge): the model emits with IStep.Emit, the kernel releases after the commit of the
-// step that wrote it and sends it to the reply addresses of the messages the instance consumed, and each node keeps its
+// HTTP on the kernel's live output (merge): the model emits with ITurn.Emit, the kernel releases after the commit of the
+// turn that wrote it and sends it to the reply addresses of the messages the instance consumed, and each node keeps its
 // open requests in the kernel's Requests, which take the first response and ignore whatever comes after. The native
 // branch's own channel (ILiveChannel, LiveNode) and the kernel hooks it needed (NATIVE N2: OnApplied, OnReset) are gone.
 
@@ -59,7 +59,7 @@ public sealed class HttpRoutes
         foreach (var workflow in registry.All)
         {
             // Every route with a literal path: its opt-out of the release rule (the owner's default of 12 November is to
-            // release a response after the commit of the step that wrote it).
+            // release a response after the commit of the turn that wrote it).
             foreach (var node in workflow.Nodes.Values.Where(n => n.Type == typeof(HttpEndpoint)))
                 if (node.Inputs.GetValueOrDefault("Path") is LiteralBinding { Value: { } p } && node.Inputs.GetValueOrDefault("RespondBeforeCommit") is LiteralBinding { Value: { } early } && early.GetValue<bool>())
                     _early.Add(Key(Method(node), p.GetValue<string>()));
@@ -74,13 +74,13 @@ public sealed class HttpRoutes
 
     public bool TryStart(string method, string path, out (string Workflow, string Node) route) => _starts.TryGetValue(Key(method, path), out route);
 
-    /// <summary>The route's caller is answered when the step ends, not after its commit.</summary>
+    /// <summary>The route's caller is answered when the turn ends, not after its commit.</summary>
     public bool BeforeCommit(string method, string path) => _early.Contains(Key(method, path));
 }
 
 /// <summary>
 /// A node's HTTP front: a request that matches a start route starts a workflow in a partition this node owns, hands
-/// it the request as the step's ambient value, and observes it; any other request resumes the instance that waits on
+/// it the request as the turn's ambient value, and observes it; any other request resumes the instance that waits on
 /// its route, wherever it is owned, by a delivery that carries this node's reply address. The host's <c>pump</c> runs
 /// the workers; a request still open when the pump returns times out.
 /// </summary>

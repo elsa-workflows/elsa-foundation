@@ -1,7 +1,7 @@
 namespace Kernel;
 
 /// <summary>
-/// What an owner sends to a caller that waits: an item a step emitted, or the end of the observation. <c>Key</c> is the
+/// What an owner sends to a caller that waits: an item a turn emitted, or the end of the observation. <c>Key</c> is the
 /// same however often it is sent. An end has no channel: the instance's status, or an error ("lost", "missing").
 /// </summary>
 public sealed record Reply(string Request, string Key, string? Channel, object? Item, InstanceStatus? Status = null, string? Error = null);
@@ -18,7 +18,7 @@ public interface IReplyTransport
 /// <summary>
 /// A reply address: the node that holds the request, and the request's id there. It rides on a message as <c>ReplyTo</c>.
 /// <paramref name="beforeCommit"/> is a route's opt-out of the owner's default of 12 November (output is released after
-/// the commit of the step that wrote it): this caller gets a step's output when the step ends.
+/// the commit of the turn that wrote it): this caller gets a turn's output when the turn ends.
 /// </summary>
 public static class ReplyTo
 {

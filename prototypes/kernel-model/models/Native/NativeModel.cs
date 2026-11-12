@@ -8,10 +8,10 @@ public static class Modes
     public const string Ephemeral = "Ephemeral", Balanced = "Balanced", Durable = "Durable";
 }
 
-/// <summary>Messages the native model understands besides the kernel's own kinds (start, child-finished, run-finished, event).</summary>
+/// <summary>Messages the native model understands besides the kernel's own kinds (start, child-finished, job-finished, event).</summary>
 public static class NativeKinds
 {
-    public const string Continue = "native.continue";   // a Durable boundary: the burst goes on in the next step
+    public const string Continue = "native.continue";   // a Durable boundary: the burst goes on in the next turn
     public const string Timer = "native.timer";         // a Delay is due
     public const string Resume = "native.resume";       // an outsider resumes a wait by its stimulus, without the event tables
     public const string Cancel = "native.cancel";
@@ -29,7 +29,7 @@ public enum NativeFlaw
     ScopeInMemory = 1 << 4,     // an iteration scope is kept in memory only
 }
 
-/// <summary>An HTTP start gives its trigger as the step's ambient value instead (the kernel's Ambient: never stored).</summary>
+/// <summary>An HTTP start gives its trigger as the turn's ambient value instead (the kernel's Ambient: never stored).</summary>
 public sealed record NativeStart(string Mode = Modes.Balanced, JsonObject? Input = null, string? TriggerNode = null, JsonNode? Trigger = null);
 
 public sealed record TimerFired(string Wait);
@@ -43,14 +43,14 @@ public sealed record BackgroundResult(TransitionKind Kind, JsonNode? Result, str
 public sealed class NativeOptions
 {
     public NativeFlaw Flaws { get; init; }
-    /// <summary>Gates off-step work before it runs (the simulation decides when it completes).</summary>
-    public Func<IRun, CancellationToken, ValueTask>? Gate { get; init; }
+    /// <summary>Gates a background job before it runs (the simulation decides when it completes).</summary>
+    public Func<IJob, CancellationToken, ValueTask>? Gate { get; init; }
     /// <summary>
     /// Called when an External activity's side effect happens: instance, frame, node, committed attempt, and whether the
-    /// step may have run before (the kernel's <see cref="IStep.Redelivered"/>, friction F-N6).
+    /// turn may have run before (the kernel's <see cref="ITurn.Redelivered"/>, friction F-N6).
     /// </summary>
     public Action<InstanceRef, string, string, int, bool>? OnExternal { get; init; }
-    public int MaxActivitiesPerStep { get; init; } = 1000;
+    public int MaxActivitiesPerTurn { get; init; } = 1000;
     public TimeSpan EventWindow { get; init; } = TimeSpan.FromHours(1);
 }
 
@@ -121,25 +121,25 @@ public sealed class NativeModel(WorkflowRegistry registry, NativeOptions? option
 
     public object CreateState(StartSpec start) => new NativeState { Mode = Json.Read<NativeStart>(start.Input ?? "{}").Mode };
 
-    public ValueTask StepAsync(IStep step, CancellationToken cancellationToken) => new Burst(this, step, cancellationToken).RunAsync();
+    public ValueTask TurnAsync(ITurn turn, CancellationToken cancellationToken) => new Burst(this, turn, cancellationToken).RunAsync();
 
-    /// <summary>A Background leaf, run off the step: its inputs were materialized in the step that started it.</summary>
-    public async ValueTask<object?> RunAsync(IRun run, CancellationToken cancellationToken)
+    /// <summary>A Background leaf, run as a background job: its inputs were materialized in the turn that started it.</summary>
+    public async ValueTask<object?> ExecuteJobAsync(IJob job, CancellationToken cancellationToken)
     {
-        if (Options.Gate is { } gate) await gate(run, cancellationToken);
-        var args = Json.Read<BackgroundArgs>(run.Arguments!);
+        if (Options.Gate is { } gate) await gate(job, cancellationToken);
+        var args = Json.Read<BackgroundArgs>(job.Arguments!);
         var node = registry.Get(args.Workflow).Nodes[args.Node];
         var activity = (ILeaf)Hydrator.Create(node, args.Inputs);
-        var t = await activity.ExecuteAsync(new ActivityContext(run.Instance, args.Frame, node.Id, 0, cancellationToken));
+        var t = await activity.ExecuteAsync(new ActivityContext(job.Instance, args.Frame, node.Id, 0, cancellationToken));
         return new BackgroundResult(t.Kind, t.Result, t.Outcome, t.Fault);
     }
 }
 
-/// <summary>One step: take the inbox, then run the scheduled work until everything waits, ends or meets a boundary.</summary>
-internal sealed class Burst(NativeModel model, IStep step, CancellationToken cancellationToken)
+/// <summary>One turn: take the inbox, then run the scheduled work until everything waits, ends or meets a boundary.</summary>
+internal sealed class Burst(NativeModel model, ITurn turn, CancellationToken cancellationToken)
 {
-    private readonly NativeState _s = (NativeState)step.State;
-    private readonly Workflow _wf = model.Registry.Get(step.Instance.Definition);
+    private readonly NativeState _s = (NativeState)turn.State;
+    private readonly Workflow _wf = model.Registry.Get(turn.Instance.Definition);
     private InstanceStatus _status = InstanceStatus.Running;
     private int _executed;
 
@@ -150,7 +150,7 @@ internal sealed class Burst(NativeModel model, IStep step, CancellationToken can
 
     public async ValueTask RunAsync()
     {
-        foreach (var message in step.Inbox) Accept(message);
+        foreach (var message in turn.Inbox) Accept(message);
         await DrainAsync();
     }
 
@@ -166,7 +166,7 @@ internal sealed class Burst(NativeModel model, IStep step, CancellationToken can
                 var start = Json.Read<NativeStart>(m.Start?.Input ?? "{}");
                 foreach (var (name, value) in _wf.Variables) _s.Variables[name] = value?.DeepClone();
                 if (start.Input is { } input) _s.Variables["input"] = input.DeepClone();
-                (_s.TriggerNode, _s.Trigger) = (start.TriggerNode, start.Trigger ?? step.Ambient as JsonNode);
+                (_s.TriggerNode, _s.Trigger) = (start.TriggerNode, start.Trigger ?? turn.Ambient as JsonNode);
                 _s.Agenda.Add(new Work { Frame = NewId("f"), Node = _wf.Root.Id });
                 break;
             }
@@ -191,9 +191,9 @@ internal sealed class Burst(NativeModel model, IStep step, CancellationToken can
                     Resume(id, payload.DeepClone());
                 break;
             }
-            case Kinds.RunFinished:
+            case Kinds.JobFinished:
             {
-                var finished = m.Read<RunFinished>();
+                var finished = m.Read<JobFinished>();
                 Resume(finished.Key, Values.From(finished));
                 break;
             }
@@ -216,19 +216,19 @@ internal sealed class Burst(NativeModel model, IStep step, CancellationToken can
         _s.Agenda.RemoveAll(w => w.Gone);      // only under NativeFlaw.InFlightInMemory: memory forgets now what the row still has
         while (_s.Agenda.Exists(w => !w.Gone) && _status == InstanceStatus.Running)
         {
-            // Durable: a boundary after every activity. Balanced and Ephemeral: one step until all waits or ends (capped).
-            if ((Durable && _executed > 0) || _executed >= model.Options.MaxActivitiesPerStep)
+            // Durable: a boundary after every activity. Balanced and Ephemeral: one turn until all waits or ends (capped).
+            if ((Durable && _executed > 0) || _executed >= model.Options.MaxActivitiesPerTurn)
             {
-                step.Send(step.Instance.Ref, NativeKinds.Continue);
+                turn.Send(turn.Instance.Ref, NativeKinds.Continue);
                 return;
             }
             var work = _s.Agenda.First(w => !w.Gone);
             if (!work.Resume && Durable && _wf.Nodes[work.Node!].External && work.Attempt == 0 && !Has(NativeFlaw.NoAttemptCommit))
             {
-                // Not replay-safe: commit the attempt first, run it in the next step. After a crash the row says it may have run.
+                // Not replay-safe: commit the attempt first, run it in the next turn. After a crash the row says it may have run.
                 work.Attempt = 1;
-                step.Record($"a:{work.Frame}:{work.Attempt}");
-                step.Send(step.Instance.Ref, NativeKinds.Continue);
+                turn.Record($"a:{work.Frame}:{work.Attempt}");
+                turn.Send(turn.Instance.Ref, NativeKinds.Continue);
                 return;
             }
             if (Has(NativeFlaw.InFlightInMemory) && Durable) work.Gone = true;     // MUTATION: dequeued in memory only; the commit still carries it
@@ -247,11 +247,11 @@ internal sealed class Burst(NativeModel model, IStep step, CancellationToken can
         var scope = new FrameScope(this, frame);
         if (node.Background)
         {
-            // The slow activity is off-step work: its intent rides in this commit, its result comes back as a message.
+            // The slow activity is a background job: its intent rides in this commit, its result comes back as a message.
             _s.Frames[frame.Id] = frame;
             var wait = NewId("w");
-            _s.Waits[wait] = new WaitEntry(frame.Id, "run", wait);
-            step.Run(wait, new BackgroundArgs(_wf.Id, node.Id, frame.Id, Hydrator.Snapshot(node, b => Evaluate(b, scope))));
+            _s.Waits[wait] = new WaitEntry(frame.Id, "job", wait);
+            turn.StartJob(wait, new BackgroundArgs(_wf.Id, node.Id, frame.Id, Hydrator.Snapshot(node, b => Evaluate(b, scope))));
             return;
         }
         var activity = Hydrator.Create(node, b => Evaluate(b, scope));
@@ -276,11 +276,11 @@ internal sealed class Burst(NativeModel model, IStep step, CancellationToken can
             case ILeaf leaf:
                 if (node.External)
                 {
-                    // Friction F-N6, fixed in the merge: the kernel says when the step may have run before, so the
+                    // Friction F-N6, fixed in the merge: the kernel says when the turn may have run before, so the
                     // journal can say "this side effect may have happened already" instead of nobody knowing.
-                    var again = step.Inbox.Any(step.Redelivered);
-                    if (again && Durable) step.Record($"m:{frame.Id}:{frame.Attempt}");
-                    model.Options.OnExternal?.Invoke(step.Instance.Ref, frame.Id, node.Id, frame.Attempt, again);
+                    var again = turn.Inbox.Any(turn.Redelivered);
+                    if (again && Durable) turn.Record($"m:{frame.Id}:{frame.Attempt}");
+                    model.Options.OnExternal?.Invoke(turn.Instance.Ref, frame.Id, node.Id, frame.Attempt, again);
                 }
                 Apply(frame, await leaf.ExecuteAsync(Context(frame)));
                 break;
@@ -296,13 +296,13 @@ internal sealed class Burst(NativeModel model, IStep step, CancellationToken can
             _s.Waits.Remove(id);
             Unregister(id, other, cancel: true);
         }
-        if (wait.Kind == "child") step.Record($"r:{work.Wait}:{wait.Key}:{work.Payload?["Child"]}");
+        if (wait.Kind == "child") turn.Record($"r:{work.Wait}:{wait.Key}:{work.Payload?["Child"]}");
         _s.Frames.Remove(frame.Id);
         var node = _wf.Nodes[frame.Node];
         if (node.Background)
         {
-            var finished = Values.To<RunFinished>(work.Payload)!;
-            if (finished.Error is { } error) Fail(frame, new ActivityFault("run", error));
+            var finished = Values.To<JobFinished>(work.Payload)!;
+            if (finished.Error is { } error) Fail(frame, new ActivityFault("job", error));
             else if (Json.Read<BackgroundResult>(finished.Result!) is var r) Apply(frame, new Transition(r.Kind, r.Result, r.Outcome, r.Fault));
             return;
         }
@@ -310,7 +310,7 @@ internal sealed class Burst(NativeModel model, IStep step, CancellationToken can
         Apply(frame, await activity.ResumeAsync(Context(frame), frame.State, work.Payload));
     }
 
-    private ActivityContext Context(Frame frame) => new(step.Instance.Ref, frame.Id, frame.Node, frame.Attempt, cancellationToken);
+    private ActivityContext Context(Frame frame) => new(turn.Instance.Ref, frame.Id, frame.Node, frame.Attempt, cancellationToken);
 
     // ---- transitions -------------------------------------------------------------------------------------------------
 
@@ -338,20 +338,20 @@ internal sealed class Burst(NativeModel model, IStep step, CancellationToken can
         {
             case EventTrigger e:
                 _s.Waits[id] = new WaitEntry(frame.Id, "event", "event:" + e.Name);
-                step.Subscribe("event:" + e.Name, id);
+                turn.Subscribe("event:" + e.Name, id);
                 break;
             case HttpTrigger h:
                 _s.Waits[id] = new WaitEntry(frame.Id, "event", HttpRoutes.Key(h.Method, h.Path));
-                step.Subscribe(HttpRoutes.Key(h.Method, h.Path), id);
+                turn.Subscribe(HttpRoutes.Key(h.Method, h.Path), id);
                 break;
             case TimerTrigger t:
                 // The key is the timer message's id, so that a cancel can take it back (friction F-N4, fixed in the merge).
-                _s.Waits[id] = new WaitEntry(frame.Id, "timer", step.Send(step.Instance.Ref, NativeKinds.Timer, new TimerFired(id), new SendOptions(Delay: TimeSpan.FromMilliseconds(t.Milliseconds))));
+                _s.Waits[id] = new WaitEntry(frame.Id, "timer", turn.Send(turn.Instance.Ref, NativeKinds.Timer, new TimerFired(id), new SendOptions(Delay: TimeSpan.FromMilliseconds(t.Milliseconds))));
                 break;
             case ChildTrigger c:
-                var child = step.Start(NativeModel.Spec(c.Workflow, c.Mode, c.Input as JsonObject));
+                var child = turn.Start(NativeModel.Spec(c.Workflow, c.Mode, c.Input as JsonObject));
                 _s.Waits[id] = new WaitEntry(frame.Id, "child", child.Id);
-                step.Record($"s:{frame.Id}:{child.Id}");
+                turn.Record($"s:{frame.Id}:{child.Id}");
                 break;
         }
     }
@@ -360,10 +360,10 @@ internal sealed class Burst(NativeModel model, IStep step, CancellationToken can
     {
         switch (wait.Kind)
         {
-            case "event": step.Unsubscribe(wait.Key, id); break;
-            case "run" when cancel: step.CancelRun(wait.Key); break;
-            case "child" when cancel: step.Send(new InstanceRef(wait.Key), NativeKinds.Cancel); break;
-            case "timer" when cancel: step.Recall(wait.Key); break;      // its row goes with this commit
+            case "event": turn.Unsubscribe(wait.Key, id); break;
+            case "job" when cancel: turn.CancelJob(wait.Key); break;
+            case "child" when cancel: turn.Send(new InstanceRef(wait.Key), NativeKinds.Cancel); break;
+            case "timer" when cancel: turn.Recall(wait.Key); break;      // its row goes with this commit
         }
     }
 
@@ -372,19 +372,19 @@ internal sealed class Burst(NativeModel model, IStep step, CancellationToken can
         switch (effect)
         {
             case PublishEffect p:
-                step.Publish("event:" + p.Event, p.Payload?.ToJsonString(), model.Options.EventWindow);
+                turn.Publish("event:" + p.Event, p.Payload?.ToJsonString(), model.Options.EventWindow);
                 break;
             case DispatchEffect d:
             {
                 // A detached start (friction F-N5, fixed in the merge): no parent, and minted here, so no read.
-                var child = step.Start(NativeModel.Spec(d.Workflow, d.Mode, d.Input as JsonObject), detached: true);
-                step.Record($"d:{frame.Id}:{child.Id}");
+                var child = turn.Start(NativeModel.Spec(d.Workflow, d.Mode, d.Input as JsonObject), detached: true);
+                turn.Record($"d:{frame.Id}:{child.Id}");
                 break;
             }
             case EmitEffect e:
                 // The kernel's live output: it knows who waits (the reply addresses of the messages this instance
-                // consumed), releases it after this step's commit, and a request takes only its first response.
-                step.Emit(e.Channel, e.Item);
+                // consumed), releases it after this turn's commit, and a request takes only its first response.
+                turn.Emit(e.Channel, e.Item);
                 break;
         }
     }
@@ -395,7 +395,7 @@ internal sealed class Burst(NativeModel model, IStep step, CancellationToken can
         CancelChildren(frame.Id);
         if (result is not null) _s.Results[frame.Node] = result;
         foreach (var (variable, path) in _wf.Nodes[frame.Node].Captures) Assign(frame, variable, Values.Path(result, path)?.DeepClone());
-        step.Record($"c:{frame.Id}:{frame.Node}");
+        turn.Record($"c:{frame.Id}:{frame.Node}");
         NotifyParent(frame, outcome, result);
     }
 
@@ -415,23 +415,23 @@ internal sealed class Burst(NativeModel model, IStep step, CancellationToken can
     /// <summary>A threshold join fired: record it once, complete the composite, cancel what still runs under it.</summary>
     internal void Join(Frame frame)
     {
-        step.Record($"j:{frame.Id}");
+        turn.Record($"j:{frame.Id}");
         if (!Has(NativeFlaw.JoinWithoutGuard))
         {
             Complete(frame, "Done", null);
             return;
         }
-        step.Record($"c:{frame.Id}:{frame.Node}");     // MUTATION: the parent hears of it, the frame and its branches live on
+        turn.Record($"c:{frame.Id}:{frame.Node}");     // MUTATION: the parent hears of it, the frame and its branches live on
         NotifyParent(frame, "Done", null);
     }
 
-    internal void RecordJoin(Frame frame, string node) => step.Record($"j:{frame.Id}:{node}");
+    internal void RecordJoin(Frame frame, string node) => turn.Record($"j:{frame.Id}:{node}");
 
     internal void Fail(Frame frame, ActivityFault fault)
     {
         _s.Frames.Remove(frame.Id);
         CancelChildren(frame.Id);
-        step.Record($"f:{frame.Id}:{frame.Node}");
+        turn.Record($"f:{frame.Id}:{frame.Node}");
         if (frame.Parent is null || !_s.Frames.TryGetValue(frame.Parent, out var parent))
         {
             if (frame.Parent is null) End(InstanceStatus.Faulted, fault.Code, Values.From(fault));
@@ -467,7 +467,7 @@ internal sealed class Burst(NativeModel model, IStep step, CancellationToken can
                 Unregister(id, wait, cancel: true);
             }
             CancelChildren(frame);
-            step.Record($"x:{f.Id}:{f.Node}");
+            turn.Record($"x:{f.Id}:{f.Node}");
         }
         _s.Agenda.RemoveAll(w => !w.Resume && w.Frame == frame);
     }
@@ -491,7 +491,7 @@ internal sealed class Burst(NativeModel model, IStep step, CancellationToken can
         foreach (var frame in _s.Frames.Keys.ToList()) Cancel(frame);
         _s.Agenda.Clear();
         _status = status;
-        step.SetStatus(status, subStatus, output);
+        turn.SetStatus(status, subStatus, output);
     }
 
     // ---- variables and bindings --------------------------------------------------------------------------------------

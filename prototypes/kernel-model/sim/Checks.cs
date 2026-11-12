@@ -91,7 +91,7 @@ public sealed partial class World
         // I14, the counting half: attempts change only in a take (see World.Take).
         foreach (var row in Store.Messages.Values)
             if (row.Attempts != _attempts.GetValueOrDefault(row.Message.Id)) return $"I14 the attempts of {row.Message.Id} changed to {row.Attempts} outside a take";
-        return Journal() ?? Memory() ?? Counters(waiting) ?? Trees(waiting) ?? Waits() ?? Sequences(waiting) ?? Runs() ?? Correlated() ?? Answers();
+        return Journal() ?? Memory() ?? Counters(waiting) ?? Trees(waiting) ?? Waits() ?? Sequences(waiting) ?? Jobs() ?? Correlated() ?? Answers();
     }
 
     // I6: no gap in a partition's journal. I2, I10: an instance's row and its journal rows agree; a row never goes back.
@@ -135,9 +135,9 @@ public sealed partial class World
             // I18: a state is read at its own version or upgraded; no model writes back a state older than the row's.
             if (_versions.TryGetValue(row.Id, out var version) && row.StateVersion < version) return $"I18 {row.Id} went from state version {version} back to {row.StateVersion}";
             _versions[row.Id] = row.StateVersion;
-            // I19: a rebind is the instance's from the next step on, in its row and in every step that follows.
+            // I19: a rebind is the instance's from the next turn on, in its row and in every turn that follows.
             if (row.Model == "counter" && State<CounterState>(row.Id) is { } bound && (bound.Wrong.Count > 0 || row.Definition != (bound.Bound ?? Counter.Spec.Definition)))
-                return $"I19 {row.Id} is bound to {bound.Bound ?? Counter.Spec.Definition}, its row says {row.Definition}{(bound.Wrong.Count > 0 ? ", and a step " + bound.Wrong[0] : "")}";
+                return $"I19 {row.Id} is bound to {bound.Bound ?? Counter.Spec.Definition}, its row says {row.Definition}{(bound.Wrong.Count > 0 ? ", and a turn " + bound.Wrong[0] : "")}";
             if (row.Model == "counter" && row.StateVersion == 2 && State<CounterState>(row.Id) is { } counted && counted.Count != counted.Tokens.Count)
                 return $"I18 {row.Id} at state version 2 counts {counted.Count} tokens and holds {counted.Tokens.Count}";
             if (_known.TryGetValue(row.Id, out var before) && (row.Revision < before.Revision || (before.Status != InstanceStatus.Running && row.Status != before.Status)))
@@ -161,7 +161,7 @@ public sealed partial class World
         return Oracle.Ghosts.FirstOrDefault(Store.Instances.ContainsKey) is { } ghost ? $"I10 {ghost} was created by a message without a start spec" : null;
     }
 
-    // I9: at its current epoch, what an owner holds equals the committed rows plus its own uncommitted steps.
+    // I9: at its current epoch, what an owner holds equals the committed rows plus its own uncommitted turns.
     private string? Memory()
     {
         foreach (var actor in Alive)
@@ -310,8 +310,8 @@ public sealed partial class World
         return null;
     }
 
-    // I15: a caller gets at most one response and at most one end, and a response only from a step that committed or had
-    // nothing to commit. A step had nothing to commit only if its instance is ephemeral and was never written.
+    // I15: a caller gets at most one response and at most one end, and a response only from a turn that committed or had
+    // nothing to commit. A turn had nothing to commit only if its instance is ephemeral and was never written.
     private readonly HashSet<string> _answered = new(StringComparer.Ordinal);
     private string? Answers()
     {
@@ -324,7 +324,7 @@ public sealed partial class World
             if (!committed && !unwritten) return $"I15 request {request.Id} was answered {answer}, which no commit of {instance} wrote";
         }
         foreach (var (id, (_, _, posted, _)) in Oracle.Https)
-            if (State<HttpState>(id) is { } state && state.Ambient.Find(a => a != $"seen@{posted}") is { } stray) return $"I15 {id} was started by actor {posted} and a step saw the ambient as {stray}";
+            if (State<HttpState>(id) is { } state && state.Ambient.Find(a => a != $"seen@{posted}") is { } stray) return $"I15 {id} was started by actor {posted} and a turn saw the ambient as {stray}";
         return null;
     }
 
@@ -344,8 +344,8 @@ public sealed partial class World
     private List<string>? Hubs(string waiter) =>
         Oracle.CWaiters[waiter].Select(key => Correlation.Of(key, Config.Partitions).Id).ToList() is var hubs && hubs.Exists(Parked.Contains) ? null : hubs;
 
-    // I12: a run's result is applied exactly once; a cancelled run's result never is.
-    private string? Runs()
+    // I12: a job's result is applied exactly once; a cancelled job's result never is.
+    private string? Jobs()
     {
         foreach (var (id, _) in Oracle.Runners)
         {
@@ -353,9 +353,9 @@ public sealed partial class World
             foreach (var key in state.Log.Select(l => l[(l.IndexOf(' ') + 1)..]).Distinct())
             {
                 int start = state.Log.IndexOf("start " + key), result = state.Log.IndexOf("result " + key), cancel = state.Log.IndexOf("cancel " + key);
-                if (state.Log.Count(l => l == "result " + key) > 1) return $"I12 the result of run {key} of {id} was applied twice: [{string.Join(", ", state.Log)}]";
-                if (result >= 0 && (start < 0 || start > result)) return $"I12 {id} got a result for run {key}, which it had not started: [{string.Join(", ", state.Log)}]";
-                if (result >= 0 && cancel >= 0 && cancel < result) return $"I12 {id} got the result of run {key} after cancelling it: [{string.Join(", ", state.Log)}]";
+                if (state.Log.Count(l => l == "result " + key) > 1) return $"I12 the result of job {key} of {id} was applied twice: [{string.Join(", ", state.Log)}]";
+                if (result >= 0 && (start < 0 || start > result)) return $"I12 {id} got a result for job {key}, which it had not started: [{string.Join(", ", state.Log)}]";
+                if (result >= 0 && cancel >= 0 && cancel < result) return $"I12 {id} got the result of job {key} after cancelling it: [{string.Join(", ", state.Log)}]";
             }
         }
         return null;
@@ -414,20 +414,20 @@ public sealed partial class World
                     foreach (var id in worker.Ready.Order(StringComparer.Ordinal).ToList())
                     {
                         if (Dying is not null) break;
-                        worker.Run(id);
+                        worker.RunTurn(id);
                     }
                     if (Dying is null) Watch(worker.FlushAsync());
-                    if (Dying is { } dying)     // a step or off-step work killed the process
+                    if (Dying is { } dying)     // a turn or a background job killed the process
                     {
                         Dying = null;
                         Crash(dying, zombie: false);
                         continue;
                     }
-                    foreach (var key in actor.Runs.Keys.ToList())
-                        if (actor.Runs.Remove(key, out var work)) work.TrySetResult("done");
+                    foreach (var key in actor.Jobs.Keys.ToList())
+                        if (actor.Jobs.Remove(key, out var work)) work.TrySetResult("done");
                 }
             if (Check() is { } violation) return violation;
-            if (Store.Messages.Values.Any(m => !m.Done && m.Message.Kind != "expire") || slots.Select(s => Of(s.Node, s.Partition)).Any(a => a.Worker.Owns && (a.Worker.NeedsFlush || a.Worker.Ready.Any() || a.Runs.Count > 0))) continue;
+            if (Store.Messages.Values.Any(m => !m.Done && m.Message.Kind != "expire") || slots.Select(s => Of(s.Node, s.Partition)).Any(a => a.Worker.Owns && (a.Worker.NeedsFlush || a.Worker.Ready.Any() || a.Jobs.Count > 0))) continue;
             if (Unfair() is not null) continue;
             if (published && (!Config.Native || NativeMeet() == 0)) return End();    // native waits that appeared since get their events too
             if (Meet() is { } missed) return missed;
@@ -518,7 +518,7 @@ public sealed partial class World
         {
             var log = State<RunnerState>(id)?.Log ?? [];
             if (!Parked.Contains(id) && Store.Instances.GetValueOrDefault(id)?.Status != InstanceStatus.Cancelled && keys.Find(k => !log.Contains("start " + k) || !(log.Contains("result " + k) || log.Contains("cancel " + k))) is { } key)
-                return $"I12 run {key} of {id} has neither a result nor a cancel: [{string.Join(", ", log)}]";
+                return $"I12 job {key} of {id} has neither a result nor a cancel: [{string.Join(", ", log)}]";
         }
         foreach (var row in Store.Instances.Values.Where(i => i.Model == "tree" && i.Parent is not null && i.Status == InstanceStatus.Cancelled))
             Count("tree descendant cancelled" + (row.Id[..row.Id.IndexOf('/')] != row.Parent![..row.Parent!.IndexOf('/')] ? ", in another partition" : ", with its parent") + (_late.Contains(row.Id) ? ", created after its parent ended" : ""));

@@ -71,7 +71,7 @@ public static class Cost
             var busy = worker.NeedsLoad || worker.NeedsMeet || worker.NeedsFlush || worker.Ready.Any();
             await worker.LoadAsync();
             await worker.MeetAsync();
-            foreach (var id in worker.Ready.ToList()) worker.Run(id);
+            foreach (var id in worker.Ready.ToList()) worker.RunTurn(id);
             await worker.FlushAsync();
             idle = busy ? 0 : idle + 1;
         }
