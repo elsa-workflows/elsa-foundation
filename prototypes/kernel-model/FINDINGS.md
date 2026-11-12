@@ -545,3 +545,30 @@ The owner's requirement of 12 November: a workflow handles an HTTP request and p
 - **Check:** the counter holds a message that asks for it, with everything after it, and sends itself a nudge; the
   existing checks of invariants 3, 4 and 11 then say that nothing held is lost, applied twice or reordered.
   `--flaw HoldLoses` (a held message is consumed): caught, seed 1 (`I3 t41 for 1/c0 is neither waiting nor applied`).
+
+## 15. State versions. Run
+
+- **Built:** `IExecutionModel.StateVersion` and `UpgradeState`; `StateVersion` on the instance row. On load, a row
+  at an older version is upgraded; the next commit writes the model's version.
+- **Contract change, reasoned:** the sketch has `UpgradeState(object state, int fromVersion)`. The kernel cannot
+  produce that object: it reads a state as the model's current `StateType`, and an old state may not fit it. The
+  upgrade takes the stored form: `UpgradeState(string state, int fromVersion)`.
+- **In the simulation:** every third seed is a rolling deploy. Counters start at version 1, which keeps tokens; version
+  2 also keeps their count, and upgrades a version-1 state by counting. A restarting node comes back at version 1 or
+  2 in turn (a deploy with rollbacks), and such seeds restart nodes more often. The settling phase finishes the deploy.
+
+### F14. A node behind the deploy must not step a row written by a newer model (invariant 18). Run
+
+- **Replay:** `--flaw StepNewerState`, seed 99 at `--actions 1000` (`I18 0/c1 went from state version 2 back to 1`),
+  or seed 18198 at 300 actions. It is rare at 300 actions: in 4,000 seeds, an owner at version 1 held a counter row
+  at version 2 at 28 moments.
+- **Sketch:** says nothing about a cluster in which nodes run different versions of a model. One does during every
+  rolling deploy. An older model reads a newer state as far as it understands it and writes it back older: data is
+  lost without an error.
+- **Fix:** an instance whose row is at a newer state version than this node's model is withheld like a suspended
+  one: kernel messages pass, the model's wait, its suspects are shelved (F12). It moves on when an owner at the
+  newer version takes the partition.
+- **Proposed, reasoned:** a node should not take partitions while a newer version of one of its models is running
+  in the cluster (the `node` row can carry the model versions), or withheld instances wait for the deploy.
+- **Invariant 18:** an instance's state version never goes back, and a counter at version 2 counts exactly the
+  tokens it holds. `--flaw SkipUpgrade` (read an old row as the new type): caught, seed 33.

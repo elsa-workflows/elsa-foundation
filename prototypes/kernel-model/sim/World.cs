@@ -1,6 +1,6 @@
 namespace Kernel.Sim;
 
-public sealed record Config(int Nodes, int Partitions, Flaw Flaws, int Attempts = 3, int Group = 1);
+public sealed record Config(int Nodes, int Partitions, Flaw Flaws, int Attempts = 3, int Group = 1, bool Upgrade = false);
 
 /// <summary>One thing that happens. Concrete, so that a list of them replays without the random generator.</summary>
 public sealed record Act(string Kind, int A = 0, int B = 0, string S = "", Message? M = null, bool Flag = false)
@@ -74,6 +74,7 @@ public sealed class Actor(int id, int node, int partition)
     public Projector Projector = null!;
     public TrialGate Gate = null!;
     public bool Dead, Zombie;
+    public int Version;
     public readonly List<Call> Calls = [];
     public readonly Dictionary<string, TaskCompletionSource<object?>> Runs = new(StringComparer.Ordinal);
 }
@@ -159,6 +160,7 @@ public sealed partial class World
     public readonly int[,] Current;
     public readonly long[] Skew;
     public readonly int[] Incarnation;
+    public readonly int[] Versions;     // the counter model's version on each node: a rolling upgrade moves it from 1 to 2 at a restart
     public readonly Balancer[] Balancers;
     public readonly Dictionary<string, Requests> Processes = new(StringComparer.Ordinal);   // by process name: the requests open there
     public readonly List<(string Process, Request Request, string Instance)> Asked = [];
@@ -168,7 +170,7 @@ public sealed partial class World
     public readonly List<string> Faults = [];
     private readonly List<Task> _watched = [];
     public long Time = 1_000_000;
-    public bool Auto;
+    public bool Auto, Deployed;
     public int? Dying;
     public Action<string>? Log;
 
@@ -180,6 +182,7 @@ public sealed partial class World
         Skew = new long[config.Nodes];
         Paused = new bool[config.Nodes];
         Incarnation = new int[config.Nodes];
+        Versions = Enumerable.Repeat(config.Upgrade ? 1 : 2, config.Nodes).ToArray();
         Balancers = new Balancer[config.Nodes];
         _gates = Enumerable.Range(0, config.Nodes).Select(_ => new TrialGate()).ToArray();
         for (var node = 0; node < config.Nodes; node++)
@@ -218,10 +221,11 @@ public sealed partial class World
     {
         var actor = new Actor(Actors.Count, node, partition);
         var wire = new Wire(this, actor);
+        actor.Version = Versions[node];
         actor.Projector = new Projector(wire, partition, take: 5);    // a projector runs on every node, whoever owns the partition
         IExecutionModel[] models =
         [
-            new Counter(), new Parent(), new Child(), new Waiter(), new Sequence(), new Correlation(Config.Flaws.HasFlag(Flaw.CorrelationForgets)), new CWaiter(Config.Partitions),
+            new Counter(Versions[node]), new Parent(), new Child(), new Waiter(), new Sequence(), new Correlation(Config.Flaws.HasFlag(Flaw.CorrelationForgets)), new CWaiter(Config.Partitions),
             new Runner((run, cancel) => Work(actor, run, cancel)), new Fragile(() => Dying = node), new Http(actor.Id, (run, cancel) => Work(actor, run, cancel)),
             new Tree((run, cancel) => Work(actor, run, cancel)),
         ];
@@ -291,6 +295,7 @@ public sealed partial class World
     {
         Paused[node] = false;
         Incarnation[node]++;
+        Versions[node] = Config.Upgrade && !Deployed && Incarnation[node] % 2 == 0 ? 1 : 2;     // a rolling deploy, with rollbacks
         _gates[node] = new TrialGate();     // a new process; a zombie keeps the old one
         foreach (var actor in Actors.Where(a => a.Node == node && !a.Dead).ToList())
         {
@@ -499,6 +504,7 @@ public sealed class Generator(int seed, World world)
             }
             case < 90: return Outside(r, alive);
             case < 93: return new Act("tick", r.Next(3000));
+            case < 94 when world.Config.Upgrade: return new Act("crash", r.Next(world.Config.Nodes));   // a rolling deploy restarts nodes more often than crashes do
             case < 94: return new Act("skew", r.Next(world.Config.Nodes), r.Next(-5000, 5000));
             case < 95: return new Act("crash", r.Next(world.Config.Nodes), Flag: r.Next(3) == 0);
             case < 96: return new Act(r.Next(2) == 0 ? "pause" : "resume", r.Next(world.Config.Nodes));

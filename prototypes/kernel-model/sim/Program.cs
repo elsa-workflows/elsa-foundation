@@ -18,7 +18,8 @@ if (Arg("--seed") is { } one) return Replay(int.Parse(one), flaws) ? 0 : 1;
 return Sweep(int.Parse(Arg("--from") ?? "1"), int.Parse(Arg("--seeds") ?? "10000"), flaws) ? 0 : 1;
 
 // Every fifth seed tries suspects in groups of four that halve, with a threshold to match; the others one at a time.
-static Config ConfigOf(int seed, Flaw flaws) => flaws.HasFlag(Flaw.StableNodeName) ? new(1, 2, flaws) : seed % 5 == 0 ? new(2 + seed % 2, 2, flaws, Attempts: 5, Group: 4) : new(2 + seed % 2, 2, flaws);
+// Every third seed is a rolling upgrade: counters start at state version 1 and each node moves to 2 when it restarts.
+static Config ConfigOf(int seed, Flaw flaws) => (flaws.HasFlag(Flaw.StableNodeName) ? new(1, 2, flaws) : seed % 5 == 0 ? new(2 + seed % 2, 2, flaws, Attempts: 5, Group: 4) : new Config(2 + seed % 2, 2, flaws)) with { Upgrade = seed % 3 == 0 };
 
 (string? Violation, List<Act> Acts) Run(int seed, Flaw flaws)
 {
@@ -150,7 +151,7 @@ int Mutations(int seeds)
         Flaw.WallClockTimers, Flaw.DeleteOutsideCommands, Flaw.HandOverWhileBehind, Flaw.BumpAllInherited, Flaw.RunBeforeMark,
         Flaw.VolatileRunTicket, Flaw.PollRace, Flaw.MeetWithoutTicket,
         // round 3: the rule of each new piece
-        Flaw.GreedyBalancer, Flaw.TrialPerPartition, Flaw.ProjectorBlindWrite, Flaw.EmitBeforeCommit, Flaw.ReplyTwice, Flaw.NoDeadline, Flaw.DeliverWhileSuspended, Flaw.NoShelf, Flaw.SuspendDuringTrial, Flaw.TerminateRootOnly, Flaw.HoldLoses, Flaw.HoldKeepsTrial,
+        Flaw.GreedyBalancer, Flaw.TrialPerPartition, Flaw.ProjectorBlindWrite, Flaw.EmitBeforeCommit, Flaw.ReplyTwice, Flaw.NoDeadline, Flaw.DeliverWhileSuspended, Flaw.NoShelf, Flaw.SuspendDuringTrial, Flaw.TerminateRootOnly, Flaw.HoldLoses, Flaw.HoldKeepsTrial, Flaw.SkipUpgrade, Flaw.StepNewerState,
     ];
     var missed = 0;
     foreach (var mutation in mutations)

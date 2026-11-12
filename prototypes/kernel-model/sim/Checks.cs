@@ -45,7 +45,8 @@ public sealed partial class World
 {
     public readonly Oracle Oracle = new();
     private readonly Dictionary<string, (long Revision, InstanceStatus Status)> _known = new(StringComparer.Ordinal);
-    private readonly HashSet<string> _late = new(StringComparer.Ordinal);   // instances whose row first appeared after their parent had ended
+    private readonly HashSet<string> _late = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, int> _versions = new(StringComparer.Ordinal);   // instances whose row first appeared after their parent had ended
     private readonly Dictionary<(Type, string), object> _parsed = new();
     private readonly Dictionary<string, int> _attempts = new(StringComparer.Ordinal);  // per message, as last seen
     public readonly HashSet<string> Parked = new(StringComparer.Ordinal);               // instances parked by the rule of invariant 14
@@ -120,6 +121,11 @@ public sealed partial class World
         foreach (var row in Store.Instances.Values)
         {
             if (!commits.ContainsKey(row.Id) && row.History != History.Minimal) return $"I2 {row.Id} has a row and no journal row";
+            // I18: a state is read at its own version or upgraded; no model writes back a state older than the row's.
+            if (_versions.TryGetValue(row.Id, out var version) && row.StateVersion < version) return $"I18 {row.Id} went from state version {version} back to {row.StateVersion}";
+            _versions[row.Id] = row.StateVersion;
+            if (row.Model == "counter" && row.StateVersion == 2 && State<CounterState>(row.Id) is { } counted && counted.Count != counted.Tokens.Count)
+                return $"I18 {row.Id} at state version 2 counts {counted.Count} tokens and holds {counted.Tokens.Count}";
             if (_known.TryGetValue(row.Id, out var before) && (row.Revision < before.Revision || (before.Status != InstanceStatus.Running && row.Status != before.Status)))
                 return $"I10 {row.Id} went from revision {before.Revision} {before.Status} to revision {row.Revision} {row.Status}";
             if (!_known.ContainsKey(row.Id) && row.Parent is { } up && Store.Instances.GetValueOrDefault(up) is { Status: not InstanceStatus.Running }) _late.Add(row.Id);
@@ -146,6 +152,7 @@ public sealed partial class World
                 return $"I9 actor {actor.Id} believes partition {actor.Partition} is at {worker.Position}; it is at {partition.Position}";
             foreach (var (id, row, state, busy) in worker.Instances)
             {
+                if (row is { Model: "counter", StateVersion: 2 } && actor.Version == 1) Count("a version-1 owner holds a counter row at version 2");
                 if (busy) continue;
                 if (row != Store.Instances.GetValueOrDefault(id))
                     return $"I9 actor {actor.Id} holds {id} at revision {row?.Revision.ToString() ?? "none"}; its row is at {Store.Instances.GetValueOrDefault(id)?.Revision.ToString() ?? "none"}";
@@ -327,6 +334,9 @@ public sealed partial class World
 
     public string? Settle()
     {
+        Deployed = true;
+        for (var node = 0; node < Config.Nodes; node++)     // the deployment finishes: every node still at version 1 restarts at 2
+            if (Versions[node] == 1) Crash(node, zombie: false);
         foreach (var actor in Actors) actor.Dead |= actor.Zombie;
         Array.Clear(Paused);
         for (var again = true; again;)      // what is on the wire arrives

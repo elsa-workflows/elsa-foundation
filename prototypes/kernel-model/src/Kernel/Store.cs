@@ -4,7 +4,7 @@ namespace Kernel;
 /// The kernel's part of the row: <c>Runs</c>, the keys of the off-step work in flight, and <c>Children</c>, the instances
 /// it started that have not finished, each a JSON array or null.
 /// </summary>
-public sealed record InstanceRow(string Id, string Model, string Definition, InstanceStatus Status, string State, long Revision, string? Parent, string? Fault = null, string? Runs = null, History History = History.Full, bool Suspended = false, string? Children = null);
+public sealed record InstanceRow(string Id, string Model, string Definition, InstanceStatus Status, string State, long Revision, string? Parent, string? Fault = null, string? Runs = null, History History = History.Full, bool Suspended = false, string? Children = null, int StateVersion = 1);
 
 /// <summary>A message row as a poll returns it.</summary>
 public sealed record Stored(Message Message, long Seq, long Seen, int Attempts, long Trial);

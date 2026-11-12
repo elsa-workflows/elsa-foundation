@@ -255,7 +255,15 @@ public sealed class Worker
     /// in every poll; a poll limit of them hides the resume behind them. So it is shelved: its row is marked seen at this
     /// epoch, which moves the polls on, but it is neither on trial nor cleared to run. The next owner still suspects it.
     /// </summary>
-    private bool Shelf(Item suspect) => !Has(Flaw.NoShelf) && _slots.TryGetValue(suspect.Message.Target.Id, out var slot) && slot.Row is { Suspended: true };
+    private bool Shelf(Item suspect) => !Has(Flaw.NoShelf) && _slots.TryGetValue(suspect.Message.Target.Id, out var slot) && Withheld(slot);
+
+    /// <summary>
+    /// An instance whose model cannot be given its messages now: it is suspended, or its row was written by a newer
+    /// version of its model than this node has (finding F14: an older model would read the newer state wrongly and
+    /// write it back older). Kernel messages still pass.
+    /// </summary>
+    private bool Withheld(Slot slot) => slot.Row is { } row
+        && ((row.Suspended && !Has(Flaw.DeliverWhileSuspended)) || (row.StateVersion > _models[row.Model].StateVersion && !Has(Flaw.StepNewerState)));
 
     /// <summary>
     /// Finding F2: suspects are tried apart from everything else. A fenced commit writes that they are on trial at this
@@ -285,7 +293,7 @@ public sealed class Worker
     /// once: its instance is loaded, has nothing in flight, is not suspended, and no kernel message waits ahead of it.
     /// </summary>
     private bool CanTry(Item suspect) =>
-        _slots.TryGetValue(suspect.Message.Target.Id, out var slot) && slot.Loaded && (!slot.Busy || Has(Flaw.SuspendDuringTrial)) && slot.Row is not { Suspended: true }
+        _slots.TryGetValue(suspect.Message.Target.Id, out var slot) && slot.Loaded && (!slot.Busy || Has(Flaw.SuspendDuringTrial)) && !Withheld(slot)
         && !slot.Inbox.TakeWhile(i => i != suspect).Any(i => Kinds.IsControl(i.Message.Kind));
 
     /// <summary>
@@ -298,7 +306,7 @@ public sealed class Worker
     {
         var now = Now;
         var due = new List<Item>();
-        var suspended = slot.Row is { Suspended: true } && !Has(Flaw.DeliverWhileSuspended);
+        var suspended = Withheld(slot);
         foreach (var item in slot.Inbox)
         {
             if (item.Ticket) continue;
@@ -371,10 +379,12 @@ public sealed class Worker
         try
         {
             var model = _models[step.Instance.Model];
-            step.State = step.Slot.State ?? (step.Slot.Row is { } row ? Json.Read(row.State, model.StateType) : model.CreateState(step.Spec!));
+            step.State = step.Slot.State ?? (step.Slot.Row is { } row
+                ? row.StateVersion < model.StateVersion && !Has(Flaw.SkipUpgrade) ? model.UpgradeState(row.State, row.StateVersion) : Json.Read(row.State, model.StateType)
+                : model.CreateState(step.Spec!));
             _options.OnStep?.Invoke(step.Instance.Ref, step.Inbox, Now);
             await model.StepAsync(step, CancellationToken.None);
-            unit = step.Seal();
+            unit = step.Seal(model.StateVersion);
         }
         catch (Exception e)
         {

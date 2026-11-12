@@ -66,7 +66,14 @@ public interface IExecutionModel
 {
     string Key { get; }
     Type StateType { get; }
+    int StateVersion { get; }
     object CreateState(StartSpec start);
+
+    /// <summary>
+    /// A row written at an older version, in its stored form: the kernel cannot read it as a type it no longer knows.
+    /// Called on load; the next commit writes it at <see cref="StateVersion"/>.
+    /// </summary>
+    object UpgradeState(string state, int fromVersion);
     ValueTask StepAsync(IStep step, CancellationToken cancellationToken);
     ValueTask<object?> RunAsync(IRun run, CancellationToken cancellationToken);
 }
@@ -147,4 +154,6 @@ public enum Flaw : long
     TerminateRootOnly = 1 << 30,   // a terminate ends its instance and not the instances it started
     HoldLoses = 1L << 31,          // a held message is consumed like the rest
     HoldKeepsTrial = 1L << 32,     // a held message that was on trial stays on trial in its row
+    SkipUpgrade = 1L << 33,        // a row at an older state version is read as the current one
+    StepNewerState = 1L << 34,     // a model steps a row that a newer version of it wrote
 }

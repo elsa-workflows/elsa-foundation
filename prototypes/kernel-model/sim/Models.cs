@@ -6,6 +6,8 @@ public abstract class Model<TState> : IExecutionModel where TState : class, new(
 {
     public abstract string Key { get; }
     public Type StateType => typeof(TState);
+    public virtual int StateVersion => 1;
+    public virtual object UpgradeState(string state, int fromVersion) => Json.Read<TState>(state);
     public virtual object CreateState(StartSpec start) => new TState();
     public virtual ValueTask<object?> RunAsync(IRun run, CancellationToken cancellationToken) => new((object?)null);
     protected abstract void Step(IStep step, TState state);
@@ -25,16 +27,26 @@ public sealed class CounterState
     public List<string> Tokens { get; set; } = [];
     public List<Forward> Forwarded { get; set; } = [];
     public List<string> Held { get; set; } = [];        // messages held once, which it applies when they come again
+    public int Count { get; set; }                      // version 2 only: how many tokens it applied
 }
 
 public sealed record Forward(string Target, string Token);
 
 public sealed record Add(string Token, string? ForwardTo = null, bool Hold = false);
 
-public sealed class Counter : Model<CounterState>
+/// <summary>Version 1 keeps tokens; version 2 also keeps their count, and upgrades a version-1 state by counting them.</summary>
+public sealed class Counter(int version = 2) : Model<CounterState>
 {
     public static readonly StartSpec Spec = new("counter", "c");
     public override string Key => "counter";
+    public override int StateVersion => version;
+
+    public override object UpgradeState(string state, int fromVersion)
+    {
+        var old = Json.Read<CounterState>(state);
+        old.Count = old.Tokens.Count;
+        return old;
+    }
 
     protected override void Step(IStep step, CounterState state)
     {
@@ -58,6 +70,7 @@ public sealed class Counter : Model<CounterState>
             }
             state.Ids.Add(message.Id);
             state.Tokens.Add(add.Token);
+            if (version >= 2) state.Count++;
             step.Record(add.Token);
             if (add.ForwardTo is not { } target) continue;
             var forward = new Forward(target, add.Token + ">");
