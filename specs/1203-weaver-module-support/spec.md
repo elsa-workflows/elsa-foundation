@@ -467,9 +467,9 @@ Negative cases:
   - **Partial failure**: a module reports a partial failure, where a side effect happened before the failure, by throwing. Weaver core records the outcome as *uncertain*.
   - **Module codes**: a tool descriptor and a context-provider descriptor MAY declare a closed set of module codes. Every M4 tool and context provider declares one.
     - **Validation**: Weaver core validates each code from a declaring source, in receipts, refusals, preparation and execution errors, authorization violations and context diagnostics.
-    - **Replacement**: a code outside the set is classified first, and then replaced by a generic code with that classification. A generic code that replaces an owner-unavailable code is itself outside `agent.`, so it stays owner-unavailable and never becomes forbidden.
+    - **Replacement**: a code outside the set is classified first, and then replaced by a generic code with that classification. A generic code that replaces an owner-unavailable code is itself outside `weaver.`, so it stays owner-unavailable and never becomes forbidden.
     - **Mapping**: each `Elsa.Weaver.<Domain>` package maps its owning module's native codes into its set. This includes splitting a code with two meanings, such as the Secrets `not-found` code used for both a missing secret and a missing configuration entry, into two declared codes.
-    - **Format**: mapped codes are dotted ASCII identifiers outside `agent.`. A receipt carries its code in a new member, which the plan names.
+    - **Format**: mapped codes are dotted ASCII identifiers outside `weaver.`. A receipt carries its code in a new member, which the plan names.
     - **Undeclared sources**: sources that declare no set pass their codes through unchanged.
   - **Everything else**: every other outcome reuses the existing outcomes and codes. A new code is added only where none fits, such as the privilege-policy refusal. A status alone is never evidence of an effect.
 

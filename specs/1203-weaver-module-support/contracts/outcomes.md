@@ -20,7 +20,7 @@ Preserve positional constructors and every existing enum ordinal.
 
 Prepared class members and defaults are defined in [privilege-policy.md](privilege-policy.md). No principal is a model/persistence member. Use existing WeaverProposalExecutionResult.Status and Executed; no second outcome enum is added.
 
-Code declarations are copied/validated at catalog admission. Codes are bounded dotted ASCII identifiers, outside reserved agent namespace, max128characters, ordinal membership, no blank/duplicate declaration entries. Every new M4 tool/source declares a set. Module packages map native codes and safe text into it; core never interprets native code meanings.
+Code declarations are copied/validated at catalog admission. Codes are bounded dotted ASCII identifiers, outside reserved Weaver namespace, max128characters, ordinal membership, no blank/duplicate declaration entries. Every new M4 tool/source declares a set. Module packages map native codes and safe text into it; core never interprets native code meanings.
 
 ## Successful result validation
 
@@ -47,7 +47,7 @@ Use one small internal source-bound normalizer and private provenance like the e
 
 1. Identify actual installed-owner origin at preparation, execution, same tool authorization, and installed context collection/retained disclosure under its own descriptor. Strip host/event/custom-executor spoofed markers.
 2. For a declaring source, preserve a genuine owner-unavailable semantic before inspecting raw code syntax. Replace an out-of-set/malformed/reserved code and its message with safe fixed generic values. Invalid syntax must not turn genuine unavailability into forbidden.
-3. Ordinary replacement code is module.code.unsupported; genuine-unavailable replacement is module.owner.unavailable, outside agent namespace. Use fixed engine text, including existing OwnerUnavailableMessage. Preserve original refusal/result/diagnostic classification and status.
+3. Ordinary replacement code is module.code.unsupported; genuine-unavailable replacement is module.owner.unavailable, outside Weaver namespace. Use fixed engine text, including existing OwnerUnavailableMessage. Preserve original refusal/result/diagnostic classification and status.
 4. Normalize typed Code, Error/Violation/Diagnostic.Message, ToolResult.Content and execution Summary before freeze, persistence, HTTP/SSE, provider, review or audit. Never log raw unknown codes/messages.
 5. Forward the normalized WeaverError object rather than reconstructing Failure(code,message,status) and dropping metadata/provenance. Arbitrary deserialized flags do not become fresh owner authority.
 6. Undeclared sources retain explicit legacy pass-through/dotted-owner-code behavior. Engine-generated errors remain engine errors, not module-set inputs.
