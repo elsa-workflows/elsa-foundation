@@ -136,8 +136,8 @@ test("Feature Management keeps Clear under the native pointer after selection", 
 });
 
 
-test("Feature categories stay discoverable and contained with long labels and many choices", async ({ page }, testInfo) => {
-  for (const mode of ["light", "dark"] as const) {
+for (const mode of ["light", "dark"] as const) {
+  test(`Feature categories stay discoverable and contained with long labels and many choices (${mode})`, async ({ page }, testInfo) => {
     await page.addInitScript(mode => {
       localStorage.setItem("elsa-studio-theme", "classic");
       localStorage.setItem("elsa-studio-workspace-style", "minimal");
@@ -149,6 +149,7 @@ test("Feature categories stay discoverable and contained with long labels and ma
         const params = new URLSearchParams({ categoryRail: "1" });
         if (viewport.moduleWidth) params.set("moduleWidth", String(viewport.moduleWidth));
         await page.goto(`/feature-management.html?${params}`);
+        await expect(page.locator("html")).toHaveAttribute("data-theme-mode", mode);
         const rail = page.getByRole("region", { name: "Categories", exact: true });
         const choices = rail.getByRole("group", { name: "Feature categories", exact: true });
         await expect(choices.getByRole("button")).toHaveCount(26);
@@ -216,5 +217,5 @@ test("Feature categories stay discoverable and contained with long labels and ma
         });
       });
     }
-  }
-});
+  });
+}
