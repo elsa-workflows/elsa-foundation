@@ -18,7 +18,7 @@ public sealed class PackageMaintenanceRaceDiagnosticTests
     public static TheoryData<int> Iterations()
     {
         var data = new TheoryData<int>();
-        for (var i = 0; i < 5; i++) data.Add(i);
+        for (var i = 0; i < 8; i++) data.Add(i);
         return data;
     }
 
@@ -27,7 +27,22 @@ public sealed class PackageMaintenanceRaceDiagnosticTests
     public async Task Replay_exact_retained_generation_sequence_concurrently(int round)
     {
         var failures = (await Task.WhenAll(Enumerable.Range(0, 8).Select(index => ReplayAsync(round * 8 + index)))).Where(static failure => failure is not null).ToArray();
-        Assert.True(failures.Length == 0, "DIAGNOSTIC #4090 REFUSAL\n" + string.Join("\n----\n", failures));
+        var counts = $"totals so far: refused+reused={RefusedReused} refused+fresh={RefusedFresh} completed+reused={CompletedReused} completed+fresh={CompletedFresh}";
+        Assert.True(failures.Length == 0 && round != 7, "DIAGNOSTIC #4090\n" + counts + "\n" + string.Join("\n----\n", failures));
+    }
+
+    private static int RefusedReused, RefusedFresh, CompletedReused, CompletedFresh;
+
+    private static string Inode(string path)
+    {
+        var start = new System.Diagnostics.ProcessStartInfo("stat") { RedirectStandardOutput = true };
+        start.ArgumentList.Add("-c");
+        start.ArgumentList.Add("%d:%i");
+        start.ArgumentList.Add(path);
+        using var process = System.Diagnostics.Process.Start(start)!;
+        var output = process.StandardOutput.ReadToEnd().Trim();
+        process.WaitForExit();
+        return output;
     }
 
     private static async Task<string?> ReplayAsync(int iteration)
@@ -35,12 +50,15 @@ public sealed class PackageMaintenanceRaceDiagnosticTests
         await Task.Yield();
         var report = new StringBuilder($"iteration={iteration}\n");
         string root;
+        string obsoletePath;
         await using (var installer = await AdministrationHost.StartAsync(nativeStore: true, keepFiles: true))
         {
             root = installer.Root;
             PackageAssetTests.Pack(installer, "0.5.0", "obsolete");
             await PackageAssetTests.Reconcile(installer);
+            obsoletePath = Assert.Single((await installer.App.Services.GetRequiredService<INuplaneAdminOperations>().GetPackagesAsync(CancellationToken.None)).Packages).InstallPath;
         }
+        var obsoleteInode = Inode(obsoletePath);
         File.Delete(Path.Combine(root, "feed", PackageAssetTests.PackageId + ".0.5.0.nupkg"));
         await using var host = await AdministrationHost.StartAsync(root: root, nativeStore: true, loadPackages: true,
             configureNuplane: nuplane => nuplane.AutoloadPackages(loading => loading.WithDefaultLoadMode(PackageLoadMode.Collectible)
@@ -68,6 +86,9 @@ public sealed class PackageMaintenanceRaceDiagnosticTests
         File.Delete(Path.Combine(root, "feed", PackageAssetTests.PackageId + ".1.0.0.nupkg"));
         PackageAssetTests.Pack(host, "2.0.0", "second", assembly: "Second");
         await PackageAssetTests.Reconcile(host);
+        var secondInode = Inode(Assert.Single((await admin.GetPackagesAsync(CancellationToken.None)).Packages).InstallPath);
+        var reused = obsoleteInode == secondInode;
+        report.AppendLine($"inode(0.5.0)={obsoleteInode}; inode(2.0.0)={secondInode}; reused={reused}");
         var clock = System.Diagnostics.Stopwatch.StartNew();
         await using (var current = registry.GetActive("Authoring")!.BeginScope())
             Assert.Equal("second", current.ServiceProvider.GetRequiredService<string>());
@@ -75,7 +96,9 @@ public sealed class PackageMaintenanceRaceDiagnosticTests
         report.AppendLine($"replaced-preview@{clock.ElapsedMilliseconds}ms: " + Summary(replacedPreview));
         var replaced = await Prune(host, Execute(replacedPreview));
         report.AppendLine($"replaced-execute@{clock.ElapsedMilliseconds}ms: " + Summary(replaced));
-        if ((string?)replaced["status"] != "Completed")
+        var refused = (string?)replaced["status"] != "Completed";
+        Interlocked.Increment(ref refused ? ref reused ? ref RefusedReused : ref RefusedFresh : ref reused ? ref CompletedReused : ref CompletedFresh);
+        if (refused || reused)
         {
             report.AppendLine($"after-refusal-preview@{clock.ElapsedMilliseconds}ms: " + Summary(await Prune(host, new JsonObject())));
             var again = await Prune(host, Execute(replacedPreview));
