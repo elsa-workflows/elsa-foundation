@@ -39,7 +39,7 @@ public sealed class BpmnEscalationValidationTests
     [Fact]
     public void ValidEscalationGraph_BuildsCleanly()
     {
-        var graph = BpmnGraph.From(NewNode(MinimalElements(), MinimalFlows, ["node-sub"]));
+        var graph = BpmnGraphAdapter.Build(NewNode(MinimalElements(), MinimalFlows, ["node-sub"]));
 
         var boundary = Assert.Single(graph.AttachedEscalationBoundaries("sub"));
         Assert.Equal("b-esc", boundary.ElementId);
@@ -73,7 +73,7 @@ public sealed class BpmnEscalationValidationTests
         AssertRejects(
             MinimalElements(thrower: new BpmnElement("throw", BpmnElementTypes.IntermediateThrowEvent, childNodeId: "node-throw",
                 eventDefinitions: [new BpmnEventDefinition(BpmnEventDefinitionTypes.Escalation, new Dictionary<string, string> { [BpmnEventDefinitionProperties.Code] = "E1" })])),
-            "cannot bind a child",
+            "cannot bind work",
             children: ["node-sub", "node-throw"]);
 
     [Fact]
@@ -87,7 +87,7 @@ public sealed class BpmnEscalationValidationTests
                 BpmnRuntimeFixture.EndEvent("end"),
                 BpmnRuntimeFixture.EndEvent("bnd-end")
             ],
-            "only attach to a subprocess host",
+            "only attach to a subprocess or call activity host",
             flows:
             [
                 BpmnRuntimeFixture.Flow("flow-1", "start", "task-a"),
@@ -101,7 +101,7 @@ public sealed class BpmnEscalationValidationTests
             MinimalElements(boundary: new BpmnElement("b-esc", BpmnElementTypes.BoundaryEvent, childNodeId: "node-listener",
                 eventDefinitions: [new BpmnEventDefinition(BpmnEventDefinitionTypes.Escalation, new Dictionary<string, string> { [BpmnEventDefinitionProperties.Code] = "E1" })],
                 attachedToRef: "sub")),
-            "cannot bind a child activity",
+            "cannot bind work",
             children: ["node-sub", "node-listener"]);
 
     [Fact]
@@ -147,7 +147,7 @@ public sealed class BpmnEscalationValidationTests
     [Fact]
     public void EscalationBoundary_CodedPlusCatchAll_OnOneHost_BuildsCleanly()
     {
-        var graph = BpmnGraph.From(NewNode(
+        var graph = BpmnGraphAdapter.Build(NewNode(
             [
                 BpmnRuntimeFixture.StartEvent(),
                 BpmnRuntimeFixture.SubProcess("sub", childNodeId: "node-sub"),
@@ -171,8 +171,8 @@ public sealed class BpmnEscalationValidationTests
     private static void AssertRejects(IReadOnlyCollection<BpmnElement> elements, string expectedMessage, IReadOnlyCollection<string>? children = null, IReadOnlyCollection<BpmnSequenceFlow>? flows = null)
     {
         var node = NewNode(elements, flows ?? MinimalFlows, children ?? ["node-sub"]);
-        var exception = Assert.Throws<BpmnExecutionException>(() => BpmnGraph.From(node));
-        Assert.Contains(expectedMessage, exception.Message, StringComparison.Ordinal);
+        var exception = Assert.Throws<BpmnHostException>(() => BpmnGraphAdapter.Build(node));
+        Assert.True(exception.Message.Contains(expectedMessage, StringComparison.Ordinal), exception.ToString());
     }
 
     private static ExecutableNode NewNode(IReadOnlyCollection<BpmnElement> elements, IReadOnlyCollection<BpmnSequenceFlow> flows, IReadOnlyCollection<string> childNodeIds) =>

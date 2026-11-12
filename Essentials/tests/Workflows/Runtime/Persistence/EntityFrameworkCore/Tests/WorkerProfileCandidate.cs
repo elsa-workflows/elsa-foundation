@@ -27,7 +27,7 @@ internal sealed record WorkerProfileCandidate(
     public const string DefaultProfileId = "worker-http";
     public const string DefaultProfileVersion = "1";
     public const string ControlAudience = "worker-api-candidate";
-    private const string ExpectedCatalogDigest = "6563d77f116b7aefb2a67425f28b72cab736297d4e46df964bf9fb507cf91c3c";
+    private const string ExpectedCatalogDigest = "a4f4545f3d90da5deb27a0b7a6634ac4c8ad555e275239977193a4576135ecf0";
     private const string ExpectedProfileDigest = "e46f8092771171ad63b0ca81bf307f5ad7ad7a9ca4929dd311bfac6af3cf8fa1";
 
     private static readonly string[] s_workerFeatures =
@@ -186,7 +186,7 @@ internal sealed record WorkerProfileCandidate(
         var identity = ReadIdentity(authoredNode);
         var acceptedIdentity = ReadIdentity(acceptedNode);
         Assert.Equal("elsa-foundation", identity.CatalogId);
-        Assert.Equal("3", identity.CatalogVersion);
+        Assert.Equal("4", identity.CatalogVersion);
         Assert.Equal(ExpectedCatalogDigest, identity.CatalogDigest);
         Assert.Equal(DefaultProfileId, identity.ProfileId);
         Assert.Equal(DefaultProfileVersion, identity.ProfileVersion);

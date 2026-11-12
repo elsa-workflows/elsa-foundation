@@ -1,0 +1,180 @@
+{
+  "schemaVersion": 1,
+  "task": "T049 saved-start admission through ordinary dispatcher; final GC and activation remain open",
+  "sourceParentCommit": "913b7450fe670a83e75ddb34550edcb6e06adae1",
+  "filesSha256": {
+    "Essentials/src/Workflows/Runtime/Core/Contracts/IWorkflowStartDispatcher.cs": "53118253e45dd73614a23929832083823531e0fab4575eba12bb2eeb01573fce",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md": "b019359fb8664bf246832f88e3023151ddd4f5ec3d6cdc4f777bc21478a12eb7",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Extensions/RuntimeCoreServiceCollectionExtensions.cs": "4e6fa25194bef6b9cb4522be9846e1e2aaa411eb0ec7a625618536747405959f",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Executions/WorkflowStartDispatcher.cs": "079ad4d70c005393ce34f6bc1c37d281b0957ad44be82fedf599e0d2e1cdb7c9",
+    "specs/1006-bpmn-library-adoption/contracts/broadcast-recipient-snapshot.md": "2b726838b524e35bcf6cc0c3d11039b7109a80eba6069238a6003751384bd93e",
+    "specs/1006-bpmn-library-adoption/tasks.md": "e66ea61db3971ce214bffc6aa2602d1bfec039d60a44a974f553a749921b09d2",
+    "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/StimulusDeliveryStartDispatchTests.cs": "91f046f254829b5b6c7436326b4f01efda476857c593435a95c175c3dafc2d19",
+    "Essentials/src/Workflows/Runtime/Core/Contracts/IStimulusDeliveryStore.cs": "8fc230a99d85931dbafd25746537f63ca594ecade2dadf9e1ec3eea60874a18b",
+    "Essentials/src/Workflows/Runtime/Core/Models/StimulusDeliverySnapshot.cs": "0956689d7a3403b9d9c1cac72efbaa14bb734439026b8de1d1f0aeef95e07d77",
+    "Essentials/src/Workflows/Runtime/Core/Models/WorkflowExecutionStartDispatch.cs": "3595641101a2db9758651392d3ce061064afee825dfdb51743737841bb078e30",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Checkpoints/InMemoryRuntimeCheckpointCommitStore.cs": "a466b28459accfd49f0a04e2d057ef4f1b4977203475f4b6e478912da91a8e2c",
+    "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfRuntimePostCommitOutboxStore.cs": "7b7b091a8266ab92280196ae76ecfe62346d2c6784241db7f984fd9f12f497d3",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/WorkHandlers/WorkflowStartSchedulerWorkHandler.cs": "e5afc05c2fd43b570a8d96c63892095e0bc2a41658645bcb70f554a67e44bc58",
+    "Essentials/src/Workflows/Runtime/Core/PublicAPI.Unshipped.txt": "dddfdeac3f7f610f348b349821e8a8ba037597865b6309bdc0251e4079b4d585"
+  },
+  "checks": [
+    {
+      "project": "Workflow Runtime",
+      "passed": 2875,
+      "failed": 0,
+      "skipped": 0,
+      "newCases": 0
+    },
+    {
+      "project": "Runtime EF",
+      "passed": 1317,
+      "failed": 0,
+      "skipped": 0,
+      "newCases": 99
+    },
+    {
+      "focusedProviderAdmissionAndRelatedControls": 130,
+      "coreApiAdditions": 0,
+      "coreApiRemovals": 0,
+      "frozenAuthoringFingerprintSha256": "41aa0bb979ea46fc2533b057e3677f408ab54c3411fecfafaa238a2adae38c92",
+      "unchanged": true
+    }
+  ],
+  "discovery": {
+    "runtime": {
+      "listed": 2864,
+      "uniqueDisplayNames": 2860,
+      "executed": 2875,
+      "deferredTheories": {
+        "Elsa.Workflows.Runtime.Tests.CheckpointRuleViolationWorkflowFaulterTests.A_refused_commit_faults_the_execution_with_only_its_state_and_an_incident": 2,
+        "Elsa.Workflows.Runtime.Tests.CheckpointRuleViolationWorkflowFaulterTests.A_failure_that_is_not_a_rule_refusal_leaves_the_execution_running": 4,
+        "Elsa.Workflows.Runtime.Tests.ValueEnvelopeEncryptionPredicateTests.Only_a_present_value_under_a_policy_that_requires_encryption_matches": 8
+      },
+      "unmapped": []
+    },
+    "ef": {
+      "listed": 1317,
+      "uniqueDisplayNames": 1315,
+      "executed": 1317,
+      "deferredTheories": {},
+      "unmapped": []
+    }
+  },
+  "mutations": [
+    {
+      "name": "trust-unmarked-cohort",
+      "exitCode": 1,
+      "summary": "Failed!  - Failed:     2, Passed:     0, Skipped:     0, Total:     2, Duration: 623 ms - Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.dll (net10.0)",
+      "compileError": false
+    },
+    {
+      "name": "ignore-original-start-key",
+      "exitCode": 1,
+      "summary": "Failed!  - Failed:     4, Passed:    24, Skipped:     0, Total:    28, Duration: 1 s - Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.dll (net10.0)",
+      "compileError": false
+    },
+    {
+      "name": "ignore-saved-trigger-node-and-metadata",
+      "exitCode": 1,
+      "summary": "Failed!  - Failed:     4, Passed:    24, Skipped:     0, Total:    28, Duration: 1 s - Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.dll (net10.0)",
+      "compileError": false
+    },
+    {
+      "name": "allow-root-context-overrides",
+      "exitCode": 1,
+      "summary": "Failed!  - Failed:    10, Passed:    18, Skipped:     0, Total:    28, Duration: 1 s - Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.dll (net10.0)",
+      "compileError": false
+    },
+    {
+      "name": "ignore-existing-complete-pin",
+      "exitCode": 1,
+      "summary": "Failed!  - Failed:     8, Passed:     0, Skipped:     0, Total:     8, Duration: 825 ms - Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.dll (net10.0)",
+      "compileError": false
+    },
+    {
+      "name": "adopt-foreign-existing-root",
+      "exitCode": 1,
+      "summary": "Failed!  - Failed:    15, Passed:     0, Skipped:     0, Total:    15, Duration: 887 ms - Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.dll (net10.0)",
+      "compileError": false
+    },
+    {
+      "name": "ignore-new-material-full-pin",
+      "exitCode": 1,
+      "summary": "Failed!  - Failed:     8, Passed:     0, Skipped:     0, Total:     8, Duration: 817 ms - Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.dll (net10.0)",
+      "compileError": false
+    },
+    {
+      "name": "discard-captured-publication",
+      "exitCode": 1,
+      "summary": "Failed!  - Failed:     2, Passed:     0, Skipped:     0, Total:     2, Duration: 712 ms - Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.dll (net10.0)",
+      "compileError": false
+    },
+    {
+      "name": "bypass-ordinary-start-policy",
+      "exitCode": 1,
+      "summary": "Failed!  - Failed:     2, Passed:     0, Skipped:     0, Total:     2, Duration: 727 ms - Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.dll (net10.0)",
+      "compileError": false
+    },
+    {
+      "name": "skip-post-policy-source-recheck",
+      "exitCode": 1,
+      "summary": "Failed!  - Failed:     2, Passed:     2, Skipped:     0, Total:     4, Duration: 756 ms - Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.dll (net10.0)",
+      "compileError": false
+    },
+    {
+      "name": "skip-post-actor-source-recheck",
+      "exitCode": 1,
+      "summary": "Failed!  - Failed:     2, Passed:     2, Skipped:     0, Total:     4, Duration: 870 ms - Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.dll (net10.0)",
+      "compileError": false
+    },
+    {
+      "name": "skip-post-duplicate-source-recheck",
+      "exitCode": 1,
+      "summary": "Failed!  - Failed:     2, Passed:     0, Skipped:     0, Total:     2, Duration: 832 ms - Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.dll (net10.0)",
+      "compileError": false
+    },
+    {
+      "name": "permit-lossy-saved-command",
+      "exitCode": 1,
+      "summary": "Failed!  - Failed:     2, Passed:     0, Skipped:     0, Total:     2, Duration: 833 ms - Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.dll (net10.0)",
+      "compileError": false
+    },
+    {
+      "name": "replace-actual-duplicate-provenance",
+      "exitCode": 1,
+      "summary": "Failed!  - Failed:     2, Passed:     0, Skipped:     0, Total:     2, Duration: 904 ms - Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.dll (net10.0)",
+      "compileError": false
+    }
+  ],
+  "reviewFixes": [
+    "Recheck current source after awaited actor lookup immediately before enqueue.",
+    "Existing duplicates must match exact root scope/authority and the complete accepted pin while preserving actual winning source attribution.",
+    "Document saved retired-publication selection and source/claim failure/cancellation contracts on the public interface and catalog.",
+    "Refuse malformed UTF-16 whose ordinary command round trip loses exact saved metadata/provenance; leave ordinary wire unchanged."
+  ],
+  "reviews": {
+    "correctness": "final source and receipt clean",
+    "standards": "final source/API/catalog and receipt clean",
+    "acceptance": "final source/control scope and receipt clean",
+    "fullPrRounds": 0
+  },
+  "limits": [
+    "Actual native/EF cohort source admission into a recording actor only; no actual host/fresh durable mailbox/process recovery or Studio claim.",
+    "Queued-handler control consumes the actual admitted command after actual source ACK and publisher deletion, using the production handler with an in-memory queue. It is not a complete upgraded-host execution.",
+    "The saved authority grants publication selection only. T050 must derive stimulus input from the persisted intent in its owning adapter and validate exact bookmarks atomically.",
+    "T049 final GC composition, T050 activation/schema dormancy, T051 host recovery, T045/other stories, duplicate-semantics deletion/guards, final current host/Studio, full PR checks/resulting-main and ADR0063 remain open."
+  ],
+  "knownCiMergeBlockers": {
+    "head": "913b7450fe670a83e75ddb34550edcb6e06adae1",
+    "run": 40369434902,
+    "failures": [
+      "Core implementation-shape guard: RuntimeChildControlContext",
+      "DispatchWorkflow behavioral output/outcome drives",
+      "Cluster readability expected outbox family versions",
+      "Runtime export/import probe leaves waited parent suspended"
+    ],
+    "status": "Each failed its configured CI retry; no bypass or false green claim. Fix next on this existing PR.",
+    "advisorySecretScan": "GitGuardian incident38996611 flags a public source SHA256 in older control-transport receipt; unresolved, no bypass."
+  }
+}

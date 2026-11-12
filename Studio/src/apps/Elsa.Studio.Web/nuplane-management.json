@@ -18,30 +18,14 @@
       ]
     },
     "Loading": {
-      "Enabled": true,
-      "SharedAssemblies": [
-        {
-          "Name": "CShells.Abstractions",
-          "PublicKeyToken": null,
-          "MajorVersion": 0
-        },
-        {
-          "Name": "CShells.AspNetCore.Abstractions",
-          "PublicKeyToken": null,
-          "MajorVersion": 0
-        },
-        {
-          "Name": "Elsa.Studio.Core",
-          "PublicKeyToken": null,
-          "MajorVersion": 0
-        }
-      ]
-    },
-    "CleanupPolicy": {
-      "RetainLastNVersions": 3,
-      "RetainYoungerThanDays": 30,
-      "Mode": "Automatic",
-      "ProtectLastKnownGood": true
+      "Enabled": true
+    }
+  },
+  "Studio": {
+    "PackageManagement": {
+      "RetentionPolicy": {
+        "KeepNewestInactiveVersionsPerPackage": null
+      }
     }
   }
 }

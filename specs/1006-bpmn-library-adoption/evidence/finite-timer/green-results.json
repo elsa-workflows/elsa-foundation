@@ -1,0 +1,453 @@
+{
+  "originalTrxSha256": "76ec878b169de8343e1446eb91654341a3ec37122a52e75413b58f59183d01c5",
+  "counters": {
+    "total": "71",
+    "executed": "71",
+    "passed": "71",
+    "failed": "0",
+    "error": "0",
+    "timeout": "0",
+    "aborted": "0",
+    "inconclusive": "0",
+    "passedButRunAborted": "0",
+    "notRunnable": "0",
+    "notExecuted": "0",
+    "disconnected": "0",
+    "warning": "0",
+    "completed": "0",
+    "inProgress": "0",
+    "pending": "0"
+  },
+  "results": [
+    {
+      "testName": "Elsa.Tasks.Tests.BackoffSweepWorkerTaskTests.ComputeBackoff_CoversClampBranches(baseSeconds: 0, maxSeconds: 60, failures: 1, expectedSeconds: 60)",
+      "outcome": "Passed",
+      "duration": "00:00:00.0047045",
+      "error": null
+    },
+    {
+      "testName": "Elsa.Tasks.Tests.BackoffSweepWorkerTaskTests.ComputeBackoff_CoversClampBranches(baseSeconds: 1, maxSeconds: 60, failures: 3, expectedSeconds: 4)",
+      "outcome": "Passed",
+      "duration": "00:00:00.0001321",
+      "error": null
+    },
+    {
+      "testName": "Elsa.Tasks.Tests.BackoffSweepWorkerTaskTests.ComputeBackoff_CoversClampBranches(baseSeconds: 1, maxSeconds: 60, failures: 40, expectedSeconds: 60)",
+      "outcome": "Passed",
+      "duration": "00:00:00.0000017",
+      "error": null
+    },
+    {
+      "testName": "Elsa.Tasks.Tests.BackoffSweepWorkerTaskTests.ComputeBackoff_CoversClampBranches(baseSeconds: 120, maxSeconds: 60, failures: 1, expectedSeconds: 60)",
+      "outcome": "Passed",
+      "duration": "00:00:00.0000009",
+      "error": null
+    },
+    {
+      "testName": "Elsa.Tasks.Tests.BackoffSweepWorkerTaskTests.Constructor_WhenLoggerIsNull_Throws",
+      "outcome": "Passed",
+      "duration": "00:00:00.0001005",
+      "error": null
+    },
+    {
+      "testName": "Elsa.Tasks.Tests.BackoffSweepWorkerTaskTests.ExecuteAsync_Cancellation_RethrowsByDefault",
+      "outcome": "Passed",
+      "duration": "00:00:00.0006721",
+      "error": null
+    },
+    {
+      "testName": "Elsa.Tasks.Tests.BackoffSweepWorkerTaskTests.ExecuteAsync_ForeignCancellation_FeedsBackoffWhenNarrowed",
+      "outcome": "Passed",
+      "duration": "00:00:00.0004432",
+      "error": null
+    },
+    {
+      "testName": "Elsa.Tasks.Tests.BackoffSweepWorkerTaskTests.ExecuteAsync_HandledFailure_WidensThenCleanSweepResets",
+      "outcome": "Passed",
+      "duration": "00:00:00.0020868",
+      "error": null
+    },
+    {
+      "testName": "Elsa.Tasks.Tests.BackoffSweepWorkerTaskTests.ExecuteAsync_UnhandledException_Escapes",
+      "outcome": "Passed",
+      "duration": "00:00:00.0003078",
+      "error": null
+    },
+    {
+      "testName": "Elsa.Tasks.Tests.BackoffSweepWorkerTaskTests.GetSchedule_WaitsTheWidenedSweepIntervalAfterFailures",
+      "outcome": "Passed",
+      "duration": "00:00:00.0008248",
+      "error": null
+    },
+    {
+      "testName": "Elsa.Tasks.Tests.StartupTaskOrderingTests.Startup_tasks_run_after_the_tasks_they_depend_on",
+      "outcome": "Passed",
+      "duration": "00:00:00.0014976",
+      "error": null
+    },
+    {
+      "testName": "Elsa.Tasks.Tests.StartupTaskTelemetryTests.CancelledTask_EmitsCancelledActivityAndDuration_AndPropagatesCancellation",
+      "outcome": "Passed",
+      "duration": "00:00:00.0005823",
+      "error": null
+    },
+    {
+      "testName": "Elsa.Tasks.Tests.StartupTaskTelemetryTests.DormantTask_EmitsSkippedActivityAndDuration",
+      "outcome": "Passed",
+      "duration": "00:00:00.0036361",
+      "error": null
+    },
+    {
+      "testName": "Elsa.Tasks.Tests.StartupTaskTelemetryTests.FailedTask_EmitsFailedActivityAndDuration_AndPropagatesFailure",
+      "outcome": "Passed",
+      "duration": "00:00:00.0004967",
+      "error": null
+    },
+    {
+      "testName": "Elsa.Tasks.Tests.StartupTaskTelemetryTests.SingleNodeTaskCancelledByTheShell_EmitsCancelledActivityAndDuration_EvenWhenItsLockCanBeLost",
+      "outcome": "Passed",
+      "duration": "00:00:00.0007098",
+      "error": null
+    },
+    {
+      "testName": "Elsa.Tasks.Tests.StartupTaskTelemetryTests.SingleNodeTaskThatLosesItsLock_EmitsFailedActivityAndDuration_NotCancelled",
+      "outcome": "Passed",
+      "duration": "00:00:00.0004419",
+      "error": null
+    },
+    {
+      "testName": "Elsa.Tasks.Tests.StartupTaskTelemetryTests.SingleNodeTaskWhoseLockWaitRunsOut_EmitsFailedActivityAndDuration_AndPropagatesTheTimeout",
+      "outcome": "Passed",
+      "duration": "00:00:00.0004450",
+      "error": null
+    },
+    {
+      "testName": "Elsa.Tasks.Tests.StartupTaskTelemetryTests.StaticInstrumentPublicationFailureDoesNotFailSuccessfulTask",
+      "outcome": "Passed",
+      "duration": "00:00:00.0002633",
+      "error": null
+    },
+    {
+      "testName": "Elsa.Tasks.Tests.StartupTaskTelemetryTests.SuccessfulTask_EmitsBoundedSuccessActivityAndDuration",
+      "outcome": "Passed",
+      "duration": "00:00:00.0002785",
+      "error": null
+    },
+    {
+      "testName": "Elsa.Tasks.Tests.StartupTaskTelemetryTests.ThrowingTelemetryListenerDoesNotFailSuccessfulTask",
+      "outcome": "Passed",
+      "duration": "00:00:00.0003995",
+      "error": null
+    },
+    {
+      "testName": "Elsa.Tasks.Tests.TaskExecutorSingleNodeTests.A_background_start_waits_and_then_runs",
+      "outcome": "Passed",
+      "duration": "00:00:00.0007090",
+      "error": null
+    },
+    {
+      "testName": "Elsa.Tasks.Tests.TaskExecutorSingleNodeTests.A_background_task_skipped_once_and_later_started_is_stopped",
+      "outcome": "Passed",
+      "duration": "00:00:00.0009044",
+      "error": null
+    },
+    {
+      "testName": "Elsa.Tasks.Tests.TaskExecutorSingleNodeTests.A_background_task_that_started_is_stopped_even_when_the_node_has_since_gone_dormant",
+      "outcome": "Passed",
+      "duration": "00:00:00.0017674",
+      "error": null
+    },
+    {
+      "testName": "Elsa.Tasks.Tests.TaskExecutorSingleNodeTests.A_background_task_whose_start_was_skipped_for_dormancy_is_not_stopped",
+      "outcome": "Passed",
+      "duration": "00:00:00.0001477",
+      "error": null
+    },
+    {
+      "testName": "Elsa.Tasks.Tests.TaskExecutorSingleNodeTests.A_declared_requirement_is_never_met_without_a_dormancy_check",
+      "outcome": "Passed",
+      "duration": "00:00:00.0002919",
+      "error": null
+    },
+    {
+      "testName": "Elsa.Tasks.Tests.TaskExecutorSingleNodeTests.A_dormant_node_skips_the_task_without_touching_the_lock",
+      "outcome": "Passed",
+      "duration": "00:00:00.0002865",
+      "error": null
+    },
+    {
+      "testName": "Elsa.Tasks.Tests.TaskExecutorSingleNodeTests.A_release_that_fails_after_the_lock_was_lost_does_not_replace_the_lost_lock_failure",
+      "outcome": "Passed",
+      "duration": "00:00:00.0004630",
+      "error": null
+    },
+    {
+      "testName": "Elsa.Tasks.Tests.TaskExecutorSingleNodeTests.A_release_that_fails_after_the_task_completed_does_not_fail_it",
+      "outcome": "Passed",
+      "duration": "00:00:00.0002936",
+      "error": null
+    },
+    {
+      "testName": "Elsa.Tasks.Tests.TaskExecutorSingleNodeTests.A_task_that_finishes_after_losing_its_lock_is_not_failed",
+      "outcome": "Passed",
+      "duration": "00:00:00.0008672",
+      "error": null
+    },
+    {
+      "testName": "Elsa.Tasks.Tests.TaskExecutorSingleNodeTests.A_task_without_the_attribute_runs_without_touching_the_lock",
+      "outcome": "Passed",
+      "duration": "00:00:00.0002922",
+      "error": null
+    },
+    {
+      "testName": "Elsa.Tasks.Tests.TaskExecutorSingleNodeTests.Cancelling_the_shell_while_the_lock_is_held_stays_a_cancellation",
+      "outcome": "Passed",
+      "duration": "00:00:00.0096878",
+      "error": null
+    },
+    {
+      "testName": "Elsa.Tasks.Tests.TaskExecutorSingleNodeTests.Dormancy_is_asked_before_the_lock_is_taken",
+      "outcome": "Passed",
+      "duration": "00:00:00.0003949",
+      "error": null
+    },
+    {
+      "testName": "Elsa.Tasks.Tests.TaskExecutorSingleNodeTests.Fails_naming_the_lock_when_the_bounded_wait_runs_out",
+      "outcome": "Passed",
+      "duration": "00:00:00.0002512",
+      "error": null
+    },
+    {
+      "testName": "Elsa.Tasks.Tests.TaskExecutorSingleNodeTests.Losing_the_lock_cancels_the_task_and_fails_it_rather_than_reporting_a_cancellation",
+      "outcome": "Passed",
+      "duration": "00:00:00.0004653",
+      "error": null
+    },
+    {
+      "testName": "Elsa.Tasks.Tests.TaskExecutorSingleNodeTests.Propagates_a_lock_provider_failure_rather_than_swallowing_it",
+      "outcome": "Passed",
+      "duration": "00:00:00.0005410",
+      "error": null
+    },
+    {
+      "testName": "Elsa.Tasks.Tests.TaskExecutorSingleNodeTests.Runs_at_once_and_releases_the_lock_when_it_is_free",
+      "outcome": "Passed",
+      "duration": "00:00:00.0016521",
+      "error": null
+    },
+    {
+      "testName": "Elsa.Tasks.Tests.TaskExecutorSingleNodeTests.The_key_is_the_shells_so_another_shell_of_the_process_does_not_wait",
+      "outcome": "Passed",
+      "duration": "00:00:00.0001684",
+      "error": null
+    },
+    {
+      "testName": "Elsa.Tasks.Tests.TaskExecutorSingleNodeTests.Waits_for_another_holder_and_then_runs_instead_of_skipping",
+      "outcome": "Passed",
+      "duration": "00:00:00.0041068",
+      "error": null
+    },
+    {
+      "testName": "Elsa.Tasks.Tests.TaskManagerConcurrencyTests.GetOrInitializeTaskStateManager_ConcurrentFirstCallers_AllObserveTheSameInstance",
+      "outcome": "Passed",
+      "duration": "00:00:02.8250935",
+      "error": null
+    },
+    {
+      "testName": "Elsa.Tasks.Tests.TaskManagerLifetimeTests.Activation_cancellation_does_not_stop_shell_tasks_and_a_cancelled_stop_waiter_does_not_abandon_stop",
+      "outcome": "Passed",
+      "duration": "00:00:00.0075276",
+      "error": null
+    },
+    {
+      "testName": "Elsa.Tasks.Tests.TaskManagerLifetimeTests.Caller_cancellation_during_startup_prevents_background_and_recurring_tasks_from_starting",
+      "outcome": "Passed",
+      "duration": "00:00:00.0019566",
+      "error": null
+    },
+    {
+      "testName": "Elsa.Tasks.Tests.TaskManagerLifetimeTests.Concurrent_stop_cancels_startup_and_unblocks_the_start_call(failCancellationCallback: False)",
+      "outcome": "Passed",
+      "duration": "00:00:01.7964126",
+      "error": null
+    },
+    {
+      "testName": "Elsa.Tasks.Tests.TaskManagerLifetimeTests.Concurrent_stop_cancels_startup_and_unblocks_the_start_call(failCancellationCallback: True)",
+      "outcome": "Passed",
+      "duration": "00:00:00.0237274",
+      "error": null
+    },
+    {
+      "testName": "Elsa.Tasks.Tests.TaskManagerLifetimeTests.Failed_or_cancelled_background_start_does_not_execute_the_task(cancelStart: False)",
+      "outcome": "Passed",
+      "duration": "00:00:00.0011270",
+      "error": null
+    },
+    {
+      "testName": "Elsa.Tasks.Tests.TaskManagerLifetimeTests.Failed_or_cancelled_background_start_does_not_execute_the_task(cancelStart: True)",
+      "outcome": "Passed",
+      "duration": "00:00:00.0004036",
+      "error": null
+    },
+    {
+      "testName": "Elsa.Tasks.Tests.TaskManagerLifetimeTests.Faulted_background_execution_does_not_skip_lifetime_cancellation_or_recurring_cleanup",
+      "outcome": "Passed",
+      "duration": "00:00:01.0033003",
+      "error": null
+    },
+    {
+      "testName": "Elsa.Tasks.Tests.TaskScheduleTests.A_configured_infinite_wait_does_not_run_when_the_clock_advances",
+      "outcome": "Passed",
+      "duration": "00:00:00.2021573",
+      "error": null
+    },
+    {
+      "testName": "Elsa.Tasks.Tests.TaskScheduleTests.A_failure_to_schedule_the_next_run_is_logged",
+      "outcome": "Passed",
+      "duration": "00:00:00.0089084",
+      "error": null
+    },
+    {
+      "testName": "Elsa.Tasks.Tests.TaskScheduleTests.A_finite_tick_exactly_one_millisecond_late_runs_and_schedules_its_next_run",
+      "outcome": "Passed",
+      "duration": "00:00:00.2031944",
+      "error": null
+    },
+    {
+      "testName": "Elsa.Tasks.Tests.TaskScheduleTests.A_wait_longer_than_a_timer_can_hold_is_armed_in_parts",
+      "outcome": "Passed",
+      "duration": "00:00:00.0051396",
+      "error": null
+    },
+    {
+      "testName": "Elsa.Tasks.Tests.TaskScheduleTests.A_wait_that_never_ends_never_arms",
+      "outcome": "Passed",
+      "duration": "00:00:00.0000463",
+      "error": null
+    },
+    {
+      "testName": "Elsa.Tasks.Tests.TaskScheduleTests.A_wait_with_no_time_left_runs_now(remainingTicks: -1)",
+      "outcome": "Passed",
+      "duration": "00:00:00.0002653",
+      "error": null
+    },
+    {
+      "testName": "Elsa.Tasks.Tests.TaskScheduleTests.A_wait_with_no_time_left_runs_now(remainingTicks: 0)",
+      "outcome": "Passed",
+      "duration": "00:00:00.0003307",
+      "error": null
+    },
+    {
+      "testName": "Elsa.Tasks.Tests.TaskScheduleTests.A_wait_with_time_left_never_runs_early(remainingTicks: 1)",
+      "outcome": "Passed",
+      "duration": "00:00:00.0002976",
+      "error": null
+    },
+    {
+      "testName": "Elsa.Tasks.Tests.TaskScheduleTests.A_wait_with_time_left_never_runs_early(remainingTicks: 10000)",
+      "outcome": "Passed",
+      "duration": "00:00:00.0000027",
+      "error": null
+    },
+    {
+      "testName": "Elsa.Tasks.Tests.TaskScheduleTests.A_wait_with_time_left_never_runs_early(remainingTicks: 9504000000000)",
+      "outcome": "Passed",
+      "duration": "00:00:00.0001096",
+      "error": null
+    },
+    {
+      "testName": "Elsa.Tasks.Tests.TaskScheduleTests.Cron_refuses_an_expression_that_is_not_five_field_cron(expression: \"0 * * * * *\")",
+      "outcome": "Passed",
+      "duration": "00:00:00.0002955",
+      "error": null
+    },
+    {
+      "testName": "Elsa.Tasks.Tests.TaskScheduleTests.Cron_refuses_an_expression_that_is_not_five_field_cron(expression: \"every minute\")",
+      "outcome": "Passed",
+      "duration": "00:00:00.0031603",
+      "error": null
+    },
+    {
+      "testName": "Elsa.Tasks.Tests.TaskScheduleTests.Cron_refuses_an_expression_that_never_occurs",
+      "outcome": "Passed",
+      "duration": "00:00:00.0027160",
+      "error": null
+    },
+    {
+      "testName": "Elsa.Tasks.Tests.TaskScheduleTests.Cron_schedules_a_yearly_expression",
+      "outcome": "Passed",
+      "duration": "00:00:00.0006202",
+      "error": null
+    },
+    {
+      "testName": "Elsa.Tasks.Tests.TaskScheduleTests.Cron_waits_until_the_next_occurrence_after_the_clocks_now",
+      "outcome": "Passed",
+      "duration": "00:00:00.0002944",
+      "error": null
+    },
+    {
+      "testName": "Elsa.Tasks.Tests.TaskScheduleTests.Cron_with_no_further_occurrence_stops_scheduling_and_says_so",
+      "outcome": "Passed",
+      "duration": "00:00:00.0023419",
+      "error": null
+    },
+    {
+      "testName": "Elsa.Tasks.Tests.TaskScheduleTests.Early_finite_callbacks_keep_waiting_until_the_original_deadline",
+      "outcome": "Passed",
+      "duration": "00:00:02.8009131",
+      "error": null
+    },
+    {
+      "testName": "Elsa.Tasks.Tests.TaskScheduleTests.Every_accepts_an_interval_of_one_millisecond",
+      "outcome": "Passed",
+      "duration": "00:00:00.0001827",
+      "error": null
+    },
+    {
+      "testName": "Elsa.Tasks.Tests.TaskScheduleTests.Every_refuses_an_interval_shorter_than_a_millisecond(ticks: -10000000)",
+      "outcome": "Passed",
+      "duration": "00:00:00.0000593",
+      "error": null
+    },
+    {
+      "testName": "Elsa.Tasks.Tests.TaskScheduleTests.Every_refuses_an_interval_shorter_than_a_millisecond(ticks: 0)",
+      "outcome": "Passed",
+      "duration": "00:00:00.0000068",
+      "error": null
+    },
+    {
+      "testName": "Elsa.Tasks.Tests.TaskScheduleTests.Every_refuses_an_interval_shorter_than_a_millisecond(ticks: 1)",
+      "outcome": "Passed",
+      "duration": "00:00:00.0006573",
+      "error": null
+    },
+    {
+      "testName": "Elsa.Tasks.Tests.TaskScheduleTests.Every_refuses_an_interval_shorter_than_a_millisecond(ticks: 9990)",
+      "outcome": "Passed",
+      "duration": "00:00:00.0000050",
+      "error": null
+    },
+    {
+      "testName": "Elsa.Tasks.Tests.TaskScheduleTests.Every_schedules_an_interval_longer_than_a_timer_can_hold",
+      "outcome": "Passed",
+      "duration": "00:00:00.0002108",
+      "error": null
+    },
+    {
+      "testName": "Elsa.Tasks.Tests.TaskScheduleTests.Every_waits_the_interval_before_each_run",
+      "outcome": "Passed",
+      "duration": "00:00:00.0002672",
+      "error": null
+    },
+    {
+      "testName": "Elsa.Tasks.Tests.TasksFeatureRegistrationTests.TasksFeature_RegistersShellLifecycleThatStartsAndStopsTasks",
+      "outcome": "Passed",
+      "duration": "00:00:00.0098808",
+      "error": null
+    }
+  ],
+  "productionSourceSha256": "912696fb5307e74d894773c4b841c72ab4f24ab8546acc3be34e96b2fc0daca8",
+  "sameTestSourceSha256": "79ef549b37794ef95a26bb56bd0a616d0ac95d06c3080831df0d873b31acd9a8",
+  "monotonicClockSeamPresentInBoth": true,
+  "actualSystemThreadingTimer": true
+}

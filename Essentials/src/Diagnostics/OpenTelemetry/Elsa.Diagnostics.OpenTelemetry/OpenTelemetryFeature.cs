@@ -1,3 +1,6 @@
+using Elsa.Api.Capabilities;
+using Elsa.Api.Capabilities.Extensions;
+using Elsa.Api.Capabilities.Models;
 using CShells.AspNetCore.Features;
 using CShells.Features;
 using Elsa.Api.AspNetCore;
@@ -27,7 +30,8 @@ namespace Elsa.Diagnostics.OpenTelemetry;
 [ShellFeature(
     name: "DiagnosticsOpenTelemetry",
     DisplayName = "Diagnostics: OpenTelemetry",
-    Description = "Collects OpenTelemetry traces, metrics, and logs over OTLP/HTTP and exposes them for querying and live streaming."
+    Description = "Collects OpenTelemetry traces, metrics, and logs over OTLP/HTTP and exposes them for querying and live streaming.",
+    DependsOn = new object[] { typeof(ApiCapabilitiesFeature) }
 )]
 public class OpenTelemetryFeature : IWebShellFeature
 {
@@ -70,6 +74,10 @@ public class OpenTelemetryFeature : IWebShellFeature
     public virtual void ConfigureServices(IServiceCollection services)
     {
         services.AddElsaEndpoints();
+        services.AddApiCapability(new ApiCapabilityDeclaration(
+            "elsa.api.open-telemetry", 1,
+            [new("telemetry-resources", "diagnostics/opentelemetry/resources/search")],
+            "DiagnosticsOpenTelemetry"));
         services.AddOpenTelemetryDiagnosticsServices(ConfigureOptions);
         services.AddPermissionContributor<OpenTelemetryPermissionContributor>();
 

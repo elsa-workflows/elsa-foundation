@@ -11,6 +11,9 @@ using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using BpmnProcessActivity = Elsa.Activities.Bpmn.Activities.BpmnProcess;
 
+using BpmnCompensableStatus = global::Bpmn.Model.State.BpmnCompensableStatus;
+using BpmnExecutionState = global::Bpmn.Model.State.BpmnExecutionState;
+
 namespace Elsa.Activities.Bpmn.Tests;
 
 /// <summary>

@@ -1,0 +1,19 @@
+{
+  "preIncrementSourceRevision": "e4302d77d26d28d5173f7f6b083cde4ba157841e",
+  "testSourceSha256": "27ed0e1a1840ad95b5ee509feac0ac5012ccc1e9df37210888592d0be43f4261",
+  "fixture": "legacy/queued-loser.sqlite.gz",
+  "fixtureSha256": "ce051448a84c5263f78a477724cff7e985aa619bea2c85442cb470bdd528fda5",
+  "originalQueuedWorkItemId": "4cd41ccc9fa61357:parent:legacy-activity-0:child:legacy-activity-2",
+  "runtimeEfTests": {
+    "passed": 1016,
+    "failed": 0,
+    "skipped": 0
+  },
+  "omittedReplaySweepMutation": "red: exact callback remains queued before final resume",
+  "processedGuardMutation": "red during first frozen recovery, before duplicate replay",
+  "limits": [
+    "Not outbox acknowledgement-loss proof",
+    "Not real late-child-fault proof",
+    "Not live binary rollback qualification"
+  ]
+}

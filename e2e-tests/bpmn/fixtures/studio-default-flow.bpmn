@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:elsa="https://elsa-workflows.io/schemas/bpmn" id="studio-default-flow" targetNamespace="urn:elsa:bpmn-adoption">
+  <process id="qualification" name="Released BPMN default-flow qualification" isExecutable="true">
+    <startEvent id="start" name="Start"/>
+    <exclusiveGateway id="route" name="Choose route" default="default-flow"/>
+    <intermediateCatchEvent id="wait" name="Default timer">
+      <timerEventDefinition><timeDuration>PT1S</timeDuration></timerEventDefinition>
+    </intermediateCatchEvent>
+    <endEvent id="end" name="Default complete"/>
+    <endEvent id="other-end" name="Other complete"/>
+    <sequenceFlow id="begin" sourceRef="start" targetRef="route"/>
+    <sequenceFlow id="default-flow" sourceRef="route" targetRef="wait"/>
+    <sequenceFlow id="other-flow" sourceRef="route" targetRef="other-end" elsa:conditionOutcome="Other"/>
+    <sequenceFlow id="finish" sourceRef="wait" targetRef="end"/>
+  </process>
+</definitions>

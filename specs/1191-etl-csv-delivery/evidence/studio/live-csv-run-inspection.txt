@@ -1,0 +1,40 @@
+Page text captured by the built-in browser's get_page_text from the owned Studio (127.0.0.1:5394)
+against the owned Workbench (127.0.0.1:5393), journey at eb418a835, after selecting the dirty run.
+Source element: <main>. Run list entries are omitted; the connector part of the inspection panel follows verbatim.
+
+Source records
+7
+Accepted records
+2
+Rejected records
+5
+Outstanding records
+0
+Outstanding bytes
+0
+Main output binding
+dirty-output
+Error output binding
+dirty-errors
+Diagnostic
+
+etl.rows-rejected
+
+Connector output progress
+Source type
+JSON Lines
+Main output type
+CSV file
+Error output type
+CSV file
+Main route bodies accepted
+2
+Error route bodies accepted
+5
+
+Partition progress
+Connector partition progress
+Partition	Source position	Claim	Fetch state	Owed output	Settled route bodies
+0	File range 1–5 (next 5)	Unclaimed	No fetch retry scheduled	None	Main: 1; errors: 3
+1	File range 5–8 (next 8)	Recorded claim expired
+2026-11-02T15:57:30.568635+00:00	No fetch retry scheduled	None	Main: 1; errors: 2

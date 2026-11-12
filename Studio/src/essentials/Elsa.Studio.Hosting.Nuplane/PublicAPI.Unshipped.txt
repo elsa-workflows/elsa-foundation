@@ -1,0 +1,10 @@
+#nullable enable
+Elsa.Studio.Hosting.Nuplane.StudioNuplaneOptions
+Elsa.Studio.Hosting.Nuplane.StudioNuplaneOptions.StudioNuplaneOptions() -> void
+Elsa.Studio.Hosting.Nuplane.StudioNuplaneOptions.ManagementFile.get -> string!
+Elsa.Studio.Hosting.Nuplane.StudioNuplaneOptions.ManagementFile.set -> void
+Elsa.Studio.Hosting.Nuplane.StudioNuplaneOptions.DirectoryFeedName.get -> string?
+Elsa.Studio.Hosting.Nuplane.StudioNuplaneOptions.DirectoryFeedName.set -> void
+Elsa.Studio.Hosting.Nuplane.NuplaneHostingExtensions
+static Elsa.Studio.Hosting.Nuplane.NuplaneHostingExtensions.AddElsaStudioNuplane(this Elsa.Studio.Hosting.StudioBuilder! studio, System.Action<Elsa.Studio.Hosting.Nuplane.StudioNuplaneOptions!>? configure = null, System.Action<Nuplane.Builder.NuplaneBuilder!>? configureNuplane = null) -> Elsa.Studio.Hosting.StudioBuilder!
+static Elsa.Studio.Hosting.Nuplane.NuplaneHostingExtensions.MapElsaStudioNuplane(this Microsoft.AspNetCore.Routing.IEndpointRouteBuilder! endpoints) -> Microsoft.AspNetCore.Routing.IEndpointRouteBuilder!

@@ -2,9 +2,9 @@ import React, { useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { ConnectionsPage } from "../../../Extensions/Connections/studio/Elsa.Studio.Connections/Client/src/ConnectionsPage";
-import { ThemeProvider } from "../../src/apps/Elsa.Studio.Web/Client/src/app/components/ThemeProvider";
-import { writeAppearancePreferences } from "../../src/apps/Elsa.Studio.Web/Client/src/app/themes/appearance";
-import "../../src/apps/Elsa.Studio.Web/Client/src/app/styles.css";
+import { ThemeProvider } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/components/ThemeProvider";
+import { writeAppearancePreferences } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/themes/appearance";
+import "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/styles.css";
 import "../../../Extensions/Connections/studio/Elsa.Studio.Connections/Client/src/styles.css";
 
 const fixtureQuery = new URLSearchParams(window.location.search);

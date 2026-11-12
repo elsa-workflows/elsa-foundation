@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable>
+    <Version>__VERSION__</Version><RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Elsa.Activities.Runtime.Core" Version="__VERSION__" />
+    <PackageReference Include="Microsoft.Agents.AI" Version="1.27.0" />
+  </ItemGroup>
+</Project>

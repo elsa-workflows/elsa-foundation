@@ -1,0 +1,136 @@
+{
+  "schemaVersion": 1,
+  "task": "T049 template reachability and ordinary GC dormancy; native template coordination remains open",
+  "sourceParentCommit": "334541128ff2c1670dc08098ccb1fa01affbca11",
+  "filesSha256": {
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md": "51076a2a29445e9c683263e0dcc0640fae93e376fd3da932cd5bd5e98c46b222",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Extensions/RuntimeCoreServiceCollectionExtensions.cs": "eb10cef37b06ccd60c489f815df2dc769b82674c44b79fb6e974906750700382",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Executables/WorkflowExecutableReferenceGarbageCollector.cs": "5c85259fb6b766d880f0f489a536425df6eab7d82aab538c6e168fef9fd0e576",
+    "Essentials/src/Workflows/Runtime/ReferenceGarbageCollection/WorkflowsRuntimeReferenceGarbageCollectionFeature.cs": "8d6d1f20d3651dd45da4cadedb3b9ca6dea4f69babcfc418add14aa08c2c194c",
+    "Essentials/tests/Workflows/Runtime/Tests/WorkflowExecutableReferenceGarbageCollectorTests.cs": "5dad3a0f8ed58c5de1042546e7950765018b179defbd414d72bd1caa58069a86",
+    "specs/1006-bpmn-library-adoption/tasks.md": "97709acf899064b5bae80d4ecbe2ace1094f8541516419823dedbe38f6ca2d23",
+    "Essentials/src/Workflows/Runtime/Core/Contracts/IWorkflowExecutableReferenceGarbageCollector.cs": "58cdb89acacdd3339718b7cbc2ed3362fb0913cf3d79bcb21e52f1b1bbf1f6fe",
+    "Essentials/src/Workflows/Runtime/Core/PublicAPI.Unshipped.txt": "090553bbd51de1c251546715db5b1be79e5f706bb7c412be604c1b718e16e78c"
+  },
+  "checks": [
+    {
+      "project": "Workflow Runtime",
+      "passed": 2895,
+      "failed": 0,
+      "skipped": 0,
+      "newCases": 20
+    },
+    {
+      "project": "Runtime EF",
+      "passed": 1317,
+      "failed": 0,
+      "skipped": 0,
+      "newCases": 0
+    }
+  ],
+  "focusedGcChecks": 41,
+  "discovery": {
+    "runtime": {
+      "listed": 2884,
+      "uniqueDisplayNames": 2880,
+      "executed": 2895,
+      "deferredTheories": {
+        "Elsa.Workflows.Runtime.Tests.CheckpointRuleViolationWorkflowFaulterTests.A_refused_commit_faults_the_execution_with_only_its_state_and_an_incident": 2,
+        "Elsa.Workflows.Runtime.Tests.CheckpointRuleViolationWorkflowFaulterTests.A_failure_that_is_not_a_rule_refusal_leaves_the_execution_running": 4,
+        "Elsa.Workflows.Runtime.Tests.ValueEnvelopeEncryptionPredicateTests.Only_a_present_value_under_a_policy_that_requires_encryption_matches": 8
+      },
+      "unmapped": []
+    },
+    "ef": {
+      "listed": 1317,
+      "uniqueDisplayNames": 1315,
+      "executed": 1317,
+      "deferredTheories": {},
+      "unmapped": []
+    }
+  },
+  "mutations": [
+    {
+      "mutation": "workflow-node-edges-removed",
+      "failed": 6,
+      "passed": 35,
+      "skipped": 0,
+      "restored": true
+    },
+    {
+      "mutation": "template-local-edges-removed",
+      "failed": 2,
+      "passed": 39,
+      "skipped": 0,
+      "restored": true
+    },
+    {
+      "mutation": "closed-template-edges-removed",
+      "failed": 9,
+      "passed": 32,
+      "skipped": 0,
+      "restored": true
+    },
+    {
+      "mutation": "direct-template-edges-removed",
+      "failed": 6,
+      "passed": 35,
+      "skipped": 0,
+      "restored": true
+    },
+    {
+      "mutation": "invalid-exact-dependency-ignored",
+      "failed": 4,
+      "passed": 37,
+      "skipped": 0,
+      "restored": true
+    },
+    {
+      "mutation": "inlined-absent-template-rejected",
+      "failed": 1,
+      "passed": 40,
+      "skipped": 0,
+      "restored": true
+    },
+    {
+      "mutation": "runtime-greedy-constructor-restored",
+      "failed": 1,
+      "passed": 40,
+      "skipped": 0,
+      "restored": true
+    },
+    {
+      "mutation": "pump-greedy-constructor-restored",
+      "failed": 1,
+      "passed": 40,
+      "skipped": 0,
+      "restored": true
+    }
+  ],
+  "coreApiAdditions": 0,
+  "coreApiRemovals": 0,
+  "frozenAuthoringFingerprintSha256": "41aa0bb979ea46fc2533b057e3677f408ab54c3411fecfafaa238a2adae38c92",
+  "unchanged": true,
+  "reviews": {
+    "correctness": "final source and receipt clean",
+    "standards": "final source/catalog and receipt clean",
+    "acceptance": "final source/control scope and receipt clean",
+    "fullPrRounds": 0
+  },
+  "limits": [
+    "Default DI controls exercise actual native memory composition in both registration orders, with real ordinary template/reference cleanup and SupportsStimulusDeliveryRetention=false. These are not EF template-lifecycle or host-recovery qualifications.",
+    "The explicit cohort constructor still conservatively retains templates because their native atomic material boundary is unfinished. Ordinary defaults deliberately use the original constructor while publication remains disabled.",
+    "Runtime and EF whole-project passes retain existing provider controls; they do not establish new native/EF atomic template coordination, T050 exact-bookmark/immutable-input activation or T051 host proof.",
+    "T049 qualified GC, other story/deletion/final host/Studio, full-PR review/checks/resulting-main and ADR0063 remain open. #2898/#2907 production acceptance and Orleans/task-runner deferrals are unchanged."
+  ],
+  "remoteParentChecks": {
+    "head": "334541128ff2c1670dc08098ccb1fa01affbca11",
+    "run": 40377823312,
+    "buildAndTest": "success",
+    "architecture": "success",
+    "generatedMaps": "success",
+    "fullTier": "not run: draft",
+    "gitGuardianIncident": "38996611 unresolved public source-digest finding; no bypass",
+    "boundary": "This verifies the preceding CI repair head, not the new source increment."
+  }
+}

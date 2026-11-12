@@ -1,4 +1,3 @@
-import "@xyflow/react/dist/style.css";
 import { ActivityIconsFixture } from "./activityIconsFixture";
 import { ActivityInputEvidenceFixture } from "./activityInputEvidenceFixture";
 import React, { lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -21,17 +20,22 @@ import { ActivityDefinitionDraftCodeView } from "../../src/essentials/Elsa.Studi
 import { ActivityDefinitionDiagnosticsPanel } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/ActivityDefinitionDiagnosticsPanel";
 import { ActivityDefinitionTestRunDialog } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/ActivityDefinitionTestRunDialog";
 import { WorkflowLazyBoundary } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/WorkflowLazyBoundary";
-import { TestRunStatus } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/editorPanels";
+import { WorkflowRuntimePanel } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/editorPanels";
 import { WorkflowEditorToolbar } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowEditorToolbar";
-import { builtInPropertyEditors } from "../../src/apps/Elsa.Studio.Web/Client/src/app/propertyEditors";
+import { builtInPropertyEditors } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/propertyEditors";
 import { Download, ListTree, Package, PackageOpen, Play, Sparkles, Upload } from "lucide-react";
 import { PanelTabList } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/PanelTabList";
 import { WorkflowDefinitions } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowDefinitions";
 import { useWorkflowDefinitionBrowseSession } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/workflowDefinitionBrowseSession";
 import { setDialogs } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/dialogs";
+import { setNotifications } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/notifications";
+import { createLocalNotificationStorage } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/notificationStorage";
+import { ToastHost } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/ui/feedback/ToastHost";
+import { NotificationCenter } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/ui/feedback/NotificationCenter";
 import { useRunDetailLayout } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/useRunDetailLayout";
 import {
   createEndpointContext,
+  createNotificationController,
   type StudioActivityDescriptor,
   type StudioAiContributionApi,
   type StudioEndpointContext,
@@ -72,10 +76,10 @@ import type {
   ActivityDefinitionDraftView,
   ActivityDefinitionVersionView
 } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/activityDefinitionTypes";
-import { getTheme, themeTokenNames } from "../../src/apps/Elsa.Studio.Web/Client/src/app/themes/presets";
-import { applyMaterialVariables } from "../../src/apps/Elsa.Studio.Web/Client/src/app/components/ThemeProvider";
-import "../../src/apps/Elsa.Studio.Web/Client/src/app/ui/tokens.css";
-import "../../src/apps/Elsa.Studio.Web/Client/src/app/ui/disclosure/disclosure.css";
+import { getTheme, themeTokenNames } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/themes/presets";
+import { applyMaterialVariables } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/components/ThemeProvider";
+import "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/ui/tokens.css";
+import "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/ui/disclosure/disclosure.css";
 import "../../src/essentials/Elsa.Studio.Workflows/Client/src/styles.css";
 import "../../../Extensions/Secrets/studio/Elsa.Studio.Secrets/Client/src/styles.css";
 import "../../../Extensions/Connections/studio/Elsa.Studio.Connections/Client/src/styles.css";
@@ -159,7 +163,6 @@ function WorkflowToolbarFixture() {
         onPublish={mode => selectAction(mode === "publish" ? "Publish" : "Review & publish")()}
         onRun={selectAction("Test Run")}
         canRun
-        runStatus={runStatus ? <TestRunStatus testRun={toolbarTestRun(runStatus)} stale={runStatus === "stale"} onOpenDetails={selectAction("Runtime details")} /> : null}
         runTitle="Run a transient test of the current design"
         moreActions={[
           { label: "Weaver", actions: [
@@ -174,9 +177,10 @@ function WorkflowToolbarFixture() {
           ] }
         ]}
       />
+      {runStatus ? <WorkflowRuntimePanel testRun={toolbarTestRun(runStatus)} onOpenRun={selectAction("Open run")} /> : null}
       <section className="browser-toolbar-controls" aria-label="Toolbar test controls">
         <label>Save status<select aria-label="Save status" value={status} onChange={event => setStatus(event.target.value)}>
-          {["", "Autosaving...", "Autosaved", "Saving before review...", "Published to an unusually long publication channel"].map(value => <option key={value} value={value}>{value || "Empty"}</option>)}
+          {["", "Autosaving...", "Autosaved", "Saving before review...", "Workflow organization updated", "Published to an unusually long publication channel"].map(value => <option key={value} value={value}>{value || "Empty"}</option>)}
         </select></label>
         <label>Test Run status<select aria-label="Test Run status" value={runStatus} onChange={event => setRunStatus(event.target.value)}>
           {["", "accepted", "rejected", "incidents", "runtime-issue", "stale"].map(value => <option key={value} value={value}>{value || "None"}</option>)}
@@ -931,6 +935,15 @@ function LazyBoundaryFixture() {
 
 function MoveDefinitionsFixture() {
   const [moved, setMoved] = useState(false);
+  // The host owns notifications at runtime; the fixture stands in for it with a localStorage-backed
+  // controller so results survive a page reload the way they do in the real shell.
+  const [notifications] = useState(() => {
+    const controller = createNotificationController({ storage: createLocalNotificationStorage() });
+    controller.setScope("fixture");
+    setNotifications(controller.api);
+    return controller;
+  });
+  const navigateFixture = useCallback((path: string) => window.history.pushState({}, "", path), []);
   const movedRef = useRef(false);
   const destinationRef = useRef<string | null | undefined>(undefined);
   const movedDefinitionIdRef = useRef<string | undefined>(undefined);
@@ -998,7 +1011,9 @@ function MoveDefinitionsFixture() {
 
   return <main className="wf-editor browser-fixture" data-moved={moved}>
     <h1>Workflow definitions</h1>
+    <NotificationCenter controller={notifications} navigate={navigateFixture} />
     <DirectWorkflowDefinitions context={context} ai={ai} />
+    <ToastHost controller={notifications} navigate={navigateFixture} />
   </main>;
 }
 
@@ -1732,7 +1747,7 @@ if (searchParams.get("mode") !== "activity-authoring" && !navPlacementFixture &&
   document.documentElement.dataset.theme = fixtureTheme;
   document.documentElement.dataset.themeLayout = "classic";
   document.documentElement.dataset.themeMode = darkVariant ? "dark" : "light";
-  if (darkVariant || classicVariant || searchParams.get("mode") === "connections" || activityIconsFixture || activityDuplicateFixture || activityDuplicateEditorFixture || activityInspectorTabsFixture || validationLabelsFixture) {
+  if (darkVariant || classicVariant || searchParams.get("mode") === "connections" || searchParams.get("mode") === "decision-inputs" || activityIconsFixture || activityDuplicateFixture || activityDuplicateEditorFixture || activityInspectorTabsFixture || validationLabelsFixture || publicationReviewFixture) {
     const palette = getTheme(fixtureTheme)![darkVariant ? "dark" : "light"];
     for (const token of themeTokenNames) {
       document.documentElement.style.setProperty(`--${token.replace(/([A-Z])/g, "-$1").toLowerCase()}`, palette[token]);
@@ -1759,6 +1774,8 @@ if (activityIconsFixture && searchParams.get("host-override") === "1") {
 const root = createRoot(document.getElementById("root")!);
 
 async function renderRequestedFixture() {
+  // Toast, bell and sheet styles live in the shared primitives sheet; load it only where they render.
+  if (moveDefinitionsFixture) await import("../../src/essentials/Elsa.Studio.Hosting/Client/src/app/ui/components.css");
   if (searchParams.get("mode") === "intrinsic-labels") {
     const { IntrinsicLabelsFixture } = await import("./intrinsicLabelsFixture");
     root.render(<IntrinsicLabelsFixture />);
@@ -1769,9 +1786,20 @@ async function renderRequestedFixture() {
     root.render(<HttpProgressiveDisclosureFixture />);
     return;
   }
+  if (searchParams.get("mode") === "decision-inputs") {
+    await import("../../src/essentials/Elsa.Studio.Hosting/Client/src/app/ui/components.css");
+    const { DecisionInputsFixture } = await import("./decisionInputsFixture");
+    root.render(<DecisionInputsFixture />);
+    return;
+  }
   if (searchParams.get("mode") === "connections") {
     const { ConnectionsFixture } = await import("./connectionsFixture");
     root.render(<ConnectionsFixture />);
+    return;
+  }
+  if (searchParams.get("mode") === "workflow-authorization-unavailable") {
+    const { WorkflowAuthorizationUnavailableFixture } = await import("./workflowAuthorizationUnavailableFixture");
+    root.render(<WorkflowAuthorizationUnavailableFixture />);
     return;
   }
   if (workflowPublishChoiceFixture) {
@@ -1817,6 +1845,11 @@ async function renderRequestedFixture() {
     root.render(<WorkflowDefinitionBrowseFixture />);
     return;
   }
+  if (searchParams.get("mode") === "workflow-library") {
+    const { WorkflowLibraryFixture } = await import("./workflowLibraryFixture");
+    root.render(<WorkflowLibraryFixture />);
+    return;
+  }
   if (navBeforeFixture) {
     const { NavBeforeFixture } = await import("./navBeforeFixture");
     root.render(<NavBeforeFixture />);
@@ -1857,6 +1890,11 @@ async function renderRequestedFixture() {
     root.render(<ActivityDuplicateFixture />);
     return;
   }
+  if (searchParams.get("mode") === "workflow-templates") {
+    const { WorkflowTemplatesFixture } = await import("./workflowTemplatesFixture");
+    root.render(<WorkflowTemplatesFixture />);
+    return;
+  }
   if (activityDuplicateEditorFixture) {
     const { ActivityDuplicateEditorFixture } = await import("./activityDuplicateEditorFixture");
     root.render(<ActivityDuplicateEditorFixture />);
@@ -1869,7 +1907,7 @@ async function renderRequestedFixture() {
   }
 
   if (activityDefinitionsFixture) {
-    await import("../../src/apps/Elsa.Studio.Web/Client/src/app/styles.css");
+    await import("../../src/essentials/Elsa.Studio.Hosting/Client/src/app/styles.css");
   }
 
   root.render(

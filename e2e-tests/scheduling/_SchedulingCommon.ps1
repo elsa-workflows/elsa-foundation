@@ -6,7 +6,7 @@
 
     Execution models (from Essentials/src/Activities/Scheduling):
       - Delay  : MID-FLOW suspend/resume. Suspends the instance for `Duration`; the hosted DurableTimerPumpTask
-                 fires a bookmark at now+Duration (swept ~every 10s) to auto-resume it. No external stimulus.
+                 fires a bookmark at now+Duration (deadline-driven with periodic recovery) to auto-resume it. No external stimulus.
       - Timer  : START trigger ([TriggerActivity]). The RecurringTriggerPumpTask starts a NEW instance every
                  `Interval`, anchored per fire (fired-at + interval), at most once per due window.
       - Cron   : START trigger. Same pump; occurrences are absolute UTC instants from a Cronos expression.

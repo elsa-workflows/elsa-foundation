@@ -1,0 +1,1926 @@
+{
+  "recovered": {
+    "providerChecked": true,
+    "readOnly": true,
+    "snapshotSha256": "6d6e11bbd3334d1a42a10bd393554480b2b93aeb616e5e26e1a08c80c29ccd8b",
+    "source": {
+      "outboxItemId": "commit:3d774859f9df6d9b:invoke:14h99VlEmmT:activity-completed:14h99VlEmmT:bd668ba220022fa8:0",
+      "workflowExecutionId": "14h99VcgbrQ",
+      "recordedAt": "2026-10-27T10:37:21.934025+00:00",
+      "status": "Delivered",
+      "deliveryAttemptCount": 1,
+      "deliveringOwnerId": null,
+      "deliveryFencingToken": 2,
+      "deliveryVisibleAfter": null,
+      "deliveredAt": "2026-10-27T10:38:23.812262+00:00",
+      "lastFailureMessage": null,
+      "intentPayload": {
+        "stimulusType": "Event",
+        "stimulusHash": "sha256:179f9006f184e53dce246e6ad79bd7b35f87ce4604c61375f6e148462faab304",
+        "eventName": "bpmn-source-recovery-fb02779f8547404d8879ed611312c85b",
+        "correlationId": null,
+        "payload": null,
+        "isLocalEvent": false
+      },
+      "intentFingerprint": "0afa09e83aa0fa5a0fd5e2cf900a7fd8b1703902733631913e8e195581a889e0",
+      "snapshot": {
+        "version": 1,
+        "sourceOutboxItemId": "commit:3d774859f9df6d9b:invoke:14h99VlEmmT:activity-completed:14h99VlEmmT:bd668ba220022fa8:0",
+        "intentFingerprint": "0afa09e83aa0fa5a0fd5e2cf900a7fd8b1703902733631913e8e195581a889e0",
+        "scope": {
+          "persistenceScope": {
+            "value": "default"
+          },
+          "tenantId": "default",
+          "partition": {
+            "value": "default"
+          },
+          "runKind": 2,
+          "testScope": null
+        },
+        "selectedAt": "2026-10-27T10:37:22.807+00:00",
+        "stimulusType": "Event",
+        "stimulusHash": "sha256:179f9006f184e53dce246e6ad79bd7b35f87ce4604c61375f6e148462faab304",
+        "starts": [
+          {
+            "binding": {
+              "triggerBindingId": "tb1-34FDD73E402FD474C82BEE252695C7A91A8255E9EA2337C3D4A971FA54B1E2BE",
+              "artifactId": "artifact-acbedc71ebee",
+              "definitionId": "14h99VEUlUN",
+              "artifactVersion": "1.0.0",
+              "artifactHash": "sha256:acbedc71ebee3fd4b8739352410ab4bf27aa57fc272af4a6b96acbc62b207c8f",
+              "executableNodeId": "node-selected-start",
+              "stimulusType": "Event",
+              "stimulusHash": "sha256:179f9006f184e53dce246e6ad79bd7b35f87ce4604c61375f6e148462faab304",
+              "correlationScope": null,
+              "metadata": {
+                "bpmn.startElementId": "receive"
+              },
+              "createdAt": "2026-10-27T10:37:21.820144+00:00",
+              "activationId": "publication-14h99VGkJMU",
+              "slotId": "activation-slot:11:14h99VEUlUN:7:default",
+              "cardinality": 1,
+              "isActive": true
+            },
+            "executable": {
+              "artifactId": "artifact-acbedc71ebee",
+              "definitionId": "14h99VEUlUN",
+              "definitionVersionId": "14h99VEWPWR",
+              "artifactVersion": "1.0.0",
+              "artifactHash": "sha256:acbedc71ebee3fd4b8739352410ab4bf27aa57fc272af4a6b96acbc62b207c8f"
+            },
+            "sourceCapture": {
+              "version": 1,
+              "provenance": {
+                "sourceReferenceId": "activation-ref:publication-14h99VGkJMU",
+                "sourceKind": "WorkflowDefinitionVersion",
+                "sourceId": "14h99VEWPWR",
+                "sourceVersion": "1.0.0",
+                "definitionId": "14h99VEUlUN",
+                "definitionVersionId": "14h99VEWPWR",
+                "artifactVersion": "1.0.0",
+                "publicationId": "publication-14h99VGkJMU",
+                "slotId": "activation-slot:11:14h99VEUlUN:7:default"
+              }
+            }
+          }
+        ],
+        "resumes": [
+          {
+            "workflowExecutionId": "14h99SggF4q",
+            "bookmarkId": "14h99UPwWSs:attempt:1:trigger:1",
+            "activityExecutionId": "14h99UPwWSs",
+            "executableNodeId": "node-wait-a",
+            "resumeTargetId": "node-wait-a:resume-target:event",
+            "stimulusType": "Event",
+            "stimulusHash": "sha256:179f9006f184e53dce246e6ad79bd7b35f87ce4604c61375f6e148462faab304",
+            "createdAt": "2026-10-27T10:37:21.712843+00:00",
+            "expiresAt": null,
+            "registrationCapture": {
+              "version": 1,
+              "generation": 1480265773743631766,
+              "executable": {
+                "artifactId": "artifact-bf68ee24c771",
+                "definitionId": "14h99QzZF8x",
+                "definitionVersionId": "14h99R0kRqI",
+                "artifactVersion": "1.0.0",
+                "artifactHash": "sha256:bf68ee24c771d20573ce06b5bf8fede121d73d62055e8966c13966ade05b457e"
+              },
+              "scope": {
+                "persistenceScope": {
+                  "value": "default"
+                },
+                "tenantId": "default",
+                "partition": {
+                  "value": "default"
+                },
+                "runKind": 2,
+                "testScope": null
+              },
+              "pinnedSource": {
+                "sourceReferenceId": "activation-ref:publication-14h99RR7iDi",
+                "sourceKind": "WorkflowDefinitionVersion",
+                "sourceId": "14h99R0kRqI",
+                "sourceVersion": "1.0.0",
+                "definitionId": "14h99QzZF8x",
+                "definitionVersionId": "14h99R0kRqI",
+                "artifactVersion": "1.0.0",
+                "publicationId": "publication-14h99RR7iDi",
+                "slotId": "activation-slot:11:14h99QzZF8x:7:default"
+              },
+              "metadata": {
+                "runtime.schedulerWorkItemId": "a030151bfd1bed44:create-bookmark:14h99UPwWSs:attempt:1:trigger:1",
+                "runtime.commandId": "666f330b3002471f:create-bookmark:14h99UPwWSs:attempt:1:trigger:1",
+                "runtime.reason": "ActivitySuspended"
+              },
+              "payloadFingerprint": "5ad38304b535c2987dbd24657c1a11b884984ff600d9f389deb0d4e634fee792"
+            }
+          },
+          {
+            "workflowExecutionId": "14h99SggF4q",
+            "bookmarkId": "14h99UQ93dT:attempt:1:trigger:1",
+            "activityExecutionId": "14h99UQ93dT",
+            "executableNodeId": "node-wait-b",
+            "resumeTargetId": "node-wait-b:resume-target:event",
+            "stimulusType": "Event",
+            "stimulusHash": "sha256:179f9006f184e53dce246e6ad79bd7b35f87ce4604c61375f6e148462faab304",
+            "createdAt": "2026-10-27T10:37:21.744385+00:00",
+            "expiresAt": null,
+            "registrationCapture": {
+              "version": 1,
+              "generation": 2871419317888779447,
+              "executable": {
+                "artifactId": "artifact-bf68ee24c771",
+                "definitionId": "14h99QzZF8x",
+                "definitionVersionId": "14h99R0kRqI",
+                "artifactVersion": "1.0.0",
+                "artifactHash": "sha256:bf68ee24c771d20573ce06b5bf8fede121d73d62055e8966c13966ade05b457e"
+              },
+              "scope": {
+                "persistenceScope": {
+                  "value": "default"
+                },
+                "tenantId": "default",
+                "partition": {
+                  "value": "default"
+                },
+                "runKind": 2,
+                "testScope": null
+              },
+              "pinnedSource": {
+                "sourceReferenceId": "activation-ref:publication-14h99RR7iDi",
+                "sourceKind": "WorkflowDefinitionVersion",
+                "sourceId": "14h99R0kRqI",
+                "sourceVersion": "1.0.0",
+                "definitionId": "14h99QzZF8x",
+                "definitionVersionId": "14h99R0kRqI",
+                "artifactVersion": "1.0.0",
+                "publicationId": "publication-14h99RR7iDi",
+                "slotId": "activation-slot:11:14h99QzZF8x:7:default"
+              },
+              "metadata": {
+                "runtime.schedulerWorkItemId": "db2b8063b193b74b:create-bookmark:14h99UQ93dT:attempt:1:trigger:1",
+                "runtime.commandId": "649dc0264beb04a4:create-bookmark:14h99UQ93dT:attempt:1:trigger:1",
+                "runtime.reason": "ActivitySuspended"
+              },
+              "payloadFingerprint": "5ad38304b535c2987dbd24657c1a11b884984ff600d9f389deb0d4e634fee792"
+            }
+          }
+        ],
+        "retentionAcceptance": {
+          "version": 1
+        }
+      },
+      "selectedResumes": [
+        {
+          "workflowExecutionId": "14h99SggF4q",
+          "bookmarkId": "14h99UPwWSs:attempt:1:trigger:1",
+          "activityExecutionId": "14h99UPwWSs",
+          "executableNodeId": "node-wait-a",
+          "createdAt": "2026-10-27T10:37:21.712843+00:00",
+          "generation": 1480265773743631766
+        },
+        {
+          "workflowExecutionId": "14h99SggF4q",
+          "bookmarkId": "14h99UQ93dT:attempt:1:trigger:1",
+          "activityExecutionId": "14h99UQ93dT",
+          "executableNodeId": "node-wait-b",
+          "createdAt": "2026-10-27T10:37:21.744385+00:00",
+          "generation": 2871419317888779447
+        }
+      ],
+      "selectedStarts": [
+        {
+          "artifactId": "artifact-acbedc71ebee",
+          "bindingCreatedAt": "2026-10-27T10:37:21.820144+00:00",
+          "workflowExecutionId": "wfexec:start:v1:7c2c93171128075836b1d3673d7cf504a7a0d2a2a82cacf5701951dbb023eae0"
+        }
+      ]
+    },
+    "workflows": [
+      {
+        "workflowExecutionId": "14h99SggF4q",
+        "exists": true,
+        "status": "Completed",
+        "pinnedExecutable": {
+          "artifactId": "artifact-bf68ee24c771",
+          "definitionId": "14h99QzZF8x",
+          "definitionVersionId": "14h99R0kRqI",
+          "artifactVersion": "1.0.0",
+          "artifactHash": "sha256:bf68ee24c771d20573ce06b5bf8fede121d73d62055e8966c13966ade05b457e"
+        },
+        "pinnedSource": {
+          "sourceReferenceId": "activation-ref:publication-14h99RR7iDi",
+          "sourceKind": "WorkflowDefinitionVersion",
+          "sourceId": "14h99R0kRqI",
+          "sourceVersion": "1.0.0",
+          "definitionId": "14h99QzZF8x",
+          "definitionVersionId": "14h99R0kRqI",
+          "artifactVersion": "1.0.0",
+          "publicationId": "publication-14h99RR7iDi",
+          "slotId": "activation-slot:11:14h99QzZF8x:7:default"
+        },
+        "runKind": 2,
+        "bookmarks": [],
+        "selectedActivities": [
+          {
+            "activityExecutionId": "14h99UPwWSs",
+            "status": "Completed",
+            "bookmarkIds": [],
+            "attemptCount": 2
+          },
+          {
+            "activityExecutionId": "14h99UQ93dT",
+            "status": "Completed",
+            "bookmarkIds": [],
+            "attemptCount": 2
+          }
+        ]
+      },
+      {
+        "workflowExecutionId": "14h99VcgbrQ",
+        "exists": true,
+        "status": "Completed",
+        "pinnedExecutable": {
+          "artifactId": "artifact-6cf7efea8e5e",
+          "definitionId": "14h99VSyBYF",
+          "definitionVersionId": "14h99VT2KZj",
+          "artifactVersion": "1.0.0",
+          "artifactHash": "sha256:6cf7efea8e5e237acafdff018a6f57c91f0b86b69671b6ef8b13bdd490fbe44a"
+        },
+        "pinnedSource": {
+          "sourceReferenceId": "activation-ref:publication-14h99VW6grx",
+          "sourceKind": "WorkflowDefinitionVersion",
+          "sourceId": "14h99VT2KZj",
+          "sourceVersion": "1.0.0",
+          "definitionId": "14h99VSyBYF",
+          "definitionVersionId": "14h99VT2KZj",
+          "artifactVersion": "1.0.0",
+          "publicationId": "publication-14h99VW6grx",
+          "slotId": "activation-slot:11:14h99VSyBYF:7:default"
+        },
+        "runKind": 2,
+        "bookmarks": [],
+        "selectedActivities": []
+      },
+      {
+        "workflowExecutionId": "14h99aZTkP2",
+        "exists": true,
+        "status": "Running",
+        "pinnedExecutable": {
+          "artifactId": "artifact-e3ccdb1e5d1e",
+          "definitionId": "14h99aNLF6l",
+          "definitionVersionId": "14h99aNGnVs",
+          "artifactVersion": "1.0.0",
+          "artifactHash": "sha256:e3ccdb1e5d1ee31465f6f723a3afd193243d9bbee1473b7968df5bd5c7c39fe6"
+        },
+        "pinnedSource": {
+          "sourceReferenceId": "activation-ref:publication-14h99aQT8lI",
+          "sourceKind": "WorkflowDefinitionVersion",
+          "sourceId": "14h99aNGnVs",
+          "sourceVersion": "1.0.0",
+          "definitionId": "14h99aNLF6l",
+          "definitionVersionId": "14h99aNGnVs",
+          "artifactVersion": "1.0.0",
+          "publicationId": "publication-14h99aQT8lI",
+          "slotId": "activation-slot:11:14h99aNLF6l:7:default"
+        },
+        "runKind": 2,
+        "bookmarks": [
+          {
+            "bookmarkId": "14h99ajhOps:attempt:1:trigger:1",
+            "activityExecutionId": "14h99ajhOps",
+            "executableNodeId": "node-wait-a",
+            "stimulusType": "Event",
+            "stimulusHash": "sha256:179f9006f184e53dce246e6ad79bd7b35f87ce4604c61375f6e148462faab304",
+            "generation": 4446857632419107338,
+            "createdAt": "2026-10-27T10:37:23.04996+00:00",
+            "expiresAt": null,
+            "activityStatus": "Suspended",
+            "attemptCount": 1
+          },
+          {
+            "bookmarkId": "14h99ajhYXE:attempt:1:trigger:1",
+            "activityExecutionId": "14h99ajhYXE",
+            "executableNodeId": "node-wait-b",
+            "stimulusType": "Event",
+            "stimulusHash": "sha256:179f9006f184e53dce246e6ad79bd7b35f87ce4604c61375f6e148462faab304",
+            "generation": 3634190743242799716,
+            "createdAt": "2026-10-27T10:37:23.054934+00:00",
+            "expiresAt": null,
+            "activityStatus": "Suspended",
+            "attemptCount": 1
+          }
+        ],
+        "selectedActivities": []
+      },
+      {
+        "workflowExecutionId": "wfexec:start:v1:7c2c93171128075836b1d3673d7cf504a7a0d2a2a82cacf5701951dbb023eae0",
+        "exists": true,
+        "status": "Running",
+        "pinnedExecutable": {
+          "artifactId": "artifact-acbedc71ebee",
+          "definitionId": "14h99VEUlUN",
+          "definitionVersionId": "14h99VEWPWR",
+          "artifactVersion": "1.0.0",
+          "artifactHash": "sha256:acbedc71ebee3fd4b8739352410ab4bf27aa57fc272af4a6b96acbc62b207c8f"
+        },
+        "pinnedSource": {
+          "sourceReferenceId": "activation-ref:publication-14h99VGkJMU",
+          "sourceKind": "WorkflowDefinitionVersion",
+          "sourceId": "14h99VEWPWR",
+          "sourceVersion": "1.0.0",
+          "definitionId": "14h99VEUlUN",
+          "definitionVersionId": "14h99VEWPWR",
+          "artifactVersion": "1.0.0",
+          "publicationId": "publication-14h99VGkJMU",
+          "slotId": "activation-slot:11:14h99VEUlUN:7:default"
+        },
+        "runKind": 2,
+        "bookmarks": [
+          {
+            "bookmarkId": "14h9E4Edtxu:attempt:1:trigger:1",
+            "activityExecutionId": "14h9E4Edtxu",
+            "executableNodeId": "node-park",
+            "stimulusType": "Event",
+            "stimulusHash": "sha256:771715ddf0a90b55c7c0ab6ff29e5dae9ed37f15b77f3c1d24aeb3a524ee7549",
+            "generation": 2323185273422391659,
+            "createdAt": "2026-10-27T10:38:23.662096+00:00",
+            "expiresAt": null,
+            "activityStatus": "Suspended",
+            "attemptCount": 1
+          }
+        ],
+        "selectedActivities": []
+      }
+    ],
+    "matchingBindings": [
+      {
+        "triggerBindingId": "tb1-34FDD73E402FD474C82BEE252695C7A91A8255E9EA2337C3D4A971FA54B1E2BE",
+        "artifactId": "artifact-acbedc71ebee",
+        "executableNodeId": "node-selected-start",
+        "stimulusType": "Event",
+        "stimulusHash": "sha256:179f9006f184e53dce246e6ad79bd7b35f87ce4604c61375f6e148462faab304",
+        "isActive": true,
+        "createdAt": "2026-10-27T10:37:21.820144+00:00"
+      },
+      {
+        "triggerBindingId": "tb1-A727FF7360031123E283BB8C8424832B0AD0193AAB721490D022697A3522DAC7",
+        "artifactId": "artifact-290f062fb276",
+        "executableNodeId": "node-late-start",
+        "stimulusType": "Event",
+        "stimulusHash": "sha256:179f9006f184e53dce246e6ad79bd7b35f87ce4604c61375f6e148462faab304",
+        "isActive": true,
+        "createdAt": "2026-10-27T10:37:23.091193+00:00"
+      }
+    ],
+    "allWorkflows": [
+      {
+        "workflowExecutionId": "14h99SggF4q",
+        "artifactId": "artifact-bf68ee24c771",
+        "status": "Completed"
+      },
+      {
+        "workflowExecutionId": "wfexec:start:v1:7c2c93171128075836b1d3673d7cf504a7a0d2a2a82cacf5701951dbb023eae0",
+        "artifactId": "artifact-acbedc71ebee",
+        "status": "Running"
+      },
+      {
+        "workflowExecutionId": "14h99aZTkP2",
+        "artifactId": "artifact-e3ccdb1e5d1e",
+        "status": "Running"
+      },
+      {
+        "workflowExecutionId": "14h99VcgbrQ",
+        "artifactId": "artifact-6cf7efea8e5e",
+        "status": "Completed"
+      }
+    ]
+  },
+  "observations": [
+    {
+      "selectedStarts": [
+        {
+          "instance": {
+            "workflowExecutionId": "wfexec:start:v1:7c2c93171128075836b1d3673d7cf504a7a0d2a2a82cacf5701951dbb023eae0",
+            "artifactId": "artifact-acbedc71ebee",
+            "definitionId": "14h99VEUlUN",
+            "definitionVersionId": "14h99VEWPWR",
+            "artifactVersion": "1.0.0",
+            "artifactHash": "sha256:acbedc71ebee3fd4b8739352410ab4bf27aa57fc272af4a6b96acbc62b207c8f",
+            "status": "Running",
+            "runKind": "PublishedRun",
+            "subStatus": null,
+            "createdAt": "2026-10-27T11:38:23.319213+01:00",
+            "startedAt": "2026-10-27T11:38:23.319213+01:00",
+            "updatedAt": "2026-10-27T11:38:23.333017+01:00",
+            "completedAt": null,
+            "correlationId": null,
+            "parentWorkflowExecutionId": null,
+            "tenantId": "default",
+            "activityCount": 2,
+            "incidentCount": 0,
+            "sourceReferenceId": "activation-ref:publication-14h99VGkJMU",
+            "publicationId": "publication-14h99VGkJMU",
+            "slotId": "activation-slot:11:14h99VEUlUN:7:default",
+            "sourceKind": "WorkflowDefinitionVersion",
+            "sourceId": "14h99VEWPWR",
+            "sourceVersion": "1.0.0",
+            "activeIncidentCount": 0,
+            "blockingIncidentCount": 0
+          },
+          "activities": [
+            {
+              "activityExecutionId": "14h9E4Edtxu",
+              "workflowExecutionId": "wfexec:start:v1:7c2c93171128075836b1d3673d7cf504a7a0d2a2a82cacf5701951dbb023eae0",
+              "executableNodeId": "node-park",
+              "authoredActivityId": "node-park",
+              "activityType": "Elsa.Event",
+              "activityTypeVersion": "1.0.0+b694efb8c5bda5891a9e96e2b3cc38eacdfd051c",
+              "status": "Suspended",
+              "subStatus": "BookmarkWaiting",
+              "executionSequence": 232624804207884270,
+              "scheduledAt": "2026-10-27T11:38:23.614695+01:00",
+              "startedAt": "2026-10-27T11:38:23.615242+01:00",
+              "completedAt": null,
+              "firstCheckpointId": "checkpoint:74b4539563bc3db9:schedule-child:node-park:14h9E4Edtxu:activity-scheduled:14h9E4Edtxu",
+              "lastCheckpointId": "checkpoint:d3988e7da762940a:create-bookmark:14h9E4Edtxu:attempt:1:trigger:1:bookmark-created:14h9E4Edtxu:attempt:1:trigger:1",
+              "lastCommittedAt": "2026-10-27T11:38:23.662585+01:00",
+              "provenance": {
+                "parentActivityExecutionId": "14h9E2tC9sP",
+                "schedulingActivityExecutionId": "14h9E2tC9sP",
+                "schedulingWorkflowExecutionId": "wfexec:start:v1:7c2c93171128075836b1d3673d7cf504a7a0d2a2a82cacf5701951dbb023eae0",
+                "branchId": null,
+                "iterationId": null,
+                "executionPathId": "token:4",
+                "executionScopeId": null,
+                "schedulingCause": "element:intermediateCatchEvent",
+                "metadata": {}
+              },
+              "outcomeNames": [],
+              "bookmarkCount": 1,
+              "incidentCount": 0,
+              "valueSnapshotCount": 3,
+              "metadata": {}
+            },
+            {
+              "activityExecutionId": "14h9E2tC9sP",
+              "workflowExecutionId": "wfexec:start:v1:7c2c93171128075836b1d3673d7cf504a7a0d2a2a82cacf5701951dbb023eae0",
+              "executableNodeId": "node-selected-start",
+              "authoredActivityId": "node-selected-start",
+              "activityType": "Elsa.Activities.Bpmn.Activities.BpmnProcess",
+              "activityTypeVersion": "1.0.0+b694efb8c5bda5891a9e96e2b3cc38eacdfd051c",
+              "status": "Running",
+              "subStatus": null,
+              "executionSequence": 7223419739058634815,
+              "scheduledAt": "2026-10-27T11:38:23.363757+01:00",
+              "startedAt": "2026-10-27T11:38:23.377343+01:00",
+              "completedAt": null,
+              "firstCheckpointId": "checkpoint:4c3af3d7691fc47a:schedule:node-selected-start:activity-scheduled:14h9E2tC9sP",
+              "lastCheckpointId": "checkpoint:c31adab88752349e:invoke:14h9E2tC9sP:activity-inspection-captured:14h9E2tC9sP",
+              "lastCommittedAt": "2026-10-27T11:38:23.612322+01:00",
+              "provenance": {
+                "parentActivityExecutionId": null,
+                "schedulingActivityExecutionId": null,
+                "schedulingWorkflowExecutionId": "wfexec:start:v1:7c2c93171128075836b1d3673d7cf504a7a0d2a2a82cacf5701951dbb023eae0",
+                "branchId": null,
+                "iterationId": null,
+                "executionPathId": null,
+                "executionScopeId": null,
+                "schedulingCause": "WorkflowStart",
+                "metadata": {}
+              },
+              "outcomeNames": [],
+              "bookmarkCount": 0,
+              "incidentCount": 0,
+              "valueSnapshotCount": 1,
+              "metadata": {}
+            }
+          ],
+          "incidents": [],
+          "outputs": {},
+          "persistenceMode": "Balanced",
+          "inspectionGranularity": "boundary-level",
+          "activityNextContinuationToken": null,
+          "permissions": {
+            "canManage": true,
+            "canInspectValues": true
+          }
+        }
+      ],
+      "publisher": {
+        "instance": {
+          "workflowExecutionId": "14h99VcgbrQ",
+          "artifactId": "artifact-6cf7efea8e5e",
+          "definitionId": "14h99VSyBYF",
+          "definitionVersionId": "14h99VT2KZj",
+          "artifactVersion": "1.0.0",
+          "artifactHash": "sha256:6cf7efea8e5e237acafdff018a6f57c91f0b86b69671b6ef8b13bdd490fbe44a",
+          "status": "Completed",
+          "runKind": "PublishedRun",
+          "subStatus": null,
+          "createdAt": "2026-10-27T11:37:21.89828+01:00",
+          "startedAt": "2026-10-27T11:37:21.89828+01:00",
+          "updatedAt": "2026-10-27T11:37:21.980986+01:00",
+          "completedAt": "2026-10-27T11:37:21.980986+01:00",
+          "correlationId": null,
+          "parentWorkflowExecutionId": null,
+          "tenantId": "default",
+          "activityCount": 2,
+          "incidentCount": 0,
+          "sourceReferenceId": "activation-ref:publication-14h99VW6grx",
+          "publicationId": "publication-14h99VW6grx",
+          "slotId": "activation-slot:11:14h99VSyBYF:7:default",
+          "sourceKind": "WorkflowDefinitionVersion",
+          "sourceId": "14h99VT2KZj",
+          "sourceVersion": "1.0.0",
+          "activeIncidentCount": 0,
+          "blockingIncidentCount": 0
+        },
+        "activities": [
+          {
+            "activityExecutionId": "14h99VlEmmT",
+            "workflowExecutionId": "14h99VcgbrQ",
+            "executableNodeId": "node-send",
+            "authoredActivityId": "node-send",
+            "activityType": "Elsa.PublishEvent",
+            "activityTypeVersion": "1.0.0+b694efb8c5bda5891a9e96e2b3cc38eacdfd051c",
+            "status": "Completed",
+            "subStatus": null,
+            "executionSequence": 918502634148377907,
+            "scheduledAt": "2026-10-27T11:37:21.915265+01:00",
+            "startedAt": "2026-10-27T11:37:21.916168+01:00",
+            "completedAt": "2026-10-27T11:37:21.9339+01:00",
+            "firstCheckpointId": "checkpoint:a4466fb4f1700206:schedule-child:node-send:14h99VlEmmT:activity-scheduled:14h99VlEmmT",
+            "lastCheckpointId": "checkpoint:3d774859f9df6d9b:invoke:14h99VlEmmT:activity-completed:14h99VlEmmT",
+            "lastCommittedAt": "2026-10-27T11:37:21.934718+01:00",
+            "provenance": {
+              "parentActivityExecutionId": "14h99VgVpMB",
+              "schedulingActivityExecutionId": "14h99VgVpMB",
+              "schedulingWorkflowExecutionId": "14h99VcgbrQ",
+              "branchId": null,
+              "iterationId": null,
+              "executionPathId": "token:4",
+              "executionScopeId": null,
+              "schedulingCause": "element:intermediateThrowEvent",
+              "metadata": {}
+            },
+            "outcomeNames": [
+              "Done"
+            ],
+            "bookmarkCount": 0,
+            "incidentCount": 0,
+            "valueSnapshotCount": 4,
+            "metadata": {}
+          },
+          {
+            "activityExecutionId": "14h99VgVpMB",
+            "workflowExecutionId": "14h99VcgbrQ",
+            "executableNodeId": "node-publisher",
+            "authoredActivityId": "node-publisher",
+            "activityType": "Elsa.Activities.Bpmn.Activities.BpmnProcess",
+            "activityTypeVersion": "1.0.0+b694efb8c5bda5891a9e96e2b3cc38eacdfd051c",
+            "status": "Completed",
+            "subStatus": null,
+            "executionSequence": 7826648120931819104,
+            "scheduledAt": "2026-10-27T11:37:21.899276+01:00",
+            "startedAt": "2026-10-27T11:37:21.899929+01:00",
+            "completedAt": "2026-10-27T11:37:21.966712+01:00",
+            "firstCheckpointId": "checkpoint:52587ce8325cf8b6:schedule:node-publisher:activity-scheduled:14h99VgVpMB",
+            "lastCheckpointId": "checkpoint:31919de78b3cf42d:checkpoint:WorkflowCompleted:14h99VgVpMB",
+            "lastCommittedAt": "2026-10-27T11:37:21.980986+01:00",
+            "provenance": {
+              "parentActivityExecutionId": null,
+              "schedulingActivityExecutionId": null,
+              "schedulingWorkflowExecutionId": "14h99VcgbrQ",
+              "branchId": null,
+              "iterationId": null,
+              "executionPathId": null,
+              "executionScopeId": null,
+              "schedulingCause": "WorkflowStart",
+              "metadata": {}
+            },
+            "outcomeNames": [
+              "Done"
+            ],
+            "bookmarkCount": 0,
+            "incidentCount": 0,
+            "valueSnapshotCount": 2,
+            "metadata": {}
+          }
+        ],
+        "incidents": [],
+        "outputs": {},
+        "persistenceMode": "Balanced",
+        "inspectionGranularity": "boundary-level",
+        "activityNextContinuationToken": null,
+        "permissions": {
+          "canManage": true,
+          "canInspectValues": true
+        }
+      },
+      "originalWaiter": {
+        "instance": {
+          "workflowExecutionId": "14h99SggF4q",
+          "artifactId": "artifact-bf68ee24c771",
+          "definitionId": "14h99QzZF8x",
+          "definitionVersionId": "14h99R0kRqI",
+          "artifactVersion": "1.0.0",
+          "artifactHash": "sha256:bf68ee24c771d20573ce06b5bf8fede121d73d62055e8966c13966ade05b457e",
+          "status": "Completed",
+          "runKind": "PublishedRun",
+          "subStatus": null,
+          "createdAt": "2026-10-27T11:37:21.335509+01:00",
+          "startedAt": "2026-10-27T11:37:21.335509+01:00",
+          "updatedAt": "2026-10-27T11:38:23.800055+01:00",
+          "completedAt": "2026-10-27T11:38:23.800055+01:00",
+          "correlationId": null,
+          "parentWorkflowExecutionId": null,
+          "tenantId": "default",
+          "activityCount": 3,
+          "incidentCount": 0,
+          "sourceReferenceId": "activation-ref:publication-14h99RR7iDi",
+          "publicationId": "publication-14h99RR7iDi",
+          "slotId": "activation-slot:11:14h99QzZF8x:7:default",
+          "sourceKind": "WorkflowDefinitionVersion",
+          "sourceId": "14h99R0kRqI",
+          "sourceVersion": "1.0.0",
+          "activeIncidentCount": 0,
+          "blockingIncidentCount": 0
+        },
+        "activities": [
+          {
+            "activityExecutionId": "14h99UQ93dT",
+            "workflowExecutionId": "14h99SggF4q",
+            "executableNodeId": "node-wait-b",
+            "authoredActivityId": "node-wait-b",
+            "activityType": "Elsa.Event",
+            "activityTypeVersion": "1.0.0+b694efb8c5bda5891a9e96e2b3cc38eacdfd051c",
+            "status": "Completed",
+            "subStatus": null,
+            "executionSequence": 1570009392718063944,
+            "scheduledAt": "2026-10-27T11:37:21.623553+01:00",
+            "startedAt": "2026-10-27T11:37:21.635251+01:00",
+            "completedAt": "2026-10-27T11:38:23.790297+01:00",
+            "firstCheckpointId": "checkpoint:bd471425bedcc3c1:schedule-child:node-wait-b:14h99UQ93dT:activity-scheduled:14h99UQ93dT",
+            "lastCheckpointId": "checkpoint:14h9E4yQSSm:activitycompleted:14h99UQ93dT:attempt:1:trigger:1",
+            "lastCommittedAt": "2026-10-27T11:38:23.790343+01:00",
+            "provenance": {
+              "parentActivityExecutionId": "14h99T6ogLA",
+              "schedulingActivityExecutionId": "14h99T6ogLA",
+              "schedulingWorkflowExecutionId": "14h99SggF4q",
+              "branchId": null,
+              "iterationId": null,
+              "executionPathId": "token:9",
+              "executionScopeId": null,
+              "schedulingCause": "element:intermediateCatchEvent",
+              "metadata": {}
+            },
+            "outcomeNames": [
+              "Done"
+            ],
+            "bookmarkCount": 1,
+            "incidentCount": 0,
+            "valueSnapshotCount": 8,
+            "metadata": {}
+          },
+          {
+            "activityExecutionId": "14h99T6ogLA",
+            "workflowExecutionId": "14h99SggF4q",
+            "executableNodeId": "node-waiter",
+            "authoredActivityId": "node-waiter",
+            "activityType": "Elsa.Activities.Bpmn.Activities.BpmnProcess",
+            "activityTypeVersion": "1.0.0+b694efb8c5bda5891a9e96e2b3cc38eacdfd051c",
+            "status": "Completed",
+            "subStatus": null,
+            "executionSequence": 1929739715527907957,
+            "scheduledAt": "2026-10-27T11:37:21.382725+01:00",
+            "startedAt": "2026-10-27T11:37:21.397021+01:00",
+            "completedAt": "2026-10-27T11:38:23.796262+01:00",
+            "firstCheckpointId": "checkpoint:f657d2ae898eb45a:schedule:node-waiter:activity-scheduled:14h99T6ogLA",
+            "lastCheckpointId": "checkpoint:36eed9132cc0add8:checkpoint:WorkflowCompleted:14h99T6ogLA",
+            "lastCommittedAt": "2026-10-27T11:38:23.800055+01:00",
+            "provenance": {
+              "parentActivityExecutionId": null,
+              "schedulingActivityExecutionId": null,
+              "schedulingWorkflowExecutionId": "14h99SggF4q",
+              "branchId": null,
+              "iterationId": null,
+              "executionPathId": null,
+              "executionScopeId": null,
+              "schedulingCause": "WorkflowStart",
+              "metadata": {}
+            },
+            "outcomeNames": [
+              "Done"
+            ],
+            "bookmarkCount": 0,
+            "incidentCount": 0,
+            "valueSnapshotCount": 3,
+            "metadata": {}
+          },
+          {
+            "activityExecutionId": "14h99UPwWSs",
+            "workflowExecutionId": "14h99SggF4q",
+            "executableNodeId": "node-wait-a",
+            "authoredActivityId": "node-wait-a",
+            "activityType": "Elsa.Event",
+            "activityTypeVersion": "1.0.0+b694efb8c5bda5891a9e96e2b3cc38eacdfd051c",
+            "status": "Completed",
+            "subStatus": null,
+            "executionSequence": 8424427967357677943,
+            "scheduledAt": "2026-10-27T11:37:21.623116+01:00",
+            "startedAt": "2026-10-27T11:37:21.62438+01:00",
+            "completedAt": "2026-10-27T11:38:23.7396+01:00",
+            "firstCheckpointId": "checkpoint:bd471425bedcc3c1:schedule-child:node-wait-a:14h99UPwWSs:activity-scheduled:14h99UPwWSs",
+            "lastCheckpointId": "checkpoint:14h9E4eh4RS:activitycompleted:14h99UPwWSs:attempt:1:trigger:1",
+            "lastCommittedAt": "2026-10-27T11:38:23.745215+01:00",
+            "provenance": {
+              "parentActivityExecutionId": "14h99T6ogLA",
+              "schedulingActivityExecutionId": "14h99T6ogLA",
+              "schedulingWorkflowExecutionId": "14h99SggF4q",
+              "branchId": null,
+              "iterationId": null,
+              "executionPathId": "token:7",
+              "executionScopeId": null,
+              "schedulingCause": "element:intermediateCatchEvent",
+              "metadata": {}
+            },
+            "outcomeNames": [
+              "Done"
+            ],
+            "bookmarkCount": 1,
+            "incidentCount": 0,
+            "valueSnapshotCount": 8,
+            "metadata": {}
+          }
+        ],
+        "incidents": [],
+        "outputs": {},
+        "persistenceMode": "Balanced",
+        "inspectionGranularity": "boundary-level",
+        "activityNextContinuationToken": null,
+        "permissions": {
+          "canManage": true,
+          "canInspectValues": true
+        }
+      },
+      "laterListener": {
+        "instance": {
+          "workflowExecutionId": "14h99aZTkP2",
+          "artifactId": "artifact-e3ccdb1e5d1e",
+          "definitionId": "14h99aNLF6l",
+          "definitionVersionId": "14h99aNGnVs",
+          "artifactVersion": "1.0.0",
+          "artifactHash": "sha256:e3ccdb1e5d1ee31465f6f723a3afd193243d9bbee1473b7968df5bd5c7c39fe6",
+          "status": "Running",
+          "runKind": "PublishedRun",
+          "subStatus": null,
+          "createdAt": "2026-10-27T11:37:22.969767+01:00",
+          "startedAt": "2026-10-27T11:37:22.969767+01:00",
+          "updatedAt": "2026-10-27T11:37:22.970189+01:00",
+          "completedAt": null,
+          "correlationId": null,
+          "parentWorkflowExecutionId": null,
+          "tenantId": "default",
+          "activityCount": 3,
+          "incidentCount": 0,
+          "sourceReferenceId": "activation-ref:publication-14h99aQT8lI",
+          "publicationId": "publication-14h99aQT8lI",
+          "slotId": "activation-slot:11:14h99aNLF6l:7:default",
+          "sourceKind": "WorkflowDefinitionVersion",
+          "sourceId": "14h99aNGnVs",
+          "sourceVersion": "1.0.0",
+          "activeIncidentCount": 0,
+          "blockingIncidentCount": 0
+        },
+        "activities": [
+          {
+            "activityExecutionId": "14h99aam96H",
+            "workflowExecutionId": "14h99aZTkP2",
+            "executableNodeId": "node-late-waiter",
+            "authoredActivityId": "node-late-waiter",
+            "activityType": "Elsa.Activities.Bpmn.Activities.BpmnProcess",
+            "activityTypeVersion": "1.0.0+b694efb8c5bda5891a9e96e2b3cc38eacdfd051c",
+            "status": "Running",
+            "subStatus": null,
+            "executionSequence": 3672358443927627648,
+            "scheduledAt": "2026-10-27T11:37:22.971187+01:00",
+            "startedAt": "2026-10-27T11:37:22.972026+01:00",
+            "completedAt": null,
+            "firstCheckpointId": "checkpoint:7b2c4987ef9cd607:schedule:node-late-waiter:activity-scheduled:14h99aam96H",
+            "lastCheckpointId": "checkpoint:96ffdb5a9a67778e:invoke:14h99aam96H:activity-inspection-captured:14h99aam96H",
+            "lastCommittedAt": "2026-10-27T11:37:23.001197+01:00",
+            "provenance": {
+              "parentActivityExecutionId": null,
+              "schedulingActivityExecutionId": null,
+              "schedulingWorkflowExecutionId": "14h99aZTkP2",
+              "branchId": null,
+              "iterationId": null,
+              "executionPathId": null,
+              "executionScopeId": null,
+              "schedulingCause": "WorkflowStart",
+              "metadata": {}
+            },
+            "outcomeNames": [],
+            "bookmarkCount": 0,
+            "incidentCount": 0,
+            "valueSnapshotCount": 1,
+            "metadata": {}
+          },
+          {
+            "activityExecutionId": "14h99ajhOps",
+            "workflowExecutionId": "14h99aZTkP2",
+            "executableNodeId": "node-wait-a",
+            "authoredActivityId": "node-wait-a",
+            "activityType": "Elsa.Event",
+            "activityTypeVersion": "1.0.0+b694efb8c5bda5891a9e96e2b3cc38eacdfd051c",
+            "status": "Suspended",
+            "subStatus": "BookmarkWaiting",
+            "executionSequence": 4906696310466975625,
+            "scheduledAt": "2026-10-27T11:37:23.002063+01:00",
+            "startedAt": "2026-10-27T11:37:23.003205+01:00",
+            "completedAt": null,
+            "firstCheckpointId": "checkpoint:9e2d7ca233c53c20:schedule-child:node-wait-a:14h99ajhOps:activity-scheduled:14h99ajhOps",
+            "lastCheckpointId": "checkpoint:89c50300bd85a824:create-bookmark:14h99ajhOps:attempt:1:trigger:1:bookmark-created:14h99ajhOps:attempt:1:trigger:1",
+            "lastCommittedAt": "2026-10-27T11:37:23.049966+01:00",
+            "provenance": {
+              "parentActivityExecutionId": "14h99aam96H",
+              "schedulingActivityExecutionId": "14h99aam96H",
+              "schedulingWorkflowExecutionId": "14h99aZTkP2",
+              "branchId": null,
+              "iterationId": null,
+              "executionPathId": "token:7",
+              "executionScopeId": null,
+              "schedulingCause": "element:intermediateCatchEvent",
+              "metadata": {}
+            },
+            "outcomeNames": [],
+            "bookmarkCount": 1,
+            "incidentCount": 0,
+            "valueSnapshotCount": 3,
+            "metadata": {}
+          },
+          {
+            "activityExecutionId": "14h99ajhYXE",
+            "workflowExecutionId": "14h99aZTkP2",
+            "executableNodeId": "node-wait-b",
+            "authoredActivityId": "node-wait-b",
+            "activityType": "Elsa.Event",
+            "activityTypeVersion": "1.0.0+b694efb8c5bda5891a9e96e2b3cc38eacdfd051c",
+            "status": "Suspended",
+            "subStatus": "BookmarkWaiting",
+            "executionSequence": 7865468905844992513,
+            "scheduledAt": "2026-10-27T11:37:23.00247+01:00",
+            "startedAt": "2026-10-27T11:37:23.013931+01:00",
+            "completedAt": null,
+            "firstCheckpointId": "checkpoint:9e2d7ca233c53c20:schedule-child:node-wait-b:14h99ajhYXE:activity-scheduled:14h99ajhYXE",
+            "lastCheckpointId": "checkpoint:5dd42f50a5fc6c3c:create-bookmark:14h99ajhYXE:attempt:1:trigger:1:bookmark-created:14h99ajhYXE:attempt:1:trigger:1",
+            "lastCommittedAt": "2026-10-27T11:37:23.054939+01:00",
+            "provenance": {
+              "parentActivityExecutionId": "14h99aam96H",
+              "schedulingActivityExecutionId": "14h99aam96H",
+              "schedulingWorkflowExecutionId": "14h99aZTkP2",
+              "branchId": null,
+              "iterationId": null,
+              "executionPathId": "token:9",
+              "executionScopeId": null,
+              "schedulingCause": "element:intermediateCatchEvent",
+              "metadata": {}
+            },
+            "outcomeNames": [],
+            "bookmarkCount": 1,
+            "incidentCount": 0,
+            "valueSnapshotCount": 3,
+            "metadata": {}
+          }
+        ],
+        "incidents": [],
+        "outputs": {},
+        "persistenceMode": "Balanced",
+        "inspectionGranularity": "boundary-level",
+        "activityNextContinuationToken": null,
+        "permissions": {
+          "canManage": true,
+          "canInspectValues": true
+        }
+      }
+    }
+  ],
+  "publisherAdmission": {
+    "workflowExecutionId": "14h99VcgbrQ",
+    "artifactId": "artifact-6cf7efea8e5e",
+    "artifactVersion": "1.0.0",
+    "artifactHash": "sha256:6cf7efea8e5e237acafdff018a6f57c91f0b86b69671b6ef8b13bdd490fbe44a",
+    "commandDispatchStatus": "Accepted",
+    "envelopeId": "14h99VcYYWt",
+    "agentId": "inprocess:14h99VcgbrQ:2",
+    "agentProviderName": "InProcessWorkflowExecutionActorProvider",
+    "reason": null,
+    "sourceReferenceId": "activation-ref:publication-14h99VW6grx",
+    "publicationId": "publication-14h99VW6grx",
+    "slotId": "activation-slot:11:14h99VSyBYF:7:default",
+    "shed": false,
+    "retryAfterSeconds": null
+  },
+  "cut": {
+    "caseId": "after-cohort-9966d470d82049bc8862c884ceddf9ca",
+    "phase": "after-cohort",
+    "sourceOutboxItemId": "commit:3d774859f9df6d9b:invoke:14h99VlEmmT:activity-completed:14h99VlEmmT:bd668ba220022fa8:0",
+    "sourceCommitId": "commit:3d774859f9df6d9b:invoke:14h99VlEmmT:activity-completed:14h99VlEmmT",
+    "intentFingerprint": "0afa09e83aa0fa5a0fd5e2cf900a7fd8b1703902733631913e8e195581a889e0",
+    "scope": "default",
+    "ownerId": "runtime-outbox-8392603898fd4592943f03a0088920fd",
+    "fencingToken": 1,
+    "visibleAfter": "2026-10-27T10:38:22.776831+00:00",
+    "workflowExecutionId": "14h99VcgbrQ",
+    "snapshot": {
+      "version": 1,
+      "sourceOutboxItemId": "commit:3d774859f9df6d9b:invoke:14h99VlEmmT:activity-completed:14h99VlEmmT:bd668ba220022fa8:0",
+      "intentFingerprint": "0afa09e83aa0fa5a0fd5e2cf900a7fd8b1703902733631913e8e195581a889e0",
+      "scope": {
+        "persistenceScope": {
+          "value": "default"
+        },
+        "tenantId": "default",
+        "partition": {
+          "value": "default"
+        },
+        "runKind": 2,
+        "testScope": null
+      },
+      "selectedAt": "2026-10-27T10:37:22.807+00:00",
+      "stimulusType": "Event",
+      "stimulusHash": "sha256:179f9006f184e53dce246e6ad79bd7b35f87ce4604c61375f6e148462faab304",
+      "starts": [
+        {
+          "binding": {
+            "triggerBindingId": "tb1-34FDD73E402FD474C82BEE252695C7A91A8255E9EA2337C3D4A971FA54B1E2BE",
+            "artifactId": "artifact-acbedc71ebee",
+            "definitionId": "14h99VEUlUN",
+            "artifactVersion": "1.0.0",
+            "artifactHash": "sha256:acbedc71ebee3fd4b8739352410ab4bf27aa57fc272af4a6b96acbc62b207c8f",
+            "executableNodeId": "node-selected-start",
+            "stimulusType": "Event",
+            "stimulusHash": "sha256:179f9006f184e53dce246e6ad79bd7b35f87ce4604c61375f6e148462faab304",
+            "correlationScope": null,
+            "metadata": {
+              "bpmn.startElementId": "receive"
+            },
+            "createdAt": "2026-10-27T10:37:21.820144+00:00",
+            "activationId": "publication-14h99VGkJMU",
+            "slotId": "activation-slot:11:14h99VEUlUN:7:default",
+            "cardinality": 1,
+            "isActive": true
+          },
+          "executable": {
+            "artifactId": "artifact-acbedc71ebee",
+            "definitionId": "14h99VEUlUN",
+            "definitionVersionId": "14h99VEWPWR",
+            "artifactVersion": "1.0.0",
+            "artifactHash": "sha256:acbedc71ebee3fd4b8739352410ab4bf27aa57fc272af4a6b96acbc62b207c8f"
+          },
+          "sourceCapture": {
+            "version": 1,
+            "provenance": {
+              "sourceReferenceId": "activation-ref:publication-14h99VGkJMU",
+              "sourceKind": "WorkflowDefinitionVersion",
+              "sourceId": "14h99VEWPWR",
+              "sourceVersion": "1.0.0",
+              "definitionId": "14h99VEUlUN",
+              "definitionVersionId": "14h99VEWPWR",
+              "artifactVersion": "1.0.0",
+              "publicationId": "publication-14h99VGkJMU",
+              "slotId": "activation-slot:11:14h99VEUlUN:7:default"
+            }
+          }
+        }
+      ],
+      "resumes": [
+        {
+          "workflowExecutionId": "14h99SggF4q",
+          "bookmarkId": "14h99UPwWSs:attempt:1:trigger:1",
+          "activityExecutionId": "14h99UPwWSs",
+          "executableNodeId": "node-wait-a",
+          "resumeTargetId": "node-wait-a:resume-target:event",
+          "stimulusType": "Event",
+          "stimulusHash": "sha256:179f9006f184e53dce246e6ad79bd7b35f87ce4604c61375f6e148462faab304",
+          "createdAt": "2026-10-27T10:37:21.712843+00:00",
+          "expiresAt": null,
+          "registrationCapture": {
+            "version": 1,
+            "generation": 1480265773743631766,
+            "executable": {
+              "artifactId": "artifact-bf68ee24c771",
+              "definitionId": "14h99QzZF8x",
+              "definitionVersionId": "14h99R0kRqI",
+              "artifactVersion": "1.0.0",
+              "artifactHash": "sha256:bf68ee24c771d20573ce06b5bf8fede121d73d62055e8966c13966ade05b457e"
+            },
+            "scope": {
+              "persistenceScope": {
+                "value": "default"
+              },
+              "tenantId": "default",
+              "partition": {
+                "value": "default"
+              },
+              "runKind": 2,
+              "testScope": null
+            },
+            "pinnedSource": {
+              "sourceReferenceId": "activation-ref:publication-14h99RR7iDi",
+              "sourceKind": "WorkflowDefinitionVersion",
+              "sourceId": "14h99R0kRqI",
+              "sourceVersion": "1.0.0",
+              "definitionId": "14h99QzZF8x",
+              "definitionVersionId": "14h99R0kRqI",
+              "artifactVersion": "1.0.0",
+              "publicationId": "publication-14h99RR7iDi",
+              "slotId": "activation-slot:11:14h99QzZF8x:7:default"
+            },
+            "metadata": {
+              "runtime.schedulerWorkItemId": "a030151bfd1bed44:create-bookmark:14h99UPwWSs:attempt:1:trigger:1",
+              "runtime.commandId": "666f330b3002471f:create-bookmark:14h99UPwWSs:attempt:1:trigger:1",
+              "runtime.reason": "ActivitySuspended"
+            },
+            "payloadFingerprint": "5ad38304b535c2987dbd24657c1a11b884984ff600d9f389deb0d4e634fee792"
+          }
+        },
+        {
+          "workflowExecutionId": "14h99SggF4q",
+          "bookmarkId": "14h99UQ93dT:attempt:1:trigger:1",
+          "activityExecutionId": "14h99UQ93dT",
+          "executableNodeId": "node-wait-b",
+          "resumeTargetId": "node-wait-b:resume-target:event",
+          "stimulusType": "Event",
+          "stimulusHash": "sha256:179f9006f184e53dce246e6ad79bd7b35f87ce4604c61375f6e148462faab304",
+          "createdAt": "2026-10-27T10:37:21.744385+00:00",
+          "expiresAt": null,
+          "registrationCapture": {
+            "version": 1,
+            "generation": 2871419317888779447,
+            "executable": {
+              "artifactId": "artifact-bf68ee24c771",
+              "definitionId": "14h99QzZF8x",
+              "definitionVersionId": "14h99R0kRqI",
+              "artifactVersion": "1.0.0",
+              "artifactHash": "sha256:bf68ee24c771d20573ce06b5bf8fede121d73d62055e8966c13966ade05b457e"
+            },
+            "scope": {
+              "persistenceScope": {
+                "value": "default"
+              },
+              "tenantId": "default",
+              "partition": {
+                "value": "default"
+              },
+              "runKind": 2,
+              "testScope": null
+            },
+            "pinnedSource": {
+              "sourceReferenceId": "activation-ref:publication-14h99RR7iDi",
+              "sourceKind": "WorkflowDefinitionVersion",
+              "sourceId": "14h99R0kRqI",
+              "sourceVersion": "1.0.0",
+              "definitionId": "14h99QzZF8x",
+              "definitionVersionId": "14h99R0kRqI",
+              "artifactVersion": "1.0.0",
+              "publicationId": "publication-14h99RR7iDi",
+              "slotId": "activation-slot:11:14h99QzZF8x:7:default"
+            },
+            "metadata": {
+              "runtime.schedulerWorkItemId": "db2b8063b193b74b:create-bookmark:14h99UQ93dT:attempt:1:trigger:1",
+              "runtime.commandId": "649dc0264beb04a4:create-bookmark:14h99UQ93dT:attempt:1:trigger:1",
+              "runtime.reason": "ActivitySuspended"
+            },
+            "payloadFingerprint": "5ad38304b535c2987dbd24657c1a11b884984ff600d9f389deb0d4e634fee792"
+          }
+        }
+      ],
+      "retentionAcceptance": {
+        "version": 1
+      }
+    },
+    "proposal": null,
+    "acceptedExecution": null,
+    "acceptedBookmark": null,
+    "capturedAtUtc": "2026-10-27T10:37:22.852438+00:00"
+  },
+  "successorClaim": {
+    "providerChecked": true,
+    "readOnly": true,
+    "snapshotSha256": "71f55b107e9ce32aa2c7a2de6f20bc94a0d41a9176088e9f97bf31cd68d6c6c8",
+    "source": {
+      "outboxItemId": "commit:3d774859f9df6d9b:invoke:14h99VlEmmT:activity-completed:14h99VlEmmT:bd668ba220022fa8:0",
+      "workflowExecutionId": "14h99VcgbrQ",
+      "recordedAt": "2026-10-27T10:37:21.934025+00:00",
+      "status": "Delivering",
+      "deliveryAttemptCount": 0,
+      "deliveringOwnerId": "runtime-outbox-cf05c7325672475790a3e65d15a990dc",
+      "deliveryFencingToken": 2,
+      "deliveryVisibleAfter": "2026-10-27T10:39:23.151464+00:00",
+      "deliveredAt": null,
+      "lastFailureMessage": null,
+      "intentPayload": {
+        "stimulusType": "Event",
+        "stimulusHash": "sha256:179f9006f184e53dce246e6ad79bd7b35f87ce4604c61375f6e148462faab304",
+        "eventName": "bpmn-source-recovery-fb02779f8547404d8879ed611312c85b",
+        "correlationId": null,
+        "payload": null,
+        "isLocalEvent": false
+      },
+      "intentFingerprint": "0afa09e83aa0fa5a0fd5e2cf900a7fd8b1703902733631913e8e195581a889e0",
+      "snapshot": {
+        "version": 1,
+        "sourceOutboxItemId": "commit:3d774859f9df6d9b:invoke:14h99VlEmmT:activity-completed:14h99VlEmmT:bd668ba220022fa8:0",
+        "intentFingerprint": "0afa09e83aa0fa5a0fd5e2cf900a7fd8b1703902733631913e8e195581a889e0",
+        "scope": {
+          "persistenceScope": {
+            "value": "default"
+          },
+          "tenantId": "default",
+          "partition": {
+            "value": "default"
+          },
+          "runKind": 2,
+          "testScope": null
+        },
+        "selectedAt": "2026-10-27T10:37:22.807+00:00",
+        "stimulusType": "Event",
+        "stimulusHash": "sha256:179f9006f184e53dce246e6ad79bd7b35f87ce4604c61375f6e148462faab304",
+        "starts": [
+          {
+            "binding": {
+              "triggerBindingId": "tb1-34FDD73E402FD474C82BEE252695C7A91A8255E9EA2337C3D4A971FA54B1E2BE",
+              "artifactId": "artifact-acbedc71ebee",
+              "definitionId": "14h99VEUlUN",
+              "artifactVersion": "1.0.0",
+              "artifactHash": "sha256:acbedc71ebee3fd4b8739352410ab4bf27aa57fc272af4a6b96acbc62b207c8f",
+              "executableNodeId": "node-selected-start",
+              "stimulusType": "Event",
+              "stimulusHash": "sha256:179f9006f184e53dce246e6ad79bd7b35f87ce4604c61375f6e148462faab304",
+              "correlationScope": null,
+              "metadata": {
+                "bpmn.startElementId": "receive"
+              },
+              "createdAt": "2026-10-27T10:37:21.820144+00:00",
+              "activationId": "publication-14h99VGkJMU",
+              "slotId": "activation-slot:11:14h99VEUlUN:7:default",
+              "cardinality": 1,
+              "isActive": true
+            },
+            "executable": {
+              "artifactId": "artifact-acbedc71ebee",
+              "definitionId": "14h99VEUlUN",
+              "definitionVersionId": "14h99VEWPWR",
+              "artifactVersion": "1.0.0",
+              "artifactHash": "sha256:acbedc71ebee3fd4b8739352410ab4bf27aa57fc272af4a6b96acbc62b207c8f"
+            },
+            "sourceCapture": {
+              "version": 1,
+              "provenance": {
+                "sourceReferenceId": "activation-ref:publication-14h99VGkJMU",
+                "sourceKind": "WorkflowDefinitionVersion",
+                "sourceId": "14h99VEWPWR",
+                "sourceVersion": "1.0.0",
+                "definitionId": "14h99VEUlUN",
+                "definitionVersionId": "14h99VEWPWR",
+                "artifactVersion": "1.0.0",
+                "publicationId": "publication-14h99VGkJMU",
+                "slotId": "activation-slot:11:14h99VEUlUN:7:default"
+              }
+            }
+          }
+        ],
+        "resumes": [
+          {
+            "workflowExecutionId": "14h99SggF4q",
+            "bookmarkId": "14h99UPwWSs:attempt:1:trigger:1",
+            "activityExecutionId": "14h99UPwWSs",
+            "executableNodeId": "node-wait-a",
+            "resumeTargetId": "node-wait-a:resume-target:event",
+            "stimulusType": "Event",
+            "stimulusHash": "sha256:179f9006f184e53dce246e6ad79bd7b35f87ce4604c61375f6e148462faab304",
+            "createdAt": "2026-10-27T10:37:21.712843+00:00",
+            "expiresAt": null,
+            "registrationCapture": {
+              "version": 1,
+              "generation": 1480265773743631766,
+              "executable": {
+                "artifactId": "artifact-bf68ee24c771",
+                "definitionId": "14h99QzZF8x",
+                "definitionVersionId": "14h99R0kRqI",
+                "artifactVersion": "1.0.0",
+                "artifactHash": "sha256:bf68ee24c771d20573ce06b5bf8fede121d73d62055e8966c13966ade05b457e"
+              },
+              "scope": {
+                "persistenceScope": {
+                  "value": "default"
+                },
+                "tenantId": "default",
+                "partition": {
+                  "value": "default"
+                },
+                "runKind": 2,
+                "testScope": null
+              },
+              "pinnedSource": {
+                "sourceReferenceId": "activation-ref:publication-14h99RR7iDi",
+                "sourceKind": "WorkflowDefinitionVersion",
+                "sourceId": "14h99R0kRqI",
+                "sourceVersion": "1.0.0",
+                "definitionId": "14h99QzZF8x",
+                "definitionVersionId": "14h99R0kRqI",
+                "artifactVersion": "1.0.0",
+                "publicationId": "publication-14h99RR7iDi",
+                "slotId": "activation-slot:11:14h99QzZF8x:7:default"
+              },
+              "metadata": {
+                "runtime.schedulerWorkItemId": "a030151bfd1bed44:create-bookmark:14h99UPwWSs:attempt:1:trigger:1",
+                "runtime.commandId": "666f330b3002471f:create-bookmark:14h99UPwWSs:attempt:1:trigger:1",
+                "runtime.reason": "ActivitySuspended"
+              },
+              "payloadFingerprint": "5ad38304b535c2987dbd24657c1a11b884984ff600d9f389deb0d4e634fee792"
+            }
+          },
+          {
+            "workflowExecutionId": "14h99SggF4q",
+            "bookmarkId": "14h99UQ93dT:attempt:1:trigger:1",
+            "activityExecutionId": "14h99UQ93dT",
+            "executableNodeId": "node-wait-b",
+            "resumeTargetId": "node-wait-b:resume-target:event",
+            "stimulusType": "Event",
+            "stimulusHash": "sha256:179f9006f184e53dce246e6ad79bd7b35f87ce4604c61375f6e148462faab304",
+            "createdAt": "2026-10-27T10:37:21.744385+00:00",
+            "expiresAt": null,
+            "registrationCapture": {
+              "version": 1,
+              "generation": 2871419317888779447,
+              "executable": {
+                "artifactId": "artifact-bf68ee24c771",
+                "definitionId": "14h99QzZF8x",
+                "definitionVersionId": "14h99R0kRqI",
+                "artifactVersion": "1.0.0",
+                "artifactHash": "sha256:bf68ee24c771d20573ce06b5bf8fede121d73d62055e8966c13966ade05b457e"
+              },
+              "scope": {
+                "persistenceScope": {
+                  "value": "default"
+                },
+                "tenantId": "default",
+                "partition": {
+                  "value": "default"
+                },
+                "runKind": 2,
+                "testScope": null
+              },
+              "pinnedSource": {
+                "sourceReferenceId": "activation-ref:publication-14h99RR7iDi",
+                "sourceKind": "WorkflowDefinitionVersion",
+                "sourceId": "14h99R0kRqI",
+                "sourceVersion": "1.0.0",
+                "definitionId": "14h99QzZF8x",
+                "definitionVersionId": "14h99R0kRqI",
+                "artifactVersion": "1.0.0",
+                "publicationId": "publication-14h99RR7iDi",
+                "slotId": "activation-slot:11:14h99QzZF8x:7:default"
+              },
+              "metadata": {
+                "runtime.schedulerWorkItemId": "db2b8063b193b74b:create-bookmark:14h99UQ93dT:attempt:1:trigger:1",
+                "runtime.commandId": "649dc0264beb04a4:create-bookmark:14h99UQ93dT:attempt:1:trigger:1",
+                "runtime.reason": "ActivitySuspended"
+              },
+              "payloadFingerprint": "5ad38304b535c2987dbd24657c1a11b884984ff600d9f389deb0d4e634fee792"
+            }
+          }
+        ],
+        "retentionAcceptance": {
+          "version": 1
+        }
+      },
+      "selectedResumes": [
+        {
+          "workflowExecutionId": "14h99SggF4q",
+          "bookmarkId": "14h99UPwWSs:attempt:1:trigger:1",
+          "activityExecutionId": "14h99UPwWSs",
+          "executableNodeId": "node-wait-a",
+          "createdAt": "2026-10-27T10:37:21.712843+00:00",
+          "generation": 1480265773743631766
+        },
+        {
+          "workflowExecutionId": "14h99SggF4q",
+          "bookmarkId": "14h99UQ93dT:attempt:1:trigger:1",
+          "activityExecutionId": "14h99UQ93dT",
+          "executableNodeId": "node-wait-b",
+          "createdAt": "2026-10-27T10:37:21.744385+00:00",
+          "generation": 2871419317888779447
+        }
+      ],
+      "selectedStarts": [
+        {
+          "artifactId": "artifact-acbedc71ebee",
+          "bindingCreatedAt": "2026-10-27T10:37:21.820144+00:00",
+          "workflowExecutionId": "wfexec:start:v1:7c2c93171128075836b1d3673d7cf504a7a0d2a2a82cacf5701951dbb023eae0"
+        }
+      ]
+    },
+    "workflows": [
+      {
+        "workflowExecutionId": "14h99SggF4q",
+        "exists": true,
+        "status": "Running",
+        "pinnedExecutable": {
+          "artifactId": "artifact-bf68ee24c771",
+          "definitionId": "14h99QzZF8x",
+          "definitionVersionId": "14h99R0kRqI",
+          "artifactVersion": "1.0.0",
+          "artifactHash": "sha256:bf68ee24c771d20573ce06b5bf8fede121d73d62055e8966c13966ade05b457e"
+        },
+        "pinnedSource": {
+          "sourceReferenceId": "activation-ref:publication-14h99RR7iDi",
+          "sourceKind": "WorkflowDefinitionVersion",
+          "sourceId": "14h99R0kRqI",
+          "sourceVersion": "1.0.0",
+          "definitionId": "14h99QzZF8x",
+          "definitionVersionId": "14h99R0kRqI",
+          "artifactVersion": "1.0.0",
+          "publicationId": "publication-14h99RR7iDi",
+          "slotId": "activation-slot:11:14h99QzZF8x:7:default"
+        },
+        "runKind": 2,
+        "bookmarks": [
+          {
+            "bookmarkId": "14h99UPwWSs:attempt:1:trigger:1",
+            "activityExecutionId": "14h99UPwWSs",
+            "executableNodeId": "node-wait-a",
+            "stimulusType": "Event",
+            "stimulusHash": "sha256:179f9006f184e53dce246e6ad79bd7b35f87ce4604c61375f6e148462faab304",
+            "generation": 1480265773743631766,
+            "createdAt": "2026-10-27T10:37:21.712843+00:00",
+            "expiresAt": null,
+            "activityStatus": "Suspended",
+            "attemptCount": 1
+          },
+          {
+            "bookmarkId": "14h99UQ93dT:attempt:1:trigger:1",
+            "activityExecutionId": "14h99UQ93dT",
+            "executableNodeId": "node-wait-b",
+            "stimulusType": "Event",
+            "stimulusHash": "sha256:179f9006f184e53dce246e6ad79bd7b35f87ce4604c61375f6e148462faab304",
+            "generation": 2871419317888779447,
+            "createdAt": "2026-10-27T10:37:21.744385+00:00",
+            "expiresAt": null,
+            "activityStatus": "Suspended",
+            "attemptCount": 1
+          }
+        ],
+        "selectedActivities": [
+          {
+            "activityExecutionId": "14h99UPwWSs",
+            "status": "Suspended",
+            "bookmarkIds": [
+              "14h99UPwWSs:attempt:1:trigger:1"
+            ],
+            "attemptCount": 1
+          },
+          {
+            "activityExecutionId": "14h99UQ93dT",
+            "status": "Suspended",
+            "bookmarkIds": [
+              "14h99UQ93dT:attempt:1:trigger:1"
+            ],
+            "attemptCount": 1
+          }
+        ]
+      },
+      {
+        "workflowExecutionId": "14h99VcgbrQ",
+        "exists": true,
+        "status": "Completed",
+        "pinnedExecutable": {
+          "artifactId": "artifact-6cf7efea8e5e",
+          "definitionId": "14h99VSyBYF",
+          "definitionVersionId": "14h99VT2KZj",
+          "artifactVersion": "1.0.0",
+          "artifactHash": "sha256:6cf7efea8e5e237acafdff018a6f57c91f0b86b69671b6ef8b13bdd490fbe44a"
+        },
+        "pinnedSource": {
+          "sourceReferenceId": "activation-ref:publication-14h99VW6grx",
+          "sourceKind": "WorkflowDefinitionVersion",
+          "sourceId": "14h99VT2KZj",
+          "sourceVersion": "1.0.0",
+          "definitionId": "14h99VSyBYF",
+          "definitionVersionId": "14h99VT2KZj",
+          "artifactVersion": "1.0.0",
+          "publicationId": "publication-14h99VW6grx",
+          "slotId": "activation-slot:11:14h99VSyBYF:7:default"
+        },
+        "runKind": 2,
+        "bookmarks": [],
+        "selectedActivities": []
+      },
+      {
+        "workflowExecutionId": "wfexec:start:v1:7c2c93171128075836b1d3673d7cf504a7a0d2a2a82cacf5701951dbb023eae0",
+        "exists": false,
+        "status": null,
+        "pinnedExecutable": null,
+        "pinnedSource": null,
+        "runKind": null,
+        "bookmarks": [],
+        "selectedActivities": []
+      }
+    ],
+    "matchingBindings": [
+      {
+        "triggerBindingId": "tb1-34FDD73E402FD474C82BEE252695C7A91A8255E9EA2337C3D4A971FA54B1E2BE",
+        "artifactId": "artifact-acbedc71ebee",
+        "executableNodeId": "node-selected-start",
+        "stimulusType": "Event",
+        "stimulusHash": "sha256:179f9006f184e53dce246e6ad79bd7b35f87ce4604c61375f6e148462faab304",
+        "isActive": true,
+        "createdAt": "2026-10-27T10:37:21.820144+00:00"
+      },
+      {
+        "triggerBindingId": "tb1-A727FF7360031123E283BB8C8424832B0AD0193AAB721490D022697A3522DAC7",
+        "artifactId": "artifact-290f062fb276",
+        "executableNodeId": "node-late-start",
+        "stimulusType": "Event",
+        "stimulusHash": "sha256:179f9006f184e53dce246e6ad79bd7b35f87ce4604c61375f6e148462faab304",
+        "isActive": true,
+        "createdAt": "2026-10-27T10:37:23.091193+00:00"
+      }
+    ],
+    "allWorkflows": [
+      {
+        "workflowExecutionId": "14h99aZTkP2",
+        "artifactId": "artifact-e3ccdb1e5d1e",
+        "status": "Running"
+      },
+      {
+        "workflowExecutionId": "14h99VcgbrQ",
+        "artifactId": "artifact-6cf7efea8e5e",
+        "status": "Completed"
+      },
+      {
+        "workflowExecutionId": "14h99SggF4q",
+        "artifactId": "artifact-bf68ee24c771",
+        "status": "Running"
+      }
+    ]
+  },
+  "crashedOrPausedProcessId": 82206,
+  "normalAssemblySha256": "ccc0e8a2d6314915a0e6f09ee37d808ecf32c2a4684d1ac4826ac821ab76bbbb",
+  "readerSha256": "7dbe38c0606ab0c18213dab2ab2d5c70afa9732c41b3757a1d4311327f40fce0",
+  "passed": true,
+  "capturedAtUtc": "2026-10-27T10:38:26.6634170+00:00",
+  "failures": [],
+  "sourceCommit": "b694efb8c5bda5891a9e96e2b3cc38eacdfd051c",
+  "sourceRevision": "b694efb8c5bda5891a9e96e2b3cc38eacdfd051c+uncommitted-partial-start",
+  "normalProcessId": 82253,
+  "scenario": "after-cohort-before-dispatch",
+  "stopped": {
+    "providerChecked": true,
+    "readOnly": true,
+    "snapshotSha256": "805ce2b6d7a42afe4adcedd5c8738dde90e1f533169e222069f378af55e0ecbe",
+    "source": {
+      "outboxItemId": "commit:3d774859f9df6d9b:invoke:14h99VlEmmT:activity-completed:14h99VlEmmT:bd668ba220022fa8:0",
+      "workflowExecutionId": "14h99VcgbrQ",
+      "recordedAt": "2026-10-27T10:37:21.934025+00:00",
+      "status": "Delivering",
+      "deliveryAttemptCount": 0,
+      "deliveringOwnerId": "runtime-outbox-8392603898fd4592943f03a0088920fd",
+      "deliveryFencingToken": 1,
+      "deliveryVisibleAfter": "2026-10-27T10:38:22.776831+00:00",
+      "deliveredAt": null,
+      "lastFailureMessage": null,
+      "intentPayload": {
+        "stimulusType": "Event",
+        "stimulusHash": "sha256:179f9006f184e53dce246e6ad79bd7b35f87ce4604c61375f6e148462faab304",
+        "eventName": "bpmn-source-recovery-fb02779f8547404d8879ed611312c85b",
+        "correlationId": null,
+        "payload": null,
+        "isLocalEvent": false
+      },
+      "intentFingerprint": "0afa09e83aa0fa5a0fd5e2cf900a7fd8b1703902733631913e8e195581a889e0",
+      "snapshot": {
+        "version": 1,
+        "sourceOutboxItemId": "commit:3d774859f9df6d9b:invoke:14h99VlEmmT:activity-completed:14h99VlEmmT:bd668ba220022fa8:0",
+        "intentFingerprint": "0afa09e83aa0fa5a0fd5e2cf900a7fd8b1703902733631913e8e195581a889e0",
+        "scope": {
+          "persistenceScope": {
+            "value": "default"
+          },
+          "tenantId": "default",
+          "partition": {
+            "value": "default"
+          },
+          "runKind": 2,
+          "testScope": null
+        },
+        "selectedAt": "2026-10-27T10:37:22.807+00:00",
+        "stimulusType": "Event",
+        "stimulusHash": "sha256:179f9006f184e53dce246e6ad79bd7b35f87ce4604c61375f6e148462faab304",
+        "starts": [
+          {
+            "binding": {
+              "triggerBindingId": "tb1-34FDD73E402FD474C82BEE252695C7A91A8255E9EA2337C3D4A971FA54B1E2BE",
+              "artifactId": "artifact-acbedc71ebee",
+              "definitionId": "14h99VEUlUN",
+              "artifactVersion": "1.0.0",
+              "artifactHash": "sha256:acbedc71ebee3fd4b8739352410ab4bf27aa57fc272af4a6b96acbc62b207c8f",
+              "executableNodeId": "node-selected-start",
+              "stimulusType": "Event",
+              "stimulusHash": "sha256:179f9006f184e53dce246e6ad79bd7b35f87ce4604c61375f6e148462faab304",
+              "correlationScope": null,
+              "metadata": {
+                "bpmn.startElementId": "receive"
+              },
+              "createdAt": "2026-10-27T10:37:21.820144+00:00",
+              "activationId": "publication-14h99VGkJMU",
+              "slotId": "activation-slot:11:14h99VEUlUN:7:default",
+              "cardinality": 1,
+              "isActive": true
+            },
+            "executable": {
+              "artifactId": "artifact-acbedc71ebee",
+              "definitionId": "14h99VEUlUN",
+              "definitionVersionId": "14h99VEWPWR",
+              "artifactVersion": "1.0.0",
+              "artifactHash": "sha256:acbedc71ebee3fd4b8739352410ab4bf27aa57fc272af4a6b96acbc62b207c8f"
+            },
+            "sourceCapture": {
+              "version": 1,
+              "provenance": {
+                "sourceReferenceId": "activation-ref:publication-14h99VGkJMU",
+                "sourceKind": "WorkflowDefinitionVersion",
+                "sourceId": "14h99VEWPWR",
+                "sourceVersion": "1.0.0",
+                "definitionId": "14h99VEUlUN",
+                "definitionVersionId": "14h99VEWPWR",
+                "artifactVersion": "1.0.0",
+                "publicationId": "publication-14h99VGkJMU",
+                "slotId": "activation-slot:11:14h99VEUlUN:7:default"
+              }
+            }
+          }
+        ],
+        "resumes": [
+          {
+            "workflowExecutionId": "14h99SggF4q",
+            "bookmarkId": "14h99UPwWSs:attempt:1:trigger:1",
+            "activityExecutionId": "14h99UPwWSs",
+            "executableNodeId": "node-wait-a",
+            "resumeTargetId": "node-wait-a:resume-target:event",
+            "stimulusType": "Event",
+            "stimulusHash": "sha256:179f9006f184e53dce246e6ad79bd7b35f87ce4604c61375f6e148462faab304",
+            "createdAt": "2026-10-27T10:37:21.712843+00:00",
+            "expiresAt": null,
+            "registrationCapture": {
+              "version": 1,
+              "generation": 1480265773743631766,
+              "executable": {
+                "artifactId": "artifact-bf68ee24c771",
+                "definitionId": "14h99QzZF8x",
+                "definitionVersionId": "14h99R0kRqI",
+                "artifactVersion": "1.0.0",
+                "artifactHash": "sha256:bf68ee24c771d20573ce06b5bf8fede121d73d62055e8966c13966ade05b457e"
+              },
+              "scope": {
+                "persistenceScope": {
+                  "value": "default"
+                },
+                "tenantId": "default",
+                "partition": {
+                  "value": "default"
+                },
+                "runKind": 2,
+                "testScope": null
+              },
+              "pinnedSource": {
+                "sourceReferenceId": "activation-ref:publication-14h99RR7iDi",
+                "sourceKind": "WorkflowDefinitionVersion",
+                "sourceId": "14h99R0kRqI",
+                "sourceVersion": "1.0.0",
+                "definitionId": "14h99QzZF8x",
+                "definitionVersionId": "14h99R0kRqI",
+                "artifactVersion": "1.0.0",
+                "publicationId": "publication-14h99RR7iDi",
+                "slotId": "activation-slot:11:14h99QzZF8x:7:default"
+              },
+              "metadata": {
+                "runtime.schedulerWorkItemId": "a030151bfd1bed44:create-bookmark:14h99UPwWSs:attempt:1:trigger:1",
+                "runtime.commandId": "666f330b3002471f:create-bookmark:14h99UPwWSs:attempt:1:trigger:1",
+                "runtime.reason": "ActivitySuspended"
+              },
+              "payloadFingerprint": "5ad38304b535c2987dbd24657c1a11b884984ff600d9f389deb0d4e634fee792"
+            }
+          },
+          {
+            "workflowExecutionId": "14h99SggF4q",
+            "bookmarkId": "14h99UQ93dT:attempt:1:trigger:1",
+            "activityExecutionId": "14h99UQ93dT",
+            "executableNodeId": "node-wait-b",
+            "resumeTargetId": "node-wait-b:resume-target:event",
+            "stimulusType": "Event",
+            "stimulusHash": "sha256:179f9006f184e53dce246e6ad79bd7b35f87ce4604c61375f6e148462faab304",
+            "createdAt": "2026-10-27T10:37:21.744385+00:00",
+            "expiresAt": null,
+            "registrationCapture": {
+              "version": 1,
+              "generation": 2871419317888779447,
+              "executable": {
+                "artifactId": "artifact-bf68ee24c771",
+                "definitionId": "14h99QzZF8x",
+                "definitionVersionId": "14h99R0kRqI",
+                "artifactVersion": "1.0.0",
+                "artifactHash": "sha256:bf68ee24c771d20573ce06b5bf8fede121d73d62055e8966c13966ade05b457e"
+              },
+              "scope": {
+                "persistenceScope": {
+                  "value": "default"
+                },
+                "tenantId": "default",
+                "partition": {
+                  "value": "default"
+                },
+                "runKind": 2,
+                "testScope": null
+              },
+              "pinnedSource": {
+                "sourceReferenceId": "activation-ref:publication-14h99RR7iDi",
+                "sourceKind": "WorkflowDefinitionVersion",
+                "sourceId": "14h99R0kRqI",
+                "sourceVersion": "1.0.0",
+                "definitionId": "14h99QzZF8x",
+                "definitionVersionId": "14h99R0kRqI",
+                "artifactVersion": "1.0.0",
+                "publicationId": "publication-14h99RR7iDi",
+                "slotId": "activation-slot:11:14h99QzZF8x:7:default"
+              },
+              "metadata": {
+                "runtime.schedulerWorkItemId": "db2b8063b193b74b:create-bookmark:14h99UQ93dT:attempt:1:trigger:1",
+                "runtime.commandId": "649dc0264beb04a4:create-bookmark:14h99UQ93dT:attempt:1:trigger:1",
+                "runtime.reason": "ActivitySuspended"
+              },
+              "payloadFingerprint": "5ad38304b535c2987dbd24657c1a11b884984ff600d9f389deb0d4e634fee792"
+            }
+          }
+        ],
+        "retentionAcceptance": {
+          "version": 1
+        }
+      },
+      "selectedResumes": [
+        {
+          "workflowExecutionId": "14h99SggF4q",
+          "bookmarkId": "14h99UPwWSs:attempt:1:trigger:1",
+          "activityExecutionId": "14h99UPwWSs",
+          "executableNodeId": "node-wait-a",
+          "createdAt": "2026-10-27T10:37:21.712843+00:00",
+          "generation": 1480265773743631766
+        },
+        {
+          "workflowExecutionId": "14h99SggF4q",
+          "bookmarkId": "14h99UQ93dT:attempt:1:trigger:1",
+          "activityExecutionId": "14h99UQ93dT",
+          "executableNodeId": "node-wait-b",
+          "createdAt": "2026-10-27T10:37:21.744385+00:00",
+          "generation": 2871419317888779447
+        }
+      ],
+      "selectedStarts": [
+        {
+          "artifactId": "artifact-acbedc71ebee",
+          "bindingCreatedAt": "2026-10-27T10:37:21.820144+00:00",
+          "workflowExecutionId": "wfexec:start:v1:7c2c93171128075836b1d3673d7cf504a7a0d2a2a82cacf5701951dbb023eae0"
+        }
+      ]
+    },
+    "workflows": [
+      {
+        "workflowExecutionId": "14h99SggF4q",
+        "exists": true,
+        "status": "Running",
+        "pinnedExecutable": {
+          "artifactId": "artifact-bf68ee24c771",
+          "definitionId": "14h99QzZF8x",
+          "definitionVersionId": "14h99R0kRqI",
+          "artifactVersion": "1.0.0",
+          "artifactHash": "sha256:bf68ee24c771d20573ce06b5bf8fede121d73d62055e8966c13966ade05b457e"
+        },
+        "pinnedSource": {
+          "sourceReferenceId": "activation-ref:publication-14h99RR7iDi",
+          "sourceKind": "WorkflowDefinitionVersion",
+          "sourceId": "14h99R0kRqI",
+          "sourceVersion": "1.0.0",
+          "definitionId": "14h99QzZF8x",
+          "definitionVersionId": "14h99R0kRqI",
+          "artifactVersion": "1.0.0",
+          "publicationId": "publication-14h99RR7iDi",
+          "slotId": "activation-slot:11:14h99QzZF8x:7:default"
+        },
+        "runKind": 2,
+        "bookmarks": [
+          {
+            "bookmarkId": "14h99UPwWSs:attempt:1:trigger:1",
+            "activityExecutionId": "14h99UPwWSs",
+            "executableNodeId": "node-wait-a",
+            "stimulusType": "Event",
+            "stimulusHash": "sha256:179f9006f184e53dce246e6ad79bd7b35f87ce4604c61375f6e148462faab304",
+            "generation": 1480265773743631766,
+            "createdAt": "2026-10-27T10:37:21.712843+00:00",
+            "expiresAt": null,
+            "activityStatus": "Suspended",
+            "attemptCount": 1
+          },
+          {
+            "bookmarkId": "14h99UQ93dT:attempt:1:trigger:1",
+            "activityExecutionId": "14h99UQ93dT",
+            "executableNodeId": "node-wait-b",
+            "stimulusType": "Event",
+            "stimulusHash": "sha256:179f9006f184e53dce246e6ad79bd7b35f87ce4604c61375f6e148462faab304",
+            "generation": 2871419317888779447,
+            "createdAt": "2026-10-27T10:37:21.744385+00:00",
+            "expiresAt": null,
+            "activityStatus": "Suspended",
+            "attemptCount": 1
+          }
+        ],
+        "selectedActivities": [
+          {
+            "activityExecutionId": "14h99UPwWSs",
+            "status": "Suspended",
+            "bookmarkIds": [
+              "14h99UPwWSs:attempt:1:trigger:1"
+            ],
+            "attemptCount": 1
+          },
+          {
+            "activityExecutionId": "14h99UQ93dT",
+            "status": "Suspended",
+            "bookmarkIds": [
+              "14h99UQ93dT:attempt:1:trigger:1"
+            ],
+            "attemptCount": 1
+          }
+        ]
+      },
+      {
+        "workflowExecutionId": "14h99VcgbrQ",
+        "exists": true,
+        "status": "Completed",
+        "pinnedExecutable": {
+          "artifactId": "artifact-6cf7efea8e5e",
+          "definitionId": "14h99VSyBYF",
+          "definitionVersionId": "14h99VT2KZj",
+          "artifactVersion": "1.0.0",
+          "artifactHash": "sha256:6cf7efea8e5e237acafdff018a6f57c91f0b86b69671b6ef8b13bdd490fbe44a"
+        },
+        "pinnedSource": {
+          "sourceReferenceId": "activation-ref:publication-14h99VW6grx",
+          "sourceKind": "WorkflowDefinitionVersion",
+          "sourceId": "14h99VT2KZj",
+          "sourceVersion": "1.0.0",
+          "definitionId": "14h99VSyBYF",
+          "definitionVersionId": "14h99VT2KZj",
+          "artifactVersion": "1.0.0",
+          "publicationId": "publication-14h99VW6grx",
+          "slotId": "activation-slot:11:14h99VSyBYF:7:default"
+        },
+        "runKind": 2,
+        "bookmarks": [],
+        "selectedActivities": []
+      },
+      {
+        "workflowExecutionId": "14h99aZTkP2",
+        "exists": true,
+        "status": "Running",
+        "pinnedExecutable": {
+          "artifactId": "artifact-e3ccdb1e5d1e",
+          "definitionId": "14h99aNLF6l",
+          "definitionVersionId": "14h99aNGnVs",
+          "artifactVersion": "1.0.0",
+          "artifactHash": "sha256:e3ccdb1e5d1ee31465f6f723a3afd193243d9bbee1473b7968df5bd5c7c39fe6"
+        },
+        "pinnedSource": {
+          "sourceReferenceId": "activation-ref:publication-14h99aQT8lI",
+          "sourceKind": "WorkflowDefinitionVersion",
+          "sourceId": "14h99aNGnVs",
+          "sourceVersion": "1.0.0",
+          "definitionId": "14h99aNLF6l",
+          "definitionVersionId": "14h99aNGnVs",
+          "artifactVersion": "1.0.0",
+          "publicationId": "publication-14h99aQT8lI",
+          "slotId": "activation-slot:11:14h99aNLF6l:7:default"
+        },
+        "runKind": 2,
+        "bookmarks": [
+          {
+            "bookmarkId": "14h99ajhOps:attempt:1:trigger:1",
+            "activityExecutionId": "14h99ajhOps",
+            "executableNodeId": "node-wait-a",
+            "stimulusType": "Event",
+            "stimulusHash": "sha256:179f9006f184e53dce246e6ad79bd7b35f87ce4604c61375f6e148462faab304",
+            "generation": 4446857632419107338,
+            "createdAt": "2026-10-27T10:37:23.04996+00:00",
+            "expiresAt": null,
+            "activityStatus": "Suspended",
+            "attemptCount": 1
+          },
+          {
+            "bookmarkId": "14h99ajhYXE:attempt:1:trigger:1",
+            "activityExecutionId": "14h99ajhYXE",
+            "executableNodeId": "node-wait-b",
+            "stimulusType": "Event",
+            "stimulusHash": "sha256:179f9006f184e53dce246e6ad79bd7b35f87ce4604c61375f6e148462faab304",
+            "generation": 3634190743242799716,
+            "createdAt": "2026-10-27T10:37:23.054934+00:00",
+            "expiresAt": null,
+            "activityStatus": "Suspended",
+            "attemptCount": 1
+          }
+        ],
+        "selectedActivities": []
+      },
+      {
+        "workflowExecutionId": "wfexec:start:v1:7c2c93171128075836b1d3673d7cf504a7a0d2a2a82cacf5701951dbb023eae0",
+        "exists": false,
+        "status": null,
+        "pinnedExecutable": null,
+        "pinnedSource": null,
+        "runKind": null,
+        "bookmarks": [],
+        "selectedActivities": []
+      }
+    ],
+    "matchingBindings": [
+      {
+        "triggerBindingId": "tb1-34FDD73E402FD474C82BEE252695C7A91A8255E9EA2337C3D4A971FA54B1E2BE",
+        "artifactId": "artifact-acbedc71ebee",
+        "executableNodeId": "node-selected-start",
+        "stimulusType": "Event",
+        "stimulusHash": "sha256:179f9006f184e53dce246e6ad79bd7b35f87ce4604c61375f6e148462faab304",
+        "isActive": true,
+        "createdAt": "2026-10-27T10:37:21.820144+00:00"
+      },
+      {
+        "triggerBindingId": "tb1-A727FF7360031123E283BB8C8424832B0AD0193AAB721490D022697A3522DAC7",
+        "artifactId": "artifact-290f062fb276",
+        "executableNodeId": "node-late-start",
+        "stimulusType": "Event",
+        "stimulusHash": "sha256:179f9006f184e53dce246e6ad79bd7b35f87ce4604c61375f6e148462faab304",
+        "isActive": true,
+        "createdAt": "2026-10-27T10:37:23.091193+00:00"
+      }
+    ],
+    "allWorkflows": [
+      {
+        "workflowExecutionId": "14h99aZTkP2",
+        "artifactId": "artifact-e3ccdb1e5d1e",
+        "status": "Running"
+      },
+      {
+        "workflowExecutionId": "14h99VcgbrQ",
+        "artifactId": "artifact-6cf7efea8e5e",
+        "status": "Completed"
+      },
+      {
+        "workflowExecutionId": "14h99SggF4q",
+        "artifactId": "artifact-bf68ee24c771",
+        "status": "Running"
+      }
+    ]
+  },
+  "probeAssemblySha256": "5d36b73c57d39a44cec16a677814854e61cfe987dcaea0b62e0f90fbd5d12e58",
+  "sharedVerifiedManifests": {
+    "hostReceipt": "broadcast-partial-start-host.json",
+    "fields": [
+      "sourceFiles",
+      "probeBuild",
+      "normalBuild",
+      "readerBuild"
+    ],
+    "identicalToActualRun": true
+  }
+}

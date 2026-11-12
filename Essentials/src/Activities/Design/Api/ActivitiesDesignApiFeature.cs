@@ -13,6 +13,7 @@ using Elsa.Activities.Design.Core.Stores;
 using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Api.AspNetCore;
 using Elsa.Api.Capabilities.Extensions;
+using Elsa.Api.Capabilities.Contracts;
 using Elsa.Events.Core.Extensions;
 using Elsa.Foundation.Identity.Extensions;
 using Elsa.Mediator.Core.Extensions;
@@ -22,7 +23,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
-using NativeEndpoints;
+using MinimalEndpoints;
 
 namespace Elsa.Activities.Design.Api;
 
@@ -34,7 +35,7 @@ namespace Elsa.Activities.Design.Api;
     name: "ActivitiesDesignApi",
     DisplayName = "Activities Design API",
     Description = "Contains endpoints to manage data in the Activities Design Domain",
-    DependsOn = new object[] { "ApiCapabilities", "Expressions" }
+    DependsOn = new object[] { "ApiCapabilities", "Expressions", "WorkflowDesignValidations" }
 )]
 public class ActivitiesDesignApiFeature : IWebShellFeature
 {
@@ -70,11 +71,14 @@ public class ActivitiesDesignApiFeature : IWebShellFeature
         services.TryAddScoped<IActivityUpgradePlanner>(sp => sp.GetRequiredService<ActivityUpgradePlanner>());
         services.TryAddScoped<IActivityUpgradePlanRefresher>(sp => sp.GetRequiredService<ActivityUpgradePlanner>());
         services.TryAddScoped<IActivityUpgradeDiffBuilder, ActivityUpgradeDiffBuilder>();
-        services.TryAddSingleton<IActivityProviderRegistry, ActivityProviderRegistry>();
+        services.TryAddScoped<IActivityProviderRegistry, ActivityProviderRegistry>();
         services.TryAddSingleton<IActivityContractCapabilityCatalog, ExpressionActivityContractCapabilityCatalog>();
         services.TryAddSingleton<ActivityContractAuthoringValidator>();
         services.TryAddSingleton<IActivityTypeKeyPolicy, DefaultActivityTypeKeyPolicy>();
         services.TryAddScoped<IActivityDraftValidator, ActivityDraftValidator>();
+        DataSelectionDraftValidationRegistration.Register(services);
+        services.TryAddScoped<ActivityDataSelectionContextService>();
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IApiCapabilitySource, ActivityDataSelectionApiCapabilitySource>());
         services.TryAddSingleton<IActivityVersionDiffer, ActivityVersionDiffer>();
         services.TryAddSingleton(TimeProvider.System);
         services.AddOptions<ActivityTokenSigningOptions>().Configure(options =>
@@ -121,6 +125,12 @@ public class ActivitiesDesignApiFeature : IWebShellFeature
         services.TryAddScoped<IActivityAvailabilityOperations>(sp => sp.GetRequiredService<ActivityAvailabilityOperations>());
         services.TryAddScoped<IActivityAuthoringCapabilitiesReader>(sp => sp.GetRequiredService<ActivityAuthoringCapabilitiesReader>());
         services.TryAddScoped<IActivityAuthoringCatalogReader>(sp => sp.GetRequiredService<ActivityAuthoringCatalogReader>());
+        // The actor-gated catalog other domains read through Activities Design Core. One implementation per shell:
+        // a duplicate fails startup rather than resolving last-write-wins.
+        // Rejected at configuration as well as at startup: the startup task runs only where the Tasks feature is composed.
+        ActivityAuthoringCatalogStartupTask.Validate(services);
+        services.TryAddScoped<IActivityAuthoringCatalog, HttpActivityAuthoringCatalog>();
+        AddCatalogValidator(services);
         services.TryAddScoped<IRecommendedActivityDefinitionReader>(sp => sp.GetRequiredService<RecommendedActivityDefinitionReader>());
         services.TryAddScoped<IActivityUpgradeOperations>(sp => sp.GetRequiredService<ActivityUpgradeOperations>());
         services.TryAddSingleton<IActivityVersionSelectionPolicy, DefaultActivityVersionSelectionPolicy>();
@@ -142,6 +152,22 @@ public class ActivitiesDesignApiFeature : IWebShellFeature
 
     public virtual void MapEndpoints(IEndpointRouteBuilder endpoints, IHostEnvironment? environment) =>
         ActivitiesDesignApi.MapActivitiesDesignApi(endpoints);
+
+    // Shells copy parent descriptors. The validator owns only the configuring collection, so a child shell checks its own
+    // registrations and repeated configuration keeps one validator.
+    private static void AddCatalogValidator(IServiceCollection services)
+    {
+        if (services.LastOrDefault(item => item.ServiceType == typeof(ActivityAuthoringCatalogStartupTask))
+                ?.ImplementationInstance is not ActivityAuthoringCatalogStartupTask validator || !validator.Owns(services))
+            validator = new ActivityAuthoringCatalogStartupTask(services);
+        services.RemoveAll<ActivityAuthoringCatalogStartupTask>();
+        services.AddSingleton(validator);
+        foreach (var previous in services.Where(item => item.ServiceType == typeof(Elsa.Tasks.Core.IStartupTask)
+                     && (item.ImplementationInstance is ActivityAuthoringCatalogStartupTask
+                         || item.ImplementationType == typeof(ActivityAuthoringCatalogStartupTask))).ToArray())
+            services.Remove(previous);
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<Elsa.Tasks.Core.IStartupTask>(validator));
+    }
 
     private static void ApplyFeatureOptions(ActivityAvailabilityOptions? source, ActivityAvailabilityOptions target)
     {

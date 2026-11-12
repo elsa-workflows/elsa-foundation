@@ -8,16 +8,16 @@ import {
   type StudioNavigationContribution,
   type StudioSettingDescriptor
 } from "@elsa-workflows/studio-sdk";
-import { registerBuiltInSettingEditors } from "../../src/apps/Elsa.Studio.Web/Client/src/app/ui/shared";
-import { ShellFrame, getStudioNavigation } from "../../src/apps/Elsa.Studio.Web/Client/src/app/App";
-import { ThemeProvider } from "../../src/apps/Elsa.Studio.Web/Client/src/app/components/ThemeProvider";
-import { writeAppearancePreferences } from "../../src/apps/Elsa.Studio.Web/Client/src/app/themes/appearance";
+import { registerBuiltInSettingEditors } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/ui/shared";
+import { ShellFrame, getStudioNavigation } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/App";
+import { ThemeProvider } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/components/ThemeProvider";
+import { writeAppearancePreferences } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/themes/appearance";
 import { HomePage } from "../../src/essentials/Elsa.Studio.Dashboard/Client/src/HomePage";
 import { createHomeLayoutScope, homeLayoutLocalStoragePrefix, homeLayoutRoute } from "../../src/essentials/Elsa.Studio.Dashboard/Client/src/homeLayout";
 import { registerCoreHomeWidgets } from "../../src/essentials/Elsa.Studio.Dashboard/Client/src/widgets/registerCoreHomeWidgets";
 import { register as registerWorkflowDashboardWidgets } from "../../../Extensions/Workflows.Dashboard/studio/Elsa.Studio.Workflows.Dashboard/Client/src/module";
 import { createWidgetHost } from "./homeFixture";
-import "../../src/apps/Elsa.Studio.Web/Client/src/app/styles.css";
+import "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/styles.css";
 import "../../src/essentials/Elsa.Studio.Dashboard/Client/src/styles.css";
 
 declare global {

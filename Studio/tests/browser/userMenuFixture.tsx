@@ -1,14 +1,14 @@
 import React from "react";
-import { UserMenu } from "../../src/apps/Elsa.Studio.Web/Client/src/app/components/UserMenu";
-import { ShellFrame, getStudioNavigation } from "../../src/apps/Elsa.Studio.Web/Client/src/app/App";
-import { StudioAuthBoundary, createStudioAuthManager } from "../../src/apps/Elsa.Studio.Web/Client/src/app/auth/studioAuth";
-import { ThemeProvider } from "../../src/apps/Elsa.Studio.Web/Client/src/app/components/ThemeProvider";
-import { ThemeSwitcher } from "../../src/apps/Elsa.Studio.Web/Client/src/app/components/ThemeSwitcher";
-import { AgentLauncher } from "../../src/apps/Elsa.Studio.Web/Client/src/app/agent/AgentLauncher";
-import type { AgentSessionIndicatorSession } from "../../src/apps/Elsa.Studio.Web/Client/src/app/agent/AgentSessionIndicator";
-import { writeAppearancePreferences } from "../../src/apps/Elsa.Studio.Web/Client/src/app/themes/appearance";
-import type { StudioNavigationContribution } from "../../src/apps/Elsa.Studio.Web/Client/src/sdk";
-import "../../src/apps/Elsa.Studio.Web/Client/src/app/styles.css";
+import { UserMenu } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/components/UserMenu";
+import { ShellFrame, getStudioNavigation } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/App";
+import { StudioAuthBoundary, createStudioAuthManager } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/auth/studioAuth";
+import { ThemeProvider } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/components/ThemeProvider";
+import { ThemeSwitcher } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/components/ThemeSwitcher";
+import { WeaverLauncher } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/weaver/WeaverLauncher";
+import type { WeaverSessionIndicatorSession } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/weaver/WeaverSessionIndicator";
+import { writeAppearancePreferences } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/themes/appearance";
+import type { StudioNavigationContribution } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/sdk";
+import "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/styles.css";
 
 const fixtureQuery = new URLSearchParams(window.location.search);
 const dark = fixtureQuery.get("theme") === "dark";
@@ -20,7 +20,7 @@ const showAccount = fixtureQuery.get("account") !== "off";
 const backendBaseUrl = fixtureQuery.get("backend") === "long"
   ? "https://workflow-runtime.internal.example.org:18443"
   : window.location.origin;
-const agentSessions: AgentSessionIndicatorSession[] = weaverVariant === "dense"
+const weaverSessions: WeaverSessionIndicatorSession[] = weaverVariant === "dense"
   ? [
       {
         id: "active",
@@ -51,14 +51,14 @@ const moduleNavigation: StudioNavigationContribution[] = [
 const authManager = createStudioAuthManager({ auth: { enabled: fixtureQuery.get("auth") !== "off" } }, window.location.origin);
 
 export function UserMenuFixture() {
-  const [agentOpen, setAgentOpen] = React.useState(false);
+  const [weaverOpen, setWeaverOpen] = React.useState(false);
   writeAppearancePreferences({ themeId: "classic", mode: dark ? "dark" : "light", navigation: navigationPreference });
 
   return (
     <StudioAuthBoundary manager={authManager}>
       <ThemeProvider>
         <ShellFrame
-          assistantAction={showWeaver ? <AgentLauncher open={agentOpen} sessions={agentSessions} onClick={() => setAgentOpen(open => !open)} /> : undefined}
+          assistantAction={showWeaver ? <WeaverLauncher open={weaverOpen} sessions={weaverSessions} onClick={() => setWeaverOpen(open => !open)} /> : undefined}
           accountAction={showAccount ? <UserMenu /> : undefined}
           navigation={getStudioNavigation(moduleNavigation, { includeThemeBuilder: false })}
           panels={[]}

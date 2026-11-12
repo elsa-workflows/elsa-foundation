@@ -1,13 +1,16 @@
 using CShells.AspNetCore.Configuration;
 using Elsa.Studio.Api.Options;
+using Elsa.Studio.Api.Contracts;
 using CShells.AspNetCore.Extensions;
 using CShells.AspNetCore.Middleware;
 using CShells.AspNetCore.Resolution;
 using CShells.DependencyInjection;
+using CShells.Lifecycle;
 using CShells.Resolution;
 using Elsa.Studio.Api.Features;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Elsa.Studio.Core.Contracts;
 
 namespace Elsa.Studio.Hosting;
 
@@ -30,7 +33,7 @@ public static class StudioHostingExtensions
         {
             try
             {
-                builder.Configuration.AddJsonFile(settings.ShellsFile, optional: false, reloadOnChange: true);
+                ((IConfigurationBuilder)builder.Configuration).Add(new StudioJsonConfigurationSource(settings.ShellsFile, optional: false));
             }
             catch (Exception error) when (error is IOException or FormatException or UnauthorizedAccessException)
             {
@@ -40,23 +43,31 @@ public static class StudioHostingExtensions
         settings = settings with { AuthEnabled = builder.Configuration.GetValue("Studio:Auth:Enabled", false) };
         builder.WebHost.UseStaticWebAssets();
         builder.Services.AddSingleton(settings);
+        builder.Services.TryAddScoped<IStudioModuleManifestProvider, SelectedShellModuleManifestProvider>();
         builder.Services.AddSingleton<IConfigurationRoot>(builder.Configuration);
-        builder.Services.AddSingleton<IOptions<StudioHostingOptions>>(Options.Create(new StudioHostingOptions
+        ServiceDescriptor? blueprintSource = null;
+        ServiceDescriptor? shellRegistry = null;
+        builder.Services.AddSingleton<IOptions<StudioHostingOptions>>(_ => Options.Create(new StudioHostingOptions
         {
-            ShellName = settings.ShellName, ShellsFile = settings.ShellsFile,
+            ShellName = settings.ShellName,
+            // A replacement registry/provider controls its own configuration. Addons must not write an unused file.
+            ShellsFile = ReferenceEquals(blueprintSource, builder.Services.LastOrDefault(service => service.ServiceType == typeof(IShellBlueprintProvider)))
+                && ReferenceEquals(shellRegistry, builder.Services.LastOrDefault(service => service.ServiceType == typeof(IShellRegistry)))
+                ? settings.ShellsFile : null,
             IndexFile = settings.IndexFile, QueryTokenPathPrefixes = settings.QueryTokenPathPrefixes.ToArray()
         }));
         var gate = new StudioConfigurationMutationGate();
         builder.Services.AddSingleton(gate);
         builder.Services.AddAuthentication();
         builder.Services.AddAuthorization();
+        StudioBackendAuthorityAccessor.Add(builder.Services, builder.Configuration);
         builder.Services.AddStudioBridgeAuth(builder.Configuration, settings);
         builder.Services.AddStudioBackendManagementBridge(builder.Configuration);
         CShellsBuilder? shellBuilder = null;
         builder.Services.AddCShellsAspNetCore(shells =>
         {
             shellBuilder = shells;
-            shells.WithAssemblies(typeof(StudioApiFeature).Assembly)
+            shells.WithStudioStartupAssemblies(typeof(StudioApiFeature).Assembly, typeof(Elsa.Events.EventsFeature).Assembly)
                 .WithConfigurationProvider(builder.Configuration)
                 .WithWebRouting(routing => routing.EnablePathRouting = true)
                 .ConfigureResolverPipeline(pipeline => pipeline
@@ -66,7 +77,10 @@ public static class StudioHostingExtensions
                 .ShareSingletonWithShells<TimeProvider>()
                 .ShareSingletonWithShells<StudioBackendManagementOptions>()
                 .ShareSingletonWithShells<StudioSessionTransport>();
+            shells.ShareSingletonWithShells<IStudioBackendAuthorityAccessor>();
         });
+        blueprintSource = builder.Services.Last(service => service.ServiceType == typeof(IShellBlueprintProvider));
+        shellRegistry = builder.Services.Last(service => service.ServiceType == typeof(IShellRegistry));
         builder.Services.AddSingleton(provider => new DefaultShellResolver(provider.GetServices<IShellResolverStrategy>(), provider.GetRequiredService<IOptions<ShellResolverOptions>>().Value));
         builder.Services.Replace(ServiceDescriptor.Singleton<IShellResolver, StudioShellResolver>());
         // Ownership may change at the same host/path/method after reload. A cached shell ID would bypass this guard.
@@ -96,7 +110,7 @@ public static class StudioHostingExtensions
     {
         var settings = endpoints.ServiceProvider.GetRequiredService<StudioHostingSettings>();
         var configuration = endpoints.ServiceProvider.GetRequiredService<IConfiguration>();
-        endpoints.MapGet("/studio-runtime.js", () => Results.Content(StudioRuntimeScript.Render(configuration, settings.AuthEnabled), "application/javascript"));
+        endpoints.MapGet("/studio-runtime.js", (Func<HttpContext, Task<IResult>>)(context => StudioRuntimeEndpoint.ReadAsync(context, configuration, settings)));
         endpoints.MapActiveShellStudioApi();
         endpoints.MapStudioBackendManagementBridge();
         endpoints.MapFallback("/_elsa/{**path}", () => Results.NotFound());

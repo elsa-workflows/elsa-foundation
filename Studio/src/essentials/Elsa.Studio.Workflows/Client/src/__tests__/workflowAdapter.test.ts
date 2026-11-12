@@ -15,6 +15,7 @@ import {
   sequenceStructureKind,
   spliceWorkflowEdge,
   syncCanvasToScope,
+  updateLayout,
   updateScopeActivities,
   withFlowchartConnections,
   type CanvasScope,
@@ -67,6 +68,20 @@ const forEachActivity: ActivityCatalogItem = {
     }
   }]
 };
+
+it("saves displayed required defaults on placement without replacing authored bindings or seeding credentials", () => {
+  const item = { ...writeLine, inputs: [
+    { referenceKey: "Actions", name: "Actions", isRequired: true, defaultValue: '["Approve","Reject"]', defaultSyntax: "Object" },
+    { referenceKey: "Title", name: "Title", isRequired: true, defaultValue: "User task", defaultSyntax: "Literal" },
+    { referenceKey: "Secret", name: "Secret", isRequired: true, defaultValue: "never-copy", isCredential: true }
+  ] };
+  const created = createActivityNode(item, "task");
+  expect(created.inputs).toContainEqual({ referenceKey: "Actions", value: { expressionType: "Object", value: '["Approve","Reject"]' } });
+  expect(created.inputs).toContainEqual({ referenceKey: "Title", value: { expressionType: "Literal", value: "User task" } });
+  expect(created.inputs).not.toEqual(expect.arrayContaining([expect.objectContaining({ referenceKey: "Secret" })]));
+  const authored = { ...created, inputs: [{ referenceKey: "Title", value: { expressionType: "Literal", value: "Authored title" } }] };
+  expect(createActivityNode({ ...item, authoringTemplate: authored }, "other").inputs).toContainEqual(authored.inputs[0]);
+});
 
 describe("workflow adapter", () => {
   it("uses friendly activity display names and falls back from fully-qualified names", () => {
@@ -358,12 +373,73 @@ describe("workflow adapter", () => {
     const updated = replaceSlotActivities(root, slots[2], [body]);
 
     expect(new Set(slots.map(slot => slot.id)).size).toBe(3);
-    expect(slots.map(slot => slot.label)).toEqual(["Case A", "Case B", "Case B"]);
+    expect(slots.map(slot => slot.label)).toEqual(["A", "B", "B"]);
     expect(updated.structure?.payload.cases).toEqual([
       { name: "A", expression: "a", activity: null },
       { name: "B", expression: "b", activity: null },
       { name: "B", expression: "b2", activity: body }
     ]);
+  });
+
+  it.each([
+    { kind: "parallel", scenario: "named", name: "Parallel.Branch", collection: "branches", labelProperty: "name", template: "Parallel.Branch[{name}]", values: ["Left", "Right"], labels: ["Left", "Right"] },
+    { kind: "switch", scenario: "named", name: "Switch.Case", collection: "cases", labelProperty: "match", template: "Switch.Case[{match}]", values: ["Left", "Right"], labels: ["Left", "Right"] },
+    { kind: "parallel", scenario: "literal", name: "Parallel.Branch", collection: "branches", labelProperty: "name", template: "Parallel.Branch[{name}]",
+      values: ["{name}", "Parallel.Branch", "Left{index}", "Left1", "Sales $& Marketing"],
+      labels: ["{name}", "Parallel.Branch", "Left{index}", "Left1", "Sales $& Marketing"] },
+    { kind: "switch", scenario: "empty and literal", name: "Switch.Case", collection: "cases", labelProperty: "match", template: "Switch.Case[{match}]",
+      values: ["", "1", "$&", "{match}", " ", " Padded "], labels: ['""', "1", "$&", "{match}", '" "', '" Padded "'] },
+    { kind: "switch", scenario: "legacy alias", name: "Case", collection: "cases", labelProperty: "label", template: "Case {label}",
+      values: ["{name}", "Case", "{index}", "1"], labels: ["{name}", "Case", "{index}", "1"] }
+  ])("distinguishes $kind collection slots using the declared item label ($scenario)", ({ kind, name, collection, labelProperty, template, values, labels }) => {
+    const item: ActivityCatalogItem = {
+      ...writeLine,
+      activityVersionId: `native-${kind}`,
+      designFacets: [{ kind: `elsa.${kind}.structure`, schemaVersion: "1.0.0", payload: {
+        mode: "sequence", supportsScopedVariables: false,
+        slots: [{ name, property: collection, displayName: "Branches", cardinality: "single",
+          collectionProperty: collection, childProperty: "activity", labelProperty, slotNameTemplate: template }],
+        initialPayload: { [collection]: [] }
+      } }]
+    };
+    const root: ActivityNode = { nodeId: "parallel", activityVersionId: item.activityVersionId, inputs: [], outputs: [],
+      structure: { kind: `elsa.${kind}.structure`, schemaVersion: "1.0.0", payload: {
+        [collection]: values.map((value, index) => ({ [labelProperty]: value, activity: node(`child-${index}`) }))
+      } } };
+    const slots = getChildSlots(root, item);
+    expect(slots.map(slot => slot.label)).toEqual(labels);
+    expect(slots.map(slot => slot.slotNameTemplate)).toEqual(values.map(() => template));
+    expect(new Set(slots.map(slot => slot.id)).size).toBe(values.length);
+    expect(slots.map(slot => slot.activities.map(activity => activity.nodeId))).toEqual(values.map((_, index) => [`child-${index}`]));
+    const changed = replaceSlotActivities(root, slots[1], [node("second-new")]);
+    expect(getChildSlots(changed, item).map(slot => slot.activities.map(activity => activity.nodeId)))
+      .toEqual(values.map((_, index) => [index === 1 ? "second-new" : `child-${index}`]));
+    const reordered = structuredClone(root);
+    (reordered.structure!.payload[collection] as unknown[]).reverse();
+    const selected = replaceSlotActivities(reordered, slots[0], [node("first-reordered-new")]);
+    expect(getChildSlots(selected, item).map(slot => slot.activities.map(activity => activity.nodeId)))
+      .toEqual(values.map((_, index) => [index === 0 ? "first-reordered-new" : `child-${index}`]).reverse());
+  });
+
+  it("keeps empty, quoted and Default case labels distinct while retaining exact matches", () => {
+    const values = ["", '""', " ", '" "', "Default", '"Default"', "Approved"];
+    const item: ActivityCatalogItem = { ...writeLine, activityVersionId: "switch-labels", designFacets: [{
+      kind: "elsa.switch.structure", schemaVersion: "1.0.0", payload: {
+        mode: "generic", supportsScopedVariables: false,
+        slots: [{ name: "Switch.Case", property: "cases", displayName: "Cases", cardinality: "single",
+          collectionProperty: "cases", childProperty: "activity", labelProperty: "match", slotNameTemplate: "Switch.Case[{match}]" },
+        { name: "Switch.Default", property: "default", displayName: "Default", cardinality: "single" }],
+        initialPayload: { cases: [], default: null }
+      }
+    }] };
+    const root = createActivityNode(item, "switch");
+    root.structure!.payload.cases = values.map(match => ({ match, activity: null }));
+    const slots = getChildSlots(root, item);
+    expect(new Set(slots.map(slot => slot.label)).size).toBe(values.length + 1);
+    expect(slots.slice(0, -1).map(slot => slot.collectionItemLabel)).toEqual(values);
+    expect(slots.at(-1)!.label).toBe("Default");
+    expect(slots.find(slot => slot.collectionItemLabel === "Default")!.label).toBe('"Default"');
+    expect(slots.find(slot => slot.collectionItemLabel === "Approved")!.label).toBe("Approved");
   });
 
   it("resolves explicit designer support for flowchart and sequence activities", () => {
@@ -412,6 +488,41 @@ describe("workflow adapter", () => {
     const canvas = buildUnsupportedActivityCanvas(node("explicit-icon"), [{ ...writeLine, icon: "trigger" }], []);
 
     expect(canvas.nodes[0].data.catalogIcon).toBe("trigger");
+  });
+
+  it("applies a saved node width from the layout", () => {
+    const canvas = buildCanvas(firstScope(flowchartRoot([node("wide"), node("plain")])), [writeLine], [
+      { nodeId: "wide", x: 0, y: 0, width: 360 },
+      { nodeId: "plain", x: 440, y: 0 }
+    ]);
+
+    expect(canvas.nodes.find(current => current.id === "wide")?.width).toBe(360);
+    expect(canvas.nodes.find(current => current.id === "plain")?.width).toBeUndefined();
+  });
+
+  it("clamps saved node widths to the range the resize handle allows", () => {
+    const canvas = buildCanvas(firstScope(flowchartRoot([node("narrow"), node("huge")])), [writeLine], [
+      { nodeId: "narrow", x: 0, y: 0, width: 40 },
+      { nodeId: "huge", x: 440, y: 0, width: 5000 }
+    ]);
+
+    expect(canvas.nodes.find(current => current.id === "narrow")?.width).toBe(246);
+    expect(canvas.nodes.find(current => current.id === "huge")?.width).toBe(640);
+  });
+
+  it("persists a resized node width and keeps saved widths for untouched nodes", () => {
+    const layout = updateLayout(
+      [{ nodeId: "resized", x: 0, y: 0, width: 300 }, { nodeId: "kept", x: 440, y: 0, width: 380 }],
+      [
+        { id: "resized", position: { x: 0, y: 0 }, width: 412.6, data: {} },
+        { id: "kept", position: { x: 440, y: 0 }, data: {} },
+        { id: "fresh", position: { x: 880, y: 0 }, data: {} }
+      ]
+    );
+
+    expect(layout.find(record => record.nodeId === "resized")?.width).toBe(413);
+    expect(layout.find(record => record.nodeId === "kept")?.width).toBe(380);
+    expect(layout.find(record => record.nodeId === "fresh")).not.toHaveProperty("width");
   });
 
   it("preserves authored Sequence order regardless of saved horizontal positions", () => {

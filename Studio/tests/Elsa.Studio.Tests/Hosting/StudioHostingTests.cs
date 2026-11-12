@@ -13,6 +13,7 @@ using CShells.Lifecycle;
 using Elsa.Studio.Core.Attributes;
 using Elsa.Studio.Core.Events;
 using Elsa.Studio.Hosting;
+using Elsa.Studio.Api.Contracts;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -93,11 +94,11 @@ public sealed class StudioHostingTests
     }
 
     [Fact]
-    public async Task Failed_shell_activation_leaves_real_files_runtime_and_root_fallback_available()
+    public async Task Failed_shell_activation_keeps_files_available_but_refuses_partial_runtime_configuration()
     {
         await using var host = await HostingTestHost.StartAsync(failActivation: true);
         Assert.Equal("export const probe = true;", await host.Client.GetStringAsync("/entry.js"));
-        Assert.StartsWith("window.__ELSA_STUDIO_RUNTIME__", await host.Client.GetStringAsync("/studio-runtime.js"));
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, (await host.Client.GetAsync("/studio-runtime.js")).StatusCode);
         Assert.Equal("<html>custom Studio</html>", await host.Client.GetStringAsync("/"));
         using var missing = await host.Client.GetAsync("/_elsa/unknown");
         Assert.Equal(HttpStatusCode.NotFound, missing.StatusCode);
@@ -148,6 +149,50 @@ public sealed class StudioHostingTests
         finally { host.Probe.Release.TrySetResult(); }
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Root_manifest_consumers_retain_the_selected_generation_until_the_awaited_read_finishes(bool moduleRegistry)
+    {
+        await using var host = await HostingTestHost.StartAsync(withDefaultDecoy: true);
+        await using var rootScope = host.App.Services.CreateAsyncScope();
+        var manifests = rootScope.ServiceProvider.GetRequiredService<IStudioModuleManifestProvider>();
+        host.Probe.PauseNext = 1;
+        Task request = moduleRegistry ? manifests.GetModuleRegistry(CancellationToken.None) : manifests.GetModules(CancellationToken.None);
+        var retained = await host.Probe.Entered.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        var registry = host.App.Services.GetRequiredService<IShellRegistry>();
+        var old = registry.GetActive("Authoring");
+        try
+        {
+            await registry.ReloadAsync("Authoring").WaitAsync(TimeSpan.FromSeconds(10));
+            Assert.NotSame(old, registry.GetActive("Authoring"));
+            Assert.False(retained.Disposed);
+            var current = await manifests.GetModules(CancellationToken.None);
+            Assert.Contains(current.Modules, module => module.ShellFeatureName == "HostingConsumer");
+        }
+        finally { host.Probe.Release.TrySetResult(); }
+        await request.WaitAsync(TimeSpan.FromSeconds(10));
+        await retained.DisposedSignal.Task.WaitAsync(TimeSpan.FromSeconds(10));
+    }
+
+    [Fact]
+    public async Task Root_manifest_cancellation_releases_the_tracked_scope()
+    {
+        await using var host = await HostingTestHost.StartAsync();
+        await using var rootScope = host.App.Services.CreateAsyncScope();
+        host.Probe.PauseNext = 1;
+        using var cancellation = new CancellationTokenSource();
+        var pending = rootScope.ServiceProvider.GetRequiredService<IStudioModuleManifestProvider>().GetModuleRegistry(cancellation.Token);
+        var retained = await host.Probe.Entered.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        try
+        {
+            cancellation.Cancel();
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await pending);
+            await retained.DisposedSignal.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+        finally { host.Probe.Release.TrySetResult(); }
+    }
+
     [Fact]
     public async Task Runtime_reports_the_installed_auth_posture_after_configuration_changes()
     {
@@ -156,7 +201,7 @@ public sealed class StudioHostingTests
         var script = await host.Client.GetStringAsync("/studio-runtime.js");
         using var json = JsonDocument.Parse(script[(script.IndexOf('=') + 1)..].Trim().TrimEnd(';'));
         Assert.False(json.RootElement.GetProperty("auth").GetProperty("enabled").GetBoolean());
-        Assert.Equal(new[] { "activityDefinitions", "attention", "auth", "backendBaseUrl", "dashboard", "hostId", "workflows" }, json.RootElement.EnumerateObject().Select(property => property.Name).Order().ToArray());
+        Assert.Equal(new[] { "activityDefinitions", "appearance", "attention", "auth", "backendBaseUrl", "backendId", "branding", "dashboard", "hostId", "workflows" }, json.RootElement.EnumerateObject().Select(property => property.Name).Order().ToArray());
     }
 
     [Theory]
@@ -170,6 +215,8 @@ public sealed class StudioHostingTests
     public void Invalid_registration_options_fail_early(string kind)
     {
         var builder = WebApplication.CreateSlimBuilder();
+        using var contentRoot = builder.Environment.ContentRootFileProvider as IDisposable;
+        using var configuration = builder.Configuration;
         Assert.Throws<ArgumentException>(() => builder.AddElsaStudio(options =>
         {
             options.ShellsFile = null;
@@ -293,13 +340,20 @@ public sealed class StudioHostingTests
 
 internal sealed class HostingTestHost : IAsyncDisposable
 {
+    private WebApplicationBuilder? _builder;
     public string Root { get; } = Directory.CreateTempSubdirectory("studio-hosting-").FullName;
     public HostingProbe Probe { get; } = new();
     public StudioBuilder Studio { get; private set; } = null!;
     public WebApplication App { get; private set; } = null!;
     public HttpClient Client { get; private set; } = null!;
 
-    public static StudioConfigurationMutationGate CreateGate() => WebApplication.CreateSlimBuilder().AddElsaStudio(options => options.ShellsFile = null).ConfigurationMutationGate;
+    public static StudioConfigurationMutationGate CreateGate()
+    {
+        var builder = WebApplication.CreateSlimBuilder();
+        using var contentRoot = builder.Environment.ContentRootFileProvider as IDisposable;
+        using var configuration = builder.Configuration;
+        return builder.AddElsaStudio(options => options.ShellsFile = null).ConfigurationMutationGate;
+    }
 
     public static async Task<HostingTestHost> StartAsync(bool failActivation = false, int scopeFailures = 0, bool withDefaultDecoy = false)
     {
@@ -310,7 +364,7 @@ internal sealed class HostingTestHost : IAsyncDisposable
             await File.WriteAllTextAsync(Path.Combine(webRoot, "entry.js"), "export const probe = true;");
             await File.WriteAllTextAsync(Path.Combine(webRoot, "entry.css"), "body{}");
             await File.WriteAllTextAsync(Path.Combine(webRoot, "custom.html"), "<html>custom Studio</html>");
-            var builder = WebApplication.CreateSlimBuilder(new WebApplicationOptions { EnvironmentName = Environments.Production, ContentRootPath = host.Root, WebRootPath = webRoot });
+            var builder = host._builder = WebApplication.CreateSlimBuilder(new WebApplicationOptions { EnvironmentName = Environments.Production, ContentRootPath = host.Root, WebRootPath = webRoot });
             builder.WebHost.UseTestServer();
             builder.Configuration.Sources.Clear();
             builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
@@ -359,6 +413,11 @@ internal sealed class HostingTestHost : IAsyncDisposable
     {
         Client?.Dispose();
         if (App is not null) await App.DisposeAsync();
+        else if (_builder is not null)
+        {
+            _builder.Configuration.Dispose();
+            (_builder.Environment.ContentRootFileProvider as IDisposable)?.Dispose();
+        }
         Directory.Delete(Root, true);
     }
 }

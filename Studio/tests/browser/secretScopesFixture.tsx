@@ -1,10 +1,11 @@
 import React, { useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import type { ElsaStudioModuleApi, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import { SecretEditorPage } from "../../../Extensions/Secrets/studio/Elsa.Studio.Secrets/Client/src/SecretEditorPage";
 import { SecretsPage } from "../../../Extensions/Secrets/studio/Elsa.Studio.Secrets/Client/src/SecretsPage";
 import type { CreateSecretRequest, SecretDescriptorsResponse, SecretMetadata } from "../../../Extensions/Secrets/studio/Elsa.Studio.Secrets/Client/src/secretTypes";
-import { ThemeProvider } from "../../src/apps/Elsa.Studio.Web/Client/src/app/components/ThemeProvider";
-import "../../src/apps/Elsa.Studio.Web/Client/src/app/styles.css";
+import { ThemeProvider } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/components/ThemeProvider";
+import "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/styles.css";
 import "../../../Extensions/Secrets/studio/Elsa.Studio.Secrets/Client/src/styles.css";
 
 const scenario = new URLSearchParams(window.location.search).get("scenario") ?? "default";
@@ -97,7 +98,17 @@ function inventoryResults(url: string): SecretMetadata[] {
     : [];
 }
 
+// Isolated router: production pages run here, while the address retains the fixture entrypoint.
+// The composed acceptance suite owns canonical route and workspace-tab qualification.
 function Fixture() {
+  const [route, setRoute] = useState("/security/secrets");
+  const navigate = (path: string) => {
+    const destination = new URL(path, window.location.origin);
+    destination.pathname = "/secret-scopes.html";
+    destination.searchParams.set("scenario", scenario);
+    window.history.pushState(null, "", destination);
+    setRoute(path.split("?")[0]);
+  };
   const [unexpectedReadCount, setUnexpectedReadCount] = useState(0);
   const [listRequestCount, setListRequestCount] = useState(0);
   const [mutationRequestCount, setMutationRequestCount] = useState(0);
@@ -115,18 +126,18 @@ function Fixture() {
           descriptorRequestCount.current += 1;
           const requestNumber = descriptorRequestCount.current;
 
-          if (scenario === "focused-retry" && requestNumber === 2) {
+          if (scenario === "focused-retry" && requestNumber === 3) {
             await new Promise<void>(resolve => window.addEventListener("fixture-scope-failure", () => resolve(), { once: true }));
             throw new Error("Fixture scope catalog refresh failed.");
           }
-          if (scenario === "retry-removed" && requestNumber === 2) {
+          if (scenario === "retry-removed" && requestNumber === 3) {
             throw new Error("Fixture scope catalog refresh failed.");
           }
-          if (scenario === "loading" && requestNumber === 2) {
+          if (scenario === "loading" && requestNumber === 3) {
             await new Promise(resolve => window.setTimeout(resolve, 800));
           }
 
-          const scopes = scenario === "retry-removed" && requestNumber >= 3 ? [] : suggestedScopes;
+          const scopes = scenario === "retry-removed" && requestNumber >= 4 ? [] : suggestedScopes;
           return { ...descriptors, scopes } as T;
         }
         if (url.startsWith("/secrets?")) {
@@ -142,6 +153,11 @@ function Fixture() {
             ? 101
             : items.length;
           return { items, totalCount } as T;
+        }
+        if (url.startsWith("/secrets/")) {
+          const name = decodeURIComponent(url.slice("/secrets/".length));
+          if (name === editorSecret.current.name) return editorSecret.current as T;
+          if (name === laterInventorySecret.name) return laterInventorySecret as T;
         }
         setUnexpectedReadCount(count => count + 1);
         throw new Error(`Unexpected fixture GET ${url}`);
@@ -221,9 +237,14 @@ function Fixture() {
     }
   }), []);
 
+  const dialogs = { confirm: async () => true, prompt: async () => null, alert: async () => undefined };
+  const api = { backend: context, dialogs } as unknown as ElsaStudioModuleApi;
+  const editor = route !== "/security/secrets";
+  const name = route.endsWith("/edit") ? decodeURIComponent(route.split("/").at(-2)!) : undefined;
   return (
     <ThemeProvider>
-      <SecretsPage context={context} dialogs={{ confirm: async () => true, prompt: async () => null, alert: async () => undefined }} />
+      {editor ? <SecretEditorPage api={api} name={name} navigate={navigate} />
+        : <SecretsPage context={context} dialogs={dialogs} navigate={navigate} />}
       <output data-testid="unexpected-secret-reads">{unexpectedReadCount}</output>
       <output data-testid="secret-list-requests">{listRequestCount}</output>
       <output data-testid="secret-mutation-requests">{mutationRequestCount}</output>

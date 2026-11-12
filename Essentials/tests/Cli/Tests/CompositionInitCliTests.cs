@@ -110,7 +110,7 @@ public sealed class CompositionInitCliTests
         var composition = compositionDocument.RootElement;
         var catalog = FoundationSelectionCatalog.Load();
         var profile = Assert.Single(catalog.Profiles, x => x.Id == "worker-http");
-        Assert.Equal("3", catalog.Version);
+        Assert.Equal("4", catalog.Version);
         Assert.Equal("e46f8092771171ad63b0ca81bf307f5ad7ad7a9ca4929dd311bfac6af3cf8fa1", profile.Digest);
         Assert.Equal(catalog.Id, composition.GetProperty("catalog").GetProperty("id").GetString());
         Assert.Equal(catalog.Version, composition.GetProperty("catalog").GetProperty("version").GetString());
@@ -156,17 +156,17 @@ public sealed class CompositionInitCliTests
         using var temp = new TempDirectory("elsa-composition-init-");
         var outputPath = temp.File("composition.json");
         var init = DotnetElsa.Run("composition", "init", "--profile", "embedded-runtime@1",
-            "--group", "diagnostics-ef@1", "--output", outputPath);
+            "--group", "diagnostics-ef@2", "--output", outputPath);
         Assert.Equal(ToolExitCode.Success, init.ExitCode);
 
         using var compositionDocument = JsonDocument.Parse(File.ReadAllText(outputPath));
         var composition = compositionDocument.RootElement;
         var catalog = FoundationSelectionCatalog.Load();
         var group = Assert.Single(catalog.Groups, x => x.Id == "diagnostics-ef");
-        Assert.Equal("3", composition.GetProperty("catalog").GetProperty("version").GetString());
+        Assert.Equal("4", composition.GetProperty("catalog").GetProperty("version").GetString());
         Assert.Equal(group.Digest, Assert.Single(composition.GetProperty("groups").EnumerateArray())
             .GetProperty("digest").GetString());
-        var expected = s_expectedMembers.Concat(group.Members).OrderBy(id => id, StringComparer.Ordinal).ToArray();
+        var expected = s_expectedMembers.Concat(group.Members).Distinct(StringComparer.Ordinal).OrderBy(id => id, StringComparer.Ordinal).ToArray();
         Assert.Equal(expected, Strings(composition.GetProperty("accepted").GetProperty("featureIds")));
 
         var plan = DotnetElsa.Run("composition", "plan", "--composition", outputPath, "--format", "json");
@@ -174,10 +174,10 @@ public sealed class CompositionInitCliTests
         using var planDocument = JsonDocument.Parse(plan.Output);
         var root = planDocument.RootElement;
         Assert.Equal(expected, Strings(root.GetProperty("candidate").GetProperty("featureIds")));
-        Assert.Equal(4, root.GetProperty("reasons").EnumerateArray().Count(reason =>
+        Assert.Equal(5, root.GetProperty("reasons").EnumerateArray().Count(reason =>
             reason.GetProperty("sourceKind").GetString() == "group" &&
             reason.GetProperty("sourceId").GetString() == "diagnostics-ef"));
-        Assert.Equal(2, root.GetProperty("dependencyEvidence").EnumerateArray().Count(edge =>
+        Assert.Equal(4, root.GetProperty("dependencyEvidence").EnumerateArray().Count(edge =>
             edge.GetProperty("evidenceKind").GetString() == "reviewed-definition" &&
             edge.GetProperty("evidenceSource").GetString() == "diagnostics-ef"));
         Assert.Contains(root.GetProperty("findings").EnumerateArray(), finding =>
@@ -252,7 +252,7 @@ public sealed class CompositionInitCliTests
         Assert.False(File.Exists(outputPath));
 
         var duplicateGroup = DotnetElsa.Run("composition", "init", "--profile", "embedded-runtime@1",
-            "--group", "diagnostics-ef@1", "--group", "diagnostics-ef@1", "--output", outputPath);
+            "--group", "diagnostics-ef@2", "--group", "diagnostics-ef@2", "--output", outputPath);
         Assert.Equal(ToolExitCode.Refusal, duplicateGroup.ExitCode);
         Assert.Contains("composition-group-duplicate", duplicateGroup.Error, StringComparison.Ordinal);
         Assert.False(File.Exists(outputPath));

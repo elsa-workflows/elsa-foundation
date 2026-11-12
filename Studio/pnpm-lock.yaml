@@ -18,10 +18,10 @@ importers:
         specifier: ^0.468.0
         version: 0.468.0(react@19.2.7)
       react:
-        specifier: ^19.1.0
+        specifier: ^19.2.0
         version: 19.2.7
       react-dom:
-        specifier: ^19.1.0
+        specifier: ^19.2.0
         version: 19.2.7(react@19.2.7)
     devDependencies:
       '@eslint/js':
@@ -73,14 +73,48 @@ importers:
         specifier: ^2.1.8
         version: 2.1.9(jsdom@25.0.1)
 
+  ../Extensions/Agent/studio/Elsa.Studio.Agent/Client:
+    dependencies:
+      '@elsa-workflows/studio-sdk':
+        specifier: workspace:*
+        version: link:../../../../../Studio/src/essentials/Elsa.Studio.Hosting/StudioSdk
+      '@elsa-workflows/studio-ui':
+        specifier: workspace:*
+        version: link:../../../../../Studio/src/essentials/Elsa.Studio.Hosting/StudioUi
+      lucide-react:
+        specifier: ^0.468.0
+        version: 0.468.0(react@19.2.7)
+      react:
+        specifier: ^18.0.0 || ^19.0.0
+        version: 19.2.7
+    devDependencies:
+      '@types/react':
+        specifier: ^19.2.17
+        version: 19.2.17
+      '@types/react-dom':
+        specifier: ^19.2.3
+        version: 19.2.3(@types/react@19.2.17)
+      jsdom:
+        specifier: ^25.0.1
+        version: 25.0.1
+      react-dom:
+        specifier: ^19.1.0
+        version: 19.2.7(react@19.2.7)
+      vite:
+        specifier: ^7.1.0
+        version: 7.3.5
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(jsdom@25.0.1)
+
   ../Extensions/Attention/studio/Elsa.Studio.Attention/Client:
     dependencies:
       '@elsa-workflows/studio-sdk':
         specifier: workspace:*
-        version: link:../../../../../Studio/src/apps/Elsa.Studio.Web/StudioSdk
+        version: link:../../../../../Studio/src/essentials/Elsa.Studio.Hosting/StudioSdk
       '@elsa-workflows/studio-ui':
         specifier: workspace:*
-        version: link:../../../../../Studio/src/apps/Elsa.Studio.Web/StudioUi
+        version: link:../../../../../Studio/src/essentials/Elsa.Studio.Hosting/StudioUi
       react:
         specifier: ^18.0.0 || ^19.0.0
         version: 19.2.7
@@ -108,10 +142,10 @@ importers:
     dependencies:
       '@elsa-workflows/studio-sdk':
         specifier: workspace:*
-        version: link:../../../../../Studio/src/apps/Elsa.Studio.Web/StudioSdk
+        version: link:../../../../../Studio/src/essentials/Elsa.Studio.Hosting/StudioSdk
       '@elsa-workflows/studio-ui':
         specifier: workspace:*
-        version: link:../../../../../Studio/src/apps/Elsa.Studio.Web/StudioUi
+        version: link:../../../../../Studio/src/essentials/Elsa.Studio.Hosting/StudioUi
       lucide-react:
         specifier: ^0.468.0
         version: 0.468.0(react@19.2.7)
@@ -142,7 +176,10 @@ importers:
     dependencies:
       '@elsa-workflows/studio-sdk':
         specifier: workspace:*
-        version: link:../../../../../Studio/src/apps/Elsa.Studio.Web/StudioSdk
+        version: link:../../../../../Studio/src/essentials/Elsa.Studio.Hosting/StudioSdk
+      '@elsa-workflows/studio-ui':
+        specifier: workspace:*
+        version: link:../../../../../Studio/src/essentials/Elsa.Studio.Hosting/StudioUi
       '@microsoft/signalr':
         specifier: ^8.0.7
         version: 8.0.29
@@ -153,9 +190,49 @@ importers:
       '@types/react':
         specifier: ^19.2.17
         version: 19.2.17
+      '@types/react-dom':
+        specifier: ^19.2.3
+        version: 19.2.3(@types/react@19.2.17)
       jsdom:
         specifier: ^25.0.1
         version: 25.0.1
+      react-dom:
+        specifier: ^19.1.0
+        version: 19.2.7(react@19.2.7)
+      vite:
+        specifier: ^7.1.0
+        version: 7.3.5
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(jsdom@25.0.1)
+
+  ../Extensions/Decisions/studio/Elsa.Studio.Decisions/Client:
+    dependencies:
+      '@elsa-workflows/studio-sdk':
+        specifier: workspace:*
+        version: link:../../../../../Studio/src/essentials/Elsa.Studio.Hosting/StudioSdk
+      '@elsa-workflows/studio-ui':
+        specifier: workspace:*
+        version: link:../../../../../Studio/src/essentials/Elsa.Studio.Hosting/StudioUi
+      lucide-react:
+        specifier: ^0.468.0
+        version: 0.468.0(react@19.2.7)
+      react:
+        specifier: ^18.0.0 || ^19.0.0
+        version: 19.2.7
+    devDependencies:
+      '@types/react':
+        specifier: ^19.2.17
+        version: 19.2.17
+      '@types/react-dom':
+        specifier: ^19.2.3
+        version: 19.2.3(@types/react@19.2.17)
+      jsdom:
+        specifier: ^25.0.1
+        version: 25.0.1
+      react-dom:
+        specifier: ^19.1.0
+        version: 19.2.7(react@19.2.7)
       vite:
         specifier: ^7.1.0
         version: 7.3.5
@@ -167,7 +244,10 @@ importers:
     dependencies:
       '@elsa-workflows/studio-sdk':
         specifier: workspace:*
-        version: link:../../../../../Studio/src/apps/Elsa.Studio.Web/StudioSdk
+        version: link:../../../../../Studio/src/essentials/Elsa.Studio.Hosting/StudioSdk
+      '@elsa-workflows/studio-ui':
+        specifier: workspace:*
+        version: link:../../../../../Studio/src/essentials/Elsa.Studio.Hosting/StudioUi
       react:
         specifier: ^18.0.0 || ^19.0.0
         version: 19.2.7
@@ -195,7 +275,10 @@ importers:
     dependencies:
       '@elsa-workflows/studio-sdk':
         specifier: workspace:*
-        version: link:../../../../../Studio/src/apps/Elsa.Studio.Web/StudioSdk
+        version: link:../../../../../Studio/src/essentials/Elsa.Studio.Hosting/StudioSdk
+      '@elsa-workflows/studio-ui':
+        specifier: workspace:*
+        version: link:../../../../../Studio/src/essentials/Elsa.Studio.Hosting/StudioUi
       react:
         specifier: ^18.0.0 || ^19.0.0
         version: 19.2.7
@@ -223,10 +306,10 @@ importers:
     dependencies:
       '@elsa-workflows/studio-sdk':
         specifier: workspace:*
-        version: link:../../../../../Studio/src/apps/Elsa.Studio.Web/StudioSdk
+        version: link:../../../../../Studio/src/essentials/Elsa.Studio.Hosting/StudioSdk
       '@elsa-workflows/studio-ui':
         specifier: workspace:*
-        version: link:../../../../../Studio/src/apps/Elsa.Studio.Web/StudioUi
+        version: link:../../../../../Studio/src/essentials/Elsa.Studio.Hosting/StudioUi
       lossless-json:
         specifier: 4.3.2
         version: 4.3.2
@@ -263,7 +346,7 @@ importers:
         version: link:../../../../../Studio/src/essentials/Elsa.Studio.CodeEditor/Client
       '@elsa-workflows/studio-sdk':
         specifier: workspace:*
-        version: link:../../../../../Studio/src/apps/Elsa.Studio.Web/StudioSdk
+        version: link:../../../../../Studio/src/essentials/Elsa.Studio.Hosting/StudioSdk
       react:
         specifier: ^18.0.0 || ^19.0.0
         version: 19.2.7
@@ -288,7 +371,7 @@ importers:
         version: link:../../../../../Studio/src/essentials/Elsa.Studio.CodeEditor/Client
       '@elsa-workflows/studio-sdk':
         specifier: workspace:*
-        version: link:../../../../../Studio/src/apps/Elsa.Studio.Web/StudioSdk
+        version: link:../../../../../Studio/src/essentials/Elsa.Studio.Hosting/StudioSdk
       react:
         specifier: ^18.0.0 || ^19.0.0
         version: 19.2.7
@@ -313,10 +396,10 @@ importers:
         version: link:../../../../../Studio/src/essentials/Elsa.Studio.CodeEditor/Client
       '@elsa-workflows/studio-sdk':
         specifier: workspace:*
-        version: link:../../../../../Studio/src/apps/Elsa.Studio.Web/StudioSdk
+        version: link:../../../../../Studio/src/essentials/Elsa.Studio.Hosting/StudioSdk
       '@elsa-workflows/studio-ui':
         specifier: workspace:*
-        version: link:../../../../../Studio/src/apps/Elsa.Studio.Web/StudioUi
+        version: link:../../../../../Studio/src/essentials/Elsa.Studio.Hosting/StudioUi
       lucide-react:
         specifier: ^0.468.0
         version: 0.468.0(react@19.2.7)
@@ -347,10 +430,10 @@ importers:
     dependencies:
       '@elsa-workflows/studio-sdk':
         specifier: workspace:*
-        version: link:../../../../../Studio/src/apps/Elsa.Studio.Web/StudioSdk
+        version: link:../../../../../Studio/src/essentials/Elsa.Studio.Hosting/StudioSdk
       '@elsa-workflows/studio-ui':
         specifier: workspace:*
-        version: link:../../../../../Studio/src/apps/Elsa.Studio.Web/StudioUi
+        version: link:../../../../../Studio/src/essentials/Elsa.Studio.Hosting/StudioUi
       lucide-react:
         specifier: ^0.468.0
         version: 0.468.0(react@19.2.7)
@@ -381,7 +464,10 @@ importers:
     dependencies:
       '@elsa-workflows/studio-sdk':
         specifier: workspace:*
-        version: link:../../../../../Studio/src/apps/Elsa.Studio.Web/StudioSdk
+        version: link:../../../../../Studio/src/essentials/Elsa.Studio.Hosting/StudioSdk
+      '@elsa-workflows/studio-ui':
+        specifier: workspace:*
+        version: link:../../../../../Studio/src/essentials/Elsa.Studio.Hosting/StudioUi
       react:
         specifier: ^18.0.0 || ^19.0.0
         version: 19.2.7
@@ -403,10 +489,44 @@ importers:
     dependencies:
       '@elsa-workflows/studio-sdk':
         specifier: workspace:*
-        version: link:../../../../../Studio/src/apps/Elsa.Studio.Web/StudioSdk
+        version: link:../../../../../Studio/src/essentials/Elsa.Studio.Hosting/StudioSdk
       '@elsa-workflows/studio-ui':
         specifier: workspace:*
-        version: link:../../../../../Studio/src/apps/Elsa.Studio.Web/StudioUi
+        version: link:../../../../../Studio/src/essentials/Elsa.Studio.Hosting/StudioUi
+      lucide-react:
+        specifier: ^0.468.0
+        version: 0.468.0(react@19.2.7)
+      react:
+        specifier: ^18.0.0 || ^19.0.0
+        version: 19.2.7
+    devDependencies:
+      '@types/react':
+        specifier: ^19.2.17
+        version: 19.2.17
+      '@types/react-dom':
+        specifier: ^19.2.3
+        version: 19.2.3(@types/react@19.2.17)
+      jsdom:
+        specifier: ^25.0.1
+        version: 25.0.1
+      react-dom:
+        specifier: ^19.1.0
+        version: 19.2.7(react@19.2.7)
+      vite:
+        specifier: ^7.1.0
+        version: 7.3.5
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(jsdom@25.0.1)
+
+  ../Extensions/UserTasks/studio/Elsa.Studio.UserTasks/Client:
+    dependencies:
+      '@elsa-workflows/studio-sdk':
+        specifier: workspace:*
+        version: link:../../../../../Studio/src/essentials/Elsa.Studio.Hosting/StudioSdk
+      '@elsa-workflows/studio-ui':
+        specifier: workspace:*
+        version: link:../../../../../Studio/src/essentials/Elsa.Studio.Hosting/StudioUi
       lucide-react:
         specifier: ^0.468.0
         version: 0.468.0(react@19.2.7)
@@ -437,7 +557,7 @@ importers:
     dependencies:
       '@elsa-workflows/studio-sdk':
         specifier: workspace:*
-        version: link:../../../../../Studio/src/apps/Elsa.Studio.Web/StudioSdk
+        version: link:../../../../../Studio/src/essentials/Elsa.Studio.Hosting/StudioSdk
       '@elsa-workflows/studio-workflows':
         specifier: workspace:*
         version: link:../../../../../Studio/src/essentials/Elsa.Studio.Workflows/Client
@@ -462,10 +582,10 @@ importers:
     dependencies:
       '@elsa-workflows/studio-sdk':
         specifier: workspace:*
-        version: link:../../../../../Studio/src/apps/Elsa.Studio.Web/StudioSdk
+        version: link:../../../../../Studio/src/essentials/Elsa.Studio.Hosting/StudioSdk
       '@elsa-workflows/studio-ui':
         specifier: workspace:*
-        version: link:../../../../../Studio/src/apps/Elsa.Studio.Web/StudioUi
+        version: link:../../../../../Studio/src/essentials/Elsa.Studio.Hosting/StudioUi
       react:
         specifier: ^18.0.0 || ^19.0.0
         version: 19.2.7
@@ -496,10 +616,10 @@ importers:
         version: link:../../src/essentials/Elsa.Studio.CodeEditor/Client
       '@elsa-workflows/studio-sdk':
         specifier: workspace:*
-        version: link:../../src/apps/Elsa.Studio.Web/StudioSdk
+        version: link:../../src/essentials/Elsa.Studio.Hosting/StudioSdk
       '@elsa-workflows/studio-ui':
         specifier: workspace:*
-        version: link:../../src/apps/Elsa.Studio.Web/StudioUi
+        version: link:../../src/essentials/Elsa.Studio.Hosting/StudioUi
       '@elsa-workflows/studio-workflows':
         specifier: workspace:*
         version: link:../../src/essentials/Elsa.Studio.Workflows/Client
@@ -542,7 +662,7 @@ importers:
         version: link:../../src/essentials/Elsa.Studio.CodeEditor/Client
       '@elsa-workflows/studio-ui':
         specifier: workspace:*
-        version: link:../../src/apps/Elsa.Studio.Web/StudioUi
+        version: link:../../src/essentials/Elsa.Studio.Hosting/StudioUi
       react:
         specifier: ^19.1.0
         version: 19.2.7
@@ -569,50 +689,23 @@ importers:
         specifier: ^2.1.8
         version: 2.1.9(jsdom@25.0.1)
 
-  src/apps/Elsa.Studio.Web/Client:
+  src/essentials/Elsa.Studio.Backends/Client:
     dependencies:
-      '@elsa-workflows/studio-code-editor':
+      '@elsa-workflows/studio-sdk':
         specifier: workspace:*
-        version: link:../../../essentials/Elsa.Studio.CodeEditor/Client
-      '@fontsource-variable/geist':
-        specifier: ^5.3.0
-        version: 5.3.0
-      '@fontsource-variable/geist-mono':
-        specifier: ^5.3.0
-        version: 5.3.0
-      '@fontsource-variable/instrument-sans':
-        specifier: ^5.3.0
-        version: 5.3.0
-      '@fontsource-variable/jetbrains-mono':
-        specifier: ^5.3.0
-        version: 5.3.0
-      '@fontsource-variable/manrope':
-        specifier: ^5.3.0
-        version: 5.3.0
-      '@fontsource/dm-mono':
-        specifier: ^5.3.0
-        version: 5.3.0
-      '@fontsource/ibm-plex-mono':
-        specifier: ^5.3.0
-        version: 5.3.0
-      '@fontsource/ibm-plex-sans':
-        specifier: ^5.3.0
-        version: 5.3.0
-      '@fontsource/instrument-serif':
-        specifier: ^5.3.0
-        version: 5.3.0
-      '@radix-ui/react-dialog':
-        specifier: ^1.1.6
-        version: 1.1.17(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
-      '@radix-ui/react-dropdown-menu':
-        specifier: 2.1.15
-        version: 2.1.15(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
-      react-markdown:
-        specifier: ^10.1.0
-        version: 10.1.0(@types/react@19.2.17)(react@19.2.7)
-      remark-gfm:
-        specifier: ^4.0.1
-        version: 4.0.1
+        version: link:../../Elsa.Studio.Hosting/StudioSdk
+      '@elsa-workflows/studio-ui':
+        specifier: workspace:*
+        version: link:../../Elsa.Studio.Hosting/StudioUi
+      lucide-react:
+        specifier: ^0.468.0
+        version: 0.468.0(react@19.2.7)
+      react:
+        specifier: ^18.0.0 || ^19.0.0
+        version: 19.2.7
+      react-dom:
+        specifier: ^18.0.0 || ^19.0.0
+        version: 19.2.7(react@19.2.7)
     devDependencies:
       '@types/react':
         specifier: ^19.2.17
@@ -620,32 +713,6 @@ importers:
       '@types/react-dom':
         specifier: ^19.2.3
         version: 19.2.3(@types/react@19.2.17)
-
-  src/apps/Elsa.Studio.Web/StudioSdk:
-    dependencies:
-      react:
-        specifier: ^18.0.0 || ^19.0.0
-        version: 19.2.7
-    devDependencies:
-      '@types/react':
-        specifier: ^19.2.17
-        version: 19.2.17
-      vite-plugin-dts:
-        specifier: ^4.5.0
-        version: 4.5.4(rollup@4.62.0)(typescript@5.9.3)(vite@7.3.5)
-
-  src/apps/Elsa.Studio.Web/StudioUi:
-    dependencies:
-      react:
-        specifier: ^18.0.0 || ^19.0.0
-        version: 19.2.7
-    devDependencies:
-      '@types/react':
-        specifier: ^19.2.17
-        version: 19.2.17
-      vite-plugin-dts:
-        specifier: ^4.5.0
-        version: 4.5.4(rollup@4.62.0)(typescript@5.9.3)(vite@7.3.5)
 
   src/essentials/Elsa.Studio.CodeEditor/Client:
     dependencies:
@@ -706,10 +773,10 @@ importers:
     dependencies:
       '@elsa-workflows/studio-sdk':
         specifier: workspace:*
-        version: link:../../../apps/Elsa.Studio.Web/StudioSdk
+        version: link:../../Elsa.Studio.Hosting/StudioSdk
       '@elsa-workflows/studio-ui':
         specifier: workspace:*
-        version: link:../../../apps/Elsa.Studio.Web/StudioUi
+        version: link:../../Elsa.Studio.Hosting/StudioUi
       lucide-react:
         specifier: ^0.468.0
         version: 0.468.0(react@19.2.7)
@@ -727,6 +794,90 @@ importers:
         specifier: ^19.2.3
         version: 19.2.3(@types/react@19.2.17)
 
+  src/essentials/Elsa.Studio.Hosting/Client:
+    dependencies:
+      '@elsa-workflows/studio-code-editor':
+        specifier: workspace:*
+        version: link:../../Elsa.Studio.CodeEditor/Client
+      '@fontsource-variable/geist':
+        specifier: ^5.3.0
+        version: 5.3.0
+      '@fontsource-variable/geist-mono':
+        specifier: ^5.3.0
+        version: 5.3.0
+      '@fontsource-variable/instrument-sans':
+        specifier: ^5.3.0
+        version: 5.3.0
+      '@fontsource-variable/jetbrains-mono':
+        specifier: ^5.3.0
+        version: 5.3.0
+      '@fontsource-variable/manrope':
+        specifier: ^5.3.0
+        version: 5.3.0
+      '@fontsource/dm-mono':
+        specifier: ^5.3.0
+        version: 5.3.0
+      '@fontsource/ibm-plex-mono':
+        specifier: ^5.3.0
+        version: 5.3.0
+      '@fontsource/ibm-plex-sans':
+        specifier: ^5.3.0
+        version: 5.3.0
+      '@fontsource/instrument-serif':
+        specifier: ^5.3.0
+        version: 5.3.0
+      '@radix-ui/react-dialog':
+        specifier: ^1.1.6
+        version: 1.1.17(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+      '@radix-ui/react-dropdown-menu':
+        specifier: 2.1.15
+        version: 2.1.15(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+      react-markdown:
+        specifier: ^10.1.0
+        version: 10.1.0(@types/react@19.2.17)(react@19.2.7)
+      remark-gfm:
+        specifier: ^4.0.1
+        version: 4.0.1
+    devDependencies:
+      '@elsa-workflows/studio-sdk':
+        specifier: workspace:*
+        version: link:../StudioSdk
+      '@types/react':
+        specifier: ^19.2.17
+        version: 19.2.17
+      '@types/react-dom':
+        specifier: ^19.2.3
+        version: 19.2.3(@types/react@19.2.17)
+
+  src/essentials/Elsa.Studio.Hosting/StudioSdk:
+    dependencies:
+      react:
+        specifier: ^18.0.0 || ^19.0.0
+        version: 19.2.7
+    devDependencies:
+      '@types/react':
+        specifier: ^19.2.17
+        version: 19.2.17
+      vite-plugin-dts:
+        specifier: ^4.5.0
+        version: 4.5.4(rollup@4.62.0)(typescript@5.9.3)(vite@7.3.5)
+
+  src/essentials/Elsa.Studio.Hosting/StudioUi:
+    dependencies:
+      '@elsa-workflows/studio-sdk':
+        specifier: workspace:*
+        version: link:../StudioSdk
+      react:
+        specifier: ^18.0.0 || ^19.0.0
+        version: 19.2.7
+    devDependencies:
+      '@types/react':
+        specifier: ^19.2.17
+        version: 19.2.17
+      vite-plugin-dts:
+        specifier: ^4.5.0
+        version: 4.5.4(rollup@4.62.0)(typescript@5.9.3)(vite@7.3.5)
+
   src/essentials/Elsa.Studio.Workflows/Client:
     dependencies:
       '@elsa-workflows/studio-code-editor':
@@ -734,10 +885,10 @@ importers:
         version: link:../../Elsa.Studio.CodeEditor/Client
       '@elsa-workflows/studio-sdk':
         specifier: workspace:*
-        version: link:../../../apps/Elsa.Studio.Web/StudioSdk
+        version: link:../../Elsa.Studio.Hosting/StudioSdk
       '@elsa-workflows/studio-ui':
         specifier: workspace:*
-        version: link:../../../apps/Elsa.Studio.Web/StudioUi
+        version: link:../../Elsa.Studio.Hosting/StudioUi
       '@tanstack/react-query':
         specifier: ^5.101.0
         version: 5.101.0(react@19.2.7)

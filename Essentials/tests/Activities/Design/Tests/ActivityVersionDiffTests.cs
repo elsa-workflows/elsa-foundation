@@ -8,6 +8,21 @@ namespace Elsa.Activities.Design.Tests;
 
 public sealed class ActivityVersionDiffTests
 {
+    [Fact]
+    public async Task Node_name_only_change_is_visible_patch_and_nonbehavioral()
+    {
+        var request = Request(Contract(), Contract()) with
+        {
+            FromImplementation = new() { PresentationHash = "before", PresentationCount = 1 },
+            ToImplementation = new() { PresentationHash = "after", PresentationCount = 1 }
+        };
+        var result = await new ActivityVersionDiffer().DiffAsync(request);
+        Assert.False(result.BehaviorChanged);
+        Assert.Equal(ActivityVersionCompatibility.NonBehavioral, result.Compatibility);
+        Assert.Equal(ActivityVersionBump.Patch, result.RequiredBump);
+        Assert.Equal("NodePresentationChanged", Assert.Single(result.Changes).Kind);
+    }
+
     public static TheoryData<string, ActivityContract, ActivityContract, ActivityVersionCompatibility, ActivityVersionBump> CompatibilityMatrix => new()
     {
         { "no change", Contract(), Contract(), ActivityVersionCompatibility.Identical, ActivityVersionBump.None },

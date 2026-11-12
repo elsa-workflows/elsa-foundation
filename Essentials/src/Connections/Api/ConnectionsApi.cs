@@ -16,7 +16,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
-using NativeEndpoints;
+using MinimalEndpoints;
 
 namespace Elsa.Connections.Api;
 
@@ -250,7 +250,13 @@ public static class ConnectionsApi
         {
             case ArgumentException argument:
                 await Results.Json(
-                    new { error = argument.Message },
+                    new
+                    {
+                        error = argument.Message,
+                        errors = argument.ParamName == "name"
+                            ? new Dictionary<string, string[]> { ["name"] = [argument.Message] }
+                            : null
+                    },
                     JsonOptions,
                     contentType: "application/json",
                     statusCode: StatusCodes.Status400BadRequest).ExecuteAsync(context);

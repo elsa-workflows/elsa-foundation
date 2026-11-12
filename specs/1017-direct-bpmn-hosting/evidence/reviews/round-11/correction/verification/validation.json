@@ -1,0 +1,169 @@
+{
+  "verdict": "A1 resolved within actual original-input cancellation with compute bindings offline",
+  "source": "6bd8ac3e86d1701603b1c975534514d3fe62933b",
+  "reviewedSourceEquivalentHead": "f83df1b56ae3f8f41e70f7f61b9c0ad60bad74e1",
+  "originalWriter": "9508e25e57672c569f462aff9a1e0282c5780eb9",
+  "storesVerified": [
+    {
+      "phase": "original",
+      "store": "elsa",
+      "source": "/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/reviews/round-7/pre-correction/waiting/waiting-elsa.sqlite.gz",
+      "gzipSha256": "cbc0caf5cab087cbf4697b1cf195f706b9b7aa31cdd9e830125082ef30f3f092",
+      "databaseSha256": "0dbe02e70cefcf69965add6b8230fec575fa78c2e9545cce7c34b64384a2e19d",
+      "integrity": "ok"
+    },
+    {
+      "phase": "original",
+      "store": "etl-runtime",
+      "source": "/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/reviews/round-7/pre-correction/waiting/waiting-etl-runtime.sqlite.gz",
+      "gzipSha256": "b9cb3cd9a2282af8adbe36a9cde0d8369736eb9d2a8bbdb9d55fd3d0705c98a1",
+      "databaseSha256": "cc0ca8a47fa2f64e8930cb73cae6809b2754af5593368955e6646304d161a2aa",
+      "integrity": "ok"
+    },
+    {
+      "phase": "original",
+      "store": "etl-design",
+      "source": "/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/reviews/round-7/pre-correction/waiting/waiting-etl-design.sqlite.gz",
+      "gzipSha256": "ba4a7580842991dd67a6ae7634b604985df7327e290773d68393c42ae719012e",
+      "databaseSha256": "18771bf22cbd150d543a08699b7dfa218bb418e688b43d46f11100535516b466",
+      "integrity": "ok"
+    },
+    {
+      "phase": "before",
+      "store": "elsa",
+      "source": "/tmp/elsa-2898-review11-nested-cancellation/before-elsa.sqlite.gz",
+      "gzipSha256": "1374126d73523e16b2602a365c73699426dfad940bdeeeb0da6084c397930734",
+      "databaseSha256": "a687b6c4d04477fc69cf205e1b5bdd1b71e955959f274dfc513ddc9cb2c094fd",
+      "integrity": "ok"
+    },
+    {
+      "phase": "before",
+      "store": "etl-runtime",
+      "source": "/tmp/elsa-2898-review11-nested-cancellation/before-etl-runtime.sqlite.gz",
+      "gzipSha256": "623b944a6c195a9757661ddd74f4aad2fc9fdd3d1d66d583eab92d2744664759",
+      "databaseSha256": "cc0ca8a47fa2f64e8930cb73cae6809b2754af5593368955e6646304d161a2aa",
+      "integrity": "ok"
+    },
+    {
+      "phase": "before",
+      "store": "etl-design",
+      "source": "/tmp/elsa-2898-review11-nested-cancellation/before-etl-design.sqlite.gz",
+      "gzipSha256": "eb9419ed5ffedba9b6eb9e313618acb800abc0f073705ba496c277d29e376df7",
+      "databaseSha256": "18771bf22cbd150d543a08699b7dfa218bb418e688b43d46f11100535516b466",
+      "integrity": "ok"
+    },
+    {
+      "phase": "completed",
+      "store": "elsa",
+      "source": "/tmp/elsa-2898-review11-nested-cancellation/completed-elsa.sqlite.gz",
+      "gzipSha256": "2ba0b9b5fe432c8699c3437a42369de1fc6c17ea6e627c85e1797f8f6f5c016f",
+      "databaseSha256": "b3a61ffec531e234e090c6556a1084e6dfa00ba4f9399dd3e4297cbb79ae5b20",
+      "integrity": "ok"
+    },
+    {
+      "phase": "completed",
+      "store": "etl-runtime",
+      "source": "/tmp/elsa-2898-review11-nested-cancellation/completed-etl-runtime.sqlite.gz",
+      "gzipSha256": "dfd2d2e448f42cb50b4d90e9a43f9b42617841a26770f9b12e8f6edc288a5e5c",
+      "databaseSha256": "02471acb4c8d419b391dd1eea50dd47827b710cf20269c6c9810c2433d7b576f",
+      "integrity": "ok"
+    },
+    {
+      "phase": "completed",
+      "store": "etl-design",
+      "source": "/tmp/elsa-2898-review11-nested-cancellation/completed-etl-design.sqlite.gz",
+      "gzipSha256": "5e5a785082e228ec29ce36d203b6bb3ae9ad4972e1a2795f3c5f6f42d6a6ff81",
+      "databaseSha256": "d3f2cb5f76c39c19f8f7b8c5ed1f2b35303203b8927df5b404db1155c28866bb",
+      "integrity": "ok"
+    },
+    {
+      "phase": "retained",
+      "store": "elsa",
+      "source": "/tmp/elsa-2898-review11-nested-cancellation/retained-elsa.sqlite.gz",
+      "gzipSha256": "bd58a766901a9bb84032c630f79f2b6be585262cf78d22a584cc76dd88b0217b",
+      "databaseSha256": "47b0daa2ecc9ac608049badf4dc7e7c8ad559c144c30c2863e86b630bca0a99c",
+      "integrity": "ok"
+    },
+    {
+      "phase": "retained",
+      "store": "etl-runtime",
+      "source": "/tmp/elsa-2898-review11-nested-cancellation/retained-etl-runtime.sqlite.gz",
+      "gzipSha256": "dfd2d2e448f42cb50b4d90e9a43f9b42617841a26770f9b12e8f6edc288a5e5c",
+      "databaseSha256": "02471acb4c8d419b391dd1eea50dd47827b710cf20269c6c9810c2433d7b576f",
+      "integrity": "ok"
+    },
+    {
+      "phase": "retained",
+      "store": "etl-design",
+      "source": "/tmp/elsa-2898-review11-nested-cancellation/retained-etl-design.sqlite.gz",
+      "gzipSha256": "5e5a785082e228ec29ce36d203b6bb3ae9ad4972e1a2795f3c5f6f42d6a6ff81",
+      "databaseSha256": "d3f2cb5f76c39c19f8f7b8c5ed1f2b35303203b8927df5b404db1155c28866bb",
+      "integrity": "ok"
+    }
+  ],
+  "originalNativeModelAndEtlIdentitiesPreserved": true,
+  "fullPinsAuthorityMaterialAndBindingsPreserved": true,
+  "sameTwoNativeWorkersAndTwoModels": true,
+  "actualEtl": {
+    "runId": "etl-0c01015ac05338d8e7775918207ee230620d5c7c22ca002aec2d1661a074705a",
+    "initialStatus": "Running",
+    "finalStatus": "Cancelled",
+    "historicalAcceptedEffects": 2,
+    "outstandingRecords": 0,
+    "outstandingBytes": 0,
+    "activePreparationOrPartitionLeases": 0,
+    "owedBatchIds": 0,
+    "terminalDeliveryDisposition": "ProvenParentTerminal",
+    "deliveryAcknowledged": true,
+    "connectorPartitionAndBindingRowsUnchanged": true
+  },
+  "ordering": {
+    "outerCancelAccepted": "2026-10-31T20:31:10.996729+00:00",
+    "innerCancelAccepted": "2026-10-31T20:31:11.798377+00:00",
+    "etlCancelled": "2026-10-31T20:31:12.544592+00:00",
+    "etlCancelSourceDelivered": "2026-10-31T20:31:12.587018+00:00",
+    "etlTerminalDeliveryAcknowledgedTicks": 639290754726776570,
+    "innerNativeResultAccepted": "2026-10-31T20:31:12.799084+00:00",
+    "cancelEmbeddedDelivered": "2026-10-31T20:31:13.04179+00:00",
+    "innerModelParentSettled": "2026-10-31T20:31:13.327959+00:00",
+    "innerNativeResultSourceDelivered": "2026-10-31T20:31:13.79075+00:00",
+    "outerModelSettled": "2026-10-31T20:32:11.902309+00:00",
+    "outerNativeResultSourceDelivered": "2026-10-31T20:32:15.323105+00:00",
+    "outerCancelSourceDelivered": "2026-10-31T20:32:15.326516+00:00",
+    "etlTerminalDeliveryAcknowledged": "2026-10-31T20:31:12.677657+00:00"
+  },
+  "twoColdApiViewsIdentical": true,
+  "coldEtlRuntimeAndDesignWholeFilesIdentical": true,
+  "coldCombinedRuntimeDesignWholeFilesIdentical": false,
+  "etlCancelPayloadEqualsOriginalFrozenInvocation": true,
+  "unsettledEtlReservations": 0,
+  "combinedStoreChangedTables": [
+    {
+      "table": "elsa_activity_dependency_projection",
+      "completedRows": 1,
+      "retainedRows": 1,
+      "removedOrChangedRows": 1,
+      "addedOrChangedRows": 1
+    },
+    {
+      "table": "elsa_runtime_post_commit_outbox",
+      "completedRows": 19,
+      "retainedRows": 19,
+      "removedOrChangedRows": 2,
+      "addedOrChangedRows": 2
+    }
+  ],
+  "processes": [
+    {
+      "pid": 93657,
+      "recordedExit": -9,
+      "noOriginalProcessRemaining": true
+    },
+    {
+      "pid": 94368,
+      "recordedExit": -9,
+      "noOriginalProcessRemaining": true
+    }
+  ],
+  "scopeLimit": "No current HTTP compute, retry, new effect, Studio, other-provider or wider acceptance proof; original accepted effects and connector observations are historical."
+}

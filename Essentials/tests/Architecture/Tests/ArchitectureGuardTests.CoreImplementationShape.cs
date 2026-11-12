@@ -39,25 +39,6 @@ public sealed partial class ArchitectureGuardTests
         [
             "Elsa.Activities.Runtime.Contracts.ActivityActivationLease"
         ],
-        ["Elsa.Agent.Core"] =
-        [
-            "Elsa.Agent.Core.Services.AgentTurnRegistry",
-            "Elsa.Agent.Core.Services.DefaultAgentCapabilityCatalog",
-            "Elsa.Agent.Core.Services.DefaultAgentContextCollector",
-            "Elsa.Agent.Core.Services.DefaultAgentContextSanitizer",
-            "Elsa.Agent.Core.Services.DefaultAgentPolicyEvaluator",
-            "Elsa.Agent.Core.Services.DefaultAgentProviderRegistry",
-            "Elsa.Agent.Core.Services.DefaultAgentToolInvoker",
-            "Elsa.Agent.Core.Services.DefaultAgentToolRegistry",
-            "Elsa.Agent.Core.Services.DefaultAgentTurnOrchestrator",
-            "Elsa.Agent.Core.Services.DeterministicAgentProvider",
-            "Elsa.Agent.Core.Services.InMemoryAgentAuditStore",
-            "Elsa.Agent.Core.Services.InMemoryAgentFeedbackService",
-            "Elsa.Agent.Core.Services.InMemoryAgentProposalService",
-            "Elsa.Agent.Core.Services.InMemoryAgentSessionService",
-            "Elsa.Agent.Core.Services.InMemoryAgentTurnStateStore",
-            "Elsa.Agent.Core.Services.NoopAgentActionProposalExecutor"
-        ],
         ["Elsa.Attention.Core"] =
         [
             "Elsa.Attention.Core.AttentionAggregationService",
@@ -172,7 +153,7 @@ public sealed partial class ArchitectureGuardTests
 
     // Every production module root, not just src/. This was src/-only on the reasoning that a .Core
     // project is a required-module shape and no extension declared one; moving the Agent bucket to
-    // Extensions/ made Elsa.Agent.Core the first that does (#1815). The narrowing showed up as sixteen
+    // Extensions/ made Elsa.Weaver.Core the first that does (#1815). The narrowing showed up as sixteen
     // baseline entries reported stale rather than as missed violations, which is the inverse assertion
     // earning its keep: without it the guard would simply have stopped checking Agent and stayed green.
     private static IEnumerable<Assembly> CoreProjectAssemblies()

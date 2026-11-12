@@ -1,8 +1,8 @@
 import { createRoot } from "react-dom/client";
-import { applyThemeStyleVariables } from "../../src/apps/Elsa.Studio.Web/Client/src/app/components/ThemeProvider";
-import { getTheme, themeTokenNames } from "../../src/apps/Elsa.Studio.Web/Client/src/app/themes/presets";
-import { DisclosureFixturePage } from "../../src/apps/Elsa.Studio.Web/Client/src/app/ui/disclosure/DisclosureFixturePage";
-import "../../src/apps/Elsa.Studio.Web/Client/src/app/styles.css";
+import { applyThemeStyleVariables } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/components/ThemeProvider";
+import { getTheme, themeTokenNames } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/themes/presets";
+import { DisclosureFixturePage } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/ui/disclosure/DisclosureFixturePage";
+import "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/styles.css";
 
 const searchParams = new URLSearchParams(window.location.search);
 const mode = searchParams.get("mode") === "dark" ? "dark" : "light";

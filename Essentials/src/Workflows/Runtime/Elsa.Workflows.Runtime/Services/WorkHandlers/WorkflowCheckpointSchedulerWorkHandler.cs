@@ -274,6 +274,7 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
             PinnedSource = priorWorkflowState?.PinnedSource ?? payload.PinnedSource,
             Partition = priorWorkflowState?.Partition ?? payload.Partition,
             Authority = priorWorkflowState?.Authority ?? payload.Authority,
+            ModelWorkOrigin = priorWorkflowState?.ModelWorkOrigin ?? payload.ModelWorkOrigin,
             DispatchNestingDepth = priorWorkflowState?.DispatchNestingDepth ?? payload.DispatchNestingDepth,
             TestScope = priorWorkflowState?.TestScope ?? payload.TestScope,
             RootVariableFrame = priorWorkflowState?.RootVariableFrame ?? CreateRootVariableFrame(workItem.WorkflowExecutionId, payload.SeedVariables, executable)
@@ -296,6 +297,12 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
             metadata[RuntimeMetadataKeys.SourceReferenceId] = existingReferenceId;
         else if (workItem?.CommandMetadata.TryGetValue(RuntimeMetadataKeys.SourceReferenceId, out var sourceReferenceId) == true)
             metadata[RuntimeMetadataKeys.SourceReferenceId] = sourceReferenceId;
+        // A lookup hint is retained for explicit called-workflow control. It grants no authority:
+        // the boundary provider validates its complete committed dispatch/root/caller context.
+        if (priorWorkflowState?.SystemMetadata.TryGetValue(RuntimeMetadataKeys.ChildControlDispatchId, out var existingControlDispatchId) == true)
+            metadata[RuntimeMetadataKeys.ChildControlDispatchId] = existingControlDispatchId;
+        else if (workItem?.CommandMetadata.TryGetValue(RuntimeMetadataKeys.ChildControlDispatchId, out var controlDispatchId) == true)
+            metadata[RuntimeMetadataKeys.ChildControlDispatchId] = controlDispatchId;
 
         // Carry the run's recorded persistence mode forward across every state rebuild that does not resolve it itself
         // (e.g. the workflow-completed transition), unless this rebuild is recording a freshly resolved mode.
@@ -367,6 +374,7 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
             PinnedSource = priorWorkflowState?.PinnedSource ?? payload.PinnedSource,
             Partition = priorWorkflowState?.Partition ?? payload.Partition,
             Authority = priorWorkflowState?.Authority ?? payload.Authority,
+            ModelWorkOrigin = priorWorkflowState?.ModelWorkOrigin ?? payload.ModelWorkOrigin,
             DispatchNestingDepth = priorWorkflowState?.DispatchNestingDepth ?? payload.DispatchNestingDepth,
             TestScope = priorWorkflowState?.TestScope ?? payload.TestScope,
             RootVariableFrame = priorWorkflowState?.RootVariableFrame is { } rootFrame

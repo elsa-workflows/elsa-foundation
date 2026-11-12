@@ -1,21 +1,26 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, FlaskConical, Package, Settings2, ShieldAlert, RefreshCcw } from "lucide-react";
 import {
+  defaultStudioHostId,
   useAuthSession,
   useDialogFocus,
   usePermissions,
+  studioBackendCapabilitiesChangedEvent,
+  studioNavigationRequestedEvent,
+  type StudioNavigationRequest,
+  notifyStudioNavigationGuardReleased,
+  type AuthSession,
   type ElsaStudioModuleApi,
+  type StudioHostId,
   type StudioSettingDescriptor
 } from "@elsa-workflows/studio-sdk";
-import {
-  registerBuiltInSettingEditors,
+import { registerBuiltInSettingEditors,
   selectSettingEditor,
   SkeletonRows,
   StudioAlert,
   StudioTabs,
   StudioToolbar,
-  StudioToolbarGroup
-} from "@elsa-workflows/studio-ui";
+  StudioToolbarGroup, StudioPageHeader, StudioButton } from "@elsa-workflows/studio-ui";
 import "./styles.css";
 
 interface FeatureCatalogResponse {
@@ -30,6 +35,8 @@ interface FeatureApplyResult {
 }
 
 interface FeatureCatalogItem {
+  runtimeAvailable?: boolean;
+  availability?: {status:string;reasons:{family:string;version:string;kind:string;reason:string}[]} | null;
   id: string;
   displayName: string;
   description?: string | null;
@@ -105,10 +112,12 @@ interface FeatureImpactEntry {
   reasons: FeatureImpactReason[];
 }
 
-type FeatureHostId = "studio" | "server";
+type FeatureHostId = StudioHostId;
 type FeatureEndpointContext = Pick<ElsaStudioModuleApi["host"], "http">;
 
 interface FeatureHostConfig {
+  key: string;
+  session?: AuthSession;
   id: FeatureHostId;
   label: string;
   runtime: string;
@@ -132,6 +141,8 @@ interface FeatureHostState {
 }
 
 interface FeatureReviewSnapshot {
+  targetKey: string;
+  context: FeatureEndpointContext;
   hostId: FeatureHostId;
   catalog: FeatureCatalogResponse;
   catalogSignature: string | undefined;
@@ -149,7 +160,7 @@ export const featureKeys = {
 };
 
 let moduleApi: ElsaStudioModuleApi;
-let featureCompletion: { hostId: FeatureHostId; message: string } | null = null;
+let featureCompletion: { hostId: FeatureHostId; message: string; targetKey:string } | null = null;
 let featureVisitVersion = 0;
 let pendingFeatureApplies = 0;
 let removeFeatureNavigationObserver: (() => void) | null = null;
@@ -199,7 +210,7 @@ function endFeatureApplyAttempt() {
   removeFeatureNavigationObserverIfIdle();
 }
 
-function retainFeatureCompletion(hostId: FeatureHostId, message: string, visitVersion: number) {
+function retainFeatureCompletion(hostId: FeatureHostId, message: string, visitVersion: number, targetKey:string) {
   if (typeof window === "undefined"
     || !isFeatureManagementPath(window.location.pathname)
     || visitVersion !== featureVisitVersion) {
@@ -207,7 +218,7 @@ function retainFeatureCompletion(hostId: FeatureHostId, message: string, visitVe
   }
 
   clearFeatureCompletion();
-  featureCompletion = { hostId, message };
+  featureCompletion = { hostId, message, targetKey };
   observeFeatureNavigation();
 }
 
@@ -227,7 +238,7 @@ export function register(api: ElsaStudioModuleApi) {
     id: "feature-management",
     label: "Features",
     path: "/features",
-    component: FeatureManagementPage
+    component: () => <FeatureManagementPage key={api.backendSession?.key ?? api.backend.baseUrl} />
   });
 }
 
@@ -244,7 +255,7 @@ function projectEffectiveFeature(feature: Pick<DraftFeature, "id" | "enabled" | 
 export function createApplyPayload(revision: string, features: DraftFeature[]) {
   return {
     revision,
-    features: features.map(projectEffectiveFeature)
+    features: features.filter(feature => feature.sourceKind !== "manifest-error").map(projectEffectiveFeature)
   };
 }
 
@@ -367,6 +378,8 @@ function getFeatureHosts(api: ElsaStudioModuleApi): FeatureHostConfig[] {
   return [
     {
       id: "studio",
+      key: JSON.stringify(["studio",api.host.baseUrl,api.hostSession?.subject,api.hostSession?.tenantId]),
+      session: api.hostSession,
       label: "Studio",
       runtime: "Elsa.Studio.Web",
       context: api.host,
@@ -374,7 +387,9 @@ function getFeatureHosts(api: ElsaStudioModuleApi): FeatureHostConfig[] {
     },
     {
       id: "server",
-      label: "Server",
+      key: api.backendSession?.key ?? JSON.stringify(["server",api.backend.baseUrl,api.runtime?.identity]),
+      session: api.backendSession?.identity,
+      label: api.backendSession ? `Server · ${api.backendSession.profile.name}` : "Server",
       runtime: "Elsa.Server",
       context: api.backend,
       writable: true
@@ -463,7 +478,7 @@ export function FeatureManagementPage() {
   const session = useAuthSession();
   const permissions = usePermissions();
   const hosts = useMemo(() => getFeatureHosts(moduleApi), []);
-  const [activeHostId, setActiveHostId] = useState<FeatureHostId>(() => featureCompletion?.hostId ?? "server");
+  const [activeHostId, setActiveHostId] = useState<FeatureHostId>(() => {const target=new URLSearchParams(window.location.search).get("target");return target === "studio" || target === "server" ? target : featureCompletion?.hostId ?? defaultStudioHostId;});
   const completionRef = useRef<HTMLDivElement | null>(null);
   const [reviewSnapshot, setReviewSnapshot] = useState<FeatureReviewSnapshot | null>(null);
   const reviewSnapshotRef = useRef<FeatureReviewSnapshot | null>(null);
@@ -476,9 +491,14 @@ export function FeatureManagementPage() {
   const activeHost = hosts.find(host => host.id === activeHostId) ?? hosts[0];
   const hostState = hostStates[activeHost.id];
   const { catalog, draft, selectedId, checkedFeatureIds, selectedCategory, filterText, loading, applying, status, error, enabledRoots, stateCauses } = hostState;
-  const completionMessage = featureCompletion?.hostId === activeHost.id ? featureCompletion.message : status;
+  const completionMessage = featureCompletion?.hostId === activeHost.id && featureCompletion.targetKey === activeHost.key ? featureCompletion.message : status;
 
+  // Load once. A background workspace tab mounts its effects again when it returns, and a refresh
+  // would replace an unapplied feature draft with the server catalog.
+  const initialRefreshRef = useRef(false);
   useEffect(() => {
+    if (initialRefreshRef.current) return;
+    initialRefreshRef.current = true;
     for (const host of hosts) {
       void refreshHost(host.id, false);
     }
@@ -511,9 +531,27 @@ export function FeatureManagementPage() {
   const checkedVisibleCount = filteredDraft.filter(feature => checkedFeatureIds.has(feature.id)).length;
   const allVisibleChecked = filteredDraft.length > 0 && checkedVisibleCount === filteredDraft.length;
   const checkedFeatures = draft.filter(feature => checkedFeatureIds.has(feature.id));
+  const targetSession = activeHost.session ?? session;
   const readOnly = !activeHost.writable
-    || (session.status === "authenticated" && !permissions.has("module-management:manage"));
+    || (targetSession.status === "authenticated" && !(activeHost.session ? (targetSession.permissions.includes("*") || targetSession.permissions.includes("module-management:manage")) : permissions.has("module-management:manage")));
   const editingDisabled = loading || applying || readOnly;
+  const currentTargetKey = (id:FeatureHostId) => getFeatureHosts(moduleApi).find(host => host.id === id)?.key;
+  useEffect(() => {
+    const guard = (event:Event) => {
+      if (Object.values(hostStates).some(state => state.applying || isDirty(state.catalog,state.draft))) {
+        event.preventDefault();
+        // A probe only asks whether unsaved work exists; it must not change what the page shows.
+        if ((event as CustomEvent<StudioNavigationRequest>).detail?.intent === "probe") return;
+        updateHostState(activeHost.id,state => ({...state,error:"Review and apply, or reset, the current feature draft before leaving this backend."}));
+      }
+    };
+    window.addEventListener(studioNavigationRequestedEvent,guard);
+    return () => window.removeEventListener(studioNavigationRequestedEvent,guard);
+  },[hostStates,activeHost.id]);
+  useEffect(() => {
+    if (!Object.values(hostStates).some(state => state.applying || isDirty(state.catalog,state.draft)))
+      notifyStudioNavigationGuardReleased();
+  },[hostStates]);
 
   useEffect(() => {
     if (selectedFeature && selectedFeature.id !== selectedId) {
@@ -567,6 +605,7 @@ export function FeatureManagementPage() {
     updateHostState(host.id, state => ({ ...state, loading: true, error: null, status: null }));
     try {
       const response = await host.context.http.getJson<FeatureCatalogResponse>("/modularity/features");
+      if (host.key !== currentTargetKey(host.id)) return;
       if (reviewSnapshotRef.current?.hostId === host.id) {
         clearReview();
       }
@@ -593,6 +632,8 @@ export function FeatureManagementPage() {
 
     const currentState = hostStates[snapshot.hostId];
     const snapshotIsCurrent = snapshot.hostId === activeHost.id
+      && snapshot.targetKey === activeHost.key
+      && snapshot.targetKey === currentTargetKey(snapshot.hostId)
       && snapshot.catalog === currentState.catalog
       && snapshot.catalogSignature === stableStringify(currentState.catalog)
       && snapshot.draftSignature === stableStringify(currentState.draft)
@@ -614,9 +655,10 @@ export function FeatureManagementPage() {
     clearFeatureCompletion();
     updateHostState(snapshot.hostId, state => ({ ...state, applying: true, error: null, status: null }));
     try {
-      const response = await host.context.http.postJson<FeatureApplyResult>(
+      const response = await snapshot.context.http.postJson<FeatureApplyResult>(
         "/modularity/features/apply",
         JSON.parse(JSON.stringify(snapshot.payload)));
+      if (host.key !== currentTargetKey(host.id)) return;
       const message = `Applied ${response.featureDescriptorCount} descriptor(s); reloaded ${response.reloadedShellCount} shell(s).`;
       updateHostState(snapshot.hostId, state => ({
         ...state,
@@ -627,11 +669,13 @@ export function FeatureManagementPage() {
         status: message,
         applying: false
       }));
-      retainFeatureCompletion(snapshot.hostId, message, applyVisitVersion);
+      retainFeatureCompletion(snapshot.hostId, message, applyVisitVersion, snapshot.targetKey);
       clearReview();
 
       if (snapshot.hostId === "studio") {
         window.dispatchEvent(new Event(ModulesChangedEventName));
+      } else if (moduleApi.backendSession) {
+        window.dispatchEvent(new CustomEvent(studioBackendCapabilitiesChangedEvent,{detail:{key:moduleApi.backendSession.key}}));
       }
     } catch (e) {
       updateHostState(snapshot.hostId, state => ({ ...state, error: getErrorMessage(e), applying: false, status: null }));
@@ -647,6 +691,8 @@ export function FeatureManagementPage() {
     }
 
     const snapshot: FeatureReviewSnapshot = {
+      targetKey: activeHost.key,
+      context: activeHost.context,
       hostId: activeHost.id,
       catalog,
       catalogSignature: stableStringify(catalog),
@@ -758,24 +804,18 @@ export function FeatureManagementPage() {
   }
 
   return (
-    <section className="feature-management-page">
-      <div className="section-header feature-management-header">
-        <div>
-          <h2>Features</h2>
-          <p>{activeHost.label}: {enabledCount} enabled of {draft.length} available{dirty ? " - Unsaved changes" : ""}</p>
-        </div>
-        <StudioToolbar>
+    <section className="studio-page feature-management-page">
+      <StudioPageHeader headingLevel={2} title={<>Features</>} description={<>{activeHost.label}: {enabledCount} enabled of {draft.length} available{dirty ? " - Unsaved changes" : ""}</>} actions={<><StudioToolbar>
           <StudioToolbarGroup>
-            <button type="button" className="studio-icon-button" aria-label="Refresh features" title="Refresh" onClick={() => refreshHost()} disabled={loading || applying}>
+            <StudioButton type="button" className="studio-icon-button" aria-label="Refresh features" title="Refresh" onClick={() => refreshHost()} disabled={loading || applying}>
               <RefreshCcw size={15} />
-            </button>
-            <button type="button" className="studio-button" onClick={reset} disabled={!dirty || loading || applying || readOnly}>Reset</button>
-            <button type="button" className="studio-button studio-button-primary" onClick={openReview} disabled={!dirty || loading || applying || readOnly}>
+            </StudioButton>
+            <StudioButton type="button" onClick={reset} disabled={!dirty || loading || applying || readOnly}>Reset</StudioButton>
+            <StudioButton type="button" variant="primary" onClick={openReview} disabled={!dirty || loading || applying || readOnly}>
               Review changes
-            </button>
+            </StudioButton>
           </StudioToolbarGroup>
-        </StudioToolbar>
-      </div>
+        </StudioToolbar></>} />
 
       <StudioTabs
         tabs={hosts.map(host => ({ id: host.id, label: host.label }))}
@@ -1467,6 +1507,8 @@ function FeatureInspector({
 
       {feature.description ? <p>{feature.description}</p> : null}
       {feature.readError ? <div className="feature-management-warning">{feature.readError}</div> : null}
+      {feature.enabled && feature.runtimeAvailable === false ? <div className="feature-management-warning">Enabled in configuration; no runtime descriptor is available.</div> : null}
+      {feature.enabled && feature.availability?.status === "dormant" ? <div className="feature-management-warning">Dormant: {feature.availability.reasons.map(reason => reason.reason).join(" ")}</div> : null}
 
       <section className="feature-management-inspector-section" aria-label="Feature metadata">
         <FeatureMetadata feature={feature} dependents={dependents} />
@@ -1522,6 +1564,8 @@ function FeatureMetadata({ feature, dependents }: { feature: DraftFeature; depen
       <dl className="feature-management-detail-list">
         <div><dt>Technical name</dt><dd><code>{feature.id}</code></dd></div>
         <div><dt>Settings</dt><dd>{feature.settings.length}</dd></div>
+        <div><dt>Runtime descriptor</dt><dd>{feature.runtimeAvailable === undefined ? "Not reported" : feature.runtimeAvailable ? "Available" : "Missing"}</dd></div>
+        <div><dt>Operational availability</dt><dd>{!feature.enabled ? "Disabled" : feature.availability?.status ?? "Not reported"}</dd></div>
         <div className="feature-management-detail-wide"><dt>Categories</dt><dd><CategoryChips categories={feature.categories} /></dd></div>
         <div className="feature-management-detail-wide"><dt>Package</dt><dd>{feature.packageId ? <FeatureBadge tone="violet"><Package size={11} />{packageName}</FeatureBadge> : <span className="feature-management-muted">{packageName}</span>}</dd></div>
         {dependencies.length > 0 ? <div className="feature-management-detail-wide"><dt>Depends on</dt><dd><FeatureLinkChips ids={dependencies} /></dd></div> : null}

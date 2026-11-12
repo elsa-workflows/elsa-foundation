@@ -1,0 +1,84 @@
+using System.Net.Http.Headers;
+using System.Net.Http.Json;
+using System.Text.Json;
+using Microsoft.AspNetCore.Http.Connections;
+using Microsoft.AspNetCore.SignalR.Client;
+
+var baseUrl = args[0];
+const string owner = "composition-owner";
+using var http = new HttpClient { BaseAddress = new Uri(baseUrl), Timeout = TimeSpan.FromSeconds(25) };
+http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", owner);
+var before = await GenerationAsync();
+Ensure(before.GetProperty("value").GetString() == "module-v1", "Initial serving generation is not module-v1");
+(await http.PostAsync("/__qualification/retain", null)).EnsureSuccessStatusCode();
+await using var connection = new HubConnectionBuilder().WithUrl(baseUrl + "/_elsa/studio/diagnostics/console-logs/hub", options =>
+{
+    options.Transports = HttpTransportType.WebSockets;
+    options.AccessTokenProvider = () => Task.FromResult<string?>(owner);
+}).Build();
+using var lifetime = new CancellationTokenSource(TimeSpan.FromSeconds(90));
+await connection.StartAsync(lifetime.Token);
+var connectionId = connection.ConnectionId;
+var preMarker = Guid.NewGuid().ToString("N");
+var postMarker = Guid.NewGuid().ToString("N");
+var pre = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+var post = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+using var streamCancellation = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token);
+var pump = Task.Run(async () =>
+{
+    try
+    {
+        await foreach (var item in connection.StreamAsync<JsonElement>("StreamAsync", (object?)null, streamCancellation.Token))
+        {
+            var text = item.GetRawText();
+            if (text.Contains("composition:" + preMarker, StringComparison.Ordinal)) pre.TrySetResult();
+            if (text.Contains("composition:" + postMarker, StringComparison.Ordinal)) post.TrySetResult();
+        }
+    }
+    catch (OperationCanceledException) when (streamCancellation.IsCancellationRequested) { }
+});
+try
+{
+    await AcknowledgeAsync(preMarker, pre.Task);
+    Console.WriteLine(JsonSerializer.Serialize(new { stage = "before", connectionId, generation = before }));
+    var command = await Console.In.ReadLineAsync().WaitAsync(TimeSpan.FromSeconds(45));
+    Ensure(command == "after", "The actual-reconciliation barrier was not released");
+    var after = await GenerationAsync();
+    Ensure(after.GetProperty("generation").GetString() != before.GetProperty("generation").GetString()
+        && after.GetProperty("value").GetString() == "module-v2", "Actual package reconciliation did not replace the serving generation");
+    Ensure(after.GetProperty("retained").GetString() == "module-v1", "The retained old generation lost its service");
+    await AcknowledgeAsync(postMarker, post.Task);
+    Ensure(connection.State == HubConnectionState.Connected && connection.ConnectionId == connectionId,
+        "The live connection was replaced or disconnected during shell reload");
+    streamCancellation.Cancel();
+    await pump;
+    await connection.StopAsync(lifetime.Token);
+    (await http.PostAsync("/__qualification/release", null)).EnsureSuccessStatusCode();
+    Console.WriteLine(JsonSerializer.Serialize(new { stage = "passed", connectionId, before, after, preMarker, postMarker, cleanDisconnect = true }));
+}
+finally
+{
+    streamCancellation.Cancel();
+    try { await pump; } catch { }
+    try { await http.PostAsync("/__qualification/release", null); } catch { }
+}
+
+async Task<JsonElement> GenerationAsync() => await http.GetFromJsonAsync<JsonElement>("/__qualification/generation");
+async Task AcknowledgeAsync(string marker, Task acknowledgement)
+{
+    var deadline = DateTime.UtcNow.AddSeconds(20);
+    while (!acknowledgement.IsCompleted)
+    {
+        lifetime.Token.ThrowIfCancellationRequested();
+        Ensure(DateTime.UtcNow < deadline, "The live console stream did not acknowledge " + marker);
+        if (pump.IsFaulted) await pump;
+        (await http.PostAsync("/__qualification/emit/" + marker, null, lifetime.Token)).EnsureSuccessStatusCode();
+        try { await acknowledgement.WaitAsync(TimeSpan.FromMilliseconds(500), lifetime.Token); }
+        catch (TimeoutException) { }
+    }
+    await acknowledgement;
+}
+static void Ensure(bool condition, string message)
+{
+    if (!condition) throw new InvalidOperationException(message);
+}

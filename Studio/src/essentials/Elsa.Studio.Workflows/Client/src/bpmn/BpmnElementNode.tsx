@@ -1,33 +1,38 @@
 import React from "react";
-import { Handle, Position, type NodeProps } from "@xyflow/react";
+import { Handle, type NodeProps } from "@xyflow/react";
 import { renderActivityIcon } from "../activityIconView";
 import { NodeSlotBadges } from "../workflow-editor/NodeSlotBadges";
 import { RuntimeIncidentAction } from "../workflow-editor/RuntimeIncidentAction";
+import { ExecutionActivityPulse } from "../workflow-editor/ExecutionMotionPulse";
 import { bpmnElementTypes, bpmnElementTypeLabel, isEventElementType, isGatewayElementType, isTerminateEndEvent } from "./bpmnTypes";
 import type { BpmnNodeData } from "./bpmnAdapter";
+import { useGraphPortLayout } from "../graph-authoring/useGraphPortLayout";
+import { portPlacementStyle } from "../graph-authoring/graphPortLayout";
 
 // Renders one BPMN element with its standard notation shape: thin circle (start event), thick circle
 // (end event, filled when terminate), diamond with an X / + / O marker (exclusive / parallel /
 // inclusive gateway), and a rounded task/subprocess frame showing the bound Elsa activity. Start
 // events have no inbound handle; end events no outbound handle.
-export function BpmnElementNode({ data, selected }: NodeProps) {
+export function BpmnElementNode({ id, data, selected }: NodeProps) {
   const nodeData = data as BpmnNodeData;
   const element = nodeData.element;
   const acceptsInbound = element.elementType !== bpmnElementTypes.startEvent;
   const producesOutbound = element.elementType !== bpmnElementTypes.endEvent;
   const typeLabel = bpmnElementTypeLabel(element);
+  const ports = useGraphPortLayout(id, producesOutbound ? ["flow"] : [], acceptsInbound);
 
   return (
     <div
-      className={["wf-bpmn-node", `wf-bpmn-${element.elementType}`, selected ? "selected" : "", nodeData.runtime ? "wf-bpmn-node-runtime" : "", nodeData.runtime?.hasBlockingIncident ? "faulted" : ""].filter(Boolean).join(" ")}
+      className={["wf-bpmn-node", selected ? "selected" : "", nodeData.runtime ? "wf-bpmn-node-runtime" : "", nodeData.runtime?.hasBlockingIncident ? "faulted" : ""].filter(Boolean).join(" ")}
       data-element-type={element.elementType}
       data-runtime-node-id={nodeData.runtimeNodeId ?? nodeData.boundActivity?.nodeId ?? element.elementId}
       title={typeLabel}
     >
-      {acceptsInbound ? <Handle type="target" position={Position.Left} /> : null}
+      <ExecutionActivityPulse pulse={nodeData.executionPulse} status={nodeData.runtime?.status} />
+      {ports.target ? <Handle type="target" position={ports.target.side} style={portPlacementStyle(ports.target)} /> : null}
       {renderBpmnShape(nodeData)}
       {nodeData.runtime ? <RuntimeIncidentAction runtime={nodeData.runtime} onOpenIncident={nodeData.onIncidentClick} activityLabel={element.name?.trim() || nodeData.boundActivity?.label || typeLabel} className="wf-bpmn-incident-action" /> : null}
-      {producesOutbound ? <Handle type="source" position={Position.Right} id="flow" /> : null}
+      {ports.sources.map(port => <Handle key={port.id} type="source" position={port.side} id={port.id} style={portPlacementStyle(port)} />)}
     </div>
   );
 }
@@ -59,7 +64,7 @@ function renderBpmnShape(nodeData: BpmnNodeData) {
         <span className="wf-bpmn-gateway" aria-hidden="true">
           <span className="wf-bpmn-gateway-marker">{marker}</span>
         </span>
-        <small className="wf-bpmn-caption">{element.name?.trim() || bpmnElementTypeLabel(element)}</small>
+        <small className="wf-bpmn-caption">{element.name?.trim() || nodeData.boundActivity?.label || bpmnElementTypeLabel(element)}</small>
       </span>
     );
   }
@@ -80,6 +85,7 @@ function renderBpmnShape(nodeData: BpmnNodeData) {
               ownerNodeId={bound.nodeId}
               ownerLabel={element.name?.trim() || bound.label}
               slots={nodeData.childSlots}
+              collections={nodeData.collectionSlots}
               onEnterSlot={nodeData.onEnterSlot}
             />
           </span>
@@ -87,7 +93,7 @@ function renderBpmnShape(nodeData: BpmnNodeData) {
       ) : (
         <span className="wf-bpmn-task-copy">
           <strong>{element.name?.trim() || bpmnElementTypeLabel(element)}</strong>
-          <small>No activity bound</small>
+          <small>{nodeData.bindingLabel ?? "No activity bound"}</small>
         </span>
       )}
       {element.elementType === bpmnElementTypes.subProcess ? <span className="wf-bpmn-subprocess-marker" aria-hidden="true">⊞</span> : null}

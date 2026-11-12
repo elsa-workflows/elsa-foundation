@@ -13,6 +13,9 @@ using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using EventActivity = Elsa.Activities.Primitives.Activities.Event;
 
+using BpmnDiagnosticKind = global::Bpmn.Model.State.BpmnDiagnosticKind;
+using BpmnExecutionState = global::Bpmn.Model.State.BpmnExecutionState;
+
 namespace Elsa.Activities.Bpmn.Tests;
 
 /// <summary>
@@ -70,7 +73,7 @@ public sealed class BpmnBoundaryEventTests
         var hostChild = resumed.State("node-host");
         Assert.Equal(ActivityExecutionStatus.Cancelled, hostChild.Status);
         Assert.Equal("ParentCancelled", hostChild.SubStatus);
-        Assert.Equal(BpmnExecutionEngine.BoundaryHostInterruptedReason, hostChild.Metadata[RuntimeMetadataKeys.ScopeCancellationReason]);
+        Assert.Equal("bpmn.boundary.host-interrupted", hostChild.Metadata[RuntimeMetadataKeys.ScopeCancellationReason]);
         Assert.Empty(await fixture.BookmarksAsync());
     }
 
@@ -111,7 +114,7 @@ public sealed class BpmnBoundaryEventTests
         var listenerChild = resumed.State("node-timer");
         Assert.Equal(ActivityExecutionStatus.Cancelled, listenerChild.Status);
         Assert.Equal("ParentCancelled", listenerChild.SubStatus);
-        Assert.Equal(BpmnExecutionEngine.BoundarySupersededByHostCompletionReason, listenerChild.Metadata[RuntimeMetadataKeys.ScopeCancellationReason]);
+        Assert.Equal("bpmn.boundary.superseded-by-host-completion", listenerChild.Metadata[RuntimeMetadataKeys.ScopeCancellationReason]);
         Assert.Empty(await fixture.BookmarksAsync());
     }
 
@@ -192,7 +195,7 @@ public sealed class BpmnBoundaryEventTests
         Assert.Equal("AbsorbFault", incident.ResolutionOutcome!.ActionKind);
         Assert.NotNull(incident.ResolvedAt);
         Assert.Equal("actexec-bpmn", incident.Metadata[RuntimeMetadataKeys.FaultAbsorbedBy]);
-        Assert.Equal(BpmnExecutionEngine.ErrorBoundaryAbsorptionReason, incident.Metadata[RuntimeMetadataKeys.FaultAbsorptionReason]);
+        Assert.Equal("bpmn.boundary.error-absorbed", incident.Metadata[RuntimeMetadataKeys.FaultAbsorptionReason]);
     }
 
     [Fact]
@@ -235,7 +238,7 @@ public sealed class BpmnBoundaryEventTests
             .ListAsync(WorkflowExecutionHarness.WorkflowExecutionId));
         Assert.Equal(IncidentStatus.Resolved, incident.Status);
         Assert.Equal("actexec-bpmn", incident.Metadata[RuntimeMetadataKeys.FaultAbsorbedBy]);
-        Assert.Equal(BpmnExecutionEngine.ErrorBoundaryAbsorptionReason, incident.Metadata[RuntimeMetadataKeys.FaultAbsorptionReason]);
+        Assert.Equal("bpmn.boundary.error-absorbed", incident.Metadata[RuntimeMetadataKeys.FaultAbsorptionReason]);
     }
 
     [Fact]
@@ -270,7 +273,7 @@ public sealed class BpmnBoundaryEventTests
         Assert.Equal(ActivityExecutionStatus.Faulted, run.State("node-fault").Status);
         var listenerChild = run.State("node-timer");
         Assert.Equal(ActivityExecutionStatus.Cancelled, listenerChild.Status);
-        Assert.Equal(BpmnExecutionEngine.BoundaryHostInterruptedReason, listenerChild.Metadata[RuntimeMetadataKeys.ScopeCancellationReason]);
+        Assert.Equal("bpmn.boundary.host-interrupted", listenerChild.Metadata[RuntimeMetadataKeys.ScopeCancellationReason]);
 
         var incident = Assert.Single(await fixture.Provider.GetRequiredService<IIncidentStateStore>()
             .ListAsync(WorkflowExecutionHarness.WorkflowExecutionId));
@@ -305,7 +308,7 @@ public sealed class BpmnBoundaryEventTests
             process.PrivateState!.Value.InlineValue!.Value.GetRawText(),
             new JsonSerializerOptions(JsonSerializerDefaults.Web))!;
         Assert.Contains(persistedState.Diagnostics, diagnostic =>
-            diagnostic.Kind == BpmnDiagnosticKind.Faulted && diagnostic.Message.Contains("faulted child cannot complete", StringComparison.Ordinal));
+            diagnostic.Kind == BpmnDiagnosticKind.Faulted && diagnostic.Message.Contains("failed work cannot complete", StringComparison.Ordinal));
     }
 
     [Fact]

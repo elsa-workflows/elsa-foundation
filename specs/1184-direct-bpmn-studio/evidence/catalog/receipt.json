@@ -1,0 +1,16 @@
+{
+  "source": "1e608cb8a71eb6d9fb02ac5052ed912c9c5a55fb",
+  "containsMain": "69d90f4f0ec21b965de6df72645eacf008b9fbe5",
+  "name": "elsa-bpmn-catalog-host-1e608cb8a.zip",
+  "sha256": "8a05b59e98011ef50d2cc43bda50015e1f81a89388200c071359c7a9aa1679ce",
+  "bytes": 504970,
+  "files": 18,
+  "assetId": 698291268,
+  "checksumAssetId": 698291339,
+  "url": "https://github.com/elsa-workflows/elsa-foundation/releases/download/contributor-preview-2026-10-07.1/elsa-bpmn-catalog-host-1e608cb8a.zip",
+  "uploader": "elsa-workflows-codex[bot]",
+  "downloadVerified": true,
+  "allMembersVerified": true,
+  "newReleaseOrTag": false,
+  "releasePublishedAtUnchanged": "2026-10-07T15:44:19Z"
+}

@@ -1,0 +1,109 @@
+{
+  "scenarios": [
+    {
+      "exportedXml": "<definitions xmlns:bpmndi=\"http://www.omg.org/spec/BPMN/20100524/DI\" xmlns:dc=\"http://www.omg.org/spec/DD/20100524/DC\" xmlns:di=\"http://www.omg.org/spec/DD/20100524/DI\" id=\"node-simple-definitions\" targetNamespace=\"https://elsa-workflows.io/schemas/bpmn\" xmlns=\"http://www.omg.org/spec/BPMN/20100524/MODEL\" xmlns:elsa=\"https://elsa-workflows.io/schemas/bpmn\">\n  <process id=\"node-simple\" isExecutable=\"true\">\n    <startEvent id=\"start\">\n      <outgoing>flow</outgoing>\n    </startEvent>\n    <endEvent id=\"end\">\n      <incoming>flow</incoming>\n    </endEvent>\n    <sequenceFlow id=\"flow\" sourceRef=\"start\" targetRef=\"end\" />\n  </process>\n  <bpmndi:BPMNDiagram id=\"node-simple-diagram\">\n    <bpmndi:BPMNPlane id=\"node-simple-plane\" bpmnElement=\"node-simple\">\n      <bpmndi:BPMNShape id=\"start_di\" bpmnElement=\"start\">\n        <dc:Bounds x=\"40\" y=\"102\" width=\"36\" height=\"36\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"end_di\" bpmnElement=\"end\">\n        <dc:Bounds x=\"156\" y=\"102\" width=\"36\" height=\"36\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNEdge id=\"flow_di\" bpmnElement=\"flow\">\n        <di:waypoint x=\"76\" y=\"120\" />\n        <di:waypoint x=\"156\" y=\"120\" />\n      </bpmndi:BPMNEdge>\n    </bpmndi:BPMNPlane>\n  </bpmndi:BPMNDiagram>\n</definitions>",
+      "scenario": "none-start",
+      "activities": [
+        {
+          "executableNodeId": "node-simple",
+          "status": "Completed",
+          "outcomeNames": [
+            "Done"
+          ]
+        }
+      ],
+      "artifactId": "artifact-940babc6164f",
+      "workflowExecutionId": "14eEisTzHaX",
+      "incidents": [],
+      "processVersionId": "actver_0XrufdkM-Qm0vrQmd0O7xc2c6tey0g5DIWlxzwX-TH4",
+      "status": "Completed",
+      "observedSuspended": false
+    },
+    {
+      "exportedXml": "<definitions xmlns:bpmndi=\"http://www.omg.org/spec/BPMN/20100524/DI\" xmlns:dc=\"http://www.omg.org/spec/DD/20100524/DC\" xmlns:di=\"http://www.omg.org/spec/DD/20100524/DI\" id=\"node-timer-definitions\" targetNamespace=\"https://elsa-workflows.io/schemas/bpmn\" xmlns=\"http://www.omg.org/spec/BPMN/20100524/MODEL\" xmlns:elsa=\"https://elsa-workflows.io/schemas/bpmn\">\n  <process id=\"node-timer\" isExecutable=\"true\">\n    <startEvent id=\"start\">\n      <outgoing>first</outgoing>\n    </startEvent>\n    <intermediateCatchEvent id=\"wait\">\n      <incoming>first</incoming>\n      <outgoing>last</outgoing>\n      <timerEventDefinition>\n        <timeDuration>PT5S</timeDuration>\n      </timerEventDefinition>\n    </intermediateCatchEvent>\n    <endEvent id=\"end\">\n      <incoming>last</incoming>\n    </endEvent>\n    <sequenceFlow id=\"first\" sourceRef=\"start\" targetRef=\"wait\" />\n    <sequenceFlow id=\"last\" sourceRef=\"wait\" targetRef=\"end\" />\n  </process>\n  <bpmndi:BPMNDiagram id=\"node-timer-diagram\">\n    <bpmndi:BPMNPlane id=\"node-timer-plane\" bpmnElement=\"node-timer\">\n      <bpmndi:BPMNShape id=\"start_di\" bpmnElement=\"start\">\n        <dc:Bounds x=\"40\" y=\"102\" width=\"36\" height=\"36\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"wait_di\" bpmnElement=\"wait\">\n        <dc:Bounds x=\"156\" y=\"102\" width=\"36\" height=\"36\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"end_di\" bpmnElement=\"end\">\n        <dc:Bounds x=\"272\" y=\"102\" width=\"36\" height=\"36\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNEdge id=\"first_di\" bpmnElement=\"first\">\n        <di:waypoint x=\"76\" y=\"120\" />\n        <di:waypoint x=\"156\" y=\"120\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"last_di\" bpmnElement=\"last\">\n        <di:waypoint x=\"192\" y=\"120\" />\n        <di:waypoint x=\"272\" y=\"120\" />\n      </bpmndi:BPMNEdge>\n    </bpmndi:BPMNPlane>\n  </bpmndi:BPMNDiagram>\n</definitions>",
+      "scenario": "timer-duration",
+      "activities": [
+        {
+          "executableNodeId": "node-wait",
+          "status": "Completed",
+          "outcomeNames": [
+            "Done"
+          ]
+        },
+        {
+          "executableNodeId": "node-timer",
+          "status": "Completed",
+          "outcomeNames": [
+            "Done"
+          ]
+        }
+      ],
+      "artifactId": "artifact-e8e1be68e913",
+      "workflowExecutionId": "14eEiwmqiax",
+      "incidents": [],
+      "processVersionId": "actver_0XrufdkM-Qm0vrQmd0O7xc2c6tey0g5DIWlxzwX-TH4",
+      "status": "Completed",
+      "observedSuspended": true
+    },
+    {
+      "exportedXml": "<definitions xmlns:bpmndi=\"http://www.omg.org/spec/BPMN/20100524/DI\" xmlns:dc=\"http://www.omg.org/spec/DD/20100524/DC\" xmlns:di=\"http://www.omg.org/spec/DD/20100524/DI\" id=\"node-publisher-definitions\" targetNamespace=\"https://elsa-workflows.io/schemas/bpmn\" xmlns=\"http://www.omg.org/spec/BPMN/20100524/MODEL\" xmlns:elsa=\"https://elsa-workflows.io/schemas/bpmn\">\n  <signal id=\"signal-bpmn-adoption-753871e34cba4222a4a195c50778f794\" name=\"bpmn-adoption-753871e34cba4222a4a195c50778f794\" />\n  <process id=\"node-publisher\" isExecutable=\"true\">\n    <startEvent id=\"start\">\n      <outgoing>begin</outgoing>\n    </startEvent>\n    <intermediateThrowEvent id=\"send\">\n      <incoming>begin</incoming>\n      <outgoing>finish</outgoing>\n      <signalEventDefinition signalRef=\"signal-bpmn-adoption-753871e34cba4222a4a195c50778f794\" />\n    </intermediateThrowEvent>\n    <endEvent id=\"end\">\n      <incoming>finish</incoming>\n    </endEvent>\n    <sequenceFlow id=\"begin\" sourceRef=\"start\" targetRef=\"send\" />\n    <sequenceFlow id=\"finish\" sourceRef=\"send\" targetRef=\"end\" />\n  </process>\n  <bpmndi:BPMNDiagram id=\"node-publisher-diagram\">\n    <bpmndi:BPMNPlane id=\"node-publisher-plane\" bpmnElement=\"node-publisher\">\n      <bpmndi:BPMNShape id=\"start_di\" bpmnElement=\"start\">\n        <dc:Bounds x=\"40\" y=\"102\" width=\"36\" height=\"36\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"send_di\" bpmnElement=\"send\">\n        <dc:Bounds x=\"156\" y=\"102\" width=\"36\" height=\"36\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"end_di\" bpmnElement=\"end\">\n        <dc:Bounds x=\"272\" y=\"102\" width=\"36\" height=\"36\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNEdge id=\"begin_di\" bpmnElement=\"begin\">\n        <di:waypoint x=\"76\" y=\"120\" />\n        <di:waypoint x=\"156\" y=\"120\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"finish_di\" bpmnElement=\"finish\">\n        <di:waypoint x=\"192\" y=\"120\" />\n        <di:waypoint x=\"272\" y=\"120\" />\n      </bpmndi:BPMNEdge>\n    </bpmndi:BPMNPlane>\n  </bpmndi:BPMNDiagram>\n</definitions>",
+      "scenario": "signal-publisher",
+      "activities": [
+        {
+          "executableNodeId": "node-publisher",
+          "status": "Completed",
+          "outcomeNames": [
+            "Done"
+          ]
+        },
+        {
+          "executableNodeId": "node-send",
+          "status": "Completed",
+          "outcomeNames": [
+            "Done"
+          ]
+        }
+      ],
+      "artifactId": "artifact-28e78c255ac9",
+      "workflowExecutionId": "14eEjOpIKHO",
+      "incidents": [],
+      "processVersionId": "actver_0XrufdkM-Qm0vrQmd0O7xc2c6tey0g5DIWlxzwX-TH4",
+      "status": "Completed",
+      "observedSuspended": false
+    },
+    {
+      "activities": [
+        {
+          "executableNodeId": "node-broadcast",
+          "status": "Completed",
+          "outcomeNames": [
+            "Done"
+          ]
+        },
+        {
+          "executableNodeId": "node-wait-b",
+          "status": "Completed",
+          "outcomeNames": [
+            "Done"
+          ]
+        },
+        {
+          "executableNodeId": "node-wait-a",
+          "status": "Completed",
+          "outcomeNames": [
+            "Done"
+          ]
+        }
+      ],
+      "incidents": [],
+      "status": "Completed",
+      "completedCatches": 2,
+      "suspendedBeforePublish": 2,
+      "scenario": "signal-broadcast-two-catches",
+      "workflowExecutionId": "14eEjNbPtHx"
+    }
+  ],
+  "passed": true,
+  "sourceRevision": "b2fc515ffc213e7ba96f4040769269f43b4c00d8",
+  "capturedAtUtc": "2026-10-25T16:32:46.7009320+00:00"
+}

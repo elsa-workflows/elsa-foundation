@@ -1,0 +1,7 @@
+# Called-result observer race: retained refusal
+
+The source6153c1c23 fixture first passes, passes the first bounded repeat, then fails the second repeat at the same final snapshot as the expanded suite. Repetition stops on that failure. The observer retains the actual closed whole database, public API/marker inputs, exact reader version/hash and refusal output before private fixture cleanup.
+
+A separate temporary diagnostic invokes the **same compiled checked reader** over an immutable copy of that retained database. It reports: “The later real terminal source has no equivalent durable consumption proof.” The physical source is still `Delivering` with no `deliveredAt`, while the actual caller has completed. All other sources are Delivered. The closed database hash is unchanged before/after diagnosis; Python inspects only that already-closed copy. The temporary diagnostic source/command/output and physical source rows are retained under `closed-diagnostic`; they do not qualify the failed snapshot as a success.
+
+The test stopped its owned host after observing recipient completion but before the sender committed acknowledgement. The correction waits for actual source acknowledgements before stopping the host. The checked-provider receipt/ack guard stays unchanged, as does runtime implementation. This is an observer ordering correction; a fixed-source actual pass and whole-suite pass are still required. Initial passing runs do not erase the retained failure or substitute for those gates. Historical paths are provenance, not reproduction inputs.

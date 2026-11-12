@@ -12,6 +12,7 @@ using Elsa.Workflows.Runtime.Resumption;
 using Elsa.Workflows.Runtime.Services.ActivityExecutions;
 using Elsa.Workflows.Runtime.Services.Bookmarks;
 using Elsa.Workflows.Runtime.Services.Checkpoints;
+using Elsa.Workflows.Runtime.Services.Coalescing;
 using Elsa.Workflows.Runtime.Services.Dispatch;
 using Elsa.Workflows.Runtime.Services.Executables;
 using Elsa.Workflows.Runtime.Services.Executions;
@@ -21,6 +22,7 @@ using Elsa.Workflows.Runtime.Services.Values;
 using Elsa.Workflows.Runtime.Services.WorkHandlers;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Time.Testing;
 using Xunit;
 
 namespace Elsa.Workflows.Runtime.Tests;
@@ -33,6 +35,22 @@ namespace Elsa.Workflows.Runtime.Tests;
 /// </summary>
 public sealed class RuntimeCoreCompositionRootTests : RuntimePipelineTestSupport
 {
+    [Theory]
+    [InlineData(false)] [InlineData(true)]
+    public void Default_runtime_qualifies_its_actual_exact_bookmark_boundary_with_or_without_coalescing(bool coalescing)
+    {
+        var services = new ServiceCollection().AddWorkflowRuntime();
+        if (coalescing) services.AddPersistenceModes();
+        using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+        using var scope = provider.CreateScope(); var sp = scope.ServiceProvider;
+        var checkpoints = sp.GetRequiredService<IRuntimeCheckpointCommitStore>();
+        var executions = coalescing ? sp.GetRequiredService<CoalescingInner<IWorkflowExecutionStateStore>>().Value : sp.GetRequiredService<IWorkflowExecutionStateStore>();
+        var activities = coalescing ? sp.GetRequiredService<CoalescingInner<IActivityExecutionStateStore>>().Value : sp.GetRequiredService<IActivityExecutionStateStore>();
+        Assert.True(checkpoints.SupportsExactBookmarkResume);
+        Assert.True(checkpoints.CanCommitExactBookmarkResume(sp.GetRequiredService<IBookmarkStateStore>(), executions, activities));
+        Assert.False(checkpoints.CanCommitExactBookmarkResume(new InMemoryBookmarkStateStore(), executions, activities));
+    }
+
     private static readonly Type[] ScopedOperationServices =
     [
         typeof(IRuntimeActivityExecutionInspectionAccumulator),
@@ -422,6 +440,132 @@ public sealed class RuntimeCoreCompositionRootTests : RuntimePipelineTestSupport
         Assert.Equal(composeResumption ? 1 : 0, queued.Items.Count);
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task AddWorkflowRuntime_HoldsARetryAfterOnlyWhenAResumptionRedriverIsComposed(bool composeResumption)
+    {
+        // #3275 through the container. The drainer's factory derives HasResumptionRedriver from the same evidence the
+        // router reads above; every drainer test sets the flag by hand, so dropping it from the factory would poison
+        // every RetryAfter on a host that runs the sweep while the suite stayed green. Driven both ways from one
+        // composition, with a durable provider's other evidence present on both sides, so the assertion is the
+        // difference the resumption entry makes.
+        var services = new ServiceCollection();
+        services.AddSingleton<IRuntimeDomainRetryPolicy>(new RetryAfterPolicy(TimeSpan.FromMinutes(5)));
+        services.AddSingleton<IWorkflowSchedulerWorkHandler, FaultingInvokeActivityHandler>();
+        services.AddSingleton<IWorkflowDispatchDurabilityEvidence>(
+            new WorkflowDispatchDurabilityEvidence(WorkflowDispatchDurabilityComponents.Scheduler, WorkflowDispatchDurabilityLevel.Durable));
+        services.AddWorkflowRuntime();
+        services.AddLogging();
+        if (composeResumption)
+            new WorkflowsRuntimeResumptionFeature().ConfigureServices(services);
+
+        await using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+        await provider.GetRequiredService<IWorkflowSchedulerWorkQueue>().EnqueueAsync(new RuntimeSchedulerWorkItem(
+            "work-1", "wfexec-retry", "command-1", WorkflowExecutionCommandKind.InvokeActivity, "envelope-1", "idempotency-1", Now, Now));
+        using var scope = provider.CreateScope();
+
+        var result = await scope.ServiceProvider.GetRequiredService<IWorkflowSchedulerDrainer>()
+            .DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-retry"));
+
+        Assert.True(result.StoppedOnFault);
+        var record = Assert.Single(await provider.GetRequiredService<IWorkflowSchedulerPoisonStore>().ListAsync("wfexec-retry"));
+        Assert.Equal(
+            composeResumption ? RuntimeSchedulerPoisonDisposition.RetryScheduled : RuntimeSchedulerPoisonDisposition.Poisoned,
+            record.Disposition);
+        var queued = await provider.GetRequiredService<IWorkflowSchedulerWorkQueue>()
+            .ListAsync(new RuntimeSchedulerWorkQuery("wfexec-retry"));
+        Assert.Equal(composeResumption ? 1 : 0, queued.Items.Count);
+    }
+
+    [Fact]
+    public async Task AddWorkflowRuntime_ResumptionSweepReDrivesAReleasedRetryAfterOnceItIsDue()
+    {
+        // #3275 end to end: the drainer tests stop at backlog discovery listing the released item. Here the composed
+        // RuntimeResumptionService finds it only once the delay has passed and re-drives it through the actor mailbox
+        // and the composed drainer, so the faulted step runs again and leaves the queue.
+        var clock = new FakeTimeProvider(Now);
+        var delay = TimeSpan.FromMinutes(5);
+        var handler = new FaultingOnceInvokeActivityHandler();
+        var services = new ServiceCollection();
+        services.AddSingleton<IRuntimeDomainRetryPolicy>(new RetryAfterPolicy(delay));
+        services.AddSingleton<IWorkflowSchedulerWorkHandler>(handler);
+        services.AddWorkflowRuntime();
+        services.AddLogging();
+        new WorkflowsRuntimeResumptionFeature().ConfigureServices(services);
+        services.RemoveAll<TimeProvider>();
+        services.AddSingleton<TimeProvider>(clock);
+        services.AddPersistenceModes();
+
+        await using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+        var queue = provider.GetRequiredService<IWorkflowSchedulerWorkQueue>();
+        await queue.EnqueueAsync(new RuntimeSchedulerWorkItem(
+            "work-1", "wfexec-retry", "command-1", WorkflowExecutionCommandKind.InvokeActivity, "envelope-1", "idempotency-1", Now, Now));
+        using (var scope = provider.CreateScope())
+            Assert.True((await scope.ServiceProvider.GetRequiredService<IWorkflowSchedulerDrainer>()
+                .DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-retry"))).StoppedOnFault);
+
+        clock.Advance(delay - TimeSpan.FromSeconds(1));
+        using (var scope = provider.CreateScope())
+            Assert.Empty((await scope.ServiceProvider.GetRequiredService<IRuntimeResumptionService>()
+                .SweepAsync(new RuntimeResumptionSweepRequest())).Dispatches);
+        Assert.Equal(1, handler.InvocationCount);
+
+        clock.Advance(TimeSpan.FromSeconds(1));
+        using (var scope = provider.CreateScope())
+        {
+            var dispatch = Assert.Single((await scope.ServiceProvider.GetRequiredService<IRuntimeResumptionService>()
+                .SweepAsync(new RuntimeResumptionSweepRequest())).Dispatches);
+            Assert.Equal(("wfexec-retry", RuntimeResumptionDispatchOutcome.Accepted), (dispatch.WorkflowExecutionId, dispatch.Outcome));
+        }
+
+        Assert.Equal(2, handler.InvocationCount);
+        Assert.Empty((await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-retry"))).Items);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task AddWorkflowRuntime_hands_the_drain_controls_to_the_orchestrator_so_a_yield_redrive_waits_for_a_cancel(bool cancelWaiting)
+    {
+        // #3647 through the container. A yield re-drive delivers the flushed continuations before its first segment only
+        // while no Cancel waits, and only the composition root hands the orchestrator the signal it checks: without it the
+        // re-drive would queue the next step ahead of that Cancel, while every hand-built orchestrator test stays green.
+        var outbox = new CountingOutboxProcessor();
+        var services = new ServiceCollection().AddWorkflowRuntime();
+        services.AddPersistenceModes();
+        services.RemoveAll<IRuntimePostCommitOutboxProcessor>();
+        services.AddScoped<IRuntimePostCommitOutboxProcessor>(_ => outbox);
+        await using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+        var control = new DrainControl();
+        using var waiting = cancelWaiting ? control.Wait() : null;
+        using var frame = provider.GetRequiredService<DrainControlContext>().Push("wfexec-scopes", control);
+        await using var scope = provider.CreateAsyncScope();
+        var command = new WorkflowExecutionCommand("redrive", "wfexec-scopes", WorkflowExecutionCommandKind.RunSchedulerWork, Now, null,
+            new Dictionary<string, string> { ["source"] = InProcessWorkflowExecutionActorProvider.YieldRedriveSource });
+        var redrive = new WorkflowExecutionCommandEnvelope("redrive", "wfexec-scopes", command, "redrive",
+            WorkflowExecutionCommandDeliveryMode.AtLeastOnce, Now);
+
+        var result = await scope.ServiceProvider.GetRequiredService<IWorkflowDrainOrchestrator>()
+            .DrainAsync(redrive, new RuntimeSchedulerDrainRequest("wfexec-scopes"));
+
+        // With a Cancel waiting the drainer yields before its first step, so the orchestrator asked the outbox for nothing.
+        Assert.Equal(cancelWaiting ? RuntimeSchedulerDrainStopReason.Yielded : RuntimeSchedulerDrainStopReason.Quiesced, result.StopReason);
+        Assert.Equal(!cancelWaiting, outbox.Calls > 0);
+    }
+
+    private sealed class CountingOutboxProcessor : IRuntimePostCommitOutboxProcessor
+    {
+        private int calls;
+        public int Calls => Volatile.Read(ref calls);
+
+        public ValueTask<RuntimePostCommitOutboxProcessResult> ProcessAsync(RuntimePostCommitOutboxProcessRequest request, CancellationToken cancellationToken = default)
+        {
+            Interlocked.Increment(ref calls);
+            return ValueTask.FromResult(new RuntimePostCommitOutboxProcessResult([]));
+        }
+    }
+
     private WorkflowExecutionCommandEnvelope NewEnvelope(
         int index,
         WorkflowExecutionPartition? partition = null,
@@ -472,6 +616,33 @@ public sealed class RuntimeCoreCompositionRootTests : RuntimePipelineTestSupport
         services.AddScoped<IPortableExpressionEvaluator, StubPortableExpressionEvaluator>();
         services.AddSingleton<IWellKnownTypeRegistry, StubWellKnownTypeRegistry>();
         services.AddSingleton<IPayloadSerializer, StubPayloadSerializer>();
+    }
+
+    private sealed class RetryAfterPolicy(TimeSpan delay) : IRuntimeDomainRetryPolicy
+    {
+        public RuntimeDomainRetryDecision Decide(RuntimeDomainRetryRequest request) =>
+            new(RuntimeDomainRetryMode.RetryAfter, delay, "retry-after");
+    }
+
+    private sealed class FaultingInvokeActivityHandler : IWorkflowSchedulerWorkHandler
+    {
+        public string Name => nameof(FaultingInvokeActivityHandler);
+        public bool CanHandle(RuntimeSchedulerWorkItem workItem) => workItem.CommandKind == WorkflowExecutionCommandKind.InvokeActivity;
+        public ValueTask HandleAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException($"Handler crashed for {workItem.WorkItemId}.");
+    }
+
+    private sealed class FaultingOnceInvokeActivityHandler : IWorkflowSchedulerWorkHandler
+    {
+        private int _invocationCount;
+        public int InvocationCount => Volatile.Read(ref _invocationCount);
+        public string Name => nameof(FaultingOnceInvokeActivityHandler);
+        public bool CanHandle(RuntimeSchedulerWorkItem workItem) => workItem.CommandKind == WorkflowExecutionCommandKind.InvokeActivity;
+
+        public ValueTask HandleAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken = default) =>
+            Interlocked.Increment(ref _invocationCount) == 1
+                ? throw new InvalidOperationException($"Handler crashed for {workItem.WorkItemId}.")
+                : ValueTask.CompletedTask;
     }
 
     private sealed class ReplacementStartPolicy : IWorkflowExecutableStartPolicy

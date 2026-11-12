@@ -1,0 +1,49 @@
+{
+  "passed": true,
+  "stage": "Finished",
+  "controls": [
+    {
+      "name": "actual-compensation-stage",
+      "exitCode": 0,
+      "databaseSha256": "94d33c9d8d43180a3ec199d627b4c01d9f65cfb27c54962ce0a86c6125a6dd17",
+      "outputSha256": "0618955aae46e120582ff41a2208ee0e62dbc9bcc1e010a0dae6268800329cb6",
+      "unchanged": true
+    },
+    {
+      "name": "wrong-snapshot-hash",
+      "exitCode": 2,
+      "databaseSha256": "94d33c9d8d43180a3ec199d627b4c01d9f65cfb27c54962ce0a86c6125a6dd17",
+      "outputSha256": "c492062f3e27c654296cbc2d7b2e1dce16f2a95d70f58f39c1b5dbdcf46a46d4",
+      "unchanged": true
+    },
+    {
+      "name": "foreign-complete-api-pin",
+      "exitCode": 2,
+      "databaseSha256": "94d33c9d8d43180a3ec199d627b4c01d9f65cfb27c54962ce0a86c6125a6dd17",
+      "outputSha256": "c492062f3e27c654296cbc2d7b2e1dce16f2a95d70f58f39c1b5dbdcf46a46d4",
+      "unchanged": true
+    },
+    {
+      "name": "foreign-original-handler-identity",
+      "exitCode": 2,
+      "databaseSha256": "94d33c9d8d43180a3ec199d627b4c01d9f65cfb27c54962ce0a86c6125a6dd17",
+      "outputSha256": "c492062f3e27c654296cbc2d7b2e1dce16f2a95d70f58f39c1b5dbdcf46a46d4",
+      "unchanged": true
+    },
+    {
+      "name": "actual-handler-loses-scheduling-association",
+      "exitCode": 2,
+      "databaseSha256": "2b05e4eca482e55984a44257f6b3ab17ea65f08a286f00909030ca6fc1261c96",
+      "outputSha256": "c492062f3e27c654296cbc2d7b2e1dce16f2a95d70f58f39c1b5dbdcf46a46d4",
+      "unchanged": true
+    },
+    {
+      "name": "owed-physical-orphan-hidden-behind-canonical-source",
+      "exitCode": 2,
+      "databaseSha256": "3f1bc6d746dc239b7590c3e63ad51bf67e3805e2e61deddae9b73c6b437dc70f",
+      "outputSha256": "c492062f3e27c654296cbc2d7b2e1dce16f2a95d70f58f39c1b5dbdcf46a46d4",
+      "unchanged": true
+    }
+  ],
+  "originalSnapshotUnchanged": true
+}

@@ -2,6 +2,11 @@ namespace Elsa.Workflows.Runtime.Core.Constants;
 
 public static class RuntimeMetadataKeys
 {
+    /// <summary>Explicit authored-control protocol declared by a structural consumer and admitted for one waited dispatch.</summary>
+    public const string ChildControlConsumerKey = "runtime.childControlConsumerKey";
+    public const string ChildControlConsumerVersion = "runtime.childControlConsumerVersion";
+    /// <summary>Lookup hint only; a called root must still validate the complete committed dispatch boundary.</summary>
+    public const string ChildControlDispatchId = "runtime.childControlDispatchId";
     public const string WorkflowExecutionOrigin = "runtime.workflowExecutionOrigin";
     public const string WorkflowStartedAt = "runtime.workflowStartedAt";
     /// <summary>Monotonic workflow marker indicating that native background work was admitted for this execution.</summary>
@@ -301,6 +306,8 @@ public static class RuntimeMetadataKeys
     public const string NotifyParentSchedulerWorkItemId = "runtime.notifyParentSchedulerWorkItemId";
     public const string NotifyingChildActivityExecutionId = "runtime.notifyingChildActivityExecutionId";
     public const string ParentNotificationCode = "runtime.parentNotificationCode";
+    /// <summary>On an incident a child-control consumer raised: the calling child whose control batches it was evaluating.</summary>
+    public const string ChildControlActivityExecutionId = "runtime.childControlActivityExecutionId";
     public const string PinnedArtifactId = "runtime.pinnedArtifactId";
     public const string PinnedArtifactVersion = "runtime.pinnedArtifactVersion";
     public const string PinnedArtifactHash = "runtime.pinnedArtifactHash";

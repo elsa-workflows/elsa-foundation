@@ -1,0 +1,406 @@
+{
+  "schemaVersion": 1,
+  "task": "T050 exact physical bookmark initial trigger-claim prerequisite; publisher/router activation and host acceptance remain open",
+  "sourceParentCommit": "678a519aebca7ac0e0195ba4a2170ec944152fe2",
+  "filesSha256": {
+    "Essentials/src/Activities/Primitives/Services/PublishStimulusExecutor.cs": "f3458ae210672f626c25f40cba3ec016900e71bbbc13c895606a494629cb2e06",
+    "Essentials/src/Activities/Runtime/Elsa.Activities.Runtime/Services/WorkflowResumeBookmarkSchedulerWorkHandler.cs": "101163c9803e49907e16764511d5494fec8b70ba38e44950a8088378e2372c18",
+    "Essentials/src/Workflows/Publishing/Api/PublicAPI.Unshipped.txt": "73879d2fad5907a9c6de29c22d65b58bbe6d7c27f3dd0b76c3f758745b54ed68",
+    "Essentials/src/Workflows/Publishing/Core/PublicAPI.Unshipped.txt": "d713ee3a8f01df4417e5a2b025f9df7795784d0bd9a4a0ec189920dc09976759",
+    "Essentials/src/Workflows/Runtime/Core/Contracts/IBookmarkStateStore.cs": "2800c8d8a4d12608412875cd91a162e0d8bd7062cc5bac52f753f704204d7fbc",
+    "Essentials/src/Workflows/Runtime/Core/Contracts/IRuntimeCheckpointCommitStore.cs": "d7ef72f10fb027e23c1f1204984726a0ebd61e45ae6415cd3349099aab9bb3fa",
+    "Essentials/src/Workflows/Runtime/Core/Exceptions/BookmarkResumeSupersededException.cs": "db880c8c10396aa5f6ff2fec0f6420b689b41164bf0b13f2c26c0d2307ba99cb",
+    "Essentials/src/Workflows/Runtime/Core/Models/BookmarkResumeDispatchModels.cs": "c5f1c16b406aaff0006073d1f5d0f4b8a9a68eab179cff067c328a38318fc066",
+    "Essentials/src/Workflows/Runtime/Core/Models/BookmarkStateObservation.cs": "17c6fc6e4a960cbde86d22265645a6dcdda1f80bca1ec1cffb4356339e2fef88",
+    "Essentials/src/Workflows/Runtime/Core/Models/RuntimeCheckpointCommit.cs": "b060b8205bbdd99bfd0f14648c9f23200b281a5c7e6cad2792af9f7288d24615",
+    "Essentials/src/Workflows/Runtime/Core/Models/RuntimeCheckpointCommitFingerprint.cs": "cdeb955aeae38496c0fc5c4269186eba36e0a14404493fc02b8f48ad11eb00ef",
+    "Essentials/src/Workflows/Runtime/Core/Models/StimulusDeliverySnapshot.cs": "a1f3991df21d17adf1a64e56981bd7b5aa2cae7af01fcfb81bd6201f2dc0d8ba",
+    "Essentials/src/Workflows/Runtime/Core/Models/StimulusResumeCapture.cs": "b8504af00b6e172d84f73a48112a8625e4d571d331b70a4715fef240545a31d1",
+    "Essentials/src/Workflows/Runtime/Core/PublicAPI.Shipped.txt": "3c3b422dddb1efeb0fc5b228608fd8682452b2a9507d4031894bce3c4dedadbd",
+    "Essentials/src/Workflows/Runtime/Core/PublicAPI.Unshipped.txt": "bc988352a64ce43bcb98346e6dd487c99883186a27d0829e904d3747583eb603",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md": "bb6595e24b6a352bb5849878a96ceb13c25a361f77f3b44de7838d540ba09d42",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Extensions/RuntimeCoreServiceCollectionExtensions.cs": "29e8bb6872c0e365a2528384625840015e28a906176055ae04474f1c77a819c6",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/ActivityExecutions/InMemoryActivityExecutionStateStore.cs": "8c1cd06d6c8db929323f2ea698cc0c1a6b5f9ef13e268a0fae5f847e687fed4f",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Bookmarks/BookmarkConsumptionCheckpointService.cs": "d4ec76f00de3645412493e640d44fbc5a2293a69266dbbda65a7f6c372c6c06d",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Bookmarks/InMemoryBookmarkStateStore.cs": "f431231d80ceef87506f0e7411e22ed3754f7072f1f4e6c31a28dfe403a64b4a",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Checkpoints/InMemoryRuntimeCheckpointCommitStore.cs": "26cb082aeed567504ee2eaaf9bfc6b4743969512b518a6909201ab675365af9a",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Checkpoints/RuntimeCheckpointCommitter.cs": "47670933e36641a7ef4fdfea4a64032b338c1bc2e276f599420fa55b2a7f30ec",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Coalescing/CoalescingRuntimeCheckpointCommitStore.cs": "ed3650fab2a7f72748a3312c9802d9f35adb71b691a153cc4b9c5a2c633e65b7",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Executions/InMemoryWorkflowExecutionDeletionStore.cs": "b816a04998d520ce86a5895dccb14e1e6e83d542840f7da152a0a6af4a0f71e2",
+    "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Configuration/RuntimeArtifactEntityConfigurations.cs": "27c2cc257c257afd4303f725296a9f2a5ef8b166e81a03a3e38737a08b2dc716",
+    "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfActivityExecutionStateStore.cs": "cfc9d0007bef3d9a7cc1bc14dfab64d0ada5172c374311954ab5b6aee91afe7b",
+    "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfBookmarkStateStore.cs": "ad8ae1307ac345820a65664dcb8ddd87608fa12165b6c6b691798e23b8e6cc20",
+    "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfRuntimeCheckpointCommitStore.cs": "a31ab06286f72ac6a487a290f55fea289c17f8774e9580110ed59543c52333a1",
+    "Essentials/tests/Activities/Runtime/Tests/ExactTypedTriggerResumeTests.cs": "e7e60f17b58ec205fa2f6464bf6aaffbea0cda1d8ba9e7c29cf5359a7ee1fbf4",
+    "Essentials/tests/Activities/Runtime/Tests/WorkflowResumeBookmarkSchedulerWorkHandlerTests.cs": "f20fd2e93f6134f89e3370f0920658a033f7668f78456043e05e73be06da4faa",
+    "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/ExactBookmarkResumeCheckpointTests.cs": "8b2724fa919f04facd24918a330fa2a98fc49dda01cc401f3a38dfccb5985196",
+    "Essentials/tests/Workflows/Runtime/Tests/RuntimeBookmarkStateStoreTests.cs": "c428b192c99e878f4de95e0bb6343629a1af43655af976eeeecc39ea9ba1e7b6",
+    "Essentials/tests/Workflows/Runtime/Tests/RuntimeCoreCompositionRootTests.cs": "dd1be983bbe8284550f32077e7efc97c41813005720a1e8d1838629f9ec3458b",
+    "Essentials/tests/Workflows/Runtime/Tests/StimulusDeliverySnapshotTests.cs": "55a7c2d3ac423e02b5ce39178fdb3e00009f5750bd6adaab8db32bcdc9111780",
+    "docs/reports/evidence/bpmn-extraction-baseline/activity-contract-fingerprint.json": "41aa0bb979ea46fc2533b057e3677f408ab54c3411fecfafaa238a2adae38c92",
+    "specs/1006-bpmn-library-adoption/contracts/broadcast-recipient-snapshot.md": "ae70db4ada9803985f0e2f5fb6b97b4e2f62da4715fc4b03cd0b5b87d16ea6fa",
+    "specs/1006-bpmn-library-adoption/evidence/broadcast-exact-bookmark-admission.md": "78f3ff7773a94fb32a92dc527134f1e2c634588629c1067b4c12ea375b18bdba",
+    "specs/1006-bpmn-library-adoption/tasks.md": "4e3073eec7205105d6fd089057f6750fb063fbd306efbdd0208cd3fb6a994f18"
+  },
+  "checks": [
+    {
+      "project": "Essentials/tests/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj",
+      "passed": 2990,
+      "failed": 0,
+      "skipped": 0,
+      "command": [
+        "dotnet",
+        "test",
+        "Essentials/tests/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj",
+        "--no-restore"
+      ],
+      "trxSha256": "7ed354c786f184abc922fe40a5722afe62f0b7312b8f2e12ffb5b7decccae57b",
+      "discovery": {
+        "listed": 2979,
+        "exactCaseMatches": 2972,
+        "deferredTheoryCaseExpansion": {
+          "Elsa.Workflows.Runtime.Tests.ValueEnvelopeEncryptionPredicateTests.Only_a_present_value_under_a_policy_that_requires_encryption_matches": 8,
+          "Elsa.Workflows.Runtime.Tests.CheckpointRuleViolationWorkflowFaulterTests.A_failure_that_is_not_a_rule_refusal_leaves_the_execution_running": 4,
+          "Elsa.Workflows.Runtime.Tests.CheckpointRuleViolationWorkflowFaulterTests.A_refused_commit_faults_the_execution_with_only_its_state_and_an_incident": 2
+        },
+        "executed": 2990,
+        "unmatchedExecutedCases": 0,
+        "unmatchedDiscoveredCases": 0,
+        "executedCaseNamesSha256": "cdf5d78dbc4182f89b7ceb4642ee2b7111413591a86959b052f2682456bd4661",
+        "command": [
+          "dotnet",
+          "test",
+          "Essentials/tests/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj",
+          "--no-build",
+          "--list-tests"
+        ]
+      }
+    },
+    {
+      "project": "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.csproj",
+      "passed": 1623,
+      "failed": 0,
+      "skipped": 0,
+      "command": [
+        "dotnet",
+        "test",
+        "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.csproj",
+        "--no-restore"
+      ],
+      "trxSha256": "c63038cc6dcf7bd480031b2b9d361047e54eb8766a221d575411e1b8d5920e0f",
+      "discovery": {
+        "listed": 1623,
+        "exactCaseMatches": 1621,
+        "deferredTheoryCaseExpansion": {},
+        "executed": 1623,
+        "unmatchedExecutedCases": 0,
+        "unmatchedDiscoveredCases": 0,
+        "executedCaseNamesSha256": "69bdfbe0fc4d7f90c138ccb0b58072d0b9d249b8e9f11247ab03764de3033ce2",
+        "command": [
+          "dotnet",
+          "test",
+          "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.csproj",
+          "--no-build",
+          "--list-tests"
+        ]
+      }
+    },
+    {
+      "project": "Essentials/tests/Activities/Runtime/Tests/Elsa.Activities.Runtime.Tests.csproj",
+      "passed": 680,
+      "failed": 0,
+      "skipped": 0,
+      "command": [
+        "dotnet",
+        "test",
+        "Essentials/tests/Activities/Runtime/Tests/Elsa.Activities.Runtime.Tests.csproj",
+        "--no-restore"
+      ],
+      "trxSha256": "ea6eac00f767b4eff512d5472c7f16245f169e6914701bed080b537a4f0f05a1",
+      "discovery": {
+        "listed": 678,
+        "exactCaseMatches": 676,
+        "deferredTheoryCaseExpansion": {
+          "Elsa.Activities.Runtime.Tests.ClrActivityActivatorTests.A_context_without_one_partition_refuses_before_the_resolver_is_called": 2,
+          "Elsa.Activities.Runtime.Tests.ClrActivityActivatorTests.A_resolver_that_throws_while_the_activation_is_live_reports_ResolverFailed_without_what_it_threw": 2
+        },
+        "executed": 680,
+        "unmatchedExecutedCases": 0,
+        "unmatchedDiscoveredCases": 0,
+        "executedCaseNamesSha256": "2d9ff642aeddbda1f90741d5a86a817829b74ec1ea64bcb617a41cc40c0fa9fb",
+        "command": [
+          "dotnet",
+          "test",
+          "Essentials/tests/Activities/Runtime/Tests/Elsa.Activities.Runtime.Tests.csproj",
+          "--no-build",
+          "--list-tests"
+        ]
+      }
+    }
+  ],
+  "newCases": {
+    "provider": 54,
+    "nativeQueuedCallback": 16,
+    "wireFingerprint": 17,
+    "actualDefaultComposition": 2,
+    "total": 89
+  },
+  "supplementary": [
+    {
+      "check": "54 native/SQLite exact provider controls",
+      "passed": 54,
+      "failed": 0,
+      "skipped": 0,
+      "logSha256": "089e2aee688d1e00b4fe264217c0b5552ac68111ff8fcc6f0bd0e5df0c1a4337"
+    },
+    {
+      "check": "16 actual queued native callback controls",
+      "passed": 16,
+      "failed": 0,
+      "skipped": 0,
+      "logSha256": "fe73428fef6a46262deed7d449edb5812d9aab1f3a0ace6097de6034815dd16f"
+    },
+    {
+      "check": "95 wire/bookmark/API/default composition controls",
+      "passed": 95,
+      "failed": 0,
+      "skipped": 0,
+      "logSha256": "e5e2e0d57108e07b3b93e3e0a8efb4bc9d528248eb0e42b82e4e35c9dde59eec"
+    },
+    {
+      "check": "7 Runtime engine shape/dependency guards",
+      "passed": 7,
+      "failed": 0,
+      "skipped": 0,
+      "logSha256": "6b38249e88a464aa6f4ece03e30d4fc236d21820b18b2df702b7955fb574ab6f"
+    }
+  ],
+  "lockedRestore": "Runtime Core --locked-mode passed",
+  "generatedMaps": "Generator -- check passed; no generated solution-filter change",
+  "publicApi": {
+    "RuntimeCore": {
+      "added": [
+        "Elsa.Workflows.Runtime.Core.Contracts.IBookmarkStateStore.ObserveAsync(string! workflowExecutionId, string! bookmarkId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Models.BookmarkStateObservation?>",
+        "Elsa.Workflows.Runtime.Core.Contracts.IRuntimeCheckpointCommitStore.CanCommitExactBookmarkResume(Elsa.Workflows.Runtime.Core.Contracts.IBookmarkStateStore! bookmarks, Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutionStateStore! physicalExecutions, Elsa.Workflows.Runtime.Core.Contracts.IActivityExecutionStateStore! activities) -> bool",
+        "Elsa.Workflows.Runtime.Core.Contracts.IRuntimeCheckpointCommitStore.SupportsExactBookmarkResume.get -> bool",
+        "Elsa.Workflows.Runtime.Core.Exceptions.BookmarkResumeSupersededException",
+        "Elsa.Workflows.Runtime.Core.Exceptions.BookmarkResumeSupersededException.BookmarkId.get -> string!",
+        "Elsa.Workflows.Runtime.Core.Exceptions.BookmarkResumeSupersededException.BookmarkResumeSupersededException(string! workflowExecutionId, string! bookmarkId) -> void",
+        "Elsa.Workflows.Runtime.Core.Exceptions.BookmarkResumeSupersededException.WorkflowExecutionId.get -> string!",
+        "Elsa.Workflows.Runtime.Core.Models.BookmarkStateObservation",
+        "Elsa.Workflows.Runtime.Core.Models.BookmarkStateObservation.BookmarkStateObservation(Elsa.Workflows.Runtime.Core.Models.BookmarkState! state, long generation) -> void",
+        "Elsa.Workflows.Runtime.Core.Models.BookmarkStateObservation.BookmarkStateObservation(Elsa.Workflows.Runtime.Core.Models.BookmarkState! state, long generation, Elsa.Workflows.Runtime.Core.Models.PersistenceScope? scope) -> void",
+        "Elsa.Workflows.Runtime.Core.Models.BookmarkStateObservation.Generation.get -> long",
+        "Elsa.Workflows.Runtime.Core.Models.BookmarkStateObservation.Scope.get -> Elsa.Workflows.Runtime.Core.Models.PersistenceScope?",
+        "Elsa.Workflows.Runtime.Core.Models.BookmarkStateObservation.State.get -> Elsa.Workflows.Runtime.Core.Models.BookmarkState!",
+        "Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpointCommit.EnsureExactBookmarkResumeShape() -> void",
+        "Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpointCommit.ExpectedBookmarkResume.get -> Elsa.Workflows.Runtime.Core.Models.StimulusResumeRecipient?",
+        "Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpointCommit.ExpectedBookmarkResume.init -> void",
+        "Elsa.Workflows.Runtime.Core.Models.RuntimeResumeBookmarkCommandPayload.ExpectedBookmarkResume.get -> Elsa.Workflows.Runtime.Core.Models.StimulusResumeRecipient?",
+        "Elsa.Workflows.Runtime.Core.Models.RuntimeResumeBookmarkCommandPayload.ExpectedBookmarkResume.init -> void",
+        "Elsa.Workflows.Runtime.Core.Models.StimulusResumeCapture",
+        "Elsa.Workflows.Runtime.Core.Models.StimulusResumeCapture.Executable.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableIdentity!",
+        "Elsa.Workflows.Runtime.Core.Models.StimulusResumeCapture.Generation.get -> long",
+        "Elsa.Workflows.Runtime.Core.Models.StimulusResumeCapture.Metadata.get -> System.Collections.Generic.IReadOnlyDictionary<string!, string!>!",
+        "Elsa.Workflows.Runtime.Core.Models.StimulusResumeCapture.PayloadFingerprint.get -> string!",
+        "Elsa.Workflows.Runtime.Core.Models.StimulusResumeCapture.PinnedSource.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableSourceProvenance?",
+        "Elsa.Workflows.Runtime.Core.Models.StimulusResumeCapture.Scope.get -> Elsa.Workflows.Runtime.Core.Models.StimulusDeliveryScope!",
+        "Elsa.Workflows.Runtime.Core.Models.StimulusResumeCapture.StimulusResumeCapture(long generation, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableIdentity! executable, Elsa.Workflows.Runtime.Core.Models.StimulusDeliveryScope! scope, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableSourceProvenance? pinnedSource, System.Collections.Generic.IReadOnlyDictionary<string!, string!>! metadata, string! payloadFingerprint) -> void",
+        "Elsa.Workflows.Runtime.Core.Models.StimulusResumeRecipient.MatchesAdmission(Elsa.Workflows.Runtime.Core.Models.BookmarkStateObservation? observation, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionState? execution, Elsa.Workflows.Runtime.Core.Models.ActivityExecutionState? activity, Elsa.Workflows.Runtime.Core.Models.PersistenceScope! scope, System.DateTimeOffset observedAt) -> bool",
+        "Elsa.Workflows.Runtime.Core.Models.StimulusResumeRecipient.MatchesExecution(Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionState! execution, Elsa.Workflows.Runtime.Core.Models.PersistenceScope! scope) -> bool",
+        "Elsa.Workflows.Runtime.Core.Models.StimulusResumeRecipient.RegistrationCapture.get -> Elsa.Workflows.Runtime.Core.Models.StimulusResumeCapture?",
+        "Elsa.Workflows.Runtime.Core.Models.StimulusResumeRecipient.StimulusResumeRecipient(string! workflowExecutionId, string! bookmarkId, string! activityExecutionId, string! executableNodeId, string! resumeTargetId, string! stimulusType, string! stimulusHash, System.DateTimeOffset createdAt, System.DateTimeOffset? expiresAt, Elsa.Workflows.Runtime.Core.Models.StimulusResumeCapture? registrationCapture) -> void",
+        "const Elsa.Workflows.Runtime.Core.Models.StimulusResumeCapture.CurrentVersion = 1 -> int",
+        "static Elsa.Workflows.Runtime.Core.Models.StimulusResumeRecipient.From(Elsa.Workflows.Runtime.Core.Models.BookmarkStateObservation! observation, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionState! execution, Elsa.Workflows.Runtime.Core.Models.PersistenceScope! scope) -> Elsa.Workflows.Runtime.Core.Models.StimulusResumeRecipient!"
+      ],
+      "removed": []
+    },
+    "RuntimeCoreShipped": "unchanged",
+    "PublishingCore": "unchanged",
+    "PublishingApi": "unchanged"
+  },
+  "schema": "unchanged",
+  "frozenAuthoringSha256": "41aa0bb979ea46fc2533b057e3677f408ab54c3411fecfafaa238a2adae38c92",
+  "historicalFingerprintControl": {
+    "writerCommit": "678a519aebca7ac0e0195ba4a2170ec944152fe2",
+    "method": "Independent temporary compilation of exact parent fingerprint source over the permanent historical-envelope fixture; parent and current hashes equal. Temporary duplicate writer removed.",
+    "fixtureHash": "af976cb76bbef3f226bc15cbbdae5d8b330ec98ae9f287ff18e15aadc2df1f1a",
+    "controlPassed": true
+  },
+  "mutations": [
+    {
+      "mutation": "ignore-physical-generation",
+      "suite": "provider",
+      "exitCode": 1,
+      "failed": 5,
+      "passed": 49,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "ignore-live-activity-status",
+      "suite": "provider",
+      "exitCode": 1,
+      "failed": 4,
+      "passed": 50,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "ignore-complete-pin-source-scope",
+      "suite": "provider",
+      "exitCode": 1,
+      "failed": 8,
+      "passed": 46,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "native-skip-atomic-predicate",
+      "suite": "provider",
+      "exitCode": 1,
+      "failed": 16,
+      "passed": 38,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "ef-skip-atomic-predicate",
+      "suite": "provider",
+      "exitCode": 1,
+      "failed": 14,
+      "passed": 40,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "native-ignore-final-deadline",
+      "suite": "provider",
+      "exitCode": 1,
+      "failed": 1,
+      "passed": 53,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "ef-ignore-post-sql-deadline",
+      "suite": "provider",
+      "exitCode": 1,
+      "failed": 1,
+      "passed": 53,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "handler-uses-ordinary-stale-cleanup",
+      "suite": "queue",
+      "exitCode": 1,
+      "failed": 1,
+      "passed": 15,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "handler-faults-on-unavailable-read",
+      "suite": "queue",
+      "exitCode": 1,
+      "failed": 4,
+      "passed": 12,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "native-faults-on-real-lease-refusal",
+      "suite": "queue",
+      "exitCode": 1,
+      "failed": 1,
+      "passed": 15,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "ef-discards-lost-ack-reconciliation-causes",
+      "suite": "provider",
+      "exitCode": 1,
+      "failed": 1,
+      "passed": 53,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "checkpoint-hash-ignores-condition",
+      "suite": "wire",
+      "exitCode": 1,
+      "failed": 1,
+      "passed": 86,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "native-di-uses-overlay-activity-store",
+      "suite": "wire",
+      "exitCode": 1,
+      "failed": 1,
+      "passed": 86,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "capture-null-silently-becomes-legacy",
+      "suite": "wire",
+      "exitCode": 1,
+      "failed": 1,
+      "passed": 86,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    }
+  ],
+  "mutatedSourcesRestored": {
+    "Essentials/src/Workflows/Runtime/Core/Models/StimulusDeliverySnapshot.cs": true,
+    "Essentials/src/Workflows/Runtime/Core/Models/RuntimeCheckpointCommitFingerprint.cs": true,
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Checkpoints/InMemoryRuntimeCheckpointCommitStore.cs": true,
+    "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfRuntimeCheckpointCommitStore.cs": true,
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Extensions/RuntimeCoreServiceCollectionExtensions.cs": true,
+    "Essentials/src/Activities/Runtime/Elsa.Activities.Runtime/Services/WorkflowResumeBookmarkSchedulerWorkHandler.cs": true
+  },
+  "reviews": {
+    "correctness": "clean final independent component source review; prior stale-cleanup/missing authority/tuple/access gaps fixed",
+    "standards": "clean final independent component source/API/wire review; prior availability and documentation findings fixed",
+    "acceptance": "clean final independent component callback/receipt review; real native lease refusal test closes last finding",
+    "fullPrRoundsUsed": 0,
+    "fullPrRoundBound": 6
+  },
+  "scope": {
+    "nativeQueuedCallbackQualified": true,
+    "nativeTestReceiptAndActualDeletionGuardQualified": true,
+    "efSqlCommitRollbackAckAndFreshContextReplayQualified": true,
+    "sourceOwnedRoutingQualified": false,
+    "publisherEnabled": false,
+    "quiescentUpgradeAdmissionQualified": false,
+    "durableHostRecoveryQualified": false,
+    "currentStudioQualified": false,
+    "librarySwitchPerformed": false,
+    "legacyWriterDeleted": false,
+    "programComplete": false
+  },
+  "limits": [
+    "Constructed checkpoint and provider cuts are component controls, not production incidents. Native memory is not crash durable.",
+    "Fresh EF contexts reconcile actual durable checkpoint transactions; this is not upgraded Foundation host restart or Studio proof.",
+    "Existing six legacy captures remain historical writer evidence. Final current-host/Studio/resulting-main acceptance remains open.",
+    "Orleans and task-runner follow-up remain deferred. #2898/#2907 and the execution-model program remain open."
+  ]
+}

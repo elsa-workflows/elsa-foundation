@@ -42,7 +42,7 @@ public sealed class BpmnCompensationValidationTests
     public void ValidCompensationGraph_BuildsCleanly()
     {
         var node = NewNode(MinimalElements(), MinimalFlows, ["node-host", "node-h"]);
-        var graph = BpmnGraph.From(node);
+        var graph = BpmnGraphAdapter.Build(node);
 
         Assert.NotNull(graph.AttachedCompensationBoundary("host"));
         Assert.Empty(graph.AttachedCatchBoundaries("host"));
@@ -77,7 +77,7 @@ public sealed class BpmnCompensationValidationTests
         AssertRejects(
             MinimalElements(boundary: new BpmnElement("cb", BpmnElementTypes.BoundaryEvent, childNodeId: "node-x",
                 eventDefinitions: [new BpmnEventDefinition(BpmnEventDefinitionTypes.Compensation)], attachedToRef: "host", compensationHandlerElementId: "handler")),
-            "cannot bind a child",
+            "cannot bind work",
             children: ["node-host", "node-h", "node-x"]);
 
     [Fact]
@@ -98,7 +98,7 @@ public sealed class BpmnCompensationValidationTests
     public void Handler_WithoutChild_IsRejected() =>
         AssertRejects(
             MinimalElements(handler: new BpmnElement("handler", BpmnElementTypes.Task, isForCompensation: true)),
-            "must bind a child",
+            "must bind work",
             children: ["node-host"]);
 
     [Fact]
@@ -132,17 +132,17 @@ public sealed class BpmnCompensationValidationTests
     }
 
     [Fact]
-    public void ThrowEvent_WithNonCompensationDefinition_IsRejected() =>
+    public void ThrowEvent_UnboundSignal_IsRejected() =>
         AssertRejects(
             MinimalElements(throwEvent: new BpmnElement("throw", BpmnElementTypes.IntermediateThrowEvent, eventDefinitions: [new BpmnEventDefinition(BpmnEventDefinitionTypes.Signal)])),
-            "only compensate and escalation throw events are supported");
+            "requires bound work (the broadcast that publishes the signal)");
 
     [Fact]
     public void ThrowEvent_BindingChild_IsRejected() =>
         AssertRejects(
             MinimalElements(throwEvent: new BpmnElement("throw", BpmnElementTypes.IntermediateThrowEvent, childNodeId: "node-throw",
                 eventDefinitions: [new BpmnEventDefinition(BpmnEventDefinitionTypes.Compensation)])),
-            "cannot bind a child",
+            "cannot bind work",
             children: ["node-host", "node-h", "node-throw"]);
 
     [Fact]
@@ -161,14 +161,25 @@ public sealed class BpmnCompensationValidationTests
     public void ActivityRef_NamingCompensationHost_ValidatesCleanly()
     {
         var node = NewNode(MinimalElements(throwEvent: BpmnRuntimeFixture.CompensateThrow("throw", activityRef: "host")), MinimalFlows, ["node-host", "node-h"]);
-        Assert.NotNull(BpmnGraph.From(node));
+        Assert.NotNull(BpmnGraphAdapter.Build(node));
+    }
+
+    [Fact]
+    public void ThrowEvent_BoundSignal_PreservesBroadcastBinding()
+    {
+        var signal = new BpmnElement("throw", BpmnElementTypes.IntermediateThrowEvent, childNodeId: "node-broadcast",
+            eventDefinitions: [new BpmnEventDefinition(BpmnEventDefinitionTypes.Signal,
+                new Dictionary<string, string> { [BpmnEventDefinitionProperties.Name] = "broadcast" })]);
+        var graph = BpmnGraphAdapter.Build(NewNode(MinimalElements(throwEvent: signal), MinimalFlows,
+            ["node-host", "node-h", "node-broadcast"]));
+        Assert.Equal("node-broadcast", graph.GetRequiredElement("throw").BindingRef);
     }
 
     private static void AssertRejects(IReadOnlyCollection<BpmnElement> elements, string expectedMessage, IReadOnlyCollection<string>? children = null, IReadOnlyCollection<BpmnSequenceFlow>? flows = null)
     {
         var node = NewNode(elements, flows ?? MinimalFlows, children ?? ["node-host", "node-h"]);
-        var exception = Assert.Throws<BpmnExecutionException>(() => BpmnGraph.From(node));
-        Assert.Contains(expectedMessage, exception.Message, StringComparison.Ordinal);
+        var exception = Assert.Throws<BpmnHostException>(() => BpmnGraphAdapter.Build(node));
+        Assert.True(exception.Message.Contains(expectedMessage, StringComparison.Ordinal), exception.ToString());
     }
 
     private static ExecutableNode NewNode(IReadOnlyCollection<BpmnElement> elements, IReadOnlyCollection<BpmnSequenceFlow> flows, IReadOnlyCollection<string> childNodeIds) =>

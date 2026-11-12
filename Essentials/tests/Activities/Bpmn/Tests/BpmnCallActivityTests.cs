@@ -12,6 +12,9 @@ using Elsa.Workflows.Runtime.Scheduling;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
+using BpmnDiagnosticKind = global::Bpmn.Model.State.BpmnDiagnosticKind;
+using BpmnExecutionState = global::Bpmn.Model.State.BpmnExecutionState;
+
 namespace Elsa.Activities.Bpmn.Tests;
 
 /// <summary>
@@ -210,7 +213,7 @@ public sealed class BpmnCallActivityTests
         run.AssertWorkflowCompleted();
         var listener = run.State("node-timer");
         Assert.Equal(ActivityExecutionStatus.Cancelled, listener.Status);
-        Assert.Equal(BpmnExecutionEngine.CallActivityFailureRoutedReason, listener.Metadata[RuntimeMetadataKeys.ScopeCancellationReason]);
+        Assert.Equal("bpmn.call-activity.failure-routed", listener.Metadata[RuntimeMetadataKeys.ScopeCancellationReason]);
         Assert.Empty(await fixture.BookmarksAsync());
     }
 
@@ -253,9 +256,9 @@ public sealed class BpmnCallActivityTests
     // ---- Tier 3: no catcher → deterministic composite fault ----------------------------------------------------
 
     [Theory]
-    [InlineData("Faulted", BpmnExecutionEngine.CallActivityFaultedFaultCode)]
-    [InlineData("DispatchFailed", BpmnExecutionEngine.CallActivityDispatchFailedFaultCode)]
-    [InlineData("Cancelled", BpmnExecutionEngine.CallActivityCancelledFaultCode)]
+    [InlineData("Faulted", "bpmn.call-activity.faulted")]
+    [InlineData("DispatchFailed", "bpmn.call-activity.dispatch-failed")]
+    [InlineData("Cancelled", "bpmn.call-activity.cancelled")]
     public async Task FailureOutcome_NoCatcher_FaultsCompositeWithPinnedCode(string outcome, string faultCode)
     {
         await using var fixture = await CreateFixtureAsync("actexec-bpmn", "actexec-call");

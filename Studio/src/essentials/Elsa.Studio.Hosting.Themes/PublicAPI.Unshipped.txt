@@ -1,0 +1,31 @@
+#nullable enable
+Elsa.Studio.Hosting.Themes.StudioThemeStoreOptions
+Elsa.Studio.Hosting.Themes.StudioThemeStoreOptions.StudioThemeStoreOptions() -> void
+Elsa.Studio.Hosting.Themes.StudioThemeStoreOptions.StoreFile.get -> string!
+Elsa.Studio.Hosting.Themes.StudioThemeStoreOptions.StoreFile.set -> void
+Elsa.Studio.Hosting.Themes.StudioThemeStoreOptions.AssetsDirectory.get -> string!
+Elsa.Studio.Hosting.Themes.StudioThemeStoreOptions.AssetsDirectory.set -> void
+Elsa.Studio.Hosting.Themes.StudioThemeStoreOptions.ThemesDirectory.get -> string?
+Elsa.Studio.Hosting.Themes.StudioThemeStoreOptions.ThemesDirectory.set -> void
+Elsa.Studio.Hosting.Themes.StudioThemeStoreOptions.ThemesMode.get -> Elsa.Studio.Hosting.Themes.StudioThemeSourceMode
+Elsa.Studio.Hosting.Themes.StudioThemeStoreOptions.ThemesMode.set -> void
+Elsa.Studio.Hosting.Themes.StudioThemeStoreOptions.DefaultThemeId.get -> string?
+Elsa.Studio.Hosting.Themes.StudioThemeStoreOptions.DefaultThemeId.set -> void
+Elsa.Studio.Hosting.Themes.ThemeHostingExtensions
+static Elsa.Studio.Hosting.Themes.ThemeHostingExtensions.AddElsaStudioThemes(this Elsa.Studio.Hosting.StudioBuilder! studio, System.Action<Elsa.Studio.Hosting.Themes.StudioThemeStoreOptions!>? configure = null) -> Elsa.Studio.Hosting.StudioBuilder!
+Elsa.Studio.Hosting.Themes.ThemeStoreCoreStudioFeature
+Elsa.Studio.Hosting.Themes.ThemeStoreCoreStudioFeature.ThemeStoreCoreStudioFeature() -> void
+virtual Elsa.Studio.Hosting.Themes.ThemeStoreCoreStudioFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void
+virtual Elsa.Studio.Hosting.Themes.ThemeStoreCoreStudioFeature.MapEndpoints(Microsoft.AspNetCore.Routing.IEndpointRouteBuilder! endpoints, Microsoft.Extensions.Hosting.IHostEnvironment? environment) -> void
+Elsa.Studio.Hosting.Themes.ThemePickerStudioFeature
+Elsa.Studio.Hosting.Themes.ThemePickerStudioFeature.ThemePickerStudioFeature() -> void
+virtual Elsa.Studio.Hosting.Themes.ThemePickerStudioFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void
+virtual Elsa.Studio.Hosting.Themes.ThemePickerStudioFeature.MapEndpoints(Microsoft.AspNetCore.Routing.IEndpointRouteBuilder! endpoints, Microsoft.Extensions.Hosting.IHostEnvironment? environment) -> void
+Elsa.Studio.Hosting.Themes.ThemeManagementStudioFeature
+Elsa.Studio.Hosting.Themes.ThemeManagementStudioFeature.ThemeManagementStudioFeature() -> void
+virtual Elsa.Studio.Hosting.Themes.ThemeManagementStudioFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void
+virtual Elsa.Studio.Hosting.Themes.ThemeManagementStudioFeature.MapEndpoints(Microsoft.AspNetCore.Routing.IEndpointRouteBuilder! endpoints, Microsoft.Extensions.Hosting.IHostEnvironment? environment) -> void
+Elsa.Studio.Hosting.Themes.StudioThemeSourceMode
+Elsa.Studio.Hosting.Themes.StudioThemeSourceMode.BuiltInsOnly = 0 -> Elsa.Studio.Hosting.Themes.StudioThemeSourceMode
+Elsa.Studio.Hosting.Themes.StudioThemeSourceMode.DirectoryOnly = 1 -> Elsa.Studio.Hosting.Themes.StudioThemeSourceMode
+Elsa.Studio.Hosting.Themes.StudioThemeSourceMode.AddToBuiltIns = 2 -> Elsa.Studio.Hosting.Themes.StudioThemeSourceMode

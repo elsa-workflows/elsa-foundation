@@ -35,7 +35,7 @@ internal sealed class EtlHttpSourceAcquirer(IEtlConnectorRuntimeStore store, Hos
             await using var binding = await bindings.ResolveExactAsync(lease.Scope, pin.Alias, "Source",
                 pin.Revision, pin.Handle, cancellationToken);
             var requests = new EtlHttpRequestBuilder(source, binding, pipeline.Http);
-            var cache = new EtlHttpPageCache(snapshotRoot, admission, lease.PartitionOrdinal, requests);
+            var cache = new EtlHttpPageCache(snapshotRoot, admission, lease.PartitionOrdinal, requests, lease.PollGeneration);
             // Policy and manifest validation precede attempt allocation. Cache corruption is never a cache miss.
             var uri = requests.RequestUri(position.Request);
             var cached = await cache.ReadAsync(position.PageSequence, position.Request, cancellationToken);
@@ -74,10 +74,15 @@ internal sealed class EtlHttpSourceAcquirer(IEtlConnectorRuntimeStore store, Hos
                 return Failed("etl.http.source-receipt-invalid");
 
             // Decode before publication so a deterministic bad page is recorded as such, rather than retried.
+            bool caughtUp;
             try
             {
                 var decoded = EtlJsonPageReader.Read(body, source, pipeline.Limits, pipeline.Http);
-                _ = requests.NextContinuation(position.Request, decoded.Continuation);
+                // A continuous feed with nothing new answers with no records and an unmoved cursor (spec 1192).
+                caughtUp = pipeline.Continuous is not null &&
+                           requests.IsCaughtUp(position.Request, decoded.Records.Count, decoded.Continuation);
+                if (!caughtUp)
+                    _ = requests.NextContinuation(position.Request, decoded.Continuation);
             }
             catch (EtlJsonPageReadException exception)
             {
@@ -88,8 +93,34 @@ internal sealed class EtlHttpSourceAcquirer(IEtlConnectorRuntimeStore store, Hos
                 return await InvalidPageAsync(lease, permit, received, exception.Code, cancellationToken);
             }
 
-            cached = await cache.PublishAsync(position.PageSequence, position.Request, Guid.ParseExact(permit.RequestId, "N"),
-                permit.Fence, received, body, cancellationToken);
+            if (caughtUp)
+            {
+                // A predecessor's publication wins over this unpublished response.
+                if (await cache.ReadAsync(position.PageSequence, position.Request, cancellationToken) is { } published)
+                    return await CaptureAsync(lease, published, begin.Fetch, cancellationToken);
+                var recorded = await store.RecordConnectorHttpCaughtUpAsync(lease, permit, received, cancellationToken);
+                if (recorded.Status != EtlStoreStatus.Applied)
+                    return Refused(recorded.Status);
+                // Idle: nothing is retained; the store scheduled the next poll and the execution releases the lease.
+                if (!recorded.Final)
+                    return new(EtlStoreStatus.Applied, null, null, null);
+                // Completion covers this response: retain it as the final page, whose unmoved cursor ends the shard.
+            }
+
+            try
+            {
+                cached = await cache.PublishAsync(position.PageSequence, position.Request, Guid.ParseExact(permit.RequestId, "N"),
+                    permit.Fence, received, body, cancellationToken);
+            }
+            catch (EtlHttpPageCacheException exception) when (pipeline.Continuous is not null &&
+                                                              exception.Code == "etl.http.page-cache-conflict")
+            {
+                // A continuous request identity can receive different bodies over time; a predecessor's publication
+                // won the create-only key, and the store validates its provenance on capture.
+                cached = await cache.ReadAsync(position.PageSequence, position.Request, cancellationToken);
+                if (cached is null)
+                    throw;
+            }
             // Another attempt may have published these identical bytes first. Reconcile its exact provenance,
             // never relabel the winning response with this attempt's fence or receive time.
             return await CaptureAsync(lease, cached, begin.Fetch, cancellationToken);
@@ -110,6 +141,24 @@ internal sealed class EtlHttpSourceAcquirer(IEtlConnectorRuntimeStore store, Hos
         {
             return Failed(exception.Code);
         }
+    }
+
+    /// <summary>
+    /// Removes the cached manifest and per-page body of the page a continuous shard has left, once the advance committed
+    /// (spec 1196). <paramref name="left"/> is the lease that held the page, whose generation published it.
+    /// </summary>
+    public async ValueTask DeleteLeftPageAsync(EtlConnectorRunAdmission admission, EtlConnectorPartitionLease left,
+        CancellationToken cancellationToken = default)
+    {
+        if (left.Position is not EtlConnectorHttpPosition position) return;
+        var pipeline = EtlArtifactV2Json.Read(admission.Invocation.Artifact.Pipeline);
+        if (pipeline.Continuous is null || pipeline.Source is not EtlHttpJsonSource source) return;
+        var pin = admission.Bindings.Source.Revision;
+        await using var binding = await bindings.ResolveExactAsync(left.Scope, pin.Alias, "Source",
+            pin.Revision, pin.Handle, cancellationToken);
+        var cache = new EtlHttpPageCache(snapshotRoot, admission, left.PartitionOrdinal,
+            new EtlHttpRequestBuilder(source, binding, pipeline.Http), left.PollGeneration);
+        await cache.DeleteAsync(position.PageSequence, position.Request, cancellationToken);
     }
 
     private async ValueTask<EtlHttpSourceAcquisition> CaptureAsync(EtlConnectorPartitionLease lease,

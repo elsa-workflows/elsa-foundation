@@ -108,6 +108,10 @@ export function ActivityDefinitionDependencyExplorer({
   const validPages = binding ? pages.slice(0, mismatchIndex < 0 ? pages.length : mismatchIndex) : [];
   const responseBindingMismatch = validPages.length !== pages.length;
   const privacyFailure = isPrivateFailure(dependenciesQuery.error);
+  const usageUnavailable = dependenciesQuery.error instanceof StudioHttpError &&
+    dependenciesQuery.error.status === 503 &&
+    typeof dependenciesQuery.error.payload === "object" && dependenciesQuery.error.payload !== null &&
+    "errorCode" in dependenciesQuery.error.payload && dependenciesQuery.error.payload.errorCode === "activity.dependency.unavailable";
   const cursorFailure = dependencyCursorFailure(dependenciesQuery.error);
   const rows = !rootVersion || privacyFailure ? [] : validPages.flatMap(page => page.items);
   const selected = rows.find(item => item.relationshipId === selectedRelationshipId) ?? null;
@@ -206,7 +210,8 @@ export function ActivityDefinitionDependencyExplorer({
     {rootVersion && included.length > 0 && dependenciesQuery.isPending ? <div className="ad-inline-status" role="status">Loading evidence…</div> : null}
     {privacyFailure ? <div className="ad-inline-error" role="alert">Evidence is unavailable for this account or version. No identities or counts are shown.</div> : null}
     {responseBindingMismatch && !rows.length ? <div className="ad-inline-error" role="alert">Results did not match this version or snapshot. No identities or counts are shown. <button type="button" onClick={restart}>Restart scan</button></div> : null}
-    {dependenciesQuery.isError && !privacyFailure && !rows.length ? <div className="ad-inline-error" role="alert">Could not confirm these results. No unconfirmed rows are shown. <button type="button" onClick={restart}>Try again</button></div> : null}
+    {usageUnavailable ? <div className="ad-inline-error" role="alert">Usage information is unavailable. Ask an administrator to restart the server to rebuild it, then try again. <button type="button" onClick={restart}>Try again</button></div> : null}
+    {dependenciesQuery.isError && !privacyFailure && !usageUnavailable && !rows.length ? <div className="ad-inline-error" role="alert">Could not confirm these results. No unconfirmed rows are shown. <button type="button" onClick={restart}>Try again</button></div> : null}
     {isStale ? <div className="ad-stale-warning" role="alert"><div><strong>This scan is out of date</strong><span>{cursorFailure === "expired" ? "The snapshot is no longer available. Confirmed rows remain visible." : "The next page did not match this version, filters, or snapshot. Confirmed rows remain visible."} Pages from another snapshot were not combined.</span></div><button type="button" onClick={restart}><RefreshCw size={15} aria-hidden /> Restart scan</button></div> : null}
 
     {snapshot && rows.length ? <details className="ad-scan-details">

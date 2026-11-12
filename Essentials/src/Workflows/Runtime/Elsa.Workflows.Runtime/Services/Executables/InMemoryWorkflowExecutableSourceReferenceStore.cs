@@ -3,10 +3,33 @@ using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Runtime.Services.Executables;
 
-public sealed class InMemoryWorkflowExecutableSourceReferenceStore : IWorkflowExecutableSourceReferenceStore
+public sealed partial class InMemoryWorkflowExecutableSourceReferenceStore : IWorkflowExecutableSourceReferenceStore
 {
     private readonly Dictionary<string, WorkflowExecutableSourceReference> _references = new(StringComparer.Ordinal);
     private readonly Lock _gate = new();
+
+    private readonly InMemoryWorkflowExecutableStore? _executableStore;
+    private readonly TimeProvider _clock = TimeProvider.System;
+    internal InMemoryWorkflowExecutableStore? FencedArtifactStore => _executableStore;
+    public InMemoryWorkflowExecutableSourceReferenceStore() { }
+    public InMemoryWorkflowExecutableSourceReferenceStore(IWorkflowExecutableStore executableStore) : this(executableStore, TimeProvider.System) { }
+    public InMemoryWorkflowExecutableSourceReferenceStore(IWorkflowExecutableStore executableStore, TimeProvider? clock)
+    {
+        _executableStore = executableStore?.GetMaterialStore() as InMemoryWorkflowExecutableStore;
+        _clock = clock ?? TimeProvider.System;
+    }
+
+    public ValueTask<bool> TryDeleteDoomedAsync(WorkflowExecutableSourceReference expectedDoomedReference,
+        DateTimeOffset now, WorkflowExecutableDeletionGuard deletionGuard, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(expectedDoomedReference); ArgumentNullException.ThrowIfNull(deletionGuard);
+        cancellationToken.ThrowIfCancellationRequested();
+        if (expectedDoomedReference.ArtifactId != deletionGuard.ArtifactId)
+            throw new ArgumentException("The reference and deletion guard differ.", nameof(deletionGuard));
+        if (_executableStore is null) throw new NotSupportedException("The source store requires its native artifact store for guarded deletion.");
+        return ValueTask.FromResult(_executableStore.ExecuteUnderDeletionGuard(deletionGuard, now, () =>
+            TryDeleteDoomedAsync(expectedDoomedReference, now, cancellationToken).GetAwaiter().GetResult()));
+    }
 
     public ValueTask SaveAsync(WorkflowExecutableSourceReference reference, CancellationToken cancellationToken = default)
     {
@@ -17,6 +40,12 @@ public sealed class InMemoryWorkflowExecutableSourceReferenceStore : IWorkflowEx
             _references[reference.SourceReferenceId] = reference;
 
         return ValueTask.CompletedTask;
+    }
+
+    internal T ExecuteUnderReferenceGate<T>(Func<IReadOnlyDictionary<string, WorkflowExecutableSourceReference>, T> operation)
+    {
+        lock (_gate)
+            return operation(_references);
     }
 
     public ValueTask<WorkflowExecutableSourceReference?> FindAsync(string sourceReferenceId, CancellationToken cancellationToken = default)

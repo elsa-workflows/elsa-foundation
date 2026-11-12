@@ -24,14 +24,16 @@ public sealed class ActivitiesControlFlowFeatureTests
     }
 
     [Fact]
-    public void ConfigureServices_RegistersAllSevenControlFlowStructureHandlers()
+    public void ConfigureServices_RegistersSevenKindsAndBothSwitchSchemas()
     {
-        Assert.Equal(7, _handlers.Count);
+        Assert.Equal(7, _handlers.Select(handler => handler.Kind).Distinct().Count());
+        Assert.Equal(8, _handlers.Count);
     }
 
     [Theory]
     [InlineData(IfActivity.StructureKind, IfActivity.StructureSchemaVersion)]
     [InlineData(SwitchActivity.StructureKind, SwitchActivity.StructureSchemaVersion)]
+    [InlineData(SwitchActivity.StructureKind, SwitchActivity.LegacyStructureSchemaVersion)]
     [InlineData(ForEachActivity.StructureKind, ForEachActivity.StructureSchemaVersion)]
     [InlineData(ForActivity.StructureKind, ForActivity.StructureSchemaVersion)]
     [InlineData(WhileActivity.StructureKind, WhileActivity.StructureSchemaVersion)]
@@ -39,7 +41,7 @@ public sealed class ActivitiesControlFlowFeatureTests
     [InlineData(ParallelActivity.StructureKind, ParallelActivity.StructureSchemaVersion)]
     public void ConfigureServices_RegistersHandlerForEachControlFlowKind(string kind, string schemaVersion)
     {
-        var handler = Assert.Single(_handlers, h => h.Kind == kind);
+        var handler = Assert.Single(_handlers, h => h.Kind == kind && h.SchemaVersion == schemaVersion);
         Assert.Equal(schemaVersion, handler.SchemaVersion);
     }
 

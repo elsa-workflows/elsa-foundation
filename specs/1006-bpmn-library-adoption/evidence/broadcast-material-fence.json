@@ -1,0 +1,151 @@
+{
+  "schemaVersion": 1,
+  "task": "T049 actual grant and atomic material-fence capability; source cohort integration remains open",
+  "sourceParentCommit": "4aa4d9e8288e3842fbfa59ef8e022173997362d0",
+  "filesSha256": {
+    "Essentials/src/Workflows/Runtime/Core/Contracts/IWorkflowExecutableRootWriteLeaseManager.cs": "80aa13597bef56d6264d892a426994b1c2aba889afc73b26e0e484366032a404",
+    "Essentials/src/Workflows/Runtime/Core/PublicAPI.Unshipped.txt": "368f9c34b5e4b87f9022286a78e3374ff664afe0ffc7364e7ed1387022bc19ef",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md": "3465127e223bcc2327957790036db928e8fb7ff6d41af8d33b8ce29111df3d68",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Executables/InMemoryWorkflowExecutableStore.cs": "b886767bca6070e70803598e1a3e1c46db32f92043f4a2291c4d604134571658",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Executables/WorkflowExecutableRootWriteLeaseManager.cs": "a6cc012ef3ffdb10cd48ff8a9b1c0a2c12370031c403a1f67137d10601fbb520",
+    "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowExecutableStore.cs": "622745cb3176ea36522ce678aad0157a26f47aef8341ee443a0a7e0da357b545",
+    "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/EfRuntimeArtifactScopeTests.cs": "277eae1a4c22ada1d407d4dd64b527beb714f8d355bf1dcc4b4a2a1ce5f13b02",
+    "Essentials/tests/Workflows/Runtime/Tests/WorkflowExecutableRootWriteLeaseManagerTests.cs": "bf056f5197f9f619bf091fe26e2c6962a07e71f287bf49bd208cf4e7d6d5a0fe",
+    "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Properties/AssemblyInfo.cs": "6950af5920ff4711ab682c403fc7cd5c6cc9d2c0d968a229ec106ccf684c6b64",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Executions/WorkflowStartDispatcher.cs": "15f7b0d4c3143e791bb05954862cd156b6fadc5c55f3116908f87253c16001fa"
+  },
+  "checks": [
+    {
+      "project": "Workflow Runtime",
+      "passed": 2866,
+      "failed": 0,
+      "skipped": 0,
+      "listed": 2855,
+      "newCases": 12
+    },
+    {
+      "project": "Runtime EF",
+      "passed": 1182,
+      "failed": 0,
+      "skipped": 0,
+      "listed": 1182,
+      "newCases": 14
+    },
+    {
+      "leaseManagerCases": 41,
+      "newActualEFCases": 14
+    },
+    {
+      "coreApiAdditions": 1,
+      "coreApiRemovals": 0
+    },
+    {
+      "frozenAuthoringFingerprintSha256": "41aa0bb979ea46fc2533b057e3677f408ab54c3411fecfafaa238a2adae38c92",
+      "unchanged": true
+    }
+  ],
+  "runtimeDiscovery": {
+    "runtimeListed": 2855,
+    "runtimeUniqueListed": 2851,
+    "runtimeExecuted": 2866,
+    "runtimeDeferredTheories": {
+      "Elsa.Workflows.Runtime.Tests.CheckpointRuleViolationWorkflowFaulterTests.A_failure_that_is_not_a_rule_refusal_leaves_the_execution_running": 4,
+      "Elsa.Workflows.Runtime.Tests.ValueEnvelopeEncryptionPredicateTests.Only_a_present_value_under_a_policy_that_requires_encryption_matches": 8,
+      "Elsa.Workflows.Runtime.Tests.CheckpointRuleViolationWorkflowFaulterTests.A_refused_commit_faults_the_execution_with_only_its_state_and_an_incident": 2
+    },
+    "unmapped": []
+  },
+  "mutations": [
+    {
+      "name": "expose-mutable-grant-array",
+      "exitCode": 1,
+      "summary": "Failed!  - Failed:     1, Passed:     0, Skipped:     0, Total:     1, Duration: 53 ms - Elsa.Workflows.Runtime.Tests.dll (net10.0)",
+      "compileError": false
+    },
+    {
+      "name": "legacy-grant-callback-falls-through-single-root",
+      "exitCode": 1,
+      "summary": "Failed!  - Failed:     1, Passed:     1, Skipped:     0, Total:     2, Duration: 24 ms - Elsa.Workflows.Runtime.Tests.dll (net10.0)",
+      "compileError": false
+    },
+    {
+      "name": "trust-misbound-provider-grants",
+      "exitCode": 1,
+      "summary": "Failed!  - Failed:     3, Passed:     0, Skipped:     0, Total:     3, Duration: 68 ms - Elsa.Workflows.Runtime.Tests.dll (net10.0)",
+      "compileError": false
+    },
+    {
+      "name": "memory-fence-ignores-token",
+      "exitCode": 1,
+      "summary": "Failed!  - Failed:     1, Passed:     5, Skipped:     0, Total:     6, Duration: 24 ms - Elsa.Workflows.Runtime.Tests.dll (net10.0)",
+      "compileError": false
+    },
+    {
+      "name": "memory-fence-ignores-expiry",
+      "exitCode": 1,
+      "summary": "Failed!  - Failed:     1, Passed:     5, Skipped:     0, Total:     6, Duration: 25 ms - Elsa.Workflows.Runtime.Tests.dll (net10.0)",
+      "compileError": false
+    },
+    {
+      "name": "EF-fence-allows-no-owned-transaction",
+      "exitCode": 1,
+      "summary": "Failed!  - Failed:     1, Passed:    13, Skipped:     0, Total:    14, Duration: 1 s - Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.dll (net10.0)",
+      "compileError": false
+    },
+    {
+      "name": "EF-fence-stages-instead-of-locking-coordination",
+      "exitCode": 1,
+      "summary": "Failed!  - Failed:     2, Passed:    12, Skipped:     0, Total:    14, Duration: 1 s - Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.dll (net10.0)",
+      "compileError": false
+    },
+    {
+      "name": "EF-fence-ignores-current-token",
+      "exitCode": 1,
+      "summary": "Failed!  - Failed:     2, Passed:    12, Skipped:     0, Total:    14, Duration: 1 s - Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.dll (net10.0)",
+      "compileError": false
+    },
+    {
+      "name": "EF-fence-ignores-lease-incarnation",
+      "exitCode": 1,
+      "summary": "Failed!  - Failed:     1, Passed:    13, Skipped:     0, Total:    14, Duration: 1 s - Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.dll (net10.0)",
+      "compileError": false
+    },
+    {
+      "name": "EF-fence-omits-time-check-after-lease-lock",
+      "exitCode": 1,
+      "summary": "Failed!  - Failed:     1, Passed:    13, Skipped:     0, Total:    14, Duration: 1 s - Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.dll (net10.0)",
+      "compileError": false
+    },
+    {
+      "name": "EF-fence-ignores-deletion-guard",
+      "exitCode": 1,
+      "summary": "Failed!  - Failed:     1, Passed:    13, Skipped:     0, Total:    14, Duration: 1 s - Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.dll (net10.0)",
+      "compileError": false
+    },
+    {
+      "name": "EF-fence-trusts-tracked-lease",
+      "exitCode": 1,
+      "summary": "Failed!  - Failed:     1, Passed:    13, Skipped:     0, Total:    14, Duration: 1 s - Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.dll (net10.0)",
+      "compileError": false
+    },
+    {
+      "name": "EF-fence-trusts-tracked-coordination",
+      "exitCode": 1,
+      "summary": "Failed!  - Failed:     1, Passed:    13, Skipped:     0, Total:    14, Duration: 1 s - Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.dll (net10.0)",
+      "compileError": false
+    }
+  ],
+  "reviews": {
+    "correctness": "clean; final source hashes, mutation results, whole/listed counts and limits verified",
+    "standards": "clean; final source hashes, mutation results, whole/listed counts and limits verified",
+    "acceptance": "clean; final source hashes, mutation results, whole/listed counts and limits verified",
+    "fullPrRounds": 0
+  },
+  "limits": [
+    "Actual grant/material commit capability only. No source cohort eligibility, recipient ownership fencing, verified acceptance marker or saved-start admission is added by this increment.",
+    "EF controls stage a real source reference in the same owned transaction, not an accepted recipient cohort. Deterministic expiry delays occur after the last matching coordination/lease update; they are not live peer/host recovery claims.",
+    "The EF helper is internal; friend access is restricted to its own test assembly. It does not own/commit the callers transaction.",
+    "Caller callbacks must honor cancellation and fence actual durable publication; these helpers cannot roll back effects committed by an unrelated writer.",
+    "T049 automatic provider integration/renewal-context coordination and remaining T050/T051/current host/Studio/full PR/required checks/resulting-main gates remain open."
+  ]
+}

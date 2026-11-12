@@ -1,0 +1,261 @@
+{
+  "schemaVersion": 1,
+  "sourceParentCommit": "f5e7fee0767940f00c6695c1381cd0d42d4f3906",
+  "taskClosure": [
+    "T032",
+    "T033",
+    "T034"
+  ],
+  "T035DocumentationAndTypeInventoryUpdatedFinalStatusCleanupPending": true,
+  "actualPostDeletionHostAndStudioStillRequired": true,
+  "fullPrRounds": 0,
+  "fullPrRoundBound": 6,
+  "filesSha256": {
+    "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/ActivitiesBpmnFeature.cs": "aad83275ef62da9b55d11108849d200ff10c032840156e951f4af1a0d394ca58",
+    "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/EXTENSION_POINTS.md": "f488dc6b48527d1288ad7d69631fb98a2143b9a257052225353008e8087d0edc",
+    "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Elsa.Activities.Bpmn.csproj": "83bc4bbb325cb99e5cd325aecb7fcc2dc1019665c0ed159ef6abf0a30394c57d",
+    "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnGraphAdapter.cs": "ea06d9a15f2f175fa3ec82cf768730aa0a873ea119b8bbafe581786403ac6417",
+    "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnStartTriggerStimulus.cs": "39939ab6dd08aa690e49ea1a5a387d03132f287a167584d416e60e8cc038bd92",
+    "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Models/BpmnElement.cs": "fa692cfc702350c87b632bde2dce0cbf2f72368aa89778ee9b8fe9e9c7dfa9c5",
+    "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Models/BpmnEventDefinition.cs": "4ea43831abe2f5b4bcd8ab69b83e83ce938919144e12ee7739af06de3af86e67",
+    "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Models/BpmnLoopCharacteristics.cs": "0eda0b071e8513439c44234fcc1cb8b1b075c43a1fccbc097bd331ac7dcd32ed",
+    "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/README.md": "8818d163be32c5306c9580637b72764463ae6a1e884fef65d6db7826aef0e4af",
+    "Essentials/src/Activities/Bpmn/Interchange/README.md": "2770a91787b7299ad4f5c4334853ea9ca8db9420d7c4b11785e7f9cc71cf3df1",
+    "Essentials/tests/Activities/Bpmn/Interchange/Tests/BpmnBoundaryEventInterchangeTests.cs": "1092e46b57660f86ee811556d72762b859c671c906d904eb830fe239720fbc82",
+    "Essentials/tests/Activities/Bpmn/Interchange/Tests/BpmnCallActivityInterchangeTests.cs": "6c66b0698ea6fe161d808bcb36eeeeecba022ba268d427612d59309ca4a89d28",
+    "Essentials/tests/Activities/Bpmn/Interchange/Tests/BpmnCollaborationInterchangeTests.cs": "83e00bbcfd21a40f9e1c85da22db02f95c254d30b654c452105cb31e090264cc",
+    "Essentials/tests/Activities/Bpmn/Interchange/Tests/BpmnCompensationInterchangeTests.cs": "a3161d9ceee06d6ae85c2a766359c7486fb6216e990b9c3a5fa69b190dcd0fde",
+    "Essentials/tests/Activities/Bpmn/Interchange/Tests/BpmnEscalationInterchangeTests.cs": "f915d4ec38f1401c720c5c0c71d1047ffbdee8b18b303bb6508cd3a2c3074ec7",
+    "Essentials/tests/Activities/Bpmn/Interchange/Tests/BpmnEventBasedGatewayInterchangeTests.cs": "782fc5e18ad709fbf9e0505fa967fafb121787818af2a8f2be7b7f6c006aa365",
+    "Essentials/tests/Activities/Bpmn/Interchange/Tests/BpmnEventDefinitionPublishParityTests.cs": "59027f722beca7de698f16f323e57676b32da281589a17df6f0a55e98921fbc7",
+    "Essentials/tests/Activities/Bpmn/Interchange/Tests/BpmnEventSubprocessInterchangeTests.cs": "0bed78e295044cfd86d3d71503458d669d3dc5b1ddc9d73797a56fdb887d4810",
+    "Essentials/tests/Activities/Bpmn/Interchange/Tests/BpmnMessageInterchangeTests.cs": "6f1b8424e4493efe7d1bb5150f349a660c15e7cbf4fe20f52b2db4142e621e47",
+    "Essentials/tests/Activities/Bpmn/Interchange/Tests/BpmnTransactionInterchangeTests.cs": "150d2131019f4ffbf66863f0b16a96277c60cc5b1c9a347bb1c3e9dca8f86819",
+    "Essentials/tests/Activities/Bpmn/Interchange/Tests/LibraryGraphAliases.cs": "1824242e09f0830d8b09d5ce054f7961cf28def4c2106a7a0e043df4bb2a9836",
+    "Essentials/tests/Activities/Bpmn/Tests/ActivitiesBpmnFeatureTests.cs": "fda5c8c910bdc69c65085f7b0bac10f7a34b4e0926db097c61fe4a0908df0692",
+    "Essentials/tests/Activities/Bpmn/Tests/BpmnBoundaryEventTests.cs": "ef34474e9f8bb59940c0f1362cc914cb55f5eabe7f89d8bd43ce4bc7273a5532",
+    "Essentials/tests/Activities/Bpmn/Tests/BpmnCallActivityTests.cs": "5cab0568e70e00d95c879c679bbded0ef5317fc3bfd949561880fb2269e44df1",
+    "Essentials/tests/Activities/Bpmn/Tests/BpmnCompensationValidationTests.cs": "e6d0535cafcdc9c6507b0ad5afcf2e2522662e3ce8535082af8dc5ac534eee1a",
+    "Essentials/tests/Activities/Bpmn/Tests/BpmnDeliveryBoundaryTests.cs": "131a5014043234f4345c4274d540f0247aad60264b6cd7e6d429698d76c51edb",
+    "Essentials/tests/Activities/Bpmn/Tests/BpmnEscalationTests.cs": "31521d790660e8a856fb9f3471fac91c43e34c241e7d5dcdd768befbc8af461c",
+    "Essentials/tests/Activities/Bpmn/Tests/BpmnEscalationValidationTests.cs": "4f091bfb96d94fdf8a7d09770b54c26d7f8658354383ef684470a49ed3a6caca",
+    "Essentials/tests/Activities/Bpmn/Tests/BpmnEventBasedGatewayTests.cs": "1ab6fee8e58bb48b5b711a760e4d73526d7b5cc9cd215e43bd5126df816c29ab",
+    "Essentials/tests/Activities/Bpmn/Tests/BpmnEventSubprocessTests.cs": "f6f2d76202ffd835def2cabb69bcc6e4ebc5a9dea6dc750506bb595160f0fd31",
+    "Essentials/tests/Activities/Bpmn/Tests/BpmnEventSubprocessValidationTests.cs": "f3c8ce112faa050ac33f3d4a5690261885d169b3b07a4c5503c8fb81022fe8d8",
+    "Essentials/tests/Activities/Bpmn/Tests/BpmnGraphBackwardEdgeTests.cs": "e65d3ee26f4136dfc4dd6e76b23fbded39e84b9389f8d8a231abad94d9e95ead",
+    "Essentials/tests/Activities/Bpmn/Tests/BpmnGraphValidationTests.cs": "599f6c105050dc241f3f3f8ef7eae3778de96f870708745a8ec3dde9aadfa614",
+    "Essentials/tests/Activities/Bpmn/Tests/BpmnMultiInstanceTests.cs": "730da4eb5175de18bfed552e07a616f1e94b31a35e4f2983987fa581026df9e2",
+    "Essentials/tests/Activities/Bpmn/Tests/BpmnSemanticOwnershipTests.cs": "fa4184a0089b5eb075cae5173564d4250032e34f801d87368541b8bc31afd84b",
+    "Essentials/tests/Activities/Bpmn/Tests/BpmnTransactionValidationTests.cs": "5a000ad00a5438d8af9a161847f2246762753182b8bffe5866fad075feeb9ec6",
+    "Essentials/tests/Activities/Bpmn/Tests/LibraryGraphAliases.cs": "1824242e09f0830d8b09d5ce054f7961cf28def4c2106a7a0e043df4bb2a9836",
+    "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/BpmnUpgradeRecoveryEfTests.OutcomeReplay.cs": "cd07e002708a882f4ab80205f7666ec651aa9374cb6cd0d489ef018d7e1b4e83",
+    "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/BpmnUpgradeRecoveryEfTests.cs": "e5f38c5e656129b430bff7af42809f3bc82356892679575b465408a8f12d3bb9",
+    "e2e-tests/bpmn/Test-BpmnCallActivity.ps1": "19cee83ac6df20467f814583c8fcddc4b1fbcfe8fadd72e030c7023ac524aff4",
+    "specs/1006-bpmn-library-adoption/evidence/semantic-deletion.md": "1674b58b5132b83f905d933a4372c0a95233651a521abc73656cfa081624272b",
+    "specs/1006-bpmn-library-adoption/evidence/test-reconciliation.md": "661101531ad9775ab6bd7d928f767da0001b9a3cea13724d7ac39fba35b03926",
+    "specs/1006-bpmn-library-adoption/tasks.md": "03964f650d425d669513582bfcbfdea8cd0f22a617783a90c1455155a844bde2"
+  },
+  "deletedSourcesSha256": {
+    "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Contracts/IBpmnBehaviorContext.cs": "829ee3d5e16c196837334e4c13cff80e72f2998a3a9140c730c87124f6f27796",
+    "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Contracts/IBpmnBehaviorRegistry.cs": "10d8bb1f2b11cbac4bfd842a0485021522f89a071fe87229fd17763728c7c587",
+    "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Contracts/IBpmnElementBehavior.cs": "f22406fc9b779be499bdba35946ecc5be8f6efe7d7a4fe8b3d4ca3723811ca2f",
+    "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Exceptions/BpmnExecutionException.cs": "6a0c6bdcc4f866e6e77dc53b550a97f136d69ec57f49537a22f56f803778bd35",
+    "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/Behaviors/BpmnBoundaryBehaviors.cs": "5634c6f60662edcb62cfad7ade4e948ddb063725a60113b565a03097dc269bba",
+    "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/Behaviors/BpmnEventBehaviors.cs": "cceb3c343fe22e07cc8b5186591382d8d6bed5cac75c5eb1b21981f84e332dc8",
+    "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/Behaviors/BpmnFlowSelector.cs": "925b09d77eebbe2bcbbd23c825296b196f2bdcd655636bdbd84293928332dc00",
+    "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/Behaviors/BpmnGatewayBehaviors.cs": "b26a573bbc9ebf4fdafbe7858028090e96c798ec3740b71b6e8553f26e27645e",
+    "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/Behaviors/BpmnTaskBehaviors.cs": "1be5223dcb64cbefae096f084443271f990f7c875897a99b3dbc303de4d917e7",
+    "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnBehaviorContext.cs": "2ea3a698e4d9ecf3b28ad213d971bbe80652a918c64da5126087f705f73e6fd2",
+    "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnBehaviorRegistry.cs": "f2dd0caf9e408cd5e6bdd89010c60bb8ad66fc61f7dbebddb40126ed362ae964",
+    "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnDiagnosticAccumulator.cs": "e8228db1a9215e9deb577126b621b117b57cc69ebc9b861d01cae97ea5810441",
+    "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnElementFamilies.cs": "7db721f7fb4e76d4269677a5bb1ff8fc81e5a2461e58b82c0bb0d176001e2f52",
+    "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnExecutionEngine.cs": "10baa01542a0625a06da4831d26e9d9f0241d6be1447da5bc471bf58407a2498",
+    "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnGraph.cs": "3fc33e75d7c59d380fb8004b7b14728d15121243dacb21bd6424ef6618b74ed5",
+    "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnScheduler.cs": "b15967704adcbab407717a78810a83ba9bf9ad29e02e89c7cf7bd91a5f7188b9",
+    "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnStateMutator.cs": "ddde5dc11e4b9c892deb3a6625b16ac5f4a7e68f992ecdba012a3fe943120149",
+    "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnStatePersister.cs": "9189d14118f7d2464342abd516801ba8989d8a73ce52559017369c35c8ae9972",
+    "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnTokenCoordinator.cs": "ce346d3dafb7a2dd508ba262cff62ac7f9c60a6afaa9ee0612f36c6aace0e6b5",
+    "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Models/BpmnActiveChild.cs": "0f4190be8c7396d5ff81f90e394ac99a0c4aa9e8590c3c211a1eed9643c681b6",
+    "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Models/BpmnBehaviorDecision.cs": "333216218be1645361816ea0175841f825eb7b08c8136fa501bbeae99f9d82e2",
+    "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Models/BpmnCompensable.cs": "920381f394e3bd0ef701b0d81125cc0569cf8b3f43643d4b34d9b47465174e28",
+    "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Models/BpmnCompensationRun.cs": "6219e237f1e5e15e63a4283449c3d98b2c11f70986beb632efd476f10d8e57e2",
+    "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Models/BpmnDiagnosticEvent.cs": "49bac0ff04693e8347070101b587011fef361e6f4cb41c89faa714f085b73bca",
+    "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Models/BpmnEventRace.cs": "73ac871cd0c270123214aa0f6d416a2b0a52b17708f40085ca73bd7bf59d1025",
+    "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Models/BpmnExecutionState.cs": "1ccedf004260a568cdaca16d3a56d8bdc6f3ce77df274be4ab4d286c43adc754",
+    "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Models/BpmnLoopState.cs": "ca03cf4d61c6c43bbea7c08c8ba15f6a11b6a2c261cf755426b28660fd234d51",
+    "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Models/BpmnToken.cs": "d37de7ec76445215a956717cc7ed73eb79879cd2a6ec0bb1bf5c2e0eec67b285"
+  },
+  "portableArtifacts": {
+    "specs/1006-bpmn-library-adoption/evidence/semantic-ownership/242-method-map.json": {
+      "sha256": "bc497feeafb900bc488b53b1030a70c0b5f1266444702fdd1680d5a6f08d9c65",
+      "bytes": 446055
+    },
+    "specs/1006-bpmn-library-adoption/evidence/semantic-ownership/Read-PublicTypeSurface.ps1": {
+      "sha256": "169050e3d05c55dafe283948bdb861026372002ba1d942a88a34f4b8b9ae6a36",
+      "bytes": 1794
+    },
+    "specs/1006-bpmn-library-adoption/evidence/semantic-ownership/architecture-discovery.log": {
+      "sha256": "7a17108f7d2d5f131805db1378567bd59efb307200d648fd98a5020d1c9a6f47",
+      "bytes": 88387
+    },
+    "specs/1006-bpmn-library-adoption/evidence/semantic-ownership/architecture-whole.log.gz": {
+      "sha256": "f16921a53dbbdf4141a616f6217395eeaa2b0556c73a73cba68937d70f1a68dd",
+      "bytes": 290
+    },
+    "specs/1006-bpmn-library-adoption/evidence/semantic-ownership/architecture-whole.trx.gz": {
+      "sha256": "57e60b6658c9f0d29efad39b0a964b332c5026c86763c13eeb2e5a005ff3be5f",
+      "bytes": 154738
+    },
+    "specs/1006-bpmn-library-adoption/evidence/semantic-ownership/bounded-reviews.json": {
+      "sha256": "56045e6a383847f8317bfc229b7a0babf638881d58ca49f937a575855fc4c538",
+      "bytes": 591
+    },
+    "specs/1006-bpmn-library-adoption/evidence/semantic-ownership/bpmn-discovery.log": {
+      "sha256": "da7318da5a0195dab9df2ed0ab342f8e79f8cd1b3840a0036c613c8a91de930e",
+      "bytes": 45229
+    },
+    "specs/1006-bpmn-library-adoption/evidence/semantic-ownership/bpmn-whole.log.gz": {
+      "sha256": "f2ddc126300004c3b7ae487e47a08b3975fbf035bbb087d041cfac0724c2db26",
+      "bytes": 300
+    },
+    "specs/1006-bpmn-library-adoption/evidence/semantic-ownership/bpmn-whole.trx.gz": {
+      "sha256": "b29d2b2bb4ad290a0cdc01167f8cf6547c484e92e9d48f7fd643a07f400c0fc0",
+      "bytes": 74467
+    },
+    "specs/1006-bpmn-library-adoption/evidence/semantic-ownership/collision-mutant.log.gz": {
+      "sha256": "2e673f554741e5ee7003d09589b0ee4cb235e7ddc5bb134b0318d3b290dd135c",
+      "bytes": 1424
+    },
+    "specs/1006-bpmn-library-adoption/evidence/semantic-ownership/collision-mutant.trx.gz": {
+      "sha256": "75d2e72f6d847cc8ea612d3efb7a34c463d435ea4643c8b11aab55287b92f3e1",
+      "bytes": 1757
+    },
+    "specs/1006-bpmn-library-adoption/evidence/semantic-ownership/deleted-source-mutant.log.gz": {
+      "sha256": "ed5d362087d2e6687647278fb8195633d63e93ce82b72e87cbcbe8d17d24ee0c",
+      "bytes": 1398
+    },
+    "specs/1006-bpmn-library-adoption/evidence/semantic-ownership/deleted-source-mutant.trx.gz": {
+      "sha256": "fd6de7d40cd53265125902ca9ecc82e4543e217413a9a486d912eb883a3e317a",
+      "bytes": 1723
+    },
+    "specs/1006-bpmn-library-adoption/evidence/semantic-ownership/deleted-sources.json": {
+      "sha256": "ad8f39eb8a0127d4ee51c95e23be4952a5ff919c41c7681c565b1d5f93357585",
+      "bytes": 5004
+    },
+    "specs/1006-bpmn-library-adoption/evidence/semantic-ownership/ef-discovery.log": {
+      "sha256": "beb437ccb3edaf6a1d5555c3856659e690e68b7e22cc2d8cd6386c90a2849f08",
+      "bytes": 347315
+    },
+    "specs/1006-bpmn-library-adoption/evidence/semantic-ownership/ef-whole.log.gz": {
+      "sha256": "a37c7d8b88cac8fa00e563242067f04cf15a66b5053ed9a0706f24260f098c35",
+      "bytes": 1839
+    },
+    "specs/1006-bpmn-library-adoption/evidence/semantic-ownership/ef-whole.trx.gz": {
+      "sha256": "f3c13e2a3aee05eb224175c86e1462d417dc38d6d8324f2a9654ccf0df41129f",
+      "bytes": 464533
+    },
+    "specs/1006-bpmn-library-adoption/evidence/semantic-ownership/excluded-architecture.log.gz": {
+      "sha256": "5fbd18863dd9f940b23cea59297f8329c1668b1b6b9af1e565a1baf525313503",
+      "bytes": 7379
+    },
+    "specs/1006-bpmn-library-adoption/evidence/semantic-ownership/excluded-architecture.trx.gz": {
+      "sha256": "8ad8a8f1e34de9e2cca219ef7a0762dbc25731038a3c7d5340f06485bc149214",
+      "bytes": 156346
+    },
+    "specs/1006-bpmn-library-adoption/evidence/semantic-ownership/interchange-discovery.log": {
+      "sha256": "1f98c681de98533bcaf195cf37d7bcd24d88f14fbc2c0d67fea55850d6b51a5c",
+      "bytes": 22195
+    },
+    "specs/1006-bpmn-library-adoption/evidence/semantic-ownership/interchange-whole.log.gz": {
+      "sha256": "eb8690b7c69b61b4f0c52a2763fb6682033b85fa28ba5305200513be225bb277",
+      "bytes": 703
+    },
+    "specs/1006-bpmn-library-adoption/evidence/semantic-ownership/interchange-whole.trx.gz": {
+      "sha256": "2e6de9455b217130ad6cedeafeba16a7c668595924ff66c2a41bc0ec4fd7b66f",
+      "bytes": 30033
+    },
+    "specs/1006-bpmn-library-adoption/evidence/semantic-ownership/locked-server-restore.log.gz": {
+      "sha256": "0e88b5e86285a74a0ae0b461606ffe9e9a472a686db1a01ddd95118a06d82039",
+      "bytes": 2214
+    },
+    "specs/1006-bpmn-library-adoption/evidence/semantic-ownership/maps-build.log.gz": {
+      "sha256": "53b380982f480a111e5253c7989f74df3e82a262ab75f200550c6f5143c96f38",
+      "bytes": 238
+    },
+    "specs/1006-bpmn-library-adoption/evidence/semantic-ownership/maps-check.log.gz": {
+      "sha256": "331099547a70ba6594d7004b2f491da5fa852cfb2cebba8b98e78c4d02acfc47",
+      "bytes": 76
+    },
+    "specs/1006-bpmn-library-adoption/evidence/semantic-ownership/mutations.json": {
+      "sha256": "e2a090d23a3d33fb1fa681821a5664b1a835070b8a74d84ad88f90e1e67670e8",
+      "bytes": 2475
+    },
+    "specs/1006-bpmn-library-adoption/evidence/semantic-ownership/permanent-bpmn-audit-6392471534.json": {
+      "sha256": "8d289f06a29d59c0cd84d02005fa7c7fcf06875b69fff0a632de0b992515b2fd",
+      "bytes": 45312
+    },
+    "specs/1006-bpmn-library-adoption/evidence/semantic-ownership/permanent-bpmn-audit-6392471747.json": {
+      "sha256": "a3ef79de707eded2b45b85ccde7ddb931fdb0a8ea78ebde95b82f89efa655e3a",
+      "bytes": 49162
+    },
+    "specs/1006-bpmn-library-adoption/evidence/semantic-ownership/permanent-bpmn-audit-6392471977.json": {
+      "sha256": "7ec4d59c314e2dc0c95c37b950910ef4a7b23d9249e506cc1fbbc9eda704b5e7",
+      "bytes": 44799
+    },
+    "specs/1006-bpmn-library-adoption/evidence/semantic-ownership/permanent-bpmn-audit-6392472266.json": {
+      "sha256": "79f7b43755b54f699edd7de20b41e658b07e3cd872160cd75f750b20661d0435",
+      "bytes": 20049
+    },
+    "specs/1006-bpmn-library-adoption/evidence/semantic-ownership/public-type-surface.json": {
+      "sha256": "ddf323a0b1e26658e7cc7ededc0f123a498cdcaa6f58fc5fee18553c589e9f03",
+      "bytes": 10510
+    },
+    "specs/1006-bpmn-library-adoption/evidence/semantic-ownership/qualification.json": {
+      "sha256": "94672ff6a86e4bf478688645e18176a9fd05a8b9ce4ce615ead5cc2cd0f7d676",
+      "bytes": 3305
+    },
+    "specs/1006-bpmn-library-adoption/evidence/semantic-ownership/released-neutral-anchors.json": {
+      "sha256": "8c3b12a4e80bbe24dce84706ca8385a3297de8dac6877edd2aa86dc7e9df7af1",
+      "bytes": 133061
+    },
+    "specs/1006-bpmn-library-adoption/evidence/semantic-ownership/restored-guards.log.gz": {
+      "sha256": "633543a2bfdea715b4db90f2f79f6d808b7cbaccf6aeeb69cd5619953389744c",
+      "bytes": 1138
+    },
+    "specs/1006-bpmn-library-adoption/evidence/semantic-ownership/restored-guards.trx.gz": {
+      "sha256": "c3edfb61eaa736115597bb6d0f18b8010ff4b73eccde668fb49f8a3a8f89c7c5",
+      "bytes": 1405
+    },
+    "specs/1006-bpmn-library-adoption/evidence/semantic-ownership/retained-history.json": {
+      "sha256": "b59c0c61614d08970f8c9885daba8c3fc378b20cefe59420a64446a914d16a34",
+      "bytes": 130422
+    }
+  },
+  "previousCommittedEvidenceAndFrozenFilesUnchanged": 521,
+  "frozenAuthoringSha256": "41aa0bb979ea46fc2533b057e3677f408ab54c3411fecfafaa238a2adae38c92",
+  "wholeTests": {
+    "bpmn": 308,
+    "interchange": 130,
+    "runtimeEf": 1710,
+    "architecture": 590
+  },
+  "architectureDiscoverySelectors": 581,
+  "architectureDeferredTheoryRows": 11,
+  "excludedArchitectureAttempt": {
+    "passed": 588,
+    "failed": 2,
+    "skipped": 0,
+    "taskOwnedSnapshotRelocatedOutsideCheckoutFilesByteIdentical": 14759
+  },
+  "lockedReleaseDebugServerRestorePassed": true,
+  "generatedMapsCheckPassed": true,
+  "remainingGates": [
+    "T035finalstatus/T036postdeletionactualhost+Studio/currentwholequalification",
+    "T037fullPR0/6/requiredexactheadchecks/T038protectedmerge/resultingmain",
+    "SeparateorderedADR0063;independent2898/2907/programproductionacceptance"
+  ],
+  "deferred": [
+    "Orleans",
+    "task-runnerfollow-up"
+  ]
+}

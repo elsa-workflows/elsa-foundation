@@ -76,12 +76,15 @@ const exportsMap = {
   }
 };
 // studio-ui ships design tokens; studio-workflows ships a bundled stylesheet.
-if (pkg.name.endsWith("studio-ui")) exportsMap["./tokens.css"] = "./dist/tokens.css";
-if (pkg.name.endsWith("studio-workflows")) exportsMap["./style.css"] = "./dist/style.css";
+if (pkg.name.endsWith("studio-ui")) {
+  exportsMap["./tokens.css"] = "./dist/tokens.css";
+  exportsMap["./styles.css"] = "./dist/styles.css";
+}
+if (pkg.name.endsWith("studio-workflows") || pkg.name.endsWith("studio-code-editor")) exportsMap["./style.css"] = "./dist/style.css";
 pkg.exports = exportsMap;
 
 pkg.files = ["dist"];
-pkg.sideEffects = false;
+pkg.sideEffects = ["**/*.css"];
 
 // Rewrite intra-monorepo workspace deps (workspace:*, workspace:^, workspace:~, workspace:<ver>)
 // to a caret range on the version being published, NOT to that exact version.

@@ -13,6 +13,26 @@ namespace Elsa.Workflows.Runtime.Tests;
 
 public sealed class ValueConversionPlanTests
 {
+    [Theory]
+    [InlineData("{\"Id\":9007199254740993,\"amount\":1234567890.123456789012345}")]
+    [InlineData("[12345678901234567890,1.0,true,null]")]
+    [InlineData("\"{text stays text}\"")]
+    [InlineData("true")]
+    [InlineData("null")]
+    public void Json_targets_preserve_value_kinds_casing_and_exact_numbers(string json)
+    {
+        using var document = JsonDocument.Parse(json);
+        var source = new ValueTypeDescriptor("Object");
+        var target = new ValueTypeDescriptor("System.Text.Json.JsonElement");
+        var plan = Plan(source, target, ValueRepresentation.TypedValue, ValueConversionOperation.CanonicalAny);
+        var result = new RuntimeValueConversionExecutor().Convert(
+            ValueEnvelope.Inline(source, document.RootElement, ValueProtectionPolicy.InstanceInline), plan);
+
+        Assert.Equal(json, result.InlineValue!.Value.GetRawText());
+        Assert.Equal(document.RootElement.ValueKind, result.InlineValue.Value.ValueKind);
+        Assert.Equal(target, result.Type);
+    }
+
     [Fact]
     public void Identity_plan_pins_the_complete_versioned_contract_with_a_stable_fingerprint()
     {

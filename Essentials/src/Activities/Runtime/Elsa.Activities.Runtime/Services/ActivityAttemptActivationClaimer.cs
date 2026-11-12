@@ -294,7 +294,10 @@ internal static class ActivityAttemptActivationClaimer
             timeProvider, workItem, payload, state, sideEffectProfile,
             freshAttemptReason, claimedReplacementReason, triggerDeliveryId,
             requireFreshAttempt, triggerDelivery);
-        await checkpointCommitter.CommitAsync(prepared.Commit, cancellationToken);
+        // Claiming an activation is not semantic acceptance. Keep the exact source/payload until its
+        // returned decision commits. Background admission uses PrepareBackgroundInvokeClaim directly,
+        // so its accepted work and source consumption remain in the existing atomic admission decision.
+        await checkpointCommitter.CommitAsync(prepared.Commit with { RetainSchedulerWork = true }, cancellationToken);
         return prepared.Claim;
     }
 

@@ -1,0 +1,125 @@
+{
+  "schemaVersion": 1,
+  "task": "T049 compact saved-source contracts/read boundary only; task remains open",
+  "sourceParentCommit": "3bd2920c027e5061222ab27539dea8fb7b2b6596",
+  "filesSha256": {
+    "Essentials/src/Workflows/Runtime/Core/Contracts/IStimulusDeliveryStore.cs": "7f27e78c01dad56dd109a0274b89b50becf0e3d9faa25ecac219ee17dedc9adc",
+    "Essentials/src/Workflows/Runtime/Core/Models/PostCommitDeliveryContext.cs": "ce39a611af99932331cbcbbed6ac772595851ccde5fc3a0e75087c6bf296efd6",
+    "Essentials/src/Workflows/Runtime/Core/Models/RuntimePostCommitOutbox.cs": "8c7faef80ca344db8daabe2555e574d9a4d6b7e8dd81be9ef27c0782fa2e734b",
+    "Essentials/src/Workflows/Runtime/Core/Models/WorkflowExecutableStimulusDeliveryAuthority.cs": "2256acfc3bb3cf1f25055fc1cd2a55ffcd470ffa45aa3ce3f2d904f0467689e1",
+    "Essentials/src/Workflows/Runtime/Core/Models/WorkflowExecutionStartDispatch.cs": "3595641101a2db9758651392d3ce061064afee825dfdb51743737841bb078e30",
+    "Essentials/src/Workflows/Runtime/Core/PublicAPI.Unshipped.txt": "7617980f65210609040faf753c2b32e402f030ec0760c63232d55471839bfc3f",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md": "68ed9919e8be55773f6252131c484ccf48b3d44bc4cb6192463c18c13c26c2db",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Checkpoints/InMemoryRuntimeCheckpointCommitStore.cs": "778388ffc7bd2ffc72c469c7ea4492df3d4c22e98ea002f91c0a5b0522103b6b",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Executions/WorkflowStartDispatcher.cs": "b0411d713d70282b6b490a9b65c506e00e810da47a1a8301670ac875ade4095a",
+    "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfRuntimePostCommitOutboxStore.cs": "ee513358a6e96b5cb01e171e9552df7e994703ecfee1e0f4c3f07045f654b02e",
+    "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/StimulusDeliveryStoreTests.cs": "4c1c3f6d354f4810f7648b375c91ea255837c291cca1632e0c1fabd1cc272bb2",
+    "Essentials/tests/Workflows/Runtime/Tests/RuntimeWorkflowExecutionStartDispatchTests.cs": "a003fbecc309d38095aed3fcc1464241da3202d3c6fffa02498040469a9889e2",
+    "Essentials/tests/Workflows/Runtime/Tests/StimulusDeliveryStartAuthorityTests.cs": "99dfb1569d4027859c0ed09719bb5e19a7b3f57ba053e8e717454375ad551396",
+    "specs/1006-bpmn-library-adoption/contracts/broadcast-recipient-snapshot.md": "4f6c2ba41ea8e43f3f46f080f8f5550fda68701be6c4c26d8a33d427ae901918"
+  },
+  "checks": [
+    {
+      "project": "Workflow Runtime",
+      "passed": 2842,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "project": "Runtime EF",
+      "passed": 1130,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "focusedCoreStartCases": 38,
+      "newCoreStartCases": 29,
+      "newProviderReadCases": 30,
+      "failed": 0
+    },
+    {
+      "coreApiAdditions": 14,
+      "coreApiRemovals": 0,
+      "originalAuthorityConstructorAndWirePreserved": true
+    },
+    {
+      "frozenAuthoringFingerprintSha256": "41aa0bb979ea46fc2533b057e3677f408ab54c3411fecfafaa238a2adae38c92",
+      "unchanged": true
+    }
+  ],
+  "mutations": [
+    {
+      "name": "allow-mixed-stimulus-dependency-authority",
+      "exitCode": 1,
+      "summary": "Failed!  - Failed:     1, Passed:     2, Skipped:     0, Total:     3, Duration: 14 ms - Elsa.Workflows.Runtime.Tests.dll (net10.0)",
+      "compileError": false
+    },
+    {
+      "name": "allow-live-selection-on-saved-request",
+      "exitCode": 1,
+      "summary": "Failed!  - Failed:     1, Passed:     1, Skipped:     0, Total:     2, Duration: 17 ms - Elsa.Workflows.Runtime.Tests.dll (net10.0)",
+      "compileError": false
+    },
+    {
+      "name": "bypass-preduplicate-disabled-admission",
+      "exitCode": 1,
+      "summary": "Failed!  - Failed:     2, Passed:     0, Skipped:     0, Total:     2, Duration: 26 ms - Elsa.Workflows.Runtime.Tests.dll (net10.0)",
+      "compileError": false
+    },
+    {
+      "name": "ignore-current-source-expiry",
+      "exitCode": 1,
+      "summary": "Failed!  - Failed:     2, Passed:     2, Skipped:     0, Total:     4, Duration: 623 ms - Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.dll (net10.0)",
+      "compileError": false
+    },
+    {
+      "name": "erase-owner-fence-at-both-source-boundaries",
+      "exitCode": 1,
+      "summary": "Failed!  - Failed:     4, Passed:     0, Skipped:     0, Total:     4, Duration: 593 ms - Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.dll (net10.0)",
+      "compileError": false
+    },
+    {
+      "name": "omit-presented-intent-digest",
+      "exitCode": 1,
+      "summary": "Failed!  - Failed:     2, Passed:    12, Skipped:     0, Total:    14, Duration: 759 ms - Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.dll (net10.0)",
+      "compileError": false
+    },
+    {
+      "name": "omit-current-publisher-scope",
+      "exitCode": 1,
+      "summary": "Failed!  - Failed:     2, Passed:    12, Skipped:     0, Total:    14, Duration: 713 ms - Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.dll (net10.0)",
+      "compileError": false
+    },
+    {
+      "name": "omit-EF-source-recheck-after-publisher-read",
+      "exitCode": 1,
+      "summary": "Failed!  - Failed:     1, Passed:     0, Skipped:     0, Total:     1, Duration: 607 ms - Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.dll (net10.0)",
+      "compileError": false
+    },
+    {
+      "name": "emit-new-authority-member-in-legacy-wire",
+      "exitCode": 1,
+      "summary": "Failed!  - Failed:     1, Passed:     0, Skipped:     0, Total:     1, Duration: 14 ms - Elsa.Workflows.Runtime.Tests.dll (net10.0)",
+      "compileError": false
+    },
+    {
+      "name": "allow-uncaptured-saved-binding",
+      "exitCode": 1,
+      "summary": "Failed!  - Failed:     2, Passed:    12, Skipped:     0, Total:    14, Duration: 731 ms - Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.dll (net10.0)",
+      "compileError": false
+    }
+  ],
+  "reviews": {
+    "correctness": "clean; final source hashes, mutation logs and whole/focused results verified",
+    "standards": "clean; source/API/catalog/receipt verified",
+    "acceptance": "clean for finite provenance/read scope; starts remain disabled",
+    "fullPrRounds": 0
+  },
+  "limits": [
+    "All new StimulusDelivery start requests are deliberately refused before keyed-duplicate lookup. This increment does not admit any saved start.",
+    "The compact carrier and returned PostCommitDeliveryContext are provenance data, not independent authorization tokens.",
+    "Constructed provider cohorts establish current physical source/claim validation, not authoritative publication selection, captured-null legacy eligibility, executable leases/GC or source/execution/dedup retention.",
+    "T049 admission/retention integration remains open before T050 publisher activation and T051 actual host/fresh-provider recovery.",
+    "Historical captures/host/Studio receipts remain source-bound and unchanged. Full-PR review, remaining story/deletion/guards/final host/Studio/required checks and resulting-main verification remain open."
+  ]
+}

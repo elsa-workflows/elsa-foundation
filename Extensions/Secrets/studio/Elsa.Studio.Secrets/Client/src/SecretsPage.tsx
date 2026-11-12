@@ -1,33 +1,37 @@
 import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { AlertCircle, CheckCircle2, KeyRound, Plus, RefreshCw, X } from "lucide-react";
-import type { StudioDialogApi, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
-import { OverflowMenu, StudioButton, StudioSearchInput, type OverflowMenuItem } from "@elsa-workflows/studio-ui";
-import { createSecret, deleteSecret, getSecretDescriptors, listSecrets, revokeSecret, rotateSecret, testSecret, updateSecret } from "./secretsApi";
-import type { CreateSecretRequest, RotateSecretRequest, SecretDescriptorsResponse, SecretMetadata, SecretStatus, UpdateSecretRequest } from "./secretTypes";
+import { isStudioWorkspaceTabClick, openStudioWorkspaceTab, useStudioRouteLocation, useStudioWorkspaceTab, type StudioDialogApi, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import { OverflowMenu, StudioButton, StudioSearchInput, type OverflowMenuItem , StudioPage, StudioPageHeader, StudioCollectionFooter, StudioCollectionToolbar, StudioTableContainer, StudioResultState} from "@elsa-workflows/studio-ui";
+import { deleteSecret, getSecretDescriptors, listSecrets, revokeSecret, rotateSecret, testSecret } from "./secretsApi";
+import type { RotateSecretRequest, SecretDescriptorsResponse, SecretMetadata, SecretStatus } from "./secretTypes";
 import { CopySecretNameButton } from "./CopySecretNameButton";
-import { SecretDetail } from "./SecretDetail";
-import { CreateSecretDialog, RotateSecretDialog } from "./SecretDialogs";
+import { RotateSecretDialog } from "./SecretDialogs";
+
+import { readSecretBrowse, secretPath } from "./secretNavigation";
 
 const secretStatuses: SecretStatus[] = ["Active", "Retired", "Expired", "Revoked", "Deleted"];
 const MAX_SECRETS_PER_LOAD = 100;
 
-export function SecretsPage({ context, dialogs }: { context: StudioEndpointContext; dialogs: StudioDialogApi }) {
-  const [search, setSearch] = useState("");
-  const [completedSearch, setCompletedSearch] = useState("");
+export function SecretsPage({ context, dialogs, navigate }: { context: StudioEndpointContext; dialogs: StudioDialogApi; navigate?(path: string): void }) {
+  const location = useStudioRouteLocation();
+  const tab = useStudioWorkspaceTab();
+  const initialBrowse = readSecretBrowse(location.search);
+  const [search, setSearch] = useState(initialBrowse.query);
+  const [completedSearch, setCompletedSearch] = useState(initialBrowse.search);
   const [secrets, setSecrets] = useState<SecretMetadata[]>([]);
   const [totalCount, setTotalCount] = useState(0);
   const [descriptors, setDescriptors] = useState<SecretDescriptorsResponse | null>(null);
-  const [dialog, setDialog] = useState<{ kind: "create" } | { kind: "rotate" | "edit"; name: string } | null>(null);
-  const [typeFilter, setTypeFilter] = useState("");
-  const [storeFilter, setStoreFilter] = useState("");
-  const [scopeFilter, setScopeFilter] = useState("");
-  const [statusFilter, setStatusFilter] = useState("");
+  const [dialog, setDialog] = useState<{ kind: "rotate"; name: string } | null>(null);
+  const [typeFilter, setTypeFilter] = useState(initialBrowse.type);
+  const [storeFilter, setStoreFilter] = useState(initialBrowse.store);
+  const [scopeFilter, setScopeFilter] = useState(initialBrowse.scope);
+  const [statusFilter, setStatusFilter] = useState(initialBrowse.status);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [descriptorsLoading, setDescriptorsLoading] = useState(true);
   const [descriptorError, setDescriptorError] = useState(false);
   const [busyName, setBusyName] = useState<string | null>(null);
-  const [status, setStatus] = useState<string | null>(null);
+  const [status, setStatus] = useState<string | null>(() => new URLSearchParams(location.search).get("notice") === "created" ? "Secret created." : new URLSearchParams(location.search).get("notice") === "updated" ? "Secret metadata updated." : null);
   const [error, setError] = useState<string | null>(null);
   const descriptorRequestSequence = useRef(0);
   const secretsRequestSequence = useRef(0);
@@ -50,7 +54,7 @@ export function SecretsPage({ context, dialogs }: { context: StudioEndpointConte
       return true;
     });
   }, [scopeFilter, secrets, statusFilter, storeFilter, typeFilter]);
-  const dialogSecret = dialog?.kind === "edit" || dialog?.kind === "rotate"
+  const dialogSecret = dialog?.kind === "rotate"
     ? secrets.find(secret => secret.name === dialog.name) ?? null
     : null;
   const hasLocalFilters = Boolean(typeFilter || storeFilter || scopeFilter || statusFilter);
@@ -81,17 +85,13 @@ export function SecretsPage({ context, dialogs }: { context: StudioEndpointConte
       setSecrets(list.items);
       setTotalCount(list.totalCount);
       setCompletedSearch(searchTerm);
-      setDialog(current => {
-        if (current?.kind === "edit" && !list.items.some(secret => secret.name === current.name)) return null;
-        if (current?.kind === "rotate" && !list.items.some(secret => secret.name === current.name)) return null;
-        return current;
-      });
+      setDialog(current => current && !list.items.some(secret => secret.name === current.name) ? null : current);
     } catch {
       if (requestSequence !== secretsRequestSequence.current) return;
       setLoadError(true);
       setError(null);
       setSecrets([]);
-      setDialog(current => current?.kind === "create" ? current : null);
+      setDialog(null);
     } finally {
       if (requestSequence === secretsRequestSequence.current) setLoading(false);
     }
@@ -117,10 +117,12 @@ export function SecretsPage({ context, dialogs }: { context: StudioEndpointConte
     await Promise.all([loadSecrets(searchTerm), loadDescriptors()]);
   }, [loadDescriptors, loadSecrets]);
 
+  const appliedSearch = useRef(initialBrowse.search);
+  appliedSearch.current = completedSearch;
   useEffect(() => {
     const descriptorSequence = descriptorRequestSequence;
     const secretsSequence = secretsRequestSequence;
-    void load("");
+    void load(appliedSearch.current);
     return () => {
       descriptorSequence.current++;
       secretsSequence.current++;
@@ -131,25 +133,6 @@ export function SecretsPage({ context, dialogs }: { context: StudioEndpointConte
   async function refreshWithStatus(message: string) {
     await load(completedSearch);
     setStatus(message);
-  }
-
-  async function saveMetadata(name: string, request: UpdateSecretRequest) {
-    setBusyName(name);
-    setError(null);
-    setStatus(null);
-    try {
-      await updateSecret(context, name, request);
-      await refreshWithStatus("Secret metadata updated.");
-    } finally {
-      setBusyName(null);
-    }
-  }
-
-  async function saveCreatedSecret(request: CreateSecretRequest) {
-    setError(null);
-    setStatus(null);
-    await createSecret(context, request);
-    await refreshWithStatus("Secret created.");
   }
 
   async function saveRotation(name: string, request: RotateSecretRequest) {
@@ -202,7 +185,7 @@ export function SecretsPage({ context, dialogs }: { context: StudioEndpointConte
     setStatus(null);
     try {
       await deleteSecret(context, secret.name);
-      setDialog(current => current?.kind === "edit" && current.name === secret.name ? null : current);
+
       await refreshWithStatus("Secret deleted.");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Secret could not be deleted.");
@@ -224,28 +207,37 @@ export function SecretsPage({ context, dialogs }: { context: StudioEndpointConte
     void load("");
   };
 
-  return (
-    <main className="secrets-shell">
-      <header className="secrets-header">
-        <div className="secrets-header-copy">
-          <span className="secrets-kicker">Secret management</span>
-          <h2><KeyRound size={18} aria-hidden /> Secrets</h2>
-          <p>Manage secret metadata; existing values stay masked.</p>
-        </div>
-        <div className="secrets-header-meta">
-          {!loading && !loadError ? (
-            <p className="secrets-count" aria-live="polite">
-              {filteredSecrets.length} shown · {secrets.length} loaded · {totalCount} {totalCount === 1 ? "result" : "results"}{completedSearch.trim() ? ` for “${completedSearch}”` : ""}
-            </p>
-          ) : null}
-          <div className="secrets-header-actions" role="group" aria-label="Secret page actions">
-            <StudioButton variant="primary" size="md" aria-label="Create secret" onClick={() => setDialog({ kind: "create" })} disabled={!descriptors}><Plus size={15} aria-hidden /> Create secret</StudioButton>
-            <StudioButton variant="default" size="md" onClick={() => void load(completedSearch)} disabled={loading || descriptorsLoading} aria-label="Refresh secrets"><RefreshCw size={15} aria-hidden /> Refresh</StudioButton>
-          </div>
-        </div>
-      </header>
+  const browse = { search: completedSearch, query: search, type: typeFilter, store: storeFilter, scope: scopeFilter, status: statusFilter };
+  const openEditor = (name?: string) => {
+    const path = secretPath(browse, name ?? "", undefined, undefined, location.href);
+    if (tab?.isActive() !== false) window.history.replaceState(window.history.state, "", secretPath(browse, undefined, undefined, name, location.href));
+    if (navigate) navigate(path); else window.location.assign(path);
+  };
+  const focused = useRef<string | null>(null);
+  const collectionRoot = useRef<HTMLElement>(null);
+  const focusName = new URLSearchParams(location.search).get("focusSecret");
+  const focusCreate = new URLSearchParams(location.search).get("focusCreate") === "1";
+  const focusKey = focusName ? `secret:${focusName}` : focusCreate ? "create" : null;
+  useEffect(() => {
+    if (loading || !focusKey || focused.current === focusKey || tab?.isActive() === false || (focusCreate && descriptorsLoading)) return;
+    const button = focusCreate ? collectionRoot.current?.closest(".secrets-shell")?.querySelector<HTMLButtonElement>('button[aria-label="Create secret"]') : Array.from(collectionRoot.current?.querySelectorAll<HTMLButtonElement>("[data-secret-edit]") ?? []).find(element => element.dataset.secretEdit === focusName);
+    if (button) {
+      // Row actions sit in the last column; on narrow tables keep the row's name in view instead of scrolling to them.
+      const row = focusCreate ? null : button.closest("tr");
+      button.focus(row ? { preventScroll: true } : undefined);
+      row?.scrollIntoView?.({ block: "nearest", inline: "start" });
+      focused.current = focusKey;
+    }
+  }, [loading, descriptorsLoading, focusName, focusCreate, focusKey, filteredSecrets, tab]);
 
-      <section className="secrets-toolbar" aria-label="Secret filters">
+  return (
+    <StudioPage className="secrets-shell">
+      <StudioPageHeader title="Secrets" headingLevel={2} description="Manage secret metadata; existing values stay masked." actions={          <div className="studio-page-actions" role="group" aria-label="Secret page actions">
+            <StudioButton variant="primary" size="md" aria-label="Create secret" onClick={() => openEditor()} disabled={!descriptors}><Plus size={15} aria-hidden /> Create secret</StudioButton>
+            <StudioButton variant="default" size="md" onClick={() => void load(completedSearch)} disabled={loading || descriptorsLoading} aria-label="Refresh secrets"><RefreshCw size={15} aria-hidden /> Refresh</StudioButton>
+          </div>} />
+
+      <StudioCollectionToolbar className="secrets-toolbar" aria-label="Secret filters">
         <form className="secrets-search-wrap" role="search" aria-label="Secrets" onSubmit={event => { event.preventDefault(); void load(search); }}>
           <StudioSearchInput className="secrets-search-control" aria-label="Search secrets" value={search} onChange={event => setSearch(event.target.value)} placeholder="Search secrets" />
           <StudioButton type="submit" className="secrets-search-action" size="md">Search</StudioButton>
@@ -261,9 +253,9 @@ export function SecretsPage({ context, dialogs }: { context: StudioEndpointConte
           description={`The list loads up to ${MAX_SECRETS_PER_LOAD} secrets, so other scopes may exist.`}
         />
         <FilterSelect label="Status" value={statusFilter} onChange={setStatusFilter} options={secretStatuses.map(value => ({ value, label: value }))} />
-      </section>
+      </StudioCollectionToolbar>
 
-      {descriptorError && dialog?.kind !== "create" ? (
+      {descriptorError ? (
         <p className="secrets-field-error" role="alert">
           Secret options could not be refreshed.{descriptors ? " Previously loaded options remain available." : " Create a secret after retrying."}
           {" "}<button type="button" onClick={() => void loadDescriptors()} disabled={descriptorsLoading}>Retry secret options</button>
@@ -277,9 +269,9 @@ export function SecretsPage({ context, dialogs }: { context: StudioEndpointConte
         </p>
       ) : null}
 
-      <section className="secrets-layout">
-        <div className="secrets-table-shell">
-          <table className="secrets-table" aria-label="Secrets">
+      <section ref={collectionRoot} className="secrets-layout">
+        <StudioTableContainer>
+          <table className="studio-table secrets-table" aria-label="Secrets">
             <thead>
               <tr>
                 <th>Name</th>
@@ -297,30 +289,19 @@ export function SecretsPage({ context, dialogs }: { context: StudioEndpointConte
               ) : null}
               {!loading && loadError ? (
                 <tr><td colSpan={7} className="secrets-empty">
-                  <div className="secrets-empty-state" role="alert">
-                    <span className="secrets-empty-icon" aria-hidden><AlertCircle size={20} /></span>
-                    <strong>Secrets could not be loaded.</strong>
-                    <p>Check your connection and try again.</p>
-                    <button type="button" onClick={() => void load(attemptedSearch.current)}><RefreshCw size={14} aria-hidden /> Retry</button>
-                  </div>
+                  <StudioResultState headingLevel={3} tone="danger" title="Secrets could not be loaded." description="Check your connection and try again." icon={<AlertCircle size={20} />} actions={<StudioButton onClick={() => void load(attemptedSearch.current)}><RefreshCw size={14} aria-hidden /> Retry</StudioButton>} />
                 </td></tr>
               ) : null}
               {!loading && !loadError && filteredSecrets.length === 0 ? (
                 <tr><td colSpan={7} className="secrets-empty">
-                  <div className="secrets-empty-state" role="status">
-                    <span className="secrets-empty-icon" aria-hidden><KeyRound size={20} /></span>
-                    <strong>{emptyTitle}</strong>
-                    <p>{emptyDescription}</p>
-                    {hasActiveFilters ? <button type="button" onClick={clearFilters}>Clear filters</button>
-                      : <button type="button" className="secrets-primary" onClick={() => setDialog({ kind: "create" })} disabled={!descriptors}><Plus size={14} aria-hidden /> Create secret</button>}
-                  </div>
+                  <StudioResultState headingLevel={3} title={emptyTitle} description={emptyDescription} icon={<KeyRound size={20} />} actions={hasActiveFilters ? <StudioButton onClick={clearFilters}>Clear filters</StudioButton> : <StudioButton variant="primary" onClick={() => openEditor()} disabled={!descriptors}><Plus size={14} aria-hidden /> Create secret</StudioButton>} />
                 </td></tr>
               ) : null}
               {!loading && filteredSecrets.map(secret => (
                 <tr key={secret.name}>
                   <td className="secrets-name-cell">
                     <div className="secrets-name-heading">
-                      <button type="button" className="secrets-row-link" data-secret-open={secret.name} onClick={() => setDialog({ kind: "edit", name: secret.name })}><strong>{secret.displayName || secret.name}</strong></button>
+                      <a className="secrets-row-link" data-secret-open={secret.name} href={secretPath(browse, secret.name, undefined, undefined, location.href)} onClick={event => { const path = secretPath(browse, secret.name, undefined, undefined, location.href); if (isStudioWorkspaceTabClick(event) && openStudioWorkspaceTab(path)) { event.preventDefault(); return; } if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || !navigate) return; event.preventDefault(); openEditor(secret.name); }}><strong>{secret.displayName || secret.name}</strong></a>
                       {!secret.displayName || secret.displayName === secret.name ? <CopySecretNameButton name={secret.name} /> : null}
                     </div>
                     {secret.displayName && secret.displayName !== secret.name ? <div className="secrets-technical-name"><code>{secret.name}</code><CopySecretNameButton name={secret.name} /></div> : null}
@@ -332,7 +313,7 @@ export function SecretsPage({ context, dialogs }: { context: StudioEndpointConte
                   <td>{formatDate(secret.updatedAt ?? secret.createdAt)}</td>
                   <td>
                     <div className="secrets-row-actions">
-                      <StudioButton variant="default" size="sm" className="secrets-edit-action" data-secret-edit={secret.name} aria-label={`Edit ${secret.name}`} title={`Edit ${secret.displayName || secret.name}`} onClick={() => setDialog({ kind: "edit", name: secret.name })}>Edit</StudioButton>
+                      <StudioButton variant="default" size="sm" className="secrets-edit-action" data-secret-edit={secret.name} aria-label={`Edit ${secret.name}`} title={`Edit ${secret.displayName || secret.name}`} onClick={() => openEditor(secret.name)}>Edit</StudioButton>
                       <OverflowMenu
                         ariaLabel={`Actions for ${secret.name}`}
                         items={[
@@ -348,28 +329,16 @@ export function SecretsPage({ context, dialogs }: { context: StudioEndpointConte
               ))}
             </tbody>
           </table>
-        </div>
+        </StudioTableContainer>
 
-        {dialog?.kind === "edit" && dialogSecret ? <SecretDetail
-          key={dialogSecret.name}
-          secret={dialogSecret}
-          descriptors={descriptors}
-          busy={busyName === dialogSecret.name}
-          onSave={saveMetadata}
-          onClose={() => setDialog(null)}
-        /> : null}
       </section>
 
-      {dialog?.kind === "create" && descriptors ? (
-        <CreateSecretDialog
-          descriptors={descriptors}
-          scopeCatalogLoading={descriptorsLoading}
-          scopeCatalogError={descriptorError}
-          onRetryScopeCatalog={() => void loadDescriptors()}
-          onCancel={() => setDialog(null)}
-          onSave={saveCreatedSecret}
-        />
-      ) : null}
+      <StudioCollectionFooter>{!loading && !loadError ? (
+            <p className="secrets-count" aria-live="polite">
+              {filteredSecrets.length} shown · {secrets.length} loaded · {totalCount} {totalCount === 1 ? "result" : "results"}{completedSearch.trim() ? ` for “${completedSearch}”` : ""}
+            </p>
+          ) : null}</StudioCollectionFooter>
+
       {dialog?.kind === "rotate" && dialogSecret ? (
         <RotateSecretDialog
           key={dialogSecret.id}
@@ -379,7 +348,7 @@ export function SecretsPage({ context, dialogs }: { context: StudioEndpointConte
           onSave={request => saveRotation(dialogSecret.name, request)}
         />
       ) : null}
-    </main>
+    </StudioPage>
   );
 }
 

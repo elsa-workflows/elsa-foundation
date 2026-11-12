@@ -31,7 +31,7 @@ namespace Elsa.Studio.Tests.ExtensionBuilder;
 /// module manifest, no feature key in <c>shells.json</c> — and enabling the <c>ExtensionBuilderStudio</c> feature is
 /// what brings the module and its bridge back, with the host's authorization gate intact on the shell-mapped routes.
 /// </summary>
-public sealed class ExtensionBuilderOptionalityTests : IAsyncDisposable
+public sealed class ExtensionBuilderOptionalityTests : IAsyncLifetime
 {
     private const string FeatureName = "ExtensionBuilderStudio";
     private const string ModuleId = "Elsa.Studio.ExtensionBuilder";
@@ -233,7 +233,9 @@ public sealed class ExtensionBuilderOptionalityTests : IAsyncDisposable
         return app.GetTestClient();
     }
 
-    public async ValueTask DisposeAsync()
+    public Task InitializeAsync() => Task.CompletedTask;
+
+    public async Task DisposeAsync()
     {
         if (_app is not null)
             await _app.DisposeAsync();

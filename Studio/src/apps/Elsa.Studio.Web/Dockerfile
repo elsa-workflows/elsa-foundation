@@ -24,13 +24,27 @@ ARG STUDIO_VERSION=1.0.0
 COPY Studio/Directory.Build.props Studio/Directory.Packages.props Studio/NuGet.config Studio/icon.png ./Studio/
 COPY Studio/Elsa.Studio.slnx ./Studio/
 
+# Hosting and its optional administration package use these lightweight Foundation libraries.
+# Their shared build/version inputs and compile-only naming analyzer are required in this context too.
+COPY Directory.Build.props Directory.Packages.props VersionLines.props PackageVersioning.props PackageRanges.targets .editorconfig ./
+COPY Essentials/build/Analyzers/ ./Essentials/build/Analyzers/
+COPY Essentials/src/Modularity/Core/ ./Essentials/src/Modularity/Core/
+COPY Essentials/src/Modularity/Nuplane/ ./Essentials/src/Modularity/Nuplane/
+COPY Essentials/src/Studio/Preferences/Core/ ./Essentials/src/Studio/Preferences/Core/
+COPY Essentials/src/Events/ ./Essentials/src/Events/
+COPY Essentials/src/Pipelines/Core/ ./Essentials/src/Pipelines/Core/
+COPY Essentials/src/Primitives/Primitives/ ./Essentials/src/Primitives/Primitives/
+COPY Essentials/src/Tasks/Core/ ./Essentials/src/Tasks/Core/
+
 # Copy the Studio host and shared modules.
 COPY Studio/src/ ./Studio/src/
 
 # Copy only the optional Studio modules consumed by the host, not every Foundation extension.
+COPY Extensions/Agent/studio/ ./Extensions/Agent/studio/
 COPY Extensions/Attention/studio/ ./Extensions/Attention/studio/
 COPY Extensions/ConsoleStream/studio/ ./Extensions/ConsoleStream/studio/
 COPY Extensions/Connections/studio/ ./Extensions/Connections/studio/
+COPY Extensions/Decisions/studio/ ./Extensions/Decisions/studio/
 COPY Extensions/Diagnostics.OpenTelemetry/studio/ ./Extensions/Diagnostics.OpenTelemetry/studio/
 COPY Extensions/Diagnostics.StructuredLogs/studio/ ./Extensions/Diagnostics.StructuredLogs/studio/
 COPY Extensions/Etl/studio/ ./Extensions/Etl/studio/
@@ -39,13 +53,14 @@ COPY Extensions/ExpressionEditors.Liquid/studio/ ./Extensions/ExpressionEditors.
 COPY Extensions/ExtensionBuilder/studio/ ./Extensions/ExtensionBuilder/studio/
 COPY Extensions/FeatureManagement/studio/ ./Extensions/FeatureManagement/studio/
 COPY Extensions/Secrets/studio/ ./Extensions/Secrets/studio/
+COPY Extensions/UserTasks/studio/ ./Extensions/UserTasks/studio/
 COPY Extensions/Weaver/studio/ ./Extensions/Weaver/studio/
 COPY Extensions/Workflows.Dashboard/studio/ ./Extensions/Workflows.Dashboard/studio/
 
 # Fail the image build clearly if the frontend build was skipped. The generated
 # wwwroot files are intentionally ignored by Git, so this protects both CI and
 # local Docker builds from publishing an assetless image that returns 404 at `/`.
-RUN test -f Studio/src/apps/Elsa.Studio.Web/wwwroot/studio/index.html
+RUN test -f Studio/src/essentials/Elsa.Studio.Hosting/wwwroot/studio/index.html
 
 # Restore and publish only the web host; project references are pulled in transitively.
 #

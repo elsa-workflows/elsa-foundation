@@ -1,0 +1,165 @@
+{
+  "schemaVersion": 1,
+  "task": "Current T049/T050/T051 broadcast delivery/retention reconciliation; broader adoption remains open",
+  "sourceParentCommit": "e57db5a315f7007f1d683d8b4dcb0ffc04fb1cc4",
+  "filesSha256": {
+    "Essentials/tests/Workflows/Runtime/Tests/StimulusDeliveryOutboxModelTests.cs": "1191e76349d12df957a7d497e0d3439b4f641c26110e23989eb2a6608f386eb1",
+    "Essentials/tests/Workflows/Runtime/Tests/WorkflowDispatchRedriveTests.cs": "4fca84017557f823b9132c840380ce04c8010068901436998ba5adb7690b9df9",
+    "Essentials/src/Workflows/Runtime/Core/Models/RuntimePostCommitOutbox.cs": "a5aa243e85d115c0ad61364fd21c76c031cd17b3e1b673b953c2a9cb50cc06df",
+    "Essentials/src/Workflows/Runtime/Core/Models/WorkflowDispatchRedrive.cs": "88abf6842d572752f52c9586e8cec697bbca303e51bb348548230f8714c8388e",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Checkpoints/RuntimePostCommitOutboxProcessor.cs": "b00159a39d5712f7e00a1119ea6311e6b180f81fe95468de1b698638e359139b",
+    "Essentials/src/Workflows/Runtime/Api/Endpoints/Dispatches/Redrive/Endpoint.cs": "609a8bdec3e72dbf4b0e5f3d038c5690c2ecc671a5d30e5aa5781d01c7cbeaa2",
+    "specs/1006-bpmn-library-adoption/tasks.md": "1f09a10ae515ee737910e5a8aba98114c63dfe69d5e580a31218280b549f7c56",
+    "specs/1006-bpmn-library-adoption/plan.md": "f32e94539d6163426afe07a2f909b7a6984681da1d35a93ac73183423e30a65c",
+    "specs/1006-bpmn-library-adoption/contracts/broadcast-recipient-snapshot.md": "7ececda6f59b44f3edae0c03de8a7a141cc89b58099839c404dc3c3c9dc3d287",
+    "specs/1006-bpmn-library-adoption/evidence/broadcast-delivery-reconciliation.md": "716f2384c1d7a771155a8fe4f78b7d683252276e1eb0a4dba14e8325af4682c5"
+  },
+  "checks": [
+    {
+      "name": "whole Runtime",
+      "passed": 3043,
+      "failed": 0,
+      "skipped": 0,
+      "logSha256": "2b93104e1ab1fbcfed23ba3bf4f51dfd7563c44d598c01711b66e1dd98a72c05"
+    },
+    {
+      "name": "whole Runtime EF, prescribed normal outputs",
+      "passed": 1649,
+      "failed": 0,
+      "skipped": 0,
+      "logSha256": "42ea6005989cab0eb46ad414a089bf79b24bc92999c632fb835614ffd748d37b"
+    },
+    {
+      "name": "whole Activities Runtime",
+      "passed": 720,
+      "failed": 0,
+      "skipped": 0,
+      "logSha256": "834bc362f55dbcab04b6625efd7d244eaeb9feaa86ef98bc155401630e7ee243"
+    },
+    {
+      "name": "focused model/redrive/durable-source contracts",
+      "passed": 67,
+      "failed": 0,
+      "skipped": 0,
+      "logSha256": "d1eec467fedf5261e58320bec725aca902e386a33d035dce1fa651937b427d5a"
+    }
+  ],
+  "affectedWholeProjectTotal": 5412,
+  "mutations": {
+    "sourceRestored": true,
+    "mutants": [
+      {
+        "name": "drop-redrive-cohort",
+        "expectedTestFailures": 2,
+        "actualTestFailures": 2,
+        "compileFailure": false,
+        "logSha256": "95fa0a54e17f4896380dfec2cd561d986ef1693af2ee158f92ec074170041c81"
+      },
+      {
+        "name": "allow-wrong-intent-redrive",
+        "expectedTestFailures": 2,
+        "actualTestFailures": 2,
+        "compileFailure": false,
+        "logSha256": "916f66c834c10d9c5fbecbd62bc46fb2f949ea19fc52747405b10f55786db4d5"
+      }
+    ],
+    "sourceSha256": {
+      "Essentials/src/Workflows/Runtime/Core/Models/RuntimePostCommitOutbox.cs": "a5aa243e85d115c0ad61364fd21c76c031cd17b3e1b673b953c2a9cb50cc06df",
+      "Essentials/src/Workflows/Runtime/Core/Models/WorkflowDispatchRedrive.cs": "88abf6842d572752f52c9586e8cec697bbca303e51bb348548230f8714c8388e"
+    }
+  },
+  "initialFailure": {
+    "name": "EF whole project with isolated /tmp artifact layout",
+    "passed": 1633,
+    "failed": 16,
+    "skipped": 0,
+    "cause": "13 legacy checkpoint cases and three CLI/OIDC host cases locate checkout fixtures by walking build-output ancestors. The nondefault external artifact directory has no checkout ancestor.",
+    "resolution": "Rerun the same whole project with its prescribed normal checkout output layout: 1649/0/0. No production or fixture source change, filtered skip or deletion.",
+    "logSha256": "d848197479ce6f7d58db61154bcbc0400cb7af618f5634a4c5b57a0f09d6dbb4"
+  },
+  "redriveApplicability": {
+    "supportedPublicOperation": "runtime/workflows/dispatches/{dispatchId}/redrive",
+    "supportedScope": "Eligible detached StartChild failures with exact deterministic IDs, dead letter and retry-policy conditions.",
+    "namedEventIntentExplicitlyRefused": true,
+    "namedEventHostRedriveApi": "not supported; not invented or claimed",
+    "sharedModelPreservation": [
+      "empty/populated snapshot and constructed retention-witness marker data; construction grants no admission authority",
+      "protocol/source scope and immutable intent/outbox identity",
+      "advanced fence, stale old completion refused",
+      "new claim/completion retains cohort"
+    ],
+    "modelControlsAreNotHostProof": true
+  },
+  "evidenceMapSha256": {
+    "T049": {
+      "broadcast-cohort-acceptance.json": "d3e697d1f633996c5a0133ba347b255ea711a906e34259fc809607cd38353736",
+      "broadcast-saved-admission.json": "3285417b5d1f8741b4c1d313b0ed42378791aa7699bba0a9dc2a5aa380704512",
+      "broadcast-retention-roots.json": "18c81c9c80f768eae78744bc7dc51e97f0d1c3fb83e47ba5479a5752b2adc02e",
+      "broadcast-material-fence.json": "5abfcdd18b90b3b0d84d0ef468aa15f362ebca8236a2d481456bf252200fe727",
+      "broadcast-physical-gc-composition.json": "4da076edb0e75bb3edadb498a1b2d0f12cb73f0865adf543eca05618d37fc9e0",
+      "broadcast-republished-cohort-recovery.json": "60f64f62ae3cd1c2c27fb2b9a0dbb81da45d51799aad4082e13509d47f1131c5",
+      "broadcast-collected-proposal-recovery.json": "d497252fc3f28d5ada4fc204784c49490f52b410e5267e3bc96caa3aa2a8bdc5",
+      "broadcast-same-artifact-recovery.json": "6ce92082432306cff3e1a3da66aded94f12ec7c79f1c854cd5b91b3ebbe91ff9",
+      "broadcast-scope-recovery.json": "5d0252e980ad1287a840834b558a844f61470f2fbe9d95b953cbcbf118e653bf"
+    },
+    "T050": {
+      "broadcast-exact-bookmark-admission.json": "909a78d69c66cab6b3a6233c7ae0efdfdd9551206e4dbca761bf8bb3ee4335bd",
+      "broadcast-source-owned-routing.json": "eca43fa6d0dd6b2e1a590e0879e3293442619562a6faa5604a196e02622db9bc",
+      "broadcast-publisher-activation.json": "85c0c583647682ce037286b74b1c62c8a85c441d2e0dd8c57c5fe8c10a93f546",
+      "broadcast-empty-cohort-recovery.json": "142e868a08b52da1cd03203fe60e304feb0ca7080db83203674cd530afe54cfc",
+      "broadcast-partial-resume-recovery.json": "bac1144cf7505c8990d94bb7d9d98ab7d17b6d3542390381871925162d00ba7c",
+      "broadcast-scope-recovery.json": "5d0252e980ad1287a840834b558a844f61470f2fbe9d95b953cbcbf118e653bf",
+      "broadcast-same-artifact-recovery.json": "6ce92082432306cff3e1a3da66aded94f12ec7c79f1c854cd5b91b3ebbe91ff9"
+    },
+    "T051": {
+      "broadcast-delayed-selection-recovery.json": "e2f9765119c8313bb43005e33eafac6f61b9b873f8e7ae846b77282e1fc36154",
+      "broadcast-empty-cohort-recovery.json": "142e868a08b52da1cd03203fe60e304feb0ca7080db83203674cd530afe54cfc",
+      "broadcast-competing-proposal-recovery.json": "8cf72429d753773ac6ec828468061faf793c40470295ae3bb9e34c79baca4ff1",
+      "broadcast-empty-proposal-recovery.json": "0941ec5a9ce01a098e088f1ef043aeb58eb58cbf7dd7a1fdd35e16aa2dcd96f2",
+      "broadcast-empty-winner-recovery.json": "20e12b459bb5747815797cc41423a3cd3250fb819945e2273ae90625fa934c77",
+      "broadcast-after-cohort-recovery.json": "861d3c924eff9c9749d7aa17582c674960d9c4025ca1feaf8a0831bf3a1dfcf8",
+      "broadcast-partial-start-recovery.json": "5047ec1830e97829896de7addebcaf63851e81aeee44f5fd0f0b97343415e229",
+      "broadcast-partial-resume-recovery.json": "bac1144cf7505c8990d94bb7d9d98ab7d17b6d3542390381871925162d00ba7c",
+      "broadcast-fanout-pre-ack-recovery.json": "548b62d6f248a78994a64b7c527dffd64b6ebc04103eeb93a23bf220a7780960",
+      "broadcast-committed-ack-recovery.json": "22d5a2d39a2108545db704e664556d7b14187d2dea251be5391742b29b42ee61",
+      "broadcast-renewed-claim-recovery.json": "afde3f62edca14834fd3fa109c541fcd96b101869a35629308c6510b847d7c62",
+      "broadcast-republished-cohort-recovery.json": "60f64f62ae3cd1c2c27fb2b9a0dbb81da45d51799aad4082e13509d47f1131c5",
+      "broadcast-same-artifact-recovery.json": "6ce92082432306cff3e1a3da66aded94f12ec7c79f1c854cd5b91b3ebbe91ff9",
+      "broadcast-scope-recovery.json": "5d0252e980ad1287a840834b558a844f61470f2fbe9d95b953cbcbf118e653bf",
+      "broadcast-collected-proposal-recovery.json": "d497252fc3f28d5ada4fc204784c49490f52b410e5267e3bc96caa3aa2a8bdc5",
+      "broadcast-storage.json": "3123628dd86e1de051791fecc7876da497e34772da8635e1a7e221880fe96949",
+      "broadcast-source-context.json": "adea5317697b8273cd3fa78c7fe24cb5eab7b0fc9af3216afef4ba54d385b9a9",
+      "broadcast-publisher-activation.json": "85c0c583647682ce037286b74b1c62c8a85c441d2e0dd8c57c5fe8c10a93f546",
+      "broadcast-upgrade-preflight.json": "26978834caa661aacbf028f963049839f5c4e1b4251ce6d5398c9c89aaa79dce",
+      "broadcast-publisher-activation-host.json": "5a8c989f91f66d3b755d287cb26557b731a5fc49f2befd51d1dc58d63062bd6f"
+    }
+  },
+  "unchangedProduction": {
+    "activationCommit": "b9e98f985ed5e5ee4f046c39b45ad19d10bac269",
+    "currentDifferencePaths": [
+      "Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj",
+      "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md"
+    ],
+    "allowedDifferenceExplanation": "Opt-in test probe compile inclusion and an updated Studio SDK documentation link; no production runtime/Primitives/provider C# or root pin/build-property change.",
+    "historicalSourceReceiptsNotRelabeledAsCurrentRuns": true
+  },
+  "reviews": {
+    "type": "three independent component task/contract/source/evidence reconciliation audits; not full PR",
+    "remainingActionable": []
+  },
+  "qualifiedTasks": [
+    "T049",
+    "T050",
+    "T051"
+  ],
+  "scope": "Actual owned Foundation host and native/fresh EF provider contracts; production-wide writer exclusion and final adoption acceptance remain separate.",
+  "frozenAuthoringFingerprintSha256": "41aa0bb979ea46fc2533b057e3677f408ab54c3411fecfafaa238a2adae38c92",
+  "productionSourceChanged": false,
+  "fullPrRounds": 0,
+  "remainingGates": [
+    "T017/T021/T022/T024/T025/T029/T045 native-composite and actual historical upgraded-host/current Studio proof",
+    "T032 legacy semantic writer/duplicate implementation deletion and T033/T034/T035 guards/audits",
+    "T036/T037/T038 final qualification/full PR review, required exact-head checks/protected merge/resulting-main",
+    "Separate ADR0063 acceptance and independent production #2898/#2907/program evidence; Orleans/task-runner deferred"
+  ]
+}

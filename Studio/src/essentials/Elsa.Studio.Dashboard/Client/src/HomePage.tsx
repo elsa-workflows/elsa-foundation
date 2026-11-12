@@ -1,3 +1,4 @@
+import { StudioPageHeader, StudioButton } from "@elsa-workflows/studio-ui";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { House, Plus, RefreshCw } from "lucide-react";
 import {
@@ -113,10 +114,8 @@ export function HomePage({ api }: { api: ElsaStudioModuleApi }) {
     button?.focus();
   }, [moveFocus]);
 
-  if (!document) return <section className="dashboard-page home-page">
-    <header className="dashboard-page-header">
-      <div><h2>Home</h2><p>What to know and do next.</p></div>
-    </header>
+  if (!document) return <section className="studio-page dashboard-page home-page">
+    <StudioPageHeader headingLevel={2} title={<>Home</>} description={<>What to know and do next.</>} />
     <HomeTaskGroup api={api} />
     <div role="status">Loading Home layout…</div>
   </section>;
@@ -187,28 +186,22 @@ export function HomePage({ api }: { api: ElsaStudioModuleApi }) {
   });
 
   return (
-    <section ref={pageRef} className={`dashboard-page home-page${editing ? " home-page--editing" : ""}`}>
-      <header className="dashboard-page-header">
-        <div>
-          <h2>Home</h2>
-          <p>{editing ? "Add, remove and reorder widgets. Changes save as you go." : "What to know and do next."}</p>
-        </div>
-        <div>
+    <section ref={pageRef} className={`studio-page dashboard-page home-page${editing ? " home-page--editing" : ""}`}>
+      <StudioPageHeader headingLevel={2} title="Home" description={editing ? "Add, remove and reorder widgets. Changes save as you go." : "What to know and do next."} actions={<>
           <label>Refresh <select value={refreshIntervalMs} onChange={event => setRefreshIntervalMs(Number(event.target.value))}>
             {([[0, "Off"], [60_000, "1 minute"], [300_000, "5 minutes"], [900_000, "15 minutes"], [1_800_000, "30 minutes"]] as const)
               .map(([value, label]) => <option key={value} value={value}>{label}</option>)}
           </select></label>
-          <button type="button" onClick={() => setRefreshVersion(value => value + 1)}><RefreshCw size={15} /> Refresh all</button>
+          <StudioButton type="button" onClick={() => setRefreshVersion(value => value + 1)}><RefreshCw size={15} /> Refresh all</StudioButton>
           {editing ? (
             <>
-              <button type="button" onClick={() => { setPickerOpen(true); setPickerQuery(""); }}><Plus size={15} /> Add widget</button>
-              <button type="button" onClick={reset}>Reset to default</button>
-              {canSaveDefault && !store.anonymous ? <button type="button" onClick={saveDefault}>Save as server default</button> : null}
-              <button type="button" onClick={() => { setEditing(false); closePicker(); }}>Done</button>
+              <StudioButton type="button" onClick={() => { setPickerOpen(true); setPickerQuery(""); }}><Plus size={15} /> Add widget</StudioButton>
+              <StudioButton type="button" onClick={reset}>Reset to default</StudioButton>
+              {canSaveDefault && !store.anonymous ? <StudioButton type="button" onClick={saveDefault}>Save as server default</StudioButton> : null}
+              <StudioButton type="button" onClick={() => { setEditing(false); closePicker(); }}>Done</StudioButton>
             </>
-          ) : <button type="button" onClick={() => setEditing(true)}>Edit home</button>}
-        </div>
-      </header>
+          ) : <StudioButton type="button" onClick={() => setEditing(true)}>Edit home</StudioButton>}
+        </>} />
       <HomeTaskGroup api={api} />
       <div className="visually-hidden" aria-live="polite">{liveMessage}</div>
       {preferenceError ? <div role="status">{preferenceError}</div> : null}

@@ -8,6 +8,15 @@ declare module "@elsa-workflows/studio-sdk" {
     restoreFocusFallback?: () => void
   ): void;
 
+  export function describeApiError(error: unknown): Promise<string>;
+  export function tryExtractValidationErrors(error: unknown): Promise<Record<string, string[]> | null>;
+  export class StudioHttpError extends Error {
+    constructor(status: number, message: string, validationErrors?: Record<string, string[]> | null, payload?: unknown | null);
+    readonly status: number;
+    readonly validationErrors: Record<string, string[]> | null;
+    readonly payload: unknown | null;
+  }
+
   export interface StudioHttpClient {
     requestJson<T>(url: string, init?: RequestInit): Promise<T>;
     getJson<T>(url: string, init?: RequestInit): Promise<T>;
@@ -88,11 +97,24 @@ declare module "@elsa-workflows/studio-sdk" {
     onValidationChange?: (hasError: boolean) => void;
   }
 
+  export interface StudioDraftValidationIssue {
+    type: string;
+    message: string;
+    path?: string | null;
+    severity?: "Error" | "Warning" | string | null;
+  }
+
+  export interface StudioDraftValidationContext {
+    typeName?: string | null;
+    inputs?: StudioActivityInputDescriptor[];
+  }
+
   export interface StudioActivityPropertyEditorContribution {
     id: string;
     order?: number;
     /** Declares that all local blocking errors are reported through onValidationChange, or that none exist. */
     supportsValidationReporting?: true;
+    collectDraftValidation?(activity: unknown, context?: StudioDraftValidationContext): StudioDraftValidationIssue[] | Promise<StudioDraftValidationIssue[]>;
     supports(descriptor: StudioActivityInputDescriptor, context: StudioActivityPropertyEditorContext): boolean;
     component: ComponentType<StudioActivityPropertyEditorProps>;
   }
@@ -165,7 +187,9 @@ declare module "@elsa-workflows/studio-sdk" {
     order?: number;
     supports(context: StudioExpressionEditorContext): boolean;
     surfaces: Partial<Record<StudioExpressionEditorSurface, ComponentType<StudioExpressionEditorProps>>>;
+    readsActivityContext?: true;
     createDefaultValue?(context: StudioExpressionEditorContext): unknown;
+    collectDraftValidation?(activity: unknown, context?: StudioDraftValidationContext): StudioDraftValidationIssue[] | Promise<StudioDraftValidationIssue[]>;
   }
 
   export interface StudioConfirmOptions {
