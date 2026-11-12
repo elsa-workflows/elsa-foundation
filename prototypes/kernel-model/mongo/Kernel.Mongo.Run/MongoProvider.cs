@@ -22,6 +22,9 @@ public sealed class MongoProvider(string connection, MongoStoreOptions options) 
     private ChaosProxy Proxy => _proxy ??= Proxies["kernel-worker"];
     private long _cuts, _ended;
 
+    /// <summary>The connection killer only cuts connections and never ends sessions.</summary>
+    public static bool CutsOnly { get; set; }
+
     public string Name => "mongodb" + (options.FenceInBatch ? ", fence in batch" : ", checked fence");
 
     // The workers' client reaches the server through a proxy that can cut its connections.
@@ -98,12 +101,14 @@ public sealed class MongoProvider(string connection, MongoStoreOptions options) 
                 new("$match", new BsonDocument { { "appName", "kernel-worker" }, { "$or", new BsonArray { new BsonDocument("active", true), new BsonDocument("transaction", new BsonDocument("$exists", true)) } } }),
                 new("$project", new BsonDocument { { "_id", 0 }, { "lsid", 1 } }),     // the rest may hold duplicate field names
             ];
-            // Half the time a connection is cut on the wire instead.
-            if (random.Next(2) == 0 && provider.Proxy.CutBusy(random) > 0)
+            // Half the time a connection is cut on the wire instead. With CutsOnly, always: then nobody ends the
+            // transactions that cut connections leave open (finding M2).
+            if ((CutsOnly || random.Next(2) == 0) && provider.Proxy.CutBusy(random) > 0)
             {
                 Interlocked.Increment(ref provider._cuts);
                 return 1;
             }
+            if (CutsOnly) return 0;
             var ops = await (await admin.AggregateAsync<BsonDocument>(pipeline)).ToListAsync();
             var sessions = ops.Where(o => o.Contains("lsid")).Select(o => o["lsid"]["id"]).Distinct().ToList();
             if (sessions.Count == 0) return 0;

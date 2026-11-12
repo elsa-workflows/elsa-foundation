@@ -15,6 +15,11 @@ What was found is in [FINDINGS.md](FINDINGS.md); what each database engine does 
 | `sim` | Toy execution models, the deterministic simulation, the invariant checks, the shrinker and the mutation check |
 | `ef/Kernel.EntityFramework` | The storage interface on Entity Framework Core for PostgreSQL and SQLite |
 | `ef/Kernel.Ef.Run` | The cost measurement and the concurrent stress test; `EngineRun.cs` runs them on PostgreSQL, SQL Server, MySQL and SQLite (`x ...`, see ENGINES.md) |
+| `conformance/Kernel.Store.Conformance` | The store conformance suite: semantic cases, the stress test, the cost runs, for any provider ([MONGO.md](MONGO.md)) |
+| `conformance/Kernel.Store.Conformance.Run` | The suite against the in-memory store |
+| `mongo/Kernel.Mongo` | The storage interface on MongoDB |
+| `mongo/Kernel.Mongo.Run` | The suite against MongoDB, its connection killer, probes |
+| `ef/Kernel.Ef.Conformance` | The suite against the EF store |
 
 ## Run
 
@@ -34,6 +39,25 @@ dotnet ef/Kernel.Ef.Run/bin/Release/net10.0/Kernel.Ef.Run.dll cost postgres "Hos
 dotnet ef/Kernel.Ef.Run/bin/Release/net10.0/Kernel.Ef.Run.dll stress "Host=localhost;Port=<port>;Username=postgres;Password=kernel;Database=kernel_stress" 40 5000
 dotnet ef/Kernel.Ef.Run/bin/Release/net10.0/Kernel.Ef.Run.dll stress-unfenced "<same>" 15 1500   # the fence broken on purpose: must fail
 dotnet ef/Kernel.Ef.Run/bin/Release/net10.0/Kernel.Ef.Run.dll probe "<same>"                     # seq order inside one commit (finding F8)
+```
+
+The conformance suite (see [MONGO.md](MONGO.md)):
+
+```
+dotnet build conformance/Kernel.Store.Conformance.Run -c Release
+dotnet conformance/Kernel.Store.Conformance.Run/bin/Release/net10.0/Kernel.Store.Conformance.Run.dll semantic
+dotnet conformance/Kernel.Store.Conformance.Run/bin/Release/net10.0/Kernel.Store.Conformance.Run.dll stress 15 1500
+docker run -d --rm -P --name kernel-mongo mongo:8.0 --replSet rs0 --bind_ip_all
+docker exec kernel-mongo mongosh --quiet --eval 'rs.initiate({_id:"rs0",members:[{_id:0,host:"localhost:27017"}]})'
+docker port kernel-mongo 27017                                            # the port Docker picked
+dotnet build mongo/Kernel.Mongo.Run -c Release
+dotnet mongo/Kernel.Mongo.Run/bin/Release/net10.0/Kernel.Mongo.Run.dll "mongodb://localhost:<port>/?directConnection=true" semantic
+dotnet mongo/Kernel.Mongo.Run/bin/Release/net10.0/Kernel.Mongo.Run.dll "<same>" stress 40 5000
+dotnet mongo/Kernel.Mongo.Run/bin/Release/net10.0/Kernel.Mongo.Run.dll "<same>" stress-broken 15 1500    # must fail
+dotnet mongo/Kernel.Mongo.Run/bin/Release/net10.0/Kernel.Mongo.Run.dll "<same>" [--fence-in-batch] cost
+dotnet mongo/Kernel.Mongo.Run/bin/Release/net10.0/Kernel.Mongo.Run.dll "<same>" probe crash|limits
+dotnet ef/Kernel.Ef.Conformance/bin/Release/net10.0/Kernel.Ef.Conformance.dll sqlite semantic
+dotnet ef/Kernel.Ef.Conformance/bin/Release/net10.0/Kernel.Ef.Conformance.dll postgres "Host=localhost;Port=<port>;Username=postgres;Password=kernel" [--fence-in-batch] semantic|cost
 ```
 
 A seed fixes everything: the number of nodes, every action and every fault. `--flaw` takes the names of
