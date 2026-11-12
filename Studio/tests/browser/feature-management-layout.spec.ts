@@ -184,6 +184,7 @@ test("Feature categories stay discoverable and contained with long labels and ma
         expect(geometry.controlsFit).toBe(true);
         expect(geometry.overflow).toBeLessThanOrEqual(1);
         expect(geometry.width >= 960 ? geometry.beside : geometry.above).toBe(true);
+        await longCategory.scrollIntoViewIfNeeded();
         await search.focus();
         await testInfo.attach(`categories-${mode}-${viewport.viewportWidth}-${viewport.moduleWidth ?? "full"}`, {
           body: await page.screenshot(), contentType: "image/png"
