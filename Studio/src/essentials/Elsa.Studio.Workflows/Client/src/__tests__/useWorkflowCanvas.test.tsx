@@ -85,6 +85,36 @@ describe("useWorkflowCanvas BPMN placement", () => {
   });
 });
 
+// A captured snapshot is read-only, but React Flow still measures its nodes. A controlled node without a
+// measurement is hidden until React Flow measures it again, so a click in that frame lands on the pane and
+// clears the selection (#4040).
+describe("useWorkflowCanvas read-only canvas", () => {
+  it("keeps React Flow's measurements of a read-only node", () => {
+    const harness = renderFlowchartCanvas({ readOnly: true });
+
+    harness.changeNodes([{ id: "node-a", type: "dimensions", dimensions: { width: 220, height: 64 } }]);
+
+    expect(harness.node("node-a")?.measured).toEqual({ width: 220, height: 64 });
+    expect(harness.commitCount()).toBe(0);
+  });
+
+  it("still ignores moves and resizes of a read-only node", () => {
+    const harness = renderFlowchartCanvas({ readOnly: true });
+    const before = harness.node("node-a")!;
+
+    harness.changeNodes([
+      { id: "node-a", type: "position", position: { x: 900, y: 900 } },
+      { id: "node-a", type: "dimensions", dimensions: { width: 400, height: 300 }, resizing: true, setAttributes: true }
+    ]);
+
+    const after = harness.node("node-a")!;
+    expect(after.position).toEqual(before.position);
+    expect(after.width).toBe(before.width);
+    expect(after.measured).toEqual(before.measured);
+    expect(harness.commitCount()).toBe(0);
+  });
+});
+
 // updateLayout only ever upserts, so a delete that does not prune leaves the departed node's position
 // in the saved draft forever — it grows on every removal and is re-applied if the id is ever reused.
 describe("useWorkflowCanvas side tables of deleted nodes", () => {
@@ -172,11 +202,12 @@ function renderBpmnCanvas() {
   });
 }
 
-function renderFlowchartCanvas() {
+function renderFlowchartCanvas(options: { readOnly?: boolean } = {}) {
   return renderCanvas({
     draft: flowchartDraft(),
     catalog: [flowchartCatalogItem(), writeLineCatalogItem()],
-    isBpmnDesigner: false
+    isBpmnDesigner: false,
+    ...options
   });
 }
 
@@ -188,10 +219,11 @@ function renderSingleSlotCanvas() {
   });
 }
 
-function renderCanvas({ draft: initialDraft, catalog, isBpmnDesigner }: {
+function renderCanvas({ draft: initialDraft, catalog, isBpmnDesigner, readOnly = false }: {
   draft: WorkflowDraft;
   catalog: ActivityCatalogItem[];
   isBpmnDesigner: boolean;
+  readOnly?: boolean;
 }) {
   const catalogByVersion = new Map(catalog.map(item => [item.activityVersionId, item]));
   let draft = initialDraft;
@@ -208,6 +240,7 @@ function renderCanvas({ draft: initialDraft, catalog, isBpmnDesigner }: {
     addActivity?: ReturnType<typeof useWorkflowCanvas>["addActivity"];
     commitLayout?: ReturnType<typeof useWorkflowCanvas>["commitLayout"];
     onNodesDelete?: ReturnType<typeof useWorkflowCanvas>["onNodesDelete"];
+    onNodesChange?: ReturnType<typeof useWorkflowCanvas>["onNodesChange"];
     nodes?: ReturnType<typeof useWorkflowCanvas>["nodes"];
   } = {};
 
@@ -222,7 +255,8 @@ function renderCanvas({ draft: initialDraft, catalog, isBpmnDesigner }: {
       catalogByVersion,
       isUnsupportedDesigner: false,
       isBpmnDesigner,
-      canAddActivitiesToCanvas: true,
+      canAddActivitiesToCanvas: !readOnly,
+      readOnly,
       selectedNodeId: null,
       editDraft: applyRecipe,
       editDraftAndSelect: recipe => applyRecipe(recipe),
@@ -234,6 +268,7 @@ function renderCanvas({ draft: initialDraft, catalog, isBpmnDesigner }: {
     api.addActivity = canvas.addActivity;
     api.commitLayout = canvas.commitLayout;
     api.onNodesDelete = canvas.onNodesDelete;
+    api.onNodesChange = canvas.onNodesChange;
     api.nodes = canvas.nodes;
     return null;
   }
@@ -262,6 +297,13 @@ function renderCanvas({ draft: initialDraft, catalog, isBpmnDesigner }: {
       flushSync(() => api.onNodesDelete!([node]));
       flushSync(() => root.render(<Harness />));
     },
+    // Mirrors React Flow's onNodesChange: measurements, selection and drags all arrive here.
+    changeNodes: (changes: Parameters<NonNullable<typeof api.onNodesChange>>[0]) => {
+      flushSync(() => api.onNodesChange!(changes));
+      flushSync(() => root.render(<Harness />));
+    },
+    node: (nodeId: string) => api.nodes!.find(candidate => candidate.id === nodeId),
+    commitCount: () => commits.length,
     // Mirrors React Flow's onNodeDragStop payload: the settled node, plus every node of a
     // multi-selection drag.
     dragStop: (
