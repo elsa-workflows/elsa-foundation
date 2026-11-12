@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -12,6 +13,9 @@ public sealed class EfBackgroundActivityWorkStore(
     RuntimeDbContext context,
     IPersistenceAccessContextAccessor accessContextAccessor) : IBackgroundActivityWorkStore
 {
+    internal bool Uses(RuntimeDbContext expected, PersistenceScope scope) =>
+        ReferenceEquals(context, expected) && accessContextAccessor.Current.RequireScope() == scope;
+
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     public async ValueTask<BackgroundActivityWorkItem?> FindAsync(
@@ -235,7 +239,7 @@ public sealed class EfBackgroundActivityWorkStore(
         row.ClaimableAtUtcTicks = projection.ClaimableAtUtcTicks;
         row.ClaimableIsEligible = projection.ClaimableIsEligible;
         row.ContentJson = JsonSerializer.Serialize(item, JsonOptions);
-        row.SchemaVersion = RuntimeBackgroundActivityWorkEfModule.SchemaVersion;
+        row.SchemaVersion = RuntimeTestEntryWriteVersion.Preserve(RuntimeBackgroundActivityWorkEfModule.SchemaVersion, row.SchemaVersion);
         row.Revision = item.Revision;
     }
 
@@ -254,10 +258,11 @@ public sealed class EfBackgroundActivityWorkStore(
             !StringComparer.Ordinal.Equals(row.WorkflowExecutionIdHash, EfRuntimeOperationalStoreSupport.Hash(workflowExecutionId)) ||
             !StringComparer.Ordinal.Equals(row.WorkId, workId) ||
             !StringComparer.Ordinal.Equals(row.WorkIdHash, EfRuntimeOperationalStoreSupport.Hash(workId)) ||
-            !StringComparer.Ordinal.Equals(row.SchemaVersion, RuntimeBackgroundActivityWorkEfModule.SchemaVersion))
+            EfSchemaVersion.NotReadable(RuntimeBackgroundActivityWorkEfModule.Chain, row.SchemaVersion))
             throw new InvalidDataException("The persisted background activity work identity or schema projection is inconsistent.");
 
-        var item = JsonSerializer.Deserialize<BackgroundActivityWorkItem>(row.ContentJson, JsonOptions)
+        var item = JsonSerializer.Deserialize<BackgroundActivityWorkItem>(RuntimeBackgroundActivityWorkEfModule.Chain.Upcast<BackgroundActivityWorkEntity>(row.SchemaVersion,
+                       (nameof(row.ContentJson), row.ContentJson))[nameof(row.ContentJson)]!, JsonOptions)
                    ?? throw new InvalidDataException("The persisted background activity work content is empty.");
         ValidateItem(item);
         var request = item.Request;

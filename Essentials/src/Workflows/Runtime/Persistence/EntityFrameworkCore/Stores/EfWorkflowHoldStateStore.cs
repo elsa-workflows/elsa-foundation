@@ -195,7 +195,7 @@ public sealed class EfWorkflowHoldStateStore(
         row.Id = replacement.Id; row.ScopeKey = replacement.ScopeKey; row.ScopeKeyHash = replacement.ScopeKeyHash;
         row.ControlPlaneStateId = replacement.ControlPlaneStateId; row.ControlPlaneStateIdHash = replacement.ControlPlaneStateIdHash; row.ControlPlaneStateIdOrderKey = replacement.ControlPlaneStateIdOrderKey;
         row.WorkflowExecutionId = replacement.WorkflowExecutionId; row.WorkflowExecutionIdHash = replacement.WorkflowExecutionIdHash; row.WorkflowExecutionIdOrderKey = replacement.WorkflowExecutionIdOrderKey;
-        row.ContentJson = replacement.ContentJson; row.SchemaVersion = replacement.SchemaVersion; row.Revision = revision;
+        row.ContentJson = replacement.ContentJson; row.SchemaVersion = RuntimeTestEntryWriteVersion.Preserve(replacement.SchemaVersion, row.SchemaVersion); row.Revision = revision;
     }
 
     private static WorkflowHoldState Read(WorkflowHoldStateEntity row, string scope, string? expectedControlPlaneStateId = null)

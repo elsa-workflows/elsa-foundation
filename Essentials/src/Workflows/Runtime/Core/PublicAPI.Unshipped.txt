@@ -10370,3 +10370,40 @@ Elsa.Workflows.Runtime.Core.Contracts.IRunRowPresenceProbe.ResolveReadScope(stri
 Elsa.Workflows.Runtime.Core.Contracts.ISchedulerPoisonFenceCapability
 Elsa.Workflows.Runtime.Core.Contracts.ISchedulerPoisonFenceCapability.CanRecordFenced.get -> bool
 Elsa.Workflows.Runtime.Core.Contracts.ISchedulerPoisonFenceCapability.RecordFencedAsync(Elsa.Workflows.Runtime.Core.Models.RuntimeSchedulerPoisonRecord! record, Elsa.Workflows.Runtime.Core.Models.RuntimeExecutionFence! fence, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Models.RuntimeSchedulerPoisonRecord!>
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeTestPersistenceBoundary
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeTestPersistenceBoundary.CanPersistTestEntry(Elsa.Workflows.Runtime.Core.Models.RuntimeTestPersistenceBoundaryContext! context) -> bool
+Elsa.Workflows.Runtime.Core.Models.RuntimeTestPersistenceBoundaryContext
+Elsa.Workflows.Runtime.Core.Models.RuntimeTestPersistenceBoundaryContext.<Clone>$() -> Elsa.Workflows.Runtime.Core.Models.RuntimeTestPersistenceBoundaryContext!
+Elsa.Workflows.Runtime.Core.Models.RuntimeTestPersistenceBoundaryContext.Background.get -> Elsa.Workflows.Runtime.Core.Contracts.IBackgroundActivityWorkStore!
+Elsa.Workflows.Runtime.Core.Models.RuntimeTestPersistenceBoundaryContext.Background.init -> void
+Elsa.Workflows.Runtime.Core.Models.RuntimeTestPersistenceBoundaryContext.Checkpoints.get -> Elsa.Workflows.Runtime.Core.Contracts.IRuntimeCheckpointCommitStore!
+Elsa.Workflows.Runtime.Core.Models.RuntimeTestPersistenceBoundaryContext.Checkpoints.init -> void
+Elsa.Workflows.Runtime.Core.Models.RuntimeTestPersistenceBoundaryContext.Deconstruct(out Elsa.Workflows.Runtime.Core.Models.WorkflowTestEntry! Entry, out Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutionStateStore! Executions, out Elsa.Workflows.Runtime.Core.Contracts.IWorkflowSchedulerWorkQueue! Scheduler, out Elsa.Workflows.Runtime.Core.Contracts.IRuntimeCheckpointCommitStore! Checkpoints, out Elsa.Workflows.Runtime.Core.Contracts.IRuntimePostCommitOutboxStore! Outbox, out Elsa.Workflows.Runtime.Core.Contracts.IBackgroundActivityWorkStore! Background, out Elsa.Workflows.Runtime.Core.Contracts.IDurableTimerStore! Timers) -> void
+Elsa.Workflows.Runtime.Core.Models.RuntimeTestPersistenceBoundaryContext.Entry.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowTestEntry!
+Elsa.Workflows.Runtime.Core.Models.RuntimeTestPersistenceBoundaryContext.Entry.init -> void
+Elsa.Workflows.Runtime.Core.Models.RuntimeTestPersistenceBoundaryContext.Equals(Elsa.Workflows.Runtime.Core.Models.RuntimeTestPersistenceBoundaryContext? other) -> bool
+Elsa.Workflows.Runtime.Core.Models.RuntimeTestPersistenceBoundaryContext.Executions.get -> Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutionStateStore!
+Elsa.Workflows.Runtime.Core.Models.RuntimeTestPersistenceBoundaryContext.Executions.init -> void
+Elsa.Workflows.Runtime.Core.Models.RuntimeTestPersistenceBoundaryContext.Outbox.get -> Elsa.Workflows.Runtime.Core.Contracts.IRuntimePostCommitOutboxStore!
+Elsa.Workflows.Runtime.Core.Models.RuntimeTestPersistenceBoundaryContext.Outbox.init -> void
+Elsa.Workflows.Runtime.Core.Models.RuntimeTestPersistenceBoundaryContext.RuntimeTestPersistenceBoundaryContext(Elsa.Workflows.Runtime.Core.Models.WorkflowTestEntry! Entry, Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutionStateStore! Executions, Elsa.Workflows.Runtime.Core.Contracts.IWorkflowSchedulerWorkQueue! Scheduler, Elsa.Workflows.Runtime.Core.Contracts.IRuntimeCheckpointCommitStore! Checkpoints, Elsa.Workflows.Runtime.Core.Contracts.IRuntimePostCommitOutboxStore! Outbox, Elsa.Workflows.Runtime.Core.Contracts.IBackgroundActivityWorkStore! Background, Elsa.Workflows.Runtime.Core.Contracts.IDurableTimerStore! Timers) -> void
+Elsa.Workflows.Runtime.Core.Models.RuntimeTestPersistenceBoundaryContext.Scheduler.get -> Elsa.Workflows.Runtime.Core.Contracts.IWorkflowSchedulerWorkQueue!
+Elsa.Workflows.Runtime.Core.Models.RuntimeTestPersistenceBoundaryContext.Scheduler.init -> void
+Elsa.Workflows.Runtime.Core.Models.RuntimeTestPersistenceBoundaryContext.Timers.get -> Elsa.Workflows.Runtime.Core.Contracts.IDurableTimerStore!
+Elsa.Workflows.Runtime.Core.Models.RuntimeTestPersistenceBoundaryContext.Timers.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionState.TestEntry.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowTestEntry?
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionState.TestEntry.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowTestEntry
+Elsa.Workflows.Runtime.Core.Models.WorkflowTestEntry.Authority.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionAuthoritySnapshot!
+Elsa.Workflows.Runtime.Core.Models.WorkflowTestEntry.ContextFingerprint.get -> string!
+Elsa.Workflows.Runtime.Core.Models.WorkflowTestEntry.ContextId.get -> string!
+Elsa.Workflows.Runtime.Core.Models.WorkflowTestEntry.Executable.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableIdentity!
+Elsa.Workflows.Runtime.Core.Models.WorkflowTestEntry.ExecutableNodeId.get -> string!
+Elsa.Workflows.Runtime.Core.Models.WorkflowTestEntry.Matches(Elsa.Workflows.Runtime.Core.Models.WorkflowTestEntry? other) -> bool
+Elsa.Workflows.Runtime.Core.Models.WorkflowTestEntry.Scope.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowTestScope!
+Elsa.Workflows.Runtime.Core.Models.WorkflowTestEntry.WorkflowTestEntry(string! contextId, string! contextFingerprint, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableIdentity! executable, string! executableNodeId, Elsa.Workflows.Runtime.Core.Models.WorkflowTestScope! scope, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionAuthoritySnapshot! authority) -> void
+override Elsa.Workflows.Runtime.Core.Models.RuntimeTestPersistenceBoundaryContext.Equals(object? obj) -> bool
+override Elsa.Workflows.Runtime.Core.Models.RuntimeTestPersistenceBoundaryContext.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Core.Models.RuntimeTestPersistenceBoundaryContext.ToString() -> string!
+static Elsa.Workflows.Runtime.Core.Models.RuntimeTestPersistenceBoundaryContext.operator !=(Elsa.Workflows.Runtime.Core.Models.RuntimeTestPersistenceBoundaryContext? left, Elsa.Workflows.Runtime.Core.Models.RuntimeTestPersistenceBoundaryContext? right) -> bool
+static Elsa.Workflows.Runtime.Core.Models.RuntimeTestPersistenceBoundaryContext.operator ==(Elsa.Workflows.Runtime.Core.Models.RuntimeTestPersistenceBoundaryContext? left, Elsa.Workflows.Runtime.Core.Models.RuntimeTestPersistenceBoundaryContext? right) -> bool

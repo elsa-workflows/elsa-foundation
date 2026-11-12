@@ -62,6 +62,10 @@ public sealed record WorkflowExecutionState(
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public WorkflowTestScope? TestScope { get; init; }
 
+    /// <summary>Exact trusted test boundary. Persisting this descriptor does not authorize a start.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public WorkflowTestEntry? TestEntry { get; init; }
+
     /// <summary>
     /// The workflow activation's lexical variable frame. Null only for legacy states that predate
     /// role-owned variable frames.

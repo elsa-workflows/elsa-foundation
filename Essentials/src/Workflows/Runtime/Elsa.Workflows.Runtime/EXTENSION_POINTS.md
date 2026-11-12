@@ -5,6 +5,25 @@ The canonical per-domain catalog (framework §2.22.1), anchored at the
 provider/default implementations may live in sibling runtime projects. Runtime execution
 contracts are Design-free and operate on runtime-owned executable artifacts and execution state.
 
+## Selected-entry persistence qualification
+
+`WorkflowTestEntry` carries an exact executable/node, test scope, context identity and normal authority
+snapshot. Its presence is data, not authorization or permission to start. Header persistence preserves
+the descriptor immutably and requires its pin, tenant, partition, scope and authority to agree with the header.
+
+`IRuntimeTestPersistenceBoundary` is an optional, single-provider qualification role in Runtime.Core.
+Its synchronous `CanPersistTestEntry(RuntimeTestPersistenceBoundaryContext)` checks the actual selected
+execution, scheduler, checkpoint, outbox, background and timer stores together. A provider label is insufficient.
+The complete EF aggregate registers scoped `EfRuntimeTestPersistenceBoundary`; it requires the same actual
+context, ordinary persistence scope and live admitted format gates across all five native families.
+Individual store registrations do not advertise this aggregate qualification. There is no implicit
+in-memory or custom-provider fallback. A successful qualification is not a current permission grant.
+
+Selected-entry rows and all native continuations inherit predecessor-unreadable physical format stamps;
+ordinary ungated writes keep their prior minimums. Legacy upcasters refuse entry data disguised under
+older header/queue/outbox stamps. This persistence slice does not activate selected starts: trusted
+context resolution, scheduler entry behavior and transport qualification must be installed separately.
+
 > **ADR 0033 split.** Since the contracts/engine split, `Elsa.Workflows.Runtime.Core` holds only the
 > contracts, models, constants, pipeline contract surface (middleware attribute/bases/placeholders,
 > `RuntimePipelinePlanBuilder`), and validators. Unless an entry states otherwise, every **default
