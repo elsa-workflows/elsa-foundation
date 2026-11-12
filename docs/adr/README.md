@@ -82,7 +82,7 @@ An ADR proposed from an [initiative](../contributing/initiatives.md) follows its
 | 0088 | [Rules owns its execution domain](0088-rules-owns-its-execution-domain.md) | Accepted |
 | 0089 | [Scripts Read Variables By Name And Publish Pins Them As Declared Parameters](0089-scripts-read-variables-by-name-and-publish-pins-them-as-declared-parameters.md) | Proposed |
 | 0090 | [Activities Change Variables As A Unit Of Work Committed With The Step](0090-activities-change-variables-as-a-unit-of-work-committed-with-the-step.md) | Proposed |
-| 0094 | [Agent-owned content uses shared revisions and provider-derived activities](0094-agent-definitions-own-authored-content-and-providers-publish-activities.md) | Proposed |
+| 0094 | [Agent-owned content uses shared revisions and provider-derived activities](0094-agent-definitions-own-authored-content-and-providers-publish-activities.md) | Accepted |
 | EB-0001 | [Extension Builder Git identity](EB-0001-extension-builder-git-identity.md) | Accepted |
 | EB-0002 | [Extension Builder managed repository remotes](EB-0002-extension-builder-managed-repository-remotes.md) | Accepted |
 | EB-0003 | [Extension Builder build and promotion source](EB-0003-extension-builder-build-and-promotion-source.md) | Accepted |

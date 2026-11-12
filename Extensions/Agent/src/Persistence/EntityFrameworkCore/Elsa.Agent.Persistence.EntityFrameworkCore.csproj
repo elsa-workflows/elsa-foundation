@@ -8,11 +8,11 @@
     <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
     <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
-    <ProjectReference Include="../../Elsa.Agent/Elsa.Agent.csproj" />
+    <ProjectReference Include="../../Core/Elsa.Agent.Core.csproj" />
     <ProjectReference Include="../../../../../Essentials/src/Persistence/EntityFramework/Elsa.Persistence.EntityFramework.csproj" />
-    <ProjectReference Include="../../../../../Essentials/src/Secrets/Core/Elsa.Secrets.Core.csproj" />
-    <InternalsVisibleTo Include="Elsa.Agent.Persistence.Tests" />
-    <InternalsVisibleTo Include="Elsa.Agent.Persistence.ProviderTests" />
+    <ProjectReference Include="../../../../../Essentials/src/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj" />
+    <ProjectReference Include="../../../../../Essentials/src/Tasks/Core/Elsa.Tasks.Core.csproj" />
+    <InternalsVisibleTo Include="Elsa.Agent.Tests" />
   </ItemGroup>
   <ItemGroup><None Update="nuplane.json" Pack="true" PackagePath="/" /></ItemGroup>
 </Project>

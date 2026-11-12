@@ -74,8 +74,46 @@ internal static class PlacedReferenceRemapper
         IReadOnlyDictionary<string, string> placedNodeIds,
         string graphScopeId)
     {
+        // A request member read is not remapped yet; result and variable member reads are.
+        if (binding.Selection is not null && binding.Source is not (RuntimeInputBindingSource.ActivityResultMember or RuntimeInputBindingSource.VariableMember))
+            throw PublishedMemberReadDiagnostics.Unsupported(null, binding);
+
         switch (binding.Source)
         {
+            case RuntimeInputBindingSource.VariableMember when binding.Variable is { } memberVariable:
+            {
+                // The scope moves with the placement as a whole-value read's does; the selection is carried unchanged.
+                var scopeId = RemapScope(memberVariable.DeclaringScopeId, placedNodeIds, graphScopeId);
+                return StringComparer.Ordinal.Equals(scopeId, memberVariable.DeclaringScopeId)
+                    ? binding
+                    : new RuntimeInputBinding(
+                        binding.InputName,
+                        binding.TargetType,
+                        binding.EffectivePolicy,
+                        binding.Source,
+                        binding.Selection,
+                        variable: new RuntimeVariableReference(memberVariable.VariableKey, scopeId),
+                        metadata: binding.Metadata,
+                        conversionPlan: binding.ConversionPlan,
+                        conversionRequest: binding.ConversionRequest);
+            }
+            case RuntimeInputBindingSource.ActivityResultMember when binding.ActivityResult is { } memberResult:
+            {
+                // The producer moves with the placement; the selection is carried unchanged.
+                var producerId = placedNodeIds.GetValueOrDefault(memberResult.ProducerExecutableNodeId, memberResult.ProducerExecutableNodeId);
+                return StringComparer.Ordinal.Equals(producerId, memberResult.ProducerExecutableNodeId)
+                    ? binding
+                    : new RuntimeInputBinding(
+                        binding.InputName,
+                        binding.TargetType,
+                        binding.EffectivePolicy,
+                        binding.Source,
+                        binding.Selection,
+                        activityResult: new RuntimeActivityResultReference(producerId, memberResult.ProjectionKey, producerScopeId: null, memberResult.IsOptional),
+                        metadata: binding.Metadata,
+                        conversionPlan: binding.ConversionPlan,
+                        conversionRequest: binding.ConversionRequest);
+            }
             case RuntimeInputBindingSource.VariableRead when binding.Variable is { } variable:
             {
                 var scopeId = RemapScope(variable.DeclaringScopeId, placedNodeIds, graphScopeId);
@@ -86,7 +124,9 @@ internal static class PlacedReferenceRemapper
             case RuntimeInputBindingSource.ActivityResult when binding.ActivityResult is { } result:
             {
                 var producerId = placedNodeIds.GetValueOrDefault(result.ProducerExecutableNodeId, result.ProducerExecutableNodeId);
-                var producerScopeId = placedNodeIds.GetValueOrDefault(result.ProducerScopeId, result.ProducerScopeId);
+                var producerScopeId = result.ProducerScopeId is { } declaredScope
+                    ? placedNodeIds.GetValueOrDefault(declaredScope, declaredScope)
+                    : null;
                 if (StringComparer.Ordinal.Equals(producerId, result.ProducerExecutableNodeId) &&
                     StringComparer.Ordinal.Equals(producerScopeId, result.ProducerScopeId))
                     return binding;

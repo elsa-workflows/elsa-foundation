@@ -76,12 +76,16 @@ The board states which phase the initiative is in.
    written as if the ADRs it applies were agreed, so its plan and tasks test whether those ADRs work in the code (see
    *Provisional specs* below). Its formal approval needs the ADRs it depends on to be agreed. Each spec row on the board
    names the ADRs and decisions it needs.
-3. **Implementation.** Production implementation needs the approved spec and the decisions it applies, landed on
-   `main` (see *Landing* below). ADR and spec PRs both follow the final-commit agreement rule below.
+3. **Implementation.** Production implementation of a spec needs the approved spec and every ADR and decision it
+   applies, agreed and merged into the initiative branch. The implementation is built on that branch and lands on
+   `main` with the initiative (see *Implementing a spec on the branch* below). ADR and spec PRs both follow the
+   final-commit agreement rule below.
 
-Because the initiative branch lands as a whole, every spec is agreed before implementation of any of them starts. An
-initiative may agree further, stricter rules. Such a rule holds until the approvers change it. A bounded research experiment is allowed in any phase, but it
-never silently becomes production implementation.
+Phases apply **per spec**, not to the initiative as a whole. A spec advances to implementation as soon as its own
+dependencies are resolved: the spec is approved, and every ADR and decision it applies is agreed and merged into the
+initiative branch. It does not wait for the other specs. The board's phase line names the specs in implementation. An initiative may agree further, stricter rules, such as holding every
+implementation until all specs are agreed. Such a rule holds until the approvers change it. A bounded research
+experiment is allowed in any phase, but it never silently becomes production implementation.
 
 No activation by a program goal is needed for any phase.
 
@@ -98,11 +102,24 @@ No activation by a program goal is needed for any phase.
 description. By default that is the initiative's Approvers list. A different plan, or an exception to the rules on
 this page, needs an authorized role, a scope, a reason and a record on the PR.
 
+**Alternatives.** Every ADR records, in an **Alternatives considered** section, the alternatives its author weighed
+and why each was not chosen, including doing nothing. The section exposes the angles the author used, so a reviewer
+can judge whether every real option was seen — or whether none of them addresses the actual problem. A spec does not
+repeat this: it refers to the alternatives in the ADRs it applies, and may note a design choice of its own in its
+`research.md` — guidance for the author and reviewers, not a checked field. The pre-merge gate's deterministic checks
+fail a **newly added** ADR that carries no such section. They do not force one onto a pre-existing ADR the branch
+merely amends — a status-only or supersession edit backfills nothing; whether a material amendment must extend the
+section is a judgement for the reviewers.
+
 **Review.** The PR requests every non-author approver in its plan, so GitHub notifies them at once. Small points are
-settled in PR comments and reviews. A topic that cannot be settled in comments goes to a meeting. If disagreement
+settled in PR comments and reviews. A topic that cannot be settled in comments goes to a meeting: see
+[Closing the review](#closing-the-review-final-round-and-resolution-meeting), which bounds written review to two
+rounds and lets any approver mark a point **resolve in call** at any time. If disagreement
 persists or an approver is unavailable, the coordinator brings the question to the role authorized under project
 governance to resolve it or arrange a delegation. Record any authorized change in the approval plan. Silence is
-never approval, and the coordinator cannot remove an approver merely to unblock a PR.
+never approval, and the coordinator cannot remove an approver merely to unblock a PR. An approver reviews an
+initiative proposal through the [Initiative Proposal Review](../skills/catalog.md#initiative-proposal-review) method:
+first understanding the problem and where it sits, then judging the direction and the author's alternatives.
 
 **Reconciliation.** A review or a position comment that raises more than a couple of points gets a reconciliation: a
 table that answers every point.
@@ -116,6 +133,15 @@ table that answers every point.
   - **needs clarification:** a question back, asked where the point lives;
   - **differs:** the positions, the current text, and the answer or options.
 - **Every point the PR adopts** also gets a short reply on its review thread, naming the commit.
+- **A point that changes a document is handled only when its edit is prepared.** When a point means an ADR or spec
+  must change, its drafter makes the concrete edit to that document's text in a pushed commit on the proposal's
+  branch, kept in draft, and the row names that commit. A point left as a comment, or as a bare "agreed", is **not**
+  handled: the edit, not the intention, is what a later reader sees. If every approver agrees, applying it is
+  bookkeeping; if anyone opposes, they counter on the PR and the reconciled text is prepared the same way. The drafter
+  is the PR's **author** for a single-PR review (the author deduces the text in their own PR), the **coordinator** for
+  a position across PRs; the coordinator, working in that PR's scope, may also deduce the verdict from the forum and
+  apply it, then ask the reviewers to verify the proposed text. The sync and the pre-merge gate both check that no such
+  point is left comment-only.
 - **A reconciliation never makes anything agreed.** It says what each PR's text will be. Agreement still follows the
   final-commit approval rule below.
 - **Open rows reach the board:** a clarification names who must answer in *Who is needed where*, and a "differs" that
@@ -138,20 +164,56 @@ table that answers every point.
 - **General defects.** A defect a spec finds that does not depend on the initiative's decisions gets its own issue
   outside the initiative. The spec does not depend on it.
 
+**Surfaces: the document, the forum, the board.** An initiative keeps its thinking on three surfaces, and each holds
+a different thing. Keeping them in their places is what makes a proposal cheap to reason about, both on its own and in
+the wider initiative.
+- **The document** — the ADR or spec text — records only the decision and how it was reached: the problem it solves,
+  what it enables, the alternatives weighed, and the context of its time and place. It is written to be read years
+  later. It carries **no personal names and no "who is needed where"**: nothing that is only true now. That also
+  rules out `@` mentions, positions attributed to a person ("X's position"), dated amendment headings, PR and issue
+  links, provenance lines ("found by spec N, Q5") and an open-questions section: those belong in the PR description.
+  The gate's deterministic checks fail an added `@` mention and warn on the rest in an ADR.
+- **The PR and the issue are the forum.** Discussion, questions, counter-proposals and the live state of the proposal
+  live here. The document is **deduced from** the forum, not edited in lockstep with it, and not everything on the
+  forum reaches the document. The **title stays stable and general** — it names the topic, not a mechanism that may
+  still change. The **description is the live state**: it states the current direction and points to the latest
+  decisive comments, so a reader, often an agent, sees from it alone where the proposal stands. The **document may
+  lag** the latest direction; when it does, the description says so. **Open questions live as a checklist in the
+  description**, each one open or answered with a link — not in the document, and not tied to a named person.
+- **The board** holds the only transient routing: **Who is needed where**. An open question, or a "differs" that
+  comments cannot settle, appears there as someone who is needed; two approvals may stand in when a reviewer is away,
+  and the row is cleared when the question is answered.
+
+**Everyone is offered to contribute; only some are offered to edit the document.** When a session helps anyone take
+part in an initiative PR or issue, it offers to record their thoughts, questions and discussion points as a **forum
+comment**, so the forum stays the live record. It offers to edit the **document's text** only to the PR's **author**,
+in their own PR, and to the **coordinator working in that PR's scope**, who may deduce the verdict from the forum,
+apply it to the document, and then ask the reviewers to verify the proposed text. It never offers anyone else to edit
+the document, even though anyone with access may push.
+
+**Reconciling the surfaces.** When a finding changes the direction, the description is brought current at once; the
+document's text is reconciled when the direction is agreed, through the prepared edit in *Reconciliation* above. The
+coordinator checks **surface consistency** at every sync and before every merge: the title, the description and the
+document agree on the current direction, no decisive comment is left unreflected in the description, and no finding
+that changes a document is left as a comment only. A mismatch is a contradiction and blocks the merge until the
+drafter reconciles it.
+
 **Agreement (ADRs and specs).** Both kinds of PR stay drafts until the following steps are complete:
 1. Once review has settled the text, the **author** commits the final record: `Status: accepted (<date>)` for an ADR,
    or `**Status**: Approved` for an initial spec approval. Later spec changes retain the appropriate
    [lifecycle status](../reference/spec-lifecycle.md), including `Implemented` when delivery finishes. An approving
    coordinator asks the author to make this edit instead of committing to the PR. A status line alone is not agreement.
-2. Every human approver in the approval plan who is not an author approves the **final text**, including that status
-   edit: an `APPROVED` review on the current head commit, or on an earlier commit whose text is still the same (see
-   below). A later changes-requested review must be resolved by a fresh approval.
-3. An author includes anyone who committed to the PR, as the normal merge rules require. A human author named in
-   the approval plan records their agreement in a PR comment naming the final commit, without self-approving.
-   A bot's publishing identity or approval never substitutes for a human approver's agreement.
+2. Every human approver in the approval plan agrees with the **direction the final text records**. Agreement may be
+   recorded in any form: a meeting read-back processed by the coordinator, a comment, a reconciliation row, or a
+   review. A GitHub `APPROVED` review is welcome but not required, and a changes-requested review that later commits
+   answer does not block once the coordinator records how it was answered. The coordinator decides that a PR is
+   agreed when every decision and open question in it is settled under that record, and links the record on the
+   board and in the PR.
+3. A bot's publishing identity or approval never substitutes for a human approver's agreement.
 4. The coordinator records the agreed commit on the board and marks the PR ready. The coordinator then runs the
    [pre-merge gate](#the-pre-merge-gate) and merges the PR into the [initiative branch](#the-initiative-branch).
-   Agreement is not the merge: a PR can be agreed and still wait for a clean gate or a side track.
+   Agreement is not the merge: a PR can be agreed and still wait for a clean gate or a side track. Approvers verify
+   what was merged afterwards and raise any mistake as a new point.
 
 **Material changes need renewed agreement.** An approval stays valid for a later commit unless a change could
 seriously alter that reviewer's standpoint or decision. Trivial, non-semantic edits — the status line, formatting, a
@@ -167,7 +229,7 @@ work may use only the version actually agreed. Agreement and merge remain separa
 
 **Scope.** Every ADR, ADR amendment and spec whose topic is on an initiative's board is agreed through that initiative,
 whoever writes it, including an architect working outside the board. Its PR is opened as a draft against the
-initiative branch (against `main` once the initiative has landed), says `Part of #N`, and requests every non-author approver. The boundary rule also covers links through descendant issues and issues the
+initiative branch, says `Part of #N`, and requests every non-author approver. The boundary rule also covers links through descendant issues and issues the
 PR closes. Missing a link does not exempt a board topic: add the link and apply the same gate. Bot review checks
 the change, never architectural agreement. A manual merge follows the same agreement rule.
 
@@ -212,25 +274,130 @@ The source record stays visible before the next sync. The pointer looks like thi
 - it also reads the linked PRs and issues, so that work reported without a pointer (for example a PR approved in the
   browser) still reaches the board;
 - it checks that every reconciliation row has reached its PR (applied, asked, or on the meeting list), and offers a
-  reconciliation for any multi-point review or position that has none yet.
+  reconciliation for any multi-point review or position that has none yet;
+- it checks surface consistency on every open proposal: the title, the description and the document agree on the
+  current direction, the description reflects the latest decisive comments and carries the open-questions checklist,
+  and no finding that changes a document is left as a comment only — it offers the drafter the prepared edit wherever
+  one is missing.
 
-**Check-in.** "Where am I needed on #N?" reads three things:
+**Check-in.** A session doing initiative work first checks out the **initiative branch** (`git fetch origin`, then
+work from `origin/initiative/<n>-<slug>`, named in the board header), not `main`: that branch is the initiative's
+current knowledge base — every agreed ADR, spec and amendment — and every open proposal is reviewed against it, so a
+participant left on `main` reads stale decision artifacts that predate the initiative. Then "Where am I needed on
+#N?" reads three things:
 - the board;
 - the pointer comments the coordinator has not handled yet;
 - the person's open review requests on PRs linked to the initiative (linked by the boundary rule above).
 
 A new task is therefore visible to the person who needs to act, even before the next sync.
 
+## Closing the review: final round and resolution meeting
+
+Written review converges, or it loops. This phase bounds it: two review rounds, one final round, then one human
+meeting that decides what is left, and a coordinator session that turns the meeting into recorded decisions.
+
+**1. Review rounds (at most two).** A round is one pass in which every approver reviews a proposal PR and its author
+revises it. The board's decision rows note the round (`r1`, `r2`). After the second round, the coordinator calls the
+final round for the proposals still open.
+
+**2. Resolve in call (any time).** Any approver may mark a point **resolve in call** in any round: a PR comment headed
+`Resolve in call`, naming the decision ID. That point stops in writing at once and goes on the meeting list. This
+prevents a comment loop on a point where positions are clear and only a conversation will move them.
+
+**3. The final round (one pass).** Every approver, for every open proposal at the head the coordinator names:
+- **approves** the text they can agree with (a review or a comment); or
+- **records a meeting item**: one PR comment headed `Meeting item`, in the approver's own words, with
+  - the point (one line, with the decision ID and the document section);
+  - their position (one or two sentences);
+  - what they cannot accept in the current text (one sentence);
+  - the evidence they will bring (a pointer, or "none yet").
+
+No new proposals, alternatives or prepared edits are made in the final round. An AI assistant may **format and
+fact-check** a person's own words (find the commit, quote the section) but never **drafts positions or
+counter-arguments** in the final round or after it. The coordinator sets a deadline; silence is not approval, so an
+approver who does not answer has their open points carried into the meeting.
+
+**4. The meeting agenda.** The coordinator prepares it on the initiative branch, at
+`docs/initiatives/<n>/<date>-meeting-agenda.md`, from the template below, so everyone reads it before the meeting. It
+has:
+- **a briefing** at the top: the minimum the meeting must resolve, one bullet per item with its context;
+- **one zoom-in section per item**, in impact order (the item that blocks the most specs first), with the decision to
+  make, each person's position, links to the item's `Meeting item` and `Resolve in call` comments, and evidence.
+
+Every item carries **one short spoken anchor**: the board's decision ID and a two-to-three word handle, for example
+*"D-6, effect flag"*. An item without a decision ID gets one on the board before the meeting. The agenda is a view on the
+board, never a second source of truth. Like an ADR, the **committed agenda carries no personal names**: positions are
+numbered and link to their comments, and the board maps them to people. A copy posted on the board may name people. For
+the meeting itself, the coordinator generates a local copy with names,
+`python tools/initiatives/agenda_names.py <agenda> --initiative <n>`, which writes a git-ignored `*.named.md` next to
+the agenda for a Markdown preview; it is never committed.
+
+**5. The meeting (human only).** The coordinator leads and guards the agenda:
+- opens and closes each item by saying its anchor aloud: these are the anchors in the transcript;
+- when the conversation drifts to another item, names it ("that is D-7, computed reads") and either decides it there
+  under its own anchor or parks it;
+- per item, asks each person for the restrictions and benefits of their view for the architecture, workflow users and
+  .NET Elsa developers, and for their evidence, then seeks the middle ground everyone agrees on;
+- ends with a **read-back**: every anchor with its outcome (decided as …, still open, new, reopened, obsolete).
+
+The meeting is recorded and transcribed.
+
+**6. After the meeting (a coordinator session).** The coordinator, not the authors, turns the transcript into recorded
+decisions:
+1. **Classify** every passage that states an outcome ("agreed", "we go with", "park it", "drop that") against the
+   agenda's anchors. Each decision lands in one bucket: **decided**, **still open**, **new**, **reopened** or
+   **obsolete**. An outcome with no anchor is a *new decision* candidate. Nothing without a clear outcome is closed.
+2. **Verify** the classification by grilling the coordinator: "the transcript says D-6 was decided as X; is that what
+   was agreed?" Only confirmed outcomes are applied.
+3. **Apply**: the coordinator writes each decision into its ADRs and specs (as the coordinator in that PR's scope),
+   updates the board (decided in the meeting, with the date), and creates, reopens or retires decision rows.
+4. **Verify only**: approvers check that each changed text matches what was decided. This is not a new review and
+   cannot reopen a decision; a mismatch is fixed by the coordinator. Agreement and merge then follow the normal rules
+   above.
+
+A meeting that cannot reach a decision follows the governance route in *Review* above.
+
+```markdown
+# Meeting agenda: <initiative> (#<n>), <date>
+
+**Led by:** the coordinator. **With:** the approvers. **Recorded and transcribed.** Positions are numbered; the board maps them to people.
+
+## Briefing: the minimum to resolve
+- **D-6, effect flag** (ADR 0045 §5): which functions get the commit boundary. Blocks S-1, S-7.
+- **D-14, per-arrival join** (ADR 0045 §6): …
+
+## D-6, effect flag
+**Decision to make:** <one sentence>.
+**Already agreed around it:** <bullets>.
+| Position | Summary | Notes |
+|---|---|---|
+| 1 | … | [meeting item](link) |
+**Ask each:** restrictions and benefits for the architecture, workflow users, .NET Elsa developers; evidence.
+**Evidence on file:** <links>. **Possible middle grounds:** <bullets>.
+**Changes after the decision:** <PRs>.
+
+## Parking lot
+## Read-back
+| Anchor | Outcome |
+|---|---|
+```
+
 ## The initiative branch
 
 Every initiative has one integration branch in this repository, `initiative/<n>-<slug>`, cut from `main` when the
 initiative starts and named in the board's header. It holds the initiative's **agreed decision artifacts** and nothing
-else: ADRs and ADR amendments; spec, plan and tasks; and the CONTEXT, glossary or constitution edits those decisions
-imply. It holds no production code. Because every proposal is checked against everything already on it, the branch is
-the initiative's shared, consistent knowledge base: what the initiative has decided so far, in one place.
+else: ADRs and ADR amendments; spec, plan and tasks; the CONTEXT, glossary or constitution edits those decisions
+imply; and the initiative's meeting agendas (`docs/initiatives/<n>/`), which land with it as part of the decision
+log. Once a spec's decisions are agreed, it also holds that spec's **implementation** (see *Implementing a spec on
+the branch* below), so the decisions and the code built on them land together. Because every proposal is checked
+against everything already on it, the branch is the initiative's shared, consistent knowledge base: what the
+initiative has decided so far, in one place. Everyone taking part works from it — authors cut their proposal branches
+from it, and reviewers and the coordinator check it out to see the agreed decisions a proposal builds on — not from
+`main`, which does not carry them until the initiative lands.
 
 Work outside the initiative is unaffected. Every rule in this section applies only to **initiative proposals**: PRs
-whose base is an `initiative/*` branch, or the branch of a proposal stacked on one.
+whose base is an `initiative/*` branch, or the branch of a proposal stacked on one. Implementation PRs on the branch
+follow their own subsection below where it differs.
 
 - **Proposal PRs target the branch.** An ADR, amendment or spec PR in the initiative's scope uses the initiative branch
   as its base from its first draft, so it is written and reviewed against what the initiative has already agreed.
@@ -240,21 +407,30 @@ whose base is an `initiative/*` branch, or the branch of a proposal stacked on o
   parent's branch. They are part of the parent: the **parent's author** merges an agreed child into their own branch
   before the parent's gate, and the change counts toward the parent's agreement under the materiality rule. A child
   still open when its parent merges is retargeted to the initiative branch and becomes a proposal of its own.
-- **No required CI.** Initiative proposals carry no required checks. Architecture is judged by agreement and the
-  pre-merge gate, not by builds and tests, which would only re-run unchanged code. The landing PR runs every required
-  check on `main`.
+- **No required CI for decision documents.** ADR, amendment and spec proposals carry no required checks.
+  Architecture is judged by agreement and the pre-merge gate, not by builds and tests, which would only re-run
+  unchanged code. Implementation PRs do run the full checks (see below), and the landing PR runs every required check
+  on `main`.
 - **The coordinator merges** proposals into the initiative branch, by squash, after agreement and a clean pre-merge
   gate. Code Review does not merge initiative proposals ([org review and merge rules][org-agents-review]). Each
-  accepted proposal is one squash commit, so the branch reads as a decision log. The coordinator also pushes the merges
-  of `main`, the ADR index updates and any renumbering of merged items; nobody else pushes to the branch. When the
-  coordinator authored or committed to a proposal, the recorded delegate, or else a non-author approver, stands in:
-  they run the gate, push what it needs and merge the proposal, because an author never merges their own PR. A stand-in
-  who is not the recorded delegate does not edit the board: they post the `main` commit and the merge commit in a
-  pointer comment, and the coordinator records them at the next sync.
+  accepted proposal is one squash commit, so the branch reads as a decision log. The coordinator also merges
+  implementation PRs, after Code Review's approval and green checks instead of the gate. The coordinator also pushes the merges
+  of `main`, the ADR index updates and any renumbering of merged items; nobody else pushes to the branch. The
+  coordinator merges a proposal they authored too, once its agreement is recorded. When the coordinator is away, the
+  recorded delegate, or else an approver, stands in: they run the gate, push what it needs and merge the proposal. A
+  stand-in who is not the recorded delegate does not edit the board: they post the `main` commit and the merge commit
+  in a pointer comment, and the coordinator records them at the next sync.
+- **Merging closes the issues the PR fixes.** GitHub closes an issue from `Fixes #n`, `Closes #n` or `Resolves #n`
+  only when the PR merges into the default branch, and the initiative reaches `main` only when it lands. Whoever merges
+  a PR into the initiative branch therefore closes, right after the merge, every issue it fixes
+  (`gh pr view <n> --json closingIssuesReferences`), with a comment naming the PR and the merge commit. The closed
+  issues show the initiative's progress while it is still on its branch; the sync closes any that a merge left open.
 - **Accepted text is amended in place.** Until it lands, an agreed ADR or spec that must change is edited on the branch
   through an amendment PR that follows the agreement rule. No superseding ADR is written for something `main` has never
-  seen. After landing, the branch is gone: later changes to the initiative's ADRs and specs are PRs to `main` under the
-  agreement rule, and the normal supersede rules apply.
+  seen. Landing closes the initiative: once its branch has landed and been archived, its ADRs and specs are ordinary
+  `main` documents that change under the repository's normal rules — the initiative's agreement rule no longer applies,
+  and no further proposals are opened against it. Resuming coordinated work on the topic means starting a new
+  initiative, not reopening a closed one.
 - **Numbers are reserved on the board.** When a proposal is drafted, the coordinator reserves the next free ADR or spec
   number (across `main`, every `initiative/*` branch and all open PRs) and records it on the proposal's board row.
   Proposal PRs do not edit `docs/adr/README.md`; the coordinator updates the index on the branch after each merge. A
@@ -286,9 +462,14 @@ out.
 3. **Check the proposal.** In a local, unpushed checkout of the proposal's head with the updated initiative branch
    merged in, the proposal is checked against everything already on the initiative branch, not only the files it
    touches. If that local merge conflicts, the author merges the initiative branch into the PR first; the coordinator
-   never commits to a proposal.
+   never commits to a proposal. The coordinator also checks the **surfaces**: the title, the description and the ADR or
+   spec text state the same current direction, the description reflects the latest decisive comments, and every finding
+   that changes the document has its prepared edit applied. A stale title or description, or a finding left as a
+   comment only, blocks the merge until the drafter reconciles it.
 4. **Run the deterministic checks** in that same checkout: `python tools/initiatives/check_decision_docs.py`. They find
-   duplicate ADR or spec numbers and malformed status lines, and show which ADR references do not resolve.
+   duplicate ADR or spec numbers, malformed status lines, a newly added ADR with no **Alternatives considered**
+   section and an `@` mention added to an ADR, and show which ADR references do not resolve and which added ADR
+   lines carry a PR or issue link, a dated heading or an open-questions heading (the document stays timeless).
 5. **Review independently and verify.** Independent reviewers do steps 2 and 3 without seeing each other's output, and a
    fresh reviewer verifies every finding against the text. A finding names both passages and the kind of problem:
    *contradiction*, *ambiguity*, *overlap*, *stale reference* or *number collision*. Unverified findings are dropped.
@@ -306,9 +487,9 @@ out.
      the amendment PR that changes it merges.
    - **Ambiguity, overlap and stale references** go back to the proposal's author as review comments. They block only
      when the coordinator says so in the gate comment.
-8. **Merge.** The gate is **clean** when no contradiction, number collision or deterministic-check error is open for
-   the proposal. Then squash-merge the PR, push the ADR index update, and record the merge commit on the proposal's board
-   row.
+8. **Merge.** The gate is **clean** when no contradiction, number collision, deterministic-check error or
+   unreconciled surface is open for the proposal. Then squash-merge the PR, push the ADR index update, and record the
+   merge commit on the proposal's board row.
 
 ### Side tracks
 
@@ -325,10 +506,36 @@ decision relies on. That fix is a **side track**:
 
 An ADR amendment on a topic on the board is never a side track: it goes through the initiative.
 
+### Implementing a spec on the branch
+
+A spec whose dependencies are resolved does not wait for the rest of the initiative. Once the spec is approved and
+merged into the initiative branch, and every ADR and decision it applies is agreed and merged there, the coordinator
+moves its board row to implementation, recording the branch commit it starts from:
+
+- The implementer cuts a branch from `origin/initiative/<n>-<slug>` and implements the spec there (Speckit implement),
+  so the code is written against the decisions it applies. The implementation PR targets the initiative branch and
+  says `Part of #N`. It may be split into several PRs, each naming the spec and its tasks.
+- **It runs the full checks.** Unlike ADR and spec proposals, an implementation PR changes code, so it runs the
+  repository's CI tiers, the same checks a PR to `main` runs. Its author runs the local review loop on the draft,
+  marks it ready with the evidence, and requests Code Review.
+- **Code Review reviews, the coordinator merges.** Code Review reviews and approves it as it would a PR to `main`, but
+  does not merge it (the [org rule][org-agents-review] for `initiative/*` bases stands). The coordinator merges it
+  into the initiative branch once Code Review approved it and its checks pass. It changes no decision, so it needs
+  no architecture agreement and no pre-merge gate; if it would change a decision or a requirement, that change goes
+  through the spec or ADR as an amendment first. After merging it, the coordinator closes the issues it fixes, as
+  above.
+- An implementation that finds an agreed ADR or spec does not work in code follows *Provisional specs*: the finding
+  goes back to the document's PR as an amendment, and the implementation waits for it.
+- When the spec's tasks are done, its `**Status**` becomes `Implemented` in the last implementation PR, and the board
+  row records the merge commit.
+
+The initiative branch therefore carries code once implementation starts. The coordinator's syncs keep merging `main`
+in, so the code keeps building against current `main`.
+
 ### Landing
 
-The initiative branch lands on `main` in one PR, once every board row is agreed and the initiative is ready for
-implementation:
+The initiative branch lands on `main` in one PR, with its decisions and the implementations built on them, once every
+board row is agreed and merged and every spec on it is implemented:
 
 - The coordinator runs the pre-merge gate against `main` one last time and posts the evidence on the landing PR:
   every row agreed and merged, no open side track, collision or recheck, and the gate comment.
@@ -338,8 +545,8 @@ implementation:
 - The coordinator tags the branch tip `archive/initiative/<n>-<slug>` and requests Code Review. Code Review approves
   and merges it through the normal [merge path](merging.md), with a merge commit so that `main` keeps the decision
   log. Every required check runs.
-- The coordinator moves the board to the implementation phase, and a repository admin deletes the branch, since the
-  ruleset blocks everyone else.
+- The coordinator closes the board, and a repository admin deletes the branch, since the ruleset blocks everyone
+  else.
 
 ## Size guard
 
@@ -363,7 +570,7 @@ Last synced <date> by the coordinator. Newer updates are in the comments below.
 
 # Initiative: <objective>
 
-**Phase:** analysis and decisions | specs | implementation
+**Phase:** analysis and decisions | specs | implementation (per spec: name the specs in implementation)
 
 **Coordinator:** @<assignee>. Delegate: <none, or @person for what and until when>.
 
@@ -381,8 +588,11 @@ Last synced <date> by the coordinator. Newer updates are in the comments below.
 |---|---|
 
 ## Decisions
-| Id | Decision | Status | Unblocks |
-|---|---|---|---|
+| Id | Handle | Decision | Status (round, or decided in the meeting of <date>) | Unblocks |
+|---|---|---|---|---|
+
+## Meeting
+<date, link to the agenda on the branch; after it, the read-back and the transcript-processing comment>.
 
 ## Analyses
 | Id | Question | Lead | Status (with links) | Blocks |

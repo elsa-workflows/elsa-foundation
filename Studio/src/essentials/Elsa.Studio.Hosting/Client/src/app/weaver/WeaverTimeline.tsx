@@ -1,15 +1,15 @@
 import React from "react";
 import { Check, CircleDot, Loader2, Wrench, X } from "lucide-react";
-import type { AgentPlanStep } from "../agent/agentTypes";
+import type { WeaverPlanStep } from "./weaverTypes";
 import type { WeaverTimelineEntry } from "./useWeaverSession";
 
-export function WeaverTimeline({ entries, plan }: { entries: WeaverTimelineEntry[]; plan: AgentPlanStep[] }) {
+export function WeaverTimeline({ entries, plan }: { entries: WeaverTimelineEntry[]; plan: WeaverPlanStep[] }) {
   if (entries.length === 0 && plan.length === 0) {
     return null;
   }
 
   return (
-    <section className="weaver-timeline" aria-label="Agent activity">
+    <section className="weaver-timeline" aria-label="Weaver activity">
       {plan.length > 0 ? (
         <ol className="weaver-plan">
           {plan.map(step => (

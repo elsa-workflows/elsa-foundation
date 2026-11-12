@@ -3,8 +3,8 @@ import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { describe, expect, it } from "vitest";
 import type { StudioActivityDescriptor } from "@elsa-workflows/studio-sdk";
-import { createAgentRegistry } from "@elsa-workflows/studio-sdk";
-import { registerWorkflowAgent } from "../workflowAgent";
+import { createWeaverRegistry } from "@elsa-workflows/studio-sdk";
+import { registerWorkflowWeaver } from "../workflowWeaver";
 import { useWorkflowContextBridge, workflowContextCandidateBudget } from "../workflow-editor/useWorkflowContextBridge";
 import { admittedSnapshotLength, clip, collectWorkflowContextDiagnostics, hostSerializedLength, workflowPropertyContentBudget, workflowPropertyContentLimit } from "../workflow-editor/workflowExplainContext";
 import type { ActivityCatalogItem, ActivityNode, ValidationError, WorkflowDefinitionDetails, WorkflowDraft } from "../workflowTypes";
@@ -70,12 +70,12 @@ function descriptorOf(item: ActivityCatalogItem): StudioActivityDescriptor {
 }
 
 function snapshot(draft: WorkflowDraft, options: { selected?: ActivityNode | null; validationErrors?: ValidationError[] } = {}) {
-  const agent = createAgentRegistry();
-  const controller = registerWorkflowAgent(agent);
+  const weaverRegistry = createWeaverRegistry();
+  const controller = registerWorkflowWeaver(weaverRegistry);
   const details = { definition: { id: "definition", name: "Orders" } } as WorkflowDefinitionDetails;
   const selected = options.selected ?? null;
   function Probe() {
-    useWorkflowContextBridge({ controller, clientId: agent.clientId, details, draft, selectedNode: selected, selectedNodeId: selected?.nodeId ?? null,
+    useWorkflowContextBridge({ controller, clientId: weaverRegistry.clientId, details, draft, selectedNode: selected, selectedNodeId: selected?.nodeId ?? null,
       selectedDescriptor: selected ? descriptorOf(catalogByVersion.get(selected.activityVersionId)!) : null,
       inspectedNode: null, inspectedDescriptor: null, inspectedIsScopeOwner: false, catalogByVersion, validationErrors: options.validationErrors });
     return null;
@@ -164,10 +164,10 @@ describe("workflow explain context", () => {
       provenance: { sourceKind: "CLR", sourceId: "/published/" } };
     const decorated = new Map([...catalogByVersion, [clrWriteLine.activityVersionId, clrWriteLine]]);
     const plain: ActivityNode = { nodeId: "plain", activityVersionId: clrWriteLine.activityVersionId, inputs: [], outputs: [] };
-    const agent = createAgentRegistry();
-    const controller = registerWorkflowAgent(agent);
+    const weaverRegistry = createWeaverRegistry();
+    const controller = registerWorkflowWeaver(weaverRegistry);
     function Probe() {
-      useWorkflowContextBridge({ controller, clientId: agent.clientId, details: { definition: { id: "definition", name: "Orders" } } as WorkflowDefinitionDetails,
+      useWorkflowContextBridge({ controller, clientId: weaverRegistry.clientId, details: { definition: { id: "definition", name: "Orders" } } as WorkflowDefinitionDetails,
         draft: draftWith([plain]), selectedNode: null, selectedNodeId: null, selectedDescriptor: null, inspectedNode: null, inspectedDescriptor: null,
         inspectedIsScopeOwner: false, catalogByVersion: decorated });
       return null;
@@ -203,7 +203,7 @@ describe("workflow explain context", () => {
   });
 
   it("produces exactly the shared snapshot the server admits against the owning catalog", () => {
-    // Elsa.Agent.Tests (WorkflowExplainContextTests) admits this same content strictly; a drift on either side fails one suite.
+    // Elsa.Weaver.Tests (WorkflowExplainContextTests) admits this same content strictly; a drift on either side fails one suite.
     const node = apiNode();
     const content = snapshot(draftWith([node]), { selected: node, validationErrors: sharedErrors });
     expect(content).toEqual(shared.content);
@@ -230,11 +230,11 @@ describe("workflow explain context", () => {
   it("leaves the property context out when the selected node's exact version is not in the catalog", () => {
     // The designer then inspects it with another version's descriptor, whose inputs the server would refuse as undeclared.
     const node = { ...apiNode(), activityVersionId: "activity-api-call-v0" };
-    const agent = createAgentRegistry();
-    const controller = registerWorkflowAgent(agent);
+    const weaverRegistry = createWeaverRegistry();
+    const controller = registerWorkflowWeaver(weaverRegistry);
     const details = { definition: { id: "definition", name: "Orders" } } as WorkflowDefinitionDetails;
     function Probe() {
-      useWorkflowContextBridge({ controller, clientId: agent.clientId, details, draft: draftWith([node]), selectedNode: node, selectedNodeId: node.nodeId,
+      useWorkflowContextBridge({ controller, clientId: weaverRegistry.clientId, details, draft: draftWith([node]), selectedNode: node, selectedNodeId: node.nodeId,
         selectedDescriptor: descriptorOf(apiActivity), inspectedNode: null, inspectedDescriptor: null, inspectedIsScopeOwner: false, catalogByVersion });
       return null;
     }

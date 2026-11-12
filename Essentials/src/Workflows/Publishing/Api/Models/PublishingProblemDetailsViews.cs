@@ -11,7 +11,11 @@ public sealed record ActivityPublishingDiagnosticView(
     ActivityDiagnosticSubject Subject,
     ActivityDiagnosticLocation? Location,
     string? Remediation,
-    IReadOnlyDictionary<string, string> Metadata);
+    IReadOnlyDictionary<string, string> Metadata)
+{
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public string? AuthoredPath { get; init; }
+}
 
 /// <summary>A stable activity publication problem response.</summary>
 public sealed record ActivityPublishingProblemDetails(

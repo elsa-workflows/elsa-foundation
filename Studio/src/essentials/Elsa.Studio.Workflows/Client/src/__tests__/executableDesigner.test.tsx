@@ -25,6 +25,7 @@ function mount(tree: WorkflowExecutableNode) {
     const [frames, setFrames] = useState<ScopeFrame[]>([]);
     const [selectedNodeId, select] = useState<string | null>(null);
     return <WorkflowExecutableCanvas detail={detail} activityCatalog={catalog} graph={graph} chosenReference={null}
+      displayName="Pinned workflow"
       frames={frames} onNavigateToScope={setFrames} selectedNodeId={selectedNodeId} onSelectNode={select} />;
   }
   const element = document.createElement("div"); document.body.append(element);

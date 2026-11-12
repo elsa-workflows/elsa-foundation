@@ -80,8 +80,8 @@ public static class RuntimeWorkflowOutputStateProjection
 
         return decision.Mode switch
         {
-            RuntimePayloadCaptureMode.Payload => new WorkflowOutputProjection(name, value.InlineValue, IsRedacted: false, RedactionReason: null, value.Type, value.CapturedAt),
-            RuntimePayloadCaptureMode.DiagnosticSnapshot => new WorkflowOutputProjection(name, DefaultDiagnosticSnapshotFactory.Capture(value.InlineValue.Value, name, value.Type), IsRedacted: false, RedactionReason: null, value.Type, value.CapturedAt),
+            RuntimePayloadCaptureMode.Payload => new WorkflowOutputProjection(name, value.InlineValue, IsRedacted: false, RedactionReason: null, value.Type, value.CapturedAt) { CaptureMode = decision.Mode },
+            RuntimePayloadCaptureMode.DiagnosticSnapshot => new WorkflowOutputProjection(name, DefaultDiagnosticSnapshotFactory.Capture(value.InlineValue.Value, name, value.Type), IsRedacted: false, RedactionReason: null, value.Type, value.CapturedAt) { CaptureMode = decision.Mode },
             _ => new WorkflowOutputProjection(name, Value: null, IsRedacted: true, RedactionReason: decision.Reason, value.Type, value.CapturedAt)
         };
     }

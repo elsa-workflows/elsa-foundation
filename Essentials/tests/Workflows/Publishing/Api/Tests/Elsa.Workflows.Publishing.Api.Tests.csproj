@@ -42,6 +42,8 @@
     <ProjectReference Include="..\..\..\..\..\src\Activities\Runtime\Core\Elsa.Activities.Runtime.Core.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Activities\Runtime\Elsa.Activities.Runtime\Elsa.Activities.Runtime.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Activities\Graph\Runtime\Elsa.Activities.Graph.Runtime.csproj" />
+    <!-- Exercise genuine provider publication before admitting reusable defaults in a workflow. -->
+    <ProjectReference Include="../../../../../src/Activities/Graph/Design/Elsa.Activities.Graph.Design.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Activities\Primitives\Elsa.Activities.Primitives.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Activities\Scripting\Elsa.Activities.Scripting.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Activities\Scheduling\Elsa.Activities.Scheduling.csproj" />
@@ -52,6 +54,12 @@
     <ProjectReference Include="..\..\..\..\..\src\Workflows\Runtime\Scheduling\Elsa.Workflows.Runtime.Scheduling.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Activities\Sequence\Elsa.Activities.Sequence.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Activities\Flowchart\Elsa.Activities.Flowchart.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Activities\ControlFlow\Elsa.Activities.ControlFlow.csproj" />
+    <!-- A BPMN process with a gateway: an enclosing structure that cannot prove its order. -->
+    <ProjectReference Include="../../../../../src/Activities/Bpmn/Elsa.Activities.Bpmn/Elsa.Activities.Bpmn.csproj" />
+    <ProjectReference Include="../../../../../src/Activities/Bpmn/Design/Elsa.Activities.Bpmn.Design.csproj" />
+    <!-- A compensation handler reading its forward step, as the public compensation guide shows. -->
+    <ProjectReference Include="../../../../../src/Activities/Compensation/Elsa.Activities.Compensation.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Primitives\Primitives\Elsa.Primitives.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Mediator\Core\Elsa.Mediator.Core.csproj" />
     <ProjectReference Include="..\..\..\..\Api\Compatibility\Testing\Elsa.Api.Compatibility.Testing.csproj" />
@@ -65,6 +73,11 @@
   <ItemGroup>
     <Compile Include="../../../Fixtures/LegacyWorkflowHashFixture.cs" Link="Fixtures/LegacyWorkflowHashFixture.cs" />
     <EmbeddedResource Include="../../../Fixtures/legacy-set-v1.json" LogicalName="legacy-set-v1.json" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Canonical inline event pipeline used by the real source-analysis fixture. -->
+    <ProjectReference Include="../../../../../src/Events/Elsa.Events/Elsa.Events.csproj" />
   </ItemGroup>
 
 </Project>
