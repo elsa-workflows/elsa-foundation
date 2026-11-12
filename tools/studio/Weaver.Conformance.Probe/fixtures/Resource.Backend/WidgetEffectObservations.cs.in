@@ -5,7 +5,7 @@ using Elsa.Studio.Preferences.Core.Models;
 
 namespace Acme.Home.Weaver;
 
-internal sealed record WidgetEffectsSettings(string ObservationFile, string FaultControlFile);
+internal sealed record WidgetEffectsSettings(string ObservationFile, string FaultControlFile, string ExecutionObservationFile = "");
 internal sealed record WidgetRun(string Actor, string Tenant, string Host, string InvocationId, string ToolCallId,
     string ToolName, string Revision, bool Passed, int CallNumber);
 

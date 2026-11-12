@@ -447,6 +447,7 @@ internal sealed class EffectsEnvironment : IDisposable
     internal EffectPrincipal Principal { get; }
     internal EffectAuthorization Authorization { get; }
     internal WidgetRunJournal Journal { get; }
+    internal WidgetExecutionJournal Executions { get; }
     internal WidgetEffectOwner Owner { get; }
     internal WidgetFaultControl Faults { get; }
     internal WidgetEffectsContext Context { get; }
@@ -462,8 +463,9 @@ internal sealed class EffectsEnvironment : IDisposable
         provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
         scope = provider.CreateScope();
         Journal = new(settings);
+        Executions = new(settings);
         Faults = new(settings);
-        Owner = new(scope.ServiceProvider, native.Http, native.Auth, native.Resource, new(WidgetTestEnvironment.HostId), Journal);
+        Owner = new(scope.ServiceProvider, native.Http, native.Auth, native.Resource, new(WidgetTestEnvironment.HostId), Journal, Executions);
         Context = new(Owner, native.Sessions, Faults);
     }
 

@@ -1,0 +1,139 @@
+using System.Text;
+using System.Text.Json;
+using Elsa.Weaver.Core.Models;
+using Elsa.Studio.Preferences.Core;
+using Elsa.Studio.Preferences.Core.Models;
+
+namespace Acme.Home.Weaver;
+
+internal sealed record WidgetExecutionEntry(string Actor, string Tenant, string Host, string ToolName, string RequestedToolName,
+    string SessionId, string TurnId, string InvocationId, string ToolCallId, int EntryNumber);
+
+// An entry means only that this module's ExecuteAsync was entered, never that an effect ran or succeeded.
+// The operator must provision the private file with Header before enabling observation. Missing files are never recreated.
+internal sealed class WidgetExecutionJournal(WidgetEffectsSettings settings)
+{
+    internal const string Header = """{"Format":"acme.home.execution-entries","Version":1}""";
+    private const int MaximumBytes = 2 * 1024 * 1024;
+    private const int MaximumEntries = 4096;
+    private static readonly UTF8Encoding Utf8 = new(false, true);
+    private readonly object sync = new();
+    private bool failed;
+
+    internal void Record(WeaverPreparedToolInvocation invocation, string toolName, string host)
+    {
+        // Ordinary fixture profiles retain their old tool behaviour. They cannot report an observed zero through Read.
+        if (settings.ExecutionObservationFile.Length == 0) return;
+        lock (sync)
+        {
+            try
+            {
+                WidgetFixtureFiles.Check(settings.ExecutionObservationFile);
+                RequireAvailable();
+                using var file = new FileStream(settings.ExecutionObservationFile, FileMode.Open, FileAccess.ReadWrite, FileShare.Read);
+                var rows = Decode(file);
+                var row = new WidgetExecutionEntry(invocation.ActorId, invocation.TenantId, host, toolName, invocation.ToolName,
+                    invocation.SessionId, invocation.TurnId, invocation.InvocationId, invocation.ToolCallId,
+                    rows.Count(item => item.Actor == invocation.ActorId && item.Tenant == invocation.TenantId && item.Host == host) + 1);
+                Validate(row, rows);
+                if (rows.Count >= MaximumEntries) throw new InvalidDataException("Widget execution observation limit reached.");
+                var bytes = Utf8.GetBytes(JsonSerializer.Serialize(row) + "\n");
+                file.Position = file.Length - 1; // A valid header makes the file nonempty.
+                var delimiter = file.ReadByte() != '\n';
+                if (file.Length + bytes.Length + (delimiter ? 1 : 0) > MaximumBytes)
+                    throw new InvalidDataException("Widget execution observation limit reached.");
+                file.Position = file.Length;
+                if (delimiter) file.WriteByte((byte)'\n');
+                file.Write(bytes);
+                file.Flush(true);
+            }
+            catch (Exception error) when (error is IOException or UnauthorizedAccessException or JsonException or DecoderFallbackException)
+            {
+                failed = true;
+                MarkFailed();
+                throw new WidgetFixtureException("The module execution entry could not be retained. No effect has been attempted by this callback.", error);
+            }
+        }
+    }
+
+    internal IReadOnlyList<WidgetExecutionEntry> Read(StudioPreferenceKey key)
+    {
+        lock (sync)
+        {
+            try
+            {
+                if (settings.ExecutionObservationFile.Length == 0)
+                    throw new InvalidDataException("Execution observation is not configured.");
+                if (key.Namespace != StudioPreferenceNamespaces.HomeLayout)
+                    throw new InvalidDataException("Execution observation belongs to the personal Home resource.");
+                WidgetFixtureFiles.Check(settings.ExecutionObservationFile);
+                RequireAvailable();
+                using var file = new FileStream(settings.ExecutionObservationFile, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+                return Decode(file).Where(row => row.Actor == key.SubjectId && row.Tenant == key.TenantId && row.Host == key.StudioHostId).ToArray();
+            }
+            catch (Exception error) when (error is IOException or UnauthorizedAccessException or JsonException or DecoderFallbackException)
+            { throw new WidgetFixtureException("Module execution observations are unavailable.", error); }
+        }
+    }
+
+    private void RequireAvailable()
+    {
+        var marker = settings.ExecutionObservationFile + ".failed";
+        WidgetFixtureFiles.Check(marker);
+        if (failed || File.Exists(marker)) throw new InvalidDataException("A module execution entry was not retained; this observation cannot prove a count.");
+    }
+
+    private void MarkFailed()
+    {
+        try
+        {
+            var marker = settings.ExecutionObservationFile + ".failed";
+            WidgetFixtureFiles.Check(marker);
+            if (File.Exists(marker)) return;
+            var options = new FileStreamOptions { Mode = FileMode.CreateNew, Access = FileAccess.Write, Share = FileShare.Read };
+            if (!OperatingSystem.IsWindows()) options.UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
+            using var file = new FileStream(marker, options);
+            file.Write(Utf8.GetBytes("Execution observation is incomplete; retain this failure and use a fresh observation path.\n"));
+            file.Flush(true);
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+        {
+            // The current instance stays poisoned even when storage cannot retain
+            // the marker. Such an I/O failure cannot qualify a restart witness.
+        }
+    }
+
+    private static List<WidgetExecutionEntry> Decode(FileStream file)
+    {
+        if (file.Length > MaximumBytes) throw new InvalidDataException("Widget execution observation limit reached.");
+        using var reader = new StreamReader(file, Utf8, detectEncodingFromByteOrderMarks: false, bufferSize: 1024, leaveOpen: true);
+        if (reader.ReadLine() != Header) throw new InvalidDataException("Invalid widget execution observation header.");
+        var rows = new List<WidgetExecutionEntry>();
+        while (reader.ReadLine() is { } line)
+        {
+            using var document = JsonDocument.Parse(line);
+            var value = document.RootElement;
+            if (value.ValueKind != JsonValueKind.Object || value.EnumerateObject().Count() != 10
+                || value.EnumerateObject().Select(item => item.Name).Distinct(StringComparer.Ordinal).Count() != 10
+                || value.EnumerateObject().Any(item => item.Name is not ("Actor" or "Tenant" or "Host" or "ToolName" or "RequestedToolName"
+                    or "SessionId" or "TurnId" or "InvocationId" or "ToolCallId" or "EntryNumber")))
+                throw new InvalidDataException("Invalid widget execution observation.");
+            var row = JsonSerializer.Deserialize<WidgetExecutionEntry>(line) ?? throw new InvalidDataException("Invalid widget execution observation.");
+            Validate(row, rows);
+            if (rows.Count >= MaximumEntries) throw new InvalidDataException("Widget execution observation limit reached.");
+            rows.Add(row);
+        }
+        return rows;
+    }
+
+    private static void Validate(WidgetExecutionEntry row, IReadOnlyCollection<WidgetExecutionEntry> rows)
+    {
+        var fields = new[] { row.Actor, row.Tenant, row.Host, row.ToolName, row.RequestedToolName,
+            row.SessionId, row.TurnId, row.InvocationId, row.ToolCallId };
+        // Preserve even malformed invocation identities: recording precedes the module's validation.
+        if (fields.Any(value => value is null || value.Length > 256) || !WidgetEffects.Tools.Contains(row.ToolName, StringComparer.Ordinal)
+            || string.IsNullOrWhiteSpace(row.Host)
+            || row.EntryNumber != rows.Count(item => item.Actor == row.Actor && item.Tenant == row.Tenant && item.Host == row.Host) + 1)
+            throw new InvalidDataException("Invalid widget execution observation.");
+    }
+}

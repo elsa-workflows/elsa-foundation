@@ -20,6 +20,7 @@ internal static class WidgetEffects
     internal const string CheckResult = "acme.home.check-result";
     internal const string CheckRenderer = "acme.home.check-result-renderer";
     internal const string ChecksEndpoint = WidgetContract.Endpoint + "/checks";
+    internal const string ExecutionsEndpoint = WidgetContract.Endpoint + "/execution-entries";
     internal const string CheckSchema = """{"type":"object","required":["widgetId","revision","hostId","expectedVisible","actualVisible","passed","ran","callNumber"],"properties":{"widgetId":{"const":"acme.home:status"},"revision":{"type":"string","minLength":1},"hostId":{"type":"string","minLength":1},"expectedVisible":{"type":"boolean"},"actualVisible":{"type":"boolean"},"passed":{"type":"boolean"},"ran":{"const":true},"callNumber":{"type":"integer","minimum":1}},"additionalProperties":false}""";
     internal const string Admin = "acme_home_admin_visibility";
     internal const string Irrecoverable = "acme_home_irrecoverable_visibility";
@@ -53,8 +54,10 @@ internal static class WidgetEffects
 // New effects use the generic current-principal seam and independently repeat native owner authorization.
 // Legacy read/visibility/size and their undeclared context keep their original contracts.
 internal sealed class WidgetEffectOwner(IServiceProvider services, IHttpContextAccessor http, IAuthSessionService auth,
-    WidgetResource resource, WidgetHost host, WidgetRunJournal journal)
+    WidgetResource resource, WidgetHost host, WidgetRunJournal journal, WidgetExecutionJournal executions)
 {
+    internal void RecordExecutionEntry(WeaverPreparedToolInvocation invocation, string toolName) => executions.Record(invocation, toolName, host.Id);
+
     internal Task<StudioPreferenceKey> AuthorizeAsync(string? actor, string? tenant, bool write, CancellationToken ct)
     {
         ct.ThrowIfCancellationRequested();
@@ -182,6 +185,20 @@ internal sealed class WidgetEffectOwner(IServiceProvider services, IHttpContextA
         var runs = journal.Read(state.Key);
         return new { widgetId = WidgetContract.WidgetId, revision = state.Document.Revision, hostId = host.Id,
             ranCount = runs.Count, runs = runs.TakeLast(16).Select(run => new { run.InvocationId, run.ToolCallId, run.ToolName, run.Revision, run.Passed, run.CallNumber }) };
+    }
+
+    internal async Task<object> ExecutionEntriesAsync(CancellationToken ct)
+    {
+        var current = CaptureCurrentRequest();
+        var key = await AuthorizeCurrentAsync(ct);
+        current();
+        var state = await ObserveAsync(key.SubjectId, key.TenantId, false, ct);
+        current();
+        var entries = executions.Read(state.Key);
+        await AuthorizeAsync(key.SubjectId, key.TenantId, false, ct);
+        current();
+        return new { widgetId = WidgetContract.WidgetId, revision = state.Document.Revision, hostId = host.Id,
+            entryCount = entries.Count, entries };
     }
 }
 
