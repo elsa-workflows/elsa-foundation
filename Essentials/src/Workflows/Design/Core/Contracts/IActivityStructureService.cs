@@ -8,6 +8,13 @@ public interface IActivityStructureService
     IReadOnlyCollection<ActivityChildProjection> ProjectChildren(ActivityNode activity);
 
     /// <summary>
+    /// Projects physical ownership solely for retaining authoring metadata. The default keeps custom
+    /// services compatible by deriving ownership from their existing lexical child projection.
+    /// </summary>
+    ActivityOwnershipProjection ProjectOwnership(ActivityNode activity) =>
+        new(ProjectChildren(activity).SelectMany(slot => slot.Activities).ToArray(), []);
+
+    /// <summary>
     /// Projects public-contract members referenced by structure-owned relationships.
     /// </summary>
     IReadOnlyCollection<ActivityChildContractMemberUsage> ProjectChildContractMemberUsage(ActivityNode activity) => [];

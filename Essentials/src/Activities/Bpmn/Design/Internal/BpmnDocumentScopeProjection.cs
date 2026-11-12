@@ -130,7 +130,12 @@ internal static class BpmnDocumentScopeProjection
             throw Invalid("an exact internal scope view is required");
         BpmnDocumentScopeView view;
         try { view = structure.Payload.Deserialize<BpmnDocumentScopeView>(Json) ?? throw Invalid("the view context is missing"); }
-        catch (JsonException exception) { throw new InvalidOperationException("Invalid BPMN scope view context.", exception); }
+        catch (JsonException exception)
+        {
+            var scopeId = structure.Payload.ValueKind == JsonValueKind.Object && structure.Payload.TryGetProperty("scopeElementId", out var id)
+                && id.ValueKind == JsonValueKind.String ? id.GetString() : "<unavailable>";
+            throw new BpmnDocumentSourceException($"Invalid BPMN scope-view JSON on node '{activity.NodeId}', scope '{scopeId}'.", exception);
+        }
         if (view.Owner is null || view.Variables is null) throw Invalid("a view requires its complete canonical owner and variables");
         var source = BpmnDocumentStructureHandler.Read(view.Owner);
         if (view.ScopeElementId == source.ProcessId)
@@ -205,7 +210,7 @@ internal static class BpmnDocumentScopeProjection
     }
 
     private static Dictionary<string, XElement> Index(BpmnAuthoredDocument source) =>
-        BpmnDocumentStructureHandler.ParseXml(source.DocumentXml).Root!.DescendantsAndSelf()
+        BpmnDocumentStructureHandler.ParseXml(source.DocumentXml, source.ProcessId).Root!.DescendantsAndSelf()
             .Where(element => element.Name.NamespaceName == BpmnDocumentStructureHandler.ModelNamespace && element.Attribute("id") is not null)
             .ToDictionary(element => (string)element.Attribute("id")!, StringComparer.Ordinal);
 

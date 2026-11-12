@@ -1,4 +1,5 @@
 using Elsa.Activities.Bpmn.Models;
+using Elsa.Activities.Bpmn.Core;
 using Elsa.Expressions.Core.Models;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
@@ -16,18 +17,23 @@ internal sealed class BpmnDocumentScopeViewHandler : IActivityStructureHandler
     public ActivityChildResultFacts AssessChildResult(ActivityNode activity, string producerChildNodeId, string consumerChildNodeId) =>
         new(ActivityChildResultAvailability.Unknown) { EarlierProducerRunCanReachConsumer = null };
 
+    /// <exception cref="BpmnDocumentSourceException">Malformed source retains its parser cause and node/scope identity.</exception>
     public IReadOnlyCollection<ActivityChildProjection> ProjectChildren(ActivityNode activity)
     {
         var view = BpmnDocumentScopeProjection.ReadView(activity);
         return BpmnDocumentScopeProjection.Project(view.Owner, view.ScopeElementId);
     }
 
+    /// <exception cref="BpmnDocumentSourceException">Malformed source retains its parser cause and node/scope identity.</exception>
     public IReadOnlyCollection<VariableDefinition> ProjectScopedVariables(ActivityNode activity) =>
         BpmnDocumentScopeProjection.QueryVariables(activity);
 
+    /// <exception cref="BpmnDocumentSourceException">Malformed source retains its parser cause and node/scope identity.</exception>
     public ActivityNode ReplaceChildren(ActivityNode activity, IReadOnlyCollection<ActivityChildProjection> childProjections) =>
         BpmnDocumentScopeProjection.ReplaceView(activity, childProjections);
 
+    /// <exception cref="BpmnDocumentSourceException">Malformed source retains its parser cause and node/scope identity.</exception>
+    /// <exception cref="NotSupportedException">Complete-source execution remains closed.</exception>
     public ActivityNodeStructure CompileExecutableStructure(ActivityNode activity)
     {
         BpmnDocumentScopeProjection.ReadView(activity);
