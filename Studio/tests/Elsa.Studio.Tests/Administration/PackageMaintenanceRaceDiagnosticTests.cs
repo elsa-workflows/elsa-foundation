@@ -18,14 +18,21 @@ public sealed class PackageMaintenanceRaceDiagnosticTests
     public static TheoryData<int> Iterations()
     {
         var data = new TheoryData<int>();
-        for (var i = 0; i < 40; i++) data.Add(i);
+        for (var i = 0; i < 5; i++) data.Add(i);
         return data;
     }
 
     [Theory]
     [MemberData(nameof(Iterations))]
-    public async Task Replay_exact_retained_generation_sequence(int iteration)
+    public async Task Replay_exact_retained_generation_sequence_concurrently(int round)
     {
+        var failures = (await Task.WhenAll(Enumerable.Range(0, 8).Select(index => ReplayAsync(round * 8 + index)))).Where(static failure => failure is not null).ToArray();
+        Assert.True(failures.Length == 0, "DIAGNOSTIC #4090 REFUSAL\n" + string.Join("\n----\n", failures));
+    }
+
+    private static async Task<string?> ReplayAsync(int iteration)
+    {
+        await Task.Yield();
         var report = new StringBuilder($"iteration={iteration}\n");
         string root;
         await using (var installer = await AdministrationHost.StartAsync(nativeStore: true, keepFiles: true))
@@ -75,9 +82,10 @@ public sealed class PackageMaintenanceRaceDiagnosticTests
             report.AppendLine($"re-execute@{clock.ElapsedMilliseconds}ms: " + Summary(again));
             await Task.Delay(3000);
             report.AppendLine($"late-preview@{clock.ElapsedMilliseconds}ms: " + Summary(await Prune(host, new JsonObject())));
-            Assert.Fail("DIAGNOSTIC #4090 REFUSAL\n" + report);
+            return report.ToString();
         }
         Assert.Equal("first", retained.ServiceProvider.GetRequiredService<string>());
+        return null;
     }
 
     private static string Summary(JsonObject result)
