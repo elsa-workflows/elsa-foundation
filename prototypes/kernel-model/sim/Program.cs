@@ -111,7 +111,10 @@ int Mutations(int seeds)
     [
         Flaw.FenceWithoutEpoch, Flaw.FenceWithoutPosition, Flaw.FenceWithoutPosition | Flaw.NoResetAfterFailedCommit, Flaw.CommitDespiteFence,
         Flaw.NoResetAfterFailedCommit, Flaw.DeliverBeforeCommit, Flaw.PollWithoutSkip, Flaw.KeepConsumedMessages, Flaw.DeleteWithoutCount,
-        Flaw.WallClockTimers, Flaw.DeleteOutsideCommands, Flaw.RunBeforeMark, Flaw.VolatileRunTicket, Flaw.MeetWithoutTicket, Flaw.PollRace,
+        Flaw.DeleteWithoutCount | Flaw.PollWithoutSkip,
+        // behaviours of draft 1, or of a literal reading of draft 2: the findings of FINDINGS.md
+        Flaw.WallClockTimers, Flaw.DeleteOutsideCommands, Flaw.HandOverWhileBehind, Flaw.BumpAllInherited, Flaw.RunBeforeMark,
+        Flaw.VolatileRunTicket, Flaw.PollRace, Flaw.MeetWithoutTicket,
     ];
     var missed = 0;
     foreach (var mutation in mutations)

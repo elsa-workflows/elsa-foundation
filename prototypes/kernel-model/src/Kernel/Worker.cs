@@ -313,7 +313,7 @@ public sealed class Worker
         // The ticket becomes the result: same id, so it is consumed once, by the step that handles it.
         ticket.Message = ticket.Message with { Kind = Kinds.RunFinished, Payload = Json.Write(new RunFinished(run.Key, result, error)) };
         ticket.Ticket = false;
-        // A result goes ahead of whatever else waits, so a step never sees a cancel first and the result after it.
+        // Finding F7: a result goes ahead of whatever else waits, so a step never sees a cancel first and the result after it.
         ticket.Seq = 0;
         if (_slots.TryGetValue(ticket.Message.Target.Id, out var slot) && slot.Inbox.Remove(ticket)) slot.Inbox.Insert(0, ticket);
     }

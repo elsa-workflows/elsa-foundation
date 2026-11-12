@@ -9,6 +9,7 @@ using Microsoft.EntityFrameworkCore.Diagnostics;
 // Usage:
 //   dotnet run -c Release --project ef/Kernel.Ef.Run -- cost sqlite
 //   dotnet run -c Release --project ef/Kernel.Ef.Run -- cost postgres "<connection string>"
+//   dotnet run -c Release --project ef/Kernel.Ef.Run -- probe "<connection string>"                   seq order inside one commit (finding F8)
 //   dotnet run -c Release --project ef/Kernel.Ef.Run -- stress "<connection string>" [seconds of chaos] [messages]
 //   dotnet run -c Release --project ef/Kernel.Ef.Run -- stress-unfenced "<connection string>" ...     the same with the fence broken: it must fail
 
@@ -23,6 +24,23 @@ if (args is ["cost", "postgres", var cost])
 {
     foreach (var inBatch in new[] { false, true }) await Cost(true, cost, inBatch);
     return 0;
+}
+if (args is ["probe", var probe])
+{
+    // Does seq follow the order in which one commit sent its messages? Twelve messages, one SaveChanges, ids whose
+    // ordinal has no fixed width (as the kernel wrote them before finding F8). It does not: EF sends them in key order.
+    var create = Factory(true, probe);
+    await using (var db = create()) await db.Database.EnsureDeletedAsync();
+    var store = new EfStore(create, postgres: true);
+    await store.CreateAsync(2);
+    var lease = (await store.TakeAsync(0, "probe", TimeSpan.FromSeconds(30)))!;
+    var sent = Enumerable.Range(0, 12).Select(i => new Message($"0/a#1.{i}", InstanceRef.In(1, "b"), "add")).ToList();
+    var row = new InstanceRow("0/a", "counter", "c", InstanceStatus.Running, "{}", 1, null);
+    await store.CommitAsync(new CommitBatch(0, lease.Epoch, lease.Position, TimeSpan.FromSeconds(30), true, [new StepCommit("0/a", row, null, [], [], sent, [], [], "[]")], [], []));
+    var polled = await store.PollAsync(1, 1, TimeSpan.Zero, 100);
+    Console.WriteLine("sent:     " + string.Join(" ", sent.Select(m => m.Id)));
+    Console.WriteLine("by seq:   " + string.Join(" ", polled.Messages.Select(m => m.Message.Id)));
+    return polled.Messages.Select(m => m.Message.Id).SequenceEqual(sent.Select(m => m.Id)) ? 0 : 1;
 }
 if (args is ["stress" or "stress-unfenced", var stress, ..])
     return await Stress(stress, args.Length > 2 ? int.Parse(args[2]) : 15, args.Length > 3 ? int.Parse(args[3]) : 1500, unfenced: args[0] != "stress");

@@ -31,6 +31,7 @@ docker port kernel-model-pg 5432                                          # the 
 dotnet ef/Kernel.Ef.Run/bin/Release/net10.0/Kernel.Ef.Run.dll cost postgres "Host=localhost;Port=<port>;Username=postgres;Password=kernel;Database=kernel_cost"
 dotnet ef/Kernel.Ef.Run/bin/Release/net10.0/Kernel.Ef.Run.dll stress "Host=localhost;Port=<port>;Username=postgres;Password=kernel;Database=kernel_stress" 40 5000
 dotnet ef/Kernel.Ef.Run/bin/Release/net10.0/Kernel.Ef.Run.dll stress-unfenced "<same>" 15 1500   # the fence broken on purpose: must fail
+dotnet ef/Kernel.Ef.Run/bin/Release/net10.0/Kernel.Ef.Run.dll probe "<same>"                     # seq order inside one commit (finding F8)
 ```
 
 A seed fixes everything: the number of nodes, every action and every fault. `--flaw` takes the names of

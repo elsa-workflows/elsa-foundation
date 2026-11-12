@@ -39,9 +39,10 @@ internal sealed class Step : IStep
 
     private string Id => Instance.Ref.Id;
 
-    // A message's id is derived from its sender and the sender's revision.
+    // A message's id is derived from its sender and the sender's revision. Finding F8: the ordinal has a fixed width,
+    // because Entity Framework sends the inserts of one commit in key order and the database hands out seq in that order.
     public void Send(InstanceRef target, string kind, object? payload = null, SendOptions? options = null) =>
-        Send($"{Id}#{_revision}.{_ordinal++}", target, kind, payload, options);
+        Send($"{Id}#{_revision}.{_ordinal++:D4}", target, kind, payload, options);
 
     private void Send(string id, InstanceRef target, string kind, object? payload, SendOptions? options = null) =>
         _sent.Add(new Message(id, target, kind, payload is null ? null : Json.Write(payload), Id, options?.Start,
