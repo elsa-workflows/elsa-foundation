@@ -27,6 +27,11 @@ public sealed class EfExecutionCommandTransport(
     private static readonly EfWriteRetry AppendAndLeaseRetry = new(MaxCasAttempts, EfWriteConflict.Concurrency | EfWriteConflict.UniqueKey | EfWriteConflict.Transient);
     private static readonly EfWriteRetry AckRetry = new(MaxCasAttempts, EfWriteConflict.Concurrency | EfWriteConflict.Transient);
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    internal bool Uses(ExecutionCommandTransportDbContext expected, PersistenceScope scope, string? tenantId)
+    {
+        accessContextAccessor.Current.EnsureTenantScope(tenantId);
+        return ReferenceEquals(context, expected) && accessContextAccessor.Current.RequireScope() == scope;
+    }
 
     public async ValueTask<ExecutionCommandTransportItem> SendAsync(
         string workflowExecutionId,
@@ -63,7 +68,8 @@ public sealed class EfExecutionCommandTransport(
                 envelope,
                 sequence,
                 now);
-            var itemEntity = ToEntity(item, scope, scopeHash, workflowHash);
+            var version = ExecutionCommandTransportWriteVersion.For(context, envelope, streamVersion: head?.SchemaVersion);
+            var itemEntity = ToEntity(item, scope, scopeHash, workflowHash, version);
             var pendingCount = head?.PendingCount ?? 0;
             if (pendingCount < 0)
                 throw new InvalidOperationException("The command stream head has a negative pending count.");
@@ -82,12 +88,13 @@ public sealed class EfExecutionCommandTransport(
                     PendingVisibleAtUtcTicks = 0,
                     PendingSequence = sequence,
                     Revision = 1,
-                    SchemaVersion = ExecutionCommandTransportEfModule.SchemaVersion
+                    SchemaVersion = version
                 });
             }
             else
             {
                 head.LastSequence = sequence;
+                head.SchemaVersion = version;
                 head.PendingCount = checked(pendingCount + 1);
                 var previousEarliestWasVisible = pendingCount > 0 && head.PendingVisibleAtUtcTicks == 0;
                 head.PendingVisibleAtUtcTicks = 0;
@@ -173,7 +180,7 @@ public sealed class EfExecutionCommandTransport(
                     throw new InvalidOperationException("A command transport item is ahead of its stream head.");
 
                 var next = current.Lease(ownerId, leaseExpiresAt);
-                ApplyLease(candidate, next, scope, scopeHash, workflowHash);
+                ApplyLease(candidate, next, scope, scopeHash, workflowHash, head.SchemaVersion);
             }
 
             await context.SaveChangesAsync(cancellationToken);
@@ -181,6 +188,7 @@ public sealed class EfExecutionCommandTransport(
             head.PendingVisibleAtUtcTicks = summary.VisibleAtUtcTicks;
             head.PendingSequence = summary.Sequence;
             head.Revision = checked(head.Revision + 1);
+            head.SchemaVersion = ExecutionCommandTransportWriteVersion.For(context, null, head.SchemaVersion);
             await context.SaveChangesAsync(cancellationToken);
             await transaction.CommitAsync(cancellationToken);
 
@@ -251,6 +259,7 @@ public sealed class EfExecutionCommandTransport(
             if (item.Sequence > head.LastSequence)
                 throw new InvalidOperationException("A command transport item is ahead of its stream head.");
 
+            head.SchemaVersion = ExecutionCommandTransportWriteVersion.For(context, item.Envelope, itemEntity.SchemaVersion, head.SchemaVersion);
             context.CommandTransportItems.Remove(itemEntity);
             head.PendingCount--;
             await context.SaveChangesAsync(cancellationToken);
@@ -329,7 +338,8 @@ public sealed class EfExecutionCommandTransport(
             if (item.Sequence > head.LastSequence)
                 throw new InvalidOperationException("A command transport item is ahead of its stream head.");
 
-            ApplyLease(itemEntity, item.ReleaseLease(now), scope, scopeHash, workflowHash);
+            ApplyLease(itemEntity, item.ReleaseLease(now), scope, scopeHash, workflowHash, head.SchemaVersion);
+            head.SchemaVersion = ExecutionCommandTransportWriteVersion.For(context, null, head.SchemaVersion);
             await context.SaveChangesAsync(cancellationToken);
             var summary = await ReadEarliestPendingAsync(scopeHash, workflowHash, scope, workflowExecutionId, head.PendingCount, head.LastSequence, cancellationToken);
             head.PendingVisibleAtUtcTicks = summary.VisibleAtUtcTicks;
@@ -640,12 +650,13 @@ public sealed class EfExecutionCommandTransport(
                    row.WorkflowExecutionId == workflowExecutionId,
             cancellationToken);
 
-    private static void ApplyLease(
+    private void ApplyLease(
         ExecutionCommandTransportItemEntity row,
         ExecutionCommandTransportItem item,
         string scope,
         string scopeHash,
-        string workflowHash)
+        string workflowHash,
+        string streamVersion)
     {
         row.ScopeKey = EfDistributedIdentity.EncodeScope(scope);
         row.ScopeKeyHash = scopeHash;
@@ -659,7 +670,7 @@ public sealed class EfExecutionCommandTransport(
         row.LeaseExpiresAtUtcTicks = item.LeaseExpiresAt?.UtcTicks ?? 0;
         row.LeaseExpiresAtOffsetMinutes = item.LeaseExpiresAt is { } expiry ? OffsetMinutes(expiry) : 0;
         row.PayloadJson = Serialize(item);
-        row.SchemaVersion = ExecutionCommandTransportEfModule.SchemaVersion;
+        row.SchemaVersion = ExecutionCommandTransportWriteVersion.For(context, item.Envelope, row.SchemaVersion, streamVersion);
         row.Revision = checked(row.Revision + 1);
     }
 
@@ -667,7 +678,8 @@ public sealed class EfExecutionCommandTransport(
         ExecutionCommandTransportItem item,
         string scope,
         string scopeHash,
-        string workflowHash) => new()
+        string workflowHash,
+        string version) => new()
         {
             Id = EfDistributedIdentity.CreateId(scope, item.TransportItemId),
             ScopeKey = EfDistributedIdentity.EncodeScope(scope),
@@ -686,7 +698,7 @@ public sealed class EfExecutionCommandTransport(
             LeaseExpiresAtOffsetMinutes = 0,
             PayloadJson = Serialize(item),
             Revision = 1,
-            SchemaVersion = ExecutionCommandTransportEfModule.SchemaVersion
+            SchemaVersion = version
         };
 
     private static ExecutionCommandTransportItem MapItem(
@@ -813,7 +825,7 @@ public sealed class EfExecutionCommandTransport(
     private static string Escape(string value) => value.Replace("%", "%25").Replace(":", "%3A");
 
     private static bool IsPersistenceBoundaryFailure(Exception exception) =>
-        exception is DbException or DbUpdateException or InvalidOperationException or ArgumentException or OverflowException or JsonException;
+        exception is DbException or DbUpdateException or InvalidOperationException or ArgumentException or OverflowException or JsonException or InvalidDataException;
 
     private static ExecutionCommandTransportEntityFrameworkPersistenceException Normalize(string operation, string identity, Exception inner) =>
         new(operation, identity, $"The EF execution command transport failed while {operation} command '{identity}'.", inner);
