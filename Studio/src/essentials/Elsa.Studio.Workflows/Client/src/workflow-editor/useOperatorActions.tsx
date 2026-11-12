@@ -490,16 +490,24 @@ export function useOperatorActions({
     });
   }, [context, workflowExecutionId]);
 
-  const returnFocus = (state: DialogState) => {
-    requestAnimationFrame(() => requestAnimationFrame(() => {
-      if (state.trigger?.isConnected && !state.trigger.closest("[aria-hidden='true'], [inert]")) state.trigger.focus();
-      else state.focusFallback?.();
-    }));
-  };
+  // Focus goes back in the commit that closes the dialog, after React has updated the page. A submitted action closes the
+  // dialog in the same commit that marks it pending and removes the row's action buttons, so focus lands on what stays:
+  // the opener when it is still there, otherwise the fallback (the row's state chip). Waiting for animation frames
+  // instead raced that commit and could focus a button that was about to be removed (#4096).
+  const focusReturn = useRef<DialogState | null>(null);
+  const [focusReturnRequest, setFocusReturnRequest] = useState(0);
+  useLayoutEffect(() => {
+    const state = focusReturn.current;
+    if (!state) return;
+    focusReturn.current = null;
+    if (state.trigger?.isConnected && !state.trigger.closest("[aria-hidden='true'], [inert]")) state.trigger.focus();
+    else state.focusFallback?.();
+  }, [focusReturnRequest]);
 
   const close = (state: DialogState) => {
+    focusReturn.current = state;
+    setFocusReturnRequest(request => request + 1);
     setDialog(null);
-    returnFocus(state);
   };
 
   const confirm = async (state: DialogState, form: OperatorActionForm) => {
