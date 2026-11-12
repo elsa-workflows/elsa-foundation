@@ -232,6 +232,11 @@ public sealed class InMemoryStore(int partitions, Func<long> clock, Flaw flaws =
         }
     }
 
+    public ValueTask<IReadOnlyList<ViewRow>> ReadViewsAsync(IReadOnlyCollection<string> instances, CancellationToken cancellationToken = default)
+    {
+        lock (_gate) return new(instances.Select(i => Views.GetValueOrDefault(i)).OfType<ViewRow>().ToList());
+    }
+
     public ValueTask<int> SweepAsync(CancellationToken cancellationToken = default)
     {
         lock (_gate)

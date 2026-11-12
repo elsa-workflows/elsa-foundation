@@ -118,6 +118,9 @@ public interface IKernelStore
     /// </summary>
     ValueTask<bool> ProjectAsync(int partition, long from, long to, IReadOnlyList<JournalRow> rows, CancellationToken cancellationToken = default);
 
+    /// <summary>The viewer's read: the view rows of these instances, as the projectors have written them. Missing ids are skipped.</summary>
+    ValueTask<IReadOnlyList<ViewRow>> ReadViewsAsync(IReadOnlyCollection<string> instances, CancellationToken cancellationToken = default);
+
     /// <summary>Delete handled outside commands and events whose window has passed.</summary>
     ValueTask<int> SweepAsync(CancellationToken cancellationToken = default);
 }

@@ -142,6 +142,7 @@ public sealed class Wire(World world, Actor actor) : IKernelStore
     public ValueTask<bool> ProjectAsync(int partition, long from, long to, IReadOnlyList<JournalRow> rows, CancellationToken cancellationToken = default) =>
         Send("project", $"project p{partition} from {from} to {to}", () => world.Store.ProjectAsync(partition, from, to, rows));
     public ValueTask<int> SweepAsync(CancellationToken cancellationToken = default) => world.Store.SweepAsync();
+    public ValueTask<IReadOnlyList<ViewRow>> ReadViewsAsync(IReadOnlyCollection<string> instances, CancellationToken cancellationToken = default) => world.Store.ReadViewsAsync(instances);
 
     private static string Describe(StepCommit step) =>
         (step.Row is { } row ? $"{row.Id} r{row.Revision} {row.Status}" : step.Instance == "" ? "tickets" : $"{step.Instance} (no row)")

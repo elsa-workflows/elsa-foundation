@@ -5,7 +5,7 @@ It tests the design before product code exists. It shares nothing with the Elsa 
 repository: the folder has its own `Directory.Build.*`, `Directory.Packages.props`, `NuGet.config`, `global.json` and
 `.editorconfig`.
 
-What was found is in [FINDINGS.md](FINDINGS.md).
+What was found is in [FINDINGS.md](FINDINGS.md); what each database engine does to the EF store is in [ENGINES.md](ENGINES.md).
 
 ## Layout
 
@@ -14,7 +14,7 @@ What was found is in [FINDINGS.md](FINDINGS.md).
 | `src/Kernel` | The kernel: contracts, storage interface, partition worker, balancer, projector, reply addresses for live output, in-memory store. No clock, thread, timer or random number of its own |
 | `sim` | Toy execution models, the deterministic simulation, the invariant checks, the shrinker and the mutation check |
 | `ef/Kernel.EntityFramework` | The storage interface on Entity Framework Core for PostgreSQL and SQLite |
-| `ef/Kernel.Ef.Run` | The cost measurement and the concurrent stress test |
+| `ef/Kernel.Ef.Run` | The cost measurement and the concurrent stress test; `EngineRun.cs` runs them on PostgreSQL, SQL Server, MySQL and SQLite (`x ...`, see ENGINES.md) |
 
 ## Run
 

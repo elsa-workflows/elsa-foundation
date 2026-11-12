@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>Kernel.Mongo.Run</RootNamespace>
+    <ServerGarbageCollection>true</ServerGarbageCollection>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Kernel.Mongo/Kernel.Mongo.csproj" />
+    <ProjectReference Include="../../conformance/Kernel.Store.Conformance/Kernel.Store.Conformance.csproj" />
+  </ItemGroup>
+</Project>

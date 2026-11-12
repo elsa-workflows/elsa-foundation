@@ -12,7 +12,9 @@ using Microsoft.EntityFrameworkCore.Diagnostics;
 //   dotnet run -c Release --project ef/Kernel.Ef.Run -- probe "<connection string>"                   seq order inside one commit (finding F8)
 //   dotnet run -c Release --project ef/Kernel.Ef.Run -- stress "<connection string>" [seconds of chaos] [messages]
 //   dotnet run -c Release --project ef/Kernel.Ef.Run -- stress-unfenced "<connection string>" ...     the same with the fence broken: it must fail
+//   dotnet run -c Release --project ef/Kernel.Ef.Run -- x <command> <engine> "<connection string>" [key=value ...]   any engine: EngineRun.cs, ENGINES.md
 
+if (args is ["x", ..]) return await EngineRun.RunAsync(args[1..]);
 if (args is ["cost", "sqlite"])
 {
     var file = Path.Combine(Path.GetTempPath(), $"kernel-model-{Guid.NewGuid():N}.db");
