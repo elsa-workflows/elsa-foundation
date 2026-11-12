@@ -1,5 +1,12 @@
 # Findings
 
+**Names.** Sections 1 to 23 use the names the code had when they were written: an instance's *step* (`IStep`,
+`StepAsync`, `Step.cs`, a step commit) is a **turn** (`ITurn`, `TurnAsync`), and off-step work, a *run* (`IRun`,
+`Run`, `CancelRun`, `RunFinished`, `kernel.run`, the `runs` column), is a **background job** (`IJob`, `StartJob`,
+`CancelJob`, `JobFinished`, `kernel.job`, `jobs`). `src/Kernel` is now three projects: `src/Kernel.Runtime`,
+`src/Kernel.Durable` and `src/Kernel.Workflows`. The flaws `VolatileRunTicket` and `StepNewerState` are
+`VolatileJobTicket` and `TurnNewerState`. Section 24 has the mapping.
+
 What the model and the simulation say about the kernel sketch (draft 2, 12 November 2026).
 
 With every fix below in place: 200,000 seeds of 300 actions (60 million actions) pass every invariant and the end
@@ -802,3 +809,143 @@ set-based delete.
 
 The seam between layers 1 and 2; draft 4's workflow-instance layer; F-N7, F-N10, F-N11; skipping the event insert when
 no wait can want it kept; the stress test with native instances; a MongoDB replica set of three.
+
+# Round 4
+
+## 24. Stage A: three layers, and the names turn, job and pass. Run
+
+The owner's decisions of 12 November: the kernel is three layers (actor runtime, durable actors, actor types) with
+dependencies pointing downward only; runtimes host partitions only; an instance's step is a **turn**, off-step work
+(a run) is a **background job**, and the runtime's call into a partition is a **pass**. Stage A is a pure refactor:
+every gate gives the numbers it gave at `baba05a78c`, and it does (the table below). Sections 1 to 23 keep the old
+names; the mapping is here.
+
+### Renames
+
+| Before | Now |
+|---|---|
+| `IStep`, `StepAsync`, `Step.cs`, `StepCommit` | `ITurn`, `TurnAsync`, `Turn.cs`, `TurnCommit` |
+| `IRun`, `RunAsync` (the model's), `Run(key)`, `CancelRun` | `IJob`, `ExecuteJobAsync`, `StartJob(key)`, `CancelJob` |
+| `RunFinished`, kind `run-finished`, ticket kind `kernel.run` | `JobFinished`, `job-finished`, `kernel.job` |
+| Instance row field and column `runs` (EF, MongoDB) | `jobs` |
+| Flaws `VolatileRunTicket`, `StepNewerState` | `VolatileJobTicket`, `TurnNewerState` (same bits, so every seed keeps its meaning) |
+| `Kinds.ChildFinished` | `WorkflowKinds.ChildFinished` (layer 3's kind; the string is unchanged) |
+| `Item`, `Unit` (the worker's) | `Delivery`, `TurnOutcome` |
+| `Balancer.RoundAsync` | `PartitionRuntime.BalanceAsync` |
+
+"Run" stays where it means a workflow run, a test run or the verb; `IScopeActivation.RunAsync` is a pass.
+
+### What moved where
+
+| Before (`src/Kernel`) | Now |
+|---|---|
+| `Balancer.cs`: the fair share, `Defaults` | Layer 1, `src/Kernel.Runtime/PartitionRuntime.cs`: `PartitionRuntime` (activations, deactivations, `BalanceAsync`, `PassAsync`, wake hints), `Defaults` |
+| — | Layer 1, `Seam.cs`: `IActorRuntime`, `IScopeHost`, `IScopeActivation`, `IWakeSignal` and `InProcessWakeSignal`, `IMembership` and `Cluster` |
+| `Contracts.cs`: `InstanceRef`, `Flaw` | Layer 1, `Addresses.cs` |
+| `Contracts.cs`: messages, kinds, `StartSpec`, `InstanceStatus`, `History`, `IJob`, `Json` | Layer 2, `src/Kernel.Durable/Messages.cs` |
+| `Contracts.cs`: `IExecutionModel`, `ITurn`, `InstanceInfo`, `Placement`, `ChildFinished` | Layer 3, `src/Kernel.Workflows/Contracts.cs` |
+| `Store.cs` (with `HeartbeatAsync`) | Layer 2, `Store.cs`; `IKernelStore` extends layer 1's `IMembership`, which now holds the heartbeat |
+| `InMemoryStore.cs`, `Projector.cs`, `Replies.cs` | Layer 2, unchanged but for namespaces |
+| `Worker.cs` | Layer 2, `Worker.cs`: it is one partition's `IScopeActivation` (`RunAsync` is a pass, `WokenAsync` a hint, `DisposeAsync` a release); `TakeAsync` and `ReleaseAsync` are internal, reached through `DurableHost` |
+| — | Layer 2, `DurableHost.cs`: the `IScopeHost`; activating a scope takes its fence or declines |
+| `Worker.cs`: the model table, `Withheld`'s rule, `Control`, `Terminate`, `Park`, `Journal`, `Finished`, the state read and upgrade before a turn | Layer 3, `WorkflowInstance.cs`, through layer 2's `IActorType` (`Withholds`, `Command`, `TurnAsync`, `Park`, `ExecuteJobAsync`) |
+| `Step.cs` | Split. Layer 2, `Turns.cs`: `DurableTurn` (sends, recalls, jobs, holds, waits, publish, emit, the meet ticket) and the seam types `TurnInput`, `TurnOutcome`, `Delivery`, `ITurnServices`. Layer 3, `Turn.cs`: what a workflow adds (status, definition and rebind, children, the parent's notice, journal entries, the ephemeral rule) and `Seal` |
+
+Hosts. The simulation is the runtime of its processes: each has a `PartitionRuntime` over a `DurableHost`, and its
+takes, releases and balancing rounds go through it. Its settling loop wakes each scope over the runtime's wake signal
+and runs a whole pass with `PassAsync`; a process that dies cancels the pass's token, which stops it at a turn
+boundary and before its flush, as the loop's `Dying` checks did before. During faults the simulation still calls the
+pieces of a pass (poll, load, turn, flush, beat, meet) as separate seeded actions. The EF, MongoDB, conformance and
+native hosts activate through `DurableHost` and drain with `RunAsync` where they called the pieces by hand.
+
+Size: `src/Kernel` was 1,758 lines; the three projects are 279, 1,675 and 281 (2,235). The difference is the seam's
+interfaces, `PartitionRuntime`, `DurableTurn` and their comments.
+
+### Checked against the brief (by reading)
+
+- **Downward only:** `Kernel.Workflows` references `Kernel.Durable`, which references `Kernel.Runtime`, which
+  references nothing; the compiler enforces it.
+- **Partitions only:** no `Granularity`, no `ScopeId` or `ActorId`; `ScopeOf` is the actor's partition. No sweep.
+- **The wake signal is an interface** (`IWakeSignal`), and a lost hint loses nothing: a pass polls only when woken,
+  and the host's poll interval wakes it with `WokenAsync(null)`.
+- **One pass at a time per scope:** `PartitionRuntime.PassAsync` refuses a second pass of a scope while one is under
+  way.
+- **No clock, thread or random number** in the three projects but the default of `WorkerOptions.Monotonic`
+  (`Environment.TickCount64`, as at the baseline), which the simulation always replaces. `InProcessWakeSignal` calls
+  its listeners inline.
+- **The renames** are complete in code, test output and the four reports; a search for the old names finds only
+  "run" as a verb, a workflow run, a test run, and MongoDB's primary that "stepped down".
+- **The simulation is deterministic:** every seed gives the same actions and the same first failures as at the
+  baseline (the mutation table below is identical to the seed and the action count).
+
+### Known seam leaks
+
+Where a clean cut would have changed behaviour or round trips, the code keeps what it had.
+
+| # | Leak | Why it stays |
+|---|---|---|
+| L1 | One `instance` row (`InstanceRow`) holds layer 2's columns (revision, state, state version, history, jobs) and layer 3's (model, definition, status, parent, fault, suspended, children) | One write per commit. Two rows would be two statements per instance commit, on every store |
+| L2 | `InstanceStatus` is declared in layer 2 | The row carries it, and layer 2 ends a caller's observation with it (`Reply.Status`) and treats an ended actor's messages as dropped |
+| L3 | The command kinds (`kernel.suspend`, `resume`, `terminate`, `delete`) and `Kinds.IsControl` are in layer 2 | Delivery treats them apart: they pass a withheld actor, go alone, are never suspects, and a trial does not start behind one (F12, F13). What they do is layer 3's (`IActorType.Command`) |
+| L4 | `StartSpec` carries model, definition, parent, ephemeral and history | Layer 2 decides from it whether a message creates its target or is dropped (no row and no start spec), and the row a creating turn writes is built from it |
+| L5 | The take is both the runtime's lease and layer 2's fence: one store call bumps the epoch and sets `lease_until`, and layer 2's commits and `BeatAsync` renew the lease. `Defaults.Lease` is layer 1's, read by `WorkerOptions` | Splitting them would add a round trip to every take and every renewal |
+| L6 | The built-in runtime's membership (node rows, free partitions) is in the kernel store: `IKernelStore : IMembership` | The node rows are in the same database; a separate membership store would be one more provider to write |
+| L7 | `Flaw` is one enum in layer 1 with every layer's flaws, read by layers 2 and 3 (`ITurnServices.Has`) | Every flaw keeps its bit, so every seed in sections 1 to 23 keeps its meaning |
+| L8 | `TrialGate`: the workers of one process share a gate, so a trial is alone in the process (F11) | Which partitions die together is the runtime's placement, but the poison rule that needs it is layer 2's |
+| L9 | Layer 3's terminate derives job tickets with layer 2's `Worker.TicketId` | Tickets are layer 2's ids; a turn must cancel a job it does not hold |
+| L10 | `IReplyTransport` is declared in layer 2, though it rides on the runtime's transport between nodes | It carries layer 2's replies; layer 1 has no transport of its own yet |
+| L11 | `InstanceRef` is named for instances and embeds the partition in the id | Placement is fixed by the address; a runtime that moved actors between scopes would need another address. Partitions only, so not needed now |
+| L12 | During faults the simulation calls the pieces of a pass one at a time, not through `PassAsync`, so "one pass at a time" holds there only because the pieces guard themselves (`Polling`, `Flushing`, ...) | The pieces as separate actions keep every seed's schedule, and with it every first failing seed |
+| L13 | Only the simulation uses `PartitionRuntime`; the EF, MongoDB, conformance and native hosts activate through `DurableHost` and loop over `RunAsync` themselves | They own one or a few partitions and never balance. Moving them onto `PartitionRuntime` is no change of round trips, but it is not a rename either; left for a later stage |
+
+### The gates, before and after
+
+Before: a scratch worktree at `baba05a78c`. After: this branch. Both built with README's loop, run from
+`prototypes/kernel-model`, on the machine shared with other agents' runs (times are not comparable). PostgreSQL 17 in
+Docker, port chosen by Docker (`-P`). The outputs were compared line by line after removing times: the only
+differences are the renamed words ("step" to "turn", "off-step work" to "a background job", "kernel.run" to
+"kernel.job", the two flaw names) and one TCP count, below.
+
+| Gate | Command | Before | After |
+|---|---|---|---|
+| Simulation, 200,000 × 300 | `$SIM --seeds 200000` | 0 failed, 0 parked | 0 failed, 0 parked |
+| Simulation, 20,000 × 1,000 | `$SIM --seeds 20000 --actions 1000` | 0 failed, 12 innocent parked | 0 failed, 12 innocent parked |
+| Native, 20,000 × 1,000 | `$SIM --native --seeds 20000 --actions 1000` | 0 failed, 15 parked; 409,284 matched; 972 reruns, all told | the same |
+| Mutations | `$SIM --mutations --seeds 20000` | 37 single mutations, 35 caught alone, every round-3 flaw at section 22's seed; `FenceWithoutPosition` (with `NoResetAfterFailedCommit`, seed 19) and `DeleteWithoutCount` (with `PollWithoutSkip`, seed 1) caught only in combination | the same, seed for seed and action count for action count |
+| Native mutations | `$SIM --native-mutations --seeds 20000` | 5 of 5 (seeds 1, 6, 1, 12, 1) | the same |
+| Semantic cases, in memory | `Kernel.Store.Conformance.Run.dll semantic` | 56 passed, 1 skipped | the same |
+| Semantic cases, SQLite | `$EFC sqlite semantic`, and with `--fence-in-batch` | 54 passed, 0 required failed, 2 reference differ, 1 skipped; both | the same |
+| Semantic cases, PostgreSQL | `$EFC postgres "$PG" semantic`, and with `--fence-in-batch` | 54 passed, 0 required failed, 3 reference differ; both | the same |
+| Native smoke | `$NAT smoke` | 31 of 31 ok | the same |
+| Native cost, SQLite | `$NAT cost sqlite` | every row ok; 26 instances, nothing left | the same, row for row |
+| Native cost, PostgreSQL | `$NAT cost postgres "$PG;Database=kernel_native"` | every row ok | the same, row for row |
+| EF cost, SQLite | `$EFR x cost sqlite "Data Source=.out/cost.db"`, and with `fence=batch` | DESIGN.md's SQLite column | identical output |
+| EF cost, PostgreSQL | `$EFR x cost postgres "$PG;Database=kernel_cost" proxy=1`, and with `fence=batch` | DESIGN.md's PostgreSQL column, counted and sent | the same counted and sent, every row; see below for one TCP count |
+
+**One cell moved, and it is noise.** In the first runs, "1,000 balanced instances started at once" with the fence in
+the batch showed 6 TCP reads before and 7 after; counted and sent were 4 in both. Three more runs of each: before 4,
+6, 5 (checked fence 4, 4, 4), after 5, 6, 5 (checked 4, 4, 4). The TCP column counts reads on the proxy's stream,
+and a 1,000-row batch splits into a varying number of segments; the round trips themselves did not move. DESIGN.md's
+"4 / 5" for that row is one such sample.
+
+No parked count moved, so no schedule changed: stage A kept the order in which a seed's actions call the kernel.
+
+### Surprises and small differences
+
+- **The previous agent's work was right but unfinished.** Its four commits are faithful moves (checked by reading
+  the diffs against `baba05a78c` and by the gates), but it had not run the 200,000-seed gate, PostgreSQL or the EF
+  cost runs, and README already pointed to this section, which did not exist; DESIGN.md still described the
+  unlayered code.
+- **Three differences that no gate can see**, because nothing exercises them: (1) the workflow turn's constructor
+  (reading `jobs`, `children` and the results in the inbox) now runs inside the try that parks an instance whose turn
+  throws; before, a throw there escaped `RunTurn`. (2) A command's and a park's consumed list is a copy of the taken
+  list, not the list itself; nothing changes the list afterwards. (3) The non-simulation hosts' drains now run the
+  ready turns in id order (`RunAsync`), where they took the dictionary's order; every count is the same.
+- `PartitionRuntime` is small (121 lines) because it has no clock: its host calls `BalanceAsync`, `PassAsync` and
+  `WokenAsync(null)`. A production runtime adds a loop with a poll interval around those, outside the kernel.
+
+### Not done
+
+The Orleans adapter and the runtime conformance suite; the non-simulation hosts on `PartitionRuntime` (L13); the
+stress tests (not in stage A's gates); SQL Server, MySQL and MongoDB (not in stage A's gates; the store code changed
+only by the `jobs` rename).
