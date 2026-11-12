@@ -58,7 +58,7 @@
     <div class="card l2"><h4>Timers</h4><p>A message with a future <code>due</code>. The poll returns database time; the owner anchors it and schedules on a monotonic clock. Cancel a timer by deleting its message, whose id the sender knows.</p></div>
     <div class="card l3"><h4>Creating instances</h4><p>A message may carry a start spec: if its target does not exist, the owner creates it on delivery. Starting a child, starting on an event and signal-with-start are all this one mechanism.</p></div>
     <div class="card l3"><h4>Placement</h4><p>A start without a caller's key goes into a partition the starting node owns and runs there, with no hop. A keyed start hashes the key to a partition. A child goes into its parent's partition, so a call tree commits together.</p></div>
-    <div class="card"><h4>Poison</h4><p>A new owner tries its predecessor's held messages one at a time: a fenced commit bumps one message's attempts and its turn runs alone. A death counts only against the message on trial. Past the threshold it is parked and its instance faulted, so a message that kills its process cannot walk the cluster.</p></div>
+    <div class="card"><h4>Poison</h4><p>A new owner puts its predecessor's held messages on trial, in a group that halves with every attempt. If that owner is lost too, the next take adds one attempt to exactly the messages on trial, so a poison message ends up alone and a death stops counting against its neighbours. Past the threshold it is parked and its instance faulted, so a message that kills its process cannot walk the cluster.</p></div>
     <div class="card"><h4>Edge cases</h4><p>A message to an instance that does not exist and carries no start spec is dropped and journalled. A message to a finished instance is consumed and dropped. A turn that throws parks its instance at once; retries are the model's business.</p></div>
   </div>
 </section>
@@ -182,7 +182,7 @@
       <tr><td>Key instance in another partition</td><td class="n">9</td><td class="n">33 (24)</td></tr>
     </tbody>
   </table></div>
-  <p class="note">In brackets: with the fence in the batch. The tables stay for broad keys; the instance is the simpler choice for narrow, quiet keys such as an approval.</p>
+  <p class="note">In brackets: with the fence in the batch. Decided 12 November: the tables stay the kernel's one mechanism; the instance per key remains a sample model.</p>
 </section>
 
 <!-- 11 ─────────────────────────────────────────── -->
