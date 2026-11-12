@@ -3433,47 +3433,6 @@
   letter-spacing: normal;
 }
 
-.wf-form-field input,
-.wf-form-field select,
-.wf-form-field textarea {
-  min-height: 38px;
-  border: 1px solid var(--wf-border);
-  border-radius: var(--wf-radius);
-  color: var(--wf-text);
-  font: inherit;
-  font-size: 14px;
-  font-weight: 500;
-  width: 100%;
-  min-width: 0;
-  padding: 0 10px;
-  text-transform: none;
-}
-
-.wf-form-field input,
-.wf-form-field textarea {
-  background: var(--wf-panel-muted);
-}
-
-.wf-form-field textarea {
-  min-height: 74px;
-  padding: 9px 10px;
-  resize: vertical;
-}
-
-.wf-form-field select {
-  /* Preserve the shared host chevron while applying the field surface. */
-  background-color: var(--wf-panel-muted-tone);
-  padding-right: 28px;
-}
-
-.wf-form-field input:focus,
-.wf-form-field select:focus,
-.wf-form-field textarea:focus {
-  border-color: var(--wf-accent);
-  outline: none;
-  box-shadow: var(--wf-focus-ring);
-}
-
 .wf-root-field {
   border: 0;
   margin: 0;

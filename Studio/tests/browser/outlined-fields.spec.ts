@@ -8,12 +8,13 @@ for (const theme of builtInThemeDefinitions) for (const mode of allThemeModes) {
     await page.getByLabel("Focused", { exact: true }).focus();
     await expect(page.getByLabel("Focused", { exact: true })).toBeFocused();
     const frames = page.locator(".studio-form-control");
-    await expect(frames).toHaveCount(15);
+    await expect(frames).toHaveCount(19);
     const geometry = await frames.evaluateAll(elements => elements.map(element => {
       const box = element.getBoundingClientRect(), legend = element.querySelector("legend")!.getBoundingClientRect(), style = getComputedStyle(element);
       return { border: style.borderLeftWidth, overflows: element.scrollWidth > element.clientWidth + 1, labelFits: legend.right <= box.right + 1 && legend.left >= box.left - 1 };
     }));
     expect(geometry.every(item => item.border === "1px" && !item.overflows && item.labelFits)).toBe(true);
+    expect(await page.locator(".studio-form-control [data-studio-field-control]").evaluateAll(elements => elements.every(element => getComputedStyle(element).borderLeftWidth === "0px"))).toBe(true);
     await expect(page.getByLabel("Disabled", { exact: true })).toBeDisabled();
     await expect(page.getByLabel("Read only", { exact: true })).toHaveAttribute("readonly", "");
     await expect(page.getByLabel("Invalid", { exact: true })).toHaveAttribute("aria-invalid", "true");

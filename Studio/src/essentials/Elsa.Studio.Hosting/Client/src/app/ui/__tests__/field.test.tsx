@@ -93,3 +93,14 @@ it("associates legacy sibling help without including it in the accessible name",
   expect(input.labels?.[0].textContent).toBe("Address");
   expect(document.getElementById(input.getAttribute("aria-describedby")!)?.textContent).toBe("Use an absolute URL");
 });
+
+
+it("keeps a standalone choice individually named and activates it from its caption", () => {
+  const { container } = mount(<fields.StudioField label="Protect decision source and values"><input type="checkbox" defaultChecked={false} /></fields.StudioField>);
+  const input = container.querySelector("input")!;
+  expect(input.labels?.length).toBe(1);
+  expect(input.labels?.[0].textContent).toBe("Protect decision source and values");
+  flushSync(() => input.labels![0].click());
+  expect(input.checked).toBe(true);
+  expect(container.querySelector("fieldset")).toBeNull();
+});

@@ -9,6 +9,9 @@ import "../../../Extensions/Agent/studio/Elsa.Studio.Agent/Client/src/styles.css
 import "../../../Extensions/UserTasks/studio/Elsa.Studio.UserTasks/Client/src/styles.css";
 import "../../../Extensions/Secrets/studio/Elsa.Studio.Secrets/Client/src/styles.css";
 import "../../../Extensions/FeatureManagement/studio/Elsa.Studio.FeatureManagement/Client/src/styles.css";
+import "../../../Extensions/Decisions/studio/Elsa.Studio.Decisions/Client/src/styles.css";
+import "../../../Extensions/Connections/studio/Elsa.Studio.Connections/Client/src/styles.css";
+import "../../../Extensions/Etl/studio/Elsa.Studio.Etl/Client/src/styles.css";
 
 const params = new URLSearchParams(location.search);
 const theme = getTheme(params.get("theme") ?? "classic")!;
@@ -45,6 +48,10 @@ function Fixture() {
       <StudioField label="Options"><label><input type="checkbox" defaultChecked /> Enabled</label><label><input type="radio" name="option" defaultChecked /> Default</label></StudioField>
       <div className="agent-editor"><StudioField label="Agent setting"><input defaultValue="Module style collision" /></StudioField></div>
       <div className="user-task-detail"><StudioField label="Task response"><input defaultValue="User Tasks collision" /></StudioField></div>
+      <div className="decisions-page"><StudioField label="Decision value"><input defaultValue="Decision collision" /></StudioField></div>
+      <div className="connections-page"><StudioField label="Connection setting"><input defaultValue="Connection collision" /></StudioField></div>
+      <div className="feature-management-setting"><StudioField label="Feature setting"><input type="text" defaultValue="Settings collision" /></StudioField></div>
+      <div className="etl-editor-field"><StudioField label="ETL setting"><input defaultValue="ETL collision" /></StudioField></div>
       <div style={{ background: "repeating-linear-gradient(45deg,transparent,transparent 6px,#8882 6px,#8882 12px)", padding: 12, "--studio-field-surface": "transparent" } as React.CSSProperties}>
         <StudioField label="Transparent surface"><input defaultValue="Real legend gap" /></StudioField>
       </div>

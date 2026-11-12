@@ -103,6 +103,33 @@ def verdict(report, artifacts, journeys=None):
     return len(rows)
 
 
+def field_gallery_verdict(report, artifacts):
+    """Retain renderer-level evidence separately from composed product acceptance."""
+    rows = []
+    def walk(suites):
+        for suite in suites:
+            for spec in suite.get('specs', []):
+                for test in spec.get('tests', []):
+                    rows.append((spec.get('title'), test))
+            walk(suite.get('suites', []))
+    walk(report.get('suites', []))
+    expected = report.get('config', {}).get('metadata', {}).get('outlinedCases')
+    if not expected or len(rows) != expected or len({title for title, _ in rows}) != expected or report.get('errors'):
+        raise ValueError('Incomplete Outlined field gallery inventory')
+    for title, test in rows:
+        results = test.get('results', [])
+        if test.get('expectedStatus') != 'passed' or test.get('status') != 'expected' or len(results) != 1 or results[0].get('status') != 'passed':
+            raise ValueError(f'{title}: not a single successful field-gallery execution')
+        images = [item for item in results[0].get('attachments', []) if item.get('contentType') == 'image/png']
+        if not images:
+            raise ValueError(f'{title}: missing field-state screenshot')
+        for item in images:
+            file = Path(item.get('path', '')).resolve()
+            if not file.is_relative_to(artifacts.resolve()) or not file.is_file() or not file.stat().st_size:
+                raise ValueError(f'{title}: missing or unsafe field-state screenshot')
+    return len(rows)
+
+
 def clean_environment():
     # Hosts read environment variables after shells.json. Never inherit a developer's stores/provider secrets.
     allowed = {'PATH', 'HOME', 'USERPROFILE', 'DOTNET_ROOT', 'DOTNET_ROOT_X64', 'TMPDIR', 'TEMP', 'TMP',
@@ -174,6 +201,14 @@ def run(output, journey=None):
         studio_project = ROOT / 'Studio/src/apps/Elsa.Studio.Web/Elsa.Studio.Web.csproj'
         command(['dotnet', 'build', str(backend_project), '-p:RestoreLockedMode=true', '-v:q', '-nologo', '-m:1', '/nr:false'], output / 'backend-build.log')
         command(['pnpm', 'build'], output / 'frontend-build.log', cwd=ROOT / 'Studio')
+        report['stage'] = 'isolated-field-gallery'
+        gallery = output / 'outlined-gallery'
+        command(['pnpm', 'exec', 'playwright', 'test', '--config', 'tests/browser/playwright.outlined-fields.config.ts'],
+                output / 'outlined-gallery.log', cwd=ROOT / 'Studio', env=dict(os.environ, OUTLINED_EVIDENCE=str(gallery)))
+        report['isolatedFieldGallery'] = {'executed': field_gallery_verdict(json.loads((gallery / 'playwright.json').read_text()), gallery),
+                                          'sourceSha': sha, 'kind': 'isolated-shared-components'}
+        report['stage'] = 'build'
+
         command(['dotnet', 'build', str(studio_project), '-p:RestoreLockedMode=true', '-v:q', '-nologo', '-m:1', '/nr:false'], output / 'studio-build.log')
         with tempfile.TemporaryDirectory(prefix='elsa-ux-acceptance-') as temporary:
             data = Path(temporary)

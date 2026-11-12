@@ -86,6 +86,21 @@ export const StudioField = forwardRef<HTMLDivElement, Omit<FieldProps, "hint"> &
   const generatedId = useId();
   const controls: NativeControl[] = [];
   collectControls(children, controls);
+  if (controls.length === 1 && controls[0].type === "input" && choices.has(controls[0].props.type ?? "text")) {
+    const choice = controls[0];
+    const id = choice.props.id ?? controlId ?? generatedId;
+    const descriptionId = description || error ? `${id}-help` : undefined;
+    const attributes: ControlAttributes = { id, "aria-describedby": descriptionId, "aria-invalid": error ? true : undefined, "data-studio-field-control": "", disabled: disabled ?? choice.props.disabled };
+    return <div {...rest} ref={ref} className={`studio-field studio-choice-field${className ? ` ${className}` : ""}`}>
+      <div className="studio-choice-control">
+        {Children.map(children, child => containsControl(child, choice) ? decorateControl(child, choice, attributes) : null)}
+        <label id={labelId} htmlFor={id}>{label}</label>{meta}
+      </div>
+      {Children.map(children, child => containsControl(child, choice) ? null : child)}
+      {descriptionId ? <small id={descriptionId} role={error ? "alert" : undefined}>{error || description}</small> : null}
+      {after}
+    </div>;
+  }
   const control = controls.length === 1 && !(controls[0].type === "input" && choices.has(controls[0].props.type ?? "text")) ? controls[0] : undefined;
   if (!control && controls.length === 0 && controlId) {
     const isMessage = (child: React.ReactNode) => isValidElement(child) && (child.type === "small" || child.type === "p");

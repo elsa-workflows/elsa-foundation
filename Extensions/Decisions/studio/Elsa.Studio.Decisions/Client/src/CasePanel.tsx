@@ -19,7 +19,7 @@ export function ValueInput({ clause, value, onChange, label, unset = false }: { 
     if (next === "unset") return;
     onChange(next === "null" ? { kind: "null", value: null } : initial(clause.type));
   };
-  return <label className={unset ? "decision-value-field is-unset" : "decision-value-field"}>{label}<span className="decision-value-controls">
+  return <div role="group" aria-label={label} className={unset ? "decision-value-field is-unset" : "decision-value-field"}><div className="decision-value-controls">
     <StudioField label={`${label} value kind`}><select aria-label={`${label} value kind`} value={kind} onChange={event => confirm(event.target.value)}>
       {unset ? <option value="unset">Not set</option> : null}
       <option value={clause.type}>{clause.type === "number" ? "Number" : clause.type === "boolean" ? "Boolean" : "Text"}</option>
@@ -42,7 +42,7 @@ export function ValueInput({ clause, value, onChange, label, unset = false }: { 
             kind: clause.type === "number" ? "number" : "string",
             value: event.target.value
           })} /></StudioField>}
-  </span>{unset ? <span id={missingId} className="decision-input-missing" role="status">{label} is not set. Runtime will refuse MissingInput until you enter or confirm a value.</span> : null}</label>;
+  </div>{unset ? <span id={missingId} className="decision-input-missing" role="status">{label} is not set. Runtime will refuse MissingInput until you enter or confirm a value.</span> : null}</div>;
 }
 export function CasePanel({ api, asset, candidate, xml, dirty, onDraftStateChange }: { api: ElsaStudioModuleApi; asset: DecisionAsset; candidate?: DecisionVersion; xml: string; dirty: boolean; onDraftStateChange?(dirty: boolean, busy: boolean): void }) {
   const [cases, setCases] = useState<DecisionCase[]>([]), [runs, setRuns] = useState<TestRun[]>([]), [run, setRun] = useState<TestRun | null>(null);

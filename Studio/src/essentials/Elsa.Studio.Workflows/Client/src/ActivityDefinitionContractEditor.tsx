@@ -739,7 +739,7 @@ function NumberDefaultField({ value, readOnly, onValidityChange, onChange }: {
   const [source, setSource] = useState(() => String(value));
   const [error, setError] = useState<string | null>(null);
   useEffect(() => setSource(String(value)), [value]);
-  return <StudioField label={<><span>Value</span>{error ? <small id={`${errorId}-error`} role="alert">{error} This text is not saved.</small> : null}</>}><input data-contract-field="default.value" type="text" aria-label="Value" inputMode="decimal" value={source} onChange={event => {
+  return <StudioField label={<><span>Value</span></>}><input data-contract-field="default.value" type="text" aria-label="Value" inputMode="decimal" value={source} onChange={event => {
     const next = event.target.value;
     setSource(next);
     const isNumber = /^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$/.test(next) && Number.isFinite(Number(next));
@@ -747,7 +747,7 @@ function NumberDefaultField({ value, readOnly, onValidityChange, onChange }: {
     setError(nextError);
     onValidityChange(!nextError);
     if (isNumber) onChange(Number(next));
-  }} disabled={readOnly} aria-invalid={Boolean(error)} aria-describedby={error ? `${errorId}-error` : undefined} /></StudioField>;
+  }} disabled={readOnly} aria-invalid={Boolean(error)} aria-describedby={error ? `${errorId}-error` : undefined} />{error ? <small id={`${errorId}-error`} role="alert">{error} This text is not saved.</small> : null}</StudioField>;
 }
 
 function LiteralDefaultField({ value, supportsNull, readOnly, onValidityChange, onChange }: {
@@ -761,7 +761,7 @@ function LiteralDefaultField({ value, supportsNull, readOnly, onValidityChange, 
   const [source, setSource] = useState(() => serializeDefaultValue(value));
   const [error, setError] = useState<string | null>(null);
   useEffect(() => setSource(serializeDefaultValue(value)), [value]);
-  return <StudioField label={<><span>Value (JSON)</span>{error ? <small id={`${errorId}-error`} role="alert">{error} The visible text is not saved.</small> : null}</>}><textarea data-contract-field="default.value" aria-label="Value (JSON)" value={source} onChange={event => {
+  return <StudioField label={<><span>Value (JSON)</span></>}><textarea data-contract-field="default.value" aria-label="Value (JSON)" value={source} onChange={event => {
     const next = event.target.value;
     setSource(next);
     const parsed = parseLiteralDefault(next);
@@ -769,7 +769,7 @@ function LiteralDefaultField({ value, supportsNull, readOnly, onValidityChange, 
     setError(nextError);
     onValidityChange(!nextError);
     if (parsed.ok && !nextError) onChange(parsed.value);
-  }} rows={3} disabled={readOnly} aria-invalid={Boolean(error)} aria-describedby={error ? `${errorId}-error` : undefined} /></StudioField>;
+  }} rows={3} disabled={readOnly} aria-invalid={Boolean(error)} aria-describedby={error ? `${errorId}-error` : undefined} />{error ? <small id={`${errorId}-error`} role="alert">{error} The visible text is not saved.</small> : null}</StudioField>;
 }
 
 function ExpressionDefaultFields({ value, expressions, readOnly, onChange }: {

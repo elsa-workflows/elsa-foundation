@@ -79,7 +79,7 @@ export function ActivityDefinitionDraftDialog({
       <label><input type="radio" name="draft-mode" checked={mode === "blank"} onChange={() => setMode("blank")} /> <span><strong>Blank</strong><small>Start from an advertised authoring provider and its required contract outcomes.</small></span></label>
       <label><input type="radio" name="draft-mode" checked={mode === "clone"} onChange={() => setMode("clone")} /> <span><strong>Clone exact version</strong><small>Deep-copy one visible immutable version; the source remains unchanged.</small></span></label>
     </fieldset>
-    <StudioField className="ad-dialog-field" label={<><span>Draft label <small>Optional · need not be unique</small></span></>}><input value={presentationLabel} maxLength={200} onChange={event => setPresentationLabel(event.target.value)} placeholder="Generated fallback used when blank" /></StudioField>
+    <StudioField className="ad-dialog-field" label={<></>}><input value={presentationLabel} maxLength={200} onChange={event => setPresentationLabel(event.target.value)} placeholder="Generated fallback used when blank" /><span>Draft label <small>Optional · need not be unique</small></span></StudioField>
     {mode === "blank" ? <>
       {capabilitiesQuery.isPending ? <div className="ad-inline-status" role="status">Loading authorized providers…</div> : null}
       {capabilitiesQuery.isError ? <div className="ad-inline-error" role="alert">Authoring capabilities are unavailable. Studio will not invent a blank provider state.</div> : null}

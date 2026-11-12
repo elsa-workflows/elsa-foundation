@@ -180,8 +180,11 @@ function WidgetSettings({ api, widget, value, onSave, onClose }: { api: ElsaStud
     <form className="dashboard-widget-settings-form" onSubmit={submit}>
       <div className="dashboard-widget-settings-fields">
         {definition.descriptors.map(descriptor => {
-          const Editor = selectSettingEditor(api, descriptor).component;
-          return <label key={descriptor.name}><span>{descriptor.displayName}</span><Editor setting={descriptor} value={draft[descriptor.name]} onChange={next => { setDraft(current => ({ ...current, [descriptor.name]: next })); setValidationError(null); }} /></label>;
+          const editor = selectSettingEditor(api, descriptor);
+          const Editor = editor.component;
+          const control = <Editor setting={descriptor} value={draft[descriptor.name]} onChange={next => { setDraft(current => ({ ...current, [descriptor.name]: next })); setValidationError(null); }} />;
+          return editor.presentsField ? <div key={descriptor.name}>{control}</div>
+            : <label key={descriptor.name}><span>{descriptor.displayName}</span>{control}</label>;
         })}
         {validationError ? <p id={errorId} className="dashboard-widget-settings-error" role="alert">{validationError}</p> : null}
       </div>

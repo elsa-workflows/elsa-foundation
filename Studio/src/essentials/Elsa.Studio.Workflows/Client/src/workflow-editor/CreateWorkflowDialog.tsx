@@ -212,7 +212,7 @@ export function CreateWorkflowDialog({ context, title = "Create Workflow", submi
               ) : null}
             </div>
           ) : null}
-          <StudioField className="wf-form-field" label={<><span>Starting point</span>{draft.starter === "http" ? <small className="wf-muted">POST /hello returns 200 with JSON. Publish it, then use Send HTTP test request to try it.</small> : null}{catalogState === "ready" && httpStarterAvailabilityReason ? <small className="wf-muted" id="wf-http-starter-unavailable">{httpStarterAvailabilityReason}</small> : null}</>}><select
+          <StudioField className="wf-form-field" label={<><span>Starting point</span></>}><select
               data-dialog-initial-focus
               aria-label="Starting point"
               aria-busy={!templatesSettled}
@@ -223,7 +223,7 @@ export function CreateWorkflowDialog({ context, title = "Create Workflow", submi
             >
               {builtInWorkflowTemplates.map(template => <option key={template.id} value={template.id} disabled={template.id === "http" && (catalogState !== "ready" || !httpStarterAvailable)}>{template.name}</option>)}
               {templates.map(({ template, reason }) => <option key={template.id} value={template.id} disabled={!!reason} title={reason}>{template.name}{reason ? " (unavailable)" : ""}</option>)}
-            </select></StudioField>
+            </select>{draft.starter === "http" ? <small className="wf-muted">POST /hello returns 200 with JSON. Publish it, then use Send HTTP test request to try it.</small> : null}{catalogState === "ready" && httpStarterAvailabilityReason ? <small className="wf-muted" id="wf-http-starter-unavailable">{httpStarterAvailabilityReason}</small> : null}</StudioField>
           <StudioField className="wf-form-field" label={<><span>Display name</span></>}><input
               aria-label="Display name"
               value={draft.name}
