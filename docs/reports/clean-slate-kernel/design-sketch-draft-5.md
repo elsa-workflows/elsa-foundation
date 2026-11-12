@@ -155,7 +155,7 @@ The tables below are the relational shape. A document provider stores the same r
 | `journal` | partition, position, instance, entries | One row per instance-commit: what happened, as one compact value. The truth about the past. Feeds the viewer's tables. Written according to the history level |
 | `projection` | partition, position | How far the projector has got. Its own row, so the projector never touches the fence row |
 
-This is the proposed shape. Not in the prototype yet: the instance's `sub_status`, `root`, `correlation`, `tenant`, `created` and `updated`, and the message's `headers`. The prototype also keeps `fault`, `history`, `suspended` and `children` on the instance row, and a `revision` on each journal row.
+This is the proposed shape. Not in the prototype yet: the instance's `sub_status`, `root`, `correlation`, `tenant`, `created` and `updated`, the message's `headers`, and the subscription's `kind` (the prototype tells a start subscription by the start spec on its row). The prototype also keeps `fault`, `history`, `suspended` and `children` on the instance row, a `revision` on each journal row and a `died` flag on the partition row; at the evidence commit `jobs` is still called `runs`.
 
 The viewer's tables are projections of the journal. There is no outbox, dispatcher, scheduler queue, per-run lease, commit marker, dispatch record or timer table.
 
@@ -184,7 +184,8 @@ Rows per flush are capped (parameter limits, lock escalation). 100 instance-comm
 **What a failed commit means.**
 - **Unknown outcome** (the connection broke): reset.
 - **The fence matched nothing:** reset.
-- **A definite error** (a value too long, a key violation, a deadlock victim): no reset. A deadlock victim retries the batch. Otherwise the owner commits the batch's instances one by one and **parks** the one that fails: its status becomes faulted with the error, and the rest go on.
+- **A transient error** (a deadlock victim, `SQLITE_BUSY`): the batch is retried as it is.
+- **A definite error** (a value too long, a key violation): no reset. The owner commits the batch's instances one by one and **parks** the one that fails: its status becomes faulted with the error, and the rest go on.
 
 ## Ownership
 
@@ -428,7 +429,7 @@ These figures come from the prototype's own cost runs, reported in its findings;
 | Stress with the fence broken on purpose | Violations on every engine: PostgreSQL 228, SQL Server 26, MySQL 611, SQLite 238, MongoDB 390 | Reported by the merge run; not re-run |
 
 - **Built since draft 2:** suspend, resume, terminate, rebind and delete; events that start instances; the projector; reply addresses for live output across nodes; the native model with HTTP routes; the store on SQL Server, MySQL and MongoDB.
-- **Not built yet:** the three layers as separate code (round 4, in progress); the runtime conformance suite; the Orleans adapter; the graph engine and the BPMN, StateMachine and standalone-jobs spikes; short timers and jobs of an Ephemeral instance kept in memory (decision 4); the stress test with native instances; a three-node MongoDB replica set. Also not built: the projector's set-based rounds, the reply-address deadline and the owner's signal to the receiving node, the recreate rule per kind of id, values by reference, the viewer's tail read and catch-up, `Describe`, the journal envelope, tenant checks and trace headers on messages.
+- **Not built yet:** the three layers as separate code (round 4, in progress); the runtime conformance suite; the Orleans adapter; the graph engine and the BPMN, StateMachine and standalone-jobs spikes; short timers and jobs of an Ephemeral instance kept in memory (decision 4); the stress test with native instances; a three-node MongoDB replica set. Also not built: the projector's set-based rounds, the reply-address deadline and the owner's signal to the receiving node, the recreate rule per kind of id, values by reference, the viewer's tail read and catch-up, `Describe`, the journal envelope, tenant checks and trace headers on messages; streaming responses and a route mapping a client's disconnect to a cancel.
 - **Not measured yet:** bytes written per commit and PostgreSQL bloat (design-now question 7).
 
 ## Trade-offs
