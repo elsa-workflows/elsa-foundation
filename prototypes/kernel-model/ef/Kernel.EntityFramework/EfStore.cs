@@ -132,6 +132,10 @@ public sealed class EfStore(Func<KernelDb> create, bool postgres, bool fenceInBa
     /// <summary>MUTATION, for the stress test only: the fence statement loses its epoch and position conditions.</summary>
     public bool Unfenced { get; init; }
 
+    /// <summary>How often E1 turned a key violation into "the fence matched nothing". For the stress test's report.</summary>
+    public int KeyViolationsAsFence => _keyViolationsAsFence;
+    private int _keyViolationsAsFence;
+
     /// <summary>Set for SQL Server and MySQL (with postgres: true, as the database assigns seq there too); null for PostgreSQL and SQLite.</summary>
     public Engine? Engine { get; init; }
 
@@ -167,6 +171,7 @@ public sealed class EfStore(Func<KernelDb> create, bool postgres, bool fenceInBa
     {
         await using var db = create();
         await db.Database.EnsureCreatedAsync();
+        if (Engine is not null) await Engine.CreatedAsync(db, default);
         if (await db.Partitions.AnyAsync()) return;
         db.Partitions.AddRange(Enumerable.Range(0, partitions).Select(id => new PartitionEntity { Id = id }));
         await db.SaveChangesAsync();
@@ -187,11 +192,16 @@ public sealed class EfStore(Func<KernelDb> create, bool postgres, bool fenceInBa
         try
         {
             await using var db = create();
+            db.Database.AutoSavepointsEnabled = false;      // ENGINES.md E4: SAVEPOINT and RELEASE were two more round trips per commit on PostgreSQL
             await using var transaction = await (Engine?.BeginAsync(db, cancellationToken) ?? db.Database.BeginTransactionAsync(cancellationToken));
             var now = 0L;
             if (fenceInBatch)
             {
-                var fence = db.Attach(new PartitionEntity { Id = batch.Partition, Epoch = batch.Epoch, Position = batch.Position }).Entity;
+                // MUTATION (Unfenced): the tokens are what the row says now, not what this owner believes, so the check always passes.
+                var (tokenEpoch, tokenPosition) = Unfenced
+                    ? await db.Partitions.AsNoTracking().Where(p => p.Id == batch.Partition).Select(p => ValueTuple.Create(p.Epoch, p.Position)).SingleAsync(cancellationToken)
+                    : (batch.Epoch, batch.Position);
+                var fence = db.Attach(new PartitionEntity { Id = batch.Partition, Epoch = tokenEpoch, Position = tokenPosition }).Entity;
                 fence.Position = batch.Position + batch.Positions;
                 fence.LeaseUntil = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + (long)batch.Lease.TotalMilliseconds;
                 db.Entry(fence).Property(p => p.LeaseUntil).IsModified = true;     // also when nothing else changes: the fence must always be sent
@@ -258,7 +268,11 @@ public sealed class EfStore(Func<KernelDb> create, bool postgres, bool fenceInBa
             // ENGINES.md E1. With the fence in the batch the rows are sent before the fence is checked, so an owner that
             // is behind collides with its successor's rows first and is told "duplicate key". A key violation counts as
             // a definite error only if the fence still holds; otherwise it is the fence that matched nothing.
-            if (fenceInBatch && failure.Failure == Failure.Definite && !await HoldsAsync(batch, cancellationToken)) return new Committed(false, 0, []);
+            if (fenceInBatch && failure.Failure == Failure.Definite && !await HoldsAsync(batch, cancellationToken))
+            {
+                Interlocked.Increment(ref _keyViolationsAsFence);
+                return new Committed(false, 0, []);
+            }
             throw failure;
         }
     }

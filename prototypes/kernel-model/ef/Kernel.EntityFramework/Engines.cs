@@ -28,9 +28,10 @@ public abstract class Engine
     public System.Data.IsolationLevel? Isolation { get; init; }
 
     /// <summary>
-    /// ENGINES.md E4. Entity Framework sets a savepoint before every SaveChanges inside a transaction. PostgreSQL's driver
-    /// sends it along with the next command; SQL Server's and MySQL's send it alone (and MySQL's releases it alone), so it
-    /// is one or two round trips per commit for nothing: a commit that fails is rolled back whole. Off unless asked for.
+    /// ENGINES.md E4. Entity Framework sets a savepoint before every SaveChanges inside a transaction, and releases it
+    /// after where the engine has a release. Each is a round trip of its own (counted on the TCP stream: one per commit
+    /// on SQL Server, two on PostgreSQL), for nothing: a commit that fails is rolled back whole. Off unless asked for.
+    /// <see cref="EfStore"/> turns it off for PostgreSQL and SQLite too.
     /// </summary>
     public bool Savepoints { get; init; }
 
@@ -40,6 +41,9 @@ public abstract class Engine
         db.Database.AutoSavepointsEnabled = Savepoints;
         return Isolation is { } level ? db.Database.BeginTransactionAsync(level, cancellationToken) : db.Database.BeginTransactionAsync(cancellationToken);
     }
+
+    /// <summary>Runs once, after the tables are created: database settings the engine needs.</summary>
+    public virtual Task CreatedAsync(KernelDb db, CancellationToken cancellationToken) => Task.CompletedTask;
 
     /// <summary>Statement 1 of the commit. Database time when it changed exactly one row, null when it matched nothing.</summary>
     public abstract ValueTask<long?> FenceAsync(KernelDb db, CommitBatch batch, bool unfenced, CancellationToken cancellationToken);
@@ -80,8 +84,22 @@ public abstract class Engine
 /// <summary>SQL Server: OUTPUT in place of RETURNING, TOP in place of LIMIT, no ON CONFLICT.</summary>
 public sealed class SqlServerEngine : Engine
 {
-    /// <summary>Adds WITH (READPAST) to the poll. For the experiment only: it breaks the order rule.</summary>
+    /// <summary>Adds WITH (READPAST) to the poll. For the experiment only: it breaks the order rule (ENGINES.md E6).</summary>
     public bool ReadPast { get; init; }
+
+    /// <summary>
+    /// ENGINES.md E5. Under locking READ COMMITTED the poll waits behind any uncommitted insert, mark or delete it reaches,
+    /// and keeps its shared locks on rows with nvarchar(max) values until the statement ends, so a commit deadlocks with
+    /// it and waits for SQL Server's deadlock monitor (rounds of up to 5 s; 11 s seen). With READ_COMMITTED_SNAPSHOT the
+    /// poll reads the last committed rows and takes no locks. On unless switched off.
+    /// </summary>
+    public bool ReadCommittedSnapshot { get; init; } = true;
+
+    public override async Task CreatedAsync(KernelDb db, CancellationToken cancellationToken)
+    {
+        await db.Database.ExecuteSqlRawAsync($"ALTER DATABASE CURRENT SET READ_COMMITTED_SNAPSHOT {(ReadCommittedSnapshot ? "ON" : "OFF")} WITH ROLLBACK IMMEDIATE", cancellationToken);
+        SqlConnection.ClearAllPools();
+    }
 
     public override string Now => "DATEDIFF_BIG(millisecond, '1970-01-01', SYSUTCDATETIME())";
 

@@ -15,9 +15,10 @@ using Npgsql;
 /// The runs of ENGINES.md: the stress test, the cost count and the probes of Program.cs, on any of the four engines.
 ///   x stress|cost|probe|block|definite|deadlock postgres|sqlserver|mysql|sqlite "connection" [key=value ...]
 /// Options: fence=checked|batch  unfenced=1  seconds=40  messages=5000  partitions=2  nodes=3
-///          rcsi=1 readpast=1 xactabort=1 (SQL Server)   isolation=rc (MySQL)   wal=0|1 busy=ms timeout=s (SQLite)
+///          kill=0 (no sessions killed)   rcsi=0 (locking; default on) readpast=1 xactabort=1 (SQL Server)   isolation=rc (MySQL)   wal=0|1 busy=ms timeout=s (SQLite)
 ///          role=workers name=b signal=path (a second process on the same database)   locks=1 (cost)
-///          savepoints=1 (leave Entity Framework's savepoint on)   batchsize=n (statements per command, SQL Server and MySQL)
+///          savepoints=1 (leave Entity Framework's savepoint on, SQL Server and MySQL)   batchsize=n (statements per command, SQL Server and MySQL; default 1000)
+///          many=100,1000 (cost: the sizes of the large flushes)   proxy=1 wire=1 (cost: count round trips on the TCP stream; MySQL: list what the server ran)
 /// </summary>
 static class EngineRun
 {
@@ -66,7 +67,8 @@ static class EngineRun
             if (signal != "") { File.Delete(signal + ".calm"); File.Delete(signal + ".stop"); }
             await target.ResetAsync(partitions);
         }
-        var tally = new Tally(target.Store(create));
+        var ef = target.Store(create);
+        var tally = new Tally(ef);
         IKernelStore store = tally;
         Console.WriteLine($"{target.Engine}: {await target.DescribeAsync()}; fence {(target.Has("unfenced") ? "BROKEN ON PURPOSE" : target.FenceInBatch ? "in the batch" : "checked")}; {nodes} nodes, {partitions} partitions{(workersOnly ? "; workers only, as " + name : "")}");
 
@@ -121,7 +123,7 @@ static class EngineRun
             while (!calm)
             {
                 await Task.Delay(random.Next(20, 60));
-                try { kills += await target.KillAsync(admin); }
+                try { if (target.Get("kill", "1") == "1") kills += await target.KillAsync(admin); }
                 catch (Exception) { }
             }
         });
@@ -237,6 +239,7 @@ static class EngineRun
         Console.WriteLine($"{messages} outside messages, {rows.Count} instances, {steps} steps run, {journal.Count} commits of instances, {expected.Sum(e => e.Value.Count)} counter tokens checked");
         Console.WriteLine($"producer: {addRetries} retried inserts {string.Join(", ", addFailures.Select(f => $"{f.Key} x{f.Value}"))}");
         tally.Print();
+        if (target.FenceInBatch) Console.WriteLine($"E1: {ef.KeyViolationsAsFence} key violations were the fence (counted in 'commit fenced')");
         Console.WriteLine($"deadlocks: the engine counted {await target.DeadlocksAsync(admin) - deadlocksBefore}, the store saw {tally.Sum(target.DeadlockCode)} (commit {tally.Sum("commit", target.DeadlockCode)}, poll {tally.Sum("poll", target.DeadlockCode)}, other {tally.Sum(target.DeadlockCode) - tally.Sum("commit", target.DeadlockCode) - tally.Sum("poll", target.DeadlockCode)})");
         Console.WriteLine($"SUMMARY | {target.Engine} | {await target.DescribeAsync()} | {(target.Has("unfenced") ? "broken" : target.FenceInBatch ? "batch" : "checked")} | {seconds} s, {messages} | kills {kills} | stalls {stalls} | takeovers {string.Join(", ", takeovers)} | steps {steps} | commits {journal.Count} | deadlocks {tally.Sum(target.DeadlockCode)} | retries {tally.Sum("commit", "Transient")} | resets {tally.Sum("commit", "fenced") + tally.Sum("commit", "Unknown")} (fenced {tally.Sum("commit", "fenced")}, unknown {tally.Sum("commit", "Unknown")}) | definite {tally.Sum("commit", "Definite")} | {(wrong.Count == 0 ? "holds" : wrong.Count + " violations")}");
         Console.WriteLine(wrong.Count == 0 ? "end state: all properties hold" : $"end state: {wrong.Count} violations\n  " + string.Join("\n  ", wrong.Take(20)));
@@ -261,19 +264,24 @@ static class EngineRun
 
         Console.WriteLine($"\n{target.Engine}: {await target.DescribeAsync()}; fence {(target.FenceInBatch ? "in the batch" : "checked")}");
         Console.WriteLine("counted: commands, COMMITs and (but for PostgreSQL) BEGINs, as FINDINGS.md section 5 counts; sent: what the driver sends, one per request (see ENGINES.md)");
-        Console.WriteLine($"{"run",-58} {"commands",8} {"begin",6} {"commit",6} {"opens",6} {"saves",6} {"counted",8} {"sent",6} {"packets",8}");
+        Console.WriteLine($"{"run",-58} {"commands",8} {"begin",6} {"commit",6} {"opens",6} {"saves",6} {"counted",8} {"sent",6} {"server",8} {"tcp",6}");
         async Task Row(string name, Func<Task> body, Func<Task>? before = null)
         {
             if (before is not null) await before();
             counter.Reset();
             (opens.Count, saves.Set, saves.Released, locks.Largest) = (0, 0, 0, "");
+            var trips = target.Proxy?.Trips ?? 0;
+            var kinds = await target.WireByKindAsync();
             var wire = await target.WireAsync();
             await body();
             wire = wire < 0 ? -1 : await target.WireAsync() - wire;
+            var delta = (await target.WireByKindAsync()).Select(k => (k.Key, n: k.Value - kinds.GetValueOrDefault(k.Key))).Where(k => k.n > 0).ToList();
             var counted = counter.Commands + counter.Transactions.Ended + (target.Engine == "postgres" ? 0 : counter.Transactions.Begun);
             var sent = counter.Commands + counter.Transactions.Ended + target.BeginTrips * counter.Transactions.Begun + target.OpenTrips * opens.Count + target.SaveTrips * (saves.Set + saves.Released);
-            Console.WriteLine($"{name,-58} {counter.Commands,8} {counter.Transactions.Begun,6} {counter.Transactions.Ended,6} {opens.Count,6} {saves.Set + saves.Released,6} {counted,8} {sent,6} {(wire < 0 ? "" : wire.ToString()),8}");
+            var tcp = target.Proxy is { } proxy ? (proxy.Trips - trips).ToString() : "";
+            Console.WriteLine($"{name,-58} {counter.Commands,8} {counter.Transactions.Begun,6} {counter.Transactions.Ended,6} {opens.Count,6} {saves.Set + saves.Released,6} {counted,8} {sent,6} {(wire < 0 ? "" : wire.ToString()),8} {tcp,6}");
             if (locks.Largest != "") Console.WriteLine("    locks held at the largest commit: " + locks.Largest);
+            if (target.Has("wire") && target.Engine == "mysql") Console.WriteLine("    server: " + string.Join(", ", delta.OrderBy(k => k.Key).Select(k => $"{k.Key.Replace("statement/", "")} x{k.n}")));
         }
 
         foreach (var mode in new[] { Sequence.Ephemeral, Sequence.Balanced, Sequence.Durable })
@@ -293,13 +301,13 @@ static class EngineRun
             owner.Post(new Message($"m{++n}", InstanceRef.In(0, $"parent{n}"), Kinds.Start, Start: new StartSpec("parent", "p", Json.Write(new ParentInput(3, 0)))), fresh: true);
             await Drain(owner, poll: false);
         });
-        foreach (var many in new[] { 100, 1000 })
+        foreach (var many in target.Get("many", "100,1000").Split(",").Select(int.Parse))
             await Row($"{many} balanced instances started at once", async () =>
             {
                 for (var i = 0; i < many; i++) owner.Post(Start(Sequence.Balanced), fresh: true);
                 await Drain(owner, poll: false);
             });
-        foreach (var many in new[] { 100, 1000 })
+        foreach (var many in target.Get("many", "100,1000").Split(",").Select(int.Parse))
             await Row($"{many} balanced instances, their starts arriving by poll", () => Drain(owner, poll: true), async () =>
             {
                 for (var i = 0; i < many; i++) await store.AddAsync(Start(Sequence.Balanced) with { KeepUntil = keep });
@@ -465,19 +473,22 @@ sealed class Target(string engine, string connection, Dictionary<string, string>
     /// <summary>Round trips per BEGIN. Npgsql sends it with the next command; SqlClient sends it alone; Connector/NET sends SET TRANSACTION ISOLATION LEVEL and BEGIN as two commands; SQLite has no wire and counts the call.</summary>
     public int BeginTrips => engine switch { "postgres" => 0, "mysql" => 2, _ => 1 };
 
-    /// <summary>Round trips per connection taken from the pool: Connector/NET sends Init DB every time; the others send nothing of their own.</summary>
-    public int OpenTrips => engine == "mysql" ? 1 : 0;
+    /// <summary>Round trips per connection taken from the pool: Connector/NET sends Ping and Init DB every time (both seen in performance_schema and on the TCP stream); the others send nothing of their own.</summary>
+    public int OpenTrips => engine == "mysql" ? 2 : 0;
 
-    /// <summary>Round trips per savepoint set or released: Npgsql sends it along with the next command; the others send it alone.</summary>
-    public int SaveTrips => engine == "postgres" ? 0 : 1;
+    /// <summary>Round trips per savepoint set or released: every driver sends it alone (ENGINES.md E4, counted on the TCP stream).</summary>
+    public int SaveTrips => 1;
 
     public string Quote(string sql) => engine == "mysql" ? sql.Replace('"', '`') : sql;
 
+    /// <summary>With proxy=1 the workers connect through <see cref="Wire"/>, which counts round trips on the TCP stream.</summary>
+    public Wire? Proxy { get; } = options.ContainsKey("proxy") && engine != "sqlite" ? Wire.Start(engine, connection) : null;
+
     private string Worker => engine switch
     {
-        "postgres" => connection + ";Application Name=kernel-worker;Maximum Pool Size=40",
-        "sqlserver" => connection + ";Application Name=kernel-worker;Max Pool Size=40",
-        "mysql" => connection + ";uid=kernel_worker;pwd=kernel;maximumpoolsize=40",
+        "postgres" => (Proxy?.Rewrite(connection) ?? connection) + ";Application Name=kernel-worker;Maximum Pool Size=40",
+        "sqlserver" => (Proxy?.Rewrite(connection) ?? connection) + ";Application Name=kernel-worker;Max Pool Size=40",
+        "mysql" => (Proxy?.Rewrite(connection) ?? connection) + ";uid=kernel_worker;pwd=kernel;maximumpoolsize=40",
         _ => connection + (options.TryGetValue("timeout", out var timeout) ? ";Default Timeout=" + timeout : ""),
     };
 
@@ -504,8 +515,10 @@ sealed class Target(string engine, string connection, Dictionary<string, string>
         _ = engine switch
         {
             "postgres" => builder.UseNpgsql(to),
-            "sqlserver" => builder.UseSqlServer(to, o => { if (options.ContainsKey("batchsize")) o.MaxBatchSize(Int("batchsize", 42)); }),
-            "mysql" => builder.UseMySQL(to, o => { if (options.ContainsKey("batchsize")) o.MaxBatchSize(Int("batchsize", 42)); }),
+            // ENGINES.md E7. Both providers put at most 42 statements in one command, so a flush of 100 instances was five
+            // commands. At 1,000, SQL Server's provider still splits at its limit of 2,100 parameters.
+            "sqlserver" => builder.UseSqlServer(to, o => o.MaxBatchSize(Int("batchsize", 1000))),
+            "mysql" => builder.UseMySQL(to, o => o.MaxBatchSize(Int("batchsize", 1000))),
             "sqlite" => builder.UseSqlite(to),
             _ => throw new ArgumentException(engine),
         };
@@ -518,7 +531,7 @@ sealed class Target(string engine, string connection, Dictionary<string, string>
         Unfenced = Has("unfenced"),
         Engine = engine switch
         {
-            "sqlserver" => new SqlServerEngine { ReadPast = Has("readpast"), Savepoints = Has("savepoints") },
+            "sqlserver" => new SqlServerEngine { ReadPast = Has("readpast"), Savepoints = Has("savepoints"), ReadCommittedSnapshot = Get("rcsi", "1") == "1" },
             "mysql" => new MySqlEngine { Isolation = Get("isolation", "") == "rc" ? System.Data.IsolationLevel.ReadCommitted : null, Savepoints = Has("savepoints") },
             _ => null,
         },
@@ -533,9 +546,7 @@ sealed class Target(string engine, string connection, Dictionary<string, string>
         switch (engine)
         {
             case "sqlserver":
-                await settings.Database.ExecuteSqlRawAsync($"ALTER DATABASE CURRENT SET READ_COMMITTED_SNAPSHOT {(Has("rcsi") ? "ON" : "OFF")} WITH ROLLBACK IMMEDIATE");
-                SqlConnection.ClearAllPools();
-                break;
+                break;      // READ_COMMITTED_SNAPSHOT: SqlServerEngine.CreatedAsync (ENGINES.md E5)
             case "mysql":
                 await settings.Database.ExecuteSqlRawAsync("CREATE USER IF NOT EXISTS 'kernel_worker'@'%' IDENTIFIED BY 'kernel'");
                 await settings.Database.ExecuteSqlRawAsync("GRANT ALL ON *.* TO 'kernel_worker'@'%'");
@@ -612,18 +623,105 @@ sealed class Target(string engine, string connection, Dictionary<string, string>
         await using var db = Admins()();
         return engine switch
         {
-            "sqlserver" => await Text(db, "SELECT TOP 1 CAST(event_data AS nvarchar(max)) FROM sys.fn_xe_file_target_read_file('system_health*.xel', NULL, NULL, NULL) WHERE object_name = 'xml_deadlock_report' ORDER BY timestamp_utc DESC"),
+            "sqlserver" => await Text(db, "SELECT TOP 30 CAST(event_data AS nvarchar(max)) FROM sys.fn_xe_file_target_read_file('system_health*.xel', NULL, NULL, NULL) WHERE object_name = 'xml_deadlock_report' ORDER BY timestamp_utc DESC"),
             "mysql" => await Text(db, "SHOW ENGINE INNODB STATUS"),
             _ => "see the server's log",
         };
     }
 
     /// <summary>What the server itself counted as requests from the workers, where it keeps such a count; -1 where it does not.</summary>
-    public async Task<long> WireAsync()
+    public async Task<long> WireAsync() => (await WireByKindAsync()).Values.Sum() is var sum && engine is "sqlserver" or "mysql" ? sum : -1;
+
+    /// <summary>
+    /// SQL Server: network reads on the workers' connections (a request larger than a TDS packet is several reads, one
+    /// round trip). MySQL: every command the server executed for the worker user, by kind (COM_QUERY statements,
+    /// Init DB, Reset Connection, ...), from performance_schema: one per request.
+    /// </summary>
+    public async Task<Dictionary<string, long>> WireByKindAsync()
     {
-        if (engine != "sqlserver") return -1;
         await using var db = Admins()();
-        return long.Parse(await Text(db, "SELECT COALESCE(SUM(c.num_reads), 0) FROM sys.dm_exec_connections c JOIN sys.dm_exec_sessions s ON s.session_id = c.session_id WHERE s.program_name = 'kernel-worker'"));
+        var sql = engine switch
+        {
+            "sqlserver" => "SELECT 'reads', COALESCE(SUM(c.num_reads), 0) FROM sys.dm_exec_connections c JOIN sys.dm_exec_sessions s ON s.session_id = c.session_id WHERE s.program_name = 'kernel-worker'",
+            "mysql" => "SELECT e.EVENT_NAME, SUM(e.COUNT_STAR) FROM performance_schema.events_statements_summary_by_thread_by_event_name e JOIN performance_schema.threads t ON t.THREAD_ID = e.THREAD_ID WHERE t.PROCESSLIST_USER = 'kernel_worker' AND e.COUNT_STAR > 0 GROUP BY e.EVENT_NAME",
+            _ => null,
+        };
+        var counts = new Dictionary<string, long>();
+        if (sql is null) return counts;
+        var connection = db.Database.GetDbConnection();
+        await db.Database.OpenConnectionAsync();
+        await using var command = connection.CreateCommand();
+        command.CommandText = sql;
+        await using var reader = await command.ExecuteReaderAsync();
+        while (await reader.ReadAsync()) counts[reader.GetString(0)] = Convert.ToInt64(reader.GetValue(1));
+        return counts;
+    }
+}
+
+/// <summary>
+/// A TCP proxy in front of the database that counts round trips: a round trip begins each time the client sends after
+/// the server last spoke on that connection (or for the first time). Requests the driver pipelines without waiting
+/// for an answer count as one. Connection handshakes count too. Admin connections do not go through it.
+/// </summary>
+sealed class Wire
+{
+    private readonly System.Net.Sockets.TcpListener _listener = new(System.Net.IPAddress.Loopback, 0);
+    private readonly string _host;
+    private readonly int _port;
+    private long _trips;
+
+    private Wire(string host, int port) => (_host, _port) = (host, port);
+
+    public long Trips => Interlocked.Read(ref _trips);
+
+    public static Wire Start(string engine, string connection)
+    {
+        var match = engine == "sqlserver"
+            ? System.Text.RegularExpressions.Regex.Match(connection, @"Server=([^,;]+),(\d+)", System.Text.RegularExpressions.RegexOptions.IgnoreCase)
+            : System.Text.RegularExpressions.Regex.Match(connection, @"(?:Host|server)=([^;]+);.*?Port=(\d+)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        var wire = new Wire(match.Groups[1].Value, int.Parse(match.Groups[2].Value));
+        wire._listener.Start();
+        _ = Task.Run(wire.AcceptAsync);
+        return wire;
+    }
+
+    public string Rewrite(string connection)
+    {
+        var port = ((System.Net.IPEndPoint)_listener.LocalEndpoint).Port;
+        return System.Text.RegularExpressions.Regex.Replace(connection, @"(Server=[^,;]+,)\d+|(Port=)\d+", m => (m.Groups[1].Success ? m.Groups[1].Value : m.Groups[2].Value) + port, System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+    }
+
+    private async Task AcceptAsync()
+    {
+        while (true)
+        {
+            var client = await _listener.AcceptTcpClientAsync();
+            _ = Task.Run(async () =>
+            {
+                using var server = new System.Net.Sockets.TcpClient();
+                using var _ = client;
+                client.NoDelay = true;
+                server.NoDelay = true;
+                await server.ConnectAsync(_host, _port);
+                var serverSpoke = 1;     // so the client's first send is a round trip
+                async Task Pump(System.Net.Sockets.NetworkStream from, System.Net.Sockets.NetworkStream to, bool fromClient)
+                {
+                    var buffer = new byte[65536];
+                    try
+                    {
+                        for (int read; (read = await from.ReadAsync(buffer)) > 0;)
+                        {
+                            if (fromClient) { if (Interlocked.Exchange(ref serverSpoke, 0) == 1) Interlocked.Increment(ref _trips); }
+                            else Interlocked.Exchange(ref serverSpoke, 1);
+                            await to.WriteAsync(buffer.AsMemory(0, read));
+                        }
+                    }
+                    catch (Exception) { }
+                    finally { client.Close(); server.Close(); }
+                }
+                await Task.WhenAll(Pump(client.GetStream(), server.GetStream(), true), Pump(server.GetStream(), client.GetStream(), false));
+            });
+        }
     }
 }
 
