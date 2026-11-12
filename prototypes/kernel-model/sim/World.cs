@@ -1,6 +1,9 @@
+using Kernel.Native;
+
 namespace Kernel.Sim;
 
-public sealed record Config(int Nodes, int Partitions, Flaw Flaws, int Attempts = 3, int Group = 1);
+// Native and NativeFlaws: native workflow instances in the mix (sim/NativeSim.cs), and the model broken on purpose.
+public sealed record Config(int Nodes, int Partitions, Flaw Flaws, int Attempts = 3, int Group = 1, bool Native = false, NativeFlaw NativeFlaws = NativeFlaw.None);
 
 /// <summary>One thing that happens. Concrete, so that a list of them replays without the random generator.</summary>
 public sealed record Act(string Kind, int A = 0, int B = 0, string S = "", Message? M = null, bool Flag = false)
@@ -146,6 +149,7 @@ public sealed partial class World
     public World(Config config)
     {
         Config = config;
+        Native = new NativeOracle(config.Partitions);
         Store = new InMemoryStore(config.Partitions, () => Time, config.Flaws) { Refuses = row => row.State.Contains(Fragile.Sour) };
         Current = new int[config.Nodes, config.Partitions];
         Skew = new long[config.Nodes];
@@ -167,7 +171,7 @@ public sealed partial class World
         IExecutionModel[] models =
         [
             new Counter(), new Parent(), new Child(), new Waiter(), new Sequence(), new Correlation(Config.Flaws.HasFlag(Flaw.CorrelationForgets)), new CWaiter(Config.Partitions),
-            new Runner((run, cancel) => Work(actor, run, cancel)), new Fragile(() => Dying = node),
+            new Runner((run, cancel) => Work(actor, run, cancel)), new Fragile(() => Dying = node), NativeModelFor(actor),
         ];
         // A node's name is unique per process start: a restarted process is not its predecessor (finding F9).
         actor.Worker = new Worker(Config.Flaws.HasFlag(Flaw.StableNodeName) ? "node" + node : $"node{node}.{Incarnation[node]}", partition, new Wire(this, actor), models, new WorkerOptions
@@ -411,6 +415,7 @@ public sealed class Generator(int seed, World world)
 
     private Act Outside(Random r, List<Actor> alive)
     {
+        if (world.Config.Native && r.Next(100) < 40) return world.NativeAct(r, alive, _serial++);     // native instances (NativeSim.cs)
         var (n, p) = (_serial++, r.Next(world.Config.Partitions));
         long keep = world.Time + (r.Next(3) == 0 ? 5_000 : 3_600_000);
         Message To(string name, string kind, object? payload, StartSpec? start) =>

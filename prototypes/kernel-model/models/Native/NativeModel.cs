@@ -66,7 +66,6 @@ public sealed class NativeState
     public string? TriggerNode { get; set; }
     public JsonNode? Trigger { get; set; }
     public string? ReplyTo { get; set; }
-    [JsonIgnore] internal Work? InFlight;     // only under NativeFlaw.InFlightInMemory
 }
 
 /// <summary>A live activity: a composite with children, or an activity that waits.</summary>
@@ -95,6 +94,7 @@ public sealed class Work
     public JsonNode? Payload { get; set; }
     public int Attempt { get; set; }       // External in Durable: the attempt committed before it runs
     [JsonIgnore] internal Dictionary<string, JsonNode?>? LiveScope;
+    [JsonIgnore] internal bool Gone;       // only under NativeFlaw.InFlightInMemory
 }
 
 public sealed record WaitEntry(string Frame, string Kind, string Key);
@@ -171,7 +171,7 @@ internal sealed class Burst(NativeModel model, IStep step, CancellationToken can
                 break;
             case Kinds.Event:
                 // Friction F-N3: a delivered event carries neither its key nor the wait; the wait is the last part of its id.
-                Resume(m.Id[(m.Id.LastIndexOf(':') + 1)..], m.Payload is null ? null : JsonNode.Parse(m.Payload));
+                Resume(m.Id[(m.Id.LastIndexOf(':') + 1)..], Values.Parse(m.Payload));
                 break;
             case NativeKinds.Resume:
             {
@@ -209,12 +209,8 @@ internal sealed class Burst(NativeModel model, IStep step, CancellationToken can
 
     private async ValueTask DrainAsync()
     {
-        if (_s.InFlight is { } done)
-        {
-            _s.Agenda.Remove(done);
-            _s.InFlight = null;
-        }
-        while (_s.Agenda.Count > 0 && _status == InstanceStatus.Running)
+        _s.Agenda.RemoveAll(w => w.Gone);      // only under NativeFlaw.InFlightInMemory: memory forgets now what the row still has
+        while (_s.Agenda.Exists(w => !w.Gone) && _status == InstanceStatus.Running)
         {
             // Durable: a boundary after every activity. Balanced and Ephemeral: one step until all waits or ends (capped).
             if ((Durable && _executed > 0) || _executed >= model.Options.MaxActivitiesPerStep)
@@ -222,7 +218,7 @@ internal sealed class Burst(NativeModel model, IStep step, CancellationToken can
                 step.Send(step.Instance.Ref, NativeKinds.Continue);
                 return;
             }
-            var work = _s.Agenda[0];
+            var work = _s.Agenda.First(w => !w.Gone);
             if (!work.Resume && Durable && _wf.Nodes[work.Node!].External && work.Attempt == 0 && !Has(NativeFlaw.NoAttemptCommit))
             {
                 // Not replay-safe: commit the attempt first, run it in the next step. After a crash the row says it may have run.
@@ -231,8 +227,8 @@ internal sealed class Burst(NativeModel model, IStep step, CancellationToken can
                 step.Send(step.Instance.Ref, NativeKinds.Continue);
                 return;
             }
-            if (Has(NativeFlaw.InFlightInMemory) && Durable) _s.InFlight = work;
-            else _s.Agenda.RemoveAt(0);
+            if (Has(NativeFlaw.InFlightInMemory) && Durable) work.Gone = true;     // MUTATION: dequeued in memory only; the commit still carries it
+            else _s.Agenda.Remove(work);
             _executed++;
             if (work.Resume) await ResumeAsync(work);
             else await ExecuteAsync(work);
@@ -374,7 +370,7 @@ internal sealed class Burst(NativeModel model, IStep step, CancellationToken can
                 var me = step.Instance.Ref;
                 var child = InstanceRef.In(me.Partition, $"{me.Id[(me.Id.IndexOf('/') + 1)..]}~d{frame.Id}");
                 step.Send(child, Kinds.Start, null, new SendOptions(Start: NativeModel.Spec(d.Workflow, d.Mode, d.Input as JsonObject)));
-                step.Record($"s:{frame.Id}:{child.Id}");
+                step.Record($"d:{frame.Id}:{child.Id}");
                 break;
             }
             case EmitEffect e:
@@ -450,7 +446,7 @@ internal sealed class Burst(NativeModel model, IStep step, CancellationToken can
     }
 
     internal IReadOnlyList<string> Running(string frame) =>
-        [.. _s.Frames.Values.Where(f => f.Parent == frame).Select(f => f.Id), .. _s.Agenda.Where(w => !w.Resume && w.Parent == frame).Select(w => w.Frame)];
+        [.. _s.Frames.Values.Where(f => f.Parent == frame).Select(f => f.Id), .. _s.Agenda.Where(w => !w.Resume && !w.Gone && w.Parent == frame).Select(w => w.Frame)];
 
     internal void Cancel(string frame)
     {

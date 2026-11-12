@@ -67,6 +67,7 @@ public sealed partial class World
     public string? Check()
     {
         if (Store.Ghost.Count > 0) return Store.Ghost[0];
+        if (Config.Native) ScanJournal();      // the native checks read the journal (NativeSim.cs)
         if (Faults.Count > 0) return Faults[0];
         _watched.RemoveAll(t => t.IsCompletedSuccessfully);
         if (_watched.Find(t => t.IsFaulted) is { } bug) return "BUG " + bug.Exception!.InnerException;
@@ -219,7 +220,7 @@ public sealed partial class World
     private string? Waits()
     {
         var rows = Store.Subscriptions.ToLookup(s => s.Instance, s => s.Key);
-        if (rows.FirstOrDefault(g => !Oracle.Waiters.ContainsKey(g.Key)) is { } stray) return $"I8 {stray.Key} has a subscription and is no waiter";
+        if (rows.FirstOrDefault(g => !Oracle.Waiters.ContainsKey(g.Key) && Store.Instances.GetValueOrDefault(g.Key)?.Model != Kernel.Native.NativeModel.ModelKey) is { } stray) return $"I8 {stray.Key} has a subscription and is no waiter";
         foreach (var id in Oracle.Waiters.Keys)
         {
             var state = State<WaiterState>(id);
@@ -341,7 +342,7 @@ public sealed partial class World
                 }
             if (Check() is { } violation) return violation;
             if (Store.Messages.Values.Any(m => !m.Done && m.Message.Kind != "expire") || slots.Select(s => Of(s.Node, s.Partition)).Any(a => a.Worker.Owns && (a.Worker.NeedsFlush || a.Worker.Ready.Any() || a.Runs.Count > 0))) continue;
-            if (published) return End();
+            if (published && (!Config.Native || NativeMeet() == 0)) return End();    // native waits that appeared since get their events too
             if (Meet() is { } missed) return missed;
             published = true;
         }
@@ -365,6 +366,13 @@ public sealed partial class World
             if (Parked.Contains(id) || Hubs(id) is not { } hubs || Store.Instances.GetValueOrDefault(id)?.Status != InstanceStatus.Running) continue;
             if (hubs.Find(Oracle.Published.Contains) is { } hub) return $"I13 the wait of {id} and an event sent to {hub} never met";
             Store.AddAsync(Correlation.Published("last-" + id, keys[0], Config.Partitions, new Publish("last-" + id, null, 3_600_000), Time + 3_600_000)).AsTask().Wait();
+        }
+        if (Config.Native)      // the same for native waits, then their events (NativeSim.cs)
+        {
+            foreach (var s in Store.Subscriptions.Where(s => Store.Instances.GetValueOrDefault(s.Instance) is { Model: Kernel.Native.NativeModel.ModelKey, Status: InstanceStatus.Running }))
+                if (Store.EventRows.Values.FirstOrDefault(e => e.Key == s.Key && e.KeepUntil >= Time) is { } e)
+                    return $"I13 event {e.Id} for key {e.Key} and the native wait {s.Wait} of {s.Instance} are both committed and never met";
+            NativeMeet();
         }
         return null;
     }
@@ -402,6 +410,7 @@ public sealed partial class World
             Project(p, int.MaxValue);
             if (Projected[p] != Store.Partitions[p].Position) return $"I6 the projector of partition {p} stopped at {Projected[p]} of {Store.Partitions[p].Position}";
         }
+        if (Config.Native && NativeEnd() is { } native) return native;
         return Faults.FirstOrDefault() ?? Check();
     }
 }

@@ -269,6 +269,14 @@ public static class Values
         _ => true,
     };
 
+    /// <summary>A message payload as a value: JSON when it parses, else the text itself (a kernel payload is any string).</summary>
+    public static JsonNode? Parse(string? payload)
+    {
+        if (payload is null) return null;
+        try { return JsonNode.Parse(payload); }
+        catch (JsonException) { return JsonValue.Create(payload); }
+    }
+
     /// <summary>A JSON number whatever backs it: a parsed element, or a CLR long, int or double.</summary>
     public static bool TryNumber(JsonValue v, out double d)
     {

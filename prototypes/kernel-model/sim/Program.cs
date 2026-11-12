@@ -12,13 +12,17 @@ string? Arg(string name) => Array.IndexOf(args, name) is >= 0 and var i && i + 1
 var actions = int.Parse(Arg("--actions") ?? "300");
 var flaws = (Arg("--flaw") ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries).Aggregate(Flaw.None, (all, name) => all | Enum.Parse<Flaw>(name, true));
 
+NativeSwitch.On = args.Contains("--native");
+NativeSwitch.Flaws = (Arg("--native-flaw") ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries).Aggregate(Kernel.Native.NativeFlaw.None, (all, name) => all | Enum.Parse<Kernel.Native.NativeFlaw>(name, true));
+if (args.Contains("--native-mutations")) return NativeMutations(int.Parse(Arg("--seeds") ?? "2000"));
 if (args.Contains("--mutations")) return Mutations(int.Parse(Arg("--seeds") ?? "2000"));
 if (Arg("--backlog") is { } backlog) return Backlog(int.Parse(backlog));
 if (Arg("--seed") is { } one) return Replay(int.Parse(one), flaws) ? 0 : 1;
 return Sweep(int.Parse(Arg("--from") ?? "1"), int.Parse(Arg("--seeds") ?? "10000"), flaws) ? 0 : 1;
 
 // Every fifth seed tries suspects in groups of four that halve, with a threshold to match; the others one at a time.
-static Config ConfigOf(int seed, Flaw flaws) => flaws.HasFlag(Flaw.StableNodeName) ? new(1, 2, flaws) : seed % 5 == 0 ? new(2 + seed % 2, 2, flaws, Attempts: 5, Group: 4) : new(2 + seed % 2, 2, flaws);
+static Config ConfigOf(int seed, Flaw flaws) => (flaws.HasFlag(Flaw.StableNodeName) ? new(1, 2, flaws) : seed % 5 == 0 ? new(2 + seed % 2, 2, flaws, Attempts: 5, Group: 4) : new Config(2 + seed % 2, 2, flaws))
+    with { Native = NativeSwitch.On, NativeFlaws = NativeSwitch.Flaws };
 
 (string? Violation, List<Act> Acts) Run(int seed, Flaw flaws)
 {
@@ -98,7 +102,8 @@ bool Sweep(int from, int seeds, Flaw flaws)
         Interlocked.Add(ref acts, done.Count);
         if (violation is not null) failures.Add((seed, violation));
     });
-    Console.WriteLine($"{seeds} seeds from {from}, {acts} actions, {clock.Elapsed.TotalSeconds:F1} s, flaws: {flaws}: {failures.Count} failed; {World.Bystanders} innocent instances parked at the threshold");
+    Console.WriteLine($"{seeds} seeds from {from}, {acts} actions, {clock.Elapsed.TotalSeconds:F1} s, flaws: {flaws}: {failures.Count} failed; {World.Bystanders} innocent instances parked at the threshold"
+        + (NativeSwitch.On ? $"; native: {World.NativeInstances} finished instances matched a run without faults, {World.NativeReruns} External effects ran again under the same committed attempt" : ""));
     foreach (var group in failures.GroupBy(f => f.Violation.Split(' ')[0]).OrderByDescending(g => g.Count()))
     {
         var first = group.MinBy(f => f.Seed);
@@ -136,6 +141,36 @@ int Backlog(int messages)
         Console.WriteLine($"{messages} messages held by a dead owner, trial group {group}: {commits} commits to recover them");
     }
     return 0;
+}
+
+// The native model broken on purpose, one flaw at a time, with native instances in the mix (NATIVE.md, section 5).
+int NativeMutations(int seeds)
+{
+    NativeSwitch.On = true;
+    var missed = 0;
+    foreach (var mutation in Enum.GetValues<Kernel.Native.NativeFlaw>().Where(f => f != Kernel.Native.NativeFlaw.None))
+    {
+        NativeSwitch.Flaws = mutation;
+        var clock = Stopwatch.StartNew();
+        (int Seed, string Violation)? caught = null;
+        long acts = 0;
+        for (var from = 1; caught is null && from <= seeds; from += 64)
+        {
+            var found = new ConcurrentBag<(int Seed, string Violation)>();
+            Parallel.For(from, Math.Min(from + 64, seeds + 1), seed =>
+            {
+                var (violation, done) = Run(seed, Flaw.None);
+                Interlocked.Add(ref acts, done.Count);
+                if (violation is not null) found.Add((seed, violation));
+            });
+            if (!found.IsEmpty) caught = found.MinBy(f => f.Seed);
+        }
+        if (caught is null) missed++;
+        Console.WriteLine(caught is { } c
+            ? $"{mutation}: CAUGHT at seed {c.Seed} after {acts} actions, {clock.ElapsedMilliseconds} ms: {c.Violation}"
+            : $"{mutation}: NOT CAUGHT in {seeds} seeds ({acts} actions, {clock.ElapsedMilliseconds} ms)");
+    }
+    return missed;
 }
 
 int Mutations(int seeds)
