@@ -1,0 +1,558 @@
+using System.Text.Json.Nodes;
+using System.Text.Json.Serialization;
+
+namespace Kernel.Native;
+
+public static class Modes
+{
+    public const string Ephemeral = "Ephemeral", Balanced = "Balanced", Durable = "Durable";
+}
+
+/// <summary>Messages the native model understands besides the kernel's own kinds (start, child-finished, run-finished, event).</summary>
+public static class NativeKinds
+{
+    public const string Continue = "native.continue";   // a Durable boundary: the burst goes on in the next step
+    public const string Timer = "native.timer";         // a Delay is due
+    public const string Resume = "native.resume";       // an outsider resumes a wait by its stimulus, without the event tables
+    public const string Cancel = "native.cancel";
+}
+
+/// <summary>Deliberate defects of the model, one per check of the simulation (NATIVE.md, section 5).</summary>
+[Flags]
+public enum NativeFlaw
+{
+    None = 0,
+    InFlightInMemory = 1 << 0,  // Durable: the executed work item leaves the agenda only in memory
+    JoinWithoutGuard = 1 << 1,  // Parallel: no joined flag, and the join does not cancel the other branches
+    ResumeAnyChild = 1 << 2,    // a child-finished resumes every child wait, not the one for that child
+    NoAttemptCommit = 1 << 3,   // Durable: an External activity runs without its attempt committed first
+    ScopeInMemory = 1 << 4,     // an iteration scope is kept in memory only
+}
+
+public sealed record NativeStart(string Mode = Modes.Balanced, JsonObject? Input = null, string? TriggerNode = null, JsonNode? Trigger = null, string? ReplyTo = null);
+
+public sealed record TimerFired(string Wait);
+
+public sealed record ResumeStimulus(string Event, JsonNode? Payload = null);
+
+public sealed record BackgroundArgs(string Workflow, string Node, string Frame, JsonObject Inputs);
+
+public sealed record BackgroundResult(TransitionKind Kind, JsonNode? Result, string Outcome, ActivityFault? Fault);
+
+public sealed class NativeOptions
+{
+    public NativeFlaw Flaws { get; init; }
+    /// <summary>Gates off-step work before it runs (the simulation decides when it completes).</summary>
+    public Func<IRun, CancellationToken, ValueTask>? Gate { get; init; }
+    /// <summary>Called when an External activity's side effect happens: instance, frame, node, committed attempt.</summary>
+    public Action<InstanceRef, string, string, int>? OnExternal { get; init; }
+    public ILiveChannel? Live { get; init; }
+    public int MaxActivitiesPerStep { get; init; } = 1000;
+    public TimeSpan EventWindow { get; init; } = TimeSpan.FromHours(1);
+}
+
+// ---- the state: live frames, scheduled work, waits, variables, results ---------------------------------------------
+
+public sealed class NativeState
+{
+    public string Mode { get; set; } = Modes.Balanced;
+    public bool Started { get; set; }
+    public long Next { get; set; }
+    public Dictionary<string, Frame> Frames { get; set; } = new(StringComparer.Ordinal);
+    public List<Work> Agenda { get; set; } = [];
+    public Dictionary<string, WaitEntry> Waits { get; set; } = new(StringComparer.Ordinal);
+    public Dictionary<string, JsonNode?> Variables { get; set; } = new(StringComparer.Ordinal);
+    public Dictionary<string, JsonNode?> Results { get; set; } = new(StringComparer.Ordinal);
+    public string? TriggerNode { get; set; }
+    public JsonNode? Trigger { get; set; }
+    public string? ReplyTo { get; set; }
+    [JsonIgnore] internal Work? InFlight;     // only under NativeFlaw.InFlightInMemory
+}
+
+/// <summary>A live activity: a composite with children, or an activity that waits.</summary>
+public sealed class Frame
+{
+    public string Id { get; set; } = "";
+    public string Node { get; set; } = "";
+    public string? Parent { get; set; }
+    public string? Tag { get; set; }
+    public JsonNode? State { get; set; }
+    public Dictionary<string, JsonNode?>? Scope { get; set; }
+    public int Attempt { get; set; }
+    [JsonIgnore] internal Dictionary<string, JsonNode?>? LiveScope;   // only under NativeFlaw.ScopeInMemory
+}
+
+/// <summary>Scheduled work: execute a node as a new frame, or resume a frame's wait.</summary>
+public sealed class Work
+{
+    public bool Resume { get; set; }
+    public string Frame { get; set; } = "";
+    public string? Node { get; set; }
+    public string? Parent { get; set; }
+    public string? Tag { get; set; }
+    public Dictionary<string, JsonNode?>? Scope { get; set; }
+    public string? Wait { get; set; }
+    public JsonNode? Payload { get; set; }
+    public int Attempt { get; set; }       // External in Durable: the attempt committed before it runs
+    [JsonIgnore] internal Dictionary<string, JsonNode?>? LiveScope;
+}
+
+public sealed record WaitEntry(string Frame, string Kind, string Key);
+
+// ---- the model -----------------------------------------------------------------------------------------------------
+
+public sealed class NativeModel(WorkflowRegistry registry, NativeOptions? options = null) : IExecutionModel
+{
+    public const string ModelKey = "native";
+    public string Key => ModelKey;
+    public Type StateType => typeof(NativeState);
+    internal WorkflowRegistry Registry => registry;
+    internal NativeOptions Options { get; } = options ?? new NativeOptions();
+
+    public static StartSpec Spec(string workflow, string mode = Modes.Balanced, JsonObject? input = null, string? triggerNode = null, JsonNode? trigger = null, string? replyTo = null) =>
+        new(ModelKey, workflow, Json.Write(new NativeStart(mode, input, triggerNode, trigger, replyTo)), Ephemeral: mode == Modes.Ephemeral);
+
+    public object CreateState(StartSpec start) => new NativeState { Mode = Json.Read<NativeStart>(start.Input ?? "{}").Mode };
+
+    public ValueTask StepAsync(IStep step, CancellationToken cancellationToken) => new Burst(this, step, cancellationToken).RunAsync();
+
+    /// <summary>A Background leaf, run off the step: its inputs were materialized in the step that started it.</summary>
+    public async ValueTask<object?> RunAsync(IRun run, CancellationToken cancellationToken)
+    {
+        if (Options.Gate is { } gate) await gate(run, cancellationToken);
+        var args = Json.Read<BackgroundArgs>(run.Arguments!);
+        var node = registry.Get(args.Workflow).Nodes[args.Node];
+        var activity = (ILeaf)Hydrator.Create(node, args.Inputs);
+        var t = await activity.ExecuteAsync(new ActivityContext(run.Instance, args.Frame, node.Id, 0, cancellationToken));
+        return new BackgroundResult(t.Kind, t.Result, t.Outcome, t.Fault);
+    }
+}
+
+/// <summary>One step: take the inbox, then run the scheduled work until everything waits, ends or meets a boundary.</summary>
+internal sealed class Burst(NativeModel model, IStep step, CancellationToken cancellationToken)
+{
+    private readonly NativeState _s = (NativeState)step.State;
+    private readonly Workflow _wf = model.Registry.Get(step.Instance.Definition);
+    private readonly List<(string? ReplyTo, EmitEffect Emit)> _emits = [];
+    private InstanceStatus _status = InstanceStatus.Running;
+    private int _executed;
+
+    private bool Has(NativeFlaw flaw) => (model.Options.Flaws & flaw) != 0;
+    internal bool Flawed(NativeFlaw flaw) => Has(flaw);
+    private bool Durable => _s.Mode == Modes.Durable;
+    private string NewId(string prefix) => prefix + ++_s.Next;
+
+    public async ValueTask RunAsync()
+    {
+        foreach (var message in step.Inbox) Accept(message);
+        await DrainAsync();
+        if (_emits.Count > 0 && model.Options.Live is { } live)
+            foreach (var (replyTo, emit) in _emits) live.Emit(step.Instance.Ref.Id, replyTo, emit.Channel, emit.Item, emit.BeforeCommit);
+    }
+
+    // ---- messages in -------------------------------------------------------------------------------------------------
+
+    private void Accept(Message m)
+    {
+        switch (m.Kind)
+        {
+            case Kinds.Start when !_s.Started:
+            {
+                _s.Started = true;
+                var start = Json.Read<NativeStart>(m.Start?.Input ?? "{}");
+                foreach (var (name, value) in _wf.Variables) _s.Variables[name] = value?.DeepClone();
+                if (start.Input is { } input) _s.Variables["input"] = input.DeepClone();
+                (_s.TriggerNode, _s.Trigger, _s.ReplyTo) = (start.TriggerNode, start.Trigger, start.ReplyTo);
+                _s.Agenda.Add(new Work { Frame = NewId("f"), Node = _wf.Root.Id });
+                break;
+            }
+            case NativeKinds.Timer:
+                Resume(m.Read<TimerFired>().Wait, null);
+                break;
+            case Kinds.Event:
+                // Friction F-N3: a delivered event carries neither its key nor the wait; the wait is the last part of its id.
+                Resume(m.Id[(m.Id.LastIndexOf(':') + 1)..], m.Payload is null ? null : JsonNode.Parse(m.Payload));
+                break;
+            case NativeKinds.Resume:
+            {
+                var stimulus = m.Read<ResumeStimulus>();
+                if (_s.Waits.FirstOrDefault(w => w.Value.Key == "event:" + stimulus.Event).Key is { } wait) Resume(wait, stimulus.Payload);
+                break;
+            }
+            case Kinds.ChildFinished:
+            {
+                var finished = m.Read<ChildFinished>();
+                var payload = new JsonObject { ["Status"] = finished.Status.ToString(), ["Output"] = finished.Output is null ? null : JsonNode.Parse(finished.Output), ["Child"] = finished.Child };
+                foreach (var (id, wait) in _s.Waits.Where(w => w.Value.Kind == "child" && (w.Value.Key == finished.Child || Has(NativeFlaw.ResumeAnyChild))).ToList())
+                    Resume(id, payload.DeepClone());
+                break;
+            }
+            case Kinds.RunFinished:
+            {
+                var finished = m.Read<RunFinished>();
+                Resume(finished.Key, Values.From(finished));
+                break;
+            }
+            case NativeKinds.Cancel:
+                CancelWorkflow();
+                break;
+        }
+    }
+
+    // A wait is removed when its resume is processed, so a second delivery for it (two events, a stale timer) does nothing.
+    private void Resume(string wait, JsonNode? payload)
+    {
+        if (_s.Waits.TryGetValue(wait, out var entry)) _s.Agenda.Add(new Work { Resume = true, Frame = entry.Frame, Wait = wait, Payload = payload });
+    }
+
+    // ---- the burst ---------------------------------------------------------------------------------------------------
+
+    private async ValueTask DrainAsync()
+    {
+        if (_s.InFlight is { } done)
+        {
+            _s.Agenda.Remove(done);
+            _s.InFlight = null;
+        }
+        while (_s.Agenda.Count > 0 && _status == InstanceStatus.Running)
+        {
+            // Durable: a boundary after every activity. Balanced and Ephemeral: one step until all waits or ends (capped).
+            if ((Durable && _executed > 0) || _executed >= model.Options.MaxActivitiesPerStep)
+            {
+                step.Send(step.Instance.Ref, NativeKinds.Continue);
+                return;
+            }
+            var work = _s.Agenda[0];
+            if (!work.Resume && Durable && _wf.Nodes[work.Node!].External && work.Attempt == 0 && !Has(NativeFlaw.NoAttemptCommit))
+            {
+                // Not replay-safe: commit the attempt first, run it in the next step. After a crash the row says it may have run.
+                work.Attempt = 1;
+                step.Record($"a:{work.Frame}:{work.Attempt}");
+                step.Send(step.Instance.Ref, NativeKinds.Continue);
+                return;
+            }
+            if (Has(NativeFlaw.InFlightInMemory) && Durable) _s.InFlight = work;
+            else _s.Agenda.RemoveAt(0);
+            _executed++;
+            if (work.Resume) await ResumeAsync(work);
+            else await ExecuteAsync(work);
+        }
+    }
+
+    private async ValueTask ExecuteAsync(Work work)
+    {
+        if (work.Parent is not null && !_s.Frames.ContainsKey(work.Parent)) return;     // its parent was cancelled meanwhile
+        var node = _wf.Nodes[work.Node!];
+        var frame = new Frame { Id = work.Frame, Node = node.Id, Parent = work.Parent, Tag = work.Tag, Scope = work.Scope, Attempt = work.Attempt, LiveScope = work.LiveScope };
+        var scope = new FrameScope(this, frame);
+        if (node.Background)
+        {
+            // The slow activity is off-step work: its intent rides in this commit, its result comes back as a message.
+            _s.Frames[frame.Id] = frame;
+            var wait = NewId("w");
+            _s.Waits[wait] = new WaitEntry(frame.Id, "run", wait);
+            step.Run(wait, new BackgroundArgs(_wf.Id, node.Id, frame.Id, Hydrator.Snapshot(node, b => Evaluate(b, scope))));
+            return;
+        }
+        var activity = Hydrator.Create(node, b => Evaluate(b, scope));
+        switch (activity)
+        {
+            case IIntrinsic set:
+                Assign(frame, set.Name, set.Value);
+                Complete(frame, "Done", null);
+                break;
+            case CompositeActivity composite:
+                _s.Frames[frame.Id] = frame;
+                composite.Execute(new CompositeContext(this, frame, node));
+                break;
+            case IStateful stateful:
+            {
+                var delivery = _s.TriggerNode == node.Id && _s.Trigger is not null;
+                var trigger = delivery ? _s.Trigger : null;
+                if (delivery) (_s.TriggerNode, _s.Trigger) = (null, null);
+                Apply(frame, await stateful.StartAsync(Context(frame), delivery, trigger));
+                break;
+            }
+            case ILeaf leaf:
+                if (node.External) model.Options.OnExternal?.Invoke(step.Instance.Ref, frame.Id, node.Id, frame.Attempt);
+                Apply(frame, await leaf.ExecuteAsync(Context(frame)));
+                break;
+        }
+    }
+
+    private async ValueTask ResumeAsync(Work work)
+    {
+        if (!_s.Waits.Remove(work.Wait!, out var wait) || !_s.Frames.TryGetValue(wait.Frame, out var frame)) return;
+        Unregister(work.Wait!, wait, cancel: false);
+        foreach (var (id, other) in _s.Waits.Where(w => w.Value.Frame == frame.Id).ToList())     // an activity resumes once
+        {
+            _s.Waits.Remove(id);
+            Unregister(id, other, cancel: true);
+        }
+        if (wait.Kind == "child") step.Record($"r:{work.Wait}:{wait.Key}:{work.Payload?["Child"]}");
+        if (work.Payload is JsonObject { } o && (o["ReplyTo"] ?? o["replyTo"])?.GetValue<string>() is { } replyTo) _s.ReplyTo = replyTo;     // a request resumed it: answer that one
+        _s.Frames.Remove(frame.Id);
+        var node = _wf.Nodes[frame.Node];
+        if (node.Background)
+        {
+            var finished = Values.To<RunFinished>(work.Payload)!;
+            if (finished.Error is { } error) Fail(frame, new ActivityFault("run", error));
+            else if (Json.Read<BackgroundResult>(finished.Result!) is var r) Apply(frame, new Transition(r.Kind, r.Result, r.Outcome, r.Fault));
+            return;
+        }
+        var activity = (IStateful)Hydrator.Create(node, b => Evaluate(b, new FrameScope(this, frame)));
+        Apply(frame, await activity.ResumeAsync(Context(frame), frame.State, work.Payload));
+    }
+
+    private ActivityContext Context(Frame frame) => new(step.Instance.Ref, frame.Id, frame.Node, frame.Attempt, cancellationToken);
+
+    // ---- transitions -------------------------------------------------------------------------------------------------
+
+    private void Apply(Frame frame, Transition t)
+    {
+        foreach (var effect in t.Effects ?? []) Do(frame, effect);
+        switch (t.Kind)
+        {
+            case TransitionKind.Complete: Complete(frame, t.Outcome, t.Result); break;
+            case TransitionKind.Cancel: Complete(frame, "Cancelled", null); break;
+            case TransitionKind.Fault: Fail(frame, t.Fault!); break;
+            case TransitionKind.Suspend:
+                frame.State = t.State;
+                _s.Frames[frame.Id] = frame;
+                foreach (var trigger in t.Triggers ?? []) Register(frame, trigger);
+                break;
+        }
+    }
+
+    // Every leak of the activity map ends here: each trigger and effect is one kernel call, made by the model.
+    private void Register(Frame frame, Trigger trigger)
+    {
+        var id = NewId("w");
+        switch (trigger)
+        {
+            case EventTrigger e:
+                _s.Waits[id] = new WaitEntry(frame.Id, "event", "event:" + e.Name);
+                step.Subscribe("event:" + e.Name, id);
+                break;
+            case HttpTrigger h:
+                _s.Waits[id] = new WaitEntry(frame.Id, "event", HttpRoutes.Key(h.Method, h.Path));
+                step.Subscribe(HttpRoutes.Key(h.Method, h.Path), id);
+                break;
+            case TimerTrigger t:
+                _s.Waits[id] = new WaitEntry(frame.Id, "timer", id);
+                step.Send(step.Instance.Ref, NativeKinds.Timer, new TimerFired(id), new SendOptions(Delay: TimeSpan.FromMilliseconds(t.Milliseconds)));
+                break;
+            case ChildTrigger c:
+                var child = step.Start(NativeModel.Spec(c.Workflow, c.Mode, c.Input as JsonObject));
+                _s.Waits[id] = new WaitEntry(frame.Id, "child", child.Id);
+                step.Record($"s:{frame.Id}:{child.Id}");
+                break;
+        }
+    }
+
+    private void Unregister(string id, WaitEntry wait, bool cancel)
+    {
+        switch (wait.Kind)
+        {
+            case "event": step.Unsubscribe(wait.Key, id); break;
+            case "run" when cancel: step.CancelRun(wait.Key); break;
+            case "child" when cancel: step.Send(new InstanceRef(wait.Key), NativeKinds.Cancel); break;
+            // Friction F-N4: a timer cannot be taken back from a step. The message arrives later and finds no wait.
+        }
+    }
+
+    private void Do(Frame frame, Effect effect)
+    {
+        switch (effect)
+        {
+            case PublishEffect p:
+                step.Publish("event:" + p.Event, p.Payload?.ToJsonString(), model.Options.EventWindow);
+                break;
+            case DispatchEffect d:
+            {
+                // A detached start: Send with a start spec, not Start, which would make it a child (friction F-N5).
+                var me = step.Instance.Ref;
+                var child = InstanceRef.In(me.Partition, $"{me.Id[(me.Id.IndexOf('/') + 1)..]}~d{frame.Id}");
+                step.Send(child, Kinds.Start, null, new SendOptions(Start: NativeModel.Spec(d.Workflow, d.Mode, d.Input as JsonObject)));
+                step.Record($"s:{frame.Id}:{child.Id}");
+                break;
+            }
+            case EmitEffect e:
+                _emits.Add((_s.ReplyTo, e));
+                if (e.Channel == HttpRoutes.ResponseChannel) _s.ReplyTo = null;     // one response per request
+                break;
+        }
+    }
+
+    internal void Complete(Frame frame, string outcome, JsonNode? result)
+    {
+        _s.Frames.Remove(frame.Id);
+        CancelChildren(frame.Id);
+        if (result is not null) _s.Results[frame.Node] = result;
+        foreach (var (variable, path) in _wf.Nodes[frame.Node].Captures) Assign(frame, variable, Values.Path(result, path)?.DeepClone());
+        step.Record($"c:{frame.Id}:{frame.Node}");
+        NotifyParent(frame, outcome, result);
+    }
+
+    private void NotifyParent(Frame frame, string outcome, JsonNode? result)
+    {
+        if (frame.Parent is null)
+        {
+            Finish();
+            return;
+        }
+        if (!_s.Frames.TryGetValue(frame.Parent, out var parent)) return;
+        var node = _wf.Nodes[parent.Node];
+        var composite = (CompositeActivity)Hydrator.Create(node, b => Evaluate(b, new FrameScope(this, parent)));
+        composite.OnChildCompleted(new CompositeContext(this, parent, node), new ChildCompleted(frame.Id, frame.Node, outcome, result, frame.Tag));
+    }
+
+    /// <summary>A threshold join fired: record it once, complete the composite, cancel what still runs under it.</summary>
+    internal void Join(Frame frame)
+    {
+        step.Record($"j:{frame.Id}");
+        if (!Has(NativeFlaw.JoinWithoutGuard))
+        {
+            Complete(frame, "Done", null);
+            return;
+        }
+        step.Record($"c:{frame.Id}:{frame.Node}");     // MUTATION: the parent hears of it, the frame and its branches live on
+        NotifyParent(frame, "Done", null);
+    }
+
+    internal void RecordJoin(Frame frame, string node) => step.Record($"j:{frame.Id}:{node}");
+
+    internal void Fail(Frame frame, ActivityFault fault)
+    {
+        _s.Frames.Remove(frame.Id);
+        CancelChildren(frame.Id);
+        step.Record($"f:{frame.Id}:{frame.Node}");
+        if (frame.Parent is null || !_s.Frames.TryGetValue(frame.Parent, out var parent))
+        {
+            if (frame.Parent is null) End(InstanceStatus.Faulted, fault.Code, Values.From(fault));
+            return;
+        }
+        var node = _wf.Nodes[parent.Node];
+        var composite = (CompositeActivity)Hydrator.Create(node, b => Evaluate(b, new FrameScope(this, parent)));
+        composite.OnChildFaulted(new CompositeContext(this, parent, node), new ChildFaulted(frame.Id, frame.Node, fault, frame.Tag));
+    }
+
+    internal string Schedule(Frame parent, Node child, string? tag, IReadOnlyDictionary<string, JsonNode?>? scope)
+    {
+        var work = new Work { Frame = NewId("f"), Node = child.Id, Parent = parent.Id, Tag = tag };
+        if (scope is not null)
+        {
+            if (Has(NativeFlaw.ScopeInMemory)) work.LiveScope = new(scope);     // MUTATION: the iteration scope is not in the row
+            else work.Scope = new(scope);
+        }
+        _s.Agenda.Add(work);
+        return work.Frame;
+    }
+
+    internal IReadOnlyList<string> Running(string frame) =>
+        [.. _s.Frames.Values.Where(f => f.Parent == frame).Select(f => f.Id), .. _s.Agenda.Where(w => !w.Resume && w.Parent == frame).Select(w => w.Frame)];
+
+    internal void Cancel(string frame)
+    {
+        if (_s.Frames.Remove(frame, out var f))
+        {
+            foreach (var (id, wait) in _s.Waits.Where(w => w.Value.Frame == frame).ToList())
+            {
+                _s.Waits.Remove(id);
+                Unregister(id, wait, cancel: true);
+            }
+            CancelChildren(frame);
+            step.Record($"x:{f.Id}:{f.Node}");
+        }
+        _s.Agenda.RemoveAll(w => !w.Resume && w.Frame == frame);
+    }
+
+    private void CancelChildren(string frame)
+    {
+        foreach (var child in _s.Frames.Values.Where(f => f.Parent == frame).Select(f => f.Id).ToList()) Cancel(child);
+        _s.Agenda.RemoveAll(w => !w.Resume && w.Parent == frame);
+    }
+
+    private void CancelWorkflow()
+    {
+        foreach (var frame in _s.Frames.Values.Where(f => f.Parent is null).Select(f => f.Id).ToList()) Cancel(frame);
+        End(InstanceStatus.Cancelled, "cancelled", null);
+    }
+
+    private void Finish() => End(InstanceStatus.Finished, null, _s.Variables.GetValueOrDefault("output"));
+
+    private void End(InstanceStatus status, string? subStatus, JsonNode? output)
+    {
+        foreach (var frame in _s.Frames.Keys.ToList()) Cancel(frame);
+        _s.Agenda.Clear();
+        _status = status;
+        step.SetStatus(status, subStatus, output);
+    }
+
+    // ---- variables and bindings --------------------------------------------------------------------------------------
+
+    internal JsonNode? Evaluate(Binding binding, IScope scope) => binding switch
+    {
+        LiteralBinding l => l.Value?.DeepClone(),
+        VariableBinding v => scope.Variable(v.Name)?.DeepClone(),
+        ResultBinding r => Values.Path(_s.Results.GetValueOrDefault(r.Node), r.Path)?.DeepClone(),
+        ExpressionBinding e => Expression.Evaluate(e.Text, scope),
+        _ => throw new InvalidOperationException(binding.ToString()),
+    };
+
+    private Frame? ParentOf(Frame frame) => frame.Parent is { } id ? _s.Frames.GetValueOrDefault(id) : null;
+
+    internal JsonNode? Read(Frame? frame, string name)
+    {
+        for (; frame is not null; frame = ParentOf(frame))
+        {
+            if (frame.LiveScope is { } live && live.TryGetValue(name, out var l)) return l;
+            if (frame.Scope is { } scope && scope.TryGetValue(name, out var v)) return v;
+        }
+        return _s.Variables.GetValueOrDefault(name);
+    }
+
+    internal JsonNode? Result(string node) => _s.Results.GetValueOrDefault(node);
+
+    /// <summary>A write goes to the nearest scope that declares the variable, else to the workflow's.</summary>
+    private void Assign(Frame frame, string name, JsonNode? value)
+    {
+        for (var f = (Frame?)frame; f is not null; f = ParentOf(f))
+        {
+            if (f.LiveScope?.ContainsKey(name) == true) { f.LiveScope[name] = value; return; }
+            if (f.Scope?.ContainsKey(name) == true) { f.Scope[name] = value; return; }
+        }
+        _s.Variables[name] = value;
+    }
+}
+
+internal sealed class FrameScope(Burst burst, Frame frame) : IScope
+{
+    public JsonNode? Variable(string name) => burst.Read(frame, name);
+    public JsonNode? Result(string node) => burst.Result(node);
+}
+
+/// <summary>What a composite sees: its children, its private state, and the structural requests it may make.</summary>
+public sealed class CompositeContext
+{
+    private readonly Burst _burst;
+    private readonly Frame _frame;
+
+    internal CompositeContext(Burst burst, Frame frame, Node node) => (_burst, _frame, Node) = (burst, frame, node);
+
+    public Node Node { get; }
+    public string FrameId => _frame.Id;
+    public IReadOnlyList<Node> Children => Node.Children;
+    public IReadOnlyList<string> Running => _burst.Running(_frame.Id);
+    internal bool Flawed(NativeFlaw flaw) => _burst.Flawed(flaw);
+
+    public T GetState<T>() where T : new() => Values.To<T>(_frame.State) ?? new T();
+    public void SetState<T>(T state) => _frame.State = Values.From(state);
+
+    public string Schedule(Node child, string? tag = null, IReadOnlyDictionary<string, JsonNode?>? scope = null) => _burst.Schedule(_frame, child, tag, scope);
+    public void Complete(string outcome = "Done", JsonNode? result = null) => _burst.Complete(_frame, outcome, result);
+    public void Join() => _burst.Join(_frame);
+    public void RecordJoin(string node) => _burst.RecordJoin(_frame, node);
+    public void Fault(ActivityFault fault) => _burst.Fail(_frame, fault);
+    public void Cancel(string childFrame) => _burst.Cancel(childFrame);
+}

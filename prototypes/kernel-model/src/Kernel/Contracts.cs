@@ -42,6 +42,7 @@ public static class Kinds
     public const string Event = "event";
     public const string Run = "kernel.run";    // a run's ticket: the intent while the work is in flight, the result afterwards
     public const string Meet = "kernel.meet";  // "read the events for the keys this commit subscribed"
+    public const string Publish = "kernel.publish";    // NATIVE N1: "publish this event now that the commit has landed"
 }
 
 public interface IExecutionModel
@@ -72,6 +73,14 @@ public interface IStep
     void CancelRun(string key);
     void Subscribe(string key, string wait);
     void Unsubscribe(string key, string wait);
+
+    /// <summary>
+    /// NATIVE N1: publish an event from a step. The commit carries a ticket to self; after it lands the owner inserts the
+    /// event and delivers it to the subscriptions it finds, as <see cref="Events.PublishAsync"/> does for an outsider.
+    /// Returns the event's id, derived from the instance and its revision.
+    /// </summary>
+    string Publish(string key, string? payload, TimeSpan keep);
+
     void Record(object entry);
     void SetStatus(InstanceStatus status, string? subStatus = null, object? output = null);
 }

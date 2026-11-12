@@ -78,6 +78,14 @@ internal sealed class Step : IStep
 
     public void Subscribe(string key, string wait) => _subscribed.Add(new SubscriptionRow(key, Id, wait));
     public void Unsubscribe(string key, string wait) => _unsubscribed.Add(new SubscriptionRow(key, Id, wait));
+    // NATIVE N1: the publish is a ticket to self, so "the inbox alone says what is owed" holds for it too.
+    public string Publish(string key, string? payload, TimeSpan keep)
+    {
+        var id = $"{Id}#{_revision}.{_ordinal:D4}";
+        Send(Instance.Ref, Kinds.Publish, new EventRow(key, id, payload, _worker.Now + (long)keep.TotalMilliseconds));
+        return id;
+    }
+
     public void Record(object entry) => _entries.Add(entry);
     public void SetStatus(InstanceStatus status, string? subStatus = null, object? output = null) => (_status, _output) = (status, output);
 

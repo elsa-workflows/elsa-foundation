@@ -23,6 +23,15 @@ public sealed record WorkerOptions
 
     /// <summary>Called when a step starts, with the worker's idea of database time. For tests.</summary>
     public Action<InstanceRef, IReadOnlyList<Message>, long>? OnStep { get; init; }
+
+    /// <summary>
+    /// NATIVE N2: a step's result reached memory: its commit landed, or it had nothing to write. False when the step was
+    /// parked instead (it threw, or its row was refused). A live channel releases what the step emitted only then.
+    /// </summary>
+    public Action<string, bool>? OnApplied { get; init; }
+
+    /// <summary>NATIVE N2: the worker dropped its memory: whatever its steps emitted and not yet released is lost.</summary>
+    public Action? OnReset { get; init; }
 }
 
 /// <summary>
@@ -142,6 +151,7 @@ public sealed class Worker
         _cancelling.Clear();
         _caughtUp = false;
         _trial.Clear();
+        _options.OnReset?.Invoke();     // NATIVE N2
     }
 
     private void Observe(long now) => _anchor = Math.Max(_anchor, now - _options.Monotonic());
@@ -185,7 +195,7 @@ public sealed class Worker
     /// A message that another owner had marked, or that is on trial already, may be what killed that owner. What this
     /// same process marked in an epoch it held earlier is not: the process is alive.
     /// </summary>
-    private bool Suspect(Stored row, long now) => row.Message.Kind != Kinds.Meet && row.Attempts < _options.MaxAttempts
+    private bool Suspect(Stored row, long now) => row.Message.Kind is not (Kinds.Meet or Kinds.Publish) && row.Attempts < _options.MaxAttempts
         && (row.Trial > 0 || (row.Seen > 0 && !_mine.Contains(row.Seen) && (row.Message.Due is not { } due || due <= now)));
 
     private bool OnTrial(string instance) => _trial.Any(t => t.Message.Target.Id == instance);
@@ -197,7 +207,7 @@ public sealed class Worker
         _behind.Remove(message.Id);
         var item = new Item(message, seq) { Durable = durable, Marked = marked, Suspect = suspect, Attempts = attempts };
         _items[message.Id] = item;
-        if (message.Kind == Kinds.Meet)
+        if (message.Kind is Kinds.Meet or Kinds.Publish)     // NATIVE N1: a publish ticket is handled like a meet ticket
         {
             item.Ticket = true;
             _meets.Add(item);
@@ -333,7 +343,7 @@ public sealed class Worker
         var row = slot.Row is { } r ? r with { Status = InstanceStatus.Faulted, Revision = r.Revision + 1, Fault = error }
             : spec is null ? null
             : new InstanceRow(instance, spec.Model, spec.Definition, InstanceStatus.Faulted, "null", 1, spec.Parent, error);
-        var unit = new Unit(slot, instance) { Row = row, Expected = slot.Row?.Revision, Consumed = taken, Journal = Json.Write(new[] { "parked: " + error }) };
+        var unit = new Unit(slot, instance) { Row = row, Expected = slot.Row?.Revision, Consumed = taken, Journal = Json.Write(new[] { "parked: " + error }), Parked = true };
         if (row?.Parent is not null) unit.Sent.Add(Finished(row, null));
         return unit;
     }
@@ -376,8 +386,11 @@ public sealed class Worker
         _meeting = true;
         try
         {
-            var waits = tickets.SelectMany(t => t.Message.Read<SubscriptionRow[]>()).ToList();
-            var events = await _store.FindEventsAsync(waits.Select(w => w.Key).Distinct().ToArray(), cancellationToken);
+            // NATIVE N1: a publish ticket is the publisher's side, done by the owner after the commit that sent it.
+            foreach (var ticket in tickets.Where(t => t.Message.Kind == Kinds.Publish))
+                await Events.PublishAsync(_store, ticket.Message.Read<EventRow>(), cancellationToken);
+            var waits = tickets.Where(t => t.Message.Kind == Kinds.Meet).SelectMany(t => t.Message.Read<SubscriptionRow[]>()).ToList();
+            IReadOnlyList<EventRow> events = waits.Count == 0 ? [] : await _store.FindEventsAsync(waits.Select(w => w.Key).Distinct().ToArray(), cancellationToken);
             foreach (var e in events)
                 foreach (var wait in waits.Where(w => w.Key == e.Key))
                     await _store.AddAsync(Events.Deliver(e, wait), cancellationToken);
@@ -506,6 +519,7 @@ public sealed class Worker
             foreach (var message in unit.Sent)
                 if (message.Target.Partition == Partition && message.Due is null && !unit.Volatile.Contains(message.Id)) _behind.Add(message.Id);
         HandOver(unit, seqs, hold: handOver && !Has(Flaw.DeliverBeforeCommit));
+        if (unit.Slot is not null) _options.OnApplied?.Invoke(unit.Instance, !unit.Parked);    // NATIVE N2
         if (unit.Slot is not { } slot) return;
         if (unit.Row is not null) slot.Row = unit.Row;
         slot.State = unit.Row is { Status: InstanceStatus.Running } ? unit.State : null;
@@ -572,6 +586,7 @@ internal sealed class Unit(Slot? slot, string instance)
     public List<Message> Sent = [];
     public HashSet<string> Fresh = [], Volatile = [];
     public List<SubscriptionRow> Subscribed = [], Unsubscribed = [];
+    public bool Parked;     // NATIVE N2: this unit replaces the step's own result
 
     public bool Durable => Row is not null || Journal is not null || Cancelled.Count > 0 || Consumed.Exists(i => i.Durable) || Sent.Exists(m => !Volatile.Contains(m.Id));
 }
