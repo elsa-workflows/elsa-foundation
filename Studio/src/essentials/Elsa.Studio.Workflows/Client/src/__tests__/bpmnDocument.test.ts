@@ -71,6 +71,22 @@ describe("complete BPMN document authority", () => {
     expect(original.structure!.payload.documentXml).toBe(parsed.payload.documentXml);
   });
 
+  it.each([["missing:Loose", false], ["local:Loose:extra", true]])("does not infer a local deletion reference from opaque QName %s", (reference, hasNamespace) => {
+    const source = xml.replace(' id="Definitions"', ' xmlns:local="urn:test" id="Definitions"')
+      .replace('<bpmn:startEvent id="Start"', `<bpmn:callActivity id="Caller" calledElement="${reference}"/><bpmn:task id="Loose"/><bpmn:startEvent id="Start"`);
+    const original = owner(hasNamespace ? source : source.replace(' targetNamespace="urn:test"', ""));
+    const next = applyBpmnDocumentCommands(original, [{ kind: "remove", target: address("Loose") }]);
+    expect(readBpmnDocument(next).byId.has("Loose")).toBe(false);
+    expect(element(next, "Caller").getAttribute("calledElement")).toBe(reference);
+    expect(readBpmnDocument(original).byId.has("Loose")).toBe(true);
+  });
+
+  it.each(["Loose", "local:Loose"])("still refuses deletion through an actual local reference %s", reference => {
+    const source = xml.replace(' id="Definitions"', ' xmlns:local="urn:test" id="Definitions"')
+      .replace('<bpmn:startEvent id="Start"', `<bpmn:callActivity id="Caller" calledElement="${reference}"/><bpmn:task id="Loose"/><bpmn:startEvent id="Start"`);
+    expect(() => applyBpmnDocumentCommands(owner(source), [{ kind: "remove", target: address("Loose") }])).toThrow("reference");
+  });
+
   it("opens full collaboration, nested events, loops and vendor syntax without rewriting source", () => {
     const original = owner();
     const before = structuredClone(original);

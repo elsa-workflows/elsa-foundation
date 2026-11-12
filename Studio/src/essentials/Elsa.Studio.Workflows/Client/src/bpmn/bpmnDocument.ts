@@ -260,15 +260,19 @@ export function readBpmnDocument(owner: ActivityNode): ParsedBpmnDocument {
     ...(raw.scopeHeaders !== undefined ? { scopeHeaders: headers } : {}) }, document, byId, process };
 }
 
-/** QName references may qualify a local ID with the document's target namespace. */
-export function resolveBpmnDocumentReference(parsed: ParsedBpmnDocument, context: Element, reference: string | null): Element | undefined {
+function localReferenceId(document: XMLDocument, context: Element, reference: string | null): string | undefined {
   if (!reference) return undefined;
   const value = reference.trim();
-  if (!value.includes(":")) return parsed.byId.get(value);
+  if (!value.includes(":")) return value;
   const parts = value.split(":");
-  const targetNamespace = parsed.document.documentElement.getAttribute("targetNamespace");
+  const targetNamespace = document.documentElement.getAttribute("targetNamespace");
   if (!targetNamespace || parts.length !== 2 || !parts[0] || !parts[1] || context.lookupNamespaceURI(parts[0]) !== targetNamespace) return undefined;
-  return parsed.byId.get(parts[1]);
+  return parts[1];
+}
+/** QName references may qualify a local ID with the document's target namespace. */
+export function resolveBpmnDocumentReference(parsed: ParsedBpmnDocument, context: Element, reference: string | null): Element | undefined {
+  const id = localReferenceId(parsed.document, context, reference);
+  return id === undefined ? undefined : parsed.byId.get(id);
 }
 
 function resolve(parsed: ParsedBpmnDocument, address: BpmnXmlAddress): Element {
@@ -447,8 +451,10 @@ function standardReferenceAttribute(element: Element, attribute: Attr) {
 function rejectRemovedReferences(previousIds: ReadonlyMap<string, Element>, nextIds: ReadonlyMap<string, Element>, document: XMLDocument) {
   const removed = new Set([...previousIds.keys()].filter(id => !nextIds.has(id)));
   if (!removed.size) return;
-  const removedReference = (element: Element, value: string) => removed.has(value)
-    || value.includes(":") && element.lookupNamespaceURI(value.split(":")[0]) === document.documentElement.getAttribute("targetNamespace") && removed.has(value.split(":")[1]);
+  const removedReference = (element: Element, value: string) => {
+    const id = localReferenceId(document, element, value);
+    return id !== undefined && removed.has(id);
+  };
   for (const element of [...document.getElementsByTagName("*")]) {
     if (!standardReferenceContext(element)) continue;
     for (const attribute of [...element.attributes]) {
