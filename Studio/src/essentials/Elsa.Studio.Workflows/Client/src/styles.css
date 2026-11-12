@@ -166,6 +166,21 @@
   padding: 16px 20px 0;
 }
 
+/* On a phone the run title and its instance id share one line, so the run's canvas and evidence keep the viewport. */
+@media (max-width: 600px) {
+  .wf-page--run-workbench > .studio-page-header {
+    flex-wrap: nowrap;
+    align-items: baseline;
+    gap: 12px;
+    padding: 10px 16px 0;
+  }
+
+  .wf-page--run-workbench > .studio-page-header > .studio-page-header-copy { flex: 0 0 auto; }
+  .wf-page--run-workbench > .studio-page-header > .studio-page-actions { flex: 1 1 auto; min-width: 0; }
+  .wf-page--run-workbench .wf-page-context { display: flex; align-items: baseline; justify-content: flex-end; gap: 6px; }
+  .wf-page--run-workbench .wf-page-context code { min-width: 0; max-width: none; }
+}
+
 .wf-page--run-workbench > .wf-toolbar {
   flex: 0 0 auto;
   flex-wrap: wrap;
@@ -1314,6 +1329,19 @@
 
 .wf-instance-detail-workbench.inspector-collapsed .wf-instance-inspector .wf-panel-tab-list {
   display: none;
+}
+
+/* The run panel's four tabs keep their full labels beside its panel buttons. Below the width that
+   fits them with icons, the labels stay and the icons go, rather than a label scrolling under the
+   chevron ("Detai"). */
+.wf-instance-inspector > .wf-instance-panel-title {
+  container: wf-run-panel-title / inline-size;
+}
+
+@container wf-run-panel-title (max-width: 460px) {
+  .wf-instance-panel-title .wf-panel-tab-list { gap: 2px; }
+  .wf-instance-panel-title .wf-panel-tab-list button { gap: 0; padding-inline: 6px; }
+  .wf-instance-panel-title .wf-panel-tab-icon { display: none; }
 }
 
 .wf-instance-detail-workbench.run-layout-medium,
@@ -5495,6 +5523,16 @@ button.wf-reference-select {
 .wf-property-row textarea:focus {
   border-color: var(--wf-accent);
   box-shadow: var(--wf-focus-ring);
+}
+
+/* An invalid field is visibly an error, not only aria-invalid: a danger border, and its message in danger text. */
+.wf-property-row :is(input, select, textarea)[aria-invalid="true"] {
+  border-color: var(--studio-danger-fg, var(--wf-danger));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--studio-danger-fg, var(--wf-danger)) 45%, transparent);
+}
+
+.wf-property-row p.wf-property-row-error {
+  color: var(--studio-danger-fg, var(--wf-danger));
 }
 
 .wf-expression-field {

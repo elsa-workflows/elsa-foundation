@@ -49,9 +49,25 @@
 .wf-attached-test-run .wf-run-observation-notice { flex-basis: 100%; }
 
 @media (max-width: 600px) {
-  .wf-run-actions { width: 100%; margin-left: 0; }
+  .wf-run-toolbar.wf-toolbar { gap: 4px 8px; padding: 6px 16px 8px; }
+  .wf-run-actions { width: 100%; margin-left: 0; gap: 4px; }
   .wf-run-actions > .wf-run-observation-controls { padding-left: 0; border-left: 0; }
-  .wf-run-identity > strong { max-width: 100%; }
+  /* One identity row: the run name gives way (full name in its tooltip) before the status wraps. */
+  .wf-run-identity { flex: 1 1 100%; flex-wrap: nowrap; }
+  .wf-run-identity > strong { flex: 0 1 auto; max-width: none; overflow: hidden; overflow-wrap: normal; text-overflow: ellipsis; white-space: nowrap; }
+  .wf-run-identity > :is(button, .wf-status-badge) { flex-shrink: 0; }
+  /* A phone keeps the run header to a few rows: secondary tools keep their icon and accessible name, not their visible text. */
+  :is(.wf-run-toolbar, .wf-attached-test-run) .wf-run-live-tool { width: auto; }
+  .wf-run-toolbar .wf-run-tool-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .wf-run-toolbar .wf-run-tool:has(.wf-run-tool-label) { min-width: 32px; }
 }
 
 @media (pointer: coarse) {

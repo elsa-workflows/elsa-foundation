@@ -47,6 +47,8 @@ import type { WorkflowEdgeActions } from "../workflow-editor/contexts";
 import { decorateWorkflowCanvasElements } from "../workflow-editor/workflowAccessibility";
 
 import { emptyGraphElements, graphElementDragDataType, type GraphPaletteElement } from "./graphPaletteElements";
+import { choosePalettePlacement, estimatedNodeHeight, placementReserve, type PalettePlacement } from "./palettePlacement";
+import { defaultNodeWidth } from "./nodeWidth";
 
 type PaletteDragItem = { kind: "activity"; activity: ActivityCatalogItem } | { kind: "element"; element: GraphPaletteElement };
 const paletteDragKey = (item: PaletteDragItem) => item.kind === "activity" ? item.activity.activityVersionId : `element:${item.element.id}`;
@@ -553,11 +555,45 @@ export function useGraphCanvasInteractions({
     if (!suppressPaletteClickRef.current) placeElement(element);
   };
 
+  // A palette click names no point, so a flowchart picks a free spot clear of every node's badge,
+  // toolbar and outcome labels, inside the visible pane when one exists, and pans to it otherwise.
+  const choosePaletteNodePlacement = (): PalettePlacement | null => {
+    if (mode !== "flowchart" || !reactFlowInstance) return null;
+    const pane = canvasRef.current?.querySelector<HTMLElement>(".react-flow") ?? canvasRef.current;
+    const bounds = pane?.getBoundingClientRect();
+    let visible = null;
+    if (bounds && bounds.width > 0 && bounds.height > 0) {
+      const start = reactFlowInstance.screenToFlowPosition({ x: bounds.left, y: bounds.top });
+      const end = reactFlowInstance.screenToFlowPosition({ x: bounds.right, y: bounds.bottom });
+      visible = { x: start.x, y: start.y, width: end.x - start.x, height: end.y - start.y };
+    }
+    const rects = nodes.map(node => {
+      const measured = reactFlowInstance.getInternalNode(node.id)?.measured;
+      return {
+        x: node.position.x,
+        y: node.position.y,
+        width: measured?.width ?? node.measured?.width ?? node.width ?? defaultNodeWidth,
+        height: measured?.height ?? node.measured?.height ?? node.height ?? estimatedNodeHeight
+      };
+    });
+    return choosePalettePlacement(rects, visible);
+  };
+
   const onPaletteClick = (activity: ActivityCatalogItem) => {
     if (suppressPaletteClickRef.current) return;
     if (!canAddActivities || activity.available === false || (isOfferedActivity && !isOfferedActivity(activity))) return;
-    const added = placeActivity(activity);
-    if (added) queueCanvasNodeFocus(added.nodeId);
+    const placement = choosePaletteNodePlacement();
+    const added = placeActivity(activity, placement?.position);
+    if (!added) return;
+    if (placement && !placement.visible && reactFlowInstance) {
+      const { x, y } = placement.position;
+      const instance = reactFlowInstance;
+      window.requestAnimationFrame(() => void instance.setCenter(
+        x + (defaultNodeWidth + placementReserve.right - placementReserve.left) / 2,
+        y + (estimatedNodeHeight + placementReserve.bottom - placementReserve.top) / 2,
+        { zoom: instance.getZoom() }));
+    }
+    queueCanvasNodeFocus(added.nodeId);
   };
 
   const onCanvasDragOver = (event: React.DragEvent) => {

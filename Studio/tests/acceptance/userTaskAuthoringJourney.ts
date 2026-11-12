@@ -5,13 +5,28 @@ const jsonAlias = "System.Text.Json.JsonElement";
 
 // Real Studio authoring and autosave, followed by real publication, response and result reads.
 // Forms/tasks, run navigation and results use the project's viewport. Multi-pane graph wiring
-// uses desktop size; affected authoring inspectors are additionally captured at project size.
+// uses a desktop size (the desktop project's own); affected authoring inspectors are additionally
+// captured at project size.
 export async function userTaskAuthoringJourney(page: Page, info: TestInfo, capture: Capture, registerDefinition: (id: string) => void, registerCleanup: (cleanup: () => Promise<void>) => void) {
   const base = process.env.UX_BACKEND_URL;
   if (!base || process.env.UX_ACCEPTANCE_OWNED !== "1") throw new Error("Owned backend URL is required");
   const get = async (path: string) => { const response = await page.request.get(`${base}${path}`); expect(response.ok(), await response.text()).toBe(true); return response.json(); };
   const post = async (path: string, data: unknown) => { const response = await page.request.post(`${base}${path}`, { data }); expect(response.ok(), await response.text()).toBe(true); return response.json(); };
   const projectViewport = page.viewportSize()!;
+  // A desktop project authors at its own size, so its captures show the canvas it was laid out in.
+  const authoringViewport = projectViewport.width >= 1400 ? projectViewport : { width: 1600, height: 1100 };
+  type Box = { x: number; y: number; width: number; height: number };
+  const overlaps = (a: Box, b: Box) => a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y;
+  const inside = async (target: Locator, frame: Locator) => {
+    const [box, bounds] = await Promise.all([target.boundingBox(), frame.boundingBox()]);
+    return Boolean(box && bounds && box.x >= bounds.x && box.y >= bounds.y && box.x + box.width <= bounds.x + bounds.width && box.y + box.height <= bounds.y + bounds.height);
+  };
+  // Every run panel tab shows its whole label beside the panel buttons; none scrolls under them (#4069).
+  const expectRunTabsUnclipped = async () => {
+    const tablist = page.getByRole("tablist", { name: "Run details tabs", exact: true });
+    if (!await tablist.isVisible()) return;
+    for (const tab of await tablist.getByRole("tab").all()) await expect.poll(() => inside(tab, tablist)).toBe(true);
+  };
   const editorViews = page.getByRole("tablist", { name: "Editor view tabs", exact: true });
   const inspectorSections = page.getByRole("tablist", { name: "Activity inspector sections", exact: true });
   const suffix = `${info.project.name}-${Date.now()}`;
@@ -55,7 +70,7 @@ export async function userTaskAuthoringJourney(page: Page, info: TestInfo, captu
   const captureInspector = async (name: string, target: Locator) => {
     if (projectViewport.width < 800) await page.getByRole("button", { name: "Maximize inspector panel", exact: true }).click();
     await page.setViewportSize(projectViewport); await target.scrollIntoViewIfNeeded(); await capture(page, info, name);
-    await page.setViewportSize({ width: 1600, height: 1100 });
+    await page.setViewportSize(authoringViewport);
     if (projectViewport.width < 800) await page.getByRole("button", { name: "Restore inspector panel", exact: true }).click();
   };
   await page.getByRole("button", { name: "More tools", exact: true }).click();
@@ -79,7 +94,7 @@ export async function userTaskAuthoringJourney(page: Page, info: TestInfo, captu
   await page.getByRole("button", { name: "Back to forms", exact: true }).press("Enter");
   await expect(formLink).toBeFocused();
 
-  await page.setViewportSize({ width: 1600, height: 1100 });
+  await page.setViewportSize(authoringViewport);
   await page.goto("/workflows/definitions");
   await page.getByRole("button", { name: /^(Create|Create workflow)$/ }).first().click();
   const dialog = page.getByRole("dialog", { name: "Create Workflow", exact: true });
@@ -94,6 +109,10 @@ export async function userTaskAuthoringJourney(page: Page, info: TestInfo, captu
   await palette.fill("Create User Task"); await page.getByRole("treeitem", { name: /^Create User Task,/ }).click();
   const taskNode = page.locator(".react-flow__node").filter({ hasText: "Create User Task" });
   const taskNodeId = await taskNode.getAttribute("data-id");
+  // A palette click lands the first node inside the pane, its START badge clear of the canvas header (#4069).
+  const designerPane = page.locator(".react-flow").filter({ has: taskNode });
+  await expect.poll(() => inside(taskNode.locator(".wf-node-start-badge"), designerPane)).toBe(true);
+  await expect.poll(() => inside(taskNode, designerPane)).toBe(true);
   await page.getByRole("textbox", { name: "Title", exact: true }).fill(title);
   await page.getByLabel("Task assignee", { exact: true }).selectOption(who.userId);
   await page.getByLabel("Task form", { exact: true }).selectOption(formId);
@@ -109,6 +128,17 @@ export async function userTaskAuthoringJourney(page: Page, info: TestInfo, captu
   await palette.fill("Set Output"); await page.getByRole("treeitem", { name: /^Set Output,/ }).click();
   const outputNode = page.locator(".react-flow__node").filter({ hasText: "Set Output" });
   const outputNodeId = await outputNode.getAttribute("data-id");
+  // The next palette node is visible and clear of the User Task's outcome labels (#4069).
+  await expect.poll(() => inside(outputNode, designerPane)).toBe(true);
+  await expect.poll(async () => {
+    const node = await outputNode.boundingBox();
+    if (!node) return false;
+    for (const label of await taskNode.locator(".wf-node-port-label").all()) {
+      const box = await label.boundingBox();
+      if (!box || overlaps(box, node)) return false;
+    }
+    return true;
+  }).toBe(true);
   await expect(page.getByRole("combobox", { name: "Output Name", exact: true })).toBeDisabled();
   await expect(page.getByText("Add a workflow output in the editor's Outputs tab, then select it here.", { exact: true })).toBeVisible();
   await editorViews.getByRole("tab", { name: "Outputs", exact: true }).click();
@@ -135,6 +165,16 @@ export async function userTaskAuthoringJourney(page: Page, info: TestInfo, captu
   await page.getByLabel("Output name", { exact: true }).fill("RenamedData");
   await editorViews.getByRole("tab", { name: "Designer", exact: true }).click();
   await expect(page.getByRole("combobox", { name: "Output Name", exact: true })).toHaveAttribute("aria-invalid", "true");
+  // aria-invalid is also visible: the field's border and its message take the danger colour (#4069).
+  const expectVisiblyInvalid = async () => {
+    const message = page.locator(".wf-property-row-error");
+    await expect(message).toBeVisible();
+    const danger = await message.evaluate(element => getComputedStyle(element).color);
+    const muted = await page.locator(".wf-property-row-header label").first().evaluate(element => getComputedStyle(element).color);
+    expect(danger).not.toBe(muted);
+    await expect.poll(() => page.getByRole("combobox", { name: "Output Name", exact: true }).evaluate(element => getComputedStyle(element).borderTopColor)).toBe(danger);
+  };
+  await expectVisiblyInvalid();
   await captureInspector("renamed-output", page.getByRole("combobox", { name: "Output Name", exact: true }));
   await page.getByRole("combobox", { name: "Output Name", exact: true }).selectOption("RenamedData");
   await editorViews.getByRole("tab", { name: "Outputs", exact: true }).click();
@@ -143,6 +183,7 @@ export async function userTaskAuthoringJourney(page: Page, info: TestInfo, captu
   await expect(page.getByRole("combobox", { name: "Output Name", exact: true })).toBeDisabled();
   await expect(page.getByRole("combobox", { name: "Output Name", exact: true })).toHaveAttribute("aria-invalid", "true");
   await expect(page.getByText(/This output is no longer defined. Add a workflow output in the editor's Outputs tab/)).toBeVisible();
+  await expectVisiblyInvalid();
   await captureInspector("removed-output", page.getByRole("combobox", { name: "Output Name", exact: true }));
   await editorViews.getByRole("tab", { name: "Outputs", exact: true }).click();
   await page.getByRole("button", { name: "Add output", exact: true }).click();
@@ -187,7 +228,7 @@ export async function userTaskAuthoringJourney(page: Page, info: TestInfo, captu
   await expect(page.getByRole("button", { name: "Back to task list", exact: true })).toBeEnabled();
   const completed = await get(`/runtime/workflows/instances/${runId}`);
   expect(completed.outputs.RenamedData).toMatchObject({ isRedacted: false, captureMode: "DiagnosticSnapshot", value: { kind: "object", properties: [{ name: "Note", value: { preview: "Approved with case preserved" } }] } });
-  await page.setViewportSize({ width: 1600, height: 1100 }); await page.goto(`/workflows/instances/${runId}`);
+  await page.setViewportSize(authoringViewport); await page.goto(`/workflows/instances/${runId}`);
   const runtimeTask = page.locator(`.react-flow__node[data-id="${taskNodeId}"]`);
   await expect(runtimeTask.locator('.source[data-handleid="Approve"]')).toBeVisible();
   await expect(runtimeTask.locator('.source[data-handleid="Reject"]')).toBeVisible();
@@ -214,6 +255,18 @@ export async function userTaskAuthoringJourney(page: Page, info: TestInfo, captu
     }).toBe(true);
   }
   await expect(page.locator(".react-flow__edge-text").filter({ hasText: /^Approve$/ })).toHaveCount(0);
+  await expectRunTabsUnclipped();
+  if (projectViewport.width < 600) {
+    // On a phone the run header stays compact: title and instance id share a line, and the run's
+    // name, back link and status share another (#4069).
+    const title = (await page.getByRole("heading", { name: "Run", exact: true }).boundingBox())!;
+    const instanceId = (await page.locator(".wf-page-context code").boundingBox())!;
+    expect(Math.abs((title.y + title.height / 2) - (instanceId.y + instanceId.height / 2))).toBeLessThan(title.height / 2);
+    const identity = (await page.locator(".wf-run-identity").boundingBox())!;
+    expect(identity.height).toBeLessThanOrEqual(48);
+    const toolbar = (await page.getByRole("group", { name: "Run workspace actions", exact: true }).boundingBox())!;
+    await info.attach("narrow-run-header.json", { body: JSON.stringify({ titleTop: title.y, toolbarBottom: toolbar.y + toolbar.height, viewportHeight: projectViewport.height }), contentType: "application/json" });
+  }
   await capture(page, info, "run-outcomes");
 
   // Fit View is an overview. Verify ordinary controls can recover readable outcomes.
@@ -234,8 +287,6 @@ export async function userTaskAuthoringJourney(page: Page, info: TestInfo, captu
     await expect.poll(renderedOutcomeFont).toBeGreaterThan(previous);
   }
   await expect.poll(renderedOutcomeFont).toBeGreaterThanOrEqual(10);
-  type Box = { x: number; y: number; width: number; height: number };
-  const overlaps = (a: Box, b: Box) => a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y;
   const panTo = async (targets: Locator[], avoidFloatingPanels = false) => {
     const pane = (await runCanvas.locator(".react-flow__pane").boundingBox())!;
     // The zoom controls and MiniMap float over the pane; a target meant to be read must clear them, not just the pane edge.
@@ -281,9 +332,14 @@ export async function userTaskAuthoringJourney(page: Page, info: TestInfo, captu
       }).toBe(true);
     }
   };
-  await panTo(await outcomeLabels.all(), true);
+  // Frame the outcome labels with their node's name, so the capture shows whose outcomes they are (#4069).
+  // A pane too narrow for both keeps the labels, which is what this step must prove readable.
+  const taskName = runtimeTask.locator(".wf-node-copy strong");
+  let framedWithNode = true;
+  try { await panTo([...await outcomeLabels.all(), taskName], true); }
+  catch { framedWithNode = false; await panTo(await outcomeLabels.all(), true); }
   for (const label of ["Approve", "Reject", "Unmatched"]) await expect(outcomeLabels.filter({ hasText: new RegExp(`^${label}$`) })).toBeVisible();
-  await info.attach("runtime-outcome-readable-font.json", { body: JSON.stringify({ overviewFont, recoveredFont: await renderedOutcomeFont() }), contentType: "application/json" });
+  await info.attach("runtime-outcome-readable-font.json", { body: JSON.stringify({ overviewFont, recoveredFont: await renderedOutcomeFont(), framedWithNode }), contentType: "application/json" });
   await capture(page, info, "run-outcomes-readable");
   const runtimeOutput = page.locator(`.react-flow__node[data-id="${outputNodeId}"]`);
   await panTo([runtimeOutput]);
@@ -300,7 +356,7 @@ export async function userTaskAuthoringJourney(page: Page, info: TestInfo, captu
   await expect(result).toContainText("RenamedData"); await expect(result).toContainText("Approved with case preserved");
   const resultValue = result.locator(".wf-runtime-snapshot-property code");
   expect((await resultValue.boundingBox())!.width).toBeGreaterThan(150);
-  await result.scrollIntoViewIfNeeded(); await capture(page, info, "workflow-result");
+  await result.scrollIntoViewIfNeeded(); await expectRunTabsUnclipped(); await capture(page, info, "workflow-result");
 
   const catalog = await get("/design/activities/definitions?search=CreateUserTask");
   const taskVersion = catalog.items.find((item: { definition: { activityTypeKey: string } }) => item.definition.activityTypeKey.endsWith("CreateUserTask"))!.definition.headVersionId;
@@ -325,10 +381,13 @@ export async function userTaskAuthoringJourney(page: Page, info: TestInfo, captu
     await expect(page.locator(".wf-instance-incident-summary").filter({ hasText: expected })).toBeVisible();
     if (variant === "assignment") {
       await expect(page.locator(".wf-instance-incident-cause").filter({ hasText: "Review its incident to correct the cause." })).toBeVisible();
+      await expectRunTabsUnclipped();
       await capture(page, info, "task-fault-causes");
       const parent = page.locator(".wf-instance-incident").filter({ hasText: "Review its incident to correct the cause." });
       await parent.getByText("Technical details", { exact: true }).click();
       await expect(parent.locator(".wf-incident-message")).toContainText("a faulted child cannot complete");
+      // Show the expanded message itself, not only its heading at the fold (#4069).
+      await parent.locator(".wf-incident-message").scrollIntoViewIfNeeded();
       await capture(page, info, "task-fault-details");
     } else {
       await capture(page, info, "prefill-fault");
