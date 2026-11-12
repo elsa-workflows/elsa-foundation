@@ -108,3 +108,48 @@ for (const [theme, workspace] of [["linen", "linen"], ["classic", "minimal"]]) {
     }
   }
 }
+
+test("dock reset restores filters and level focus after copying and scrolling", async ({ page, context }) => {
+  await page.setViewportSize({ width: 390, height: 1000 });
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  await page.addInitScript(() => localStorage.setItem("elsa-studio-structured-logs-autoscroll", "false"));
+  await page.route("**/_elsa/studio/diagnostics/structured-logs/**", async route => {
+    const url = new URL(route.request().url());
+    if (url.pathname.endsWith("/sources")) return route.fulfill({ json: [{ id: "server", displayName: "Server" }, { id: "studio", displayName: "Studio" }, { id: source, displayName: "Warehouse stream" }] });
+    if (url.pathname.endsWith("/recent")) {
+      const sourceId = url.searchParams.get("source") ?? "";
+      const level = url.searchParams.get("minLevel") ?? "Information";
+      return route.fulfill({ json: entries.filter(entry => (!sourceId || entry.sourceId === sourceId) && ["", "Trace", "Debug", "Information"].includes(level)) });
+    }
+    return route.continue();
+  });
+  await page.goto("/minimal-studio.html?screen=logs-panel");
+  const table = page.getByRole("table", { name: "Structured logs", exact: true });
+  const rows = table.getByRole("row", { name: /Select Information structured log/ });
+  await expect(rows).toHaveCount(2);
+  await expect(page.getByRole("textbox", { name: "Filter by category", exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "Pause", exact: true }).click();
+  await rows.first().getByRole("button", { name: /Copy structured log message/ }).click();
+  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(entries[0].message);
+  await table.evaluate(element => { element.scrollLeft = element.scrollWidth; });
+  const level = page.getByRole("combobox", { name: "Minimum log level", exact: true });
+  const sourceFilter = page.getByRole("combobox", { name: "Structured log source", exact: true });
+  await level.selectOption("Warning");
+  await sourceFilter.selectOption("studio");
+  const empty = table.getByText("No logs match these filters.", { exact: true });
+  await expect(empty).toBeVisible();
+  expect(await empty.evaluate(element => {
+    const viewport = element.closest(".structured-logs-rows")!.getBoundingClientRect();
+    const box = element.getBoundingClientRect();
+    return box.left >= viewport.left && box.right <= viewport.right;
+  })).toBe(true);
+  const reset = table.getByRole("button", { name: "Reset filters", exact: true });
+  await expect(reset).toBeVisible();
+  await reset.focus();
+  await reset.press("Enter");
+  await expect(level).toBeFocused();
+  await expect(level).toHaveValue("Information");
+  await expect(sourceFilter).toHaveValue("");
+  await expect(rows).toHaveCount(2);
+  await expect(page.getByRole("button", { name: "Resume", exact: true })).toBeVisible();
+});
