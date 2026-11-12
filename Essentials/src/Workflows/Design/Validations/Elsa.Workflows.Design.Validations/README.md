@@ -49,11 +49,18 @@ portable-parameter failures are not collapsed by a blanket path/type deduplicati
   resolver) stop descending past this depth. Iterative DFS internally, so the .NET call stack
   is never the actual risk — the bound guards against cyclic / malformed Draft data.
 - `MemberReads` — default `false`. Whether a binding may read one member of an activity result
-  (`ActivityResultMember`). While it is off the shared analyzer neither offers nor admits one
-  (`ActivityData/UnsupportedMemberBinding`), so no publication, test run, template compilation, BPMN
-  publication or import can produce an executable that carries one. With it on, a read inside a reusable
-  activity's body is published untyped and its member is checked when the run reads it, so an explicit
-  conversion on such a read is refused at publication.
+  (`ActivityResultMember`) or of a variable (`VariableMember`). While it is off the shared analyzer neither
+  offers nor admits one (`ActivityData/UnsupportedMemberBinding`), so no publication, test run, template
+  compilation, BPMN publication or import can produce an executable that carries one. With it on, a read inside
+  a reusable activity's body is published untyped and its member is checked when the run reads it, so an
+  explicit conversion on such a read is refused at publication. A variable member read names its variable's
+  declaring scope explicitly, is always published untyped (a variable can hold JSON from any writer), and so
+  refuses an explicit conversion too.
+
+  **Member names are matched exactly.** Each member segment matches the stored member name exactly, case
+  included. A variable seeded from a CLR value when a run starts is stored with its CLR property names, so
+  `CustomerId` reads that member and `customerId` reads it as absent (`VF-SEL-001` when the input needs a
+  value).
 
   **Upgrade rule.** An executable with a member read cannot be read by a runtime built before member reads
   existed: it reports the payload as corrupt, and without distributed placement the work item is poisoned and

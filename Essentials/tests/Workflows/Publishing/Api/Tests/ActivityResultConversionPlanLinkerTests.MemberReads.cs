@@ -53,6 +53,23 @@ public sealed partial class ActivityResultConversionPlanLinkerTests
     }
 
     [Fact]
+    public void A_variable_member_read_is_passed_through_unplanned()
+    {
+        var consumer = new ExecutableNode("consumer", "consumer", "test.consumer", "1",
+            new Elsa.Activities.Runtime.Core.Models.RuntimeActivityDescriptor("test", "1", JsonSerializer.SerializeToElement(new { })),
+            new Dictionary<string, RuntimeInputBinding>
+            {
+                ["value"] = new("value", Type("Int64"), ValueProtectionPolicy.InstanceInline, RuntimeInputBindingSource.VariableMember, Deferred(),
+                    variable: new RuntimeVariableReference("customer", "workflow"))
+            },
+            new Dictionary<string, RuntimeOutputCapture>(), new Dictionary<string, string>());
+
+        var linked = new ActivityResultConversionPlanLinker(new ValueConversionPlanResolver()).Link(Tree(Producer("String"), consumer));
+
+        Assert.Same(consumer.InputBindings["value"], NodeById(linked, "consumer").InputBindings["value"]);
+    }
+
+    [Fact]
     public void A_deferred_member_read_with_an_explicit_conversion_is_refused_at_publication()
     {
         var exception = Assert.Throws<ValueConversionPublicationException>(() =>

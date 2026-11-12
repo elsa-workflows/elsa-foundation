@@ -1,6 +1,7 @@
 using System.Collections.Immutable;
 using System.Text.Json;
 using Elsa.Expressions.Core.Models;
+using Elsa.Workflows.Design.Validations.Core.Models;
 
 namespace Elsa.Workflows.Design.Validations.Internal;
 
@@ -23,11 +24,8 @@ internal sealed record ActivityDataReadBinding(
     /// <summary>The exact member segments of a member read; empty for a whole-value read.</summary>
     public ImmutableArray<string> MemberPath { get; init; } = [];
 
-    /// <summary>Most segments a member path may have; the compiled read selection has the same bound.</summary>
-    public const int MaximumMemberSegments = 64;
-
-    /// <summary>Most characters a member path may have in total; the compiled read selection has the same bound.</summary>
-    public const int MaximumMemberPathLength = 4096;
+    /// <summary>Whether this reads one member of its source rather than the whole value.</summary>
+    public bool IsMemberRead => Role is "ActivityResultMember" or "VariableMember";
 
     // Match the publication compiler's descriptor payload profile, including case-insensitive
     // properties, last-wins aliases and polymorphic metadata in canonicalized object order.
@@ -116,6 +114,8 @@ internal sealed record ActivityDataReadBinding(
         var json = value is JsonElement element ? element : default;
         if (role.Equals("ActivityResultMember", StringComparison.OrdinalIgnoreCase))
             return ResultMember(json);
+        if (role.Equals("VariableMember", StringComparison.OrdinalIgnoreCase))
+            return VariableMember(json);
         if (IsMemberRole(role)) return new(role, Error: "UnsupportedMemberBinding");
         if (json.ValueKind == JsonValueKind.Object &&
             (json.TryGetProperty("memberPath", out _) ||
@@ -156,7 +156,7 @@ internal sealed record ActivityDataReadBinding(
         var binding = Required(role, String(json, "producerNodeId"), projection: String(json, "projectionKey"));
         if (binding.Error is not null || string.IsNullOrWhiteSpace(binding.Projection))
             return new(role, Error: "InvalidSource");
-        if (!TryReadMemberPath(json, out var memberPath))
+        if (!ActivityDataMemberPath.TryRead(json, out var memberPath))
             return new(role, Error: "InvalidMemberPath");
         return binding with
         {
@@ -166,33 +166,19 @@ internal sealed record ActivityDataReadBinding(
         };
     }
 
-    /// <summary>
-    /// Reads a member path exactly as authored: a nonempty array of strings, kept unsplit and untrimmed, within the
-    /// segment and length bounds. Anything else is not a member path.
-    /// </summary>
-    internal static bool TryReadMemberPath(JsonElement json, out ImmutableArray<string> memberPath)
+    // A member read of a variable names its declaring scope explicitly: unlike a whole-value read, it has no default.
+    private static ActivityDataReadBinding VariableMember(JsonElement json)
     {
-        memberPath = [];
-        if (!json.TryGetProperty("memberPath", out var raw) || raw.ValueKind != JsonValueKind.Array)
-            return false;
-        var count = raw.GetArrayLength();
-        if (count is 0 or > MaximumMemberSegments)
-            return false;
-        var segments = ImmutableArray.CreateBuilder<string>(count);
-        var length = 0;
-        foreach (var item in raw.EnumerateArray())
-        {
-            if (item.ValueKind != JsonValueKind.String)
-                return false;
-            var segment = item.GetString()!;
-            length += segment.Length;
-            if (length > MaximumMemberPathLength)
-                return false;
-            segments.Add(segment);
-        }
-
-        memberPath = segments.MoveToImmutable();
-        return true;
+        const string role = "VariableMember";
+        if (json.ValueKind != JsonValueKind.Object || json.TryGetProperty("path", out _))
+            return new(role, Error: "InvalidSource");
+        var key = String(json, "referenceKey");
+        var scope = String(json, "declaringScopeId");
+        if (string.IsNullOrWhiteSpace(key) || string.IsNullOrWhiteSpace(scope))
+            return new(role, Error: "InvalidSource");
+        return ActivityDataMemberPath.TryRead(json, out var memberPath)
+            ? new(role, key, scope) { MemberPath = memberPath }
+            : new(role, Error: "InvalidMemberPath");
     }
 
     private static ActivityDataReadBinding? Parameter(ExpressionParameterBinding binding) => binding switch

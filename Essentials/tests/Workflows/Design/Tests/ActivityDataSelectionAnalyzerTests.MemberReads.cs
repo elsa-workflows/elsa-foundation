@@ -192,6 +192,113 @@ public sealed partial class ActivityDataSelectionAnalyzerTests
         Assert.DoesNotContain(result.Findings, finding => finding.Type == "ActivityData/SourceRestricted");
     }
 
+    /// <summary>
+    /// A result member read the whole-read rules refuse is not typed as well, so a read that names an undeclared member
+    /// of a producer that is not available reports the one refusal of the whole read, not two.
+    /// </summary>
+    [Fact]
+    public async Task A_member_read_the_whole_read_refuses_reports_one_finding_even_for_an_unknown_member()
+    {
+        using var provider = MemberProvider(new ActivitySerializedShape(ActivitySerializedShapeState.Unknown, ActivitySerializedValueKind.Unknown, null,
+            "contract", "profile", "metadata") { ReasonCode = "activity.shape.member-not-declared" });
+
+        var result = await Analyzer(provider).AnalyzeAsync(Document(Sequence(Node("consumer", Input(Member("producer"))), Node("producer"))));
+
+        var finding = Assert.Single(result.Findings);
+        Assert.NotEqual("ActivityData/UnknownMember", finding.Type);
+    }
+
+    [Fact]
+    public async Task With_member_reads_off_a_variable_member_read_is_refused()
+    {
+        using var provider = Provider();
+
+        var result = await Analyzer(provider).AnalyzeAsync(VariableDocument(Input(VariableMember("customer", "workflow"))));
+
+        Assert.Equal("ActivityData/UnsupportedMemberBinding", Assert.Single(result.Findings).Type);
+    }
+
+    [Fact]
+    public async Task A_variable_member_read_is_admitted_like_the_whole_read_and_never_typed()
+    {
+        using var provider = MemberProvider(Known());
+
+        var result = await Analyzer(provider).AnalyzeAsync(VariableDocument(Input(VariableMember("customer", "workflow", ["address", "a.b", ""]))));
+
+        Assert.Empty(result.Findings);
+        Assert.Empty(result.MemberReads);
+    }
+
+    public static TheoryData<string, string> MalformedVariableMemberReads => new()
+    {
+        { """{"referenceKey":"customer","memberPath":["a"]}""", "ActivityData/InvalidSource" },
+        { """{"referenceKey":"customer","declaringScopeId":"","memberPath":["a"]}""", "ActivityData/InvalidSource" },
+        { """{"declaringScopeId":"workflow","memberPath":["a"]}""", "ActivityData/InvalidSource" },
+        { """{"referenceKey":"customer","declaringScopeId":"workflow","path":"a","memberPath":["a"]}""", "ActivityData/InvalidSource" },
+        { """{"referenceKey":"customer","declaringScopeId":"workflow"}""", "ActivityData/InvalidMemberPath" },
+        { """{"referenceKey":"customer","declaringScopeId":"workflow","memberPath":[]}""", "ActivityData/InvalidMemberPath" },
+        { """{"referenceKey":"customer","declaringScopeId":"workflow","memberPath":["a",1]}""", "ActivityData/InvalidMemberPath" }
+    };
+
+    [Theory]
+    [MemberData(nameof(MalformedVariableMemberReads))]
+    public async Task A_malformed_variable_member_read_is_a_finding(string payload, string finding)
+    {
+        using var provider = MemberProvider(Known());
+
+        var result = await Analyzer(provider).AnalyzeAsync(VariableDocument(
+            Input(new(JsonDocument.Parse(payload).RootElement.Clone(), "VariableMember"))));
+
+        Assert.Equal(("consumer/inputs/CustomerId", finding), (Assert.Single(result.Findings).Path, result.Findings[0].Type));
+    }
+
+    [Fact]
+    public async Task A_variable_member_read_of_an_unknown_variable_is_refused_with_the_whole_reads_code()
+    {
+        using var provider = MemberProvider(Known());
+
+        var whole = await Analyzer(provider).AnalyzeAsync(VariableDocument(Input(new(new VariableReference("missing", "workflow"), "Variable"))));
+        var member = await Analyzer(provider).AnalyzeAsync(VariableDocument(Input(VariableMember("missing", "workflow"))));
+
+        Assert.Equal("Variable/UnresolvableReference", Assert.Single(whole.Findings).Type);
+        Assert.Equal(whole.Findings.Select(finding => (finding.Path, finding.Type)), member.Findings.Select(finding => (finding.Path, finding.Type)));
+    }
+
+    [Fact]
+    public async Task The_offered_variable_member_read_is_the_admitted_one()
+    {
+        using var provider = MemberProvider(Known());
+
+        var offered = await Analyzer(provider).AnalyzeAsync(VariableDocument(), new("consumer", "CustomerId"),
+            new() { Source = new(new VariableReference("customer", "workflow"), "Variable"), MemberPath = ["a.b", ""] });
+        var binding = Assert.Single(offered.Sources).Binding!;
+        var stored = await Analyzer(provider).AnalyzeAsync(VariableDocument(Input(binding)));
+
+        Assert.Empty(offered.Findings);
+        Assert.Equal("VariableMember", binding.ExpressionType);
+        var payload = Assert.IsType<JsonElement>(binding.Value);
+        Assert.Equal("workflow", payload.GetProperty("declaringScopeId").GetString());
+        Assert.Equal(["a.b", ""], payload.GetProperty("memberPath").EnumerateArray().Select(segment => segment.GetString()));
+        Assert.Empty(stored.Findings);
+    }
+
+    [Fact]
+    public async Task A_variable_member_read_passes_an_owning_restriction_that_admits_the_whole_variable_read()
+    {
+        using var provider = MemberProvider(Known(), services =>
+            services.AddSingleton<IActivityInputSourceConstraintProvider>(new Constraint(["Variable"])));
+
+        var result = await Analyzer(provider).AnalyzeAsync(VariableDocument(Input(VariableMember("customer", "workflow"))));
+
+        Assert.Empty(result.Findings);
+    }
+
+    private static ActivityDataSelectionDocument VariableDocument(params ArgumentState[] inputs) =>
+        Document(Sequence(Node("consumer", inputs))) with { Variables = [Variable("customer", "Customer")] };
+
+    private static ArgumentValue VariableMember(string key, string scope, string[]? path = null) =>
+        new(JsonSerializer.SerializeToElement(new { referenceKey = key, declaringScopeId = scope, memberPath = path ?? ["customerId"] }), "VariableMember");
+
     private static void MemberReadsOn(IServiceCollection services) =>
         services.Configure<WorkflowDesignValidatorOptions>(options => options.MemberReads = true);
 

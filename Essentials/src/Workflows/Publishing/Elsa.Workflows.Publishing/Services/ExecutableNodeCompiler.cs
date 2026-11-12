@@ -441,9 +441,9 @@ public sealed class ExecutableNodeCompiler(
         IReadOnlyCollection<VariableDefinition> workflowVariables,
         IReadOnlyCollection<InputDefinition> workflowInputs)
     {
-        // A member of an activity result has no static source contract here, as a whole result has none: the
-        // intrinsic validates the selected member against its destination when it reads it.
-        if (binding.Source == RuntimeInputBindingSource.ActivityResultMember)
+        // A member read has no static source contract here (a result member's is planned by the linker, a variable
+        // member's is never known): the intrinsic validates the selected member against its destination when it reads it.
+        if (binding.Source is RuntimeInputBindingSource.ActivityResultMember or RuntimeInputBindingSource.VariableMember)
             return binding;
         if (binding.Selection is not null)
             throw PublishedMemberReadDiagnostics.Unsupported(nodeId, binding);

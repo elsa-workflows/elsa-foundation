@@ -21,6 +21,7 @@ using Elsa.Workflows.Publishing.Services;
 using Elsa.Workflows.Runtime.Core.Models;
 using Xunit;
 using ArgumentValue = Elsa.Expressions.Core.Models.ArgumentValue;
+using VariableDefinition = Elsa.Expressions.Core.Models.VariableDefinition;
 using DesignContract = Elsa.Activities.Design.Core.Models.ActivityContract;
 using WorkflowArgumentState = Elsa.Workflows.Design.Core.Models.ArgumentState;
 
@@ -49,7 +50,8 @@ public sealed partial class PublishWorkflowRequestHandlerTests
     /// <summary>The member-read shapes still refused with member reads on, with the finding reported.</summary>
     public static TheoryData<string, string> RefusedWithMemberReadsOn => new()
     {
-        { "VariableMember", "ActivityData/UnsupportedMemberBinding" },
+        { "VariableMember+noScope", "ActivityData/InvalidSource" },
+        { "VariableMember+unknown", "Variable/UnresolvableReference" },
         { "WorkflowRequestMember", "ActivityData/UnsupportedMemberBinding" },
         { "InputMember", "ActivityData/UnsupportedMemberBinding" },
         { "ActivityResult+memberPath", "ActivityData/UnsupportedMemberSelection" },
@@ -75,6 +77,8 @@ public sealed partial class PublishWorkflowRequestHandlerTests
             "ActivityResultMember+tooManySegments" => ("ActivityResultMember", new { producerNodeId = producer, projectionKey = "$result", memberPath = Enumerable.Repeat("a", 65).ToArray() }),
             "ActivityResultMember+tooLong" => ("ActivityResultMember", new { producerNodeId = producer, projectionKey = "$result", memberPath = new[] { new string('a', 4097) } }),
             "VariableMember" => ("VariableMember", new { referenceKey = "customer", declaringScopeId = "workflow", memberPath = path }),
+            "VariableMember+noScope" => ("VariableMember", new { referenceKey = "customer", memberPath = path }),
+            "VariableMember+unknown" => ("VariableMember", new { referenceKey = "missing", declaringScopeId = "workflow", memberPath = path }),
             "WorkflowRequestMember" => ("WorkflowRequestMember", new { memberKey = "customer", memberPath = path }),
             "InputMember" => ("InputMember", new { referenceKey = "customer", memberPath = path }),
             "ActivityResult+memberPath" => ("ActivityResult", new { producerNodeId = producer, projectionKey = "$result", memberPath = path }),
@@ -168,6 +172,70 @@ public sealed partial class PublishWorkflowRequestHandlerTests
         var refusal = Assert.IsType<ActivityDataSelectionRejectedException>(exception.InnerException);
         Assert.Contains(refusal.Findings, finding => finding.Path == "consumer/inputs/Text" && finding.Type == "ValueFlow/EarlierProducerRun");
         Assert.Equal(before, await CountPublishWritesAsync());
+    }
+
+    /// <summary>
+    /// With member reads on, a member read of a workflow variable publishes as a deferred variable member read in the
+    /// variable's explicit scope, with no plan, and the executable requires the engine to select members.
+    /// </summary>
+    [Fact]
+    public async Task With_member_reads_on_a_variable_member_read_publishes_deferred_with_its_requirement()
+    {
+        var root = Node("consumer", MemberRead("VariableMember"));
+        var version = new WorkflowDefinitionVersion("definition-1", "1.0.0")
+        {
+            Id = "version-1",
+            Definition = new WorkflowDefinition { Id = "definition-1", Name = "Demo" },
+            State = new WorkflowDefinitionState([new VariableDefinition("customer", "Customer", new TypeReference("Object"), null, null)], root, [], [], null)
+        };
+
+        var publication = await MemberReadHandler(version).Handle(new PublishWorkflow(version.Id), CancellationToken.None);
+
+        var executable = Assert.IsType<WorkflowExecutable>(await _store.FindAsync(publication.ArtifactId));
+        var binding = executable.RootActivity.InputBindings["Text"];
+        Assert.Equal(RuntimeInputBindingSource.VariableMember, binding.Source);
+        Assert.Equal(("customer", "workflow"), (binding.Variable!.VariableKey, binding.Variable.DeclaringScopeId));
+        Assert.Equal(["customerId"], binding.Selection!.Segments);
+        Assert.Equal(RuntimeReadSelectionMode.DeferredFit, binding.Selection.Mode);
+        Assert.Null(binding.ConversionPlan);
+        Assert.Contains(new RuntimeRequirement(RuntimeReadSelection.RequirementKey, "1"), executable.RuntimeRequirements);
+    }
+
+    [Fact]
+    public void The_binding_compiler_compiles_a_variable_member_read_as_deferred_in_its_explicit_scope()
+    {
+        var compiler = new RuntimeInputBindingCompiler(TestWellKnownTypeRegistry.Create());
+        var definition = new InputDefinition("Text", "Text", new TypeReference("String"), null, "Text", null, IsNullable: false);
+
+        var member = compiler.Compile("consumer", definition, MemberRead("VariableMember"));
+        var noScope = Assert.Throws<ActivityDataSelectionRejectedException>(() => compiler.Compile("consumer", definition, MemberRead("VariableMember+noScope")));
+
+        Assert.Equal(RuntimeInputBindingSource.VariableMember, member.Source);
+        Assert.Equal(RuntimeReadSelectionMode.DeferredFit, member.Selection!.Mode);
+        Assert.Equal(["customerId"], member.Selection.Segments);
+        Assert.Equal(("customer", "workflow"), (member.Variable!.VariableKey, member.Variable.DeclaringScopeId));
+        Assert.Null(member.ConversionPlan);
+        Assert.Equal(("consumer/inputs/Text", "ActivityData/InvalidSource"), (Assert.Single(noScope.Findings).Path, noScope.Findings[0].Type));
+    }
+
+    /// <summary>
+    /// A variable member is never typed at publication, so an explicit conversion on its read cannot be planned and is
+    /// refused; the default conversion is left to the runtime's fit check.
+    /// </summary>
+    [Theory]
+    [InlineData(AuthoredValueConversionMode.Json)]
+    [InlineData(AuthoredValueConversionMode.None)]
+    public void The_binding_compiler_refuses_an_explicit_conversion_on_a_variable_member_read(AuthoredValueConversionMode mode)
+    {
+        var compiler = new RuntimeInputBindingCompiler(TestWellKnownTypeRegistry.Create());
+        var definition = new InputDefinition("Text", "Text", new TypeReference("String"), null, "Text", null, IsNullable: false);
+
+        var exception = Assert.Throws<ValueConversionPublicationException>(() =>
+            compiler.Compile("consumer", definition, MemberRead("VariableMember") with { Conversion = new AuthoredValueConversionRequest(mode) }));
+        var automatic = compiler.Compile("consumer", definition, MemberRead("VariableMember") with { Conversion = new AuthoredValueConversionRequest() });
+
+        Assert.Equal(ValueConversionRejectionReason.SelectedMemberContractUnknown, exception.ReasonCode);
+        Assert.Null(automatic.ConversionPlan);
     }
 
     /// <summary>

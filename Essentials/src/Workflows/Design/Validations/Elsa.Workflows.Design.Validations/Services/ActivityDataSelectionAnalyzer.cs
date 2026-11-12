@@ -94,12 +94,18 @@ internal sealed class ActivityDataSelectionAnalyzer(
         if (query.Source is not null)
         {
             var binding = ActivityDataReadBinding.Direct(query.Source.ExpressionType, query.Source.Value);
-            // A member of a result the whole read names is offered as the member read itself, decided by the same
-            // admission that publication applies to a stored one.
-            if (options.Value.MemberReads && !query.MemberPath.IsDefaultOrEmpty && binding is { Role: "ActivityResult", IsDirect: true, Scope: null, Error: null })
-                binding = query.MemberPath.Sum(segment => segment.Length) <= ActivityDataReadBinding.MaximumMemberPathLength
-                    ? binding with { Role = "ActivityResultMember", MemberPath = query.MemberPath }
-                    : binding with { Role = "ActivityResultMember", Error = "InvalidMemberPath" };
+            // A member of a result or variable the whole read names is offered as the member read itself, decided by
+            // the same admission that publication applies to a stored one.
+            var memberRole = binding switch
+            {
+                { Role: "ActivityResult", IsDirect: true, Scope: null, Error: null } => "ActivityResultMember",
+                { Role: "Variable", Error: null } => "VariableMember",
+                _ => null
+            };
+            if (options.Value.MemberReads && !query.MemberPath.IsDefaultOrEmpty && memberRole is not null)
+                binding = ActivityDataMemberPath.IsWithinBounds(query.MemberPath)
+                    ? binding with { Role = memberRole, MemberPath = query.MemberPath }
+                    : binding with { Role = memberRole, Error = "InvalidMemberPath" };
             var source = await Resolve(context, consumer, binding, Path(consumer, target.InputKey), findings, cancellationToken);
             if (source is not null)
             {
@@ -214,7 +220,7 @@ internal sealed class ActivityDataSelectionAnalyzer(
     {
         ct.ThrowIfCancellationRequested();
         var memberRead = binding.Role == "ActivityResultMember";
-        if (memberRead && !options.Value.MemberReads)
+        if (binding.IsMemberRead && !options.Value.MemberReads)
         {
             findings.Add(new(path, "ActivityData/UnsupportedMemberBinding", "The source binding is malformed or uses a member-read contract not supported by this server."));
             return null;
@@ -245,8 +251,10 @@ internal sealed class ActivityDataSelectionAnalyzer(
                 ActivityChildResultAvailability.Definite, input.Type, null, null, input.IsNullable, input.IsSensitive, input.IsCredential,
                 binding.Path is null ? null : "LegacyRequestPath");
         }
-        if (binding.Role == "Variable")
+        if (binding.Role is "Variable" or "VariableMember")
         {
+            // A member read of a variable is admitted exactly as the whole read of it; its member is never typed here,
+            // because a variable can hold JSON from any writer, so the runtime checks the member when it reads it.
             var scope = NormalizeScope(context.Document, binding.Scope);
             var matches = Visible(context, consumer).Where(item => item.ScopeId == scope && item.Variable.ReferenceKey == binding.Key).ToArray();
             if (matches.Length != 1)
@@ -256,9 +264,11 @@ internal sealed class ActivityDataSelectionAnalyzer(
             }
             var variable = matches[0].Variable;
             var authoredScope = AuthoredScope(context.Document, scope);
+            ArgumentValue read = binding.Role == "VariableMember"
+                ? new(JsonSerializer.SerializeToElement(new { referenceKey = variable.ReferenceKey, declaringScopeId = authoredScope, memberPath = binding.MemberPath }), "VariableMember")
+                : new(new VariableReference(variable.ReferenceKey, authoredScope), "Variable");
             return new($"variable:{authoredScope}:{variable.ReferenceKey}", variable.Name, scope,
-                new(new VariableReference(variable.ReferenceKey, authoredScope), "Variable"), ActivityChildResultAvailability.Definite,
-                variable.Type, null, null, null, null, null);
+                read, ActivityChildResultAvailability.Definite, variable.Type, null, null, null, null, null);
         }
         if (binding.Role != "ActivityResult" && !memberRead)
         {
@@ -314,8 +324,9 @@ internal sealed class ActivityDataSelectionAnalyzer(
         }
         var output = binding.Projection != "$result" && outputs.Length == 1 ? outputs[0] : null;
         var admitted = declaresNoScope && !notDefinite && !earlierRun && !noTypedResult;
-        // A member read is admitted exactly as the whole read of the same result, and then by its path.
-        var member = memberRead ? await Member(context, binding, version, path, findings, ct) : null;
+        // A member read is admitted exactly as the whole read of the same result, and then by its path; a read the
+        // whole-read rules refuse is not typed, so it reports that refusal alone.
+        var member = memberRead && admitted ? await Member(context, binding, version, path, findings, ct) : null;
         // A declared scope is returned as supplied. Without one, the binding is returned only when the checks above
         // admit it, so what a client stores unchanged is what publication accepts.
         ArgumentValue? direct = memberRead
@@ -394,8 +405,12 @@ internal sealed class ActivityDataSelectionAnalyzer(
     private sealed record MemberReadAnalysis(ActivityDataMemberReadFacts Facts, string? Refusal);
 
     // A member read of a result is admitted wherever the whole read of that result is.
-    private static string? ConstraintRole(string? expressionType) =>
-        StringComparer.OrdinalIgnoreCase.Equals(expressionType, "ActivityResultMember") ? "ActivityResult" : expressionType;
+    private static string? ConstraintRole(string? expressionType) => expressionType switch
+    {
+        _ when StringComparer.OrdinalIgnoreCase.Equals(expressionType, "ActivityResultMember") => "ActivityResult",
+        _ when StringComparer.OrdinalIgnoreCase.Equals(expressionType, "VariableMember") => "Variable",
+        _ => expressionType
+    };
 
     private async ValueTask<ActivitySerializedShape> Shape(Source source, ActivityDataSelectionDocument document,
         ImmutableArray<string> memberPath, ActivitySerializedShapeLimits limits, CancellationToken ct)

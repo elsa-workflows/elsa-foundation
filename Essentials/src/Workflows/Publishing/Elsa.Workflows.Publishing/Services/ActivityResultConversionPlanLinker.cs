@@ -55,6 +55,9 @@ public sealed class ActivityResultConversionPlanLinker(ValueConversionPlanResolv
         IReadOnlyDictionary<string, ExecutableNode> nodesById)
     {
         var memberRead = binding.Source == RuntimeInputBindingSource.ActivityResultMember;
+        // A variable member read is never typed at publication, so there is nothing to plan; the runtime checks it.
+        if (binding.Source == RuntimeInputBindingSource.VariableMember)
+            return binding;
         if (binding.Selection is not null && !memberRead)
             throw PublishedMemberReadDiagnostics.Unsupported(consumer.ExecutableNodeId, binding);
         if (binding.Source != RuntimeInputBindingSource.ActivityResult && !memberRead || binding.ConversionPlan is not null)
