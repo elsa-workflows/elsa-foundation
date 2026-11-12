@@ -1,4 +1,5 @@
 import { getViewportForBounds, type FitViewOptions, type Node, type Rect, type Viewport } from "@xyflow/react";
+import { READ_ONLY_MINIMAP_HEIGHT, READ_ONLY_MINIMAP_WIDTH } from "./readOnlyMinimap";
 
 /**
  * Smallest zoom at which a run canvas's first view keeps outcome port labels readable.
@@ -10,7 +11,19 @@ export const READ_ONLY_READABLE_ZOOM = 1;
  * Screen margins that keep the graph's own edges in view when the first view is clamped to a
  * readable zoom. The right margin leaves room for outcome labels drawn beyond the node box.
  */
-const readableEdgeMargin = { top: 24, right: 112, bottom: 32, left: 32 };
+export interface ReadableEdgeMargin { top: number; right: number; bottom: number; left: number }
+
+export const readableEdgeMargin: ReadableEdgeMargin = { top: 24, right: 112, bottom: 32, left: 32 };
+
+/**
+ * Margins when the read-only MiniMap is shown: it is 120×80 plus a 1px border, placed 15px from the
+ * pane's bottom-right corner, so the right and bottom margins keep 8px clear of it.
+ */
+export const readableMinimapEdgeMargin: ReadableEdgeMargin = {
+  ...readableEdgeMargin,
+  right: READ_ONLY_MINIMAP_WIDTH + 2 + 15 + 8,
+  bottom: READ_ONLY_MINIMAP_HEIGHT + 2 + 15 + 8
+};
 const minimumFocusInset = 8;
 
 /**
@@ -47,17 +60,18 @@ export interface ReadableFitViewportInput {
   minZoom: number;
   maxZoom: number;
   readableZoom: number;
+  /** Screen margins for the clamped readable view; use {@link readableMinimapEdgeMargin} when the MiniMap is shown. */
+  margin?: ReadableEdgeMargin;
 }
 
 /**
  * Fit the whole graph when that keeps labels readable. Otherwise use the readable zoom, centre the
  * graph's reading start, and clamp so the view never scrolls past the graph's edges into empty canvas.
  */
-export function getReadableFitViewport({ graph, focus, width, height, padding, minZoom, maxZoom, readableZoom }: ReadableFitViewportInput): Viewport {
+export function getReadableFitViewport({ graph, focus, width, height, padding, minZoom, maxZoom, readableZoom, margin = readableEdgeMargin }: ReadableFitViewportInput): Viewport {
   const overview = getViewportForBounds(graph, width, height, minZoom, maxZoom, padding ?? 0.1);
   if (overview.zoom >= readableZoom || !focus) return overview;
   const zoom = Math.min(readableZoom, maxZoom);
-  const margin = readableEdgeMargin;
   return {
     zoom,
     x: clampAxis(focus.x, focus.width, graph.x, graph.width, width, margin.left, margin.right, zoom),

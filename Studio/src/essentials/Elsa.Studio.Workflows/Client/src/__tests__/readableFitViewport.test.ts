@@ -1,6 +1,7 @@
 import { getViewportForBounds, type Node } from "@xyflow/react";
 import { describe, expect, it } from "vitest";
-import { getReadableFitViewport, pickReadOnlyFocusNode, READ_ONLY_READABLE_ZOOM } from "../workflow-editor/readableFitViewport";
+import { getReadableFitViewport, pickReadOnlyFocusNode, READ_ONLY_READABLE_ZOOM, readableMinimapEdgeMargin } from "../workflow-editor/readableFitViewport";
+import { readOnlyMinimapFitViewOptions } from "../workflow-editor/readOnlyMinimap";
 
 const padding = { top: "24px", right: "112px", bottom: "32px", left: "32px" } as const;
 // A User Task (Approve/Reject/Unmatched) followed by Set Output, as the composed journey lays it out.
@@ -47,6 +48,25 @@ describe("getReadableFitViewport", () => {
     expect(right).toBeGreaterThanOrEqual(width - 112);
     const outputLeft = output.x * view.zoom + view.x;
     expect(outputLeft).toBeGreaterThanOrEqual(0);
+  });
+
+  it("centres the first activity clear of the MiniMap on a short pane", () => {
+    // A three-node graph on a 360x245 phone pane: the first activity's box and outcome labels
+    // (about 90px past its right edge) share the MiniMap's columns, so only the height can keep them apart.
+    const graph3 = { x: 0, y: 0, width: 660, height: 416 };
+    const first = { x: 0, y: 160, width: 240, height: 96 };
+    const width = 360, height = 245;
+    const input = { graph: graph3, focus: first, width, height, padding: readOnlyMinimapFitViewOptions.padding,
+      minZoom: 0.1, maxZoom: 2, readableZoom: 1 };
+    // The 120x80 MiniMap (1px border) sits 15px from the bottom-right corner.
+    const minimapLeft = width - 15 - 122, minimapTop = height - 15 - 82;
+    const underMinimap = (view: { x: number; y: number }) =>
+      first.x + first.width + 90 + view.x > minimapLeft && first.y + first.height + view.y > minimapTop;
+    expect(underMinimap(getReadableFitViewport(input))).toBe(true);
+    const view = getReadableFitViewport({ ...input, margin: readableMinimapEdgeMargin });
+    expect(view.zoom).toBe(1);
+    expect(underMinimap(view)).toBe(false);
+    expect(first.y + view.y).toBeGreaterThanOrEqual(0);
   });
 
   it("falls back to the whole-graph fit when there is no focus activity", () => {
