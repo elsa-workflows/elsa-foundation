@@ -56,7 +56,7 @@ Contribution never makes someone an approver.
 
 | Role | How it is known | What it does |
 |---|---|---|
-| **Coordinator** | The initiative issue's **assignee**. Reassigning the issue hands the role over. A delegation (for a sync, or while away) is recorded on the board. | Owns **board consistency** and is the **only writer of the board**, or its recorded delegate: runs the [kick-off](#kick-off), syncs incoming work into the board, reports pending reviews and blockers, offers reminders, and prepares meetings. Doing research or drafting ADRs is optional, not part of the role. |
+| **Coordinator** | The initiative issue's **assignee**. Reassigning the issue hands the role over. A delegation (for a sync, or while away) is recorded on the board. | Owns **board consistency** and is the **only writer of the board**, or its recorded delegate: runs the [kick-off](#kick-off), syncs incoming work into the board, reports pending reviews and blockers, offers reminders, and prepares meetings. Apart from the kick-off's proposal set, doing research or drafting ADRs is optional, not part of the role. |
 | **Approver** (technical architect) | Listed in the board's **Approvers** list, designated under the project's governance, with the capacity they act in. | Writes analyses, drafts and reviews ADRs and specs, and agrees decisions by approving PRs. |
 | **Developer** | Not defined yet. It is defined when an initiative first reaches implementation. | |
 
@@ -119,7 +119,8 @@ posted on the initiative issue: no ADR PR exists for them yet. Keep them short a
    reviewer who agrees also approves the PR. There is no second written round.
 5. **Meeting.** If every reviewer agrees with the proposal set as it stands, the meeting is skipped. Otherwise the
    coordinator plans and prepares a meeting right after the review round, and every result, thought and
-   counter-proposal is discussed there; one meeting is quicker than more written rounds.
+   counter-proposal is discussed there; one meeting is quicker than more written rounds. The meeting, not a
+   reconciliation table, answers the kick-off reviews.
 
 **Meetings.** Both kick-off meetings run on the same mechanics. The coordinator prepares an agenda on the initiative
 branch, at `docs/initiatives/<n>/<date>-meeting-agenda.md`, in which every item has one short **spoken anchor**: an
@@ -129,12 +130,13 @@ coordinator, not the participants, classifies the transcript's outcomes against 
 participants before applying it, and applies it; the participants then only verify the applied text.
 
 **Leaving the kick-off.** The coordinator applies the outcomes of the review round, and of the meeting if one was
-held, to the proposal set. The proposal set is agreed when every approver has approved the PR's final text; it has no
-status line. Because the coordinator authored it, the recorded delegate or a non-author approver merges it into the
-initiative branch as the initiative's scope record (see *The initiative branch*). The coordinator then fills the board
-from the agreed set: an ADR row for each ADR to change (with its existing number) or write (with a reserved number),
-and a spec row for each spec on the roadmap, with what it needs. The board moves to the analysis-and-decisions phase, and the initiative continues with the
-normal phases.
+held, to the proposal set. Its PR names an approval plan, like any proposal, and follows the agreement rule below,
+except that it has no status line: every non-author approver approves its final text, and an author who is an approver
+confirms the final commit in a PR comment. Because the coordinator authored it, the recorded delegate or a non-author
+approver merges it into the initiative branch as the initiative's scope record (see *The initiative branch*). The
+coordinator then fills the board from the agreed set: an ADR row for each ADR to change or write, and a spec row for
+each spec on the roadmap, with what it needs. Numbers for new ADRs and specs are reserved when each is drafted, as
+usual. The board moves to the analysis-and-decisions phase, and the initiative continues with the normal phases.
 
 ## How work flows
 
@@ -360,8 +362,8 @@ whose base is an `initiative/*` branch, or the branch of a proposal stacked on o
 - **The coordinator merges** proposals into the initiative branch, by squash, after agreement and a clean pre-merge
   gate. Code Review does not merge initiative proposals ([org review and merge rules][org-agents-review]). Each
   accepted proposal is one squash commit, so the branch reads as a decision log. The coordinator also pushes the merges
-  of `main`, the ADR index updates, any renumbering of merged items and the kick-off's meeting agendas; nobody else pushes to the branch. When the
-  coordinator authored or committed to a proposal, the recorded delegate, or else a non-author approver, stands in:
+  of `main`, the ADR index updates, any renumbering of merged items and, with the recorded delegate, the kick-off's
+  meeting agendas; nobody else pushes to the branch. When the coordinator authored or committed to a proposal, the recorded delegate, or else a non-author approver, stands in:
   they run the gate, push what it needs and merge the proposal, because an author never merges their own PR. A stand-in
   who is not the recorded delegate does not edit the board: they post the `main` commit and the merge commit in a
   pointer comment, and the coordinator records them at the next sync.
