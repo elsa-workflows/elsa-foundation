@@ -1,6 +1,7 @@
 import type { ActivityCatalogItem, ActivityNode, ActivityPresentationRecord, DesignMetadataRecord } from "../workflowTypes";
 import { createActivityNode, getChildSlots, resolveScope, sequenceStructureKind, flowchartStructureKind, updateScopeOwner, type ScopeFrame } from "../workflowAdapter";
 import { compensationScopeStructureKind, compensationStepsSlotId } from "../compensationScope";
+import { transferNativeBlockResults } from "./nativeBlockResultTransfers";
 
 // Internal document edits only. Resource authorization, persistence and history remain with each host.
 export interface NativeBlockDocument {
@@ -261,7 +262,8 @@ export function planExtractNativeBlock(context: NativeBlockContext, request: Ext
     const children = scope.slot.activities.filter(x => !selected.has(x.nodeId));
     children.splice(first, 0, composite);
     const layout = [...translateLayout(context.document.layout, selected, { x: -position.x, y: -position.y }), { nodeId: block.nodeId, ...position }];
-    return ready(context, edited(context, withActivities(owner, children), layout, [...context.document.activityPresentation, presentation]), [block.nodeId]);
+    const document = edited(context, withActivities(owner, children), layout, [...context.document.activityPresentation, presentation]);
+    return ready(context, transferNativeBlockResults(context, document, scope.owner.nodeId, block.nodeId, selected, refuse), [block.nodeId]);
   });
 }
 
@@ -454,8 +456,19 @@ function assertUnreferenced(context: NativeBlockContext, owner: ActivityNode, bl
         .filter((item): item is string => typeof item === "string")
         .map(item => item.toLowerCase());
       const literal = syntaxes.length > 0 && syntaxes.every(item => item === "literal");
+      const variable = syntaxes.length > 0 && syntaxes.every(item => item === "variable");
       const opaque = expression || typeof value.expressionType === "string" || typeof value.syntax === "string" || syntaxes.some(item => ["javascript", "csharp", "liquid", "python"].includes(item));
       for (const [key, child] of Object.entries(value)) {
+        if (variable && ["expressionType", "syntax", "type"].includes(key)) continue;
+        if (key === "value" && variable) {
+          // A variable key is not a node identity. Its declaring scope and unknown fields still
+          // fence Ungroup; keeping explicit transfers must not depend on the variable's spelling.
+          if (record(child)) Object.entries(child).forEach(([field, item]) => {
+            if (field !== "referenceKey") walk(item, `${path}.value.${field}`, true);
+          });
+          continue;
+        }
+        if (value.$type === "Variable" && (key === "$type" || key === "variableKey")) continue;
         // Literal scalars are data, even when text happens to contain the wrapper ID. Objects can
         // carry typed references; those and conflicting syntax markers stay conservative.
         if (key === "value" && literal && (child === null || typeof child !== "object")) continue;

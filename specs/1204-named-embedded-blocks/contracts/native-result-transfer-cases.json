@@ -1,0 +1,4184 @@
+{
+  "formatVersion": 1,
+  "kind": "pure-planner-golden-documents-not-runtime-evidence",
+  "versions": {
+    "activity-sequence-v1": "Elsa.Activities.Sequence.Activities.Sequence",
+    "activity-flowchart-v1": "Elsa.Activities.Flowchart.Activities.Flowchart",
+    "activity-while-v1": "Elsa.Activities.ControlFlow.While.Activities.While",
+    "inline-version": "Elsa.Activities.Primitives.Activities.Inline"
+  },
+  "cases": [
+    {
+      "name": "sequence-direct",
+      "expected": "42",
+      "loop": false,
+      "ownerId": "root",
+      "variables": [],
+      "context": {
+        "document": {
+          "rootActivity": {
+            "nodeId": "root",
+            "activityVersionId": "activity-sequence-v1",
+            "inputs": [],
+            "outputs": [],
+            "structure": {
+              "kind": "elsa.sequence.structure",
+              "schemaVersion": "1.0.0",
+              "payload": {
+                "activities": [
+                  {
+                    "nodeId": "producer",
+                    "activityVersionId": "inline-version",
+                    "inputs": [
+                      {
+                        "referenceKey": "Expression",
+                        "value": {
+                          "expressionType": "Literal",
+                          "value": 42
+                        }
+                      }
+                    ],
+                    "outputs": []
+                  },
+                  {
+                    "nodeId": "consumer",
+                    "activityVersionId": "inline-version",
+                    "inputs": [
+                      {
+                        "referenceKey": "Expression",
+                        "value": {
+                          "expressionType": "ActivityResult",
+                          "value": {
+                            "producerNodeId": "producer",
+                            "projectionKey": "$result",
+                            "producerScopeId": "scope:root"
+                          }
+                        }
+                      }
+                    ],
+                    "outputs": []
+                  },
+                  {
+                    "nodeId": "answer",
+                    "activityVersionId": "elsa.intrinsic.set-output@1",
+                    "intrinsic": {
+                      "kind": "setOutput",
+                      "valueType": {
+                        "alias": "Elsa.Any",
+                        "collectionKind": "single"
+                      }
+                    },
+                    "outputs": [],
+                    "inputs": [
+                      {
+                        "referenceKey": "name",
+                        "value": {
+                          "expressionType": "Literal",
+                          "value": "answer"
+                        }
+                      },
+                      {
+                        "referenceKey": "value",
+                        "value": {
+                          "expressionType": "ActivityResult",
+                          "value": {
+                            "producerNodeId": "consumer",
+                            "projectionKey": "$result",
+                            "producerScopeId": "scope:root"
+                          }
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          },
+          "layout": [],
+          "activityPresentation": []
+        },
+        "catalog": [
+          {
+            "activityVersionId": "activity-sequence-v1",
+            "activityTypeKey": "Elsa.Activities.Sequence.Activities.Sequence",
+            "version": "1.0.0",
+            "category": "Composition",
+            "displayName": "Sequence",
+            "description": null,
+            "executionType": "Action",
+            "inputs": [],
+            "outputs": [],
+            "designFacets": [
+              {
+                "kind": "elsa.sequence.structure",
+                "schemaVersion": "1.0.0",
+                "payload": {
+                  "mode": "sequence",
+                  "supportsScopedVariables": true,
+                  "slots": [
+                    {
+                      "name": "Sequence.Activities",
+                      "property": "activities",
+                      "displayName": "Activities",
+                      "cardinality": "many"
+                    }
+                  ],
+                  "initialPayload": {
+                    "activities": []
+                  }
+                }
+              },
+              {
+                "kind": "elsa.outcomes",
+                "schemaVersion": "1",
+                "payload": {
+                  "ports": [
+                    {
+                      "name": "Done"
+                    },
+                    {
+                      "name": "Break"
+                    }
+                  ]
+                }
+              }
+            ],
+            "ports": [
+              {
+                "name": "Done"
+              },
+              {
+                "name": "Break"
+              }
+            ]
+          },
+          {
+            "activityVersionId": "activity-flowchart-v1",
+            "activityTypeKey": "Elsa.Activities.Flowchart.Activities.Flowchart",
+            "version": "1.0.0",
+            "category": "Composition",
+            "displayName": "Flowchart",
+            "description": null,
+            "executionType": "Action",
+            "inputs": [],
+            "outputs": [],
+            "designFacets": [
+              {
+                "kind": "elsa.flowchart.structure",
+                "schemaVersion": "1.0.0",
+                "payload": {
+                  "mode": "flowchart",
+                  "supportsScopedVariables": true,
+                  "slots": [
+                    {
+                      "name": "Flowchart.Activities",
+                      "property": "activities",
+                      "displayName": "Activities",
+                      "cardinality": "many"
+                    }
+                  ],
+                  "initialPayload": {
+                    "activities": [],
+                    "connections": [],
+                    "startNodeId": null,
+                    "nodeMetadata": {},
+                    "connectionMetadata": {}
+                  }
+                }
+              },
+              {
+                "kind": "elsa.outcomes",
+                "schemaVersion": "1",
+                "payload": {
+                  "ports": [
+                    {
+                      "name": "Done"
+                    },
+                    {
+                      "name": "Break"
+                    }
+                  ]
+                }
+              }
+            ],
+            "ports": [
+              {
+                "name": "Done"
+              },
+              {
+                "name": "Break"
+              }
+            ]
+          },
+          {
+            "activityVersionId": "activity-while-v1",
+            "activityTypeKey": "Elsa.Activities.ControlFlow.While.Activities.While",
+            "version": "1.0.0",
+            "category": "Control Flow",
+            "displayName": "While",
+            "description": null,
+            "executionType": "Action",
+            "inputs": [],
+            "outputs": [],
+            "designFacets": [
+              {
+                "kind": "elsa.while.structure",
+                "schemaVersion": "1.0.0",
+                "payload": {
+                  "mode": "generic",
+                  "supportsScopedVariables": false,
+                  "slots": [
+                    {
+                      "name": "While.Body",
+                      "property": "body",
+                      "displayName": "Body",
+                      "cardinality": "single"
+                    }
+                  ],
+                  "initialPayload": {
+                    "body": null
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "activityVersionId": "inline-version",
+            "activityTypeKey": "Elsa.Activities.Primitives.Activities.Inline",
+            "version": "1.0.0",
+            "category": "Primitives",
+            "displayName": "Write Line",
+            "description": null,
+            "executionType": "Action",
+            "inputs": [],
+            "outputs": [],
+            "designFacets": [],
+            "ports": [
+              {
+                "name": "Done"
+              }
+            ]
+          },
+          {
+            "activityVersionId": "elsa.intrinsic.set@1",
+            "activityTypeKey": "Elsa.Activities.Primitives.Activities.WriteLine",
+            "version": "1.0.0",
+            "category": "Primitives",
+            "displayName": "Write Line",
+            "description": null,
+            "executionType": "Action",
+            "inputs": [],
+            "outputs": [],
+            "designFacets": [],
+            "intrinsic": {
+              "kind": "Set",
+              "valueInputKey": "value"
+            },
+            "ports": [
+              {
+                "name": "Done"
+              }
+            ]
+          }
+        ],
+        "scope": [],
+        "referenceContext": [
+          []
+        ],
+        "sourceKey": "fixture:sequence:direct",
+        "canEdit": true
+      },
+      "request": {
+        "nodeId": "block",
+        "displayName": "Producer block",
+        "activityVersionId": "activity-sequence-v1",
+        "selectedNodeIds": [
+          "producer"
+        ]
+      },
+      "grouped": {
+        "rootActivity": {
+          "nodeId": "root",
+          "activityVersionId": "activity-sequence-v1",
+          "inputs": [],
+          "outputs": [],
+          "structure": {
+            "kind": "elsa.sequence.structure",
+            "schemaVersion": "1.0.0",
+            "payload": {
+              "activities": [
+                {
+                  "nodeId": "block",
+                  "activityVersionId": "activity-sequence-v1",
+                  "inputs": [],
+                  "outputs": [],
+                  "structure": {
+                    "kind": "elsa.sequence.structure",
+                    "schemaVersion": "1.0.0",
+                    "payload": {
+                      "activities": [
+                        {
+                          "nodeId": "producer",
+                          "activityVersionId": "inline-version",
+                          "inputs": [
+                            {
+                              "referenceKey": "Expression",
+                              "value": {
+                                "expressionType": "Literal",
+                                "value": 42
+                              }
+                            }
+                          ],
+                          "outputs": []
+                        },
+                        {
+                          "nodeId": "block-capture-1",
+                          "activityVersionId": "elsa.intrinsic.set@1",
+                          "inputs": [
+                            {
+                              "referenceKey": "value",
+                              "value": {
+                                "expressionType": "ActivityResult",
+                                "value": {
+                                  "producerNodeId": "producer",
+                                  "projectionKey": "$result",
+                                  "producerScopeId": "scope:root"
+                                }
+                              }
+                            }
+                          ],
+                          "outputs": [],
+                          "intrinsic": {
+                            "kind": "set",
+                            "valueType": {
+                              "alias": "Elsa.Any",
+                              "collectionKind": "single"
+                            },
+                            "variable": {
+                              "referenceKey": "block-result-1",
+                              "declaringScopeId": "root"
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "nodeId": "consumer",
+                  "activityVersionId": "inline-version",
+                  "inputs": [
+                    {
+                      "referenceKey": "Expression",
+                      "value": {
+                        "expressionType": "Variable",
+                        "value": {
+                          "referenceKey": "block-result-1",
+                          "declaringScopeId": "root"
+                        }
+                      }
+                    }
+                  ],
+                  "outputs": []
+                },
+                {
+                  "nodeId": "answer",
+                  "activityVersionId": "elsa.intrinsic.set-output@1",
+                  "intrinsic": {
+                    "kind": "setOutput",
+                    "valueType": {
+                      "alias": "Elsa.Any",
+                      "collectionKind": "single"
+                    }
+                  },
+                  "outputs": [],
+                  "inputs": [
+                    {
+                      "referenceKey": "name",
+                      "value": {
+                        "expressionType": "Literal",
+                        "value": "answer"
+                      }
+                    },
+                    {
+                      "referenceKey": "value",
+                      "value": {
+                        "expressionType": "ActivityResult",
+                        "value": {
+                          "producerNodeId": "consumer",
+                          "projectionKey": "$result",
+                          "producerScopeId": "scope:root"
+                        }
+                      }
+                    }
+                  ]
+                }
+              ],
+              "variables": [
+                {
+                  "referenceKey": "block-result-1",
+                  "name": "Block result block-result-1",
+                  "type": {
+                    "alias": "Elsa.Any",
+                    "collectionKind": "single"
+                  },
+                  "storageDriverType": null,
+                  "default": null
+                }
+              ]
+            }
+          }
+        },
+        "layout": [
+          {
+            "nodeId": "block",
+            "x": 0,
+            "y": 0
+          }
+        ],
+        "activityPresentation": [
+          {
+            "nodeId": "block",
+            "displayName": "Producer block"
+          },
+          {
+            "nodeId": "block-capture-1",
+            "displayName": "Store block result"
+          }
+        ]
+      },
+      "ungrouped": {
+        "rootActivity": {
+          "nodeId": "root",
+          "activityVersionId": "activity-sequence-v1",
+          "inputs": [],
+          "outputs": [],
+          "structure": {
+            "kind": "elsa.sequence.structure",
+            "schemaVersion": "1.0.0",
+            "payload": {
+              "activities": [
+                {
+                  "nodeId": "producer",
+                  "activityVersionId": "inline-version",
+                  "inputs": [
+                    {
+                      "referenceKey": "Expression",
+                      "value": {
+                        "expressionType": "Literal",
+                        "value": 42
+                      }
+                    }
+                  ],
+                  "outputs": []
+                },
+                {
+                  "nodeId": "block-capture-1",
+                  "activityVersionId": "elsa.intrinsic.set@1",
+                  "inputs": [
+                    {
+                      "referenceKey": "value",
+                      "value": {
+                        "expressionType": "ActivityResult",
+                        "value": {
+                          "producerNodeId": "producer",
+                          "projectionKey": "$result",
+                          "producerScopeId": "scope:root"
+                        }
+                      }
+                    }
+                  ],
+                  "outputs": [],
+                  "intrinsic": {
+                    "kind": "set",
+                    "valueType": {
+                      "alias": "Elsa.Any",
+                      "collectionKind": "single"
+                    },
+                    "variable": {
+                      "referenceKey": "block-result-1",
+                      "declaringScopeId": "root"
+                    }
+                  }
+                },
+                {
+                  "nodeId": "consumer",
+                  "activityVersionId": "inline-version",
+                  "inputs": [
+                    {
+                      "referenceKey": "Expression",
+                      "value": {
+                        "expressionType": "Variable",
+                        "value": {
+                          "referenceKey": "block-result-1",
+                          "declaringScopeId": "root"
+                        }
+                      }
+                    }
+                  ],
+                  "outputs": []
+                },
+                {
+                  "nodeId": "answer",
+                  "activityVersionId": "elsa.intrinsic.set-output@1",
+                  "intrinsic": {
+                    "kind": "setOutput",
+                    "valueType": {
+                      "alias": "Elsa.Any",
+                      "collectionKind": "single"
+                    }
+                  },
+                  "outputs": [],
+                  "inputs": [
+                    {
+                      "referenceKey": "name",
+                      "value": {
+                        "expressionType": "Literal",
+                        "value": "answer"
+                      }
+                    },
+                    {
+                      "referenceKey": "value",
+                      "value": {
+                        "expressionType": "ActivityResult",
+                        "value": {
+                          "producerNodeId": "consumer",
+                          "projectionKey": "$result",
+                          "producerScopeId": "scope:root"
+                        }
+                      }
+                    }
+                  ]
+                }
+              ],
+              "variables": [
+                {
+                  "referenceKey": "block-result-1",
+                  "name": "Block result block-result-1",
+                  "type": {
+                    "alias": "Elsa.Any",
+                    "collectionKind": "single"
+                  },
+                  "storageDriverType": null,
+                  "default": null
+                }
+              ]
+            }
+          }
+        },
+        "layout": [],
+        "activityPresentation": [
+          {
+            "nodeId": "block-capture-1",
+            "displayName": "Store block result"
+          }
+        ]
+      }
+    },
+    {
+      "name": "sequence-parameter",
+      "expected": "43",
+      "loop": false,
+      "ownerId": "root",
+      "variables": [],
+      "context": {
+        "document": {
+          "rootActivity": {
+            "nodeId": "root",
+            "activityVersionId": "activity-sequence-v1",
+            "inputs": [],
+            "outputs": [],
+            "structure": {
+              "kind": "elsa.sequence.structure",
+              "schemaVersion": "1.0.0",
+              "payload": {
+                "activities": [
+                  {
+                    "nodeId": "producer",
+                    "activityVersionId": "inline-version",
+                    "inputs": [
+                      {
+                        "referenceKey": "Expression",
+                        "value": {
+                          "expressionType": "Literal",
+                          "value": 42
+                        }
+                      }
+                    ],
+                    "outputs": []
+                  },
+                  {
+                    "nodeId": "consumer",
+                    "activityVersionId": "inline-version",
+                    "inputs": [
+                      {
+                        "referenceKey": "Expression",
+                        "value": {
+                          "expressionType": "JavaScript",
+                          "value": {
+                            "language": "JavaScript",
+                            "source": "prior + 1",
+                            "capabilityProfile": "binding-pure-v1",
+                            "parameters": {
+                              "prior": {
+                                "$type": "ActivityResult",
+                                "producerNodeId": "producer",
+                                "projectionKey": "$result"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    ],
+                    "outputs": []
+                  },
+                  {
+                    "nodeId": "answer",
+                    "activityVersionId": "elsa.intrinsic.set-output@1",
+                    "intrinsic": {
+                      "kind": "setOutput",
+                      "valueType": {
+                        "alias": "Elsa.Any",
+                        "collectionKind": "single"
+                      }
+                    },
+                    "outputs": [],
+                    "inputs": [
+                      {
+                        "referenceKey": "name",
+                        "value": {
+                          "expressionType": "Literal",
+                          "value": "answer"
+                        }
+                      },
+                      {
+                        "referenceKey": "value",
+                        "value": {
+                          "expressionType": "ActivityResult",
+                          "value": {
+                            "producerNodeId": "consumer",
+                            "projectionKey": "$result",
+                            "producerScopeId": "scope:root"
+                          }
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          },
+          "layout": [],
+          "activityPresentation": []
+        },
+        "catalog": [
+          {
+            "activityVersionId": "activity-sequence-v1",
+            "activityTypeKey": "Elsa.Activities.Sequence.Activities.Sequence",
+            "version": "1.0.0",
+            "category": "Composition",
+            "displayName": "Sequence",
+            "description": null,
+            "executionType": "Action",
+            "inputs": [],
+            "outputs": [],
+            "designFacets": [
+              {
+                "kind": "elsa.sequence.structure",
+                "schemaVersion": "1.0.0",
+                "payload": {
+                  "mode": "sequence",
+                  "supportsScopedVariables": true,
+                  "slots": [
+                    {
+                      "name": "Sequence.Activities",
+                      "property": "activities",
+                      "displayName": "Activities",
+                      "cardinality": "many"
+                    }
+                  ],
+                  "initialPayload": {
+                    "activities": []
+                  }
+                }
+              },
+              {
+                "kind": "elsa.outcomes",
+                "schemaVersion": "1",
+                "payload": {
+                  "ports": [
+                    {
+                      "name": "Done"
+                    },
+                    {
+                      "name": "Break"
+                    }
+                  ]
+                }
+              }
+            ],
+            "ports": [
+              {
+                "name": "Done"
+              },
+              {
+                "name": "Break"
+              }
+            ]
+          },
+          {
+            "activityVersionId": "activity-flowchart-v1",
+            "activityTypeKey": "Elsa.Activities.Flowchart.Activities.Flowchart",
+            "version": "1.0.0",
+            "category": "Composition",
+            "displayName": "Flowchart",
+            "description": null,
+            "executionType": "Action",
+            "inputs": [],
+            "outputs": [],
+            "designFacets": [
+              {
+                "kind": "elsa.flowchart.structure",
+                "schemaVersion": "1.0.0",
+                "payload": {
+                  "mode": "flowchart",
+                  "supportsScopedVariables": true,
+                  "slots": [
+                    {
+                      "name": "Flowchart.Activities",
+                      "property": "activities",
+                      "displayName": "Activities",
+                      "cardinality": "many"
+                    }
+                  ],
+                  "initialPayload": {
+                    "activities": [],
+                    "connections": [],
+                    "startNodeId": null,
+                    "nodeMetadata": {},
+                    "connectionMetadata": {}
+                  }
+                }
+              },
+              {
+                "kind": "elsa.outcomes",
+                "schemaVersion": "1",
+                "payload": {
+                  "ports": [
+                    {
+                      "name": "Done"
+                    },
+                    {
+                      "name": "Break"
+                    }
+                  ]
+                }
+              }
+            ],
+            "ports": [
+              {
+                "name": "Done"
+              },
+              {
+                "name": "Break"
+              }
+            ]
+          },
+          {
+            "activityVersionId": "activity-while-v1",
+            "activityTypeKey": "Elsa.Activities.ControlFlow.While.Activities.While",
+            "version": "1.0.0",
+            "category": "Control Flow",
+            "displayName": "While",
+            "description": null,
+            "executionType": "Action",
+            "inputs": [],
+            "outputs": [],
+            "designFacets": [
+              {
+                "kind": "elsa.while.structure",
+                "schemaVersion": "1.0.0",
+                "payload": {
+                  "mode": "generic",
+                  "supportsScopedVariables": false,
+                  "slots": [
+                    {
+                      "name": "While.Body",
+                      "property": "body",
+                      "displayName": "Body",
+                      "cardinality": "single"
+                    }
+                  ],
+                  "initialPayload": {
+                    "body": null
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "activityVersionId": "inline-version",
+            "activityTypeKey": "Elsa.Activities.Primitives.Activities.Inline",
+            "version": "1.0.0",
+            "category": "Primitives",
+            "displayName": "Write Line",
+            "description": null,
+            "executionType": "Action",
+            "inputs": [],
+            "outputs": [],
+            "designFacets": [],
+            "ports": [
+              {
+                "name": "Done"
+              }
+            ]
+          },
+          {
+            "activityVersionId": "elsa.intrinsic.set@1",
+            "activityTypeKey": "Elsa.Activities.Primitives.Activities.WriteLine",
+            "version": "1.0.0",
+            "category": "Primitives",
+            "displayName": "Write Line",
+            "description": null,
+            "executionType": "Action",
+            "inputs": [],
+            "outputs": [],
+            "designFacets": [],
+            "intrinsic": {
+              "kind": "Set",
+              "valueInputKey": "value"
+            },
+            "ports": [
+              {
+                "name": "Done"
+              }
+            ]
+          }
+        ],
+        "scope": [],
+        "referenceContext": [
+          []
+        ],
+        "sourceKey": "fixture:sequence:parameter",
+        "canEdit": true
+      },
+      "request": {
+        "nodeId": "block",
+        "displayName": "Producer block",
+        "activityVersionId": "activity-sequence-v1",
+        "selectedNodeIds": [
+          "producer"
+        ]
+      },
+      "grouped": {
+        "rootActivity": {
+          "nodeId": "root",
+          "activityVersionId": "activity-sequence-v1",
+          "inputs": [],
+          "outputs": [],
+          "structure": {
+            "kind": "elsa.sequence.structure",
+            "schemaVersion": "1.0.0",
+            "payload": {
+              "activities": [
+                {
+                  "nodeId": "block",
+                  "activityVersionId": "activity-sequence-v1",
+                  "inputs": [],
+                  "outputs": [],
+                  "structure": {
+                    "kind": "elsa.sequence.structure",
+                    "schemaVersion": "1.0.0",
+                    "payload": {
+                      "activities": [
+                        {
+                          "nodeId": "producer",
+                          "activityVersionId": "inline-version",
+                          "inputs": [
+                            {
+                              "referenceKey": "Expression",
+                              "value": {
+                                "expressionType": "Literal",
+                                "value": 42
+                              }
+                            }
+                          ],
+                          "outputs": []
+                        },
+                        {
+                          "nodeId": "block-capture-1",
+                          "activityVersionId": "elsa.intrinsic.set@1",
+                          "inputs": [
+                            {
+                              "referenceKey": "value",
+                              "value": {
+                                "expressionType": "ActivityResult",
+                                "value": {
+                                  "producerNodeId": "producer",
+                                  "projectionKey": "$result"
+                                }
+                              }
+                            }
+                          ],
+                          "outputs": [],
+                          "intrinsic": {
+                            "kind": "set",
+                            "valueType": {
+                              "alias": "Elsa.Any",
+                              "collectionKind": "single"
+                            },
+                            "variable": {
+                              "referenceKey": "block-result-1",
+                              "declaringScopeId": "root"
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "nodeId": "consumer",
+                  "activityVersionId": "inline-version",
+                  "inputs": [
+                    {
+                      "referenceKey": "Expression",
+                      "value": {
+                        "expressionType": "JavaScript",
+                        "value": {
+                          "language": "JavaScript",
+                          "source": "prior + 1",
+                          "capabilityProfile": "binding-pure-v1",
+                          "parameters": {
+                            "prior": {
+                              "$type": "Variable",
+                              "declaringScopeNodeId": "root",
+                              "variableKey": "block-result-1"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  ],
+                  "outputs": []
+                },
+                {
+                  "nodeId": "answer",
+                  "activityVersionId": "elsa.intrinsic.set-output@1",
+                  "intrinsic": {
+                    "kind": "setOutput",
+                    "valueType": {
+                      "alias": "Elsa.Any",
+                      "collectionKind": "single"
+                    }
+                  },
+                  "outputs": [],
+                  "inputs": [
+                    {
+                      "referenceKey": "name",
+                      "value": {
+                        "expressionType": "Literal",
+                        "value": "answer"
+                      }
+                    },
+                    {
+                      "referenceKey": "value",
+                      "value": {
+                        "expressionType": "ActivityResult",
+                        "value": {
+                          "producerNodeId": "consumer",
+                          "projectionKey": "$result",
+                          "producerScopeId": "scope:root"
+                        }
+                      }
+                    }
+                  ]
+                }
+              ],
+              "variables": [
+                {
+                  "referenceKey": "block-result-1",
+                  "name": "Block result block-result-1",
+                  "type": {
+                    "alias": "Elsa.Any",
+                    "collectionKind": "single"
+                  },
+                  "storageDriverType": null,
+                  "default": null
+                }
+              ]
+            }
+          }
+        },
+        "layout": [
+          {
+            "nodeId": "block",
+            "x": 0,
+            "y": 0
+          }
+        ],
+        "activityPresentation": [
+          {
+            "nodeId": "block",
+            "displayName": "Producer block"
+          },
+          {
+            "nodeId": "block-capture-1",
+            "displayName": "Store block result"
+          }
+        ]
+      },
+      "ungrouped": {
+        "rootActivity": {
+          "nodeId": "root",
+          "activityVersionId": "activity-sequence-v1",
+          "inputs": [],
+          "outputs": [],
+          "structure": {
+            "kind": "elsa.sequence.structure",
+            "schemaVersion": "1.0.0",
+            "payload": {
+              "activities": [
+                {
+                  "nodeId": "producer",
+                  "activityVersionId": "inline-version",
+                  "inputs": [
+                    {
+                      "referenceKey": "Expression",
+                      "value": {
+                        "expressionType": "Literal",
+                        "value": 42
+                      }
+                    }
+                  ],
+                  "outputs": []
+                },
+                {
+                  "nodeId": "block-capture-1",
+                  "activityVersionId": "elsa.intrinsic.set@1",
+                  "inputs": [
+                    {
+                      "referenceKey": "value",
+                      "value": {
+                        "expressionType": "ActivityResult",
+                        "value": {
+                          "producerNodeId": "producer",
+                          "projectionKey": "$result"
+                        }
+                      }
+                    }
+                  ],
+                  "outputs": [],
+                  "intrinsic": {
+                    "kind": "set",
+                    "valueType": {
+                      "alias": "Elsa.Any",
+                      "collectionKind": "single"
+                    },
+                    "variable": {
+                      "referenceKey": "block-result-1",
+                      "declaringScopeId": "root"
+                    }
+                  }
+                },
+                {
+                  "nodeId": "consumer",
+                  "activityVersionId": "inline-version",
+                  "inputs": [
+                    {
+                      "referenceKey": "Expression",
+                      "value": {
+                        "expressionType": "JavaScript",
+                        "value": {
+                          "language": "JavaScript",
+                          "source": "prior + 1",
+                          "capabilityProfile": "binding-pure-v1",
+                          "parameters": {
+                            "prior": {
+                              "$type": "Variable",
+                              "declaringScopeNodeId": "root",
+                              "variableKey": "block-result-1"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  ],
+                  "outputs": []
+                },
+                {
+                  "nodeId": "answer",
+                  "activityVersionId": "elsa.intrinsic.set-output@1",
+                  "intrinsic": {
+                    "kind": "setOutput",
+                    "valueType": {
+                      "alias": "Elsa.Any",
+                      "collectionKind": "single"
+                    }
+                  },
+                  "outputs": [],
+                  "inputs": [
+                    {
+                      "referenceKey": "name",
+                      "value": {
+                        "expressionType": "Literal",
+                        "value": "answer"
+                      }
+                    },
+                    {
+                      "referenceKey": "value",
+                      "value": {
+                        "expressionType": "ActivityResult",
+                        "value": {
+                          "producerNodeId": "consumer",
+                          "projectionKey": "$result",
+                          "producerScopeId": "scope:root"
+                        }
+                      }
+                    }
+                  ]
+                }
+              ],
+              "variables": [
+                {
+                  "referenceKey": "block-result-1",
+                  "name": "Block result block-result-1",
+                  "type": {
+                    "alias": "Elsa.Any",
+                    "collectionKind": "single"
+                  },
+                  "storageDriverType": null,
+                  "default": null
+                }
+              ]
+            }
+          }
+        },
+        "layout": [],
+        "activityPresentation": [
+          {
+            "nodeId": "block-capture-1",
+            "displayName": "Store block result"
+          }
+        ]
+      }
+    },
+    {
+      "name": "sequence-loop",
+      "expected": "3",
+      "loop": true,
+      "ownerId": "body",
+      "variables": [
+        {
+          "referenceKey": "counter",
+          "name": "Counter",
+          "type": {
+            "alias": "Int32",
+            "collectionKind": "single"
+          },
+          "storageDriverType": null,
+          "default": {
+            "expressionType": "Literal",
+            "value": 0
+          }
+        }
+      ],
+      "context": {
+        "document": {
+          "rootActivity": {
+            "nodeId": "root",
+            "activityVersionId": "activity-sequence-v1",
+            "inputs": [],
+            "outputs": [],
+            "structure": {
+              "kind": "elsa.sequence.structure",
+              "schemaVersion": "1.0.0",
+              "payload": {
+                "activities": [
+                  {
+                    "nodeId": "loop",
+                    "activityVersionId": "activity-while-v1",
+                    "inputs": [
+                      {
+                        "referenceKey": "Condition",
+                        "value": {
+                          "expressionType": "JavaScript",
+                          "value": "getVariable('counter') < 3"
+                        }
+                      }
+                    ],
+                    "outputs": [],
+                    "structure": {
+                      "kind": "elsa.while.structure",
+                      "schemaVersion": "1.0.0",
+                      "payload": {
+                        "body": {
+                          "nodeId": "body",
+                          "activityVersionId": "activity-sequence-v1",
+                          "inputs": [],
+                          "outputs": [],
+                          "structure": {
+                            "kind": "elsa.sequence.structure",
+                            "schemaVersion": "1.0.0",
+                            "payload": {
+                              "activities": [
+                                {
+                                  "nodeId": "increment",
+                                  "activityVersionId": "elsa.intrinsic.set@1",
+                                  "inputs": [
+                                    {
+                                      "referenceKey": "value",
+                                      "value": {
+                                        "expressionType": "JavaScript",
+                                        "value": "getVariable('counter') + 1"
+                                      }
+                                    }
+                                  ],
+                                  "outputs": [],
+                                  "intrinsic": {
+                                    "kind": "set",
+                                    "valueType": {
+                                      "alias": "Elsa.Any",
+                                      "collectionKind": "single"
+                                    },
+                                    "variable": {
+                                      "referenceKey": "counter"
+                                    }
+                                  }
+                                },
+                                {
+                                  "nodeId": "producer",
+                                  "activityVersionId": "inline-version",
+                                  "inputs": [
+                                    {
+                                      "referenceKey": "Expression",
+                                      "value": {
+                                        "expressionType": "Variable",
+                                        "value": {
+                                          "referenceKey": "counter"
+                                        }
+                                      }
+                                    }
+                                  ],
+                                  "outputs": []
+                                },
+                                {
+                                  "nodeId": "consumer",
+                                  "activityVersionId": "inline-version",
+                                  "inputs": [
+                                    {
+                                      "referenceKey": "Expression",
+                                      "value": {
+                                        "expressionType": "ActivityResult",
+                                        "value": {
+                                          "producerNodeId": "producer",
+                                          "projectionKey": "$result",
+                                          "producerScopeId": "scope:root"
+                                        }
+                                      }
+                                    }
+                                  ],
+                                  "outputs": []
+                                }
+                              ]
+                            }
+                          }
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "nodeId": "answer",
+                    "activityVersionId": "elsa.intrinsic.set-output@1",
+                    "intrinsic": {
+                      "kind": "setOutput",
+                      "valueType": {
+                        "alias": "Elsa.Any",
+                        "collectionKind": "single"
+                      }
+                    },
+                    "outputs": [],
+                    "inputs": [
+                      {
+                        "referenceKey": "name",
+                        "value": {
+                          "expressionType": "Literal",
+                          "value": "answer"
+                        }
+                      },
+                      {
+                        "referenceKey": "value",
+                        "value": {
+                          "expressionType": "Variable",
+                          "value": {
+                            "referenceKey": "counter"
+                          }
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          },
+          "layout": [],
+          "activityPresentation": []
+        },
+        "catalog": [
+          {
+            "activityVersionId": "activity-sequence-v1",
+            "activityTypeKey": "Elsa.Activities.Sequence.Activities.Sequence",
+            "version": "1.0.0",
+            "category": "Composition",
+            "displayName": "Sequence",
+            "description": null,
+            "executionType": "Action",
+            "inputs": [],
+            "outputs": [],
+            "designFacets": [
+              {
+                "kind": "elsa.sequence.structure",
+                "schemaVersion": "1.0.0",
+                "payload": {
+                  "mode": "sequence",
+                  "supportsScopedVariables": true,
+                  "slots": [
+                    {
+                      "name": "Sequence.Activities",
+                      "property": "activities",
+                      "displayName": "Activities",
+                      "cardinality": "many"
+                    }
+                  ],
+                  "initialPayload": {
+                    "activities": []
+                  }
+                }
+              },
+              {
+                "kind": "elsa.outcomes",
+                "schemaVersion": "1",
+                "payload": {
+                  "ports": [
+                    {
+                      "name": "Done"
+                    },
+                    {
+                      "name": "Break"
+                    }
+                  ]
+                }
+              }
+            ],
+            "ports": [
+              {
+                "name": "Done"
+              },
+              {
+                "name": "Break"
+              }
+            ]
+          },
+          {
+            "activityVersionId": "activity-flowchart-v1",
+            "activityTypeKey": "Elsa.Activities.Flowchart.Activities.Flowchart",
+            "version": "1.0.0",
+            "category": "Composition",
+            "displayName": "Flowchart",
+            "description": null,
+            "executionType": "Action",
+            "inputs": [],
+            "outputs": [],
+            "designFacets": [
+              {
+                "kind": "elsa.flowchart.structure",
+                "schemaVersion": "1.0.0",
+                "payload": {
+                  "mode": "flowchart",
+                  "supportsScopedVariables": true,
+                  "slots": [
+                    {
+                      "name": "Flowchart.Activities",
+                      "property": "activities",
+                      "displayName": "Activities",
+                      "cardinality": "many"
+                    }
+                  ],
+                  "initialPayload": {
+                    "activities": [],
+                    "connections": [],
+                    "startNodeId": null,
+                    "nodeMetadata": {},
+                    "connectionMetadata": {}
+                  }
+                }
+              },
+              {
+                "kind": "elsa.outcomes",
+                "schemaVersion": "1",
+                "payload": {
+                  "ports": [
+                    {
+                      "name": "Done"
+                    },
+                    {
+                      "name": "Break"
+                    }
+                  ]
+                }
+              }
+            ],
+            "ports": [
+              {
+                "name": "Done"
+              },
+              {
+                "name": "Break"
+              }
+            ]
+          },
+          {
+            "activityVersionId": "activity-while-v1",
+            "activityTypeKey": "Elsa.Activities.ControlFlow.While.Activities.While",
+            "version": "1.0.0",
+            "category": "Control Flow",
+            "displayName": "While",
+            "description": null,
+            "executionType": "Action",
+            "inputs": [],
+            "outputs": [],
+            "designFacets": [
+              {
+                "kind": "elsa.while.structure",
+                "schemaVersion": "1.0.0",
+                "payload": {
+                  "mode": "generic",
+                  "supportsScopedVariables": false,
+                  "slots": [
+                    {
+                      "name": "While.Body",
+                      "property": "body",
+                      "displayName": "Body",
+                      "cardinality": "single"
+                    }
+                  ],
+                  "initialPayload": {
+                    "body": null
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "activityVersionId": "inline-version",
+            "activityTypeKey": "Elsa.Activities.Primitives.Activities.Inline",
+            "version": "1.0.0",
+            "category": "Primitives",
+            "displayName": "Write Line",
+            "description": null,
+            "executionType": "Action",
+            "inputs": [],
+            "outputs": [],
+            "designFacets": [],
+            "ports": [
+              {
+                "name": "Done"
+              }
+            ]
+          },
+          {
+            "activityVersionId": "elsa.intrinsic.set@1",
+            "activityTypeKey": "Elsa.Activities.Primitives.Activities.WriteLine",
+            "version": "1.0.0",
+            "category": "Primitives",
+            "displayName": "Write Line",
+            "description": null,
+            "executionType": "Action",
+            "inputs": [],
+            "outputs": [],
+            "designFacets": [],
+            "intrinsic": {
+              "kind": "Set",
+              "valueInputKey": "value"
+            },
+            "ports": [
+              {
+                "name": "Done"
+              }
+            ]
+          }
+        ],
+        "scope": [
+          {
+            "ownerNodeId": "loop",
+            "slotId": "elsa.while.structure:body",
+            "label": ""
+          },
+          {
+            "ownerNodeId": "body",
+            "slotId": "elsa.sequence.structure:activities",
+            "label": "loop / Body"
+          }
+        ],
+        "referenceContext": [
+          [
+            {
+              "referenceKey": "counter",
+              "name": "Counter",
+              "type": {
+                "alias": "Int32",
+                "collectionKind": "single"
+              },
+              "storageDriverType": null,
+              "default": {
+                "expressionType": "Literal",
+                "value": 0
+              }
+            }
+          ]
+        ],
+        "sourceKey": "fixture:sequence:loop",
+        "canEdit": true
+      },
+      "request": {
+        "nodeId": "block",
+        "displayName": "Producer block",
+        "activityVersionId": "activity-sequence-v1",
+        "selectedNodeIds": [
+          "increment",
+          "producer"
+        ]
+      },
+      "grouped": {
+        "rootActivity": {
+          "nodeId": "root",
+          "activityVersionId": "activity-sequence-v1",
+          "inputs": [],
+          "outputs": [],
+          "structure": {
+            "kind": "elsa.sequence.structure",
+            "schemaVersion": "1.0.0",
+            "payload": {
+              "activities": [
+                {
+                  "nodeId": "loop",
+                  "activityVersionId": "activity-while-v1",
+                  "inputs": [
+                    {
+                      "referenceKey": "Condition",
+                      "value": {
+                        "expressionType": "JavaScript",
+                        "value": "getVariable('counter') < 3"
+                      }
+                    }
+                  ],
+                  "outputs": [],
+                  "structure": {
+                    "kind": "elsa.while.structure",
+                    "schemaVersion": "1.0.0",
+                    "payload": {
+                      "body": {
+                        "nodeId": "body",
+                        "activityVersionId": "activity-sequence-v1",
+                        "inputs": [],
+                        "outputs": [],
+                        "structure": {
+                          "kind": "elsa.sequence.structure",
+                          "schemaVersion": "1.0.0",
+                          "payload": {
+                            "activities": [
+                              {
+                                "nodeId": "block",
+                                "activityVersionId": "activity-sequence-v1",
+                                "inputs": [],
+                                "outputs": [],
+                                "structure": {
+                                  "kind": "elsa.sequence.structure",
+                                  "schemaVersion": "1.0.0",
+                                  "payload": {
+                                    "activities": [
+                                      {
+                                        "nodeId": "increment",
+                                        "activityVersionId": "elsa.intrinsic.set@1",
+                                        "inputs": [
+                                          {
+                                            "referenceKey": "value",
+                                            "value": {
+                                              "expressionType": "JavaScript",
+                                              "value": "getVariable('counter') + 1"
+                                            }
+                                          }
+                                        ],
+                                        "outputs": [],
+                                        "intrinsic": {
+                                          "kind": "set",
+                                          "valueType": {
+                                            "alias": "Elsa.Any",
+                                            "collectionKind": "single"
+                                          },
+                                          "variable": {
+                                            "referenceKey": "counter"
+                                          }
+                                        }
+                                      },
+                                      {
+                                        "nodeId": "producer",
+                                        "activityVersionId": "inline-version",
+                                        "inputs": [
+                                          {
+                                            "referenceKey": "Expression",
+                                            "value": {
+                                              "expressionType": "Variable",
+                                              "value": {
+                                                "referenceKey": "counter"
+                                              }
+                                            }
+                                          }
+                                        ],
+                                        "outputs": []
+                                      },
+                                      {
+                                        "nodeId": "block-capture-1",
+                                        "activityVersionId": "elsa.intrinsic.set@1",
+                                        "inputs": [
+                                          {
+                                            "referenceKey": "value",
+                                            "value": {
+                                              "expressionType": "ActivityResult",
+                                              "value": {
+                                                "producerNodeId": "producer",
+                                                "projectionKey": "$result",
+                                                "producerScopeId": "scope:root"
+                                              }
+                                            }
+                                          }
+                                        ],
+                                        "outputs": [],
+                                        "intrinsic": {
+                                          "kind": "set",
+                                          "valueType": {
+                                            "alias": "Elsa.Any",
+                                            "collectionKind": "single"
+                                          },
+                                          "variable": {
+                                            "referenceKey": "block-result-1",
+                                            "declaringScopeId": "body"
+                                          }
+                                        }
+                                      }
+                                    ]
+                                  }
+                                }
+                              },
+                              {
+                                "nodeId": "consumer",
+                                "activityVersionId": "inline-version",
+                                "inputs": [
+                                  {
+                                    "referenceKey": "Expression",
+                                    "value": {
+                                      "expressionType": "Variable",
+                                      "value": {
+                                        "referenceKey": "block-result-1",
+                                        "declaringScopeId": "body"
+                                      }
+                                    }
+                                  }
+                                ],
+                                "outputs": []
+                              }
+                            ],
+                            "variables": [
+                              {
+                                "referenceKey": "block-result-1",
+                                "name": "Block result block-result-1",
+                                "type": {
+                                  "alias": "Elsa.Any",
+                                  "collectionKind": "single"
+                                },
+                                "storageDriverType": null,
+                                "default": null
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "nodeId": "answer",
+                  "activityVersionId": "elsa.intrinsic.set-output@1",
+                  "intrinsic": {
+                    "kind": "setOutput",
+                    "valueType": {
+                      "alias": "Elsa.Any",
+                      "collectionKind": "single"
+                    }
+                  },
+                  "outputs": [],
+                  "inputs": [
+                    {
+                      "referenceKey": "name",
+                      "value": {
+                        "expressionType": "Literal",
+                        "value": "answer"
+                      }
+                    },
+                    {
+                      "referenceKey": "value",
+                      "value": {
+                        "expressionType": "Variable",
+                        "value": {
+                          "referenceKey": "counter"
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        "layout": [
+          {
+            "nodeId": "block",
+            "x": 0,
+            "y": 0
+          }
+        ],
+        "activityPresentation": [
+          {
+            "nodeId": "block",
+            "displayName": "Producer block"
+          },
+          {
+            "nodeId": "block-capture-1",
+            "displayName": "Store block result"
+          }
+        ]
+      },
+      "ungrouped": {
+        "rootActivity": {
+          "nodeId": "root",
+          "activityVersionId": "activity-sequence-v1",
+          "inputs": [],
+          "outputs": [],
+          "structure": {
+            "kind": "elsa.sequence.structure",
+            "schemaVersion": "1.0.0",
+            "payload": {
+              "activities": [
+                {
+                  "nodeId": "loop",
+                  "activityVersionId": "activity-while-v1",
+                  "inputs": [
+                    {
+                      "referenceKey": "Condition",
+                      "value": {
+                        "expressionType": "JavaScript",
+                        "value": "getVariable('counter') < 3"
+                      }
+                    }
+                  ],
+                  "outputs": [],
+                  "structure": {
+                    "kind": "elsa.while.structure",
+                    "schemaVersion": "1.0.0",
+                    "payload": {
+                      "body": {
+                        "nodeId": "body",
+                        "activityVersionId": "activity-sequence-v1",
+                        "inputs": [],
+                        "outputs": [],
+                        "structure": {
+                          "kind": "elsa.sequence.structure",
+                          "schemaVersion": "1.0.0",
+                          "payload": {
+                            "activities": [
+                              {
+                                "nodeId": "increment",
+                                "activityVersionId": "elsa.intrinsic.set@1",
+                                "inputs": [
+                                  {
+                                    "referenceKey": "value",
+                                    "value": {
+                                      "expressionType": "JavaScript",
+                                      "value": "getVariable('counter') + 1"
+                                    }
+                                  }
+                                ],
+                                "outputs": [],
+                                "intrinsic": {
+                                  "kind": "set",
+                                  "valueType": {
+                                    "alias": "Elsa.Any",
+                                    "collectionKind": "single"
+                                  },
+                                  "variable": {
+                                    "referenceKey": "counter"
+                                  }
+                                }
+                              },
+                              {
+                                "nodeId": "producer",
+                                "activityVersionId": "inline-version",
+                                "inputs": [
+                                  {
+                                    "referenceKey": "Expression",
+                                    "value": {
+                                      "expressionType": "Variable",
+                                      "value": {
+                                        "referenceKey": "counter"
+                                      }
+                                    }
+                                  }
+                                ],
+                                "outputs": []
+                              },
+                              {
+                                "nodeId": "block-capture-1",
+                                "activityVersionId": "elsa.intrinsic.set@1",
+                                "inputs": [
+                                  {
+                                    "referenceKey": "value",
+                                    "value": {
+                                      "expressionType": "ActivityResult",
+                                      "value": {
+                                        "producerNodeId": "producer",
+                                        "projectionKey": "$result",
+                                        "producerScopeId": "scope:root"
+                                      }
+                                    }
+                                  }
+                                ],
+                                "outputs": [],
+                                "intrinsic": {
+                                  "kind": "set",
+                                  "valueType": {
+                                    "alias": "Elsa.Any",
+                                    "collectionKind": "single"
+                                  },
+                                  "variable": {
+                                    "referenceKey": "block-result-1",
+                                    "declaringScopeId": "body"
+                                  }
+                                }
+                              },
+                              {
+                                "nodeId": "consumer",
+                                "activityVersionId": "inline-version",
+                                "inputs": [
+                                  {
+                                    "referenceKey": "Expression",
+                                    "value": {
+                                      "expressionType": "Variable",
+                                      "value": {
+                                        "referenceKey": "block-result-1",
+                                        "declaringScopeId": "body"
+                                      }
+                                    }
+                                  }
+                                ],
+                                "outputs": []
+                              }
+                            ],
+                            "variables": [
+                              {
+                                "referenceKey": "block-result-1",
+                                "name": "Block result block-result-1",
+                                "type": {
+                                  "alias": "Elsa.Any",
+                                  "collectionKind": "single"
+                                },
+                                "storageDriverType": null,
+                                "default": null
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "nodeId": "answer",
+                  "activityVersionId": "elsa.intrinsic.set-output@1",
+                  "intrinsic": {
+                    "kind": "setOutput",
+                    "valueType": {
+                      "alias": "Elsa.Any",
+                      "collectionKind": "single"
+                    }
+                  },
+                  "outputs": [],
+                  "inputs": [
+                    {
+                      "referenceKey": "name",
+                      "value": {
+                        "expressionType": "Literal",
+                        "value": "answer"
+                      }
+                    },
+                    {
+                      "referenceKey": "value",
+                      "value": {
+                        "expressionType": "Variable",
+                        "value": {
+                          "referenceKey": "counter"
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        "layout": [],
+        "activityPresentation": [
+          {
+            "nodeId": "block-capture-1",
+            "displayName": "Store block result"
+          }
+        ]
+      }
+    },
+    {
+      "name": "flowchart-direct",
+      "expected": "42",
+      "loop": false,
+      "ownerId": "root",
+      "variables": [],
+      "context": {
+        "document": {
+          "rootActivity": {
+            "nodeId": "root",
+            "activityVersionId": "activity-flowchart-v1",
+            "inputs": [],
+            "outputs": [],
+            "structure": {
+              "kind": "elsa.flowchart.structure",
+              "schemaVersion": "1.0.0",
+              "payload": {
+                "activities": [
+                  {
+                    "nodeId": "producer",
+                    "activityVersionId": "inline-version",
+                    "inputs": [
+                      {
+                        "referenceKey": "Expression",
+                        "value": {
+                          "expressionType": "Literal",
+                          "value": 42
+                        }
+                      }
+                    ],
+                    "outputs": []
+                  },
+                  {
+                    "nodeId": "consumer",
+                    "activityVersionId": "inline-version",
+                    "inputs": [
+                      {
+                        "referenceKey": "Expression",
+                        "value": {
+                          "expressionType": "ActivityResult",
+                          "value": {
+                            "producerNodeId": "producer",
+                            "projectionKey": "$result",
+                            "producerScopeId": "scope:root"
+                          }
+                        }
+                      }
+                    ],
+                    "outputs": []
+                  },
+                  {
+                    "nodeId": "answer",
+                    "activityVersionId": "elsa.intrinsic.set-output@1",
+                    "intrinsic": {
+                      "kind": "setOutput",
+                      "valueType": {
+                        "alias": "Elsa.Any",
+                        "collectionKind": "single"
+                      }
+                    },
+                    "outputs": [],
+                    "inputs": [
+                      {
+                        "referenceKey": "name",
+                        "value": {
+                          "expressionType": "Literal",
+                          "value": "answer"
+                        }
+                      },
+                      {
+                        "referenceKey": "value",
+                        "value": {
+                          "expressionType": "ActivityResult",
+                          "value": {
+                            "producerNodeId": "consumer",
+                            "projectionKey": "$result",
+                            "producerScopeId": "scope:root"
+                          }
+                        }
+                      }
+                    ]
+                  }
+                ],
+                "connections": [
+                  {
+                    "id": "read",
+                    "source": {
+                      "nodeId": "producer",
+                      "port": "Done"
+                    },
+                    "target": {
+                      "nodeId": "consumer"
+                    }
+                  },
+                  {
+                    "id": "answer",
+                    "source": {
+                      "nodeId": "consumer",
+                      "port": "Done"
+                    },
+                    "target": {
+                      "nodeId": "answer"
+                    }
+                  }
+                ],
+                "startNodeId": "producer",
+                "nodeMetadata": {},
+                "connectionMetadata": {}
+              }
+            }
+          },
+          "layout": [],
+          "activityPresentation": []
+        },
+        "catalog": [
+          {
+            "activityVersionId": "activity-sequence-v1",
+            "activityTypeKey": "Elsa.Activities.Sequence.Activities.Sequence",
+            "version": "1.0.0",
+            "category": "Composition",
+            "displayName": "Sequence",
+            "description": null,
+            "executionType": "Action",
+            "inputs": [],
+            "outputs": [],
+            "designFacets": [
+              {
+                "kind": "elsa.sequence.structure",
+                "schemaVersion": "1.0.0",
+                "payload": {
+                  "mode": "sequence",
+                  "supportsScopedVariables": true,
+                  "slots": [
+                    {
+                      "name": "Sequence.Activities",
+                      "property": "activities",
+                      "displayName": "Activities",
+                      "cardinality": "many"
+                    }
+                  ],
+                  "initialPayload": {
+                    "activities": []
+                  }
+                }
+              },
+              {
+                "kind": "elsa.outcomes",
+                "schemaVersion": "1",
+                "payload": {
+                  "ports": [
+                    {
+                      "name": "Done"
+                    },
+                    {
+                      "name": "Break"
+                    }
+                  ]
+                }
+              }
+            ],
+            "ports": [
+              {
+                "name": "Done"
+              },
+              {
+                "name": "Break"
+              }
+            ]
+          },
+          {
+            "activityVersionId": "activity-flowchart-v1",
+            "activityTypeKey": "Elsa.Activities.Flowchart.Activities.Flowchart",
+            "version": "1.0.0",
+            "category": "Composition",
+            "displayName": "Flowchart",
+            "description": null,
+            "executionType": "Action",
+            "inputs": [],
+            "outputs": [],
+            "designFacets": [
+              {
+                "kind": "elsa.flowchart.structure",
+                "schemaVersion": "1.0.0",
+                "payload": {
+                  "mode": "flowchart",
+                  "supportsScopedVariables": true,
+                  "slots": [
+                    {
+                      "name": "Flowchart.Activities",
+                      "property": "activities",
+                      "displayName": "Activities",
+                      "cardinality": "many"
+                    }
+                  ],
+                  "initialPayload": {
+                    "activities": [],
+                    "connections": [],
+                    "startNodeId": null,
+                    "nodeMetadata": {},
+                    "connectionMetadata": {}
+                  }
+                }
+              },
+              {
+                "kind": "elsa.outcomes",
+                "schemaVersion": "1",
+                "payload": {
+                  "ports": [
+                    {
+                      "name": "Done"
+                    },
+                    {
+                      "name": "Break"
+                    }
+                  ]
+                }
+              }
+            ],
+            "ports": [
+              {
+                "name": "Done"
+              },
+              {
+                "name": "Break"
+              }
+            ]
+          },
+          {
+            "activityVersionId": "activity-while-v1",
+            "activityTypeKey": "Elsa.Activities.ControlFlow.While.Activities.While",
+            "version": "1.0.0",
+            "category": "Control Flow",
+            "displayName": "While",
+            "description": null,
+            "executionType": "Action",
+            "inputs": [],
+            "outputs": [],
+            "designFacets": [
+              {
+                "kind": "elsa.while.structure",
+                "schemaVersion": "1.0.0",
+                "payload": {
+                  "mode": "generic",
+                  "supportsScopedVariables": false,
+                  "slots": [
+                    {
+                      "name": "While.Body",
+                      "property": "body",
+                      "displayName": "Body",
+                      "cardinality": "single"
+                    }
+                  ],
+                  "initialPayload": {
+                    "body": null
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "activityVersionId": "inline-version",
+            "activityTypeKey": "Elsa.Activities.Primitives.Activities.Inline",
+            "version": "1.0.0",
+            "category": "Primitives",
+            "displayName": "Write Line",
+            "description": null,
+            "executionType": "Action",
+            "inputs": [],
+            "outputs": [],
+            "designFacets": [],
+            "ports": [
+              {
+                "name": "Done"
+              }
+            ]
+          },
+          {
+            "activityVersionId": "elsa.intrinsic.set@1",
+            "activityTypeKey": "Elsa.Activities.Primitives.Activities.WriteLine",
+            "version": "1.0.0",
+            "category": "Primitives",
+            "displayName": "Write Line",
+            "description": null,
+            "executionType": "Action",
+            "inputs": [],
+            "outputs": [],
+            "designFacets": [],
+            "intrinsic": {
+              "kind": "Set",
+              "valueInputKey": "value"
+            },
+            "ports": [
+              {
+                "name": "Done"
+              }
+            ]
+          }
+        ],
+        "scope": [],
+        "referenceContext": [
+          []
+        ],
+        "sourceKey": "fixture:flowchart:direct",
+        "canEdit": true
+      },
+      "request": {
+        "nodeId": "block",
+        "displayName": "Producer block",
+        "activityVersionId": "activity-flowchart-v1",
+        "selectedNodeIds": [
+          "producer"
+        ]
+      },
+      "grouped": {
+        "rootActivity": {
+          "nodeId": "root",
+          "activityVersionId": "activity-flowchart-v1",
+          "inputs": [],
+          "outputs": [],
+          "structure": {
+            "kind": "elsa.flowchart.structure",
+            "schemaVersion": "1.0.0",
+            "payload": {
+              "activities": [
+                {
+                  "nodeId": "block",
+                  "activityVersionId": "activity-flowchart-v1",
+                  "inputs": [],
+                  "outputs": [],
+                  "structure": {
+                    "kind": "elsa.flowchart.structure",
+                    "schemaVersion": "1.0.0",
+                    "payload": {
+                      "activities": [
+                        {
+                          "nodeId": "producer",
+                          "activityVersionId": "inline-version",
+                          "inputs": [
+                            {
+                              "referenceKey": "Expression",
+                              "value": {
+                                "expressionType": "Literal",
+                                "value": 42
+                              }
+                            }
+                          ],
+                          "outputs": []
+                        },
+                        {
+                          "nodeId": "block-capture-1",
+                          "activityVersionId": "elsa.intrinsic.set@1",
+                          "inputs": [
+                            {
+                              "referenceKey": "value",
+                              "value": {
+                                "expressionType": "ActivityResult",
+                                "value": {
+                                  "producerNodeId": "producer",
+                                  "projectionKey": "$result",
+                                  "producerScopeId": "scope:root"
+                                }
+                              }
+                            }
+                          ],
+                          "outputs": [],
+                          "intrinsic": {
+                            "kind": "set",
+                            "valueType": {
+                              "alias": "Elsa.Any",
+                              "collectionKind": "single"
+                            },
+                            "variable": {
+                              "referenceKey": "block-result-1",
+                              "declaringScopeId": "root"
+                            }
+                          }
+                        }
+                      ],
+                      "connections": [
+                        {
+                          "id": "block-capture-1",
+                          "source": {
+                            "nodeId": "producer",
+                            "port": "Done"
+                          },
+                          "target": {
+                            "nodeId": "block-capture-1"
+                          }
+                        }
+                      ],
+                      "startNodeId": "producer",
+                      "nodeMetadata": {},
+                      "connectionMetadata": {}
+                    }
+                  }
+                },
+                {
+                  "nodeId": "consumer",
+                  "activityVersionId": "inline-version",
+                  "inputs": [
+                    {
+                      "referenceKey": "Expression",
+                      "value": {
+                        "expressionType": "Variable",
+                        "value": {
+                          "referenceKey": "block-result-1",
+                          "declaringScopeId": "root"
+                        }
+                      }
+                    }
+                  ],
+                  "outputs": []
+                },
+                {
+                  "nodeId": "answer",
+                  "activityVersionId": "elsa.intrinsic.set-output@1",
+                  "intrinsic": {
+                    "kind": "setOutput",
+                    "valueType": {
+                      "alias": "Elsa.Any",
+                      "collectionKind": "single"
+                    }
+                  },
+                  "outputs": [],
+                  "inputs": [
+                    {
+                      "referenceKey": "name",
+                      "value": {
+                        "expressionType": "Literal",
+                        "value": "answer"
+                      }
+                    },
+                    {
+                      "referenceKey": "value",
+                      "value": {
+                        "expressionType": "ActivityResult",
+                        "value": {
+                          "producerNodeId": "consumer",
+                          "projectionKey": "$result",
+                          "producerScopeId": "scope:root"
+                        }
+                      }
+                    }
+                  ]
+                }
+              ],
+              "connections": [
+                {
+                  "id": "read",
+                  "source": {
+                    "nodeId": "block",
+                    "port": "Done"
+                  },
+                  "target": {
+                    "nodeId": "consumer"
+                  }
+                },
+                {
+                  "id": "answer",
+                  "source": {
+                    "nodeId": "consumer",
+                    "port": "Done"
+                  },
+                  "target": {
+                    "nodeId": "answer"
+                  }
+                }
+              ],
+              "startNodeId": "block",
+              "nodeMetadata": {},
+              "connectionMetadata": {},
+              "variables": [
+                {
+                  "referenceKey": "block-result-1",
+                  "name": "Block result block-result-1",
+                  "type": {
+                    "alias": "Elsa.Any",
+                    "collectionKind": "single"
+                  },
+                  "storageDriverType": null,
+                  "default": null
+                }
+              ]
+            }
+          }
+        },
+        "layout": [
+          {
+            "nodeId": "block",
+            "x": 0,
+            "y": 0
+          }
+        ],
+        "activityPresentation": [
+          {
+            "nodeId": "block",
+            "displayName": "Producer block"
+          },
+          {
+            "nodeId": "block-capture-1",
+            "displayName": "Store block result"
+          }
+        ]
+      },
+      "ungrouped": {
+        "rootActivity": {
+          "nodeId": "root",
+          "activityVersionId": "activity-flowchart-v1",
+          "inputs": [],
+          "outputs": [],
+          "structure": {
+            "kind": "elsa.flowchart.structure",
+            "schemaVersion": "1.0.0",
+            "payload": {
+              "activities": [
+                {
+                  "nodeId": "producer",
+                  "activityVersionId": "inline-version",
+                  "inputs": [
+                    {
+                      "referenceKey": "Expression",
+                      "value": {
+                        "expressionType": "Literal",
+                        "value": 42
+                      }
+                    }
+                  ],
+                  "outputs": []
+                },
+                {
+                  "nodeId": "block-capture-1",
+                  "activityVersionId": "elsa.intrinsic.set@1",
+                  "inputs": [
+                    {
+                      "referenceKey": "value",
+                      "value": {
+                        "expressionType": "ActivityResult",
+                        "value": {
+                          "producerNodeId": "producer",
+                          "projectionKey": "$result",
+                          "producerScopeId": "scope:root"
+                        }
+                      }
+                    }
+                  ],
+                  "outputs": [],
+                  "intrinsic": {
+                    "kind": "set",
+                    "valueType": {
+                      "alias": "Elsa.Any",
+                      "collectionKind": "single"
+                    },
+                    "variable": {
+                      "referenceKey": "block-result-1",
+                      "declaringScopeId": "root"
+                    }
+                  }
+                },
+                {
+                  "nodeId": "consumer",
+                  "activityVersionId": "inline-version",
+                  "inputs": [
+                    {
+                      "referenceKey": "Expression",
+                      "value": {
+                        "expressionType": "Variable",
+                        "value": {
+                          "referenceKey": "block-result-1",
+                          "declaringScopeId": "root"
+                        }
+                      }
+                    }
+                  ],
+                  "outputs": []
+                },
+                {
+                  "nodeId": "answer",
+                  "activityVersionId": "elsa.intrinsic.set-output@1",
+                  "intrinsic": {
+                    "kind": "setOutput",
+                    "valueType": {
+                      "alias": "Elsa.Any",
+                      "collectionKind": "single"
+                    }
+                  },
+                  "outputs": [],
+                  "inputs": [
+                    {
+                      "referenceKey": "name",
+                      "value": {
+                        "expressionType": "Literal",
+                        "value": "answer"
+                      }
+                    },
+                    {
+                      "referenceKey": "value",
+                      "value": {
+                        "expressionType": "ActivityResult",
+                        "value": {
+                          "producerNodeId": "consumer",
+                          "projectionKey": "$result",
+                          "producerScopeId": "scope:root"
+                        }
+                      }
+                    }
+                  ]
+                }
+              ],
+              "connections": [
+                {
+                  "id": "read",
+                  "source": {
+                    "nodeId": "block-capture-1",
+                    "port": "Done"
+                  },
+                  "target": {
+                    "nodeId": "consumer"
+                  }
+                },
+                {
+                  "id": "answer",
+                  "source": {
+                    "nodeId": "consumer",
+                    "port": "Done"
+                  },
+                  "target": {
+                    "nodeId": "answer"
+                  }
+                },
+                {
+                  "id": "block-capture-1",
+                  "source": {
+                    "nodeId": "producer",
+                    "port": "Done"
+                  },
+                  "target": {
+                    "nodeId": "block-capture-1"
+                  }
+                }
+              ],
+              "startNodeId": "producer",
+              "nodeMetadata": {},
+              "connectionMetadata": {},
+              "variables": [
+                {
+                  "referenceKey": "block-result-1",
+                  "name": "Block result block-result-1",
+                  "type": {
+                    "alias": "Elsa.Any",
+                    "collectionKind": "single"
+                  },
+                  "storageDriverType": null,
+                  "default": null
+                }
+              ]
+            }
+          }
+        },
+        "layout": [],
+        "activityPresentation": [
+          {
+            "nodeId": "block-capture-1",
+            "displayName": "Store block result"
+          }
+        ]
+      }
+    },
+    {
+      "name": "flowchart-parameter",
+      "expected": "43",
+      "loop": false,
+      "ownerId": "root",
+      "variables": [],
+      "context": {
+        "document": {
+          "rootActivity": {
+            "nodeId": "root",
+            "activityVersionId": "activity-flowchart-v1",
+            "inputs": [],
+            "outputs": [],
+            "structure": {
+              "kind": "elsa.flowchart.structure",
+              "schemaVersion": "1.0.0",
+              "payload": {
+                "activities": [
+                  {
+                    "nodeId": "producer",
+                    "activityVersionId": "inline-version",
+                    "inputs": [
+                      {
+                        "referenceKey": "Expression",
+                        "value": {
+                          "expressionType": "Literal",
+                          "value": 42
+                        }
+                      }
+                    ],
+                    "outputs": []
+                  },
+                  {
+                    "nodeId": "consumer",
+                    "activityVersionId": "inline-version",
+                    "inputs": [
+                      {
+                        "referenceKey": "Expression",
+                        "value": {
+                          "expressionType": "JavaScript",
+                          "value": {
+                            "language": "JavaScript",
+                            "source": "prior + 1",
+                            "capabilityProfile": "binding-pure-v1",
+                            "parameters": {
+                              "prior": {
+                                "$type": "ActivityResult",
+                                "producerNodeId": "producer",
+                                "projectionKey": "$result"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    ],
+                    "outputs": []
+                  },
+                  {
+                    "nodeId": "answer",
+                    "activityVersionId": "elsa.intrinsic.set-output@1",
+                    "intrinsic": {
+                      "kind": "setOutput",
+                      "valueType": {
+                        "alias": "Elsa.Any",
+                        "collectionKind": "single"
+                      }
+                    },
+                    "outputs": [],
+                    "inputs": [
+                      {
+                        "referenceKey": "name",
+                        "value": {
+                          "expressionType": "Literal",
+                          "value": "answer"
+                        }
+                      },
+                      {
+                        "referenceKey": "value",
+                        "value": {
+                          "expressionType": "ActivityResult",
+                          "value": {
+                            "producerNodeId": "consumer",
+                            "projectionKey": "$result",
+                            "producerScopeId": "scope:root"
+                          }
+                        }
+                      }
+                    ]
+                  }
+                ],
+                "connections": [
+                  {
+                    "id": "read",
+                    "source": {
+                      "nodeId": "producer",
+                      "port": "Done"
+                    },
+                    "target": {
+                      "nodeId": "consumer"
+                    }
+                  },
+                  {
+                    "id": "answer",
+                    "source": {
+                      "nodeId": "consumer",
+                      "port": "Done"
+                    },
+                    "target": {
+                      "nodeId": "answer"
+                    }
+                  }
+                ],
+                "startNodeId": "producer",
+                "nodeMetadata": {},
+                "connectionMetadata": {}
+              }
+            }
+          },
+          "layout": [],
+          "activityPresentation": []
+        },
+        "catalog": [
+          {
+            "activityVersionId": "activity-sequence-v1",
+            "activityTypeKey": "Elsa.Activities.Sequence.Activities.Sequence",
+            "version": "1.0.0",
+            "category": "Composition",
+            "displayName": "Sequence",
+            "description": null,
+            "executionType": "Action",
+            "inputs": [],
+            "outputs": [],
+            "designFacets": [
+              {
+                "kind": "elsa.sequence.structure",
+                "schemaVersion": "1.0.0",
+                "payload": {
+                  "mode": "sequence",
+                  "supportsScopedVariables": true,
+                  "slots": [
+                    {
+                      "name": "Sequence.Activities",
+                      "property": "activities",
+                      "displayName": "Activities",
+                      "cardinality": "many"
+                    }
+                  ],
+                  "initialPayload": {
+                    "activities": []
+                  }
+                }
+              },
+              {
+                "kind": "elsa.outcomes",
+                "schemaVersion": "1",
+                "payload": {
+                  "ports": [
+                    {
+                      "name": "Done"
+                    },
+                    {
+                      "name": "Break"
+                    }
+                  ]
+                }
+              }
+            ],
+            "ports": [
+              {
+                "name": "Done"
+              },
+              {
+                "name": "Break"
+              }
+            ]
+          },
+          {
+            "activityVersionId": "activity-flowchart-v1",
+            "activityTypeKey": "Elsa.Activities.Flowchart.Activities.Flowchart",
+            "version": "1.0.0",
+            "category": "Composition",
+            "displayName": "Flowchart",
+            "description": null,
+            "executionType": "Action",
+            "inputs": [],
+            "outputs": [],
+            "designFacets": [
+              {
+                "kind": "elsa.flowchart.structure",
+                "schemaVersion": "1.0.0",
+                "payload": {
+                  "mode": "flowchart",
+                  "supportsScopedVariables": true,
+                  "slots": [
+                    {
+                      "name": "Flowchart.Activities",
+                      "property": "activities",
+                      "displayName": "Activities",
+                      "cardinality": "many"
+                    }
+                  ],
+                  "initialPayload": {
+                    "activities": [],
+                    "connections": [],
+                    "startNodeId": null,
+                    "nodeMetadata": {},
+                    "connectionMetadata": {}
+                  }
+                }
+              },
+              {
+                "kind": "elsa.outcomes",
+                "schemaVersion": "1",
+                "payload": {
+                  "ports": [
+                    {
+                      "name": "Done"
+                    },
+                    {
+                      "name": "Break"
+                    }
+                  ]
+                }
+              }
+            ],
+            "ports": [
+              {
+                "name": "Done"
+              },
+              {
+                "name": "Break"
+              }
+            ]
+          },
+          {
+            "activityVersionId": "activity-while-v1",
+            "activityTypeKey": "Elsa.Activities.ControlFlow.While.Activities.While",
+            "version": "1.0.0",
+            "category": "Control Flow",
+            "displayName": "While",
+            "description": null,
+            "executionType": "Action",
+            "inputs": [],
+            "outputs": [],
+            "designFacets": [
+              {
+                "kind": "elsa.while.structure",
+                "schemaVersion": "1.0.0",
+                "payload": {
+                  "mode": "generic",
+                  "supportsScopedVariables": false,
+                  "slots": [
+                    {
+                      "name": "While.Body",
+                      "property": "body",
+                      "displayName": "Body",
+                      "cardinality": "single"
+                    }
+                  ],
+                  "initialPayload": {
+                    "body": null
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "activityVersionId": "inline-version",
+            "activityTypeKey": "Elsa.Activities.Primitives.Activities.Inline",
+            "version": "1.0.0",
+            "category": "Primitives",
+            "displayName": "Write Line",
+            "description": null,
+            "executionType": "Action",
+            "inputs": [],
+            "outputs": [],
+            "designFacets": [],
+            "ports": [
+              {
+                "name": "Done"
+              }
+            ]
+          },
+          {
+            "activityVersionId": "elsa.intrinsic.set@1",
+            "activityTypeKey": "Elsa.Activities.Primitives.Activities.WriteLine",
+            "version": "1.0.0",
+            "category": "Primitives",
+            "displayName": "Write Line",
+            "description": null,
+            "executionType": "Action",
+            "inputs": [],
+            "outputs": [],
+            "designFacets": [],
+            "intrinsic": {
+              "kind": "Set",
+              "valueInputKey": "value"
+            },
+            "ports": [
+              {
+                "name": "Done"
+              }
+            ]
+          }
+        ],
+        "scope": [],
+        "referenceContext": [
+          []
+        ],
+        "sourceKey": "fixture:flowchart:parameter",
+        "canEdit": true
+      },
+      "request": {
+        "nodeId": "block",
+        "displayName": "Producer block",
+        "activityVersionId": "activity-flowchart-v1",
+        "selectedNodeIds": [
+          "producer"
+        ]
+      },
+      "grouped": {
+        "rootActivity": {
+          "nodeId": "root",
+          "activityVersionId": "activity-flowchart-v1",
+          "inputs": [],
+          "outputs": [],
+          "structure": {
+            "kind": "elsa.flowchart.structure",
+            "schemaVersion": "1.0.0",
+            "payload": {
+              "activities": [
+                {
+                  "nodeId": "block",
+                  "activityVersionId": "activity-flowchart-v1",
+                  "inputs": [],
+                  "outputs": [],
+                  "structure": {
+                    "kind": "elsa.flowchart.structure",
+                    "schemaVersion": "1.0.0",
+                    "payload": {
+                      "activities": [
+                        {
+                          "nodeId": "producer",
+                          "activityVersionId": "inline-version",
+                          "inputs": [
+                            {
+                              "referenceKey": "Expression",
+                              "value": {
+                                "expressionType": "Literal",
+                                "value": 42
+                              }
+                            }
+                          ],
+                          "outputs": []
+                        },
+                        {
+                          "nodeId": "block-capture-1",
+                          "activityVersionId": "elsa.intrinsic.set@1",
+                          "inputs": [
+                            {
+                              "referenceKey": "value",
+                              "value": {
+                                "expressionType": "ActivityResult",
+                                "value": {
+                                  "producerNodeId": "producer",
+                                  "projectionKey": "$result"
+                                }
+                              }
+                            }
+                          ],
+                          "outputs": [],
+                          "intrinsic": {
+                            "kind": "set",
+                            "valueType": {
+                              "alias": "Elsa.Any",
+                              "collectionKind": "single"
+                            },
+                            "variable": {
+                              "referenceKey": "block-result-1",
+                              "declaringScopeId": "root"
+                            }
+                          }
+                        }
+                      ],
+                      "connections": [
+                        {
+                          "id": "block-capture-1",
+                          "source": {
+                            "nodeId": "producer",
+                            "port": "Done"
+                          },
+                          "target": {
+                            "nodeId": "block-capture-1"
+                          }
+                        }
+                      ],
+                      "startNodeId": "producer",
+                      "nodeMetadata": {},
+                      "connectionMetadata": {}
+                    }
+                  }
+                },
+                {
+                  "nodeId": "consumer",
+                  "activityVersionId": "inline-version",
+                  "inputs": [
+                    {
+                      "referenceKey": "Expression",
+                      "value": {
+                        "expressionType": "JavaScript",
+                        "value": {
+                          "language": "JavaScript",
+                          "source": "prior + 1",
+                          "capabilityProfile": "binding-pure-v1",
+                          "parameters": {
+                            "prior": {
+                              "$type": "Variable",
+                              "declaringScopeNodeId": "root",
+                              "variableKey": "block-result-1"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  ],
+                  "outputs": []
+                },
+                {
+                  "nodeId": "answer",
+                  "activityVersionId": "elsa.intrinsic.set-output@1",
+                  "intrinsic": {
+                    "kind": "setOutput",
+                    "valueType": {
+                      "alias": "Elsa.Any",
+                      "collectionKind": "single"
+                    }
+                  },
+                  "outputs": [],
+                  "inputs": [
+                    {
+                      "referenceKey": "name",
+                      "value": {
+                        "expressionType": "Literal",
+                        "value": "answer"
+                      }
+                    },
+                    {
+                      "referenceKey": "value",
+                      "value": {
+                        "expressionType": "ActivityResult",
+                        "value": {
+                          "producerNodeId": "consumer",
+                          "projectionKey": "$result",
+                          "producerScopeId": "scope:root"
+                        }
+                      }
+                    }
+                  ]
+                }
+              ],
+              "connections": [
+                {
+                  "id": "read",
+                  "source": {
+                    "nodeId": "block",
+                    "port": "Done"
+                  },
+                  "target": {
+                    "nodeId": "consumer"
+                  }
+                },
+                {
+                  "id": "answer",
+                  "source": {
+                    "nodeId": "consumer",
+                    "port": "Done"
+                  },
+                  "target": {
+                    "nodeId": "answer"
+                  }
+                }
+              ],
+              "startNodeId": "block",
+              "nodeMetadata": {},
+              "connectionMetadata": {},
+              "variables": [
+                {
+                  "referenceKey": "block-result-1",
+                  "name": "Block result block-result-1",
+                  "type": {
+                    "alias": "Elsa.Any",
+                    "collectionKind": "single"
+                  },
+                  "storageDriverType": null,
+                  "default": null
+                }
+              ]
+            }
+          }
+        },
+        "layout": [
+          {
+            "nodeId": "block",
+            "x": 0,
+            "y": 0
+          }
+        ],
+        "activityPresentation": [
+          {
+            "nodeId": "block",
+            "displayName": "Producer block"
+          },
+          {
+            "nodeId": "block-capture-1",
+            "displayName": "Store block result"
+          }
+        ]
+      },
+      "ungrouped": {
+        "rootActivity": {
+          "nodeId": "root",
+          "activityVersionId": "activity-flowchart-v1",
+          "inputs": [],
+          "outputs": [],
+          "structure": {
+            "kind": "elsa.flowchart.structure",
+            "schemaVersion": "1.0.0",
+            "payload": {
+              "activities": [
+                {
+                  "nodeId": "producer",
+                  "activityVersionId": "inline-version",
+                  "inputs": [
+                    {
+                      "referenceKey": "Expression",
+                      "value": {
+                        "expressionType": "Literal",
+                        "value": 42
+                      }
+                    }
+                  ],
+                  "outputs": []
+                },
+                {
+                  "nodeId": "block-capture-1",
+                  "activityVersionId": "elsa.intrinsic.set@1",
+                  "inputs": [
+                    {
+                      "referenceKey": "value",
+                      "value": {
+                        "expressionType": "ActivityResult",
+                        "value": {
+                          "producerNodeId": "producer",
+                          "projectionKey": "$result"
+                        }
+                      }
+                    }
+                  ],
+                  "outputs": [],
+                  "intrinsic": {
+                    "kind": "set",
+                    "valueType": {
+                      "alias": "Elsa.Any",
+                      "collectionKind": "single"
+                    },
+                    "variable": {
+                      "referenceKey": "block-result-1",
+                      "declaringScopeId": "root"
+                    }
+                  }
+                },
+                {
+                  "nodeId": "consumer",
+                  "activityVersionId": "inline-version",
+                  "inputs": [
+                    {
+                      "referenceKey": "Expression",
+                      "value": {
+                        "expressionType": "JavaScript",
+                        "value": {
+                          "language": "JavaScript",
+                          "source": "prior + 1",
+                          "capabilityProfile": "binding-pure-v1",
+                          "parameters": {
+                            "prior": {
+                              "$type": "Variable",
+                              "declaringScopeNodeId": "root",
+                              "variableKey": "block-result-1"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  ],
+                  "outputs": []
+                },
+                {
+                  "nodeId": "answer",
+                  "activityVersionId": "elsa.intrinsic.set-output@1",
+                  "intrinsic": {
+                    "kind": "setOutput",
+                    "valueType": {
+                      "alias": "Elsa.Any",
+                      "collectionKind": "single"
+                    }
+                  },
+                  "outputs": [],
+                  "inputs": [
+                    {
+                      "referenceKey": "name",
+                      "value": {
+                        "expressionType": "Literal",
+                        "value": "answer"
+                      }
+                    },
+                    {
+                      "referenceKey": "value",
+                      "value": {
+                        "expressionType": "ActivityResult",
+                        "value": {
+                          "producerNodeId": "consumer",
+                          "projectionKey": "$result",
+                          "producerScopeId": "scope:root"
+                        }
+                      }
+                    }
+                  ]
+                }
+              ],
+              "connections": [
+                {
+                  "id": "read",
+                  "source": {
+                    "nodeId": "block-capture-1",
+                    "port": "Done"
+                  },
+                  "target": {
+                    "nodeId": "consumer"
+                  }
+                },
+                {
+                  "id": "answer",
+                  "source": {
+                    "nodeId": "consumer",
+                    "port": "Done"
+                  },
+                  "target": {
+                    "nodeId": "answer"
+                  }
+                },
+                {
+                  "id": "block-capture-1",
+                  "source": {
+                    "nodeId": "producer",
+                    "port": "Done"
+                  },
+                  "target": {
+                    "nodeId": "block-capture-1"
+                  }
+                }
+              ],
+              "startNodeId": "producer",
+              "nodeMetadata": {},
+              "connectionMetadata": {},
+              "variables": [
+                {
+                  "referenceKey": "block-result-1",
+                  "name": "Block result block-result-1",
+                  "type": {
+                    "alias": "Elsa.Any",
+                    "collectionKind": "single"
+                  },
+                  "storageDriverType": null,
+                  "default": null
+                }
+              ]
+            }
+          }
+        },
+        "layout": [],
+        "activityPresentation": [
+          {
+            "nodeId": "block-capture-1",
+            "displayName": "Store block result"
+          }
+        ]
+      }
+    },
+    {
+      "name": "flowchart-loop",
+      "expected": "3",
+      "loop": true,
+      "ownerId": "body",
+      "variables": [
+        {
+          "referenceKey": "counter",
+          "name": "Counter",
+          "type": {
+            "alias": "Int32",
+            "collectionKind": "single"
+          },
+          "storageDriverType": null,
+          "default": {
+            "expressionType": "Literal",
+            "value": 0
+          }
+        }
+      ],
+      "context": {
+        "document": {
+          "rootActivity": {
+            "nodeId": "root",
+            "activityVersionId": "activity-sequence-v1",
+            "inputs": [],
+            "outputs": [],
+            "structure": {
+              "kind": "elsa.sequence.structure",
+              "schemaVersion": "1.0.0",
+              "payload": {
+                "activities": [
+                  {
+                    "nodeId": "loop",
+                    "activityVersionId": "activity-while-v1",
+                    "inputs": [
+                      {
+                        "referenceKey": "Condition",
+                        "value": {
+                          "expressionType": "JavaScript",
+                          "value": "getVariable('counter') < 3"
+                        }
+                      }
+                    ],
+                    "outputs": [],
+                    "structure": {
+                      "kind": "elsa.while.structure",
+                      "schemaVersion": "1.0.0",
+                      "payload": {
+                        "body": {
+                          "nodeId": "body",
+                          "activityVersionId": "activity-flowchart-v1",
+                          "inputs": [],
+                          "outputs": [],
+                          "structure": {
+                            "kind": "elsa.flowchart.structure",
+                            "schemaVersion": "1.0.0",
+                            "payload": {
+                              "activities": [
+                                {
+                                  "nodeId": "increment",
+                                  "activityVersionId": "elsa.intrinsic.set@1",
+                                  "inputs": [
+                                    {
+                                      "referenceKey": "value",
+                                      "value": {
+                                        "expressionType": "JavaScript",
+                                        "value": "getVariable('counter') + 1"
+                                      }
+                                    }
+                                  ],
+                                  "outputs": [],
+                                  "intrinsic": {
+                                    "kind": "set",
+                                    "valueType": {
+                                      "alias": "Elsa.Any",
+                                      "collectionKind": "single"
+                                    },
+                                    "variable": {
+                                      "referenceKey": "counter"
+                                    }
+                                  }
+                                },
+                                {
+                                  "nodeId": "producer",
+                                  "activityVersionId": "inline-version",
+                                  "inputs": [
+                                    {
+                                      "referenceKey": "Expression",
+                                      "value": {
+                                        "expressionType": "Variable",
+                                        "value": {
+                                          "referenceKey": "counter"
+                                        }
+                                      }
+                                    }
+                                  ],
+                                  "outputs": []
+                                },
+                                {
+                                  "nodeId": "consumer",
+                                  "activityVersionId": "inline-version",
+                                  "inputs": [
+                                    {
+                                      "referenceKey": "Expression",
+                                      "value": {
+                                        "expressionType": "ActivityResult",
+                                        "value": {
+                                          "producerNodeId": "producer",
+                                          "projectionKey": "$result",
+                                          "producerScopeId": "scope:root"
+                                        }
+                                      }
+                                    }
+                                  ],
+                                  "outputs": []
+                                }
+                              ],
+                              "connections": [
+                                {
+                                  "id": "increment",
+                                  "source": {
+                                    "nodeId": "increment",
+                                    "port": "Done"
+                                  },
+                                  "target": {
+                                    "nodeId": "producer"
+                                  }
+                                },
+                                {
+                                  "id": "consume",
+                                  "source": {
+                                    "nodeId": "producer",
+                                    "port": "Done"
+                                  },
+                                  "target": {
+                                    "nodeId": "consumer"
+                                  }
+                                }
+                              ],
+                              "startNodeId": "increment",
+                              "nodeMetadata": {},
+                              "connectionMetadata": {}
+                            }
+                          }
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "nodeId": "answer",
+                    "activityVersionId": "elsa.intrinsic.set-output@1",
+                    "intrinsic": {
+                      "kind": "setOutput",
+                      "valueType": {
+                        "alias": "Elsa.Any",
+                        "collectionKind": "single"
+                      }
+                    },
+                    "outputs": [],
+                    "inputs": [
+                      {
+                        "referenceKey": "name",
+                        "value": {
+                          "expressionType": "Literal",
+                          "value": "answer"
+                        }
+                      },
+                      {
+                        "referenceKey": "value",
+                        "value": {
+                          "expressionType": "Variable",
+                          "value": {
+                            "referenceKey": "counter"
+                          }
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          },
+          "layout": [],
+          "activityPresentation": []
+        },
+        "catalog": [
+          {
+            "activityVersionId": "activity-sequence-v1",
+            "activityTypeKey": "Elsa.Activities.Sequence.Activities.Sequence",
+            "version": "1.0.0",
+            "category": "Composition",
+            "displayName": "Sequence",
+            "description": null,
+            "executionType": "Action",
+            "inputs": [],
+            "outputs": [],
+            "designFacets": [
+              {
+                "kind": "elsa.sequence.structure",
+                "schemaVersion": "1.0.0",
+                "payload": {
+                  "mode": "sequence",
+                  "supportsScopedVariables": true,
+                  "slots": [
+                    {
+                      "name": "Sequence.Activities",
+                      "property": "activities",
+                      "displayName": "Activities",
+                      "cardinality": "many"
+                    }
+                  ],
+                  "initialPayload": {
+                    "activities": []
+                  }
+                }
+              },
+              {
+                "kind": "elsa.outcomes",
+                "schemaVersion": "1",
+                "payload": {
+                  "ports": [
+                    {
+                      "name": "Done"
+                    },
+                    {
+                      "name": "Break"
+                    }
+                  ]
+                }
+              }
+            ],
+            "ports": [
+              {
+                "name": "Done"
+              },
+              {
+                "name": "Break"
+              }
+            ]
+          },
+          {
+            "activityVersionId": "activity-flowchart-v1",
+            "activityTypeKey": "Elsa.Activities.Flowchart.Activities.Flowchart",
+            "version": "1.0.0",
+            "category": "Composition",
+            "displayName": "Flowchart",
+            "description": null,
+            "executionType": "Action",
+            "inputs": [],
+            "outputs": [],
+            "designFacets": [
+              {
+                "kind": "elsa.flowchart.structure",
+                "schemaVersion": "1.0.0",
+                "payload": {
+                  "mode": "flowchart",
+                  "supportsScopedVariables": true,
+                  "slots": [
+                    {
+                      "name": "Flowchart.Activities",
+                      "property": "activities",
+                      "displayName": "Activities",
+                      "cardinality": "many"
+                    }
+                  ],
+                  "initialPayload": {
+                    "activities": [],
+                    "connections": [],
+                    "startNodeId": null,
+                    "nodeMetadata": {},
+                    "connectionMetadata": {}
+                  }
+                }
+              },
+              {
+                "kind": "elsa.outcomes",
+                "schemaVersion": "1",
+                "payload": {
+                  "ports": [
+                    {
+                      "name": "Done"
+                    },
+                    {
+                      "name": "Break"
+                    }
+                  ]
+                }
+              }
+            ],
+            "ports": [
+              {
+                "name": "Done"
+              },
+              {
+                "name": "Break"
+              }
+            ]
+          },
+          {
+            "activityVersionId": "activity-while-v1",
+            "activityTypeKey": "Elsa.Activities.ControlFlow.While.Activities.While",
+            "version": "1.0.0",
+            "category": "Control Flow",
+            "displayName": "While",
+            "description": null,
+            "executionType": "Action",
+            "inputs": [],
+            "outputs": [],
+            "designFacets": [
+              {
+                "kind": "elsa.while.structure",
+                "schemaVersion": "1.0.0",
+                "payload": {
+                  "mode": "generic",
+                  "supportsScopedVariables": false,
+                  "slots": [
+                    {
+                      "name": "While.Body",
+                      "property": "body",
+                      "displayName": "Body",
+                      "cardinality": "single"
+                    }
+                  ],
+                  "initialPayload": {
+                    "body": null
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "activityVersionId": "inline-version",
+            "activityTypeKey": "Elsa.Activities.Primitives.Activities.Inline",
+            "version": "1.0.0",
+            "category": "Primitives",
+            "displayName": "Write Line",
+            "description": null,
+            "executionType": "Action",
+            "inputs": [],
+            "outputs": [],
+            "designFacets": [],
+            "ports": [
+              {
+                "name": "Done"
+              }
+            ]
+          },
+          {
+            "activityVersionId": "elsa.intrinsic.set@1",
+            "activityTypeKey": "Elsa.Activities.Primitives.Activities.WriteLine",
+            "version": "1.0.0",
+            "category": "Primitives",
+            "displayName": "Write Line",
+            "description": null,
+            "executionType": "Action",
+            "inputs": [],
+            "outputs": [],
+            "designFacets": [],
+            "intrinsic": {
+              "kind": "Set",
+              "valueInputKey": "value"
+            },
+            "ports": [
+              {
+                "name": "Done"
+              }
+            ]
+          }
+        ],
+        "scope": [
+          {
+            "ownerNodeId": "loop",
+            "slotId": "elsa.while.structure:body",
+            "label": ""
+          },
+          {
+            "ownerNodeId": "body",
+            "slotId": "elsa.flowchart.structure:activities",
+            "label": "loop / Body"
+          }
+        ],
+        "referenceContext": [
+          [
+            {
+              "referenceKey": "counter",
+              "name": "Counter",
+              "type": {
+                "alias": "Int32",
+                "collectionKind": "single"
+              },
+              "storageDriverType": null,
+              "default": {
+                "expressionType": "Literal",
+                "value": 0
+              }
+            }
+          ]
+        ],
+        "sourceKey": "fixture:flowchart:loop",
+        "canEdit": true
+      },
+      "request": {
+        "nodeId": "block",
+        "displayName": "Producer block",
+        "activityVersionId": "activity-flowchart-v1",
+        "selectedNodeIds": [
+          "increment",
+          "producer"
+        ]
+      },
+      "grouped": {
+        "rootActivity": {
+          "nodeId": "root",
+          "activityVersionId": "activity-sequence-v1",
+          "inputs": [],
+          "outputs": [],
+          "structure": {
+            "kind": "elsa.sequence.structure",
+            "schemaVersion": "1.0.0",
+            "payload": {
+              "activities": [
+                {
+                  "nodeId": "loop",
+                  "activityVersionId": "activity-while-v1",
+                  "inputs": [
+                    {
+                      "referenceKey": "Condition",
+                      "value": {
+                        "expressionType": "JavaScript",
+                        "value": "getVariable('counter') < 3"
+                      }
+                    }
+                  ],
+                  "outputs": [],
+                  "structure": {
+                    "kind": "elsa.while.structure",
+                    "schemaVersion": "1.0.0",
+                    "payload": {
+                      "body": {
+                        "nodeId": "body",
+                        "activityVersionId": "activity-flowchart-v1",
+                        "inputs": [],
+                        "outputs": [],
+                        "structure": {
+                          "kind": "elsa.flowchart.structure",
+                          "schemaVersion": "1.0.0",
+                          "payload": {
+                            "activities": [
+                              {
+                                "nodeId": "block",
+                                "activityVersionId": "activity-flowchart-v1",
+                                "inputs": [],
+                                "outputs": [],
+                                "structure": {
+                                  "kind": "elsa.flowchart.structure",
+                                  "schemaVersion": "1.0.0",
+                                  "payload": {
+                                    "activities": [
+                                      {
+                                        "nodeId": "increment",
+                                        "activityVersionId": "elsa.intrinsic.set@1",
+                                        "inputs": [
+                                          {
+                                            "referenceKey": "value",
+                                            "value": {
+                                              "expressionType": "JavaScript",
+                                              "value": "getVariable('counter') + 1"
+                                            }
+                                          }
+                                        ],
+                                        "outputs": [],
+                                        "intrinsic": {
+                                          "kind": "set",
+                                          "valueType": {
+                                            "alias": "Elsa.Any",
+                                            "collectionKind": "single"
+                                          },
+                                          "variable": {
+                                            "referenceKey": "counter"
+                                          }
+                                        }
+                                      },
+                                      {
+                                        "nodeId": "producer",
+                                        "activityVersionId": "inline-version",
+                                        "inputs": [
+                                          {
+                                            "referenceKey": "Expression",
+                                            "value": {
+                                              "expressionType": "Variable",
+                                              "value": {
+                                                "referenceKey": "counter"
+                                              }
+                                            }
+                                          }
+                                        ],
+                                        "outputs": []
+                                      },
+                                      {
+                                        "nodeId": "block-capture-1",
+                                        "activityVersionId": "elsa.intrinsic.set@1",
+                                        "inputs": [
+                                          {
+                                            "referenceKey": "value",
+                                            "value": {
+                                              "expressionType": "ActivityResult",
+                                              "value": {
+                                                "producerNodeId": "producer",
+                                                "projectionKey": "$result",
+                                                "producerScopeId": "scope:root"
+                                              }
+                                            }
+                                          }
+                                        ],
+                                        "outputs": [],
+                                        "intrinsic": {
+                                          "kind": "set",
+                                          "valueType": {
+                                            "alias": "Elsa.Any",
+                                            "collectionKind": "single"
+                                          },
+                                          "variable": {
+                                            "referenceKey": "block-result-1",
+                                            "declaringScopeId": "body"
+                                          }
+                                        }
+                                      }
+                                    ],
+                                    "connections": [
+                                      {
+                                        "id": "increment",
+                                        "source": {
+                                          "nodeId": "increment",
+                                          "port": "Done"
+                                        },
+                                        "target": {
+                                          "nodeId": "producer"
+                                        }
+                                      },
+                                      {
+                                        "id": "block-capture-1",
+                                        "source": {
+                                          "nodeId": "producer",
+                                          "port": "Done"
+                                        },
+                                        "target": {
+                                          "nodeId": "block-capture-1"
+                                        }
+                                      }
+                                    ],
+                                    "startNodeId": "increment",
+                                    "nodeMetadata": {},
+                                    "connectionMetadata": {}
+                                  }
+                                }
+                              },
+                              {
+                                "nodeId": "consumer",
+                                "activityVersionId": "inline-version",
+                                "inputs": [
+                                  {
+                                    "referenceKey": "Expression",
+                                    "value": {
+                                      "expressionType": "Variable",
+                                      "value": {
+                                        "referenceKey": "block-result-1",
+                                        "declaringScopeId": "body"
+                                      }
+                                    }
+                                  }
+                                ],
+                                "outputs": []
+                              }
+                            ],
+                            "connections": [
+                              {
+                                "id": "consume",
+                                "source": {
+                                  "nodeId": "block",
+                                  "port": "Done"
+                                },
+                                "target": {
+                                  "nodeId": "consumer"
+                                }
+                              }
+                            ],
+                            "startNodeId": "block",
+                            "nodeMetadata": {},
+                            "connectionMetadata": {},
+                            "variables": [
+                              {
+                                "referenceKey": "block-result-1",
+                                "name": "Block result block-result-1",
+                                "type": {
+                                  "alias": "Elsa.Any",
+                                  "collectionKind": "single"
+                                },
+                                "storageDriverType": null,
+                                "default": null
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "nodeId": "answer",
+                  "activityVersionId": "elsa.intrinsic.set-output@1",
+                  "intrinsic": {
+                    "kind": "setOutput",
+                    "valueType": {
+                      "alias": "Elsa.Any",
+                      "collectionKind": "single"
+                    }
+                  },
+                  "outputs": [],
+                  "inputs": [
+                    {
+                      "referenceKey": "name",
+                      "value": {
+                        "expressionType": "Literal",
+                        "value": "answer"
+                      }
+                    },
+                    {
+                      "referenceKey": "value",
+                      "value": {
+                        "expressionType": "Variable",
+                        "value": {
+                          "referenceKey": "counter"
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        "layout": [
+          {
+            "nodeId": "block",
+            "x": 0,
+            "y": 0
+          }
+        ],
+        "activityPresentation": [
+          {
+            "nodeId": "block",
+            "displayName": "Producer block"
+          },
+          {
+            "nodeId": "block-capture-1",
+            "displayName": "Store block result"
+          }
+        ]
+      },
+      "ungrouped": {
+        "rootActivity": {
+          "nodeId": "root",
+          "activityVersionId": "activity-sequence-v1",
+          "inputs": [],
+          "outputs": [],
+          "structure": {
+            "kind": "elsa.sequence.structure",
+            "schemaVersion": "1.0.0",
+            "payload": {
+              "activities": [
+                {
+                  "nodeId": "loop",
+                  "activityVersionId": "activity-while-v1",
+                  "inputs": [
+                    {
+                      "referenceKey": "Condition",
+                      "value": {
+                        "expressionType": "JavaScript",
+                        "value": "getVariable('counter') < 3"
+                      }
+                    }
+                  ],
+                  "outputs": [],
+                  "structure": {
+                    "kind": "elsa.while.structure",
+                    "schemaVersion": "1.0.0",
+                    "payload": {
+                      "body": {
+                        "nodeId": "body",
+                        "activityVersionId": "activity-flowchart-v1",
+                        "inputs": [],
+                        "outputs": [],
+                        "structure": {
+                          "kind": "elsa.flowchart.structure",
+                          "schemaVersion": "1.0.0",
+                          "payload": {
+                            "activities": [
+                              {
+                                "nodeId": "increment",
+                                "activityVersionId": "elsa.intrinsic.set@1",
+                                "inputs": [
+                                  {
+                                    "referenceKey": "value",
+                                    "value": {
+                                      "expressionType": "JavaScript",
+                                      "value": "getVariable('counter') + 1"
+                                    }
+                                  }
+                                ],
+                                "outputs": [],
+                                "intrinsic": {
+                                  "kind": "set",
+                                  "valueType": {
+                                    "alias": "Elsa.Any",
+                                    "collectionKind": "single"
+                                  },
+                                  "variable": {
+                                    "referenceKey": "counter"
+                                  }
+                                }
+                              },
+                              {
+                                "nodeId": "producer",
+                                "activityVersionId": "inline-version",
+                                "inputs": [
+                                  {
+                                    "referenceKey": "Expression",
+                                    "value": {
+                                      "expressionType": "Variable",
+                                      "value": {
+                                        "referenceKey": "counter"
+                                      }
+                                    }
+                                  }
+                                ],
+                                "outputs": []
+                              },
+                              {
+                                "nodeId": "block-capture-1",
+                                "activityVersionId": "elsa.intrinsic.set@1",
+                                "inputs": [
+                                  {
+                                    "referenceKey": "value",
+                                    "value": {
+                                      "expressionType": "ActivityResult",
+                                      "value": {
+                                        "producerNodeId": "producer",
+                                        "projectionKey": "$result",
+                                        "producerScopeId": "scope:root"
+                                      }
+                                    }
+                                  }
+                                ],
+                                "outputs": [],
+                                "intrinsic": {
+                                  "kind": "set",
+                                  "valueType": {
+                                    "alias": "Elsa.Any",
+                                    "collectionKind": "single"
+                                  },
+                                  "variable": {
+                                    "referenceKey": "block-result-1",
+                                    "declaringScopeId": "body"
+                                  }
+                                }
+                              },
+                              {
+                                "nodeId": "consumer",
+                                "activityVersionId": "inline-version",
+                                "inputs": [
+                                  {
+                                    "referenceKey": "Expression",
+                                    "value": {
+                                      "expressionType": "Variable",
+                                      "value": {
+                                        "referenceKey": "block-result-1",
+                                        "declaringScopeId": "body"
+                                      }
+                                    }
+                                  }
+                                ],
+                                "outputs": []
+                              }
+                            ],
+                            "connections": [
+                              {
+                                "id": "consume",
+                                "source": {
+                                  "nodeId": "block-capture-1",
+                                  "port": "Done"
+                                },
+                                "target": {
+                                  "nodeId": "consumer"
+                                }
+                              },
+                              {
+                                "id": "increment",
+                                "source": {
+                                  "nodeId": "increment",
+                                  "port": "Done"
+                                },
+                                "target": {
+                                  "nodeId": "producer"
+                                }
+                              },
+                              {
+                                "id": "block-capture-1",
+                                "source": {
+                                  "nodeId": "producer",
+                                  "port": "Done"
+                                },
+                                "target": {
+                                  "nodeId": "block-capture-1"
+                                }
+                              }
+                            ],
+                            "startNodeId": "increment",
+                            "nodeMetadata": {},
+                            "connectionMetadata": {},
+                            "variables": [
+                              {
+                                "referenceKey": "block-result-1",
+                                "name": "Block result block-result-1",
+                                "type": {
+                                  "alias": "Elsa.Any",
+                                  "collectionKind": "single"
+                                },
+                                "storageDriverType": null,
+                                "default": null
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "nodeId": "answer",
+                  "activityVersionId": "elsa.intrinsic.set-output@1",
+                  "intrinsic": {
+                    "kind": "setOutput",
+                    "valueType": {
+                      "alias": "Elsa.Any",
+                      "collectionKind": "single"
+                    }
+                  },
+                  "outputs": [],
+                  "inputs": [
+                    {
+                      "referenceKey": "name",
+                      "value": {
+                        "expressionType": "Literal",
+                        "value": "answer"
+                      }
+                    },
+                    {
+                      "referenceKey": "value",
+                      "value": {
+                        "expressionType": "Variable",
+                        "value": {
+                          "referenceKey": "counter"
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        "layout": [],
+        "activityPresentation": [
+          {
+            "nodeId": "block-capture-1",
+            "displayName": "Store block result"
+          }
+        ]
+      }
+    }
+  ]
+}

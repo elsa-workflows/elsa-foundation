@@ -4,6 +4,7 @@ import { applyNativeBlockPlan, planCreateNativeBlock, planExtractNativeBlock, pl
 import type { ActivityCatalogItem, ActivityNode } from "../workflowTypes";
 import { flowchartActivity, sequenceActivity, writeLine, whileActivity, whileNode } from "./fixtures";
 import { compensationScopeStructureKind } from "../compensationScope";
+import { readFileSync } from "node:fs";
 
 const action: ActivityCatalogItem = { ...writeLine, ports: [{ name: "Done", isBrowsable: true }] };
 const outcomes = (item: ActivityCatalogItem, names: string[]) => ({ ...item, ports: names.map(name => ({ name })), designFacets: [...item.designFacets ?? [], { kind: "elsa.outcomes", schemaVersion: "1", payload: { ports: names.map(name => ({ name })) } }] });
@@ -54,6 +55,76 @@ function compensationContext(kind: "sequence" | "flowchart", withHandler = true,
 }
 
 describe("pure native block planning", () => {
+  it("matches the exact planner documents consumed by real publication and runtime regressions", () => {
+    const moduleUrl = import.meta.url;
+    const fixture = JSON.parse(readFileSync(new URL("../../../../../../../specs/1204-named-embedded-blocks/contracts/native-result-transfer-cases.json", moduleUrl), "utf8")) as {
+      cases: { context: NativeBlockContext; request: Parameters<typeof planExtractNativeBlock>[1]; grouped: unknown; ungrouped: unknown }[];
+    };
+    expect(fixture.cases).toHaveLength(6);
+    for (const test of fixture.cases) {
+      const plan = accepted(planExtractNativeBlock(test.context, test.request));
+      expect(plan.document).toEqual(test.grouped);
+      expect(accepted(planUngroupNativeBlock({ ...test.context, document: plan.document }, "block")).document).toEqual(test.ungrouped);
+    }
+  });
+
+  it.each(["sequence", "flowchart"] as const)("transfers an outside ordinary result read explicitly through the enclosing %s frame", kind => {
+    const ctx = kind === "sequence" ? context() : flow();
+    ctx.catalog.push({ ...action, activityVersionId: "elsa.intrinsic.set@1", intrinsic: { kind: "Set", valueInputKey: "value" } });
+    const children = payload(ctx).activities as ActivityNode[];
+    children[1].outputs = [{ referenceKey: "existing", value: { expressionType: "Variable", value: { referenceKey: "retained" } } }];
+    children[3].inputs = [{ referenceKey: "text", future: "retain", value: { expressionType: "ActivityResult", value: { producerNodeId: "b", projectionKey: "$result", producerScopeId: "scope:root" } } }];
+    payload(ctx).variables = [{ referenceKey: "new-block-result-1", name: "Existing", type: { alias: "Int32" } }];
+    const before = structuredClone(ctx);
+    const plan = accepted(extract(ctx));
+    expect(ctx).toEqual(before);
+    const root = plan.document.rootActivity.structure!.payload;
+    const body = (root.activities as ActivityNode[])[1].structure!.payload;
+    const capture = (body.activities as ActivityNode[])[1];
+    expect((body.activities as ActivityNode[]).map(node => node.nodeId)).toEqual(["b", capture.nodeId, "c"]);
+    expect(capture.intrinsic).toMatchObject({ kind: "set", variable: { referenceKey: "new-block-result-2", declaringScopeId: "root" } });
+    expect((body.activities as ActivityNode[])[0].outputs).toEqual(children[1].outputs);
+    expect((root.activities as ActivityNode[])[2].inputs).toEqual([{ referenceKey: "text", future: "retain", value: { expressionType: "Variable", value: { referenceKey: "new-block-result-2", declaringScopeId: "root" } } }]);
+    expect((root.variables as unknown[])[0]).toEqual((payload(ctx).variables as unknown[])[0]);
+    const inverse = accepted(planUngroupNativeBlock({ ...ctx, document: plan.document }, "new-block"));
+    expect(inverse.document.rootActivity.structure!.payload.variables).toEqual(root.variables);
+    expect((inverse.document.rootActivity.structure!.payload.activities as ActivityNode[]).map(node => node.nodeId)).toEqual(["a", "b", capture.nodeId, "c", "d"]);
+    if (kind === "flowchart") expect(body.connections).toEqual([
+      { ...edge("b", "c"), source: { nodeId: capture.nodeId }, vertices: [{ x: 80, y: 50, bend: "keep" }] },
+      { id: capture.nodeId, source: { nodeId: "b", port: "Done" }, target: { nodeId: capture.nodeId } }
+    ]);
+  });
+
+  it("rewrites explicit expression parameters without editing expression source or literal payloads", () => {
+    const ctx = context();
+    ctx.catalog.push({ ...action, activityVersionId: "elsa.intrinsic.set@1", intrinsic: { kind: "Set", valueInputKey: "value" } });
+    const children = payload(ctx).activities as ActivityNode[];
+    children[3].inputs = [{ referenceKey: "text", value: { expressionType: "JavaScript", value: {
+      language: "JavaScript", source: "prior + 1", capabilityProfile: "binding-pure-v1", parameters: {
+        prior: { $type: "ActivityResult", producerNodeId: "b", projectionKey: "$result" },
+        literal: { $type: "Literal", value: { producerNodeId: "b", projectionKey: "$result" } }
+      }
+    } } }];
+    const plan = accepted(extract(ctx));
+    const input = ((planPayload(plan).activities as ActivityNode[])[2].inputs[0] as { value: { value: { source: string; parameters: unknown } } }).value.value;
+    expect(input.source).toBe("prior + 1");
+    expect(input.parameters).toEqual({ prior: { $type: "Variable", declaringScopeNodeId: "root", variableKey: "new-block-result-1" }, literal: { $type: "Literal", value: { producerNodeId: "b", projectionKey: "$result" } } });
+    accepted(planUngroupNativeBlock({ ...ctx, document: plan.document }, "new-block"));
+  });
+
+  it.each(["missing-set", "optional", "nested-producer", "resource"])("refuses an unproved ordinary result transfer before mutation: %s", fault => {
+    const ctx = context();
+    if (fault !== "missing-set") ctx.catalog.push({ ...action, activityVersionId: "elsa.intrinsic.set@1", intrinsic: { kind: "Set", valueInputKey: "value" } });
+    const binding = { expressionType: "ActivityResult", value: { producerNodeId: fault === "nested-producer" ? "inner" : "b", projectionKey: "$result", ...(fault === "optional" ? { isOptional: true } : {}) } };
+    const children = payload(ctx).activities as ActivityNode[];
+    if (fault === "nested-producer") { children[1] = container("sequence", [node("inner")]); children[1].nodeId = "b"; }
+    if (fault === "resource") ctx.referenceContext = [{ outputMappings: [{ source: binding }] }];
+    else children[3].inputs = [{ referenceKey: "text", value: binding }];
+    const before = structuredClone(ctx);
+    refused(extract(ctx), fault === "missing-set" ? "unavailable-result-transfer" : fault === "resource" ? "resource-result-crossing" : "unproven-result-transfer");
+    expect(ctx).toEqual(before);
+  });
+
   it.each(["sequence", "flowchart"] as const)("refuses an outside member reader before extracting its %s producer", kind => {
     const ctx = kind === "sequence" ? context() : flow();
     const consumer = (payload(ctx).activities as ActivityNode[])[3];
