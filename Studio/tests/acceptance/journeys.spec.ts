@@ -2,6 +2,7 @@ import { tabbedSecretsJourney } from "./tabbedSecretsJourney";
 import { templateToastJourney } from "./templateToastJourney";
 import { executableDesignerJourney } from "./executableDesignerJourney";
 import { compactInputsJourney } from "./compactInputsJourney";
+import { executionNavigationJourney } from "./executionNavigationJourney";
 import { writeFileSync } from "node:fs";
 import { expect, test, type APIRequestContext, type Page, type TestInfo } from "@playwright/test";
 import { userTaskAuthoringJourney } from "./userTaskAuthoringJourney";
@@ -535,4 +536,8 @@ test("tabbed Secrets authoring and metadata", async ({ page }, info) => {
 
 test("compact runtime Inputs retain exact captured values and accessible technical details", async ({ page }, info) => {
   await compactInputsJourney(page, info, capture, cleanup => { ownedCleanups.get(page)!.push(cleanup); });
+});
+
+test("execution navigation keeps keyboard focus and exact evidence", async ({ page }, info) => {
+  await executionNavigationJourney(page, info, capture, cleanup => { ownedCleanups.get(page)!.push(cleanup); });
 });
