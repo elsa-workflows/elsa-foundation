@@ -79,3 +79,21 @@ The D02-D03 implementation is tracked by [#1720](https://github.com/elsa-workflo
 Its SQLite behavior suite and SQL Server/PostgreSQL/MySQL live smoke suite are the executable proof.
 Provider-specific migrations were added by #1755 (see "Schema and migrations" above); default flips
 and broad host journeys remain deferred.
+
+## Selected test-entry transport boundary
+
+`IExecutionCommandTransportTestBoundary` qualifies the actual selected physical transport, its
+context, ordinary tenant partition and live admitted format gate. The EF registration contributes
+one scoped owner. Missing or duplicate qualification owners must refuse trusted routing; this
+slice adds no runtime entry or routing activation.
+
+Start/checkpoint protocol payloads carrying a test entry/context require command-transport format
+2.0.0 on both the command row and its stream head. Continuations inherit that head's format,
+including after acknowledgement empties the stream. Lease, release and acknowledgement preserve
+it; a host whose live gate still writes 1.0.0 refuses these mutations. The v1 upcaster rejects
+selected-entry protocol data hidden in a predecessor stamp. Ordinary TestRun scope and business
+payload property names do not themselves declare the selected-entry protocol or grant authority.
+
+The format uses the existing schema finalization chain and admission gate; no table migration or
+alternate transport is introduced. Frozen predecessor-chain tests are not actual old-worker binary
+qualification. Trusted entry, lexical context and end-to-end runtime admission remain separate work.

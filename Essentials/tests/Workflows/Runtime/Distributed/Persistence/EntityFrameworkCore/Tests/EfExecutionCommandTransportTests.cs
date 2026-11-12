@@ -377,7 +377,7 @@ public sealed class EfExecutionCommandTransportTests
         var sent = await fixture.Transport.SendAsync("wf-1", Envelope("wf-1", "one"), Now);
         var row = await fixture.Context.CommandTransportItems.SingleAsync();
         Assert.Equal(ExecutionCommandTransportEfModule.SchemaVersion, row.SchemaVersion);
-        await EfSchemaVersionSkewTestSupport.ArrangeSkewedRowAsync(fixture.Context, v => row.SchemaVersion = v, v => row.PayloadJson = v);
+        await EfSchemaVersionSkewTestSupport.ArrangeSkewedRowAsync(fixture.Context, v => row.SchemaVersion = "3.0.0", v => row.PayloadJson = v);
 
         Func<Task>[] operations =
         [
@@ -397,7 +397,7 @@ public sealed class EfExecutionCommandTransportTests
         await fixture.Transport.SendAsync("wf-1", Envelope("wf-1", "one"), Now);
         var head = await fixture.Context.CommandStreamHeads.SingleAsync();
         Assert.Equal(ExecutionCommandTransportEfModule.SchemaVersion, head.SchemaVersion);
-        await EfSchemaVersionSkewTestSupport.ArrangeSkewedRowAsync(fixture.Context, v => head.SchemaVersion = v, _ => head.LastSequence = 0);
+        await EfSchemaVersionSkewTestSupport.ArrangeSkewedRowAsync(fixture.Context, v => head.SchemaVersion = "3.0.0", _ => head.LastSequence = 0);
 
         Func<Task>[] operations =
         [
@@ -409,8 +409,12 @@ public sealed class EfExecutionCommandTransportTests
             AssertTransportSkew(await Assert.ThrowsAsync<EfSchemaVersionSkewException>(operation));
     }
 
-    private static void AssertTransportSkew(EfSchemaVersionSkewException skew) =>
-        EfSchemaVersionSkewTestSupport.AssertSchemaVersionSkew(skew, "ExecutionCommandTransport", ExecutionCommandTransportEfModule.SchemaVersion);
+    private static void AssertTransportSkew(EfSchemaVersionSkewException skew)
+    {
+        Assert.Equal("ExecutionCommandTransport", skew.Family);
+        Assert.Equal("3.0.0", skew.Found);
+        Assert.Equal(ExecutionCommandTransportEfModule.Chain.CurrentVersion, skew.Expected);
+    }
 
     [Fact]
     public async Task Indexed_projection_and_json_disagreement_fails_closed_for_addressed_item()

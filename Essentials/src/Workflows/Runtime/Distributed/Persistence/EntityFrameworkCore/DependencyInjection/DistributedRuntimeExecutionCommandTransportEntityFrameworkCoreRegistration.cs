@@ -67,6 +67,7 @@ public static class DistributedRuntimeExecutionCommandTransportEntityFrameworkCo
             provider.GetRequiredService<ExecutionCommandTransportDbContext>(),
             provider.GetRequiredService<IPersistenceAccessContextAccessor>()));
         services.Add(transportDescriptor);
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IExecutionCommandTransportTestBoundary, EfExecutionCommandTransportTestBoundary>());
         ExecutionCommandTransportBackend.Register(services, new ExecutionCommandTransportBackend(StoreBackendName, transportDescriptor));
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IWorkflowDispatchDurabilityEvidence, EntityFrameworkCommandTransportDurabilityEvidence>());
         return services;

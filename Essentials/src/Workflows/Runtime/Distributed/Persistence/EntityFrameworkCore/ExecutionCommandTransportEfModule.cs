@@ -9,8 +9,10 @@ public static class ExecutionCommandTransportEfModule
     public const string StreamHeadTableName = "elsa_distributed_command_stream_head";
     public const string TransportItemTableName = "elsa_distributed_command_transport";
 
-    /// <summary>The persisted-schema version every stream-head and transport-item row is stamped with, and checked against when read.</summary>
+    /// <summary>The predecessor write format for ordinary stream-head and transport-item rows.</summary>
     public const string SchemaVersion = "1.0.0";
+    /// <summary>Minimum physical format whose older readers refuse before selected-entry content is decoded.</summary>
+    public const string TestEntrySchemaVersion = "2.0.0";
 
     /// <summary>The schema family this module's rows belong to, checked against when a row is read.</summary>
     public const string SchemaFamily = "ExecutionCommandTransport";
