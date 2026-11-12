@@ -27,11 +27,11 @@ public sealed class WeaverAuthorizerRegistrationTests
         if (inheritedDefaults) services.AddWeaver();
         services.AddCShells(builder => builder
             .WithAssemblies(typeof(AmbiguousAuthorizerFeature).Assembly, typeof(EventsFeature).Assembly)
-            .AddShell("agent-authorizer-conflict", shell => shell.WithFeature<AmbiguousAuthorizerFeature>()));
+            .AddShell("weaver-authorizer-conflict", shell => shell.WithFeature<AmbiguousAuthorizerFeature>()));
         await using var root = services.BuildServiceProvider();
 
         var failure = await Assert.ThrowsAnyAsync<Exception>(() =>
-            root.GetRequiredService<IShellRegistry>().GetOrActivateAsync("agent-authorizer-conflict"));
+            root.GetRequiredService<IShellRegistry>().GetOrActivateAsync("weaver-authorizer-conflict"));
 
         var diagnostic = string.Join(" ", ExceptionChain(failure).Select(x => x.Message));
         Assert.Contains(nameof(IWeaverToolAuthorizer), diagnostic);
@@ -108,7 +108,7 @@ public sealed class WeaverAuthorizerRegistrationTests
             yield return exception;
     }
 
-    [ShellFeature("AgentAmbiguousAuthorizerProbe", DependsOn = new object[] { typeof(WeaverApiFeature) })]
+    [ShellFeature("WeaverAmbiguousAuthorizerProbe", DependsOn = new object[] { typeof(WeaverApiFeature) })]
     public sealed class AmbiguousAuthorizerFeature : WeaverApiFeature
     {
         public override void ConfigureServices(IServiceCollection services)

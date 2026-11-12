@@ -191,7 +191,7 @@ internal sealed class NoteContextSource(NoteStore store, IWeaverSessionService s
             ? WeaverContextSensitivity.Secret : caller.Sensitivity).Append(WeaverContextSensitivity.Internal).Max();
         var attachment = new WeaverContextAttachment("weaver-journey:note:" + note.Revision, NoteContract.ContextKind, note.Id, "Owned qualification note", NoteContract.ContextKind,
             sensitivity, "resource", "The owning file supplied this note and revision.", JsonSerializer.SerializeToElement(note, NoteContract.Json), new Dictionary<string, string>())
-        { ModuleId = NoteContract.Module, SchemaVersion = "1", Target = target, Origin = WeaverContextOrigin.AuthoritativeRead, AgentScopes = [NoteContract.Scope] };
+        { ModuleId = NoteContract.Module, SchemaVersion = "1", Target = target, Origin = WeaverContextOrigin.AuthoritativeRead, WeaverScopes = [NoteContract.Scope] };
         return new([attachment], request.CallerAttachments.Select(caller => new WeaverContributionDiagnostic(
             sensitivity >= WeaverContextSensitivity.SecretRedacted ? Descriptor.Id : Descriptor.Id + ":" + caller.Id, "weaver.note.reference_admitted", "Admitted reference; canonical owning-resource read used.", false)).ToArray());
     }
@@ -210,7 +210,7 @@ internal sealed class NoteContextSource(NoteStore store, IWeaverSessionService s
             // Current read authority still applies to disclosure of that retained placeholder.
             if (item.Sensitivity == WeaverContextSensitivity.SecretRedacted)
             {
-                if (item.Content is not null || item.Target is not null || item.AgentScopes.Count != 0) return InvalidDisclosure();
+                if (item.Content is not null || item.Target is not null || item.WeaverScopes.Count != 0) return InvalidDisclosure();
                 continue;
             }
             if (!OwnTarget(item.Target) || !TryReadState(item.Content, out var retained) || item.Target != NoteContract.Target(retained!))

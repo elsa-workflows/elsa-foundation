@@ -52,8 +52,9 @@ def select(event_name: str, event: dict, changed: list[str] | None, patterns: di
 def changed_paths(event_name: str, event: dict, head: str) -> list[str] | None:
     if event_name not in {'push', 'pull_request', 'merge_group'}:
         return []
-    # PR merge commit first parent is today's main, rather than the stale base.sha. A merge-queue entry names its own
-    # parent: base_sha is the commit the entry was built on, and head (GITHUB_SHA) is the entry's merge result.
+    # PR merge commit first parent is the base branch today (main or initiative/*), rather than the stale base.sha. A
+    # merge-queue entry names its own parent: base_sha is the commit the entry was built on, and head (GITHUB_SHA) is the
+    # entry's merge result.
     if event_name == 'pull_request':
         base = f'{head}^1'
     elif event_name == 'merge_group':

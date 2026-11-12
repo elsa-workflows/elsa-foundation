@@ -30,7 +30,7 @@ public sealed class WorkflowTruthSeamTests
         var catalog = Single(contribution, WorkflowActivityCatalog.ContentType);
         Assert.Equal(WeaverContextOrigin.AuthoritativeRead, catalog.Origin);
         Assert.Null(catalog.Target);
-        Assert.Empty(catalog.AgentScopes);
+        Assert.Empty(catalog.WeaverScopes);
         var content = Content(catalog);
         Assert.Equal("available", content.GetProperty("status").GetString());
         Assert.False(content.GetProperty("truncated").GetBoolean());
@@ -45,7 +45,7 @@ public sealed class WorkflowTruthSeamTests
         var permissions = Single(contribution, DefaultWorkflowWeaverContextProvider.PermissionsContentType);
         Assert.Equal(WorkflowWeaverTests.Snapshot().Target, permissions.Target);
         Assert.Equal(WeaverContextOrigin.AuthoritativeRead, permissions.Origin);
-        Assert.Empty(permissions.AgentScopes);
+        Assert.Empty(permissions.WeaverScopes);
         var granted = Content(permissions);
         Assert.Equal("allowed", granted.GetProperty("read").GetString());
         Assert.Equal("allowed", granted.GetProperty("manage").GetString());
@@ -241,7 +241,7 @@ public sealed class WorkflowTruthSeamTests
 
         var reported = Content(Single(contribution, DefaultWorkflowWeaverContextProvider.PermissionsContentType));
         // The owner still allows managing the workflow; only the host policy withholds the tool. The capability is admitted
-        // by its own id, as the Agent API admits it, so it stays.
+        // by its own id, as the Weaver API admits it, so it stays.
         Assert.Equal("allowed", reported.GetProperty("manage").GetString());
         Assert.Equal([WorkflowReadGraphTool.ToolName, WorkflowApplyOperationBatchTool.ToolName], Strings(reported, "tools"));
         Assert.Equal(["workflow.explain", "workflow.propose-change"], Strings(reported, "capabilities"));

@@ -2,18 +2,18 @@ import React, { useState } from "react";
 import { createRoot } from "react-dom/client";
 import { createEndpointContext, StudioHttpError, type StudioWeaverPreparedInvocation, type StudioBackendSession, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { createStudioRegistry } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/registry";
-import { createAgentClient } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/agent/agentClient";
-import type { subscribeAgentSessionStream } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/agent/agentStream";
-import type { AgentStreamEvent } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/agent/agentTypes";
+import { createWeaverClient } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/weaver/weaverClient";
+import type { subscribeWeaverSessionStream } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/weaver/weaverStream";
+import type { WeaverStreamEvent } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/weaver/weaverTypes";
 import { WeaverSurface } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/weaver";
 import { ThemeProvider } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/components/ThemeProvider";
 import "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/styles.css";
-import "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/agent/agent.css";
+import "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/weaver/weaverControls.css";
 import "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/weaver/weaver.css";
 
-// A durable fake Agent backend (#3441 T022). State lives in localStorage, so a reload behaves like a server that kept
+// A durable fake Weaver backend (#3441 T022). State lives in localStorage, so a reload behaves like a server that kept
 // running and a second tab in the same browser context sees the same server. Requests go through the real Studio
-// agent client; only the transport and the turn stream are simulated.
+// Weaver client; only the transport and the turn stream are simulated.
 type Message = { id: string; role: string; content: string; status: string; statusReason?: string };
 type Proposal = { id: string; title: string; summary: string; risk: string; status: string; baseRevision: string; resourceTarget: unknown; preparedInvocation?: StudioWeaverPreparedInvocation; ownerResolution?: { claim: string; actorId: string }; result?: unknown };
 type Session = { id: string; owner: string; workspace?: string; continuedFrom?: string; title: string; status: string; updatedAt: string; messages: Message[]; proposals: Proposal[]; paused?: boolean };
@@ -53,7 +53,7 @@ function refuse(status: number, code: string, message: string): never {
 
 function owned(store: Store, id: string) {
   const session = store.sessions.find(item => item.id === id);
-  if (!session || session.owner !== user) refuse(404, "weaver.session.not_found", `Agent session '${id}' was not found.`);
+  if (!session || session.owner !== user) refuse(404, "weaver.session.not_found", `Weaver session '${id}' was not found.`);
   return session;
 }
 
@@ -72,7 +72,7 @@ function details(session: Session) {
 function route(method: string, path: string, body: Record<string, unknown> = {}): unknown {
   const store = read();
   const url = new URL(path, "https://fixture.example/");
-  const parts = url.pathname.split("/").filter(Boolean).slice(2); // after _elsa/agent
+  const parts = url.pathname.split("/").filter(Boolean).slice(2); // after _elsa/weaver
   const done = <T,>(value: T) => { write(store); return { data: value }; };
   if (method === "GET" && parts[0] === "bootstrap") {
     return { data: { enabled: true, providerStatus: "available", modes: ["explain"], capabilities: [{ id: "weaver.fixture", displayName: "Fixture", description: "", kind: "answer", risk: "readOnly", surfaces: ["*"] }],
@@ -145,14 +145,14 @@ const http = {
   async putJson(path: string, body: Record<string, unknown>) { return route("PUT", path, body); }
 };
 const context = { baseUrl: "https://fixture.example/", http } as unknown as StudioEndpointContext;
-const client = createAgentClient(context);
+const client = createWeaverClient(context);
 
 // The turn stream: a turn runs only while it is open, as on the server.
-const subscribeStream: typeof subscribeAgentSessionStream = (_context, url, onEvent, onError, options) => {
+const subscribeStream: typeof subscribeWeaverSessionStream = (_context, url, onEvent, onError, options) => {
   let closed = false;
   const sessionId = decodeURIComponent(url.split("/")[4]);
   const replyId = options?.defaultMessageId ?? "reply";
-  const emit = (event: AgentStreamEvent) => { if (!closed) onEvent(event); };
+  const emit = (event: WeaverStreamEvent) => { if (!closed) onEvent(event); };
   void (async () => {
     const tick = () => new Promise(resolve => setTimeout(resolve, 30));
     const store = read();

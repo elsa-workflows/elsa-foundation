@@ -36,7 +36,10 @@
     "Essentials/apps/Elsa.Workbench/**",
     "Extensions/Agent/**",
     "Extensions/Connections/**",
-    "Extensions/Secrets/**"
+    "Extensions/Secrets/**",
+    ".github/actions/install-chromium/**",
+    "tools/ci/install_playwright_chromium.py",
+    "tools/ci/test_install_playwright_chromium.py"
   ],
   "backend-source": [
     "global.json",
@@ -88,7 +91,10 @@
     "tools/ci/workflow_scope.py",
     "tools/ci/workflow-paths.json",
     "tools/ci/test_workflow_scope.py",
-    ".github/actions/setup-studio/**"
+    ".github/actions/setup-studio/**",
+    ".github/actions/install-chromium/**",
+    "tools/ci/install_playwright_chromium.py",
+    "tools/ci/test_install_playwright_chromium.py"
   ],
   "published-images": [
     "docker/compose/docker-compose.images.yml",
@@ -98,6 +104,9 @@
     ".github/workflows/ci.yml",
     "tools/ci/workflow_scope.py",
     "tools/ci/workflow-paths.json",
-    "tools/ci/test_workflow_scope.py"
+    "tools/ci/test_workflow_scope.py",
+    ".github/actions/install-chromium/**",
+    "tools/ci/install_playwright_chromium.py",
+    "tools/ci/test_install_playwright_chromium.py"
   ]
 }

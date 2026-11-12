@@ -326,7 +326,7 @@ public sealed class WeaverLifecycleOutcomeDisclosureTests
     /// outcome, then a read runs; while it runs the lifecycle outcome's owner becomes unable to decide (for historical and
     /// current admission alike) and current authority withdraws the read. The read result's admission first re-admits
     /// the recorded history in order, which reaches the earlier lifecycle outcome's outage before the later read's
-    /// definite refusal, so the turn stops with the owner's 503, as the Agent catalog states.
+    /// definite refusal, so the turn stops with the owner's 503, as the Weaver catalog states.
     /// </summary>
     [Fact]
     public async Task Across_admissions_an_earlier_owner_outage_in_history_is_reported_before_a_later_definite_refusal()

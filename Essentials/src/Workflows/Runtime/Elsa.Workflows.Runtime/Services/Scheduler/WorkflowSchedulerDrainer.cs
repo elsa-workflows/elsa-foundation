@@ -742,6 +742,12 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
             metadata[RuntimeMetadataKeys.ExpressionLanguage] = inputFailure.ExpressionLanguage;
             metadata[RuntimeMetadataKeys.InputEvaluationPhase] = inputFailure.EvaluationPhase;
         }
+        else if (exception is RuntimeReadSelectionException selectionFailure)
+        {
+            // A member read's VF-SEL code, beside the fault type and message, as an expression input failure's code is.
+            metadata[RuntimeMetadataKeys.InputFailureCode] = selectionFailure.Code;
+            metadata[RuntimeMetadataKeys.InputKey] = selectionFailure.InputKey;
+        }
 
         // A later retry-policy decision replaces its two fields, while older records without a new decision retain
         // the last recorded retry context alongside the stable activity address.

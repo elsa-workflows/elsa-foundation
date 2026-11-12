@@ -308,7 +308,7 @@ internal sealed class HeldDelegatedProvider : IRecoveryTestProvider, IWeaverHarn
             yield return Delta(dispatch.Result?.Content ?? dispatch.Error?.Message ?? "The change was refused.");
             yield break;
         }
-        yield return Delta("Delegated agent provider response.");
+        yield return Delta("Delegated Weaver provider response.");
     }
 
     public IAsyncEnumerable<WeaverStreamEvent> ContinueTurnAsync(WeaverTurnContext context, CancellationToken cancellationToken = default)

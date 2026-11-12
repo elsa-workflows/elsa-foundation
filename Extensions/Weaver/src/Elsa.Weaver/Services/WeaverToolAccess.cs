@@ -30,8 +30,8 @@ internal static class WeaverToolAccess
     /// says the owning tool's owner could not decide; otherwise null, and the caller keeps its own denial.
     /// </summary>
     /// <remarks>
-    /// Only an owner-namespaced code is reported. A code in the engine's reserved <c>agent.</c> namespace (such as
-    /// <c>agent.proposal.expired</c>), or one that is empty, overlong or not a plain dotted identifier, cannot be spoofed
+    /// Only an owner-namespaced code is reported. A code in the engine's reserved <c>weaver.</c> namespace (such as
+    /// <c>weaver.proposal.expired</c>), or one that is empty, overlong or not a plain dotted identifier, cannot be spoofed
     /// through this outcome: the refusal stays the caller's ordinary denial.
     /// </remarks>
     internal static WeaverError? OwnerUnavailable(WeaverPolicyDecision decision) =>

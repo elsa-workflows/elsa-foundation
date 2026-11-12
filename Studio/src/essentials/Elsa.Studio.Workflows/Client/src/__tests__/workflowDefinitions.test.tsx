@@ -9,7 +9,7 @@ import { useWorkflowDefinitionBrowseSession } from "../workflow-editor/workflowD
 import { getDialogs, setDialogs } from "../workflow-editor/dialogs";
 import { flowchartActivity } from "./fixtures/workflowCatalog";
 import { createWeaverRegistry } from "@elsa-workflows/studio-sdk";
-import { registerWorkflowAgent, type WorkflowAgentController } from "../workflowAgent";
+import { registerWorkflowWeaver, type WorkflowWeaverController } from "../workflowWeaver";
 import type { StudioWeaverClientExecutionResult, StudioWeaverPreparedInvocation } from "@elsa-workflows/studio-sdk";
 
 let mounted: { root: Root; container: HTMLDivElement } | null = null;
@@ -121,8 +121,8 @@ describe("workflow definition list", () => {
     const getJson = vi.fn(async (url: string) => url === "/capabilities"
       ? { capabilities: [{ ...definitionCapabilities.capabilities[0], links: [...definitionCapabilities.capabilities[0].links, { rel: "workflow-templates", href: "design/workflows/templates" }] }, activityCapability] }
       : url.endsWith("design/workflows/templates") ? [template] : routeJson(url));
-    const agent = createWeaverRegistry();
-    const weaver = registerWorkflowAgent(agent);
+    const weaverRegistry = createWeaverRegistry();
+    const weaver = registerWorkflowWeaver(weaverRegistry);
     const container = render(context(getJson), vi.fn(), weaver);
     await waitFor(() => expect(container.textContent).toContain("Invoice evaluator"));
     click(container.querySelector<HTMLButtonElement>("button[aria-label='Create workflow']")!);
@@ -144,8 +144,8 @@ describe("workflow definition list", () => {
       if (url.endsWith("design/workflows/templates")) { await templatesRead; return [template]; }
       return routeJson(url);
     });
-    const agent = createWeaverRegistry();
-    const weaver = registerWorkflowAgent(agent);
+    const weaverRegistry = createWeaverRegistry();
+    const weaver = registerWorkflowWeaver(weaverRegistry);
     const container = render(context(getJson), vi.fn(), weaver);
     const dialog = () => [...weaver.library!.snapshots].find(([key]) => key.startsWith("workflows.create-dialog:"))?.[1];
     await waitFor(() => expect(container.textContent).toContain("Invoice evaluator"));
@@ -175,8 +175,8 @@ describe("workflow definition list", () => {
       if (url.includes("design/workflows/tags")) { await tagsRead; return { items: [], permissions }; }
       return routeJson(url);
     });
-    const agent = createWeaverRegistry();
-    const weaver = registerWorkflowAgent(agent);
+    const weaverRegistry = createWeaverRegistry();
+    const weaver = registerWorkflowWeaver(weaverRegistry);
     const container = render(context(getJson), vi.fn(), weaver);
     const list = () => [...weaver.library!.snapshots].find(([key]) => key.startsWith("workflows.library:"))?.[1];
     await waitFor(() => expect(container.textContent).toContain("Invoice evaluator"));
@@ -201,8 +201,8 @@ describe("workflow definition list", () => {
       if (url.includes("design/workflows/tags")) throw new Error("tags unavailable");
       return routeJson(url);
     });
-    const agent = createWeaverRegistry();
-    const weaver = registerWorkflowAgent(agent);
+    const weaverRegistry = createWeaverRegistry();
+    const weaver = registerWorkflowWeaver(weaverRegistry);
     const container = render(context(getJson), vi.fn(), weaver);
     const list = () => [...weaver.library!.snapshots].find(([key]) => key.startsWith("workflows.library:"))?.[1];
     await vi.waitFor(() => expect(list()).toBeDefined(), { timeout: 5_000, interval: 20 });
@@ -218,8 +218,8 @@ describe("workflow definition list", () => {
       if (url.includes("design/workflows/views")) throw new Error("views unavailable");
       return routeJson(url);
     });
-    const agent = createWeaverRegistry();
-    const weaver = registerWorkflowAgent(agent);
+    const weaverRegistry = createWeaverRegistry();
+    const weaver = registerWorkflowWeaver(weaverRegistry);
     const container = render(context(getJson), vi.fn(), weaver);
     const list = () => [...weaver.library!.snapshots].find(([key]) => key.startsWith("workflows.library:"))?.[1];
     await vi.waitFor(() => expect(list()).toBeDefined(), { timeout: 5_000, interval: 20 });
@@ -238,8 +238,8 @@ describe("workflow definition list", () => {
       if (url.endsWith("design/activities/catalog")) { await catalogRead; return routeJson(url); }
       return routeJson(url);
     });
-    const agent = createWeaverRegistry();
-    const weaver = registerWorkflowAgent(agent);
+    const weaverRegistry = createWeaverRegistry();
+    const weaver = registerWorkflowWeaver(weaverRegistry);
     const disclosed = recordDialogDisclosures(weaver);
     const container = render(context(getJson), vi.fn(), weaver);
     await waitFor(() => expect(container.textContent).toContain("Invoice evaluator"));
@@ -256,8 +256,8 @@ describe("workflow definition list", () => {
   it("reopens a closed dialog through a Weaver revert with its own fresh catalog and templates, even after an authority reset (spec 1193 FR-023)", async () => {
     let revision = "t-r3";
     const getJson = vi.fn(async (url: string) => url === "/capabilities" ? templateCapabilities() : url.endsWith("design/workflows/templates") ? [savedTemplate(revision)] : routeJson(url));
-    const agent = createWeaverRegistry();
-    const weaver = registerWorkflowAgent(agent);
+    const weaverRegistry = createWeaverRegistry();
+    const weaver = registerWorkflowWeaver(weaverRegistry);
     const disclosed = recordDialogDisclosures(weaver, true);
     const first = context(getJson);
     const { container, rerender } = renderWithContext(first, weaver);
@@ -266,7 +266,7 @@ describe("workflow definition list", () => {
     const dialog = () => [...weaver.library!.snapshots].find(([key]) => key.startsWith("workflows.create-dialog:"))?.[1];
     await vi.waitFor(() => expect(dialog()).toBeDefined(), { timeout: 5_000, interval: 20 });
     const snapshot = dialog()!;
-    const contract = agent.toolContracts.list().find(item => item.id === "workflow_create_dialog_prefill")!;
+    const contract = weaverRegistry.toolContracts.list().find(item => item.id === "workflow_create_dialog_prefill")!;
     const invocation = { invocationId: "i-1", client: snapshot.client, target: snapshot.target, expiresAt: new Date(Date.now() + 60_000).toISOString(),
       arguments: { baseRevision: snapshot.target!.revision, change: { name: "Prefilled" } } } as unknown as StudioWeaverPreparedInvocation;
     let result: StudioWeaverClientExecutionResult | undefined;
@@ -447,7 +447,7 @@ function savedTemplate(revision: string) {
 }
 
 /** Every create-dialog context the page publishes, as its offered template ids (with revisions when asked). */
-function recordDialogDisclosures(weaver: WorkflowAgentController, withRevision = false) {
+function recordDialogDisclosures(weaver: WorkflowWeaverController, withRevision = false) {
   const disclosed: string[][] = [];
   const snapshots = weaver.library!.snapshots;
   const set = snapshots.set.bind(snapshots);
@@ -459,7 +459,7 @@ function recordDialogDisclosures(weaver: WorkflowAgentController, withRevision =
   return disclosed;
 }
 
-function renderWithContext(initial: StudioEndpointContext, weaver: WorkflowAgentController) {
+function renderWithContext(initial: StudioEndpointContext, weaver: WorkflowWeaverController) {
   const container = document.createElement("div");
   document.body.appendChild(container);
   const root = createRoot(container);
@@ -473,7 +473,7 @@ function renderWithContext(initial: StudioEndpointContext, weaver: WorkflowAgent
   return { container, rerender: (next: StudioEndpointContext) => flushSync(() => root.render(<Harness contextValue={next} />)) };
 }
 
-function render(contextValue: StudioEndpointContext, onOpen: (id: string) => void, weaver?: WorkflowAgentController) {
+function render(contextValue: StudioEndpointContext, onOpen: (id: string) => void, weaver?: WorkflowWeaverController) {
   const container = document.createElement("div");
   document.body.appendChild(container);
   const root = createRoot(container);

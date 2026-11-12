@@ -5,15 +5,15 @@ using Elsa.Persistence.EntityFramework;
 namespace Elsa.Weaver.Persistence.Tests;
 
 /// <summary>
-/// #3441 self-review round 2 (P3-2): every protected payload column of an Agent table is declared to the schema family,
+/// #3441 self-review round 2 (P3-2): every protected payload column of a Weaver table is declared to the schema family,
 /// as content or integrity, so it is stamped on write and upcast on read like the rest. The shared declaration guard
-/// recognizes only columns named exactly <c>Payload</c> (or ending in <c>Json</c>), so the Agent's other payload columns are
+/// recognizes only columns named exactly <c>Payload</c> (or ending in <c>Json</c>), so Weaver's other payload columns are
 /// held here.
 /// </summary>
 public sealed class WeaverEfSchemaDeclarationTests
 {
     [Fact]
-    public void Every_payload_column_of_an_agent_table_is_declared()
+    public void Every_payload_column_of_a_weaver_table_is_declared()
     {
         var assembly = typeof(WeaverDbContext).Assembly;
         var declared = assembly.GetCustomAttributes<EfSchemaContentAttribute>().SelectMany(x => x.Columns.Select(column => (x.Entity, column)))

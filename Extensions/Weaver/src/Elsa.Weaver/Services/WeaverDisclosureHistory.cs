@@ -111,7 +111,7 @@ internal sealed class WeaverDisclosureHistory
         {
             Content = attachment.Content is null ? null : JsonSerializer.SerializeToElement(attachment.Content).Clone(),
             References = new ReadOnlyDictionary<string, string>(attachment.References.ToDictionary()),
-            AgentScopes = Array.AsReadOnly(attachment.AgentScopes.ToArray())
+            WeaverScopes = Array.AsReadOnly(attachment.WeaverScopes.ToArray())
         }).ToArray()), Array.AsReadOnly(snapshot.ToolResults.Select(result => result with
         {
             Payload = result.Payload is null ? null : WeaverInvocationIntegrity.Freeze(result.Payload),

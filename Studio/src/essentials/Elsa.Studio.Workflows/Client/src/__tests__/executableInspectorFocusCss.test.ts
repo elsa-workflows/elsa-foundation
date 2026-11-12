@@ -30,3 +30,9 @@ describe("Executable Inspector keyboard focus", () => {
     expect(focusRing.test(styles)).toBe(true);
   });
 });
+
+describe("prefers-reduced-motion for portaled workflow dialogs", () => {
+  it("covers body-portaled .wf-tokens roots, not only .wf-page and .wf-editor", () => {
+    expect(styles).toMatch(/@media \(prefers-reduced-motion: reduce\) \{[\s\S]*\.wf-tokens,[\s\S]*\.wf-tokens \*,[\s\S]*\.wf-tokens \*::before,[\s\S]*\.wf-tokens \*::after/);
+  });
+});

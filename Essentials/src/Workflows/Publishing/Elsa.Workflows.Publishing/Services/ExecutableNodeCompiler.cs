@@ -138,6 +138,7 @@ public sealed class ExecutableNodeCompiler(
             ? catalogActivityType
             : ActivityTypeMetadata.GetDeclaredActivityType(clrActivityType) ?? catalogActivityType;
         var projectedInputs = ProjectInputs(activity, inputDefinitions, activityStructureService.ProjectInputs(activity));
+        projectedInputs.States = LowerWorkflowInputReads(projectedInputs.States, workflowInputs);
         inputBindingCompiler.EnsureSecretBindingsAdmissible(activity.NodeId, descriptor, projectedInputs.States);
         var inputBindings = inputBindingCompiler.CompileAll(activity.NodeId, projectedInputs.Definitions, projectedInputs.States);
         var childSlots = CompileChildSlots(activityType, activity.NodeId, projection.ChildProjections(activity), projection, activityRows, placedActivities, workflowVariables, workflowInputs);
@@ -318,6 +319,16 @@ public sealed class ExecutableNodeCompiler(
             workflowVariables);
     }
 
+    // A workflow's request is keyed by each declared input's name, so an authored Input read of a declared input's
+    // reference key is the request read of that input's name. Anything else is left for the analysis to refuse.
+    private static ArgumentState[] LowerWorkflowInputReads(ArgumentState[] states, IReadOnlyCollection<InputDefinition> workflowInputs) =>
+        workflowInputs.Count == 0
+            ? states
+            : states.Select(state => InputReadLowering.Lower(state, referenceKey =>
+                workflowInputs.Where(input => StringComparer.Ordinal.Equals(input.ReferenceKey, referenceKey)).Take(2).ToArray() is [var input]
+                    ? input.Name
+                    : null)).ToArray();
+
     private ExecutableNode CompileIntrinsicNode(
         ActivityNode activity,
         ActivityTreeProjection projection,
@@ -359,7 +370,8 @@ public sealed class ExecutableNodeCompiler(
                 },
             _ => new Dictionary<string, TypeReference>(StringComparer.Ordinal) { [WorkflowIntrinsicInputKeys.Value] = valueType! }
         };
-        var authoredInputs = activity.Inputs.ToDictionary(input => input.ReferenceKey, StringComparer.Ordinal);
+        var authoredInputs = LowerWorkflowInputReads(activity.Inputs.ToArray(), workflowInputs)
+            .ToDictionary(input => input.ReferenceKey, StringComparer.Ordinal);
         if (authoredInputs.Count != inputTypes.Count || inputTypes.Keys.Any(key => !authoredInputs.ContainsKey(key)))
         {
             throw new ArgumentException(
@@ -441,6 +453,10 @@ public sealed class ExecutableNodeCompiler(
         IReadOnlyCollection<VariableDefinition> workflowVariables,
         IReadOnlyCollection<InputDefinition> workflowInputs)
     {
+        // A member read has no static source contract here (a result member's is planned by the linker, a variable
+        // member's is never known): the intrinsic validates the selected member against its destination when it reads it.
+        if (binding.Source is RuntimeInputBindingSource.ActivityResultMember or RuntimeInputBindingSource.VariableMember)
+            return binding;
         if (binding.Selection is not null)
             throw PublishedMemberReadDiagnostics.Unsupported(nodeId, binding);
         TypeReference? sourceType = binding.Source switch

@@ -912,7 +912,7 @@ public sealed partial class WeaverCumulativeDisclosureTests
             var current = new List<WeaverContextAttachment> { Attachment("original", "original-resource", "original-v1") };
             if (ShowDetail) current.Add(Attachment("detail", "detail-resource", DetailRevision));
             if (AddSection) current.Add(Attachment("section", "section-resource", "section-v1"));
-            if (OfferToolScope && !RevokeToolScope) current = current.Select(item => item with { AgentScopes = ["scope-s"] }).ToList();
+            if (OfferToolScope && !RevokeToolScope) current = current.Select(item => item with { WeaverScopes = ["scope-s"] }).ToList();
             if (TargetPresentation is { } presentation) current = current.Select(item => item with
             {
                 Target = item.Target is null ? null : item.Target with
@@ -921,7 +921,7 @@ public sealed partial class WeaverCumulativeDisclosureTests
                     Route = presentation is "route" or "both" ? "/refreshed/authorized/route" : item.Target.Route
                 }
             }).ToList();
-            if (BindingDrift == "scopes") current = current.Select(item => item with { AgentScopes = ["new-scope"] }).ToList();
+            if (BindingDrift == "scopes") current = current.Select(item => item with { WeaverScopes = ["new-scope"] }).ToList();
             if (BindingDrift == "revision") current = current.Select(item => item.Target?.ResourceId == "detail-resource"
                 ? item with { Target = item.Target with { Revision = "detail-v2" } } : item).ToList();
             if (BindingDrift == "target") current.Add(Attachment("another", "another-resource", "another-v1"));
@@ -969,7 +969,7 @@ public sealed partial class WeaverCumulativeDisclosureTests
         private static readonly WeaverToolDescriptor BaseDescriptor = new("cumulative_neutral_read", "Read another owned resource", "A neutral owner read.",
             WeaverToolMutability.ReadOnly, WeaverRisk.ReadOnly, "{}", [], [])
         { ModuleId = "test.module", DisclosureSourceId = WeaverTestContextSource.TestModuleSourceId, ResultType = "neutral.result", ResultSchemaVersion = "1" };
-        public WeaverToolDescriptor Descriptor => BaseDescriptor with { AgentScopes = RequireScope ? ["scope-s"] : [] };
+        public WeaverToolDescriptor Descriptor => BaseDescriptor with { WeaverScopes = RequireScope ? ["scope-s"] : [] };
         public Task<WeaverResult<WeaverToolPreparation>> PrepareAsync(WeaverToolInvocation invocation, CancellationToken cancellationToken = default)
         {
             Preparations++;

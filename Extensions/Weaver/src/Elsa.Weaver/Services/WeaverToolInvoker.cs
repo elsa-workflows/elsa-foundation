@@ -44,8 +44,8 @@ internal sealed class DefaultWeaverToolInvoker(
         if (session.Policy.DeniedCapabilityIds.Contains(descriptor.Name, StringComparer.OrdinalIgnoreCase)
             || policy.DeniedCapabilityIds.Contains(descriptor.Name, StringComparer.OrdinalIgnoreCase))
             return await DeniedAsync("weaver.tool.denied", "Current host policy disables this tool.", 403);
-        var scopes = invocation.Context.SelectMany(x => x.AgentScopes).ToHashSet(StringComparer.Ordinal);
-        if (descriptor.AgentScopes.Count > 0 && !descriptor.AgentScopes.Any(scopes.Contains))
+        var scopes = invocation.Context.SelectMany(x => x.WeaverScopes).ToHashSet(StringComparer.Ordinal);
+        if (descriptor.WeaverScopes.Count > 0 && !descriptor.WeaverScopes.Any(scopes.Contains))
             return await DeniedAsync("weaver.tool.scope_denied", "The admitted module context does not support this tool scope.", 403);
 
         // A mutation's approval basis is the claim's snapshot, read after acquisition and held until a

@@ -1113,16 +1113,23 @@ describe("activity property organization", () => {
     expect(container.querySelector(".wf-expression-expand-button")).toBeNull();
     const expand = container.querySelector<HTMLButtonElement>("button[aria-label='Open expanded Inputs editor']");
     expect(expand?.textContent).toContain("Open expanded editor");
+    expand!.focus();
     flushSync(() => expand!.click());
     await nextFrame();
     const dialog = document.querySelector<HTMLElement>("[role='dialog']");
     expect(dialog).not.toBeNull();
     expect(dialog?.querySelector("[aria-label='amount expanded']")).not.toBeNull();
     expect(container.querySelector("[aria-label='amount']")).not.toBeNull();
+    expect(dialog!.contains(document.activeElement)).toBe(true);
+    const focusable = dialogFocusable(dialog!);
+    focusable[0].focus();
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", shiftKey: true, bubbles: true, cancelable: true }));
+    expect(document.activeElement).toBe(focusable.at(-1));
     flushSync(() => document.querySelector<HTMLButtonElement>("button[aria-label='Close Inputs editor']")!.click());
     await nextFrame();
     expect(document.querySelector("[role='dialog']")).toBeNull();
     expect(container.querySelector("[aria-label='amount']")).not.toBeNull();
+    expect(document.activeElement).toBe(expand);
   });
 
   it("does not rebuild an unrelated JavaScript row when a sibling input that opted into activity context changes", async () => {
@@ -2050,11 +2057,65 @@ describe("activity property organization", () => {
     expect(portalRoot!.style.getPropertyValue("--wf-panel")).toBe("rgb(210, 220, 230)");
     container.style.setProperty("--wf-text", "rgb(9, 8, 7)");
     container.style.removeProperty("--wf-panel");
-    document.documentElement.setAttribute("data-theme", "dark");
+    document.documentElement.setAttribute("data-theme-mode", "dark");
+    document.documentElement.setAttribute("data-theme-appearance", "dark");
+    document.documentElement.setAttribute("data-color-scheme", "classic");
     return vi.waitFor(() => {
       expect(portalRoot!.style.getPropertyValue("--wf-text")).toBe("rgb(9, 8, 7)");
       expect(portalRoot!.style.getPropertyValue("--wf-panel")).toBe("");
-    }).finally(() => document.documentElement.removeAttribute("data-theme"));
+    }).finally(() => {
+      document.documentElement.removeAttribute("data-theme-mode");
+      document.documentElement.removeAttribute("data-theme-appearance");
+      document.documentElement.removeAttribute("data-color-scheme");
+    });
+  });
+
+  it("disconnects the portal theme observer on close and watches appearance attributes", () => {
+    const Original = window.MutationObserver;
+    const disconnect = vi.fn();
+    const filters: Array<readonly string[] | undefined> = [];
+    vi.stubGlobal("MutationObserver", class {
+      inner: MutationObserver;
+      constructor(callback: MutationCallback) {
+        this.inner = new Original(callback);
+      }
+      observe(target: Node, options?: MutationObserverInit) {
+        filters.push(options?.attributeFilter);
+        this.inner.observe(target, options);
+      }
+      disconnect() {
+        disconnect();
+        this.inner.disconnect();
+      }
+      takeRecords() {
+        return this.inner.takeRecords();
+      }
+    });
+    onTestFinished(() => {
+      vi.unstubAllGlobals();
+    });
+
+    const container = renderPanel([input("Payload", { typeName: "System.Object", isWrapped: true })], {
+      expressionDescriptors: [
+        { type: "Literal", displayName: "Literal", editingMode: "literal" },
+        { type: "Object", displayName: "Object", editingMode: "structured" }
+      ],
+      expressionEditors: [createObjectExpressionEditorContribution(() => [])],
+      activity: activity({
+        payload: { typeName: "System.Object", expression: { type: "Object", value: { first: 1 } } }
+      })
+    });
+    const expand = container.querySelector<HTMLButtonElement>("button[aria-label='Open expanded Payload editor']")!;
+    expand.focus();
+    flushSync(() => expand.click());
+    expect(filters.some(filter =>
+      ["data-theme-mode", "data-theme-appearance", "data-color-scheme"].every(name => filter?.includes(name))
+    )).toBe(true);
+
+    flushSync(() => document.querySelector<HTMLButtonElement>("button[aria-label='Close Payload editor']")!.click());
+    expect(document.body.querySelector(".wf-property-editor-dialog")).toBeNull();
+    expect(disconnect).toHaveBeenCalled();
+    expect(document.activeElement).toBe(expand);
   });
 });
 
@@ -2556,6 +2617,12 @@ function openAndSelect(scope: ParentNode, label: string) {
 
 async function nextFrame() {
   await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+}
+
+function dialogFocusable(dialog: HTMLElement) {
+  return [...dialog.querySelectorAll<HTMLElement>(
+    "button, input:not([type='hidden']), textarea, select, [href], [contenteditable='true'], [tabindex]"
+  )].filter(element => (!element.hasAttribute("tabindex") || element.tabIndex >= 0) && !element.closest("[hidden], [aria-hidden='true']"));
 }
 
 function changeTextArea(input: HTMLTextAreaElement, value: string) {

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Transactions;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Constants;
@@ -24,23 +25,36 @@ public sealed class EfExecutionLivenessStateStore(
     internal bool UsesSameBackingStore(RuntimeDbContext candidateContext, IPersistenceAccessContextAccessor candidateAccessor) =>
         ReferenceEquals(context, candidateContext) && ReferenceEquals(accessContextAccessor, candidateAccessor);
 
+    /// <summary>
+    /// The fence cursors of the service provider this store belongs to. With them the store records, after each
+    /// save of an ownership row, the revision at which the row now holds its lease, so the EF checkpoint store can
+    /// check a commit's fence against that revision without reading the row. Without them it records nothing. The
+    /// registration sets them when it resolves the store as <see cref="IExecutionLivenessStateStore"/>.
+    /// </summary>
+    internal EfExecutionFenceCursors? FenceCursors { private get; set; }
+
     public async ValueTask<ExecutionLivenessState> SaveAsync(ExecutionLivenessState state, CancellationToken cancellationToken = default)
     {
         ValidateState(state);
         cancellationToken.ThrowIfCancellationRequested();
         var scope = EfRuntimeOperationalStoreSupport.RequireScope(accessContextAccessor);
         var entity = await LoadAsync(scope, state.WorkflowExecutionId, state.ExecutionLivenessStateId, tracking: true, cancellationToken);
+        ExecutionLivenessState? replaced = null;
         if (entity is null)
-            context.ExecutionLivenessStates.Add(ToEntity(state, scope, 1));
+            context.ExecutionLivenessStates.Add(entity = ToEntity(state, scope, 1));
         else
         {
-            EnsureNotDeletionTombstone(Read(entity, scope, state.WorkflowExecutionId, state.ExecutionLivenessStateId));
+            replaced = Read(entity, scope, state.WorkflowExecutionId, state.ExecutionLivenessStateId);
+            EnsureNotDeletionTombstone(replaced);
             Copy(entity, state, scope, checked(entity.Revision + 1));
         }
 
         try
         {
+            var durable = SavesAreDurableAtOnce();
             await context.SaveChangesAsync(cancellationToken);
+            if (durable)
+                RecordFenceCursor(scope, state, replaced, entity);
             return state;
         }
         catch (DbUpdateConcurrencyException exception)
@@ -67,12 +81,13 @@ public sealed class EfExecutionLivenessStateStore(
         var scope = EfRuntimeOperationalStoreSupport.RequireScope(accessContextAccessor);
         context.ChangeTracker.Clear();
         var entity = await LoadAsync(scope, state.WorkflowExecutionId, state.ExecutionLivenessStateId, tracking: true, cancellationToken);
+        ExecutionLivenessState? replaced = null;
 
         if (expectedRevision == 0)
         {
             if (entity is not null)
                 return new(ExecutionLivenessStateWriteStatus.RevisionConflict, entity.Revision);
-            context.ExecutionLivenessStates.Add(ToEntity(state, scope, 1));
+            context.ExecutionLivenessStates.Add(entity = ToEntity(state, scope, 1));
         }
         else
         {
@@ -83,12 +98,16 @@ public sealed class EfExecutionLivenessStateStore(
                 return new ExecutionLivenessStateWriteResult(ExecutionLivenessStateWriteStatus.RevisionConflict, entity.Revision);
             if (IsDeletionTombstone(current))
                 return new ExecutionLivenessStateWriteResult(ExecutionLivenessStateWriteStatus.RevisionConflict, entity.Revision);
+            replaced = current;
             Copy(entity, state, scope, checked(expectedRevision + 1));
         }
 
         try
         {
+            var durable = SavesAreDurableAtOnce();
             await context.SaveChangesAsync(cancellationToken);
+            if (durable)
+                RecordFenceCursor(scope, state, replaced, entity);
             return new(ExecutionLivenessStateWriteStatus.Saved, expectedRevision + 1);
         }
         catch (DbUpdateConcurrencyException)
@@ -101,6 +120,30 @@ public sealed class EfExecutionLivenessStateStore(
             context.ChangeTracker.Clear();
             return new(ExecutionLivenessStateWriteStatus.RevisionConflict);
         }
+    }
+
+    // A save inside someone's transaction can still be rolled back, and then the row never held the lease at that
+    // revision. Only a save that is durable when it returns may become a cursor.
+    private bool SavesAreDurableAtOnce() =>
+        FenceCursors is not null && context.Database.CurrentTransaction is null &&
+        context.Database.GetEnlistedTransaction() is null && Transaction.Current is null;
+
+    /// <summary>
+    /// Records what this store's own save made true: the ownership row of the run holds <paramref name="saved"/>'s
+    /// lease at the revision of <paramref name="row"/>, the row as it was written. The lease the row held before no
+    /// longer has a cursor, unless it is the same lease, as after a heartbeat. Rows that are not ownership rows have
+    /// no cursor.
+    /// </summary>
+    private void RecordFenceCursor(string scope, ExecutionLivenessState saved, ExecutionLivenessState? replaced, ExecutionLivenessStateEntity row)
+    {
+        if (!StringComparer.Ordinal.Equals(saved.ExecutionLivenessStateId, RuntimeExecutionOwnershipStateId.For(saved.WorkflowExecutionId)))
+            return;
+
+        var held = saved.ExecutionLease is { } lease ? EfExecutionFenceCursors.Key.For(scope, lease) : default(EfExecutionFenceCursors.Key?);
+        if (replaced?.ExecutionLease is { } previous && EfExecutionFenceCursors.Key.For(scope, previous) != held)
+            FenceCursors!.Remove(EfExecutionFenceCursors.Key.For(scope, previous));
+        if (held is { } key)
+            FenceCursors!.Hold(key, new(row.Revision, saved.ExecutionLease!.ExpiresAt, row.SchemaVersion));
     }
 
     public async ValueTask<ExecutionLivenessState?> FindAsync(

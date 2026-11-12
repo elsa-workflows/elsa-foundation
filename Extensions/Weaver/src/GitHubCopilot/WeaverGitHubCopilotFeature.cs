@@ -11,8 +11,8 @@ namespace Elsa.Weaver.GitHubCopilot;
 [ManifestFeatureCategory("Provider")]
 [ShellFeature(
     name: "WeaverGitHubCopilot",
-    DisplayName = "GitHub Copilot Agent Provider",
-    Description = "Registers the GitHub Copilot agent provider facade seam without leaking SDK-specific details to Studio or workflow modules.",
+    DisplayName = "GitHub Copilot Weaver Provider",
+    Description = "Registers the GitHub Copilot Weaver provider facade seam without leaking SDK-specific details to Studio or workflow modules.",
     DependsOn = new object[] { typeof(WeaverFeature) }
 )]
 public class WeaverGitHubCopilotFeature : WeaverFeature

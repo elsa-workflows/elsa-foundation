@@ -10,8 +10,8 @@ namespace Elsa.Weaver.Workflows;
 [ManifestFeatureCategory("Workflows")]
 [ShellFeature(
     name: "WeaverWorkflows",
-    DisplayName = "Foundation Workflows Agent",
-    Description = "Registers workflow explanation, troubleshooting, and reviewable workflow-change proposal seams for the agent foundation.",
+    DisplayName = "Foundation Workflows Weaver",
+    Description = "Registers workflow explanation, troubleshooting, and reviewable workflow-change proposal seams for the Weaver foundation.",
     DependsOn = new object[] { typeof(WeaverFeature) }
 )]
 public class WeaverWorkflowsFeature : WeaverFeature

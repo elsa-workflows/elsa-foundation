@@ -44,8 +44,17 @@ export async function userTasksJourney(page: Page, info: TestInfo, capture: Capt
     }, { timeout: 30_000 }).not.toBe("");
     await page.getByRole("button", { name: "Refresh", exact: true }).click();
     const row = page.getByRole("link", { name: title, exact: true });
-    await expect(row).toBeVisible(); await capture(page, info, "tasks-list");
+    await expect(row).toBeVisible();
+    // #4068: the assignee reads as a person, and no column is clipped or hidden off the side at 360 px.
+    const taskRow = page.getByRole("row").filter({ has: row });
+    await expect(taskRow.getByRole("cell").last()).toHaveText("You");
+    const fitsWidth = (region: string) => page.getByRole("region", { name: region, exact: true }).evaluate(element => element.scrollWidth <= element.clientWidth);
+    expect(await fitsWidth("Task inbox")).toBe(true);
+    await capture(page, info, "tasks-list");
     await page.getByRole("searchbox", { name: "Search tasks", exact: true }).fill("Review purchase");
+    // #4068: the search shell draws the only focus ring; the inner input adds none.
+    await expect(page.getByRole("searchbox", { name: "Search tasks", exact: true })).toHaveCSS("outline-style", "none");
+    await expect(page.getByRole("searchbox", { name: "Search tasks", exact: true })).toHaveCSS("box-shadow", "none");
     await expect(row).toBeVisible();
     await row.press("Enter");
     await expect(page).toHaveURL(new RegExp(`/user-tasks/${id}(?:\\?|$)`));
@@ -79,7 +88,14 @@ export async function userTasksJourney(page: Page, info: TestInfo, capture: Capt
     await detail.getByRole("button", { name: "Refresh task", exact: true }).click();
     await expect(detail.getByText("Completed", { exact: true })).toBeVisible();
     await detail.getByText("History", { exact: true }).click();
+    // #4068: history names the person, never the raw user ID.
+    await expect(detail.locator("details li").last()).toContainText("completed · Approve · You");
+    await expect(detail.locator("details")).not.toContainText(who.userId);
     await detail.locator("details li").last().scrollIntoViewIfNeeded(); await capture(page, info, "task-history");
+    // #4068: a completed response reads as a record, with no required marker, resize handle or empty action row.
+    const record = detail.getByRole("textbox", { name: "Note", exact: true });
+    await expect(record).toBeDisabled(); await expect(record).toHaveCSS("resize", "none");
+    await expect(detail.locator(".user-task-actions")).toHaveCount(0);
     await detail.getByRole("heading").scrollIntoViewIfNeeded(); await capture(page, info, "completed");
     await expect(detail.getByRole("button", { name: "Back to task list", exact: true })).toBeEnabled();
     await detail.getByRole("button", { name: "Back to task list", exact: true }).click();
@@ -87,24 +103,42 @@ export async function userTasksJourney(page: Page, info: TestInfo, capture: Capt
     await expect(page.getByRole("searchbox", { name: "Search tasks", exact: true })).toHaveValue("Review purchase");
     await expect(row).toHaveCount(0);
     await expect(page.getByRole("heading", { name: "No matching tasks", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Clear search", exact: true })).toHaveCount(1);
     expect(new URL(page.url()).searchParams.get("backend")).toBe("legacy");
     await capture(page, info, "tasks-return");
     await page.goto(`/user-tasks/absent-${suffix}?backend=legacy`);
     await expect(page.getByRole("heading", { name: "Task not found", exact: true })).toBeVisible();
     await expect(page.getByRole("searchbox", { name: "Search tasks", exact: true })).toHaveCount(0);
+    // #4068: the not-found body offers its own way back, beside the header link.
+    await expect(page.getByRole("button", { name: "Back to task list", exact: true })).toHaveCount(2);
     await capture(page, info, "task-not-found");
-    await page.getByRole("button", { name: "Back to task list", exact: true }).click();
+    await page.getByRole("button", { name: "Back to task list", exact: true }).last().click();
     await expect(page.getByRole("searchbox", { name: "Search tasks", exact: true })).toBeVisible();
     await page.goto("/user-tasks/forms");
     await expect(page.getByRole("table", { name: "Reusable task forms", exact: true }).getByText(form.id, { exact: true })).toBeVisible();
     const nextVersion = page.getByRole("button", { name: "Create next version", exact: true }).first();
     expect((await nextVersion.boundingBox())!.width).toBeGreaterThan(120);
     expect((await nextVersion.boundingBox())!.height).toBeLessThan(48);
+    // #4068: every column fits at 360 px, each action sits beside its form's name, and only a form's latest version offers a next one.
+    expect(await fitsWidth("Reusable form versions")).toBe(true);
+    const formRows = await page.getByRole("table", { name: "Reusable task forms", exact: true }).locator("tbody tr").evaluateAll(rows => rows.map(row => ({
+      id: row.querySelector("td[data-label='Identifier']")?.textContent ?? "",
+      version: Number(row.querySelector("td[data-label='Version']")?.textContent ?? "0"),
+      offersNext: [...row.querySelectorAll("button")].some(button => button.textContent === "Create next version")
+    })));
+    const superseded = formRows.filter(item => item.version < Math.max(...formRows.filter(other => other.id === item.id).map(other => other.version)));
+    expect(superseded.filter(item => item.offersNext)).toEqual([]);
+    const actionRow = page.getByRole("row").filter({ has: nextVersion }).first();
+    await nextVersion.scrollIntoViewIfNeeded();
+    const [nameBox, actionBox] = [await actionRow.getByRole("button").first().boundingBox(), await nextVersion.boundingBox()];
+    expect(nameBox!.x).toBeGreaterThanOrEqual(0); expect(actionBox!.x + actionBox!.width).toBeLessThanOrEqual(page.viewportSize()!.width);
     await capture(page, info, "task-forms");
     await nextVersion.scrollIntoViewIfNeeded(); await capture(page, info, "task-form-versions");
     await page.getByRole("button", { name: "Create form version", exact: true }).first().press("Enter");
     await expect(page.getByRole("textbox", { name: "Form ID", exact: true })).toBeFocused();
     await page.getByRole("button", { name: "Add field", exact: true }).click();
+    // #4068: the automatically assigned version is shown as a value, not as an editable-looking box.
+    await expect(page.getByRole("textbox", { name: /^Version/ })).toHaveCount(0);
     await page.getByRole("textbox", { name: "Form ID", exact: true }).scrollIntoViewIfNeeded(); await capture(page, info, "task-form-editor");
     await page.getByRole("button", { name: "Cancel", exact: true }).scrollIntoViewIfNeeded(); await capture(page, info, "task-form-actions");
     await page.getByRole("button", { name: "Cancel", exact: true }).press("Enter");

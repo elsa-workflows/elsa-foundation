@@ -25,7 +25,7 @@
     <ProjectReference Include="../../../../../Essentials/tests/Testing/Elsa.Testing.csproj" />
   </ItemGroup>
 
-  <!-- The Agent restart scenarios (T009-T014), compiled unchanged and run over the EF store on SQLite. -->
+  <!-- The Weaver restart scenarios (T009-T014), compiled unchanged and run over the EF store on SQLite. -->
   <ItemGroup>
     <Compile Include="../../Tests/WeaverRestartHarness.cs" Link="Restart/WeaverRestartHarness.cs" />
     <Compile Include="../../Tests/WeaverRecoveryRestartTests.cs" Link="Restart/WeaverRecoveryRestartTests.cs" />

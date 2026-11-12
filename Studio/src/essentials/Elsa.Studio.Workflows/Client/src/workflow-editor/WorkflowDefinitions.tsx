@@ -1,8 +1,8 @@
 import { qualifyStudioBackendPath, useStudioWorkspaceTab, useStudioWorkspaceWhenActive } from "@elsa-workflows/studio-sdk";
-import type { WorkflowAgentController } from "../workflowAgent";
+import type { WorkflowWeaverController } from "../workflowWeaver";
 import type { WorkflowTemplate } from "../workflowTemplates";
-import { applyCreateDialogPrefill, applyListStateChange, createDialogAttachment, createDialogKind, libraryAttachment, libraryKind } from "./workflowLibraryAgent";
-import { useWorkflowPageAgent } from "./useWorkflowLibraryAgent";
+import { applyCreateDialogPrefill, applyListStateChange, createDialogAttachment, createDialogKind, libraryAttachment, libraryKind } from "./workflowLibraryWeaver";
+import { useWorkflowPageWeaver } from "./useWorkflowLibraryWeaver";
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import { AlertCircle, Package, Plus, Trash2 } from "lucide-react";
 import { StudioHttpError, type StudioWeaverRegistry, type StudioEndpointContext, type StudioNotificationInput } from "@elsa-workflows/studio-sdk";
@@ -85,8 +85,8 @@ function canRetainBrowseSnapshot(previous: BrowseIdentity, next: BrowseIdentity)
 export function WorkflowDefinitions({ context, ai, weaver, onOpen, session, homeCreateRequestId = null, onHomeCreateRequestHandled }: {
   context: StudioEndpointContext;
   ai: StudioWeaverRegistry;
-  /** The Workflows module's agent state: this page discloses its visible list and create dialog, and applies their reviewed changes. */
-  weaver?: WorkflowAgentController;
+  /** The Workflows module's Weaver state: this page discloses its visible list and create dialog, and applies their reviewed changes. */
+  weaver?: WorkflowWeaverController;
   onOpen(id: string): void;
   session: WorkflowDefinitionBrowseSession;
   homeCreateRequestId?: string | null;
@@ -679,7 +679,7 @@ export function WorkflowDefinitions({ context, ai, weaver, onOpen, session, home
   const listSettled = isCurrentData && viewKnown && permissionsKnown;
   const offeredTemplates = useMemo(() => (dialogTemplates ?? []).map(template => ({ id: template.id, name: template.name, description: template.description,
     revision: template.revision, content: template.content })), [dialogTemplates]);
-  useWorkflowPageAgent<WorkflowDefinitionBrowseLocation>({
+  useWorkflowPageWeaver<WorkflowDefinitionBrowseLocation>({
     controller: weaver, clientId: ai.clientId, kind: libraryKind, toolId: "workflow_library_set_list_state", resultType: "workflows.list-state",
     describe: "Changed the visible workflow list on this page; nothing was saved.",
     build: (location, client) => listSettled ? libraryAttachment({
@@ -693,7 +693,7 @@ export function WorkflowDefinitions({ context, ai, weaver, onOpen, session, home
     restore: changeLibraryLocation
   });
   // Spec 1193 FR-023: the open create dialog's unsaved values; a prefill only fills it, and Create stays the user's action.
-  useWorkflowPageAgent<CreateWorkflowDraft | null>({
+  useWorkflowPageWeaver<CreateWorkflowDraft | null>({
     controller: weaver, clientId: ai.clientId, kind: createDialogKind, toolId: "workflow_create_dialog_prefill", resultType: "workflows.create-dialog-prefill",
     describe: "Filled in the open New workflow dialog; create the workflow with its Create action.",
     build: (draft, client) => draft && dialogTemplates !== null ? createDialogAttachment(draft, offeredTemplates, client) : null,
