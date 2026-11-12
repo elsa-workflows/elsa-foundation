@@ -63,6 +63,13 @@ Studio API is the composition root for Studio.Core contracts. Frontend lifecycle
 - Register: set `workspace` on `api.routes.add(...)` or a feature-area route. Navigation guards read `StudioNavigationRequest.intent` (`navigate`, `close`, `probe`).
 - Known implementations: Workflows definitions, templates, Activity Definitions and upgrade plans (intra-domain). The workspace tab host itself is not replaceable. See spec [1188](../../../../specs/1188-studio-workspace-tabs/spec.md).
 
+### Activity implementation editor admission (SDK — Elsa.Studio.Hosting)
+
+- Kind: optional synchronous admission on `StudioActivityDefinitionImplementationEditorProps`.
+- Signature: existing `onChange(value): void` remains a notification, including async and concise callbacks. Optional `tryChange(value, expectedValue): boolean` returns literal `true` only after the parent admits the value against the exact baseline. A refusal leaves canonical state unchanged.
+- Register: the owning host supplies the optional callback through the existing activity implementation editor props. Controlled editors update their history only after `true` and do not also call `onChange`; a Promise or other return value is not a receipt.
+- Known implementation/consumer: host activation is **pending** S14 of [spec 1224](../../../../specs/1224-optional-bpmn-js-editor/delivery-slices.md). This prerequisite adds history/checkpoint support without activating the optional editor. Legacy hosts continue using `onChange` unchanged. Contract details: [SDK documentation](../Elsa.Studio.Hosting/Client/src/sdk/README.md#activity-implementation-admission).
+
 ## Events
 
 | Event | Delivery | Meaning | Payload | Contributor | Publication site |
