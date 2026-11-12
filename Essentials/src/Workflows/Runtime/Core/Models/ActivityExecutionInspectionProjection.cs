@@ -113,6 +113,9 @@ public sealed record ActivityExecutionInspectionProjection(
             CompletedAt = state.CompletedAt,
             LastCheckpointId = checkpointId,
             LastCommittedAt = committedAt,
+            // A raw delta belongs only to its original checkpoint. A capable owner supplies a new one explicitly.
+            CheckpointValueCapture = LastCheckpointId == checkpointId && CheckpointValueCapture?.CheckpointId == checkpointId
+                ? CheckpointValueCapture : null,
             Provenance = state.Provenance,
             ExecutionScopeId = state.ExecutionScopeId ?? state.Provenance.ExecutionScopeId,
             Attempt = state.Attempt ?? state.Provenance.Attempt,

@@ -28,9 +28,9 @@ public sealed record RuntimeCheckpointValueCapture
 public enum ActivityValueCapturePhase { Unknown, Invoke, Resume, Structural, Output, Container }
 
 /// <summary>Safe actual-owner provenance, without copying scheduler payloads or metadata.</summary>
-public sealed record ActivityValueCaptureSource
+public sealed record ActivityValueCaptureOrigin
 {
-    public ActivityValueCaptureSource(string workflowExecutionId, string? schedulerWorkItemId, ActivityValueCapturePhase phase)
+    public ActivityValueCaptureOrigin(string workflowExecutionId, string? schedulerWorkItemId, ActivityValueCapturePhase phase)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
         if (workflowExecutionId.Length > 1024 || schedulerWorkItemId is not null && (string.IsNullOrWhiteSpace(schedulerWorkItemId) || schedulerWorkItemId.Length > 1024) || !Enum.IsDefined(phase))
@@ -40,7 +40,7 @@ public sealed record ActivityValueCaptureSource
     public string WorkflowExecutionId { get; }
     public string? SchedulerWorkItemId { get; }
     public ActivityValueCapturePhase Phase { get; }
-    public static ActivityValueCaptureSource FromWorkItem(RuntimeSchedulerWorkItem workItem)
+    public static ActivityValueCaptureOrigin FromWorkItem(RuntimeSchedulerWorkItem workItem)
     {
         ArgumentNullException.ThrowIfNull(workItem);
         return new(workItem.WorkflowExecutionId, workItem.WorkItemId, workItem.CommandKind switch

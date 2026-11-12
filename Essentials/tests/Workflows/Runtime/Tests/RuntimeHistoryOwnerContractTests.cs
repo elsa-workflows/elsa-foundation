@@ -91,7 +91,7 @@ public sealed class RuntimeHistoryOwnerContractTests
     public void Source_phase_uses_actual_work_and_keeps_unknown_kinds_explicit(WorkflowExecutionCommandKind kind, ActivityValueCapturePhase phase)
     {
         var work = new RuntimeSchedulerWorkItem("work", "run", "command", kind, "envelope", "key", At, At);
-        var source = ActivityValueCaptureSource.FromWorkItem(work);
+        var source = ActivityValueCaptureOrigin.FromWorkItem(work);
         Assert.Equal("run", source.WorkflowExecutionId);
         Assert.Equal("work", source.SchedulerWorkItemId);
         Assert.Equal(phase, source.Phase);
@@ -137,6 +137,22 @@ public sealed class RuntimeHistoryOwnerContractTests
         Assert.Equal("activity", projection.ActivityExecutionId);
         Assert.Null(projection.CheckpointValueCapture);
         Assert.False(JsonSerializer.SerializeToElement(projection).TryGetProperty(nameof(ActivityExecutionInspectionProjection.CheckpointValueCapture), out _));
+    }
+
+    [Theory]
+    [InlineData("checkpoint-A", true)]
+    [InlineData("checkpoint-B", false)]
+    public void Inspection_merge_never_reattributes_an_earlier_raw_delta(string checkpointId, bool sameCheckpoint)
+    {
+        var state = State();
+        var delta = new RuntimeCheckpointValueCapture("checkpoint-A", "work-A", ["evidence-A"]);
+        var earlier = ActivityExecutionInspectionProjection.FromState(state, "checkpoint-A", At) with { CheckpointValueCapture = delta };
+        var merged = earlier.Merge(state, checkpointId, At.AddSeconds(1));
+
+        Assert.Equal(checkpointId, merged.LastCheckpointId);
+        if (sameCheckpoint) Assert.Same(delta, merged.CheckpointValueCapture);
+        else Assert.Null(merged.CheckpointValueCapture);
+        Assert.Same(delta, earlier.CheckpointValueCapture);
     }
 
     private static RuntimeHistorySourceFact SourceFact(string subject) => new(RuntimeHistorySourceFactKind.ActivityContinuationStarted, subject, At);

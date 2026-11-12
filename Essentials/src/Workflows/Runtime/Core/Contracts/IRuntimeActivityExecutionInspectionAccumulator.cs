@@ -9,7 +9,7 @@ public interface IRuntimeActivityExecutionInspectionAccumulator
 
     /// <summary>Optional actual-owner path; legacy implementations preserve their behavior without invoking the source factory.</summary>
     ValueTask<ActivityExecutionInspectionProjection> BuildProjectionWithSourceAsync(
-        ActivityExecutionState state, string checkpointId, DateTimeOffset committedAt, Func<ActivityValueCaptureSource> source,
+        ActivityExecutionState state, string checkpointId, DateTimeOffset committedAt, Func<ActivityValueCaptureOrigin> source,
         IReadOnlyCollection<string>? outcomeNames = null,
         IReadOnlyCollection<ActivityExecutionBookmarkSummary>? bookmarks = null,
         IReadOnlyCollection<ActivityExecutionIncidentSummary>? incidents = null,
