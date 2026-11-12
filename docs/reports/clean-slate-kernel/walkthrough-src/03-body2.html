@@ -79,7 +79,7 @@
     ValueTask&lt;object?&gt; ExecuteJobAsync(IJob job, CancellationToken ct);
     InstanceSummary Describe(object state);
 }</code></pre>
-  <p class="note">The proposed contract. At the evidence commit the prototype still says step and run (<code>IStep</code>, <code>StepAsync</code>, <code>IRun</code>) and has no <code>Describe</code>.</p>
+  <p class="note">The proposed contract. At the evidence commit the prototype still says step and run (<code>IStep</code>, <code>StepAsync</code>, <code>IRun</code>) and has no <code>Describe</code>; its <code>UpgradeState</code> takes the stored string, it declares a <code>StateType</code>, and its <code>Ambient</code> is a plain <code>object?</code>.</p>
   <pre><code><span class="k">public interface</span> ITurn
 {
     InstanceInfo Instance { get; }
