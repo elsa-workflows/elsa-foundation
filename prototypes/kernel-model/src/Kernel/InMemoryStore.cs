@@ -33,6 +33,7 @@ public sealed class InMemoryStore(int partitions, Func<long> clock, Flaw flaws =
     public List<string> Ghost { get; } = [];
     public Dictionary<string, long> Nodes { get; } = new(StringComparer.Ordinal);
     public long[] Projection { get; } = new long[partitions];
+    public long[] Deleted { get; } = new long[partitions];     // journal rows removed by deletes, per partition: for the tests
     public Dictionary<string, ViewRow> Views { get; } = new(StringComparer.Ordinal);
 
     /// <summary>A row the database refuses, every time: a value too long.</summary>
@@ -72,6 +73,7 @@ public sealed class InMemoryStore(int partitions, Func<long> clock, Flaw flaws =
                 var at = batch.Position;
                 foreach (var step in batch.Steps)
                 {
+                    if (step.Delete && Instances.GetValueOrDefault(step.Instance)?.Revision != step.Expected) Diverged($"instance {step.Instance} to delete is not at revision {step.Expected}");
                     if (step.Row is { } row)
                     {
                         if (Refuses?.Invoke(row) == true) throw new StoreException(Failure.Definite, $"the row of {row.Id} was refused");
@@ -91,6 +93,15 @@ public sealed class InMemoryStore(int partitions, Func<long> clock, Flaw flaws =
             foreach (var step in batch.Steps)
             {
                 if (step.Row is not null) Instances[step.Row.Id] = step.Row;
+                if (step.Delete)
+                {
+                    Instances.Remove(step.Instance);
+                    foreach (var key in Journal.Where(j => j.Value.Instance == step.Instance && j.Value.Revision > 0 && !Has(Flaw.DeleteLeavesJournal)).Select(j => j.Key).ToList())
+                    {
+                        Journal.Remove(key);
+                        Deleted[batch.Partition]++;
+                    }
+                }
                 foreach (var id in step.Consumed) Messages.Remove(id);
                 foreach (var id in step.Done)
                 {
@@ -107,7 +118,7 @@ public sealed class InMemoryStore(int partitions, Func<long> clock, Flaw flaws =
                 foreach (var subscription in step.Subscribed) Subscriptions.Add(subscription);
                 foreach (var subscription in step.Unsubscribed) Subscriptions.Remove(subscription);
                 if (step.Unsubscribe) Subscriptions.RemoveWhere(s => s.Instance == step.Instance);
-                if (step.Journal is not null) Journal[(batch.Partition, ++next)] = new JournalRow(batch.Partition, next, step.Instance, step.Row?.Revision ?? 0, step.Journal);
+                if (step.Journal is not null) Journal[(batch.Partition, ++next)] = new JournalRow(batch.Partition, next, step.Instance, step.Delete ? -1 : step.Row?.Revision ?? 0, step.Journal);
             }
             foreach (var id in batch.Seen)
                 if (Messages.GetValueOrDefault(id) is { } seen) seen.Seen = batch.Epoch;
@@ -203,19 +214,20 @@ public sealed class InMemoryStore(int partitions, Func<long> clock, Flaw flaws =
         lock (_gate) return new(Journal.Values.Where(j => j.Partition == partition && j.Position > after).OrderBy(j => j.Position).Take(take).ToList());
     }
 
-    public ValueTask<long> ProjectedAsync(int partition, CancellationToken cancellationToken = default)
+    public ValueTask<Projection> ProjectedAsync(int partition, CancellationToken cancellationToken = default)
     {
-        lock (_gate) return new(Projection[partition]);
+        lock (_gate) return new(new Projection(Projection[partition], Partitions[partition].Position));
     }
 
-    public ValueTask<bool> ProjectAsync(int partition, long from, IReadOnlyList<JournalRow> rows, CancellationToken cancellationToken = default)
+    public ValueTask<bool> ProjectAsync(int partition, long from, long to, IReadOnlyList<JournalRow> rows, CancellationToken cancellationToken = default)
     {
         lock (_gate)
         {
             if (Projection[partition] != from && !Has(Flaw.ProjectorBlindWrite)) return new(false);
-            Projection[partition] = rows[^1].Position;
+            Projection[partition] = to;
             foreach (var row in rows.Where(r => r.Revision > 0))
                 Views[row.Instance] = Views.GetValueOrDefault(row.Instance) is { } view ? new ViewRow(row.Instance, Math.Max(view.Revision, row.Revision), view.Commits + 1) : new ViewRow(row.Instance, row.Revision, 1);
+            foreach (var row in rows.Where(r => r.Revision < 0)) Views.Remove(row.Instance);
             return new(true);
         }
     }

@@ -131,10 +131,10 @@ public sealed class Wire(World world, Actor actor) : IKernelStore
     public ValueTask SubscribeAsync(SubscriptionRow subscription, CancellationToken cancellationToken = default) => world.Store.SubscribeAsync(subscription);
     public ValueTask<IReadOnlyList<JournalRow>> ReadJournalAsync(int partition, long after, int take, CancellationToken cancellationToken = default) =>
         Send("journal", $"journal p{partition} after {after}", () => world.Store.ReadJournalAsync(partition, after, take));
-    public ValueTask<long> ProjectedAsync(int partition, CancellationToken cancellationToken = default) =>
+    public ValueTask<Projection> ProjectedAsync(int partition, CancellationToken cancellationToken = default) =>
         Send("projected", $"projection p{partition}", () => world.Store.ProjectedAsync(partition));
-    public ValueTask<bool> ProjectAsync(int partition, long from, IReadOnlyList<JournalRow> rows, CancellationToken cancellationToken = default) =>
-        Send("project", $"project p{partition} from {from} to {rows[^1].Position}", () => world.Store.ProjectAsync(partition, from, rows));
+    public ValueTask<bool> ProjectAsync(int partition, long from, long to, IReadOnlyList<JournalRow> rows, CancellationToken cancellationToken = default) =>
+        Send("project", $"project p{partition} from {from} to {to}", () => world.Store.ProjectAsync(partition, from, to, rows));
     public ValueTask<int> SweepAsync(CancellationToken cancellationToken = default) => world.Store.SweepAsync();
 
     private static string Describe(StepCommit step) =>
@@ -226,7 +226,7 @@ public sealed partial class World
         var actor = new Actor(Actors.Count, node, partition);
         var wire = new Wire(this, actor);
         actor.Version = Versions[node];
-        actor.Projector = new Projector(wire, partition, take: 5);    // a projector runs on every node, whoever owns the partition
+        actor.Projector = new Projector(wire, partition, take: 5, Config.Flaws);    // a projector runs on every node, whoever owns the partition
         IExecutionModel[] models =
         [
             new Counter(Versions[node]), new Parent(Config.Flaws.HasFlag(Flaw.CancelKnownChildren)), new Child(), new Waiter(), new Sequence(), new Correlation(Config.Flaws.HasFlag(Flaw.CorrelationForgets)), new CWaiter(Config.Partitions),
@@ -629,7 +629,13 @@ public sealed class Generator(int seed, World world)
     // The kernel's own commands, from outside: start a tree, terminate a tree node or a runner, suspend or resume anything.
     private Act Control(Random r)
     {
-        var roll = r.Next(12);
+        var roll = r.Next(13);
+        if (roll == 12)     // an ended instance is deleted
+        {
+            var ended = world.Store.Instances.Values.Where(i => i.Status != InstanceStatus.Running && i.Model is "sequence" or "waiter" or "onevent").Select(i => i.Id).Order(StringComparer.Ordinal).ToList();
+            if (ended.Count == 0) return new Act("tick", r.Next(50));
+            return new Act("add", M: new Message($"x{_serial++}", new InstanceRef(ended[r.Next(ended.Count)]), Kinds.Delete, KeepUntil: world.Time + 3_600_000));
+        }
         if (roll == 10)     // a parent is cancelled: it cancels its children, wherever they are
         {
             var parents = world.Oracle.Parents.Keys.Where(id => world.Store.Instances.GetValueOrDefault(id)?.Status == InstanceStatus.Running).Order(StringComparer.Ordinal).ToList();

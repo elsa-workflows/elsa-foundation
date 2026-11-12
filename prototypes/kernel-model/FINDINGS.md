@@ -636,3 +636,31 @@ The owner's requirement of 12 November: a workflow handles an HTTP request and p
 - **Not solved, reasoned:** an instance with a caller waiting is never dropped, but the owner does not know when that
   caller gave up. A reply address should carry the caller's deadline, so the owner can drop the address and with it
   the pin.
+
+## 20. Deleting an ended instance. Run
+
+- **Built:** `kernel.delete`, handled by the owner. An ended instance's row is deleted at its revision, with its
+  subscriptions and its journal rows, and a journal row of the delete is written at the next position (revision -1,
+  which the projector turns into removing the view row). A delete of a running instance is consumed and dropped.
+  What arrives afterwards finds no row and is dropped and journalled, as for a missing target; outside commands that
+  were handled stay as done markers until their window passes, so a late retry still meets a duplicate key.
+
+### F15. Deleting journal rows breaks the projector's rule (invariant 6). Run
+
+- **Replay:** `--flaw ProjectorStopsAtGap` (the rule of section 10), seed 6: `I6 the projector of partition 0
+  stopped at 1 of 50`.
+- **Sketch sentences:** "A partition's journal has no gap among the rows written, and the projector never passes an
+  unwritten position", with deletion "with its messages, subscriptions and journal rows". A deleted row is a gap the
+  projector cannot tell from a row not written yet, so it stops for ever.
+- **Fix:** the projector reads the partition's position before the journal (`IKernelStore.ProjectedAsync` returns
+  both). Every position up to it is committed, because the fence moves the position in the commit that writes the
+  rows, so a gap there was deleted. The projector reads only up to that position and passes such gaps.
+  `ProjectAsync` takes the position to move to. Invariant 6 now reads: rows present plus rows deleted equal the
+  position.
+- **Check (invariant 22):** a row disappears only when its instance was deleted; a deleted instance never has a row
+  again; its journal rows, waits and view are gone (the view once the projector has passed the delete).
+  `--flaw DeleteLeavesJournal`: caught, seed 6 (`I2 the journal has a commit of 0/s16 and there is no row`).
+- **In the simulation:** outsiders delete ended sequences, waiters and event-started instances: 104 in 4,000 seeds. Not
+  instances that later messages would create again (a counter, which every add can start), because a message with
+  a start spec creates a new instance with the same id: delete then means "start over", which is right for a keyed
+  instance and has to be a decision.

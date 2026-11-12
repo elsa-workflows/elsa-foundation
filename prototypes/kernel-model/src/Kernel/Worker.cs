@@ -367,7 +367,7 @@ public sealed class Worker
         (slot.Busy, slot.Used) = (true, ++_used);
         var creator = slot.Row is null ? due.FindIndex(i => i.Message.Start is not null) : -1;
         var spec = creator < 0 ? null : due[creator].Message.Start;
-        if (slot.Row is { } current && Kinds.IsControl(due[0].Message.Kind) && (current.Status == InstanceStatus.Running || current.Children is not null))
+        if (slot.Row is { } current && Kinds.IsControl(due[0].Message.Kind) && (current.Status == InstanceStatus.Running || current.Children is not null || due[0].Message.Kind == Kinds.Delete))
             Enqueue(Control(slot, instance, due[0]));       // a terminate still goes on to the children of a finished instance
         else if (slot.Row is { Status: not InstanceStatus.Running })
             Enqueue(new Unit(slot, instance) { Consumed = due, Status = slot.Row.Status });    // a finished target: consumed and dropped
@@ -417,6 +417,10 @@ public sealed class Worker
     {
         var row = slot.Row!;
         if (item.Message.Kind == Kinds.Terminate) return Terminate(slot, instance, item, row);
+        if (item.Message.Kind == Kinds.Delete)
+            // Only an ended instance is deleted. What arrives for it afterwards is dropped as for a missing target.
+            return row.Status == InstanceStatus.Running ? new Unit(slot, instance) { Consumed = [item], State = slot.State }
+                : new Unit(slot, instance) { Delete = true, Expected = row.Revision, Consumed = [item], Unsubscribe = true, Status = row.Status, Journal = Json.Write(new[] { "deleted" }) };
         var suspended = item.Message.Kind == Kinds.Suspend;
         if (row.Status != InstanceStatus.Running) return new Unit(slot, instance) { Consumed = [item], Status = row.Status };
         if (row.Suspended == suspended) return new Unit(slot, instance) { Consumed = [item], State = slot.State };
@@ -561,7 +565,7 @@ public sealed class Worker
                 Has(Flaw.KeepConsumedMessages) ? [] : [.. u.Consumed.Where(i => i.Durable && i.Message.KeepUntil is null).Select(i => i.Message.Id), .. Has(Flaw.VolatileRunTicket) ? [] : u.Cancelled],
                 Has(Flaw.KeepConsumedMessages) ? [] : u.Consumed.Where(i => i.Durable && i.Message.KeepUntil is not null).Select(i => i.Message.Id).ToList(),
                 u.Sent.Where(m => !u.Volatile.Contains(m.Id)).ToList(), u.Subscribed, u.Unsubscribed, u.Journal, u.Unsubscribe,
-                u.Held.Where(i => i.Durable).Select(i => i.Message.Id).ToList())).ToList(),
+                u.Held.Where(i => i.Durable).Select(i => i.Message.Id).ToList(), u.Delete)).ToList(),
             marks.Select(i => i.Message.Id).ToList(), trial.Select(i => i.Message.Id).ToList());
         while (true)
         {
@@ -631,6 +635,7 @@ public sealed class Worker
         HandOver(unit, seqs, hold: handOver && !Has(Flaw.DeliverBeforeCommit));
         if (unit.Slot is not { } slot) return;
         if (unit.Row is not null) slot.Row = unit.Row;
+        if (unit.Delete) slot.Row = null;
         slot.State = unit.Row is { Status: InstanceStatus.Running } ? unit.State : null;
         slot.Busy = false;
         if (!Has(Flaw.EmitBeforeCommit)) Release(unit);
@@ -762,7 +767,7 @@ internal sealed class Unit(Slot? slot, string instance)
     public List<Message> Sent = [];
     public HashSet<string> Fresh = [], Volatile = [];
     public List<SubscriptionRow> Subscribed = [], Unsubscribed = [];
-    public bool Unsubscribe;
+    public bool Unsubscribe, Delete;
 
     public bool Durable => Row is not null || Journal is not null || Cancelled.Count > 0 || Consumed.Exists(i => i.Durable) || Sent.Exists(m => !Volatile.Contains(m.Id));
 }

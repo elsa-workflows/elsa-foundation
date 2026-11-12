@@ -58,8 +58,9 @@ public static class Kinds
     public const string Suspend = "kernel.suspend";     // deliver nothing but kernel messages until a resume
     public const string Resume = "kernel.resume";
     public const string Terminate = "kernel.terminate";   // end it, its runs and its waits, and every instance it started
+    public const string Delete = "kernel.delete";         // remove an ended instance: its row, its waits, its journal rows
 
-    public static bool IsControl(string kind) => kind is Suspend or Resume or Terminate;
+    public static bool IsControl(string kind) => kind is Suspend or Resume or Terminate or Delete;
 }
 
 public interface IExecutionModel
@@ -161,4 +162,6 @@ public enum Flaw : long
     StartWithoutRead = 1L << 36,   // read by the simulation: a registrar of a start subscription does not read the events kept
     CancelKnownChildren = 1L << 37, // read by the simulation: a parent cancels only the children that have reported back
     EvictBusy = 1L << 38,          // an instance whose commit is in flight may be evicted
+    DeleteLeavesJournal = 1L << 39, // a delete leaves the instance's journal rows
+    ProjectorStopsAtGap = 1L << 40, // the projector stops at the first missing position, as in section 10
 }

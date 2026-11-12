@@ -276,6 +276,12 @@ public sealed class EfStore(Func<KernelDb> create, bool postgres, bool fenceInBa
             var (position, sent) = (batch.Position, new List<MessageEntity>());
             foreach (var step in batch.Steps)
             {
+                if (step.Delete)    // an ended instance: its row at the expected revision, and its journal rows
+                {
+                    if (await db.Database.ExecuteSqlRawAsync("""DELETE FROM "Instances" WHERE "Id" = {0} AND "Revision" = {1}""", [step.Instance, step.Expected!], cancellationToken) != 1)
+                        return new Committed(false, 0, []);
+                    await db.Database.ExecuteSqlRawAsync("""DELETE FROM "Journal" WHERE "Partition" = {0} AND "Instance" = {1} AND "Revision" > 0""", [batch.Partition, step.Instance], cancellationToken);
+                }
                 if (step.Row is { } row)
                 {
                     var entity = new InstanceEntity
@@ -300,7 +306,7 @@ public sealed class EfStore(Func<KernelDb> create, bool postgres, bool fenceInBa
                 if (step.Unsubscribe)       // ended by force: its waits go, whatever they are
                     await db.Database.ExecuteSqlRawAsync("""DELETE FROM "Subscriptions" WHERE "Instance" = {0}""", [step.Instance], cancellationToken);
                 if (step.Journal is not null)
-                    db.Add(new JournalEntity { Partition = batch.Partition, Position = ++position, Instance = step.Instance, Revision = step.Row?.Revision ?? 0, Entries = step.Journal });
+                    db.Add(new JournalEntity { Partition = batch.Partition, Position = ++position, Instance = step.Instance, Revision = step.Delete ? -1 : step.Row?.Revision ?? 0, Entries = step.Journal });
             }
             foreach (var id in batch.Seen)
                 db.Attach(new MessageEntity { Id = id, Seen = batch.Epoch }).Property(m => m.Seen).IsModified = true;
@@ -399,22 +405,33 @@ public sealed class EfStore(Func<KernelDb> create, bool postgres, bool fenceInBa
         return rows.Select(j => new JournalRow(j.Partition, j.Position, j.Instance, j.Revision, j.Entries)).ToList();
     }
 
-    public async ValueTask<long> ProjectedAsync(int partition, CancellationToken cancellationToken = default)
+    private sealed class ProjectionRow
     {
-        await using var db = create();
-        return await db.Projections.Where(p => p.Partition == partition).Select(p => p.Position).SingleAsync(cancellationToken);
+        public long Position { get; set; }
+        public long Written { get; set; }
     }
 
-    public async ValueTask<bool> ProjectAsync(int partition, long from, IReadOnlyList<JournalRow> rows, CancellationToken cancellationToken = default)
+    public async ValueTask<Projection> ProjectedAsync(int partition, CancellationToken cancellationToken = default)
+    {
+        await using var db = create();
+        var row = await db.Database.SqlQueryRaw<ProjectionRow>(
+            """SELECT (SELECT "Position" FROM "Projections" WHERE "Partition" = {0}) AS "Position", (SELECT "Position" FROM "Partitions" WHERE "Id" = {0}) AS "Written" """,
+            partition).SingleAsync(cancellationToken);
+        return new Projection(row.Position, row.Written);
+    }
+
+    public async ValueTask<bool> ProjectAsync(int partition, long from, long to, IReadOnlyList<JournalRow> rows, CancellationToken cancellationToken = default)
     {
         await using var db = create();
         await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
-        var moved = await db.Database.ExecuteSqlRawAsync("""UPDATE "Projections" SET "Position" = {0} WHERE "Partition" = {1} AND "Position" = {2}""", [rows[^1].Position, partition, from], cancellationToken);
+        var moved = await db.Database.ExecuteSqlRawAsync("""UPDATE "Projections" SET "Position" = {0} WHERE "Partition" = {1} AND "Position" = {2}""", [to, partition, from], cancellationToken);
         if (moved != 1) return false;
         foreach (var view in rows.Where(r => r.Revision > 0).GroupBy(r => r.Instance))
             await db.Database.ExecuteSqlRawAsync(
                 """INSERT INTO "Views" ("Instance", "Partition", "Revision", "Commits") VALUES ({0}, {1}, {2}, {3}) ON CONFLICT ("Instance") DO UPDATE SET "Revision" = excluded."Revision", "Commits" = "Views"."Commits" + excluded."Commits" """,
                 [view.Key, partition, view.Max(r => r.Revision), view.Count()], cancellationToken);
+        foreach (var deleted in rows.Where(r => r.Revision < 0))
+            await db.Database.ExecuteSqlRawAsync("""DELETE FROM "Views" WHERE "Instance" = {0}""", [deleted.Instance], cancellationToken);
         await transaction.CommitAsync(cancellationToken);
         return true;
     }

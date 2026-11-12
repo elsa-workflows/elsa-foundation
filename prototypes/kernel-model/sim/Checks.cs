@@ -18,6 +18,7 @@ public sealed class Oracle
     public readonly HashSet<string> Trees = [];                                          // roots of trees started from outside
     public readonly Dictionary<string, List<string>> Events = new();                   // key -> events published
     public readonly List<SubscriptionRow> Starts = [];                                   // start subscriptions registered
+    public readonly HashSet<string> Deleted = [];                                        // instances that were sent a delete
 
     public bool Accepts(Message m) => m.Kind != "cancel" || Parents.ContainsKey(m.Target.Id) || (Runners.TryGetValue(m.Target.Id, out var keys) && keys.Contains(m.Read<string>()));
 
@@ -26,6 +27,7 @@ public sealed class Oracle
         if (!Sent.Add(m.Id)) return;
         var target = m.Target.Id;
         if (m.Kind == "cancel" && Parents.ContainsKey(target)) Cancelled.Add(target);
+        if (m.Kind == Kinds.Delete) Deleted.Add(target);
         switch (m.Start?.Model)
         {
             case "counter": List(Counters, target).Add(m.Read<Add>().Token); break;
@@ -50,6 +52,7 @@ public sealed partial class World
     public readonly Oracle Oracle = new();
     private readonly Dictionary<string, (long Revision, InstanceStatus Status)> _known = new(StringComparer.Ordinal);
     private readonly HashSet<string> _late = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _gone = new(StringComparer.Ordinal);    // deleted, and seen gone
     private readonly Dictionary<string, int> _versions = new(StringComparer.Ordinal);   // instances whose row first appeared after their parent had ended
     private readonly Dictionary<(Type, string), object> _parsed = new();
     private readonly Dictionary<string, int> _attempts = new(StringComparer.Ordinal);  // per message, as last seen
@@ -105,14 +108,17 @@ public sealed partial class World
         for (var p = 0; p < Config.Partitions; p++)
         {
             var position = Store.Partitions[p].Position;
-            if (count[p] != position || top[p] != position) return $"I6 partition {p} is at position {position} and its journal has {count[p]} rows up to {top[p]}";
+            if (count[p] + Store.Deleted[p] != position || top[p] != position) return $"I6 partition {p} is at position {position} and its journal has {count[p]} rows up to {top[p]}, {Store.Deleted[p]} deleted";
             if (Store.Projection[p] > position) return $"I6 the projector of partition {p} is at {Store.Projection[p]}, past position {position}";
         }
         // I6 for the view: each view row counts exactly the journal rows of its instance up to its projector's position.
         var projected = Store.Journal.Values.Where(j => j.Revision > 0 && j.Position <= Store.Projection[j.Partition]).GroupBy(j => j.Instance)
             .ToDictionary(g => g.Key, g => (Revision: g.Max(j => j.Revision), Commits: g.Count()), StringComparer.Ordinal);
+        var deletions = Store.Journal.Values.Where(j => j.Revision < 0).ToDictionary(j => j.Instance, j => j, StringComparer.Ordinal);
+        foreach (var id in deletions.Keys.Where(id => Oracle.Deleted.Contains(id) && !Store.Instances.ContainsKey(id))) _gone.Add(id);   // also those created and deleted between two checks
         foreach (var (id, view) in Store.Views)
-            if (!projected.TryGetValue(id, out var expected) || expected != (view.Revision, view.Commits))
+            if (deletions.TryGetValue(id, out var deletion) && deletion.Position > Store.Projection[deletion.Partition]) continue;    // deleted; the projector has not got there yet
+            else if (!projected.TryGetValue(id, out var expected) || expected != (view.Revision, view.Commits))
                 return $"I6 the view of {id} says revision {view.Revision} after {view.Commits} commits; the journal up to the projector says {expected.Revision} after {expected.Commits}";
         if (projected.Keys.FirstOrDefault(id => !Store.Views.ContainsKey(id)) is { } unseen) return $"I6 the projector passed the journal rows of {unseen} and has no view of it";
         foreach (var (id, revisions) in commits)
@@ -144,7 +150,13 @@ public sealed partial class World
             if (poison is null && !Oracle.Fragiles.GetValueOrDefault(row.Id)) return $"I14 {row.Id} did nothing wrong and was parked: {row.Fault}";
             if (poison is not null && Parked.Add(row.Id) && !Oracle.Fragiles.GetValueOrDefault(row.Id)) Interlocked.Increment(ref Bystanders);
         }
-        if (_known.Keys.FirstOrDefault(id => !Store.Instances.ContainsKey(id)) is { } gone) return $"I10 the row of {gone} disappeared";
+        // I22: a row disappears only when its instance was deleted, and a deleted instance never comes back.
+        if (_known.Keys.FirstOrDefault(id => !Store.Instances.ContainsKey(id) && !_gone.Contains(id)) is { } gone)
+        {
+            if (!Oracle.Deleted.Contains(gone) || !deletions.ContainsKey(gone)) return $"I10 the row of {gone} disappeared";
+            _gone.Add(gone);
+        }
+        if (_gone.FirstOrDefault(Store.Instances.ContainsKey) is { } back) return $"I22 {back} was deleted and has a row again";
         return Oracle.Ghosts.FirstOrDefault(Store.Instances.ContainsKey) is { } ghost ? $"I10 {ghost} was created by a message without a start spec" : null;
     }
 
@@ -283,7 +295,7 @@ public sealed partial class World
         {
             if (Store.Instances.GetValueOrDefault(id) is not { } row)
             {
-                if (!posted && mode != Sequence.Ephemeral && !waiting[id].Any()) return $"I3 the start of {id} is lost";
+                if (!posted && mode != Sequence.Ephemeral && !waiting[id].Any() && !_gone.Contains(id)) return $"I3 the start of {id} is lost";
                 continue;
             }
             if (Parked.Contains(id)) continue;
@@ -470,7 +482,8 @@ public sealed partial class World
     {
         if (Store.Messages.Values.FirstOrDefault(m => !m.Done && m.Message.Kind != "expire") is { } message) return $"END message {message.Message.Id} was never consumed";
         // I20 at the end: every event and every start subscription of its key, both committed, made exactly one instance.
-        var started = Store.Instances.Values.Where(i => i.Model == "onevent").Select(i => i.Id[(i.Id.IndexOf('/') + 1)..]).ToHashSet();
+        var started = Store.Instances.Values.Where(i => i.Model == "onevent").Select(i => i.Id).Concat(_gone.Where(id => id.Contains("/on:"))).Select(id => id[(id.IndexOf('/') + 1)..]).ToHashSet();
+        Count("instances deleted", _gone.Count);
         foreach (var start in Oracle.Starts)
             foreach (var e in Oracle.Events.GetValueOrDefault(start.Key) ?? [])
                 if (!started.Remove($"on:{e}:{start.Wait}")) return $"I20 event {e} for key {start.Key} and start subscription {start.Wait} are both committed and no instance was started";
@@ -489,13 +502,13 @@ public sealed partial class World
             }
         }
         foreach (var id in Oracle.Waiters.Keys)
-            if (!Parked.Contains(id) && Store.Instances.GetValueOrDefault(id) is not { Status: InstanceStatus.Finished }) return $"END waiter {id} did not finish";
+            if (!Parked.Contains(id) && !_gone.Contains(id) && Store.Instances.GetValueOrDefault(id) is not { Status: InstanceStatus.Finished }) return $"END waiter {id} did not finish";
         foreach (var id in Oracle.CWaiters.Keys)
             if (!Parked.Contains(id) && Hubs(id) is not null && Store.Instances.GetValueOrDefault(id) is not { Status: InstanceStatus.Finished }) return $"END waiter {id} (through correlation) did not finish";
         foreach (var (id, (count, mode, posted)) in Oracle.Sequences)
         {
             var row = Store.Instances.GetValueOrDefault(id);
-            if (!Parked.Contains(id) && (row is null ? !posted && mode != Sequence.Ephemeral : row.Status != InstanceStatus.Finished)) return $"END sequence {id} ({mode}{(posted ? ", handed over in memory" : "")}) ended as {row?.Status.ToString() ?? "no row"}";
+            if (!Parked.Contains(id) && !_gone.Contains(id) && (row is null ? !posted && mode != Sequence.Ephemeral : row.Status != InstanceStatus.Finished)) return $"END sequence {id} ({mode}{(posted ? ", handed over in memory" : "")}) ended as {row?.Status.ToString() ?? "no row"}";
         }
         foreach (var (id, keys) in Oracle.Runners)
         {

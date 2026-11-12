@@ -16,6 +16,12 @@ public sealed record EventRow(string Key, string Id, string? Payload, long KeepU
 
 public sealed record JournalRow(int Partition, long Position, string Instance, long Revision, string Entries);
 
+/// <summary>
+/// A projector's position, and the partition's position read just before: every journal position up to <c>Written</c>
+/// is committed, so one that is missing there was deleted, not written late.
+/// </summary>
+public sealed record Projection(long Position, long Written);
+
 /// <summary>The viewer's row of an instance, as the projector has it: the last revision it saw and how many commits.</summary>
 public sealed record ViewRow(string Instance, long Revision, int Commits);
 
@@ -30,11 +36,12 @@ public sealed record Cluster(int Nodes, IReadOnlyList<int> Free, long Now);
 /// One instance's part of a commit. <c>Expected</c> is the revision the row must have; null means the row is new.
 /// <c>Consumed</c> messages are deleted; <c>Done</c> ones (outside commands, which carry keep_until) are marked done.
 /// <c>Held</c> messages stay, and are no longer on trial: their step ran and did not kill the process.
+/// <c>Delete</c> removes the instance's row (at revision <c>Expected</c>) and its journal rows; its own journal row says so.
 /// <c>Unsubscribe</c> deletes every subscription of the instance: it was ended by force and the kernel holds no list of them.
 /// </summary>
 public sealed record StepCommit(
     string Instance, InstanceRow? Row, long? Expected, IReadOnlyList<string> Consumed, IReadOnlyList<string> Done, IReadOnlyList<Message> Sent,
-    IReadOnlyList<SubscriptionRow> Subscribed, IReadOnlyList<SubscriptionRow> Unsubscribed, string? Journal, bool Unsubscribe = false, IReadOnlyList<string>? Held = null);
+    IReadOnlyList<SubscriptionRow> Subscribed, IReadOnlyList<SubscriptionRow> Unsubscribed, string? Journal, bool Unsubscribe = false, IReadOnlyList<string>? Held = null, bool Delete = false);
 
 /// <summary>What the owner of <c>Partition</c> at <c>Epoch</c>, believing the position is <c>Position</c>, writes in one transaction.</summary>
 public sealed record CommitBatch(
@@ -101,14 +108,15 @@ public interface IKernelStore
 
     ValueTask<IReadOnlyList<JournalRow>> ReadJournalAsync(int partition, long after, int take, CancellationToken cancellationToken = default);
 
-    /// <summary>The position of the partition's projector: its own row, apart from the fence.</summary>
-    ValueTask<long> ProjectedAsync(int partition, CancellationToken cancellationToken = default);
+    /// <summary>The position of the partition's projector, its own row apart from the fence, and then the partition's position.</summary>
+    ValueTask<Projection> ProjectedAsync(int partition, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// In one transaction: move the projector's position from <paramref name="from"/> to the last row's, if it is still
-    /// at <paramref name="from"/>, and write the view rows of <paramref name="rows"/>. False when another projector moved it first.
+    /// In one transaction: move the projector's position from <paramref name="from"/> to <paramref name="to"/>, if it is
+    /// still at <paramref name="from"/>, and write the view rows of <paramref name="rows"/>; a row of a deleted instance
+    /// removes its view. False when another projector moved it first.
     /// </summary>
-    ValueTask<bool> ProjectAsync(int partition, long from, IReadOnlyList<JournalRow> rows, CancellationToken cancellationToken = default);
+    ValueTask<bool> ProjectAsync(int partition, long from, long to, IReadOnlyList<JournalRow> rows, CancellationToken cancellationToken = default);
 
     /// <summary>Delete handled outside commands and events whose window has passed.</summary>
     ValueTask<int> SweepAsync(CancellationToken cancellationToken = default);
