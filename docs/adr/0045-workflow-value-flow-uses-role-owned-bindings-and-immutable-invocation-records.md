@@ -283,11 +283,9 @@ completion.** A successful completion carries an *outcome selection* instead of 
   - The connections of every selected outcome are scheduled. When two of them lead to the same node, each is an
     arrival at that node. Its default synchronizing implicit join
     ([ADR 0064](0064-flowchart-infers-joins-from-propagated-dead-paths.md)) accounts for the eligible arrivals of one
-    activation and runs the target once. Explicit per-arrival behavior may create separate executions; later loop
-    iterations and independent activations remain distinct. Non-default behavior must be visible in authoring and
-    represented in the published contract. Waiting conditions, execution cardinality and losing-branch cancellation
-    remain explicit; S-3 must define invocation identity and data provenance for per-arrival execution and prove the
-    behavior through late arrivals, loop re-entry, cancellation and persistence/recovery.
+    activation and runs the target once. Later loop iterations and independent activations remain distinct. This
+    amendment defines no other join behaviour; whether a target may run once per arrival belongs to the design of join
+    behaviour as a whole, not to the outcome contract.
   - Path analysis, joins ([ADR 0064](0064-flowchart-infers-joins-from-propagated-dead-paths.md)), the unordered-write
     warning ([ADR 0048](0048-container-output-captures-resolve-through-producer-visible-variable-frames.md), spec 266)
     and inspection treat a node that may select several outcomes as an inclusive fork.
