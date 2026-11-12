@@ -142,7 +142,7 @@
         <li>Short timers and jobs of an Ephemeral instance kept in memory; the stress test with native instances; a three-node MongoDB replica set</li>
       </ul></div>
     <div class="card"><h4>Decided 12 November</h4>
-      <p class="note">Built in the prototype: the fence in the batch, the event tables and job poison counting. Partly: wake hints in one process. Not built yet: the Orleans adapter, short waits in memory, reply deadlines, the recreate rule, set-based projector rounds, parking a poisoned job, values by reference and the viewer's tail read.</p>
+      <p class="note">Built in the prototype: the fence in the batch, the event tables and job poison counting. Not built yet: the wake signal (round 4 adds it), the Orleans adapter, short waits in memory, reply deadlines, the recreate rule, set-based projector rounds, parking a poisoned job, values by reference and the viewer's tail read.</p>
       <ul>
         <li>Commit fence in the batch by default (2 round trips on PostgreSQL); fence first stays an option</li>
         <li>A pluggable wake signal between nodes; polling remains the guarantee</li>
