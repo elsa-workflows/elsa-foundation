@@ -1,5 +1,6 @@
 using Elsa.Foundation.Identity.Core.Iam;
 using Elsa.Workflows.Runtime.Core.UserTasks;
+using Microsoft.Extensions.Logging;
 
 namespace Elsa.Workflows.Runtime.Api.UserTasks;
 
@@ -7,8 +8,9 @@ namespace Elsa.Workflows.Runtime.Api.UserTasks;
 /// Puts display names beside the stored task user and group IDs for anyone who may read the task. Names come from
 /// the same tenant directory the eligibility adapter trusts, so readers never need the manager-only target directory.
 /// Each distinct ID is read once per request; an ID that is not in the task's tenant directory gets no name.
+/// Names are display-only: a directory failure leaves the name out rather than failing a response whose change is already saved.
 /// </summary>
-internal sealed class UserTaskPeople(IUserStore? users = null, IRoleStore? roles = null)
+internal sealed class UserTaskPeople(IUserStore? users = null, IRoleStore? roles = null, ILogger<UserTaskPeople>? logger = null)
 {
     private readonly Dictionary<(string Tenant, string Id), string?> userNames = new();
     private readonly Dictionary<(string Tenant, string Id), string?> groupNames = new();
@@ -42,7 +44,9 @@ internal sealed class UserTaskPeople(IUserStore? users = null, IRoleStore? roles
     {
         if (users is null || string.IsNullOrWhiteSpace(id)) return null;
         if (userNames.TryGetValue((tenantId, id), out var known)) return known;
-        var user = await users.FindAsync(tenantId, id, cancellationToken);
+        UserRecord? user;
+        try { user = await users.FindAsync(tenantId, id, cancellationToken); }
+        catch (Exception exception) when (exception is not OperationCanceledException) { return Unnamed(exception); }
         // Disabled people keep their name so history stays readable; only the tenant and identity must match.
         var name = user is not null && user.Id == id && user.TenantId == tenantId ? Readable(user.DisplayName) ?? Readable(user.UserName) : null;
         return userNames[(tenantId, id)] = name;
@@ -52,9 +56,17 @@ internal sealed class UserTaskPeople(IUserStore? users = null, IRoleStore? roles
     {
         if (roles is null || string.IsNullOrWhiteSpace(id)) return null;
         if (groupNames.TryGetValue((tenantId, id), out var known)) return known;
-        var role = await roles.FindAsync(tenantId, id, cancellationToken);
+        RoleRecord? role;
+        try { role = await roles.FindAsync(tenantId, id, cancellationToken); }
+        catch (Exception exception) when (exception is not OperationCanceledException) { return Unnamed(exception); }
         var name = role is not null && role.Id == id && role.TenantId == tenantId ? Readable(role.Name) : null;
         return groupNames[(tenantId, id)] = name;
+    }
+
+    private string? Unnamed(Exception exception)
+    {
+        logger?.LogWarning(exception, "The task directory could not name a task person; the response shows the stored ID.");
+        return null;
     }
 
     private static string? Readable(string? name) => string.IsNullOrWhiteSpace(name) ? null : name;

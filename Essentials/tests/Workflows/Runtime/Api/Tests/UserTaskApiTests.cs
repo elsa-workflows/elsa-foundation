@@ -127,6 +127,12 @@ public sealed class UserTaskApiTests
         var claimed = await (await host.Client.PostAsJsonAsync("/runtime/user-tasks/task/claim", new { revision = 2, requestId = "claim" })).Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal("Alice", claimed.GetProperty("claimantName").GetString());
         Assert.Equal("alice:Alice", claimed.GetProperty("history").EnumerateArray().Select(entry => entry.GetProperty("actorId").GetString() + ":" + entry.GetProperty("actorName").GetString()).Last());
+        // A directory failure only leaves a name out; it never turns a saved change into a failed response.
+        host.Identity.Failing.Add("bob");
+        var released = await host.Client.PostAsJsonAsync("/runtime/user-tasks/task/release", new { revision = 3, requestId = "release" });
+        Assert.Equal(HttpStatusCode.OK, released.StatusCode);
+        var history = (await released.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("history");
+        Assert.Equal(JsonValueKind.Null, history[1].GetProperty("actorName").ValueKind); Assert.Equal("Alice", history[history.GetArrayLength() - 1].GetProperty("actorName").GetString());
     }
 
     private sealed class Host(WebApplication app, HttpClient client, Identity identity) : IAsyncDisposable
@@ -175,8 +181,8 @@ public sealed class UserTaskApiTests
     {
         public UserRecord User = new("alice", "default", "Alice", null, "Alice", UserStatus.Active, ResourceOwnership.Foundation, new HashSet<string> { "finance" }, new HashSet<string>());
         public bool Revoked; public bool DenyResource; public HashSet<string>? Granted;
-        public readonly Dictionary<string, UserRecord> Others = new(); public readonly Dictionary<string, string> Groups = new(); public readonly List<string> UserLookups = [];
-        public ValueTask<UserRecord?> FindAsync(string tenantId, string userId, CancellationToken cancellationToken = default) { UserLookups.Add(userId); return ValueTask.FromResult<UserRecord?>(Others.TryGetValue(userId, out var other) ? other : userId == User.Id ? User with { TenantId = tenantId } : null); }
+        public readonly Dictionary<string, UserRecord> Others = new(); public readonly Dictionary<string, string> Groups = new(); public readonly List<string> UserLookups = []; public readonly HashSet<string> Failing = [];
+        public ValueTask<UserRecord?> FindAsync(string tenantId, string userId, CancellationToken cancellationToken = default) { UserLookups.Add(userId); if (Failing.Contains(userId)) throw new InvalidOperationException("Directory unavailable."); return ValueTask.FromResult<UserRecord?>(Others.TryGetValue(userId, out var other) ? other : userId == User.Id ? User with { TenantId = tenantId } : null); }
         public ValueTask<UserRecord?> FindByEmailAsync(string tenantId, string email, CancellationToken cancellationToken = default) => ValueTask.FromResult<UserRecord?>(null);
         public ValueTask SaveAsync(UserRecord user, CancellationToken cancellationToken = default) { User = user; return ValueTask.CompletedTask; }
         public ValueTask<bool> SetStatusAsync(string tenantId, string userId, UserStatus status, CancellationToken cancellationToken = default) { User = User with { Status = status }; return ValueTask.FromResult(true); }
