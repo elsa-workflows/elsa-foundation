@@ -155,7 +155,7 @@ The tables below are the relational shape. A document provider stores the same r
 | `journal` | partition, position, instance, entries | One row per instance-commit: what happened, as one compact value. The truth about the past. Feeds the viewer's tables. Written according to the history level |
 | `projection` | partition, position | How far the projector has got. Its own row, so the projector never touches the fence row |
 
-This is the proposed shape. Not in the prototype yet: the instance's `sub_status`, `root`, `correlation`, `tenant`, `created` and `updated`, the message's `headers`, and the subscription's `kind` (the prototype tells a start subscription by the start spec on its row). The prototype also keeps `fault`, `history`, `suspended` and `children` on the instance row, a `revision` on each journal row and a `died` flag on the partition row; at the evidence commit `jobs` is still called `runs`.
+This is the proposed shape, and the interfaces in this sketch are the proposed contract: at the evidence commit the prototype still says step and run (`IStep`, `StepAsync`, `IRun`) and has no `Describe`. Not in the prototype yet: the instance's `sub_status`, `root`, `correlation`, `tenant`, `created` and `updated`, the message's `headers`, and the subscription's `kind` (the prototype tells a start subscription by the start spec on its row). The prototype also keeps `fault`, `history`, `suspended` and `children` on the instance row, a `revision` on each journal row and a `died` flag on the partition row; at the evidence commit `jobs` is still called `runs`.
 
 The viewer's tables are projections of the journal. There is no outbox, dispatcher, scheduler queue, per-run lease, commit marker, dispatch record or timer table.
 
@@ -173,7 +173,9 @@ The owner of partition `p` at epoch `e`, which believes the position is `n`, com
 8. Insert `k` journal rows at positions `n + 1 .. n + k`.
 9. Commit.
 
-Statement 1 is the fence. The row lock on the partition row orders it against a takeover. The check in step 2 is why a commit is **two round trips, not one**: a commit sent in the same packet as a fence that matched nothing would still land. There are two ways to do it, both measured: `epoch` and `position` as EF concurrency tokens in the one `SaveChanges`, which checks before it sends the commit (2 round trips on PostgreSQL, lease time from the node's clock); or the fence as its own statement first (3 round trips, lease time from the database). The fence also renews the lease, so a busy partition needs no heartbeat. An idle owner sends an empty fenced commit as its heartbeat, which is also how a stale one finds out. **Default (12 November): the fence in the batch; the fence as its own statement stays an option.**
+Statement 1 is the fence. With the fence as its own statement, the row lock on the partition row orders the commit against a takeover; with the fence in the batch EF chooses the order, see E9 below. The check in step 2 is why a commit is **two round trips, not one**: a commit sent in the same packet as a fence that matched nothing would still land. There are two ways to do it, both measured: `epoch` and `position` as EF concurrency tokens in the one `SaveChanges`, which checks before it sends the commit (2 round trips on PostgreSQL, lease time from the node's clock); or the fence as its own statement first (3 round trips, lease time from the database). The fence also renews the lease, so a busy partition needs no heartbeat. An idle owner sends an empty fenced commit as its heartbeat, which is also how a stale one finds out. **Default (12 November): the fence in the batch; the fence as its own statement stays an option.**
+
+On SQL Server the fence in the batch has a known problem (finding E9 of the prototype): a stale owner's commit holds a message lock and waits for the partition row, because EF sends the fence last, while a take holds the partition row and waits for that message. In one stress run that made 127 deadlocks, every victim a take. Nothing wrong landed; it costs availability during takeovers. The suggested fix, the checked fence on SQL Server, is not applied; whether SQL Server's default becomes the checked fence is an open owner question.
 
 The ordinal in a derived message id has a fixed width. EF sends the inserts of one commit in key order, so without it the eleventh message of a turn overtook the third (found on PostgreSQL).
 
@@ -425,7 +427,7 @@ These figures come from the prototype's own cost runs, reported in its findings;
 | Store conformance, 57 semantic cases: in memory | 56 pass, 1 skipped | Re-run on 12 November |
 | Store conformance: SQLite, either fence | 54 pass, 1 skipped; 2 reference cases differ (subscribing twice, removing what is absent), where the contract is silent and must be defined | Re-run on 12 November |
 | Store conformance: PostgreSQL, SQL Server, MySQL, MongoDB, either fence | PostgreSQL 54 pass, 3 differ; SQL Server and MySQL 53 pass, 3 differ, 1 skipped; MongoDB 57 pass. The differing cases are where the contract is silent | Reported by the merge run; not re-run |
-| Stress: 40 s, 5,000 messages, killed connections and stalls | Every property holds on all five engines; 0 deadlocks on PostgreSQL, SQL Server and MySQL | Reported by the merge run; not re-run |
+| Stress: 40 s, 5,000 messages, killed connections and stalls | Every property holds on all five engines; 0 deadlocks on PostgreSQL, SQL Server (checked fence) and MySQL. SQL Server with the fence in the batch: 127 deadlocks on takes in one run (E9), safety held | Reported by the merge run; not re-run |
 | Stress with the fence broken on purpose | Violations on every engine: PostgreSQL 228, SQL Server 26, MySQL 611, SQLite 238, MongoDB 390 | Reported by the merge run; not re-run |
 
 - **Built since draft 2:** suspend, resume, terminate, rebind and delete; events that start instances; the projector; reply addresses for live output across nodes; the native model with HTTP routes; the store on SQL Server, MySQL and MongoDB.
@@ -444,7 +446,7 @@ What the design gains, what it pays for it, and the lever that moves the balance
 | 4 | Batching: many commits in one transaction under load | A commit waits for the one before it, so latency rises a little under load while throughput rises a lot | Rows per flush |
 | 5 | Balanced mode: one commit per wait | After a crash, the activities since the last commit run again. Activity code runs at least once; its effect on workflow state happens exactly once. Side effects outside Elsa may repeat | Persistence mode per workflow; Durable for what must not repeat |
 | 6 | Background jobs do not block the instance | A background job can run more than once after a crash; external calls need idempotency keys | None: inherent, as in Temporal |
-| 7 | The run viewer costs nothing on the hot path | Studio and the activity views lag the run while the projector catches up; the projector's own writes still cost database calls, most at Full history | History level per workflow |
+| 7 | The run viewer costs nothing on the hot path | The run view stays current by reading the journal tail (decision 11, not built); lists and other views over projected rows lag the projector; the projector's own writes still cost database calls, most at Full history | History level per workflow |
 | 8 | Instances only talk through messages: no races, no cross-run locks | No code can read another instance's state: a question to another instance is a message or a read of a projection that may lag. Some features become a little harder to write | None: it is the design |
 | 9 | State is a snapshot, not a replayed history: authors have no determinism rules, and loading is fast | History is a record, not the source: no rebuilding a run from history alone, and an old state needs upgrade code when a model changes | State versions and `UpgradeState` |
 | 10 | State is opaque to the kernel: any model fits | The kernel cannot search inside state. Finding instances by a variable needs the model to publish a summary or an index, which costs writes | `Describe`; indexed fields chosen per workflow |
@@ -486,6 +488,8 @@ The test: give Elsa 3 users a reason to move and nothing that stops them, and gi
 - **Large fan-out:** the aggregating pattern is designed in the proposal and ships with ETL; release 1 caps a parallel ForEach at a documented size.
 - **Standalone jobs:** Elsa.Jobs rebuilt on the kernel as a job actor type; a spike now, release placement in the proposal.
 - **After, with a spike now:** BPMN, the Orleans adapter, ETL. The out-of-process job worker protocol follows in 1.x; its contract is designed now so jobs are built right.
+
+- **SQL Server's default fence (E9).** The fence in the batch deadlocks takes with stale commits on SQL Server; the fix (the checked fence there) is not applied. Open for the owner: the checked fence as SQL Server's default.
 
 ### Earlier open questions
 
