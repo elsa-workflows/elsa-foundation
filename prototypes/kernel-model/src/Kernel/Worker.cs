@@ -93,7 +93,7 @@ public sealed class Worker
     public bool NeedsFlush => _queue.Count > 0 || _items.Values.Any(Unmarked) || NextTrial().Count > 0;
     public IEnumerable<string> Trial => _trial.Select(i => i.Message.Id);
     public bool NeedsMeet => _meets.Exists(i => !Awaits(i) && !i.Taken);
-    public IEnumerable<string> Ready => _slots.Where(s => s.Value.Loaded && !s.Value.Busy && Deliverable(s.Value).Count > 0).Select(s => s.Key)
+    public IEnumerable<string> Ready => _slots.Where(s => s.Value.Loaded && !s.Value.Busy && Deliverable(s.Key, s.Value).Count > 0).Select(s => s.Key)
         .Where(id => !Blocked && (_trial.Count == 0 || OnTrial(id)));    // while a trial runs, nothing else in the process does
 
     // What is in memory, for tests of invariant 9.
@@ -203,7 +203,7 @@ public sealed class Worker
     /// A message that another owner had marked, or that is on trial already, may be what killed that owner. What this
     /// same process marked in an epoch it held earlier is not: the process is alive.
     /// </summary>
-    private bool Suspect(Stored row, long now) => row.Message.Kind != Kinds.Meet && row.Attempts < _options.MaxAttempts
+    private bool Suspect(Stored row, long now) => row.Message.Kind != Kinds.Meet && !Kinds.IsControl(row.Message.Kind) && row.Attempts < _options.MaxAttempts
         && (row.Trial > 0 || (row.Seen > 0 && !_mine.Contains(row.Seen) && (row.Message.Due is not { } due || due <= now)));
 
     private bool OnTrial(string instance) => _trial.Any(t => t.Message.Target.Id == instance);
@@ -239,7 +239,14 @@ public sealed class Worker
         slot.Inbox.Insert(at < 0 ? slot.Inbox.Count : at, item);    // a target's messages are handled in seq order
     }
 
-    private static bool Unmarked(Item item) => item.Durable && !item.Marked && !item.Taken && !item.Suspect;
+    private bool Unmarked(Item item) => item.Durable && !item.Marked && !item.Taken && (!item.Suspect || (!item.Shelved && Shelf(item)));
+
+    /// <summary>
+    /// Finding F12: a suspect whose instance is suspended cannot be tried, and while its row says unseen it fills a place
+    /// in every poll; a poll limit of them hides the resume behind them. So it is shelved: its row is marked seen at this
+    /// epoch, which moves the polls on, but it is neither on trial nor cleared to run. The next owner still suspects it.
+    /// </summary>
+    private bool Shelf(Item suspect) => !Has(Flaw.NoShelf) && _slots.TryGetValue(suspect.Message.Target.Id, out var slot) && slot.Row is { Suspended: true };
 
     /// <summary>
     /// Finding F2: suspects are tried apart from everything else. A fenced commit writes that they are on trial at this
@@ -252,15 +259,25 @@ public sealed class Worker
         if (_trial.Count > 0 || Blocked) return [];
         var suspects = _items.Values.Where(i => i.Durable && !i.Marked && !i.Taken && i.Suspect).OrderBy(i => i.Seq).ToList();
         if (suspects.Count == 0 || Has(Flaw.BumpAllInherited)) return suspects;
-        var (attempts, group, skipped) = (suspects[0].Attempts, new List<Item>(), new HashSet<string>());
+        var (group, skipped) = (new List<Item>(), new HashSet<string>());
+        int? attempts = null;
         foreach (var suspect in suspects)
         {
             // A member must not wait behind an older suspect of the same target that is not in the group.
-            if (suspect.Attempts == attempts && group.Count < Math.Max(1, _options.TrialGroup >> attempts) && !skipped.Contains(suspect.Message.Target.Id)) group.Add(suspect);
-            else skipped.Add(suspect.Message.Target.Id);
+            var target = suspect.Message.Target.Id;
+            if (!skipped.Contains(target) && CanTry(suspect) && (attempts ??= suspect.Attempts) == suspect.Attempts && group.Count < Math.Max(1, _options.TrialGroup >> attempts.Value)) group.Add(suspect);
+            else skipped.Add(target);
         }
         return group;
     }
+
+    /// <summary>
+    /// A trial holds up the process until its members are consumed, so a suspect is tried only when its step can run at
+    /// once: its instance is loaded, has nothing in flight, is not suspended, and no kernel message waits ahead of it.
+    /// </summary>
+    private bool CanTry(Item suspect) =>
+        _slots.TryGetValue(suspect.Message.Target.Id, out var slot) && slot.Loaded && (!slot.Busy || Has(Flaw.SuspendDuringTrial)) && slot.Row is not { Suspended: true }
+        && !slot.Inbox.TakeWhile(i => i != suspect).Any(i => Kinds.IsControl(i.Message.Kind));
 
     /// <summary>
     /// Finding F3: a polled message is not acted on until a fenced commit has marked it seen at this epoch (and bumped
@@ -268,14 +285,24 @@ public sealed class Worker
     /// </summary>
     private bool Awaits(Item item) => item.Durable && !item.Marked && (item.Suspect || !Has(Flaw.RunBeforeMark));
 
-    private List<Item> Deliverable(Slot slot)
+    private List<Item> Deliverable(string instance, Slot slot)
     {
         var now = Now;
         var due = new List<Item>();
+        var suspended = slot.Row is { Suspended: true } && !Has(Flaw.DeliverWhileSuspended);
         foreach (var item in slot.Inbox)
         {
             if (item.Ticket) continue;
+            var control = Kinds.IsControl(item.Message.Kind);
+            if (suspended && !control) continue;    // a suspended instance is given nothing; its messages wait in order
             if (Awaits(item)) break;    // nothing overtakes a message that waits for its mark
+            if (control)
+            {
+                // The kernel's, alone, after what came before it. A suspend waits while the instance has a message on trial,
+                // or the trial could never end.
+                if (due.Count == 0 && !(item.Message.Kind == Kinds.Suspend && OnTrial(instance) && !Has(Flaw.SuspendDuringTrial))) due.Add(item);
+                break;
+            }
             if (item.Message.Due is not { } at || at <= now) due.Add(item);
         }
         return due;
@@ -308,7 +335,7 @@ public sealed class Worker
     {
         if (!Owns || !_slots.TryGetValue(instance, out var slot) || !slot.Loaded || slot.Busy) return;
         if (Blocked || (_trial.Count > 0 && !OnTrial(instance))) return;
-        var due = Deliverable(slot);
+        var due = Deliverable(instance, slot);
         if (due.Count == 0) return;
         slot.Inbox.RemoveAll(due.Contains);
         foreach (var item in due) item.Taken = true;
@@ -319,6 +346,8 @@ public sealed class Worker
             Enqueue(new Unit(slot, instance) { Consumed = due, Status = slot.Row.Status });    // a finished target: consumed and dropped
         else if (due.Find(i => i.Attempts >= _options.MaxAttempts && i.Message.Kind != Kinds.RunFinished) is { } poison)
             Enqueue(Park(slot, instance, due, spec, $"message {poison.Message.Id} was on trial when {poison.Attempts} owners were lost"));
+        else if (slot.Row is not null && Kinds.IsControl(due[0].Message.Kind))
+            Enqueue(Control(slot, instance, due[0]));
         else if (slot.Row is null && spec is null)                   // no target and no start spec: dropped and journalled
             Enqueue(new Unit(slot, instance) { Consumed = due, Journal = Json.Write(due.Select(i => "dropped " + i.Message.Id)), Status = null });
         else
@@ -354,6 +383,16 @@ public sealed class Worker
         var unit = new Unit(slot, instance) { Row = row, Expected = slot.Row?.Revision, Consumed = taken, Journal = row is null ? null : Journal(row.History, ["parked: " + error]), Status = row?.Status };
         if (row?.Parent is not null) unit.Sent.Add(Finished(row, null));
         return unit;
+    }
+
+    /// <summary>The kernel's own step: suspend or resume. A message that changes nothing is consumed and dropped.</summary>
+    private static Unit Control(Slot slot, string instance, Item item)
+    {
+        var row = slot.Row!;
+        var suspended = item.Message.Kind == Kinds.Suspend;
+        if (row.Suspended == suspended) return new Unit(slot, instance) { Consumed = [item], State = slot.State };
+        var next = row with { Suspended = suspended, Revision = row.Revision + 1 };
+        return new Unit(slot, instance) { Row = next, Expected = row.Revision, Consumed = [item], State = slot.State, Revision = next.Revision, Journal = Journal(row.History, [item.Message.Kind]) };
     }
 
     /// <summary>What a commit leaves in the journal at a history level. At Minimal no row is written and the position does not move.</summary>
@@ -496,7 +535,9 @@ public sealed class Worker
             }
             Position += batch.Positions;
             Observe(result.Now);
-            foreach (var item in marks.Concat(trial)) item.Marked = true;
+            foreach (var item in marks.Concat(trial))
+                if (item.Suspect && !trial.Contains(item)) item.Shelved = true;
+                else item.Marked = true;
             var seqs = new Queue<long>(result.Seqs);
             foreach (var unit in units) Apply(unit, seqs, handOver);
             foreach (var item in marks.Concat(trial))
@@ -619,6 +660,7 @@ internal sealed class Item(Message message, long seq)
     public bool Durable;            // it is a row
     public bool Marked;             // its row says seen at this epoch
     public bool Suspect;            // another owner had it: it is tried apart before anything else is believed of it
+    public bool Shelved;            // a suspect whose row says seen at this epoch, not yet tried
     public int Attempts;
     public bool Ticket;             // a kernel message, not (yet) for the model
     public bool Taken;              // a step or a commit in flight has it

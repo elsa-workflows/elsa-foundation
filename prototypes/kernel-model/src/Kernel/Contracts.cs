@@ -45,6 +45,12 @@ public static class Kinds
     public const string Event = "event";
     public const string Run = "kernel.run";    // a run's ticket: the intent while the work is in flight, the result afterwards
     public const string Meet = "kernel.meet";  // "read the events for the keys this commit subscribed"
+
+    // What anyone may tell the kernel to do with an instance. The kernel handles them alone, in order; no model sees them.
+    public const string Suspend = "kernel.suspend";     // deliver nothing but kernel messages until a resume
+    public const string Resume = "kernel.resume";
+
+    public static bool IsControl(string kind) => kind is Suspend or Resume;
 }
 
 public interface IExecutionModel
@@ -125,4 +131,7 @@ public enum Flaw
     EmitBeforeCommit = 1 << 24,    // what a step emits is released when the step ends, before its commit lands
     ReplyTwice = 1 << 25,          // a request takes a second answer that arrives after its first
     NoDeadline = 1 << 26,          // a request waits until something answers it
+    DeliverWhileSuspended = 1 << 27, // a suspended instance is given its messages
+    NoShelf = 1 << 28,             // a suspect that cannot be tried keeps its row unseen
+    SuspendDuringTrial = 1 << 29,  // an instance may be suspended while it has a message on trial
 }

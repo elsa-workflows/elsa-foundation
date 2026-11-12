@@ -1,7 +1,7 @@
 namespace Kernel;
 
 /// <summary><c>Runs</c> is the kernel's part of the row: the keys of the off-step work in flight, as a JSON array, or null.</summary>
-public sealed record InstanceRow(string Id, string Model, string Definition, InstanceStatus Status, string State, long Revision, string? Parent, string? Fault = null, string? Runs = null, History History = History.Full);
+public sealed record InstanceRow(string Id, string Model, string Definition, InstanceStatus Status, string State, long Revision, string? Parent, string? Fault = null, string? Runs = null, History History = History.Full, bool Suspended = false);
 
 /// <summary>A message row as a poll returns it.</summary>
 public sealed record Stored(Message Message, long Seq, long Seen, int Attempts, long Trial);

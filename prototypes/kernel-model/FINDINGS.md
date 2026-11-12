@@ -473,3 +473,38 @@ The owner's requirement of 12 November: a workflow handles an HTTP request and p
 - **Choices, reasoned:** a reset tells callers "lost" even when the rows still hold the request's message; a new
   owner answers that message later, and the caller has already ended. A caller prefers a quick 503 to a late 200.
   "Respond before the commit" (the sketch's opt-out) is not built.
+
+## 12. Suspend and resume by the kernel. Run
+
+- **Built:** `kernel.suspend` and `kernel.resume`, messages anyone may add. The kernel handles them alone, in `seq`
+  order, after what came before them; no model sees them. `Suspended` is a column of the instance row. While it is
+  set, the instance is given nothing but kernel messages (a resume overtakes what waits); its messages, results and
+  due timers wait in order and are delivered after the resume. A command that changes nothing is consumed and dropped.
+- **In the simulation:** outsiders suspend and resume random running instances (counters, children, runners, HTTP
+  instances, correlation keys); the settling phase resumes whatever is suspended.
+- **Invariant 16:** while its committed row says suspended, the current owner runs no step of the instance; at the
+  end nothing is suspended and everything that waited was delivered (the existing order and timer checks hold across
+  a suspension). `--flaw DeliverWhileSuspended`: caught, seed 10.
+
+### F12. Suspects of a suspended instance hide the resume (liveness). Run
+
+- **Replay:** seed 989, `--flaw NoShelf`: `IDLE ... resume-1/hw9.4 (kernel.resume to 1/hw9, seen 0)`.
+- **Trace, in short:** an owner dies with messages of an instance that is then suspended. The new owner suspects
+  them, but a suspect of a suspended instance cannot be tried, so its row stays unseen. With a poll limit of three,
+  they are the first three rows of every poll; the resume behind them is never read.
+- **Sketch sentence:** "Polling: `... WHERE seen < e ... ORDER BY seq LIMIT m`" with "a new owner tries the messages
+  its predecessor had marked one at a time". A row that waits for something its own poll cannot reach blocks the poll.
+- **Fix:** a suspect whose instance is suspended is *shelved*: a fenced commit marks its row seen at this epoch (so
+  polls pass it) without putting it on trial; in memory it stays a suspect that is not cleared to run. A later owner
+  still suspects it. `Worker.Shelf`, `Item.Shelved`.
+
+### F13. A trial must not start on an instance that can be suspended under it (liveness). Run
+
+- **Replay:** seed 2101, `--flaw SuspendDuringTrial`: `IDLE ... 0/h1!work (kernel.run to 0/h1)`.
+- **Trace, in short:** a run ticket was put on trial in the same commit that suspended its instance. The run's
+  result could then never be consumed, and the trial held up the whole process for ever.
+- **Fix:** a suspect is tried only when its step can run at once: its instance is loaded, has nothing in flight, is not
+  suspended, and no kernel message waits ahead of it (`Worker.CanTry`). While an instance has a message on trial, a
+  suspend to it waits.
+- **Side effect, run:** innocent messages parked at the threshold fell from 154 to 1 in 5,000 seeds of 1,000 actions.
+  A trial no longer waits for its instance's load. Section 21 measures this.

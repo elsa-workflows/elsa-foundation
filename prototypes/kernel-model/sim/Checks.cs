@@ -224,7 +224,7 @@ public sealed partial class World
                 if (!stage) return $"I2 child {child} of {id}: row {row?.Status.ToString() ?? "none"}, {start} start, {timer} timer, {finished} child-finished waiting";
             }
             foreach (var child in state.Done)
-                if (Store.Instances.GetValueOrDefault(child) is not { Status: InstanceStatus.Finished or InstanceStatus.Faulted } || (!Parked.Contains(child) && waiting[child].Any())) return $"I2 {id} counts {child} as done and it is not";
+                if (Store.Instances.GetValueOrDefault(child) is not { Status: InstanceStatus.Finished or InstanceStatus.Faulted } || (!Parked.Contains(child) && waiting[child].Any(m => !Kinds.IsControl(m.Kind)))) return $"I2 {id} counts {child} as done and it is not";
         }
         return null;
     }
@@ -351,6 +351,8 @@ public sealed partial class World
                 if (Processes.TryGetValue(node, out var requests) && Running(node)) requests.Receive(reply);
             Deliveries.Clear();
             foreach (var requests in Processes.Values) requests.Expire(Time);
+            foreach (var row in Store.Instances.Values.Where(i => i.Suspended).ToList())     // the outsider resumes whatever is suspended
+                Store.AddAsync(new Message($"resume-{row.Id}.{row.Revision}", new InstanceRef(row.Id), Kinds.Resume, KeepUntil: Time + 3_600_000)).AsTask().Wait();
             for (var pass = 0; pass < 8; pass++)
                 foreach (var (node, partition) in slots)
                 {
@@ -448,6 +450,7 @@ public sealed partial class World
             if (!Parked.Contains(id) && keys.Find(k => !log.Contains("start " + k) || !(log.Contains("result " + k) || log.Contains("cancel " + k))) is { } key)
                 return $"I12 run {key} of {id} has neither a result nor a cancel: [{string.Join(", ", log)}]";
         }
+        if (Store.Instances.Values.FirstOrDefault(i => i.Suspended) is { } suspended) return $"END {suspended.Id} is still suspended after its resume";
         foreach (var (process, request, instance) in Asked)
         {
             if (!request.Done && Running(process)) return $"I15 request {request.Id} on {process} for {instance} still waits";

@@ -236,6 +236,9 @@ public sealed partial class World
             {
                 Log?.Invoke($"        actor {actor.Id} steps {instance} with [{string.Join(", ", inbox.Select(m => m.Kind + " " + m.Id))}]");
                 Alone(actor, instance.Id, "a step of " + instance);
+                // I16: while its committed row says suspended, the current owner gives an instance nothing.
+                if (actor.Worker.Epoch == Store.Partitions[actor.Partition].Epoch && Store.Instances.GetValueOrDefault(instance.Id) is { Suspended: true })
+                    Faults.Add($"I16 actor {actor.Id} ran a step of {instance} while it was suspended: [{string.Join(", ", inbox.Select(m => m.Id))}]");
                 foreach (var message in inbox)
                     if (message.Due > Time) Faults.Add($"I5 {message.Id} was delivered to {instance} {message.Due - Time} ms before it was due");
             },
@@ -466,7 +469,7 @@ public sealed class Generator(int seed, World world)
         var r = _random;
         var alive = world.Alive.ToList();
         var actor = alive[r.Next(alive.Count)];
-        var roll = r.Next(106);
+        var roll = r.Next(108);
         switch (roll)
         {
             case < 3: return new Act("take", actor.Id);
@@ -508,6 +511,7 @@ public sealed class Generator(int seed, World world)
             case < 99: return new Act("project", actor.Id);
             case < 100: return new Act("sweep");
             case < 103: return Asking(r, alive);
+            case < 105: return Control(r);
             default:
             {
                 if (world.Deliveries.Count == 0) return new Act("tick", r.Next(50));
@@ -590,6 +594,16 @@ public sealed class Generator(int seed, World world)
         }
         var open = world.Asked.Where(a => !a.Request.Done).Select(a => a.Request.Id).ToList();
         return open.Count == 0 ? new Act("tick", r.Next(50)) : new Act("disconnect", S: open[r.Next(open.Count)], Flag: r.Next(2) == 0);
+    }
+
+    // The kernel's own commands, from outside: suspend or resume an instance that exists.
+    private Act Control(Random r)
+    {
+        var rows = world.Store.Instances.Values.Where(i => i.Status == InstanceStatus.Running).Select(i => i.Id).Order(StringComparer.Ordinal).ToList();
+        if (rows.Count == 0) return new Act("tick", r.Next(50));
+        var target = rows[r.Next(rows.Count)];
+        var kind = world.Store.Instances[target].Suspended == (r.Next(4) == 0) ? Kinds.Suspend : Kinds.Resume;
+        return new Act("add", M: new Message($"x{_serial++}", new InstanceRef(target), kind, KeepUntil: world.Time + 3_600_000));
     }
 
     private static string Mode(Random r) => r.Next(3) switch { 0 => Sequence.Ephemeral, 1 => Sequence.Balanced, _ => Sequence.Durable };

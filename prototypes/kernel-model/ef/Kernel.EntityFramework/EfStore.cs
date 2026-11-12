@@ -33,6 +33,7 @@ public sealed class InstanceEntity
     public string? Parent { get; set; }
     public string? Fault { get; set; }
     public History History { get; set; }
+    public bool Suspended { get; set; }
 }
 
 public sealed class ProjectionEntity
@@ -277,7 +278,7 @@ public sealed class EfStore(Func<KernelDb> create, bool postgres, bool fenceInBa
                     var entity = new InstanceEntity
                     {
                         Id = row.Id, Partition = batch.Partition, Model = row.Model, Definition = row.Definition, Status = row.Status,
-                        State = row.State, Runs = row.Runs, Revision = row.Revision, Parent = row.Parent, Fault = row.Fault, History = row.History,
+                        State = row.State, Runs = row.Runs, Revision = row.Revision, Parent = row.Parent, Fault = row.Fault, History = row.History, Suspended = row.Suspended,
                     };
                     if (step.Expected is not { } expected) db.Add(entity);
                     else db.Update(entity).Property(i => i.Revision).OriginalValue = expected;
@@ -351,7 +352,7 @@ public sealed class EfStore(Func<KernelDb> create, bool postgres, bool fenceInBa
     {
         await using var db = create();
         var rows = await db.Instances.AsNoTracking().Where(i => ids.Contains(i.Id)).ToListAsync(cancellationToken);
-        return rows.Select(i => new InstanceRow(i.Id, i.Model, i.Definition, i.Status, i.State, i.Revision, i.Parent, i.Fault, i.Runs, i.History)).ToList();
+        return rows.Select(i => new InstanceRow(i.Id, i.Model, i.Definition, i.Status, i.State, i.Revision, i.Parent, i.Fault, i.Runs, i.History, i.Suspended)).ToList();
     }
 
     public async ValueTask PublishAsync(EventRow @event, CancellationToken cancellationToken = default)
