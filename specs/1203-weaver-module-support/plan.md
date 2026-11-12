@@ -135,7 +135,7 @@ The owner-operations contract assigns these intervals to leaves1–3 and defines
 5. Leaf0 Studio/discovery: current policy/classes/outcomes, accurate numeric status mapping (#3761), live safe inventory and nested removal. Preserve workflow atomic working-state edits, whole-batch undo and explicit save/publish.
 6. Leaf0 docs/catalogs/records and FR020 follow-ups, with current overlap claims. Run affected complete suites and current full native/package qualifier. Source-bind every receipt and preserve failed/superseded evidence.
 7. Fresh independent review until no P1/P2, exact-head hosted gates, normal merge and resulting-main verification. Freeze only the demonstrated generic contract.
-8. Leaves1–3, then4–21 and M5, each through its scoped specification/plan/tasks and qualification path. No issue/board Done until its full acceptance is verified.
+8. Leaves1–3, then4–22 and M5, each through its scoped specification/plan/tasks and qualification path. Leaf22 owns the refreshed Decisions inventory row in FR001/FR025; its source inventory is not a qualified journey. No issue/board Done until its full acceptance is verified.
 
 ## Qualification gates
 

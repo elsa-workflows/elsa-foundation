@@ -92,7 +92,7 @@ An existing audit sequence counter1.0 remains readable for as long as that count
 
 - Core status/scope/models; actual descriptor declarations; default executor and custom StoreOutcome integrity; terminal/settled/idempotency/claim release; recovery and accurate audit summaries.
 - API contract strings, bootstrap privileges, real source-generated HTTP/SSE graphs and default protected-record serialization.
-- SDK scope/preparation/receipt shapes; agentTypes; agentClient status/result parsing and executed fallback; useWeaverSession storage/busy/status parsing; review/results and module renderer fallback.
+- SDK scope/preparation/receipt shapes; weaverTypes; weaverClient status/result parsing and executed fallback; useWeaverSession storage/busy/status parsing; review/results and module renderer fallback.
 - Numeric proposal statuses must match actual C#0–12, coordinating #3761, rather than extend the existing incorrect fallback. Test every ordinal and supported wire spelling.
 - Probe receipt normalization/validation and dedicated owner-backed performed cases on both actual adapters. Keep all original/current-authority/autonomy/workflow/restart inventories.
 
