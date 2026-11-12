@@ -229,7 +229,7 @@ public sealed partial class World
         actor.Projector = new Projector(wire, partition, take: 5);    // a projector runs on every node, whoever owns the partition
         IExecutionModel[] models =
         [
-            new Counter(Versions[node]), new Parent(), new Child(), new Waiter(), new Sequence(), new Correlation(Config.Flaws.HasFlag(Flaw.CorrelationForgets)), new CWaiter(Config.Partitions),
+            new Counter(Versions[node]), new Parent(Config.Flaws.HasFlag(Flaw.CancelKnownChildren)), new Child(), new Waiter(), new Sequence(), new Correlation(Config.Flaws.HasFlag(Flaw.CorrelationForgets)), new CWaiter(Config.Partitions),
             new Runner((run, cancel) => Work(actor, run, cancel)), new Fragile(() => Dying = node), new Http(actor.Id, (run, cancel) => Work(actor, run, cancel)),
             new Tree((run, cancel) => Work(actor, run, cancel)), new OnEvent(),
         ];
@@ -574,7 +574,7 @@ public sealed class Generator(int seed, World world)
             case < 44 when _outside.Count > 0:
                 return new Act("add", M: _outside[r.Next(_outside.Count)], S: "a retry");
             case < 48: return new Act("add", M: To("ghost" + n, "add", new Add("t" + n), null));
-            case < 56: return new Act("add", M: To("par" + n, Kinds.Start, null, new StartSpec("parent", "p", Json.Write(new ParentInput(r.Next(1, 4), r.Next(4000))), History: (History)r.Next(3))));
+            case < 56: return new Act("add", M: To("par" + n, Kinds.Start, null, new StartSpec("parent", "p", Json.Write(new ParentInput(r.Next(1, 4), r.Next(4) == 0 ? -1 : r.Next(4000), r.Next(2) == 0)), History: (History)r.Next(3))));
             case < 64:
             {
                 List<string> keys = r.Next(2) == 0 ? ["k" + r.Next(3)] : ["k0", "k" + r.Next(1, 3)];
@@ -629,7 +629,13 @@ public sealed class Generator(int seed, World world)
     // The kernel's own commands, from outside: start a tree, terminate a tree node or a runner, suspend or resume anything.
     private Act Control(Random r)
     {
-        var roll = r.Next(10);
+        var roll = r.Next(12);
+        if (roll == 10)     // a parent is cancelled: it cancels its children, wherever they are
+        {
+            var parents = world.Oracle.Parents.Keys.Where(id => world.Store.Instances.GetValueOrDefault(id)?.Status == InstanceStatus.Running).Order(StringComparer.Ordinal).ToList();
+            if (parents.Count == 0) return new Act("tick", r.Next(50));
+            return new Act("add", M: new Message($"x{_serial++}", new InstanceRef(parents[r.Next(parents.Count)]), "cancel", KeepUntil: world.Time + 3_600_000));
+        }
         if (roll < 3) return new Act("add", M: new Message($"x{_serial}", InstanceRef.In(r.Next(world.Config.Partitions), "tr" + _serial++), Kinds.Start, Start: Tree.Spec(r.Next(1, 3), r.Next(1, 3)), KeepUntil: world.Time + 3_600_000));
         if (roll == 6)      // a counter moves to another version of its definition
         {

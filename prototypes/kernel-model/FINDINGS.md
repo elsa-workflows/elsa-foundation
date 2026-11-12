@@ -603,3 +603,21 @@ The owner's requirement of 12 November: a workflow handles an HTTP request and p
 - **Invariant 20:** every pair of an event and a start subscription of its key, both committed, makes exactly one
   instance, which takes exactly that event and finishes; no other instance is started. `--flaw StartWithoutRead`:
   caught, seed 9.
+
+## 18. Placement across partitions, and cancelling a parent. Run
+
+- **Built in the kernel:** nothing beyond `Placement.Spread` (section 13). A child in another partition is a start
+  message in that partition's inbox; it is not handed over in memory and not marked fresh, so its owner reads the
+  instance row before creating it.
+- **In the simulation:** parents spread every other child to a hashed partition; a quarter of them start children
+  that wait until cancelled. Outsiders cancel parents. A parent sends a cancel to every child in its own list of
+  starts and ends Cancelled when every child has reported; a child reports that it started.
+- **Check:** the tree check of round 1 now covers children wherever they live and the cancel: each pending child is at
+  one stage (start waiting, running, or its child-finished waiting); a parent is Cancelled only if it was asked; at
+  the end every parent has finished or been cancelled. 5,356 children were cancelled by their parent in 4,000 seeds,
+  1,032 of them in another partition.
+- **The sketch's argument, run:** "A cancel goes to the children the parent itself started, so admitting a child and
+  cancelling the parent cannot race." `--flaw CancelKnownChildren` makes the parent cancel only the children that
+  have reported back: a child whose start is still on its way is missed and waits for ever. Caught, seed 5 (`END
+  parent 0/par5 did not finish`). The flaw is in the model, not the kernel: what it shows is that the kernel's order
+  (one sender, one target) lets a model cancel what it started without waiting to hear from it.

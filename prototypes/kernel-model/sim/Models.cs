@@ -93,13 +93,20 @@ public sealed class Counter(int version = 2) : Model<CounterState>
 public sealed class ParentState
 {
     public bool Started { get; set; }
+    public bool Cancelling { get; set; }
     public List<string> Pending { get; set; } = [];
     public List<string> Done { get; set; } = [];
+    public List<string> Known { get; set; } = [];       // children that reported that they started
 }
 
-public sealed record ParentInput(int Children, int DelayMs);
+/// <summary>A delay below zero: the children wait until they are cancelled. Spread: every other child in another partition.</summary>
+public sealed record ParentInput(int Children, int DelayMs, bool Spread = false);
 
-public sealed class Parent : Model<ParentState>
+/// <summary>
+/// Starts its children and waits for them. A cancel goes to every child it started, by its own list, so a child whose
+/// start is still on its way gets the cancel after the start (one sender, one target, in order).
+/// </summary>
+public sealed class Parent(bool knownOnly = false) : Model<ParentState>
 {
     public override string Key => "parent";
 
@@ -112,15 +119,21 @@ public sealed class Parent : Model<ParentState>
                 state.Started = true;
                 var input = Json.Read<ParentInput>(json);
                 for (var i = 0; i < input.Children; i++)
-                    state.Pending.Add(step.Start(new StartSpec("child", "c", Json.Write(input.DelayMs))).Id);
+                    state.Pending.Add(step.Start(new StartSpec("child", "c", Json.Write(input.DelayMs)), input.Spread && i % 2 == 0 ? Placement.Spread : Placement.WithParent).Id);
             }
             else if (message.Kind == Kinds.ChildFinished)
             {
                 var child = message.Read<ChildFinished>().Child;
                 state.Done.Add(state.Pending.Remove(child) ? child : "!unexpected " + child);
             }
+            else if (message.Kind == "started") state.Known.Add(message.Sender!);
+            else if (message.Kind == "cancel" && state.Started && !state.Cancelling)
+            {
+                state.Cancelling = true;
+                foreach (var child in state.Pending.Where(c => !knownOnly || state.Known.Contains(c))) step.Send(new InstanceRef(child), "cancel");
+            }
         }
-        if (state.Started && state.Pending.Count == 0) step.SetStatus(InstanceStatus.Finished);
+        if (state.Started && state.Pending.Count == 0) step.SetStatus(state.Cancelling ? InstanceStatus.Cancelled : InstanceStatus.Finished);
     }
 }
 
@@ -143,8 +156,10 @@ public sealed class Child : Model<ChildState>
             if (message.Kind == Kinds.Start && !state.Armed)
             {
                 state.Armed = true;
-                step.Send(step.Instance.Ref, "timer", null, new SendOptions(Delay: TimeSpan.FromMilliseconds(state.DelayMs)));
+                step.Send(new InstanceRef(step.Instance.Parent!), "started");
+                if (state.DelayMs >= 0) step.Send(step.Instance.Ref, "timer", null, new SendOptions(Delay: TimeSpan.FromMilliseconds(state.DelayMs)));
             }
+            else if (message.Kind == "cancel") step.SetStatus(InstanceStatus.Cancelled);
             else if (message.Kind == "timer")
             {
                 state.Fired++;

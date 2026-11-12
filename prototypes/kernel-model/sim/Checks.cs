@@ -6,7 +6,8 @@ public sealed class Oracle
     public readonly HashSet<string> Sent = new(StringComparer.Ordinal);                 // ids of outside messages
     public readonly Dictionary<string, List<string>> Counters = new();                 // target -> tokens from outside, in the order added
     public readonly HashSet<string> Ghosts = [];                                         // targets that were never given a start spec
-    public readonly Dictionary<string, int> Parents = new();
+    public readonly Dictionary<string, ParentInput> Parents = new();
+    public readonly HashSet<string> Cancelled = [];                                      // parents that were sent a cancel
     public readonly Dictionary<string, List<string>> Waiters = new();
     public readonly Dictionary<string, (int Count, string Mode, bool Posted)> Sequences = new();
     public readonly Dictionary<string, List<string>> Runners = new();                  // target -> keys told to go
@@ -18,16 +19,17 @@ public sealed class Oracle
     public readonly Dictionary<string, List<string>> Events = new();                   // key -> events published
     public readonly List<SubscriptionRow> Starts = [];                                   // start subscriptions registered
 
-    public bool Accepts(Message m) => m.Kind != "cancel" || (Runners.TryGetValue(m.Target.Id, out var keys) && keys.Contains(m.Read<string>()));
+    public bool Accepts(Message m) => m.Kind != "cancel" || Parents.ContainsKey(m.Target.Id) || (Runners.TryGetValue(m.Target.Id, out var keys) && keys.Contains(m.Read<string>()));
 
     public void Note(Message m, bool posted = false)
     {
         if (!Sent.Add(m.Id)) return;
         var target = m.Target.Id;
+        if (m.Kind == "cancel" && Parents.ContainsKey(target)) Cancelled.Add(target);
         switch (m.Start?.Model)
         {
             case "counter": List(Counters, target).Add(m.Read<Add>().Token); break;
-            case "parent": Parents[target] = Json.Read<ParentInput>(m.Start.Input!).Children; break;
+            case "parent": Parents[target] = Json.Read<ParentInput>(m.Start.Input!); break;
             case "waiter": Waiters[target] = Json.Read<List<string>>(m.Start.Input!); break;
             case "cwaiter": CWaiters[target] = Json.Read<List<string>>(m.Start.Input!); break;
             case "correlation": Published.Add(target); break;
@@ -218,7 +220,7 @@ public sealed partial class World
     // I2, I3 for a parent and its children: each pending child is at exactly one stage, and a message stands for that stage.
     private string? Trees(ILookup<string, Message> waiting)
     {
-        foreach (var (id, children) in Oracle.Parents)
+        foreach (var (id, (children, delay, _)) in Oracle.Parents)
         {
             if (Parked.Contains(id)) continue;
             if (State<ParentState>(id) is not { } state)
@@ -229,18 +231,23 @@ public sealed partial class World
             if (state.Done.Find(d => d.StartsWith('!')) is { } unexpected) return $"I4 {id} was told {unexpected}";
             if (state.Pending.Count + state.Done.Count != children || state.Done.Distinct().Count() != state.Done.Count)
                 return $"I4 {id} should have {children} children; pending [{string.Join(", ", state.Pending)}], done [{string.Join(", ", state.Done)}]";
-            if ((Store.Instances[id].Status == InstanceStatus.Finished) != (state.Pending.Count == 0)) return $"I2 {id} is {Store.Instances[id].Status} with {state.Pending.Count} children pending";
+            if ((Store.Instances[id].Status != InstanceStatus.Running) != (state.Pending.Count == 0)) return $"I2 {id} is {Store.Instances[id].Status} with {state.Pending.Count} children pending";
+            if (Store.Instances[id].Status == InstanceStatus.Cancelled && !Oracle.Cancelled.Contains(id)) return $"I2 {id} was cancelled and nobody asked";
             foreach (var child in state.Pending)
             {
+                // A child is at one stage, wherever it lives: not created (its start waits), running (its timer waits, if
+                // it has one), or ended (its child-finished waits for the parent). A cancel or a stale timer may also wait.
                 var row = Store.Instances.GetValueOrDefault(child);
                 var start = waiting[child].Count(m => m.Kind == Kinds.Start);
                 var timer = waiting[child].Count(m => m.Kind == "timer");
                 var finished = waiting[id].Count(m => m.Kind == Kinds.ChildFinished && m.Read<ChildFinished>().Child == child);
-                var stage = row is null ? (start, timer, finished) == (1, 0, 0) : row.Status == InstanceStatus.Running ? (start, timer, finished) == (0, 1, 0) : (start, timer, finished) == (0, 0, 1);
+                var stage = row is null ? (start, timer, finished) == (1, 0, 0)
+                    : row.Status == InstanceStatus.Running ? (start, timer, finished) == (0, delay >= 0 ? 1 : 0, 0)
+                    : (start, finished) == (0, 1) && timer <= (row.Status == InstanceStatus.Cancelled ? 1 : 0);
                 if (!stage) return $"I2 child {child} of {id}: row {row?.Status.ToString() ?? "none"}, {start} start, {timer} timer, {finished} child-finished waiting";
             }
             foreach (var child in state.Done)
-                if (Store.Instances.GetValueOrDefault(child) is not { Status: InstanceStatus.Finished or InstanceStatus.Faulted } || (!Parked.Contains(child) && waiting[child].Any(m => !Kinds.IsControl(m.Kind)))) return $"I2 {id} counts {child} as done and it is not";
+                if (Store.Instances.GetValueOrDefault(child) is not { Status: InstanceStatus.Finished or InstanceStatus.Faulted or InstanceStatus.Cancelled } || (!Parked.Contains(child) && waiting[child].Any(m => !Kinds.IsControl(m.Kind) && m.Kind is not ("timer" or "cancel")))) return $"I2 {id} counts {child} as done and it is not";
         }
         return null;
     }
@@ -432,6 +439,9 @@ public sealed partial class World
     // I13: an event and a subscription that are both committed must have met. Then every wait left gets an event.
     private string? Meet()
     {
+        foreach (var (id, input) in Oracle.Parents)     // a parent whose children wait for ever is cancelled
+            if (input.DelayMs < 0 && Store.Instances.GetValueOrDefault(id)?.Status == InstanceStatus.Running && Oracle.Cancelled.Add(id))
+                Store.AddAsync(new Message("cancel-" + id, new InstanceRef(id), "cancel", KeepUntil: Time + 3_600_000)).AsTask().Wait();
         foreach (var root in Oracle.Trees)      // only the roots: the kernel must reach the rest
             if (Store.Instances.GetValueOrDefault(root) is { } row && (row.Status == InstanceStatus.Running || row.Children is not null))
                 Store.AddAsync(new Message("end-" + root, new InstanceRef(root), Kinds.Terminate, KeepUntil: Time + 3_600_000)).AsTask().Wait();
@@ -465,12 +475,16 @@ public sealed partial class World
         if (started.Count > 0) return $"I20 instances [{string.Join(", ", started)}] were started by no event and subscription";
         if (Store.Instances.Values.FirstOrDefault(i => i.Model == "onevent" && i.Status != InstanceStatus.Finished) is { } open) return $"I20 {open.Id} ended as {open.Status}";
         if (Store.Subscriptions.FirstOrDefault(s => s.Start is null && !Parked.Contains(s.Instance)) is { } subscription) return $"END the subscription of {subscription.Instance} to {subscription.Key} is left behind";
-        foreach (var (id, children) in Oracle.Parents)
+        foreach (var (id, (_, delay, spread)) in Oracle.Parents)
         {
             if (Parked.Contains(id)) continue;
-            if (Store.Instances.GetValueOrDefault(id) is not { Status: InstanceStatus.Finished }) return $"END parent {id} did not finish";
+            if (Store.Instances.GetValueOrDefault(id) is not { Status: InstanceStatus.Finished or InstanceStatus.Cancelled }) return $"END parent {id} did not finish";
             foreach (var child in State<ParentState>(id)!.Done)
-                if (!Parked.Contains(child) && State<ChildState>(child) is not { Fired: 1 }) return $"I5 the timer of child {child} fired {State<ChildState>(child)?.Fired} times";
+            {
+                var ended = Store.Instances[child].Status;
+                if (!Parked.Contains(child) && ended == InstanceStatus.Finished && State<ChildState>(child) is not { Fired: 1 }) return $"I5 the timer of child {child} fired {State<ChildState>(child)?.Fired} times";
+                if (ended == InstanceStatus.Cancelled) Count("child cancelled by its parent" + (child[..child.IndexOf('/')] != id[..id.IndexOf('/')] ? ", in another partition" : ""));
+            }
         }
         foreach (var id in Oracle.Waiters.Keys)
             if (!Parked.Contains(id) && Store.Instances.GetValueOrDefault(id) is not { Status: InstanceStatus.Finished }) return $"END waiter {id} did not finish";
@@ -488,7 +502,7 @@ public sealed partial class World
                 return $"I12 run {key} of {id} has neither a result nor a cancel: [{string.Join(", ", log)}]";
         }
         foreach (var row in Store.Instances.Values.Where(i => i.Model == "tree" && i.Parent is not null && i.Status == InstanceStatus.Cancelled))
-            Count("tree child cancelled" + (row.Id[..row.Id.IndexOf('/')] != row.Parent![..row.Parent!.IndexOf('/')] ? ", in another partition" : ", with its parent") + (_late.Contains(row.Id) ? ", created after its parent ended" : ""));
+            Count("tree descendant cancelled" + (row.Id[..row.Id.IndexOf('/')] != row.Parent![..row.Parent!.IndexOf('/')] ? ", in another partition" : ", with its parent") + (_late.Contains(row.Id) ? ", created after its parent ended" : ""));
         // I17: a terminate reaches every descendant, in any partition, including those whose start was on its way.
         if (Store.Instances.Values.FirstOrDefault(i => i.Model == "tree" && i.Status == InstanceStatus.Running) is { } alive)
             return $"I17 tree instance {alive.Id} still runs after its root was terminated";
