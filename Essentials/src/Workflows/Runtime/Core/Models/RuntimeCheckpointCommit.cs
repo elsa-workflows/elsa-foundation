@@ -25,6 +25,15 @@ public sealed record RuntimeCheckpointCommit(
     }
     private readonly IReadOnlyList<RuntimeHistoryBatch>? _historyBatches;
 
+    /// <summary>Immutable actual-owner inputs captured before history enrichment, outside continuation state.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<RuntimeHistorySourceFact>? HistorySourceFacts
+    {
+        get => _historySourceFacts;
+        init => _historySourceFacts = value is null ? null : Array.AsReadOnly(value.ToArray());
+    }
+    private readonly IReadOnlyList<RuntimeHistorySourceFact>? _historySourceFacts;
+
     /// <summary>Optional model decision written with the fence, consumed input and outbox in one transaction.</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public RuntimeModelStateChange? ModelState { get; init; }
