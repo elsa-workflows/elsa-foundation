@@ -266,7 +266,8 @@ export function resolveBpmnDocumentReference(parsed: ParsedBpmnDocument, context
   const value = reference.trim();
   if (!value.includes(":")) return parsed.byId.get(value);
   const parts = value.split(":");
-  if (parts.length !== 2 || context.lookupNamespaceURI(parts[0]) !== parsed.document.documentElement.getAttribute("targetNamespace")) return undefined;
+  const targetNamespace = parsed.document.documentElement.getAttribute("targetNamespace");
+  if (!targetNamespace || parts.length !== 2 || !parts[0] || !parts[1] || context.lookupNamespaceURI(parts[0]) !== targetNamespace) return undefined;
   return parsed.byId.get(parts[1]);
 }
 

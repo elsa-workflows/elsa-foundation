@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from "vitest";
 import type { ActivityNode } from "../workflowTypes";
-import { applyBpmnDocumentCommands, bpmnNamespaces, projectBpmnDocumentScene, readBpmnDocument, type BpmnDocumentCommand } from "../bpmn/bpmnDocument";
+import { applyBpmnDocumentCommands, bpmnNamespaces, projectBpmnDocumentScene, readBpmnDocument, resolveBpmnDocumentReference, type BpmnDocumentCommand } from "../bpmn/bpmnDocument";
 
 const xml = `<?xml version="1.0"?>
 <bpmn:definitions xmlns:bpmn="${bpmnNamespaces.model}" xmlns:bpmndi="${bpmnNamespaces.diagram}"
@@ -62,6 +62,15 @@ function retainedXml(value: ActivityNode) {
 }
 
 describe("complete BPMN document authority", () => {
+  it("does not interpret an unbound prefix as a local reference when the draft has no target namespace", () => {
+    const original = owner(xml.replace(' targetNamespace="urn:test"', ""));
+    const parsed = readBpmnDocument(original);
+    const task = parsed.byId.get("Task")!;
+    expect(resolveBpmnDocumentReference(parsed, task, "Task")).toBe(task);
+    expect(resolveBpmnDocumentReference(parsed, task, "unbound:Task")).toBeUndefined();
+    expect(original.structure!.payload.documentXml).toBe(parsed.payload.documentXml);
+  });
+
   it("opens full collaboration, nested events, loops and vendor syntax without rewriting source", () => {
     const original = owner();
     const before = structuredClone(original);
