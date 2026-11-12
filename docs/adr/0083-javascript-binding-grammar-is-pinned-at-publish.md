@@ -1,7 +1,8 @@
 # JavaScript Bindings Accept Expressions and Statement Bodies
 
 Status: revised (2026-10-19), implementation [#3009](https://github.com/elsa-workflows/elsa-foundation/issues/3009).
-Amended: new capability profile `binding-readonly-v1`, and the undefined-as-null policy. See *Amendment* below.
+Amended (accepted 2026-11-12; decisions D-1, D-11 and D-15): new capability profile `binding-readonly-v1`, and the
+undefined-as-null policy. See *Amendment* below.
 
 This replaces the unimplemented 5 August proposal for host-selected grammars in
 [spec 146](../../specs/146-javascript-binding-grammar/spec.md), following the owner's request to
