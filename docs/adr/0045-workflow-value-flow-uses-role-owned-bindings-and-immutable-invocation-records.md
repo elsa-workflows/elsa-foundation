@@ -216,14 +216,13 @@ so a value an expression produced, once committed, does not change.
     repeated evaluation, such as a loop condition on each pass, produces fresh values.
 - **D-5: functions implemented in .NET.** A host may install functions into an expression engine whose
   implementation is .NET code, as `getVariable` already is. By default only JSON values cross the boundary between
-  the script and such a function. Live .NET objects do not cross it by default. A host may opt in through a separate
-  script profile for objects it registers, and through a further, separately named profile for general .NET access in
-  script activities. The ADR 0046 amendment (V10) states the rule.
-  - **Input-binding expressions.** By default input-binding expressions get no live objects. A host may enable general
-    .NET access for input expressions through a separately named binding profile; an expression selects it, and the
-    executable pins it like any profile, so one profile name never means different behaviour on different hosts.
-    - Such an expression is treated as possibly effectful: the engine commits before and after its evaluation. Only
-      expressions that select the profile pay for this.
+  the script and such a function. Live .NET objects do not cross it by default. A host may opt in to .NET interop
+  through one replaceable engine strategy that a feature provides. The ADR 0046 amendment (V10) states the rule.
+  - **Input-binding expressions.** By default input-binding expressions get no live objects. When a host enables .NET
+    interop, it applies to input-binding expressions as it does to script activities: a JavaScript input expression
+    takes the same input as a script in a JavaScript script activity.
+    - Whether such an expression is treated as possibly effectful, with a commit before and after its evaluation, is
+      decided by the opt-in's implementing spec.
     - It may use .NET objects while it evaluates, but what it returns is a storable value under ADR 0046, or the
       evaluation is refused. No live object enters the input snapshot.
     - Direct writes to Elsa-owned workflow state stay blocked, as for every input-binding expression.
