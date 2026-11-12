@@ -44,9 +44,19 @@ internal sealed class ProtocolCopilotSession(ProtocolFiles files, GitHubCopilotS
         var functions = request.CustomTools?.ToArray() ?? [];
         files.Trace("copilot.request", new { command.CommandId, sessionId = SessionId, request.SystemMessage, prompt,
             tools = functions.Select(function => new { function.Name, function.Description, function.JsonSchema }) });
+        if (command.ObserveOnly && (prompt.StartsWith("The previously reviewed operation has completed.", StringComparison.Ordinal)
+            || prompt.Split('\n').Any(line => line.TrimStart().StartsWith("Typed result:", StringComparison.Ordinal)
+                || line.Trim() == "Results from tools you called:")))
+            throw new ProtocolFixtureException("An observation command cannot consume a tool-result continuation.");
         yield return new(GitHubCopilotStreamEventKind.Started);
 
-        if (functions.Length == 0)
+        if (command.ObserveOnly)
+        {
+            linked.Token.ThrowIfCancellationRequested();
+            files.Trace("copilot.observation", new { command.CommandId, sessionId = SessionId, toolCount = functions.Length });
+            yield return new(GitHubCopilotStreamEventKind.MessageDelta, ProtocolFiles.ObservationText);
+        }
+        else if (functions.Length == 0)
         {
             // The actual adapter supplies its receipt continuation with no callable functions.
             // Preserve the real generic serialized results, never re-invoke the earlier command.

@@ -14,12 +14,19 @@ public sealed class ProtocolFixtureException(string message, Exception? innerExc
 
 internal sealed record ProtocolCommand(string CommandId, string ToolName, JsonElement Arguments)
 {
-    public Dictionary<string, object?> ToArguments() => Arguments.EnumerateObject()
-        .ToDictionary(property => property.Name, property => (object?)property.Value.Clone(), StringComparer.Ordinal);
+    public bool ObserveOnly { get; init; }
+
+    public Dictionary<string, object?> ToArguments()
+    {
+        if (ObserveOnly) throw new ProtocolFixtureException("An observation command cannot supply tool arguments.");
+        return Arguments.EnumerateObject()
+            .ToDictionary(property => property.Name, property => (object?)property.Value.Clone(), StringComparer.Ordinal);
+    }
 }
 
 internal sealed class ProtocolFiles
 {
+    internal const string ObservationText = "Observed the supplied context and tool declarations. No tool was requested.";
     private static readonly ConcurrentDictionary<string, object> TraceLocks = new(StringComparer.Ordinal);
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private readonly string commandFile;
@@ -126,6 +133,18 @@ internal sealed class ProtocolFiles
             if (root.ValueKind != JsonValueKind.Object)
                 throw new ProtocolFixtureException("Protocol command must be a JSON object.");
             var properties = root.EnumerateObject().Select(property => property.Name).ToArray();
+            if (root.TryGetProperty("mode", out var mode))
+            {
+                if (properties.Length != 2 || properties.Distinct(StringComparer.Ordinal).Count() != 2 ||
+                    properties.Any(name => name is not ("commandId" or "mode")) || mode.ValueKind != JsonValueKind.String ||
+                    mode.GetString() != "observe" || !root.TryGetProperty("commandId", out var observationId) ||
+                    observationId.ValueKind != JsonValueKind.String)
+                    throw new ProtocolFixtureException("Observation command requires exactly commandId and mode observe, without a tool or arguments.");
+                var id = observationId.GetString();
+                if (string.IsNullOrWhiteSpace(id) || id.Length > 128)
+                    throw new ProtocolFixtureException("Observation command identity must contain 1 to 128 characters and cannot be blank.");
+                return new ProtocolCommand(id, "", default) { ObserveOnly = true };
+            }
             if (properties.Length != 3 || properties.Distinct(StringComparer.Ordinal).Count() != 3 ||
                 properties.Any(name => name is not ("commandId" or "toolName" or "arguments")))
                 throw new ProtocolFixtureException("Protocol command requires exactly commandId, toolName and arguments.");

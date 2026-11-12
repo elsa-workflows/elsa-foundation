@@ -229,7 +229,7 @@ def build_authors(run):
     authors = run.report.setdefault("authors", {})
     version = "1.0.0-witness.g" + run.source[:8]
     replacements = {"__FIXTURE_VERSION__": version}
-    for name, fixture, package_id, count in (("protocol", "ProviderProtocolFixtures", MODULE_IDS[0], 21),
+    for name, fixture, package_id, count in (("protocol", "ProviderProtocolFixtures", MODULE_IDS[0], 71),
                                               ("backend", "Resource.Backend", MODULE_IDS[1], 217),
                                               ("studio", "Resource.Studio", MODULE_IDS[2], None)):
         authors[name] = {"source": run.source, "status": "building"}
