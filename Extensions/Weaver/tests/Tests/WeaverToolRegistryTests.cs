@@ -26,7 +26,7 @@ public sealed class WeaverToolRegistryTests
         var ex = await Assert.ThrowsAsync<WeaverContributionException>(() =>
             new DefaultWeaverToolRegistry(new WeaverTestToolsPublisher(new EchoTool(), new UpperEchoTool())).ListAsync());
 
-        Assert.Contains("Duplicate agent tool name", ex.Message);
+        Assert.Contains("Duplicate Weaver tool name", ex.Message);
     }
 
     // Same descriptor name as EchoTool but upper-cased, to prove the guard is case-insensitive.

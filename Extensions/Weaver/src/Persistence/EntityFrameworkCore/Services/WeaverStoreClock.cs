@@ -27,7 +27,7 @@ internal sealed class WeaverDatabaseClock : IWeaverStoreClock
                                           "AS \"Value\" /* weaver.utc-clock */",
             EfProviderNames.MySql => "SELECT CAST(621355968000000000 + TIMESTAMPDIFF(MICROSECOND, " +
                                      "CAST('1970-01-01 00:00:00.000000' AS DATETIME(6)), UTC_TIMESTAMP(6)) * 10 AS SIGNED) AS Value /* weaver.utc-clock */",
-            var provider => throw new NotSupportedException($"The agent store has no database clock for provider '{provider}'.")
+            var provider => throw new NotSupportedException($"The Weaver store has no database clock for provider '{provider}'.")
         };
         var ticks = await context.Database.SqlQueryRaw<long>(sql).SingleAsync(cancellationToken);
         return new DateTimeOffset(ticks, TimeSpan.Zero);

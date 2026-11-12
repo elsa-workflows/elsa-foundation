@@ -528,6 +528,11 @@ public static class RuntimeCoreServiceCollectionExtensions
         services.TryAddScoped<RuntimeActivityInputSnapshotMaterializer>();
         services.TryAddScoped<WorkflowIntrinsicExecutor>();
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IRuntimeActivityConsumerCapability, IntrinsicActivityConsumerCapability>());
+        // Member selection (#4078) is advertised beside the materializer that implements it, and only while it is the one
+        // composed. The capability reads the final registrations (this collection, which the container is built from)
+        // when it is first constructed, and resolves nothing.
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IRuntimeActivityConsumerCapability, InputMemberSelectionCapability>(
+            _ => new InputMemberSelectionCapability(services)));
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IWorkflowSchedulerDrainObserver, NoopWorkflowSchedulerDrainObserver>());
         // Registered before BlockingIncidentWorkflowFaultObserver: the blocking incident it projects from a parked
         // poison record must be visible to the fault observer within the same drain notification pass.

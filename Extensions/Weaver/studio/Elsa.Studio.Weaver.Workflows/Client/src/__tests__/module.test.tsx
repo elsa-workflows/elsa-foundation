@@ -5,7 +5,7 @@ import { presentsResourceModule } from "@elsa-workflows/studio-sdk";
 import { register, WorkflowBatchResult } from "../module";
 
 describe("weaver workflows module", () => {
-  it("registers prompts and presentation on the canonical agent path", () => {
+  it("registers prompts and presentation on the canonical Weaver path", () => {
     const api = testApi(); register(api);
     expect(api.weaver.promptActions.list().map(item => item.id)).toContain("weaver.workflows.propose-update");
     expect(api.weaver.resultRenderers.list().map(item => item.id)).toEqual(["weaver.workflows.batch-result", "weaver.workflows.library-result",

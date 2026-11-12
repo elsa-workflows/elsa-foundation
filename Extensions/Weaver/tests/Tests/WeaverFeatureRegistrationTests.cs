@@ -16,9 +16,9 @@ public sealed class WeaverFeatureRegistrationTests
     {
         using var provider = WeaverTestServices.Create(services => new WeaverGitHubCopilotFeature().ConfigureServices(services));
         using var scope = provider.CreateScope();
-        var agentProvider = Assert.Single(scope.ServiceProvider.GetServices<IWeaverProvider>());
-        Assert.IsType<WeaverGitHubCopilotProvider>(agentProvider);
-        var diagnostics = await agentProvider.GetDiagnosticsAsync();
+        var weaverProvider = Assert.Single(scope.ServiceProvider.GetServices<IWeaverProvider>());
+        Assert.IsType<WeaverGitHubCopilotProvider>(weaverProvider);
+        var diagnostics = await weaverProvider.GetDiagnosticsAsync();
         Assert.Equal(WeaverProviderKind.ProviderSdkBinding, diagnostics.Kind);
         Assert.Equal(WeaverProviderRiskProfile.ReviewRequired, diagnostics.RiskProfile);
         Assert.False(diagnostics.IsAvailable);
@@ -27,7 +27,7 @@ public sealed class WeaverFeatureRegistrationTests
     }
 
     [Fact]
-    public void Workflow_agent_feature_registers_capabilities_and_context()
+    public void Workflow_weaver_feature_registers_capabilities_and_context()
     {
         using var root = WeaverTestServices.Create(services => new WeaverWorkflowsFeature().ConfigureServices(services));
         using var scope = root.CreateScope();
@@ -68,7 +68,7 @@ public sealed class WeaverFeatureRegistrationTests
         // The provider yields only content; the orchestrator owns turn lifecycle (Started/StepStarted/Completed).
         var delta = Assert.Single(events);
         Assert.Equal(WeaverStreamEventKind.MessageDelta, delta.Kind);
-        Assert.Equal("Deterministic agent provider response.", delta.Content);
+        Assert.Equal("Deterministic Weaver provider response.", delta.Content);
     }
 
     [Fact]

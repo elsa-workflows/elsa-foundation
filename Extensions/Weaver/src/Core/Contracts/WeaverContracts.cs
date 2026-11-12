@@ -43,13 +43,13 @@ public interface IWeaverSessionService
 
     /// <summary>
     /// Preview: withdraws an accepted prompt that never started: a compare-and-set from Pending to Cancelled with reason
-    /// <c>withdrawn</c>, refused with <c>agent.message.not_pending</c> when the prompt is not Pending or a turn is
+    /// <c>withdrawn</c>, refused with <c>weaver.message.not_pending</c> when the prompt is not Pending or a turn is
     /// registered for the session, so a withdraw cannot lose to a concurrent start. A missing prompt is
-    /// <c>agent.message.not_found</c>. The default refuses with <c>agent.message.withdraw_unsupported</c>.
+    /// <c>weaver.message.not_found</c>. The default refuses with <c>weaver.message.withdraw_unsupported</c>.
     /// </summary>
     Task<WeaverResult<WeaverMessage>> WithdrawMessageAsync(string sessionId, string messageId, CancellationToken cancellationToken = default)
         => Task.FromResult(WeaverResult<WeaverMessage>.Failure("weaver.message.withdraw_unsupported",
-            "The installed agent session service cannot withdraw prompts.", 409));
+            "The installed Weaver session service cannot withdraw prompts.", 409));
 }
 
 /// <summary>
@@ -89,7 +89,7 @@ public interface IWeaverSessionRecordStore
     /// <summary>
     /// Whether every write is guarded on the current owner and fence. A store that cannot fence cannot back durable
     /// recovery, because a stale process could then continue a turn: selecting one fails shell activation
-    /// (the Agent durable-recovery validator).
+    /// (the Weaver durable-recovery validator).
     /// </summary>
     bool SupportsFencing { get; }
 
@@ -213,23 +213,23 @@ public interface IWeaverProposalService
 
     /// <summary>
     /// Preview: the session's proposals with their current statuses, oldest first. The default refuses with
-    /// <c>agent.proposal.query_unsupported</c>.
+    /// <c>weaver.proposal.query_unsupported</c>.
     /// </summary>
     Task<WeaverResult<IReadOnlyList<WeaverActionProposal>>> ListAsync(string sessionId, CancellationToken cancellationToken = default)
         => Task.FromResult(WeaverResult<IReadOnlyList<WeaverActionProposal>>.Failure("weaver.proposal.query_unsupported",
-            "The installed agent proposal service cannot list a session's proposals.", 409));
+            "The installed Weaver proposal service cannot list a session's proposals.", 409));
 
     /// <summary>
     /// Preview: records the owner's statement about a client-scope Uncertain operation on its proposal and releases only
     /// that operation's claim. It is not a receipt; a later truthful receipt still reconciles the operation. Repeating
-    /// the same statement returns the proposal unchanged; a different statement is <c>agent.invocation.resolution_conflict</c>.
-    /// Any other operation is refused with <c>agent.invocation.not_uncertain</c>. The default refuses with
-    /// <c>agent.invocation.resolution_unsupported</c>.
+    /// the same statement returns the proposal unchanged; a different statement is <c>weaver.invocation.resolution_conflict</c>.
+    /// Any other operation is refused with <c>weaver.invocation.not_uncertain</c>. The default refuses with
+    /// <c>weaver.invocation.resolution_unsupported</c>.
     /// </summary>
     Task<WeaverResult<WeaverActionProposal>> ResolveClientInvocationAsync(string sessionId, string invocationId, string actorId,
         WeaverOwnerResolutionClaim claim, CancellationToken cancellationToken = default)
         => Task.FromResult(WeaverResult<WeaverActionProposal>.Failure("weaver.invocation.resolution_unsupported",
-            "The installed agent proposal service cannot record an owner's resolution.", 409));
+            "The installed Weaver proposal service cannot record an owner's resolution.", 409));
 }
 
 public interface IWeaverStreamingService
@@ -271,7 +271,7 @@ public interface IWeaverFeedbackService
 /// Replacement contract, at most one: the append facet of the audit store. The sink, <see cref="IWeaverAuditReader"/>
 /// and <see cref="IWeaverAuditOwnership"/> are one store's facets and are replaced together, with
 /// <c>services.SelectWeaverAuditStore(...)</c> (<c>Elsa.Weaver.Extensions.WeaverPersistenceSelection</c>); a second
-/// registration of any facet fails the Agent registration validator.
+/// registration of any facet fails the Weaver registration validator.
 /// </summary>
 public interface IWeaverAuditSink
 {
@@ -281,7 +281,7 @@ public interface IWeaverAuditSink
 /// <summary>
 /// Replacement contract, at most one: the query facet of the audit store. It is replaced together with
 /// <see cref="IWeaverAuditSink"/> and <see cref="IWeaverAuditOwnership"/>, with <c>services.SelectWeaverAuditStore(...)</c>
-/// (<c>Elsa.Weaver.Extensions.WeaverPersistenceSelection</c>); a second registration of any facet fails the Agent
+/// (<c>Elsa.Weaver.Extensions.WeaverPersistenceSelection</c>); a second registration of any facet fails the Weaver
 /// registration validator.
 /// </summary>
 public interface IWeaverAuditReader
@@ -360,6 +360,6 @@ public interface IWeaverProvider
 
 public interface IWeaverProviderRegistry
 {
-    /// <summary>The single active agent provider, or null when no harness is enabled.</summary>
+    /// <summary>The single active Weaver provider, or null when no harness is enabled.</summary>
     IWeaverProvider? Active { get; }
 }

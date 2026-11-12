@@ -107,8 +107,8 @@ not automatic constitution violations.
 | Foundation Identity ASP.NET Core Identity EF adapter (opt-in framework stores, authentication, session invalidation, and seeding over the shared EF authority) | [`Essentials/src/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore/EXTENSION_POINTS.md`](Essentials/src/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore/EXTENSION_POINTS.md) |
 | Foundation Identity EF persistence (opt-in complete IAM authority and provider-configuration backend; OpenIddict boundary) | [`Essentials/src/Foundation/Identity/Persistence/EntityFrameworkCore/README.md`](Essentials/src/Foundation/Identity/Persistence/EntityFrameworkCore/README.md) |
 | Foundation Data Protection (the host's key ring: fixed application name, opt-in EF key store, certificate at rest, startup warnings) | [`Essentials/src/Foundation/DataProtection/EntityFrameworkCore/EXTENSION_POINTS.md`](Essentials/src/Foundation/DataProtection/EntityFrameworkCore/EXTENSION_POINTS.md) |
-| Weaver workflow agent (bounded graph explanation and reviewed designer position changes; broader authoring/troubleshooting tracked in #3442) | [`Extensions/Weaver/src/Workflows/Elsa.Weaver.Workflows/EXTENSION_POINTS.md`](Extensions/Weaver/src/Workflows/Elsa.Weaver.Workflows/EXTENSION_POINTS.md) |
-| Weaver workflow runtime agent (read-only Executable and Run context and tools, Runtime-side; spec 1193 slices F and G) | [`Extensions/Weaver/src/Workflows/Runtime/EXTENSION_POINTS.md`](Extensions/Weaver/src/Workflows/Runtime/EXTENSION_POINTS.md) |
+| Weaver workflow module (bounded graph explanation and reviewed designer position changes; broader authoring/troubleshooting tracked in #3442) | [`Extensions/Weaver/src/Workflows/Elsa.Weaver.Workflows/EXTENSION_POINTS.md`](Extensions/Weaver/src/Workflows/Elsa.Weaver.Workflows/EXTENSION_POINTS.md) |
+| Weaver workflow runtime module (read-only Executable and Run context and tools, Runtime-side; spec 1193 slices F and G) | [`Extensions/Weaver/src/Workflows/Runtime/EXTENSION_POINTS.md`](Extensions/Weaver/src/Workflows/Runtime/EXTENSION_POINTS.md) |
 
 ### Integrations
 

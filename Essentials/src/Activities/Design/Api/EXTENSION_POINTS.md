@@ -41,8 +41,8 @@ These are single-owner seams. Replace them through DI; do not register competing
 `ListAsync` and `CanReadAsync` accept no principal, permission string or tenant. The default applies the designer's own
 gate: the normalized request principal must hold `activities/design:read` in its tenant, checked through
 `IPermissionAuthorizationService` with the current request (`HttpContext`) as the resource, as the catalog route's
-policy handler has: the same principal and tenant. During a Weaver turn the current request is the agent's own (for
-example its messages request), so a host `IPermissionResourceHandler` keyed on route or path sees the agent request,
+policy handler has: the same principal and tenant. During a Weaver turn the current request is Weaver's own (for
+example its messages request), so a host `IPermissionResourceHandler` keyed on route or path sees the Weaver request,
 not the catalog route. A missing request, an unnormalized
 principal or a refused permission is a denied result with no entries, and no catalog read. An allowed read is the
 designer's own `IActivityAuthoringCatalogReader` read with `Availability = All`, projected into Core models: every entry,
@@ -70,9 +70,9 @@ Foundation Identity Core, which this `.Core` does not reference. Duplicates are 
   configuration keeps one validator. `IWorkflowDefinitionAuthorizer`'s startup validator has the same Tasks condition.
 
 Consumers that resolve `IEnumerable<IActivityAuthoringCatalog>` must fail closed on zero or several implementations, as
-the Agent workflow context does by reporting the catalog unavailable. This enumerable consumer of a replacement contract
+the Weaver workflow context does by reporting the catalog unavailable. This enumerable consumer of a replacement contract
 is the accepted exception that `IWorkflowDefinitionAuthorizer` also uses, so a duplicate added after the Tasks-less
-configuration still cannot select an implementation; the Agent-wide gap for existing contracts is #3633. Adding the
+configuration still cannot select an implementation; the Weaver-wide gap for existing contracts is #3633. Adding the
 contract is **Minor**, additive.
 
 ## Provider contributors

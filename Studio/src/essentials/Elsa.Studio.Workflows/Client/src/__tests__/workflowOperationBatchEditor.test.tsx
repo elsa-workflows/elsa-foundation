@@ -3,8 +3,8 @@ import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createWeaverRegistry, type StudioWeaverClientExecutionResult, type StudioWeaverPreparedInvocation, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
-import { registerWorkflowAgent } from "../workflowAgent";
-import { WorkflowBatchUndoControl } from "../workflowAgentResult";
+import { registerWorkflowWeaver } from "../workflowWeaver";
+import { WorkflowBatchUndoControl } from "../workflowWeaverResult";
 import { useWorkflowDocument, type WorkflowDocumentApi } from "../workflow-editor/workflowDocument";
 import { useWorkflowGraphOperationBatch } from "../workflow-editor/useWorkflowGraphOperationBatch";
 import { useWorkflowContextBridge } from "../workflow-editor/useWorkflowContextBridge";
@@ -27,7 +27,7 @@ const details = { definition: { id: "definition-1", name: "Nested workflow" } } 
 const catalogByVersion = new Map(batchCatalog.map(item => [item.activityVersionId, item]));
 const context = { baseUrl: "https://owned-persistence.example/", http: {} } as unknown as StudioEndpointContext;
 const noop = () => {};
-let agent: ReturnType<typeof createWeaverRegistry>, controller: ReturnType<typeof registerWorkflowAgent>;
+let weaverRegistry: ReturnType<typeof createWeaverRegistry>, controller: ReturnType<typeof registerWorkflowWeaver>;
 let doc: WorkflowDocumentApi, history: ReturnType<typeof useDraftHistory>, persistence: ReturnType<typeof useWorkflowPersistence>;
 let editingAllowed: boolean, root: Root, container: HTMLDivElement, sequence = 0;
 // When set, the editor's compare-and-replace is held back so a test can commit it after the observation deadline.
@@ -43,7 +43,7 @@ function Probe() {
   } } : doc;
   useWorkflowGraphOperationBatch({ draft: doc.state.draft, details, catalog: batchCatalog, document, controller, holdForReview: persistence.holdForReview,
     reviewHeld: persistence.reviewHeld, canEdit: () => editingAllowed, setStatus: noop, setError: noop, history: history.batchHistory });
-  useWorkflowContextBridge({ controller, clientId: agent.clientId, details, draft: doc.state.draft, selectedNode: null, selectedNodeId: doc.state.selectedNodeId,
+  useWorkflowContextBridge({ controller, clientId: weaverRegistry.clientId, details, draft: doc.state.draft, selectedNode: null, selectedNodeId: doc.state.selectedNodeId,
     selectedDescriptor: null, inspectedNode: null, inspectedDescriptor: null, inspectedIsScopeOwner: false, catalogByVersion });
   return null;
 }
@@ -55,7 +55,7 @@ function load() {
 
 beforeEach(() => {
   vi.mocked(updateDraft).mockReset().mockImplementation(async (_context, snapshot) => snapshot);
-  vi.useFakeTimers(); editingAllowed = true; deferDispatch = false; deferred = null; agent = createWeaverRegistry(); controller = registerWorkflowAgent(agent);
+  vi.useFakeTimers(); editingAllowed = true; deferDispatch = false; deferred = null; weaverRegistry = createWeaverRegistry(); controller = registerWorkflowWeaver(weaverRegistry);
   container = document.createElement("div"); document.body.append(container); root = createRoot(container);
   flushSync(() => root.render(<Probe />)); load();
 });

@@ -60,7 +60,7 @@ import { CopyValueButton } from "./executableShared";
 import { useDialogFocus } from "./useDialogFocus";
 import { getDialogs } from "./dialogs";
 import { isTerminalExecution, readObservedExecution, useExecutionObservation, type ExecutionObservationStatus } from "./useExecutionObservation";
-import type { WorkflowAgentController } from "../workflowAgent";
+import type { WorkflowWeaverController } from "../workflowWeaver";
 import { useWorkflowInspectionContext } from "./useWorkflowInspectionContext";
 export { formatSnapshotPayload } from "./RuntimeValueEvidence";
 import type { InstanceInspectorTab, WorkflowEditorPanelTab, WorkflowInstanceInspectionData } from "./editorTypes";
@@ -75,6 +75,7 @@ import { runDetailMinInspectorWidth, useRunDetailLayout, type RunDetailLayoutMod
 import { activateWorkflowCanvasNode, decorateWorkflowCanvasElements } from "./workflowAccessibility";
 import { getReadOnlyFitViewOptions } from "./readOnlyMinimap";
 import { FitReadOnlyFlowView, useReadOnlyFlowNodes } from "./useReadOnlyFlowCanvas";
+import { READ_ONLY_READABLE_ZOOM } from "./readableFitViewport";
 import { WorkflowReadOnlyMiniMap } from "./WorkflowReadOnlyMiniMap";
 import { AdvancedSection, CopyableIdentifier, OverflowMenu, StudioPageHeader, StudioButton } from "@elsa-workflows/studio-ui";
 import { RunWorkflowPicker } from "./RunWorkflowPicker";
@@ -847,8 +848,8 @@ const incidentActivityLookupBatchSize = 8;
 export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressionEditors = [], backendSession, runRelatedLinks = [], workflowExecutionId, initialActivityExecutionId = null, initialInspectorTab = "timeline", initialReturnTo = null, navigate }: {
   context: StudioEndpointContext;
   ai: StudioWeaverRegistry;
-  /** The Workflows module's agent state: the run page contributes the exact Run it shows and the selected activity execution (spec 1193 FR-029). */
-  weaver?: WorkflowAgentController;
+  /** The Workflows module's Weaver state: the run page contributes the exact Run it shows and the selected activity execution (spec 1193 FR-029). */
+  weaver?: WorkflowWeaverController;
   expressionEditors?: StudioExpressionEditorContribution[];
   backendSession?: StudioBackendSession;
   runRelatedLinks?: StudioWorkflowRunRelatedLinkContribution[];
@@ -2170,7 +2171,7 @@ function ReadOnlyWorkflowFlow({
       onPaneClick={() => onSelectEvidence(null)}
     >
       <Background />
-      <FitReadOnlyFlowView nodeCount={flowNodes.length} focusRequestId={focusRequestId} />
+      <FitReadOnlyFlowView nodeCount={flowNodes.length} focusRequestId={focusRequestId} minReadableZoom={READ_ONLY_READABLE_ZOOM} />
       <WorkflowReadOnlyMiniMap nodeCount={flowNodes.length} />
       <Controls fitViewOptions={getReadOnlyFitViewOptions(flowNodes.length)} />
       <RetainFlowViewport />

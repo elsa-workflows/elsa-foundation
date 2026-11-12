@@ -10,7 +10,7 @@ import unittest
 from unittest.mock import Mock
 
 from case_records import retained
-from consumers import DURABLE_STORE_DEPENDENCY, DURABLE_STORE_FEATURE, enable_durable_agent_store
+from consumers import DURABLE_STORE_DEPENDENCY, DURABLE_STORE_FEATURE, enable_durable_weaver_store
 import restart_journeys as rj
 from restart_journeys import (ABRUPT, AFTER_DEADLINE, CONTROL_ID, CORRELATION_KEYS, EXPECTED_CASES, EXPECTED_CONTROL, EXPECTED_OUTCOMES,
                               GRACEFUL, PHASE_ORDER, RESTART_CASES, RESTART_GROUPS, RestartCaseFailure, require_restart_inventory,
@@ -86,7 +86,7 @@ class Case:
                                             {"kind": "protocol.gate.waiting", "data": {"provider": provider, "commandId": COMMAND, "epoch": "epoch-1"}}],
                                 "incompleteTailBytes": 0}, ownerAfter=owner("rev-1", "medium"))
             extra.update(restart=restart_record(ABRUPT), gate={"commandId": COMMAND, "epoch": "epoch-1", "state": "hold", "timeoutMilliseconds": 60000},
-                         interruptedStream={"status": 200, "termination": "read-error", "errorType": "AgentTransportError",
+                         interruptedStream={"status": 200, "termination": "read-error", "errorType": "WeaverTransportError",
                                             "frames": [{"ordinal": 1, "value": {"kind": "started", "id": "event-0", "payload": {"turnId": TURN}}}]},
                          recoveredSession=recovered, recoveredProposals=http("GET", "/_elsa/weaver/sessions/" + SESSION + "/proposals", 200, {"data": []}),
                          continuation=sse([{"kind": "started"}, {"kind": "completed"}]), audit=audit(), **continuation)
@@ -324,7 +324,7 @@ def complete_restart_section(ref, source="frozen"):
             "liveProvider": False, "qualified": False, "independentPackageWitness": False, "expectedCaseIds": sorted(EXPECTED_CASES),
             "controlId": CONTROL_ID, "cases": rows, "restarts": [ref],
             "durableStore": {"feature": DURABLE_STORE_FEATURE, "dependsOn": DURABLE_STORE_DEPENDENCY, "provider": "Sqlite",
-                             "database": "/owned/durable-agent-store/agent-records.db", "databaseObserved": True, "restart": ref},
+                             "database": "/owned/durable-weaver-store/weaver-records.db", "databaseObserved": True, "restart": ref},
             "control": {"id": CONTROL_ID, "provider": "anthropic", "status": "failed", "expectedFailureObserved": True,
                         "actual": copy.deepcopy(EXPECTED_CONTROL), "ownerBefore": ref, "ownerAfter": ref, "evidence": [ref]}}
 
@@ -390,7 +390,7 @@ class RestartManifestTests(unittest.TestCase):
     def test_a_complete_inventory_run_passes_its_own_final_gate(self):
         # T033 attempt 2 passed all 20 cases and the control, then failed because the gate saw status 'running'.
         complete = complete_restart_section(self.ref, source=None)
-        database = self.root / "agent-records.db"
+        database = self.root / "weaver-records.db"
         database.write_bytes(b"sqlite")
         store = dict(complete["durableStore"], database=str(database))
         run = SimpleNamespace(root=self.root, report={"independentPackageWitness": False}, source=None, save=lambda: None, assert_immutable_inputs=lambda: None)
@@ -561,16 +561,16 @@ class DurableStoreConfigurationTests(unittest.TestCase):
         published = root / "backend-published"
         published.mkdir()
         (published / "shells.json").write_text(json.dumps({"CShells": {"Shells": {"Authoring": {"Features": {"Weaver": {}}}}}}))
-        self.store = root / "durable-agent-store"
+        self.store = root / "durable-weaver-store"
         self.store.mkdir(mode=0o700)
         self.run = SimpleNamespace(root=root, profiles={"backend": {"published": published}})
 
     def test_enables_the_packaged_store_on_a_new_owned_sqlite_file_without_returning_the_key(self):
         key = "k" * 48
-        selected = enable_durable_agent_store(self.run, self.store / "agent-records.db", key)
+        selected = enable_durable_weaver_store(self.run, self.store / "weaver-records.db", key)
         path = self.run.profiles["backend"]["published"] / "shells.json"
         features = json.loads(path.read_text())["CShells"]["Shells"]["Authoring"]["Features"]
-        self.assertEqual({"Provider": "Sqlite", "ConnectionString": "Data Source=" + str(self.store / "agent-records.db"), "LeaseSeconds": 15},
+        self.assertEqual({"Provider": "Sqlite", "ConnectionString": "Data Source=" + str(self.store / "weaver-records.db"), "LeaseSeconds": 15},
                          features[DURABLE_STORE_FEATURE])
         self.assertEqual({"EncryptionKey": key}, features[DURABLE_STORE_DEPENDENCY])
         self.assertIn("Weaver", features)
@@ -582,13 +582,13 @@ class DurableStoreConfigurationTests(unittest.TestCase):
         self.addCleanup(outside.cleanup)
         existing = self.store / "existing.db"
         existing.write_bytes(b"")
-        for database, key in ((Path(outside.name) / "agent.db", "k" * 48), (existing, "k" * 48), (Path("relative.db"), "k" * 48),
-                              (self.store / "agent.db", "short")):
+        for database, key in ((Path(outside.name) / "weaver.db", "k" * 48), (existing, "k" * 48), (Path("relative.db"), "k" * 48),
+                              (self.store / "weaver.db", "short")):
             with self.subTest(database=str(database)), self.assertRaises(RuntimeError):
-                enable_durable_agent_store(self.run, database, key)
-        enable_durable_agent_store(self.run, self.store / "agent.db", "k" * 48)
+                enable_durable_weaver_store(self.run, database, key)
+        enable_durable_weaver_store(self.run, self.store / "weaver.db", "k" * 48)
         with self.assertRaises(RuntimeError):
-            enable_durable_agent_store(self.run, self.store / "again.db", "k" * 48)
+            enable_durable_weaver_store(self.run, self.store / "again.db", "k" * 48)
 
 
 if __name__ == "__main__":

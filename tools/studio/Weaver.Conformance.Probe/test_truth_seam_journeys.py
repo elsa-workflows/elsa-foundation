@@ -295,9 +295,9 @@ class BrowserTests(unittest.TestCase):
 
 class PlaceholderTests(unittest.TestCase):
     def generation(self, **changes):
-        value = {"generation": "g-1", "workflowAgent": {"assembly": "Elsa.Weaver.Workflows", "activityAuthoringCatalogs": ["HttpActivityAuthoringCatalog"],
+        value = {"generation": "g-1", "workflowWeaver": {"assembly": "Elsa.Weaver.Workflows", "activityAuthoringCatalogs": ["HttpActivityAuthoringCatalog"],
                  "types": ["DefaultWorkflowWeaverContextProvider", "WeaverWorkflowsFeature", "WorkflowActivityCatalog", "WorkflowWeaverGraph"]}}
-        value["workflowAgent"].update(changes)
+        value["workflowWeaver"].update(changes)
         return value
 
     def test_the_packaged_consumer_ships_and_composes_no_placeholder(self):
@@ -365,7 +365,7 @@ class GateTests(unittest.TestCase):
 
 class AdmittedContextTests(unittest.TestCase):
     # The accepted-message wire the native API returned in the f32dd0a8f witness for the second tenant's request: the
-    # admitted context lives at data.message.context, beside data.warnings, as Studio's agent client reads it.
+    # admitted context lives at data.message.context, beside data.warnings, as Studio's Weaver client reads it.
     ACCEPTED = {"data": {"message": {"id": "m-1", "role": "user", "status": "pending", "context": [
         {"contentType": "workflow.request", "origin": "clientSnapshot", "target": None},
         {"contentType": "workflow.catalog", "origin": "authoritativeRead", "target": None, "content": {"status": "available"}},

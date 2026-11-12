@@ -20,7 +20,7 @@ namespace Elsa.Weaver.Persistence.Tests;
 /// </summary>
 public sealed class WeaverHostStopLeaseReleaseTests
 {
-    private const string ShellName = "agent";
+    private const string ShellName = "weaver";
 
     [Fact]
     public async Task A_graceful_host_stop_releases_the_leases_of_the_sessions_its_shell_owns()
@@ -77,7 +77,7 @@ public sealed class WeaverHostStopLeaseReleaseTests
                 typeof(WeaverEntityFrameworkCoreFeature).Assembly)
             .AddShell(ShellName, shell => shell
                 .WithFeature<EventsFeature>()
-                .WithFeature<SecretsFeature>(feature => feature.EncryptionKey = "agent-host-stop-test-key")
+                .WithFeature<SecretsFeature>(feature => feature.EncryptionKey = "weaver-host-stop-test-key")
                 .WithFeature<WeaverFeature>()
                 .WithFeature<WeaverEntityFrameworkCoreFeature>(feature => feature.ConnectionString = connectionString)));
         return builder.Build();

@@ -120,7 +120,7 @@ function routeMatchesPath(routePath: string, path: string) {
 export function testApi(): ElsaStudioModuleApi {
   const navigation = registry();
   const routes = registry();
-  const agent = createWeaverRegistry();
+  const weaverRegistry = createWeaverRegistry();
   return {
     backend: {
       baseUrl: "https://server.example/",
@@ -138,8 +138,8 @@ export function testApi(): ElsaStudioModuleApi {
     workflowDesigner: {
       panels: registry()
     },
-    weaver: agent,
-    ai: agent,
+    weaver: weaverRegistry,
+    ai: weaverRegistry,
     dialogs: {
       confirm: vi.fn(async () => true),
       prompt: vi.fn(async () => null),

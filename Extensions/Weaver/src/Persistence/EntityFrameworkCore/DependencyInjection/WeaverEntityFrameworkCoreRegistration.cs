@@ -73,5 +73,5 @@ public sealed class WeaverEntityFrameworkCoreOptions
 
     internal static TimeSpan ValidateLease(TimeSpan duration) => duration >= TimeSpan.FromSeconds(15) && duration <= TimeSpan.FromDays(1)
         ? duration
-        : throw new ArgumentOutOfRangeException(nameof(duration), "The agent session lease must be from 15 seconds to one day, longer than the owner's renewal interval.");
+        : throw new ArgumentOutOfRangeException(nameof(duration), "The Weaver session lease must be from 15 seconds to one day, longer than the owner's renewal interval.");
 }

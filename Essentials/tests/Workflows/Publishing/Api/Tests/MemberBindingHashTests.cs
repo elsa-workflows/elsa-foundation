@@ -131,15 +131,15 @@ public sealed class MemberBindingHashTests
     }
 
     /// <summary>
-    /// The conversion linker refuses a member read rather than leave it unplanned, as it would a whole-value read of a
-    /// non-result source. Publication cannot produce one in slice A; a hand-built tree is refused, not passed through.
+    /// The conversion linker plans result member reads only; a request member read, which publication does not
+    /// compile, is refused rather than passed through unplanned.
     /// </summary>
     [Fact]
-    public void The_conversion_linker_refuses_a_member_read()
+    public void The_conversion_linker_refuses_a_request_member_read()
     {
         var exception = Assert.Throws<NotSupportedException>(() =>
             new Elsa.Workflows.Publishing.Services.ActivityResultConversionPlanLinker(new Elsa.Workflows.Publishing.Services.ValueConversionPlanResolver())
-                .Link(Node(Result())));
+                .Link(Node(Request())));
 
         Assert.Contains("publication does not compile member reads yet", exception.Message, StringComparison.Ordinal);
     }

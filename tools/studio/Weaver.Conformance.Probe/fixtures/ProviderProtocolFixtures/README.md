@@ -1,6 +1,6 @@
 # Provider protocol fixtures
 
-This independently packed fixture replaces only the public client factories used by the real Elsa Copilot and Anthropic adapters. It adds no agent provider, orchestrator, tool registry or resource implementation. Every run is **deterministic provider-protocol evidence**, never live-provider evidence.
+This independently packed fixture replaces only the public client factories used by the real Elsa Copilot and Anthropic adapters. It adds no Weaver provider, orchestrator, tool registry or resource implementation. Every run is **deterministic provider-protocol evidence**, never live-provider evidence.
 
 Materialize this directory outside the repository. Replace `__PRODUCT_VERSION__`, `__CSHELLS_VERSION__`, `__AI_ABSTRACTIONS_VERSION__` and `__FIXTURE_VERSION__`, rename `.csproj.in` files to `.csproj` and test `.cs.in` files to `.cs`, then restore/pack against the retained feed. The driver substitutes the actual central `Microsoft.Extensions.AI.Abstractions` pin through `artifacts.pin(...)`, so the fixture follows the product package minimum. Product dependencies are PackageReferences only. Keep both adapter artifacts and this fixture package in the consumer's baseline. The independently authored resource is not a dependency.
 
@@ -49,7 +49,7 @@ For native cancellation evidence, wait for the actual native started/turn ID and
 
 ## Cross-domain contributions
 
-This package contributes no Agent context/capability/tool source or fan-in handler. Its two explicitly selected shell features replace the public provider-client factories in `Elsa.Weaver.GitHubCopilot` and `Elsa.Weaver.Anthropic`; the actual adapters continue to supply the provider and tool-policy integration.
+This package contributes no Weaver context/capability/tool source or fan-in handler. Its two explicitly selected shell features replace the public provider-client factories in `Elsa.Weaver.GitHubCopilot` and `Elsa.Weaver.Anthropic`; the actual adapters continue to supply the provider and tool-policy integration.
 
 ## Contract checks
 

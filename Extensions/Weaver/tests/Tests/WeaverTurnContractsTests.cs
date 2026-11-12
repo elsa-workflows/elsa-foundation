@@ -88,7 +88,7 @@ public sealed class WeaverTurnContractsTests
             new DefaultWeaverToolRegistry(new WeaverTestToolsPublisher(new StubTool("read-workflow"), new StubTool("read-workflow"))).ListAsync());
 
         Assert.Contains("read-workflow", ex.Message);
-        Assert.Contains("Duplicate agent tool name", ex.Message);
+        Assert.Contains("Duplicate Weaver tool name", ex.Message);
     }
 
     [Fact]
