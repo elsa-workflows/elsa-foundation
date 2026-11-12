@@ -1313,6 +1313,7 @@ function CategoryRail({
   onQueryChange(query: string): void;
   onSelect(categoryId: string): void;
 }) {
+  const railRef = useRef<HTMLElement>(null);
   const normalizedQuery = query.trim().toLowerCase();
   const visibleCategories = categories.filter(category => category.id !== AllCategoriesId
     && category.label.toLowerCase().includes(normalizedQuery));
@@ -1333,7 +1334,7 @@ function CategoryRail({
   }
 
   return (
-    <section className="feature-management-category-rail" aria-label="Categories">
+    <section ref={railRef} className="feature-management-category-rail" aria-label="Categories">
       <h2>Categories</h2>
       <StudioSearchInput
         aria-label="Search categories"
@@ -1348,7 +1349,10 @@ function CategoryRail({
           {normalizedQuery && visibleCategories.length === 0 ? (
             <div className="feature-management-category-empty">
               <p>No categories match.</p>
-              <StudioButton size="sm" onClick={() => onQueryChange("")}>Clear category search</StudioButton>
+              <StudioButton size="sm" onClick={() => {
+                onQueryChange("");
+                railRef.current?.querySelector<HTMLInputElement>("input")?.focus();
+              }}>Clear category search</StudioButton>
             </div>
           ) : null}
         </div>

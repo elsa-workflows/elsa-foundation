@@ -134,3 +134,61 @@ test("Feature Management keeps Clear under the native pointer after selection", 
     }
   }
 });
+
+
+test("Feature categories stay discoverable and contained with long labels and many choices", async ({ page }, testInfo) => {
+  for (const mode of ["light", "dark"] as const) {
+    await page.addInitScript(mode => {
+      localStorage.setItem("elsa-studio-theme", "classic");
+      localStorage.setItem("elsa-studio-workspace-style", "minimal");
+      localStorage.setItem("elsa-studio-theme-mode", mode);
+    }, mode);
+    for (const viewport of cases) {
+      await test.step(`${mode}: ${viewport.name}`, async () => {
+        await page.setViewportSize({ width: viewport.viewportWidth, height: 1000 });
+        const params = new URLSearchParams({ categoryRail: "1" });
+        if (viewport.moduleWidth) params.set("moduleWidth", String(viewport.moduleWidth));
+        await page.goto(`/feature-management.html?${params}`);
+        const rail = page.getByRole("region", { name: "Categories", exact: true });
+        const choices = rail.getByRole("group", { name: "Feature categories", exact: true });
+        await expect(choices.getByRole("button")).toHaveCount(26);
+        const longCategory = choices.getByRole("button", { name: /^ExtremelyLongUnbrokenCategoryName/ });
+        await longCategory.focus();
+        await longCategory.press("Enter");
+        await expect(longCategory).toHaveAttribute("aria-pressed", "true");
+        await expect(page.locator(".feature-management-card")).toHaveCount(1);
+        const search = rail.getByRole("searchbox", { name: "Search categories", exact: true });
+        await search.fill("no-category");
+        await rail.getByRole("button", { name: "Clear category search", exact: true }).press("Enter");
+        await expect(search).toBeFocused();
+        await expect(longCategory).toHaveAttribute("aria-pressed", "true");
+        const lastChoice = choices.getByRole("button").last();
+        await lastChoice.focus();
+        await expect(lastChoice).toBeInViewport();
+        await choices.getByRole("button", { name: /^All categories/ }).press("Space");
+        await expect(page.locator(".feature-management-card")).toHaveCount(114);
+        const geometry = await rail.evaluate(element => {
+          const rect = element.getBoundingClientRect();
+          const list = element.parentElement!.querySelector(".feature-management-list-column")!.getBoundingClientRect();
+          return {
+            width: element.parentElement!.getBoundingClientRect().width,
+            beside: rect.right <= list.left,
+            above: rect.bottom <= list.top,
+            controlsFit: Array.from(element.querySelectorAll("button,input")).every(control => {
+              const box = control.getBoundingClientRect();
+              return box.left >= rect.left && box.right <= rect.right + 1 && control.scrollWidth <= control.clientWidth;
+            }),
+            overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth
+          };
+        });
+        expect(geometry.controlsFit).toBe(true);
+        expect(geometry.overflow).toBeLessThanOrEqual(1);
+        expect(geometry.width >= 960 ? geometry.beside : geometry.above).toBe(true);
+        await search.focus();
+        await testInfo.attach(`categories-${mode}-${viewport.viewportWidth}-${viewport.moduleWidth ?? "full"}`, {
+          body: await page.screenshot(), contentType: "image/png"
+        });
+      });
+    }
+  }
+});

@@ -5,11 +5,11 @@ import { ThemeProvider } from "../../src/essentials/Elsa.Studio.Hosting/Client/s
 import { FeatureManagementPage, register } from "../../../Extensions/FeatureManagement/studio/Elsa.Studio.FeatureManagement/Client/src/module";
 import "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/styles.css";
 
-function createFeature(id: string, enabled = false) {
+function createFeature(id: string, enabled = false, categories = ["Fixture"]) {
   return {
     id,
     displayName: id,
-    categories: ["Fixture"],
+    categories,
     sourceKind: "runtime",
     packageId: "Fixture.Features",
     packageVersion: "1.0.0",
@@ -39,9 +39,14 @@ const studioCatalog = {
   revision: "studio-layout-fixture",
   features: [createFeature("StudioFeatureA"), createFeature("StudioFeatureB")]
 };
+const railFixture = new URLSearchParams(window.location.search).has("categoryRail");
 const serverCatalog = {
   revision: "server-layout-fixture",
-  features: Array.from({ length: 114 }, (_, index) => createFeature(`ServerFeature${String(index + 1).padStart(3, "0")}`))
+  features: Array.from({ length: 114 }, (_, index) => createFeature(
+    `ServerFeature${String(index + 1).padStart(3, "0")}`,
+    false,
+    railFixture ? [index === 0 ? "ExtremelyLongUnbrokenCategoryNameForContainmentAndWrapping" : `Group ${index % 24}`] : ["Fixture"]
+  ))
 };
 
 const api = {

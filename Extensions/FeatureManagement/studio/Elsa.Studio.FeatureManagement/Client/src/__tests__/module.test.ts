@@ -473,8 +473,10 @@ describe("feature management module", () => {
     await changeInput(search, "not-a-category");
     expect(choices.textContent).toContain("No categories match.");
     expect(container.querySelectorAll(".feature-management-card")).toHaveLength(2);
+    buttonByText(choices, "Clear category search").focus();
     await click(buttonByText(choices, "Clear category search"));
     expect(search?.value).toBe("");
+    expect(document.activeElement).toBe(search);
     expect(buttonContainingText(choices, "Storage").getAttribute("aria-pressed")).toBe("true");
     await click(buttonContainingText(choices, "All categories"));
     expect(container.querySelectorAll(".feature-management-card")).toHaveLength(3);

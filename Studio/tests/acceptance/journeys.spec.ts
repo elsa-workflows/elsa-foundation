@@ -167,6 +167,7 @@ test("feature filtering and settings dialogs", async ({ page }, info) => {
   await expect(list.locator(".feature-management-card").first()).toBeVisible();
   await rail.getByRole("button", { name: "Clear category search", exact: true }).press("Enter");
   await expect(categorySearch).toHaveValue("");
+  await expect(categorySearch).toBeFocused();
   await expect(categories.getByRole("button", { pressed: true })).toContainText(categoryLabel);
   await capture(page, info, "features-category-selected");
   await categories.getByRole("button", { name: /^All categories/ }).press("Space");
@@ -197,6 +198,15 @@ test("feature filtering and settings dialogs", async ({ page }, info) => {
   else expect(composition.railBottom).toBeLessThanOrEqual(composition.listTop);
   await rail.scrollIntoViewIfNeeded();
   await capture(page, info, "features-category-rail");
+  if ((page.viewportSize()?.width ?? 1440) < 700) {
+    const normalViewport = page.viewportSize()!;
+    await page.setViewportSize({ width: 320, height: normalViewport.height });
+    await expect(rail).toBeVisible();
+    expect(await rail.evaluate(element => element.scrollWidth - element.clientWidth)).toBeLessThanOrEqual(1);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
+    await capture(page, info, "features-category-rail-320");
+    await page.setViewportSize(normalViewport);
+  }
 
   await page.getByRole("tablist", { name: "Hosts" }).getByRole("tab", { name: /^Server/ }).click();
   await filter.fill("Activities Dispatch Workflow (Runtime)");
