@@ -760,6 +760,9 @@
     <Project Path="Essentials/tests/Studio/Dashboard/QueryTests/Elsa.Studio.Dashboard.QueryTests.csproj" />
     <Project Path="Essentials/tests/Studio/Dashboard/ResourceTests/Elsa.Studio.Dashboard.ResourceTests.csproj" />
   </Folder>
+  <Folder Name="/Essentials/tests/Studio/Dashboard/Persistence/">
+    <Project Path="Essentials/tests/Studio/Dashboard/Persistence/ProviderTests/Elsa.Studio.Dashboard.Persistence.ProviderTests.csproj" />
+  </Folder>
   <Folder Name="/Essentials/tests/Studio/Preferences/">
     <Project Path="Essentials/tests/Studio/Preferences/Tests/Elsa.Studio.Preferences.Tests.csproj" />
   </Folder>

@@ -448,6 +448,12 @@
       "medianMinutes": 0.01
     },
     {
+      "project": "Essentials/tests/Studio/Dashboard/Persistence/ProviderTests/Elsa.Studio.Dashboard.Persistence.ProviderTests.csproj",
+      "tier": "integration",
+      "medianMinutes": null,
+      "trait": "testcontainers"
+    },
+    {
       "project": "Essentials/tests/Studio/Dashboard/QueryTests/Elsa.Studio.Dashboard.QueryTests.csproj",
       "tier": "pr",
       "medianMinutes": null
@@ -1057,6 +1063,7 @@
           "cli-acceptance",
           "compensation",
           "dashboard",
+          "studio-dashboard",
           "data-protection",
           "elsa3-import",
           "locking-database",
@@ -1071,6 +1078,11 @@
     ]
   },
   "containerSuites": [
+    {
+      "suite": "studio-dashboard",
+      "project": "Essentials/tests/Studio/Dashboard/Persistence/ProviderTests/Elsa.Studio.Dashboard.Persistence.ProviderTests.csproj",
+      "require": "ELSA_REQUIRE_NATIVE_PROVIDER_MATRIX"
+    },
     {
       "suite": "migrations",
       "project": "Essentials/tests/Persistence/EntityFrameworkCore/Migrations/ProviderTests/Elsa.Persistence.EntityFrameworkCore.Migrations.ProviderTests.csproj",

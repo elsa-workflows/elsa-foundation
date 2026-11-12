@@ -1,10 +1,10 @@
 # Saved questions and dashboards
 
-Dashboard defines validated module-owned queries and saved definition resources alongside Studio Home. This slice supplies native query/resource management and SQLite definition persistence; API, dataset sources, Studio pages and conversational authoring follow in the [delivery stack](../../../../specs/1217-ai-dashboards/delivery-slices.md).
+Dashboard defines validated module-owned queries and saved definition resources alongside Studio Home. This slice supplies native query/resource management and four-provider EF definition persistence; API, dataset sources, Studio pages and conversational authoring follow in the [delivery stack](../../../../specs/1217-ai-dashboards/delivery-slices.md).
 
 ## Native composition
 
-`StudioDashboardManagement` registers one scoped `IDashboardQueryService`, structural and visualization validation, bounded read concurrency, resource authorization and definition validation. The [SQLite store](Persistence/EntityFrameworkCore/README.md) adds conditional durable definitions and history. Dataset modules contribute declaration, validation, execution and drill through the [named extension points](Management/EXTENSION_POINTS.md). No dataset-specific branch belongs in generic management.
+`StudioDashboardManagement` registers one scoped `IDashboardQueryService`, structural and visualization validation, bounded read concurrency, resource authorization and definition validation. The [definition store](Persistence/EntityFrameworkCore/README.md) adds conditional durable definitions and history. Dataset modules contribute declaration, validation, execution and drill through the [named extension points](Management/EXTENSION_POINTS.md). No dataset-specific branch belongs in generic management.
 
 A host must supply its trusted actor context, audience directory and durable resource store before exposing resource operations through the later API slice. An absent dependency does not grant access. A source authorizes records, fields and aggregate operations before computation, ordering or pagination. Missing or duplicate dataset ownership fails closed.
 

@@ -14,7 +14,7 @@ namespace Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore;
 [UsesEfModule("Studio.Dashboard")]
 public class DashboardResourcesEntityFrameworkCoreFeature : IShellFeature
 {
-    [ManifestSetting(DisplayName = "Provider", Category = "Persistence", Description = "Sqlite; relational provider migrations follow in the next slice.")]
+    [ManifestSetting(DisplayName = "Provider", Category = "Persistence", Description = "Sqlite, SqlServer, PostgreSql or MySql; the host supplies its provider package.")]
     public string Provider { get; set; } = "Sqlite";
     [ManifestSetting(DisplayName = "Connection string", Category = "Persistence", Secret = true)]
     public string? ConnectionString { get; set; }

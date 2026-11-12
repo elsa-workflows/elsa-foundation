@@ -52,3 +52,18 @@ public sealed class DashboardResourcesSqliteDbContext(DbContextOptions<Dashboard
 {
     public const string ExpectedProviderName = EfProviderNames.Sqlite;
 }
+
+public sealed class DashboardResourcesSqlServerDbContext(DbContextOptions<DashboardResourcesSqlServerDbContext> options) : DashboardResourceDbContext(options)
+{
+    public const string ExpectedProviderName = EfProviderNames.SqlServer;
+}
+
+public sealed class DashboardResourcesPostgreSqlDbContext(DbContextOptions<DashboardResourcesPostgreSqlDbContext> options) : DashboardResourceDbContext(options)
+{
+    public const string ExpectedProviderName = EfProviderNames.PostgreSql;
+}
+
+public sealed class DashboardResourcesMySqlDbContext(DbContextOptions<DashboardResourcesMySqlDbContext> options) : DashboardResourceDbContext(options)
+{
+    public const string ExpectedProviderName = EfProviderNames.MySql;
+}

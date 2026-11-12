@@ -11,7 +11,8 @@ public interface IDashboardActorContext
 public interface IDashboardResourceStore
 {
     ValueTask<DashboardResourceDocument?> FindAsync(string tenantId, string kind, string id, CancellationToken cancellationToken = default);
-    ValueTask<IReadOnlyList<DashboardResourceDocument>> ListAsync(string tenantId, string kind, CancellationToken cancellationToken = default);
+    /// <summary>Read at most 16 current resource documents without history, ordered by store key, continuing after a previously returned logical resource ID. Never materialize a whole tenant collection.</summary>
+    ValueTask<IReadOnlyList<DashboardResourceDocument>> ReadPageAsync(string tenantId, string kind, string? afterId = null, CancellationToken cancellationToken = default);
     ValueTask<DashboardResourceDocument?> FindCreatedAsync(string tenantId, string actorId, string kind, string operationKey,
         string fingerprint, CancellationToken cancellationToken = default);
     ValueTask<DashboardResourceWriteResult> WriteAsync(DashboardResourceWrite write, CancellationToken cancellationToken = default);

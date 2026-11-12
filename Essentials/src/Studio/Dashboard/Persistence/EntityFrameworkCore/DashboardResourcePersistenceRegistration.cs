@@ -22,9 +22,10 @@ public static class DashboardResourcePersistenceRegistration
     public static IServiceCollection AddDashboardResourcesEntityFrameworkCore(this IServiceCollection services,
         DashboardResourcePersistenceOptions options)
     {
-        if (!string.Equals(options.Provider, "Sqlite", StringComparison.OrdinalIgnoreCase))
-            throw new NotSupportedException("This Dashboard store composition supports Sqlite. Other providers require their migration slice.");
-        Add<DashboardResourcesSqliteDbContext>(services, options);
+        var add = Binding.Select<Action<IServiceCollection, DashboardResourcePersistenceOptions>>(options.Provider,
+            Add<DashboardResourcesSqliteDbContext>, Add<DashboardResourcesSqlServerDbContext>,
+            Add<DashboardResourcesPostgreSqlDbContext>, Add<DashboardResourcesMySqlDbContext>);
+        add(services, options);
         return services;
     }
 
