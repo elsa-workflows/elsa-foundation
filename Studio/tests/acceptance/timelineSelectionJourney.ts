@@ -70,15 +70,15 @@ export async function timelineSelectionJourney(page: Page, info: TestInfo, captu
   await expect(timelineTab).toHaveAttribute("aria-selected", "true");
   await expect(entries.nth(2)).toHaveAttribute("data-selected", "true");
   await expect(entries.nth(2)).toBeFocused();
-  await expect(page.locator('.wf-node[data-runtime-node-id="second"]')).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator('.react-flow__node[data-id="second"]')).toHaveAttribute("aria-pressed", "true");
   await settledCapture("timeline-click");
   await entries.nth(1).press("Enter");
   await expect(timelineTab).toHaveAttribute("aria-selected", "true");
   await expect(entries.nth(1)).toHaveAttribute("data-selected", "true");
   await expect(entries.nth(2)).toHaveAttribute("data-selected", "false");
   await expect(entries.nth(1)).toBeFocused();
-  await expect(page.locator('.wf-node[data-runtime-node-id="first"]')).toHaveAttribute("aria-pressed", "true");
-  await expect(page.locator('.wf-node[data-runtime-node-id="second"]')).toHaveAttribute("aria-pressed", "false");
+  await expect(page.locator('.react-flow__node[data-id="first"]')).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator('.react-flow__node[data-id="second"]')).toHaveAttribute("aria-pressed", "false");
   await settledCapture("timeline-keyboard");
 
   await panel.getByRole("tab", { name: "Activity", exact: true }).click();
