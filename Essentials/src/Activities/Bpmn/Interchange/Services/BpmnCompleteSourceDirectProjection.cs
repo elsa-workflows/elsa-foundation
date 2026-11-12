@@ -27,7 +27,7 @@ internal static class BpmnCompleteSourceDirectProjection
         try
         {
             source = BpmnDocumentStructureHandler.Read(owner);
-            document = BpmnDocumentStructureHandler.ParseXml(source.DocumentXml);
+            document = BpmnDocumentStructureHandler.ParseXml(source.DocumentXml, source.ProcessId, owner.NodeId);
         }
         catch (InvalidOperationException exception)
         { throw new BpmnModelValidationException(exception.Message, exception); }
