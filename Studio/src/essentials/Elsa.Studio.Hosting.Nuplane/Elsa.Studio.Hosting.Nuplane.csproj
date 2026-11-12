@@ -8,6 +8,7 @@
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <None Update="README.md" Pack="true" PackagePath="" />
+    <InternalsVisibleTo Include="Elsa.Studio.Tests" />
     <PackageReference Include="CShells.Nuplane" />
     <PackageReference Include="Nuplane" />
     <PackageReference Include="Nuplane.Admin" />

@@ -94,7 +94,7 @@ test("authors reusable forms, assignment and connected action paths in the norma
   await page.screenshot({ path: testInfo.outputPath("form-actions-narrow.png") });
   await page.setViewportSize({ width: 1600, height: 1100 });
   await page.getByRole("button", { name: "Publish form version", exact: true }).click();
-  await expect(page.getByText("The immutable form version is available to new tasks.", { exact: true })).toBeVisible();
+  await expect(page.getByRole("status").filter({ hasText: `Published ${title} version 1. New tasks can use it.` })).toBeVisible();
   await page.goto("/workflows/definitions?backend=legacy");
   await page.getByRole("button", { name: /^(Create|Create workflow)$/ }).first().click();
   const dialog = page.getByRole("dialog", { name: "Create Workflow", exact: true });
