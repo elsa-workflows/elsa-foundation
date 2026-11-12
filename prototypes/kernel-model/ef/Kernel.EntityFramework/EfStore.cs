@@ -117,6 +117,7 @@ public sealed class KernelDb(DbContextOptions<KernelDb> options) : DbContext(opt
             e.ToTable("Journal");
             e.HasKey(j => new { j.Partition, j.Position });
         });
+        Engine.Model(Database, model);      // SQL Server and MySQL: Engines.cs
     }
 }
 
@@ -130,6 +131,9 @@ public sealed class EfStore(Func<KernelDb> create, bool postgres, bool fenceInBa
 {
     /// <summary>MUTATION, for the stress test only: the fence statement loses its epoch and position conditions.</summary>
     public bool Unfenced { get; init; }
+
+    /// <summary>Set for SQL Server and MySQL (with postgres: true, as the database assigns seq there too); null for PostgreSQL and SQLite.</summary>
+    public Engine? Engine { get; init; }
 
     private sealed class TakeRow
     {
@@ -155,8 +159,9 @@ public sealed class EfStore(Func<KernelDb> create, bool postgres, bool fenceInBa
     }
 
     // Database time in milliseconds.
-    private string Now => postgres ? "(extract(epoch from clock_timestamp()) * 1000)::bigint" : "CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)";
-    private string False => postgres ? "false" : "0";
+    private string Now => Engine is not null ? Engine.Now : postgres ? "(extract(epoch from clock_timestamp()) * 1000)::bigint" : "CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)";
+    private string False => postgres && Engine is null ? "false" : "0";
+    private string Q(string sql) => Engine?.Sql(sql) ?? sql;
 
     public async Task CreateAsync(int partitions)
     {
@@ -170,6 +175,7 @@ public sealed class EfStore(Func<KernelDb> create, bool postgres, bool fenceInBa
     public async ValueTask<Lease?> TakeAsync(int partition, string node, TimeSpan lease, CancellationToken cancellationToken = default)
     {
         await using var db = create();
+        if (Engine is not null) return await Engine.TakeAsync(db, partition, node, (long)lease.TotalMilliseconds, cancellationToken);
         var rows = await db.Database.SqlQueryRaw<TakeRow>(
             $"""UPDATE "Partitions" SET "Owner" = {"{0}"}, "Epoch" = "Epoch" + 1, "LeaseUntil" = {Now} + {"{1}"} WHERE "Id" = {"{2}"} AND ("Owner" IS NULL OR "LeaseUntil" < {Now} OR "Owner" = {"{0}"}) RETURNING "Epoch", "Position", {Now} AS "Now" """,
             node, (long)lease.TotalMilliseconds, partition).ToListAsync(cancellationToken);
@@ -181,7 +187,7 @@ public sealed class EfStore(Func<KernelDb> create, bool postgres, bool fenceInBa
         try
         {
             await using var db = create();
-            await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+            await using var transaction = await (Engine?.BeginAsync(db, cancellationToken) ?? db.Database.BeginTransactionAsync(cancellationToken));
             var now = 0L;
             if (fenceInBatch)
             {
@@ -189,6 +195,11 @@ public sealed class EfStore(Func<KernelDb> create, bool postgres, bool fenceInBa
                 fence.Position = batch.Position + batch.Positions;
                 fence.LeaseUntil = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + (long)batch.Lease.TotalMilliseconds;
                 db.Entry(fence).Property(p => p.LeaseUntil).IsModified = true;     // also when nothing else changes: the fence must always be sent
+            }
+            else if (Engine is not null)
+            {
+                if (await Engine.FenceAsync(db, batch, Unfenced, cancellationToken) is not { } at) return new Committed(false, 0, []);
+                now = at;
             }
             else
             {
@@ -243,15 +254,26 @@ public sealed class EfStore(Func<KernelDb> create, bool postgres, bool fenceInBa
         }
         catch (Exception e)
         {
-            throw Classify(e);
+            var failure = Classify(e);
+            // ENGINES.md E1. With the fence in the batch the rows are sent before the fence is checked, so an owner that
+            // is behind collides with its successor's rows first and is told "duplicate key". A key violation counts as
+            // a definite error only if the fence still holds; otherwise it is the fence that matched nothing.
+            if (fenceInBatch && failure.Failure == Failure.Definite && !await HoldsAsync(batch, cancellationToken)) return new Committed(false, 0, []);
+            throw failure;
         }
+    }
+
+    private async Task<bool> HoldsAsync(CommitBatch batch, CancellationToken cancellationToken)
+    {
+        await using var db = create();
+        return await db.Partitions.AsNoTracking().AnyAsync(p => p.Id == batch.Partition && p.Epoch == batch.Epoch && p.Position == batch.Position, cancellationToken);
     }
 
     public async ValueTask<Polled> PollAsync(int partition, long epoch, TimeSpan horizon, int limit, CancellationToken cancellationToken = default)
     {
         await using var db = create();
         // A plain read. The left join returns database time even when no message does.
-        var rows = await db.Database.SqlQueryRaw<PollRow>(
+        var rows = await db.Database.SqlQueryRaw<PollRow>(Engine?.Poll ??
             $"""
              SELECT t.now AS "Now", m."Id", m."Seq", m."Target", m."Kind", m."Payload", m."Sender", m."Start", m."Due", m."Seen", m."Attempts", m."KeepUntil"
              FROM (SELECT {Now} AS now) t
@@ -268,6 +290,7 @@ public sealed class EfStore(Func<KernelDb> create, bool postgres, bool fenceInBa
     {
         await using var db = create();
         var m = ToEntity(message, 0, 0);
+        if (Engine is not null) return await Engine.AddAsync(db, m, cancellationToken);
         var seq = postgres ? ("", "") : (""", "Seq" """, """, (SELECT COALESCE(MAX("Seq"), 0) + 1 FROM "Messages")""");
         return await db.Database.ExecuteSqlRawAsync(
             $$"""
@@ -288,6 +311,7 @@ public sealed class EfStore(Func<KernelDb> create, bool postgres, bool fenceInBa
     public async ValueTask PublishAsync(EventRow @event, CancellationToken cancellationToken = default)
     {
         await using var db = create();
+        if (Engine is not null) { await Engine.PublishAsync(db, @event, cancellationToken); return; }
         await db.Database.ExecuteSqlRawAsync(
             """INSERT INTO "Events" ("Key", "Id", "Payload", "KeepUntil") VALUES ({0}, {1}, CAST({2} AS TEXT), {3}) ON CONFLICT DO NOTHING""",
             [@event.Key, @event.Id, @event.Payload!, @event.KeepUntil], cancellationToken);
@@ -303,7 +327,7 @@ public sealed class EfStore(Func<KernelDb> create, bool postgres, bool fenceInBa
     public async ValueTask<IReadOnlyList<EventRow>> FindEventsAsync(IReadOnlyCollection<string> keys, CancellationToken cancellationToken = default)
     {
         await using var db = create();
-        var rows = await db.Events.FromSqlRaw($"""SELECT * FROM "Events" WHERE "KeepUntil" >= {Now}""").AsNoTracking().Where(e => keys.Contains(e.Key)).ToListAsync(cancellationToken);
+        var rows = await db.Events.FromSqlRaw(Q($"""SELECT * FROM "Events" WHERE "KeepUntil" >= {Now}""")).AsNoTracking().Where(e => keys.Contains(e.Key)).ToListAsync(cancellationToken);
         return rows.Select(e => new EventRow(e.Key, e.Id, e.Payload, e.KeepUntil)).ToList();
     }
 
@@ -317,7 +341,7 @@ public sealed class EfStore(Func<KernelDb> create, bool postgres, bool fenceInBa
     public async ValueTask<int> SweepAsync(CancellationToken cancellationToken = default)
     {
         await using var db = create();
-        return await db.Database.ExecuteSqlRawAsync($"""DELETE FROM "Messages" WHERE "Done" <> {False} AND "KeepUntil" < {Now}; DELETE FROM "Events" WHERE "KeepUntil" < {Now}""", cancellationToken);
+        return await db.Database.ExecuteSqlRawAsync(Q($"""DELETE FROM "Messages" WHERE "Done" <> {False} AND "KeepUntil" < {Now}; DELETE FROM "Events" WHERE "KeepUntil" < {Now}"""), cancellationToken);
     }
 
     private static MessageEntity ToEntity(Message m, long seen, long seq) => new()
@@ -327,10 +351,11 @@ public sealed class EfStore(Func<KernelDb> create, bool postgres, bool fenceInBa
     };
 
     /// <summary>What a failure means: it did not happen and may be retried, it did not happen and never will, or nobody knows.</summary>
-    private static StoreException Classify(Exception e)
+    private StoreException Classify(Exception e)
     {
         for (var inner = e; inner is not null; inner = inner.InnerException)
         {
+            if (Engine?.Classify(inner) is { } failure) return new StoreException(failure, inner.Message, e);
             if (inner is PostgresException pg)
                 return new StoreException(pg.SqlState is "40001" or "40P01" ? Failure.Transient : pg.SqlState.StartsWith("22") || pg.SqlState.StartsWith("23") ? Failure.Definite : Failure.Unknown, pg.MessageText, e);
             if (inner is SqliteException lite)
