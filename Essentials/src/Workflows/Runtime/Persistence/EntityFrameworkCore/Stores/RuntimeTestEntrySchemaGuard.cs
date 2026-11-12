@@ -27,6 +27,9 @@ internal static class RuntimeTestEntrySchemaGuard
             .GetService<EfSchemaFinalizationGates>()?.FindModuleGate(context.GetType());
         // Once the live gate admits a protected format, all writes in that family already use it.
         // Classifying the owning header adds no protection there and would add a round trip to ordinary checkpoints.
+        // Below that minimum, this host may have a stale/held gate while a peer has already written a protected
+        // execution. Admission refusal here does not prove persisted roots are ordinary: the lookup is needed
+        // to refuse older-format continuation writes for those existing roots.
         var bindings = entries.Where(x => x.Entry.Entity is not SchedulerWorkItemEntity &&
                 (gate?.StateOf(x.Family!) is not { WritesRefused: false } state ||
                  Version.Parse(state.WriteVersion) < Version.Parse(Minimum(x.Family!)))).Select(x => Binding(x.Entry))

@@ -24,6 +24,7 @@ internal static class RuntimeTestEntryWriteVersion
         return item.Intent.Payload is { } payload && payload.Deserialize<RuntimeSchedulerWorkItem>(new JsonSerializerOptions(JsonSerializerDefaults.Web)) is { } restored && Requires(restored);
     }
 
+    // testContext is reserved for the upcoming owned-context slice; matching it raises format only, never authority.
     internal static bool HasEntry(JsonElement? payload) => payload is { ValueKind: JsonValueKind.Object } value &&
         value.EnumerateObject().Any(x =>
             (x.Name.Equals("testEntry", StringComparison.OrdinalIgnoreCase) || x.Name.Equals("testContext", StringComparison.OrdinalIgnoreCase)) &&
@@ -42,6 +43,8 @@ internal static class RuntimeTestEntryWriteVersion
         // Direct construction is useful for tooling and focused store tests. Normal admission separately requires
         // a provider boundary proving that these exact physical stores and their live gates are qualified.
         if (gate is null) return minimum;
+        // Module activation admits every family declared for its context. A missing state means incomplete/invalid
+        // gate composition or activation, so ordinary writes must fail closed too rather than bypass that gate.
         var state = gate.StateOf(family) ?? throw new InvalidOperationException("The selected test format family has not been admitted.");
         if (state.WritesRefused)
             throw new EfSchemaFamilyWritesRefusedException(family, state.WriteVersion, state.UnreadableFinalizedVersion!, state.ReadableVersions);
