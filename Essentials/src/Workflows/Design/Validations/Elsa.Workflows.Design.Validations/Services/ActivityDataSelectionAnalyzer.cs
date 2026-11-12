@@ -57,12 +57,12 @@ internal sealed class ActivityDataSelectionAnalyzer(
                     (CanonicalReferenceState(input, ConnectionInputBinding.ConnectionExpressionType) is not { } connectionState || !ConnectionInputBinding.IsAccepted(connectionState)))
                     findings.Add(new(Path(node, input.ReferenceKey), ConnectionInputBinding.RuleId, "A connection input accepts only a connection reference."));
                 if (facts?.Constraint is { } constraint && input.IsBound() &&
-                    !constraint.AllowedExpressionTypes.Contains(input.Value.ExpressionType, StringComparer.OrdinalIgnoreCase))
+                    !constraint.AllowedExpressionTypes.Contains(ConstraintRole(input.Value.ExpressionType), StringComparer.OrdinalIgnoreCase))
                     findings.Add(new(Path(node, input.ReferenceKey), constraint.ReasonCode, constraint.Message));
                 foreach (var binding in ActivityDataReadBinding.Read(input.Value))
                     await Resolve(context, node, binding, Path(node, input.ReferenceKey), findings, cancellationToken);
             }
-            return Result(document, null, [], findings);
+            return Result(document, null, [], findings) with { MemberReads = [.. context.MemberReads] };
         }
 
         var consumer = string.IsNullOrWhiteSpace(target.NodeId) ? null : graph.Find(target.NodeId);
@@ -94,6 +94,12 @@ internal sealed class ActivityDataSelectionAnalyzer(
         if (query.Source is not null)
         {
             var binding = ActivityDataReadBinding.Direct(query.Source.ExpressionType, query.Source.Value);
+            // A member of a result the whole read names is offered as the member read itself, decided by the same
+            // admission that publication applies to a stored one.
+            if (options.Value.MemberReads && !query.MemberPath.IsDefaultOrEmpty && binding is { Role: "ActivityResult", IsDirect: true, Scope: null, Error: null })
+                binding = query.MemberPath.Sum(segment => segment.Length) <= ActivityDataReadBinding.MaximumMemberPathLength
+                    ? binding with { Role = "ActivityResultMember", MemberPath = query.MemberPath }
+                    : binding with { Role = "ActivityResultMember", Error = "InvalidMemberPath" };
             var source = await Resolve(context, consumer, binding, Path(consumer, target.InputKey), findings, cancellationToken);
             if (source is not null)
             {
@@ -137,7 +143,7 @@ internal sealed class ActivityDataSelectionAnalyzer(
 
         var allowed = candidates.Where(source => targetFacts.Constraint is not { } constraint ||
             (source.Binding is { } binding
-                ? constraint.AllowedExpressionTypes.Contains(binding.ExpressionType, StringComparer.OrdinalIgnoreCase)
+                ? constraint.AllowedExpressionTypes.Contains(ConstraintRole(binding.ExpressionType), StringComparer.OrdinalIgnoreCase)
                 : source.ActivityResultSource is not null &&
                   constraint.AllowedExpressionTypes.Contains("ActivityResult", StringComparer.OrdinalIgnoreCase)));
         if (!string.IsNullOrWhiteSpace(query.Search))
@@ -207,6 +213,12 @@ internal sealed class ActivityDataSelectionAnalyzer(
         ActivityDataReadBinding binding, string path, ICollection<ValidationError> findings, CancellationToken ct, bool admitOccurrence = true)
     {
         ct.ThrowIfCancellationRequested();
+        var memberRead = binding.Role == "ActivityResultMember";
+        if (memberRead && !options.Value.MemberReads)
+        {
+            findings.Add(new(path, "ActivityData/UnsupportedMemberBinding", "The source binding is malformed or uses a member-read contract not supported by this server."));
+            return null;
+        }
         if (binding.Error is not null)
         {
             findings.Add(new(path, $"ActivityData/{binding.Error}", "The source binding is malformed or uses a member-read contract not supported by this server."));
@@ -248,7 +260,7 @@ internal sealed class ActivityDataSelectionAnalyzer(
                 new(new VariableReference(variable.ReferenceKey, authoredScope), "Variable"), ActivityChildResultAvailability.Definite,
                 variable.Type, null, null, null, null, null);
         }
-        if (binding.Role != "ActivityResult")
+        if (binding.Role != "ActivityResult" && !memberRead)
         {
             findings.Add(new(path, "ActivityData/InvalidSource", "The requested source role is not a readable data source."));
             return null;
@@ -301,15 +313,25 @@ internal sealed class ActivityDataSelectionAnalyzer(
             return null;
         }
         var output = binding.Projection != "$result" && outputs.Length == 1 ? outputs[0] : null;
+        var admitted = declaresNoScope && !notDefinite && !earlierRun && !noTypedResult;
+        // A member read is admitted exactly as the whole read of the same result, and then by its path.
+        var member = memberRead ? await Member(context, binding, version, path, findings, ct) : null;
         // A declared scope is returned as supplied. Without one, the binding is returned only when the checks above
         // admit it, so what a client stores unchanged is what publication accepts.
-        ArgumentValue? direct = binding.Scope is not null
-            ? new(JsonSerializer.SerializeToElement(new { producerNodeId = producer.Node.NodeId, projectionKey = binding.Projection,
-                producerScopeId = binding.Scope, isOptional = binding.IsOptional }), "ActivityResult")
-            : declaresNoScope && !notDefinite && !earlierRun && !noTypedResult
+        ArgumentValue? direct = memberRead
+            ? admitted && member!.Refusal is null
                 ? new(JsonSerializer.SerializeToElement(new { producerNodeId = producer.Node.NodeId, projectionKey = binding.Projection,
-                    isOptional = binding.IsOptional }), "ActivityResult")
-                : null;
+                    isOptional = binding.IsOptional, memberPath = binding.MemberPath }), "ActivityResultMember")
+                : null
+            : binding.Scope is not null
+                ? new(JsonSerializer.SerializeToElement(new { producerNodeId = producer.Node.NodeId, projectionKey = binding.Projection,
+                    producerScopeId = binding.Scope, isOptional = binding.IsOptional }), "ActivityResult")
+                : admitted
+                    ? new(JsonSerializer.SerializeToElement(new { producerNodeId = producer.Node.NodeId, projectionKey = binding.Projection,
+                        isOptional = binding.IsOptional }), "ActivityResult")
+                    : null;
+        if (member is { Refusal: null } && admitOccurrence && admitted)
+            context.MemberReads.Add(member.Facts with { Path = path, ProducerNodeId = producer.Node.NodeId, ProjectionKey = binding.Projection! });
         return new($"activity:{producer.Node.NodeId}:{binding.Projection}",
             output is null ? producer.Node.NodeId : $"{producer.Node.NodeId} · {output.DisplayName}", producer.Parent?.Node.NodeId,
             direct, availability, output?.Type, version, binding.Projection, output?.IsNullable, null, null,
@@ -319,9 +341,61 @@ internal sealed class ActivityDataSelectionAnalyzer(
                 ActivityChildResultAvailability.Unavailable => "UnavailableProducer",
                 _ when earlierRun => "EarlierProducerRun",
                 _ when noTypedResult => "NoTypedResult",
+                _ when member?.Refusal is { } refusal => refusal,
                 _ => null
             }) { ActivityResultSource = new(producer.Node.NodeId, binding.Projection!, binding.IsOptional) };
     }
+
+    /// <summary>
+    /// Types a member read from the producer's serialized shape. A member the shape proves absent, or one looked up in
+    /// a value that has no members, is refused here; a member whose type the shape establishes is known; anything the
+    /// shape cannot establish is left for the runtime to check when it reads the member.
+    /// </summary>
+    private async ValueTask<MemberReadAnalysis> Member(Request context, ActivityDataReadBinding binding, IActivityDefinitionVersion version,
+        string path, ICollection<ValidationError> findings, CancellationToken ct)
+    {
+        var deferred = new ActivityDataMemberReadFacts(path, binding.Key, binding.Projection!, binding.MemberPath, IsKnown: false);
+        ActivitySerializedShape? owned = null;
+        foreach (var provider in shapeSources)
+        {
+            var candidate = await provider.DescribeResultAsync(version, binding.Projection!, binding.MemberPath, new(0, 0), ct);
+            if (candidate is null) continue;
+            if (owned is not null) throw new InvalidOperationException("More than one serialized-shape source owns the admitted data contract.");
+            owned = candidate;
+        }
+        switch (owned?.ReasonCode)
+        {
+            case "activity.shape.member-not-declared":
+                findings.Add(new(path, "ActivityData/UnknownMember", "The producer's result declares no member at this path."));
+                return new(deferred, "UnknownMember");
+            case "activity.shape.member-parent-not-object":
+                findings.Add(new(path, "ActivityData/MemberParentNotObject", "A member on this path is looked up in a value that has no members."));
+                return new(deferred, "MemberParentNotObject");
+        }
+        if (owned is { State: ActivitySerializedShapeState.Known or ActivitySerializedShapeState.Truncated, Type: { } type } &&
+            !string.IsNullOrWhiteSpace(owned.ProfileRevision))
+            return new(deferred with
+            {
+                IsKnown = true,
+                SelectedType = type,
+                MayBeAbsent = owned.Presence switch
+                {
+                    ActivitySerializedPresence.Required => false,
+                    ActivitySerializedPresence.Optional => true,
+                    _ => null
+                },
+                MayBeNull = owned.IsNullable,
+                Representation = owned.Representation,
+                ProfileRevision = owned.ProfileRevision
+            }, null);
+        return new(deferred, null);
+    }
+
+    private sealed record MemberReadAnalysis(ActivityDataMemberReadFacts Facts, string? Refusal);
+
+    // A member read of a result is admitted wherever the whole read of that result is.
+    private static string? ConstraintRole(string? expressionType) =>
+        StringComparer.OrdinalIgnoreCase.Equals(expressionType, "ActivityResultMember") ? "ActivityResult" : expressionType;
 
     private async ValueTask<ActivitySerializedShape> Shape(Source source, ActivityDataSelectionDocument document,
         ImmutableArray<string> memberPath, ActivitySerializedShapeLimits limits, CancellationToken ct)
@@ -433,6 +507,7 @@ internal sealed class ActivityDataSelectionAnalyzer(
             .GroupBy(input => document.ResourceKind is "Workflow" or "WorkflowDefinition" ? input.Name : input.ReferenceKey, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);
         public Dictionary<string, bool> NoTypedResults { get; } = new(StringComparer.Ordinal);
+        public List<ActivityDataMemberReadFacts> MemberReads { get; } = [];
     }
 
     /// <summary>Defends the single response budget even when a contribution returns more than requested.</summary>

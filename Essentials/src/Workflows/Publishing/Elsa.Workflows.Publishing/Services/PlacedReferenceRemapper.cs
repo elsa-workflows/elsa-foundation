@@ -74,12 +74,29 @@ internal static class PlacedReferenceRemapper
         IReadOnlyDictionary<string, string> placedNodeIds,
         string graphScopeId)
     {
-        // A member read would keep a template-local producer or scope here; refuse it until placement remaps it (#4078).
-        if (binding.Selection is not null)
+        // A request or variable member read would keep a template-local scope here; only result member reads are remapped.
+        if (binding.Selection is not null && binding.Source != RuntimeInputBindingSource.ActivityResultMember)
             throw PublishedMemberReadDiagnostics.Unsupported(null, binding);
 
         switch (binding.Source)
         {
+            case RuntimeInputBindingSource.ActivityResultMember when binding.ActivityResult is { } memberResult:
+            {
+                // The producer moves with the placement; the selection is carried unchanged.
+                var producerId = placedNodeIds.GetValueOrDefault(memberResult.ProducerExecutableNodeId, memberResult.ProducerExecutableNodeId);
+                return StringComparer.Ordinal.Equals(producerId, memberResult.ProducerExecutableNodeId)
+                    ? binding
+                    : new RuntimeInputBinding(
+                        binding.InputName,
+                        binding.TargetType,
+                        binding.EffectivePolicy,
+                        binding.Source,
+                        binding.Selection,
+                        activityResult: new RuntimeActivityResultReference(producerId, memberResult.ProjectionKey, producerScopeId: null, memberResult.IsOptional),
+                        metadata: binding.Metadata,
+                        conversionPlan: binding.ConversionPlan,
+                        conversionRequest: binding.ConversionRequest);
+            }
             case RuntimeInputBindingSource.VariableRead when binding.Variable is { } variable:
             {
                 var scopeId = RemapScope(variable.DeclaringScopeId, placedNodeIds, graphScopeId);

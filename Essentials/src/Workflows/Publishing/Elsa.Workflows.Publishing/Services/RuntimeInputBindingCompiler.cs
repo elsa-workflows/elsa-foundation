@@ -36,6 +36,9 @@ public sealed class RuntimeInputBindingCompiler(
     private const string VariableExpressionType = "Variable";
     private const string WorkflowRequestExpressionType = "WorkflowRequest";
     private const string ActivityResultExpressionType = "ActivityResult";
+    private const string ActivityResultMemberExpressionType = "ActivityResultMember";
+    private const int MaximumMemberSegments = 64;
+    private const int MaximumMemberPathLength = 4096;
     private const string DefaultExpressionType = "Default";
     private const string ReferenceKeyMetadataKey = "referenceKey";
 
@@ -429,6 +432,11 @@ public sealed class RuntimeInputBindingCompiler(
         if (string.Equals(value.ExpressionType, LiteralExpressionType, StringComparison.OrdinalIgnoreCase))
             return CompileLiteralInput(nodeId, inputDefinition, value, effectivePolicy, conversion);
 
+        RefuseMemberSelectionOnWholeValueRead(nodeId, inputDefinition, value);
+
+        if (string.Equals(value.ExpressionType, ActivityResultMemberExpressionType, StringComparison.OrdinalIgnoreCase))
+            return CompileActivityResultMemberInput(nodeId, inputDefinition, value, effectivePolicy, conversion);
+
         // Studio's object editor serializes arrays and objects as JSON under the "Object" syntax. The value is
         // authored data, not an executable expression, so preserve it as a durable literal. This is particularly
         // important for publish-time trigger metadata such as HttpEndpoint.SupportedMethods, which must be known
@@ -663,6 +671,88 @@ public sealed class RuntimeInputBindingCompiler(
             metadata: BuildInputMetadata(inputDefinition),
             conversionRequest: AuthoredValueConversionMapper.ToRuntimeRequest(conversion));
     }
+
+    /// <summary>
+    /// Compiles a read of one member of an activity result. The selection is compiled as deferred: the selected
+    /// member's contract is pinned only after the data selection analysis has typed it.
+    /// </summary>
+    private static RuntimeInputBinding CompileActivityResultMemberInput(
+        string nodeId,
+        InputDefinition inputDefinition,
+        ArgumentValue value,
+        ValueProtectionPolicy effectivePolicy,
+        AuthoredValueConversionRequest? conversion)
+    {
+        var payload = value.Value is JsonElement element ? element : default;
+        if (payload.ValueKind != JsonValueKind.Object || payload.TryGetProperty("path", out _) ||
+            payload.TryGetProperty("producerScopeId", out var scope) && scope.ValueKind != JsonValueKind.Null)
+            throw Refusal(nodeId, inputDefinition, "ActivityData/InvalidSource",
+                "A member read of an activity result names its producer and projection only, and declares no scope.");
+        var producerNodeId = ReadOptionalStringProperty(payload, "producerNodeId");
+        var projectionKey = ReadOptionalStringProperty(payload, "projectionKey");
+        if (string.IsNullOrWhiteSpace(producerNodeId) || string.IsNullOrWhiteSpace(projectionKey))
+            throw Refusal(nodeId, inputDefinition, "ActivityData/InvalidSource",
+                "A member read of an activity result names its producer and projection only, and declares no scope.");
+        var segments = ReadMemberPath(payload)
+            ?? throw Refusal(nodeId, inputDefinition, "ActivityData/InvalidMemberPath",
+                $"A member path is a nonempty array of at most {MaximumMemberSegments} strings of at most {MaximumMemberPathLength} characters in total.");
+        var isOptional = payload.TryGetProperty("isOptional", out var optionalElement) && optionalElement.ValueKind == JsonValueKind.True;
+
+        return new RuntimeInputBinding(
+            inputDefinition.ReferenceKey,
+            ToValueTypeDescriptor(inputDefinition),
+            effectivePolicy,
+            RuntimeInputBindingSource.ActivityResultMember,
+            new RuntimeReadSelection(RuntimeReadSelection.CurrentSchemaVersion, segments, RuntimeReadSelectionMode.DeferredFit),
+            activityResult: new RuntimeActivityResultReference(producerNodeId, projectionKey, producerScopeId: null, isOptional),
+            metadata: BuildInputMetadata(inputDefinition),
+            conversionRequest: AuthoredValueConversionMapper.ToRuntimeRequest(conversion));
+    }
+
+    private static string[]? ReadMemberPath(JsonElement payload)
+    {
+        if (!payload.TryGetProperty("memberPath", out var raw) || raw.ValueKind != JsonValueKind.Array)
+            return null;
+        var count = raw.GetArrayLength();
+        if (count is 0 or > MaximumMemberSegments)
+            return null;
+        var segments = new string[count];
+        var length = 0;
+        var index = 0;
+        foreach (var item in raw.EnumerateArray())
+        {
+            if (item.ValueKind != JsonValueKind.String)
+                return null;
+            segments[index++] = item.GetString()!;
+            length += segments[index - 1].Length;
+            if (length > MaximumMemberPathLength)
+                return null;
+        }
+
+        return segments;
+    }
+
+    // A member path, or a legacy path anywhere but a workflow request, on a whole-value read would otherwise be dropped
+    // and the whole value read instead; refuse it at the input, as the data selection analysis does.
+    private static void RefuseMemberSelectionOnWholeValueRead(string nodeId, InputDefinition inputDefinition, ArgumentValue value)
+    {
+        var wholeValueRole = value.ExpressionType switch
+        {
+            _ when string.Equals(value.ExpressionType, ActivityResultExpressionType, StringComparison.OrdinalIgnoreCase) => ActivityResultExpressionType,
+            _ when string.Equals(value.ExpressionType, VariableExpressionType, StringComparison.OrdinalIgnoreCase) => VariableExpressionType,
+            _ when string.Equals(value.ExpressionType, WorkflowRequestExpressionType, StringComparison.OrdinalIgnoreCase) => WorkflowRequestExpressionType,
+            _ => null
+        };
+        if (wholeValueRole is null || value.Value is not JsonElement { ValueKind: JsonValueKind.Object } payload)
+            return;
+        if (payload.TryGetProperty("memberPath", out _) ||
+            wholeValueRole != WorkflowRequestExpressionType && payload.TryGetProperty("path", out _))
+            throw Refusal(nodeId, inputDefinition, "ActivityData/UnsupportedMemberSelection",
+                "A whole-value read cannot select a member; use the member read of its role.");
+    }
+
+    private static ActivityDataSelectionRejectedException Refusal(string nodeId, InputDefinition inputDefinition, string code, string message) =>
+        new([new ValidationError($"{nodeId}/inputs/{inputDefinition.ReferenceKey}", code, message)]);
 
     private RuntimeInputBinding CompileDefaultInput(string nodeId, InputDefinition inputDefinition, ValueProtectionPolicy effectivePolicy)
     {

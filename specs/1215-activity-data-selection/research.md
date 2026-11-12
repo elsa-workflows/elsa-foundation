@@ -237,6 +237,16 @@ running and blocked (run: `InputReadFailureCharacterizationTests.A_drain_whose_p
 with a throwing reader standing in for an older build). So where several non-distributed runtimes share one store,
 member bindings must not be published until every runtime is upgraded; slice C states this beside the preflight.
 
+**As delivered in slice C (the shared-store upgrade rule).** Publication of member reads sits behind the
+`WorkflowDesignValidations` setting `MemberReads` (`WorkflowDesignValidatorOptions.MemberReads`), off by default.
+It is enforced in the shared analyzer, the one admission step every executable-producing path runs before any write
+(workflow publication, version and draft test runs, template compilation and activity-draft test runs, BPMN
+publication, Elsa 3 import): while it is off a member read is neither offered nor admitted and is refused as
+`ActivityData/UnsupportedMemberBinding`, exactly as before slice C. A host that shares a store with older runtimes
+leaves it off until every runtime is upgraded; the rule is stated for hosts in the feature's README, beside the
+setting. The publication preflight is unchanged: it already reports the derived requirement unmet where a runtime
+cannot run member reads.
+
 **Every silent path found, and how it closes.** (a) Selection on an old kind ignored by an older reader: closed by
 new enum members (§2). (b) Node-payload hash collision: closed by explicit arms plus a throwing default. (c)
 `PlacedReferenceRemapper` passes unknown kinds through unchanged (`:106-107`), so a placed member read would keep its
@@ -293,6 +303,33 @@ admitted paths to `Known` from facts the analysis returns per input; the linker 
 `Selection.SelectedType` instead of the projection type. `DeferredFit` gets no plan; an explicit, non-Auto
 conversion request on a `DeferredFit` read is refused at publish (binding contract §3). Intrinsic member reads stay
 without a plan (`ExecutableNodeCompiler.cs:452`) and are checked by the intrinsic payload validation.
+
+**As delivered in slice C (result member reads).**
+- *Known-absent classification (decision 5):* the CLR reader is unchanged; the analyzer refuses on the shape's stable
+  reason codes `activity.shape.member-not-declared` (`ActivityData/UnknownMember`) and
+  `activity.shape.member-parent-not-object` (`ActivityData/MemberParentNotObject`), so the data-context endpoint
+  reports an absent path exactly as before. A selected shape that is `Known` or `Truncated` with a type and a profile
+  revision is pinned; anything else is admitted as `DeferredFit`.
+- *Malformed paths* are `ActivityData/InvalidMemberPath` (missing, not an array, empty, a non-string or null segment,
+  more than 64 segments, more than 4 096 characters); a scope or a `path` on the read is `ActivityData/InvalidSource`.
+  Both are analyzer findings. The binding compiler applies the same parse and, because it runs before the analysis,
+  raises the same finding itself as an `ActivityDataSelectionRejectedException`; it also refuses a `memberPath` (and a
+  `path` outside `WorkflowRequest`) on a whole-value kind as `ActivityData/UnsupportedMemberSelection`.
+- *Facts reach the pin pass* through `ActivityDataSelectionAnalysis.MemberReads`, one entry per admitted read, keyed by
+  the input path and matched on producer, projection and exact segments; anything but exactly one matching fact leaves
+  the read deferred.
+- *Where the pin pass runs (corrects the recommendation above):* only in `WorkflowExecutableCompiler`, for reads in the
+  workflow's own body. A read inside a reusable activity's body is published `DeferredFit` and checked at run time. The
+  template providers (Graph and Agent) return no compiled member reads at template compilation: a Graph body is
+  compiled from its authored occurrences only when the template is placed, after the template's analysis, and the
+  workflow's analysis does not look inside a placed body; placed body nodes also carry their dependency's authored id,
+  not the body's. So the template compiler has no pin call. Placement still remaps the producer and keeps the segments,
+  and an explicit conversion on such a read is refused (`SelectedMemberContractUnknown`). Pinning at placement, with
+  facts keyed by occurrence id, is a follow-up.
+- *Intrinsics:* a result member read on an intrinsic input compiles with no source plan, like a whole result read, and
+  is planned by the linker when its member is known.
+- *Linker:* an explicit conversion on a `DeferredFit` read is refused with the new
+  `ValueConversionRejectionReason.SelectedMemberContractUnknown`.
 
 ### 5. `ActivityResultMember` and the scope-free rule
 
@@ -490,7 +527,7 @@ runtime can run: half-enabled and reachable.
 |---|---|---|---|---|
 | A. Member-read model (T011; hashing part of T013; requirement derivation of T016; model and hash part of T017) | Enum members, `RuntimeReadSelection`, constructor overload and invariants, `Selection` serialization, hash arms with throwing default, fingerprint append, inspection view, derived requirement, PublicAPI. | Nothing compiles a member binding; the resolver throws for one; no capability is advertised, so preflight, import and placement report the requirement unmet. Locally there is no front-door guard until slice B: a hand-built member executable runs up to its reader, whose input read is refused before construction (run: `MemberReadRefusalTests`). | Invariant rows; round trip; corpus goldens unchanged; distinct hashes for distinct paths, modes, types and delimiter-bearing names; old-reader controls (§11); requirement derived for member, absent for whole. | Low–medium: public shape and hash rendering. Delivered (receipt in [tasks](tasks.md)). |
 | B. Runtime selection (T014, T015, capability and guards of T016, runtime part of T017) | Selector, materializer and intrinsic integration inline and external, fit before snapshot, reason codes (one dedicated exception type, `VF-SEL` code first), capability with composition check, front-door and drain guards, and the `RequiresActivityHistory` update so request and variable member reads stop fetching activity history (§7). | Still no publication path emits member bindings; only hand-built executables reach it, and those now run correctly. | Unit rows for every outcome in §7, exact and literal names; inline/external parity; intrinsic; constructor counter and no snapshot commit on failure; retry reuse; real engine harness in a Sequence and a top-level Flowchart; guards refuse start, resume and queued work without the capability. | High: materialization order, external values, protection. Delivered: capability by composed materializer rather than a composition check, guards at activity start and bookmark resume (§8); receipt in [tasks](tasks.md). |
-| C. Publish result member reads (T012, T013, T017 for `ActivityResultMember`) | Authored parse, analyzer offer and admission, compiler branch and old-kind refusal, pin pass, linker on the selected type, remapper arms, contract text (§5). | Enables the feature for API clients; the Studio member picker (T022) stays gated in its own leaf. | Offer-equals-admission rows; refusal before any write through the real publish handler; template placement; real host publish → run in a Sequence and a top-level Flowchart, inline and external (acceptance 1). | Medium–high. |
+| C. Publish result member reads (T012, T013, T017 for `ActivityResultMember`) | Authored parse, analyzer offer and admission, compiler branch and old-kind refusal, pin pass, linker on the selected type, remapper arms, contract text (§5). | Enables the feature for API clients; the Studio member picker (T022) stays gated in its own leaf. | Offer-equals-admission rows; refusal before any write through the real publish handler; template placement; real host publish → run in a Sequence and a top-level Flowchart, inline and external (acceptance 1). | Medium–high. Delivered behind the `MemberReads` setting, off by default (§3 "As delivered in slice C"); receipt in [tasks](tasks.md). |
 | D. Other families (T012, T013 for the rest) | `VariableMember`, `WorkflowRequestMember`, `InputMember` and its placement lowering. | Each kind refused until its row lands. | Deferred-fit rows; placement lowering keeps segments; reopen and publish. | Medium. |
 
 ### 11. Open decisions and what reading could not establish
