@@ -19,12 +19,18 @@ export function useCompactNavigation() {
 
   useEffect(() => {
     if (!contentElement) return;
-    const observer = typeof ResizeObserver === "function" ? new ResizeObserver(revealFocusedContent) : null;
+    let frame = 0;
+    const revealAfterLayout = () => {
+      window.cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(revealFocusedContent);
+    };
+    const observer = typeof ResizeObserver === "function" ? new ResizeObserver(revealAfterLayout) : null;
     observer?.observe(contentElement);
-    window.addEventListener("resize", revealFocusedContent);
+    window.addEventListener("resize", revealAfterLayout);
     return () => {
       observer?.disconnect();
-      window.removeEventListener("resize", revealFocusedContent);
+      window.removeEventListener("resize", revealAfterLayout);
+      window.cancelAnimationFrame(frame);
     };
   }, [contentElement, revealFocusedContent]);
 
