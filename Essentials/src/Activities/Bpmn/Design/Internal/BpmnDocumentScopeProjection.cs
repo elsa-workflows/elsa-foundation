@@ -49,7 +49,6 @@ internal static class BpmnDocumentScopeProjection
     private static IReadOnlyCollection<ActivityChildOutcomeProjection> Outcomes(BpmnAuthoredDocument source, XElement scope)
     {
         XNamespace model = BpmnDocumentStructureHandler.ModelNamespace;
-        var targetNamespace = (string?)scope.Document!.Root!.Attribute("targetNamespace");
         var elements = scope.Elements().Where(element => element.Name.Namespace == model && element.Attribute("id") is not null)
             .ToDictionary(element => (string)element.Attribute("id")!, StringComparer.Ordinal);
         return source.Bindings.Where(binding => binding.ChildNodeId is not null && elements.ContainsKey(binding.ElementId))
@@ -59,13 +58,7 @@ internal static class BpmnDocumentScopeProjection
                     .Select(flow => (string?)flow.Attribute(XName.Get("conditionOutcome", "https://elsa-workflows.io/schemas/bpmn")))
                     .OfType<string>().Distinct(StringComparer.Ordinal).ToArray(), BpmnActivityIdentities.DecisionOutcomeInput)).ToArray();
 
-        string? Reference(XElement element, string name)
-        {
-            var parts = element.Attribute(name)?.Value.Trim().Split(':');
-            return parts?.Length == 1 ? parts[0] : parts?.Length == 2 && parts[0].Length > 0 && parts[1].Length > 0 &&
-                !string.IsNullOrEmpty(targetNamespace) &&
-                element.GetNamespaceOfPrefix(parts[0])?.NamespaceName == targetNamespace ? parts[1] : null;
-        }
+        string? Reference(XElement element, string name) => BpmnDocumentReference.Resolve(element, (string?)element.Attribute(name));
     }
 
     internal static ActivityNode Replace(ActivityNode owner, string scopeId, IReadOnlyCollection<ActivityChildProjection> projections)

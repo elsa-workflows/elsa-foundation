@@ -12,6 +12,38 @@ public sealed class PlacedReferenceRemapperTests
 {
     private const string GraphScope = "node-graph";
 
+    [Theory]
+    [InlineData("box", "node-box")]
+    [InlineData("elsewhere", "elsewhere")]
+    public void Canonical_variable_initial_references_follow_placement_without_rewriting_opaque_data(string scope, string expected)
+    {
+        var initial = Binding(RuntimeInputBindingSource.VariableRead, variable: new("total", scope));
+        var declaration = new RuntimeVariableDeclaration("copy", "Copy", initial.TargetType, initial.EffectivePolicy, initial);
+        var fields = JsonSerializer.SerializeToElement(declaration, DescriptorPayloadSerializer.Options)
+            .EnumerateObject().ToDictionary(property => property.Name, property => property.Value.Clone());
+        fields["future"] = JsonSerializer.SerializeToElement(new { declaringScopeId = "box" });
+        var node = WithVariables(JsonSerializer.SerializeToElement(new[] { fields }));
+        var result = PlacedReferenceRemapper.Remap(node, PlacedIds, GraphScope);
+        var variable = Assert.Single(result.Structure!.Payload.GetProperty("variables").Deserialize<RuntimeVariableDeclaration[]>(DescriptorPayloadSerializer.Options)!);
+        Assert.Equal(expected, variable.InitialBinding!.Variable!.DeclaringScopeId);
+        Assert.Equal(scope, declaration.InitialBinding!.Variable!.DeclaringScopeId);
+        Assert.True(JsonElement.DeepEquals(node.Structure!.Payload.GetProperty("opaque"), result.Structure.Payload.GetProperty("opaque")));
+        Assert.True(JsonElement.DeepEquals(fields["future"], result.Structure.Payload.GetProperty("variables")[0].GetProperty("future")));
+        if (scope == "elsewhere") Assert.Same(node, result);
+    }
+
+    [Fact]
+    public void Legacy_authored_variable_arrays_are_not_inspected_or_normalized_during_placement()
+    {
+        var node = WithVariables(JsonSerializer.SerializeToElement(new[] { new { referenceKey = "legacy", variableKey = "opaque-future", @default = new { declaringScopeId = "box" } } }));
+        Assert.Same(node, PlacedReferenceRemapper.Remap(node, PlacedIds, GraphScope));
+    }
+
+    private static ExecutableNode WithVariables(JsonElement variables) => new("node", "node", "local", "1",
+        new("local", "1", JsonSerializer.SerializeToElement(new { })),
+        new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, RuntimeOutputCapture>(), new Dictionary<string, string>(),
+        structure: new("local", "1", JsonSerializer.SerializeToElement(new { variables, opaque = new { declaringScopeId = "box" } })));
+
     private static readonly IReadOnlyDictionary<string, string> PlacedIds = new Dictionary<string, string>(StringComparer.Ordinal)
     {
         ["compute"] = "node-compute",

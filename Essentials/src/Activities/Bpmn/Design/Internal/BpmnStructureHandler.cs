@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Elsa.Activities.Bpmn.Core;
 using Elsa.Activities.Bpmn.Models;
 using Elsa.Expressions.Core.Models;
@@ -104,30 +105,26 @@ internal sealed class BpmnStructureHandler : IActivityStructureHandler
         if (structure.Kind != BpmnProcessActivity.StructureKind || structure.SchemaVersion != BpmnProcessActivity.StructureSchemaVersion)
             throw new InvalidOperationException("Legacy BPMN executable remapping requires the exact kind and schema 1.0.0 before typed deserialization.");
         RejectCompleteSourceAuthority(structure.Payload, $"executable remapping of '{structure.Kind}@{structure.SchemaVersion}'");
-        var executable = structure.Payload.Deserialize<BpmnStructure>(SerializerOptions)
-                         ?? throw new InvalidOperationException("BPMN executable structure payload is invalid.");
-        var remapped = new BpmnStructure(
-            executable.Elements.Select(element => new BpmnElement(
-                element.ElementId,
-                element.ElementType,
-                element.Name,
-                Remap(element.ChildNodeId, authoredToExecutableNodeIds),
-                element.LaneId,
-                element.DefaultFlowId,
-                element.EventDefinitions,
-                element.Properties,
-                element.AttachedToRef,
-                element.CancelActivity,
-                element.LoopCharacteristics,
-                element.IsForCompensation,
-                element.CompensationHandlerElementId,
-                element.IsTransaction,
-                element.TriggeredByEvent,
-                Remap(element.ListenerNodeId, authoredToExecutableNodeIds))).ToArray(),
-            executable.SequenceFlows,
-            executable.Variables,
-            executable.IsTransaction);
-        return new ActivityNodeStructure(Kind, SchemaVersion, JsonSerializer.SerializeToElement(remapped, SerializerOptions));
+        // Validate existing semantic contracts without interpreting executable variables as authored declarations.
+        var semantic = structure.Payload.EnumerateObject().Where(property => !StringComparer.OrdinalIgnoreCase.Equals(property.Name, "variables"))
+            .ToDictionary(property => property.Name, property => property.Value.Clone(), StringComparer.Ordinal);
+        _ = JsonSerializer.SerializeToElement(semantic, SerializerOptions).Deserialize<BpmnStructure>(SerializerOptions)
+            ?? throw new InvalidOperationException("BPMN executable structure payload is invalid.");
+        foreach (var field in structure.Payload.EnumerateObject().Where(property => StringComparer.OrdinalIgnoreCase.Equals(property.Name, "variables")))
+            if (field.Value.ValueKind is not (JsonValueKind.Array or JsonValueKind.Null))
+                throw new InvalidOperationException("BPMN executable variables must be an array.");
+        var payload = JsonNode.Parse(structure.Payload.GetRawText(), new JsonNodeOptions { PropertyNameCaseInsensitive = true })?.AsObject()
+                      ?? throw new InvalidOperationException("BPMN executable structure payload is invalid.");
+        // Placement has already normalized variables and rebased their typed initial bindings.
+        // This owner rewrites only semantic activity references, retaining every other JSON field.
+        foreach (var element in payload["elements"]?.AsArray() ?? [])
+        {
+            var item = element?.AsObject() ?? throw new InvalidOperationException("BPMN executable element is invalid.");
+            foreach (var name in new[] { "childNodeId", "listenerNodeId" })
+                if (item[name] is { } reference)
+                    item[name] = Remap(reference.GetValue<string>(), authoredToExecutableNodeIds);
+        }
+        return new ActivityNodeStructure(Kind, SchemaVersion, JsonSerializer.SerializeToElement(payload, SerializerOptions));
     }
 
     public IReadOnlyCollection<VariableDefinition> ProjectScopedVariables(ActivityNode activity) =>
@@ -152,6 +149,11 @@ internal sealed class BpmnStructureHandler : IActivityStructureHandler
         { throw new BpmnDocumentSourceException($"Invalid legacy BPMN {context}: {exception.Message}", exception); }
     }
 
-    private static string? Remap(string? nodeId, IReadOnlyDictionary<string, string> nodeIds) =>
-        nodeId is not null && nodeIds.TryGetValue(nodeId, out var executableNodeId) ? executableNodeId : nodeId;
+    private static string? Remap(string? nodeId, IReadOnlyDictionary<string, string> nodeIds)
+    {
+        // Preserve the BpmnElement constructor's normalization of these owned references only.
+        nodeId = string.IsNullOrWhiteSpace(nodeId) ? null : nodeId.Trim();
+        var result = nodeId is not null && nodeIds.TryGetValue(nodeId, out var executableNodeId) ? executableNodeId : nodeId;
+        return string.IsNullOrWhiteSpace(result) ? null : result.Trim();
+    }
 }

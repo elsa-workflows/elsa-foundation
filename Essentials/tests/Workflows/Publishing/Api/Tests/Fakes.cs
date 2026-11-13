@@ -146,7 +146,8 @@ internal static class TestCompiler
         IRuntimeDurableValueStorageDriverRegistry? storageDrivers = null,
         IExecutableNodeMetadataEnricher? metadataEnricher = null,
         IIncidentStrategyCatalog? incidentStrategyCatalog = null,
-        IActivityDataSelectionAnalyzer? dataSelectionAnalyzer = null)
+        IActivityDataSelectionAnalyzer? dataSelectionAnalyzer = null,
+        ExecutableNodeCompiler? nodeCompiler = null)
     {
         var publications = activityPublications ?? new EmptyActivityPublicationStore();
         var templates = activityTemplates ?? new EmptyActivityTemplateReader();
@@ -173,7 +174,7 @@ internal static class TestCompiler
             outputCompiler,
             new WorkflowExecutableHasher(),
             new ActivityTreeProjector(activityStructureService),
-            new ExecutableNodeCompiler(
+            nodeCompiler ?? new ExecutableNodeCompiler(
                 activityStructureService,
                 wellKnownTypeRegistry,
                 inputCompiler,

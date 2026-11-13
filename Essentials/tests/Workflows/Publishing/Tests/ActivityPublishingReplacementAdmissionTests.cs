@@ -12,7 +12,7 @@ public sealed class ActivityPublishingReplacementAdmissionTests
     public static IEnumerable<object[]> Contracts() => new[]
     {
         typeof(IActivityTemplateCompiler), typeof(IActivityPublicationCandidateEvaluator), typeof(IActivityPublicationReadiness),
-        typeof(IActivityCatalogProjection), typeof(IActivityPublicationVersionPolicy)
+        typeof(IActivityCatalogProjection), typeof(IActivityPublicationVersionPolicy), typeof(IExecutableStructureNormalizer)
     }.Select(type => new object[] { type });
 
     [Theory]
@@ -58,7 +58,7 @@ public sealed class ActivityPublishingReplacementAdmissionTests
     {
         // The feature registers its admission task last. Resolve that actual contribution through
         // DI without importing a Design API or durable persistence feature into the engine host.
-        using var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
         return Assert.IsType<ValidateActivityPublishingReplacementContractsStartupTask>(provider.GetRequiredService<IStartupTask>());
     }
 
@@ -73,5 +73,19 @@ public sealed class ActivityPublishingReplacementAdmissionTests
         await ResolveGuard(services).ExecuteAsync(default);
         services.Replace(ServiceDescriptor.Scoped(contract, _ => throw new InvalidOperationException()));
         await ResolveGuard(services).ExecuteAsync(default);
+    }
+
+    [Fact]
+    public async Task Default_normalizer_is_scoped_and_removal_is_refused_without_activating_services()
+    {
+        IServiceCollection services = new ServiceCollection();
+        new WorkflowsPublishingFeature().ConfigureServices(services);
+        var normalizer = Assert.Single(services, service => service.ServiceType == typeof(IExecutableStructureNormalizer));
+        Assert.Equal(ServiceLifetime.Scoped, normalizer.Lifetime);
+        Assert.Equal(typeof(ExecutableStructureNormalizer), normalizer.ImplementationType);
+        await ResolveGuard(services).ExecuteAsync(default);
+        services.Remove(normalizer);
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => ResolveGuard(services).ExecuteAsync(default));
+        Assert.Contains("IExecutableStructureNormalizer (0 registrations)", error.Message);
     }
 }

@@ -1,6 +1,5 @@
 using System.Reflection;
 using System.Text.Json;
-using System.Text.Json.Nodes;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Runtime.Core.Attributes;
@@ -12,6 +11,7 @@ using Elsa.Serialization.Core;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Core.Services;
+using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Attributes;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -32,8 +32,20 @@ public sealed class ExecutableNodeCompiler(
     RuntimeInputBindingCompiler inputBindingCompiler,
     RuntimeOutputCaptureCompiler outputCaptureCompiler,
     IEnumerable<IOperatorActivitySchedulingCapabilityProvider>? operatorSchedulingCapabilityProviders = null,
-    ValueConversionPlanResolver? conversionPlanResolver = null)
+    ValueConversionPlanResolver? conversionPlanResolver = null,
+    IExecutableStructureNormalizer? structureNormalizer = null)
 {
+    // Preserve the six-argument binary constructor. Standalone callers retain canonical defaults;
+    // composed hosts supply the one registered scoped normalizer through the primary constructor.
+    public ExecutableNodeCompiler(IActivityStructureService activityStructureService, IWellKnownTypeRegistry wellKnownTypeRegistry,
+        RuntimeInputBindingCompiler inputBindingCompiler, RuntimeOutputCaptureCompiler outputCaptureCompiler,
+        IEnumerable<IOperatorActivitySchedulingCapabilityProvider>? operatorSchedulingCapabilityProviders,
+        ValueConversionPlanResolver? conversionPlanResolver)
+        : this(activityStructureService, wellKnownTypeRegistry, inputBindingCompiler, outputCaptureCompiler,
+            operatorSchedulingCapabilityProviders, conversionPlanResolver, null) { }
+
+    private readonly IExecutableStructureNormalizer _structureNormalizer = structureNormalizer ?? new ExecutableStructureNormalizer(inputBindingCompiler);
+
     private readonly IReadOnlyCollection<IOperatorActivitySchedulingCapabilityProvider> _operatorSchedulingCapabilityProviders =
         (operatorSchedulingCapabilityProviders ?? []).ToArray();
 
@@ -53,6 +65,43 @@ public sealed class ExecutableNodeCompiler(
             placedActivities ?? new Dictionary<string, ExecutableNode>(),
             workflowVariables as IReadOnlyCollection<VariableDefinition> ?? workflowVariables?.ToArray() ?? [],
             workflowInputs as IReadOnlyCollection<InputDefinition> ?? workflowInputs?.ToArray() ?? []);
+
+    internal ExecutableNode CompileRoot(
+        ActivityNode rootActivity,
+        ActivityTreeProjection projection,
+        IReadOnlyDictionary<string, ActivityDefinitionVersion> activityRows,
+        IReadOnlyDictionary<string, ExecutableNode> placedActivities,
+        IEnumerable<VariableDefinition>? workflowVariables,
+        IEnumerable<InputDefinition>? workflowInputs,
+        ActivityStructureCompilationContext context)
+    {
+        // Validate complete authored content before a placed reusable can replace its node.
+        // The cache also keeps each activity-owned lowering to one invocation.
+        var structures = projection.Nodes.ToDictionary(node => node.NodeId,
+            node => activityStructureService.CompileExecutableStructure(node, context), StringComparer.Ordinal);
+        return CompileNode(rootActivity, projection, activityRows, placedActivities,
+            workflowVariables as IReadOnlyCollection<VariableDefinition> ?? workflowVariables?.ToArray() ?? [],
+            workflowInputs as IReadOnlyCollection<InputDefinition> ?? workflowInputs?.ToArray() ?? [],
+            compiledStructures: structures);
+    }
+
+    internal ResolvedStructureInvocation ResolveStructureInvocation(ActivityDefinitionVersion version)
+    {
+        var descriptor = new RuntimeActivityDescriptor(version.ConsumerKey, version.ConsumerSchemaVersion, version.DescriptorPayload);
+        var catalogType = version.Definition?.ActivityTypeKey
+            ?? throw new ArgumentException($"Activity version '{version.Id}' did not include its activity definition.");
+        var clrType = ClrActivityTypeResolver.Resolve(wellKnownTypeRegistry, descriptor);
+        var runtimeType = clrType is null
+            ? descriptor.ConsumerKey == WellKnownRuntimeActivityConsumers.ClrActivity ? descriptor.ConsumerKey : catalogType
+            : ActivityTypeMetadata.GetDeclaredActivityType(clrType) ?? clrType.FullName!;
+        ActivityStructureContract? structure = null;
+        // An ambiguous declaration cannot authorize a new translation. Existing unrelated legacy
+        // nodes retain their ordinary compile path; the owning contextual handler requires an exact target.
+        if (ActivityStructureDesignFacetReader.TryReadSingle(version.DesignFacets, out var facet) && facet is not null)
+        { ActivityStructureDesignFacetReader.TryReadContract(facet, out var declared); structure = declared; }
+        return new(version.Id, ActivityDefinitionVersionResolutionKind.AuthorableActivity, runtimeType,
+            descriptor.ConsumerKey, descriptor.SchemaVersion, structure);
+    }
 
     /// <summary>
     /// Compiles the unbound root of a source-owned activity template through the same descriptor and
@@ -105,7 +154,8 @@ public sealed class ExecutableNodeCompiler(
         IReadOnlyDictionary<string, ExecutableNode> placedActivities,
         IReadOnlyCollection<VariableDefinition> workflowVariables,
         IReadOnlyCollection<InputDefinition> workflowInputs,
-        ActivityChildOutcomeProjection? outcomeProjection = null)
+        ActivityChildOutcomeProjection? outcomeProjection = null,
+        IReadOnlyDictionary<string, ActivityNodeStructure?>? compiledStructures = null)
     {
         if (!Enum.IsDefined(activity.ExecutionPlacement))
             throw BackgroundExecutionNotEligible(activity, $"execution placement '{activity.ExecutionPlacement}' is not defined");
@@ -122,7 +172,7 @@ public sealed class ExecutableNodeCompiler(
         }
 
         if (activity.Intrinsic is not null)
-            return CompileIntrinsicNode(activity, projection, activityRows, placedActivities, workflowVariables, workflowInputs);
+            return CompileIntrinsicNode(activity, projection, activityRows, placedActivities, workflowVariables, workflowInputs, compiledStructures);
 
         var activityVersion = activityRows[activity.ActivityVersionId];
         var descriptor = new RuntimeActivityDescriptor(
@@ -141,12 +191,13 @@ public sealed class ExecutableNodeCompiler(
         projectedInputs.States = LowerWorkflowInputReads(projectedInputs.States, workflowInputs);
         inputBindingCompiler.EnsureSecretBindingsAdmissible(activity.NodeId, descriptor, projectedInputs.States);
         var inputBindings = inputBindingCompiler.CompileAll(activity.NodeId, projectedInputs.Definitions, projectedInputs.States);
-        var childSlots = CompileChildSlots(activityType, activity.NodeId, projection.ChildProjections(activity), projection, activityRows, placedActivities, workflowVariables, workflowInputs);
+        var childSlots = CompileChildSlots(activityType, activity.NodeId, projection.ChildProjections(activity), projection, activityRows, placedActivities, workflowVariables, workflowInputs, compiledStructures);
         var executionType = clrActivityType is not null && ActivityTypeMetadata.IsTrigger(clrActivityType)
             ? TriggerNodeMetadata.TriggerExecutionType
             : activityVersion.ExecutionType.ToString();
         EnsureDeclaredStructureHasHandler(activity, activityVersion, catalogActivityType);
-        var structure = CompileStructure(activity.NodeId, activityStructureService.CompileExecutableStructure(activity));
+        var structure = CompileStructure(activity.NodeId, compiledStructures is null
+            ? activityStructureService.CompileExecutableStructure(activity) : compiledStructures[activity.NodeId]);
         var activityContract = clrActivityType is null
             ? null
             : BuildActivityContract(activity with { Inputs = projectedInputs.States }, activityVersion, projectedInputs.Definitions,
@@ -335,7 +386,8 @@ public sealed class ExecutableNodeCompiler(
         IReadOnlyDictionary<string, ActivityDefinitionVersion> activityRows,
         IReadOnlyDictionary<string, ExecutableNode> placedActivities,
         IReadOnlyCollection<VariableDefinition> workflowVariables,
-        IReadOnlyCollection<InputDefinition> workflowInputs)
+        IReadOnlyCollection<InputDefinition> workflowInputs,
+        IReadOnlyDictionary<string, ActivityNodeStructure?>? compiledStructures)
     {
         var intrinsic = activity.Intrinsic!;
         var runtimeKind = intrinsic.Kind switch
@@ -439,8 +491,9 @@ public sealed class ExecutableNodeCompiler(
                 ["authoredNodeId"] = activity.NodeId,
                 [TriggerNodeMetadata.ExecutionTypeKey] = ActivityExecutionType.Action.ToString()
             },
-            childSlots: CompileChildSlots(activityType, activity.NodeId, projection.ChildProjections(activity), projection, activityRows, placedActivities, workflowVariables, workflowInputs),
-            structure: CompileStructure(activity.NodeId, activityStructureService.CompileExecutableStructure(activity)),
+            childSlots: CompileChildSlots(activityType, activity.NodeId, projection.ChildProjections(activity), projection, activityRows, placedActivities, workflowVariables, workflowInputs, compiledStructures),
+            structure: CompileStructure(activity.NodeId, compiledStructures is null
+                ? activityStructureService.CompileExecutableStructure(activity) : compiledStructures[activity.NodeId]),
             activityContract: null,
             intrinsicKind: runtimeKind,
             intrinsicVariable: variable);
@@ -729,13 +782,14 @@ public sealed class ExecutableNodeCompiler(
         IReadOnlyDictionary<string, ActivityDefinitionVersion> activityRows,
         IReadOnlyDictionary<string, ExecutableNode> placedActivities,
         IReadOnlyCollection<VariableDefinition> workflowVariables,
-        IReadOnlyCollection<InputDefinition> workflowInputs)
+        IReadOnlyCollection<InputDefinition> workflowInputs,
+        IReadOnlyDictionary<string, ActivityNodeStructure?>? compiledStructures)
     {
         return childSlots
             .Select(slot =>
             {
                 var children = slot.Activities.Select(activity => CompileNode(activity, projection, activityRows, placedActivities, workflowVariables, workflowInputs,
-                    slot.OutcomeProjections.SingleOrDefault(outcomes => StringComparer.Ordinal.Equals(outcomes.NodeId, activity.NodeId)))).ToArray();
+                    slot.OutcomeProjections.SingleOrDefault(outcomes => StringComparer.Ordinal.Equals(outcomes.NodeId, activity.NodeId)), compiledStructures)).ToArray();
                 var context = new OperatorActivitySchedulingCapabilityCompilationContext(
                     parentActivityType,
                     parentExecutableNodeId,
@@ -778,26 +832,8 @@ public sealed class ExecutableNodeCompiler(
             "Compiling the structure as opaque would publish an executable that fails at execution time.");
     }
 
-    private ExecutableActivityStructure? CompileStructure(string nodeId, ActivityNodeStructure? structure)
-    {
-        if (structure is null)
-            return null;
-
-        var payload = JsonNode.Parse(structure.Payload.GetRawText()) as JsonObject
-            ?? throw new ArgumentException($"Activity node '{nodeId}' has a non-object executable structure payload.");
-        if (payload["variables"] is { } variablesNode)
-        {
-            var authored = variablesNode.Deserialize<IReadOnlyCollection<VariableDefinition>>(DescriptorPayloadSerializer.Options)
-                ?? throw new ArgumentException($"Activity node '{nodeId}' has malformed variable declarations.");
-            var compiled = authored.Select(variable => CompileVariableDeclaration(nodeId, variable)).ToArray();
-            payload["variables"] = JsonSerializer.SerializeToNode(compiled, DescriptorPayloadSerializer.Options);
-        }
-
-        return new ExecutableActivityStructure(
-            structure.Kind,
-            structure.SchemaVersion,
-            JsonSerializer.SerializeToElement(payload, DescriptorPayloadSerializer.Options));
-    }
+    private ExecutableActivityStructure? CompileStructure(string nodeId, ActivityNodeStructure? structure) =>
+        _structureNormalizer.Normalize(nodeId, structure);
 
     /// <summary>
     /// Publish-time backstop for the <c>IntrinsicVariableTargetValidator</c> draft guard (#972, PR #971
@@ -857,43 +893,8 @@ public sealed class ExecutableNodeCompiler(
             .ToArray();
     }
 
-    private RuntimeVariableDeclaration CompileVariableDeclaration(string nodeId, VariableDefinition variable)
-    {
-        var type = new ValueTypeDescriptor(variable.Type.Alias, variable.Type.CollectionKind);
-        // The built-in JSON driver encodes into the checkpoint itself. It is not an external
-        // storage profile; Studio advertises this driver for durable variable declarations.
-        var storageProfile = StringComparer.Ordinal.Equals(variable.StorageDriverType, WellKnownRuntimeDurableValueStorageDrivers.Json)
-            ? null
-            : variable.StorageDriverType;
-        var policy = ValuePolicyCombiner.ToProtectionPolicy(
-            ValuePolicyCombiner.FromAuthoredStorage(storageProfile));
-        if (policy.Storage != DurableValueStorage.Inline)
-        {
-            throw new ArgumentException(
-                $"VF-ACT-005: Variable '{variable.ReferenceKey}' on activity node '{nodeId}' selects external storage profile '{variable.StorageDriverType}', but canonical variable-frame externalization is not implemented. Publication is refused instead of accepting an unusable declaration.");
-        }
-        RuntimeInputBinding? initialBinding = null;
-        if (RuntimeInputBindingCompiler.IsSecretBinding(variable.Default))
-            throw SecretBindingDiagnostics.VariableDefaultRefused(nodeId, variable.ReferenceKey);
-        if (variable.Default is not null)
-        {
-            initialBinding = inputBindingCompiler.Compile(
-                nodeId,
-                new InputDefinition(
-                    variable.ReferenceKey,
-                    variable.Name,
-                    variable.Type,
-                    storageProfile,
-                    variable.Name,
-                    Category: null,
-                    IsNullable: true),
-                variable.Default);
-            if (initialBinding.Source != RuntimeInputBindingSource.Literal)
-                throw new ArgumentException($"Variable '{variable.ReferenceKey}' on activity node '{nodeId}' requires a persistable literal initial binding.");
-        }
-
-        return new RuntimeVariableDeclaration(variable.ReferenceKey, variable.Name, type, policy, initialBinding);
-    }
+    private RuntimeVariableDeclaration CompileVariableDeclaration(string nodeId, VariableDefinition variable) =>
+        RuntimeVariableDeclarationCompiler.Compile(nodeId, variable, inputBindingCompiler);
 
     public IReadOnlyDictionary<string, WorkflowExecutableResumeTarget> BuildResumeTargets(
         ExecutableNode root,
