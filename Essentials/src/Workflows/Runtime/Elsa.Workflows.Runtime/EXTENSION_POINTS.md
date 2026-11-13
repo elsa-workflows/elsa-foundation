@@ -1300,3 +1300,42 @@ or expression-parameter conversion plans. Unsupported setup is not returned as a
 runtime binding or completion semantics are weakened. Duplicate outside fixture identities are setup
 refusals, and every qualified evaluator alias requires complete ambient setup until an engine-owned
 dependency manifest can qualify a narrower profile.
+
+### Trusted test-context admission preflight (dormant prerequisite)
+
+`IRuntimeTestContextPreparer.PrepareAsync(WorkflowTestEntry, WorkflowExecutable, string,
+IReadOnlyDictionary<string, JsonElement>, IReadOnlyDictionary<string, JsonElement>, CancellationToken)`
+is a read-only replacement port. The default scoped `RuntimeTestContextPreparer` resolves exact trusted
+setup and invokes the canonical materializer directly; replacing the inspector cannot grant admission.
+Register a replacement with `services.AddScoped<IRuntimeTestContextPreparer, CustomPreparer>()` before
+`AddWorkflowRuntime`. It creates no execution, publication, scope or consumable start grant.
+
+These scoped replacement ports have **no default authority** and must be supplied by the owning module:
+
+- `IWorkflowTestEntryContextResolver.FindAsync(string, CancellationToken)`: authorizes the current caller
+  in its trusted tenant/partition/actor scope and returns the exact immutable descriptor or null.
+- `IRuntimeTestContextSeedSource.ResolveAsync(WorkflowTestEntry, WorkflowExecutable, string, CancellationToken)`:
+  resolves immutable setup for that exact descriptor/fingerprint and retained full executable.
+- `IRuntimeTestExecutionRoutingBoundary.CanRouteTestEntryAsync(WorkflowTestEntry,
+  IWorkflowExecutionActorProvider, CancellationToken)`: qualifies the actual selected actor and physical
+  transport against predecessor consumers; provider labels or claimed durability are insufficient.
+
+Register one owner per port with `services.AddScoped<Port, Owner>()`. Startup
+`ValidateRuntimeTestEntryComposition` diagnoses duplicate owners (including the persistence boundary)
+and missing/duplicate preparers. Missing optional owners are allowed in ordinary runtime composition;
+selected preparation refuses missing/duplicate owners, changed descriptors/seeds and unqualified tuples.
+The existing `IRuntimeTestPersistenceBoundary` receives the actual execution, scheduler, checkpoint,
+outbox, background and timer stores. Only the known coalescing wrappers are unwrapped; arbitrary selected
+decorators reach the owner unchanged. Routing receives the actual selected actor provider. Exceptions
+never qualify a fallback; requested cancellation propagates and provider failures remain safe infrastructure
+findings. No built-in actor/transport is qualified for selected execution by this slice.
+
+`WorkflowTestEntryAdmission` checks exact pin/node, TestRun kind, finite open scope, tenant, partition
+and complete authority; parent/trigger/stimulus/dependency/model-work starts and nested dispatch refuse.
+Preparation freezes setup and rechecks descriptor, providers, scope lifecycle and expiry after materialization.
+The resolver binds the current caller in this read-only path; future queued starts must pass independently
+resolved caller scope and authority to admission, rather than echoing the descriptor's own facts. Malformed
+returned seed shapes are setup refusals; exceptions thrown by providers remain infrastructure failures.
+These are preflight reads, not the scope store's atomic root-start admission transaction. Queued selected
+start/interpreter wiring, lexical consumption and newer predecessor-reader fences remain follow-up work;
+no public start, runner, or durable command format is activated here.

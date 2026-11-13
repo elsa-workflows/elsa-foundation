@@ -19,6 +19,9 @@ public sealed class CoalescingWorkflowExecutionStateStore(
 {
     private readonly IWorkflowExecutionStateStore _inner = inner.Value;
 
+    // Admission must qualify this captured provider, never an unrelated DI holder.
+    internal IWorkflowExecutionStateStore PhysicalStore => _inner;
+
     public ValueTask<WorkflowExecutionState> SaveAsync(WorkflowExecutionState state, CancellationToken cancellationToken = default)
     {
         // A direct save goes past the working set, so what the drain read when it began no longer stands. It ends
