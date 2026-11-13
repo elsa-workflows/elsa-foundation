@@ -526,7 +526,9 @@ public static class RuntimeCoreServiceCollectionExtensions
         services.TryAddSingleton<IRuntimeInputBindingResolver, RuntimeInputBindingResolver>();
         services.TryAddScoped<IRuntimeActivityInputMaterializer, RuntimeActivityInputMaterializer>();
         services.TryAddScoped<IRuntimeTestContextInspector, RuntimeTestContextInspector>();
-        services.TryAddScoped<IRuntimeTestContextPreparer, RuntimeTestContextPreparer>();
+        services.TryAddScoped<RuntimeTestContextPreparer>();
+        services.TryAddScoped<IRuntimeTestContextPreparer>(sp => sp.GetRequiredService<RuntimeTestContextPreparer>());
+        services.TryAddScoped<QueuedSelectedStart>();
         services.TryAddScoped<RuntimeTestExecutionBoundary>();
         services.TryAddScoped<WorkflowTestEntryAdmission>();
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IStartupTask, ValidateRuntimeTestEntryComposition>());
@@ -551,7 +553,17 @@ public static class RuntimeCoreServiceCollectionExtensions
         services.TryAddScoped<IncidentResolutionBatchExecutor>();
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowSchedulerDrainObserver, IncidentStrategyResolutionDrainObserver>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowSchedulerDrainObserver, BlockingIncidentWorkflowFaultObserver>());
-        services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowSchedulerWorkHandler, WorkflowStartSchedulerWorkHandler>());
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowSchedulerWorkHandler, WorkflowStartSchedulerWorkHandler>(sp => new(
+            sp.GetRequiredService<QueuedSelectedStart>(),
+            sp.GetRequiredService<IWorkflowExecutableStore>(),
+            sp.GetRequiredService<IWorkflowSchedulerWorkQueue>(),
+            sp.GetRequiredService<IRuntimeExecutionIdGenerator>(),
+            sp.GetRequiredService<TimeProvider>(),
+            sp.GetRequiredService<IWorkflowExecutionStateStore>(),
+            sp.GetService<IWorkflowExecutableReader>(),
+            sp.GetService<IIncidentStrategyCatalog>(),
+            sp.GetService<RuntimeCheckpointCommitter>(),
+            sp.GetService<ILogger<WorkflowStartSchedulerWorkHandler>>())));
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowSchedulerWorkHandler, WorkflowScheduleActivitySchedulerWorkHandler>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowSchedulerWorkHandler, WorkflowStartActivitySchedulerWorkHandler>());
         // The fusion driver runs the start stage inline via the concrete start handler (registered here so
@@ -561,7 +573,16 @@ public static class RuntimeCoreServiceCollectionExtensions
         services.TryAddScoped<ReplaySafeFusionDriver>();
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowSchedulerWorkHandler, WorkflowCompleteActivitySchedulerWorkHandler>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowSchedulerWorkHandler, WorkflowCreateBookmarkSchedulerWorkHandler>());
-        services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowSchedulerWorkHandler, WorkflowCheckpointSchedulerWorkHandler>());
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowSchedulerWorkHandler, WorkflowCheckpointSchedulerWorkHandler>(sp => new(
+            sp.GetRequiredService<QueuedSelectedStart>(),
+            sp.GetRequiredService<IActivityExecutionStateStore>(),
+            sp.GetRequiredService<RuntimeCheckpointCommitter>(),
+            sp.GetService<IRuntimeActivityExecutionInspectionAccumulator>(),
+            sp.GetRequiredService<TimeProvider>(),
+            sp.GetService<IWorkflowExecutionStateStore>(),
+            sp.GetService<IWorkflowExecutableStore>(),
+            sp.GetService<IRuntimeCoalescingSessionAccessor>(),
+            sp.GetService<IWorkflowExecutableReader>())));
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowSchedulerWorkHandler, WorkflowCancelSchedulerWorkHandler>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowSchedulerWorkHandler, WorkflowCancelActivityScopeSchedulerWorkHandler>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowSchedulerWorkHandler, WorkflowRetryActivityBoundarySchedulerWorkHandler>());
@@ -585,6 +606,7 @@ public static class RuntimeCoreServiceCollectionExtensions
             }
 
             return new WorkflowStartDispatcher(
+                serviceProvider.GetRequiredService<QueuedSelectedStart>(),
                 serviceProvider.GetRequiredService<IWorkflowExecutableStore>(),
                 serviceProvider.GetRequiredService<IWorkflowExecutableSourceReferenceStore>(),
                 serviceProvider.GetRequiredService<IWorkflowExecutionActorProvider>(),

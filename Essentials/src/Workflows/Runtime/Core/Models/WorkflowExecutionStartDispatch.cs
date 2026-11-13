@@ -5,6 +5,10 @@ namespace Elsa.Workflows.Runtime.Core.Models;
 
 public sealed class WorkflowExecutionStartDispatchRequest
 {
+    /// <summary>Exact trusted selected entry; absent on ordinary starts. Runtime admission is still required.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public WorkflowTestEntry? TestEntry { get; init; }
+
     public WorkflowExecutionStartDispatchRequest(
         string artifactId,
         string requestedBy,
@@ -491,6 +495,14 @@ public sealed record WorkflowExecutableSourceSelection
 
 public sealed class WorkflowExecutionStartCommandPayload
 {
+    /// <summary>Exact trusted selected entry; absent on ordinary starts. Runtime admission is still required.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public WorkflowTestEntry? TestEntry { get; init; }
+
+    /// <summary>Process-private interpreter protocol. Shared writers must refuse it until independently qualified.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? SelectedStartProtocol => TestEntry is null ? null : 1;
+
     public WorkflowExecutionStartCommandPayload(
         WorkflowExecutableIdentity pinnedExecutable,
         string requestedArtifactId,

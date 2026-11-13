@@ -9,6 +9,8 @@ public sealed class InMemoryBackgroundActivityWorkStore(
     InMemoryRuntimeCheckpointStoreState state,
     IPersistenceAccessContextAccessor accessContextAccessor) : IBackgroundActivityWorkStore
 {
+    internal bool Coordinates(InMemoryRuntimeCheckpointStoreState checkpointState) => ReferenceEquals(state, checkpointState);
+
     public ValueTask<BackgroundActivityWorkItem?> FindAsync(
         string workflowExecutionId,
         string workId,

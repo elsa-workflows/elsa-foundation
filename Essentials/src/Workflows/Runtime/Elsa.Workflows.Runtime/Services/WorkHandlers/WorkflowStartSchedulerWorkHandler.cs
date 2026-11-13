@@ -1,3 +1,4 @@
+using Elsa.Workflows.Runtime.Services.Executions;
 using System.Globalization;
 using System.Text.Json;
 using Elsa.Workflows.Runtime.Core.Constants;
@@ -13,6 +14,8 @@ namespace Elsa.Workflows.Runtime.Services.WorkHandlers;
 
 public sealed class WorkflowStartSchedulerWorkHandler : IWorkflowSchedulerWorkHandler
 {
+    private readonly QueuedSelectedStart? _selectedStarts;
+
     public const string HandlerName = nameof(WorkflowStartSchedulerWorkHandler);
 
     private readonly IWorkflowExecutableStore _workflowExecutableStore;
@@ -35,7 +38,21 @@ public sealed class WorkflowStartSchedulerWorkHandler : IWorkflowSchedulerWorkHa
         IIncidentStrategyCatalog? incidentStrategyCatalog = null,
         RuntimeCheckpointCommitter? checkpointCommitter = null,
         ILogger<WorkflowStartSchedulerWorkHandler>? logger = null)
+        : this(null, workflowExecutableStore, schedulerWorkQueue, idGenerator, timeProvider, workflowExecutionStateStore, executableReader, incidentStrategyCatalog, checkpointCommitter, logger) { }
+
+    internal WorkflowStartSchedulerWorkHandler(
+        QueuedSelectedStart? selectedStarts,
+        IWorkflowExecutableStore workflowExecutableStore,
+        IWorkflowSchedulerWorkQueue schedulerWorkQueue,
+        IRuntimeExecutionIdGenerator idGenerator,
+        TimeProvider timeProvider,
+        IWorkflowExecutionStateStore workflowExecutionStateStore,
+        IWorkflowExecutableReader? executableReader = null,
+        IIncidentStrategyCatalog? incidentStrategyCatalog = null,
+        RuntimeCheckpointCommitter? checkpointCommitter = null,
+        ILogger<WorkflowStartSchedulerWorkHandler>? logger = null)
     {
+        _selectedStarts = selectedStarts;
         ArgumentNullException.ThrowIfNull(workflowExecutableStore);
         ArgumentNullException.ThrowIfNull(schedulerWorkQueue);
         ArgumentNullException.ThrowIfNull(idGenerator);
@@ -68,6 +85,7 @@ public sealed class WorkflowStartSchedulerWorkHandler : IWorkflowSchedulerWorkHa
         cancellationToken.ThrowIfCancellationRequested();
 
         var startPayload = DeserializeStartPayload(workItem);
+        QueuedSelectedStart.ValidateWireEntry(workItem.Payload, startPayload.TestEntry);
         if (await HasStartedAsync(workItem, startPayload, cancellationToken))
             return;
 
@@ -77,11 +95,18 @@ public sealed class WorkflowStartSchedulerWorkHandler : IWorkflowSchedulerWorkHa
 
         SchedulerWorkHandlerHelpers.ValidatePinnedExecutable(workItem, startPayload.PinnedExecutable, executable.Identity);
 
+        if (startPayload.TestEntry is not null)
+            await (_selectedStarts ?? throw QueuedSelectedStart.Refused("The selected interpreter is unavailable."))
+                .PrepareAsync(startPayload, executable, workItem.WorkflowExecutionId, _workflowExecutionStateStore,
+                    _schedulerWorkQueue, _checkpointCommitter, null, cancellationToken);
+
         var dispatchId = workItem.CommandMetadata.GetValueOrDefault(RuntimeMetadataKeys.WorkflowDispatchId);
         var now = dispatchId is null ? _timeProvider.GetUtcNow() : workItem.EnqueuedAt;
         if (_incidentStrategyCatalog is not null &&
             !_incidentStrategyCatalog.TryGet(executable.IncidentStrategy, out _))
         {
+            if (startPayload.TestEntry is not null)
+                throw QueuedSelectedStart.Refused("The selected root has no qualified incident strategy.");
             if (_checkpointCommitter is null)
                 throw new InvalidOperationException("The runtime cannot record a missing incident strategy without a checkpoint committer.");
 
@@ -89,7 +114,7 @@ public sealed class WorkflowStartSchedulerWorkHandler : IWorkflowSchedulerWorkHa
             return;
         }
 
-        var rootActivityId = executable.RootActivity.ExecutableNodeId;
+        var rootActivityId = startPayload.TestEntry?.ExecutableNodeId ?? executable.RootActivity.ExecutableNodeId;
         var commandMetadata = CreateWorkflowStartCommandMetadata(workItem.CommandMetadata, now);
         var rootActivityWorkItem = NewRootActivityWorkItem(workItem, startPayload.PinnedExecutable, rootActivityId, dispatchId, now, commandMetadata);
         var postCommitIntents = new[] { NewRootActivityPostCommitIntent(workItem, rootActivityWorkItem, rootActivityId, now) };
@@ -124,6 +149,19 @@ public sealed class WorkflowStartSchedulerWorkHandler : IWorkflowSchedulerWorkHa
     {
         if (await _workflowExecutionStateStore.FindAsync(workItem.WorkflowExecutionId, cancellationToken) is not { } existing)
             return false;
+
+        if ((existing.TestEntry is not null || startPayload.TestEntry is not null) &&
+            (startPayload.TestEntry is null || !startPayload.TestEntry.Matches(existing.TestEntry) ||
+                !WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(existing.PinnedExecutable, startPayload.PinnedExecutable) ||
+                existing.RunKind != startPayload.RunKind || !WorkflowTestScope.ContextEquals(existing.TestScope, startPayload.TestScope) ||
+                existing.Authority is null || startPayload.Authority is null ||
+                !WorkflowExecutionAuthoritySnapshot.Matches(existing.Authority, startPayload.Authority.SystemIdentity,
+                    startPayload.Authority.RootInitiator, startPayload.Authority.Metadata) ||
+                existing.Partition != startPayload.Partition || existing.TenantId != startPayload.TenantId ||
+                startPayload.ParentWorkflowExecutionId is not null || startPayload.TriggerNodeId is not null ||
+                startPayload.StimulusInput is not null || startPayload.TriggerMetadata.Count != 0 || startPayload.DispatchNestingDepth != 0 ||
+                startPayload.StartAuthority is { Kind: not WorkflowExecutableStartAuthorityKind.LiveReference }))
+            throw QueuedSelectedStart.Refused("The duplicate selected start differs from the admitted root.");
 
         if (StringComparer.Ordinal.Equals(existing.PinnedExecutable.ArtifactId, startPayload.PinnedExecutable.ArtifactId))
         {
@@ -338,7 +376,7 @@ public sealed class WorkflowStartSchedulerWorkHandler : IWorkflowSchedulerWorkHa
             authority: startPayload.Authority,
             dispatchNestingDepth: startPayload.DispatchNestingDepth,
             testScope: startPayload.TestScope)
-        { ModelWorkOrigin = startPayload.StartAuthority?.ModelWork };
+        { ModelWorkOrigin = startPayload.StartAuthority?.ModelWork, TestEntry = startPayload.TestEntry };
 
         return new RuntimeSchedulerWorkItem(
             workItemId: RuntimeChainId.Derive(startWorkItem.WorkItemId, $"checkpoint:{RuntimeCheckpointNames.WorkflowStarted}"),

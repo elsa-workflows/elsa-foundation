@@ -198,7 +198,14 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
             {
                 if (_state.Commits.TryGetValue(commit.CommitId, out var existing))
                 {
-                    if (!StringComparer.Ordinal.Equals(
+                    var selectedReplay = commit.Checkpoint.Name == RuntimeCheckpointNames.WorkflowStarted &&
+                        existing.Commit.Checkpoint.Name == RuntimeCheckpointNames.WorkflowStarted &&
+                        existing.Commit.WorkflowExecutionId == commit.WorkflowExecutionId &&
+                        commit.StateChanges.WorkflowExecution?.State.TestEntry is { } replayEntry &&
+                        replayEntry.Matches(existing.Commit.StateChanges.WorkflowExecution?.State.TestEntry) &&
+                        commit.Metadata.TryGetValue(QueuedSelectedStart.PayloadReceiptKey, out var receipt) &&
+                        existing.Commit.Metadata.TryGetValue(QueuedSelectedStart.PayloadReceiptKey, out var acceptedReceipt) && receipt == acceptedReceipt;
+                    if (!selectedReplay && !StringComparer.Ordinal.Equals(
                             RuntimeCheckpointCommitFingerprint.Compute(existing.Commit),
                             fingerprint))
                     {
@@ -225,6 +232,11 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
                 ct);
         }, cancellationToken);
     }
+
+    internal bool CoordinatesSelectedStart(InMemoryWorkflowExecutionStateStore executions,
+        InMemoryWorkflowTestScopeStore scopes, InMemoryBackgroundActivityWorkStore background) =>
+        ReferenceEquals(ExactResumeExecutions, executions) && ReferenceEquals(executions.CheckpointState, _state) &&
+        scopes.Coordinates(_state) && background.Coordinates(_state) && ((IRuntimeCheckpointCommitStore)this).SupportsExactBookmarkResume;
 
     private InMemoryWorkflowExecutionStateStore? ExactResumeExecutions => _retentionExecutions ?? _workflowExecutionStateStore as InMemoryWorkflowExecutionStateStore;
 
@@ -297,6 +309,23 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         await ExecuteWithWorkflowExecutionRootWriteLeaseAsync(commit, async ct =>
         {
             EnsureExactBookmarkDeadline(commit);
+            // Root lease acquisition may await past scope expiry. Recheck under the same scope write gate
+            // immediately before consuming a claim or mutating any participant.
+            if (commit.Checkpoint.Name == RuntimeCheckpointNames.WorkflowStarted &&
+                commit.StateChanges.WorkflowExecution?.State is { TestEntry: not null, TestScope: { } selectedScope })
+            {
+                var selected = commit.StateChanges.WorkflowExecution.State;
+                var source = selected.PinnedSource is { } provenance && _retentionReferences is not null
+                    ? await _retentionReferences.FindAsync(provenance.SourceReferenceId, ct) : null;
+                if (source is null || source.Scope != WorkflowExecutableReferenceScope.TestRun || source.ExpiresAt is null ||
+                    !source.IsLive(_timeProvider.GetUtcNow()) || source.ArtifactId != selected.PinnedExecutable.ArtifactId ||
+                    WorkflowExecutableSourceProvenance.From(source) != selected.PinnedSource)
+                    throw QueuedSelectedStart.Refused("The finite selected source is unavailable at atomic root admission.");
+                if (await ExactResumeExecutions!.FindAsync(commit.WorkflowExecutionId, ct) is not null)
+                    throw QueuedSelectedStart.Refused("A different first checkpoint already admitted this root.");
+                await EnsureExpectedFenceAsync(commit, ct);
+                lock (_state.SyncRoot) EnsureOpenScope(selectedScope, _timeProvider.GetUtcNow());
+            }
             // Fence-checked consume first: a claim-lost outcome throws before any other state is mutated, so a stale
             // claimant's commit persists nothing.
             await ApplyConsumedSchedulerWorkItemsAsync(commit.StateChanges.ConsumedSchedulerWorkItems, ct);
@@ -502,6 +531,21 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
             $"checkpoint:{commit.CommitId}:{Guid.NewGuid():N}",
             write,
             cancellationToken);
+    }
+
+    internal bool IsSelectedStartReplay(RuntimeSchedulerWorkItem work, RuntimeCheckpointCommandPayload payload)
+    {
+        lock (_state.SyncRoot)
+        {
+            if (!_state.Commits.TryGetValue($"commit:{work.WorkItemId}", out var stored)) return false;
+            if (stored.Commit.Checkpoint.Name != RuntimeCheckpointNames.WorkflowStarted ||
+                stored.Commit.WorkflowExecutionId != work.WorkflowExecutionId ||
+                !payload.TestEntry!.Matches(stored.Commit.StateChanges.WorkflowExecution?.State.TestEntry) ||
+                !stored.Commit.Metadata.TryGetValue(QueuedSelectedStart.PayloadReceiptKey, out var hash) ||
+                hash != QueuedSelectedStart.PayloadHash(work))
+                throw new RuntimeCheckpointReplayConflictException($"commit:{work.WorkItemId}");
+            return true;
+        }
     }
 
     public IReadOnlyCollection<RuntimeCheckpointCommitRecord> ListCommits()
@@ -1330,7 +1374,7 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
             if (execution is not null &&
                 (commit.Metadata.ContainsKey(TestRunDeliveryReceipt.MetadataKey) ? execution.TestScope :
                     WorkflowTestScopeAdmission.ScopeRequiredToStart(execution, executionExists)) is { } rootScope)
-                EnsureOpenScope(rootScope, commit.Metadata.ContainsKey(TestRunDeliveryReceipt.MetadataKey) ? _timeProvider.GetUtcNow() : commit.Checkpoint.OccurredAt);
+                EnsureOpenScope(rootScope, execution.TestEntry is not null || commit.Metadata.ContainsKey(TestRunDeliveryReceipt.MetadataKey) ? _timeProvider.GetUtcNow() : commit.Checkpoint.OccurredAt);
 
             foreach (var change in commit.StateChanges.WorkflowDispatches)
             {

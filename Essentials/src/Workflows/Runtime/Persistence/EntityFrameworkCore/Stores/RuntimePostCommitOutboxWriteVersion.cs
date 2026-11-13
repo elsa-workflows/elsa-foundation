@@ -21,7 +21,8 @@ internal static class RuntimePostCommitOutboxWriteVersion
             throw new EfSchemaFamilyWritesRefusedException(RuntimePostCommitOutboxEfModule.SchemaFamily,
                 state.WriteVersion, state.UnreadableFinalizedVersion!, state.ReadableVersions);
         // Direct ungated provider construction is used by tools/tests; normal hosts always select their admitted gate.
-        var minimum = testExecution || RuntimeTestEntryWriteVersion.Requires(item) ? RuntimePostCommitOutboxEfModule.TestEntrySchemaVersion : "1.0.0";
+        var entryPayload = RuntimeTestEntryWriteVersion.Requires(item);
+        var minimum = testExecution || entryPayload ? RuntimePostCommitOutboxEfModule.TestEntrySchemaVersion : "1.0.0";
         minimum = RuntimeTestEntryWriteVersion.Preserve(minimum, storedVersion);
         var version = state?.WriteVersion ?? RuntimeTestEntryWriteVersion.Preserve(RuntimePostCommitOutboxEfModule.SchemaVersion, minimum);
         if (Version.Parse(version) < Version.Parse(minimum))

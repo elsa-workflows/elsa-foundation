@@ -26,6 +26,24 @@ public sealed class SelectedTestTransportTests
     [Theory]
     [InlineData(WorkflowExecutionCommandKind.Start)]
     [InlineData(WorkflowExecutionCommandKind.Checkpoint)]
+    public async Task Process_private_selected_interpreter_cannot_enter_shared_command_transport(WorkflowExecutionCommandKind kind)
+    {
+        await using var fixture = await Fixture.CreateAsync(gated: false);
+        await using var context = fixture.Open();
+        var entry = Entry();
+        var payload = kind == WorkflowExecutionCommandKind.Start
+            ? JsonSerializer.SerializeToElement(new WorkflowExecutionStartCommandPayload(entry.Executable, entry.Executable.ArtifactId) { TestEntry = entry }, Json)
+            : JsonSerializer.SerializeToElement(new RuntimeCheckpointCommandPayload(entry.Executable, "WorkflowStarted", [], "WorkflowStart") { TestEntry = entry }, Json);
+        var envelope = new WorkflowExecutionCommandEnvelope("private-envelope", "execution", new("private", "execution", kind, Now,
+            payload, new Dictionary<string, string>()), "private", WorkflowExecutionCommandDeliveryMode.AtLeastOnce, Now, partition: entry.Scope.Partition);
+        await Assert.ThrowsAsync<NotSupportedException>(async () => await fixture.Transport(context).SendAsync("execution", envelope, Now));
+        Assert.Empty(await context.CommandTransportItems.AsNoTracking().ToArrayAsync());
+        Assert.Empty(await context.CommandStreamHeads.AsNoTracking().ToArrayAsync());
+    }
+
+    [Theory]
+    [InlineData(WorkflowExecutionCommandKind.Start)]
+    [InlineData(WorkflowExecutionCommandKind.Checkpoint)]
     public async Task Selected_admission_is_format_fenced_before_a_predecessor_reader_can_decode_or_lease_it(WorkflowExecutionCommandKind kind)
     {
         await using var fixture = await Fixture.CreateAsync(gated: false);
@@ -122,7 +140,7 @@ public sealed class SelectedTestTransportTests
         await using var context = fixture.Open();
         var envelope = new WorkflowExecutionCommandEnvelope("event-envelope", "execution",
             new("event", "execution", WorkflowExecutionCommandKind.GeneratedEvent, Now,
-                JsonSerializer.SerializeToElement(new { testEntry = "business data", testContext = new { value = 1 } }), new Dictionary<string, string>()),
+                JsonSerializer.SerializeToElement(new { testEntry = "business data", testContext = new { value = 1 }, selectedStartProtocol = 1 }), new Dictionary<string, string>()),
             "event", WorkflowExecutionCommandDeliveryMode.AtLeastOnce, Now, partition: new("partition"));
         await fixture.Transport(context).SendAsync("execution", envelope, Now);
         Assert.Equal("1.0.0", (await context.CommandTransportItems.AsNoTracking().SingleAsync()).SchemaVersion);
@@ -138,7 +156,7 @@ public sealed class SelectedTestTransportTests
         await using var context = fixture.Open();
         var envelope = new WorkflowExecutionCommandEnvelope("ordinary-envelope", "execution",
             new("ordinary", "execution", kind, Now, JsonSerializer.SerializeToElement(new
-            { inputs = new { testEntry = "business data", testContext = new { value = 1 } } }), new Dictionary<string, string>()),
+            { inputs = new { testEntry = "business data", testContext = new { value = 1 }, selectedStartProtocol = 1 } }), new Dictionary<string, string>()),
             "ordinary", WorkflowExecutionCommandDeliveryMode.AtLeastOnce, Now, partition: new("partition"));
         await fixture.Transport(context).SendAsync("execution", envelope, Now);
         Assert.Equal("1.0.0", (await context.CommandTransportItems.AsNoTracking().SingleAsync()).SchemaVersion);
