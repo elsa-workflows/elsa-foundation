@@ -41,7 +41,7 @@ describe("unenabled full-source modeled command differ", () => {
   });
 
   it("creates and reconnects a flow with maintained endpoint references", async () => {
-    const added = await change([{ command: "connection.create", elementId: "connected", diId: "connected-di" }], (_document, byId) => {
+    const added = await change([{ command: "connection.create", elementId: "connected", diId: "connected-di", parentId: "process", sourceId: "work", targetId: "end" }], (_document, byId) => {
       append(byId.get("process")!, '<b:sequenceFlow id="connected" sourceRef="work" targetRef="end"/>');
       append(byId.get("work")!, '<b:outgoing>connected</b:outgoing>'); append(byId.get("end")!, '<b:incoming>connected</b:incoming>');
       append(byId.get("plane")!, '<bpmndi:BPMNEdge id="connected-di" bpmnElement="connected"><di:waypoint x="220" y="140"/><di:waypoint x="450" y="118"/></bpmndi:BPMNEdge>');
@@ -124,8 +124,8 @@ describe("unenabled full-source modeled command differ", () => {
   });
 
   it("creates data references/associations, text annotations, groups and category globals", async () => {
-    const result = await change([{ command: "shape.create", elementId: "data" }, { command: "connection.create", elementId: "data-in" },
-      { command: "shape.create", elementId: "note" }, { command: "connection.create", elementId: "association" }, { command: "shape.create", elementId: "group" }], (document, byId) => {
+    const result = await change([{ command: "shape.create", elementId: "data", parentId: "process" }, { command: "connection.create", elementId: "data-in", parentId: "process", semanticParentId: "work", sourceId: "data", targetId: "input" },
+      { command: "shape.create", elementId: "note", parentId: "process" }, { command: "connection.create", elementId: "association", parentId: "process", sourceId: "work", targetId: "note" }, { command: "shape.create", elementId: "group", parentId: "process" }], (document, byId) => {
       append(byId.get("process")!, '<b:dataObject id="data-object"/>');
       append(byId.get("process")!, '<b:dataObjectReference id="data" dataObjectRef="data-object"/>');
       append(byId.get("work")!, '<b:ioSpecification><b:dataInput id="input"/><b:inputSet><b:dataInputRefs>input</b:dataInputRefs></b:inputSet><b:outputSet/></b:ioSpecification>');
@@ -151,7 +151,7 @@ describe("unenabled full-source modeled command differ", () => {
   });
 
   it("retains structural edits as the next proved baseline after inserted/removed DI", async () => {
-    const result = await change([{ command: "shape.create", elementId: "created", diId: "created-di" }], (_document, byId) => {
+    const result = await change([{ command: "shape.create", elementId: "created", diId: "created-di", parentId: "process" }], (_document, byId) => {
       append(byId.get("process")!, '<b:task id="created"/>');
       append(byId.get("plane")!, '<bpmndi:BPMNShape id="created-di" bpmnElement="created"><dc:Bounds x="240" y="300" width="100" height="80"/></bpmndi:BPMNShape>');
     });
@@ -209,7 +209,7 @@ describe("unenabled full-source modeled command differ", () => {
   });
 
   it("creates an attached boundary event and replaces a gateway without changing its configured default", async () => {
-    const result = await change([{ command: "shape.create", elementId: "boundary" }, { command: "element.updateAttachment", elementId: "boundary" },
+    const result = await change([{ command: "shape.create", elementId: "boundary", parentId: "process" }, { command: "element.updateAttachment", elementId: "boundary" },
       { command: "shape.replace", oldElementId: "gateway", newElementId: "gateway" }], (document, index) => {
       append(index.get("process")!, '<b:boundaryEvent id="boundary" attachedToRef="work" cancelActivity="false"><b:timerEventDefinition/></b:boundaryEvent>');
       const old = index.get("gateway")!, replacement = document.createElementNS(ns.model, "bpmn:inclusiveGateway");
@@ -249,7 +249,7 @@ describe("unenabled full-source modeled command differ", () => {
 
   it("preserves unchanged duplicate idless properties but refuses ambiguous opaque membership changes", async () => {
     const source = owner(rawXml.replace('<bpmn:outgoing>q:flow</bpmn:outgoing>', '<bpmn:documentation v:key="one">Same</bpmn:documentation><bpmn:documentation v:key="two">Same</bpmn:documentation><bpmn:outgoing>q:flow</bpmn:outgoing>'));
-    const result = await change([{ command: "shape.create", elementId: "new-task" }], (_document, index) => { append(index.get("process")!, '<b:task id="new-task"/>'); }, source);
+    const result = await change([{ command: "shape.create", elementId: "new-task", parentId: "process" }], (_document, index) => { append(index.get("process")!, '<b:task id="new-task"/>'); }, source);
     expect(result.parsed.payload.documentXml).toContain('v:key="one"'); expect(result.parsed.payload.documentXml).toContain('v:key="two"');
     const { baseline } = await modeled(source);
     const next = edit(baseline.xml, (_document, index) => {
@@ -301,7 +301,7 @@ describe("unenabled full-source modeled command differ", () => {
 
   it("does not treat vendor metadata's repeated id attribute as a standard identity collision", async () => {
     const source = owner(rawXml.replace('<v:configuration ', '<v:configuration id="work" '));
-    const result = await change([{ command: "shape.create", elementId: "new-task" }], (_document, index) => { append(index.get("process")!, '<b:task id="new-task"/>'); }, source);
+    const result = await change([{ command: "shape.create", elementId: "new-task", parentId: "process" }], (_document, index) => { append(index.get("process")!, '<b:task id="new-task"/>'); }, source);
     expect(result.parsed.payload.documentXml).toContain('<v:configuration id="work"');
     expect(result.parsed.byId.get("work")!.localName).toBe("serviceTask");
   });
@@ -312,7 +312,7 @@ describe("unenabled full-source modeled command differ", () => {
       append(index.get("process")!, '<b:task id="new-task"/>');
       document.documentElement.appendChild(document.createComment("Unexplained serializer side effect"));
     });
-    expect(() => mapBpmnNativeCommandGroup(authoring, baseline, { id: 1, trigger: "execute", actions: [{ command: "shape.create", elementId: "new-task" }] }, next)).toThrow(/unaccounted XML\/DI/);
+    expect(() => mapBpmnNativeCommandGroup(authoring, baseline, { id: 1, trigger: "execute", actions: [{ command: "shape.create", elementId: "new-task", parentId: "process" }] }, next)).toThrow(/unaccounted XML\/DI/);
   });
 
   it("projects pinned QName reference families without rewriting their raw lexical context", async () => {

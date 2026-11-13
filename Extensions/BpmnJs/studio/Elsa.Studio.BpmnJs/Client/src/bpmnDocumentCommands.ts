@@ -8,6 +8,10 @@ import { contextualizeNativeNamespacePair, type NativeNamespaceOrigin, type Nati
 import { captureNativePropertyIntents, type NativePropertyIntent } from "./bpmnDocumentIntent";
 
 /** Immutable, optional-module-only snapshots of the pinned command context. No modeler objects escape. */
+export interface NativeCanvasTarget {
+  readonly elementId: string; readonly parentId?: string; readonly semanticParentId?: string; readonly diId?: string;
+  readonly sourceId?: string; readonly targetId?: string; readonly semanticSourceIds?: readonly string[]; readonly semanticTargetId?: string; readonly processId?: string;
+}
 export interface NativeCommandAction {
   readonly command: string;
   readonly elementId?: string;
@@ -15,6 +19,10 @@ export interface NativeCommandAction {
   readonly label?: boolean;
   readonly oldParentId?: string;
   readonly parentId?: string;
+  readonly semanticParentId?: string;
+  readonly sourceId?: string;
+  readonly targetId?: string;
+  readonly canvasTargets?: readonly NativeCanvasTarget[];
   readonly properties?: Readonly<Record<string, unknown>>;
   readonly propertyIntents?: readonly NativePropertyIntent[];
   readonly newLabel?: string | null;
@@ -88,12 +96,23 @@ function snapshotAction(command: string, context: Record<string, unknown>): Nati
   }
   const diIds = [context.elements, context.shapes].flatMap(value => Array.isArray(value)
     ? value.flatMap(element => typeof record(record(element)?.di)?.id === "string" ? [record(record(element)?.di)!.id as string] : []) : []);
+  const canvasTargets = new Map<string, NativeCanvasTarget>();
+  for (const value of [target, context.oldShape, context.newShape, context.oldRoot, context.newRoot, ...[context.elements, context.shapes, context.flowNodeShapes, context.laneShapes].flatMap(value => Array.isArray(value) ? value : [])]) {
+    const element = record(value), business = record(element?.businessObject), elementId = id(element);
+    if (!business || !elementId) continue;
+    let parent = record(business.$parent); while (parent && !id(parent)) parent = record(parent.$parent);
+    const sources = business.sourceRef == null ? undefined : (Array.isArray(business.sourceRef) ? business.sourceRef : [business.sourceRef]).map(id);
+    if (sources?.some(source => !source)) nativeRefuse("canvas connection has an unqualified source intent");
+    canvasTargets.set(elementId, Object.freeze({ elementId, parentId: id(element?.parent ?? context.newParent ?? context.parent), semanticParentId: id(parent), diId: id(element?.di),
+      sourceId: id(element?.source ?? context.source), targetId: id(element?.target ?? context.target), ...(sources ? { semanticSourceIds: Object.freeze(sources as string[]) } : {}), semanticTargetId: id(business.targetRef), processId: id(business.processRef) }));
+  }
   return Object.freeze({ command, elementId: id(target), diId: typeof di?.id === "string" ? di.id : undefined,
     label: !!element?.labelTarget || command === "label.create", oldParentId: id(context.oldParent ?? element?.parent), parentId: id(context.newParent ?? context.parent ?? element?.parent),
     ...(context.oldShape || context.oldRoot ? { oldElementId: id(context.oldShape ?? context.oldRoot) } : {}),
     ...(context.newShape || context.newRoot ? { newElementId: id(context.newShape ?? context.newRoot) } : {}),
     ...(elementIds.length ? { elementIds: Object.freeze(elementIds) } : {}),
     ...(diIds.length ? { diIds: Object.freeze(diIds) } : {}),
+    ...(canvasTargets.size ? { canvasTargets: Object.freeze([...canvasTargets.values()]) } : {}),
     ...(moddle ? { moddleOwnerId: id(moddle), ...(moddleDocumentRoot ? { moddleDocumentRoot: true } : {}) } : {}),
     ...(moddlePath.length ? { moddlePath: Object.freeze(moddlePath) } : {}),
     ...(properties ? { properties: Object.freeze(Object.fromEntries(Object.entries(structuredClone(copied!)).map(([name, value]) => [name, value && typeof value === "object" ? Object.freeze(value) : value]))), propertyNames: Object.freeze(Object.keys(properties)), propertyIntents } : {}),

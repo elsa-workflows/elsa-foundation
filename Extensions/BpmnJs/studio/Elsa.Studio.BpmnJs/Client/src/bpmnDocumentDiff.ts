@@ -1,8 +1,8 @@
 import type { BpmnDocumentAuthoring, BpmnDocumentCommand, BpmnXmlAddress } from "@elsa-workflows/studio-workflows";
-import type { NativeCommandAction, NativeCommandGroup } from "./bpmnDocumentCommands";
+import type { NativeCanvasTarget, NativeCommandAction, NativeCommandGroup } from "./bpmnDocumentCommands";
 import type { BpmnNativeBaseline } from "./bpmnDocumentProjection";
 import { nativeChildren, nativeImportSignature, nativeIndex, nativePrimitiveMatches, nativeRefuse, nativeSignature, nativeXml } from "./bpmnDocumentXml";
-import { assertNativePropertyIntents, nativeModeledProperty as modeledProperty } from "./bpmnDocumentIntent";
+import { assertNativePropertyIntents, nativeIntentElement, nativeModeledProperty as modeledProperty } from "./bpmnDocumentIntent";
 
 const xmlns = "http://www.w3.org/2000/xmlns/";
 const xsi = "http://www.w3.org/2001/XMLSchema-instance";
@@ -54,13 +54,10 @@ function nativePlaneSources(baseline: BpmnNativeBaseline, plane: Element): Set<s
 export function assertBpmnNativePlaneFrames(authoring: BpmnDocumentAuthoring, baseline: BpmnNativeBaseline, nextXml: string, fullDiff = false): void {
   const ns = authoring.bpmnNamespaces, before = nativeXml(baseline.xml), next = nativeXml(nextXml), oldIndex = nativeIndex(before);
   const planes = [...before.getElementsByTagNameNS(ns.diagram, "BPMNPlane")];
-  const key = (plane: Element) => `${plane.getAttribute("id") ? `id:${plane.getAttribute("id")}` : `diagram:${plane.parentElement?.getAttribute("id") ?? ""}`}|scope:${plane.getAttribute("bpmnElement")}`;
+  const key = (plane: Element) => JSON.stringify([plane.getAttribute("id"), plane.parentElement?.namespaceURI, plane.parentElement?.localName, plane.parentElement?.getAttribute("id"), plane.getAttribute("bpmnElement")]);
   const authored = new Set([...nativeXml(baseline.projection.xml).getElementsByTagNameNS(ns.diagram, "BPMNPlane")].filter(plane => plane.hasAttribute("id")).map(key));
-  for (const plane of [...next.getElementsByTagNameNS(ns.diagram, "BPMNPlane")]) {
-    const old = oldIndex.get(plane.getAttribute("id") ?? "");
-    if (old?.namespaceURI === ns.diagram && old.localName === "BPMNPlane" && key(old) !== key(plane))
-      nativeRefuse("S10c is required before a native plane identity/scope can change");
-  }
+  if (JSON.stringify(planes.map(key).sort()) !== JSON.stringify([...next.getElementsByTagNameNS(ns.diagram, "BPMNPlane")].map(key).sort()))
+    nativeRefuse("S10c is required before native plane membership/identity/scope can change");
   for (const entry of [...next.getElementsByTagNameNS(ns.diagram, "BPMNShape"), ...next.getElementsByTagNameNS(ns.diagram, "BPMNEdge")]) {
     const destination = entry.parentElement;
     if (destination?.namespaceURI !== ns.diagram || destination.localName !== "BPMNPlane") nativeRefuse("S10c is required for an unestablished native plane");
@@ -77,6 +74,58 @@ export function assertBpmnNativePlaneFrames(authoring: BpmnDocumentAuthoring, ba
     nativeRefuse("S10c is required for unresolved generated-plane provenance");
 }
 
+/** Fresh IDs carry no authority: captured canvas intent and the selected source root must agree. */
+function assertNativeCanvasScope(authoring: BpmnDocumentAuthoring, baseline: BpmnNativeBaseline, group: NativeCommandGroup, oldIndex: ReadonlyMap<string, Element>, newIndex: ReadonlyMap<string, Element>): void {
+  const ns = authoring.bpmnNamespaces, selected = newIndex.get(baseline.projection.scope.scopeElementId), roots = selected ? [selected] : [];
+  const previous = oldIndex.get(baseline.projection.scope.scopeElementId);
+  if (previous?.localName === "collaboration") for (const participant of nativeChildren(previous, ns.model, "participant")) {
+    const process = newIndex.get(participant.getAttribute("processRef") ?? ""); if (process && baseline.projection.scopeElementIds.has(process.getAttribute("id")!)) roots.push(process);
+  }
+  const active = (element: Element | undefined) => !!element && element.namespaceURI === ns.model && roots.some(root => root === element || root.contains(element));
+  const captured = new Map<string, NativeCanvasTarget>();
+  for (const action of group.actions) {
+    for (const target of action.canvasTargets ?? []) captured.set(target.elementId, target);
+    for (const id of [action.elementId, action.oldElementId, action.newElementId, ...(action.elementIds ?? [])].filter((id): id is string => !!id)) {
+      const old = oldIndex.get(id);
+      if (old?.namespaceURI === ns.model && !baseline.projection.scopeElementIds.has(id)) nativeRefuse("native canvas target is outside the selected source scope");
+      if (!captured.has(id)) captured.set(id, { elementId: id, parentId: action.parentId, semanticParentId: action.semanticParentId, diId: action.diId, sourceId: action.sourceId, targetId: action.targetId });
+    }
+  }
+  if (selected?.localName === "collaboration") for (const target of captured.values()) {
+    const participant = newIndex.get(target.elementId), process = newIndex.get(target.processId ?? "");
+    if (participant?.localName === "participant" && participant.parentElement === selected && target.semanticParentId === selected.getAttribute("id")
+      && process?.localName === "process" && !oldIndex.has(target.processId!) && participant.getAttribute("processRef") === target.processId) roots.push(process);
+  }
+  for (const action of group.actions) if (action.parentId && [action.elementId, action.newElementId, ...(action.elementIds ?? [])].some(id => id && !oldIndex.has(id) && newIndex.get(id)?.namespaceURI === ns.model)
+    && !active(newIndex.get(action.parentId))) nativeRefuse("captured canvas parent is outside the selected source scope");
+  for (const target of captured.values()) {
+    const element = newIndex.get(target.elementId);
+    if (!element && !oldIndex.has(target.elementId) && !group.actions.some(action => ["shape.delete", "connection.delete", "elements.delete"].includes(action.command) && [action.elementId, ...(action.elementIds ?? [])].includes(target.elementId))) nativeRefuse("new canvas target is unavailable for captured intent");
+    if (!element || element.namespaceURI !== ns.model) continue;
+    if (!active(element)) nativeRefuse("native canvas target is outside the selected source scope");
+    if (oldIndex.has(target.elementId)) continue;
+    let parent = element.parentElement; while (parent && !parent.hasAttribute("id")) parent = parent.parentElement;
+    if (!active(element) || !active(newIndex.get(target.parentId ?? target.semanticParentId ?? ""))) nativeRefuse("new canvas target/parent is outside the selected source scope");
+    if (!parent || parent.getAttribute("id") !== (target.semanticParentId ?? target.parentId)) nativeRefuse("new canvas semantic parent differs from captured intent");
+    if (["sequenceFlow", "messageFlow", "association", "dataInputAssociation", "dataOutputAssociation"].includes(element.localName)) {
+      const refs = (name: string) => element.hasAttribute(name) ? [element.getAttribute(name)!] : nativeChildren(element, ns.model, name).map(child => child.textContent?.trim() ?? "");
+      const sources = target.semanticSourceIds ?? (target.sourceId ? [target.sourceId] : undefined), destination = target.semanticTargetId ?? target.targetId;
+      if (!sources || !destination || JSON.stringify(refs("sourceRef")) !== JSON.stringify(sources) || JSON.stringify(refs("targetRef")) !== JSON.stringify([destination])) nativeRefuse("new connection endpoints differ from captured intent");
+      for (const id of [...sources, destination, target.sourceId, target.targetId].filter((id): id is string => !!id)) if (!active(newIndex.get(id))) nativeRefuse("new connection endpoint is outside the selected source scope");
+    }
+  }
+  const projected = nativeIndex(nativeXml(baseline.projection.xml)), diagram = projected.get(baseline.projection.scope.diagramId)!;
+  const selectedPlaneId = nativeChildren(diagram, ns.diagram, "BPMNPlane")[0]?.getAttribute("id");
+  for (const [id, entry] of newIndex) if (!oldIndex.has(id) && entry.namespaceURI === ns.diagram && ["BPMNShape", "BPMNEdge"].includes(entry.localName)) {
+    const plane = entry.parentElement!, semantic = newIndex.get(entry.getAttribute("bpmnElement") ?? ""), original = projected.get(plane.getAttribute("id") ?? "");
+    const target = captured.get(semantic?.getAttribute("id") ?? ""), propertyOwned = group.actions.some(action => action.propertyIntents?.some(intent => nativeIndex(nativeIntentElement(intent).ownerDocument).has(id)));
+    if (!propertyOwned && (!target || !active(newIndex.get(target.parentId ?? target.semanticParentId ?? "")) || target.diId !== id)) nativeRefuse("new canvas DI identity/parent differs from captured intent");
+    const sources = nativePlaneSources(baseline, plane);
+    if (!active(semantic) || (original?.localName === "BPMNPlane" ? original.getAttribute("id") !== selectedPlaneId : sources.size !== 1 || !sources.has(selectedPlaneId ?? "") || !active(newIndex.get(plane.getAttribute("bpmnElement") ?? ""))))
+      nativeRefuse("new canvas DI destination is outside the selected source plane");
+  }
+}
+
 /**
  * Reconcile modeled changes through granular source operations. B and N are transient native trees;
  * the retained raw tree supplies every existing node, namespace context and omitted property.
@@ -86,6 +135,7 @@ export function diffBpmnNativeCommandGroup(authoring: BpmnDocumentAuthoring, bas
   assertBpmnNativePlaneFrames(authoring, baseline, nextXml, true);
   const ns = authoring.bpmnNamespaces, standard = new Set<string>(Object.values(ns));
   const before = nativeXml(baseline.xml), next = nativeXml(nextXml), oldIndex = nativeIndex(before), newIndex = nativeIndex(next);
+  assertNativeCanvasScope(authoring, baseline, group, oldIndex, newIndex);
   if (!group.actions.length || group.actions.some(action => !nativeModelingCommands.has(action.command))) nativeRefuse("unmapped native command family");
   const targets = new Set<string>(), geometryIds = new Set<string>(), structural = new Set<string>(), propertyFields = new Map<string, Set<string>>();
   const removals = new Set<string>(), moves = new Set<string>(), replacements = new Set<string>(), connections = new Set<string>(), attachments = new Set<string>();
@@ -96,10 +146,6 @@ export function diffBpmnNativeCommandGroup(authoring: BpmnDocumentAuthoring, bas
   for (const action of group.actions) {
     const ids = [action.elementId, action.oldElementId, action.newElementId, action.moddleOwnerId, ...(action.elementIds ?? [])].filter((value): value is string => !!value);
     for (const id of ids) targets.add(id);
-    for (const id of [action.elementId, ...(action.elementIds ?? [])].filter((value): value is string => !!value)) {
-      const element = oldIndex.get(id);
-      if (element?.namespaceURI === ns.model && !baseline.projection.scopeElementIds.has(id)) nativeRefuse("native canvas target is outside the selected source scope");
-    }
     if (action.diId) geometryIds.add(action.diId);
     for (const id of action.diIds ?? []) geometryIds.add(id);
     if (!action.label && !["element.updateProperties", "element.updateModdleProperties", "element.updateLabel", "element.setColor", "id.updateClaim", "lane.updateRefs", "group.updateRefs"].includes(action.command))

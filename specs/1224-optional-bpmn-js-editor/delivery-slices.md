@@ -62,6 +62,8 @@ The S10b R4 editing findings remain deferred to S10c: an untouched empty generat
 
 S10c also owns the preserved collaboration/participant/lane fixture that legitimately retargets the existing process plane to a collaboration. S10b refuses semantic plane-scope changes even when the plane ID is unchanged. S10c must qualify legitimate process-to-collaboration retargeting alongside the authored-versus-generated geometry matrix; unrelated retargeting must neither widen active mutation authority nor leave the selected scope unrepresented.
 
+The S10b plane boundary covers the complete old/new plane membership and owning diagram identity, including empty authored or generated plane creation, removal and replacement IDs; a non-mutating root command cannot authorize canonical plane or selected-diagram replacement. Those positive editing contracts remain S10c prerequisites. Fresh canvas IDs also convey no authority: captured semantic/canvas parent and connection endpoint intent must agree with the selected source scope and DI destination. Qualified typed property/global dependencies remain distinct from process-only canvas authority, and a collaboration may use its represented processes without granting access to an unrelated inactive process or alternate diagram.
+
 ## Acceptance and maintenance
 
 The principal cost is identity/history/namespace fidelity across two modeling implementations. Keep toolkit imports, styles, fonts and notices inside the optional module. Pin its dependency tree; on upgrades repeat semantic/native-configuration round trips, history/lifecycle, nested editing, theme/narrow, attribution and consumer checks. Keep existing run inspection unless a separate demonstrated need changes that scope.
