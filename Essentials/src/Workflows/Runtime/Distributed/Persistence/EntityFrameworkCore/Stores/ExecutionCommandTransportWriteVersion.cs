@@ -24,6 +24,10 @@ internal static class ExecutionCommandTransportWriteVersion
     internal static string For(ExecutionCommandTransportDbContext context, WorkflowExecutionCommandEnvelope? envelope,
         string? storedVersion = null, string? streamVersion = null)
     {
+        if (envelope?.Command.Kind is WorkflowExecutionCommandKind.Start or WorkflowExecutionCommandKind.Checkpoint &&
+            envelope.Command.Payload is { ValueKind: JsonValueKind.Object } payload && payload.EnumerateObject().Any(x =>
+                x.Name.Equals("selectedStartProtocol", StringComparison.OrdinalIgnoreCase) && x.Value.ValueKind is not (JsonValueKind.Null or JsonValueKind.Undefined)))
+            throw new NotSupportedException("Shared command transport has no qualified selected-start interpreter protocol.");
         var minimum = Requires(envelope) ? ExecutionCommandTransportEfModule.TestEntrySchemaVersion : ExecutionCommandTransportEfModule.SchemaVersion;
         foreach (var previous in new[] { storedVersion, streamVersion })
             if (previous is not null && Version.Parse(previous) > Version.Parse(minimum)) minimum = previous;

@@ -1336,6 +1336,49 @@ Preparation freezes setup and rechecks descriptor, providers, scope lifecycle an
 The resolver binds the current caller in this read-only path; future queued starts must pass independently
 resolved caller scope and authority to admission, rather than echoing the descriptor's own facts. Malformed
 returned seed shapes are setup refusals; exceptions thrown by providers remain infrastructure failures.
-These are preflight reads, not the scope store's atomic root-start admission transaction. Queued selected
-start/interpreter wiring, lexical consumption and newer predecessor-reader fences remain follow-up work;
-no public start, runner, or durable command format is activated here.
+These are preflight reads, not the scope store's atomic root-start admission transaction. The bounded
+process-private integration is described below. Lexical consumption and shared predecessor-reader fences
+remain follow-up work; no default authority or public Testing runner is activated.
+
+
+### Process-private queued selected leaf execution
+
+`WorkflowExecutionStartDispatchRequest.TestEntry` carries an exact trusted entry through the ordinary
+start dispatcher, queued Start and first WorkflowStarted checkpoint. The full artifact is retained;
+only the selected leaf is scheduled as the parentless terminal root. This low-level runtime prerequisite
+has no default trusted descriptor, seed, routing, or target/effect owner and activates no Testing runner.
+Requests require an explicit execution ID, finite live TestRun source, matching scope/tenant/partition
+and authority, and no keyed, child, trigger, stimulus or saved/model-work route. Queued preparation and
+the first checkpoint repeat trusted lookup/source/setup/provider checks; replacing inspection/preparation
+ports cannot authorize execution because the canonical internal materializer is used.
+
+`IRuntimeSelectedStartTargetProfile` is an optional single-owner replacement port, with no default.
+Its signature is `CanExecuteAsync(WorkflowTestEntry, WorkflowExecutable, ExecutableNode,
+IRuntimeActivityExecutionPipeline, CancellationToken)`. Register with
+`services.AddScoped<IRuntimeSelectedStartTargetProfile, QualifiedLeafOwner>()` before runtime composition.
+Startup diagnoses duplicate owners; missing, duplicate or false qualification refuses selected starts.
+The owner qualifies the exact pinned leaf, construction/inputs, the actual selected pipeline and its
+complete effect/terminal responsibility profile. Trusted context and routing alone are insufficient.
+This interpreter additionally rejects every child slot, enclosing frame and outside-result fixture;
+composite, reusable, script, unknown/custom effects, controlled-time and asynchronous owner profiles
+remain unqualified unless a later interpreter explicitly implements and proves them. Only Durable and
+Balanced modes are qualified here; unsupported expression/member/conversion setup keeps its preflight refusal.
+
+`QueuedSelectedStart` also requires the actual in-process actor to retain the current scoped executor
+and scope factory, coherent native memory execution/checkpoint/outbox/background/scope state, and the
+actual handler/committer stores. No label, unrelated DI holder or external decorator qualifies a provider.
+Shared EF scheduler/outbox and command-transport writers refuse the new `SelectedStartProtocol` marker;
+prior dormant descriptor format support grants no shared selected interpreter. Native readers require
+protocol 1 and reject a reserved marker with a missing/null entry before ordinary handling or replay.
+New shared readable versions and actual predecessor-worker qualification remain future gates.
+
+The first selected checkpoint always flushes physically, including Balanced mode. It validates its single
+exact root scheduling intent, rejects ancestry/scope/iteration through direct fields and provenance,
+and admits the scope atomically with the root and post-commit intent. Exact live source, absent execution,
+scope expiry and actor fencing are checked again after awaited root-lease acquisition, before participant
+mutation under the shared write gate.
+An exact committed first-checkpoint wire receipt is a no-op after completion/teardown/expiry, without
+re-authorizing or scheduling work; changed wire conflicts, and a different first checkpoint cannot restart
+a root. Concurrent identical receipts reconcile under that gate even when preparation clocks differ;
+competing first-checkpoint IDs admit one winner. Rejected selected starts cannot manufacture ordinary
+full-root fault executions.

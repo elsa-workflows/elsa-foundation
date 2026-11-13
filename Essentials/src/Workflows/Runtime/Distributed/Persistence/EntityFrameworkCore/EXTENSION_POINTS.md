@@ -97,3 +97,8 @@ payload property names do not themselves declare the selected-entry protocol or 
 The format uses the existing schema finalization chain and admission gate; no table migration or
 alternate transport is introduced. Frozen predecessor-chain tests are not actual old-worker binary
 qualification. Trusted entry, lexical context and end-to-end runtime admission remain separate work.
+
+The process-private interpreter introduced after this dormant fence uses `SelectedStartProtocol` on
+its typed Start/Checkpoint wire payloads. The EF transport explicitly refuses that marker before
+creating a stream head or command row, even at the dormant v2 gate. A process-private qualification
+is not a distributed interpreter grant; shared execution needs a later qualified readable protocol.

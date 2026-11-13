@@ -89,8 +89,10 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
         cancellationToken.ThrowIfCancellationRequested();
 
         var payload = DeserializeCheckpointPayload(workItem);
+        QueuedSelectedStart.ValidateWireEntry(workItem.Payload, payload.TestEntry);
+        if (IsSelectedStartReplay(workItem, payload)) return;
         var commit = await BuildCommitAsync(workItem, payload, cancellationToken);
-        await _checkpointCommitter.CommitAsync(commit, cancellationToken);
+        if (commit is not null) await _checkpointCommitter.CommitAsync(commit, cancellationToken);
     }
 
     /// <summary>Pipeline dispatch: build the commit in the Invoke slot and stage it for the Checkpoint slot.</summary>
@@ -101,10 +103,17 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
         cancellationToken.ThrowIfCancellationRequested();
 
         var payload = DeserializeCheckpointPayload(workItem);
+        QueuedSelectedStart.ValidateWireEntry(workItem.Payload, payload.TestEntry);
+        if (IsSelectedStartReplay(workItem, payload)) return;
         pipelineContext.Workspace.PendingCheckpointCommit = await BuildCommitAsync(workItem, payload, cancellationToken);
     }
 
-    private async ValueTask<RuntimeCheckpointCommit> BuildCommitAsync(
+    private bool IsSelectedStartReplay(RuntimeSchedulerWorkItem work, RuntimeCheckpointCommandPayload payload) =>
+        payload.TestEntry is not null && payload.CheckpointName == RuntimeCheckpointNames.WorkflowStarted &&
+        (_selectedStarts ?? throw QueuedSelectedStart.Refused("The selected interpreter is unavailable.")).IsCheckpointReplay(work, payload,
+            _workflowExecutionStateStore ?? throw QueuedSelectedStart.Refused("The selected execution store is unavailable."), _checkpointCommitter);
+
+    private async ValueTask<RuntimeCheckpointCommit?> BuildCommitAsync(
         RuntimeSchedulerWorkItem workItem,
         RuntimeCheckpointCommandPayload payload,
         CancellationToken cancellationToken)
@@ -172,11 +181,13 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
         VariableFrameState? selectedRootFrame = null;
         if (payload.TestEntry is not null)
         {
+            QueuedSelectedStart.RequireWireProtocol(workItem.Payload);
             ValidateSelectedRootIntent(workItem, payload);
             if (executable is null || _workflowExecutionStateStore is null)
                 throw QueuedSelectedStart.Refused("The selected checkpoint has no exact native executable or state provider.");
-            if (priorWorkflowState is not null && !payload.TestEntry.Matches(priorWorkflowState.TestEntry))
-                throw QueuedSelectedStart.Refused("The selected checkpoint differs from an existing root.");
+            if (priorWorkflowState is not null && IsSelectedStartReplay(workItem, payload)) return null;
+            if (priorWorkflowState is not null)
+                throw QueuedSelectedStart.Refused("A different first checkpoint cannot admit an existing selected root again.");
             var start = new WorkflowExecutionStartCommandPayload(payload.PinnedExecutable, payload.PinnedExecutable.ArtifactId,
                 payload.SeedVariables, payload.SeedInputs, payload.SeedStimulusInput, payload.SeedTriggerNodeId,
                 payload.RunKind, payload.PinnedSource, payload.ParentWorkflowExecutionId, payload.CorrelationId,
@@ -214,11 +225,18 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
                 operational: [],
                 activityExecutionInspections: activityInspectionChanges.ToArray()),
             PostCommitIntents: payload.PostCommitIntents.ToArray(),
-            Metadata: RuntimeModelMetadata.Snapshot(new Dictionary<string, string>
-            {
-                [RuntimeMetadataKeys.SchedulerWorkItemId] = workItem.WorkItemId,
-                [RuntimeMetadataKeys.CommandKind] = workItem.CommandKind.ToString()
-            }));
+            Metadata: RuntimeModelMetadata.Snapshot(CommitMetadata(workItem, payload)));
+    }
+
+    private static Dictionary<string, string> CommitMetadata(RuntimeSchedulerWorkItem work, RuntimeCheckpointCommandPayload payload)
+    {
+        var metadata = new Dictionary<string, string>
+        {
+            [RuntimeMetadataKeys.SchedulerWorkItemId] = work.WorkItemId,
+            [RuntimeMetadataKeys.CommandKind] = work.CommandKind.ToString()
+        };
+        if (payload.TestEntry is not null) metadata[QueuedSelectedStart.PayloadReceiptKey] = QueuedSelectedStart.PayloadHash(work);
+        return metadata;
     }
 
     private static void ValidateSelectedRootIntent(RuntimeSchedulerWorkItem workItem, RuntimeCheckpointCommandPayload payload)
@@ -234,7 +252,15 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
             child is null || child.ExecutableNodeId != payload.TestEntry!.ExecutableNodeId ||
             !WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(child.PinnedExecutable, payload.PinnedExecutable) ||
             child.ParentActivityExecutionId is not null || child.SchedulingActivityExecutionId is not null || child.IterationFrame is not null ||
-            child.Reason != RuntimeScheduleActivityCommandPayload.WorkflowStartReason)
+            child.Reason != RuntimeScheduleActivityCommandPayload.WorkflowStartReason || work.ExecutionScopeId is not null ||
+            child.SchedulingProvenance is not { ParentActivityExecutionId: null, SchedulingActivityExecutionId: null,
+                BranchId: null, IterationId: null, ExecutionPathId: null, ExecutionScopeId: null } ||
+            child.SchedulingProvenance.SchedulingWorkflowExecutionId != workItem.WorkflowExecutionId ||
+            child.SchedulingProvenance.SchedulingCause != RuntimeScheduleActivityCommandPayload.WorkflowStartReason ||
+            child.SchedulingProvenance.Metadata.Count != 0 ||
+            child.SchedulingProvenance.Attempt != work.Attempt ||
+            work.Attempt is not { AttemptNumber: 1, PreviousAttemptActivityExecutionId: null } ||
+            work.Attempt.FirstAttemptActivityExecutionId != child.ActivityExecutionId)
             throw QueuedSelectedStart.Refused("The selected root scheduling intent differs from its admitted entry.");
     }
 

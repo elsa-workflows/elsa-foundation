@@ -86,6 +86,7 @@ public sealed class WorkflowStartSchedulerWorkHandler : IWorkflowSchedulerWorkHa
         cancellationToken.ThrowIfCancellationRequested();
 
         var startPayload = DeserializeStartPayload(workItem);
+        QueuedSelectedStart.ValidateWireEntry(workItem.Payload, startPayload.TestEntry);
         if (await HasStartedAsync(workItem, startPayload, cancellationToken))
             return;
 
@@ -95,6 +96,7 @@ public sealed class WorkflowStartSchedulerWorkHandler : IWorkflowSchedulerWorkHa
 
         SchedulerWorkHandlerHelpers.ValidatePinnedExecutable(workItem, startPayload.PinnedExecutable, executable.Identity);
 
+        if (startPayload.TestEntry is not null) QueuedSelectedStart.RequireWireProtocol(workItem.Payload);
         if (startPayload.TestEntry is not null)
             await (_selectedStarts ?? throw QueuedSelectedStart.Refused("The selected interpreter is unavailable."))
                 .PrepareAsync(startPayload, executable, workItem.WorkflowExecutionId, _workflowExecutionStateStore,

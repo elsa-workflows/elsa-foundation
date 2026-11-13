@@ -10605,3 +10605,7 @@ Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionStartCommandPayload.TestEntr
 Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionStartCommandPayload.TestEntry.init -> void
 Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionStartDispatchRequest.TestEntry.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowTestEntry?
 Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionStartDispatchRequest.TestEntry.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionStartCommandPayload.SelectedStartProtocol.get -> int?
+Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpointCommandPayload.SelectedStartProtocol.get -> int?
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeSelectedStartTargetProfile
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeSelectedStartTargetProfile.CanExecuteAsync(Elsa.Workflows.Runtime.Core.Models.WorkflowTestEntry! entry, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutable! executable, Elsa.Workflows.Runtime.Core.Models.ExecutableNode! target, Elsa.Workflows.Runtime.Core.Contracts.IRuntimeActivityExecutionPipeline! pipeline, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>

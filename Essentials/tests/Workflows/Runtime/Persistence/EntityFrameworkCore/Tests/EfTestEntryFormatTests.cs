@@ -11,6 +11,56 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
 public sealed partial class EfSchedulerWorkQueueStoreTests
 {
     [Theory]
+    [InlineData(WorkflowExecutionCommandKind.Start, false)]
+    [InlineData(WorkflowExecutionCommandKind.Checkpoint, false)]
+    [InlineData(WorkflowExecutionCommandKind.Start, true)]
+    [InlineData(WorkflowExecutionCommandKind.Checkpoint, true)]
+    public async Task Process_private_selected_interpreter_is_refused_before_shared_queue_writes(WorkflowExecutionCommandKind kind, bool existingRoot)
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        await using var fixture = database.Open("tenant-a");
+        var now = DateTimeOffset.UtcNow; var state = TestExecution(now);
+        if (existingRoot)
+        {
+            fixture.Context.WorkflowExecutionStates.Add(EfWorkflowExecutionStateStore.ToEntity(state, "tenant-a",
+                EfWorkflowExecutionStateStore.CreateId("tenant-a", state.WorkflowExecutionId), 1));
+            await fixture.Context.SaveChangesAsync();
+        }
+        var payload = kind == WorkflowExecutionCommandKind.Start
+            ? JsonSerializer.SerializeToElement(new WorkflowExecutionStartCommandPayload(state.PinnedExecutable, state.PinnedExecutable.ArtifactId) { TestEntry = state.TestEntry })
+            : JsonSerializer.SerializeToElement(new RuntimeCheckpointCommandPayload(state.PinnedExecutable, "WorkflowStarted", [], "WorkflowStart") { TestEntry = state.TestEntry });
+        await Assert.ThrowsAsync<NotSupportedException>(async () => await fixture.Store.EnqueueAsync(new("private", state.WorkflowExecutionId,
+            "command", kind, "envelope", "key", now, now, payload: payload)));
+        Assert.Empty(await fixture.Context.SchedulerWorkItems.AsNoTracking().ToArrayAsync());
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Process_private_selected_interpreter_is_refused_before_shared_outbox_writes(bool existingRoot)
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        await using var fixture = database.Open("tenant-a");
+        var now = DateTimeOffset.UtcNow; var state = TestExecution(now);
+        if (existingRoot)
+        {
+            fixture.Context.WorkflowExecutionStates.Add(EfWorkflowExecutionStateStore.ToEntity(state, "tenant-a",
+                EfWorkflowExecutionStateStore.CreateId("tenant-a", state.WorkflowExecutionId), 1));
+            await fixture.Context.SaveChangesAsync();
+        }
+        var payload = JsonSerializer.SerializeToElement(new WorkflowExecutionStartCommandPayload(state.PinnedExecutable,
+            state.PinnedExecutable.ArtifactId) { TestEntry = state.TestEntry });
+        var work = new RuntimeSchedulerWorkItem("private", state.WorkflowExecutionId, "command", WorkflowExecutionCommandKind.Start,
+            "envelope", "key", now, now, payload: payload);
+        var item = new RuntimePostCommitOutboxItem("outbox", new("intent", state.WorkflowExecutionId,
+            Elsa.Workflows.Runtime.Core.Constants.RuntimePostCommitIntentKinds.EnqueueSchedulerWork, now, null, "key",
+            JsonSerializer.SerializeToElement(work)), RuntimePostCommitOutboxStatus.Pending, now, now);
+        await Assert.ThrowsAsync<NotSupportedException>(async () =>
+            await new EfRuntimePostCommitOutboxStore(fixture.Context, new FixedAccessor("tenant-a")).SavePendingAsync(item));
+        Assert.Empty(await fixture.Context.RuntimePostCommitOutbox.AsNoTracking().ToArrayAsync());
+    }
+
+    [Theory]
     [InlineData(WorkflowExecutionCommandKind.Start)]
     [InlineData(WorkflowExecutionCommandKind.Checkpoint)]
     public async Task Test_entry_admission_requires_a_predecessor_unreadable_queue_format(WorkflowExecutionCommandKind kind)

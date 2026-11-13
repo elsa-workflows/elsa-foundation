@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.Workflows.Runtime.Services.Executions;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -44,7 +45,7 @@ internal static class StartCommandExecution
         }
 
         // A rejected selected admission must never be synthesized as an ordinary full-root execution.
-        if (payload is null || payload.TestEntry is not null)
+        if (payload is null || payload.TestEntry is not null || QueuedSelectedStart.HasWireProtocol(payloadElement))
             return null;
 
         return new WorkflowExecutionState(

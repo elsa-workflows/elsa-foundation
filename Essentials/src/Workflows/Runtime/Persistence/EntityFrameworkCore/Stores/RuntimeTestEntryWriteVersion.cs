@@ -14,8 +14,19 @@ internal static class RuntimeTestEntryWriteVersion
 {
     internal static bool Requires(WorkflowExecutionState state) => state.TestEntry is not null;
 
-    internal static bool Requires(RuntimeSchedulerWorkItem item) =>
-        item.CommandKind is WorkflowExecutionCommandKind.Start or WorkflowExecutionCommandKind.Checkpoint && HasEntry(item.Payload);
+    internal static bool Requires(RuntimeSchedulerWorkItem item)
+    {
+        if (item.CommandKind is not (WorkflowExecutionCommandKind.Start or WorkflowExecutionCommandKind.Checkpoint)) return false;
+        RefusePrivateInterpreter(item.Payload);
+        return HasEntry(item.Payload);
+    }
+
+    private static void RefusePrivateInterpreter(JsonElement? payload)
+    {
+        if (payload is { ValueKind: JsonValueKind.Object } value && value.EnumerateObject().Any(x =>
+                x.Name.Equals("selectedStartProtocol", StringComparison.OrdinalIgnoreCase) && x.Value.ValueKind is not (JsonValueKind.Null or JsonValueKind.Undefined)))
+            throw new NotSupportedException("Shared persistence has no qualified selected-start interpreter protocol.");
+    }
 
     internal static bool Requires(RuntimePostCommitOutboxItem item)
     {

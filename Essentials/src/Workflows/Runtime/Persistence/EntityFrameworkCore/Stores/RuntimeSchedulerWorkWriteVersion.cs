@@ -20,7 +20,8 @@ internal static class RuntimeSchedulerWorkWriteVersion
         if (state is { WritesRefused: true })
             throw new EfSchemaFamilyWritesRefusedException(RuntimeSchedulerWorkEfModule.SchemaFamily,
                 state.WriteVersion, state.UnreadableFinalizedVersion!, state.ReadableVersions);
-        var minimum = testExecution || RuntimeTestEntryWriteVersion.Requires(item) ? RuntimeSchedulerWorkEfModule.TestEntrySchemaVersion :
+        var entryPayload = RuntimeTestEntryWriteVersion.Requires(item);
+        var minimum = testExecution || entryPayload ? RuntimeSchedulerWorkEfModule.TestEntrySchemaVersion :
             IsModelWorker(item) ? RuntimeSchedulerWorkEfModule.SchemaVersion :
             item.CommandKind == WorkflowExecutionCommandKind.ExecuteModel ? RuntimeSchedulerWorkEfModule.ModelSchemaVersion : "1.0.0";
         if (storedVersion is not null && Version.Parse(storedVersion) > Version.Parse(minimum)) minimum = storedVersion;

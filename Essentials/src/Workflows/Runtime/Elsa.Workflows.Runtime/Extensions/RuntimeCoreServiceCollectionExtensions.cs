@@ -587,6 +587,7 @@ public static class RuntimeCoreServiceCollectionExtensions
             }
 
             return new WorkflowStartDispatcher(
+                serviceProvider,
                 serviceProvider.GetRequiredService<IWorkflowExecutableStore>(),
                 serviceProvider.GetRequiredService<IWorkflowExecutableSourceReferenceStore>(),
                 serviceProvider.GetRequiredService<IWorkflowExecutionActorProvider>(),
