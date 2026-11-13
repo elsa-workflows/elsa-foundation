@@ -212,7 +212,10 @@ internal sealed class Elsa3DefinitionConverter(
             (node, property) => plan.Find(node)?.ScriptProperty is { } script && StringComparer.Ordinal.Equals(script, property),
             plan.Nodes.Values.SelectMany(node => node.Variables).Select(variable => variable.ReferenceKey).ToHashSet(StringComparer.Ordinal),
             plan.MemoryAliases,
-            plan.Request.IsReusable));
+            plan.Request.IsReusable,
+            (node, name) => plan.Find(node)?.Resolved?.Inputs
+                .FirstOrDefault(input => input.ReferenceKey.Equals(name, StringComparison.OrdinalIgnoreCase) ||
+                                         input.Name.Equals(name, StringComparison.OrdinalIgnoreCase))?.Type));
     }
 
     /// <summary>The node's declared contract, plus its Elsa 4 loop variables as outputs so lowering can resolve them.</summary>
