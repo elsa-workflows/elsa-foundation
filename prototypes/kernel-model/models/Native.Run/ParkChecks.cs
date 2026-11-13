@@ -64,20 +64,33 @@ public static class ParkChecks
         if (!ok) throw new InvalidOperationException(label);
     }
 
-    private static async Task CheckPark(World world, Worker owner, string before)
+    private static async Task CheckPark(World world, Worker owner, string before, string delivery = "explode")
     {
+        var oldJournal = world.Store.Journal.Values.Where(j => j.Instance == "0/probe").ToArray();
+        var position = world.Store.Partitions[0].Position;
         await Pump(owner, () => world.Store.Instances["0/probe"].Status == InstanceStatus.Faulted);
         var row = world.Store.Instances["0/probe"];
         Require(row.State == before && row.Fault is not null, "Park must retain the committed checkpoint and fault");
         Require(world.Store.Subscriptions.All(s => s.Instance != row.Id), "Park must remove every active subscription");
-        Require(world.Store.Messages.Values.Any(m => m.Message.Kind == WorkflowKinds.ChildFinished &&
+        Require(!world.Store.Messages.ContainsKey(delivery), "the failing delivery must be consumed with the fault");
+        Require(world.Store.Messages.Values.Any(m => m.Message.Target.Id == "0/parent" && m.Message.Kind == WorkflowKinds.ChildFinished &&
             m.Message.Read<ChildFinished>() is { Child: "0/probe", Status: InstanceStatus.Faulted }), "parent must receive the faulted-child notice");
+        Require(oldJournal.All(j => world.Store.Journal.Values.Contains(j)), "Park must retain existing history");
+        var added = world.Store.Journal.Values.Where(j => j.Instance == row.Id && !oldJournal.Contains(j)).ToArray();
+        Require(row.History switch
+        {
+            History.Full => added.Length == 1 && Json.Read<string[]>(added[0].Entries).SequenceEqual(["parked: " + row.Fault]),
+            History.State => added.Length == 1 && Json.Read<string[]>(added[0].Entries).Length == 0,
+            History.Minimal => added.Length == 0 && world.Store.Partitions[0].Position == position,
+            _ => false,
+        }, "Park must honor the selected history level at its commit");
         await Events.PublishAsync(world.Store, new EventRow("approval", "after-park", "true", world.Time + 60_000));
         Require(!world.Store.Messages.Values.Any(m => m.Message.Kind == Kinds.Event), "later publishes must not route to the parked instance");
         await world.Store.AddAsync(new Message("already-routed", new InstanceRef(row.Id), Kinds.Event, "true"));
         await owner.WokenAsync(null);
         for (var i = 0; i < 5; i++) await owner.RunAsync();
         Require(world.Store.Instances[row.Id] == row, "an already-routed event must not execute or alter the faulted checkpoint");
+        Require(!world.Store.Messages.ContainsKey("already-routed"), "an already-routed event must actually be consumed");
     }
 
     public static async Task<int> RunAsync()
@@ -94,12 +107,8 @@ public static class ParkChecks
                 var world = new World();
                 await world.Arm(history);
                 var before = world.Store.Instances["0/probe"].State;
-                var oldJournal = world.Store.Journal.Values.ToArray();
                 await world.Send(world.First, "explode");
                 await CheckPark(world, world.First, before);
-                Require(oldJournal.All(j => world.Store.Journal.Values.Contains(j)), "Park must retain existing history");
-                if (history == History.Full)
-                    Require(world.Store.Journal.Values.Any(j => j.Entries.Contains("parked: probe failed")), "Full history must record the fault");
             });
         await Case("definite storage refusal", async () =>
         {
@@ -108,7 +117,7 @@ public static class ParkChecks
             var before = world.Store.Instances["0/probe"].State;
             world.Store.Refuses = row => row.Status == InstanceStatus.Running && Json.Read<ProbeState>(row.State).Value == 8;
             await world.Send(world.First, "advance");
-            await CheckPark(world, world.First, before);
+            await CheckPark(world, world.First, before, "advance");
         });
         await Case("poison threshold after a lost trial owner", async () =>
         {
@@ -131,7 +140,7 @@ public static class ParkChecks
             await new DurableHost([third]).ActivateAsync(0);
             Require(world.Store.Messages["advance"].Attempts == 1, "the lost trial must count one attempt");
             await third.WokenAsync(null);
-            await CheckPark(world, third, before);
+            await CheckPark(world, third, before, "advance");
         });
         await Case("suspension preserves the wait", async () =>
         {
