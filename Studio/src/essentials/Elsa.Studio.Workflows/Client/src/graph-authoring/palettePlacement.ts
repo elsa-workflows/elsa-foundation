@@ -16,6 +16,16 @@ export interface PlacementRect {
  */
 export const placementReserve = { top: 52, right: 120, bottom: 24, left: 24 } as const;
 
+/**
+ * The visible pane in canvas coordinates, from its top-left and bottom-right corners and the zoom.
+ * The selection toolbar keeps its screen size, so below zoom 1 the top reserve covers fewer screen
+ * pixels than the toolbar needs; the pane's top is moved down by the difference.
+ */
+export function visiblePlacementPane(start: XYPosition, end: XYPosition, zoom: number): PlacementRect {
+  const toolbarInset = placementReserve.top * Math.max(0, 1 / zoom - 1);
+  return { x: start.x, y: start.y + toolbarInset, width: end.x - start.x, height: Math.max(0, end.y - start.y - toolbarInset) };
+}
+
 /** Height assumed for a node that has not been measured yet (a new palette node). */
 export const estimatedNodeHeight = 112;
 

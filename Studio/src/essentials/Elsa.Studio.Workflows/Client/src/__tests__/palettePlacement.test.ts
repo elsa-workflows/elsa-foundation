@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { choosePalettePlacement, estimatedNodeHeight, placementReserve, type PlacementRect } from "../graph-authoring/palettePlacement";
+import { choosePalettePlacement, estimatedNodeHeight, placementReserve, visiblePlacementPane, type PlacementRect } from "../graph-authoring/palettePlacement";
 import { defaultNodeWidth } from "../graph-authoring/nodeWidth";
 
 const reservedArea = (rect: PlacementRect): PlacementRect => ({
@@ -45,6 +45,21 @@ describe("choosePalettePlacement", () => {
     const placement = choosePalettePlacement([task], tiny);
     expect(placement.visible).toBe(false);
     expect(overlaps(reservedArea(newNode(placement.position)), reservedArea(task))).toBe(false);
+  });
+
+  it("keeps the screen-size toolbar inside the pane when zoomed out", () => {
+    // A 590x630 screen pane at zoom 0.5 spans 1180x1260 canvas units.
+    const zoom = 0.5;
+    const visible = visiblePlacementPane({ x: 0, y: 0 }, { x: 1180, y: 1260 }, zoom);
+    const placement = choosePalettePlacement([], visible);
+    // The screen distance from the pane top to the node must cover the toolbar's screen-size reserve.
+    expect(placement.position.y * zoom).toBeGreaterThanOrEqual(placementReserve.top);
+    expect(visible.y + visible.height).toBe(1260);
+  });
+
+  it("leaves the pane unchanged at zoom 1 and above", () => {
+    expect(visiblePlacementPane({ x: 10, y: 20 }, { x: 600, y: 650 }, 1)).toEqual({ x: 10, y: 20, width: 590, height: 630 });
+    expect(visiblePlacementPane({ x: 10, y: 20 }, { x: 600, y: 650 }, 1.5)).toEqual({ x: 10, y: 20, width: 590, height: 630 });
   });
 
   it("measures the visible pane in canvas coordinates", () => {

@@ -47,7 +47,7 @@ import type { WorkflowEdgeActions } from "../workflow-editor/contexts";
 import { decorateWorkflowCanvasElements } from "../workflow-editor/workflowAccessibility";
 
 import { emptyGraphElements, graphElementDragDataType, type GraphPaletteElement } from "./graphPaletteElements";
-import { choosePalettePlacement, estimatedNodeHeight, placementReserve, type PalettePlacement } from "./palettePlacement";
+import { choosePalettePlacement, estimatedNodeHeight, placementReserve, type PalettePlacement, visiblePlacementPane } from "./palettePlacement";
 import { defaultNodeWidth } from "./nodeWidth";
 
 type PaletteDragItem = { kind: "activity"; activity: ActivityCatalogItem } | { kind: "element"; element: GraphPaletteElement };
@@ -565,9 +565,7 @@ export function useGraphCanvasInteractions({
     if (bounds && bounds.width > 0 && bounds.height > 0) {
       const start = reactFlowInstance.screenToFlowPosition({ x: bounds.left, y: bounds.top });
       const end = reactFlowInstance.screenToFlowPosition({ x: bounds.right, y: bounds.bottom });
-      // The selection toolbar keeps its screen size, so below zoom 1 the top reserve needs more canvas room than it covers.
-      const toolbarInset = placementReserve.top * Math.max(0, 1 / reactFlowInstance.getZoom() - 1);
-      visible = { x: start.x, y: start.y + toolbarInset, width: end.x - start.x, height: Math.max(0, end.y - start.y - toolbarInset) };
+      visible = visiblePlacementPane(start, end, reactFlowInstance.getZoom());
     }
     const rects = nodes.map(node => {
       const measured = reactFlowInstance.getInternalNode(node.id)?.measured;
