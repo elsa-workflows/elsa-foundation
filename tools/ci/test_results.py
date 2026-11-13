@@ -39,7 +39,8 @@ MANIFEST = "tools/ci/test-tiers.json"
 NS = {"t": "http://microsoft.com/schemas/VisualStudio/TeamTest/2010"}
 FAILED = {"Failed", "Error", "Timeout", "Aborted"}
 TEST_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_.+]*$")
-HOST_STOP = re.compile(r"\b(?:abort(?:ed|ing)?|crash(?:ed|ing)?)\b", re.IGNORECASE)
+HOST_STOP = re.compile(r"(?<![\w.+])(?:abort(?:ed|s|ing)?|crash(?:ed|es|ing)?)(?![\w+]|\.\w)", re.IGNORECASE)
+FAILED_RECORD = re.compile(r"(?:\[xUnit\.net[^\]]*\]\s*)?(?:[\w+]+\.)+[\w+]+(?:\([^\r\n]*?\))?\s+\[(?:FAIL|SKIP)\]")
 
 
 @dataclass
@@ -78,11 +79,14 @@ def read_trx(directory: str) -> Results:
                 results.aborted.append(f"{name}: unreadable TRX ({error})")
                 continue
             methods = {}
+            display_names = set()
             for test in document.iterfind(".//t:UnitTest", NS):
                 method = test.find("t:TestMethod", NS)
                 if method is not None:
                     methods[test.get("id")] = f"{method.get('className')}.{method.get('name')}"
             for result in document.iterfind(".//t:UnitTestResult", NS):
+                if result.get("testName"):
+                    display_names.add(result.get("testName"))
                 test = methods.get(result.get("testId"))
                 if test is None:
                     continue
@@ -100,7 +104,14 @@ def read_trx(directory: str) -> Results:
             # put ordinary failed-test output in Error-level messages; those failures still use the retry path.
             for info in document.iterfind(".//t:RunInfo", NS):
                 text = " ".join("".join(info.itertext()).split())
-                if info.get("outcome") == "Error" and HOST_STOP.search(text):
+                if info.get("outcome") != "Error" or not HOST_STOP.search(text):
+                    continue
+                # xUnit's error lines can contain custom display names with spaces. Remove the named result before
+                # its failure/skip marker; a real host diagnostic elsewhere in the same message remains visible.
+                diagnostic = FAILED_RECORD.sub("", text)
+                for test_name in display_names:
+                    diagnostic = re.sub(re.escape(test_name) + r"(?=\s+\[(?:FAIL|SKIP)\])", "", diagnostic)
+                if HOST_STOP.search(diagnostic):
                     results.aborted.append(f"{name}: {text[:200]}")
     return results
 
@@ -382,6 +393,32 @@ def self_test() -> int:
         counted_abort = os.path.join(tmp, "counted-abort")
         _trx(counted_abort, [("A.T", "Ok", "Passed", quick)], aborted_count=1)
         check("an explicit aborted counter fails even without a run diagnostic", bool(read_trx(counted_abort).aborted))
+        for method in ("Crash", "Aborted"):
+            directory = os.path.join(tmp, f"named-{method}")
+            _trx(directory, [("A.T", method, "Failed", quick)],
+                 run_info=f'<RunInfo outcome="Error"><Text>[xUnit.net] A.T.{method} [FAIL]</Text></RunInfo>')
+            check(f"a qualified method named {method} is a test failure, not a host abort",
+                  not read_trx(directory).aborted)
+        display = os.path.join(tmp, "display-name")
+        _trx(display, [("A.T", "Recovery", "Failed", quick)],
+             run_info='<RunInfo outcome="Error"><Text>[xUnit.net] recovery after crash [FAIL]</Text></RunInfo>')
+        document = ET.parse(os.path.join(display, "r.trx"))
+        document.find(".//t:UnitTestResult", NS).set("testName", "recovery after crash")
+        document.write(os.path.join(display, "r.trx"))
+        check("a failed display name containing a crash word is not a host abort", not read_trx(display).aborted)
+        info = document.find(".//t:RunInfo/t:Text", NS)
+        info.text += " The active test run was aborted."
+        document.write(os.path.join(display, "r.trx"))
+        check("a real host abort after a failed display name remains fatal", bool(read_trx(display).aborted))
+        for label, message, fatal in (
+                ("arguments", "[xUnit.net] A.T.ShouldRecover(event: crash) [FAIL]", False),
+                ("crashes", "Test host crashes unexpectedly", True),
+                ("aborts", "The active test run aborts unexpectedly", True),
+                ("record-and-crash", "[xUnit.net] A.T.ShouldRecover(event: crash) [FAIL] Test host process crashed", True)):
+            directory = os.path.join(tmp, f"diagnostic-{label}")
+            _trx(directory, [("A.T", "ShouldRecover", "Failed", quick)],
+                 run_info=f'<RunInfo outcome="Error"><Text>{message}</Text></RunInfo>')
+            check(f"test records and host diagnostic inflections: {label}", bool(read_trx(directory).aborted) == fatal)
 
         v = case("missing", None, None)
         check("run with no TRX: shard fails", not v.ok and any("wrote no TRX" in a for a in v.aborted))
