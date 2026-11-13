@@ -1,5 +1,6 @@
 import type { ActivityNode } from "../workflowTypes";
-import { bpmnNamespaces as ns, resolveBpmnDocumentReference, type BpmnBounds, type BpmnDocumentCommand, type BpmnDocumentSelection, type BpmnDocumentTransaction, type BpmnPoint, type BpmnScopeAddress } from "./bpmnDocument";
+import { applyBpmnDocumentTransaction, bpmnNamespaces as ns, readBpmnDocument, resolveBpmnDocumentReference, type BpmnBounds, type BpmnDocumentCommand, type BpmnDocumentSelection, type BpmnDocumentTransaction, type BpmnPoint, type BpmnScopeAddress } from "./bpmnDocument";
+import { verifyBpmnEventContexts } from "./bpmnDocumentEventContext";
 import { assessBpmnBoundaryAttachment, assessBpmnDocumentConnection, bpmnBoolean, bpmnFlowScope, bpmnOwningProcess, isBpmnModelElement, type BpmnDocumentConnectionKind } from "./bpmnDocumentPolicy";
 import { bpmnDocumentToolboxShapes, type BpmnToolboxShape } from "./bpmnDocumentToolbox";
 import { bpmnChildren, bpmnFragment, bpmnIdentity, bpmnOperationContext, bpmnSourceAddress, bpmnXml, insertBpmnFragment, refuseBpmnOperation, requireBpmnFlowScope, requireBpmnVisibleElement, resolveBpmnOperationAddress, type BpmnOperationContext } from "./bpmnDocumentOperationXml";
@@ -187,6 +188,8 @@ export function planBpmnCreateShape(owner: ActivityNode, scope: BpmnScopeAddress
   }
   if (entry.eventSubprocessOnly && !bpmnBoolean(parent, "triggeredByEvent")) refuseBpmnOperation("this trigger belongs to an event subprocess");
   if (entry.type === "startEvent" && bpmnBoolean(parent, "triggeredByEvent") && !entry.eventSubprocessOnly) refuseBpmnOperation("choose a start trigger for the event subprocess");
+  if (entry.type === "startEvent" && parent.localName !== "process" && !bpmnBoolean(parent, "triggeredByEvent") && entry.eventDefinitions?.length)
+    refuseBpmnOperation("ordinary subprocess bodies require a none start event");
   if (entry.transactionOnly && (entry.type === "boundaryEvent" ? context.parsed.byId.get(intent.attachedToElementId ?? "")?.localName !== "transaction" : parent.localName !== "transaction"))
     refuseBpmnOperation("cancel events require the actual transaction context");
   const elementId = context.allocate(entry.type), element = bpmnFragment(context, entry.type, { id: elementId, ...(entry.attributes ?? {}) });
@@ -304,5 +307,6 @@ export function planBpmnCreateConnection(owner: ActivityNode, scope: BpmnScopeAd
   const edge = bpmnFragment(context, "BPMNEdge", { id: diId, bpmnElement: elementId }, ns.diagram);
   for (const point of intent.points) edge.append(bpmnFragment(context, "waypoint", { x: String(point.x), y: String(point.y) }, ns.coordinates));
   commands.push(insertBpmnFragment(context, context.plane, edge));
+  if (type === "sequenceFlow") verifyBpmnEventContexts(context.parsed, readBpmnDocument(applyBpmnDocumentTransaction(owner, { commands })), [intent.sourceId, intent.targetId]);
   return { transaction: { commands }, selection: { elementId, diId } };
 }

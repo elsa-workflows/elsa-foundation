@@ -3,17 +3,11 @@ import { bpmnNamespaces as ns, projectBpmnDocumentScene, readBpmnDocument, resol
   type BpmnDocumentCommand, type BpmnDocumentScene, type BpmnScopeAddress, type BpmnXmlAddress, type ParsedBpmnDocument } from "./bpmnDocument";
 import { bpmnOwningProcess, isBpmnModelElement } from "./bpmnDocumentPolicy";
 import { serializeBpmnXml } from "./bpmnDocumentXml";
+import { isBpmnOwnedSyntax } from "./bpmnDocumentSyntaxOwnership";
+export { isBpmnOwnedSyntax };
 
 export function refuseBpmnOperation(reason: string): never { throw new Error(`Cannot author BPMN source: ${reason}.`); }
 
-/** Namespace resemblance inside an extension or text payload is not standard construct ownership. */
-export function isBpmnOwnedSyntax(element: Element): boolean {
-  for (let current: Element | null = element; current; current = current.parentElement) {
-    if (!(Object.values(ns) as readonly string[]).includes(current.namespaceURI ?? "")
-      || current.namespaceURI === ns.model && ["extensionElements", "documentation", "script"].includes(current.localName)) return false;
-  }
-  return true;
-}
 export interface BpmnOperationContext {
   owner: ActivityNode;
   scope: BpmnScopeAddress;

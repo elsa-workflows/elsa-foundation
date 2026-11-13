@@ -2,12 +2,82 @@ import { describe, expect, it } from "vitest";
 import { applyBpmnDocumentTransaction, bpmnNamespaces as ns, readBpmnDocument } from "../bpmn/bpmnDocument";
 import { bpmnAppearanceNamespaces as colors, readBpmnDocumentAppearance } from "../bpmn/bpmnDocumentAppearance";
 import { prepareBpmnReparent } from "../bpmn/bpmnDocumentContainmentOperations";
-import { planBpmnCreateShape } from "../bpmn/bpmnDocumentCreateOperations";
+import { planBpmnCreateConnection, planBpmnCreateShape } from "../bpmn/bpmnDocumentCreateOperations";
 import { planBpmnAppearance, planBpmnStandardProperty, readBpmnStandardProperties } from "../bpmn/bpmnDocumentPropertyOperations";
-import { planBpmnReplace, prepareBpmnDelete } from "../bpmn/bpmnDocumentTransformOperations";
+import { planBpmnReconnect, planBpmnReplace, prepareBpmnDelete } from "../bpmn/bpmnDocumentTransformOperations";
 import { operationOwner, operationScope } from "./bpmnDocumentOperationsFixture";
 
 describe("complete operation identity and property fidelity", () => {
+  it.each(["message", "timer", "signal", "conditional"])("keeps a %s start out of ordinary transaction bodies for create, replace and reparent", trigger => {
+    const owner = operationOwner(), before = structuredClone(owner), toolId = `startEvent-${trigger}`;
+    expect(() => planBpmnCreateShape(owner, operationScope, { toolId, parentElementId: "TX", position: { x: 330, y: 350 } })).toThrow("none start");
+    const none = planBpmnCreateShape(owner, operationScope, { toolId: "startEvent", parentElementId: "TX", position: { x: 330, y: 350 } });
+    const inBody = applyBpmnDocumentTransaction(owner, none.transaction), bodyBefore = structuredClone(inBody);
+    expect(() => planBpmnReplace(inBody, operationScope, none.selection!, toolId)).toThrow("none start");
+    expect(inBody).toEqual(bodyBefore);
+    const typed = planBpmnCreateShape(owner, operationScope, { toolId, position: { x: 20, y: 20 } });
+    const inProcess = applyBpmnDocumentTransaction(owner, typed.transaction), processBefore = structuredClone(inProcess);
+    expect(() => prepareBpmnReparent(inProcess, operationScope, { elementIds: [typed.selection!.elementId], parentElementId: "TX" })).toThrow("none start");
+    expect(inProcess).toEqual(processBefore);
+    expect(owner).toEqual(before);
+  });
+
+  it("allows a none start to move into an ordinary transaction body", () => {
+    const owner = operationOwner(), none = planBpmnCreateShape(owner, operationScope, { toolId: "startEvent", position: { x: 20, y: 20 } });
+    const source = applyBpmnDocumentTransaction(owner, none.transaction);
+    const moved = prepareBpmnReparent(source, operationScope, { elementIds: [none.selection!.elementId], parentElementId: "TX" });
+    if (moved.kind !== "ready") throw new Error("An unconfigured none start needs no native ownership decision");
+    expect(readBpmnDocument(applyBpmnDocumentTransaction(source, moved.plan.transaction)).byId.get(none.selection!.elementId)!.parentElement!.id).toBe("TX");
+  });
+
+  function receiveBoundary(idless: boolean) {
+    const owner = operationOwner();
+    owner.structure!.payload.documentXml = (owner.structure!.payload.documentXml as string)
+      .replace('<b:task id="B">', '<b:receiveTask id="B">').replace('</b:incoming></b:task>', '</b:incoming></b:receiveTask>')
+      .replace('<b:exclusiveGateway id="G"/>', `<b:boundaryEvent ${idless ? "" : 'id="Boundary"'} attachedToRef="B"><b:timerEventDefinition/></b:boundaryEvent><b:exclusiveGateway id="G"/>`);
+    return owner;
+  }
+
+  it.each([false, true])("refuses creating event-gateway input to a receive task with a boundary (idless=%s)", idless => {
+    const owner = receiveBoundary(idless);
+    owner.structure!.payload.documentXml = (owner.structure!.payload.documentXml as string).replace('<b:exclusiveGateway id="G"/>', '<b:eventBasedGateway id="G"/>');
+    const before = structuredClone(owner);
+    expect(() => planBpmnCreateConnection(owner, operationScope, { kind: "sequenceFlow", sourceId: "G", targetId: "B", points: [{ x: 550, y: 140 }, { x: 450, y: 140 }] })).toThrow("event-based gateway");
+    expect(owner).toEqual(before);
+    expect(() => planBpmnReconnect(owner, operationScope, { elementId: "F", diId: "FDI", kind: "sequenceFlow", sourceId: "G", targetId: "B", points: [{ x: 550, y: 140 }, { x: 450, y: 140 }] })).toThrow("event-based gateway");
+    expect(owner).toEqual(before);
+  });
+
+  it.each([false, true])("refuses gateway replacement that invalidates a downstream boundary (idless=%s)", idless => {
+    const owner = receiveBoundary(idless), connection = planBpmnCreateConnection(owner, operationScope, { kind: "sequenceFlow", sourceId: "G", targetId: "B", points: [{ x: 550, y: 140 }, { x: 450, y: 140 }] });
+    const next = applyBpmnDocumentTransaction(owner, connection.transaction), before = structuredClone(next);
+    expect(() => planBpmnReplace(next, operationScope, { elementId: "G", diId: "GDI" }, "eventBasedGateway")).toThrow("event-based gateway");
+    expect(next).toEqual(before);
+  });
+
+  it("permits repairing an unfinished receive-task boundary topology by reconnecting away from its event gateway", () => {
+    const owner = receiveBoundary(true);
+    owner.structure!.payload.documentXml = (owner.structure!.payload.documentXml as string)
+      .replace('<b:exclusiveGateway id="G"/>', '<b:eventBasedGateway id="G"/>').replace('sourceRef="A" targetRef="B"', 'sourceRef="G" targetRef="B"');
+    const plan = planBpmnReconnect(owner, operationScope, { elementId: "F", diId: "FDI", kind: "sequenceFlow", sourceId: "A", targetId: "B", points: [{ x: 200, y: 140 }, { x: 350, y: 140 }] });
+    expect(readBpmnDocument(applyBpmnDocumentTransaction(owner, plan.transaction)).byId.get("F")!.getAttribute("sourceRef")).toBe("A");
+  });
+
+  it("checks idless incoming gateway relationships when replacing an upstream gateway", () => {
+    const owner = receiveBoundary(true);
+    owner.structure!.payload.documentXml = (owner.structure!.payload.documentXml as string)
+      .replace('<b:sequenceFlow id="F"', '<b:sequenceFlow sourceRef="G" targetRef="B"/><b:sequenceFlow id="F"');
+    expect(() => planBpmnReplace(owner, operationScope, { elementId: "G", diId: "GDI" }, "eventBasedGateway")).toThrow("event-based gateway");
+  });
+
+  it("retains opaque BPMN-looking incoming gateway relationships when creating a real boundary", () => {
+    const owner = receiveBoundary(true);
+    owner.structure!.payload.documentXml = (owner.structure!.payload.documentXml as string)
+      .replace('<b:exclusiveGateway id="G"/>', '<b:eventBasedGateway id="G"/>')
+      .replace('<v:exact qname="q:A"/>', '<v:exact qname="q:A"><b:sequenceFlow sourceRef="G" targetRef="B"/></v:exact>');
+    expect(() => planBpmnCreateShape(owner, operationScope, { toolId: "boundaryEvent-timer", attachedToElementId: "B", position: { x: 400, y: 180 } })).not.toThrow();
+  });
+
   it("allocates first-label paint against the generated label's actual context", () => {
     const owner = operationOwner();
     owner.structure!.payload.documentXml = (owner.structure!.payload.documentXml as string)

@@ -1,5 +1,6 @@
 import { bpmnNamespaces, resolveBpmnDocumentReference, type BpmnDocumentEdge, type ParsedBpmnDocument } from "./bpmnDocument";
 import { readBpmnBooleanAttribute } from "./bpmnXmlBoolean";
+import { isBpmnOwnedSyntax } from "./bpmnDocumentSyntaxOwnership";
 import { bpmnEventDefinitionTypes as bpmnEventDefinitions, isActivityBearingElementType, isEventElementType, isGatewayElementType, isSubProcessElementType } from "./bpmnNotationTypes";
 
 export { bpmnEventDefinitions };
@@ -86,20 +87,23 @@ export function assessBpmnDocumentConnection(parsed: ParsedBpmnDocument, kind: B
   return oneAnnotation || inputAssociation(source, target) || outputAssociation(source, target) ? allow : refuse("Use a typed BPMN relationship for these endpoints.");
 }
 
-export function assessBpmnBoundaryAttachment(parsed: ParsedBpmnDocument, boundaryId: string, hostId: string): BpmnDocumentPolicyResult {
-  const boundary = parsed.byId.get(boundaryId), host = parsed.byId.get(hostId);
+export function bpmnEventGatewayInputs(parsed: ParsedBpmnDocument, host: Element | undefined): Element[] {
+  return host?.localName === "receiveTask" ? [...parsed.document.getElementsByTagNameNS(bpmnNamespaces.model, "sequenceFlow")]
+    .filter(flow => isBpmnOwnedSyntax(flow) && resolveBpmnDocumentReference(parsed, flow, flow.getAttribute("targetRef")) === host
+      && resolveBpmnDocumentReference(parsed, flow, flow.getAttribute("sourceRef"))?.localName === "eventBasedGateway") : [];
+}
+
+/** Element arguments include retained idless events; string arguments preserve existing identity-based callers. */
+export function assessBpmnBoundaryAttachment(parsed: ParsedBpmnDocument, boundaryId: string | Element, hostId: string | Element): BpmnDocumentPolicyResult {
+  const boundary = typeof boundaryId === "string" ? parsed.byId.get(boundaryId) : boundaryId;
+  const host = typeof hostId === "string" ? parsed.byId.get(hostId) : hostId;
   if (!isBpmnModelElement(boundary) || boundary.localName !== "boundaryEvent" || !isBpmnModelElement(host) || !activity(host))
     return refuse("A boundary event needs an activity host.");
   if (!bpmnFlowScope(boundary) || bpmnFlowScope(boundary) !== bpmnFlowScope(host))
     return refuse("A boundary and its host must share the same standard flow scope.");
   if (eventSubprocess(host) || bpmnBoolean(host, "isForCompensation")) return refuse("This activity cannot host a boundary event.");
-  if (host.localName === "receiveTask") {
-    for (const element of parsed.byId.values()) {
-      if (element.localName !== "sequenceFlow" || resolveBpmnDocumentReference(parsed, element, element.getAttribute("targetRef")) !== host) continue;
-      if (resolveBpmnDocumentReference(parsed, element, element.getAttribute("sourceRef"))?.localName === "eventBasedGateway")
-        return refuse("A receive task after an event-based gateway cannot host a boundary event.");
-    }
-  }
+  if (bpmnEventGatewayInputs(parsed, host).length)
+    return refuse("A receive task after an event-based gateway cannot host a boundary event.");
   return allow;
 }
 
