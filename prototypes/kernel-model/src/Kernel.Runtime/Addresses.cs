@@ -73,6 +73,7 @@ public enum Flaw : long
     EvictBusy = 1L << 38,          // an instance whose commit is in flight may be evicted
     DeleteLeavesJournal = 1L << 39, // a delete leaves the instance's journal rows
     ProjectorStopsAtGap = 1L << 40, // the projector stops at the first missing position, as in section 10
+    IgnoreJobGeneration = 1L << 46, // mutation: a queued old job may borrow a new generation's lease
     HideDeliveryHistory = 1L << 43,  // mutation: suppress the delivery-history hint
     IgnoreLeaseDeadline = 1L << 42, // mutation: start new work after the local safe deadline
     TrialBeforeLoad = 1L << 41,    // for the measurement of section 21: a trial may start before its instance is loaded and idle

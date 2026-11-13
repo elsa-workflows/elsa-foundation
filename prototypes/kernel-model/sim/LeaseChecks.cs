@@ -100,6 +100,55 @@ public static class LeaseChecks
         await Drain(replacement, () => Json.Read<RunnerState>(store.Instances[id].State).Log.Contains("result work"));
         Check(newJobs == 1, "fresh owner drains a ticket declined by the expired scheduler dispatch");
 
+        // A renewal can land before the old deadline while its acknowledgement is delayed beyond it.
+        // A job discarded in that gap must force this generation to stand down even when that reply arrives.
+        foreach (var queued in new[] { true, false })
+        {
+            time += 20_000; store = new InMemoryStore(1, () => time); wire = new DelayedCommit(store);
+            var expired = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var running = new TaskCompletionSource<object?>();
+            int attempts = 0;
+            var pausedScheduler = new HeldScheduler();
+            old = new Worker("overlap", 0, wire, new WorkflowInstance([new Runner((_, _) =>
+            {
+                attempts++;
+                return new ValueTask<object?>(running.Task);
+            })]), new WorkerOptions { Monotonic = () => time, OnExpiredJob = () => expired.TrySetResult(),
+                JobScheduler = queued ? pausedScheduler : null });
+            await Start(old);
+            await store.AddAsync(new Message("overlap", new InstanceRef(id), "go", Json.Write("work"), Start: Runner.Spec));
+            await old.PollAsync(); await old.LoadAsync(); await old.FlushAsync(); old.RunTurn(id); await old.FlushAsync();
+            Check(queued ? pausedScheduler.Count > 0 : attempts == 1, $"{(queued ? "queued" : "running")} job prepared before renewal");
+            time += 5_000;
+            wire.DelayNext = true; var delayedBeat = old.BeatAsync();
+            await wire.Landed.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            time += 6_000;
+            if (queued) pausedScheduler.RunAll(); else running.SetResult("late");
+            await expired.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            wire.Reply.SetResult(); await delayedBeat;
+            await old.RunAsync();
+            Check(!old.Owns, $"{(queued ? "queued dispatch" : "completed body")} expiry cannot be revived by a late renewal acknowledgement");
+            if (old.Owns) continue; // red baseline: do not hide the stuck owner by taking over for it
+            time += 10_000; newJobs = 0; newWork = new TaskCompletionSource<object?>();
+            replacement = Owner("new"); await Start(replacement); await Drain(replacement, () => newJobs == 1);
+            newWork.SetResult("done");
+            await Drain(replacement, () => Json.Read<RunnerState>(store.Instances[id].State).Log.Contains("result work"));
+            Check(newJobs == 1, $"replacement drains the {(queued ? "queued" : "completed")} ticket after stand-down");
+        }
+
+        // A timely acknowledged renewal advances the window; a body completing after the old deadline remains valid.
+        time += 20_000; store = new InMemoryStore(1, () => time); wire = new DelayedCommit(store);
+        oldJobs = oldEffects = 0; oldWork = new TaskCompletionSource<object?>();
+        effectFinished = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        old = Owner("old"); await Start(old);
+        await store.AddAsync(new Message("renewed", new InstanceRef(id), "go", Json.Write("work"), Start: Runner.Spec));
+        await old.PollAsync(); await old.LoadAsync(); await old.FlushAsync(); old.RunTurn(id); await old.FlushAsync();
+        Check(oldJobs == 1, "renewal witness started its job");
+        time += 5_000; await old.BeatAsync();
+        time += 6_000; oldWork.SetResult("valid"); await effectFinished.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        await Drain(old, () => Json.Read<RunnerState>(store.Instances[id].State).Log.Contains("result work"));
+        Check(old.Owns && oldEffects == 1, "a timely renewal permits a result after the prior deadline");
+
         // A queued callback from an old generation must not use the same Worker's new lease after it retakes.
         time += 20_000; store = new InMemoryStore(1, () => time); wire = new DelayedCommit(store);
         scheduler = new HeldScheduler(); oldJobs = 0;
@@ -111,11 +160,30 @@ public static class LeaseChecks
         Check(scheduler.Count > 0, "old-generation work was queued before retake");
         time += 11_000; await old.RunAsync(); await Start(old);
         scheduler.RunAll();
-        Check(old.Owns && oldJobs == 0, "a stale queued callback cannot use a later lease of the same worker");
+        Check(old.Owns && oldJobs == 0, "cancelled queued work does not run after the same worker retakes");
+
+        // Enter a scheduled delegate before cancellation, then retake before it reaches the guard. This tests the
+        // generation check itself; the earlier queued-work test is stopped by scheduler token cancellation.
+        time += 20_000; store = new InMemoryStore(1, () => time); wire = new DelayedCommit(store);
+        scheduler = new HeldScheduler(); oldJobs = 0;
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var allowGuard = new ManualResetEventSlim();
+        old = new Worker("entered", 0, wire, new WorkflowInstance([new Runner((_, _) => { Interlocked.Increment(ref oldJobs); return new ValueTask<object?>((object?)null); })]),
+            new WorkerOptions { Monotonic = () => time, Flaws = flaw, JobScheduler = scheduler,
+                BeforeScheduledJobCheck = () => { entered.TrySetResult(); if (!allowGuard.Wait(TimeSpan.FromSeconds(5))) throw new TimeoutException("guard release"); } });
+        await Start(old);
+        await store.AddAsync(new Message("entered", new InstanceRef(id), "go", Json.Write("work"), Start: Runner.Spec));
+        await old.PollAsync(); await old.LoadAsync(); await old.FlushAsync(); old.RunTurn(id); await old.FlushAsync();
+        var runningScheduler = Task.Run(scheduler.RunAll);
+        await entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        await old.DisposeAsync(); await Start(old);
+        allowGuard.Set(); await runningScheduler.WaitAsync(TimeSpan.FromSeconds(5));
+        Check(old.Owns && oldJobs == 0, "an entered old-generation callback cannot borrow a renewed lease");
 
         // Work that began before the local deadline may still have an outside effect after the lease expires.
         time += 20_000; store = new InMemoryStore(1, () => time); wire = new DelayedCommit(store);
-        oldJobs = newJobs = 0; oldWork = new TaskCompletionSource<object?>(); newWork = new TaskCompletionSource<object?>();
+        oldJobs = newJobs = oldEffects = 0; oldWork = new TaskCompletionSource<object?>(); newWork = new TaskCompletionSource<object?>();
+        effectFinished = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         old = Owner("old"); await Start(old);
         await store.AddAsync(new Message("go2", new InstanceRef(id), "go", Json.Write("work"), Start: Runner.Spec));
         await old.PollAsync(); await old.LoadAsync(); await old.FlushAsync(); old.RunTurn(id); await old.FlushAsync();

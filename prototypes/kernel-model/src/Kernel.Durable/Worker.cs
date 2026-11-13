@@ -52,6 +52,10 @@ public sealed record WorkerOptions
     public Action<InstanceRef, IReadOnlyList<Message>, long>? OnTurn { get; init; }
     /// <summary>Original stored metadata when a newly polled delivery is held; for the simulation's history oracle.</summary>
     public Action<Stored>? OnObservedDelivery { get; init; }
+    /// <summary>A job dispatch or result observed an expired local window; for deterministic witnesses.</summary>
+    public Action? OnExpiredJob { get; init; }
+    /// <summary>Called inside the scheduler just before the job's generation/deadline check; for deterministic witnesses.</summary>
+    public Action? BeforeScheduledJobCheck { get; init; }
 }
 
 /// <summary>
@@ -82,6 +86,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
     private long _generation, _anchor = long.MinValue, _local;
     private long _renewed;      // database time of the take, or of the sending of the last commit that landed: when the lease was renewed at the latest
     private long _safeUntil;    // local monotonic deadline, measured from the start of a successful take or commit
+    private long _expiredGeneration = -1; // monotonically latched by an off-turn callback; only the owner resets state
     private bool _taking, _polling, _loading, _flushing, _meeting, _caughtUp, _woken;
     private string _refusal = "";
     private readonly HashSet<Delivery> _trial = [];     // the suspects being tried now, with nothing else in flight (finding F2)
@@ -204,7 +209,24 @@ public sealed class Worker : IScopeActivation, ITurnServices
 
     // A successful response can arrive arbitrarily late. The lease was renewed no earlier than when its request began;
     // stop at that conservative local deadline, even if the actual database lease has more time. No read is needed.
-    private bool CanStartWork => Owns && (Has(Flaw.IgnoreLeaseDeadline) || _options.Monotonic() < _safeUntil);
+    private bool CanStartWork => CanStartGeneration(Volatile.Read(ref _generation));
+
+    private bool CanStartGeneration(long generation)
+    {
+        if ((!Has(Flaw.IgnoreJobGeneration) && generation != Volatile.Read(ref _generation)) || !Owns) return false;
+        if (Has(Flaw.IgnoreLeaseDeadline)) return true;
+        if (Volatile.Read(ref _expiredGeneration) == generation) return false;
+        if (_options.Monotonic() < Volatile.Read(ref _safeUntil)) return true;
+        // A delayed renewal acknowledgement must not revive a generation whose job was already discarded. Off-turn
+        // callbacks only latch a number; the worker's own loop performs Reset. Never overwrite a newer generation.
+        long seen;
+        do
+        {
+            seen = Volatile.Read(ref _expiredGeneration);
+            if (seen >= generation) break;
+        } while (Interlocked.CompareExchange(ref _expiredGeneration, generation, seen) != seen);
+        return false;
+    }
 
     private bool LeaseUsable()
     {
@@ -230,7 +252,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
         Observe(lease.Now);
         _renewed = lease.Now;
         Epoch = lease.Epoch;
-        _safeUntil = started + (long)_options.Lease.TotalMilliseconds;
+        Volatile.Write(ref _safeUntil, started + (long)_options.Lease.TotalMilliseconds);
         Position = lease.Position;
         _mine.Add(lease.Epoch);
         LeaseUsable(); // an answer delayed past the safe deadline cannot authorize work
@@ -249,7 +271,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
     /// <summary>Recovery after any doubt is the same path as start-up: drop everything; the host takes the partition again.</summary>
     private void Reset()
     {
-        _generation++;
+        Interlocked.Increment(ref _generation);
         Epoch = 0;
         _polling = _loading = _flushing = _meeting = false;
         foreach (var item in _items.Values.ToList()) item.Cancel?.Cancel();
@@ -517,6 +539,14 @@ public sealed class Worker : IScopeActivation, ITurnServices
         _ = DriveJob(ticket, ticket.Message.Read<JobTicket>());
     }
 
+    private bool JobMayRun(long generation)
+    {
+        if (CanStartGeneration(generation)) return true;
+        if (generation == Volatile.Read(ref _generation) && Volatile.Read(ref _expiredGeneration) == generation)
+            _options.OnExpiredJob?.Invoke();
+        return false;
+    }
+
     private async Task DriveJob(Delivery ticket, JobTicket job)
     {
         var generation = _generation;
@@ -525,13 +555,16 @@ public sealed class Worker : IScopeActivation, ITurnServices
         try
         {
             result = Json.Write(_options.JobScheduler is { } scheduler
-                ? await Task.Factory.StartNew(() => generation == _generation && CanStartWork
-                    ? _type.ExecuteJobAsync(job.Model, context, token).AsTask()
-                    : Task.FromCanceled<object?>(new CancellationToken(true)), token, TaskCreationOptions.DenyChildAttach, scheduler).Unwrap()
+                ? await Task.Factory.StartNew(() =>
+                {
+                    _options.BeforeScheduledJobCheck?.Invoke();
+                    return JobMayRun(generation) ? _type.ExecuteJobAsync(job.Model, context, token).AsTask()
+                        : Task.FromCanceled<object?>(new CancellationToken(true));
+                }, token, TaskCreationOptions.DenyChildAttach, scheduler).Unwrap()
                 : await _type.ExecuteJobAsync(job.Model, context, token));
         }
         catch (Exception e) { error = e.Message; }
-        if (generation != _generation || ticket.Taken || !CanStartWork) return; // next pass stands down if the deadline passed
+        if (ticket.Taken || !JobMayRun(generation)) return; // next pass stands down if the deadline passed
         // The ticket becomes the result: same id, so it is consumed once, by the turn that handles it.
         ticket.Message = ticket.Message with { Kind = Kinds.JobFinished, Payload = Json.Write(new JobFinished(job.Key, result, error)) };
         ticket.Ticket = false;
@@ -663,7 +696,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
             Position += batch.Positions;
             Observe(result.Now);
             _renewed = Math.Max(_renewed, sending);      // a commit that lands renews the lease
-            _safeUntil = Math.Max(_safeUntil, started + (long)_options.Lease.TotalMilliseconds);
+            Volatile.Write(ref _safeUntil, Math.Max(Volatile.Read(ref _safeUntil), started + (long)_options.Lease.TotalMilliseconds));
             if (!LeaseUsable()) return Outcome.Lost; // a late acknowledgement cannot revive the old local deadline
             foreach (var item in marks.Concat(trial))
                 if (item.Suspect && !trial.Contains(item)) item.Shelved = true;
