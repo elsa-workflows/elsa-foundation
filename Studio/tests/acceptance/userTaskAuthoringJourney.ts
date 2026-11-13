@@ -159,7 +159,7 @@ export async function userTaskAuthoringJourney(page: Page, info: TestInfo, captu
   await editorViews.getByRole("tab", { name: "Designer", exact: true }).click();
   await expect(page.getByRole("combobox", { name: "Output Name", exact: true })).toHaveAttribute("aria-invalid", "false");
   await expect.poll(() => page.getByRole("combobox", { name: "Output Name", exact: true }).evaluate(element => getComputedStyle(element).backgroundSize)).toBe("5px 5px, 5px 5px");
-  const valueRow = page.locator(".wf-property-row").filter({ has: page.locator(".wf-property-row-header label", { hasText: /^Value$/ }) });
+  const valueRow = page.locator(".wf-property-row").filter({ has: page.locator(".studio-field-label, .wf-property-row-header > span", { hasText: /^Value$/ }) });
   await valueRow.locator("button.wf-syntax-picker-trigger").click(); await page.getByRole("option", { name: /^Variable/ }).click();
   await selectVariable(page.getByRole("combobox", { name: "Variable reference", exact: true }));
   await captureInspector("output-picker", page.getByRole("combobox", { name: "Output Name", exact: true }));
@@ -217,7 +217,7 @@ export async function userTaskAuthoringJourney(page: Page, info: TestInfo, captu
       const box = await outcomeLabels.filter({ hasText: new RegExp(`^${label}$`) }).boundingBox();
       const pane = await runCanvas.locator(".react-flow__pane").boundingBox();
       // The zoom controls and MiniMap float over the pane, so a label under one of them is not readable.
-      const panels = await Promise.all((await runCanvas.locator(".react-flow__panel:visible").all()).map(panel => panel.boundingBox()));
+      const panels = await Promise.all((await runCanvas.locator(".react-flow__controls:visible, .react-flow__minimap:visible").all()).map(panel => panel.boundingBox()));
       const underPanel = panels.some(panel => box && panel && box.x < panel.x + panel.width && box.x + box.width > panel.x
         && box.y < panel.y + panel.height && box.y + box.height > panel.y);
       return Boolean(box && pane && !underPanel && box.x >= pane.x && box.x + box.width <= pane.x + pane.width

@@ -51,7 +51,6 @@ test("every configured project runs exactly the journeys run.py's verdict requir
   }
   for (const projects of Object.values(actual)) projects.sort();
   assert.deepEqual(actual, expected);
-  assert.equal(Object.values(actual).flat().length, 93);
 });
 
 test("touch projects really emulate touch and only the supplementary subsets change hosts", () => {

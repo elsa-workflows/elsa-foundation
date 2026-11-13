@@ -38,9 +38,9 @@ class VerdictTests(unittest.TestCase):
     def test_inventory_adds_bounded_supplementary_cases(self):
         standard = {journey for journey, projects in acceptance.JOURNEY_PROJECTS.items() if projects == acceptance.PROJECTS}
         supplements = acceptance.JOURNEYS - standard
-        self.assertEqual(14, len(standard))
+        self.assertEqual(16, len(standard))
         self.assertEqual(set(acceptance.SUPPLEMENT_PROJECTS), supplements)
-        self.assertEqual(84, sum(len(acceptance.JOURNEY_PROJECTS[journey]) for journey in standard))
+        self.assertEqual(96, sum(len(acceptance.JOURNEY_PROJECTS[journey]) for journey in standard))
         self.assertEqual(9, sum(len(acceptance.JOURNEY_PROJECTS[journey]) for journey in supplements))
         self.assertEqual({f'touch-{width}-{mode}' for width in (360, 390, 1440) for mode in ('light', 'dark')},
                          acceptance.JOURNEY_PROJECTS['coarse pointer grouped navigation'])
@@ -310,6 +310,17 @@ class RestrictedIdentityTests(unittest.TestCase):
 
 
 class OrchestrationTests(unittest.TestCase):
+    def write_gallery_fixture(self, args, env):
+        self.assertEqual(['pnpm', 'exec', 'playwright', 'test', '--config', 'tests/browser/playwright.outlined-fields.config.ts'], args)
+        gallery = Path(env['OUTLINED_EVIDENCE'])
+        gallery.mkdir(parents=True)
+        screenshot = gallery / 'states.png'
+        screenshot.write_bytes(b'isolated-gallery-fixture')
+        report = {'config': {'metadata': {'outlinedCases': 1}}, 'suites': [{'specs': [
+            {'title': 'Outlined field states', 'tests': [{'expectedStatus': 'passed', 'status': 'expected', 'results': [
+                {'status': 'passed', 'attachments': [{'contentType': 'image/png', 'path': str(screenshot)}]}]}]}]}]}
+        (gallery / 'playwright.json').write_text(json.dumps(report))
+
     def test_full_run_seeds_reader_before_owning_every_composition_host(self):
         events = []
         with tempfile.TemporaryDirectory() as temporary:
@@ -328,6 +339,9 @@ class OrchestrationTests(unittest.TestCase):
                     events.append(('stop', directory.name, dll))
 
             def fake_command(args, log, *, cwd=acceptance.ROOT, env=None):
+                if log.name == 'outlined-gallery.log':
+                    self.write_gallery_fixture(args, env)
+                    return
                 if args[:2] == ['pnpm', 'exec']:
                     events.append(('browser', {key: env.get(key) for key in env if key.startswith(('UX_', 'ELSA_'))}))
                     (output / 'playwright.json').write_text('{}')
@@ -347,6 +361,7 @@ class OrchestrationTests(unittest.TestCase):
                 acceptance.run(output)
             report = json.loads((output / 'report.json').read_text())
         self.assertEqual('passed', report['status'])
+        self.assertEqual({'executed': 1, 'sourceSha': 'abc', 'kind': 'isolated-shared-components'}, report['isolatedFieldGallery'])
         starts = [event for event in events if event[0] == 'start']
         seed, owned = starts[0], starts[1:]
         self.assertEqual(('workbench', 'Elsa.Workbench.dll', 'backend-restricted-seed.log', acceptance.RESTRICTED_USER), (seed[1], seed[2], seed[4], seed[5]))
@@ -380,6 +395,9 @@ class OrchestrationTests(unittest.TestCase):
                 yield
 
             def fake_command(args, log, *, cwd=acceptance.ROOT, env=None):
+                if log.name == 'outlined-gallery.log':
+                    self.write_gallery_fixture(args, env)
+                    return
                 if args[:2] == ['pnpm', 'exec']:
                     self.assertEqual(['--grep', 'save template toast'], args[-2:])
                     (output / 'playwright.json').write_text('{}')
@@ -391,7 +409,34 @@ class OrchestrationTests(unittest.TestCase):
                     patch.object(acceptance.subprocess, 'check_output', side_effect=lambda args, **_: 'abc' if 'rev-parse' in args else ''), \
                     patch('builtins.print'):
                 acceptance.run(output, 'save template toast')
+            report = json.loads((output / 'report.json').read_text())
         self.assertEqual(['workbench', 'studio'], starts)
+        self.assertEqual({'executed': 1, 'sourceSha': 'abc', 'kind': 'isolated-shared-components'}, report['isolatedFieldGallery'])
+
+
+class FieldGalleryVerdictTests(unittest.TestCase):
+    def test_gallery_requires_complete_single_passes_and_images(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            screenshot = root / 'states.png'
+            screenshot.write_bytes(b'png-witness')
+            test = {'expectedStatus': 'passed', 'status': 'expected', 'results': [{'status': 'passed', 'attachments': [
+                {'contentType': 'image/png', 'path': str(screenshot)}]}]}
+            report = {'config': {'metadata': {'outlinedCases': 1}}, 'suites': [{'specs': [{'title': 'Theme states', 'tests': [test]}]}]}
+            self.assertEqual(1, acceptance.field_gallery_verdict(report, root))
+            for change in ('empty', 'missing', 'duplicate', 'skip', 'retry', 'no-image', 'inline-only', 'external-image'):
+                with self.subTest(change=change):
+                    broken = copy.deepcopy(report)
+                    row = broken['suites'][0]['specs'][0]['tests'][0]
+                    if change == 'empty': broken['suites'] = []
+                    if change == 'missing': broken['config']['metadata']['outlinedCases'] = 2
+                    if change == 'duplicate': broken['suites'][0]['specs'].append(copy.deepcopy(broken['suites'][0]['specs'][0]))
+                    if change == 'skip': row['results'][0]['status'] = 'skipped'
+                    if change == 'retry': row['results'].append(copy.deepcopy(row['results'][0]))
+                    if change == 'no-image': row['results'][0]['attachments'] = []
+                    if change == 'inline-only': row['results'][0]['attachments'] = [{'contentType': 'image/png', 'body': 'inline-only'}]
+                    if change == 'external-image': row['results'][0]['attachments'][0]['path'] = str(root.parent / 'outside.png')
+                    with self.assertRaises(ValueError): acceptance.field_gallery_verdict(broken, root)
 
 
 if __name__ == '__main__':

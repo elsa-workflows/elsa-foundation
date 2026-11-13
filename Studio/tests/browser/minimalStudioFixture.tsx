@@ -10,7 +10,7 @@ import { AuthContext } from "../../src/essentials/Elsa.Studio.Hosting/Client/src
 import { AppearancePage } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/settings/AppearancePage";
 import { SettingsShell } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/settings/SettingsShell";
 import { WorkflowInstancesPage } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/pages";
-import { StructuredLogsPage, register as registerLogs } from "../../../Extensions/Diagnostics.StructuredLogs/studio/Elsa.Studio.Diagnostics.StructuredLogs/Client/src/module";
+import { StructuredLogsPage, StructuredLogsPanel, register as registerLogs } from "../../../Extensions/Diagnostics.StructuredLogs/studio/Elsa.Studio.Diagnostics.StructuredLogs/Client/src/module";
 import { WorkflowDefinitionBrowseFixture } from "./workflowDefinitionBrowseFixture";
 import { ActivityDuplicateEditorFixture } from "./activityDuplicateEditorFixture";
 import { WorkflowTemplatesFixture } from "./workflowTemplatesFixture";
@@ -62,7 +62,7 @@ function Fixture() {
   const path = view === "appearance" ? "/settings/appearance" : view === "runs" || view === "inspection" ? "/workflows/instances" : view === "templates" ? "/workflows/templates" : view === "logs" ? "/diagnostics/structured-logs" : "/workflows/definitions";
   return <ThemeProvider><ShellFrame navigation={navigation} panels={[]} path={path} title={view === "appearance" ? "Appearance" : view === "runs" || view === "inspection" ? "Runs" : "Workflows"}
     backendBaseUrl="https://backend.example/" themeAction={<ThemeSwitcher />} accountAction={<AuthContext.Provider value={{ session: { status: "authenticated", displayName: "Administrator", roles: [], permissions: [] }, capabilities: null, login: async () => undefined, logout: async () => undefined, refresh: async () => ({ status: "authenticated", roles: [], permissions: [] }) }}><UserMenu /></AuthContext.Provider>} onNavigate={next => setView(next.startsWith("/settings") ? "appearance" : next.includes("instances") ? "runs" : next.includes("templates") ? "templates" : next.includes("diagnostics") ? "logs" : "list")}>
-    {view === "appearance" ? <SettingsShell activeId="appearance" groups={[{ id: "studio", label: "Studio", sections: [{ id: "appearance", label: "Appearance", path: "/settings/appearance" }] }]} onNavigate={() => undefined}><AppearancePage onNavigate={() => undefined} /></SettingsShell> : view === "list" ? <WorkflowDefinitionBrowseFixture /> : view === "library" ? <WorkflowLibraryFixture /> : view === "runs" ? <Runs /> : view === "templates" ? <WorkflowTemplatesFixture /> : view === "logs" ? <StructuredLogsPage /> : <ActivityDuplicateEditorFixture />}
+    {view === "appearance" ? <SettingsShell activeId="appearance" groups={[{ id: "studio", label: "Studio", sections: [{ id: "appearance", label: "Appearance", path: "/settings/appearance" }] }]} onNavigate={() => undefined}><AppearancePage onNavigate={() => undefined} /></SettingsShell> : view === "list" ? <WorkflowDefinitionBrowseFixture /> : view === "library" ? <WorkflowLibraryFixture /> : view === "runs" ? <Runs /> : view === "templates" ? <WorkflowTemplatesFixture /> : view === "logs" ? <StructuredLogsPage /> : view === "logs-panel" ? <StructuredLogsPanel /> : <ActivityDuplicateEditorFixture />}
   </ShellFrame></ThemeProvider>;
 }
 
