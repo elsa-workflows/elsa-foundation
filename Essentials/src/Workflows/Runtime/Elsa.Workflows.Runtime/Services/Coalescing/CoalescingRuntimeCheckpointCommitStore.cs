@@ -315,7 +315,7 @@ public sealed class CoalescingRuntimeCheckpointCommitStore : IRuntimeCheckpointC
                 : change)
             .ToArray();
 
-    private static RuntimePostCommitOutboxItem AsPending(RuntimePostCommitOutboxItem item) =>
+    internal static RuntimePostCommitOutboxItem AsPending(RuntimePostCommitOutboxItem item) =>
         new(
             item.OutboxItemId,
             item.Intent,

@@ -111,10 +111,18 @@ public sealed class RuntimeCoalescingDrainScopeFactory(
             // Items an earlier cap flush already persisted durably are excluded: re-issuing them would mint a second
             // outbox item id for the same intent (the id derives from the commit id) and double-deliver it; their
             // durable Pending row already is the post-drain delivery source.
-            var remainingIntents = session.RemainingPendingOutboxChanges()
+            var remaining = session.RemainingPendingOutboxChanges()
                 .Where(change => !session.IsOutboxDurablyPersisted(change.StateId))
-                .Select(change => change.State.Intent)
                 .ToArray();
+            // Origin binds a logical event to its exact pending source. Preserve the whole pending set in this
+            // case: mixing retained raw sources with newly reissued intents violates the native all-intents rule.
+            // Pure legacy segments retain their historical reissue identity and wire shape.
+            var preserveSources = remaining.Any(change => change.State.Intent.HistoryCausation is not null);
+            RuntimePostCommitIntent[] remainingIntents = preserveSources ? [] : remaining.Select(change => change.State.Intent).ToArray();
+            if (preserveSources)
+                foldedState = foldedState.WithPostCommitOutbox(remaining.Select(change => change.State.Status == RuntimePostCommitOutboxStatus.FailedRetryable
+                    ? change with { State = CoalescingRuntimeCheckpointCommitStore.AsPending(change.State) }
+                    : change).ToArray());
 
             var now = timeProvider.GetUtcNow();
             var checkpoint = new RuntimeCheckpoint(

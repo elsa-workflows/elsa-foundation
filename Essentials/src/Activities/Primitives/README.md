@@ -31,7 +31,7 @@ activity's own commit through `IPublishStimulusStager`, then completes `Done` im
 `PublishStimulusStagingBuffer` (registered as both the activity-facing stager and the engine-facing
 `IPublishStimulusStagingAccessor` the invoke handler drains) builds a `PublishStimulusIntentKind` post-commit
 intent carrying the shared `Event` stimulus identity. After the checkpoint commits, `PublishStimulusExecutor`
-routes it via `IStimulusRouter.RouteAsync(StartAndResume)` — so one send both starts every published
+routes the verified physical source and its saved recipient cohort via `IStimulusRouter.RouteSourceAsync` — so one send both starts every published
 message-start workflow listening on the name and resumes every parked same-name catch — with the outbox's
 retry/poison discipline. The staging seam mirrors the DispatchWorkflow stager's layering exactly but is
 publish-typed (it takes the send's facets, never a raw intent), so an activity cannot forge an arbitrary
@@ -46,3 +46,15 @@ driver guide](../../Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md
 Coverage lives in `Essentials/tests/Activities/Runtime/Tests`, especially the CLR activator, input hydrator,
 pinned-input, and completion contract fixtures, plus `PublishEventTests` (durable-first staging, the buffer's
 intent shape, and the `StartAndResume` handler pin).
+
+## Cross-domain contributions
+
+`ActivitiesPrimitivesFeature` registers the private cross-domain `PublishStimulusHistoryEnricher` as
+Workflows Runtime Core's `IRuntimeCheckpointCommitEnricher` at `Order = 1900`, before native history
+capture at phase2000. It contributes safe publication inputs through Core's optional
+`IRuntimeHistorySourceExtension` before native capture. It stamps the logical intent and supplied pending
+projection only when the original final profile promises `StimulusPublicationCommitted`,
+`StimulusRoutingAttemptObserved` and `StimulusRoutingDispositionObserved`. Earlier vocabularies retain
+their original unstamped replay identity. This contribution does not advertise recording support or enable
+a production history module; actual capture/provider/handler qualification follows separately. See the
+[Runtime extension catalog](../../Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md) for the shared source boundary.

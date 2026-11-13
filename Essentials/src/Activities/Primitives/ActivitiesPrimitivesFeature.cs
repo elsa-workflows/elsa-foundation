@@ -49,6 +49,7 @@ public class ActivitiesPrimitivesFeature : IShellFeature
         services.TryAddSingleton<PublishStimulusStagingBuffer>();
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IStimulusDeliveryIntentAdapter, PublishStimulusIntentAdapter>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IRuntimeCheckpointCommitEnricher, PublishStimulusSchemaGuard>());
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IRuntimeCheckpointCommitEnricher, PublishStimulusHistoryEnricher>());
         services.TryAddSingleton<IPublishStimulusStager>(
             serviceProvider => serviceProvider.GetRequiredService<PublishStimulusStagingBuffer>());
         services.TryAddSingleton<IPublishStimulusStagingAccessor>(

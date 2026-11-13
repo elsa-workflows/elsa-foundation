@@ -6914,6 +6914,7 @@ const Elsa.Workflows.Runtime.Core.Constants.RuntimeCheckpointNames.WorkflowStart
 const Elsa.Workflows.Runtime.Core.Constants.RuntimeCheckpointNames.WorkflowSuspended = "WorkflowSuspended" -> string!
 const Elsa.Workflows.Runtime.Core.Constants.RuntimeDelayedScheduleFaultCodes.TooFar = "runtime.delayed-schedule.too-far" -> string!
 const Elsa.Workflows.Runtime.Core.Constants.RuntimeDelayedScheduleFaultCodes.Unavailable = "runtime.delayed-schedule.unavailable" -> string!
+const Elsa.Workflows.Runtime.Core.Constants.RuntimeMetadataKeys.CoalescedFlush = "runtime.coalescing.flush" -> string!
 const Elsa.Workflows.Runtime.Core.Constants.RuntimeMetadataKeys.AcceptsRescheduledFaultedChild = "runtime.acceptsRescheduledFaultedChild" -> string!
 const Elsa.Workflows.Runtime.Core.Constants.RuntimeMetadataKeys.ActivityActivationCompletedWorkItemId = "runtime.activityActivationCompletedWorkItemId" -> string!
 const Elsa.Workflows.Runtime.Core.Constants.RuntimeMetadataKeys.ActivityAttemptActivationClaim = "runtime.activityAttemptActivationClaim" -> string!
@@ -10807,6 +10808,7 @@ static Elsa.Workflows.Runtime.Core.Models.ActivityValueCaptureOrigin.operator ==
 static Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpointValueCapture.operator !=(Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpointValueCapture? left, Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpointValueCapture? right) -> bool
 static Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpointValueCapture.operator ==(Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpointValueCapture? left, Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpointValueCapture? right) -> bool
 static Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFacts.IsFinalProfile(Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryCapturePolicy? policy) -> bool
+static Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFacts.WithPostCommitCausation(Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpointCommit! commit, System.Func<Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitIntent!, Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryCausation?>! ownerFactory, Elsa.Workflows.Runtime.Core.Models.PersistenceScope! scope) -> Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpointCommit!
 Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFactKind.IncidentProjectionReconciled = 28 -> Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFactKind
 Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFactKind.IncidentStrategyEvaluated = 27 -> Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFactKind
 Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFactKind.IncidentSuppressed = 29 -> Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFactKind
