@@ -182,6 +182,59 @@ Not covered: nested members, optional conditional reads, other source families, 
 the `e2e-tests/` source-family/type-fit proof of T024 and independent review. Optional reads of conditional
 producers and other source families (T022) remain open. Evidence is on the delivering PR.
 
+#4309 S1 source receipt (not task completion): the existing whole-output query remains unchanged. The language-neutral
+client and workflow host accept an optional focused whole-source/literal-path query and a bounded member-shape query;
+they retain server shape, target, capability and envelope identity facts. Only a current supported/empty analysis can
+enable member reads; invalid findings remain explainable without offering its candidates or learning its flag. A nested
+answer must carry the requested member role/path/source identity. The workflow host withholds late results after
+edits, base changes, disablement or context changes, without saving. Page aggregation checks shared identity and
+capability facts but does not equate query-specific context revisions. Existing wire code needs no change: canonical
+result/variable/request/input member bindings and unknown future kinds retain structured values through Code Apply
+and reopen. Source tests are supporting evidence, not a substitute for S4/S5 real persistence/runtime/UI qualification.
+The S0 generic `InvalidSource` wording nit is explicitly deferred; its safe stable code is unchanged and both S0 client
+safety notes are handled here. S2 picker model, S3 UI, S4 real runtime proof and S5 composed acceptance remain pending;
+no T018–T025 box is closed from this bounded client/wire slice.
+
+#4309 S2 source receipt (not task completion): the new, currently unwired `activityDataPickerModel.ts` groups only
+server-published facts into result/input/request/variable families, preserving within-family server order and canonical
+binding objects. Explicit variable scopes disambiguate same names and mark visible outer shadows without graph
+traversal or identity inference from labels. Pure literal-path helpers retain empty/punctuation-bearing segments,
+JSON-array breadcrumb identity and the server's 64-segment/4096-UTF-16-unit bounds. Four member-kind readers,
+reference descriptors and provenance helpers are available to S3 but are not registered with any UI. Browsing requires
+an enabled capability, the current unambiguous source packet and its exact focused path; protected/restricted sources
+stay excluded or disabled. A non-null admitted binding remains the selection authority, including optional reads
+whose conditional availability/reason is informational; this adds no optional-authoring toggle. Member readers and
+provenance reject any own lowercase `path` property, including null, while leaving the stored payload untouched.
+Unknown/truncated/map metadata permits only exact literal key queries; no array index,
+fan-out, runtime key discovery or target compatibility is inferred. The existing whole-output model/UI is unchanged.
+S3 UI, S4 real runtime proof and S5 composed acceptance remain pending; this source slice closes no T022 or program
+acceptance box. The S0 cosmetic backend wording nit remains deferred.
+
+
+#4309 S3 source receipt (partial; acceptance still pending): ordinary workflow input rows now use the existing
+popover/transaction with the opt-in member capability. The enhanced branch browses canonical result/input/request/
+variable offers, exact literal/empty paths and breadcrumbs; collections remain whole values and unknown/map keys are
+queried without inferred keys. Open workflow requests expose a literal name proposal only for the open-input host
+and an allowed target; only the server's returned binding can be selected. Four member references and canonical
+workflow-request values render readable provenance with Replace/Clear through the existing row edit owner. No
+SDK wire or hidden save is added. Whole-output behavior remains in the original branch without a true capability.
+Focused requests abort on navigation, close, revision/base/target and readonly changes; late, malformed, wrong-kind/
+path and revoked answers cannot commit. Out-of-scope editors preserve reference payloads without cross-kind actions.
+Known data-reference replacements retain one edit; manual-expression/code-loss confirmations remain in place.
+Source-level behavioral checks cover Customer/member selection, source-family literal/empty keys, target switch through
+both row/reference callbacks, readonly transition, malformed offers, cancellation/refusal, keyboard focus and context
+absence. Composed current-head UI/runtime proof, independent visual acceptance and the S4/S5 permanent proof lanes
+are still required. No full T022/T023/T025, P1 or program acceptance box closes from this source-only receipt; S4/S5,
+US2 expression insertion, shared-editor/BPMN audits and the S0 cosmetic backend wording nit remain pending.
+
+
+S3 review/exploration follow-up (still partial): current refused reference analyses now retain safe findings for the
+exact reference/target/document/base without retaining candidates, capability or type facts; unsaved invalid references
+show a problem while keeping Replace/Clear explicit. Initial c84 composed exploration verified the real Customer
+catalog/member choice but exposed long canonical type labels squeezing source names; scoped type sizing/tooltips and
+wrapped type notes address that observed issue. That exploratory run is not accepted proof; final composed proof
+must use the corrected committed head. No task completion or runtime success is claimed from these source fixes.
+
 **Checkpoint:** US1 passes actual persisted journeys; #3094 can close only on its narrower own evidence.
 Whole-output UI completion does not close nested binding/runtime obligations.
 

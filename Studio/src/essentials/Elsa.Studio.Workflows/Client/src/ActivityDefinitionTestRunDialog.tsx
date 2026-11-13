@@ -1,3 +1,4 @@
+import { StudioField } from "@elsa-workflows/studio-ui";
 import {
   useCallback,
   useEffect,
@@ -333,9 +334,7 @@ export function ActivityDefinitionTestRunDialog({
               const value = inputDrafts[input.referenceKey] ?? { presence: "Absent", draft: "" };
               return (
                 <div className="ad-form-grid ad-test-run-input" key={input.referenceKey}>
-                  <label className="ad-dialog-field">
-                    <span>{input.displayName || input.name} presence</span>
-                    <select
+                  <StudioField className="ad-dialog-field" label={<><span>{input.displayName || input.name} presence</span></>}><select
                       aria-label={`${input.displayName || input.name} presence`}
                       value={value.presence}
                       disabled={busy}
@@ -351,9 +350,7 @@ export function ActivityDefinitionTestRunDialog({
                       <option value="Absent">Absent{contractInput.default ? " · apply default" : ""}</option>
                       <option value="Null" disabled={!contractInput.isNullable}>Present null</option>
                       <option value="Value">Present value</option>
-                    </select>
-                    <small>{presenceDescription(contractInput, value.presence)}</small>
-                  </label>
+                    </select><small>{presenceDescription(contractInput, value.presence)}</small></StudioField>
                   {value.presence === "Value" ? (
                     <WorkflowRunInputField
                       input={input}

@@ -3,7 +3,7 @@ using Kernel.Native;
 namespace Kernel.Sim;
 
 // Native and NativeFlaws: native workflow instances in the mix (sim/NativeSim.cs), and the model broken on purpose.
-public sealed record Config(int Nodes, int Partitions, Flaw Flaws, int Attempts = 3, int Group = 1, bool Upgrade = false, bool Native = false, NativeFlaw NativeFlaws = NativeFlaw.None);
+public sealed record Config(int Nodes, int Partitions, Flaw Flaws, int Attempts = 3, int Group = 1, bool Upgrade = false, bool Native = false, NativeFlaw NativeFlaws = NativeFlaw.None, AdmissionFlaw AdmissionFlaws = AdmissionFlaw.None);
 
 /// <summary>One thing that happens. Concrete, so that a list of them replays without the random generator.</summary>
 public sealed record Act(string Kind, int A = 0, int B = 0, string S = "", Message? M = null, bool Flag = false)
@@ -83,11 +83,14 @@ public sealed class Actor(int id, int node, int partition)
     public int Version;
     public readonly List<Call> Calls = [];
     public readonly Dictionary<string, TaskCompletionSource<object?>> Jobs = new(StringComparer.Ordinal);
+    public readonly Dictionary<string, bool> ObservedHistory = new(StringComparer.Ordinal);
+    public readonly Dictionary<string, bool> TurnHistoryHint = new(StringComparer.Ordinal);
 }
 
 /// <summary>What a worker sees as its store: the shared in-memory store behind a wire the simulation controls.</summary>
 public sealed class Wire(World world, Actor actor) : IKernelStore
 {
+    public bool CommitClockAvailable => world.Store.CommitClockAvailable;
     private ValueTask<T> Send<T>(string kind, string text, Func<ValueTask<T>> op)
     {
         if (world.Auto)
@@ -178,6 +181,12 @@ public sealed partial class World
     public readonly PartitionRuntime[] Runtimes;    // layer 1, one per process: the built-in runtime the simulation drives
     public readonly Dictionary<string, Requests> Processes = new(StringComparer.Ordinal);   // by process name: the requests open there
     public readonly List<(string Process, Request Request, string Instance)> Asked = [];
+
+    /// <summary>
+    /// A request's deadline, which its reply address carries (decision 6): the route's timeout, 30 s; one request in four
+    /// has 250 ms, shorter than the models' 300 ms timers, so callers expire while their instances go on.
+    /// </summary>
+    private long Deadline(string request) => Time + (long.Parse(request[1..]) % 4 == 0 ? 250 : 30_000);
     public readonly List<(string Node, Reply Reply)> Deliveries = [];                   // on the transport between nodes
     public readonly List<SubscriptionRow> CatchingUp = [];                              // start subscriptions inserted, their read still owed
     private readonly TrialGate[] _gates;
@@ -200,8 +209,10 @@ public sealed partial class World
     }
     public Action<string>? Log;
 
-    public World(Config config)
+    private readonly Func<int, IExecutionModel>? _extraModel;
+    public World(Config config, Func<int, IExecutionModel>? extraModel = null)
     {
+        _extraModel = extraModel;
         Config = config;
         Native = new NativeOracle(config.Partitions);
         Store = new InMemoryStore(config.Partitions, () => Time, config.Flaws) { Refuses = row => row.State.Contains(Fragile.Sour) };
@@ -257,6 +268,7 @@ public sealed partial class World
             new Counter(Versions[node]), new Parent(Config.Flaws.HasFlag(Flaw.CancelKnownChildren)), new Child(), new Waiter(), new Sequence(), new Correlation(Config.Flaws.HasFlag(Flaw.CorrelationForgets)), new CWaiter(Config.Partitions),
             new Runner((job, cancel) => Work(actor, job, cancel)), new Fragile(() => Dying = node), new Http(actor.Id, (job, cancel) => Work(actor, job, cancel)),
             new Tree((job, cancel) => Work(actor, job, cancel)), new OnEvent(), NativeModelFor(actor),
+            .. _extraModel is null ? Array.Empty<IExecutionModel>() : new[] { _extraModel(node) },
         ];
         // A node's name is unique per process start: a restarted process is not its predecessor (finding F9).
         actor.Worker = new Worker(Config.Flaws.HasFlag(Flaw.StableNodeName) ? "node" + node : $"node{node}.{Incarnation[node]}", partition, wire, new WorkflowInstance(models), new WorkerOptions
@@ -266,8 +278,10 @@ public sealed partial class World
             WallClock = () => Time + Skew[node],
             Flaws = Config.Flaws, Partitions = Config.Partitions, MaxInstances = 2,
             Transport = new Transport(this, Config.Flaws.HasFlag(Flaw.StableNodeName) ? "node" + node : $"node{node}.{Incarnation[node]}"),
+            OnObservedDelivery = row => actor.ObservedHistory[row.Message.Id] = row.Seen > 0 || row.Trial > 0,
             OnTurn = (instance, inbox, _) =>
             {
+                actor.TurnHistoryHint[instance.Id] = inbox.Any(m => actor.ObservedHistory.GetValueOrDefault(m.Id));
                 Log?.Invoke($"        actor {actor.Id} turns {instance} with [{string.Join(", ", inbox.Select(m => m.Kind + " " + m.Id))}]");
                 Alone(actor, instance.Id, "a turn of " + instance);
                 // I16: while its committed row says suspended, the current owner gives an instance nothing.
@@ -472,9 +486,9 @@ public sealed partial class World
             {
                 if (Live(act.A) is not { } actor || !actor.Worker.Owns) return null;
                 var request = act.M!.ReplyTo![(act.M.ReplyTo.IndexOf('|') + 1)..];
-                var asked = act.M with { ReplyTo = ReplyTo.Of(actor.Worker.Node, request) };
+                var asked = act.M with { ReplyTo = ReplyTo.Of(actor.Worker.Node, request, Deadline(request)) };
                 if (!actor.Worker.Post(asked, fresh: true, ambient: "amb:" + asked.Target.Id)) return null;
-                Asked.Add((actor.Worker.Node, Processes[actor.Worker.Node].Open(request, Time + 30_000), asked.Target.Id));
+                Asked.Add((actor.Worker.Node, Processes[actor.Worker.Node].Open(request, Deadline(request)), asked.Target.Id));
                 Oracle.Https[asked.Target.Id] = (act.S, asked.Start!.Ephemeral, actor.Id, false);
                 return "";
             }
@@ -483,9 +497,9 @@ public sealed partial class World
                 if (Paused[act.A] || !Oracle.Https.ContainsKey(act.M!.Target.Id)) return null;
                 var process = Of(act.A, 0).Worker.Node;
                 var request = act.M.ReplyTo!;
-                var asked = act.M with { ReplyTo = ReplyTo.Of(process, request) };
+                var asked = act.M with { ReplyTo = ReplyTo.Of(process, request, Deadline(request)) };
                 var added = Store.AddAsync(asked).Result;
-                Asked.Add((process, Processes[process].Open(request, Time + 30_000), asked.Target.Id));
+                Asked.Add((process, Processes[process].Open(request, Deadline(request)), asked.Target.Id));
                 return added ? "added" : "duplicate key";
             }
             case "disconnect":

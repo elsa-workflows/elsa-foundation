@@ -275,126 +275,172 @@ public sealed class EfStore(Func<KernelDb> create, bool postgres, bool? fenceInB
 
     public async ValueTask<Committed> CommitAsync(CommitBatch batch, CancellationToken cancellationToken = default)
     {
-        try
+        CommitClockFacts.RejectUnsupported(batch);
+        // FINDINGS 25.2 (M6): subscriptions are idempotent. The change tracker writes them as rows, so subscribing what is
+        // there is a key violation and unsubscribing what is not is a count that does not match. A commit whose first
+        // count that does not match is on a wait, or that subscribes anything and fails with a definite error while the
+        // fence holds (a key violation may be a wait that is there), is sent once more with its subscriptions as
+        // statements that tolerate both: round trips of their own, on that path only.
+        var waits = Waits(batch);
+        var careful = false;
+        while (true)
         {
-            await using var db = create();
-            db.Database.AutoSavepointsEnabled = false;      // ENGINES.md E4: SAVEPOINT and RELEASE were two more round trips per commit on PostgreSQL
-            await using var transaction = await (Engine?.BeginAsync(db, cancellationToken) ?? db.Database.BeginTransactionAsync(cancellationToken));
-            var now = 0L;
-            if (FenceInBatch)
+            try { return await CommitOnceAsync(batch, waits, careful, cancellationToken); }
+            catch (DbUpdateConcurrencyException e) when (!careful && e.Entries.Any(x => x.Entity is SubscriptionEntity))
             {
-                // MUTATION (Unfenced): the tokens are what the row says now, not what this owner believes, so the check always passes.
-                var (tokenEpoch, tokenPosition) = (batch.Epoch, batch.Position);
-                if (Unfenced)
+                careful = true;     // the first count that did not match was an unsubscribe; the batch was rolled back whole
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                return new Committed(false, 0, []);     // the fence (in the batch) or a count did not match: either way, reset
+            }
+            catch (Exception e)
+            {
+                var failure = Classify(e);
+                // ENGINES.md E1, MONGO.md M5. With the fence in the batch the rows are sent before the fence is checked, so an
+                // owner that is behind collides with its successor's rows first and is told "duplicate key" (PK_Journal, or a
+                // derived message id). A fence that did not match wins over every other error of the batch: a failure that
+                // says the batch did not happen (definite, or a deadlock victim) is reported as such only while the fence
+                // still holds, and is "not landed" otherwise. Epoch and position never return to old values, so a fence
+                // that holds now held when the batch ran. An unknown outcome stays unknown: the batch may have landed and
+                // moved the position itself.
+                if (FenceInBatch && !DefiniteBeatsFence && failure.Failure is Failure.Definite or Failure.Transient)
                 {
-                    var current = await db.Partitions.AsNoTracking().SingleAsync(p => p.Id == batch.Partition, cancellationToken);
-                    (tokenEpoch, tokenPosition) = (current.Epoch, current.Position);
-                }
-                var fence = db.Attach(new PartitionEntity { Id = batch.Partition, Epoch = tokenEpoch, Position = tokenPosition }).Entity;
-                fence.Position = batch.Position + batch.Positions;
-                fence.LeaseUntil = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + (long)batch.Lease.TotalMilliseconds;
-                db.Entry(fence).Property(p => p.LeaseUntil).IsModified = true;     // also when nothing else changes: the fence must always be sent
-            }
-            else if (Engine is not null)
-            {
-                if (await Engine.FenceAsync(db, batch, Unfenced, cancellationToken) is not { } at) return new Committed(false, 0, []);
-                now = at;
-            }
-            else
-            {
-                // Statement 1, and the check that it changed exactly one row before anything else is sent.
-                var fence = await db.Database.SqlQueryRaw<long>(
-                    $"""UPDATE "Partitions" SET "Position" = {"{0}"}, "LeaseUntil" = {Now} + {"{1}"} WHERE "Id" = {"{2}"} AND ("Epoch" = {"{3}"} AND "Position" = {"{4}"} OR {(Unfenced ? "1 = 1" : "1 = 0")}) RETURNING {Now} AS "Value" """,
-                    batch.Position + batch.Positions, (long)batch.Lease.TotalMilliseconds, batch.Partition, batch.Epoch, batch.Position).ToListAsync(cancellationToken);
-                if (fence.Count != 1) return new Committed(false, 0, []);       // disposing the transaction rolls it back
-                now = fence[0];
-            }
-
-            var sends = batch.Turns.Sum(s => s.Sent.Count);
-            var seq = postgres || sends == 0 ? 0 : await db.Database.SqlQueryRaw<long>("""SELECT COALESCE(MAX("Seq"), 0) AS "Value" FROM "Messages" """).SingleAsync(cancellationToken);
-
-            var (position, sent) = (batch.Position, new List<MessageEntity>());
-            foreach (var turn in batch.Turns)
-            {
-                // An ended instance: its row at the expected revision, in the batch, so a revision that does not match is a
-                // count that does not match (not landed), as for an update. Its journal rows go after the batch, below.
-                if (turn.Delete) db.Attach(new InstanceEntity { Id = turn.Instance, Revision = turn.Expected!.Value }).State = EntityState.Deleted;
-                if (turn.Row is { } row)
-                {
-                    var entity = new InstanceEntity
+                    bool holds;
+                    try { holds = await HoldsAsync(batch, cancellationToken); }
+                    catch (Exception check) { throw new StoreException(Failure.Unknown, "the fence could not be read after a failed commit: " + check.Message, check); }
+                    if (!holds)
                     {
-                        Id = row.Id, Partition = batch.Partition, Model = row.Model, Definition = row.Definition, Status = row.Status,
-                        State = row.State, Jobs = row.Jobs, Revision = row.Revision, Parent = row.Parent, Fault = row.Fault, History = row.History, Suspended = row.Suspended, Children = row.Children, StateVersion = row.StateVersion,
-                    };
-                    if (turn.Expected is not { } expected) db.Add(entity);
-                    else db.Update(entity).Property(i => i.Revision).OriginalValue = expected;
+                        Interlocked.Increment(ref _keyViolationsAsFence);
+                        return new Committed(false, 0, []);
+                    }
                 }
-                foreach (var id in turn.Consumed) db.Remove(new MessageEntity { Id = id });
-                foreach (var id in turn.Done) db.Attach(new MessageEntity { Id = id }).Entity.Done = true;
-                foreach (var id in turn.Held ?? [])     // its turn ran: no longer on trial
-                    db.Attach(new MessageEntity { Id = id, Trial = 0 }).Property(m => m.Trial).IsModified = true;
-                foreach (var message in turn.Sent)
-                {
-                    sent.Add(ToEntity(message, batch.HandOver && message.Target.Partition == batch.Partition ? batch.Epoch : 0, postgres ? 0 : ++seq));
-                    db.Add(sent[^1]);
-                }
-                foreach (var s in turn.Subscribed) db.Add(new SubscriptionEntity { Key = s.Key, Instance = s.Instance, Wait = s.Wait, Partition = batch.Partition });
-                foreach (var s in turn.Unsubscribed) db.Remove(new SubscriptionEntity { Key = s.Key, Instance = s.Instance, Wait = s.Wait });
-                if (turn.Journal is not null)
-                    db.Add(new JournalEntity { Partition = batch.Partition, Position = ++position, Instance = turn.Instance, Revision = turn.Delete ? -1 : turn.Row?.Revision ?? 0, Entries = turn.Journal });
+                // A key violation may be a subscription that is there already; the batch was rolled back whole.
+                if (!careful && failure.Failure is Failure.Definite && waits.ContainsValue(true)) { careful = true; continue; }
+                throw failure;
             }
-            foreach (var id in batch.Seen)
-                db.Attach(new MessageEntity { Id = id, Seen = batch.Epoch }).Property(m => m.Seen).IsModified = true;
-            foreach (var id in batch.Trial)
-            {
-                var tried = db.Attach(new MessageEntity { Id = id, Seen = batch.Epoch, Trial = batch.Epoch });
-                (tried.Property(m => m.Seen).IsModified, tried.Property(m => m.Trial).IsModified) = (true, true);
-            }
-
-            await db.SaveChangesAsync(cancellationToken);       // one batch; EF checks every affected-row count
-
-            // Merge with round 3: the set-based deletes of a terminate and a delete have no keys to track, so they are
-            // statements of their own, one round trip each and only in a commit that has them. They come after the batch,
-            // so that with the fence in the batch they run only once the fence has held (E1: a stale owner is told "not
-            // landed" before it touches anything else), and with either fence they lock after the partition row (E9).
-            foreach (var turn in batch.Turns)
-            {
-                if (turn.Unsubscribe)       // ended by force: its waits go, whatever they are
-                    await db.Database.ExecuteSqlRawAsync(Q("""DELETE FROM "Subscriptions" WHERE "Instance" = {0}"""), [turn.Instance], cancellationToken);
-                if (turn.Delete)
-                    await db.Database.ExecuteSqlRawAsync(Q("""DELETE FROM "Journal" WHERE "Partition" = {0} AND "Instance" = {1} AND "Revision" > 0"""), [batch.Partition, turn.Instance], cancellationToken);
-            }
-            await transaction.CommitAsync(cancellationToken);
-            return new Committed(true, now, sent.Select(m => m.Seq).ToList());
-        }
-        catch (DbUpdateConcurrencyException)
-        {
-            return new Committed(false, 0, []);     // the fence (in the batch) or a count did not match: either way, reset
-        }
-        catch (Exception e)
-        {
-            var failure = Classify(e);
-            // ENGINES.md E1, MONGO.md M5. With the fence in the batch the rows are sent before the fence is checked, so an
-            // owner that is behind collides with its successor's rows first and is told "duplicate key" (PK_Journal, or a
-            // derived message id). A fence that did not match wins over every other error of the batch: a failure that
-            // says the batch did not happen (definite, or a deadlock victim) is reported as such only while the fence
-            // still holds, and is "not landed" otherwise. Epoch and position never return to old values, so a fence
-            // that holds now held when the batch ran. An unknown outcome stays unknown: the batch may have landed and
-            // moved the position itself.
-            if (FenceInBatch && !DefiniteBeatsFence && failure.Failure is Failure.Definite or Failure.Transient)
-            {
-                bool holds;
-                try { holds = await HoldsAsync(batch, cancellationToken); }
-                catch (Exception check) { throw new StoreException(Failure.Unknown, "the fence could not be read after a failed commit: " + check.Message, check); }
-                if (!holds)
-                {
-                    Interlocked.Increment(ref _keyViolationsAsFence);
-                    return new Committed(false, 0, []);
-                }
-            }
-            throw failure;
         }
     }
+
+    /// <summary>
+    /// What the batch leaves of each subscription it names, in the order the in-memory store applies them (a turn's
+    /// subscribes, then its unsubscribes): true when it is to be there. So each is written once, however often it is named.
+    /// </summary>
+    private static Dictionary<(string Key, string Instance, string Wait), bool> Waits(CommitBatch batch)
+    {
+        var waits = new Dictionary<(string, string, string), bool>();
+        foreach (var turn in batch.Turns)
+        {
+            foreach (var s in turn.Subscribed) waits[(s.Key, s.Instance, s.Wait)] = true;
+            foreach (var s in turn.Unsubscribed) waits[(s.Key, s.Instance, s.Wait)] = false;
+        }
+        return waits;
+    }
+
+    private async Task<Committed> CommitOnceAsync(CommitBatch batch, Dictionary<(string Key, string Instance, string Wait), bool> waits, bool careful, CancellationToken cancellationToken)
+    {
+        await using var db = create();
+        db.Database.AutoSavepointsEnabled = false;      // ENGINES.md E4: SAVEPOINT and RELEASE were two more round trips per commit on PostgreSQL
+        await using var transaction = await (Engine?.BeginAsync(db, cancellationToken) ?? db.Database.BeginTransactionAsync(cancellationToken));
+        var now = 0L;
+        if (FenceInBatch)
+        {
+            // MUTATION (Unfenced): the tokens are what the row says now, not what this owner believes, so the check always passes.
+            var (tokenEpoch, tokenPosition) = (batch.Epoch, batch.Position);
+            if (Unfenced)
+            {
+                var current = await db.Partitions.AsNoTracking().SingleAsync(p => p.Id == batch.Partition, cancellationToken);
+                (tokenEpoch, tokenPosition) = (current.Epoch, current.Position);
+            }
+            var fence = db.Attach(new PartitionEntity { Id = batch.Partition, Epoch = tokenEpoch, Position = tokenPosition }).Entity;
+            fence.Position = batch.Position + batch.Positions;
+            fence.LeaseUntil = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + (long)batch.Lease.TotalMilliseconds;
+            db.Entry(fence).Property(p => p.LeaseUntil).IsModified = true;     // also when nothing else changes: the fence must always be sent
+        }
+        else if (Engine is not null)
+        {
+            if (await Engine.FenceAsync(db, batch, Unfenced, cancellationToken) is not { } at) return new Committed(false, 0, []);
+            now = at;
+        }
+        else
+        {
+            // Statement 1, and the check that it changed exactly one row before anything else is sent.
+            var fence = await db.Database.SqlQueryRaw<long>(
+                $"""UPDATE "Partitions" SET "Position" = {"{0}"}, "LeaseUntil" = {Now} + {"{1}"} WHERE "Id" = {"{2}"} AND ("Epoch" = {"{3}"} AND "Position" = {"{4}"} OR {(Unfenced ? "1 = 1" : "1 = 0")}) RETURNING {Now} AS "Value" """,
+                batch.Position + batch.Positions, (long)batch.Lease.TotalMilliseconds, batch.Partition, batch.Epoch, batch.Position).ToListAsync(cancellationToken);
+            if (fence.Count != 1) return new Committed(false, 0, []);       // disposing the transaction rolls it back
+            now = fence[0];
+        }
+
+        var sends = batch.Turns.Sum(s => s.Sent.Count);
+        var seq = postgres || sends == 0 ? 0 : await db.Database.SqlQueryRaw<long>("""SELECT COALESCE(MAX("Seq"), 0) AS "Value" FROM "Messages" """).SingleAsync(cancellationToken);
+
+        var (position, sent) = (batch.Position, new List<MessageEntity>());
+        foreach (var turn in batch.Turns)
+        {
+            // An ended instance: its row at the expected revision, in the batch, so a revision that does not match is a
+            // count that does not match (not landed), as for an update. Its journal rows go after the batch, below.
+            if (turn.Delete) db.Attach(new InstanceEntity { Id = turn.Instance, Revision = turn.Expected!.Value }).State = EntityState.Deleted;
+            if (turn.Row is { } row)
+            {
+                var entity = new InstanceEntity
+                {
+                    Id = row.Id, Partition = batch.Partition, Model = row.Model, Definition = row.Definition, Status = row.Status,
+                    State = row.State, Jobs = row.Jobs, Revision = row.Revision, Parent = row.Parent, Fault = row.Fault, History = row.History, Suspended = row.Suspended, Children = row.Children, StateVersion = row.StateVersion,
+                };
+                if (turn.Expected is not { } expected) db.Add(entity);
+                else db.Update(entity).Property(i => i.Revision).OriginalValue = expected;
+            }
+            foreach (var id in turn.Consumed) db.Remove(new MessageEntity { Id = id });
+            foreach (var id in turn.Done) db.Attach(new MessageEntity { Id = id }).Entity.Done = true;
+            foreach (var id in turn.Held ?? [])     // its turn ran: no longer on trial
+                db.Attach(new MessageEntity { Id = id, Trial = 0 }).Property(m => m.Trial).IsModified = true;
+            foreach (var message in turn.Sent)
+            {
+                sent.Add(ToEntity(message, batch.HandOver && message.Target.Partition == batch.Partition ? batch.Epoch : 0, postgres ? 0 : ++seq));
+                db.Add(sent[^1]);
+            }
+            if (turn.Journal is not null)
+                db.Add(new JournalEntity { Partition = batch.Partition, Position = ++position, Instance = turn.Instance, Revision = turn.Delete ? -1 : turn.Row?.Revision ?? 0, Entries = turn.Journal });
+        }
+        if (!careful)
+            foreach (var ((key, instance, wait), there) in waits)
+                if (there) db.Add(new SubscriptionEntity { Key = key, Instance = instance, Wait = wait, Partition = batch.Partition });
+                else db.Remove(new SubscriptionEntity { Key = key, Instance = instance, Wait = wait });
+        foreach (var id in batch.Seen)
+            db.Attach(new MessageEntity { Id = id, Seen = batch.Epoch }).Property(m => m.Seen).IsModified = true;
+        foreach (var id in batch.Trial)
+        {
+            var tried = db.Attach(new MessageEntity { Id = id, Seen = batch.Epoch, Trial = batch.Epoch });
+            (tried.Property(m => m.Seen).IsModified, tried.Property(m => m.Trial).IsModified) = (true, true);
+        }
+
+        await db.SaveChangesAsync(cancellationToken);       // one batch; EF checks every affected-row count
+
+        // The careful path: each wait as a statement of its own, after the batch, for the reason the deletes below are.
+        if (careful)
+            foreach (var ((key, instance, wait), there) in waits)
+                await db.Database.ExecuteSqlRawAsync(there ? Engine?.SubscribeIfAbsent ?? SubscribeIfAbsent : Q(Unsubscribing), [key, instance, wait, batch.Partition], cancellationToken);
+
+        // Merge with round 3: the set-based deletes of a terminate and a delete have no keys to track, so they are
+        // statements of their own, one round trip each and only in a commit that has them. They come after the batch,
+        // so that with the fence in the batch they run only once the fence has held (E1: a stale owner is told "not
+        // landed" before it touches anything else), and with either fence they lock after the partition row (E9).
+        foreach (var turn in batch.Turns)
+        {
+            if (turn.Unsubscribe)       // ended by force: its waits go, whatever they are
+                await db.Database.ExecuteSqlRawAsync(Q("""DELETE FROM "Subscriptions" WHERE "Instance" = {0}"""), [turn.Instance], cancellationToken);
+            if (turn.Delete)
+                await db.Database.ExecuteSqlRawAsync(Q("""DELETE FROM "Journal" WHERE "Partition" = {0} AND "Instance" = {1} AND "Revision" > 0"""), [batch.Partition, turn.Instance], cancellationToken);
+        }
+        await transaction.CommitAsync(cancellationToken);
+        return new Committed(true, now, sent.Select(m => m.Seq).ToList());
+    }
+
+    // The careful path's statements on PostgreSQL and SQLite ({0} key, {1} instance, {2} wait, {3} partition). Only the
+    // partition's owner writes its instances' waits, under the fence, so nothing else writes these rows meanwhile.
+    private const string SubscribeIfAbsent = """INSERT INTO "Subscriptions" ("Key", "Instance", "Wait", "Partition") VALUES ({0}, {1}, {2}, {3}) ON CONFLICT DO NOTHING""";
+    private const string Unsubscribing = """DELETE FROM "Subscriptions" WHERE "Key" = {0} AND "Instance" = {1} AND "Wait" = {2} AND "Partition" = {3}""";
 
     private async Task<bool> HoldsAsync(CommitBatch batch, CancellationToken cancellationToken)
     {
@@ -497,19 +543,41 @@ public sealed class EfStore(Func<KernelDb> create, bool postgres, bool? fenceInB
 
     public async ValueTask<bool> ProjectAsync(int partition, long from, long to, IReadOnlyList<JournalRow> rows, CancellationToken cancellationToken = default)
     {
+        // Decision 8: each round is set-based. What the round leaves of each instance's view: removed when the round has
+        // its delete (the projector removes a deleted instance's view, as it always did), else moved on by its commits.
+        var deleted = rows.Where(r => r.Revision < 0).Select(r => r.Instance).ToHashSet(StringComparer.Ordinal);
+        var views = rows.Where(r => r.Revision > 0 && !deleted.Contains(r.Instance)).GroupBy(r => r.Instance, StringComparer.Ordinal)
+            .Select(g => (Instance: g.Key, Revision: g.Max(r => r.Revision), Commits: g.Count())).ToList();
         await using var db = create();
-        await using var transaction = await (Engine?.BeginAsync(db, cancellationToken) ?? db.Database.BeginTransactionAsync(cancellationToken));
-        var moved = await db.Database.ExecuteSqlRawAsync(Q("""UPDATE "Projections" SET "Position" = {0} WHERE "Partition" = {1} AND "Position" = {2}"""), [to, partition, from], cancellationToken);
-        if (moved != 1) return false;
-        foreach (var view in rows.Where(r => r.Revision > 0).GroupBy(r => r.Instance))
+        if (postgres && Engine is null)
         {
-            if (Engine is not null) { await Engine.ViewAsync(db, view.Key, partition, view.Max(r => r.Revision), view.Count(), cancellationToken); continue; }
-            await db.Database.ExecuteSqlRawAsync(
-                """INSERT INTO "Views" ("Instance", "Partition", "Revision", "Commits") VALUES ({0}, {1}, {2}, {3}) ON CONFLICT ("Instance") DO UPDATE SET "Revision" = excluded."Revision", "Commits" = "Views"."Commits" + excluded."Commits" """,
-                [view.Key, partition, view.Max(r => r.Revision), view.Count()], cancellationToken);
+            // PostgreSQL: one statement, so one round trip and its own transaction. The view rows are written only if the
+            // projector's row moved from where the round read it.
+            var moved = await db.Database.SqlQueryRaw<int>(
+                """
+                WITH moved AS (UPDATE "Projections" SET "Position" = {0} WHERE "Partition" = {1} AND "Position" = {2} RETURNING 1),
+                up AS (INSERT INTO "Views" ("Instance", "Partition", "Revision", "Commits")
+                       SELECT v.i, {1}, v.r, v.c FROM unnest({3}::text[], {4}::bigint[], {5}::integer[]) AS v(i, r, c) WHERE EXISTS (SELECT 1 FROM moved)
+                       ON CONFLICT ("Instance") DO UPDATE SET "Revision" = excluded."Revision", "Commits" = "Views"."Commits" + excluded."Commits"),
+                gone AS (DELETE FROM "Views" WHERE "Instance" = ANY({6}::text[]) AND EXISTS (SELECT 1 FROM moved))
+                SELECT COUNT(*)::int AS "Value" FROM moved
+                """,
+                to, partition, from, views.Select(v => v.Instance).ToArray(), views.Select(v => v.Revision).ToArray(), views.Select(v => v.Commits).ToArray(), deleted.ToArray())
+                .ToListAsync(cancellationToken);
+            return moved[0] == 1;
         }
-        foreach (var deleted in rows.Where(r => r.Revision < 0))
-            await db.Database.ExecuteSqlRawAsync(Q("""DELETE FROM "Views" WHERE "Instance" = {0}"""), [deleted.Instance], cancellationToken);
+        await using var transaction = await (Engine?.BeginAsync(db, cancellationToken) ?? db.Database.BeginTransactionAsync(cancellationToken));
+        var movedRows = await db.Database.ExecuteSqlRawAsync(Q("""UPDATE "Projections" SET "Position" = {0} WHERE "Partition" = {1} AND "Position" = {2}"""), [to, partition, from], cancellationToken);
+        if (movedRows != 1) return false;
+        if (Engine is not null)     // SQL Server and MySQL: one statement per view, as before (not set-based yet)
+            foreach (var view in views) await Engine.ViewAsync(db, view.Instance, partition, view.Revision, view.Commits, cancellationToken);
+        else
+            foreach (var chunk in views.Chunk(200))     // SQLite: one statement per 200 views
+                await db.Database.ExecuteSqlRawAsync(
+                    $$"""INSERT INTO "Views" ("Instance", "Partition", "Revision", "Commits") VALUES {{string.Join(", ", chunk.Select((_, i) => $"({{{4 * i}}}, {{{4 * i + 1}}}, {{{4 * i + 2}}}, {{{4 * i + 3}}})"))}} ON CONFLICT ("Instance") DO UPDATE SET "Revision" = excluded."Revision", "Commits" = "Views"."Commits" + excluded."Commits" """,
+                    chunk.SelectMany(v => new object[] { v.Instance, partition, v.Revision, v.Commits }), cancellationToken);
+        foreach (var chunk in deleted.Chunk(500))
+            await db.Database.ExecuteSqlRawAsync(Q($"""DELETE FROM "Views" WHERE "Instance" IN ({string.Join(", ", chunk.Select((_, i) => $"{{{i}}}"))})"""), chunk, cancellationToken);
         await transaction.CommitAsync(cancellationToken);
         return true;
     }

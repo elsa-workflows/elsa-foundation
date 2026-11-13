@@ -39,13 +39,16 @@ public static class RuntimePostCommitOutboxItems
         var materialized = contributions.ToArray();
         ValidateContributions(materialized);
         var contribution = materialized.FirstOrDefault(item => item.IntentKind == intent.Kind);
+        if (contribution?.SourceKind == RuntimeDeliverySourceKind.StandaloneIngress)
+            throw new InvalidOperationException("A standalone source contribution cannot be produced by a workflow checkpoint intent.");
         var required = contribution?.RequiresDurableSource == true;
         if (required && sourceScope is null)
             throw new RuntimePostCommitSourceBoundaryException(null, intent.Kind,
                 new InvalidOperationException("A required-source write needs authoritative persistence scope."), false);
         return new(OutboxItemId(commit.CommitId, intent), intent, RuntimePostCommitOutboxStatus.Pending,
             intent.RecordedAt, AvailableAt(commit, intent), ResolveRetryPolicy(intent.Kind, materialized),
-            0, null, null, null, null, commit.Metadata, 0, null, contribution?.StimulusDeliveryProtocolVersion, required ? sourceScope : null, null);
+            0, null, null, null, null, commit.Metadata, 0, null, contribution?.StimulusDeliveryProtocolVersion, required ? sourceScope : null, null,
+            null, contribution?.SubscriptionDeliveryProtocolVersion, null);
     }
 
     /// <summary>
@@ -109,7 +112,8 @@ public static class RuntimePostCommitOutboxItems
                     contribution.HandlerType != first.HandlerType ||
                     !contribution.RetryPolicy.IsEquivalentTo(first.RetryPolicy) ||
                     contribution.RequiresDurableSource != first.RequiresDurableSource ||
-                    contribution.StimulusDeliveryProtocolVersion != first.StimulusDeliveryProtocolVersion))
+                    contribution.StimulusDeliveryProtocolVersion != first.StimulusDeliveryProtocolVersion ||
+                    contribution.SourceKind != first.SourceKind || contribution.SubscriptionDeliveryProtocolVersion != first.SubscriptionDeliveryProtocolVersion))
             {
                 throw new InvalidOperationException(
                     $"Runtime post-commit intent kind '{group.Key}' has conflicting handler or retry-policy contributions.");

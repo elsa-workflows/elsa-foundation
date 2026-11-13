@@ -90,7 +90,29 @@ public static class Smoke
         p.Chain("start", "work", "end");
         registry.Add(new BpmnProcess(p.Build(), new Dictionary<string, Work> { ["child-work"] = new JobWork("child-work") }));
 
+        foreach (var call in new[] { false, true })
+        {
+            var binding = call ? "child" : "service";
+            p = new ProcessDraft("smoke-iterations-" + binding);
+            var loop = new BpmnLoopCharacteristics(collectionVariable: "items", itemVariable: "item");
+            p.B.Variable("items", "array").StartEvent("start").Task(call ? "callActivity" : "serviceTask", "work", null, binding, loop).EndEvent("end");
+            p.Chain("start", "work", "end");
+            registry.Add(new BpmnProcess(p.Build(), new Dictionary<string, Work>
+            {
+                [binding] = call ? new CallWork("smoke-item-child") : new JobWork("observe"),
+            }));
+        }
+        p = new ProcessDraft("smoke-item-child");
+        p.B.StartEvent("start").ServiceTask("observe", bindingRef: "observe").EndEvent("end");
+        p.Chain("start", "observe", "end");
+        registry.Add(new BpmnProcess(p.Build(), new Dictionary<string, Work> { ["observe"] = new JobWork("observe") }));
+
+        ScopeChecks.Register(registry);
         return registry
+            .Service("observe", v => new ServiceResult(new JsonObject
+            {
+                ["observed-" + v["loopIndex"]] = v["item"]?.DeepClone(),
+            }))
             .Service("child-work", _ => new ServiceResult(new JsonObject { ["child-out"] = "done" }))
             .Service("note", _ => new ServiceResult(new JsonObject { ["noted"] = true }))
             .Service("go-on", _ => new ServiceResult(new JsonObject { ["went-on"] = true }))
@@ -102,6 +124,17 @@ public static class Smoke
     }
 
     public static async Task<int> RunAsync()
+    {
+        var schedulers = new ConcurrentExclusiveSchedulerPair(TaskScheduler.Default, maxConcurrencyLevel: 1);
+        try
+        {
+            return await Task.Factory.StartNew(RunOnOwnerAsync, CancellationToken.None,
+                TaskCreationOptions.DenyChildAttach, schedulers.ExclusiveScheduler).Unwrap();
+        }
+        finally { schedulers.Complete(); await schedulers.Completion; }
+    }
+
+    private static async Task<int> RunOnOwnerAsync()
     {
         var gates = new Gates();
         var store = new InMemoryStore(1, () => Environment.TickCount64);
@@ -144,13 +177,20 @@ public static class Smoke
             owner.Worker.Post(new Message("m3", id, Kinds.Start, Start: BpmnModel.Spec("smoke-fault")), fresh: true);
             await owner.PumpAsync(() => store.Instances.GetValueOrDefault(id.Id)?.Jobs is { } jobs && jobs.Contains("h2"));
             // Both results are in the inbox before the next pass, the fault first (a result goes to the front): one turn takes both.
-            gates.Release("slow");
-            await Task.Delay(30);
-            gates.Release("boom");
-            await Task.Delay(30);
+            async Task ReleaseAndWait(string service, string handle)
+            {
+                gates.Release(service);
+                using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+                while (!owner.Worker.JobResultReady(id.Id, handle)) await Task.Delay(1, timeout.Token);
+            }
+            await ReleaseAndWait("slow", "h2");
+            await ReleaseAndWait("boom", "h1");
             await owner.PumpAsync(() => owner.Status(id.Id) == InstanceStatus.Faulted && Settled());
             var state = owner.State(id.Id)!;
-            Check(state.Live.Count == 0 && store.Instances[id.Id].Jobs is null && Journal(id).IndexOf("d h1 a") < Journal(id).IndexOf("x h2 b"), $"faulted, the later result fed to nobody, no work left: {string.Join(" | ", Journal(id))}");
+            var entries = Journal(id);
+            var fault = entries.IndexOf("d h1 a");
+            var cancelled = entries.IndexOf("x h2 b");
+            Check(state.Live.Count == 0 && store.Instances[id.Id].Jobs is null && fault >= 0 && cancelled > fault, $"faulted, the later result fed to nobody, no work left: {string.Join(" | ", Journal(id))}");
             gates.Services.Clear();
         }
 
@@ -187,6 +227,36 @@ public static class Smoke
             gates.Held.Clear();
         }
 
+        foreach (var binding in new[] { "service", "child" })
+        {
+            var context = new JsonObject { ["items"] = new JsonArray("alpha", "beta"), ["item"] = "parent", ["loopIndex"] = -1 };
+            var id = InstanceRef.In(0, "iterations-" + binding);
+            owner.Worker.Post(new Message("iterations-" + binding, id, Kinds.Start, Start: BpmnModel.Spec("smoke-iterations-" + binding, context)), fresh: true);
+            await owner.PumpAsync(() => owner.Status(id.Id) is InstanceStatus.Finished or InstanceStatus.Faulted && Settled());
+            var variables = owner.State(id.Id)!.Variables;
+            Check(owner.Status(id.Id) == InstanceStatus.Finished &&
+                variables.GetValueOrDefault("observed-0")?.ToString() == "alpha" && variables.GetValueOrDefault("observed-1")?.ToString() == "beta" &&
+                variables["item"]?.ToString() == "parent" && variables["loopIndex"]?.GetValue<int>() == -1,
+                $"parallel {binding} work sees distinct item/index pairs and leaves parent inputs intact");
+        }
+        Check(BpmnModel.MessageKey("a:b", "c") != BpmnModel.MessageKey("a", "b:c")
+            && BpmnModel.MessageKey("", ":") != BpmnModel.MessageKey(":", "")
+            && BpmnModel.MessageKey("a:b", "") != BpmnModel.MessageKey("a%3Ab", "")
+            && BpmnModel.MessageKey("paid", "o1") == "msg:paid:o1", "message correlation separates component boundaries");
+        var precise = new Dictionary<string, JsonNode?> { ["n"] = 9007199254740993L };
+        foreach (var (expression, expected) in new[] { ("n == 9007199254740992", false), ("n > 9007199254740992", true),
+            ("n == 9.007199254740993e15", true), ("n < 9007199254740993.5", true),
+            ("n >= +09007199254740993.00", true), ("n < 1e-400", false) })
+            Check(Conditions.Holds(expression, precise) == expected, $"{expression} is {expected}");
+
+        foreach (var (json, expression, expected) in new[] { ("-1.01", "n < -1", true), ("-0", "n == 0.0e12", true),
+            ("1.0001", "n <= 1.0000", false), ("1e400", "n > 9.99e399", true), ("1e-400", "n != 0", true) })
+            Check(Conditions.Holds(expression, new Dictionary<string, JsonNode?> { ["n"] = JsonNode.Parse(json) }) == expected,
+                $"{json} in {expression} is {expected}");
+
+        await ScopeChecks.Run(Registry(), Check);
+        await StartAndCancelChecks.Run(Check);
+        await MessageStartChecks.Run(Check);
         Console.WriteLine("conditions");
         foreach (var (body, holds) in new[] { ("s != 'a==b'", true), ("s == 'x<y'", true), ("n >= 2", true), ("n < 2", false), ("flag", true), ("missing", false) })
         {

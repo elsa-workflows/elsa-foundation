@@ -1,4 +1,5 @@
 using System.Text.Json.Nodes;
+using Bpmn.Model;
 using Bpmn.Model.State;
 using Bpmn.Semantics;
 
@@ -28,7 +29,9 @@ internal sealed class BpmnTurn(BpmnModel model, ITurn turn)
         {
             case BpmnContinuation.Complete complete:
                 turn.Record($"end {complete.Outcome}");
-                turn.SetStatus(InstanceStatus.Finished, complete.Outcome, new JsonObject(_s.Variables.Where(v => _s.Set.Contains(v.Key)).Select(v => KeyValuePair.Create(v.Key, v.Value?.DeepClone()))));
+                // The workflow kernel carries the status (not the BPMN substatus) in the durable child notice.
+                var status = complete.Outcome == BpmnInterpreter.CancelledOutcomeName ? InstanceStatus.Cancelled : InstanceStatus.Finished;
+                turn.SetStatus(status, complete.Outcome, new JsonObject(_s.Variables.Where(v => _s.Set.Contains(v.Key)).Select(v => KeyValuePair.Create(v.Key, v.Value?.DeepClone()))));
                 break;
             case BpmnContinuation.Fault fault:
                 // The interpreter stops nothing on a fault; the instance ends, so nothing it started may run on.
@@ -48,18 +51,18 @@ internal sealed class BpmnTurn(BpmnModel model, ITurn turn)
         switch (m.Kind)
         {
             case Kinds.Start when !_s.Started:
-                _s.Started = true;
-                foreach (var (name, value) in _process.Variables) _s.Variables[name] = value?.DeepClone();
-                foreach (var (name, value) in Json.Read<BpmnStart>(m.Start?.Input ?? "{}").Variables ?? []) _s.Variables[name] = value?.DeepClone();
-                Apply(BpmnModel.Semantics.Start(new BpmnStartRequest(_process.Graph, _s.Tokens, Snapshot())));
+                Start(m, null);
+                break;
+            case Kinds.Event when !_s.Started && m.Start is not null:
+                Start(m, Events.Delivered(m) ?? throw new InvalidOperationException("Malformed BPMN event-start delivery."));
                 break;
             case BpmnKinds.Timer:
                 Completed(m.Read<TimerDue>().Handle, []);
                 break;
-            case Kinds.Event when Events.Delivered(m) is { } delivered && _s.Live.ContainsKey(delivered.Wait):
+            case Kinds.Event when m.Start is null && Events.Delivered(m) is { } delivered && _s.Live.TryGetValue(delivered.Wait, out var wait) && wait.Kind == WorkKinds.Message:
                 // A kept event is given to every catch that subscribes within its window; BPMN consumes a message once,
                 // so a catch that comes round again in a loop must not take the one an earlier catch took.
-                if (!_s.Taken.Add(delivered.Event)) break;
+                if (_s.Taken?.Contains(delivered.Event) == true || !_s.TakenEvents.Add(new(wait.Key, delivered.Event))) break;
                 Merge(Object(m.Payload));
                 Completed(delivered.Wait, []);
                 break;
@@ -84,7 +87,7 @@ internal sealed class BpmnTurn(BpmnModel model, ITurn turn)
                 if (_s.Live.FirstOrDefault(w => w.Value is { Kind: WorkKinds.Call } && w.Value.Key == signal.Child) is not { Key: { } handle, Value: var work }) break;
                 turn.Record($"s {handle} {signal.Code}");
                 var payload = signal.Payload is null ? (System.Text.Json.JsonElement?)null : System.Text.Json.JsonDocument.Parse(signal.Payload).RootElement.Clone();
-                Apply(BpmnModel.Semantics.OnWorkSignalled(new BpmnWorkSignalledRequest(_process.Graph, _s.Tokens, Snapshot(), work.Binding, handle, signal.Code, payload, work.Iteration) { WorkTokenId = work.Token }));
+                Apply(BpmnModel.Semantics.OnWorkSignalled(new BpmnWorkSignalledRequest(_process.Graph, _s.Tokens, Snapshot(work), work.Binding, handle, signal.Code, payload, work.Iteration) { WorkTokenId = work.Token }));
                 break;
             }
             case WorkflowKinds.ChildFinished:
@@ -103,6 +106,29 @@ internal sealed class BpmnTurn(BpmnModel model, ITurn turn)
                 break;
             }
         }
+    }
+
+    private void Start(Message message, (string Event, string Wait)? delivery)
+    {
+        var input = Json.Read<BpmnStart>(message.Start?.Input ?? "{}");
+        BpmnStartSignal? signal = null;
+        if (delivery is { } supplied)
+        {
+            var trigger = input.Trigger;
+            if (trigger is null || string.IsNullOrEmpty(trigger.Key) || string.IsNullOrEmpty(trigger.Element) ||
+                BpmnModel.StartWait(_process.Id, trigger) != supplied.Wait)
+                throw new InvalidOperationException("Invalid BPMN event start; register it through BpmnModel.MessageStart.");
+            if (!_process.Graph.StartEvents.Any(e => e.ElementId == trigger.Element &&
+                    BpmnElementFamilies.Resolve(e) == BpmnElementFamilies.StartEventMessage))
+                throw new InvalidOperationException($"'{trigger.Element}' is not a message start event of BPMN process '{_process.Id}'.");
+            _s.TakenEvents.Add(new ConsumedEvent(trigger.Key, supplied.Event));
+            signal = new BpmnStartSignal(trigger.Element);
+        }
+        _s.Started = true;
+        foreach (var (name, value) in _process.Variables) _s.Variables[name] = value?.DeepClone();
+        foreach (var (name, value) in input.Variables ?? []) _s.Variables[name] = value?.DeepClone();
+        if (signal is not null) Merge(Object(message.Payload));
+        Apply(BpmnModel.Semantics.Start(new BpmnStartRequest(_process.Graph, _s.Tokens, Snapshot(), signal)));
     }
 
     /// <summary>A payload that is a JSON object, or nothing: an event's payload is the publisher's, in any form.</summary>
@@ -126,13 +152,13 @@ internal sealed class BpmnTurn(BpmnModel model, ITurn turn)
     private void Completed(string handle, IReadOnlyCollection<string> outcomes, string? errorCode = null)
     {
         if (Done(handle) is not { } work) return;
-        Apply(BpmnModel.Semantics.OnWorkCompleted(new BpmnWorkCompletedRequest(_process.Graph, _s.Tokens, Snapshot(), work.Binding, handle, outcomes, work.Iteration) { WorkTokenId = work.Token, ErrorCode = errorCode }));
+        Apply(BpmnModel.Semantics.OnWorkCompleted(new BpmnWorkCompletedRequest(_process.Graph, _s.Tokens, Snapshot(work), work.Binding, handle, outcomes, work.Iteration) { WorkTokenId = work.Token, ErrorCode = errorCode }));
     }
 
     private void Faulted(string handle, string error)
     {
         if (Done(handle) is not { } work) return;
-        Apply(BpmnModel.Semantics.OnWorkFaulted(new BpmnWorkFaultedRequest(_process.Graph, _s.Tokens, Snapshot(), work.Binding, handle, error) { FaultedIterationId = work.Iteration, WorkTokenId = work.Token }));
+        Apply(BpmnModel.Semantics.OnWorkFaulted(new BpmnWorkFaultedRequest(_process.Graph, _s.Tokens, Snapshot(work), work.Binding, handle, error) { FaultedIterationId = work.Iteration, WorkTokenId = work.Token }));
     }
 
     /// <summary>The unit reported back: it leaves the ledger, and a message catch's subscription goes with this commit.</summary>
@@ -165,7 +191,7 @@ internal sealed class BpmnTurn(BpmnModel model, ITurn turn)
         // reports it at once: the interpreter absorbs the report and the cancelled token's stopped handle is spent.
         while (_stopped.TryDequeue(out var stopped))
         {
-            var late = BpmnModel.Semantics.OnWorkCompleted(new BpmnWorkCompletedRequest(_process.Graph, _s.Tokens, Snapshot(), stopped.Work.Binding, stopped.Handle, [], stopped.Work.Iteration) { WorkTokenId = stopped.Work.Token });
+            var late = BpmnModel.Semantics.OnWorkCompleted(new BpmnWorkCompletedRequest(_process.Graph, _s.Tokens, Snapshot(stopped.Work), stopped.Work.Binding, stopped.Handle, [], stopped.Work.Iteration) { WorkTokenId = stopped.Work.Token });
             Apply(late);
         }
     }
@@ -184,25 +210,25 @@ internal sealed class BpmnTurn(BpmnModel model, ITurn turn)
         var self = turn.Instance.Ref;
         var (kind, key) = _process.Work[start.BindingRef] switch
         {
-            JobWork job => (WorkKinds.Job, StartJob(handle, job, start.ElementId)),
+            JobWork job => (WorkKinds.Job, StartJob(handle, job, start)),
             TimerWork timer => (WorkKinds.Timer, turn.Send(self, BpmnKinds.Timer, new TimerDue(handle), new SendOptions(Delay: TimeSpan.FromMilliseconds(timer.Milliseconds)))),
-            MessageWork message => (WorkKinds.Message, Subscribe(handle, message)),
-            CallWork call => (WorkKinds.Call, turn.Start(BpmnModel.Spec(call.Process, Variables())).Id),
+            MessageWork message => (WorkKinds.Message, Subscribe(handle, message, start.IterationScope)),
+            CallWork call => (WorkKinds.Call, turn.Start(BpmnModel.Spec(call.Process, Variables(start.IterationScope))).Id),
             var other => throw new InvalidOperationException($"No host work for {other}."),
         };
-        _s.Live[handle] = new LiveWork(start.BindingRef, start.IterationScope?.IterationId, start.TokenId, start.ElementId, kind, key);
+        _s.Live[handle] = new LiveWork(start.BindingRef, start.IterationScope?.IterationId, start.TokenId, start.ElementId, kind, key, start.IterationScope?.Values);
         turn.Record($"w {handle} {start.ElementId} {kind} {key}");
     }
 
-    private string StartJob(string handle, JobWork job, string element)
+    private string StartJob(string handle, JobWork job, BpmnHostCommand.StartWork start)
     {
-        turn.StartJob(handle, new JobArgs(_process.Id, job.Service, element, Variables()));
+        turn.StartJob(handle, new JobArgs(_process.Id, job.Service, start.ElementId, Variables(start.IterationScope)));
         return handle;
     }
 
-    private string Subscribe(string handle, MessageWork message)
+    private string Subscribe(string handle, MessageWork message, BpmnIterationScope? scope)
     {
-        var key = BpmnModel.MessageKey(message.Name, _s.Variables.GetValueOrDefault(message.Correlation)?.ToString() ?? "");
+        var key = BpmnModel.MessageKey(message.Name, Conditions.Read(_s.Variables, scope?.Values, message.Correlation)?.ToString() ?? "");
         turn.Subscribe(key, handle, keep: true);      // BPMN correlation: a message published before the catch still counts
         return key;
     }
@@ -227,11 +253,21 @@ internal sealed class BpmnTurn(BpmnModel model, ITurn turn)
         turn.Record($"x {handle} {work.Element}");
     }
 
-    private JsonObject Variables() => new(_s.Variables.Select(v => KeyValuePair.Create(v.Key, v.Value?.DeepClone())));
-
-    private BpmnHostSnapshot Snapshot()
+    private JsonObject Variables(BpmnIterationScope? scope)
     {
-        var conditions = new Conditions(_s.Variables);
+        var snapshot = new JsonObject(_s.Variables.Select(v => KeyValuePair.Create(v.Key, v.Value?.DeepClone())));
+        if (scope is null) return snapshot;
+        foreach (var (name, value) in scope.Values)
+        {
+            if (value.Presence == BpmnValuePresence.Absent) snapshot.Remove(name);
+            else snapshot[name] = Conditions.Read(_s.Variables, scope.Values, name);
+        }
+        return snapshot;
+    }
+
+    private BpmnHostSnapshot Snapshot(LiveWork? reporting = null)
+    {
+        var conditions = new Conditions(_s, reporting);
         return new BpmnHostSnapshot(turn.Instance.Ref.Id, HasEnclosingScope: turn.Instance.Parent is not null,
             [.. _s.Live.Select(w => new BpmnLiveWork(w.Value.Binding, w.Value.Iteration, w.Key) { WorkTokenId = w.Value.Token })],
             new Dictionary<string, string>(), conditions, BpmnProcess.Capabilities) { Conditions = conditions };

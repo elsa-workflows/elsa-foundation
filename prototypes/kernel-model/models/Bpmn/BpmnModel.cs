@@ -1,4 +1,6 @@
 using System.Text.Json.Nodes;
+using System.Text.Json.Serialization;
+using Bpmn.Model;
 using Bpmn.Model.State;
 using Bpmn.Semantics;
 
@@ -15,7 +17,9 @@ public sealed record TimerDue(string Handle);
 public sealed record ScopeSignal(string Child, string Code, string? Payload);
 
 /// <summary>The start spec's input: variables over the process's own.</summary>
-public sealed record BpmnStart(JsonObject? Variables = null);
+public sealed record BpmnStart(JsonObject? Variables = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] MessageStartBinding? Trigger = null);
+public sealed record MessageStartBinding(string Key, string Element);
 
 public sealed record JobArgs(string Process, string Service, string Element, JsonObject Variables);
 
@@ -23,7 +27,10 @@ public sealed record JobArgs(string Process, string Service, string Element, Jso
 /// One unit of host work in flight, keyed by its handle: the interpreter's binding, iteration and token, and the
 /// kernel's side of it (a job key, a timer's message id, a subscription key, a child's id).
 /// </summary>
-public sealed record LiveWork(string Binding, string? Iteration, string Token, string Element, string Kind, string Key);
+public sealed record LiveWork(string Binding, string? Iteration, string Token, string Element, string Kind, string Key,
+    IReadOnlyDictionary<string, BpmnValue>? IterationValues = null);
+
+public sealed record ConsumedEvent(string Key, string Id);
 
 public static class WorkKinds
 {
@@ -46,7 +53,11 @@ public sealed class BpmnState
     /// The events message catches took. A kept event reaches every catch that subscribes within its window, so a catch
     /// that comes round again must skip it. It grows by one id per message taken (BPMN.md: friction F-B1).
     /// </summary>
-    public HashSet<string> Taken { get; set; } = new(StringComparer.Ordinal);
+    public HashSet<ConsumedEvent> TakenEvents { get; set; } = [];
+
+    // Older checkpoints stored only event IDs. Keep suppressing those prior deliveries. New receipts are keyed.
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public HashSet<string>? Taken { get; set; }
 
     /// <summary>The variables set since the start: what a called child gives back, so it does not overwrite its parent's with stale copies.</summary>
     public HashSet<string> Set { get; set; } = new(StringComparer.Ordinal);
@@ -77,11 +88,30 @@ public sealed class BpmnModel(ProcessRegistry registry, BpmnOptions? options = n
     internal BpmnOptions Options { get; } = options ?? new BpmnOptions();
     internal static BpmnInterpreter Semantics => Interpreter;
 
+    /// <summary>Direct workflow start. For event subscriptions use <see cref="MessageStart"/>.</summary>
     public static StartSpec Spec(string process, JsonObject? variables = null, History history = History.Full) =>
         new(ModelKey, process, Json.Write(new BpmnStart(variables)), History: history);
 
+    /// <summary>Register this row through Events.SubscribeAsync. The wait is a stable identity for the whole
+    /// registration. The event key and local BPMN element travel separately in its start spec.</summary>
+    public static SubscriptionRow MessageStart(string process, string element, string messageName, string correlation,
+        JsonObject? variables = null, History history = History.Full)
+    {
+        var binding = new MessageStartBinding(MessageKey(messageName, correlation), element);
+        var spec = new StartSpec(ModelKey, process, Json.Write(new BpmnStart(variables, binding)), History: history);
+        return new SubscriptionRow(binding.Key, "", StartWait(process, binding), spec);
+    }
+
+    internal static string StartWait(string process, MessageStartBinding binding) =>
+        // A wait without ':' is unambiguous in the kernel's eventId::wait delivery and eventId:wait physical name.
+        "bpmn-start-" + Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
+            System.Text.Encoding.UTF8.GetBytes(Json.Write(new[] { process, binding.Element, binding.Key }))));
+
     /// <summary>The event key a message catch waits for, and a publisher publishes to.</summary>
-    public static string MessageKey(string name, string correlation) => $"msg:{name}:{correlation}";
+    public static string MessageKey(string name, string correlation) => $"msg:{Escape(name)}:{Escape(correlation)}";
+
+    // Escape only the separator and the escape marker. All other UTF-16 code units retain their identity.
+    private static string Escape(string component) => component.Replace("%", "%25").Replace(":", "%3A");
 
     public object CreateState(StartSpec start) => new BpmnState();
 

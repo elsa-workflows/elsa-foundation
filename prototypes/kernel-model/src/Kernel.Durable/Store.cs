@@ -8,7 +8,7 @@ namespace Kernel.Durable;
 /// <c>Definition</c>, <c>Status</c>, <c>Parent</c>, <c>Fault</c>, <c>Suspended</c> and <c>Children</c>, the instances it started
 /// that have not finished. One row, so one write per commit: a seam leak (FINDINGS section 24). JSON arrays or null.
 /// </summary>
-public sealed record InstanceRow(string Id, string Model, string Definition, InstanceStatus Status, string State, long Revision, string? Parent, string? Fault = null, string? Jobs = null, History History = History.Full, bool Suspended = false, string? Children = null, int StateVersion = 1);
+public sealed record InstanceRow(string Id, string Model, string Definition, InstanceStatus Status, string State, long Revision, string? Parent, string? Fault = null, string? Jobs = null, History History = History.Full, bool Suspended = false, string? Children = null, int StateVersion = 1, string? CommitTimes = null);
 
 /// <summary>A message row as a poll returns it.</summary>
 public sealed record Stored(Message Message, long Seq, long Seen, int Attempts, long Trial);
@@ -39,6 +39,9 @@ public sealed record Polled(IReadOnlyList<Stored> Messages, long Now);
 /// <c>Held</c> messages stay, and are no longer on trial: their turn ran and did not kill the process.
 /// <c>Delete</c> removes the instance's row (at revision <c>Expected</c>) and its journal rows; its own journal row says so.
 /// <c>Unsubscribe</c> deletes every subscription of the instance: it was ended by force and the kernel holds no list of them.
+/// <c>Subscribed</c> and <c>Unsubscribed</c> are idempotent (FINDINGS 25.2): a wait that is there already stays one wait,
+/// and removing one that is not there changes nothing; neither is a count that does not match. Within a turn its
+/// subscribes apply before its unsubscribes.
 /// </summary>
 public sealed record TurnCommit(
     string Instance, InstanceRow? Row, long? Expected, IReadOnlyList<string> Consumed, IReadOnlyList<string> Done, IReadOnlyList<Message> Sent,
@@ -74,6 +77,12 @@ public sealed class StoreException(Failure failure, string message, Exception? i
 /// </summary>
 public interface IKernelStore : IMembership
 {
+    /// <summary>
+    /// Qualified immutable clock facts in the same atomic commit; unavailable by default. A qualified store returns
+    /// the exact authoritative stamp time in Committed.Now; the generic permission to omit that time does not apply.
+    /// </summary>
+    bool CommitClockAvailable => false;
+
     /// <summary>
     /// Take the partition if it is free, expired or already mine. Every take bumps the epoch. A take from another
     /// owner can only succeed because that owner's lease expired: that is a death, and in the same transaction every

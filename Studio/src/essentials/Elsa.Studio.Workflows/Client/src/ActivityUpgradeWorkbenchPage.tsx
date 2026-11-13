@@ -1,5 +1,5 @@
 import { qualifyStudioBackendPath, useStudioWorkspaceWhenActive } from "@elsa-workflows/studio-sdk";
-import { StudioPageHeader, StudioButton } from "@elsa-workflows/studio-ui";
+import { StudioPageHeader, StudioButton, StudioField } from "@elsa-workflows/studio-ui";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, ArrowLeft, CheckCircle2, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { StudioHttpError, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
@@ -389,13 +389,13 @@ function UpgradeSelection({
   return <section className="au-selection" aria-labelledby="activity-upgrade-selection">
     <header><span>1</span><div><h2 id="activity-upgrade-selection">Exact replacement and roots</h2><p>Each root is added individually. An immutable root asks the backend to plan a new clone; it is never rewritten.</p></div></header>
     <div className="au-replacement-grid">
-      <label><span>Replacement source version</span><input aria-label="Replacement source version" value={draft.fromVersionId} onChange={event => onDraftChange({ ...draft, fromVersionId: event.target.value })} placeholder="Exact current Activity Definition Version ID" /></label>
+      <StudioField label={<><span>Replacement source version</span></>}><input aria-label="Replacement source version" value={draft.fromVersionId} onChange={event => onDraftChange({ ...draft, fromVersionId: event.target.value })} placeholder="Exact current Activity Definition Version ID" /></StudioField>
       <span aria-hidden>→</span>
-      <label><span>Replacement target version</span><input aria-label="Replacement target version" value={draft.toVersionId} onChange={event => onDraftChange({ ...draft, toVersionId: event.target.value })} placeholder="Exact target Activity Definition Version ID" /></label>
+      <StudioField label={<><span>Replacement target version</span></>}><input aria-label="Replacement target version" value={draft.toVersionId} onChange={event => onDraftChange({ ...draft, toVersionId: event.target.value })} placeholder="Exact target Activity Definition Version ID" /></StudioField>
     </div>
     <div className="au-root-add">
-      <label><span>Root kind</span><select value={rootKind} onChange={event => onRootKindChange(event.target.value as ActivityUpgradeRootKind)}>{rootKindOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
-      <label><span>Exact root identity</span><input value={rootId} onChange={event => onRootIdChange(event.target.value)} placeholder="Exact draft or immutable version ID" /></label>
+      <StudioField label={<><span>Root kind</span></>}><select value={rootKind} onChange={event => onRootKindChange(event.target.value as ActivityUpgradeRootKind)}>{rootKindOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select></StudioField>
+      <StudioField label={<><span>Exact root identity</span></>}><input value={rootId} onChange={event => onRootIdChange(event.target.value)} placeholder="Exact draft or immutable version ID" /></StudioField>
       <button type="button" onClick={onAddRoot} disabled={!rootId.trim()}><Plus size={16} aria-hidden /> Add exact root</button>
     </div>
     {draft.roots.length ? <ul className="au-root-list">
@@ -474,7 +474,7 @@ function HandoffRow({ handoff, planId, value, onOpenDraft, onChange }: { handoff
   return <article>
     <div><strong>{handoff.draftKind}</strong><code>{handoff.draftId}</code><span>Revision {handoff.revision} · required by {handoff.requiredByStageIds.join(", ")}</span></div>
     <StudioLink href={href} navigateToStudioPath={onOpenDraft}>Open next required draft</StudioLink>
-    <label><span>Actual published version</span><input aria-label={`Published version for ${handoff.draftId}`} value={value} onChange={event => onChange(event.target.value)} placeholder="Exact immutable version ID" /></label>
+    <StudioField label={<><span>Actual published version</span></>}><input aria-label={`Published version for ${handoff.draftId}`} value={value} onChange={event => onChange(event.target.value)} placeholder="Exact immutable version ID" /></StudioField>
   </article>;
 }
 

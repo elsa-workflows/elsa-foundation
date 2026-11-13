@@ -71,6 +71,10 @@ public sealed class CoalescingRuntimeCheckpointCommitStore : IRuntimeCheckpointC
     {
         ArgumentNullException.ThrowIfNull(commit);
         ArgumentNullException.ThrowIfNull(decision);
+        if (commit.StateChanges.PostCommitOutbox.Any(change => change.State.SourceKind == RuntimeDeliverySourceKind.StandaloneIngress || change.State.SubscriptionDelivery is not null))
+            throw new NotSupportedException("A workflow checkpoint cannot accept standalone sources or captured subscription responsibility.");
+        if (commit.StateChanges.PostCommitOutbox.Any(change => change.State.SubscriptionDeliveryProtocolVersion is not null))
+            decision = ImmediateDecision;
 
         if (commit.ExpectedModelParentWait is not null)
         {
@@ -330,7 +334,10 @@ public sealed class CoalescingRuntimeCheckpointCommitStore : IRuntimeCheckpointC
             deliveryVisibleAfter: null,
             stimulusDeliveryProtocolVersion: item.StimulusDeliveryProtocolVersion,
             stimulusDeliverySourceScope: item.StimulusDeliverySourceScope,
-            recipientSnapshot: item.RecipientSnapshot);
+            recipientSnapshot: item.RecipientSnapshot,
+            standaloneIngress: item.StandaloneIngress,
+            subscriptionDeliveryProtocolVersion: item.SubscriptionDeliveryProtocolVersion,
+            subscriptionDelivery: item.SubscriptionDelivery);
 
     // A claim is taken just before the claimed work runs, and the work item that runs it can exist only in the session's
     // memory: a parent re-claimed to evaluate its finished child runs from such an item. A cap fold at the claim would
@@ -361,6 +368,7 @@ public sealed class CoalescingRuntimeCheckpointCommitStore : IRuntimeCheckpointC
     private static bool HasBoundaryState(RuntimeCheckpointCommit commit) =>
         commit.ExpectedModelExecution is not null ||
         commit.ExpectedBookmarkResume is not null ||
+        commit.StateChanges.PostCommitOutbox.Any(change => change.State.SubscriptionDeliveryProtocolVersion is not null) ||
         commit.StateChanges.Operational.Count > 0 ||
         commit.StateChanges.Incidents.Count > 0 ||
         commit.StateChanges.Bookmarks.Count > 0 ||

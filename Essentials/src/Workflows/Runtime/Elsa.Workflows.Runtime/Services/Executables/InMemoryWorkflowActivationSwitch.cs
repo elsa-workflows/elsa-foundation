@@ -24,7 +24,7 @@ namespace Elsa.Workflows.Runtime.Services.Executables;
 /// not hold that store's state with the others: compose a backend's switch with that backend's stores.
 /// </para>
 /// </remarks>
-public sealed class InMemoryWorkflowActivationSwitch : IWorkflowActivationSwitch
+public sealed partial class InMemoryWorkflowActivationSwitch : IWorkflowActivationSwitch
 {
     private readonly InMemoryWorkflowActivationAuthority _authority;
     private readonly IWorkflowExecutableSourceReferenceStore _references;
@@ -37,17 +37,27 @@ public sealed class InMemoryWorkflowActivationSwitch : IWorkflowActivationSwitch
         TimeProvider timeProvider,
         IWorkflowTriggerBindingStore? triggerBindingStore = null,
         IRecurringTriggerScheduleStore? recurringScheduleStore = null)
+        : this(authority, references, timeProvider, null, null, triggerBindingStore, recurringScheduleStore) { }
+
+    public InMemoryWorkflowActivationSwitch(IWorkflowActivationAuthority authority,
+        IWorkflowExecutableSourceReferenceStore references, TimeProvider timeProvider,
+        Elsa.Workflows.Runtime.Services.Checkpoints.InMemoryRuntimeCheckpointStoreState? reservationState,
+        IPersistenceAccessContextAccessor? reservationAccess, IWorkflowTriggerBindingStore? triggerBindingStore = null,
+        IRecurringTriggerScheduleStore? recurringScheduleStore = null)
     {
         _authority = authority as InMemoryWorkflowActivationAuthority ?? throw Unsupported(authority);
         _references = references ?? throw new ArgumentNullException(nameof(references));
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         _projections = [.. Projection(triggerBindingStore), .. Projection(recurringScheduleStore)];
+        _reservationState = reservationState; _reservationAccess = reservationAccess;
+        _reservationBindings = triggerBindingStore as InMemoryWorkflowTriggerBindingStore;
     }
 
     public async ValueTask<WorkflowActivationTransition> TryActivateAsync(WorkflowActivationSlotRequest request, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
         cancellationToken.ThrowIfCancellationRequested();
+        var reservationSource = await ReadReservationSourceAsync(request.ActivationId, cancellationToken);
         var transition = await LockedWithReferenceFirstAsync(
             WorkflowActivationReferenceIdentity.Create(request.ActivationId),
             current => ResumeFailed(current, request.ActivationId),
@@ -57,10 +67,12 @@ public sealed class InMemoryWorkflowActivationSwitch : IWorkflowActivationSwitch
                 if (!planned.Succeeded)
                     return planned;
                 var replaced = ReplacedActivation(planned);
+                var reservations = PrepareReservations(planned.Slot, reservationSource);
                 foreach (var projection in _projections)
                     projection.CheckSwitch(request.ActivationId, replaced);
                 foreach (var projection in _projections)
                     projection.Switch(request.ActivationId, replaced);
+                ApplyReservations(planned.Slot, reservations);
                 return _authority.Commit(planned);
             },
             planned => planned.Succeeded);
@@ -77,6 +89,7 @@ public sealed class InMemoryWorkflowActivationSwitch : IWorkflowActivationSwitch
         var slot = transition.Slot;
         var candidate = slot.ActiveActivationId ?? throw new ArgumentException("Only a transition that switched an activation on can be reverted.", nameof(revert));
         var replaced = ReplacedActivation(transition);
+        var reservationSource = replaced is null ? null : await ReadReservationSourceAsync(replaced, cancellationToken);
         var reverted = await LockedWithReferenceFirstAsync(
             replaced is null ? null : WorkflowActivationReferenceIdentity.Create(replaced),
             current => RestoreReplaced(current, replaced!),
@@ -94,6 +107,7 @@ public sealed class InMemoryWorkflowActivationSwitch : IWorkflowActivationSwitch
                         WorkflowActivationOwnershipIntent.TakeOver));
                 if (!planned.Succeeded)
                     return false;
+                var reservations = PrepareReservations(planned.Slot, reservationSource);
                 if (replaced is not null)
                     foreach (var projection in _projections)
                         projection.CheckSwitch(replaced, candidate);
@@ -104,6 +118,7 @@ public sealed class InMemoryWorkflowActivationSwitch : IWorkflowActivationSwitch
                     projection.Delete(candidate);
                 }
 
+                ApplyReservations(planned.Slot, reservations);
                 _authority.Commit(planned);
                 return true;
             },
@@ -127,7 +142,9 @@ public sealed class InMemoryWorkflowActivationSwitch : IWorkflowActivationSwitch
             var planned = _authority.PlanDeactivation(request);
             if (!planned.Succeeded)
                 return planned;
+            var reservations = PrepareReservations(planned.Slot, null);
             DeleteProjections([planned.ReplacedActivationId, .. alsoServing]);
+            ApplyReservations(planned.Slot, reservations);
             return _authority.Commit(planned);
         }));
     }
@@ -156,6 +173,7 @@ public sealed class InMemoryWorkflowActivationSwitch : IWorkflowActivationSwitch
     {
         var plan = RepairPlan(slot, alsoServing);
         cancellationToken.ThrowIfCancellationRequested();
+        var reservationSource = await ReadReservationSourceAsync(slot.ActiveActivationId!, cancellationToken);
         var repaired = await LockedWithReferenceFirstAsync(
             plan.ReferenceId,
             plan.ResumeOwn,
@@ -163,9 +181,11 @@ public sealed class InMemoryWorkflowActivationSwitch : IWorkflowActivationSwitch
             {
                 if (!plan.AppliesTo(_authority.Current(slot.WorkflowDefinitionId, slot.SlotName), [.. _projections.Select(projection => projection.State(plan.ActivationId))]))
                     return false;
+                var reservations = PrepareReservations(slot, reservationSource);
                 foreach (var projection in _projections)
                     projection.Switch(plan.ActivationId, null);
                 DeleteProjections(plan.ServingInItsPlace);
+                ApplyReservations(slot, reservations);
                 return true;
             },
             committed => committed);
@@ -197,7 +217,8 @@ public sealed class InMemoryWorkflowActivationSwitch : IWorkflowActivationSwitch
             {
                 for (; held < _projections.Length; held++)
                     Monitor.Enter(_projections[held].SyncRoot);
-                return step();
+                if (_reservationState is null) return step();
+                lock (_reservationState.SyncRoot) return step();
             }
             finally
             {

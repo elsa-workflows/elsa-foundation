@@ -1,3 +1,4 @@
+using Elsa.Workflows.Runtime.Inspection.Core;
 using System.Security.Claims;
 using System.Text.Json;
 using Elsa.Foundation.Identity.Authorization;

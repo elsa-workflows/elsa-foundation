@@ -69,6 +69,46 @@ public abstract class ConnectionRepositoryContractTests(IConnectionRepository re
         Assert.Null(await repository.FindAsync(Tenant, _name));
     }
 
+    [Theory]
+    [InlineData("incarnation-a", "incarnation-b")]
+    [InlineData("incarnation", "INCARNATION")]
+    [InlineData("", "new-known-incarnation")]
+    public async Task SaveAsync_CannotRestoreADeletedIncarnationWhenTheRevisionRepeats(string oldIdentity, string newIdentity)
+    {
+        var original = NewDocument(); original.Definition.IncarnationId = oldIdentity;
+        original.Definition.SecretFields["token"] = new() { SecretName = "stale-secret" };
+        Assert.True(await repository.TryAddAsync(original));
+        var stale = (await repository.FindAsync(Tenant, _name))!;
+        Assert.True(await repository.DeleteAsync(Tenant, _name));
+        var replacement = NewDocument(); replacement.Definition.IncarnationId = newIdentity;
+        replacement.Definition.SecretFields["token"] = new() { SecretName = "replacement-secret" };
+        Assert.True(await repository.TryAddAsync(replacement));
+        stale.Definition.DisplayName = "Stale overwrite";
+
+        await Assert.ThrowsAsync<ConnectionConflictException>(() => repository.SaveAsync(stale).AsTask());
+
+        var saved = (await repository.FindAsync(Tenant, _name))!;
+        Assert.Equal(newIdentity, saved.Definition.IncarnationId);
+        Assert.Equal(replacement.State.Version, saved.State.Version);
+        Assert.Equal(replacement.Definition.DisplayName, saved.Definition.DisplayName);
+        Assert.True(await repository.IsSecretReferencedAsync(Tenant, "replacement-secret"));
+        Assert.False(await repository.IsSecretReferencedAsync(Tenant, "stale-secret"));
+        saved.Definition.DisplayName = "Valid subsequent save";
+        await repository.SaveAsync(saved);
+        Assert.Equal("Valid subsequent save", (await repository.FindAsync(Tenant, _name))!.Definition.DisplayName);
+    }
+
+    [Fact]
+    public async Task SaveAsync_CannotChangeAKnownCreationIdentityAtTheCurrentRevision()
+    {
+        var original = NewDocument(); original.Definition.IncarnationId = "original-incarnation";
+        Assert.True(await repository.TryAddAsync(original));
+        var changed = (await repository.FindAsync(Tenant, _name))!;
+        changed.Definition.IncarnationId = "invented-incarnation";
+        await Assert.ThrowsAsync<ConnectionConflictException>(() => repository.SaveAsync(changed).AsTask());
+        Assert.Equal("original-incarnation", (await repository.FindAsync(Tenant, _name))!.Definition.IncarnationId);
+    }
+
     [Fact]
     public async Task TryAddAsync_StoresTheDocumentAtItsOwnVersion()
     {
