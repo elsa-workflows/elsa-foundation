@@ -77,7 +77,7 @@ commits answered "landed" cover one position, and along the positions the epoch 
 |---|---|---|---|
 | `partitions` | partition | owner, epoch, leaseUntil, position, **clock**, now, died | The fence record. `clock` is the partition's order-key clock, so the fence update hands out the commit's keys at no extra cost |
 | `clocks` | partition | clock | The inbox clock for outside adds. Apart from `partitions` so that adds never conflict with the owner's commits |
-| `instances` | instance id | partition, model, definition, status, state (string), runs, revision, parent, fault | One document per row. `state` stays an opaque string: the kernel never looks inside, and a string needs no conversion |
+| `instances` | instance id | partition, model, definition, status, state (string), jobs, revision, parent, fault | One document per row. `state` stays an opaque string: the kernel never looks inside, and a string needs no conversion |
 | `messages` | message id | partition, seq, target, kind, payload, sender, start (JSON), due (0 = now), seen, attempts, trial, keepUntil, done | `_id` makes adding create-only. Indexes `(partition, done, seq, _id)` for the poll, `(partition, trial)` for the take, `(done, keepUntil)` for the sweep |
 | `subscriptions` | `{k, i, w}` | key, instance, wait, partition | Upserted, so subscribing twice keeps one, as the reference does |
 | `events` | `{k, id}` | key, id, payload, keepUntil | Inserted; a duplicate is ignored |
@@ -238,12 +238,12 @@ the failure is unknown."
 on MongoDB and on EF PostgreSQL.** Two commits at one position: the loser's fence matches nothing, but the writes behind
 it meet the winner's rows (the journal position, a derived message id) and fail first as a duplicate key, a definite
 error. MongoDB before the fix: `StoreException: An error occurred during ordered bulkWrite operation`; EF on
-PostgreSQL with `fenceInBatch`: `duplicate key value violates unique constraint "PK_Journal"`, today. For the kernel
+PostgreSQL with `fenceInBatch`: `duplicate key value violates unique constraint "PK_Journal"` (before the EF fix below). For the kernel
 (reasoned from `Worker.FlushAsync`): a stale owner gets "definite", commits its instances one by one, tries to park
 the first, every one of these is fenced off, and it resets; nothing wrong lands, but it is the parking path entered
 for a stale epoch. The checked fence is not affected. **Fixed for MongoDB** (the upsert fence stops the bulk at index
-0). **EF:** not changed (another agent owns `EfStore.cs`); the same rule applies: map a key violation to "not landed"
-when the fence row did not match. **Contract sentence proposed:** "A commit whose fence does not match answers
+0). **EF:** fixed since (ENGINES.md E1, `EfStore.CommitAsync`): a key violation maps to "not landed" when the fence row
+did not match. **Contract sentence proposed:** "A commit whose fence does not match answers
 Landed = false, whatever else in it would have failed."
 
 ### Where the contract is silent (Reference cases)
