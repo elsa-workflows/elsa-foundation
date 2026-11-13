@@ -118,7 +118,10 @@ export function prepareBpmnDeleteCore(owner: ActivityNode, scope: BpmnScopeAddre
     if (element.localName === "participant" && !allowParticipants) refuseBpmnOperation("pool deletion uses its explicit process-retention preparation");
     removed.add(element);
   }
-  const ids = () => new Set([...removed].flatMap(element => [element, ...element.getElementsByTagName("*")]).map(element => element.getAttribute("id")).filter((id): id is string => Boolean(id)));
+  const ids = () => new Set([...removed].flatMap(element => [element, ...element.getElementsByTagName("*")]).flatMap(element => {
+    const id = element.getAttribute("id");
+    return id && context.parsed.byId.get(id) === element ? [id] : [];
+  }));
   let changed: boolean;
   do {
     changed = false; const deleted = ids();

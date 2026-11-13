@@ -66,11 +66,12 @@ export function prepareBpmnReparent(owner: ActivityNode, scope: BpmnScopeAddress
   const inside = (element: Element) => [...roots].some(root => root === element || root.contains(element));
   // Data-object definitions travel only when every actual reference travels; shared data is never stolen.
   for (const element of [...roots]) if (element.localName === "dataObjectReference" && element.parentElement !== target) {
-    const object = context.parsed.byId.get(element.getAttribute("dataObjectRef") ?? "");
+    const objectId = (reference: Element) => reference.getAttribute("dataObjectRef")?.replace(/^[\t\n\r ]+|[\t\n\r ]+$/g, "") ?? "";
+    const object = context.parsed.byId.get(objectId(element));
     if (!object || object.localName !== "dataObject" || object.parentElement !== element.parentElement)
       refuseBpmnOperation("the data object's existing ownership needs an explicit reconciliation");
     if ([...context.parsed.byId.values()].some(reference => isBpmnOwnedSyntax(reference) && reference.localName === "dataObjectReference"
-      && reference.getAttribute("dataObjectRef") === bpmnIdentity(object) && !inside(reference))) refuseBpmnOperation("shared data-object references must move together");
+      && objectId(reference) === bpmnIdentity(object) && !inside(reference))) refuseBpmnOperation("shared data-object references must move together");
     roots.add(object);
   }
   const futureScope = (element: Element) => roots.has(element) ? target : bpmnFlowScope(element);
@@ -86,7 +87,7 @@ export function prepareBpmnReparent(owner: ActivityNode, scope: BpmnScopeAddress
   if (intent.laneId && (!lane || lane.localName !== "lane" || !isBpmnOwnedSyntax(lane) || bpmnFlowScope(lane) !== target))
     refuseBpmnOperation("the target lane must belong to the actual target flow scope");
   if (lane) { requireBpmnVisibleElement(context, lane); visibleInstance(lane); }
-  const commands: BpmnDocumentCommand[] = [], memberships: Element[] = [];
+  const commands: BpmnDocumentCommand[] = [], memberships: { element: Element; command: BpmnDocumentCommand }[] = [];
   for (const element of roots) if (flowNode(element.localName) && (element.parentElement !== target || intent.laneId !== undefined)) {
     const references = [...context.parsed.document.getElementsByTagNameNS(ns.model, "flowNodeRef")].filter(reference => isBpmnOwnedSyntax(reference)
       && resolveBpmnDocumentReference(context.parsed, reference, reference.textContent) === element);
@@ -94,19 +95,18 @@ export function prepareBpmnReparent(owner: ActivityNode, scope: BpmnScopeAddress
     for (const reference of references) {
       if ([...reference.attributes].some(attribute => attribute.namespaceURI !== "http://www.w3.org/2000/xmlns/")
         || [...reference.childNodes].some(node => ![3, 4].includes(node.nodeType))) refuseBpmnOperation("opaque lane membership needs an explicit retention decision");
-      memberships.push(reference);
+      memberships.push({ element: reference, command: { kind: "remove", target: bpmnSourceAddress(reference, context.parsed) } });
     }
     if (lane && retained) {
       const before = bpmnChildren(lane, "childLaneSet")[0];
-      commands.push({ kind: "reparent", target: bpmnSourceAddress(retained, context.parsed), parent: { elementId: bpmnIdentity(lane) },
-        ...(before ? { before: bpmnSourceAddress(before, context.parsed) } : {}) });
+      memberships.push({ element: retained, command: { kind: "reparent", target: bpmnSourceAddress(retained, context.parsed), parent: { elementId: bpmnIdentity(lane) },
+        ...(before ? { before: bpmnSourceAddress(before, context.parsed) } : {}) } });
     }
     else if (lane) { const reference = bpmnFragment(context, "flowNodeRef"); reference.textContent = bpmnIdentity(element); commands.push(insertBpmnFragment(context, lane, reference)); }
   }
   // Descending document order keeps all idless membership addresses valid.
   const documentOrder = [...context.parsed.document.getElementsByTagName("*")];
-  commands.unshift(...memberships.sort((a, b) => documentOrder.indexOf(b) - documentOrder.indexOf(a))
-    .map(reference => ({ kind: "remove" as const, target: bpmnSourceAddress(reference, context.parsed) })));
+  commands.unshift(...memberships.sort((a, b) => documentOrder.indexOf(b.element) - documentOrder.indexOf(a.element)).map(edit => edit.command));
   for (const element of roots) if (element.parentElement !== target)
     commands.push({ kind: "reparent", target: { elementId: bpmnIdentity(element) }, parent: { elementId: bpmnIdentity(target) } });
   for (const element of flows) commands.push({ kind: "reparent", target: { elementId: bpmnIdentity(element) },

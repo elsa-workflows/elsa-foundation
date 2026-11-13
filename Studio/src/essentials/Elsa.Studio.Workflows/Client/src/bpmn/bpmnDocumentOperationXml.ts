@@ -99,7 +99,7 @@ export function bpmnIdentity(element: Element) { return element.getAttribute("id
 /** Declare narrowly, avoiding both bound prefixes and retained, currently unresolved QName-looking content. */
 export function bpmnAttributePrefix(context: BpmnOperationContext, target: Element, namespaceURI: string, preferred: string, commands: BpmnDocumentCommand[]): string {
   const existing = target.lookupPrefix(namespaceURI);
-  if (existing) return existing;
+  if (existing && target.lookupNamespaceURI(existing) === namespaceURI) return existing;
   let prefix = preferred, index = 1;
   const mentioned = (candidate: string) => [target, ...target.getElementsByTagName("*")].some(element => !element.lookupNamespaceURI(candidate)
     && ([...element.attributes].some(attribute => attribute.value.includes(`${candidate}:`))
@@ -114,7 +114,7 @@ export function resolveBpmnOperationAddress(context: BpmnOperationContext, addre
   let element = address.documentRoot === true ? context.parsed.document.documentElement : context.parsed.byId.get(address.elementId);
   if (!element) refuseBpmnOperation("the XML address is stale");
   for (const step of address.path ?? []) {
-    const candidates: Element[] = [...element.children].filter(child => child.namespaceURI === step.namespaceURI && child.localName === step.localName);
+    const candidates: Element[] = [...element.children].filter(child => (child.namespaceURI ?? "") === step.namespaceURI && child.localName === step.localName);
     if (step.index === undefined && candidates.length !== 1) refuseBpmnOperation("the XML property address is ambiguous");
     element = candidates[step.index ?? 0];
     if (!element) refuseBpmnOperation("the XML property address is stale");
