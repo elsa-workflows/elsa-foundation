@@ -39,7 +39,8 @@ public sealed class Oracle
             case "http": Https[target] = (Json.Read<HttpInput>(m.Start.Input!).Mode, m.Start.Ephemeral, -1, false); break;
             case "sequence": var input = Json.Read<SequenceInput>(m.Start.Input!); Sequences[target] = (input.Count, input.Mode, posted); break;
             case "runner": List(Runners, target).Add(m.Read<string>()); break;
-            case "fragile": Fragiles[target] = Fragiles.GetValueOrDefault(target) || m.Kind is "throw" or "spoil" or "die"; break;
+            // A job that kills the process ("dierun") is parked at the threshold and faults its instance (decision 9).
+            case "fragile": Fragiles[target] = Fragiles.GetValueOrDefault(target) || m.Kind is "throw" or "spoil" or "die" or "dierun"; break;
             case null when m.Kind == "add": Ghosts.Add(target); break;
         }
     }

@@ -289,11 +289,16 @@ public sealed class Worker : IScopeActivation, ITurnServices
             _meets.Add(item);
             return;
         }
-        if (message.Kind == Kinds.Job && attempts >= _options.MaxAttempts)
+        if (message.Kind == Kinds.Job && attempts >= _options.MaxAttempts && Has(Flaw.JobPoisonAsError))
         {
-            // A job that was on trial when too many owners were lost is parked: its result is an error.
+            // MUTATION: round 3's rule, before decision 9. The job's result is an error and its instance goes on.
             var error = $"the job was on trial when {attempts} owners were lost";
             item.Message = message with { Kind = Kinds.JobFinished, Payload = Json.Write(new JobFinished(message.Read<JobTicket>().Key, null, error)) };
+        }
+        else if (message.Kind == Kinds.Job && attempts >= _options.MaxAttempts)
+        {
+            // Decision 9: a job that was on trial when too many owners were lost is parked like any message. It is not
+            // started; it is given to a turn as it is, and RunTurn parks its instance, faulted, with the ticket consumed.
         }
         else if (message.Kind == Kinds.Job)
         {
