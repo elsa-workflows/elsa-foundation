@@ -2,7 +2,7 @@ import type { BpmnBounds, BpmnDocumentAuthoring, BpmnDocumentCommand, BpmnPoint 
 import type { BpmnNativeBaseline } from "./bpmnDocumentProjection";
 import { nativeChildren, nativeGeometrySignature, nativeIndex, nativeNumber, nativeRefuse, nativeSignature, nativeXml } from "./bpmnDocumentXml";
 import { guardBpmnNativeCopies } from "./bpmnDocumentCopyGuard";
-import { assertBpmnNativePlaneFrames, diffBpmnNativeCommandGroup } from "./bpmnDocumentDiff";
+import { assertBpmnNativePlaneFrames, assertNativeCanvasScope, diffBpmnNativeCommandGroup } from "./bpmnDocumentDiff";
 import { nativeDiAliases, normalizeNativeDiIds } from "./bpmnDocumentDiAliases";
 import { contextualizeNativeNamespacePair, type NativeNamespaceOrigin, type NativeNamespaceSnapshot } from "./bpmnDocumentNamespaceContext";
 import { captureNativePropertyIntents, type NativePropertyIntent } from "./bpmnDocumentIntent";
@@ -22,6 +22,7 @@ export interface NativeCommandAction {
   readonly semanticParentId?: string;
   readonly sourceId?: string;
   readonly targetId?: string;
+  readonly requestedParentId?: string; readonly requestedSourceId?: string; readonly requestedTargetId?: string;
   readonly canvasTargets?: readonly NativeCanvasTarget[];
   readonly properties?: Readonly<Record<string, unknown>>;
   readonly propertyIntents?: readonly NativePropertyIntent[];
@@ -107,6 +108,7 @@ function snapshotAction(command: string, context: Record<string, unknown>): Nati
       sourceId: id(element?.source ?? context.source), targetId: id(element?.target ?? context.target), ...(sources ? { semanticSourceIds: Object.freeze(sources as string[]) } : {}), semanticTargetId: id(business.targetRef), processId: id(business.processRef) }));
   }
   return Object.freeze({ command, elementId: id(target), diId: typeof di?.id === "string" ? di.id : undefined,
+    requestedParentId: id(context.newParent ?? context.parent), requestedSourceId: id(context.newSource), requestedTargetId: id(context.newTarget),
     label: !!element?.labelTarget || command === "label.create", oldParentId: id(context.oldParent ?? element?.parent), parentId: id(context.newParent ?? context.parent ?? element?.parent),
     ...(context.oldShape || context.oldRoot ? { oldElementId: id(context.oldShape ?? context.oldRoot) } : {}),
     ...(context.newShape || context.newRoot ? { newElementId: id(context.newShape ?? context.newRoot) } : {}),
@@ -210,13 +212,14 @@ export function mapBpmnNativeCommandPlan(authoring: BpmnDocumentAuthoring, basel
     ...(action.diId ? { diId: diAliases.get(action.diId) ?? oldAliases.get(action.diId) ?? action.diId } : {}),
     ...(action.diIds ? { diIds: action.diIds.map(id => diAliases.get(id) ?? oldAliases.get(id) ?? id) } : {}) })) };
   assertBpmnNativePlaneFrames(authoring, normalized, contextual.next);
+  assertNativeCanvasScope(authoring, normalized, normalizedGroup, nativeIndex(nativeXml(normalized.xml)), contextualIndex);
   return { commands: mapNormalizedBpmnNativeCommandGroup(authoring, normalized, normalizedGroup,
     contextual.next), diAliases };
 }
 function mapNormalizedBpmnNativeCommandGroup(authoring: BpmnDocumentAuthoring, baseline: BpmnNativeBaseline, group: NativeCommandGroup, nextXml: string): readonly BpmnDocumentCommand[] {
   const bounded = new Set(["element.updateLabel", "element.updateProperties", "shape.move", "shape.resize", "label.create", "shape.delete", "connection.layout", "connection.updateWaypoints", "connection.move"]);
   if (group.actions.some(action => !bounded.has(action.command) || action.command === "shape.delete" && !action.label
-    || action.command === "shape.move" && action.oldParentId !== action.parentId
+    || ["shape.move", "connection.move"].includes(action.command) && action.oldParentId !== action.parentId
     || action.command === "element.updateProperties" && fieldNeedsFullDiff(action)
     || action.command === "element.updateLabel" && !["name"].includes(labelProperty(baseline, action))))
     return diffBpmnNativeCommandGroup(authoring, baseline, group, nextXml, (geometryGroup, geometryXml) => mapBoundedBpmnNativeCommandGroup(authoring, baseline, geometryGroup, geometryXml));

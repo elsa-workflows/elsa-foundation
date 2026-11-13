@@ -74,21 +74,36 @@ export function assertBpmnNativePlaneFrames(authoring: BpmnDocumentAuthoring, ba
     nativeRefuse("S10c is required for unresolved generated-plane provenance");
 }
 
-/** Fresh IDs carry no authority: captured canvas intent and the selected source root must agree. */
-function assertNativeCanvasScope(authoring: BpmnDocumentAuthoring, baseline: BpmnNativeBaseline, group: NativeCommandGroup, oldIndex: ReadonlyMap<string, Element>, newIndex: ReadonlyMap<string, Element>): void {
+/** Canvas structure must match immutable completed intent, including retained IDs and lost changes. */
+export function assertNativeCanvasScope(authoring: BpmnDocumentAuthoring, baseline: BpmnNativeBaseline, group: NativeCommandGroup, oldIndex: ReadonlyMap<string, Element>, newIndex: ReadonlyMap<string, Element>): void {
   const ns = authoring.bpmnNamespaces, selected = newIndex.get(baseline.projection.scope.scopeElementId), roots = selected ? [selected] : [];
   const previous = oldIndex.get(baseline.projection.scope.scopeElementId);
   if (previous?.localName === "collaboration") for (const participant of nativeChildren(previous, ns.model, "participant")) {
     const process = newIndex.get(participant.getAttribute("processRef") ?? ""); if (process && baseline.projection.scopeElementIds.has(process.getAttribute("id")!)) roots.push(process);
   }
   const active = (element: Element | undefined) => !!element && element.namespaceURI === ns.model && roots.some(root => root === element || root.contains(element));
-  const captured = new Map<string, NativeCanvasTarget>();
+  const captured = new Map<string, NativeCanvasTarget>(), structural = new Set<string>();
+  const requestedParents = new Map<string, string>(), requestedSources = new Map<string, string>(), requestedTargets = new Map<string, string>();
+  // Pinned parent/endpoint families; layout, label and property effects have separate checks.
+  const parentCommands = new Set(["shape.append", "shape.create", "shape.move", "shape.replace", "connection.create", "connection.move", "connection.reconnect", "elements.create", "elements.move"]);
   for (const action of group.actions) {
     for (const target of action.canvasTargets ?? []) captured.set(target.elementId, target);
-    for (const id of [action.elementId, action.oldElementId, action.newElementId, ...(action.elementIds ?? [])].filter((id): id is string => !!id)) {
+    const ids = [action.elementId, action.oldElementId, action.newElementId, ...(action.elementIds ?? [])].filter((id): id is string => !!id);
+    const changesParent = !action.label && parentCommands.has(action.command);
+    if (changesParent && !ids.length && action.diId) {
+      const semantic = (newIndex.get(action.diId) ?? oldIndex.get(action.diId))?.getAttribute("bpmnElement"); if (semantic) ids.push(semantic);
+    }
+    for (const id of ids) {
       const old = oldIndex.get(id);
       if (old?.namespaceURI === ns.model && !baseline.projection.scopeElementIds.has(id)) nativeRefuse("native canvas target is outside the selected source scope");
-      if (!captured.has(id)) captured.set(id, { elementId: id, parentId: action.parentId, semanticParentId: action.semanticParentId, diId: action.diId, sourceId: action.sourceId, targetId: action.targetId });
+      if (changesParent) {
+        structural.add(id);
+        // Context requests retain their meaning even if a later native mutation loses the effect.
+        if (action.requestedParentId) requestedParents.set(id, action.requestedParentId);
+        if (action.requestedSourceId) requestedSources.set(id, action.requestedSourceId);
+        if (action.requestedTargetId) requestedTargets.set(id, action.requestedTargetId);
+      }
+      if (!captured.has(id) || changesParent && !action.canvasTargets?.some(target => target.elementId === id)) captured.set(id, { elementId: id, parentId: action.parentId, semanticParentId: action.semanticParentId, diId: action.diId, sourceId: action.sourceId, targetId: action.targetId });
     }
   }
   if (selected?.localName === "collaboration") for (const target of captured.values()) {
@@ -103,15 +118,22 @@ function assertNativeCanvasScope(authoring: BpmnDocumentAuthoring, baseline: Bpm
     if (!element && !oldIndex.has(target.elementId) && !group.actions.some(action => ["shape.delete", "connection.delete", "elements.delete"].includes(action.command) && [action.elementId, ...(action.elementIds ?? [])].includes(target.elementId))) nativeRefuse("new canvas target is unavailable for captured intent");
     if (!element || element.namespaceURI !== ns.model) continue;
     if (!active(element)) nativeRefuse("native canvas target is outside the selected source scope");
-    if (oldIndex.has(target.elementId)) continue;
+    if (oldIndex.has(target.elementId) && !structural.has(target.elementId)) continue;
+    for (const [requests, actual] of [[requestedParents, target.parentId], [requestedSources, target.sourceId], [requestedTargets, target.targetId]] as const)
+      if (requests.has(target.elementId) && requests.get(target.elementId) !== actual) nativeRefuse("canvas structure differs from the effective completed request intent");
     let parent = element.parentElement; while (parent && !parent.hasAttribute("id")) parent = parent.parentElement;
-    if (!active(element) || !active(newIndex.get(target.parentId ?? target.semanticParentId ?? ""))) nativeRefuse("new canvas target/parent is outside the selected source scope");
-    if (!parent || parent.getAttribute("id") !== (target.semanticParentId ?? target.parentId)) nativeRefuse("new canvas semantic parent differs from captured intent");
+    if (!active(element) || !active(newIndex.get(target.parentId ?? target.semanticParentId ?? ""))) nativeRefuse("canvas parent intent is missing or outside the selected source scope");
+    if (!parent || parent.getAttribute("id") !== (target.semanticParentId ?? target.parentId)) nativeRefuse("canvas semantic parent differs from captured intent");
     if (["sequenceFlow", "messageFlow", "association", "dataInputAssociation", "dataOutputAssociation"].includes(element.localName)) {
       const refs = (name: string) => element.hasAttribute(name) ? [element.getAttribute(name)!] : nativeChildren(element, ns.model, name).map(child => child.textContent?.trim() ?? "");
       const sources = target.semanticSourceIds ?? (target.sourceId ? [target.sourceId] : undefined), destination = target.semanticTargetId ?? target.targetId;
-      if (!sources || !destination || JSON.stringify(refs("sourceRef")) !== JSON.stringify(sources) || JSON.stringify(refs("targetRef")) !== JSON.stringify([destination])) nativeRefuse("new connection endpoints differ from captured intent");
-      for (const id of [...sources, destination, target.sourceId, target.targetId].filter((id): id is string => !!id)) if (!active(newIndex.get(id))) nativeRefuse("new connection endpoint is outside the selected source scope");
+      if (!target.sourceId || !target.targetId || !sources || !destination || JSON.stringify(refs("sourceRef")) !== JSON.stringify(sources) || JSON.stringify(refs("targetRef")) !== JSON.stringify([destination])) nativeRefuse("connection endpoints differ from captured intent");
+      const semanticParent = target.semanticParentId ?? target.parentId;
+      // Pinned BpmnUpdater maps data associations' visual activity endpoint to their owner.
+      if (element.localName === "dataInputAssociation" ? sources[0] !== target.sourceId || semanticParent !== target.targetId
+        : element.localName === "dataOutputAssociation" ? semanticParent !== target.sourceId || destination !== target.targetId
+        : JSON.stringify(sources) !== JSON.stringify([target.sourceId]) || destination !== target.targetId) nativeRefuse("visual/semantic connection endpoint intent differs");
+      for (const id of [...sources, destination, target.sourceId, target.targetId].filter((id): id is string => !!id)) if (!active(newIndex.get(id))) nativeRefuse("connection endpoint is outside the selected source scope");
     }
   }
   const projected = nativeIndex(nativeXml(baseline.projection.xml)), diagram = projected.get(baseline.projection.scope.diagramId)!;

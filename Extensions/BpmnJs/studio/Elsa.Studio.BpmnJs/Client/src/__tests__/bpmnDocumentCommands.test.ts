@@ -57,7 +57,7 @@ describe("unenabled schema2 complete native command mapping", () => {
     });
     const normalized = bindBpmnNativeBaseline(authoring, projection, imported);
     const next = edit(imported, (_document, byId) => byId.get("inner-di")!.children[0].setAttribute("x", "200"));
-    expect(mapBpmnNativeCommandGroup(authoring, normalized, group([{ command: "shape.move", elementId: "inner", diId: "inner-di" }]), next))
+    expect(mapBpmnNativeCommandGroup(authoring, normalized, group([{ command: "shape.move", elementId: "inner", diId: "inner-di", parentId: "sub" }]), next))
       .toEqual([{ kind: "bounds", shapeId: "inner-di", bounds: { x: 670, y: 300, width: 100, height: 80 } }]);
     const candidate = authoring.applyBpmnDocumentCommands(projection.owner, [{ kind: "bounds", shapeId: "inner-di", bounds: { x: 670, y: 300, width: 100, height: 80 } }]);
     const nextProjection = projectBpmnNativeDocument(authoring, candidate, scope);
@@ -87,7 +87,7 @@ describe("unenabled schema2 complete native command mapping", () => {
   it("refuses an extra standard attribute, misleading property intent and unmapped route metadata", async () => {
     const { baseline } = await modeled();
     const extra = edit(baseline.xml, (_document, byId) => byId.get("process")!.setAttribute("isExecutable", "true"));
-    expect(() => mapBpmnNativeCommandGroup(authoring, baseline, group([{ command: "shape.move", diId: "work-di" }]), extra)).toThrow(/unaccounted/);
+    expect(() => mapBpmnNativeCommandGroup(authoring, baseline, group([{ command: "shape.move", elementId: "work", diId: "work-di", parentId: "process" }]), extra)).toThrow(/unaccounted/);
     const name = edit(baseline.xml, (_document, byId) => byId.get("work")!.setAttribute("name", "Different"));
     expect(() => mapBpmnNativeCommandGroup(authoring, baseline, group([{ command: "element.updateProperties", elementId: "work", properties: { name: "Expected" } }]), name)).toThrow(/command intent/);
     const route = edit(baseline.xml, (_document, byId) => {

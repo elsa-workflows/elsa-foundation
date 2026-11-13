@@ -48,7 +48,7 @@ describe("unenabled full-source modeled command differ", () => {
     });
     expect(added.parsed.byId.get("connected")?.getAttribute("sourceRef")).toBe("work");
     expect(added.parsed.byId.get("work")!.textContent).toContain("connected");
-    const moved = await change([{ command: "connection.reconnect", elementId: "flow", diId: "flow-di" }], (_document, byId) => {
+    const moved = await change([{ command: "connection.reconnect", elementId: "flow", diId: "flow-di", parentId: "process", sourceId: "work", targetId: "end" }], (_document, byId) => {
       byId.get("flow")!.setAttribute("targetRef", "end");
       [...byId.get("gateway")!.children].find(child => child.localName === "incoming")!.remove();
       append(byId.get("end")!, '<b:incoming>flow</b:incoming>');
@@ -57,7 +57,7 @@ describe("unenabled full-source modeled command differ", () => {
   });
 
   it("replaces a bound task type while retaining its exact native binding and opaque attributes", async () => {
-    const result = await change([{ command: "shape.replace", oldElementId: "work", newElementId: "work", diId: "work-di" }], (document, byId) => {
+    const result = await change([{ command: "shape.replace", oldElementId: "work", newElementId: "work", diId: "work-di", parentId: "process" }], (document, byId) => {
       const old = byId.get("work")!, replacement = document.createElementNS(ns.model, "bpmn:userTask");
       for (const attribute of [...old.attributes]) replacement.setAttributeNS(attribute.namespaceURI, attribute.name, attribute.value);
       while (old.firstChild) replacement.appendChild(old.firstChild); old.replaceWith(replacement);
@@ -124,7 +124,7 @@ describe("unenabled full-source modeled command differ", () => {
   });
 
   it("creates data references/associations, text annotations, groups and category globals", async () => {
-    const result = await change([{ command: "shape.create", elementId: "data", parentId: "process" }, { command: "connection.create", elementId: "data-in", parentId: "process", semanticParentId: "work", sourceId: "data", targetId: "input" },
+    const result = await change([{ command: "shape.create", elementId: "data", parentId: "process" }, { command: "connection.create", elementId: "data-in", canvasTargets: [{ elementId: "data-in", parentId: "process", semanticParentId: "work", sourceId: "data", targetId: "work", semanticSourceIds: ["data"], semanticTargetId: "input" }] },
       { command: "shape.create", elementId: "note", parentId: "process" }, { command: "connection.create", elementId: "association", parentId: "process", sourceId: "work", targetId: "note" }, { command: "shape.create", elementId: "group", parentId: "process" }], (document, byId) => {
       append(byId.get("process")!, '<b:dataObject id="data-object"/>');
       append(byId.get("process")!, '<b:dataObjectReference id="data" dataObjectRef="data-object"/>');
@@ -168,7 +168,7 @@ describe("unenabled full-source modeled command differ", () => {
       index.get("work-di")!.firstElementChild!.setAttribute("x", "110");
     }));
     const mapped = mapBpmnNativeCommandPlan(authoring, baseline, { id: 1, trigger: "execute", actions: [
-      { command: "shape.replace", oldElementId: "work", newElementId: "work", diId: "replacement-di" }
+      { command: "shape.replace", oldElementId: "work", newElementId: "work", diId: "replacement-di", parentId: "process" }
     ] }, next);
     const plan = authoring.planBpmnDocumentSyntaxChange(baseline.projection.owner, mapped.commands);
     const candidate = authoring.applyBpmnDocumentTransaction(baseline.projection.owner, plan.transaction);
@@ -179,7 +179,7 @@ describe("unenabled full-source modeled command differ", () => {
     const rebound = bindBpmnNativeBaseline(authoring, projectBpmnNativeDocument(authoring, candidate, scope), next, baseline, mapped.diAliases);
     expect(rebound.di.get("replacement-di")!.id).toBe("work-di");
     const dragged = edit(next, (_document, index) => index.get("replacement-di")!.firstElementChild!.setAttribute("x", "130"));
-    expect(mapBpmnNativeCommandGroup(authoring, rebound, { id: 2, trigger: "execute", actions: [{ command: "shape.move", elementId: "work", diId: "replacement-di" }] }, dragged))
+    expect(mapBpmnNativeCommandGroup(authoring, rebound, { id: 2, trigger: "execute", actions: [{ command: "shape.move", elementId: "work", diId: "replacement-di", parentId: "process" }] }, dragged))
       .toEqual([{ kind: "bounds", shapeId: "work-di", bounds: { x: 130, y: 100, width: 120, height: 80 } }]);
   });
 
@@ -210,7 +210,7 @@ describe("unenabled full-source modeled command differ", () => {
 
   it("creates an attached boundary event and replaces a gateway without changing its configured default", async () => {
     const result = await change([{ command: "shape.create", elementId: "boundary", parentId: "process" }, { command: "element.updateAttachment", elementId: "boundary" },
-      { command: "shape.replace", oldElementId: "gateway", newElementId: "gateway" }], (document, index) => {
+      { command: "shape.replace", oldElementId: "gateway", newElementId: "gateway", parentId: "process" }], (document, index) => {
       append(index.get("process")!, '<b:boundaryEvent id="boundary" attachedToRef="work" cancelActivity="false"><b:timerEventDefinition/></b:boundaryEvent>');
       const old = index.get("gateway")!, replacement = document.createElementNS(ns.model, "bpmn:inclusiveGateway");
       for (const attribute of [...old.attributes]) replacement.setAttributeNS(attribute.namespaceURI, attribute.name, attribute.value);
