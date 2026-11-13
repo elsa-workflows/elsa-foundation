@@ -83,10 +83,10 @@ SQL Server runs under amd64 emulation on arm64: slow, but the counts are not aff
 ```
 dotnet conformance/Kernel.Store.Conformance.Run/bin/Release/net10.0/Kernel.Store.Conformance.Run.dll semantic     # in memory
 EFC="dotnet ef/Kernel.Ef.Conformance/bin/Release/net10.0/Kernel.Ef.Conformance.dll"
-$EFC sqlite [--fence-in-batch] semantic
-$EFC postgres "$PG" [--fence-in-batch] [--m5] semantic                 # --m5: E1 switched off, must fail the fence cases
-$EFC sqlserver "$MS" [--fence-in-batch] [--rcsi-off] semantic
-$EFC mysql "$MY;uid=root;pwd=kernel" [--fence-in-batch] [--rc] semantic
+$EFC sqlite [--fence-in-batch|--checked-fence] semantic               # no flag: the engine's default fence, below
+$EFC postgres "$PG" [--fence-in-batch|--checked-fence] [--m5] semantic # --m5: E1 switched off, must fail the fence cases
+$EFC sqlserver "$MS" [--fence-in-batch|--checked-fence] [--rcsi-off] semantic
+$EFC mysql "$MY;uid=root;pwd=kernel" [--fence-in-batch|--checked-fence] [--rc] semantic
 MOR="dotnet mongo/Kernel.Mongo.Run/bin/Release/net10.0/Kernel.Mongo.Run.dll"
 $MOR "$MO" [--fence-in-batch] semantic
 $MOR "$MO" semantic-broken                                             # the fence broken on purpose: its cases must fail
@@ -101,16 +101,17 @@ $MOR "$MO" probe crash|limits
 ```
 EFR="dotnet ef/Kernel.Ef.Run/bin/Release/net10.0/Kernel.Ef.Run.dll"
 mkdir -p .out                                                             # the SQLite files live here
-$EFR x stress postgres "$PG;Database=kernel_stress" seconds=40 messages=5000 [fence=batch]
+$EFR x stress postgres "$PG;Database=kernel_stress" seconds=40 messages=5000 [fence=checked|batch]
 $EFR x stress sqlserver "$MS;Database=kernel_stress" seconds=40 messages=5000          # RCSI on unless rcsi=0
 $EFR x stress mysql "$MY;database=kernel_stress" seconds=40 messages=5000 [isolation=rc]
 $EFR x stress sqlite "Data Source=.out/stress.db" seconds=40 messages=5000 [wal=0]
 $EFR x stress <engine> "<same>" seconds=15 messages=1500 unfenced=1       # the fence broken on purpose: must fail
-$EFR x cost <engine> "<connection;Database=kernel_cost>" proxy=1 [fence=batch]       # round trips on the TCP stream
+$EFR x cost <engine> "<connection;Database=kernel_cost>" proxy=1 [fence=checked|batch]       # round trips on the TCP stream
 $EFR x probe|block|definite|deadlock <engine> "<connection>"                         # ENGINES.md
 ```
 
-`EngineRun.cs` lists every option. The stress test drives round 1's models plus round 3's commands (suspend, resume,
+Without a fence option the EF store takes the engine's default: the fence in the batch, but the checked fence on SQL
+Server (decided 13 November; ENGINES.md E9). `EngineRun.cs` lists every option. The stress test drives round 1's models plus round 3's commands (suspend, resume,
 terminate, delete) and starts on events. Do not run the conformance suite on an engine while a stress test runs there:
 the stress test kills the suite's sessions too.
 
@@ -136,11 +137,11 @@ $SIM --native --seeds 20000 --actions 1000
 $SIM --mutations --seeds 20000
 $SIM --native-mutations --seeds 20000
 dotnet conformance/Kernel.Store.Conformance.Run/bin/Release/net10.0/Kernel.Store.Conformance.Run.dll semantic
-$EFC sqlite semantic; $EFC sqlite --fence-in-batch semantic
+$EFC sqlite --checked-fence semantic; $EFC sqlite --fence-in-batch semantic
 $NAT smoke; $NAT cost sqlite
-mkdir -p .out; $EFR x cost sqlite "Data Source=.out/cost.db" [fence=batch]                  # delete .out/cost.db* between runs
-$EFR x cost postgres "$PG;Database=kernel_cost" proxy=1 [fence=batch]
-$EFC postgres "$PG" [--fence-in-batch] semantic
+mkdir -p .out; $EFR x cost sqlite "Data Source=.out/cost.db" fence=checked                # and fence=batch; delete .out/cost.db* between runs
+$EFR x cost postgres "$PG;Database=kernel_cost" proxy=1 fence=checked                     # and fence=batch
+$EFC postgres "$PG" --checked-fence semantic; $EFC postgres "$PG" --fence-in-batch semantic
 $NAT cost postgres "$PG;Database=kernel_native"
 ```
 

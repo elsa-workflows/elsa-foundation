@@ -264,7 +264,7 @@ must be passed at BEGIN (`Engine.BeginAsync`); a session setting is overwritten.
   Rerun: MySQL REPEATABLE READ checked 0 deadlocks; SQL Server and MySQL all hold. PostgreSQL locks only the rows it
   changes and needs neither (reasoned); the index would still save the scan.
 
-### E9. SQL Server, fence in the batch, merged kernel: the take deadlocks with a stale commit. Run; fix described, not applied
+### E9. SQL Server, fence in the batch, merged kernel: the take deadlocks with a stale commit. Run; fixed in round 4 (the checked fence is SQL Server's default)
 
 - **Graph (`.out/f-mssql-deadlock-graphs.xml`):** a stale owner's SaveChanges holds X on a `PK_Messages` key (a seen
   or trial mark) and waits for U on `PK_Partitions` (its fence comes last in EF's order); the take holds X on
@@ -277,6 +277,9 @@ must be passed at BEGIN (`Engine.BeginAsync`); a session setting is overwritten.
 - **Smallest fix:** use the checked fence on SQL Server (0 take deadlocks), or make the fence the first statement of
   the batch (EF orders by table, so that needs the fence as its own command, which is the checked fence). Changing the
   take's order would change the protocol shared by all engines; not done.
+- **Applied (round 4, FINDINGS section 25.1):** the owner chose the checked fence as SQL Server's default on 13 November.
+  `SqlServerEngine.FenceInBatchByDefault` is false, so a store that is not told takes it; `fence=batch` still gives the
+  fence in the batch. The stress test with the default had no take deadlocks (FINDINGS section 25.1).
 
 ### E10. MySQL's driver costs four round trips per commit more than PostgreSQL's. Run; not fixed
 

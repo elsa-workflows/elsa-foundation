@@ -36,6 +36,9 @@ public abstract class Engine
     /// </summary>
     public bool Savepoints { get; init; }
 
+    /// <summary>Whether <see cref="EfStore"/> puts the fence in the batch when it is not told: true but on SQL Server.</summary>
+    public virtual bool FenceInBatchByDefault => true;
+
     /// <summary>Begins the commit's transaction.</summary>
     public virtual Task<IDbContextTransaction> BeginAsync(KernelDb db, CancellationToken cancellationToken)
     {
@@ -107,6 +110,12 @@ public abstract class Engine
 /// <summary>SQL Server: OUTPUT in place of RETURNING, TOP in place of LIMIT, no ON CONFLICT.</summary>
 public sealed class SqlServerEngine : Engine
 {
+    /// <summary>
+    /// ENGINES.md E9, decided 13 November: the checked fence. With the fence in the batch EF sends it last, so a stale
+    /// commit holds a message lock and waits for the partition row while a take holds the row and waits for the message.
+    /// </summary>
+    public override bool FenceInBatchByDefault => false;
+
     /// <summary>Adds WITH (READPAST) to the poll. For the experiment only: it breaks the order rule (ENGINES.md E6).</summary>
     public bool ReadPast { get; init; }
 
