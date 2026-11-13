@@ -1869,7 +1869,7 @@ function labCase(pause, order, lost) {
     { title: '0 rows: Node A rolls back. Nothing from its batch lands.', layer: 'Layer 2 · built and tested in the prototype',
       text: ['Node A checks the count before it sends COMMIT. 0 rows, so it rolls back: no instance row, no message and no journal row from its batch lands, and Node B never sees any of it.',
         'This is why the check must come first: sent in one packet with a fence that matched nothing, a COMMIT would still land.'],
-      t: 15.2, envA: { at: 'home', bad: true, l2: 'REJECTED: 0 rows' }, pay: 'rolled', badge: 'rolled back',
+      t: 15.2, envA: { at: 'out', bad: true, l2: 'REJECTED: 0 rows' }, pay: 'rolled', badge: 'rolled back',
       banner: ['bad', 'A\'s commit bounced: 0 rows; nothing from it landed. Node B owns partition 17 at epoch 9.'], lit: ['labEnv', 'labInstance', 'labMessage', 'labJournal'] },
     { title: 'Node A resets and stands down.', layer: 'Layer 2 · the reset and the take · built',
       text: ['A fence that matched nothing means reset: Node A drops everything it holds for partition 17 and tries to take it again, the same path as start-up.',
@@ -1880,7 +1880,7 @@ function labCase(pause, order, lost) {
   const tookB = lease => ({ row: ['B', '9', lease, '1204'], memB: ['I own 17 · epoch 9 · position 1204', 'from empty memory: it will poll the rows'] });
 
   if (order === 'early') return { title: 'Case 2: a long pause; Node B takes while Node A sleeps.',
-    aside: ['Node A pauses for longer than its lease. Node B\'s take comes well before Node A wakes, so they never meet at the row lock.', 'Watch: the epoch in the row, and the stamp on Node A\'s envelope.', 'Source: the sketch\'s "Ownership", "The commit" and "What a failed commit means".'],
+    aside: ['Node A pauses for longer than its lease. Node B\'s take comes well before Node A wakes, so they never meet at the row lock.', 'Watch: the epoch in the row, and the epoch = 8 in Node A\'s fence statement.', 'Source: the sketch\'s "Ownership", "The commit" and "What a failed commit means".'],
     steps: [...S,
       { title: 'Node B takes partition 17: epoch 9.', layer: L_TAKE,
         text: ['Node B\'s take finds the lease run out by the database\'s clock, so it lands: owner B, epoch 9, a lease to 20.2 s. It returns the position, 1204; no commit was in flight, so that is the true one.',
@@ -1907,7 +1907,7 @@ function labCase(pause, order, lost) {
         stmt: ['COMMIT', '', '→ committed · round trip 2 of 2'], lit: ['labRow', 'labInstance', 'labMessage', 'labJournal', 'labCall'] },
       { title: 'Node B\'s take runs behind the commit, and is refused.', layer: L_TAKE,
         text: ['The take waited behind a commit that was still in flight, so it re-checks the row as that commit left it, never half a commit: the lease was just renewed.',
-          'So the take\'s condition fails: owner A, a live lease to 25.0 s. 0 rows, refused, and Node B leaves the partition alone; a refused take returns nothing. A take that lands after a commit in flight returns the true position, as in the other "Together" choice, where the take comes first.'],
+          'So the take\'s condition fails: owner A, a live lease to 25.0 s. 0 rows, refused, and Node B leaves the partition alone; a refused take returns nothing. A take that lands after a commit returns the true position, as Node A\'s own take does after a lost answer (the lost-answer case). A take never reads half a commit. In the other "Together" choice the take comes first and reads 1204, because Node A\'s commit has not landed.'],
         t: 15.2, takeB: { at: 'out', bad: true, l2: 'refused: 0 rows' }, stmt: TAKESQL('B', '→ 0 rows: owner A, lease_until 25.0 s, db now 15.2 s'),
         banner: ['ok', 'A\'s commit landed; B\'s take waited, then re-checked the row as the commit left it: the lease was just renewed, 0 rows, refused.'], lit: ['labTakeB', 'labStmt', 'labLeaseUntil'] }] };
 
