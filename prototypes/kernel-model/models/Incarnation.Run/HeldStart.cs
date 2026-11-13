@@ -24,23 +24,24 @@ internal static partial class BoundaryCases
             };
             var spec = new StartSpec("holding-start", "probe", "hold", Creation: new(generation, generation - 1, "held"));
             try { await h.Send(Kinds.Start, start: spec, creation: generation); }
-            catch (IndexOutOfRangeException error) { throw new InvalidOperationException("C12: held initial checkpoint refusal threw before Park", error); }
+            catch (Exception error) when (error is IndexOutOfRangeException or ArgumentOutOfRangeException)
+            { throw new InvalidOperationException("C12: held initial checkpoint refusal threw before Park", error); }
             if (refuse)
             {
-                if (refusals == 0 || h.Row is not { Status: InstanceStatus.Faulted, Retired: false, State: "null" } || h.Row.Creation != generation ||
+                if (refusals == 0 || h.Row is not { Status: InstanceStatus.Faulted, Retired: false, State: "null", PendingStart: null } || h.Row.Creation != generation ||
                     h.Store.Messages.Values.Any(m => m.Message.Start?.Creation?.Generation == generation && !m.Done))
                     throw new InvalidOperationException("C12: held initial checkpoint was not parked and consumed");
             }
             else
             {
-                if (h.Row.Status != InstanceStatus.Running || Json.Read<HoldingState>(h.Row.State).Starts != 0)
+                if (h.Row.Status != InstanceStatus.Running || h.Row.PendingStart is null || !h.Store.Messages.ContainsKey(h.Row.PendingStart) || Json.Read<HoldingState>(h.Row.State).Starts != 0)
                     throw new InvalidOperationException("C12: initial work was not held");
                 await h.Reload(); var before = h.Row;
                 await h.Send(Kinds.Start, start: spec, creation: generation);
                 if (h.Last is not CreationResult { Result: "ExistingCreation" } || h.Row != before)
                     throw new InvalidOperationException("C12: duplicate start activated held authored work");
                 await h.Send("release", creation: generation);
-                if (h.Row.Status != InstanceStatus.Finished || Json.Read<HoldingState>(h.Row.State).Starts != 1)
+                if (h.Row.Status != InstanceStatus.Finished || h.Row.PendingStart is not null || Json.Read<HoldingState>(h.Row.State).Starts != 1)
                     throw new InvalidOperationException("C12: committed held start did not continue once after reload");
             }
             Console.WriteLine($"PASS creation:held-start,recreate={recreate},refuse={refuse}");

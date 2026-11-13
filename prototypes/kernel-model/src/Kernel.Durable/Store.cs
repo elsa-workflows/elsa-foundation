@@ -7,6 +7,7 @@ namespace Kernel.Durable;
 /// <c>Jobs</c>, the keys of the background jobs in flight. The workflow instance's part (layer 3): <c>Model</c>,
 /// <c>Definition</c>, <c>Status</c>, <c>Parent</c>, <c>Fault</c>, <c>Suspended</c> and <c>Children</c>, the instances it started
 /// that have not finished. One row, so one write per commit: a seam leak (FINDINGS section 24). JSON arrays or null.
+/// <c>PendingStart</c> is the durable owner's initial delivery ID only while its first authored work remains held.
 /// </summary>
 public sealed record InstanceRow(string Id, string Model, string Definition, InstanceStatus Status, string State, long Revision, string? Parent, string? Fault = null, string? Jobs = null, History History = History.Full, bool Suspended = false, string? Children = null, int StateVersion = 1, string? CommitTimes = null,
     long Creation = 0, bool Retired = false, string? StartIntent = null, long ParentCreation = 0, string? PendingStart = null);
