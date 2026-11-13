@@ -145,6 +145,7 @@ the stress test kills the suite's sessions too.
 ```
 NAT="dotnet models/Native.Run/bin/Release/net10.0/Kernel.Native.Run.dll"
 $NAT smoke
+$NAT park                    # Park removes active subscriptions; suspension preserves them
 $NAT cost sqlite
 $NAT cost postgres "$PG;Database=kernel_native"
 $NAT memory 3000
