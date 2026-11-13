@@ -41,7 +41,7 @@ function renderEditor(options: { context?: StudioEndpointContext; confirm?: Retu
   };
 }
 async function ready(host: HTMLElement) { await vi.waitFor(() => expect(control(host, "name")).not.toBeNull()); }
-function fill(host: HTMLElement) { change(control(host, "name"), "DbConnectionString"); change(host.querySelector<HTMLInputElement>(".secrets-value-input input")!, "private-test-material"); }
+function fill(host: HTMLElement) { change(control(host, "name"), "DbConnectionString"); change(host.querySelector<HTMLInputElement>('input[data-secret-field="value"]')!, "private-test-material"); }
 function submit(host: HTMLElement) { flushSync(() => host.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }))); }
 
 describe("standalone secret editor lifetime and navigation", () => {
@@ -70,7 +70,7 @@ describe("standalone secret editor lifetime and navigation", () => {
     await vi.waitFor(() => expect(host.querySelector("[role=alert]")?.textContent).toBe("Write unavailable."));
     expect(document.activeElement).toBe(host.querySelector("[role=alert]"));
     expect(control(host, "name").value).toBe("DbConnectionString");
-    expect(host.querySelector<HTMLInputElement>(".secrets-value-input input")?.type).toBe("password");
+    expect(host.querySelector<HTMLInputElement>('input[data-secret-field="value"]')?.type).toBe("password");
     expect(blocked()).toBe(true); expect(button(host, "Cancel").disabled).toBe(false);
   });
 
@@ -79,7 +79,7 @@ describe("standalone secret editor lifetime and navigation", () => {
     const { host, navigate, switchEndpoint } = renderEditor({ context: endpoint(post) }); await ready(host); fill(host); submit(host);
     const replacement = endpoint(); switchEndpoint(replacement); await ready(host);
     expect(control(host, "name").value).toBe("");
-    expect(host.querySelector<HTMLInputElement>(".secrets-value-input input")?.value).toBe("");
+    expect(host.querySelector<HTMLInputElement>('input[data-secret-field="value"]')?.value).toBe("");
     fill(host); expect(blocked()).toBe(true);
     request.resolve({ name: "DbConnectionString" }); await request.promise; await new Promise(resolve => setTimeout(resolve, 0));
     expect(navigate).not.toHaveBeenCalled(); expect(replacement.http.postJson).not.toHaveBeenCalled();
