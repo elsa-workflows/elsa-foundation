@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-13
 
-**Status**: Draft
+**Status**: Approved — owner authorized planning, tasks and end-to-end implementation on2026-11-13; implementation awaits the verified runtime-history dependency described in [plan.md](plan.md).
 
 **Tracking**: [Feature #4366](https://github.com/elsa-workflows/elsa-foundation/issues/4366).
 
@@ -12,7 +12,7 @@
 
 **Input**: The owner requested a GitHub issue and Spec Kit specification for activity-by-activity playback, including previous/next, play/pause, speed controls and timeline scrubbing, so a user can interactively follow the path a workflow run took.
 
-**Scope authority**: This request authorizes issue/specification capture. This document remains Draft; implementation, runtime-history readiness, delivery acceptance and deployment are not established by it.
+**Scope authority**: The original request authorized capture only. The owner's subsequent2026-11-13 instruction authorizes Spec Kit planning/tasks and end-to-end implementation. This does not establish runtime-history readiness or delivery acceptance, replace #3849's active ownership, or authorize deployment/release.
 
 **Reference**: [Playback interaction concept](design/playback-concept.md), the existing run inspector and [Studio module UI guidance](../../Studio/docs/module-ui.md). The retained concept is illustrative, not product or evidence-readiness proof. Domain terms follow the [Elsa glossary](../../docs/glossary/elsa.md); this specification adds presentation behavior, not new execution semantics.
 

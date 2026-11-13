@@ -1,0 +1,68 @@
+# Tasks: Activity-by-activity execution playback
+
+**Input**: [plan.md](plan.md), [research.md](research.md), [data-model.md](data-model.md), [dependency/UI contract](contracts/playback-inspection.md), [quickstart.md](quickstart.md).
+
+**Authority**: Owner's2026-11-13 instruction authorizes plan/tasks and end-to-end implementation. **Current execution status: blocked at T003; no production implementation started.** All four user stories remain required. Do not mark a fixture prototype or an unavailable-only UI as feature completion.
+
+**Tests/cadence**: Existing risk-based Foundation discipline applies; no greenfield TDD mandate is declared. Add meaningful behavior tests with each logic-bearing implementation; reproduce existing-behavior fixes red/green. Use controlled presentation time, and distinguish real backend evidence from fixture bodies. No new test asserts documentation text.
+
+## Phase 1: Setup and planning
+
+- [X] T001 Inspect current activity browsing/history/selection contracts and record source-backed gaps and research decisions in `specs/1225-activity-playback/research.md`.
+- [X] T002 Complete independent review of `specs/1225-activity-playback/plan.md`, `data-model.md`, `contracts/playback-inspection.md`, `quickstart.md` and `tasks.md`; preserve owner authority, coverage and actual prerequisite status.
+
+## Phase 2: Foundational prerequisites
+
+**Blocking**: No user-story implementation begins until T003 is complete. Its missing source cannot be replaced by timestamps, loaded-page arrays, signed-offset fabrication, another capture store or a test-only history response.
+
+- [ ] T003 Coordinate the separately reviewed runtime-owned facet with #3849's S02–S05/S11–S14 owners; record actual delivered base/head, contract/provider/API paths and passing admission/order/frozen-bound/ordinal-seek/gap/authorization controls against `specs/1225-activity-playback/contracts/playback-inspection.md` in `research.md`. This task is BLOCKED: current production browsing explicitly has no cross-request snapshot and exposes none of that coverage/seek contract.
+- [ ] T004 Add the private, cancellable capability-discovered sequence adapter in `Studio/src/essentials/Elsa.Studio.Workflows/Client/src/api/activityPlayback.ts`, using only the qualified T003 facet and exact string/opaque ordering identities.
+- [ ] T005 Add adapter behavior tests for unsupported/denied/unknown totals, context binding, gap/retention changes, stale responses and safe positions in `Studio/src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/activityPlaybackApi.test.ts`.
+
+## Phase 3: US1 — Manual exact-occurrence traversal
+
+**Goal/test**: Previous/Next and direct selection traverse the exact run/scope sequence, including nested/loop/retry identities, while Timeline/focus and explicit Activity details remain coherent.
+
+- [ ] T006 [US1] Implement the private presentation/cursor model and hook in `Studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/activityPlaybackModel.ts` and `useActivityPlayback.ts`; keep confirmed and pending selection distinct.
+- [ ] T007 [US1] Add labelled controls with previous/next, position/timestamp and truthful disabled/unavailable states in `Studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/ActivityPlaybackControls.tsx`, using Studio public controls/tokens and existing styles.
+- [ ] T008 [US1] Integrate confirmed cancellable occurrence/scope navigation and synchronous manual-navigation pause into `Studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowInstances.tsx`; coordinate with spec1211 S06/S07 and preserve current timeline scope, pinned graph, ambiguous-occurrence choice and focus behavior.
+- [ ] T009 [US1] Add mounted selection/boundary/identity/Activity-return regressions in `Studio/src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/activityPlayback.test.tsx` and keyboard/pointer states in `Studio/tests/browser/activity-playback.spec.ts`.
+
+## Phase 4: US2 — Play/pause and presentation pace
+
+**Goal/test**: Every eligible step appears once at the four defined cadences; pause, Activity inspection, manual navigation, backgrounding and end stop further ticks. Normal page buffering resumes only the same still-playing generation.
+
+- [ ] T010 [US2] Add cancellable timer ownership, speed selection, end/Replay and visibility pause in `Studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/useActivityPlayback.ts` and `ActivityPlaybackControls.tsx`; keep live-update/runtime controls separate.
+- [ ] T011 [US2] Verify four speeds, pause-before-queued-tick, no catch-up, manual inspection, delayed confirmation, buffering and reduced motion with controlled presentation time in `Studio/src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/activityPlayback.test.tsx` and `Studio/tests/browser/activity-playback.spec.ts`.
+
+## Phase 5: US3 — Bounded ordinal seeking
+
+**Goal/test**: First/middle/final/older repeated occurrence in a200-occurrence run, across pages and ten rapid seeks, resolves exactly the final requested target without whole-history preload or stale details.
+
+- [ ] T012 [US3] Implement native labelled ordinal scrubbing and bounded target/page loading in `Studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/ActivityPlaybackControls.tsx`, `useActivityPlayback.ts` and `src/api/activityPlayback.ts`; manual seeks pause and loading never impersonates confirmation.
+- [ ] T013 [US3] Add random-position/page-boundary, latest-request-wins, unknown-total, failure/retry and no-preload regressions in `Studio/src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/activityPlayback.test.tsx`, `activityPlaybackApi.test.ts` and `Studio/tests/browser/activity-playback.spec.ts`.
+
+## Phase 6: US4 — Evidence, live bounds and access
+
+**Goal/test**: Frozen live membership, true gaps/coverage, concurrency and protected contexts remain truthful. No implied causal path, historical state reconstruction or cross-context disclosure.
+
+- [ ] T014 [US4] Integrate admission/segment boundaries, explicit paused refresh, new-record indication and context/access invalidation in `Studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/useActivityPlayback.ts` and `WorkflowInstances.tsx`; reuse existing conservative `executionMotion.ts` predicates without inferring edges from adjacency.
+- [ ] T015 [US4] Cover concurrent/tied order, retained gaps, coarse/legacy/unavailable recording, missing pin, revocation and pending old-context reads in `Studio/src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/activityPlayback.test.tsx`, `activityPlaybackApi.test.ts` and `Studio/tests/browser/activity-playback.spec.ts`.
+
+## Phase 7: Composed acceptance and delivery
+
+- [ ] T016 Establish genuine owned-host held-retry, owner-recorded retention-gap,52-minute backend-clock and permission-revocation witnesses; record their source/seed/authority boundaries in `specs/1225-activity-playback/quickstart.md`. Do not change timestamps or substitute evidence JSON. Add only the necessary owned acceptance support beside `Studio/tests/acceptance/` after its source composition is reviewed.
+- [ ] T017 Add the four real composed journeys in `Studio/tests/acceptance/activityPlaybackJourney.ts` and register them in `journeys.spec.ts` and `tools/ux-acceptance/run.py`; retain16 project executions,320px playback narrow cases, exact identities/coverage/request manifests, PNG/ARIA and traces without weakening inherited inventory.
+- [ ] T018 Run the complete affected suites, owner API/provider controls, architecture/maps/typecheck/lint and the16 composed cases from `specs/1225-activity-playback/quickstart.md`; reconcile discovery/execution, obtain current-head downloadable artifacts and independent actual screenshot/trace inspection. Record failures/not-run states on #4366/the PR.
+- [ ] T019 Update `specs/1225-activity-playback/spec.md`, `tasks.md` and applicable public/catalog documentation to the actual qualified delivery state; remove the requirements checklist only in the final implementation PR that reaches terminal status. No partial slice sets Implemented.
+- [ ] T020 Complete the independent source/acceptance review loop and exact-head required CI for #4366, use the authorized protected merge path, verify resulting main and close the feature only when its full acceptance is established; record the receipt on the existing issue/PR and link it from `specs/1225-activity-playback/quickstart.md`.
+
+## Dependencies and parallel opportunities
+
+`T001 → T002 → T003 → T004–T005 → US1 → US2 → US3 → US4 → T016–T020`. All20 tasks are required; US1 is the first useful increment, not the final scope.
+
+No production parallel release is possible while T003 is blocked. Within US1, model tests and control layout can be prepared in separate files after the adapter/selection contract settles; US2 cadence assertions can be prepared separately from control markup; US3 adapter read tests and native range keyboard tests can be prepared separately; US4 owner access/coverage controls and client retirement tests can be prepared separately. These are conditional opportunities, not permission to race edits to the same hook/workbench. The conservative task list leaves those shared-source changes sequential and marks no `[P]` task before its prerequisites are complete.
+
+## Current stop point
+
+T003 is an actual missing delivered dependency, not a waiver-able test failure. The phase can resume after the runtime-history owner supplies and qualifies the small read facet on a recorded integration base. End-to-end implementation, real UX acceptance, CI/merge and closeout are all NOT DONE. Do not present this plan/task generation as fulfillment of the owner's complete implementation request.
