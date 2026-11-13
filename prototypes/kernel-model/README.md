@@ -8,8 +8,8 @@ repository: the folder has its own `Directory.Build.*`, `Directory.Packages.prop
 
 What was found is in [FINDINGS.md](FINDINGS.md) (section 26: the graph engine; section 25: round 4's decided items; section 24: the three layers and the round 4 names; section 23: the
 merge of the four branches and its gates); what each database engine does to the EF store is in
-[ENGINES.md](ENGINES.md), MongoDB in [MONGO.md](MONGO.md), and native workflows as an execution model in
-[NATIVE.md](NATIVE.md).
+[ENGINES.md](ENGINES.md), MongoDB in [MONGO.md](MONGO.md), native workflows as an execution model in
+[NATIVE.md](NATIVE.md), and write volume and bloat on PostgreSQL in [WRITES.md](WRITES.md).
 
 ## Layout
 
@@ -111,6 +111,7 @@ $EFR x stress sqlite "Data Source=.out/stress.db" seconds=40 messages=5000 [fenc
 $EFR x stress <engine> "<same>" seconds=15 messages=1500 unfenced=1 fence=<as recorded>   # the fence broken on purpose: must fail (ENGINES.md: batch on PostgreSQL, checked elsewhere)
 $EFR x cost <engine> "<connection;Database=kernel_cost>" proxy=1 [fence=checked|batch]       # round trips on the TCP stream
 $EFR x probe|block|definite|deadlock <engine> "<connection>"                         # ENGINES.md
+$EFR x stress|cost postgres "<connection>" writes=1 [history=state|minimal] [pad=4096] [fillfactor=70] [fastvacuum=1]   # WRITES.md; the container needs -c wal_keep_size=4GB
 ```
 
 Without a fence option the EF store takes the engine's default: the fence in the batch, but the checked fence on SQL
