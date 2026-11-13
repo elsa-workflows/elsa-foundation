@@ -131,7 +131,7 @@ class VerdictTests(unittest.TestCase):
         snapshot = lambda sends: {'category': 'actual-sdk-forwarding', 'counts': {'session.send': sends, 'event.Completed': sends,
                                   'tool.return.dashboard_request_clarification': 1 if sends >= 2 else 0,
                                   'tool.return.dashboard_preview_question': sends - 1 if sends >= 2 else 0}, 'privacyFailures': 0}
-        phases = {'initial-native-preview', 'refined-native-preview', 'use-unsaved-draft', 'explicit-save', 'reopen-saved-definition', 'reopened-native-refresh', 'saved-native-appearances', 'native-new-run-and-refresh', 'native-saved-drill', 'native-share', 'native-independent-viewer-refresh', 'native-current-field-revocation'}
+        phases = {'initial-native-preview', 'refined-native-preview', 'use-unsaved-draft', 'explicit-save', 'reopen-saved-definition', 'reopened-native-refresh', 'saved-native-appearances', 'native-new-run-and-refresh', 'native-saved-drill', 'native-share', 'native-independent-viewer-refresh', 'native-reauthenticated-field-revocation'}
         return {'turns': {'before': snapshot(0), 'afterClarification': snapshot(2)}, 'refinement': {'before': snapshot(2), 'after': snapshot(3)}, 'after': snapshot(3),
                 'nativePhases': [{'phase': phase, 'before': 2 if phase == 'initial-native-preview' else 3,
                                  'after': 2 if phase == 'initial-native-preview' else 3, 'delta': 0} for phase in phases]}
@@ -144,9 +144,16 @@ class VerdictTests(unittest.TestCase):
         self.artifact.write_text('proof')
         self.boundary = self.root / 'boundary.json'
         self.boundary.write_text(json.dumps(self.evidence()))
+        self.authority = self.root / 'authority.json'
+        self.authority.write_text(json.dumps({'readerReauthenticated': True, 'executeStatus': 403}))
         def required(title):
-            return live.JSON_ARTIFACTS | {'trace', 'source'} | {f'{capture}.{suffix}' for capture in live.CAPTURES[title] for suffix in ('png', 'aria.yml')}
-        self.report = {'suites': [{'specs': [{'title': title, 'tests': [{'projectName': 'live-desktop', 'expectedStatus': 'passed', 'status': 'expected', 'results': [{'status': 'passed', 'attachments': [{'name': name, 'path': str(self.boundary if name == 'live-counters.json' else self.artifact)} for name in required(title)]}]}]} for title in live.TITLES]}]}
+            return live.JSON_ARTIFACTS | {'trace', 'source'} | ({'live-authority.json'} if title == live.ACME else set()) | {f'{capture}.{suffix}' for capture in live.CAPTURES[title] for suffix in ('png', 'aria.yml')}
+        self.report = {'suites': [{'specs': [{'title': title, 'tests': [{'projectName': 'live-desktop', 'expectedStatus': 'passed', 'status': 'expected', 'results': [{'status': 'passed', 'attachments': [{'name': name, 'path': str(self.boundary if name == 'live-counters.json' else self.authority if name == 'live-authority.json' else self.artifact)} for name in required(title)]}]}]} for title in live.TITLES]}]}
+
+    def test_missing_fresh_principal_or_denial_cannot_qualify(self):
+        for evidence in ({'executeStatus': 403}, {'readerReauthenticated': True, 'executeStatus': 200}):
+            self.authority.write_text(json.dumps(evidence))
+            with self.assertRaises(ValueError): live.verdict(self.report, self.root)
 
     def test_complete_actual_sdk_boundary_evidence(self):
         self.assertEqual(2, live.verdict(self.report, self.root))

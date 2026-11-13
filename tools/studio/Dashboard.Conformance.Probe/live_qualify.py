@@ -265,6 +265,8 @@ def verdict(report, output, expected_sha=None):
         raise ValueError('Both live lifecycle journeys must run exactly once without runner errors')
     for title, test in rows:
         required = JSON_ARTIFACTS | {'trace', 'source'} | {f'{capture}.{suffix}' for capture in CAPTURES[title] for suffix in ('png', 'aria.yml')}
+        if title == ACME:
+            required.add('live-authority.json')
         results = test.get('results', [])
         if test.get('projectName') != 'live-desktop' or test.get('expectedStatus') != 'passed' or test.get('status') != 'expected' or len(results) != 1 or results[0].get('status') != 'passed':
             raise ValueError(title + ': missing, skipped, retried or failed live execution')
@@ -291,7 +293,11 @@ def verdict(report, output, expected_sha=None):
         authored_sends = delta(refined, before, 'session.send')
         phases = evidence.get('nativePhases') or []
         required_phases = {'initial-native-preview', 'refined-native-preview', 'use-unsaved-draft', 'explicit-save', 'reopen-saved-definition', 'reopened-native-refresh', 'saved-native-appearances'}
-        required_phases |= {'native-new-run-and-refresh', 'native-saved-drill'} if title == WORKFLOW else {'native-share', 'native-independent-viewer-refresh', 'native-current-field-revocation'}
+        required_phases |= {'native-new-run-and-refresh', 'native-saved-drill'} if title == WORKFLOW else {'native-share', 'native-independent-viewer-refresh', 'native-reauthenticated-field-revocation'}
+        if title == ACME:
+            authority = json.loads(next(Path(item['path']) for item in attachments if item.get('name') == 'live-authority.json').read_text())
+            if authority.get('readerReauthenticated') is not True or authority.get('executeStatus') != 403:
+                raise ValueError(title + ': current authenticated field-denial evidence is missing')
         categories = all(snapshot.get('category') == 'actual-sdk-forwarding' and snapshot.get('privacyFailures') == 0
                          and count(snapshot, 'event.Error') == 0 for snapshot in [before, clarified, refine_before, refined, after])
         authoring = (delta(clarified, before, 'session.send') >= 2 and delta(clarified, before, 'event.Completed') >= 2
