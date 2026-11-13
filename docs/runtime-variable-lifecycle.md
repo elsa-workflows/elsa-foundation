@@ -33,7 +33,10 @@ before it commits (see below); both are versioned like any other write.
 | Stale base, `Fault` mode, value came back (`0 → 1 → 0`) | Applies. The version mismatch is recorded. |
 | Stale base, `Fault` mode, value changed | Does not apply. The step faults through the incident path (see [runtime fault behaviour](runtime-fault-behavior.md#special-case-a-lost-update-on-a-fault-node)). |
 
-After a write applies, a value equal to the current one changes nothing and keeps the version. Two steps that both read
+After a write applies, a value equal to the current one changes nothing and keeps the version. It also leaves the
+frame's revision unchanged, so the frame revision no longer signals "something was written" for an equal value. A
+frame stored before versions existed has no digest for its current values, so its first write to a variable hashes
+both the stored and the new value. Two steps that both read
 `0` and both write `1` are still two writers: the second is a lost update, and the warning says so.
 
 ## Inline steps leave no gap
@@ -42,6 +45,10 @@ An inline leaf, `External` or `ReplaySafe`, runs its Schedule, Start (input mate
 completion) as one fused span. No other branch's work runs in between, so two parallel `count + 1` leaves total `2`
 and record no lost update. An `External` leaf's attempt claim is still committed before its body runs, as an
 intermediate commit inside the span. Code: `ReplaySafeFusionDriver.IsFusableNode`.
+
+The body runs while the span's Schedule work item is the claimed one. The drainer renews that claim for as long as the
+handler runs (`WorkflowSchedulerDrainer.DispatchWithClaimRenewalAsync`), as it renews an Invoke item's claim on the
+step-by-step path, so a long body does not let the Schedule item be redelivered while it is still running.
 
 The guarantee holds while the drain's coalescing session is active, which every drain starts with. After a boundary
 that ends the session part-way through a drain, or on a host that turns fusion off, later leaves run step by step and

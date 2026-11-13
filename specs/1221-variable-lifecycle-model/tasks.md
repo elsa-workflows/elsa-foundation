@@ -45,6 +45,8 @@ carries logic) at the application cadence (§2.21.2). No new CI tier (existing F
 - **T039:** partly done (capture, `Fault` and buffered-segment records are covered); intrinsic and background-result
   records, and restoring an overwritten value, come with US2/US5.
 - **T041:** after the remaining stories.
+- **For the next implementation PR:** keep the positional signatures of `VariableFrameState` and
+  `WorkflowAlterationCapturedConcurrency` as they are now (Code Review, #4316); add members as optional ones.
 
 ## Phase 1: Setup
 
