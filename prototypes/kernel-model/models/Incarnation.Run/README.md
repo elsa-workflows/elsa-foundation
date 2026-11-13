@@ -14,13 +14,14 @@ sweep to 180 seconds, with one processor. Record commands, source and assembly h
 failures. Mutation copies must be isolated and fail their named assertion, not merely time out or fail to build.
 No service, provider host, Docker, cloud resource or previous Azure grant is used by this runner.
 
-The 57 cases comprise twelve ordinary start/finish/receipt-expiry/Delete/recreate schedules across both modes,
+The 61 cases comprise twelve ordinary start/finish/receipt-expiry/Delete/recreate schedules across both modes,
 root/nested placement and first-creation uncertainty; six parent-cancel-before-child-commit races; four actual
 old event/timer carrier replays; eight inherited stale/missing-identity trials before Resume/Terminate on suspended actors;
 one separately scheduled, non-cooperative old job completion/ticket replay; four
 store/reader boundaries; two semantic-start/mixed-event cases; two visit-isolation cases; four held-prefix/native
 child-cancellation cases; four recreation Park cases (actual exhausted trials/definite commit refusal); and four
-job acknowledgement races, four held initial checkpoint/refusal cases, and two mixed legacy/qualified oracle cases. Select subsets with
+job acknowledgement races, eight held initial checkpoint/refusal cases with explicit or start-spec-only addressing,
+and two mixed legacy/qualified oracle cases. Select subsets with
 `--parent-race`, `--transport-races` (also includes the job race), `--refusal-takeover`, `--held-singleton`,
 `--native-child-cancel`, `--recreation-park`, `--held-start`, `--mixed-oracle`, `--boundaries`, `--visits` or `--job-ack`.
 The default run includes every listed case. An assertion failure stops it; subsequent cases are not run.

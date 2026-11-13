@@ -472,7 +472,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
             if (suspended && !control && !identityReply) continue;    // identity refusal does not activate suspended authored work
             if (Awaits(item)) break;    // nothing overtakes a message that waits for its mark
             // Keep lifecycle changes/refusals separate. Compatible messages of this creation retain normal batching.
-            if (item.Message.Start?.Creation is not null && !continuingStart || CreationProtocol.TargetError(slot.Row, item.Message) is not null ||
+            if (item.Message.Start?.Creation is not null && !continuingStart || identityReply ||
                 slot.Row?.Creation > 0 && (item.Message.Start is not null && !continuingStart || _type.SingleMessage(item.Message)))
             {
                 if (due.TrueForAll(i => i.Held) && (item.Message.Due is not { } dueAt || dueAt <= now)) due = [item];
