@@ -29,7 +29,8 @@ public sealed partial class EfRuntimeHistoryCheckpointTests
         Assert.Equal(first.Event.RecordedAt, replay.Event.RecordedAt); Assert.Equal(first.Event.OccurredAt, replay.Event.OccurredAt);
         Assert.Equal(RuntimeHistoryIdentity.Compute(first.Event), RuntimeHistoryIdentity.Compute(replay.Event));
         Assert.Empty(context.ChangeTracker.Entries()); Assert.Null(context.Database.CurrentTransaction);
-        await using var read = db.Open(); var head = await read.Set<RuntimeHistoryHeadEntity>().SingleAsync();
+        await using var read = db.Open();
+        var head = new EfRuntimeHistoryProjectionMapping(Chain).Read(await read.Set<RuntimeHistoryHeadEntity>().SingleAsync(), Scope, Run);
         Assert.Equal(2, head.LastSequence); Assert.Equal("native-checkpoint", head.LastPhysicalCommitId);
         Assert.Equal(Now.AddDays(1), head.LastCommittedAt); Assert.Equal(2, await read.Set<RuntimeHistoryEventEntity>().CountAsync());
         Assert.Single(await read.Set<RuntimeHistoryOccurrenceEntity>().ToArrayAsync());
