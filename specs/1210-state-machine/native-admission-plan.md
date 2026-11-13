@@ -36,7 +36,13 @@ The experiment's fixture is a native composite with ordinary children, not anoth
    evaluating bindings, selecting transitions, calling guard/phase callbacks or draining the agenda. Commit
    accepted order, queue/receipt state, consumed request and the normal reply/continuation outputs through
    the existing fenced turn. An enqueue result is not the admission receipt.
-4. Release a typed admission reply through the normal post-commit reply mechanism. A lost response is uncertain,
+4. Add a generic request-correlated post-commit reply operation to the prototype turn. The current `Emit`
+   broadcasts to all workflow observers and retains their addresses; it cannot safely serve independent
+   admission requests. A targeted reply names one request actually consumed by this turn, routes only to that
+   request's reply address, and does not enroll/retain it as a workflow observer. Its receipt is released only
+   after commit even when that request's ordinary route opted into early workflow output. Preserve existing
+   `Emit` semantics. No request/caller address is copied into retained semantic receipt state.
+   A lost response is uncertain,
    not a rejected/accepted guess. A retry with a fresh transport ID and the same sender ID resolves the committed
    decision without another queue entry. Definite failure before commit must not release acceptance.
 5. Pending capacity includes a selected in-flight input until its evaluation settles. Retained receipt capacity
@@ -44,8 +50,10 @@ The experiment's fixture is a native composite with ordinary children, not anoth
    cannot evict a previously accepted input or assign it a different order. This first probe need not evaluate
    queued chart events; the selected-slot fixture may represent a recorded pending evaluation explicitly.
 6. Keep control and authored-work turns separate even if polling returns a mixed inbox. Process a prefix of
-   admission requests only, hold the remaining normal messages, and skip authored draining. On a normal-work
-   turn, hold admission requests until their own control turn. Do not indefinitely postpone an earlier normal
+   admission requests only, hold the remaining normal messages, and skip authored draining. When messages are
+   held for a different kind of turn, send one normal durable self-continuation in that commit: held rows alone
+   sleep. On a normal-work turn, hold admission requests until their own control turn and likewise wake it.
+   Do not indefinitely postpone an earlier normal
    continuation because later admission attempts keep arriving. Record source/arrival order used by this rule.
 
 The precise prototype API/type names are internal engineering choices. Preserve the ordinary Event/timer
@@ -70,6 +78,10 @@ Exercise root and nested Sequence placement, both persistence modes used by the 
 - same sender ID/contents with a fresh transport ID returns its receipt; changed content conflicts;
 - a recorded selected input occupies one slot; receipt budget refusal does not erase accepted receipts;
 - mixed normal/admission inboxes retain each message for its correct turn and make forward progress;
+- both mixed-inbox orders finish their owed turns with no further external arrivals, including a reload;
+- two simultaneous distinct request addresses receive only their own input's reply; repeated refused requests
+  and fresh-transport retries do not accumulate workflow observers or send later replies to old callers;
+- a caller opting into early workflow output still gets its admission receipt only after commit;
 - after normal child fault and recorded blockage, new inputs still receive metadata admission decisions;
 - failed commit before apply, applied commit/lost acknowledgement, fresh-owner reload and stale fenced write;
 - an obsolete frame address cannot target a replacement visit/another nested machine;
