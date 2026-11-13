@@ -245,7 +245,9 @@ function renderCanvas({ draft: initialDraft, catalog, isBpmnDesigner, readOnly =
   } = {};
 
   function Harness() {
-    const scope = resolveScope(draft.state.rootActivity, [], catalogByVersion);
+    // The editor memoizes the scope (useWorkflowScope), so the canvas projection reruns only when the draft does.
+    const current = draft;
+    const scope = React.useMemo(() => resolveScope(current.state.rootActivity, [], catalogByVersion), [current]);
     const canvas = useWorkflowCanvas({
       draft,
       scope,
