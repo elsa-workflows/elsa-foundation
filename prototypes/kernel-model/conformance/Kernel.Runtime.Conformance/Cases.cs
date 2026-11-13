@@ -139,6 +139,41 @@ public static class Cases
             That(watch.Elapsed < h.Lease, $"the takeover took {watch.ElapsedMilliseconds} ms, a lease is {h.Lease.TotalMilliseconds} ms");
         }, Default with { Timing = new RuntimeTiming(TimeSpan.FromSeconds(6), TimeSpan.FromMilliseconds(400)) }),
 
+        new("fence: a node whose scope was taken while it stalled is told, and activates it again", Level.Required, async h =>
+        {
+            var a = await h.StartAsync();
+            await Settle(h);
+            h.StoreOf(a.Name).Stall(h.Lease * 2);       // the node pauses; its lease on partition 0 runs out meanwhile
+            await Task.Delay(h.Lease + TimeSpan.FromMilliseconds(200));
+            var thief = await h.Outside.TakeAsync(0, "thief", h.Lease);      // another process takes it, then dies without releasing it
+            That(thief is not null, "the stalled node's lease on partition 0 did not run out");
+            await Task.Delay(h.Lease * 2);
+            That(h.Watcher.FencedOn(a.Name) > 0, "no pass of the stalled node learned that it lost partition 0");
+            await Settle(h, "partition 0 activated again");
+            var tokens = Enumerable.Range(0, 5).Select(i => "f" + i).ToList();
+            foreach (var token in tokens) await h.AddAsync(Token(0, "c", token));
+            await Applied(h, 0, "c", tokens, h.Lease * 3 + Slack);
+        }, Fence: true),
+
+        new("split: two activations of one scope at once, on two sides; the fence lets one of them write", Level.Required, async h =>
+        {
+            await h.StartAsync(side: 0);
+            await h.StartAsync(side: 1);
+            await Settle(h);
+            var holder = h.Watcher.Holders(h.Partitions)[0].Single();
+            var tokens = Enumerable.Range(0, 20).Select(i => "s" + i).ToList();
+            // The holder's next commit is in flight when the network splits: it executes three leases later, under an
+            // epoch that is no longer the partition's. Meanwhile the other side activates the scope and handles the same
+            // messages.
+            h.StoreOf(holder).StallNextCommit(h.Lease * 3, partition: 0);
+            foreach (var token in tokens) await h.AddAsync(Token(0, "c", token));
+            await Applied(h, 0, "c", tokens, h.Lease * 4 + Slack);
+            await Task.Delay(h.Lease * 2);       // the stalled commit executes
+            That(h.Watcher.Overlaps > 0, "no two activations of one scope were ever held at once: the case did not split");
+            That(h.Recorded.Refused > 0 || h.Watcher.FencedOn(holder) > 0, "the stale side was never refused");
+            await Applied(h, 0, "c", tokens, TimeSpan.Zero);
+        }, Fence: true),
+
         new("join: a node that joins gets a share of the scopes", Level.Reference, async h =>
         {
             await h.StartAsync();

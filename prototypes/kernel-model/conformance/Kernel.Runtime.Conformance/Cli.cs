@@ -17,8 +17,21 @@ public static class Cli
             case ["semantic", .. var rest]:
                 var outcomes = await Cases.RunAsync(runtime, store, filter: Filter(rest));
                 return outcomes.Any(o => !o.Passed && o.Case.Level == Level.Required) ? 1 : 0;
+            case ["semantic-broken", .. var rest]:
+                var broken = await Cases.RunAsync(runtime, store, brokenFence: true, filter: c => c.Fence && (Filter(rest)?.Invoke(c) ?? true));
+                var caught = broken.Count(o => !o.Passed);
+                Console.WriteLine($"fence broken on purpose: {caught} of {broken.Count} fence cases failed, as they must");
+                return caught == broken.Count ? 0 : 1;
+            case ["stress" or "stress-broken", .. var rest]:
+                var options = new RuntimeStressOptions { BrokenFence = args[0] == "stress-broken" };
+                if (rest.Length > 0) options = options with { Seconds = int.Parse(rest[0], CultureInfo.InvariantCulture) };
+                if (rest.Length > 1) options = options with { Messages = int.Parse(rest[1], CultureInfo.InvariantCulture) };
+                Console.WriteLine($"{runtime.Name} on {store.Name}: stress {options.Seconds} s, {options.Messages} messages, {options.NodesPerSide} nodes on each of two sides, " +
+                    $"lease {options.Lease.TotalMilliseconds} ms, fault rate {options.FaultRate}{(options.BrokenFence ? ", FENCE BROKEN ON PURPOSE" : "")}");
+                var result = await RuntimeStress.RunAsync(runtime, store, options);
+                return options.BrokenFence ? result == 0 ? 1 : 0 : result;
             default:
-                Console.Error.WriteLine("semantic [filter]");
+                Console.Error.WriteLine("semantic [filter] | semantic-broken [filter] | stress [seconds] [messages] | stress-broken [seconds] [messages]");
                 return 2;
         }
     }

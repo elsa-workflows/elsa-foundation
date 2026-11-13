@@ -14,7 +14,7 @@ public sealed record HarnessSetup(int Partitions, RuntimeTiming Timing, double F
 public sealed class Harness : IAsyncDisposable
 {
     private readonly ProvidedStore _provided;
-    private readonly ConcurrentDictionary<string, bool> _names = new();
+    private readonly ConcurrentDictionary<string, NodeStore> _stores = new();
     private readonly List<IRuntimeNode> _nodes = [];
     private readonly HashSet<string> _gone = [];
     private IRuntimeCluster _cluster = null!;
@@ -56,10 +56,13 @@ public sealed class Harness : IAsyncDisposable
         get { lock (_nodes) return _nodes.Where(n => !_gone.Contains(n.Name)).ToList(); }
     }
 
+    /// <summary>The node's way to the store, which a case can stall.</summary>
+    public NodeStore StoreOf(string node) => _stores[node];
+
     private NodeServices Node(string name)
     {
-        var store = Recorded;
-        if (!_names.TryAdd(name, true)) lock (Reused) Reused.Add(name);
+        var store = new NodeStore(Recorded);
+        if (!_stores.TryAdd(name, store)) lock (Reused) Reused.Add(name);
         var options = new WorkerOptions
         {
             Lease = Lease, Horizon = TimeSpan.FromSeconds(2), PollLimit = 40, MaxBatch = 40, MaxAttempts = 1_000_000, Partitions = Partitions,
