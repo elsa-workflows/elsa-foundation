@@ -1,0 +1,132 @@
+{
+  "family": "Weaver",
+  "from": "1.0.0",
+  "to": "1.1.0",
+  "captureStartedAtUtc": "2026-11-13T18:16:13.767975+00:00",
+  "captureElapsedSeconds": 249.471,
+  "transport": "test-only-weaver-fixture: followed by the production WeaverRecordCodec envelope; synthetic plaintext, no encryption or authentication claim",
+  "database": "Actual migrated SQLite stores, fresh database admitted at each actual writer current version. Runtime SQLite DDL was not recorded. Original complete content-column JSON bytes are retained.",
+  "writers": [
+    {
+      "role": "source",
+      "head": "dff7c490d0e5501b22d4ba89beb389c956d4f423",
+      "tree": "9664f7ff693ce2f244f6e27fdd63b2aeb1e70330",
+      "schema": "1.0.0",
+      "discoveryCase": "Elsa.Weaver.Persistence.Tests.CaptureWeaverSchemaFixtures.Capture_real_version_admitted_writer_content_once",
+      "discoveredCases": 1,
+      "discoveryLogSha256": "b4e953c76bc16bba7e380561f1999c7b769e6b9ea402204bfcd49e07b26b6b8d",
+      "productSource": "dff7c490d0e5501b22d4ba89beb389c956d4f423",
+      "captureCasesPassed": 1,
+      "testDllSha256": "d85c38e43180acf8925e96f8aca3524c84174383e649255d90184dd46c20d21b",
+      "dependencyCount": 57,
+      "allDependencyBytesUnchangedAcrossCapture": true,
+      "oneToOneDefinitionAndCodebaseVerified": true,
+      "trxSha256": "1c667714aa8eeceb77a3010626a38bb1d7e5bac439bc5a2134b2b79990f321a2"
+    },
+    {
+      "role": "expected",
+      "head": "bcf82cec1cb59912608cc4984c57974c409f63dd",
+      "tree": "5361e78d6bc64308bf5a47502a8a86f80cb7d16a",
+      "schema": "1.1.0",
+      "discoveryCase": "Elsa.Weaver.Persistence.Tests.CaptureWeaverSchemaFixtures.Capture_real_version_admitted_writer_content_once",
+      "discoveredCases": 1,
+      "discoveryLogSha256": "1a38b6393358a84807d065597dc1a4b4b78d8f03e736d8332a61354050231d7e",
+      "productSource": "bcf82cec1cb59912608cc4984c57974c409f63dd",
+      "captureCasesPassed": 1,
+      "testDllSha256": "2256793a084bbdc3b5a93df43ea8115d1d67e514f18398ae564369e3ba24bc07",
+      "dependencyCount": 58,
+      "allDependencyBytesUnchangedAcrossCapture": true,
+      "oneToOneDefinitionAndCodebaseVerified": true,
+      "trxSha256": "49124a75693519e852e146da796e864a9d6fe8cebe1e64b6daf4ae3de54a6d67"
+    }
+  ],
+  "auxiliarySourceSha256": {
+    "WeaverSchemaFixtureSeed.cs": "384ea97e205f8ab97136b02cab72325d78113c45c18f6221e1fe8da4b45df644",
+    "CaptureWeaverSchemaFixtures.cs": "69e4314020adf2484e4cd9a074f016861c0c6c4906cb88629c5888ff4f51bdda"
+  },
+  "controllerSha256": "4b9ae4854e557088b4a558ba22f6b539ce5ede94f9745093c9fae0b52b50f5e4",
+  "captureReceiptSha256": "7689f07b7a0fbb87280edb35e73c68330baeb747c3d9c59fc31c32d1231765be",
+  "independentRawAuditSha256": "2bff73baed46f445959e473318b1a57dbcc3805773ea0c2639911e0715a6d392",
+  "independentRawAuditScope": "Full archive member hashes, both actual writer TRXs/assemblies/managed dependencies, five original row pairs, source restoration and external invocation/empty-cgroup closeouts. A separate manual review joined the three TRXs and nineteen selected raw files against the archive-bound selection map.",
+  "selectedRawMetadataCustodySha256": "b748c58467b39423d3265f23733bf087bc6048d7de124c38013a96a2b55c9ef9",
+  "rawArchive": {
+    "bytes": 680233901,
+    "sha256": "c7b192a6e6b967b6a9caa19066dc6005ea99de00f875a1bbfef4c2f500f6632e"
+  },
+  "sdk": {
+    "version": "10.0.402",
+    "executableSha256": "8b3d902364f618e31e029d4eba077d52c141dd641e375f4555715604806e44b6"
+  },
+  "normalPersistence": {
+    "sourceHead": "bcf82cec1cb59912608cc4984c57974c409f63dd",
+    "additionalInputs": "These ten original captured JSON files, with the temporary capture Fact removed and normal test assembly rebuilt.",
+    "casesPassed": 189,
+    "canonicalCasesPassed": 4,
+    "failed": 0,
+    "skipped": 0,
+    "trxSha256": "346b66d3c670400bbd25e542dd6b90eb0144abe7460fcd221be2817f445ec93e",
+    "externalCloseoutSha256": "acb2a201d2e2b65e11313ab418a004c4592f73d687acbce2b0e208e36cbdf4b1"
+  },
+  "worker": {
+    "instanceUuid": "8ed033d0-f996-4b21-a040-cc184ed226fe",
+    "cpuQuotaPercent": 100,
+    "memoryMaxBytes": 3221225472,
+    "firstMutationAtUtc": "2026-11-13T17:58:20.050617+00:00",
+    "originalExpiresAtUtc": "2026-11-13T19:28:20.050617+00:00",
+    "deallocatedAtUtc": "2026-11-13T18:34:08.605902+00:00",
+    "resourceGroupConfirmedAbsentAtUtc": "2026-11-13T18:36:40.698312+00:00"
+  },
+  "pairs": {
+    "WeaverSessionRow": {
+      "columns": [
+        "Payload",
+        "PausedTurnPayload",
+        "PendingAuditsPayload"
+      ],
+      "sourceSha256": "af71c62e0449126e00fd03b0a49a8f34267659d469ab8a74e101a83062c07a89",
+      "expectedSha256": "af71c62e0449126e00fd03b0a49a8f34267659d469ab8a74e101a83062c07a89",
+      "contentStringsEqual": true
+    },
+    "WeaverMessageRow": {
+      "columns": [
+        "Payload"
+      ],
+      "sourceSha256": "59d29335ca55780e79c01a5f834510e6e2da06007b25b9d5fda7d0eca9d83a65",
+      "expectedSha256": "59d29335ca55780e79c01a5f834510e6e2da06007b25b9d5fda7d0eca9d83a65",
+      "contentStringsEqual": true
+    },
+    "WeaverContextRow": {
+      "columns": [
+        "Payload"
+      ],
+      "sourceSha256": "1adadf856186eac4350b720aa5a86a5bf4f87d2ec70ae578d8dd3375ff8ae51c",
+      "expectedSha256": "1adadf856186eac4350b720aa5a86a5bf4f87d2ec70ae578d8dd3375ff8ae51c",
+      "contentStringsEqual": true
+    },
+    "WeaverProposalRow": {
+      "columns": [
+        "Payload"
+      ],
+      "sourceSha256": "251ca1b8fdc2b9134891532d983b616dba9068eaf9d00406a641537f93c7cef1",
+      "expectedSha256": "251ca1b8fdc2b9134891532d983b616dba9068eaf9d00406a641537f93c7cef1",
+      "contentStringsEqual": true
+    },
+    "WeaverAuditRow": {
+      "columns": [
+        "Payload"
+      ],
+      "sourceSha256": "87ea409156bbbe767ca761a63e43b8474e1c88fee07d1437921441d045f484d8",
+      "expectedSha256": "87ea409156bbbe767ca761a63e43b8474e1c88fee07d1437921441d045f484d8",
+      "contentStringsEqual": true
+    }
+  },
+  "evidence": "https://github.com/elsa-workflows/elsa-foundation/pull/3845#issuecomment-6861803697",
+  "limits": [
+    "Never regenerate fixtures during tests or CI",
+    "HistoricalAgent captures remain unchanged and are not inputs",
+    "Synthetic transport is not cryptographic proof; fresh writer admission is not fleet-finalization proof",
+    "Runtime SQLite DDL was not recorded",
+    "No four-provider, packaged/custom-host, native restart, browser, live-provider or resulting-main acceptance",
+    "No contract freeze or Program completion"
+  ]
+}
