@@ -37,7 +37,7 @@ internal static class BoundaryCases
         var original = h.Row;
         Require(original is { Creation: 1, Status: InstanceStatus.Running }, "normal writer did not create qualified header");
         foreach (var invalid in new[] { original with { Creation = 2 }, original with { StartIntent = "replacement" },
-            original with { ParentCreation = 1 }, original with { Retired = true }, CreationProtocol.Retire(original) })
+            original with { ParentCreation = 1 }, original with { Parent = "0/forged-parent" }, original with { Retired = true }, CreationProtocol.Retire(original) })
         {
             var turn = Write(invalid, original, invalid.Retired);
             await Refused(h.Store, async () => { await h.Store.CommitAsync(Batch(h.Store, turn)); }, "forged immutable/retired header");

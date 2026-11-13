@@ -69,6 +69,7 @@ public static class CreationProtocol
         if (turn.Row is not { } row) return;
         if (row.Creation < 0 || row.ParentCreation < 0) RefuseWrite("negative creation identity");
         if (row.Creation == 0 && (row.Retired || row.StartIntent is not null || row.ParentCreation != 0)) RefuseWrite("legacy row cannot carry a partial creation header");
+        if (row.Creation > 0 && (row.Parent is null ? row.ParentCreation != 0 : row.ParentCreation <= 0)) RefuseWrite("incomplete exact parent address");
         if (row.Retired)
         {
             if (!turn.Delete || previous is not { Creation: > 0, Retired: false } || row.Status == InstanceStatus.Running || row != Retire(previous))
@@ -82,7 +83,8 @@ public static class CreationProtocol
         }
         else if (previous is { })
         {
-            if (row.Creation != previous.Creation || row.StartIntent != previous.StartIntent || row.ParentCreation != previous.ParentCreation)
+            if (row.Creation != previous.Creation || row.StartIntent != previous.StartIntent || row.ParentCreation != previous.ParentCreation ||
+                row.Creation > 0 && row.Parent != previous.Parent)
                 RefuseWrite("creation header is immutable");
         }
         else if (row.Creation > 0 && (row.Creation != 1 || string.IsNullOrEmpty(row.StartIntent)))

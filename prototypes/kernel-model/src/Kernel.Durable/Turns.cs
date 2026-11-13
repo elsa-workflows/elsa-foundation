@@ -83,7 +83,7 @@ public sealed class TurnInput
 
     internal Slot Slot { get; }
     public string Actor { get; }
-    public InstanceRow? Row => Slot.Row is { Retired: false } row ? row : null;
+    public InstanceRow? Row => Slot.CurrentRow;
     public InstanceRow? Previous => Slot.Row;
     public long Creation => Row?.Creation ?? Spec?.Creation?.Generation ?? 0;
 

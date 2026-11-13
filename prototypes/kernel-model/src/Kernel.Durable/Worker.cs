@@ -546,7 +546,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
         if (_type.Command(input) is { } command)
             Enqueue(Bound(command, slot));
         else if (due.Find(i => i.Attempts >= _options.MaxAttempts && i.Message.Kind != Kinds.JobFinished) is { } poison)
-            Enqueue(Bound(_type.Park(slot.Row, instance, due, spec, $"message {poison.Message.Id} was on trial when {poison.Attempts} owners were lost"), slot));
+            Enqueue(Bound(_type.Park(slot.CurrentRow, instance, due, spec, $"message {poison.Message.Id} was on trial when {poison.Attempts} owners were lost"), slot));
         else if (slot.Row is null && spec is null)                   // no target and no start spec: dropped and journalled
             Enqueue(new TurnOutcome(instance) { Slot = slot, Consumed = due, Journal = Json.Write(due.Select(i => "dropped " + i.Message.Id)), Status = null });
         else
@@ -718,7 +718,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
                 // The marks ride with the first of these commits that lands.
                 outcome = await CommitAsync([unit], marks, trial, generation, cancellationToken);
                 if (outcome == Outcome.Refused && unit.Slot is { } slot)
-                    outcome = await CommitAsync([Bound(_type.Park(slot.Row, unit.Instance, unit.Consumed, unit.Spec, _refusal), slot)], marks, trial, generation, cancellationToken);
+                    outcome = await CommitAsync([Bound(_type.Park(slot.CurrentRow, unit.Instance, unit.Consumed, unit.Spec, _refusal), slot)], marks, trial, generation, cancellationToken);
                 if (outcome == Outcome.Landed) (marks, trial) = ([], []);
             }
             if (outcome == Outcome.Refused && generation == _generation) Reset();   // nothing left to set apart
@@ -950,7 +950,8 @@ public sealed class TrialGate
 internal sealed class Slot
 {
     public long ActiveCreation;    // volatile latch captured by background drivers; retired/missing is -1
-    public InstanceRow? Row;        // the committed row; null while the instance does not exist
+    public InstanceRow? Row;        // committed actor row or retired lifecycle predecessor
+    public InstanceRow? CurrentRow => Row is { Retired: false } row ? row : null;
     public Message? Starting;     // semantic creation envelope, including a failed initial turn; excludes transport retry identity
     public object? State;           // the live state between turns, equal to Row.State
     public bool Loaded, Busy;
