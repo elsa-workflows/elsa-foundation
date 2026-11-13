@@ -248,6 +248,11 @@ class SourcePairTests(unittest.TestCase):
             self.assertTrue(acceptance.supplies_pr_head(root, merged, merged))
             self.assertFalse(acceptance.supplies_pr_head(root, merged, base))
             self.assertFalse(acceptance.supplies_pr_head(root, reviewed, base))
+            shallow = root / 'shallow-checkout'
+            subprocess.run(['git', 'clone', '-q', '--depth', '1', root.resolve().as_uri(), str(shallow)], check=True, capture_output=True)
+            self.assertTrue((shallow / '.git/shallow').is_file())
+            self.assertTrue(acceptance.supplies_pr_head(shallow, merged, reviewed))
+            self.assertFalse(acceptance.supplies_pr_head(shallow, merged, base))
 
     def test_reported_studio_source_is_the_checkout_actually_built(self):
         with tempfile.TemporaryDirectory() as directory:

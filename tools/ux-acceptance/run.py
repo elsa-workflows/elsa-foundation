@@ -233,10 +233,11 @@ def supplies_pr_head(root, source_sha, head):
     if source_sha == head:
         return True
     # pull_request CI normally tests GitHub's two-parent merge, with the reviewed PR as parent2.
-    result = subprocess.run(['git', '-c', 'core.fsmonitor=false', 'rev-list', '--parents', '-n', '1', source_sha],
+    result = subprocess.run(['git', '-c', 'core.fsmonitor=false', 'cat-file', '-p', source_sha],
                             cwd=root, text=True, capture_output=True)
-    parents = result.stdout.split()
-    return result.returncode == 0 and len(parents) == 3 and parents[2] == head
+    headers = result.stdout.partition('\n\n')[0].splitlines()
+    parents = [line.removeprefix('parent ') for line in headers if line.startswith('parent ')]
+    return result.returncode == 0 and len(parents) == 2 and parents[1] == head
 
 
 def run(output, journey=None, studio_root=None):
