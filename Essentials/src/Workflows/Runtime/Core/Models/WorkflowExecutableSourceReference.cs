@@ -40,6 +40,10 @@ public sealed record WorkflowExecutableSourceReference(
     string? TenantId = null,
     IReadOnlyList<WorkflowExecutableActivityPresentationRecord>? ActivityPresentation = null)
 {
+    /// <summary>Actual physical scope stamped by protected logical publication; absent on legacy source records.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public PersistenceScope? PublicationScope { get; init; }
+
     /// <summary>
     /// Preserves the authored-input constructor introduced before tenant scope became part of the reference.
     /// </summary>

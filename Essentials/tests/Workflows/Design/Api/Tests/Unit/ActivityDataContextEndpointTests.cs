@@ -202,7 +202,8 @@ public sealed class ActivityDataContextEndpointTests
         var request = host.Request() with { Snapshot = View(Sequence(Node("consumer"))), Query = new() { Source = Result("producer", optional: true) } };
         var result = await host.Invoke(request);
         Assert.Equal("invalid", result.Body.State);
-        Assert.Null(result.Body.Analysis);
+        Assert.Empty(result.Body.Analysis!.Sources);
+        Assert.NotEmpty(result.Body.Analysis.Findings);
         var persisted = await host.Invoke(request with { Snapshot = null });
         Assert.Equal("supported", persisted.Body.State);
         Assert.Equal("activity:producer:$result", Assert.Single(persisted.Body.Analysis!.Sources).Id);
@@ -340,8 +341,14 @@ public sealed class ActivityDataContextEndpointTests
     public async Task Literal_member_metadata_is_unknown_and_its_real_metadata_revision_invalidates_the_context()
     {
         var shape = new CallbackShape(() => { });
-        using var host = new Host(services => services.AddSingleton<IActivitySerializedShapeSource>(shape));
-        var request = host.Request() with { Query = new() { Source = Result("producer"), MemberPath = ["a.b", ""] } };
+        using var host = new Host(services =>
+        {
+            services.Configure<WorkflowDesignValidatorOptions>(options => options.MemberReads = true);
+            services.AddSingleton<IActivitySerializedShapeSource>(shape);
+        });
+        var request = host.Request() with { Query = new() { Source = new(JsonSerializer.SerializeToElement(new {
+            producerNodeId = "producer", projectionKey = "$result"
+        }), "ActivityResult"), MemberPath = ["a.b", ""] } };
         var first = await host.Invoke(request);
         Assert.Equal("supported", first.Body.State);
         Assert.Equal(new[] { "a.b", "" }, shape.LastPath);
