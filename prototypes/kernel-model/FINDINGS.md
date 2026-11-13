@@ -1025,8 +1025,11 @@ which reset the partition). The EF store now:
   owner writes its instances' waits, under the fence, so nothing races the check.
 
 The common path costs nothing more: the waits are still in the one batch. The second attempt costs a commit's round
-trips plus one per wait, and only a batch that re-subscribes or removes what is absent pays it. M6 reasoned that the
-kernel's own turns do neither, so only a model that does it pays.
+trips plus one per wait. A batch pays it when its first count that does not match is on a wait (a wait removed while
+absent, or a stale owner's batch whose unsubscribe is checked before its fence), or when it subscribes anything and
+fails with a definite error while the fence holds (a wait that is there, or any other definite error, which then fails
+the second attempt too, and each of the kernel's one-by-one commits after it). M6 reasoned that the kernel's own turns
+never re-subscribe or remove what is absent.
 
 **Gates.**
 

@@ -256,7 +256,8 @@ that does not match: in memory *unknown*, EF and MongoDB *not landed* or *defini
 today (reasoned from `Turn`), but a model that re-subscribes would park on EF. Proposed: subscriptions are idempotent,
 and a key that exists where a commit creates a row is a count that does not match (not landed). **Decided and built in
 round 4 (FINDINGS 25.2):** subscriptions are idempotent in the contract, both cases are required, and every store meets
-them (EF by a careful retry; MongoDB already did). The count that does not match is still a reference case.
+them (EF by a careful retry; MongoDB already did). What a count that does not match answers is still open: the
+required cases accept any refusal (not landed, unknown or definite).
 
 ### The provider's own job
 
