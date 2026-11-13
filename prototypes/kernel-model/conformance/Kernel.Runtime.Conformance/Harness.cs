@@ -106,6 +106,7 @@ public sealed class Harness : IAsyncDisposable
     public async Task KillAsync(IRuntimeNode node)
     {
         lock (_nodes) if (!_gone.Add(node.Name)) return;
+        Watcher.Killing(node.Name);
         await node.KillAsync();
         Watcher.Dead(node.Name);
     }
