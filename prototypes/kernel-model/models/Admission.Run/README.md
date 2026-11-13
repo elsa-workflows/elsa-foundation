@@ -62,3 +62,7 @@ delete execution, re-entry, equal frame IDs in different actors, parent-finished
 budget reuse after expiry, or legacy-version fixtures. Shared identity, remaining time/version obligations,
 transport/value retention roots, provider/process restart, full business-input adapter and Studio remain open.
 No execution result is asserted until the exact-source packet is recorded. No product schema/default is selected.
+
+Work-in-progress finding: source review found that a pre-commit `turn.Now` is insufficient to promise a full R
+if the finalizing commit is delayed. The terminal fixture now delays that commit by more than R. This source is
+not merge-ready until an authoritative persisted commit anchor is implemented and independently qualified.

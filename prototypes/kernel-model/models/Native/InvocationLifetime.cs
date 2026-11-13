@@ -1,7 +1,28 @@
+using System.Text.Json;
+
 namespace Kernel.Native;
 
 internal static class InvocationLifetime
 {
+    // A failed initial turn can legitimately leave no model state (Park's persisted JSON null).
+    internal static ValueTask Missing(ITurn turn)
+    {
+        foreach (var message in turn.Inbox.Where(m => m.Kind is InvocationInput.Kind or ReceiptQuery.Kind))
+        {
+            Admission result;
+            try
+            {
+                var address = message.Payload is null ? null : message.Kind == ReceiptQuery.Kind
+                    ? message.Read<ReceiptQuery>() : message.Read<InvocationInput>() is { } input ? new ReceiptQuery(input.Frame, input.Id) : null;
+                result = address is null ? new("", "", "Invalid", Actor: turn.Instance.Ref.Id)
+                    : new(address.Frame, address.Id, "UnknownInvocation", Actor: turn.Instance.Ref.Id);
+            }
+            catch (JsonException) { result = new("", "", "Invalid", Actor: turn.Instance.Ref.Id); }
+            turn.Reply(message, Request.Response, result);
+        }
+        return ValueTask.CompletedTask;
+    }
+
     internal static InputReceipt Final(InputReceipt receipt, string status, string outcome, long now) =>
         receipt with { Status = status, Outcome = outcome, FinalizedAt = now,
             ValidUntil = receipt.Retention is { } duration ? checked(now + duration) : null };

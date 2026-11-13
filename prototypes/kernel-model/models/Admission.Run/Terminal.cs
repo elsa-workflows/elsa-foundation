@@ -40,6 +40,7 @@ internal static class TerminalReceipts
         var workflow = Wf.Workflow("terminal-probe", root);
         NativeWorkflows.Registry.Add(workflow);
         var serial = 0;
+        var delayFinalCommit = false;
         void Require(bool ok, string name, string detail)
         { if (!ok) throw new InvalidOperationException(name + ": " + detail); }
         void Apply(Act act)
@@ -66,7 +67,12 @@ internal static class TerminalReceipts
                     Require(world.Deliveries.Count == before, "T1", "metadata response escaped before commit");
                 }
                 else if (!actor.Worker.NeedsFlush && !actor.Worker.NeedsMeet) return;
-                if (actor.Worker.NeedsFlush) Apply(new("flush", actor.Id));
+                if (actor.Worker.NeedsFlush)
+                {
+                    // Let finalization sit staged for longer than R. The full window starts at durable disposition.
+                    if (delayFinalCommit) { Apply(new("tick", 2000)); delayFinalCommit = false; }
+                    Apply(new("flush", actor.Id));
+                }
                 if (actor.Worker.NeedsMeet) Apply(new("meet", actor.Id));
             }
             throw new InvalidOperationException("T1: terminal inbox failed to settle");
@@ -88,8 +94,9 @@ internal static class TerminalReceipts
         Require(Request(InvocationInput.Kind, a).Result == "Accepted" && Request(InvocationInput.Kind, b).Order == 2,
             "T0", "normal invocation admission failed");
         Apply(new("tick", 2000)); // pending longer than the captured 1000ms terminal window
+        delayFinalCommit = ending == "completed";
         if (ending != "cancelled-queued") { Add(NativeKinds.Resume, new ResumeStimulus("step")); Drain(); }
-        if (ending != "completed") { Add(Kinds.Terminate); Drain(); }
+        if (ending != "completed") { delayFinalCommit = true; Add(Kinds.Terminate); Drain(); }
         var inbox = State().Inboxes![frame];
         Require(inbox.Closed == (ending == "completed" ? "completed" : "cancelled"), "T0", "terminal reason not committed");
         Require(inbox.Pending.Count == 0 && !world.Store.Instances[target.Id].State.Contains("payload-canary"), "T3", "receipt payload retained");

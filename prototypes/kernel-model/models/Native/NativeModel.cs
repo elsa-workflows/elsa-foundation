@@ -133,9 +133,14 @@ public sealed class NativeModel(WorkflowRegistry registry, NativeOptions? option
     public ValueTask TurnAsync(ITurn turn, CancellationToken cancellationToken) => new Burst(this, turn, cancellationToken).RunAsync();
 
     public bool HandlesMetadata(Message message) => message.Kind is InvocationInput.Kind or ReceiptQuery.Kind;
-    public ValueTask MetadataAsync(ITurn turn, CancellationToken cancellationToken) => new Burst(this, turn, cancellationToken, true).MetadataAsync();
-    public void TerminateMetadata(object state, long now) => InvocationLifetime.Terminate((NativeState)state, now, (Options.AdmissionFlaws & AdmissionFlaw.KeepPayload) != 0);
-    public bool ProtectsDeletion(object state, long now) => (Options.AdmissionFlaws & AdmissionFlaw.IgnoreRetention) == 0 && InvocationLifetime.Protected((NativeState)state, now);
+    public ValueTask MetadataAsync(ITurn turn, CancellationToken cancellationToken) => turn.State is NativeState
+        ? new Burst(this, turn, cancellationToken, true).MetadataAsync() : InvocationLifetime.Missing(turn);
+    public void TerminateMetadata(object state, long now)
+    {
+        if (state is NativeState native) InvocationLifetime.Terminate(native, now, (Options.AdmissionFlaws & AdmissionFlaw.KeepPayload) != 0);
+    }
+    public bool ProtectsDeletion(object state, long now) => (Options.AdmissionFlaws & AdmissionFlaw.IgnoreRetention) == 0 &&
+        state is NativeState native && InvocationLifetime.Protected(native, now);
 
     /// <summary>A Background leaf, run as a background job: its inputs were materialized in the turn that started it.</summary>
     public async ValueTask<object?> ExecuteJobAsync(IJob job, CancellationToken cancellationToken)
