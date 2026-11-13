@@ -57,11 +57,13 @@ There are no setters.
 - [ ] T009 [US1] *(API)* Return `(Value, Selection)` from `IJavaScriptScriptEvaluator`
   (`Expressions/JavaScript/Core/Contracts/`). Install the built-in `complete(result, outcomes)` for script activities in
   `Expressions/JavaScript/Jint/Services/JintJavaScriptScriptEvaluator.cs`: a pure constructor returning a branded,
-  frozen completion value (P-6). Recognize it on the top-level returned value only; omitted outcomes → `Unspecified`,
+  frozen completion value (P-6). Recognize it on the top-level returned value only (including `return f()` where `f`
+  returns it); omitted or `undefined` outcomes → `Unspecified`,
   `[]` → `Empty`, names → `Named` (repeats counted once); a nested completion value or an invalid `outcomes` faults with
   `VF-ACT-006`; a look-alike plain object is data. Add `complete` to the reserved built-in names; do not install it in
   `binding-readonly-v1`. Keep `JavaScriptExecutionApi.cs` L77–80 returning the value only. Tests for each case of
-  FR-007 to FR-007b
+  FR-007 to FR-007b, including an `undefined` result under both undefined policies, a completion value returned from a
+  nested function, and `null` outcomes
 - [ ] T010 [US1] Remove `SelectOutcome`, `UnmatchedOutcome` and routing by return value from
   `Activities/Scripting/Activities/RunJavaScript.cs`; complete with the evaluator's selection; rewrite the doc comment
   (L22–31)
@@ -95,9 +97,9 @@ There are no setters.
   `BackgroundActivityCompletionCodec.ValidateOutcome`. Update `ActivityCompletionContractTests.cs` L46 and
   `WorkflowParentActivityCompletionSchedulerWorkHandlerTests.cs` L30 to assert the code
 - [ ] T018 [US3] *(API)* Add `ScriptOutcomeLiteralValidator` in `Workflows/Publishing/Elsa.Workflows.Publishing/Services/`:
-  parse RunJavaScript scripts with Acornima, find calls of the script outcome API with literal arguments, and report
-  `VF-AUTH-010` for names outside the node's set; tests for literal, array literal, computed (no diagnostic) and
-  template-literal arguments
+  parse RunJavaScript scripts with Acornima, find `complete(_, <string literal | array of string literals>)` calls, and report
+  `VF-AUTH-010` for names outside the node's set; tests for literal, array literal, computed (no diagnostic),
+  template-literal arguments, a call in a nested function, and an aliased `complete` (no diagnostic)
 - [ ] T019 [US3] Tests for US3 scenarios 2–4: computed unknown name, an activity-declared catch-all, several names on a
   single-outcome node
 - [ ] T019a [US3] Publication checks: `VF-AUTH-013` for a node without `Done` whose activity cannot guarantee a
@@ -134,7 +136,7 @@ There are no setters.
   declares the flag; tests
 - [ ] T027 [US5] *(API)* Convert `setOutcome` / `setOutcomes` instead of refusing them: remove them from
   `RefusedHostFunctions` in `Extensions/Elsa3/src/Mapping/Services/Elsa3ExpressionRewriter.cs` L510–522, rewrite to
-  `return complete(<value>, <pending>)` (P-12), and preserve routing per Q7: the known set from `PossibleOutcomes`, literals and connected
+  `return complete(<value>, <pending>)` (P-12), renaming a script's own `complete` binding or refusing with guidance, and preserve routing per Q7: the known set from `PossibleOutcomes`, literals and connected
   ports, plus a converter-declared catch-all with no connection that the script selects for any other name, with
   Elsa 3 `Done` mapped onto it; refuse with guidance when no faithful route exists or `PossibleOutcomes` is empty and
   the name is computed; no warning-only conversion; update

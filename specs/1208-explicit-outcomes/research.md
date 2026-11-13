@@ -169,8 +169,8 @@ Already a list: `RuntimeCompleteActivityCommandPayload.OutcomeNames` (L22, L47, 
 
 Acornima 1.6.1 (`Directory.Packages.props` L15) is already used for script parsing in `JavaScriptBindingSyntax.cs`,
 `JavaScriptExpressionToolingProvider.cs` L67–74 and the Elsa 3 rewriter. No publication diagnostic reads
-`RunJavaScript.Script` today. FR-015 adds one: find calls of the script outcome API whose arguments are string
-literals (or arrays of them), and compare them with the node's set.
+`RunJavaScript.Script` today. FR-015 adds one: find `complete(...)` calls whose second argument is a string
+literal (or an array of them), in nested functions too, and compare the names with the node's set.
 
 ## R-10 Documents to update
 

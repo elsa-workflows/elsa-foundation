@@ -20,7 +20,7 @@ Resolution to the names a parent routes by:
 ```text
 attempt starts ──► Unspecified
   return complete(r, o) ──► Named(names), Empty or Unspecified   (FR-007; plain data ──► Unspecified)
-  completes      ──► the selection is validated (set, flag, fallback) and committed with the completion
+  completes      ──► the selection is validated (set, flag, `Done` rule) and committed with the completion
   faults/cancels ──► the selection is discarded; nothing is dispatched
   suspends       ──► the selection is discarded; the resuming attempt starts Unspecified
 ```

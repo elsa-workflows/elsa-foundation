@@ -16,9 +16,11 @@ to FR-007b, Q1). There are no setters.
 
 - Calling `complete` changes nothing; only returning its value selects. The selection takes effect only on successful
   completion.
-- The value is recognized by a brand only the evaluator holds, and only as the script's own returned value. Nested in
-  returned data it faults with `VF-ACT-006`.
-- `outcomes` is a string or an array of strings; anything else faults with `VF-ACT-006`. Repeats count once.
+- The value is recognized by a brand only the evaluator holds, on the script's own top-level returned value, wherever
+  it was created (`return f()` counts). Nested in returned data it faults with `VF-ACT-006`.
+- `outcomes` is omitted or `undefined` (unspecified), a string or an array of strings; anything else, `null`
+  included, faults with `VF-ACT-006`. Repeats count once. An `undefined` result follows the ADR 0045 §2 boundary rule.
+- The script body is a function body (ADR 0083): only a top-level `return` returns a value.
 - `complete` exists only in script activities, not in input-binding expressions, and is a reserved built-in name.
 
 ## Ports
@@ -43,6 +45,9 @@ to FR-007b, Q1). There are no setters.
 | `VF-AUTH-013` | A node whose pinned set has no `Done` and whose activity cannot guarantee a selection on every successful completion (FR-002b) | publication |
 | `VF-ACT-006` | A selected name is outside the pinned set (no node-level fallback); or several names on a node that does not allow several; or an unspecified selection without `Done`; or an undeclared result projection | run time, fault code |
 | `ELS3-SCRIPT-OUTCOME-CATCHALL` | Info: the converter declared a catch-all outcome with no connection for computed `setOutcome` names outside the known set (FR-027) | conversion |
+
+Conversion is faithful or refused: no case converts with only a warning, and a behaviour-changing conversion exception
+needs a separate approved decision (FR-027).
 
 Removed: `ELS3-BEHAVIOUR-SCRIPT-OUTCOME-ROUTING`, and the `VF-IMP-005` refusals of `setOutcome` / `setOutcomes`.
 Narrowed: `ELS3-ACTIVITY-UNSUPPORTED-MODE` no longer covers Switch `MatchAny` or Complete with several literal

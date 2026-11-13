@@ -201,7 +201,7 @@ with several outcomes. They convert and run with the same routing, or are refuse
 **Acceptance Scenarios**:
 
 1. **Given** an Elsa 3 script that calls `setOutcome('Approved')`, **When** it is converted, **Then** the converted
-   script selects `Approved` through the script outcome API, and `Approved` is in the node's outcome set.
+   script returns `complete(<its result>, 'Approved')`, and `Approved` is in the node's outcome set.
 2. **Given** an Elsa 3 script that calls `setOutcome` with a computed name and `PossibleOutcomes` is empty, **When**
    it is converted, **Then** it refuses with guidance that names the node and how to declare the outcomes (Q7).
 3. **Given** an Elsa 3 Switch in "match any" mode, **When** it is converted and run, **Then** every matching case's
@@ -290,16 +290,25 @@ pins exactly those ports, and a connection on a port the node does not declare i
 
   `result` is the activity's result and is materialized like any returned value (ADR 0046). The script MUST complete
   with an unspecified selection when it returns ordinary data.
+
+  The RunJavaScript body keeps its function-body contract (ADR 0083): it returns with a top-level `return`, and a
+  final expression without `return` is not a returned value. A script that ends without `return` has no result and
+  an unspecified selection.
 - **FR-007a**: *Recognition.* `complete` is pure: calling it changes nothing, and only returning its value selects.
   - The value carries a brand held by the evaluator that script data cannot forge. A plain object of the same shape
     (`{ result, outcomes }`) is ordinary data (FR-008).
-  - It is recognized only as the script's own returned value. A completion value nested inside returned data, or
-    stored as a result, faults the step with `VF-ACT-006`.
+  - It is recognized by its brand on the script's own top-level returned value, wherever the value was created: `return
+    f()`, where `f` returns `complete(...)`, selects. A completion value nested inside returned data, or stored as a
+    result, faults the step with `VF-ACT-006`.
   - `complete` is installed for script activities only, not for input-binding expressions (they select no outcome).
-    It is a reserved built-in name (ADR 0045 §5, D-5): a script that declares `complete` gets the reserved-name
-    publish diagnostic.
-- **FR-007b**: *Validation.* `outcomes` MUST be a string or an array of strings. Anything else (`null`, a number, an
-  object, a blank name) faults the step with `VF-ACT-006`. A name repeated in the array counts once, in the order of
+    It is a reserved built-in name in every JavaScript surface (ADR 0045 §5, D-5), including input-binding expressions
+    where it is not installed: a script or binding that declares `complete` gets the reserved-name publish
+    diagnostic.
+- **FR-007b**: *Validation.* `outcomes` MUST be omitted, `undefined` (both unspecified), a string or an array of
+  strings. Anything else (`null`, a number, an object, a blank name) faults the step with `VF-ACT-006`; `null` is
+  refused on purpose, so a missing selection is never confused with an empty one. An `undefined` `result`
+  (`complete()`, `complete(undefined, 'A')`) follows the ADR 0045 §2 boundary rule exactly as a plain
+  `return undefined` does: an error by default, `null` under the undefined-as-null policy. A name repeated in the array counts once, in the order of
   its first occurrence. String literals passed as `outcomes` are checked at publication (FR-015); computed names are
   checked at run time (FR-016, FR-017).
 - **FR-008**: A script's ordinary returned value (a string, number, object, array or null) MUST be the activity's
@@ -327,7 +336,9 @@ pins exactly those ports, and a connection on a port the node does not declare i
 **Validation**
 
 - **FR-015**: A literal outcome name in a script that is not in the node's outcome set MUST be a publication
-  diagnostic that names the node, the name and the set. Which call forms count as literal follows the API chosen in Q1.
+  diagnostic that names the node, the name and the set. A string literal, or an array of string literals, passed as
+  the second argument of a `complete(...)` call counts as literal, wherever the call appears (including nested
+  functions). An aliased `complete` or a computed name is checked at run time (FR-016).
 - **FR-016**: A selected name outside the node's pinned declared set MUST fault the step with `VF-ACT-006`, carried as
   the fault code (Q6). No node-level setting turns an invalid outcome name into another outcome.
 - **FR-017**: A selection of several names on a node whose set does not allow several MUST fault the step with
