@@ -59,7 +59,7 @@ Kept from Elsa 4 (see `docs/reports/elsa-4-activity-contract-parity-2026-07.md`)
 - `[Background]` is Elsa 4's background placement for a leaf; `[External]` is the side-effect profile External.
 
 Ported activities (run: `smoke` exercises each in Ephemeral, Balanced and Durable): WriteLine, SetVariable, Sequence,
-If, Flowchart (connections; joins All and Any), Parallel (threshold join), ForEach (iteration scope with
+If, Flowchart (on the graph engine of `models/Graph`: gateways, implicit dead-path joins), Parallel (threshold join), ForEach (iteration scope with
 `CurrentItem`, `CurrentIndex`), While, Delay, Event, PublishEvent, DispatchWorkflow (with and without waiting),
 HttpEndpoint, WriteHttpResponse, CallService (slow external work, `[Background]`), SendNotification (`[External]`).
 
@@ -73,7 +73,7 @@ What changed, and why:
 | A stateful activity's inputs are evaluated again on resume, not taken from a pinned snapshot | No snapshot to store. The activities that wait keep what they need in their state |
 | Sequence is stateless: the next child follows from the position of the one that completed | Smaller state |
 | `If` children fill named slots (Then, Else); its outcome is True or False either way | The same activity works inside a flowchart |
-| A flowchart completes when nothing under it runs; a join that can no longer be reached is skipped | No dead-path elimination (reasoned: an All join after a decision that skips a branch never fires) |
+| The Flowchart runs on the graph engine (`models/Graph`, main's Flowchart engine): paths, arrivals, dead paths. A node with several inbound connections is a join decided by the dead-path join (main's default); gateways (`Gateway`) are explicit; a first-wins loser is cancelled. A run starts at one node, main's: the pending start trigger when it is a child of the Flowchart, else the start node (the first child without inbound connections); other unconnected children do not start, and a trigger below one of them is not reached (main refuses that placement when a workflow is published; the prototype has no publish step). Unlike main, the trigger counts only while it is undelivered (a Flowchart run again by a loop starts at the start node), and no node carries main's trigger flag, so loop-closing connections are classified from the start node only | Before, without dead paths, an All join after a decision never fired and the flowchart completed without it (run: `smoke`, "an All join after a decision", then 'left no no', now 'left yes yes') |
 | No DI, no services in activities. The host gates Background work and performs External effects | Enough for the spike; the activity map's DI would come back unchanged |
 | A tiny expression language (`Expression.cs`), compiled to closures once per text | Instead of JavaScript |
 | `Cancel` maps to completion with outcome Cancelled | There is no cancel callback on composites yet |
@@ -103,7 +103,9 @@ Persistence modes are commit boundaries:
 - **Ephemeral:** `StartSpec.Ephemeral`; the kernel writes nothing when the instance ends in its first turn and sent
   nothing. Otherwise it commits like Balanced.
 
-Journal entries are short strings: `c:frame:node` (completed), `j:...` (a join fired), `a:frame:n` (attempt),
+Journal entries are short strings: `c:frame:node` (completed), `j:...` (a join fired: `j:frame` for a Parallel,
+`j:frame:node:round:by` for a Flowchart, where the round is the engine's iteration key and `by` the scheduling id the
+engine gives the firing), `a:frame:n` (attempt),
 `s:` and `d:` (a child started, waited for or detached), `r:` (a child wait resumed), `f:`, `x:` (faulted, cancelled).
 The simulation's checks read them.
 
@@ -183,6 +185,7 @@ SQLite, engine calls (commands):
 | writeline-sequence, 5 / 10 / 20 / 40 | Durable | 146 / 221 / 371 / 671 | 45 (33) / 85 (63) / 165 (123) / 325 (243) |
 | fork-join-resume, direct resume | Balanced | 131 | 26 (18) |
 | fork-join-resume, direct resume | Durable | 194 | 42 (30) |
+| flowchart, three event branches, an All join, three direct resumes | Ephemeral / Balanced / Durable | | 29 (23) / 29 (23) / 85 (65): the same as the old native Flowchart (round 4) |
 | http-reference | Ephemeral / Balanced / Durable | 83 / 83 / 149 | 0 / 5 (3) / 29 (21) |
 
 Where the commits of fork-join-resume go (run, from the traced commands): the start (row, subscription, meet ticket),
@@ -208,7 +211,7 @@ commit for the toy), so those columns are not shown.
 ## 6. The simulation
 
 Native instances join the mix (40% of the outside actions when `--native` is on): sequences with an External
-activity, a three-way join over event waits, a two-of-three threshold join, a flowchart All join over two waits,
+activity, a three-way join over event waits, a two-of-three threshold join, a flowchart parallel join over two waits,
 two waited children in a Parallel plus a detached one, a ForEach with a Delay in the body, a While and a background job,
 and publishers that publish to other instances' waits. Starts come from outside (retried) or are handed to an owner
 in memory; events come by publish (before or after the wait), by direct resume, or from the publishers; some
@@ -219,7 +222,7 @@ Checks:
 | Check | The brief's words | How |
 |---|---|---|
 | N1 | Every activity that completed in committed state completed exactly once | No frame id appears twice in `c:` entries of the committed journal (every action); at the end the multiset of completed activity types equals a run without faults |
-| N2 | A join fires once | No `j:` entry twice (Parallel join, flowchart join node) |
+| N2 | A join fires once | No `j:` entry twice. A Parallel joins once; a Flowchart join fires at most once per scheduling id in a round, so a join behind a merge may fire once per token (narrowed in round 4: N2 no longer holds a Flowchart join to once per round; the design sketch's G2 does, once the graph checks are in) |
 | N3 | A child is started once and its parent resumes once | A child id is started by one frame, a frame starts one child, a child wait is resumed only by its own child and once; at the end every waited child of a finished parent resumed it exactly once |
 | N4 | A non-replay-safe activity's attempt is committed before it runs in Durable mode | When an External effect happens, the committed journal holds its attempt |
 | N5 | Final variables and outputs match a run without faults | Every finished native instance (children too) has the variables of the same definition and input run alone, without faults; everything started from outside finished or was cancelled by request |
@@ -314,4 +317,4 @@ Reasoned.
 - The cross-node HTTP transport is in process; the owner-lost case across nodes is reasoned.
 - Client disconnect mapped to cancel, streaming responses, request bodies by reference.
 - GraphActivity, CreateUserTask, HumanReview, RunEtl, RunRules and EvaluateDecision; Switch, For, Do, CompensationScope.
-- Dead-path elimination in flowchart joins; incident strategies; retries of faulted activities.
+- Incident strategies; retries of faulted activities.

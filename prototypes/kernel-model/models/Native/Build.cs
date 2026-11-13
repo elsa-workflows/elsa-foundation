@@ -54,11 +54,11 @@ public static class Wf
     public static Node ForEach(string id, Binding items, Node body) => Node<ForEach>(id, ("Items", items)).With(body);
     public static Node While(string id, Binding condition, Node body) => Node<While>(id, ("Condition", condition)).With(body);
 
-    public static Node Flowchart(string id, Node[] nodes, Connection[] connections, params (string Node, JoinMode Mode)[] joins)
+    public static Node Flowchart(string id, Node[] nodes, Connection[] connections, params (string Node, Gateway Kind)[] gateways)
     {
         var node = Node<Flowchart>(id).With(nodes);
         node.Connections.AddRange(connections);
-        foreach (var (target, mode) in joins) node.Joins[target] = mode;
+        foreach (var (child, kind) in gateways) node.Gateways[child] = kind;
         return node;
     }
 

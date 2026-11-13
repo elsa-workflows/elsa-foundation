@@ -44,7 +44,13 @@ public sealed class ExternalAttribute : Attribute;
 
 // ---- the graph -----------------------------------------------------------------------------------------------------
 
-public enum JoinMode { Any, All }
+/// <summary>
+/// What a flowchart node is besides its activity: main's gateway kinds (the graph engine's policy kinds). A node with
+/// none routes on its outcome, and a node with several inbound connections is an implicit join, decided by the
+/// dead-path join (main's default). The join modes are explicit: ParallelJoin and InclusiveJoin wait for every inbound
+/// connection, live or dead; Merge never waits; FirstWins races its outbound branches and cancels the losers.
+/// </summary>
+public enum Gateway { Decision, ParallelFork, ParallelJoin, InclusiveFork, InclusiveJoin, FirstWins, Merge }
 
 /// <summary>A flowchart connection from a source's outcome to a target.</summary>
 public sealed record Connection(string Source, string Target, string Outcome = "Done");
@@ -57,7 +63,8 @@ public sealed class Node(string id, Type type)
     public Dictionary<string, Binding> Inputs { get; } = new(StringComparer.OrdinalIgnoreCase);
     public List<Node> Children { get; } = [];
     public List<Connection> Connections { get; } = [];
-    public Dictionary<string, JoinMode> Joins { get; } = new(StringComparer.Ordinal);
+    /// <summary>For a flowchart: the gateway kind of a child, by its id.</summary>
+    public Dictionary<string, Gateway> Gateways { get; } = new(StringComparer.Ordinal);
     /// <summary>Output captures: variable name to a path in the result ("" is the whole result).</summary>
     public Dictionary<string, string> Captures { get; } = new(StringComparer.Ordinal);
     /// <summary>The named child slot this node fills in its parent, where the parent has slots (If: Then, Else).</summary>
