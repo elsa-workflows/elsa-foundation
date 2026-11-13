@@ -156,12 +156,14 @@ a concurrent stress test with injected connection failures and the provider's ow
 |---|---|---|
 | In-memory | A lock; the reference, and the simulation's store | Suite, simulation |
 | EF Core, PostgreSQL | The fence as its own statement (3 round trips) or as concurrency tokens in the one `SaveChanges` (2) | Suite, stress, cost |
-| EF Core, SQL Server | `Engine` dialect: `OUTPUT`, `MERGE`; **RCSI on** (E5); an index for the take (E8); `MaxBatchSize(1000)` (E7) | Suite, stress, cost |
+| EF Core, SQL Server | `Engine` dialect: `OUTPUT`, `MERGE`; **RCSI on** (E5); an index for the take (E8); `MaxBatchSize(1000)` (E7); **the checked fence by default** (E9) | Suite, stress, cost |
 | EF Core, MySQL | Dialect: no `RETURNING`, `INSERT IGNORE`, upserts; the take at READ COMMITTED (E8); `MaxBatchSize(1000)` | Suite, stress, cost |
 | EF Core, SQLite | One writer; `seq` assigned under the write lock; BUSY is transient | Suite, stress, cost |
 | MongoDB 8.0 | A replica set; the fence then one ordered client-level bulk write in a transaction; an upsert fence at index 0 when it rides in the batch; abort before reporting a failure (M2) | Suite, stress, cost |
 
-Every provider turns EF's savepoints off (E4). The set-based deletes of a terminate and a delete are statements of
+The EF store's default fence is the one decided on 12 and 13 November: in the batch on every engine but SQL Server,
+whose default is the checked fence (`Engine.FenceInBatchByDefault`; E9). Either can still be chosen. The MongoDB store
+keeps its own default, the checked fence. Every provider turns EF's savepoints off (E4). The set-based deletes of a terminate and a delete are statements of
 their own on EF, after the batch, so that with the fence in the batch they run only after it held; on MongoDB they are
 in the one bulk write.
 
@@ -362,11 +364,12 @@ a position that is missing below the partition's position: it was deleted, not w
 kept events: an event and a wait both committed within the window are delivered once; for the others, an event
 published after the wait committed is delivered once); 14 one bad instance; 15 callers; 16 suspended; 17 termination;
 18 state versions; 19 rebind; 20 event starts; 21 memory bound; 22 delete; 23 fair share. With native instances in the
-mix: N1 an activity completes once, N2 a join fires once (a Flowchart join once per scheduling id; G2 holds it to once per round), N3 a child starts once and resumes once, N4 a Durable
+mix: N1 an activity completes once, N2 a join fires once (a Flowchart join once per scheduling id; G2 holds it to once per round where no merge lies
+upstream), N3 a child starts once and resumes once, N4 a Durable
 External effect runs only under a committed attempt, N5 final variables equal a run without faults, and N6 (merge) an
 External effect that runs again is told that its turn may have run before. The graph invariants of the sketch (round 4):
 G1 path conservation, G2 a join fires at most once per round, G3 an All join fires once every inbound of its round has
-arrived, live or dead, G4 a graph completes exactly when no path is live, G5 no path outlives its cancelled scope.
+arrived, live or dead (G2 and G3 skip a merge and every node forward of it; the mix has no merge), G4 a graph completes exactly when no path is live, G5 no path outlives its cancelled scope.
 
 ## What it costs (measured on the model)
 
