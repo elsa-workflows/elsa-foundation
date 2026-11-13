@@ -32,6 +32,39 @@ afterEach(async () => {
 
 const notifications = { notify: vi.fn((_input: { level: string; title: string; message?: string }) => ({ id: "test", update() {}, dismiss() {} })), track: <T,>(work: Promise<T>) => work };
 describe("theme management with an empty selectable default", () => {
+  it("links theme views and modes while preserving an unsaved name", async () => {
+    const custom = { ...cloneThemeDefinition(builtInThemeDefinitions[0]), id: "managed-theme", name: "Managed Theme", source: "custom", enabled: true, published: true };
+    const context = { http: { getJson: async () => ({ themes: [custom], themesMode: "DirectoryOnly", directoryThemeIds: [], defaultThemeId: "managed-theme", assets: [] }) } } as unknown as StudioEndpointContext;
+    const api = { host: context, dialogs: { confirm: async () => true } } as unknown as ElsaStudioModuleApi;
+    await update(() => root.render(<ThemeProvider storeContext={context}><ThemeBuilderPage api={api} /></ThemeProvider>));
+    const customButton = Array.from(container.querySelectorAll<HTMLButtonElement>(".theme-builder-list button")).find(button => button.textContent?.includes("Managed Theme"))!;
+    await update(() => customButton.click());
+    assertLinkedPanels(container);
+    const name = () => Array.from(container.querySelectorAll<HTMLInputElement>(".theme-builder-detail input")).find(input => !input.disabled && input.type !== "file" && input.type !== "checkbox")!;
+    const edited = `${name().value} edited`;
+    const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
+    await update(() => { setValue.call(name(), edited); name().dispatchEvent(new Event("input", { bubbles: true })); });
+    const view = () => container.querySelector<HTMLButtonElement>("[aria-label='Theme Builder views'] [aria-selected='true']")!;
+    view().focus();
+    await update(() => view().dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true })));
+    expect(document.activeElement).toBe(view());
+    expect(view().textContent).toBe("Tokens");
+    assertLinkedPanels(container);
+    for (const key of ["End", "Home", "ArrowRight", "ArrowLeft"]) {
+      const mode = container.querySelector<HTMLButtonElement>("[aria-label='Theme mode'] [aria-selected='true']")!;
+      mode.focus();
+      await update(() => mode.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true })));
+      expect(document.activeElement).toBe(container.querySelector("[aria-label='Theme mode'] [aria-selected='true']"));
+      assertLinkedPanels(container);
+    }
+    for (const tab of container.querySelectorAll<HTMLButtonElement>("[aria-label='Theme Builder views'] [role='tab']")) {
+      await update(() => tab.click());
+      assertLinkedPanels(container);
+    }
+    await update(() => container.querySelector<HTMLButtonElement>("[aria-label='Theme Builder views'] [data-tab-id='overview']")!.click());
+    expect(name().value).toBe(edited);
+  });
+
   it("explains an empty DirectoryOnly selection while keeping colour-mode and navigation controls usable", async () => {
     const context = { http: { getJson: async () => ({ themes: [], themesMode: "DirectoryOnly", directoryThemeIds: [], defaultThemeId: "", assets: [] }) } } as unknown as StudioEndpointContext;
     await update(() => root.render(<ThemeProvider storeContext={context}><AppearancePage onNavigate={() => {}} /></ThemeProvider>));
@@ -187,3 +220,17 @@ describe("theme management with an empty selectable default", () => {
     expect(container.querySelector(".theme-builder-detail h3")?.textContent).toBeTruthy();
   });
 });
+
+function assertLinkedPanels(container: Element) {
+  const tabs = Array.from(container.querySelectorAll<HTMLButtonElement>('[role="tab"]'));
+  expect(tabs.length).toBeGreaterThan(0);
+  const ids = Array.from(container.querySelectorAll('[id]'), element => element.id);
+  expect(new Set(ids).size).toBe(ids.length);
+  for (const tab of tabs) {
+    const panel = document.getElementById(tab.getAttribute("aria-controls") ?? "");
+    expect(panel, `Panel for ${tab.textContent}`).not.toBeNull();
+    expect(panel?.getAttribute("role")).toBe("tabpanel");
+    expect(panel?.getAttribute("aria-labelledby")).toBe(tab.id);
+    expect(panel?.hidden).toBe(tab.getAttribute("aria-selected") !== "true");
+  }
+}

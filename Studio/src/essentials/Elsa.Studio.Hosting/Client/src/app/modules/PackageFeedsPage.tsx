@@ -1,9 +1,9 @@
 import { StudioPageHeader, StudioButton, StudioField } from "../ui";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState, useId } from "react";
 import { PackagePlus, Pencil, RefreshCcw, Trash2, X } from "lucide-react";
 import { defaultStudioHostId, useDialogFocus } from "../../sdk";
 import type { ElsaStudioModuleApi } from "../../sdk";
-import { SkeletonRows, StudioAlert, StudioTabs, StudioToolbar, StudioToolbarGroup } from "../ui";
+import { SkeletonRows, StudioAlert, StudioTabs, StudioTabPanel, StudioToolbar, StudioToolbarGroup } from "../ui";
 import {
   addFeed,
   defaultRetentionPolicy,
@@ -32,6 +32,7 @@ interface FeedDraft {
 }
 
 export function PackageFeedsPage({ api }: { api: ElsaStudioModuleApi }) {
+  const hostTabsBaseId = useId();
   const { hosts, byHost } = useModuleManagementRegistries(api);
   const [activeHostId, setActiveHostId] = useState<HostId>(defaultStudioHostId);
   const activeHost = hosts.find(host => host.id === activeHostId) ?? hosts[0];
@@ -66,7 +67,11 @@ export function PackageFeedsPage({ api }: { api: ElsaStudioModuleApi }) {
           </StudioToolbarGroup>
         </StudioToolbar></>} />
 
-      <StudioTabs tabs={hostTabs} activeTab={activeHostId} onSelect={tabId => setActiveHostId(tabId as HostId)} ariaLabel="Hosts" />
+      <StudioTabs tabs={hostTabs} activeTab={activeHostId} onSelect={tabId => setActiveHostId(tabId as HostId)} baseId={hostTabsBaseId} ariaLabel="Hosts" />
+      {hostTabs.map((item, index) => item.id !== activeHostId ? (
+        <StudioTabPanel key={item.id} baseId={hostTabsBaseId} index={index} hidden>{null}</StudioTabPanel>
+      ) : null)}
+      <StudioTabPanel baseId={hostTabsBaseId} index={hostTabs.findIndex(item => item.id === activeHostId)} className="modules-tab-panel">
 
       {activeError ? <StudioAlert tone="danger">{activeError}</StudioAlert> : null}
       {activeStatus ? <StudioAlert tone="info">{activeStatus}</StudioAlert> : null}
@@ -95,6 +100,7 @@ export function PackageFeedsPage({ api }: { api: ElsaStudioModuleApi }) {
       ) : (
         <SkeletonRows rows={6} label={`Loading ${activeHost.label} package feeds`} />
       )}
+      </StudioTabPanel>
     </section>
   );
 }

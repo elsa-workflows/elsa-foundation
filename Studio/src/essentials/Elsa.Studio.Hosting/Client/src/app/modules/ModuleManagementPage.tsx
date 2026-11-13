@@ -1,8 +1,8 @@
 import { StudioPageHeader, StudioButton } from "../ui";
-import React, { useMemo, useRef, useState } from "react";
+import React, { useMemo, useRef, useState, useId } from "react";
 import { Boxes, CloudUpload, RefreshCcw, Trash2 } from "lucide-react";
 import { defaultStudioHostId, type ElsaStudioModuleApi } from "../../sdk";
-import { EmptyState, SkeletonRows, StatusChip, StudioAlert, StudioDataGrid, StudioTabs, StudioToolbar, StudioToolbarGroup } from "../ui";
+import { EmptyState, SkeletonRows, StatusChip, StudioAlert, StudioDataGrid, StudioTabs, StudioTabPanel, StudioToolbar, StudioToolbarGroup } from "../ui";
 import {
   deleteDropFolderPackage,
   formatFileSize,
@@ -57,6 +57,7 @@ const inspectorTabs = [
 const followUpRefreshDelaysMs = [500, 1500, 3000, 6000];
 
 export function ModuleManagementPage({ api }: { api: ElsaStudioModuleApi }) {
+  const hostTabsBaseId = useId();
   const { hosts, byHost } = useModuleManagementRegistries(api);
   const [activeHostId, setActiveHostId] = useState<HostId>(defaultStudioHostId);
   // Per-host view state (selection, source view, inspector tab). Registry data itself now lives in the
@@ -151,7 +152,11 @@ export function ModuleManagementPage({ api }: { api: ElsaStudioModuleApi }) {
           </StudioToolbarGroup>
         </StudioToolbar></>} />
 
-      <StudioTabs tabs={hostTabs} activeTab={activeHostId} onSelect={tabId => setActiveHostId(tabId as HostId)} ariaLabel="Hosts" />
+      <StudioTabs tabs={hostTabs} activeTab={activeHostId} onSelect={tabId => setActiveHostId(tabId as HostId)} baseId={hostTabsBaseId} ariaLabel="Hosts" />
+      {hostTabs.map((item, index) => item.id !== activeHostId ? (
+        <StudioTabPanel key={item.id} baseId={hostTabsBaseId} index={index} hidden>{null}</StudioTabPanel>
+      ) : null)}
+      <StudioTabPanel baseId={hostTabsBaseId} index={hostTabs.findIndex(item => item.id === activeHostId)} className="modules-tab-panel">
 
       {activeError ? <StudioAlert tone="danger">{activeError}</StudioAlert> : null}
       {activeStatus ? <StudioAlert tone="info">{activeStatus}</StudioAlert> : null}
@@ -230,6 +235,7 @@ export function ModuleManagementPage({ api }: { api: ElsaStudioModuleApi }) {
           />
         </div>
       )}
+      </StudioTabPanel>
     </section>
   );
 }
@@ -456,6 +462,7 @@ function ModuleInspector({
   activeTab: InspectorTab;
   onSelectTab(tab: InspectorTab): void;
 }) {
+  const inspectorTabsBaseId = useId();
   if (!registry) {
     return (
       <aside className="modules-inspector">
@@ -475,13 +482,18 @@ function ModuleInspector({
         <StatusChip tone={statusTone(selectedRow?.status ?? "available")}>{selectedRow?.status ?? "available"}</StatusChip>
       </div>
 
-      <StudioTabs tabs={inspectorTabs} activeTab={activeTab} onSelect={tab => onSelectTab(tab as InspectorTab)} ariaLabel="Inspector" />
+      <StudioTabs tabs={inspectorTabs} activeTab={activeTab} onSelect={tab => onSelectTab(tab as InspectorTab)} baseId={inspectorTabsBaseId} ariaLabel="Inspector" />
+      {inspectorTabs.map((item, index) => item.id !== activeTab ? (
+        <StudioTabPanel key={item.id} baseId={inspectorTabsBaseId} index={index} hidden>{null}</StudioTabPanel>
+      ) : null)}
+      <StudioTabPanel baseId={inspectorTabsBaseId} index={inspectorTabs.findIndex(item => item.id === activeTab)}>
 
       {activeTab === "overview" ? <OverviewTab host={host} registry={registry} selectedRow={selectedRow} /> : null}
       {activeTab === "contributions" ? <ContributionsTab selectedRow={selectedRow} /> : null}
       {activeTab === "package" ? <PackageTab registry={registry} selectedRow={selectedRow} /> : null}
       {activeTab === "manifest" ? <ManifestTab registry={registry} selectedRow={selectedRow} /> : null}
       {activeTab === "diagnostics" ? <DiagnosticsTab registry={registry} selectedRow={selectedRow} /> : null}
+      </StudioTabPanel>
     </aside>
   );
 }
