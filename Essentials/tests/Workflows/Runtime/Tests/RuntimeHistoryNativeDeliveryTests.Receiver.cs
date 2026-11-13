@@ -63,6 +63,26 @@ public sealed partial class RuntimeHistoryNativeDeliveryTests
         Assert.DoesNotContain("private", JsonSerializer.Serialize(observations));
     }
 
+    [Theory]
+    [InlineData(false)] [InlineData(true)]
+    public async Task An_expired_replacement_cannot_supply_the_original_saved_recipients_expiry_reason(bool differentOwner)
+    {
+        using var f = await Fixture.CreateAsync("complete", publication: true);
+        await f.SeedPublisherAsync(); await f.PublishAsync(); await f.ProcessPublicationsAsync();
+        var original = (await f.Bookmarks.FindAsync(Run, Wait))!;
+        await f.Bookmarks.DeleteAsync(Run, Wait);
+        var replacement = original with { ActivityExecutionId = differentOwner ? "replacement-activity" : original.ActivityExecutionId,
+            ExpiresAt = f.Clock.GetUtcNow().AddSeconds(-1) };
+        await f.Bookmarks.SaveAsync(replacement);
+        Assert.Equal(RuntimeSchedulerWorkItemResultStatus.Completed, Assert.Single((await f.DrainAsync()).Items).Status);
+        var skipped = Assert.Single((await f.History.ReadPageAsync(new(Run))).Items, IsReceiverObservation);
+        Assert.Equal(ActivityId, skipped.ActivityExecutionId);
+        Assert.Equal("receiver-wait-no-longer-eligible", skipped.Metadata["history.reasonCode"]);
+        var retained = (await f.Bookmarks.FindAsync(Run, Wait))!;
+        Assert.Equal(replacement.ActivityExecutionId, retained.ActivityExecutionId); Assert.Equal(replacement.ExpiresAt, retained.ExpiresAt);
+        Assert.Equal(0, f.Activator.Calls);
+    }
+
     [Fact]
     public async Task A_prior_profile_without_receiver_unmatched_kind_is_not_widened_by_installing_this_owner()
     {
@@ -99,6 +119,62 @@ public sealed partial class RuntimeHistoryNativeDeliveryTests
         var caught = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => f.DrainAsync(cancellation.Token).AsTask());
         Assert.Same(original, caught); Assert.Single(await f.Queue.ListAllAsync(new(Run))); Assert.Equal(0, f.Activator.Calls);
         Assert.DoesNotContain((await f.History.ReadPageAsync(new(Run))).Items, IsReceiverObservation);
+    }
+
+    [Fact]
+    public async Task A_matching_requested_cancellation_inside_the_provider_domain_failure_is_restored_for_a_direct_receiver_caller()
+    {
+        using var cancellation = new CancellationTokenSource(); OperationCanceledException? original = null;
+        var control = new ReceiverControl { Before = token =>
+        {
+            cancellation.Cancel(); original = new OperationCanceledException("controlled wrapped cancellation", token);
+            throw new RuntimeHistoryUnavailableException(Run, "record-observation", original);
+        } };
+        using var f = await Fixture.CreateAsync("complete", publication: true, configure: control.Configure);
+        await f.SeedPublisherAsync(); await f.PublishAsync(); await f.ProcessPublicationsAsync(); await ChangeWaitAsync(f, "removed");
+        var work = Assert.Single(await f.Queue.ListAllAsync(new(Run)));
+        var handler = new WorkflowResumeBookmarkSchedulerWorkHandler(f.Services.GetRequiredService<IServiceScopeFactory>(), f.Clock);
+        var caught = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => handler.HandleAsync(work, cancellation.Token).AsTask());
+        Assert.Same(original, caught); Assert.Equal(cancellation.Token, caught.CancellationToken);
+        Assert.Single(await f.Queue.ListAllAsync(new(Run))); Assert.Equal(0, f.Activator.Calls);
+        Assert.DoesNotContain((await f.History.ReadPageAsync(new(Run))).Items, IsReceiverObservation);
+    }
+
+    [Theory]
+    [InlineData(false)] [InlineData(true)]
+    public async Task Unrequested_or_unrelated_wrapped_cancellation_keeps_its_unavailable_domain_cause(bool unrelated)
+    {
+        using var caller = new CancellationTokenSource(); using var other = new CancellationTokenSource();
+        RuntimeHistoryUnavailableException? wrapped = null;
+        var control = new ReceiverControl { Before = token =>
+        {
+            if (unrelated) caller.Cancel();
+            wrapped = new(Run, "record-observation", new OperationCanceledException("other cancellation", unrelated ? other.Token : token));
+            throw wrapped;
+        } };
+        using var f = await Fixture.CreateAsync("complete", publication: true, configure: control.Configure);
+        await f.SeedPublisherAsync(); await f.PublishAsync(); await f.ProcessPublicationsAsync(); await ChangeWaitAsync(f, "removed");
+        var work = Assert.Single(await f.Queue.ListAllAsync(new(Run)));
+        var handler = new WorkflowResumeBookmarkSchedulerWorkHandler(f.Services.GetRequiredService<IServiceScopeFactory>(), f.Clock);
+        var failure = await Assert.ThrowsAsync<RuntimeSchedulerWorkUnavailableException>(() => handler.HandleAsync(work, caller.Token).AsTask());
+        Assert.Same(wrapped, failure.InnerException); Assert.Single(await f.Queue.ListAllAsync(new(Run))); Assert.Equal(0, f.Activator.Calls);
+    }
+
+    [Fact]
+    public async Task A_matching_requested_cancellation_cannot_hide_hard_malformed_data_in_the_same_provider_chain()
+    {
+        using var cancellation = new CancellationTokenSource(); RuntimeHistoryUnavailableException? wrapped = null;
+        var control = new ReceiverControl { Before = token =>
+        {
+            cancellation.Cancel(); wrapped = new(Run, "record-observation", new InvalidDataException("malformed", new OperationCanceledException(token)));
+            throw wrapped;
+        } };
+        using var f = await Fixture.CreateAsync("complete", publication: true, configure: control.Configure);
+        await f.SeedPublisherAsync(); await f.PublishAsync(); await f.ProcessPublicationsAsync(); await ChangeWaitAsync(f, "removed");
+        var work = Assert.Single(await f.Queue.ListAllAsync(new(Run)));
+        var handler = new WorkflowResumeBookmarkSchedulerWorkHandler(f.Services.GetRequiredService<IServiceScopeFactory>(), f.Clock);
+        var failure = await Assert.ThrowsAsync<RuntimeHistoryIntegrityException>(() => handler.HandleAsync(work, cancellation.Token).AsTask());
+        Assert.Same(wrapped, failure.InnerException); Assert.Single(await f.Queue.ListAllAsync(new(Run))); Assert.Equal(0, f.Activator.Calls);
     }
 
     [Fact]

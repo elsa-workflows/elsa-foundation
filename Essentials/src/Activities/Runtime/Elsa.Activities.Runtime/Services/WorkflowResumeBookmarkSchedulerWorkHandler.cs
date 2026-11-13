@@ -159,7 +159,9 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
             var observedAt = _timeProvider.GetUtcNow();
             if (!expected.MatchesAdmission(observed, execution, state, access.RequireScope(), observedAt))
             {
-                var reason = observed is null ? "receiver-bookmark-missing" : observed.State.ExpiresAt is { } expiry && expiry <= observedAt
+                var sameSavedRegistration = observed is not null && observed.Generation == capture.Generation &&
+                    (observed.Scope is null || observed.Scope == access.RequireScope()) && expected.Matches(observed.State);
+                var reason = observed is null ? "receiver-bookmark-missing" : sameSavedRegistration && observed.State.ExpiresAt is { } expiry && expiry <= observedAt
                     ? "receiver-bookmark-expired" : "receiver-wait-no-longer-eligible";
                 await ActivityResumeHistoryObservations.UnmatchedAsync(serviceProvider, workItem, resumePayload, execution, access,
                     observedAt, reason, cancellationToken);

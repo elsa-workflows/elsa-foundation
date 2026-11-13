@@ -1,4 +1,5 @@
 using System.Data.Common;
+using System.Runtime.ExceptionServices;
 using System.Text.Json;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
@@ -59,7 +60,9 @@ internal static class ActivityResumeHistoryObservations
             EnsureCurrent();
             if (!recorded.Recorded) throw Unavailable();
         }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+        catch (Exception failure) when (cancellationToken.IsCancellationRequested && IsUnavailable(failure) &&
+            RequestedCancellation(failure, cancellationToken) is { } cancellation)
+        { ExceptionDispatchInfo.Capture(cancellation).Throw(); throw; }
         catch (RuntimeSchedulerWorkUnavailableException) { throw; }
         catch (RuntimeHistoryIntegrityException) { throw; }
         catch (Exception failure) when (IsUnavailable(failure))
@@ -70,6 +73,16 @@ internal static class ActivityResumeHistoryObservations
 
     private static RuntimeSchedulerWorkUnavailableException Unavailable() => new("runtime.history.capture-unavailable",
         "The saved resume cannot acknowledge its retained receiver history.");
+    private static OperationCanceledException? RequestedCancellation(Exception failure, CancellationToken token)
+    {
+        for (Exception? cause = failure; cause is not null; cause = cause.InnerException)
+        {
+            // Preserve a multi-failure bundle rather than discard a sibling failure as cancellation.
+            if (cause is AggregateException { InnerExceptions.Count: > 1 }) return null;
+            if (cause is OperationCanceledException cancellation && cancellation.CancellationToken == token) return cancellation;
+        }
+        return null;
+    }
     private static bool IsUnavailable(Exception failure)
     {
         if (IsHard(failure)) return false;

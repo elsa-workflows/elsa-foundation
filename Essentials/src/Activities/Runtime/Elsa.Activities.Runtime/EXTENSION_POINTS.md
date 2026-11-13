@@ -15,9 +15,10 @@ hard, and requested cancellation propagates. Earlier profiles without this kind 
 their choices. Event time is the actual eligibility decision; another real invocation after an uncertain write has
 its own observation identity, without another business occurrence. No payload/exception message is persisted.
 
-Fourteen controls are written and NOT RUN:6 removed/replaced/expired versus capture choices;3 pre-write/ambiguous-write/
+Twenty controls are written and NOT RUN:6 removed/replaced/expired versus capture choices;3 pre-write/ambiguous-write/
 false-ack native defer/re-entry cases; older vocabulary; missing Required source owner; requested cancellation; direct
-actual-handler scope drift; malformed data with nested IO. The prior15 native delivery/publication cases are affected
+actual-handler scope drift; malformed data with nested IO;2 expired-replacement generation/owner cases;
+wrapped requested cancellation;2 unrelated/unrequested cancellation cases;hard-cause cancellation precedence. The prior15 native delivery/publication cases are affected
 and NOT RUN. Supplied publisher/target/private state/schema and a controlled callback remain component inputs;
 no authored run, production authority, multiple recipients, physical provider/restart or composed UX is qualified.
 Only the exact saved-recipient admission-mismatch branch is covered here; other receiver no-op and claim-race
