@@ -20,7 +20,7 @@ namespace Elsa.Workflows.Design.Tests;
 public sealed partial class ActivityDataSelectionAnalyzerTests
 {
     [Fact]
-    public async Task With_member_reads_off_a_result_member_read_is_refused_and_a_member_path_query_offers_the_whole_read()
+    public async Task With_member_reads_off_a_result_member_read_is_refused_and_a_member_path_query_offers_nothing()
     {
         using var provider = Provider(services => services.AddSingleton<IActivitySerializedShapeSource>(new FixedShape(Known())));
 
@@ -30,7 +30,8 @@ public sealed partial class ActivityDataSelectionAnalyzerTests
 
         Assert.Equal("ActivityData/UnsupportedMemberBinding", Assert.Single(stored.Findings).Type);
         Assert.Empty(stored.MemberReads);
-        Assert.Equal("ActivityResult", Assert.Single(offered.Sources).Binding!.ExpressionType);
+        Assert.Empty(offered.Sources);
+        Assert.Equal("ActivityData/UnsupportedMemberBinding", Assert.Single(offered.Findings).Type);
     }
 
     [Fact]

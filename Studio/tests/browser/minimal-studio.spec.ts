@@ -51,7 +51,7 @@ for (const item of presets) test(`${item.name} is a complete, persistent preset 
   await page.addScriptTag({ content: axe.source });
   const violations = await page.evaluate(async () => (window as unknown as Window & { axe: typeof axe }).axe.run(document.querySelector(".studio-shell")!, { runOnly: ["color-contrast", "button-name", "label"] }).then(result => result.violations.map(v => ({ id: v.id, nodes: v.nodes.map(n => n.failureSummary) }))));
   expect(violations).toEqual([]);
-  await page.screenshot({ path: testInfo.outputPath(`${item.id}-definitions.png`), fullPage: true });
+  await page.screenshot({ path: testInfo.outputPath(`${item.id.replaceAll(":", "-")}-definitions.png`), fullPage: true });
 });
 
 for (const item of presets) test(`${item.name} keeps workflow headings inside their tracks at desktop and narrow widths`, async ({ page }) => {
@@ -121,7 +121,8 @@ test("minimal logs preserve live controls, selected details and empty state", as
   await page.getByRole("button", { name: "Close structured log details", exact: true }).click();
   await page.getByRole("textbox", { name: "Filter by category", exact: true }).fill("empty");
   await expect(page.getByRole("row", { name: /Select Information structured log/ })).toHaveCount(0);
-  await expect(page.getByText("No structured logs received yet.", { exact: true })).toBeVisible();
+  await expect(page.getByText("No logs match these filters.", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Reset filters", exact: true })).toBeVisible();
 });
 
 test("a public UI consumer opts into Minimal without host CSS", async ({ page }) => {
