@@ -41,3 +41,6 @@ Elsa.Workflows.Publishing.Releases.Capture.Core.ReleaseSourceCapture.<Clone>$() 
 Elsa.Workflows.Publishing.Releases.Capture.Core.ReleaseSourceCapture.Equals(Elsa.Workflows.Publishing.Releases.Capture.Core.ReleaseSourceCapture? other) -> bool
 static Elsa.Workflows.Publishing.Releases.Capture.Core.ReleaseSourceCapture.operator !=(Elsa.Workflows.Publishing.Releases.Capture.Core.ReleaseSourceCapture? left, Elsa.Workflows.Publishing.Releases.Capture.Core.ReleaseSourceCapture? right) -> bool
 static Elsa.Workflows.Publishing.Releases.Capture.Core.ReleaseSourceCapture.operator ==(Elsa.Workflows.Publishing.Releases.Capture.Core.ReleaseSourceCapture? left, Elsa.Workflows.Publishing.Releases.Capture.Core.ReleaseSourceCapture? right) -> bool
+override Elsa.Workflows.Publishing.Releases.Capture.Core.ReleaseSourceCapture.Equals(object? obj) -> bool
+override Elsa.Workflows.Publishing.Releases.Capture.Core.ReleaseSourceCapture.GetHashCode() -> int
+override Elsa.Workflows.Publishing.Releases.Capture.Core.ReleaseSourceCapture.ToString() -> string!
