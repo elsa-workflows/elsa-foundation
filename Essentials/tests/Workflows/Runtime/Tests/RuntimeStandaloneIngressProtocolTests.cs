@@ -102,16 +102,29 @@ public sealed class RuntimeStandaloneIngressProtocolTests
         Assert.Throws<NotSupportedException>(() => new RuntimeSubscriptionStartIdentity(99, Scope, "source", "subscription"));
     }
 
-    [Fact]
-    public void A_workflow_overlay_cannot_mint_standalone_admission_before_any_state_changes()
+    [Theory]
+    [InlineData(false)] [InlineData(true)]
+    public void A_workflow_overlay_cannot_mint_standalone_admission_before_any_state_changes(bool workflowSource)
     {
-        var item = Pending();
+        var item = workflowSource ? WorkflowPending() : Pending();
         var commit = new RuntimeCheckpointCommit("commit", new("checkpoint", "DeferredWork", "workflow", Now, [], new Dictionary<string, string>()),
             new(null, null, [], [], [], [], [], postCommitOutbox:
                 [new(item.OutboxItemId, RuntimeStateChangeOperation.Upsert, item, new Dictionary<string, string>())]),
             [], new Dictionary<string, string>());
         var session = new RuntimeCoalescingSession("workflow", new InMemoryWorkflowSchedulerWorkQueue(), new PersistenceModeOptions());
         Assert.Throws<NotSupportedException>(() => session.BufferDeferred(commit));
+        Assert.False(session.HasBufferedChanges);
+        Assert.Empty(session.RemainingPendingOutboxChanges());
+    }
+
+    [Fact]
+    public void A_cap_flush_cannot_install_physical_standalone_source_state_in_the_overlay()
+    {
+        var item = Pending();
+        var changes = new RuntimeCheckpointStateChangeSet(null, null, [], [], [], [], [], postCommitOutbox:
+            [new(item.OutboxItemId, RuntimeStateChangeOperation.Upsert, item, new Dictionary<string, string>())]);
+        var session = new RuntimeCoalescingSession("workflow", new InMemoryWorkflowSchedulerWorkQueue(), new PersistenceModeOptions());
+        Assert.Throws<NotSupportedException>(() => session.RecordCapFlushState(changes));
         Assert.False(session.HasBufferedChanges);
         Assert.Empty(session.RemainingPendingOutboxChanges());
     }
