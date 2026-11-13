@@ -11,6 +11,7 @@ using Elsa.Serialization.Core;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Core.Services;
+using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Attributes;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -31,8 +32,20 @@ public sealed class ExecutableNodeCompiler(
     RuntimeInputBindingCompiler inputBindingCompiler,
     RuntimeOutputCaptureCompiler outputCaptureCompiler,
     IEnumerable<IOperatorActivitySchedulingCapabilityProvider>? operatorSchedulingCapabilityProviders = null,
-    ValueConversionPlanResolver? conversionPlanResolver = null)
+    ValueConversionPlanResolver? conversionPlanResolver = null,
+    IExecutableStructureNormalizer? structureNormalizer = null)
 {
+    // Preserve the six-argument binary constructor. Standalone callers retain canonical defaults;
+    // composed hosts supply the one registered scoped normalizer through the primary constructor.
+    public ExecutableNodeCompiler(IActivityStructureService activityStructureService, IWellKnownTypeRegistry wellKnownTypeRegistry,
+        RuntimeInputBindingCompiler inputBindingCompiler, RuntimeOutputCaptureCompiler outputCaptureCompiler,
+        IEnumerable<IOperatorActivitySchedulingCapabilityProvider>? operatorSchedulingCapabilityProviders,
+        ValueConversionPlanResolver? conversionPlanResolver)
+        : this(activityStructureService, wellKnownTypeRegistry, inputBindingCompiler, outputCaptureCompiler,
+            operatorSchedulingCapabilityProviders, conversionPlanResolver, null) { }
+
+    private readonly IExecutableStructureNormalizer _structureNormalizer = structureNormalizer ?? new ExecutableStructureNormalizer(inputBindingCompiler);
+
     private readonly IReadOnlyCollection<IOperatorActivitySchedulingCapabilityProvider> _operatorSchedulingCapabilityProviders =
         (operatorSchedulingCapabilityProviders ?? []).ToArray();
 
@@ -820,7 +833,7 @@ public sealed class ExecutableNodeCompiler(
     }
 
     private ExecutableActivityStructure? CompileStructure(string nodeId, ActivityNodeStructure? structure) =>
-        new ExecutableStructureNormalizer(inputBindingCompiler).Normalize(nodeId, structure);
+        _structureNormalizer.Normalize(nodeId, structure);
 
     /// <summary>
     /// Publish-time backstop for the <c>IntrinsicVariableTargetValidator</c> draft guard (#972, PR #971

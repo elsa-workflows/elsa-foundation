@@ -13,7 +13,6 @@ using Elsa.Activities.Sequence;
 using Elsa.Primitives.Models;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Design.Core.Contracts;
-using Elsa.Workflows.Design.Core.Services;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Publishing.Core.Services;
@@ -30,7 +29,7 @@ namespace Elsa.Workflows.Publishing.Api.Tests;
 public sealed partial class BpmnCompleteSourceCompilationTests
 {
     [Fact]
-    public void Template_compiler_preserves_its_existing_constructor_for_precompiled_callers()
+    public void Compiler_constructors_preserve_precompiled_callers()
     {
         Assert.NotNull(typeof(ActivityTemplateCompiler).GetConstructor([
             typeof(IActivityTemplateProviderCompilerRegistry), typeof(IActivityTemplateDependencyDiscovererRegistry),
@@ -44,6 +43,42 @@ public sealed partial class BpmnCompleteSourceCompilationTests
             typeof(IEnumerable<Elsa.Workflows.Design.Validations.Core.Contracts.IActivityDataSelectionDocumentProjector>),
             typeof(Elsa.Workflows.Design.Validations.Core.Contracts.IActivityDataSelectionAnalyzer), typeof(IActivityStructureService)
         ]));
+        Assert.NotNull(typeof(ExecutableNodeCompiler).GetConstructor([
+            typeof(IActivityStructureService), typeof(IWellKnownTypeRegistry), typeof(RuntimeInputBindingCompiler), typeof(RuntimeOutputCaptureCompiler),
+            typeof(IEnumerable<Elsa.Activities.Runtime.Core.Contracts.IOperatorActivitySchedulingCapabilityProvider>), typeof(ValueConversionPlanResolver)
+        ]));
+    }
+
+    [Fact]
+    public async Task One_host_normalizer_is_used_by_workflow_Graph_and_Bpmn_semantic_verification()
+    {
+        var normalizer = new RecordingNormalizer(new ExecutableStructureNormalizer(new RuntimeInputBindingCompiler(TestWellKnownTypeRegistry.Create())));
+        var workflow = await CompileWorkflow(Process(nestedStandardScope: true), normalizer: normalizer);
+        Assert.Equal("host", workflow.RootActivity.Structure!.Payload.GetProperty("normalizer").GetString());
+        // Ordinary node compilation and post-compilation BPMN verification must call the same replacement.
+        Assert.Equal(2, normalizer.Calls.Count(id => id == "process"));
+        Assert.Equal(2, normalizer.Calls.Count(id => id == "scope-sub"));
+        using var fixture = new GraphFixture(normalizer: normalizer);
+        var graph = await fixture.Compile(Process(nestedStandardScope: true));
+        Assert.True(graph.IsSuccessful, string.Join("; ", graph.Diagnostics.Select(diagnostic => diagnostic.Message)));
+        var process = Assert.Single(graph.Template!.DirectDependencies, dependency => dependency.OccurrenceId == "process");
+        Assert.Equal("host", process.OccurrenceOverlay!.Structure!.Payload.GetProperty("normalizer").GetString());
+        Assert.Equal(3, normalizer.Calls.Count(id => id == "process"));
+        Assert.Equal(3, normalizer.Calls.Count(id => id == "scope-sub"));
+    }
+
+    private sealed class RecordingNormalizer(IExecutableStructureNormalizer inner) : IExecutableStructureNormalizer
+    {
+        internal List<string> Calls { get; } = [];
+        public ExecutableActivityStructure? Normalize(string nodeId, Elsa.Workflows.Design.Core.Models.ActivityNodeStructure? structure)
+        {
+            Calls.Add(nodeId);
+            var result = inner.Normalize(nodeId, structure);
+            if (result is null) return null;
+            var payload = System.Text.Json.Nodes.JsonNode.Parse(result.Payload.GetRawText())!.AsObject();
+            payload["normalizer"] = "host";
+            return new(result.Kind, result.SchemaVersion, JsonSerializer.SerializeToElement(payload, Web));
+        }
     }
 
     [Theory]
@@ -276,23 +311,26 @@ public sealed partial class BpmnCompleteSourceCompilationTests
     private sealed class GraphFixture : IDisposable
     {
         private readonly ServiceProvider _services;
+        private readonly IServiceScope _scope;
         private readonly ActivityTemplateCompiler _compiler;
         private readonly ActivityTemplatePlacer _placer;
         private readonly ActivityDefinition _definition = new() { Id = "graph-definition", ActivityTypeKey = "Test.CompleteSource", Category = "BPMN" };
 
-        internal GraphFixture(bool graphClaimingProcess = false, bool badDescriptorSchema = false)
+        internal GraphFixture(bool graphClaimingProcess = false, bool badDescriptorSchema = false, IExecutableStructureNormalizer? normalizer = null)
         {
             var registry = TestWellKnownTypeRegistry.Create();
             registry.RegisterType(typeof(BpmnProcess), TypeAliasConvention.CanonicalAlias(typeof(BpmnProcess)));
             var services = new ServiceCollection();
             services.AddSingleton<IWellKnownTypeRegistry>(registry);
             services.AddSingleton(TimeProvider.System);
+            if (normalizer is not null) services.AddScoped<IExecutableStructureNormalizer>(_ => normalizer);
             new ActivitiesBpmnDesignFeature().ConfigureServices(services);
             new ActivitiesSequenceFeature().ConfigureServices(services);
             new Elsa.Activities.Flowchart.ActivitiesFlowchartFeature().ConfigureServices(services);
             new Elsa.Workflows.Publishing.WorkflowsPublishingFeature().ConfigureServices(services);
-            _services = services.BuildServiceProvider();
-            var structures = new DefaultActivityStructureService(_services.GetServices<IActivityStructureHandler>());
+            _services = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+            _scope = _services.CreateScope();
+            var structures = _scope.ServiceProvider.GetRequiredService<IActivityStructureService>();
             var inputs = new RuntimeInputBindingCompiler(registry);
             var outputs = new RuntimeOutputCaptureCompiler(new RuntimeDurableValueStorageDriverRegistry([new JsonRuntimeDurableValueStorageDriver()]));
             var nodeCompiler = new ExecutableNodeCompiler(structures, registry, inputs, outputs);
@@ -332,7 +370,7 @@ public sealed partial class BpmnCompleteSourceCompilationTests
                 publicationStore, versions, templateReader,
                 new AcceptAllActivityTemplateAdmissionPolicy(), TimeProvider.System, [provider],
                 TestCompiler.SourceAuthority(versions, structures), structures,
-                _services.GetRequiredService<IExecutableStructureNormalizer>());
+                _scope.ServiceProvider.GetRequiredService<IExecutableStructureNormalizer>());
             _placer = new(publicationStore, templateReader, new SourceReferences(publications.Select(Reference).ToArray()),
                 new Sha256ActivityPlacementHasher(), structures, inputs, outputs);
         }
@@ -363,7 +401,7 @@ public sealed partial class BpmnCompleteSourceCompilationTests
                 new([new(ActivityInvocationOriginSegmentKind.WorkflowRoot, "workflow-version")]), publication.ActivityTypeKey,
                 new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, RuntimeOutputCapture>()));
         }
-        public void Dispose() => _services.Dispose();
+        public void Dispose() { _scope.Dispose(); _services.Dispose(); }
     }
 
     private static WorkflowExecutableSourceReference Reference(ActivityDefinitionVersionPublication publication) => new(
