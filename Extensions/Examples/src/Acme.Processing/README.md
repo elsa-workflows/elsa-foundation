@@ -1,6 +1,6 @@
 # Acme.Processing reference contribution
 
-This separately packable reference module demonstrates an explicitly exposed business dimension through the same public Dashboard contracts as Elsa's Workflow contribution. Its pure domain contracts are in `Core/`; `Module/` owns ordinary processing records, authorization, native create/read endpoints and question contributions. It references no Workflow or Dashboard implementation package. Neither shared query orchestration nor Weaver needs an Acme-specific branch.
+This reference module demonstrates an explicitly exposed business dimension through the same public Dashboard contracts as Elsa's Workflow contribution. Its pure domain contracts are in `Core/`; `Module/` owns ordinary processing records, authorization, native create/read endpoints and question contributions. It references no Workflow or Dashboard implementation package. Neither shared query orchestration nor Weaver needs an Acme-specific branch. Both example projects are excluded from normal package publishing (`IsPackable=false`); the owned local package witness explicitly opts in to packing its frozen inputs.
 
 Enable the `AcmeProcessing` feature alongside `StudioDashboardApi`. The default actor adapter uses the host's canonical Dashboard identity mapping; another trusted identity integration can replace `IProcessingActorContext`. This fixture is not a customer integration or evidence that native workflow variables became searchable.
 

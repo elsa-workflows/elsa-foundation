@@ -1,5 +1,6 @@
 import { RunObservationControls, RunObservationNotice } from "./RunObservationControls";
 import { loadExecutionScope, activityExecutionSummaryFromInspection, type IncidentActivityInspection } from "./executionScope";
+import { useExecutionFocusRequest } from "./executionFocus";
 export { activityExecutionSummaryFromInspection } from "./executionScope";
 import { WorkflowActivityExecutionDetails } from "./WorkflowActivityExecutionDetails";
 export { WorkflowActivityExecutionDetails } from "./WorkflowActivityExecutionDetails";
@@ -857,7 +858,8 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
   const [frames, setFrames] = useState<ScopeFrame[]>([]);
   const appliedInitialInspectorTab = useRef<InstanceInspectorTab | null>(null);
   const appliedInitialActivityExecutionId = useRef<string | null>(null);
-  const occurrenceChoiceFocus = useRef<string | null>(null);
+  const occurrenceChoiceFocus = useExecutionFocusRequest();
+  const scopeOccurrenceFocus = useExecutionFocusRequest();
   const incidentNavigationRequest = useRef(0);
   const loadGeneration = useRef(0);
   const definitionNameAbort = useRef<AbortController | null>(null);
@@ -878,6 +880,17 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
   const [scopeNavigation, setScopeNavigation] = useState<{ context: string; loading: boolean; error: string; retaining?: boolean }>({ context: browserContext, loading: false, error: "" });
   const [preparedScope, setPreparedScope] = useState<{ context: string; scopeId: string; nodeId: string; prepared: PreparedAttachedExecution } | null>(null);
   const scopeRequest = useRef<AbortController | null>(null);
+  const focusReadyScope = useRef<AbortController | null>(null);
+  const captureFocusOperation = () => {
+    const navigation = incidentNavigationRequest.current;
+    const generation = loadGeneration.current;
+    const identity = runtimeValueContextId(context);
+    const controller = scopeRequest.current;
+    return { token: controller, signal: controller?.signal,
+      isReady: () => scopeRequest.current === controller && focusReadyScope.current === controller,
+      isCurrent: () => navigation === incidentNavigationRequest.current && generation === loadGeneration.current
+        && identity === runtimeValueContextId(context) && controller === scopeRequest.current };
+  };
   const [boundaryCanvas, setBoundaryCanvas] = useState<{ context: string; layout: ActivityExecutionLayout } | null>(null);
   const requestedScope = useRef<{ execution: ActivityExecutionStateSummary; includeSelf: boolean; label?: string; moveOccurrence?: boolean } | null>(null);
   const rememberedExecutions = useRef(new Map<string, ActivityExecutionStateSummary>());
@@ -1410,6 +1423,7 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
     scopeRequest.current = controller;
     const generation = loadGeneration.current;
     const navigation = incidentNavigationRequest.current;
+    let committed = false;
     try {
       if (!await supportsActivityExecutionBrowsing(context) || controller.signal.aborted || generation !== loadGeneration.current || navigation !== incidentNavigationRequest.current) return;
       setScopeNavigation({ context: browserContext, loading: true, error: "" });
@@ -1423,11 +1437,15 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
         const chain = result.scopes;
         setBoundaryCanvas(pinnedBoundaryLayout ? { context: browserContext, layout: pinnedBoundaryLayout } : null);
         setExecutionScopes({ context: browserContext, items: chain });
+        focusReadyScope.current = controller;
         setScopeNavigation({ context: browserContext, loading: false, error: "" });
+        committed = true;
         return true;
       }
     } catch {
       if (!controller.signal.aborted && navigation === incidentNavigationRequest.current) setScopeNavigation({ context: browserContext, loading: false, error: "Execution context could not be resolved. Retry the selection to inspect its scope." });
+    } finally {
+      if (!committed) controller.abort();
     }
   }, [browserContext, context, data?.executableGraph, labelForExecution, rememberExecution, workflowExecutionId]);
 
@@ -1485,6 +1503,7 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
     const generation = loadGeneration.current;
     const isCurrent = () => !controller.signal.aborted && navigation === incidentNavigationRequest.current && generation === loadGeneration.current;
     const retainPrevious = scopeNavigation.context !== browserContext || !scopeNavigation.error || Boolean(scopeNavigation.retaining);
+    let committed = false;
     try {
       if (!await supportsActivityExecutionBrowsing(context) || !isCurrent()) return;
       setScopeNavigation({ context: browserContext, loading: true, error: "", retaining: retainPrevious });
@@ -1518,7 +1537,9 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
       setExecutionScopes({ context: browserContext, items: scope.scopes });
       setPreparedScope({ context: browserContext, scopeId: execution.activityExecutionId, nodeId: retainedNode ?? execution.executableNodeId, prepared });
       setSelectedEvidenceId(selected?.activityExecutionId ?? retainedCanvasNode ?? execution.authoredActivityId);
+      focusReadyScope.current = controller;
       setScopeNavigation({ context: browserContext, loading: false, error: "" });
+      committed = true;
     } catch (error) {
       if (!isCurrent()) return;
       const status = typeof error === "object" && error !== null && "status" in error ? Number(error.status) : 0;
@@ -1527,6 +1548,8 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
       setScopeNavigation({ context: browserContext, loading: false,
         error: denied ? "This execution scope is unavailable in the current context." : "This occurrence's activity evidence could not be loaded. Retry the scope.",
         retaining: retainPrevious && !denied });
+    } finally {
+      if (!committed) controller.abort();
     }
   };
 
@@ -1562,7 +1585,7 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
     exactId={browserExactId} seed={browserExactId ? selectedActivity : null} ancestorId={browserAncestorId} refreshKey={evidenceRevision} requireExplicitSelection
     labelFor={labelForExecution} onSelect={value => selectBrowserExecution(value, true, false)} onEnter={enterChildExecution}
     onIncident={openExecutionIssues}
-    choiceFocus={occurrenceChoiceFocus}
+    choiceFocus={occurrenceChoiceFocus} captureFocusOperation={captureFocusOperation}
     initialPage={!browserExactId || prepared?.execution?.activityExecutionId === browserExactId ? prepared?.page : undefined}
     confirmedExecution={prepared?.execution}
     onUnavailable={() => setPreparedScope(current => current?.prepared === prepared ? null : current)}
@@ -1652,7 +1675,7 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
             executionScope={executionScope}
             refreshKey={evidenceRevision}
             scopeLoading={scopeBlocked && !retainScope}
-            executionBreadcrumb={<nav className="wf-execution-scope" aria-label="Execution scope"><button type="button" onClick={() => { scopeRequest.current?.abort(); setBoundaryCanvas(null); requestedScope.current = null; setExecutionScopes({ context: browserContext, items: [] }); setScopeNavigation({ context: browserContext, loading: false, error: "" }); setFrames([]); }}>All executions</button>{currentExecutionScopes.map(scope => <button type="button" key={scope.execution.activityExecutionId} onClick={() => { selectBrowserExecution(scope.execution); focusNodePath(scope.execution.authoredActivityId); void restoreExecutionContext(scope.execution, true); }}><ChevronRight size={13} />{scope.label}</button>)}{executionScope && (!scopeBlocked || retainScope) ? <Suspense fallback={null}><ExecutionScopeNavigator context={context} execution={executionScope} label={labelForExecution(executionScope)} refreshKey={evidenceRevision} initialPage={prepared?.scopePage?.executionId === executionScope.activityExecutionId ? prepared.scopePage.page : undefined} onIncident={openExecutionIssues} onSelect={execution => void moveScopeOccurrence(execution)} onUnavailable={() => { beginEvidenceNavigation(); setScopeNavigation({ context: browserContext, loading: false, error: "This execution scope is unavailable in the current context." }); }} /></Suspense> : null}{scopeNavigation.context === browserContext && (scopeNavigation.loading || scopeNavigation.error) ? <span role="status">{scopeNavigation.loading ? retainScope ? "Loading requested occurrence… Showing the previous scope." : "Resolving execution scope…" : scopeNavigation.error}{scopeNavigation.error ? <button type="button" onClick={() => { const request = requestedScope.current; if (request) { if (request.moveOccurrence) void moveScopeOccurrence(request.execution); else void restoreExecutionContext(request.execution, request.includeSelf, request.label); } }}>Retry execution scope</button> : null}</span> : null}</nav>}
+            executionBreadcrumb={<nav className="wf-execution-scope" aria-label="Execution scope"><button type="button" onClick={() => { scopeRequest.current?.abort(); setBoundaryCanvas(null); requestedScope.current = null; setExecutionScopes({ context: browserContext, items: [] }); setScopeNavigation({ context: browserContext, loading: false, error: "" }); setFrames([]); }}>All executions</button>{currentExecutionScopes.map(scope => <button type="button" key={scope.execution.activityExecutionId} onClick={() => { selectBrowserExecution(scope.execution); focusNodePath(scope.execution.authoredActivityId); void restoreExecutionContext(scope.execution, true); }}><ChevronRight size={13} />{scope.label}</button>)}{executionScope && (!scopeBlocked || retainScope) ? <Suspense fallback={null}><ExecutionScopeNavigator choiceFocus={scopeOccurrenceFocus} captureFocusOperation={captureFocusOperation} context={context} execution={executionScope} label={labelForExecution(executionScope)} refreshKey={evidenceRevision} initialPage={prepared?.scopePage?.executionId === executionScope.activityExecutionId ? prepared.scopePage.page : undefined} onIncident={openExecutionIssues} onSelect={execution => void moveScopeOccurrence(execution)} onUnavailable={() => { beginEvidenceNavigation(); setScopeNavigation({ context: browserContext, loading: false, error: "This execution scope is unavailable in the current context." }); }} /></Suspense> : null}{scopeNavigation.context === browserContext && (scopeNavigation.loading || scopeNavigation.error) ? <span role="status">{scopeNavigation.loading ? retainScope ? "Loading requested occurrence… Showing the previous scope." : "Resolving execution scope…" : scopeNavigation.error}{scopeNavigation.error ? <button type="button" onClick={() => { const request = requestedScope.current; if (request) { if (request.moveOccurrence) void moveScopeOccurrence(request.execution); else void restoreExecutionContext(request.execution, request.includeSelf, request.label); } }}>Retry execution scope</button> : null}</span> : null}</nav>}
             definitionVersion={data.definitionVersion}
             definitionVersionError={data.definitionVersionError}
             activityCatalog={data.activityCatalog}
