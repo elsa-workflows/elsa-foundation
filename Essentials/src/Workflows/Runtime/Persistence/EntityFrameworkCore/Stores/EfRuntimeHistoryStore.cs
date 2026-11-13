@@ -76,7 +76,7 @@ internal sealed partial class EfRuntimeHistoryStore(RuntimeDbContext context, IP
     }
     private void Recheck(Bound bound)
     {
-        if (!ReferenceEquals(access.Current, bound.Access))
+        if (access.Current != bound.Access)
             throw new InvalidOperationException("The selected persistence access changed during the history read.");
         _ = bound.Access.RequireScope();
     }
