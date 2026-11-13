@@ -134,7 +134,9 @@ export async function userTaskAuthoringJourney(page: Page, info: TestInfo, captu
   await expect(page.getByLabel("Variable storage driver", { exact: true })).toHaveValue("elsa.json");
   await editorViews.getByRole("tab", { name: "Outputs", exact: true }).click();
   await expect(page.getByLabel("Output type", { exact: true })).toHaveValue(jsonAlias);
+  await page.setViewportSize(projectViewport);
   await capture(page, info, "json-output-definitions");
+  await page.setViewportSize({ width: 1600, height: 1100 });
   await editorViews.getByRole("tab", { name: "Designer", exact: true }).click();
   await page.getByRole("combobox", { name: "Output Name", exact: true }).selectOption("ReviewData");
   await editorViews.getByRole("tab", { name: "Outputs", exact: true }).click();
