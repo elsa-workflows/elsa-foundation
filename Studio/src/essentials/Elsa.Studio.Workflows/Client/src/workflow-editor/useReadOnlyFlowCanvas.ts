@@ -49,7 +49,7 @@ export function useReadOnlyFlowNodes<T extends Node>(nodes: T[]) {
  * activity), clamped to the graph's edges and kept clear of the MiniMap (#4064). The Fit View control
  * keeps fitting the whole graph, so the full overview stays one click away.
  */
-export function FitReadOnlyFlowView({ nodeCount, focusRequestId = 0, minReadableZoom }: { nodeCount: number; focusRequestId?: number; minReadableZoom?: number }) {
+export function FitReadOnlyFlowView({ nodeCount, miniMap = shouldShowReadOnlyMiniMap(nodeCount), focusRequestId = 0, minReadableZoom }: { nodeCount: number; miniMap?: boolean; focusRequestId?: number; minReadableZoom?: number }) {
   const initialized = useNodesInitialized();
   const { fitView, getViewport, getNodes, getNodesBounds, setViewport } = useReactFlow();
   const paneWidth = useStore(state => state.width);
@@ -73,7 +73,7 @@ export function FitReadOnlyFlowView({ nodeCount, focusRequestId = 0, minReadable
       return;
     }
 
-    const options = getReadOnlyFitViewOptions(nodeCount);
+    const options = getReadOnlyFitViewOptions(nodeCount, miniMap);
     const recordAutoFit = () => { lastAutoFitViewport.current = getViewport(); };
     if (minReadableZoom === undefined) {
       void fitView(options).then(recordAutoFit);
@@ -92,9 +92,9 @@ export function FitReadOnlyFlowView({ nodeCount, focusRequestId = 0, minReadable
       minZoom: storeMinZoom ?? 0.1,
       maxZoom: storeMaxZoom ?? 2,
       readableZoom: minReadableZoom,
-      margin: shouldShowReadOnlyMiniMap(nodeCount) ? readableMinimapEdgeMargin : readableEdgeMargin
+      margin: miniMap ? readableMinimapEdgeMargin : readableEdgeMargin
     })).then(recordAutoFit);
-  }, [fitView, focusRequestId, getNodes, getNodesBounds, getViewport, initialized, minReadableZoom, nodeCount, paneHeight, paneWidth, setViewport, storeMaxZoom, storeMinZoom]);
+  }, [fitView, focusRequestId, getNodes, getNodesBounds, getViewport, initialized, miniMap, minReadableZoom, nodeCount, paneHeight, paneWidth, setViewport, storeMaxZoom, storeMinZoom]);
 
   return null;
 }

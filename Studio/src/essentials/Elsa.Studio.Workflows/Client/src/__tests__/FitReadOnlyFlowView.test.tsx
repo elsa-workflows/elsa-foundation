@@ -3,7 +3,7 @@ import { getViewportForBounds, type FitViewOptions } from "@xyflow/react";
 import { createRoot, type Root } from "react-dom/client";
 import { flushSync } from "react-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { readOnlyMinimapFitViewOptions } from "../workflow-editor/readOnlyMinimap";
+import { getReadOnlyFitViewOptions, readOnlyMinimapFitViewOptions } from "../workflow-editor/readOnlyMinimap";
 
 const viewport = vi.hoisted(() => ({ x: 0, y: 0, zoom: 1 }));
 const fitView = vi.hoisted(() => vi.fn(async (_options: FitViewOptions) => true));
@@ -68,6 +68,11 @@ describe("FitReadOnlyFlowView", () => {
     flushSync(() => root.render(<FitReadOnlyFlowView nodeCount={4} />));
     expect(fitView).toHaveBeenCalledTimes(1);
     expect(fitView).toHaveBeenCalledWith(readOnlyMinimapFitViewOptions);
+  });
+
+  it("fits without MiniMap padding on a canvas that never shows one (BPMN run)", () => {
+    flushSync(() => root.render(<FitReadOnlyFlowView nodeCount={4} miniMap={false} />));
+    expect(fitView).toHaveBeenCalledWith(getReadOnlyFitViewOptions(2));
   });
 
   it("re-fits an untouched viewport when run-feedback height shrinks the pane", async () => {

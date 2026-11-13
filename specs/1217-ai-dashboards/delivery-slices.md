@@ -10,7 +10,7 @@ Each PR is based on its predecessor until that predecessor lands. Split an overs
 
 | Slice | Spec tasks / boundary | Current state |
 | --- | --- | --- |
-| 1 | T001–T005: spec and SDK-free contracts | Ready [#4217](https://github.com/elsa-workflows/elsa-foundation/pull/4217), `58cda618a7`; local Architecture620 and independent review pass; exact-head CI pending |
+| 1 | T001–T005: spec and SDK-free query, resource, authoring contracts; tracked API and solution registration | Merged [#4217](https://github.com/elsa-workflows/elsa-foundation/pull/4217), merge `9cac434363`; contracts/spec now on main |
 | 2 | T006–T009/T011: native validation, event fan-in and read bounds | Ready [#4222](https://github.com/elsa-workflows/elsa-foundation/pull/4222), `3f7e8e76a9`; query55 and Architecture620 pass; independent review clean |
 | 3 | T008–T009/T024: resource service, authority, SQLite definitions/CAS/revisions | Ready [#4235](https://github.com/elsa-workflows/elsa-foundation/pull/4235), `d5690d870b`; resource38/query55/Architecture621 pass; independent review clean |
 | 4 | T024/T033: bounded collection/reuse and relational providers | Ready [#4242](https://github.com/elsa-workflows/elsa-foundation/pull/4242), `069b6433a4`; resource40, actual required providers3/3 and Architecture621 pass; independent review clean |
