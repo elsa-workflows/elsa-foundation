@@ -10,12 +10,13 @@ using Npgsql;
 
 // The store conformance suite against the Entity Framework store. EfStore.cs and Engines.cs are used as they are.
 //   dotnet ef/Kernel.Ef.Conformance/bin/Release/net10.0/Kernel.Ef.Conformance.dll sqlite semantic
-//   dotnet ... postgres "Host=localhost;Port=<port>;Username=postgres;Password=kernel" [--fence-in-batch] [--m5] semantic|stress|cost ...
-//   dotnet ... sqlserver "Server=localhost,<port>;User Id=sa;Password=...;TrustServerCertificate=True" [--fence-in-batch] [--rcsi-off] semantic ...
-//   dotnet ... mysql "server=localhost;port=<port>;uid=root;pwd=kernel" [--fence-in-batch] [--rc] semantic ...
+//   dotnet ... postgres "Host=localhost;Port=<port>;Username=postgres;Password=kernel" [--fence-in-batch|--checked-fence] [--m5] semantic|stress|cost ...
+//   dotnet ... sqlserver "Server=localhost,<port>;User Id=sa;Password=...;TrustServerCertificate=True" [--fence-in-batch|--checked-fence] [--rcsi-off] semantic ...
+//   dotnet ... mysql "server=localhost;port=<port>;uid=root;pwd=kernel" [--fence-in-batch|--checked-fence] [--rc] semantic ...
+// Without a fence flag the engine's default: the fence in the batch, but the checked fence on SQL Server (ENGINES.md E9).
 // --m5: the mutation that lets a definite error beat a fence that did not match (ENGINES.md E1, MONGO.md M5).
 
-string[] flags = ["--fence-in-batch", "--m5", "--rcsi-off", "--rc"];
+string[] flags = ["--fence-in-batch", "--checked-fence", "--m5", "--rcsi-off", "--rc"];
 switch (args)
 {
     case ["sqlite", .. var rest]:
@@ -23,14 +24,15 @@ switch (args)
     case [var engine and ("postgres" or "sqlserver" or "mysql"), var connection, .. var rest]:
         return await Cli.RunAsync(new EfProvider(engine, connection, rest), rest.Where(a => !flags.Contains(a)).ToArray());
     default:
-        Console.Error.WriteLine("sqlite <suite command> | postgres|sqlserver|mysql <connection> [--fence-in-batch] [--m5] [--rcsi-off] [--rc] <suite command>");
+        Console.Error.WriteLine("sqlite <suite command> | postgres|sqlserver|mysql <connection> [--fence-in-batch|--checked-fence] [--m5] [--rcsi-off] [--rc] <suite command>");
         return 2;
 }
 
 /// <summary>The suite's plug for <see cref="EfStore"/>: SQLite in a file; PostgreSQL, SQL Server or MySQL in a database of its own per store.</summary>
 sealed class EfProvider(string engine, string? server, string[] flags) : IStoreProvider
 {
-    private bool FenceInBatch => flags.Contains("--fence-in-batch");
+    // The fence flag, else the engine's default (EfStore.FenceInBatch).
+    private bool FenceInBatch => flags.Contains("--fence-in-batch") || !flags.Contains("--checked-fence") && (Dialect()?.FenceInBatchByDefault ?? true);
 
     public string Name => $"entity framework, {engine}, {(FenceInBatch ? "fence in batch" : "checked fence")}"
         + (flags.Contains("--m5") ? ", M5 MUTATION" : "") + (engine == "sqlserver" ? flags.Contains("--rcsi-off") ? ", locking" : ", RCSI" : "")
@@ -57,12 +59,14 @@ sealed class EfProvider(string engine, string? server, string[] flags) : IStoreP
     {
         Unfenced = unfenced,
         DefiniteBeatsFence = flags.Contains("--m5"),
-        Engine = engine switch
-        {
-            "sqlserver" => new SqlServerEngine { ReadCommittedSnapshot = !flags.Contains("--rcsi-off") },
-            "mysql" => new MySqlEngine { Isolation = flags.Contains("--rc") ? System.Data.IsolationLevel.ReadCommitted : null },
-            _ => null,
-        },
+        Engine = Dialect(),
+    };
+
+    private Engine? Dialect() => engine switch
+    {
+        "sqlserver" => new SqlServerEngine { ReadCommittedSnapshot = !flags.Contains("--rcsi-off") },
+        "mysql" => new MySqlEngine { Isolation = flags.Contains("--rc") ? System.Data.IsolationLevel.ReadCommitted : null },
+        _ => null,
     };
 
     public async Task<ProvidedStore> CreateAsync(int partitions, StoreSetup setup)
