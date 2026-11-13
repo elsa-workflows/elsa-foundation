@@ -1,3 +1,6 @@
+using Elsa.Events;
+using Elsa.Events.Core.Contracts;
+using Microsoft.Extensions.DependencyInjection;
 using System.Text.Json;
 using Elsa.Expressions.Core.Contracts;
 using Elsa.Expressions.Core.Models;
@@ -23,7 +26,7 @@ public sealed class StandaloneTriggerAdmissionTests
     [InlineData("AcceptAvailable", 1)]
     public async Task Host_start_policy_is_evaluated_on_resource_authority_before_acceptance(string policy, int expectedAdmissions)
     {
-        var fixture = new Fixture(policy, policyGate: new DenyOnePolicy());
+        using var fixture = new Fixture(policy, policyGate: new DenyOnePolicy());
         await fixture.Publish("a"); await fixture.Publish("blocked");
         await fixture.Save([Subscription("a"), Subscription("blocked")]);
         if (policy == "RequireAll")
@@ -44,7 +47,7 @@ public sealed class StandaloneTriggerAdmissionTests
     [Fact]
     public async Task Require_all_refuses_the_whole_complete_cohort_before_accepting_any_work()
     {
-        var fixture = new Fixture();
+        using var fixture = new Fixture();
         await fixture.Publish("a");
         await fixture.Save([Subscription("a"), Subscription("unpublished")]);
         var error = await Assert.ThrowsAsync<StandaloneTriggerAdmissionRefusedException>(() => fixture.Admit().AsTask());
@@ -56,7 +59,7 @@ public sealed class StandaloneTriggerAdmissionTests
     [Fact]
     public async Task Accept_available_saves_the_complete_partial_result_and_all_target_observations()
     {
-        var fixture = new Fixture("AcceptAvailable");
+        using var fixture = new Fixture("AcceptAvailable");
         await fixture.Publish("a");
         await fixture.Save([Subscription("a"), Subscription("unpublished")]);
         var result = await fixture.Admit();
@@ -76,7 +79,7 @@ public sealed class StandaloneTriggerAdmissionTests
     [InlineData("AcceptAvailable")]
     public async Task Zero_accepted_subscribers_never_creates_an_accepted_source(string policy)
     {
-        var fixture = new Fixture(policy);
+        using var fixture = new Fixture(policy);
         await fixture.Save([Subscription("unpublished")]);
         var error = await Assert.ThrowsAsync<StandaloneTriggerAdmissionRefusedException>(() => fixture.Admit().AsTask());
         Assert.Equal("no-eligible-subscribers", error.Code);
@@ -86,7 +89,7 @@ public sealed class StandaloneTriggerAdmissionTests
     [Fact]
     public async Task A_broken_serving_source_is_unknown_eligibility_and_does_not_become_a_partial_refusal()
     {
-        var fixture = new Fixture("AcceptAvailable");
+        using var fixture = new Fixture("AcceptAvailable");
         await fixture.Publish("a");
         await fixture.Slots.TryActivateAsync(new("broken", "Published", "missing-source", WorkflowActivationSource.Publishing, 0, Now));
         await fixture.Save([Subscription("a"), Subscription("broken")]);
@@ -97,7 +100,7 @@ public sealed class StandaloneTriggerAdmissionTests
     [Fact]
     public async Task Identical_retry_returns_original_acceptance_before_pause_unpublication_and_changed_mapping()
     {
-        var fixture = new Fixture();
+        using var fixture = new Fixture();
         await fixture.Publish("a");
         await fixture.Save([Subscription("a")]);
         var first = await fixture.Admit();
@@ -113,7 +116,7 @@ public sealed class StandaloneTriggerAdmissionTests
     [Fact]
     public async Task New_firings_follow_the_serving_version_and_revalidate_mappings()
     {
-        var fixture = new Fixture();
+        using var fixture = new Fixture();
         await fixture.Publish("a");
         await fixture.Save([Subscription("a")]);
         var first = await fixture.Admit();
@@ -128,7 +131,7 @@ public sealed class StandaloneTriggerAdmissionTests
     [Fact]
     public async Task Event_admission_is_independent_even_if_configuration_contains_http_policy_metadata()
     {
-        var fixture = new Fixture(type: "event");
+        using var fixture = new Fixture(type: "event");
         await fixture.Publish("a");
         await fixture.Save([Subscription("a", "event"), Subscription("unpublished", "event")]);
         var result = await fixture.Admit();
@@ -139,7 +142,7 @@ public sealed class StandaloneTriggerAdmissionTests
     [Fact]
     public async Task The_producer_schema_and_resource_type_are_checked_before_new_acceptance()
     {
-        var fixture = new Fixture();
+        using var fixture = new Fixture();
         await fixture.Publish("a");
         await fixture.Save([Subscription("a")]);
         var error = await Assert.ThrowsAsync<TriggerOperationException>(() => fixture.Admission.AdmitAsync(fixture.Producer,
@@ -154,7 +157,7 @@ public sealed class StandaloneTriggerAdmissionTests
         var expression = new MappingExpression();
         var available = InputMapper(expression, [expression]);
         var removed = InputMapper(expression, []);
-        var fixture = new Fixture(mapper: available);
+        using var fixture = new Fixture(mapper: available);
         await fixture.Publish("a");
         var target = await fixture.Targets.ResolveAsync(Scope, "a", "Published", default);
         var resource = new StandaloneTrigger("trigger", "End of day", "http", 1,
@@ -176,7 +179,7 @@ public sealed class StandaloneTriggerAdmissionTests
     public async Task Removed_mapping_language_refuses_require_all_before_accepting_a_healthy_sibling()
     {
         var expression = new MappingExpression();
-        var fixture = new Fixture(mapper: InputMapper(expression, []));
+        using var fixture = new Fixture(mapper: InputMapper(expression, []));
         await fixture.Publish("a"); await fixture.Publish("blocked");
         // Represents a persisted association enabled by the previous host composition.
         await fixture.Save([Subscription("a"), ExpressionSubscription("blocked")]);
@@ -207,8 +210,10 @@ public sealed class StandaloneTriggerAdmissionTests
     private static TriggerInputMapper InputMapper(IPortableExpressionEvaluator evaluator, IEnumerable<IPortableExpressionHandler> handlers) =>
         new(new WorkflowExecutableInputValidator(new StringTypeRegistry()), evaluator, handlers);
 
-    private sealed class Fixture
+    private sealed class Fixture : IDisposable
     {
+        private readonly ServiceProvider eventProvider;
+        private readonly IServiceScope eventScope;
         private readonly string type;
         private readonly string policy;
         private readonly InMemoryWorkflowExecutableStore material = new();
@@ -231,11 +236,19 @@ public sealed class StandaloneTriggerAdmissionTests
             var pipeline = StandaloneTriggerPipelineFixture.Create(new InMemoryRuntimeCheckpointCommitStore(state: state,
                 persistenceAccessContextAccessor: new Access()), new Access(), clock);
             Producer = new(type, 1, type + ".request", new("Object"));
-            Targets = new(Slots, sources, material, new Access(), [new NativeTriggerTargetModelSource()], clock);
+            var metadata = new ServiceCollection();
+            new EventsFeature().ConfigureServices(metadata);
+            metadata.AddSingleton<ITriggerTargetModelSource, NativeTriggerTargetModelSource>();
+            metadata.AddScoped<IEventHandler<TriggerTargetModelsDiscovering>, CollectTriggerTargetModels>();
+            eventProvider = metadata.BuildServiceProvider(); eventScope = eventProvider.CreateScope();
+            Targets = new(Slots, sources, material, new Access(),
+                eventScope.ServiceProvider.GetRequiredService<IInlineEventPublisher>(), clock);
             Admission = new(resources, Delivery, Targets,
                 mapper ?? new TriggerInputMapper(new WorkflowExecutableInputValidator(new StringTypeRegistry())), [new Adapter()], clock,
                 policyGate ?? new AllowWorkflowExecutableStartPolicy(), pipeline.Processor, pipeline.Dispatcher);
         }
+        public void Dispose() { eventScope.Dispose(); eventProvider.Dispose(); }
+
         internal async Task Save(IReadOnlyList<TriggerSubscription> subscriptions, TriggerDesiredState state = TriggerDesiredState.Enabled, long revision = 1)
         {
             var resource = new StandaloneTrigger("trigger", "End of day", type, 1,
