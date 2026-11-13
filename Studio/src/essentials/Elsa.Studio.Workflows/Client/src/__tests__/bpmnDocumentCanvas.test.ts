@@ -27,6 +27,39 @@ function ownerWithThreePointRoute(vertical = false, collinear = false) {
 }
 
 describe("complete document canvas projection", () => {
+  it("keeps ancestor lane dependencies when a boundary host and its subprocess both lack DI", () => {
+    const owner = documentCanvasOwner(xml => {
+      const document = new DOMParser().parseFromString(xml, "application/xml");
+      const byId = (id: string) => [...document.getElementsByTagName("*")].find(element => element.getAttribute("id") === id)!;
+      [...document.getElementsByTagNameNS(bpmnNamespaces.diagram, "BPMNEdge")].forEach(edge => edge.remove());
+      const membership = document.createElementNS(bpmnNamespaces.model, "bpmn:flowNodeRef"); membership.textContent = "Sub"; byId("LaneA").append(membership);
+      byId("Sub").append(byId("SB")); byId("SB").setAttribute("attachedToRef", "I");
+      for (const id of ["SubDI", "IDI", "IEDI"]) byId(id).remove();
+      return new XMLSerializer().serializeToString(document);
+    });
+    const view = projectBpmnDocumentCanvas(owner, documentCanvasScope), lane = view.nodes.find(node => node.id === "LaneADI")!;
+    expect(view.diagnostics).toContainEqual(expect.objectContaining({ code: "missing-attachment-di", diId: "SBDI", relatedDiIds: expect.arrayContaining(["LaneADI"]) }));
+    expect(() => planBpmnDocumentMove(view, new Map([[lane.id, { x: lane.position.x + 20, y: lane.position.y }]]))).toThrow("attachment DI");
+  });
+
+  it.each(["subprocess", "lane"])("refuses moving an outer scope when a child lacks its %s parent DI", missing => {
+    const owner = documentCanvasOwner(xml => {
+      const document = new DOMParser().parseFromString(xml, "application/xml");
+      const byId = (id: string) => [...document.getElementsByTagName("*")].find(element => element.getAttribute("id") === id)!;
+      [...document.getElementsByTagNameNS(bpmnNamespaces.diagram, "BPMNEdge")].forEach(edge => edge.remove());
+      if (missing === "subprocess") {
+        const membership = document.createElementNS(bpmnNamespaces.model, "bpmn:flowNodeRef"); membership.textContent = "Sub"; byId("LaneA").append(membership);
+        byId("SubDI").remove(); byId("SBDI").remove();
+      } else byId("LaneBDI").remove();
+      return new XMLSerializer().serializeToString(document);
+    });
+    const before = structuredClone(owner), view = projectBpmnDocumentCanvas(owner, documentCanvasScope);
+    expect(view.diagnostics).toContainEqual(expect.objectContaining({ code: "missing-parent-di", diId: missing === "subprocess" ? "IDI" : "LaneB1DI" }));
+    const id = missing === "subprocess" ? "LaneADI" : "PoolDI", node = view.nodes.find(item => item.id === id)!;
+    expect(() => planBpmnDocumentMove(view, new Map([[id, { x: node.position.x + 20, y: node.position.y }]]))).toThrow("parent DI");
+    expect(owner).toEqual(before);
+  });
+
   it("refuses container movement dependent on a missing boundary host DI while allowing an unrelated pool", () => {
     const owner = documentCanvasOwner(xml => {
       const document = new DOMParser().parseFromString(xml, "application/xml");

@@ -94,11 +94,28 @@ export function projectBpmnDocumentCanvas(owner: ActivityNode, address: BpmnScop
   };
   const semanticParent = (element: Element, shape: BpmnDocumentShape) => {
     const parent = bpmnFlowScope(element);
-    return parent && parent !== scope && isSubProcessElementType(parent.localName) ? pick(identity(parent), center(shape.bounds), shape) : poolFor(element, shape);
+    if (!parent || parent === scope || !isSubProcessElementType(parent.localName)) return poolFor(element, shape);
+    const instance = pick(identity(parent), center(shape.bounds), shape);
+    if (!instance) missingParent(element, shape, parent);
+    return instance;
   };
   const lanes = [...parsed.byId.values()].filter(element => isBpmnModelElement(element) && element.localName === "lane");
   const laneMembership = (element: Element) => lanes.filter(lane => bpmnFlowScope(lane) === bpmnFlowScope(element) && [...lane.children]
     .some(child => isBpmnModelElement(child) && child.localName === "flowNodeRef" && resolveBpmnDocumentReference(parsed, child, child.textContent) === element));
+  const containerInstances = (element: Element) => {
+    const ancestors: Element[] = [];
+    for (let current: Element | undefined = element; current; current = bpmnFlowScope(current)) ancestors.push(current);
+    const memberships = ancestors.flatMap(laneMembership), process = bpmnOwningProcess(element);
+    return shapes.filter(candidate => candidate.element !== element && (candidate.elementType === "participant"
+      ? !!process && resolveBpmnDocumentReference(parsed, candidate.element, candidate.element.getAttribute("processRef")) === process
+      : candidate.elementType === "lane" ? candidate.element.contains(element) || memberships.some(lane => candidate.element === lane || candidate.element.contains(lane))
+        : isSubProcessElementType(candidate.elementType) && candidate.element.contains(element)));
+  };
+  const missingParent = (element: Element, shape: BpmnDocumentShape, parent: Element) => diagnostics.push({
+    code: "missing-parent-di", elementId: shape.elementId, diId: shape.shapeId,
+    relatedDiIds: containerInstances(element).map(container => container.shapeId),
+    message: `The containing ${parent.localName} '${identity(parent)}' has no unambiguous DI instance; source retained.`
+  });
   const depth = (element: Element) => { let count = 0; for (let parent = element.parentElement; parent; parent = parent.parentElement) count++; return count; };
   const parentById = new Map<string, string>();
   const membershipById = new Map<string, string[]>();
@@ -114,20 +131,15 @@ export function projectBpmnDocumentCanvas(owner: ActivityNode, address: BpmnScop
         attachmentById.set(shape.shapeId, hostId);
         parent = pick(hostId, center(shape.bounds), shape);
         if (!parent) {
-          const hostLanes = laneMembership(host!);
-          const process = bpmnOwningProcess(host!);
-          const containers = shapes.filter(candidate => candidate.elementType === "participant"
-            ? !!process && resolveBpmnDocumentReference(parsed, candidate.element, candidate.element.getAttribute("processRef")) === process
-            : candidate.elementType === "lane" ? hostLanes.some(lane => candidate.element === lane || candidate.element.contains(lane))
-              : isSubProcessElementType(candidate.elementType) && candidate.element.contains(host!));
           diagnostics.push({ code: "missing-attachment-di", elementId: shape.elementId, diId: shape.shapeId,
-            relatedDiIds: containers.map(container => container.shapeId), message: "Boundary attachment has no host shape in this plane." });
+            relatedDiIds: containerInstances(host!).map(container => container.shapeId), message: "Boundary attachment has no host shape in this plane." });
         }
       } else diagnostics.push({ code: "invalid-boundary-attachment", elementId: shape.elementId, diId: shape.shapeId,
         message: assessment && !assessment.allowed ? assessment.reason : "Boundary attachment has no actual activity host." });
     } else if (element.localName === "lane") {
       const parentLane = element.parentElement?.parentElement;
       parent = parentLane?.localName === "lane" ? pick(identity(parentLane), center(shape.bounds), shape) : semanticParent(element, shape);
+      if (parentLane?.localName === "lane" && !parent) missingParent(element, shape, parentLane);
     } else if (element.localName !== "participant") {
       const memberships = laneMembership(element).sort((a, b) => depth(b) - depth(a));
       membershipById.set(shape.shapeId, memberships.map(lane => identity(lane)!));
@@ -254,6 +266,12 @@ function geometryCommands(canvas: BpmnDocumentCanvas, next: ReadonlyMap<string, 
     for (const id of [diagnostic.diId!, ...(diagnostic.relatedDiIds ?? [])]) {
       const old = nodes.get(id)?.data.absoluteBounds, bounds = next.get(id);
       if (old && bounds && !equalBounds(old, bounds)) fail("boundary attachment DI is required before moving its containing scope");
+    }
+  }
+  for (const diagnostic of canvas.diagnostics.filter(item => item.code === "missing-parent-di" && item.diId)) {
+    for (const id of [diagnostic.diId!, ...(diagnostic.relatedDiIds ?? [])]) {
+      const old = nodes.get(id)?.data.absoluteBounds, bounds = next.get(id);
+      if (old && bounds && !equalBounds(old, bounds)) fail("visual parent DI is required before moving this containing scope");
     }
   }
   for (const [id, bounds] of next) {
