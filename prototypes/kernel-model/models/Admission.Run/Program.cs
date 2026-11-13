@@ -5,6 +5,18 @@ using Kernel.Runtime;
 using Kernel.Sim;
 using Kernel.Sim.Native;
 
+if (args.SequenceEqual(["--terminal-query-boundary"]))
+{
+    new TerminalWire(Modes.Balanced, false).QueryReplyBoundary();
+    return;
+}
+
+if (args.SequenceEqual(["--terminal-adverse"]) || args.SequenceEqual(["--list-terminal-adverse"]))
+{
+    TerminalAdverse.Run(args[0] == "--list-terminal-adverse");
+    return;
+}
+
 if (args.SequenceEqual(["--recreate"]))
 {
     InvocationRecreation.Run();
