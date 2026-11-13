@@ -39,7 +39,7 @@ internal static class EfRuntimeHistoryOccurrenceReader
             query.IncludeDescendants.ToString()]);
         var window = Decode(callerCodec, query.SequenceToken, binding);
         await using var ownedTransaction = callerTransaction is null
-            ? await context.Database.BeginTransactionAsync(IsolationLevel.Serializable, token) : null;
+            ? await EfRuntimeHistoryReadTransaction.BeginAsync(context, token) : null;
         var result = await ReadWindow(context, physicalScope, callerChain, callerCodec, query, binding, window, token);
         if (ownedTransaction is not null) await ownedTransaction.CommitAsync(token);
         return result;

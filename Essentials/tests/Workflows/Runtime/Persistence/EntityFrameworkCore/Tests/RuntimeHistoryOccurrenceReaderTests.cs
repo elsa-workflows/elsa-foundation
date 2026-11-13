@@ -200,6 +200,7 @@ public sealed partial class RuntimeHistoryOccurrenceReaderTests
             var next = map.Row("scope", head with { FirstSequence = through + 1, PurgedThroughSequence = through }); next.Revision = row.Revision + 1;
             context.Entry(row).CurrentValues.SetValues(next); await context.SaveChangesAsync(); await transaction.CommitAsync();
         }
+        internal void BackupTo(SqliteConnection target) => keeper.BackupDatabase(target);
         public ValueTask DisposeAsync() => keeper.DisposeAsync();
     }
     private sealed class Commands : DbCommandInterceptor
