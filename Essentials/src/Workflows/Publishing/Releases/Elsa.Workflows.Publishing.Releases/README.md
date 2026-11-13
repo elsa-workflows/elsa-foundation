@@ -14,3 +14,7 @@ unsupported result elsewhere. See [extension points](EXTENSION_POINTS.md) and th
 ## Cross-domain contributions
 
 None. The feature does not add a publication/start authority or reference Design implementations.
+
+Directory input is supported on Linux x64 and macOS ARM64 only; other OS/architecture combinations refuse with
+`directory_platform_unsupported`. ZIP input/output remains portable. Directory support requires verified no-follow
+open flags and a matching native stat layout, rather than assuming an operating system has one ABI.

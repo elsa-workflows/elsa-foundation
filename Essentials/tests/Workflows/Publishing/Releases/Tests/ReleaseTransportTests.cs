@@ -187,7 +187,8 @@ public sealed class ReleaseTransportTests
         try
         {
             var fixture = new ReleaseBundleFixture(); fixture.WriteDirectory(directory);
-            if (!(OperatingSystem.IsMacOS() || OperatingSystem.IsLinux()) || RuntimeInformation.ProcessArchitecture is not (Architecture.X64 or Architecture.Arm64))
+            if (!(OperatingSystem.IsLinux() && RuntimeInformation.ProcessArchitecture == Architecture.X64) &&
+                !(OperatingSystem.IsMacOS() && RuntimeInformation.ProcessArchitecture == Architecture.Arm64))
             {
                 Assert.Equal("directory_platform_unsupported", (await Assert.ThrowsAsync<ReleaseBundleFormatException>(() => _codec.ReadDirectoryAsync(directory).AsTask())).Code);
                 return;

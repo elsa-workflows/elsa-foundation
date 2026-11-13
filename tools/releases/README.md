@@ -14,4 +14,4 @@ It verifies the restored archives and executed DLLs against the exact packed byt
 packages in the consumer graph. Final evidence must identify a committed source; an exploratory dirty run is recorded as such.
 
 The complete native/BPMN/ETL two-target and process/Studio qualification remains in
-[spec 1224](../../specs/1224-workflow-release-promotion/quickstart.md).
+[spec 1225](../../specs/1225-workflow-release-promotion/quickstart.md).
