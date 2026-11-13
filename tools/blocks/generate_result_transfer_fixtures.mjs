@@ -29,7 +29,8 @@ try {
     const argument = (expressionType, value) => ({ expressionType, value });
     const node = (nodeId, expressionType, value) => ({ nodeId, activityVersionId: "inline-version", inputs: [{ referenceKey: "Expression", value: argument(expressionType, value) }], outputs: [] });
     const read = { producerNodeId: "producer", projectionKey: "$result", producerScopeId: "scope:root" };
-    const producer = node("producer", loop ? "Variable" : "Literal", loop ? { referenceKey: "counter" } : 42);
+    // Object syntax preserves numeric JSON for Inline's Object input; Literal scalars are text at that boundary.
+    const producer = node("producer", loop ? "Variable" : "Object", loop ? { referenceKey: "counter" } : 42);
     const consumer = node("consumer", parameter ? "JavaScript" : "ActivityResult", parameter ? {
       language: "JavaScript", source: "args.prior + 1", resultType: { alias: "Object", collectionKind: "single" }, options: {}, capabilityProfile: "binding-pure-v1",
       parameters: { prior: { kind: "ActivityResult", producerNodeId: "producer", projectionKey: "$result" } }

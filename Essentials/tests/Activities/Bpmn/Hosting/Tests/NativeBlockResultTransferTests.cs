@@ -1,4 +1,5 @@
 using System.Net;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using Xunit;
 
@@ -67,7 +68,7 @@ public sealed class NativeBlockResultTransferTests
                     Assert.True(DateTimeOffset.UtcNow < deadline, "The explicit native result transfer did not complete.");
                     await Task.Delay(100);
                 }
-                var value = view["outputs"]!["answer"]!["value"]!["value"]!;
+                var value = ReadAnswer(view);
                 Assert.Equal(test["expected"]!.GetValue<string>(), value.ToJsonString());
                 var looping = test["loop"]!.GetValue<bool>();
                 foreach (var id in new[] { "producer", "consumer", "answer" })
@@ -84,9 +85,18 @@ public sealed class NativeBlockResultTransferTests
                     var values = new List<int>();
                     foreach (var detail in details.OrderBy(item => item["scheduledAt"]!.GetValue<string>(), StringComparer.Ordinal))
                     {
-                        var evidence = detail["valueSnapshots"]!.AsArray()[0]!["evidenceId"]!.GetValue<string>();
+                        var input = Assert.Single(detail["valueSnapshots"]!.AsArray(), item =>
+                            item!["subject"]!.GetValue<string>() == "ActivityInput"
+                            && item["inputKey"]?.GetValue<string>() == "Expression")!;
+                        Assert.Equal("Expression", input["name"]!.GetValue<string>());
+                        Assert.Equal("DiagnosticSnapshot", input["captureMode"]!.GetValue<string>());
+                        Assert.Equal("diagnosticSnapshotCaptured", input["captureState"]!.GetValue<string>());
+                        Assert.Equal("resolutionAvailable", input["accessState"]!.GetValue<string>());
+                        var evidence = input["evidenceId"]!.GetValue<string>();
                         var payload = await host.GetAsync($"/runtime/workflows/instances/{execution}/activity-executions/{detail["activityExecutionId"]!.GetValue<string>()}/value-evidence/{evidence}/payload");
-                        values.Add(payload["payload"]!["value"]!.GetValue<int>());
+                        Assert.Equal(evidence, payload["evidenceId"]!.GetValue<string>());
+                        Assert.Equal("DiagnosticSnapshot", payload["captureMode"]!.GetValue<string>());
+                        values.Add(ReadNumberSnapshot(payload["payload"]).GetValue<int>());
                     }
                     Assert.Equal(new[] { 1, 2, 3 }, values);
                 }
@@ -97,10 +107,27 @@ public sealed class NativeBlockResultTransferTests
                     await host.LoginAsync();
                     var retained = await host.GetAsync("/runtime/workflows/instances/" + execution);
                     Assert.Equal("Completed", retained["instance"]!["status"]!.GetValue<string>());
-                    Assert.True(JsonNode.DeepEquals(value, retained["outputs"]!["answer"]!["value"]!["value"]));
+                    Assert.True(JsonNode.DeepEquals(value, ReadAnswer(retained)));
                     Assert.Empty(retained["incidents"]!.AsArray());
                 }
             }
+        }
+
+        static JsonNode ReadAnswer(JsonNode view)
+        {
+            var output = Assert.IsType<JsonObject>(view["outputs"]?["answer"]);
+            Assert.False(output["isRedacted"]!.GetValue<bool>());
+            Assert.Equal("DiagnosticSnapshot", output["captureMode"]!.GetValue<string>());
+            return ReadNumberSnapshot(output["value"]);
+        }
+
+        static JsonNode ReadNumberSnapshot(JsonNode? node)
+        {
+            var snapshot = Assert.IsType<JsonObject>(node);
+            Assert.Equal("number", snapshot["kind"]?.GetValue<string>());
+            var value = Assert.IsAssignableFrom<JsonValue>(snapshot["value"]);
+            Assert.Equal(JsonValueKind.Number, value.GetValueKind());
+            return value;
         }
 
         async Task<string> Submit(JsonNode root, JsonNode? variables)
