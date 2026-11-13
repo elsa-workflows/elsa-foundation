@@ -219,6 +219,7 @@ public static class Cases
                 catch (FenceException e) { (failure, caught) = (e.Message, true); }
                 catch (ConformanceException e) { failure = e.Message; }
                 catch (TimeoutException) { failure = $"the case did not end within {Timeout.TotalSeconds} s"; }
+                catch (Exception e) { failure = $"threw {e.GetType().Name}: {e.Message}"; }      // the teardown and the checks below still run
                 // What the nodes do on their way out is checked too. A stop that hangs fails the case, not the suite.
                 try { await harness.StopAllAsync().WaitAsync(Timeout); }
                 catch (TimeoutException) { failure ??= $"stopping the nodes did not end within {Timeout.TotalSeconds} s"; }
