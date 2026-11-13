@@ -138,6 +138,7 @@ public sealed class RuntimeCoalescingDrainScopeFactory(
 
         public ValueTask DisposeAsync()
         {
+            session.DiscardContinuationReceipts();
             session.DisableDurableValuePageReuse();
             // A drain that threw leaves its session active. A flow that still holds it must not get answers once
             // the drain, and soon its lease, are gone.

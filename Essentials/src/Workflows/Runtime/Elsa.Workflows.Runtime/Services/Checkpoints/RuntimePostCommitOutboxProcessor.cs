@@ -5,6 +5,7 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.Claims;
+using Elsa.Workflows.Runtime.Services.Coalescing;
 using Elsa.Workflows.Runtime.Services.Incidents;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -19,6 +20,7 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
 
     private readonly IRuntimePostCommitOutboxStore _outboxStore;
     private readonly IPersistenceAccessContextAccessor? _persistenceAccessContextAccessor;
+    private readonly IRuntimeExecutionOwnershipContextAccessor? _ownershipContextAccessor;
     private readonly HashSet<string> _requiredSourceKinds = new(StringComparer.Ordinal);
     private readonly IRuntimePostCommitIntentDispatcher _intentDispatcher;
     private readonly TimeProvider _timeProvider;
@@ -144,6 +146,19 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
         _requiredSourceKinds = RuntimePostCommitOutboxItems.RequiredSourceKinds(contributions);
     }
 
+    internal RuntimePostCommitOutboxProcessor(IRuntimePostCommitOutboxStore outboxStore,
+        IRuntimePostCommitIntentDispatcher intentDispatcher, TimeProvider timeProvider, IRuntimeFaultCapturePolicy faultCapturePolicy,
+        IWorkflowDispatchStore? workflowDispatchStore, IEnumerable<IPostCommitFailureProjector> deliveryFailureProjectors,
+        ILogger<RuntimePostCommitOutboxProcessor>? logger, IRuntimeLiveDrainDeliveryAccessor? liveDrainDeliveryAccessor,
+        IRuntimeCoalescingSessionAccessor? coalescingSessionAccessor, IPersistenceAccessContextAccessor? persistenceAccessContextAccessor,
+        IEnumerable<RuntimePostCommitIntentHandlerContribution> contributions, IRuntimeAdmissionLoadSignal? loadSignal,
+        IRuntimeExecutionOwnershipContextAccessor ownershipContextAccessor)
+        : this(outboxStore, intentDispatcher, timeProvider, faultCapturePolicy, workflowDispatchStore, deliveryFailureProjectors,
+            logger, liveDrainDeliveryAccessor, coalescingSessionAccessor, persistenceAccessContextAccessor, contributions, loadSignal)
+    {
+        _ownershipContextAccessor = ownershipContextAccessor;
+    }
+
     private bool RequiresDurableSource(RuntimePostCommitOutboxItem item) =>
         item.StimulusDeliverySourceScope is not null || item.StimulusDeliveryProtocolVersion is not null ||
         _requiredSourceKinds.Contains(item.Intent.Kind) || _intentDispatcher.RequiresDurableSource(item.Intent.Kind);
@@ -259,15 +274,27 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
         CancellationToken cancellationToken)
     {
         var item = claim.Item;
+        var dispatched = false;
         var run = await _claimLease!.RunAsync(
             claim,
             async dispatchCancellationToken =>
             {
                 using var charge = _loadSignal is { HasAmbientCharge: false } ? _loadSignal.OpenCharge() : null;
-                if (RequiresDurableSource(item))
-                    await _intentDispatcher.DispatchAsync(await OpenDurableSourceAsync(claim, dispatchCancellationToken), dispatchCancellationToken);
-                else
-                    await _intentDispatcher.DispatchAsync(item.Intent, dispatchCancellationToken);
+                // Required physical source validation still runs even when this drain already committed the effect.
+                var source = RequiresDurableSource(item)
+                    ? await OpenDurableSourceAsync(claim, dispatchCancellationToken)
+                    : null;
+                var intent = source?.Intent ?? item.Intent;
+                var alreadyCommitted = _coalescingSessionAccessor?.Current?.HasCommittedContinuation(item, intent,
+                    _outboxStore, _persistenceAccessContextAccessor?.Current, _ownershipContextAccessor?.Current) == true;
+                if (!alreadyCommitted)
+                {
+                    dispatched = true;
+                    if (source is not null)
+                        await _intentDispatcher.DispatchAsync(source, dispatchCancellationToken);
+                    else
+                        await _intentDispatcher.DispatchAsync(intent, dispatchCancellationToken);
+                }
                 return true;
             },
             cancellationToken);
@@ -279,10 +306,9 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
             sourceStale.OutboxItemId == claim.OutboxItemId && sourceStale.PresentedOwnerId == claim.OwnerId &&
             sourceStale.PresentedFencingToken == claim.FencingToken)
         {
-            // Nothing was dispatched: the claimant that holds the item now delivers it. Delivering is reported as the
-            // requested status because nothing was requested at all, and the superseded outcome keeps the item out of
-            // the delivered and failed counts.
-            LogClaimLost(item, dispatched: false, run.Exception);
+            // No completion is accepted: the current claimant owns delivery. A source-authorized handler can refuse
+            // its source after invocation, so log the actual dispatch attempt rather than assuming none occurred.
+            LogClaimLost(item, dispatched, run.Exception);
             return new RuntimePostCommitOutboxProcessedItem(
                 item.OutboxItemId,
                 item.Intent.IntentId,
@@ -304,10 +330,9 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
         }
         catch (RuntimePostCommitOutboxStaleClaimException stale)
         {
-            // The dispatch outran the claim and a peer re-claimed the item, so this completion is refused and writes
-            // nothing (#1812). That is one item's broken lease, not a reason to abandon the rest of the batch: the peer
-            // records the item's real outcome, and the intent it dispatched again is idempotent.
-            LogClaimLost(item, dispatched: true, stale);
+            // A peer re-claimed the item before completion, so this writer records nothing (#1812). Dispatch may
+            // already have been committed by this drain and suppressed above; preserve that distinction in the log.
+            LogClaimLost(item, dispatched, stale);
             return new RuntimePostCommitOutboxProcessedItem(
                 item.OutboxItemId,
                 item.Intent.IntentId,
@@ -409,8 +434,8 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
         var successOutcome = await RecordDeliveryResultAsync(item, claim, RuntimePostCommitOutboxStatus.Delivered, null, recordedAt: null, deliveryFailure: null, cancellationToken);
         if (successOutcome == RuntimePostCommitOutboxClaimCompletionOutcome.SupersededByOtherOwner)
         {
-            // The dispatch above still happened, and the continuation queue's enqueue is idempotent, so the work is done
-            // exactly once. What this processor must NOT do is claim the delivery: the owning deliverer records the item's
+            // The effect was dispatched now or already committed by this drain. The continuation queue's enqueue is
+            // idempotent. This processor must not claim delivery: the owning deliverer records the item's
             // terminal state, and counting it as delivered here would keep the drain cycling on work it does not own.
             LogDeliverySuperseded(item);
             return new RuntimePostCommitOutboxProcessedItem(
@@ -420,6 +445,10 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
                 FailureMessage: null,
                 RuntimePostCommitOutboxClaimCompletionOutcome.SupersededByOtherOwner);
         }
+
+        if (_outboxStore is CoalescingRuntimePostCommitOutboxStore coalescingStore)
+            _coalescingSessionAccessor?.Current?.RememberDeliveredContinuation(item, coalescingStore,
+                _persistenceAccessContextAccessor?.Current, _ownershipContextAccessor?.Current);
 
         LogDelivered(item);
 
