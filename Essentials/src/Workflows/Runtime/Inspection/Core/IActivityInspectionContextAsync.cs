@@ -1,7 +1,7 @@
 using Elsa.Foundation.Identity.Core.Authorization;
 using Elsa.Workflows.Runtime.Core.Models;
 
-namespace Elsa.Workflows.Runtime.Api.Contracts;
+namespace Elsa.Workflows.Runtime.Inspection.Core;
 
 /// <summary>
 /// Request-scope inspection authorization; structure and captured-value grants are intentionally separate.
@@ -25,24 +25,4 @@ public interface IActivityInspectionContextAsync
     ValueTask<bool> CanInspectSensitiveValuesAsync(WorkflowExecutionState workflowExecution, CancellationToken cancellationToken = default);
 
     ValueTask<bool> CanResolveSensitiveValuePayloadsAsync(WorkflowExecutionState workflowExecution, CancellationToken cancellationToken = default);
-}
-
-/// <summary>Explicit test/development adapter. Production API composition uses a fail-closed request adapter.</summary>
-public sealed class AllowAllActivityExecutionInspectionAuthorizationContext : IActivityInspectionContextAsync
-{
-    public string TenantScope => "all-tenants";
-    public string AuditSubject => "allow-all";
-    public string RequestCorrelationId => string.Empty;
-
-    public ValueTask<string> GetAuthorizationProfileAsync(CancellationToken cancellationToken = default) =>
-        ValueTask.FromResult("structure+values");
-
-    public ValueTask<bool> CanInspectStructureAsync(WorkflowExecutionState workflowExecution, CancellationToken cancellationToken = default) =>
-        ValueTask.FromResult(true);
-
-    public ValueTask<bool> CanInspectSensitiveValuesAsync(WorkflowExecutionState workflowExecution, CancellationToken cancellationToken = default) =>
-        ValueTask.FromResult(true);
-
-    public ValueTask<bool> CanResolveSensitiveValuePayloadsAsync(WorkflowExecutionState workflowExecution, CancellationToken cancellationToken = default) =>
-        ValueTask.FromResult(true);
 }

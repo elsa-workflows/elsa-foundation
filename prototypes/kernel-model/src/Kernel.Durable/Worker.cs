@@ -40,6 +40,14 @@ public sealed record WorkerOptions
     public Func<long>? WallClock { get; init; }     // read only under Flaw.WallClockTimers
     public Flaw Flaws { get; init; }
 
+    /// <summary>
+    /// Where a background job's body runs. Null (the default): it starts inline, in the pass that started it, as the
+    /// simulation needs. A host that runs a worker's passes on a scheduler of its own (RuntimeNode, an Orleans grain)
+    /// sets another, so that a long or blocking job does not hold up the node's passes; what comes after the job, the
+    /// result into the instance's inbox, comes back on the host's scheduler, which the job's await captured.
+    /// </summary>
+    public TaskScheduler? JobScheduler { get; init; }
+
     /// <summary>Called when a turn starts, with the worker's idea of database time. For tests.</summary>
     public Action<InstanceRef, IReadOnlyList<Message>, long>? OnTurn { get; init; }
 }
@@ -70,6 +78,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
     private readonly HashSet<string> _behind = new(StringComparer.Ordinal);            // own rows written while catching up, not yet polled
     private readonly List<TurnOutcome> _queue = [];
     private long _generation, _anchor = long.MinValue, _local;
+    private long _renewed;      // database time of the take, or of the sending of the last commit that landed: when the lease was renewed at the latest
     private bool _taking, _polling, _loading, _flushing, _meeting, _caughtUp, _woken;
     private string _refusal = "";
     private readonly HashSet<Delivery> _trial = [];     // the suspects being tried now, with nothing else in flight (finding F2)
@@ -102,6 +111,9 @@ public sealed class Worker : IScopeActivation, ITurnServices
 
     /// <summary>Database time as far as this worker knows: the latest reading plus what its monotonic clock has counted since.</summary>
     public long Now => Has(Flaw.WallClockTimers) ? _options.WallClock!() : _anchor + _options.Monotonic();
+
+    /// <summary>Database time as far as this worker knows, whatever the flaws: what the lease is reckoned in.</summary>
+    private long DbNow => _anchor + _options.Monotonic();
 
     public bool Taking => _taking;
     public bool Polling => _polling;
@@ -152,8 +164,11 @@ public sealed class Worker : IScopeActivation, ITurnServices
 
     /// <summary>
     /// One pass, as the hosts drive a worker: read the inbox if woken, load, read kept events, run every turn that is
-    /// ready (in id order), and flush. Zero when the pass found work at its start; otherwise the time until the
-    /// earliest timer held in memory, or null. A cancelled token stops it before the next turn and before the flush.
+    /// ready (in id order), and flush; then, if no commit has renewed the lease for a third of it, beat (an empty fenced
+    /// commit, which also tells a stale owner that it is one). Zero when the pass found work at its start; otherwise the
+    /// time until the earliest timer held in memory or the next beat, whichever is sooner; null once the scope is not
+    /// held. A runtime that calls again when asked therefore keeps an idle scope's lease. A cancelled token stops the
+    /// pass before the next turn, the flush and the beat.
     /// </summary>
     public async ValueTask<TimeSpan?> RunAsync(CancellationToken cancellationToken = default)
     {
@@ -172,11 +187,16 @@ public sealed class Worker : IScopeActivation, ITurnServices
             RunTurn(id);
         }
         if (!cancellationToken.IsCancellationRequested) await FlushAsync(cancellationToken);
+        if (!cancellationToken.IsCancellationRequested && Owns && DbNow >= RenewBy) await BeatAsync(cancellationToken);
+        if (!Owns) return null;
         if (busy) return TimeSpan.Zero;
         var now = Now;
-        var next = _items.Values.Where(i => !i.Taken && i.Message.Due is { } due && due > now).Select(i => i.Message.Due!.Value).DefaultIfEmpty(long.MaxValue).Min();
-        return next == long.MaxValue ? null : TimeSpan.FromMilliseconds(next - now);
+        var next = _items.Values.Where(i => !i.Taken && i.Message.Due is { } due && due > now).Select(i => i.Message.Due!.Value - now).DefaultIfEmpty(long.MaxValue).Min();
+        return TimeSpan.FromMilliseconds(Math.Max(1, Math.Min(next, RenewBy - DbNow)));     // never zero: zero means there is work
     }
+
+    /// <summary>When the pass beats if nothing commits before: a third of the lease after it was last renewed (the sketch's cadence).</summary>
+    private long RenewBy => _renewed + (long)(_options.Lease.TotalMilliseconds / 3);
 
     // ---- ownership ---------------------------------------------------------------------------------------------
 
@@ -191,6 +211,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
         if (lease is null) return;
         Reset();    // a take starts from empty memory
         Observe(lease.Now);
+        _renewed = lease.Now;
         Epoch = lease.Epoch;
         Position = lease.Position;
         _mine.Add(lease.Epoch);
@@ -474,7 +495,13 @@ public sealed class Worker : IScopeActivation, ITurnServices
     {
         var generation = _generation;
         string? result = null, error = null;
-        try { result = Json.Write(await _type.ExecuteJobAsync(job.Model, new JobContext(ticket.Message.Target, job.Key, job.Arguments), ticket.Cancel!.Token)); }
+        var (context, token) = (new JobContext(ticket.Message.Target, job.Key, job.Arguments), ticket.Cancel!.Token);
+        try
+        {
+            result = Json.Write(_options.JobScheduler is { } scheduler
+                ? await Task.Factory.StartNew(() => _type.ExecuteJobAsync(job.Model, context, token).AsTask(), token, TaskCreationOptions.DenyChildAttach, scheduler).Unwrap()
+                : await _type.ExecuteJobAsync(job.Model, context, token));
+        }
         catch (Exception e) { error = e.Message; }
         if (generation != _generation || ticket.Taken) return;      // reset, or cancelled beside completion
         // The ticket becomes the result: same id, so it is consumed once, by the turn that handles it.
@@ -577,6 +604,12 @@ public sealed class Worker : IScopeActivation, ITurnServices
             marks.Select(i => i.Message.Id).ToList(), trial.Select(i => i.Message.Id).ToList());
         while (true)
         {
+            // When the lease is renewed at the latest, as far as this worker can tell: its estimate of database time
+            // never runs ahead of the database, and the commit executes after it is sent. A store may answer without
+            // the database's time (Now 0). The EF store with the fence in the batch writes the lease from the node's
+            // own clock instead (ENGINES.md); a beat at a third of the lease then tolerates up to two thirds of a lease
+            // of skew between the node's clock and the database's.
+            var sending = DbNow;
             Committed result;
             try { result = await _store.CommitAsync(batch, cancellationToken); }
             catch (StoreException e) when (e.Failure != Failure.Unknown)
@@ -599,6 +632,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
             }
             Position += batch.Positions;
             Observe(result.Now);
+            _renewed = Math.Max(_renewed, sending);      // a commit that lands renews the lease
             foreach (var item in marks.Concat(trial))
                 if (item.Suspect && !trial.Contains(item)) item.Shelved = true;
                 else item.Marked = true;
@@ -647,6 +681,11 @@ public sealed class Worker : IScopeActivation, ITurnServices
         slot.State = unit.Row is { Status: InstanceStatus.Running } ? unit.State : null;
         slot.Busy = false;
         if (!Has(Flaw.EmitBeforeCommit)) Release(unit);
+        for (var i = 0; i < unit.Replied.Count; i++)
+        {
+            var reply = unit.Replied[i];
+            Send(reply.To, $"{unit.Instance}#{unit.Revision}.reply:{i}", reply.Channel, reply.Item);
+        }
         if (slot.Row is null && slot.Inbox.Count == 0) _slots.Remove(unit.Instance);
         Evict();
     }
@@ -675,7 +714,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
     {
         if (unit.Slot is not { } slot) return;
         foreach (var item in unit.Consumed)
-            if (item.Message.ReplyTo is { } to) slot.Replies.Add(to);
+            if (item.Message.ReplyTo is { } to && !unit.Replied.Any(r => r.Message == item.Message.Id)) slot.Replies.Add(to);
         var callers = slot.Replies.Where(to => Has(Flaw.EmitBeforeCommit) || ReplyTo.Parse(to).BeforeCommit == early).ToList();
         for (var i = 0; i < unit.Emitted.Count; i++)
             foreach (var to in callers) Send(to, $"{unit.Instance}#{unit.Revision}.{i}", unit.Emitted[i].Channel, unit.Emitted[i].Item);

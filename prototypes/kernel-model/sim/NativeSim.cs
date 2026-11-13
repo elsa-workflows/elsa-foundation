@@ -40,6 +40,7 @@ public sealed partial class World
     private NativeModel NativeModelFor(Actor actor) => new(NativeWorkflows.Registry, new NativeOptions
     {
         Flaws = Config.NativeFlaws,
+        AdmissionFlaws = Config.AdmissionFlaws,
         Gate = async (job, cancel) => await Work(actor, job, cancel),
         OnExternal = (instance, frame, _, attempt, again) => External(instance.Id, frame, attempt, again),
     });

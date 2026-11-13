@@ -1,0 +1,59 @@
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
+using Elsa.Workflows.Publishing.Releases;
+using Elsa.Workflows.Publishing.Releases.Core;
+using Microsoft.Extensions.DependencyInjection;
+
+var services = new ServiceCollection();
+var feature = new WorkflowReleaseTransportFeature();
+feature.ConfigureServices(services);
+feature.PostConfigureServices(services);
+var verificationFeature = new WorkflowReleaseVerificationFeature();
+verificationFeature.ConfigureServices(services);
+verificationFeature.PostConfigureServices(services);
+using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateOnBuild = true, ValidateScopes = true });
+using var scope = provider.CreateScope();
+var codec = scope.ServiceProvider.GetRequiredService<IReleaseBundleCodec>();
+
+// A transport fixture only: no workflow/module semantics or target integration is implied.
+var originalBlob = Encoding.UTF8.GetBytes("{\"fixture\":\"transport-only\"}");
+var expectedBlob = originalBlob.ToArray();
+var blobDigest = "sha256:" + Convert.ToHexStringLower(SHA256.HashData(originalBlob));
+var member = new { kind = "transport-witness", identity = "one" };
+var originalManifest = JsonSerializer.SerializeToUtf8Bytes(new
+{
+    format = "elsa.workflow-release", formatVersion = 1, profile = "native-bpmn-etl/1",
+    roots = new[] { new { member, content = member, action = "activate-serving" } },
+    members = new[] { new { key = member, codec = "transport-witness-json", codecVersion = 1,
+        ownerVersion = (object?)null, payloadDigest = blobDigest, byteLength = originalBlob.LongLength } },
+    edges = Array.Empty<object>(), prerequisites = Array.Empty<object>(), resourceRequirements = Array.Empty<object>()
+});
+var transport = codec.Validate(originalManifest,
+    new Dictionary<string, ReadOnlyMemory<byte>> { [blobDigest] = originalBlob });
+var expectedManifest = transport.GetManifestBytes();
+Array.Fill(originalManifest, (byte)' ');
+Array.Fill(originalBlob, (byte)' ');
+if (!transport.GetManifestBytes().SequenceEqual(expectedManifest) || !transport.GetBlobBytes(blobDigest).SequenceEqual(expectedBlob))
+    throw new InvalidOperationException("Caller mutation changed validated transport content.");
+
+using var archive = new MemoryStream();
+await codec.WriteZipAsync(transport, archive);
+archive.Position = 0;
+var imported = await codec.ReadZipAsync(archive);
+if (imported.Digest != transport.Digest || !imported.GetBlobBytes(blobDigest).SequenceEqual(expectedBlob))
+    throw new InvalidOperationException("Packaged ZIP transport round-trip changed identity or original bytes.");
+
+// The packed semantic framework must refuse an unknown owner; structural validity cannot grant owner validity.
+var semanticVerifier = scope.ServiceProvider.GetRequiredService<IReleaseSemanticVerifier>();
+var semantic = await semanticVerifier.VerifyAsync(imported, new() { ExpectedDigest = imported.Digest });
+if (semantic.Status != ReleaseSemanticStatus.Unsupported || !semantic.Diagnostics.Any(x => x.Code == "unsupported_artifact_codec"))
+    throw new InvalidOperationException("The packed verifier failed to refuse the unregistered owner codec.");
+
+var forbidden = AppDomain.CurrentDomain.GetAssemblies().Select(x => x.GetName().Name ?? "")
+    .Where(name => name.StartsWith("Elsa.", StringComparison.Ordinal)
+        && name is not "Elsa.Workflows.Publishing.Releases" and not "Elsa.Workflows.Publishing.Releases.Core").ToArray();
+if (forbidden.Length != 0)
+    throw new InvalidOperationException("Target transport consumer loaded Design-bearing assemblies: " + string.Join(", ", forbidden));
+Console.WriteLine(JsonSerializer.Serialize(new { outcome = "passed", transportDigest = imported.Digest,
+    members = imported.Members.Count, semanticValidation = "unknown owner refused", semanticStatus = semantic.Status.ToString(), promotion = "not attempted", forbiddenAssemblies = forbidden }));
