@@ -76,7 +76,9 @@ static async Task Cost(bool postgres, string connection, bool fenceInBatch)
     await using (var db = create()) await db.Database.EnsureDeletedAsync();
     var store = new EfStore(create, postgres, fenceInBatch);
     await store.CreateAsync(2);
-    var owner = new Worker("owner", 0, store, new WorkflowInstance(Models()));
+    // A cost run counts the work, not the lease's upkeep: with an hour's lease no pass renews it inside a row, however slow the engine.
+    var hour = new WorkerOptions { Lease = TimeSpan.FromHours(1) };
+    var owner = new Worker("owner", 0, store, new WorkflowInstance(Models()), hour);
     await new DurableHost([owner]).ActivateAsync(owner.Partition);
     await owner.PollAsync();    // the owner is caught up: from here it hands over in memory
     var n = 0;
@@ -118,7 +120,7 @@ static async Task Cost(bool postgres, string connection, bool fenceInBatch)
         await Drain(owner, poll: false);
     });
     // Waiting for an event: through the subscription and event tables, and through a correlation instance per key.
-    other = new Worker("other", 1, store, new WorkflowInstance(Models()));
+    other = new Worker("other", 1, store, new WorkflowInstance(Models()), hour);
     await new DurableHost([other]).ActivateAsync(other.Partition);
     await other.PollAsync();
     string Key(int partition) => Enumerable.Range(0, 1000).Select(i => $"k{partition}-{n}-{i}").First(k => Correlation.Of(k, 2).Partition == partition);
