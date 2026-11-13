@@ -1023,7 +1023,9 @@ instances (more than SQLite's 200 views per statement), then one round of 600 de
 delete), with no view to write: `projection: rounds larger than a statement's chunk: 850 views in one, then 600
 deletes alone`. It passes on in-memory, SQLite, PostgreSQL, SQL Server, MySQL and MongoDB. It commits in chunks of 170
 and 200: one commit of 850 new instances failed on MySQL's provider ("The CommandText property has not been properly
-initialized"), a limit of that provider that the kernel, which flushes at most 500 rows a commit, does not reach.
+initialized"). A reviewer's probe found the failure from about 420 such turns in one commit, below the kernel's flush
+cap of 500 turns (`WorkerOptions.MaxBatch` counts turns, not rows), with the cause not known; ENGINES.md's 1,000
+instances started at once did land, so the row shape matters. Not fixed here: issue #4358.
 
 **Gates.**
 
