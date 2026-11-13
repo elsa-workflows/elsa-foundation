@@ -27,7 +27,7 @@ public sealed class RuntimeStandaloneIngressProtocolTests
     {
         var store = new SerializedStore(Pending());
         var handled = new List<RuntimeDeliverySourceContext>();
-        using var services = Services(new Handler(source =>
+        using var services = Services(new SourceExecutor(source =>
         {
             handled.Add(source);
             store.CancelPending(source);
@@ -48,7 +48,7 @@ public sealed class RuntimeStandaloneIngressProtocolTests
     public void Subscription_readiness_requires_the_exact_contribution_and_actual_claim_lookup_and_scope_pipeline()
     {
         var store = new SerializedStore(Pending());
-        using var services = Services(new Handler(_ => throw new InvalidOperationException("Capability discovery cannot run a handler.")));
+        using var services = Services(new SourceExecutor(_ => throw new InvalidOperationException("Capability discovery cannot run a handler.")));
         var dispatcher = services.GetRequiredService<IRuntimePostCommitIntentDispatcher>();
         var kind = RuntimeStandaloneIngressSource.StandaloneTriggerDeliveryKind;
         var version = RuntimeSubscriptionDelivery.CurrentVersion;
@@ -72,7 +72,7 @@ public sealed class RuntimeStandaloneIngressProtocolTests
     public async Task HandlerReturnWithoutTargetEvidence_CannotCompleteOwedWork()
     {
         var store = new SerializedStore(Pending());
-        using var services = Services(new Handler(_ => ValueTask.CompletedTask));
+        using var services = Services(new SourceExecutor(_ => ValueTask.CompletedTask));
         await Assert.ThrowsAsync<ArgumentException>(() => Processor(store, services).ProcessAsync(new(1)).AsTask());
         Assert.Equal(RuntimePostCommitOutboxStatus.Delivering, store.Current.Status);
         Assert.Equal(RuntimeRecipientPhase.Pending, Assert.Single(store.Current.SubscriptionDelivery!.Progress).Phase);
@@ -82,7 +82,7 @@ public sealed class RuntimeStandaloneIngressProtocolTests
     public async Task ClaimFreeAndLegacyDispatchers_RefuseExternalSourcesBeforeEffects()
     {
         var store = new SerializedStore(Pending());
-        using var services = Services(new Handler(_ => throw new Xunit.Sdk.XunitException("Handler must not run.")));
+        using var services = Services(new SourceExecutor(_ => throw new Xunit.Sdk.XunitException("SourceExecutor must not run.")));
         var legacyStore = new ClaimlessStore(store);
         await Assert.ThrowsAsync<RuntimePostCommitSourceBoundaryException>(() => Processor(legacyStore, services).ProcessAsync(new(1)).AsTask());
         var claim = RuntimePostCommitOutboxClaimTransitions.Claim(store.Current, new("owner", Now, TimeSpan.FromMinutes(1), 1));
@@ -95,7 +95,7 @@ public sealed class RuntimeStandaloneIngressProtocolTests
     public void ConflictingSourceOwners_AndUnknownProtocolVersions_Refuse()
     {
         var services = new ServiceCollection();
-        services.AddRuntimeDeliverySourceExecutor<Handler>(RuntimeStandaloneIngressSource.StandaloneTriggerDeliveryKind, Retry());
+        services.AddRuntimeDeliverySourceExecutor<SourceExecutor>(RuntimeStandaloneIngressSource.StandaloneTriggerDeliveryKind, Retry());
         Assert.Throws<InvalidOperationException>(() => services.AddRuntimePostCommitIntentHandler<WorkflowHandler>(
             RuntimeStandaloneIngressSource.StandaloneTriggerDeliveryKind, Retry()));
         Assert.Throws<NotSupportedException>(() => new RuntimeSubscriptionDelivery(99, "source", Hash, Scope, [], [], []));
@@ -146,10 +146,10 @@ public sealed class RuntimeStandaloneIngressProtocolTests
         new(1, item.OutboxItemId, item.SourceFingerprint, item.SubscriptionDelivery!.SelectionFingerprint,
             recipient.RecipientId, recipient.StartIdentity, Now, "native-start", 1, JsonSerializer.SerializeToElement(new { value = 42 }));
 
-    private static ServiceProvider Services(Handler handler)
+    private static ServiceProvider Services(SourceExecutor handler)
     {
         var services = new ServiceCollection().AddSingleton(handler);
-        services.AddRuntimeDeliverySourceExecutor<Handler>(RuntimeStandaloneIngressSource.StandaloneTriggerDeliveryKind, Retry());
+        services.AddRuntimeDeliverySourceExecutor<SourceExecutor>(RuntimeStandaloneIngressSource.StandaloneTriggerDeliveryKind, Retry());
         services.AddScoped<IRuntimePostCommitIntentDispatcher, RuntimePostCommitIntentDispatcher>();
         return services.BuildServiceProvider();
     }
@@ -158,7 +158,7 @@ public sealed class RuntimeStandaloneIngressProtocolTests
             null, [], null, null, null, new Access(), services.GetServices<RuntimePostCommitIntentHandlerContribution>());
     private sealed class Clock : TimeProvider { public override DateTimeOffset GetUtcNow() => Now; }
     private sealed class Access : IPersistenceAccessContextAccessor { public PersistenceAccessContext Current => PersistenceAccessContext.Scoped(Scope); }
-    private sealed class Handler(Func<RuntimeDeliverySourceContext, ValueTask> run) : IRuntimeDeliverySourceExecutor
+    private sealed class SourceExecutor(Func<RuntimeDeliverySourceContext, ValueTask> run) : IRuntimeDeliverySourceExecutor
     { public ValueTask HandleAsync(RuntimeDeliverySourceContext source, CancellationToken cancellationToken = default) => run(source); }
     private sealed class WorkflowHandler : IRuntimePostCommitIntentHandler
     { public ValueTask HandleAsync(RuntimePostCommitIntent intent, CancellationToken cancellationToken = default) => ValueTask.CompletedTask; }
