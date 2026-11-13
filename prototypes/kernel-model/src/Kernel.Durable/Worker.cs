@@ -836,9 +836,8 @@ public sealed class Worker : IScopeActivation, ITurnServices
             var reply = unit.Replied[i];
             Send(reply.To, $"{Origin(unit)}#{unit.Revision}.reply:{i}", reply.Channel, reply.Item);
         }
-        // Handed-over tickets arrived while this slot was still busy. Retry after its acknowledged checkpoint.
-        foreach (var message in unit.Sent)
-            if (_items.GetValueOrDefault(message.Id) is { Key: not null } ticket) StartJob(ticket);
+        // A load, poll or gate release can encounter any of this actor's jobs while its checkpoint is busy.
+        foreach (var ticket in slot.Inbox.Where(i => i.Key is not null).ToArray()) StartJob(ticket);
         if (slot.Row is null && slot.Inbox.Count == 0) _slots.Remove(unit.Instance);
         Evict();
     }
