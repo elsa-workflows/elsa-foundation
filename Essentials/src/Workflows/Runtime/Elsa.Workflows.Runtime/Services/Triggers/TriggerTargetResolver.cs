@@ -15,8 +15,8 @@ internal sealed record ResolvedTriggerTarget(WorkflowActivationSlot? Slot, Workf
 
 /// <summary>Reads current logical slots. This performs no policy admission, mapping, queue writes or runtime adapter resolution.</summary>
 internal sealed class TriggerTargetResolver(IWorkflowActivationAuthority slots, IWorkflowExecutableSourceReferenceStore sources,
-    IWorkflowExecutableStore executables, IPersistenceAccessContextAccessor access, IInlineEventPublisher publisher,
-    TimeProvider clock)
+    IWorkflowExecutableStore executables, IPersistenceAccessContextAccessor access, TimeProvider clock,
+    IInlineEventPublisher? publisher = null)
 {
 
     internal IWorkflowActivationAuthority Slots => slots;
@@ -46,7 +46,8 @@ internal sealed class TriggerTargetResolver(IWorkflowActivationAuthority slots, 
         else native = await executables.FindAsync(source.ArtifactId, ct)
             ?? throw new InvalidDataException("The serving publication material is missing.");
         var discovery = new TriggerTargetModelsDiscovering();
-        await publisher.Publish(discovery, ct);
+        await (publisher ?? throw new TriggerOperationException("unavailable",
+            "Target discovery requires the composed Events feature's inline publisher.")).Publish(discovery, ct);
         var models = ValidateModels(discovery.Models);
         var matching = models.Where(model => native is not null
             ? model.ProtocolKey is null

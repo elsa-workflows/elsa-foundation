@@ -241,8 +241,8 @@ public sealed class StandaloneTriggerAdmissionTests
             metadata.AddSingleton<ITriggerTargetModelSource, NativeTriggerTargetModelSource>();
             metadata.AddScoped<IEventHandler<TriggerTargetModelsDiscovering>, CollectTriggerTargetModels>();
             eventProvider = metadata.BuildServiceProvider(); eventScope = eventProvider.CreateScope();
-            Targets = new(Slots, sources, material, new Access(),
-                eventScope.ServiceProvider.GetRequiredService<IInlineEventPublisher>(), clock);
+            Targets = new(Slots, sources, material, new Access(), clock,
+                eventScope.ServiceProvider.GetRequiredService<IInlineEventPublisher>());
             Admission = new(resources, Delivery, Targets,
                 mapper ?? new TriggerInputMapper(new WorkflowExecutableInputValidator(new StringTypeRegistry())), [new Adapter()], clock,
                 policyGate ?? new AllowWorkflowExecutableStartPolicy(), pipeline.Processor, pipeline.Dispatcher);

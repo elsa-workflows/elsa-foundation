@@ -1,3 +1,4 @@
+using Elsa.Events.Core.Contracts;
 using Elsa.Workflows.Runtime.Services.Triggers;
 using System.Reflection;
 using System.Runtime.CompilerServices;
@@ -364,6 +365,54 @@ public sealed class StandaloneTriggerPublicConsumerTests
             await selected.GetRequiredService<IWorkflowTriggerBindingStore>().FindActivationStateAsync("material-activation"));
     }
 
+    [Theory]
+    [InlineData(false)] [InlineData(true)]
+    public async Task Native_row_incarnation_survives_idempotent_save_and_changes_after_recreation(bool guarded)
+    {
+        var services = RuntimeServices();
+        using var provider = services.BuildServiceProvider(); using var scope = provider.CreateScope();
+        var selected = scope.ServiceProvider; Bind(selected);
+        await SeedActualPublicationAndResourceAsync(selected);
+        var store = selected.GetRequiredService<IWorkflowExecutableStore>();
+        Assert.False(store.SupportsModelMaterial);
+        var original = (await store.FindMaterialAsync("consumer-material"))!;
+        await store.SaveAsync(original.NativeWorkflow!);
+        Assert.Equal(original.IncarnationId, (await store.FindMaterialAsync(original.Identity.ArtifactId))!.IncarnationId);
+        if (guarded)
+        {
+            var guard = (await store.TryBeginDeletionAsync(original.Identity.ArtifactId, "incarnation-test", Now.AddMinutes(1), Now))!;
+            Assert.NotNull(guard); Assert.True(await store.DeleteAsync(guard, Now));
+        }
+        else Assert.True(await store.DeleteAsync(original.Identity.ArtifactId));
+        Assert.Null(await store.FindMaterialAsync(original.Identity.ArtifactId));
+        await store.SaveAsync(original.NativeWorkflow!);
+        var replacement = (await store.FindMaterialAsync(original.Identity.ArtifactId))!;
+        Assert.NotEqual(original.IncarnationId, replacement.IncarnationId);
+        var reference = new WorkflowExecutableSourceReference("stale", original.Identity.ArtifactId, "definition", "stale-logical", "1",
+            "stale-logical", "stale-version", "1", Now, Now, WorkflowExecutableReferenceScope.Published, TenantId: Scope.TenantId);
+        await Assert.ThrowsAsync<ArgumentException>(() => selected.GetRequiredService<IWorkflowActivationCoordinator>().ActivateMaterialAsync(
+            new("stale-logical", original, reference, "Published", "stale-activation", WorkflowActivationSource.Publishing, 0)).AsTask());
+        Assert.Null(await selected.GetRequiredService<IWorkflowActivationAuthority>().FindAsync("stale-logical", "Published"));
+        Assert.Null(await selected.GetRequiredService<IWorkflowExecutableSourceReferenceStore>().FindAsync(
+            WorkflowActivationReferenceIdentity.Create("stale-activation")));
+    }
+
+    [Fact]
+    public async Task Missing_metadata_publisher_refuses_a_new_signal_before_accepting_work()
+    {
+        var services = RuntimeServices(); services.RemoveAll<IInlineEventPublisher>();
+        using var provider = services.BuildServiceProvider(); using var scope = provider.CreateScope();
+        var selected = scope.ServiceProvider; Bind(selected);
+        await SeedActualPublicationAndResourceAsync(selected);
+        var failure = await Assert.ThrowsAsync<TriggerOperationException>(() => selected.GetRequiredService<IStandaloneTriggerIngress<ConsumerSource>>()
+            .AdmitAsync(new("consumer-trigger", "missing-publisher", ConsumerModule.Descriptor.PayloadSchema,
+                JsonSerializer.SerializeToElement(new { payload = new { message = "value" } }))).AsTask());
+        Assert.Equal("unavailable", failure.Code);
+        var sourceId = RuntimeStandaloneIngressSource.BuildOutboxItemId(Scope.Persistence, Scope.TenantId, "consumer-trigger",
+            ConsumerModule.Descriptor.SourceFamily, "missing-publisher");
+        Assert.Null(await selected.GetRequiredService<IRuntimeIngressDeliveryStore>().FindDeliveryAsync(Scope, sourceId));
+    }
+
     [Fact]
     public async Task Unknown_committed_authority_is_a_domain_refusal_with_source_identity_and_cause()
     {
@@ -388,6 +437,7 @@ public sealed class StandaloneTriggerPublicConsumerTests
     private static ServiceCollection RuntimeServices()
     {
         var services = new ServiceCollection(); services.AddSingleton<TimeProvider>(new FakeTimeProvider(Now));
+        new EventsFeature().ConfigureServices(services);
         new SerializationFeature().ConfigureServices(services);
         services.AddWorkflowRuntime();
         services.AddWorkflowStimulusRouter();
