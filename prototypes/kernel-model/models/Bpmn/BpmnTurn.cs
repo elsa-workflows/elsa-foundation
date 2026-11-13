@@ -17,16 +17,26 @@ internal sealed class BpmnTurn(BpmnModel model, ITurn turn)
 
     public void Run()
     {
-        foreach (var message in turn.Inbox) Accept(message);
+        foreach (var message in turn.Inbox)
+        {
+            // The scope ended (a fault, a terminate end event): what else this turn took is consumed and changes nothing.
+            // The interpreter would go on evaluating a scope that an uncaught fault ended, and a later message would hide it.
+            if (_last is BpmnContinuation.Complete or BpmnContinuation.Fault) break;
+            Accept(message);
+        }
         switch (_last)
         {
             case BpmnContinuation.Complete complete:
-                turn.Record($"end:{complete.Outcome}");
+                turn.Record($"end {complete.Outcome}");
                 turn.SetStatus(InstanceStatus.Finished, complete.Outcome, new JsonObject(_s.Variables.Select(v => KeyValuePair.Create(v.Key, v.Value?.DeepClone()))));
                 break;
             case BpmnContinuation.Fault fault:
-                turn.Record($"fault:{fault.Code}");
-                turn.SetStatus(InstanceStatus.Faulted, fault.Code);
+                // The interpreter stops nothing on a fault; the instance ends, so nothing it started may run on.
+                foreach (var (handle, work) in _s.Live.ToList()) Undo(handle, work);
+                _s.Live.Clear();
+                turn.Record($"fault {fault.Code}");
+                // A parent's call activity reads the BPMN error back (the port: a crossing error keeps its code).
+                turn.SetStatus(InstanceStatus.Faulted, fault.Code, new JsonObject { ["errorCode"] = fault.ErrorCode });
                 break;
         }
     }
@@ -47,7 +57,10 @@ internal sealed class BpmnTurn(BpmnModel model, ITurn turn)
                 Completed(m.Read<TimerDue>().Handle, []);
                 break;
             case Kinds.Event when Events.Delivered(m) is { } delivered && _s.Live.ContainsKey(delivered.Wait):
-                Merge(m.Payload is { } payload ? JsonNode.Parse(payload) as JsonObject : null);
+                // A kept event is given to every catch that subscribes within its window; BPMN consumes a message once,
+                // so a catch that comes round again in a loop must not take the one an earlier catch took.
+                if (!_s.Taken.Add(delivered.Event)) break;
+                Merge(Object(m.Payload));
                 Completed(delivered.Wait, []);
                 break;
             case Kinds.JobFinished:
@@ -68,17 +81,26 @@ internal sealed class BpmnTurn(BpmnModel model, ITurn turn)
             {
                 var finished = m.Read<ChildFinished>();
                 if (_s.Live.FirstOrDefault(w => w.Value is { Kind: WorkKinds.Call } && w.Value.Key == finished.Child).Key is not { } handle) break;     // a child it stopped
-                turn.Record($"r:{handle}:{finished.Child}");
-                if (finished.Status == InstanceStatus.Finished) Merge(finished.Output is { } output ? JsonNode.Parse(output) as JsonObject : null);
+                turn.Record($"r {handle} {finished.Child}");
+                var output = Object(finished.Output);
+                if (finished.Status == InstanceStatus.Finished) Merge(output);
                 Completed(handle, finished.Status switch
                 {
                     InstanceStatus.Finished => [],
                     InstanceStatus.Cancelled => [BpmnInterpreter.CallActivityCancelledOutcomeName],
                     _ => [BpmnInterpreter.CallActivityFaultedOutcomeName],
-                });
+                }, finished.Status == InstanceStatus.Faulted ? output?["errorCode"]?.GetValue<string>() : null);
                 break;
             }
         }
+    }
+
+    /// <summary>A payload that is a JSON object, or nothing: an event's payload is the publisher's, in any form.</summary>
+    private static JsonObject? Object(string? json)
+    {
+        if (json is null) return null;
+        try { return JsonNode.Parse(json) as JsonObject; }
+        catch (System.Text.Json.JsonException) { return null; }
     }
 
     private void Merge(JsonObject? variables)
@@ -87,18 +109,25 @@ internal sealed class BpmnTurn(BpmnModel model, ITurn turn)
     }
 
     /// <summary>A report for work no longer in the ledger (a stale timer, a second delivery) changes nothing.</summary>
-    private void Completed(string handle, IReadOnlyCollection<string> outcomes)
+    private void Completed(string handle, IReadOnlyCollection<string> outcomes, string? errorCode = null)
     {
-        if (!_s.Live.Remove(handle, out var work)) return;
-        turn.Record($"d:{handle}:{work.Element}");
-        Apply(BpmnModel.Semantics.OnWorkCompleted(new BpmnWorkCompletedRequest(_process.Graph, _s.Tokens, Snapshot(), work.Binding, handle, outcomes, work.Iteration) { WorkTokenId = work.Token }));
+        if (Done(handle) is not { } work) return;
+        Apply(BpmnModel.Semantics.OnWorkCompleted(new BpmnWorkCompletedRequest(_process.Graph, _s.Tokens, Snapshot(), work.Binding, handle, outcomes, work.Iteration) { WorkTokenId = work.Token, ErrorCode = errorCode }));
     }
 
     private void Faulted(string handle, string error)
     {
-        if (!_s.Live.Remove(handle, out var work)) return;
-        turn.Record($"d:{handle}:{work.Element}");
+        if (Done(handle) is not { } work) return;
         Apply(BpmnModel.Semantics.OnWorkFaulted(new BpmnWorkFaultedRequest(_process.Graph, _s.Tokens, Snapshot(), work.Binding, handle, error) { FaultedIterationId = work.Iteration, WorkTokenId = work.Token }));
+    }
+
+    /// <summary>The unit reported back: it leaves the ledger, and a message catch's subscription goes with this commit.</summary>
+    private LiveWork? Done(string handle)
+    {
+        if (!_s.Live.Remove(handle, out var work)) return null;
+        if (work.Kind == WorkKinds.Message) turn.Unsubscribe(work.Key, handle);
+        turn.Record($"d {handle} {work.Element}");
+        return work;
     }
 
     // ---- what the interpreter decided ----------------------------------------------------------------------------------
@@ -115,7 +144,7 @@ internal sealed class BpmnTurn(BpmnModel model, ITurn turn)
             {
                 case BpmnHostCommand.StartWork start: Begin(start); break;
                 case BpmnHostCommand.CancelWorkSubtree cancel: Stop(cancel.Handle); break;
-                case BpmnHostCommand.SignalEnclosingScope signal: turn.Record($"signal:{signal.Code}"); break;     // a root has no enclosing scope here
+                case BpmnHostCommand.SignalEnclosingScope signal: turn.Record($"signal {signal.Code}"); break;     // a root has no enclosing scope here
             }
         _last = evaluation.Continuation;
         // A stopped unit never reports (a cancelled job's result is nobody's, a recalled timer never comes), so the host
@@ -140,7 +169,7 @@ internal sealed class BpmnTurn(BpmnModel model, ITurn turn)
             var other => throw new InvalidOperationException($"No host work for {other}."),
         };
         _s.Live[handle] = new LiveWork(start.BindingRef, start.IterationScope?.IterationId, start.TokenId, start.ElementId, kind, key);
-        turn.Record($"w:{handle}:{start.ElementId}:{kind}:{key}");
+        turn.Record($"w {handle} {start.ElementId} {kind} {key}");
     }
 
     private string StartJob(string handle, JobWork job, string element)
@@ -159,6 +188,13 @@ internal sealed class BpmnTurn(BpmnModel model, ITurn turn)
     private void Stop(string handle)
     {
         if (!_s.Live.Remove(handle, out var work)) return;
+        Undo(handle, work);
+        _stopped.Enqueue((handle, work));
+    }
+
+    /// <summary>The kernel's side of a unit that will not finish: its job, timer, subscription or child goes.</summary>
+    private void Undo(string handle, LiveWork work)
+    {
         switch (work.Kind)
         {
             case WorkKinds.Job: turn.CancelJob(work.Key); break;
@@ -166,8 +202,7 @@ internal sealed class BpmnTurn(BpmnModel model, ITurn turn)
             case WorkKinds.Message: turn.Unsubscribe(work.Key, handle); break;
             case WorkKinds.Call: turn.Send(new InstanceRef(work.Key), Kinds.Terminate); break;
         }
-        turn.Record($"x:{handle}:{work.Element}");
-        _stopped.Enqueue((handle, work));
+        turn.Record($"x {handle} {work.Element}");
     }
 
     private JsonObject Variables() => new(_s.Variables.Select(v => KeyValuePair.Create(v.Key, v.Value?.DeepClone())));
@@ -183,8 +218,8 @@ internal sealed class BpmnTurn(BpmnModel model, ITurn turn)
     // ---- the journal ---------------------------------------------------------------------------------------------------
 
     /// <summary>
-    /// What the checks read: each join that fired, with the arrivals it consumed (<c>j:element:merged token:arrivals</c>,
-    /// an arrival as <c>token/flow</c>). The arrivals are the tokens at the join that this evaluation consumed.
+    /// What the checks read: each join that fired, with the arrivals it consumed (<c>j element merged-token arrivals</c>,
+    /// an arrival as <c>token/flow</c>; entries are separated by spaces, since token ids hold colons). The arrivals are the tokens at the join that this evaluation consumed.
     /// </summary>
     private void Journal(BpmnExecutionState before, BpmnExecutionState after)
     {
@@ -193,7 +228,7 @@ internal sealed class BpmnTurn(BpmnModel model, ITurn turn)
         {
             var arrivals = after.Tokens.Where(t => t.AtElementId == joined.ElementId && t.FlowId is not null && t.Status == BpmnTokenStatus.Consumed
                 && t.TokenId != joined.TokenId && !consumedBefore.Contains(t.TokenId) && t.IterationKey == after.Tokens.FirstOrDefault(m => m.TokenId == joined.TokenId)?.IterationKey);
-            turn.Record($"j:{joined.ElementId}:{joined.TokenId}:{string.Join(",", arrivals.Select(t => $"{t.TokenId}/{t.FlowId}"))}");
+            turn.Record($"j {joined.ElementId} {joined.TokenId} {string.Join(",", arrivals.Select(t => $"{t.TokenId}/{t.FlowId}"))}");
         }
     }
 }

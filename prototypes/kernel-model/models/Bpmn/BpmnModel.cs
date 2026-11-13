@@ -38,15 +38,18 @@ public sealed class BpmnState
     public BpmnExecutionState Tokens { get; set; } = new();
     public Dictionary<string, JsonNode?> Variables { get; set; } = new(StringComparer.Ordinal);
     public Dictionary<string, LiveWork> Live { get; set; } = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// The events message catches took. A kept event reaches every catch that subscribes within its window, so a catch
+    /// that comes round again must skip it. It grows by one id per message taken (BPMN.md: friction F-B1).
+    /// </summary>
+    public HashSet<string> Taken { get; set; } = new(StringComparer.Ordinal);
 }
 
 public sealed class BpmnOptions
 {
     /// <summary>Gates a job before it runs (the simulation decides when it completes).</summary>
     public Func<IJob, CancellationToken, ValueTask>? Gate { get; init; }
-
-    /// <summary>How long a message published for a catch is kept for a catch that subscribes later.</summary>
-    public TimeSpan MessageWindow { get; init; } = TimeSpan.FromHours(1);
 }
 
 /// <summary>
