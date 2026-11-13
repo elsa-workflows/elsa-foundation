@@ -49,7 +49,7 @@ The audit sink, reader and ownership are one store's facets and are replaced tog
 
 Known provider implementations:
 
-- `WeaverGitHubCopilotProvider` (`Elsa.Weaver.GitHubCopilot`) *(intra-domain — provider adapter)* implements `IWeaverProvider` and `IWeaverHarness`; its feature registers the provider with `TryAddEnumerable(ServiceDescriptor.Scoped<IWeaverProvider, WeaverGitHubCopilotProvider>())`.
+- `WeaverGitHubCopilotProvider` (`Elsa.Weaver.GitHubCopilot`) *(intra-domain — provider adapter; [owning boundary](../GitHubCopilot/EXTENSION_POINTS.md))* implements `IWeaverProvider` and `IWeaverHarness`; its feature registers the provider with `TryAddEnumerable(ServiceDescriptor.Scoped<IWeaverProvider, WeaverGitHubCopilotProvider>())`.
 - `WeaverAnthropicProvider` (`Elsa.Weaver.Anthropic`) *(intra-domain — provider adapter)* implements `IWeaverProvider` for the host step loop; its feature uses the corresponding scoped enumerable registration.
 - `DeterministicWeaverProvider` (`Elsa.Weaver.Tests`) *(intra-domain — test fixture)* and the private journey `ScriptedProvider` *(cross-domain — qualification fixture)* are not shipped defaults. Their existence does not establish live-provider coverage.
 
