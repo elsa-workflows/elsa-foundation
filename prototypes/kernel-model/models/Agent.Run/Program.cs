@@ -156,15 +156,16 @@ static class Scenarios
             new WorkflowInstance([new AgentModel(HeldTool)]), new WorkerOptions { JobScheduler = TaskScheduler.Default, Monotonic = () => time });
         await new DurableHost([cancelWorker]).ActivateAsync(0);
         await cancelWorker.PollAsync();
-        cancelWorker.Post(new Message("s", InstanceRef.In(0, "cancelled"), Kinds.Start, Start: new StartSpec(AgentModel.ModelKey, "coordinator")), fresh: true);
-        await Pump(cancelWorker, () => started.Task.IsCompleted && cancelledStore.Instances.TryGetValue("0/cancelled", out var r) && Json.Read<Conversation>(r.State).Stage == "tool");
+        cancelWorker.Post(new Message("s", InstanceRef.In(0, "cancelled!part"), Kinds.Start, Start: new StartSpec(AgentModel.ModelKey, "coordinator")), fresh: true);
+        await Pump(cancelWorker, () => started.Task.IsCompleted && cancelledStore.Instances.TryGetValue("0/cancelled!part", out var r) && Json.Read<Conversation>(r.State).Stage == "tool");
         Check(started.Task.IsCompleted, "the tool actually started before cancellation");
-        var driver = cancelWorker.JobCompletion("0/cancelled", "lookup") ?? throw new Exception("started job has no driver task");
-        await cancelledStore.AddAsync(new Message("cancel", InstanceRef.In(0, "cancelled"), "cancel", KeepUntil: time + 60_000));
-        await Pump(cancelWorker, () => cancelledStore.Instances["0/cancelled"].Status == InstanceStatus.Cancelled, poll: true);
+        var driver = cancelWorker.JobCompletion("0/cancelled!part", "lookup") ?? throw new Exception("started job has no driver task");
+        Check(cancelWorker.JobCompletion("0/cancelled", "part!lookup") is null, "driver lookup respects actor and job-key boundaries");
+        await cancelledStore.AddAsync(new Message("cancel", InstanceRef.In(0, "cancelled!part"), "cancel", KeepUntil: time + 60_000));
+        await Pump(cancelWorker, () => cancelledStore.Instances["0/cancelled!part"].Status == InstanceStatus.Cancelled, poll: true);
         await signalled.Task.WaitAsync(TimeSpan.FromSeconds(5));
-        var cancelled = cancelledStore.Instances["0/cancelled"];
-        Check(cancelled.Status == InstanceStatus.Cancelled && !cancelledStore.Messages.ContainsKey(Worker.TicketId("0/cancelled", "lookup")),
+        var cancelled = cancelledStore.Instances["0/cancelled!part"];
+        Check(cancelled.Status == InstanceStatus.Cancelled && !cancelledStore.Messages.ContainsKey(Worker.TicketId("0/cancelled!part", "lookup")),
             "cancellation signalled the running tool and removed its ticket");
         held.SetResult("late");
         await bodyReady.Task.WaitAsync(TimeSpan.FromSeconds(5));
@@ -172,7 +173,7 @@ static class Scenarios
         returnPermit.TrySetResult();
         await driver.WaitAsync(TimeSpan.FromSeconds(5));
         for (var i = 0; i < 5; i++) { await cancelWorker.WokenAsync(null); await cancelWorker.RunAsync(); }
-        Check(cancelledStore.Instances["0/cancelled"] == cancelled && !cancelledStore.Messages.ContainsKey(Worker.TicketId("0/cancelled", "lookup")),
+        Check(cancelledStore.Instances["0/cancelled!part"] == cancelled && !cancelledStore.Messages.ContainsKey(Worker.TicketId("0/cancelled!part", "lookup")),
             "non-cooperative tool completed late without changing the terminal row or recreating its ticket");
         Console.WriteLine(failures == 0 ? "agent spike: all passed" : $"agent spike: {failures} failed");
         return failures == 0 ? 0 : 1;

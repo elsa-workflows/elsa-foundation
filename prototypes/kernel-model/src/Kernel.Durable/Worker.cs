@@ -148,7 +148,9 @@ public sealed class Worker : IScopeActivation, ITurnServices
     /// Diagnostic: capture before a ticket is removed. The task ends after its driver queues or discards the result;
     /// it does not establish that a model consumed the result or committed a logical job outcome.
     /// </summary>
-    public Task? JobCompletion(string instance, string key) => _items.GetValueOrDefault(TicketId(instance, key))?.JobDriver;
+    public Task? JobCompletion(string instance, string key) =>
+        _items.GetValueOrDefault(TicketId(instance, key)) is { } ticket
+            && ticket.Message.Target.Id == instance && ticket.Key == key ? ticket.JobDriver : null;
 
     public bool Has(Flaw flaw) => (_options.Flaws & flaw) != 0;
     public int Partitions => _options.Partitions;
