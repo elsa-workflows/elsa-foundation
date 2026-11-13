@@ -58,9 +58,9 @@ Why the durable layer is ours whatever the runtime: Orleans grain calls are at m
 
 ### The seam between layers 1 and 2
 
-Layer 2 hands the runtime a set of **ownership scopes**, one per partition, and the runtime decides which node hosts each one. A scope is a partition of many actors: one conditional update fences them all, one poll covers their inboxes, and the commits of many actors go in one transaction, which is why 100 instances commit in 2 round trips. Every runtime works this way; Orleans hosts each partition as a grain.
+Layer 2 hands the runtime a set of **ownership scopes**, one per partition, and the runtime decides which node hosts each one. A scope is a partition of many actors: one conditional update fences them all, one poll covers their inboxes, and the commits of many actors go in one transaction, which is why 100 instances commit in 2 round trips on PostgreSQL. Every runtime works this way; Orleans hosts each partition as a grain.
 
-**Dropped on 12 November: actor granularity.** Draft 4 also allowed a scope of one actor (one grain per workflow instance), with its own fence record, its inbox read on activation, each actor committing alone at 2 to 3 round trips, and a sweep to wake idle actors. It loses batching and buys nothing the goals need. It may come back later as a new grain type, which would need an owner epoch on the instance row and the sweep. Until then, user code that wants to call an instance like a grain gets a reference that forwards to the grain of the instance's partition, with no kernel change.
+**Dropped on 12 November: actor granularity.** Draft 4 also allowed a scope of one actor (one grain per workflow instance), with its own fence record, its inbox read on activation, each actor committing alone at 2 to 3 round trips on PostgreSQL, and a sweep to wake idle actors. It loses batching and buys nothing the goals need. It may come back later as a new grain type, which would need an owner epoch on the instance row and the sweep. Until then, user code that wants to call an instance like a grain gets a reference that forwards to the grain of the instance's partition, with no kernel change.
 
 A sketch of the interface; the restructuring will settle it:
 
@@ -138,6 +138,8 @@ What a provider has to give:
 - **Its own time,** in milliseconds, for due times and for checking leases at a take. With the fence in the batch (the default) the owner writes `lease_until` from its own clock, so clock skew costs availability, never safety.
 - **Failures told apart:** unknown outcome, transient (try again as it is), definite.
 
+The prototype's `IKernelStore` also carries the node heartbeat (for fair share), releasing a partition, start subscriptions, held messages, delete, the projector's own row and the view rows; the conformance suite tests each of them on every store.
+
 A relational database meets these with one transaction, a conditional update of the partition row and an identity column. A document store such as MongoDB meets them with a multi-document transaction (which needs a replica set), a conditional update of the partition document, and an order key the owner assigns. Whether that holds, and at what cost, is to be shown by building it.
 
 The tables below are the relational shape. A document provider stores the same records as documents.
@@ -179,7 +181,7 @@ On SQL Server the fence in the batch has a known problem (finding E9 of the prot
 
 The ordinal in a derived message id has a fixed width. EF sends the inserts of one commit in key order, so without it the eleventh message of a turn overtook the third (found on PostgreSQL).
 
-Rows per flush are capped (parameter limits, lock escalation). 100 instance-commits cost the same round trips as one.
+Rows per flush are capped (parameter limits, lock escalation). On the server engines 100 instance-commits cost the same round trips as one; SQLite's engine calls grow with the rows.
 
 **The outbox is the recipient's inbox.** A message to another instance is a row in `message`, inserted in the sender's transaction. Nothing is relayed afterwards. For a recipient in the same partition the owner also hands it over in memory right after the commit, but only once it has caught up: after a takeover it hands nothing over until a poll has come back short, or a new message would overtake older rows it has not read yet.
 
@@ -435,6 +437,7 @@ These figures come from the prototype's own cost runs, reported in its findings;
 
 - **Built since draft 2:** suspend, resume, terminate, rebind and delete; events that start instances; the projector; reply addresses for live output across nodes; the native model with HTTP routes; the store on SQL Server, MySQL and MongoDB.
 - **Not built yet:** the three layers as separate code (round 4, in progress); the runtime conformance suite; the Orleans adapter; the graph engine and the BPMN, StateMachine and standalone-jobs spikes; short timers and jobs of an Ephemeral instance kept in memory (decision 4); the stress test with native instances; a three-node MongoDB replica set. Also not built: the projector's set-based rounds, the reply-address deadline and the owner's signal to the receiving node, the recreate rule per kind of id, values by reference, the viewer's tail read and catch-up, `Describe`, the journal envelope, tenant checks and trace headers on messages; streaming responses and a route mapping a client's disconnect to a cancel.
+- **Next, before the design proposal (program #4229, step 2):** the card decisions; the Orleans adapter with a runtime conformance suite; the graph engine; spikes for BPMN, StateMachine, agents, standalone jobs with the worker protocol, and ETL's fan-out pattern; and the write-volume measurement.
 - **Not measured yet:** bytes written per commit and PostgreSQL bloat (design-now question 7).
 
 ## Trade-offs
@@ -458,7 +461,7 @@ What the design gains, what it pays for it, and the lever that moves the balance
 | 13 | Persistence is abstracted: any store | Only what the contract guarantees can be used: no provider-specific shortcuts in the kernel, each provider needs its own tuning, MongoDB needs a replica set | Store conformance suite |
 | 14 | The actor runtime can be swapped | Runtimes host partitions only (12 November); one grain per instance is deferred because it loses batching and needs the sweep. The durable layer duplicates some of what an actor runtime offers | Ship one runtime; adapters on demand |
 | 15 | A poison message cannot walk the cluster | After a takeover, suspects are retried one at a time (or in halving groups), so a deep backlog recovers slowly; an innocent message is sometimes parked when owners keep dying while it is on trial | Threshold; trial group size |
-| 16 | A synchronous HTTP response is never sent for lost work | The response waits for its turn's commit (2 to 3 round trips of latency); a resume owned by another node pays a hop | Release before commit, per route |
+| 16 | A synchronous HTTP response is never sent for lost work | The response waits for its turn's commit (2 to 3 round trips of latency on PostgreSQL); a resume owned by another node pays a hop | Release before commit, per route |
 | 17 | A clean break: the smallest, fastest design | No migration of existing runs; the native interpreter is rewritten as a model; tests bound to the current core's internals go; the API and Studio are re-pointed; two cores exist until the switch | None: accepted on 11 and 12 November |
 
 ## Open questions
@@ -490,7 +493,7 @@ The test: give Elsa 3 users a reason to move and nothing that stops them, and gi
 - **Agents:** native activities with agent calls as background jobs; a dedicated agent execution model after the switch, checked by a spike first.
 - **Large fan-out:** the aggregating pattern is designed in the proposal and ships with ETL; release 1 caps a parallel ForEach at a documented size.
 - **Standalone jobs:** Elsa.Jobs rebuilt on the kernel as a job actor type; a spike now, release placement in the proposal.
-- **After, with a spike now:** BPMN, the Orleans adapter, ETL. The out-of-process job worker protocol follows in 1.x; its contract is designed now so jobs are built right.
+- **After, with a spike now:** BPMN, the Orleans adapter, ETL (its fan-out pattern), a dedicated agent model. The out-of-process job worker protocol follows in 1.x; its contract is designed now so jobs are built right.
 
 ### Open owner questions
 
