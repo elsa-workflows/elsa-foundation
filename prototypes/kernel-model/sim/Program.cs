@@ -14,7 +14,10 @@ var flaws = (Arg("--flaw") ?? "").Split(',', StringSplitOptions.RemoveEmptyEntri
 
 NativeSwitch.On = args.Contains("--native");
 NativeSwitch.Flaws = (Arg("--native-flaw") ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries).Aggregate(Kernel.Native.NativeFlaw.None, (all, name) => all | Enum.Parse<Kernel.Native.NativeFlaw>(name, true));
+BpmnSwitch.On = args.Contains("--bpmn");
+BpmnSwitch.Flaws = (Arg("--bpmn-flaw") ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries).Aggregate(Kernel.Bpmn.BpmnFlaw.None, (all, name) => all | Enum.Parse<Kernel.Bpmn.BpmnFlaw>(name, true));
 if (args.Contains("--native-mutations")) return NativeMutations(int.Parse(Arg("--seeds") ?? "2000"));
+if (args.Contains("--bpmn-mutations")) return BpmnMutations(int.Parse(Arg("--seeds") ?? "2000"));
 if (args.Contains("--mutations")) return Mutations(int.Parse(Arg("--seeds") ?? "2000"));
 if (Arg("--backlog") is { } backlog) return Backlog(int.Parse(backlog));
 if (Arg("--seed") is { } one) return Replay(int.Parse(one), flaws) ? 0 : 1;
@@ -23,7 +26,7 @@ return Sweep(int.Parse(Arg("--from") ?? "1"), int.Parse(Arg("--seeds") ?? "10000
 // Every fifth seed tries suspects in groups of four that halve, with a threshold to match; the others one at a time.
 // Every third seed is a rolling upgrade: counters start at state version 1 and each node moves to 2 when it restarts.
 static Config ConfigOf(int seed, Flaw flaws) => (flaws.HasFlag(Flaw.StableNodeName) ? new(1, 2, flaws) : seed % 5 == 0 ? new(2 + seed % 2, 2, flaws, Attempts: 5, Group: 4) : new Config(2 + seed % 2, 2, flaws))
-    with { Upgrade = seed % 3 == 0, Native = NativeSwitch.On, NativeFlaws = NativeSwitch.Flaws };
+    with { Upgrade = seed % 3 == 0, Native = NativeSwitch.On, NativeFlaws = NativeSwitch.Flaws, Bpmn = BpmnSwitch.On, BpmnFlaws = BpmnSwitch.Flaws };
 
 (string? Violation, List<Act> Acts) Run(int seed, Flaw flaws, int? length = null)
 {
@@ -104,7 +107,8 @@ bool Sweep(int from, int seeds, Flaw flaws)
         if (violation is not null) failures.Add((seed, violation));
     });
     Console.WriteLine($"{seeds} seeds from {from}, {acts} actions, {clock.Elapsed.TotalSeconds:F1} s, flaws: {flaws}: {failures.Count} failed; {World.Bystanders} innocent instances parked at the threshold"
-        + (NativeSwitch.On ? $"; native: {World.NativeInstances} finished instances matched a run without faults, {World.NativeReruns} External effects ran again under the same committed attempt ({World.NativeRerunsFlagged} of them told that their turn may have run before)" : ""));
+        + (NativeSwitch.On ? $"; native: {World.NativeInstances} finished instances matched a run without faults, {World.NativeReruns} External effects ran again under the same committed attempt ({World.NativeRerunsFlagged} of them told that their turn may have run before)" : "")
+        + (BpmnSwitch.On ? $"; BPMN: {World.BpmnInstances} finished instances matched a run without faults" : ""));
     if (args.Contains("--coverage")) Console.WriteLine("  coverage (seeds that reached the end): " + string.Join("; ", World.Seen.OrderBy(s => s.Key).Select(s => $"{s.Key}: {s.Value}")));
     foreach (var group in failures.GroupBy(f => f.Violation.Split(' ')[0]).OrderByDescending(g => g.Count()))
     {
@@ -153,6 +157,36 @@ int NativeMutations(int seeds)
     foreach (var mutation in Enum.GetValues<Kernel.Native.NativeFlaw>().Where(f => f != Kernel.Native.NativeFlaw.None))
     {
         NativeSwitch.Flaws = mutation;
+        var clock = Stopwatch.StartNew();
+        (int Seed, string Violation)? caught = null;
+        long acts = 0;
+        for (var from = 1; caught is null && from <= seeds; from += 64)
+        {
+            var found = new ConcurrentBag<(int Seed, string Violation)>();
+            Parallel.For(from, Math.Min(from + 64, seeds + 1), seed =>
+            {
+                var (violation, done) = Run(seed, Flaw.None);
+                Interlocked.Add(ref acts, done.Count);
+                if (violation is not null) found.Add((seed, violation));
+            });
+            if (!found.IsEmpty) caught = found.MinBy(f => f.Seed);
+        }
+        if (caught is null) missed++;
+        Console.WriteLine(caught is { } c
+            ? $"{mutation}: CAUGHT at seed {c.Seed} after {acts} actions, {clock.ElapsedMilliseconds} ms: {c.Violation}"
+            : $"{mutation}: NOT CAUGHT in {seeds} seeds ({acts} actions, {clock.ElapsedMilliseconds} ms)");
+    }
+    return missed;
+}
+
+// The BPMN host broken on purpose, one flaw at a time, with BPMN instances in the mix (BPMN.md, section 5).
+int BpmnMutations(int seeds)
+{
+    BpmnSwitch.On = true;
+    var missed = 0;
+    foreach (var mutation in Enum.GetValues<Kernel.Bpmn.BpmnFlaw>().Where(f => f != Kernel.Bpmn.BpmnFlaw.None))
+    {
+        BpmnSwitch.Flaws = mutation;
         var clock = Stopwatch.StartNew();
         (int Seed, string Violation)? caught = null;
         long acts = 0;

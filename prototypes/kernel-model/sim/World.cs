@@ -3,7 +3,9 @@ using Kernel.Native;
 namespace Kernel.Sim;
 
 // Native and NativeFlaws: native workflow instances in the mix (sim/NativeSim.cs), and the model broken on purpose.
-public sealed record Config(int Nodes, int Partitions, Flaw Flaws, int Attempts = 3, int Group = 1, bool Upgrade = false, bool Native = false, NativeFlaw NativeFlaws = NativeFlaw.None);
+// Bpmn and BpmnFlaws: the same for BPMN instances (sim/BpmnSim.cs).
+public sealed record Config(int Nodes, int Partitions, Flaw Flaws, int Attempts = 3, int Group = 1, bool Upgrade = false, bool Native = false, NativeFlaw NativeFlaws = NativeFlaw.None,
+    bool Bpmn = false, Kernel.Bpmn.BpmnFlaw BpmnFlaws = Kernel.Bpmn.BpmnFlaw.None);
 
 /// <summary>One thing that happens. Concrete, so that a list of them replays without the random generator.</summary>
 public sealed record Act(string Kind, int A = 0, int B = 0, string S = "", Message? M = null, bool Flag = false)
@@ -204,6 +206,7 @@ public sealed partial class World
     {
         Config = config;
         Native = new NativeOracle(config.Partitions);
+        Bpmn = new BpmnOracle(config.Partitions);
         Store = new InMemoryStore(config.Partitions, () => Time, config.Flaws) { Refuses = row => row.State.Contains(Fragile.Sour) };
         Current = new int[config.Nodes, config.Partitions];
         Skew = new long[config.Nodes];
@@ -256,7 +259,7 @@ public sealed partial class World
         [
             new Counter(Versions[node]), new Parent(Config.Flaws.HasFlag(Flaw.CancelKnownChildren)), new Child(), new Waiter(), new Sequence(), new Correlation(Config.Flaws.HasFlag(Flaw.CorrelationForgets)), new CWaiter(Config.Partitions),
             new Runner((job, cancel) => Work(actor, job, cancel)), new Fragile(() => Dying = node), new Http(actor.Id, (job, cancel) => Work(actor, job, cancel)),
-            new Tree((job, cancel) => Work(actor, job, cancel)), new OnEvent(), NativeModelFor(actor),
+            new Tree((job, cancel) => Work(actor, job, cancel)), new OnEvent(), NativeModelFor(actor), BpmnModelFor(actor),
         ];
         // A node's name is unique per process start: a restarted process is not its predecessor (finding F9).
         actor.Worker = new Worker(Config.Flaws.HasFlag(Flaw.StableNodeName) ? "node" + node : $"node{node}.{Incarnation[node]}", partition, wire, new WorkflowInstance(models), new WorkerOptions
@@ -411,12 +414,14 @@ public sealed partial class World
                 if (!Oracle.Accepts(message)) return null;
                 var added = Store.AddAsync(message).Result;
                 Oracle.Note(message);
+                if (Config.Bpmn) BpmnApplied(message, posted: false);
                 return added ? "added" : "duplicate key";
             }
             case "post":
             {
                 if (Live(act.A) is not { } actor || Oracle.Sequences.ContainsKey(act.M!.Target.Id) || !actor.Worker.Post(act.M, fresh: true)) return null;
                 Oracle.Note(act.M, posted: true);
+                if (Config.Bpmn) BpmnApplied(act.M, posted: true);
                 return "";
             }
             case "publish":
@@ -587,6 +592,7 @@ public sealed class Generator(int seed, World world)
     private Act Outside(Random r, List<Actor> alive)
     {
         if (world.Config.Native && r.Next(100) < 40) return world.NativeAct(r, alive, _serial++);     // native instances (NativeSim.cs)
+        if (world.Config.Bpmn && r.Next(100) < 40) return world.BpmnAct(r, alive, _serial++);         // BPMN instances (BpmnSim.cs)
         var (n, p) = (_serial++, r.Next(world.Config.Partitions));
         long keep = world.Time + (r.Next(3) == 0 ? 5_000 : 3_600_000);
         Message To(string name, string kind, object? payload, StartSpec? start) =>

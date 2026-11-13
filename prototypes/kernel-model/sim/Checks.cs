@@ -84,6 +84,7 @@ public sealed partial class World
     {
         if (Store.Ghost.Count > 0) return Store.Ghost[0];
         if (Config.Native) ScanJournal();      // the native checks read the journal (NativeSim.cs)
+        if (Config.Bpmn && BpmnCheck() is { } bpmn) return bpmn;      // the token checks (BpmnSim.cs)
         if (Faults.Count > 0) return Faults[0];
         _watched.RemoveAll(t => t.IsCompletedSuccessfully);
         if (_watched.Find(t => t.IsFaulted) is { } bug) return "BUG " + bug.Exception!.InnerException;
@@ -276,7 +277,7 @@ public sealed partial class World
             if (State<OnEventState>(row.Id) is { } got && (got.Got.Count > 1 || got.Got.Exists(id => !row.Id.EndsWith(id.Replace("ev:", "on:").Replace("::", ":")))))
                 return $"I20 {row.Id} was started by [{string.Join(", ", got.Got)}]";
         // A running tree leaf waits; nothing else that is no waiter may, and a terminated leaf's wait is gone with its commit.
-        if (rows.FirstOrDefault(g => !Oracle.Waiters.ContainsKey(g.Key) && Store.Instances.GetValueOrDefault(g.Key) is not { Model: "tree" or Kernel.Native.NativeModel.ModelKey, Status: InstanceStatus.Running }) is { } stray)
+        if (rows.FirstOrDefault(g => !Oracle.Waiters.ContainsKey(g.Key) && Store.Instances.GetValueOrDefault(g.Key) is not { Model: "tree" or Kernel.Native.NativeModel.ModelKey or Kernel.Bpmn.BpmnModel.ModelKey, Status: InstanceStatus.Running }) is { } stray)
             return $"I8 {stray.Key} has a subscription and is {(Store.Instances.GetValueOrDefault(stray.Key) is { } row ? row.Status.ToString() : "no waiter")}";
         foreach (var id in Oracle.Waiters.Keys)
         {
@@ -430,7 +431,7 @@ public sealed partial class World
             if (Check() is { } violation) return violation;
             if (Store.Messages.Values.Any(m => !m.Done && m.Message.Kind != "expire") || slots.Select(s => Of(s.Node, s.Partition)).Any(a => a.Worker.Owns && (a.Worker.NeedsFlush || a.Worker.Ready.Any() || a.Jobs.Count > 0))) continue;
             if (Unfair() is not null) continue;
-            if (published && (!Config.Native || NativeMeet() == 0)) return End();    // native waits that appeared since get their events too
+            if (published && (!Config.Native || NativeMeet() == 0) && (!Config.Bpmn || BpmnMeet() == 0)) return End();    // native and BPMN waits that appeared since get their events too
             if (Meet() is { } missed) return missed;
             published = true;
         }
@@ -480,6 +481,7 @@ public sealed partial class World
         // Native waits do not ask for kept events (the owner's default of 12 November), so an event published before
         // one committed is not owed to it: they get, once, what is published at idle (NativeSim.cs).
         if (Config.Native) NativeMeet();
+        if (Config.Bpmn) BpmnMeet();
         return null;
     }
 
@@ -549,6 +551,7 @@ public sealed partial class World
             if (Store.Projection[p] != Store.Partitions[p].Position) return $"I6 the projector of partition {p} stopped at {Store.Projection[p]} of {Store.Partitions[p].Position}";
         }
         if (Config.Native && NativeEnd() is { } native) return native;
+        if (Config.Bpmn && BpmnEnd() is { } bpmn) return bpmn;
         return Faults.FirstOrDefault() ?? Check();
     }
 }

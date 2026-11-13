@@ -14,6 +14,12 @@ internal sealed class BpmnTurn(BpmnModel model, ITurn turn)
     private readonly BpmnProcess _process = model.Registry.Get(turn.Instance.Definition);
     private readonly Queue<(string Handle, LiveWork Work)> _stopped = new();
     private BpmnContinuation? _last;
+    private BpmnExecutionState? _initial;
+
+    private bool Has(BpmnFlaw flaw) => (model.Options.Flaws & flaw) != 0;
+
+    /// <summary>The token state an evaluation starts from: the last one, or, under the flaw, the turn's first.</summary>
+    private BpmnExecutionState Tokens => Has(BpmnFlaw.StaleTokens) ? _initial ??= _s.Tokens : _s.Tokens;
 
     public void Run()
     {
@@ -51,7 +57,7 @@ internal sealed class BpmnTurn(BpmnModel model, ITurn turn)
                 _s.Started = true;
                 foreach (var (name, value) in _process.Variables) _s.Variables[name] = value?.DeepClone();
                 foreach (var (name, value) in Json.Read<BpmnStart>(m.Start?.Input ?? "{}").Variables ?? []) _s.Variables[name] = value?.DeepClone();
-                Apply(BpmnModel.Semantics.Start(new BpmnStartRequest(_process.Graph, _s.Tokens, Snapshot())));
+                Apply(BpmnModel.Semantics.Start(new BpmnStartRequest(_process.Graph, Tokens, Snapshot())));
                 break;
             case BpmnKinds.Timer:
                 Completed(m.Read<TimerDue>().Handle, []);
@@ -112,20 +118,20 @@ internal sealed class BpmnTurn(BpmnModel model, ITurn turn)
     private void Completed(string handle, IReadOnlyCollection<string> outcomes, string? errorCode = null)
     {
         if (Done(handle) is not { } work) return;
-        Apply(BpmnModel.Semantics.OnWorkCompleted(new BpmnWorkCompletedRequest(_process.Graph, _s.Tokens, Snapshot(), work.Binding, handle, outcomes, work.Iteration) { WorkTokenId = work.Token, ErrorCode = errorCode }));
+        Apply(BpmnModel.Semantics.OnWorkCompleted(new BpmnWorkCompletedRequest(_process.Graph, Tokens, Snapshot(), work.Binding, handle, outcomes, work.Iteration) { WorkTokenId = work.Token, ErrorCode = errorCode }));
     }
 
     private void Faulted(string handle, string error)
     {
         if (Done(handle) is not { } work) return;
-        Apply(BpmnModel.Semantics.OnWorkFaulted(new BpmnWorkFaultedRequest(_process.Graph, _s.Tokens, Snapshot(), work.Binding, handle, error) { FaultedIterationId = work.Iteration, WorkTokenId = work.Token }));
+        Apply(BpmnModel.Semantics.OnWorkFaulted(new BpmnWorkFaultedRequest(_process.Graph, Tokens, Snapshot(), work.Binding, handle, error) { FaultedIterationId = work.Iteration, WorkTokenId = work.Token }));
     }
 
     /// <summary>The unit reported back: it leaves the ledger, and a message catch's subscription goes with this commit.</summary>
     private LiveWork? Done(string handle)
     {
         if (!_s.Live.Remove(handle, out var work)) return null;
-        if (work.Kind == WorkKinds.Message) turn.Unsubscribe(work.Key, handle);
+        if (work.Kind == WorkKinds.Message && !Has(BpmnFlaw.KeepSubscription)) turn.Unsubscribe(work.Key, handle);
         turn.Record($"d {handle} {work.Element}");
         return work;
     }
@@ -149,16 +155,16 @@ internal sealed class BpmnTurn(BpmnModel model, ITurn turn)
         _last = evaluation.Continuation;
         // A stopped unit never reports (a cancelled job's result is nobody's, a recalled timer never comes), so the host
         // reports it at once: the interpreter absorbs the report and the cancelled token's stopped handle is spent.
-        while (_stopped.TryDequeue(out var stopped))
+        while (!Has(BpmnFlaw.NoLateReport) && _stopped.TryDequeue(out var stopped))
         {
-            var late = BpmnModel.Semantics.OnWorkCompleted(new BpmnWorkCompletedRequest(_process.Graph, _s.Tokens, Snapshot(), stopped.Work.Binding, stopped.Handle, [], stopped.Work.Iteration) { WorkTokenId = stopped.Work.Token });
+            var late = BpmnModel.Semantics.OnWorkCompleted(new BpmnWorkCompletedRequest(_process.Graph, Tokens, Snapshot(), stopped.Work.Binding, stopped.Handle, [], stopped.Work.Iteration) { WorkTokenId = stopped.Work.Token });
             Apply(late);
         }
     }
 
     private void Begin(BpmnHostCommand.StartWork start)
     {
-        var handle = "h" + ++_s.Next;
+        var handle = Has(BpmnFlaw.ReuseHandles) ? "h" + (_s.Live.Count + 1) : "h" + ++_s.Next;
         var self = turn.Instance.Ref;
         var (kind, key) = _process.Work[start.BindingRef] switch
         {
@@ -195,13 +201,14 @@ internal sealed class BpmnTurn(BpmnModel model, ITurn turn)
     /// <summary>The kernel's side of a unit that will not finish: its job, timer, subscription or child goes.</summary>
     private void Undo(string handle, LiveWork work)
     {
-        switch (work.Kind)
-        {
-            case WorkKinds.Job: turn.CancelJob(work.Key); break;
-            case WorkKinds.Timer: turn.Recall(work.Key); break;
-            case WorkKinds.Message: turn.Unsubscribe(work.Key, handle); break;
-            case WorkKinds.Call: turn.Send(new InstanceRef(work.Key), Kinds.Terminate); break;
-        }
+        if (!Has(BpmnFlaw.KeepStoppedWork))
+            switch (work.Kind)
+            {
+                case WorkKinds.Job: turn.CancelJob(work.Key); break;
+                case WorkKinds.Timer: turn.Recall(work.Key); break;
+                case WorkKinds.Message: turn.Unsubscribe(work.Key, handle); break;
+                case WorkKinds.Call: turn.Send(new InstanceRef(work.Key), Kinds.Terminate); break;
+            }
         turn.Record($"x {handle} {work.Element}");
     }
 
