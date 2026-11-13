@@ -65,6 +65,12 @@ public abstract class Engine
     /// <summary>Insert or refresh the node's row with database time; returns that time.</summary>
     public abstract ValueTask<long> HeartbeatAsync(KernelDb db, string node, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Inside a commit, the careful path of FINDINGS 25.2: insert a wait unless it is there ({0} key, {1} instance, {2} wait,
+    /// {3} partition). Only the partition's owner writes these rows, under the fence, so the check cannot race.
+    /// </summary>
+    public virtual string SubscribeIfAbsent => Sql("""INSERT INTO "Subscriptions" ("Key", "Instance", "Wait", "Partition") SELECT {0}, {1}, {2}, {3} WHERE NOT EXISTS (SELECT 1 FROM "Subscriptions" WHERE "Key" = {0} AND "Instance" = {1} AND "Wait" = {2})""");
+
     /// <summary>Insert a subscription of kind start; one that exists already is left as it is.</summary>
     public abstract ValueTask SubscribeAsync(KernelDb db, SubscriptionRow subscription, CancellationToken cancellationToken);
 
@@ -327,6 +333,9 @@ public sealed class MySqlEngine : Engine
              """), node).ToListAsync(cancellationToken);
         return rows[0];
     }
+
+    // Not INSERT IGNORE: IGNORE also turns a value too long into a warning and cuts it, where it must stay a definite error.
+    public override string SubscribeIfAbsent => Sql("""INSERT INTO "Subscriptions" ("Key", "Instance", "Wait", "Partition") VALUES ({0}, {1}, {2}, {3}) ON DUPLICATE KEY UPDATE "Key" = "Key" """);
 
     public override async ValueTask SubscribeAsync(KernelDb db, SubscriptionRow s, CancellationToken cancellationToken) =>
         await db.Database.ExecuteSqlRawAsync(Sql("""INSERT IGNORE INTO "Subscriptions" ("Key", "Instance", "Wait", "Partition", "Start") VALUES (@key, @instance, @wait, 0, @start)"""),

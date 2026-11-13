@@ -71,8 +71,8 @@ internal sealed class ActivityDataContextService(IServiceProvider services)
             var catalogRevision = await CatalogRevisionAsync(snapshot.State.RootActivity, structures, lookup, ct);
             var analysis = await analyzer.AnalyzeAsync(document, new(request.NodeId, request.InputKey), request.Query, ct);
             if (analysis.ContractRevision != document.ContractRevision) return Failure("unavailable", "invalid-analysis");
-            if (analysis.Target is null || !analysis.Findings.IsEmpty)
-                return Failure("invalid", "invalid-source-or-target");
+            // A refused source or target is disclosed with its findings, after the same rechecks as a supported answer.
+            var invalid = analysis.Target is null || !analysis.Findings.IsEmpty;
             var queryRevision = WorkflowAuthoringRevision.JsonDigest(JsonSerializer.SerializeToElement(
                 request.Query ?? new(), WorkflowsDesignJsonOptions.WireContext.ActivityDataSelectionQuery));
             var metadataRevision = WorkflowAuthoringRevision.JsonDigest(JsonSerializer.SerializeToElement(
@@ -102,7 +102,8 @@ internal sealed class ActivityDataContextService(IServiceProvider services)
             if (currentBaseline != baseline) return Failure("stale", "base-changed", currentBaseline);
             if (request.PreviousContextRevision is { } previous && previous != contextRevision)
                 return Failure("stale", "context-changed", baseline, contextRevision);
-            return new("1", analysis.Sources.IsEmpty ? "empty" : "supported", "activity-data.metadata", "WorkflowDefinition",
+            return new("1", invalid ? "invalid" : analysis.Sources.IsEmpty ? "empty" : "supported",
+                invalid ? "activity-data.invalid-source-or-target" : "activity-data.metadata", "WorkflowDefinition",
                 draft.Id, baseline, request.DocumentRevision, snapshot.Hash, contextRevision, analysis);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
