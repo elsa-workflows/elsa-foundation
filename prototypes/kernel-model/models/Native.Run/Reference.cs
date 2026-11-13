@@ -25,6 +25,13 @@ public static class Reference
             Parallel("fork-join", null, [.. Enumerable.Range(1, branches).Select(i => Event($"wait-{i}", Expr($"input.event + '-{i}'")))]),
             WriteLine("after-join", "joined")));
 
+    /// <summary>The same three event branches in a Flowchart: a fork from the start node, an All join, an activity after it.</summary>
+    public static Workflow FlowchartEvents(int branches = 3) =>
+        Workflow($"flowchart-{branches}-events", Flowchart("flow",
+            [WriteLine("start", "forked"), .. Enumerable.Range(1, branches).Select(i => Event($"wait-{i}", Expr($"input.event + '-{i}'"))), WriteLine("after-join", "joined")],
+            [.. Enumerable.Range(1, branches).Select(i => new Connection("start", $"wait-{i}")), .. Enumerable.Range(1, branches).Select(i => new Connection($"wait-{i}", "after-join"))],
+            ("after-join", Gateway.ParallelJoin)));
+
     /// <summary>Today's shape: an HttpEndpoint that captures the request and its content, a variable set from them, the response.</summary>
     public static Workflow HttpReference() =>
         Workflow("http-reference", Sequence("root",
@@ -69,7 +76,7 @@ public static class Reference
     {
         var registry = new WorkflowRegistry();
         foreach (var lines in new[] { 5, 10, 20, 40 }) registry.Add(WriteLines(lines));
-        registry.Add(ForkJoinResume()).Add(ForkJoinEvents()).Add(HttpReference()).Add(RespondThenContinue()).Add(WaitBeforeResponse())
+        registry.Add(ForkJoinResume()).Add(ForkJoinEvents()).Add(FlowchartEvents()).Add(HttpReference()).Add(RespondThenContinue()).Add(WaitBeforeResponse())
             .Add(DelayBeforeResponse()).Add(ApproveOrder());
         foreach (var workflow in Smoke.Workflows()) registry.Add(workflow);
         return registry;

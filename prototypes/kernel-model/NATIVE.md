@@ -17,13 +17,19 @@ work is a *background job* (`StartJob`, `IJob`, `job-finished`, the row's `jobs`
 partition is a *pass*. `src/Kernel` is now three projects: `src/Kernel.Runtime`, `src/Kernel.Durable` and
 `src/Kernel.Workflows`; a file named below without a path is in one of them. Seeds, counts and costs are unchanged.
 
+**Round 4, the graph engine (FINDINGS.md section 26).** The Flowchart runs on `models/Graph`, main's Flowchart engine
+extracted as a library: paths, arrivals, dead paths and gateways (section 1); a Flowchart cost row (section 5); the
+graph invariants G1 to G5, the workflow `n-graph` and four graph flaws in the simulation (section 6). An All join
+after a decision fires now; it did not before (run, both ways).
+
 Every claim says how it is known: **run** means a command below produced it; **reasoned** means nobody ran it.
 
 | Path | What |
 |---|---|
-| `models/Native` | The authoring surface, the activities, the model (`NativeModel.cs`), the live channel and HTTP host (`Live.cs`) |
+| `models/Native` | The authoring surface, the activities (the Flowchart hosts the graph engine), the model (`NativeModel.cs`), the live channel and HTTP host (`Live.cs`) |
+| `models/Graph`, `models/Graph.Tests` | The graph engine (main's Flowchart engine) and main's conformance corpus against it (`dotnet test models/Graph.Tests -c Release`) |
 | `models/Native.Run` | Smoke tests of every activity and the HTTP cases, the cost measurement, the in-memory cost |
-| `sim/NativeWorkflows.cs`, `sim/NativeSim.cs` | Native instances in the simulation's mix, five checks, the model's deliberate flaws |
+| `sim/NativeWorkflows.cs`, `sim/NativeSim.cs` | Native instances in the simulation's mix, the native checks N1 to N6 and the graph checks G1 to G5, the model's and the engine's deliberate flaws |
 
 ```
 dotnet build models/Native.Run -c Release
@@ -35,7 +41,7 @@ dotnet build sim -c Release
 dotnet sim/bin/Release/net10.0/Kernel.Sim.dll --native --seeds 20000
 dotnet sim/bin/Release/net10.0/Kernel.Sim.dll --native --seeds 5000 --from 500001 --actions 1000
 dotnet sim/bin/Release/net10.0/Kernel.Sim.dll --native-mutations --seeds 20000
-dotnet sim/bin/Release/net10.0/Kernel.Sim.dll --native --native-flaw InFlightInMemory --seed 2     # replay one, shrunk
+dotnet sim/bin/Release/net10.0/Kernel.Sim.dll --native --native-flaw InFlightInMemory --seed 1     # replay one, shrunk
 ```
 
 Without `--native` the simulation runs exactly as before; its seeds replay unchanged (run: 20,000 seeds pass).
@@ -59,7 +65,7 @@ Kept from Elsa 4 (see `docs/reports/elsa-4-activity-contract-parity-2026-07.md`)
 - `[Background]` is Elsa 4's background placement for a leaf; `[External]` is the side-effect profile External.
 
 Ported activities (run: `smoke` exercises each in Ephemeral, Balanced and Durable): WriteLine, SetVariable, Sequence,
-If, Flowchart (connections; joins All and Any), Parallel (threshold join), ForEach (iteration scope with
+If, Flowchart (on the graph engine of `models/Graph`: gateways, implicit dead-path joins), Parallel (threshold join), ForEach (iteration scope with
 `CurrentItem`, `CurrentIndex`), While, Delay, Event, PublishEvent, DispatchWorkflow (with and without waiting),
 HttpEndpoint, WriteHttpResponse, CallService (slow external work, `[Background]`), SendNotification (`[External]`).
 
@@ -73,7 +79,7 @@ What changed, and why:
 | A stateful activity's inputs are evaluated again on resume, not taken from a pinned snapshot | No snapshot to store. The activities that wait keep what they need in their state |
 | Sequence is stateless: the next child follows from the position of the one that completed | Smaller state |
 | `If` children fill named slots (Then, Else); its outcome is True or False either way | The same activity works inside a flowchart |
-| A flowchart completes when nothing under it runs; a join that can no longer be reached is skipped | No dead-path elimination (reasoned: an All join after a decision that skips a branch never fires) |
+| The Flowchart runs on the graph engine (`models/Graph`, main's Flowchart engine): paths, arrivals, dead paths. A node with several inbound connections is a join decided by the dead-path join (main's default); gateways (`Gateway`) are explicit; a first-wins loser is cancelled. A run starts at one node, main's: the pending start trigger when it is a child of the Flowchart, else the start node (the first child without inbound connections); other unconnected children do not start, and a trigger below one of them is not reached (main refuses that placement when a workflow is published; the prototype has no publish step). Unlike main, the trigger counts only while it is undelivered (a Flowchart run again by a loop starts at the start node), and no node carries main's trigger flag, so loop-closing connections are classified from the start node only | Before, without dead paths, an All join after a decision never fired and the flowchart completed without it (run: `smoke`, "an All join after a decision", then 'left no no', now 'left yes yes') |
 | No DI, no services in activities. The host gates Background work and performs External effects | Enough for the spike; the activity map's DI would come back unchanged |
 | A tiny expression language (`Expression.cs`), compiled to closures once per text | Instead of JavaScript |
 | `Cancel` maps to completion with outcome Cancelled | There is no cancel callback on composites yet |
@@ -103,7 +109,9 @@ Persistence modes are commit boundaries:
 - **Ephemeral:** `StartSpec.Ephemeral`; the kernel writes nothing when the instance ends in its first turn and sent
   nothing. Otherwise it commits like Balanced.
 
-Journal entries are short strings: `c:frame:node` (completed), `j:...` (a join fired), `a:frame:n` (attempt),
+Journal entries are short strings: `c:frame:node` (completed), `j:...` (a join fired: `j:frame` for a Parallel,
+`j:frame:node:round:by` for a Flowchart, where the round is the engine's iteration key and `by` the scheduling id the
+engine gives the firing), `a:frame:n` (attempt),
 `s:` and `d:` (a child started, waited for or detached), `r:` (a child wait resumed), `f:`, `x:` (faulted, cancelled).
 The simulation's checks read them.
 
@@ -183,6 +191,7 @@ SQLite, engine calls (commands):
 | writeline-sequence, 5 / 10 / 20 / 40 | Durable | 146 / 221 / 371 / 671 | 45 (33) / 85 (63) / 165 (123) / 325 (243) |
 | fork-join-resume, direct resume | Balanced | 131 | 26 (18) |
 | fork-join-resume, direct resume | Durable | 194 | 42 (30) |
+| flowchart, three event branches, an All join, three direct resumes | Ephemeral / Balanced / Durable | | 29 (23) / 29 (23) / 85 (65): the same as the old native Flowchart (round 4) |
 | http-reference | Ephemeral / Balanced / Durable | 83 / 83 / 149 | 0 / 5 (3) / 29 (21) |
 
 Where the commits of fork-join-resume go (run, from the traced commands): the start (row, subscription, meet ticket),
@@ -208,9 +217,12 @@ commit for the toy), so those columns are not shown.
 ## 6. The simulation
 
 Native instances join the mix (40% of the outside actions when `--native` is on): sequences with an External
-activity, a three-way join over event waits, a two-of-three threshold join, a flowchart All join over two waits,
+activity, a three-way join over event waits, a two-of-three threshold join, a flowchart parallel join over two waits,
 two waited children in a Parallel plus a detached one, a ForEach with a Delay in the body, a While and a background job,
-and publishers that publish to other instances' waits. Starts come from outside (retried) or are handed to an owner
+publishers that publish to other instances' waits, and (round 4) `n-graph`, the graph engine's shapes in one Flowchart:
+a loop from the start node with a fork and an implicit join in its body, the decision that leaves it (its untaken
+side is a dead path every round), a first-wins race between an Event and a Delay (the loser is cancelled and the join
+behind it released), and an All join after a decision. Starts come from outside (retried) or are handed to an owner
 in memory; events come by publish (before or after the wait), by direct resume, or from the publishers; some
 instances are cancelled. Modes are mixed. The kernel's faults are the simulation's, unchanged.
 
@@ -219,34 +231,65 @@ Checks:
 | Check | The brief's words | How |
 |---|---|---|
 | N1 | Every activity that completed in committed state completed exactly once | No frame id appears twice in `c:` entries of the committed journal (every action); at the end the multiset of completed activity types equals a run without faults |
-| N2 | A join fires once | No `j:` entry twice (Parallel join, flowchart join node) |
+| N2 | A join fires once | No `j:` entry twice. A Parallel joins once; a Flowchart join fires at most once per scheduling id in a round, so a join behind a merge may fire once per token (narrowed in round 4: N2 no longer holds a Flowchart join to once per round; the design sketch's G2 does, below) |
 | N3 | A child is started once and its parent resumes once | A child id is started by one frame, a frame starts one child, a child wait is resumed only by its own child and once; at the end every waited child of a finished parent resumed it exactly once |
 | N4 | A non-replay-safe activity's attempt is committed before it runs in Durable mode | When an External effect happens, the committed journal holds its attempt |
 | N5 | Final variables and outputs match a run without faults | Every finished native instance (children too) has the variables of the same definition and input run alone, without faults; everything started from outside finished or was cancelled by request |
+
+The graph invariants of the design sketch (round 4, `sim/NativeSim.cs`: `NoteGraph`, `CheckGraphStates`). They read
+the native Flowchart's own journal entries, which ride in the turn's commit: `g|x` a path the step cancelled, `g|f` a
+node a join or continuation scheduled, with the sources of the arrivals it consumed, live and dead (taken from the
+engine's unpruned state, `FlowchartStep.Live`), `g|c` a completion with the paths still live. They also read the
+committed state of instances with a Flowchart; which connections reach a node comes from the definition.
+
+| Check | The sketch's words | How |
+|---|---|---|
+| G1 | Path conservation: every path created is completed, discarded as dead, or still live | In committed state every active path has its child and the child runs, and a graph with live paths has something running under it (otherwise a token is lost); in the journal no node runs on dead arrivals only |
+| G2 | A join fires at most once per round | No node fires twice with the same iteration key |
+| G3 | An All join fires once every inbound flow of its round has arrived, live or dead | At each firing of a node with several inbound connections the consumed arrivals cover every inbound source; the exception is a branch a first-wins race cut off in that round (a cancelled node, or one only cancelled nodes lead to), which the engine releases when the graph goes quiet |
+| G4 | A graph completes exactly when it has no live path | A completion has no live path; a Flowchart frame with no live path and nothing running under it fails |
+| G5 | No path outlives its cancelled scope | No live path in a race scope that is over; no child runs on a cancelled path |
+
+G2 and G3 skip a merge and every node forward of it: a merge passes every token on, so a node behind it may fire
+once per token in a round. The mix has no merge.
 
 Results (run):
 
 | Run | Seeds | Result |
 |---|---|---|
-| 300 actions | 20,000 | 0 failed; 162,630 finished native instances matched a run without faults |
-| 1,000 actions | 5,000 (from 500001) | 0 failed; 116,392 matched. 352 instances were parked by the kernel's poison rule as innocent bystanders (FINDINGS section 7, rule 3); the checks skip parked instances |
-| Without `--native` | 20,000 | 0 failed: the kernel changes did not disturb the existing invariants |
+| 300 actions | 20,000 | 0 failed; 133,483 finished native instances matched a run without faults (round 4, with `n-graph` in the mix and the graph checks on) |
+| 1,000 actions | 5,000 (from 500001) | 0 failed; 97,388 matched; 2 instances parked by the kernel's poison rule as innocent bystanders (FINDINGS section 7, rule 3); the checks skip parked instances |
+| 1,000 actions | 20,000 | 0 failed; 386,774 matched; 14 parked |
+| Without `--native` | 20,000 | 0 failed: the native and graph changes did not disturb the kernel's invariants |
 
 The checks bite (run: `--native-mutations`, each flaw alone, first failing seed):
 
 | Flaw | What it breaks | Caught |
 |---|---|---|
-| `InFlightInMemory` | Durable: the executed item leaves the agenda in memory only | N1, seed 2. Shrunk to two actions and a takeover: `N1 1/j1: activity frame f6 (s2) completed twice in committed state` |
-| `JoinWithoutGuard` | Parallel without its joined flag, and the join does not cancel the other branches | N2, seed 5: `the join f2 fired twice` |
-| `ResumeAnyChild` | A child-finished resumes every child wait | N3, seed 2: `the wait for child 1/j5~1.1 was resumed by child 1/j5~1.0` |
-| `NoAttemptCommit` | Durable runs an External activity without committing its attempt first | N4, seed 2 |
-| `ScopeInMemory` | The iteration scope is kept in memory only | N5, seed 6: `sum=53; without faults it ends with sum=63` |
+| `InFlightInMemory` | Durable: the executed item leaves the agenda in memory only | N5, seed 1 (round 4; N1, seed 2 before `n-graph` moved the seeds): `0/j69 (n-loop) ended with i=4 ... sum=189; without faults it ends with i=2 ... sum=63`. Shrunk to 9 actions |
+| `JoinWithoutGuard` | Parallel without its joined flag, and the join does not cancel the other branches | N2, seed 1: `1/j53: the join f2 fired twice` |
+| `ResumeAnyChild` | A child-finished resumes every child wait | N3, seed 3: `the wait for child 0/j26~1.1 was resumed by child 0/j26~1.0` |
+| `NoAttemptCommit` | Durable runs an External activity without committing its attempt first | N4, seed 18 |
+| `ScopeInMemory` | The iteration scope is kept in memory only | N5, seed 1: `sum=53; without faults it ends with sum=63` |
+| `NoDeadPaths` (round 4) | An untaken connection emits no dead arrival | G3, seed 2: `the join end of graph fired in round head:2 before no arrived, live or dead` (the graph went quiet and the engine released the join without the decision's untaken side) |
+| `NoRoundReset` (round 4) | A loop-closing connection opens no new round | G2, seed 2: `node a of graph fired twice in round -` |
+| `DeadPathRunsNode` (round 4) | An all-dead node is run instead of passing the deadness on | G1, seed 2: `a dead path ran node race of graph (round -)` |
+| `CancelLeavesPaths` (round 4) | A first-wins race completes without cancelling its losers | G5, seed 2: `path path:280 at r1 of graph lives on in the race scope scope:275, which is over` |
+
+The four graph flaws are the engine's (`FlowchartOptions.Flaws`, marked MUTATION in `models/Graph`), the four the
+design sketch's plan names; the mutation check fails one that another check catches first. G4 has no mutation of its
+own: no flaw of the plan aims at it, so that it bites is not shown. The round-4 seeds are those of the mix with `n-graph` in it, which
+moves every seed; the five older flaws' first seeds and messages above are round 4's (`InFlightInMemory` is now caught first by N5, not N1).
 
 Found while building the checks (run): one seed of 1,000 actions failed my own event check because a parked
-instance keeps its subscriptions (seed 500963); the check now skips instances that do not run. And a threshold join
+instance keeps its subscriptions (seed 500963); the check now skips instances that do not run. Round 4 met the same
+in the kernel's I8 (seed 2282 at 1,000 actions, once `n-graph` shifted the seeds), which now skips an instance the
+poison rule parked while its faulted row exists; and a native defect: in Durable mode a cancel recalled a fired
+Delay's timer message that an earlier turn had consumed, because the resume still waited in the agenda (I9, seed
+8486); a timer whose message has arrived is no longer recalled. And a threshold join
 is not deterministic in which branch activities complete: three events in one inbox complete all three Event
 activities before the join cancels the third branch; one by one, the third is cancelled while it waits. Variables
-agree either way, so for that workflow only the variables are compared.
+agree either way, so for that workflow only the variables are compared; and for `n-graph` (round 4), where which racer wins depends on the run.
 
 ## 7. Where the contract was awkward or had to change
 
@@ -314,4 +357,4 @@ Reasoned.
 - The cross-node HTTP transport is in process; the owner-lost case across nodes is reasoned.
 - Client disconnect mapped to cancel, streaming responses, request bodies by reference.
 - GraphActivity, CreateUserTask, HumanReview, RunEtl, RunRules and EvaluateDecision; Switch, For, Do, CompensationScope.
-- Dead-path elimination in flowchart joins; incident strategies; retries of faulted activities.
+- Incident strategies; retries of faulted activities.
