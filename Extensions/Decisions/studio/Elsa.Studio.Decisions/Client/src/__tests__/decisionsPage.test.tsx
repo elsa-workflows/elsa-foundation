@@ -16,7 +16,7 @@ describe("Decisions Studio journeys", () => {
     const navigate = (path: string) => update(<DecisionsPage api={api} navigate={navigate} assetId={new URL(path, "https://studio.test").searchParams.get("decision") ?? undefined} />);
     const { host, update } = mount(<DecisionsPage api={api} navigate={navigate} isNew />);
     await vi.waitFor(() => expect(host.querySelector('input[aria-label="Input 1 name"]')).not.toBeNull());
-    type(Array.from(host.querySelectorAll<HTMLInputElement>("input")).find(input => input.parentElement?.textContent === "Name")!, asset.name);
+    type(Array.from(host.querySelectorAll<HTMLInputElement>("input")).find(input => input.labels?.[0]?.textContent === "Name")!, asset.name);
     click(button(host, "Save decision"));
     await vi.waitFor(() => expect(host.querySelector(".decision-draft-bar")?.textContent).toContain("Saved draft"));
     expect(button(host, "Validate").disabled).toBe(false);
@@ -159,7 +159,7 @@ describe("Decisions Studio journeys", () => {
     api.backend.http.putJson.mockRejectedValueOnce(new Error("Save unavailable")).mockResolvedValueOnce({ ...asset, description: "Updated", revision: "r2" } as never);
     const { host } = mount(<DecisionsPage api={api} navigate={vi.fn()} assetId={asset.id} />);
     await vi.waitFor(() => expect(host.querySelector('input[aria-label="Input 1 name"]')).not.toBeNull());
-    const description = Array.from(host.querySelectorAll<HTMLInputElement>("input")).find(input => input.parentElement?.textContent === "Description")!;
+    const description = Array.from(host.querySelectorAll<HTMLInputElement>("input")).find(input => input.labels?.[0]?.textContent === "Description")!;
     type(description, "Updated"); click(button(host, "Save decision"));
     await vi.waitFor(() => expect(host.textContent).toContain("Save unavailable"));
     expect(description.value).toBe("Updated"); expect(api.notifications.notify).not.toHaveBeenCalled();
@@ -187,7 +187,7 @@ describe("Decisions Studio journeys", () => {
     request.mockImplementation(() => pending);
     const { host, update } = mount(<DecisionsPage api={api} navigate={navigate} assetId={asset.id} versionId={operation === "clone" ? "v1" : undefined} />);
     await vi.waitFor(() => expect(host.querySelector('input[aria-label="Input 1 name"]')).not.toBeNull());
-    if (operation === "save") type(Array.from(host.querySelectorAll<HTMLInputElement>("input")).find(input => input.parentElement?.textContent === "Description")!, "Updated");
+    if (operation === "save") type(Array.from(host.querySelectorAll<HTMLInputElement>("input")).find(input => input.labels?.[0]?.textContent === "Description")!, "Updated");
     click(button(host, operation === "save" ? "Save decision" : operation === "clone" ? "Clone to draft" : "Publish"));
     await vi.waitFor(() => expect(request).toHaveBeenCalledOnce());
     update(<button>Current backend</button>); controller.setScope("backend-b:user-a");

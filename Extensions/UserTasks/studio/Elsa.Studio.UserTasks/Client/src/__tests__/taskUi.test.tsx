@@ -174,7 +174,7 @@ it.each(["hidden", "visible"] as const)("reconciles an accepted form publication
   const context = api(get, post);
   const render = (mode: "hidden" | "visible") => act(() => root.render(<React.Activity mode={mode}><FormsPage api={context} /></React.Activity>));
   await render("visible"); await click("Create form version");
-  const field = (label: string) => [...container.querySelectorAll("label")].find(item => item.textContent?.startsWith(label))!.querySelector("input")!;
+  const field = (label: string) => [...container.querySelectorAll("label")].find(item => item.textContent?.startsWith(label))!.control as HTMLInputElement;
   await input(field("Form ID"), form.id); await input(field("Name"), form.name); await click("Publish form version");
   expect(post).toHaveBeenCalledTimes(1); expect(published).toBe(false);
   await render("hidden"); if (completion === "visible") await render("visible");
@@ -369,7 +369,7 @@ it.each(["form", "task"])("does not toast a delayed %s mutation after leaving it
   if (kind === "form") {
     await act(async () => root.render(<FormsPage api={moduleApi} />));
     await click("Create form version");
-    const field = (label: string) => [...container.querySelectorAll("label")].find(item => item.textContent?.startsWith(label))!.querySelector("input")!;
+    const field = (label: string) => [...container.querySelectorAll("label")].find(item => item.textContent?.startsWith(label))!.control as HTMLInputElement;
     await input(field("Form ID"), "purchase"); await input(field("Name"), "Purchase response");
     await click("Publish form version");
   } else {

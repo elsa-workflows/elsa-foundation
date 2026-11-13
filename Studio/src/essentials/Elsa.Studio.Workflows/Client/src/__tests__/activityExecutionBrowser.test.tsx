@@ -63,7 +63,7 @@ it("anchors a neighbor beyond the loaded page", async () => {
 it("does not substitute latest for a missing explicit execution", async () => {
   vi.mocked(browseActivityExecutions).mockResolvedValue(page([])); navigator({ selectedActivityExecutionId: "missing" });
   await vi.waitFor(() => expect(container.textContent).toContain("This execution is not available in this scope"));
-  expect(onResolve).toHaveBeenLastCalledWith(null); expect(onSelect).not.toHaveBeenCalled();
+  await vi.waitFor(() => expect(onResolve).toHaveBeenLastCalledWith(null)); expect(onSelect).not.toHaveBeenCalled();
 });
 it("aborts an old scope and ignores its late result", async () => {
   let release!: (value: ActivityExecutionBrowsePage) => void;
