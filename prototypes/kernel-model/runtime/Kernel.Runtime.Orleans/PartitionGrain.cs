@@ -42,6 +42,9 @@ public sealed class PartitionGrain(OrleansActorRuntime runtime) : Grain, IPartit
     {
         _timer?.Dispose();
         _timer = null;
+        // After Crash the silo dies as a process would: Orleans' in-process kill still deactivates the grains, but a
+        // crash gives nothing up, so its successor finds a death (FINDINGS section 25, R11).
+        if (runtime.Crashing.IsCancellationRequested) return;
         if (_activation is { } activation)
         {
             _activation = null;
