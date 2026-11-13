@@ -15,3 +15,18 @@ packages in the consumer graph. Final evidence must identify a committed source;
 
 The complete native/BPMN/ETL two-target and process/Studio qualification remains in
 [spec 1225](../../specs/1225-workflow-release-promotion/quickstart.md).
+
+The installed package witness also resolves the semantic framework and proves an unregistered owner codec remains
+Unsupported. This is a fail-closed framework/package boundary control; it does not qualify any native, BPMN or ETL owner adapter.
+
+The Runtime bridge has a separate installed-package witness:
+
+```sh
+python3 tools/releases/run_runtime_consumer.py --output /tmp/elsa-release-runtime-unique
+```
+
+It packs the concrete Runtime-only project closure, restores exact local archives into an isolated cache, and verifies
+the original template hash vector, lossless template codec, copied payloads, byte limit and template-owner hash verdict.
+Every resolved Elsa package and executed assembly must match that feed. The consumer retains mandatory module sites
+and grants no independent-start role; its deliberately refusing native hasher ensures it cannot claim native execution
+or native hash qualification. The whole Runtime release test project separately exercises the actual Runtime native hasher.

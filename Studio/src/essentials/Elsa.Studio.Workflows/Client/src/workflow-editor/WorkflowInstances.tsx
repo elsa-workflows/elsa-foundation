@@ -1,3 +1,4 @@
+import { getNotifications } from "./notifications";
 import { RunObservationControls, RunObservationNotice } from "./RunObservationControls";
 import { loadExecutionScope, activityExecutionSummaryFromInspection, type IncidentActivityInspection } from "./executionScope";
 import { useExecutionFocusRequest } from "./executionFocus";
@@ -2883,11 +2884,12 @@ export function WorkflowIncidentList({
                 ) : null}
                 <button type="button" className="wf-incident-open-details" onClick={() => setIncidentDetailsId(incident.incidentId)}>Open incident details</button>
                 <CopyValueButton
+                  scope={context}
                   value={formatIncidentForClipboard(incident)}
                   ariaLabel={`Copy incident ${incident.failureType}`}
                   copiedLabel="incident"
                   textLabel="Copy incident details"
-                  onCopied={label => setCopyStatus(`Copied ${label}`)}
+                  onCopied={label => { setCopyStatus(""); getNotifications().notify({ level: "success", title: `Copied ${label}` }); }}
                   onCopyFailed={label => setCopyStatus(`Could not copy ${label}.`)}
                 />
               </div>
@@ -3074,11 +3076,12 @@ function IncidentDetailsDialog({ incident, context, summary, guidance, onOpenDef
         <div className="wf-incident-details-body">
           <div className="wf-incident-details-actions">
             <CopyValueButton
+              scope={context}
               value={formatIncidentForClipboard(incident)}
               ariaLabel={`Copy incident ${incident.failureType}`}
               copiedLabel="incident"
               textLabel="Copy incident details"
-              onCopied={() => setCopyStatus("Copied incident")}
+              onCopied={() => { setCopyStatus(""); getNotifications().notify({ level: "success", title: "Copied incident" }); }}
               onCopyFailed={() => setCopyStatus("Could not copy incident.")}
             />
             {copyStatus ? <p className="wf-copy-status" role="status">{copyStatus}</p> : null}
