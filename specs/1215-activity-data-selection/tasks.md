@@ -142,6 +142,25 @@ with the setting on and off, a reusable body's read placed with its scope remapp
 stored PascalCase name and absent by its camelCase name (`VF-SEL-001`), and real publish → run in a Sequence and a
 top-level Flowchart. Not done: a run of a placed body's variable member read, request and input member reads (D2).
 
+#4078 slice D2 receipt (not task completion; checkboxes stay open): `WorkflowRequestMember` and `InputMember`
+publish under the same `MemberReads` setting; every member role is now parsed, admitted and compiled, and with the
+setting off every one is `ActivityData/UnsupportedMemberBinding`. T012: `WorkflowRequestMember` (`memberKey`, a
+legacy `path` refused) admitted exactly as `WorkflowRequest`, open requests included; `InputMember` (`referenceKey`)
+admitted exactly as `Input`; both offered for a focused query with a member path (a workflow offers
+`WorkflowRequestMember` by the input's name, a reusable body `InputMember`); an explicit conversion on any member
+read publication cannot type is a design-time finding (`ActivityData/SelectedMemberContractUnknown`); role names
+(`ActivityDataReadRoles`) and the declared-input lookup (`DeclaredInputIndex`) are shared by the analyzer and
+publication. T013: `InputReadLowering` lowers `InputMember` to `WorkflowRequestMember` with the member path unchanged,
+by the input's name at workflow level and by the boundary input's reference key in a placed body; the request member
+read is always deferred, refuses an explicit conversion in the compiler, and passes the linker, the intrinsic
+source-plan step and the remapper unchanged. Code-first `WorkflowRequestMember<T>` is renamed `WorkflowRequestRead<T>`
+(decision 12). T017: analyzer, compiler, lowering, remapper and linker rows; publish with the setting on and off; an
+input member read in a placed reusable body published as the boundary's request member read; a CLR-seeded request
+member read by its stored name and absent by its camelCase name (`VF-SEL-001`); and real publish → run of request and
+input member reads in a Sequence and a top-level Flowchart, declared and open requests. Not done: a run of a placed
+body's member read (the Behavioral project has no template-publication fixture), pinning reads inside placed bodies
+(follow-up), Studio authoring (T018–T022).
+
 - [ ] T018 [P] [US1] Add the language-neutral source client in `Studio/src/essentials/Elsa.Studio.Workflows/Client/src/` using existing capability discovery; integrate exact acknowledged autosave/current-snapshot acquisition with `workflow-editor/useWorkflowPersistence.ts` and `ActivityDefinitionDraftEditor.tsx`, discard late identities and preserve manual/held edits (depends T008).
 - [ ] T019 [P] [US1] Repair structured whole/result/member preservation in `Studio/src/essentials/Elsa.Studio.Workflows/Client/src/activityInputWire.ts` and add canonical save/Code Apply/reopen controls in `__tests__/activityInputWire.test.ts`; preserve unknown unsupported source definitions without JSON stringification.
 - [ ] T020 [US1] Build the shared Choose data/browser/reference contribution in `Studio/src/essentials/Elsa.Studio.Workflows/Client/src/` with existing Studio controls, stable authorized identities, readable provenance/navigation/replace/clear and keyboard/cancel/focus behavior; capability-gate member authoring while allowing #3094's qualified whole-output slice (depends T018–T019).
