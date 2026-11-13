@@ -7,7 +7,7 @@ namespace Kernel.Bpmn.Run;
 /// <summary>Every case of <see cref="BpmnCases"/> on the in-memory store, one owner (BPMN.md, section 3).</summary>
 public static class CaseSmoke
 {
-    private const int Deadline = 1000;      // the boundary timers here: a job that should win does not lose to them on a loaded machine
+    private const int Deadline = 1000;      // the controlled clock advances only in timer-first cases
     private static int _failures;
     private static int _n;
 
@@ -75,8 +75,10 @@ public static class CaseSmoke
     private static async Task<int> RunOnOwnerAsync()
     {
         var gates = new Gates();
-        var store = new InMemoryStore(1, () => Environment.TickCount64);
-        var owner = new Owner("n1", 0, store, BpmnCases.Registry(Deadline), options: new BpmnOptions { Gate = gates.Gate });
+        long now = 1000;
+        var store = new InMemoryStore(1, () => now);
+        var observed = new CaseStore(store);
+        var owner = new Owner("n1", 0, observed, BpmnCases.Registry(Deadline), monotonic: () => now, options: new BpmnOptions { Gate = gates.Gate });
         await owner.StartAsync();
 
         async Task<(BpmnState State, List<string> Journal, InstanceRef Id)> Run(string process, JsonObject? variables = null, Func<InstanceRef, Task>? meanwhile = null)
@@ -84,7 +86,7 @@ public static class CaseSmoke
             var id = InstanceRef.In(0, $"{process}-{++_n}");
             owner.Worker.Post(new Message($"m{_n}", id, Kinds.Start, Start: BpmnModel.Spec(process, variables)), fresh: true);
             if (meanwhile is not null) await meanwhile(id);
-            await owner.PumpAsync(() => owner.Status(id.Id) is InstanceStatus.Finished or InstanceStatus.Faulted && store.Messages.Values.All(m => m.Done));
+            await owner.PumpAsync(() => owner.Status(id.Id) is InstanceStatus.Finished or InstanceStatus.Faulted);
             var journal = store.Journal.Values.Where(j => j.Instance == id.Id).OrderBy(j => j.Position).SelectMany(j => Json.Read<List<string>>(j.Entries)).ToList();
             var state = owner.State(id.Id)!;
             Check(owner.Status(id.Id) == InstanceStatus.Finished, $"{id.Id} finished ({owner.Status(id.Id)}); journal: {string.Join(" ", journal)}");
@@ -143,27 +145,29 @@ public static class CaseSmoke
         {
             gates.Services.Add("slow");
             Task? lateDriver = null;
-            var (s, journal, id) = await Run("b-boundary", meanwhile: async target => { lateDriver = await CaptureJob(target); });
+            var (s, journal, id) = await Run("b-boundary", meanwhile: async target => { lateDriver = await CaptureJob(target); now += Deadline; });
             Check(Var(s, "escalated") == "true" && Var(s, "slow-done") is null, "the timer fired first: the timeout path ran, the task did not complete");
             Check(journal.Any(e => e == "x h1 slow"), "the job was stopped");
             Check(gates.Cancelled.ContainsKey("slow"), "the job was told to stop");
+            var before = store.Instances[id.Id];
+            var attempts = observed.Attempts(id.Id);
             var commits = store.Journal.Count;
             await FinishLateJob("slow", lateDriver!);
-            Check(owner.State(id.Id)!.Variables.GetValueOrDefault("slow-done") is null && owner.Status(id.Id) == InstanceStatus.Finished && store.Journal.Count == commits,
-                "the job's late result changed nothing and made no commit");
+            Check(owner.State(id.Id)!.Variables.GetValueOrDefault("slow-done") is null && owner.Status(id.Id) == InstanceStatus.Finished && store.Journal.Count == commits
+                  && store.Instances[id.Id] == before && observed.Attempts(id.Id) == attempts,
+                "the late result leaves the complete persisted row unchanged and attempts no instance commit");
             gates.Clear();
-            var clock = System.Diagnostics.Stopwatch.StartNew();
-            (s, journal, _) = await Run("b-boundary");
-            // Run waits for every message: a timer that was not recalled would hold it until it fires, at the deadline.
-            Check(Var(s, "slow-done") == "true" && Var(s, "escalated") is null && clock.ElapsedMilliseconds < Deadline,
-                $"the job finished first: the timer was recalled (done in {clock.ElapsedMilliseconds} ms, the timer is {Deadline} ms)");
+            (s, journal, id) = await Run("b-boundary");
+            Check(Var(s, "slow-done") == "true" && Var(s, "escalated") is null
+                  && !store.Messages.Values.Any(m => m.Message.Target.Id == id.Id && m.Message.Kind == BpmnKinds.Timer),
+                "the job finished first: its future timer ticket was removed without advancing the clock");
             Check(journal.Any(e => e == "x h2 deadline"), "the timer was stopped");
         }
 
         Console.WriteLine("a message published before its catch subscribes is kept and still counts");
         {
             var order = $"o{++_n}";
-            await Events.PublishAsync(store, new EventRow(BpmnModel.MessageKey("paid", order), $"paid-{order}", "{\"paid\":true}", Environment.TickCount64 + 60_000));
+            await Events.PublishAsync(store, new EventRow(BpmnModel.MessageKey("paid", order), $"paid-{order}", "{\"paid\":true}", now + 60_000));
             var (s, journal, _) = await Run("b-early", new JsonObject { ["order"] = order });
             Check(Var(s, "paid") == "true" && Var(s, "prepared") == $"\"{order}\"", "published before the instance existed, the catch still got it (a kept event)");
             Check(store.Subscriptions.Count == 0, "no subscription left");
@@ -171,9 +175,10 @@ public static class CaseSmoke
 
         Console.WriteLine("a call activity is a child start");
         {
-            var clock = System.Diagnostics.Stopwatch.StartNew();
             var (s, journal, id) = await Run("b-call", new JsonObject { ["order"] = "c1" });
-            Check(journal.Contains("x h2 call-deadline") && clock.ElapsedMilliseconds < Deadline, $"the child finished first: the call's timer was recalled (done in {clock.ElapsedMilliseconds} ms)");
+            Check(journal.Contains("x h2 call-deadline")
+                  && !store.Messages.Values.Any(m => m.Message.Target.Id == id.Id && m.Message.Kind == BpmnKinds.Timer),
+                "the child finished first: its future boundary timer ticket was removed without advancing the clock");
             var child = journal.First(e => e.StartsWith("r ", StringComparison.Ordinal)).Split(' ')[2];
             Check(Var(s, "child-out") == "\"child of c1\"", $"the child's variables came back: {Var(s, "child-out")}");
             Check(store.Instances[child] is { Status: InstanceStatus.Finished, Definition: "b-child" } c && c.Parent == id.Id, $"child {child} finished, its parent is {id.Id}");
@@ -183,15 +188,20 @@ public static class CaseSmoke
             gates.Services.Add("child");
             Task? lateDriver = null;
             var (s, journal, id) = await Run("b-call", new JsonObject { ["order"] = "c2" },
-                async target => { lateDriver = await CaptureJob(target, child: true); });
+                async target => { lateDriver = await CaptureJob(target, child: true); now += Deadline; });
             var child = journal.First(e => e.StartsWith("w ", StringComparison.Ordinal) && e.Contains(" call ", StringComparison.Ordinal)).Split(' ')[4];
             await owner.PumpAsync(() => owner.Status(child) == InstanceStatus.Cancelled);
             Check(Var(s, "child-out") is null && journal.Contains("x h1 call"), "the timer fired first and stopped the call");
             Check(store.Instances[child].Status == InstanceStatus.Cancelled && gates.Cancelled.ContainsKey("child"), $"child {child} was terminated, and its job was told to stop");
+            var beforeParent = store.Instances[id.Id];
+            var beforeChild = store.Instances[child];
+            var attempts = observed.Attempts(id.Id) + observed.Attempts(child);
             var commits = store.Journal.Count;
             await FinishLateJob("child", lateDriver!);
-            Check(owner.Status(id.Id) == InstanceStatus.Finished && owner.Status(child) == InstanceStatus.Cancelled && store.Journal.Count == commits,
-                "the child's actual late driver leaves the terminal parent and child unchanged and makes no commit");
+            Check(owner.Status(id.Id) == InstanceStatus.Finished && owner.Status(child) == InstanceStatus.Cancelled && store.Journal.Count == commits
+                  && store.Instances[id.Id] == beforeParent && store.Instances[child] == beforeChild
+                  && observed.Attempts(id.Id) + observed.Attempts(child) == attempts,
+                "the child's late driver leaves both persisted rows unchanged and attempts no parent or child commit");
             gates.Clear();
         }
 
