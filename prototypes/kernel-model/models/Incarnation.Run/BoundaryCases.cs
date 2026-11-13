@@ -4,7 +4,7 @@ using Kernel.Runtime;
 using Kernel.Sim;
 using Kernel.Workflows;
 
-internal static class BoundaryCases
+internal static partial class BoundaryCases
 {
     internal static readonly string[] Names = ["immutable-header", "unsupported-store", "legacy-v2-reader", "generation-exhaustion-reader", "semantic-start-envelope", "mixed-event-addresses"];
     internal static async Task Run()
@@ -142,12 +142,17 @@ internal static class BoundaryCases
     {
         internal readonly InMemoryStore Store = new(1, () => 100);
         internal readonly InstanceRef Target = InstanceRef.In(0, "boundary");
-        private readonly Worker _worker;
+        private Worker _worker;
+        private readonly IExecutionModel _model;
         private int _serial;
         internal InstanceRow Row => Store.Instances[Target.Id];
         internal object? Last;
-        internal Harness(IExecutionModel model) => _worker = new Worker("creation-boundary", 0, Store, new WorkflowInstance([model]),
+        internal Harness(IExecutionModel model)
+        { _model = model; _worker = Create("creation-boundary"); }
+        private Worker Create(string name) => new(name, 0, Store, new WorkflowInstance([_model]),
             new WorkerOptions { Monotonic = () => 100, Transport = this });
+        internal async Task Reload()
+        { await _worker.DisposeAsync(); _worker = Create("creation-boundary-reload"); await Activate(); await Drain(); }
         internal async Task Activate() => await new DurableHost([_worker]).ActivateAsync(0);
         internal async Task Send(string kind, object? payload = null, StartSpec? start = null, long? creation = null, InstanceRef? target = null)
         {
