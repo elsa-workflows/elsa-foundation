@@ -1164,8 +1164,8 @@ plan's aims at it), so that it bites is not shown.
 - **Catch-up on request** (`Projector.CatchUpAsync`). It completes once the projection reaches the partition's
   position as the first round started after the request read it: a full page, or a write another projector beat, is
   followed by another round. Requests are coalesced: all that arrive before such a round starts are served by it.
-  A round already under way when a request arrives does not serve it. A failed round, or a projection that cannot move
-  on, fails the request. A caller's token cancels only its own wait. The timer's `RoundAsync` is unchanged.
+  A round already under way when a request arrives does not serve it. A failed round, or a projection that three
+  rounds in a row leave where it was (by this projector or another), fails the request. A caller's token cancels only its own wait. The timer's `RoundAsync` is unchanged.
 
 **Not built:** live watching, Studio's push stream of committed entries.
 
@@ -1185,7 +1185,7 @@ plan's aims at it), so that it bites is not shown.
 
 | Gate | Before (25.7) | After |
 |---|---|---|
-| Semantic suite, in-memory | 57 passed, 1 skipped | 60 passed, 1 skipped (the catch-up case cannot overlap rounds on a store that answers at once; it checks the outcome only) |
+| Semantic suite, in-memory | 57 passed, 1 skipped | 60 passed, 1 skipped (on a store that answers at once the catch-up case cannot overlap rounds, so it checks the outcome and the rounds, not the coalescing) |
 | SQLite, PostgreSQL (default fence) | 55 passed, 2 or 3 reference differ | 58 passed, the same reference cases differ |
 | SQL Server, MySQL (default) | 54 passed, 3 reference differ, 1 skipped | 57 passed, the same |
 | MongoDB | 58 passed | 61 passed |

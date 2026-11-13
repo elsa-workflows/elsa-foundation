@@ -64,13 +64,15 @@ public sealed class Projector(IKernelStore store, int partition, int take = 100,
         try
         {
             long? target = null;
-            for (var stuck = 0; ;)
+            for (var (stuck, best) = (0, -1L); ;)
             {
-                var (at, written, moved) = await OneAsync(CancellationToken.None);
+                var (at, written) = await OneAsync(CancellationToken.None);
                 target ??= written;
                 if (at >= target) break;
-                stuck = moved ? 0 : stuck + 1;      // a lost race moves nothing here but is progress elsewhere
-                if (stuck > 2 && !moved) throw new InvalidOperationException($"the projection of partition {partition} does not move past {at}");
+                // Progress is the projection moving on, by this projector or another (a lost race shows in the next
+                // round's reading). Rounds that leave it where it was, three in a row, mean it cannot move on.
+                (stuck, best) = at > best ? (0, at) : (stuck + 1, best);
+                if (stuck > 2) throw new InvalidOperationException($"the projection of partition {partition} does not move past {best}");
             }
             served?.TrySetResult();
         }
@@ -89,9 +91,9 @@ public sealed class Projector(IKernelStore store, int partition, int take = 100,
         if (again) _ = ServeAsync();
     }
 
-    // One round: where the projection is after it (as far as this round knows), the partition's position it read, and
-    // whether this round moved it or another projector did (a lost write: the next round reads again).
-    private async Task<(long At, long Written, bool Moved)> OneAsync(CancellationToken cancellationToken)
+    // One round: where the projection is after it, as far as this round knows (after a lost write, where it read it:
+    // the next round reads the new position), and the partition's position it read.
+    private async Task<(long At, long Written)> OneAsync(CancellationToken cancellationToken)
     {
         Rounds++;
         var (from, written) = await store.ProjectedAsync(partition, cancellationToken);
@@ -106,7 +108,7 @@ public sealed class Projector(IKernelStore store, int partition, int take = 100,
             next = rows.TakeWhile((row, i) => row.Position == from + i + 1).ToList();
             to = next.LastOrDefault()?.Position ?? from;
         }
-        if (to <= from) return (from, written, false);
-        return await store.ProjectAsync(partition, from, to, next, cancellationToken) ? (to, written, true) : (from, written, true);
+        if (to <= from) return (from, written);
+        return (await store.ProjectAsync(partition, from, to, next, cancellationToken) ? to : from, written);
     }
 }
