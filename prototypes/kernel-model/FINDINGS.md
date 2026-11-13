@@ -993,8 +993,9 @@ that the default limit ran out. The checked fence is the right default on SQL Se
 **Also run, unchanged:** the semantic suite on in-memory (56 passed, 1 skipped), SQLite with no flag (now the fence in
 the batch), `--checked-fence` and `--fence-in-batch` (54 passed, 2 reference differ, 1 skipped, each), PostgreSQL with
 no flag and `--checked-fence` (54 passed, 3 reference differ), SQL Server with no flag (now checked; 53 passed, 3
-reference differ, 1 skipped). Not run: the simulation (it uses the in-memory store, which has no fence mode), and
-MongoDB (no code of it changed).
+reference differ, 1 skipped). Not run on this branch: the simulation (it uses the in-memory store, which has no
+fence mode), MongoDB (no code of it changed), the cost runs, the broken-fence stress runs, the PostgreSQL and MySQL
+stress tests, and the semantic suite on MySQL; ENGINES.md and sections 23 and 24 have their earlier results.
 
 **The new defaults of the other stress commands.** SQLite's default stress run is now the fence in the batch, which no
 stress run had covered (ENGINES.md's SQLite rows are all checked). Run here: WAL, one process, 40 s, 5,000 messages:
