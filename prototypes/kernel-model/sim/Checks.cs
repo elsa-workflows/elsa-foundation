@@ -394,7 +394,10 @@ public sealed partial class World
         var published = false;
         for (var round = 0; round < 150; round++)
         {
-            Time += 11_000;     // past any lease and any timer
+            // Expire a missing owner's lease; while every partition has an owner, give healthy owners passes within
+            // their lease. Advancing past every lease on every round would manufacture repeated owner loss.
+            var missing = Enumerable.Range(0, Config.Partitions).Any(p => !slots.Any(s => s.Partition == p && Of(s.Node, p).Worker.Owns));
+            Time += round == 0 || missing ? 11_000 : 1_000;
             for (var p = 0; p < Config.Partitions; p++)
             {
                 foreach (var (node, _) in slots.Where(s => s.Partition == p && Of(s.Node, p).Worker.Owns)) Watch(Of(node, p).Worker.BeatAsync());   // a stale owner learns that it is one

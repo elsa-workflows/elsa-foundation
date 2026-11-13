@@ -14,6 +14,10 @@ Repository consumers use `IConnectionRepository` and `ConnectionRepositoryCapabi
 types, query projections, key derivation and repository implementation stay internal. EF-generated
 migration entry points are retained in the package's public API baseline.
 
+Save reserves the revision compare-and-swap with a row write, then compares the original ordinal incarnation
+inside that transaction before replacing payload and secret references. Delete/recreate cannot reuse a stale save
+merely because its numeric revision repeats. An incarnation conflict rolls the reserved revision back too.
+
 See the [registration and ownership examples](README.md), shared
 [EF policy](../../../Persistence/EntityFramework/EXTENSION_POINTS.md), and
 [connection manager contracts and known limits](../../Elsa.Connections/EXTENSION_POINTS.md).
