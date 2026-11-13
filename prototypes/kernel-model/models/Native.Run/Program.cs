@@ -127,6 +127,18 @@ static class Cost
         }
 
         foreach (var mode in new[] { Modes.Ephemeral, Modes.Balanced, Modes.Durable })
+            await Row("flowchart, three event branches and an All join, three direct resumes", mode, async () =>
+            {
+                var id = Next("fc3");
+                owner.Worker.Post(new Message($"{id}#start", id, Kinds.Start, Start: NativeModel.Spec("flowchart-3-events", mode, Wf.Object(("event", $"ev-{id}")))), fresh: true);
+                await owner.PumpAsync();
+                for (var i = 1; i <= 3; i++)
+                    await store.AddAsync(new Message($"{id}#resume{i}", id, NativeKinds.Resume, Json.Write(new ResumeStimulus($"ev-{id}-{i}")), KeepUntil: keep));
+                await owner.PumpAsync(poll: true);
+                return Finished(owner, id);
+            });
+
+        foreach (var mode in new[] { Modes.Ephemeral, Modes.Balanced, Modes.Durable })
             await Row("http-reference (case 1)", mode, async () =>
             {
                 var response = await owner.Http.SendAsync(new HttpRequest("POST", Reference.HttpPath, Wf.Object(("firstName", "Ada"), ("lastName", "Lovelace"))), owner.Worker, mode, () => owner.PumpAsync());
