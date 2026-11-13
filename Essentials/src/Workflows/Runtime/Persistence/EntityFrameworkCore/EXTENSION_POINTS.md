@@ -55,3 +55,12 @@ The isolated schema/mapping/checkpoint tests cover private projections and relat
 normal Runtime migration targets. Actual native entry-point/marker integration and family binding, scoped readers,
 observation append, occurrence projection, retention/deletion, generated migrations and production qualification
 remain open.
+
+`EfRuntimeHistoryRetention` stages explicit prefix content retirement and full run retirement in the
+caller-owned transaction. Prefix purge locks/checks the native owner, preserves admission/checkpoint
+coverage and all semantic/occurrence receipts, and reserves the monotonic head boundary before a
+set-based content update. Full deletion uses eight completely scoped set-based statements rather than
+loading a long journal. It is called only after the native owner admits/locks full deletion, never by
+inspection or prefix purge. Both reject pending history tracker changes and recheck immutable actual
+access before returning; neither commits, acknowledges, authorizes a retention policy or registers a port.
+The normal native deletion and independent retention owner still need their production binding.

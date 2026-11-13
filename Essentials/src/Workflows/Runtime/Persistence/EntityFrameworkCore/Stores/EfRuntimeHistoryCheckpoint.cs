@@ -274,7 +274,7 @@ internal static class EfRuntimeHistoryCheckpoint
         left.CreatedAt.EqualsExact(right.CreatedAt) && (left.ExpiresAt is null && right.ExpiresAt is null ||
             left.ExpiresAt is { } a && right.ExpiresAt is { } b && a.EqualsExact(b));
 
-    private static void EnsureWritable(RuntimeDbContext context, EfSchemaChain chain)
+    internal static void EnsureWritable(RuntimeDbContext context, EfSchemaChain chain)
     {
         // The head reservation bypasses SaveChanges interceptors, so it must honor the same family gate explicitly.
         var gate = context.GetService<IDbContextOptions>().FindExtension<CoreOptionsExtension>()?.ApplicationServiceProvider?
