@@ -17,13 +17,19 @@ work is a *background job* (`StartJob`, `IJob`, `job-finished`, the row's `jobs`
 partition is a *pass*. `src/Kernel` is now three projects: `src/Kernel.Runtime`, `src/Kernel.Durable` and
 `src/Kernel.Workflows`; a file named below without a path is in one of them. Seeds, counts and costs are unchanged.
 
+**Round 4, the graph engine (FINDINGS.md section 26).** The Flowchart runs on `models/Graph`, main's Flowchart engine
+extracted as a library: paths, arrivals, dead paths and gateways (section 1); a Flowchart cost row (section 5); the
+graph invariants G1 to G5, the workflow `n-graph` and four graph flaws in the simulation (section 6). An All join
+after a decision fires now; it did not before (run, both ways).
+
 Every claim says how it is known: **run** means a command below produced it; **reasoned** means nobody ran it.
 
 | Path | What |
 |---|---|
-| `models/Native` | The authoring surface, the activities, the model (`NativeModel.cs`), the live channel and HTTP host (`Live.cs`) |
+| `models/Native` | The authoring surface, the activities (the Flowchart hosts the graph engine), the model (`NativeModel.cs`), the live channel and HTTP host (`Live.cs`) |
+| `models/Graph`, `models/Graph.Tests` | The graph engine (main's Flowchart engine) and main's conformance corpus against it (`dotnet test models/Graph.Tests -c Release`) |
 | `models/Native.Run` | Smoke tests of every activity and the HTTP cases, the cost measurement, the in-memory cost |
-| `sim/NativeWorkflows.cs`, `sim/NativeSim.cs` | Native instances in the simulation's mix, five checks, the model's deliberate flaws |
+| `sim/NativeWorkflows.cs`, `sim/NativeSim.cs` | Native instances in the simulation's mix, the native checks N1 to N6 and the graph checks G1 to G5, the model's and the engine's deliberate flaws |
 
 ```
 dotnet build models/Native.Run -c Release

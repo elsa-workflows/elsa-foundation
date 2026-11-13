@@ -6,7 +6,7 @@ break it all. It tests the design before product code exists. It shares nothing 
 repository: the folder has its own `Directory.Build.*`, `Directory.Packages.props`, `NuGet.config`, `global.json` and
 `.editorconfig`.
 
-What was found is in [FINDINGS.md](FINDINGS.md) (section 24: the three layers and the round 4 names; section 23: the
+What was found is in [FINDINGS.md](FINDINGS.md) (section 26: the graph engine; section 24: the three layers and the round 4 names; section 23: the
 merge of the four branches and its gates); what each database engine does to the EF store is in
 [ENGINES.md](ENGINES.md), MongoDB in [MONGO.md](MONGO.md), and native workflows as an execution model in
 [NATIVE.md](NATIVE.md).
@@ -19,7 +19,9 @@ merge of the four branches and its gates); what each database engine does to the
 | `src/Kernel.Durable` | Layer 2, durable actors: `Worker` (a partition's activation: inbox, fenced commit, timers, background jobs, events, poison, journal), `DurableHost`, the seam to layer 3 (`IActorType`, `DurableTurn`), the store contract, the in-memory store, the projector, reply addresses for live output |
 | `src/Kernel.Workflows` | Layer 3, actor types: `WorkflowInstance` (status, definition, parent and children, suspend, resume, terminate, rebind, delete, the history envelope) and the execution-model contract (`IExecutionModel`, `ITurn`) |
 | `sim` | Toy execution models, the deterministic simulation, the invariant checks, the shrinker and the mutation check; `NativeSim.cs` puts native instances in the mix |
-| `models/Native` | The native Elsa workflow model: authoring surface, activities, interpreter, HTTP routes and host on the kernel's live output |
+| `models/Graph` | The graph engine: main's Flowchart engine (paths, arrivals, dead paths, gateways) as a library with no kernel or Elsa reference; README says what was adapted |
+| `models/Graph.Tests` | Main's Flowchart conformance corpus and join tests against the graph engine |
+| `models/Native` | The native Elsa workflow model: authoring surface, activities (its Flowchart on the graph engine), interpreter, HTTP routes and host on the kernel's live output |
 | `models/Native.Run` | Native smoke tests, cost and memory measurement |
 | `ef/Kernel.EntityFramework` | The storage interface on Entity Framework Core: PostgreSQL and SQLite in `EfStore.cs`, SQL Server and MySQL dialects in `Engines.cs` |
 | `ef/Kernel.Ef.Run` | The cost measurement and the concurrent stress test; `EngineRun.cs` runs them on PostgreSQL, SQL Server, MySQL and SQLite (`x ...`) |
@@ -35,6 +37,7 @@ One project at a time (they share `obj/` folders through project references):
 
 ```
 for p in sim models/Native.Run ef/Kernel.Ef.Run ef/Kernel.Ef.Conformance conformance/Kernel.Store.Conformance.Run mongo/Kernel.Mongo.Run; do dotnet build $p -c Release; done
+dotnet test models/Graph.Tests -c Release      # the graph engine's corpus
 ```
 
 ## The simulation
@@ -138,6 +141,7 @@ $SIM --native-mutations --seeds 20000
 dotnet conformance/Kernel.Store.Conformance.Run/bin/Release/net10.0/Kernel.Store.Conformance.Run.dll semantic
 $EFC sqlite semantic; $EFC sqlite --fence-in-batch semantic
 $NAT smoke; $NAT cost sqlite
+dotnet test models/Graph.Tests -c Release
 mkdir -p .out; $EFR x cost sqlite "Data Source=.out/cost.db" [fence=batch]                  # delete .out/cost.db* between runs
 $EFR x cost postgres "$PG;Database=kernel_cost" proxy=1 [fence=batch]
 $EFC postgres "$PG" [--fence-in-batch] semantic
