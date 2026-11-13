@@ -99,7 +99,9 @@ public static class RuntimeStress
             $"{h.Faulty.Before} + {h.Faulty.After} calls failed before + after executing, {h.Turns} turns so far; settling");
 
         await workload.SettleAsync(h.Outside, o.Settle);
-        await h.StopAllAsync();     // every node stopped, and the stalled calls of killed ones executed: the checks see what they did
+        // Every node stopped, and the stalled calls of killed ones executed: the checks see what they did.
+        try { await h.StopAllAsync().WaitAsync(TimeSpan.FromMinutes(2)); }
+        catch (TimeoutException) { h.Misnamed.Add("TEARDOWN stopping the nodes did not end within two minutes"); }
 
         var seam = h.Watcher.Violations.Concat(h.Reused.Select(n => $"F9 the runtime reused the node name {n}")).Concat(h.Misnamed);
         var (wrong, instances, journal, tokens) = await workload.CheckAsync(h.Outside, o.Lease, h.Recorded.CheckOneWriter(), h.Provided.Ghosts.Take(10).Select(g => "GHOST " + g).Concat(seam), output);
@@ -109,11 +111,14 @@ public static class RuntimeStress
         output.WriteLine($"the runtime: {h.Watcher.Activations} activations, {h.Watcher.Second} asked for while another node held the scope, {h.Watcher.Declined} declined by layer 2, " +
             $"{h.Watcher.Overlaps} pairs held at once, {h.Watcher.Fenced} passes told by the fence that they had lost the scope");
         foreach (var (kind, n) in h.Recorded.Failures.OrderByDescending(f => f.Value).Take(12)) output.WriteLine($"  commit failure x{n}: {kind}");
-        var exercised = h.Watcher.Overlaps > 0 && (o.BrokenFence || h.Recorded.Refused + h.Watcher.Fenced > 0);
-        if (!exercised) output.WriteLine("NOT EXERCISED: no two activations of one scope were held at once, or the fence never refused one: the run did not test the fence");
+        var exercised = h.Watcher.Overlaps > 0 && (o.BrokenFence || h.HeldRefused > 0);
+        output.WriteLine($"{h.HeldRefused} commits held in flight were refused by the fence once they executed");
+        if (!exercised) output.WriteLine("NOT EXERCISED: no two activations of one scope were held at once, or the fence never refused a held commit: the run did not test the fence");
         output.WriteLine(wrong.Count == 0 ? "end state: all properties hold" : $"end state: {wrong.Count} violations\n  " + string.Join("\n  ", wrong.Take(25)));
-        var broken = wrong.Count(w => !w.StartsWith("SEAM ", StringComparison.Ordinal) && !w.StartsWith("F9 ", StringComparison.Ordinal)
-            && !w.StartsWith("NAME ", StringComparison.Ordinal) && !w.StartsWith("TEARDOWN ", StringComparison.Ordinal));
+        // What a broken fence breaks: one writer, atomic turns, messages applied once and in order, the journal, events
+        // met once. Not liveness (END, I14), not the seam's or the names'.
+        string[] fence = ["I1 ", "GHOST ", "I2 ", "I3/I4 ", "I4 ", "I6 ", "I11 ", "I13 "];
+        var broken = wrong.Count(w => fence.Any(f => w.StartsWith(f, StringComparison.Ordinal)));
         return new RuntimeStressResult(wrong.Count, broken, exercised);
     }
 }

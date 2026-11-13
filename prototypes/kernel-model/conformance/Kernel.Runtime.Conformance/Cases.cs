@@ -157,8 +157,13 @@ public static class Cases
             await Task.Delay(h.Lease + TimeSpan.FromMilliseconds(200));
             var thief = await h.Outside.TakeAsync(0, "thief", h.Lease);      // another process takes it, then dies without releasing it
             That(thief is not null, "the stalled node's lease on partition 0 did not run out");
-            if (!await Harness.WaitAsync(() => Task.FromResult(h.StoreOf(a.Name).Refused > 0), h.Lease * 3))
-                throw new FenceException("the store never refused a commit of the stalled node: it did not learn that it lost partition 0");
+            // The stalled node must try to write after its scope was taken (its renewal beat at the latest); only then is
+            // the store's answer the fence's.
+            var store = h.StoreOf(a.Name);
+            var (commits, refused) = (store.Commits, store.Refused);
+            That(await h.WaitAsync(() => store.Commits > commits, h.Lease * 3), "the stalled node made no commit after its scope was taken: the case did not test the fence");
+            if (!await h.WaitAsync(() => store.Refused > refused, h.Lease))
+                throw new FenceException("the store did not refuse the stalled node's commit: it did not learn that it lost partition 0");
             await Settle(h, "partition 0 activated again");
             var tokens = Enumerable.Range(0, 5).Select(i => "f" + i).ToList();
             foreach (var token in tokens) await h.AddAsync(Token(0, "c", token));
