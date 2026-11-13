@@ -1335,7 +1335,7 @@ describe("feature impact review", () => {
       .find(dialog => dialog.textContent?.includes("Save draft"));
     const modeLabel = Array.from(settingsDialog?.querySelectorAll("label") ?? [])
       .find(label => label.textContent?.includes("Mode"));
-    await changeInput(modeLabel?.querySelector("input, textarea") as HTMLInputElement | null, "fast");
+    await changeInput(modeLabel?.control as HTMLInputElement | null, "fast");
     await click(buttonByText(settingsDialog!, "Save draft"));
 
     expect(impactReviewRegion(container)).toBeNull();
@@ -1432,8 +1432,8 @@ describe("feature impact review", () => {
 
       dialog = await openSettingsDialog();
       const existingSettingLabel = Array.from(dialog.querySelectorAll("label"))
-        .find(label => label.querySelector("strong")?.textContent === "Existing setting");
-      const existingSettingInput = existingSettingLabel?.querySelector("input, textarea") as HTMLInputElement | null;
+        .find(label => label.textContent === "Existing setting");
+      const existingSettingInput = existingSettingLabel?.control as HTMLInputElement | null;
       expect(existingSettingInput?.value).toBe("preserve me");
       await changeInput(existingSettingInput, "");
       await click(buttonByText(dialog, "Save draft"));
@@ -2212,7 +2212,7 @@ async function editSettingValue(container: Element, featureId: string, settingLa
     .find(candidate => Array.from(candidate.querySelectorAll("button")).some(button => button.textContent === "Save draft")) ?? null;
   const settingField = Array.from(dialog?.querySelectorAll("label") ?? [])
     .find(label => label.textContent?.includes(settingLabel));
-  const input = settingField?.querySelector("input, textarea") as HTMLInputElement | null;
+  const input = settingField?.control as HTMLInputElement | null;
   await changeInput(input, value);
   await click(buttonByText(dialog!, "Save draft"));
 }

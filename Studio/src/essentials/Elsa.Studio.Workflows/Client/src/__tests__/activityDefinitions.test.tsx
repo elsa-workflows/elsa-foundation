@@ -1881,7 +1881,7 @@ function click(element: Element) { flushSync(() => element.dispatchEvent(new Mou
 function change(element: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement, value: string) { flushSync(() => { const prototype = element instanceof HTMLInputElement ? HTMLInputElement.prototype : element instanceof HTMLSelectElement ? HTMLSelectElement.prototype : HTMLTextAreaElement.prototype; const setter = Object.getOwnPropertyDescriptor(prototype, "value")?.set; setter?.call(element, value); element.dispatchEvent(new Event("change", { bubbles: true })); element.dispatchEvent(new Event("input", { bubbles: true })); }); }
 function controlByLabel<T extends HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>(container: HTMLElement, text: string) {
   const label = [...container.querySelectorAll("label")].find(candidate => candidate.textContent?.includes(text));
-  const control = label?.querySelector("input, select, textarea") ?? container.querySelector(`[aria-label="${text}"]`);
+  const control = label?.control ?? container.querySelector(`[aria-label="${text}"]`);
   if (!control) throw new Error(`Control labelled '${text}' not found.`);
   return control as T;
 }

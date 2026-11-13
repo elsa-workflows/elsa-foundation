@@ -1,5 +1,6 @@
 import { RunObservationControls, RunObservationNotice } from "./RunObservationControls";
 import { loadExecutionScope, activityExecutionSummaryFromInspection, type IncidentActivityInspection } from "./executionScope";
+import { useExecutionFocusRequest } from "./executionFocus";
 export { activityExecutionSummaryFromInspection } from "./executionScope";
 import { WorkflowActivityExecutionDetails } from "./WorkflowActivityExecutionDetails";
 export { WorkflowActivityExecutionDetails } from "./WorkflowActivityExecutionDetails";
@@ -13,7 +14,7 @@ import type { PreparedAttachedExecution } from "./prepareAttachedExecution";
 import { runtimeValueContextId } from "./RuntimeValueEvidence";
 import { createCursorHistory, getPreviousCursor, moveCursorHistoryNext, moveCursorHistoryPrevious, reconcileCursorHistory } from "./cursorHistory";
 import { lazy, Suspense, useCallback, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
-import { ReactFlow, Background, Controls, type Edge, type Node, type ReactFlowInstance } from "@xyflow/react";
+import { ReactFlow, Background, type Edge, type Node, type ReactFlowInstance } from "@xyflow/react";
 import { Activity as ActivityIcon, AlertCircle, Boxes, ChevronLeft, ChevronRight, ListTree, Maximize2, Minimize2, SlidersHorizontal, Sparkles, Workflow as WorkflowIcon } from "lucide-react";
 import type { StudioActivityInputDescriptor, StudioWeaverRegistry, StudioBackendSession, StudioEndpointContext, StudioExpressionEditorContribution, StudioWorkflowRunRelatedLinkContribution } from "@elsa-workflows/studio-sdk";
 import { listActivities } from "../api/activityDesign";
@@ -74,10 +75,11 @@ import {
 import { runDetailMinInspectorWidth, useRunDetailLayout, type RunDetailLayoutMode } from "./useRunDetailLayout";
 import { activateWorkflowCanvasNode, decorateWorkflowCanvasElements } from "./workflowAccessibility";
 import { getReadOnlyFitViewOptions } from "./readOnlyMinimap";
+import { ReadOnlyFlowControls } from "./ReadOnlyFlowControls";
 import { FitReadOnlyFlowView, useReadOnlyFlowNodes } from "./useReadOnlyFlowCanvas";
 import { READ_ONLY_READABLE_ZOOM } from "./readableFitViewport";
 import { WorkflowReadOnlyMiniMap } from "./WorkflowReadOnlyMiniMap";
-import { AdvancedSection, CopyableIdentifier, OverflowMenu, StudioPageHeader, StudioButton } from "@elsa-workflows/studio-ui";
+import { AdvancedSection, CopyableIdentifier, OverflowMenu, StudioPageHeader, StudioButton, StudioField } from "@elsa-workflows/studio-ui";
 import { RunWorkflowPicker } from "./RunWorkflowPicker";
 import { WorkflowListIdentifiers } from "./WorkflowListIdentifiers";
 import "./cleanListTables.css";
@@ -429,9 +431,7 @@ export function WorkflowInstances({ context, navigate }: {
         ) : null}
         <AdvancedSection label="More filters" setCount={advancedAppliedCount} defaultOpen={advancedAppliedCount > 0} allowCollapseWhenSet>
           <div className="wf-toolbar wf-run-advanced-selects">
-            <label className="wf-toolbar-field">
-              <span>Status</span>
-              <select aria-label="Workflow run status" value={draftFilters.status} onChange={event => setDraftFilters(current => ({ ...current, status: event.target.value }))}>
+            <StudioField className="wf-toolbar-field" label={<><span>Status</span></>}><select aria-label="Workflow run status" value={draftFilters.status} onChange={event => setDraftFilters(current => ({ ...current, status: event.target.value }))}>
                 <option value="">All statuses</option>
                 <option value="Pending">Pending</option>
                 <option value="Running">Running</option>
@@ -439,27 +439,20 @@ export function WorkflowInstances({ context, navigate }: {
                 <option value="Completed">Completed</option>
                 <option value="Faulted">Faulted</option>
                 <option value="Cancelled">Cancelled</option>
-              </select>
-            </label>
-            <label className="wf-toolbar-field">
-              <span>Kind</span>
-              <select aria-label="Run Kind" value={draftFilters.runKind} onChange={event => setDraftFilters(current => ({ ...current, runKind: event.target.value }))}>
+              </select></StudioField>
+            <StudioField className="wf-toolbar-field" label={<><span>Kind</span></>}><select aria-label="Run Kind" value={draftFilters.runKind} onChange={event => setDraftFilters(current => ({ ...current, runKind: event.target.value }))}>
                 <option value="">All kinds</option>
                 <option value="TestRun">Test Run</option>
                 <option value="PublishedRun">Published Run</option>
                 <option value="BackgroundWeaverRun">Background Weaver Run</option>
                 <option value="Unknown">Unknown / legacy</option>
-              </select>
-            </label>
-            <label className="wf-toolbar-field">
-              <span>Incident health</span>
-              <select aria-label="Workflow run incident health" value={draftFilters.incidentHealth} disabled={!canFilterByHealth && !draftFilters.incidentHealth} onChange={event => setDraftFilters(current => ({ ...current, incidentHealth: event.target.value as RunHistoryFilters["incidentHealth"] }))}>
+              </select></StudioField>
+            <StudioField className="wf-toolbar-field" label={<><span>Incident health</span></>}><select aria-label="Workflow run incident health" value={draftFilters.incidentHealth} disabled={!canFilterByHealth && !draftFilters.incidentHealth} onChange={event => setDraftFilters(current => ({ ...current, incidentHealth: event.target.value as RunHistoryFilters["incidentHealth"] }))}>
                 <option value="">All health states</option>
                 <option value="active" disabled={!canFilterByHealth}>Active incidents</option>
                 <option value="blocking" disabled={!canFilterByHealth}>Needs intervention</option>
                 <option value="none" disabled={!canFilterByHealth}>No active incidents</option>
-              </select>
-            </label>
+              </select></StudioField>
           </div>
           <div className="wf-run-filter-fields">
             <RunFilterInput label="Execution ID" value={draftFilters.workflowExecutionId} onChange={value => setDraftFilters(current => ({ ...current, workflowExecutionId: value }))} />
@@ -608,16 +601,13 @@ export function WorkflowInstances({ context, navigate }: {
           <span className="wf-pagination-summary" aria-live="polite">
             Showing {page.count} of {page.totalCount} matching runs
           </span>
-          <label className="wf-page-size">
-            Rows
-            <select aria-label="Workflow run page size" value={location.pageSize} onChange={event => updateLocation({
+          <StudioField className="wf-page-size" label="Rows"><select aria-label="Workflow run page size" value={location.pageSize} onChange={event => updateLocation({
               filters: location.filters,
               pageSize: Number(event.target.value),
               cursor: null
             }, false)}>
               {runHistoryPageSizes.map(size => <option key={size} value={size}>{size}</option>)}
-            </select>
-          </label>
+            </select></StudioField>
           <div className="wf-page-controls">
             <button type="button" disabled={!previousPage.available} onClick={() => {
               const previous = moveCursorHistoryPrevious(cursorHistory.current, cursorScope, location.cursor, page);
@@ -650,10 +640,7 @@ function RunFilterInput({ label, value, type = "text", onChange }: {
   onChange(value: string): void;
 }) {
   return (
-    <label className="wf-run-filter-field">
-      <span>{label}</span>
-      <input aria-label={`Workflow run ${label.toLowerCase()}`} type={type} value={value} onChange={event => onChange(event.target.value)} />
-    </label>
+    <StudioField className="wf-run-filter-field" label={<><span>{label}</span></>}><input aria-label={`Workflow run ${label.toLowerCase()}`} type={type} value={value} onChange={event => onChange(event.target.value)} /></StudioField>
   );
 }
 
@@ -871,7 +858,8 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
   const [frames, setFrames] = useState<ScopeFrame[]>([]);
   const appliedInitialInspectorTab = useRef<InstanceInspectorTab | null>(null);
   const appliedInitialActivityExecutionId = useRef<string | null>(null);
-  const occurrenceChoiceFocus = useRef<string | null>(null);
+  const occurrenceChoiceFocus = useExecutionFocusRequest();
+  const scopeOccurrenceFocus = useExecutionFocusRequest();
   const incidentNavigationRequest = useRef(0);
   const loadGeneration = useRef(0);
   const definitionNameAbort = useRef<AbortController | null>(null);
@@ -892,6 +880,17 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
   const [scopeNavigation, setScopeNavigation] = useState<{ context: string; loading: boolean; error: string; retaining?: boolean }>({ context: browserContext, loading: false, error: "" });
   const [preparedScope, setPreparedScope] = useState<{ context: string; scopeId: string; nodeId: string; prepared: PreparedAttachedExecution } | null>(null);
   const scopeRequest = useRef<AbortController | null>(null);
+  const focusReadyScope = useRef<AbortController | null>(null);
+  const captureFocusOperation = () => {
+    const navigation = incidentNavigationRequest.current;
+    const generation = loadGeneration.current;
+    const identity = runtimeValueContextId(context);
+    const controller = scopeRequest.current;
+    return { token: controller, signal: controller?.signal,
+      isReady: () => scopeRequest.current === controller && focusReadyScope.current === controller,
+      isCurrent: () => navigation === incidentNavigationRequest.current && generation === loadGeneration.current
+        && identity === runtimeValueContextId(context) && controller === scopeRequest.current };
+  };
   const [boundaryCanvas, setBoundaryCanvas] = useState<{ context: string; layout: ActivityExecutionLayout } | null>(null);
   const requestedScope = useRef<{ execution: ActivityExecutionStateSummary; includeSelf: boolean; label?: string; moveOccurrence?: boolean } | null>(null);
   const rememberedExecutions = useRef(new Map<string, ActivityExecutionStateSummary>());
@@ -1424,6 +1423,7 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
     scopeRequest.current = controller;
     const generation = loadGeneration.current;
     const navigation = incidentNavigationRequest.current;
+    let committed = false;
     try {
       if (!await supportsActivityExecutionBrowsing(context) || controller.signal.aborted || generation !== loadGeneration.current || navigation !== incidentNavigationRequest.current) return;
       setScopeNavigation({ context: browserContext, loading: true, error: "" });
@@ -1437,20 +1437,24 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
         const chain = result.scopes;
         setBoundaryCanvas(pinnedBoundaryLayout ? { context: browserContext, layout: pinnedBoundaryLayout } : null);
         setExecutionScopes({ context: browserContext, items: chain });
+        focusReadyScope.current = controller;
         setScopeNavigation({ context: browserContext, loading: false, error: "" });
+        committed = true;
         return true;
       }
     } catch {
       if (!controller.signal.aborted && navigation === incidentNavigationRequest.current) setScopeNavigation({ context: browserContext, loading: false, error: "Execution context could not be resolved. Retry the selection to inspect its scope." });
+    } finally {
+      if (!committed) controller.abort();
     }
   }, [browserContext, context, data?.executableGraph, labelForExecution, rememberExecution, workflowExecutionId]);
 
-  const selectBrowserExecution = (execution: ActivityExecutionStateSummary, updateScope = true, focusCanvas = true) => {
+  const selectBrowserExecution = (execution: ActivityExecutionStateSummary, updateScope = true, focusCanvas = true, inspectorTab: InstanceInspectorTab = "activity") => {
     rememberExecution(execution);
     rememberedExecutions.current.set(JSON.stringify([browserContext, executionScope?.activityExecutionId, execution.executableNodeId]), execution);
     beginEvidenceNavigation();
     setSelectedEvidenceId(execution.activityExecutionId);
-    setActiveInspectorTab("activity");
+    setActiveInspectorTab(inspectorTab);
     const nodeId = findExecutableGraphNodeId(data?.executableGraph, execution) ?? execution.authoredActivityId;
     if (focusCanvas) requestCanvasFocus(nodeId);
     if (updateScope && executionScope?.executableNodeId === execution.executableNodeId && executionScope.activityExecutionId !== execution.activityExecutionId)
@@ -1458,10 +1462,10 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
     openInspector();
   };
 
-  const selectActivityExecution = (activityExecutionId: string) => {
+  const selectActivityExecution = (activityExecutionId: string, inspectorTab: InstanceInspectorTab = "activity") => {
     const known = associationActivities.find(item => item.activityExecutionId === activityExecutionId);
     if (!known) return;
-    selectBrowserExecution(known);
+    selectBrowserExecution(known, true, inspectorTab !== "timeline", inspectorTab);
     focusNodePath(findExecutableGraphNodeId(data?.executableGraph, known) ?? known.authoredActivityId);
     void restoreExecutionContext(known, false);
   };
@@ -1499,6 +1503,7 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
     const generation = loadGeneration.current;
     const isCurrent = () => !controller.signal.aborted && navigation === incidentNavigationRequest.current && generation === loadGeneration.current;
     const retainPrevious = scopeNavigation.context !== browserContext || !scopeNavigation.error || Boolean(scopeNavigation.retaining);
+    let committed = false;
     try {
       if (!await supportsActivityExecutionBrowsing(context) || !isCurrent()) return;
       setScopeNavigation({ context: browserContext, loading: true, error: "", retaining: retainPrevious });
@@ -1532,7 +1537,9 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
       setExecutionScopes({ context: browserContext, items: scope.scopes });
       setPreparedScope({ context: browserContext, scopeId: execution.activityExecutionId, nodeId: retainedNode ?? execution.executableNodeId, prepared });
       setSelectedEvidenceId(selected?.activityExecutionId ?? retainedCanvasNode ?? execution.authoredActivityId);
+      focusReadyScope.current = controller;
       setScopeNavigation({ context: browserContext, loading: false, error: "" });
+      committed = true;
     } catch (error) {
       if (!isCurrent()) return;
       const status = typeof error === "object" && error !== null && "status" in error ? Number(error.status) : 0;
@@ -1541,6 +1548,8 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
       setScopeNavigation({ context: browserContext, loading: false,
         error: denied ? "This execution scope is unavailable in the current context." : "This occurrence's activity evidence could not be loaded. Retry the scope.",
         retaining: retainPrevious && !denied });
+    } finally {
+      if (!committed) controller.abort();
     }
   };
 
@@ -1576,7 +1585,7 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
     exactId={browserExactId} seed={browserExactId ? selectedActivity : null} ancestorId={browserAncestorId} refreshKey={evidenceRevision} requireExplicitSelection
     labelFor={labelForExecution} onSelect={value => selectBrowserExecution(value, true, false)} onEnter={enterChildExecution}
     onIncident={openExecutionIssues}
-    choiceFocus={occurrenceChoiceFocus}
+    choiceFocus={occurrenceChoiceFocus} captureFocusOperation={captureFocusOperation}
     initialPage={!browserExactId || prepared?.execution?.activityExecutionId === browserExactId ? prepared?.page : undefined}
     confirmedExecution={prepared?.execution}
     onUnavailable={() => setPreparedScope(current => current?.prepared === prepared ? null : current)}
@@ -1666,7 +1675,7 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
             executionScope={executionScope}
             refreshKey={evidenceRevision}
             scopeLoading={scopeBlocked && !retainScope}
-            executionBreadcrumb={<nav className="wf-execution-scope" aria-label="Execution scope"><button type="button" onClick={() => { scopeRequest.current?.abort(); setBoundaryCanvas(null); requestedScope.current = null; setExecutionScopes({ context: browserContext, items: [] }); setScopeNavigation({ context: browserContext, loading: false, error: "" }); setFrames([]); }}>All executions</button>{currentExecutionScopes.map(scope => <button type="button" key={scope.execution.activityExecutionId} onClick={() => { selectBrowserExecution(scope.execution); focusNodePath(scope.execution.authoredActivityId); void restoreExecutionContext(scope.execution, true); }}><ChevronRight size={13} />{scope.label}</button>)}{executionScope && (!scopeBlocked || retainScope) ? <Suspense fallback={null}><ExecutionScopeNavigator context={context} execution={executionScope} label={labelForExecution(executionScope)} refreshKey={evidenceRevision} initialPage={prepared?.scopePage?.executionId === executionScope.activityExecutionId ? prepared.scopePage.page : undefined} onIncident={openExecutionIssues} onSelect={execution => void moveScopeOccurrence(execution)} onUnavailable={() => { beginEvidenceNavigation(); setScopeNavigation({ context: browserContext, loading: false, error: "This execution scope is unavailable in the current context." }); }} /></Suspense> : null}{scopeNavigation.context === browserContext && (scopeNavigation.loading || scopeNavigation.error) ? <span role="status">{scopeNavigation.loading ? retainScope ? "Loading requested occurrence… Showing the previous scope." : "Resolving execution scope…" : scopeNavigation.error}{scopeNavigation.error ? <button type="button" onClick={() => { const request = requestedScope.current; if (request) { if (request.moveOccurrence) void moveScopeOccurrence(request.execution); else void restoreExecutionContext(request.execution, request.includeSelf, request.label); } }}>Retry execution scope</button> : null}</span> : null}</nav>}
+            executionBreadcrumb={<nav className="wf-execution-scope" aria-label="Execution scope"><button type="button" onClick={() => { scopeRequest.current?.abort(); setBoundaryCanvas(null); requestedScope.current = null; setExecutionScopes({ context: browserContext, items: [] }); setScopeNavigation({ context: browserContext, loading: false, error: "" }); setFrames([]); }}>All executions</button>{currentExecutionScopes.map(scope => <button type="button" key={scope.execution.activityExecutionId} onClick={() => { selectBrowserExecution(scope.execution); focusNodePath(scope.execution.authoredActivityId); void restoreExecutionContext(scope.execution, true); }}><ChevronRight size={13} />{scope.label}</button>)}{executionScope && (!scopeBlocked || retainScope) ? <Suspense fallback={null}><ExecutionScopeNavigator choiceFocus={scopeOccurrenceFocus} captureFocusOperation={captureFocusOperation} context={context} execution={executionScope} label={labelForExecution(executionScope)} refreshKey={evidenceRevision} initialPage={prepared?.scopePage?.executionId === executionScope.activityExecutionId ? prepared.scopePage.page : undefined} onIncident={openExecutionIssues} onSelect={execution => void moveScopeOccurrence(execution)} onUnavailable={() => { beginEvidenceNavigation(); setScopeNavigation({ context: browserContext, loading: false, error: "This execution scope is unavailable in the current context." }); }} /></Suspense> : null}{scopeNavigation.context === browserContext && (scopeNavigation.loading || scopeNavigation.error) ? <span role="status">{scopeNavigation.loading ? retainScope ? "Loading requested occurrence… Showing the previous scope." : "Resolving execution scope…" : scopeNavigation.error}{scopeNavigation.error ? <button type="button" onClick={() => { const request = requestedScope.current; if (request) { if (request.moveOccurrence) void moveScopeOccurrence(request.execution); else void restoreExecutionContext(request.execution, request.includeSelf, request.label); } }}>Retry execution scope</button> : null}</span> : null}</nav>}
             definitionVersion={data.definitionVersion}
             definitionVersionError={data.definitionVersionError}
             activityCatalog={data.activityCatalog}
@@ -2173,7 +2182,7 @@ function ReadOnlyWorkflowFlow({
       <Background />
       <FitReadOnlyFlowView nodeCount={flowNodes.length} focusRequestId={focusRequestId} minReadableZoom={READ_ONLY_READABLE_ZOOM} />
       <WorkflowReadOnlyMiniMap nodeCount={flowNodes.length} />
-      <Controls fitViewOptions={getReadOnlyFitViewOptions(flowNodes.length)} />
+      <ReadOnlyFlowControls nodeCount={flowNodes.length} />
       <RetainFlowViewport />
     </ReactFlow>
   );
@@ -2391,7 +2400,7 @@ function WorkflowInstanceInspector({
   onViewInput(incident: IncidentStateSummary): void;
   onLoadMoreIncidentAssociations(): Promise<void>;
   focusInputKey: string | null;
-  onSelectActivityExecution(activityExecutionId: string): void;
+  onSelectActivityExecution(activityExecutionId: string, inspectorTab?: InstanceInspectorTab): void;
   renderIncidentActions?: OperatorActionsApi["renderIncidentActions"];
   guidanceForIncident?: OperatorActionsApi["guidanceForIncident"];
   onOpenDefinition?(definitionId: string): void;
@@ -2509,7 +2518,7 @@ function WorkflowInstanceInspector({
                     activityCatalog={activityCatalog}
                     executableGraph={executableGraph}
                     selectedEvidenceId={selectedEvidenceId}
-                    onSelectEvidence={openActivityEvidence}
+                    onSelectEvidence={evidenceId => onSelectActivityExecution(evidenceId, "timeline")}
                   />
                 </>
               ) : activeTab === "activity" ? (activityContent ??
