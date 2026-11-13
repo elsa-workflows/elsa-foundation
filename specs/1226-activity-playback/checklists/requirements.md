@@ -31,4 +31,4 @@
 
 ## Notes
 
-Specification-quality validation: passed. This checklist judges requirements quality, not implementation or runtime-history readiness. The owner's2026-11-13 continuation authorizes planning/tasks and end-to-end implementation; the spec is Approved and issue #4366 remains open. The completed plan identifies a blocking, separately owned runtime-history read dependency (tasks T003). No production implementation or acceptance is established by these checks.
+Specification-quality validation: passed. This checklist judges requirements quality, not implementation or runtime-history readiness. The owner's2026-11-13 continuation authorizes planning/tasks and end-to-end implementation; the spec is In progress and issue #4366 remains open. The completed plan identifies the coordinated runtime-history read dependency (task T003); separate draft #4384 contains its unqualified source. No production qualification or product acceptance is established by these checks.

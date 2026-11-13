@@ -1,6 +1,6 @@
 # Proposed dependency and UI contract
 
-**Status**: proposed boundary for planning; no endpoint, registration, storage model or recording support is implemented. This is the prerequisite required by spec1226 FR026, to be reviewed with the spec1211 runtime-history owner.
+**Status**: dependency/UI boundary for spec1226 FR026. This documentation unit implements no endpoint or recording support. The [accepted S14a handoff](https://github.com/elsa-workflows/elsa-foundation/issues/3849#issuecomment-6858916502) scopes separately authored [runtime source in draft #4384](https://github.com/elsa-workflows/elsa-foundation/pull/4384); that source is not delivered or qualified production support. Complete the provider and acceptance controls with the spec1211 owner before dependent playback implementation.
 
 ## Runtime-owned occurrence sequence facet
 
