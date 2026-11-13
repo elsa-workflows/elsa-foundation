@@ -22,7 +22,7 @@ public static class Smoke
                     Sequence("b2", Event("e1", Expr("'go-' + input.key")), Set("b", "b", 2))),
                 Flowchart("flow",
                     [WriteLine("f1", "start"), Set("f2", "c", 1), Set("f3", "d", 1), Set("f4", "e", Expr("c + d"))],
-                    [new("f1", "f2"), new("f1", "f3"), new("f2", "f4"), new("f3", "f4")], ("f4", JoinMode.All)),
+                    [new("f1", "f2"), new("f1", "f3"), new("f2", "f4"), new("f3", "f4")], ("f4", Gateway.ParallelJoin)),
                 Call("svc", "quotes").Capture("quote"),
                 Notify("notify", "hello"),
                 Dispatch("child", "smoke-child", wait: true).Capture("childOut", "Output"),
@@ -33,13 +33,13 @@ public static class Smoke
         yield return Workflow("smoke-child", Sequence("root", Delay("d", 50), Set("o", "output", "child done")));
         yield return Workflow("smoke-listener", Sequence("root", Event("hear", Expr("'ping-' + input.key")), Set("o", "output", "heard")));
         yield return Workflow("smoke-wait", Sequence("root", Event("wait", "never"), Set("o", "output", "late")));
-        // NATIVE.md section 1: an All join after a decision. The decision takes True, so nothing ever arrives from the
-        // False branch; without dead paths the join cannot tell that, and it never fires.
+        // NATIVE.md section 1: an All join after a decision. The decision takes True, so nothing live ever arrives from
+        // the False branch; the untaken connection is a dead path, so the join hears from both inbound and fires.
         yield return Workflow("smoke-decision-join", Sequence("root",
                 Flowchart("flow",
                     [If("decide", true), Set("left", "branch", "left"), Set("right", "branch", "right"), Set("join", "joined", "yes"), Set("after", "after", "yes")],
                     [new("decide", "left", "True"), new("decide", "right", "False"), new("left", "join"), new("right", "join"), new("join", "after")],
-                    ("join", JoinMode.All)),
+                    ("join", Gateway.ParallelJoin)),
                 Set("out", "output", Expr("branch + ' ' + joined + ' ' + after"))),
             ("branch", null), ("joined", "no"), ("after", "no"), ("output", null));
         yield return Workflow("http-early", Sequence("root", HttpEndpoint("http-in", "early", respondBeforeCommit: true), Respond("answer", "early"), Event("wait", "never")));
@@ -97,10 +97,10 @@ public static class Smoke
             await owner.StartAsync();
             owner.Worker.Post(new Message("m1", InstanceRef.In(0, "dj"), Kinds.Start, Start: NativeModel.Spec("smoke-decision-join", mode)), fresh: true);
             await owner.PumpAsync(until: () => owner.Status("0/dj") is InstanceStatus.Finished);
-            // The missed join, shown: the decision's False branch never runs, so the join waits for an arrival that
-            // never comes. The flowchart ends when nothing under it runs, without the join and without what follows it.
+            // Before the graph engine the join never fired (output 'left no no'): nothing marked the untaken branch, and the
+            // flowchart ended when nothing under it ran. Now the untaken connection is a dead path that reaches the join.
             var output = owner.State("0/dj")?.Variables["output"]?.GetValue<string>();
-            Check(output == "left no no", $"{mode}: the join never fired: '{output}'");
+            Check(output == "left yes yes", $"{mode}: the join fired on one live and one dead arrival: '{output}'");
         }
 
         await HttpAsync(registry);

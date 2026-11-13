@@ -41,7 +41,7 @@ public static class NativeWorkflows
         registry.Add(Workflow("n-flow", Sequence("root",
                 Flowchart("flow",
                     [WriteLine("f1", "start"), Event("f2", Expr("input.key + '-1'")), Event("f3", Expr("input.key + '-2'")), Set("f4", "joined", Expr("joined + 1"))],
-                    [new("f1", "f2"), new("f1", "f3"), new("f2", "f4"), new("f3", "f4")], ("f4", JoinMode.All)),
+                    [new("f1", "f2"), new("f1", "f3"), new("f2", "f4"), new("f3", "f4")], ("f4", Gateway.ParallelJoin)),
                 Set("out", "output", Expr("'flow ' + joined"))),
             ("joined", 0), ("output", null)));
         registry.Add(Workflow("n-dispatch", Sequence("root",
