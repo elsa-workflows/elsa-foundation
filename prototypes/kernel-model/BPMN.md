@@ -11,7 +11,7 @@ Every claim says how it is known: **run** means a command below produced it; **r
 | Path | What |
 |---|---|
 | `models/Bpmn` | The model: `BpmnModel.cs` (state, options, the job), `BpmnTurn.cs` (one turn), `Processes.cs` (the host's table of work, the registry, a builder for expression flows), `Conditions.cs` (variables and flow conditions), `Cases.cs` (the spike's processes) |
-| `models/Bpmn.Run` | `smoke` (the model's own cases and every spike case), `cost sqlite` and `cost postgres` |
+| `models/Bpmn.Run` | `smoke` (the model's own cases and the cases of section 3), `cost sqlite` and `cost postgres` |
 | `sim/BpmnSim.cs` | BPMN instances in the simulation's mix, the token checks G1 to G6, the host's deliberate flaws |
 
 ```
@@ -92,7 +92,7 @@ passes):
 | Case | Process | What it shows |
 |---|---|---|
 | Parallel | `b-parallel`: fork, two service tasks, join | two jobs; the join fires once with one arrival per inbound flow |
-| Exclusive | `b-exclusive`: `amount > 100`, else the default | the host's condition picks the flow |
+| Exclusive | `b-exclusive`: `amount > 100`, then `amount > 50`, else the default | the host's conditions pick the flow; the first that holds wins |
 | Inclusive | `b-inclusive`: `express`, `insured`, else the default; inclusive join | one, two or the default flow; the join fires once on what was taken |
 | A service task as a job | every task above | `StartJob`, `job-finished` |
 | Interrupting boundary timer | `b-boundary`: a timer on a service task (300 ms; 1 s in the smoke and cost runs, so a job that should win does not lose on a loaded machine) | the timer first: the job is cancelled, the timeout path runs, the job's late result changes nothing; the job first: the timer is recalled |
@@ -138,12 +138,16 @@ Where the commits go (run, from the traced commands):
   are one turn.
 - **The call activity** is two instances: the parent's start (the child's start goes to the same partition in memory,
   so it needs no read), the child's start and its job, the child's end with its `child-finished`, the parent's end.
-  Terminating the child costs one more commit (the child's terminate turn).
-- **The message catch** costs five commits, the same whichever comes first: the start (row, job ticket); the job's
-  result with the subscription and a meet ticket (the catch asks for kept events); the meet, which reads the event
-  table, inserts the delivery and commits only to consume its ticket (friction F-N8); the commit that marks the polled
-  delivery seen (finding F3); the turn that ends. The owner needs a poll for a delivery its own meet inserted
-  (friction F-B2). The publish is two commands (insert the event, read the subscriptions).
+  When the boundary timer wins: the parent's start, the child's start, the parent's timer turn (it stops the call,
+  sends the terminate and ends), the child's terminate turn (Cancelled; its waits deleted; its `child-finished` sent),
+  and a fifth commit that only consumes that `child-finished` at a parent that has already ended.
+- **The message catch** costs five commits either way: the start (row, job ticket); the job's result with the
+  subscription and a meet ticket (the catch asks for kept events); the meet, which reads the event table and commits
+  only to consume its ticket (friction F-N8); the commit that marks the polled delivery seen (finding F3); the turn
+  that ends. Published before: the meet finds the event and inserts the delivery itself, and the owner needs a poll to
+  find a delivery its own meet inserted (friction F-B2); the publish is two commands (insert the event, read the
+  subscriptions, none yet). Published after: the meet finds nothing, and the publish is three commands (insert the
+  event, read the subscriptions, insert the delivery), which the owner finds by its poll. Both total 15 / 10 commands.
 - **State.** 480 to 910 bytes per commit, 1,150 at most here: the interpreter's token state (its record shape with
   every field named), the variables, and about 100 bytes per unit in flight in the ledger. The diagnostics are not
   kept; the interpreter would keep up to 200 of them.
@@ -214,10 +218,12 @@ identical to main's, times aside, at both sizes, with `--native`, and in both mu
 no file under `src/`). Everything the interpreter asks for maps onto calls that exist: `StartJob` and `CancelJob`,
 `Send` with a delay and `Recall`, `Subscribe` with `keep` and `Unsubscribe`, `Start` and a `kernel.terminate`
 message, `Send` for a signal to the parent, `SetStatus`, `Record`, and `Events.Delivered` to read which wait an event
-is for. NATIVE.md section 8 listed four needs of BPMN. Two were there and the spike used them: a turn can take back a timer
-(`Recall`, from the merge), and a wait can ask for kept events (`keep`). Two the spike did not reach, and they stay open:
-subscriptions of kind start, for message and signal start events (not built in the kernel), and placement other than
-with the parent, for multi-instance over many items. The verdict covers what the spike used.
+is for. NATIVE.md section 8 listed four needs of BPMN. The kernel has all four by now, and the spike used two: a turn
+can take back a timer (`Recall`, from the merge), and a wait can ask for kept events (`keep`). It did not use the other
+two: start subscriptions, for message and signal start events (FINDINGS section 17: `SubscriptionRow` with a start
+spec, registered from outside by `Events.SubscribeAsync`; a turn cannot register one), and placement across partitions
+(`ITurn.Start(spec, Placement.Spread)`, FINDINGS section 18), for multi-instance over many items. The verdict covers
+what the spike used.
 
 Frictions, none of them a contract change; whether any becomes one is the owner's question:
 
@@ -242,8 +248,9 @@ Frictions, none of them a contract change; whether any becomes one is the owner'
   tokens would show a cancelled instance as waiting. Traced; the cost is reasoned; the simulation's G5 checks what the
   kernel cancels.
 - **F-B6. Signals to the parent are the model's own messages.** An escalation from a called child goes to the parent
-  as `bpmn.signal`; the kernel has no notion of a child signalling its parent without ending. It needs none: a model
-  message from child to parent keeps the order with the child's `child-finished` (one sender, one target). Run.
+  as `bpmn.signal`; the kernel has no notion of a child signalling its parent without ending. It needs none. Run: the
+  signal arrives (`smoke`). Reasoned: it keeps its order with the child's `child-finished`, since the kernel delivers
+  one sender's messages to one target in the order sent (FINDINGS section 1).
 - **F-B7. The model relies on the interpreter not reading its diagnostics.** It drops them from the row to keep the
   state small; that holds for 0.5.0 (traced) but is not part of the library's documented contract. Worth asking
   upstream to document it, or to offer state without diagnostics.
@@ -276,10 +283,12 @@ nothing was built. Traced in both engines' code (BPMN paths under the library's 
 parallel join downstream, faults in `Bpmn.Semantics` 0.5.0 with `bpmn.join.deadlock`: the sibling's token can reach the
 untaken branch only round the loop, and the whole-graph search counts that path. The same process without the loop
 finishes (run: `smoke` runs both). The fault needs only the flow back to exist: with a loop condition that never holds,
-the join still deadlocks (run, in a probe outside the repository), since the search reads the graph, not the flows
-taken. BPMN 2.0's rule for the inclusive join leaves out a path that passes a node with a path to an arrived flow
-(here the inclusive split), so the join should fire; Elsa's forward-only search exists for this case
-(`FlowchartGraph`'s comment on it). `smoke` expects the fault, so an upgrade that fixes it shows. An
+the join still deadlocks (run, in a probe outside the repository: the same process with the flow back conditioned on
+`count < 0`), since the search reads the graph, not the flows taken. Reasoned, from the specification's wording: BPMN
+2.0's rule for the inclusive join leaves out a path that passes a node with a path to an arrived flow (here the
+inclusive split), so the join should fire. Elsa's Flowchart asks the same question forward only, within the iteration
+(`FlowchartGraph`, `CanReachForward`), which leaves out the path round the loop; whether it fires on this exact process
+was not run. `smoke` expects the fault, so an upgrade that fixes it shows. An
 upstream issue in valence-works/bpmn would be the way to report it; none was filed.
 
 **Verdict: a neutral token package is not real enough to extract.** What is truly the same is generic graph and id
@@ -298,9 +307,9 @@ Confidence: high that no worthwhile shared runtime core exists.
 
 - Reading BPMN XML: the processes are built in code with the library's builder; `Bpmn.Interchange` is not used.
 - FEEL: conditions are the host's tiny language. Elsa needs an expression story for BPMN either way.
-- Multi-instance, compensation, transactions, event subprocesses, the event-based gateway, signal and message start
-  events, timer start events: the interpreter covers them, the spike does not (a reviewer ran an event-based gateway
-  both ways on this host, and it worked; not in the mix). Escalation from a root is the interpreter's no-op.
+- Multi-instance, compensation, transactions, event subprocesses, signal and message start events, timer start
+  events: the interpreter covers them, the spike does not. The event-based gateway is in the simulation's mix
+  (`b-race`) but not in `smoke` or the cost. Escalation from a root is the interpreter's no-op.
 - A job's BPMN error code: a service that fails names no code, so only catch-all error boundaries catch it.
 - MongoDB, SQL Server and MySQL; the concurrent stress test with BPMN instances; the memory measurement.
 - What the viewer shows of a BPMN instance (its tokens, from the journal's `j` entries and the state), and the state
