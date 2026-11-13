@@ -70,7 +70,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
     private readonly HashSet<string> _behind = new(StringComparer.Ordinal);            // own rows written while catching up, not yet polled
     private readonly List<TurnOutcome> _queue = [];
     private long _generation, _anchor = long.MinValue, _local;
-    private long _renewed;      // database time of the take or the last commit that landed: when the lease was last renewed
+    private long _renewed;      // database time of the take, or of the sending of the last commit that landed: when the lease was renewed at the latest
     private bool _taking, _polling, _loading, _flushing, _meeting, _caughtUp, _woken;
     private string _refusal = "";
     private readonly HashSet<Delivery> _trial = [];     // the suspects being tried now, with nothing else in flight (finding F2)
@@ -181,7 +181,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
         if (busy) return TimeSpan.Zero;
         var now = Now;
         var next = _items.Values.Where(i => !i.Taken && i.Message.Due is { } due && due > now).Select(i => i.Message.Due!.Value).DefaultIfEmpty(long.MaxValue).Min();
-        return TimeSpan.FromMilliseconds(Math.Max(0, Math.Min(next, RenewBy) - now));
+        return TimeSpan.FromMilliseconds(Math.Max(1, Math.Min(next, RenewBy) - now));     // never zero: zero means there is work
     }
 
     /// <summary>When the pass beats if nothing commits before: a third of the lease after it was last renewed (the sketch's cadence).</summary>
@@ -587,6 +587,10 @@ public sealed class Worker : IScopeActivation, ITurnServices
             marks.Select(i => i.Message.Id).ToList(), trial.Select(i => i.Message.Id).ToList());
         while (true)
         {
+            // When the lease is renewed at the latest, as far as this worker can tell: its estimate of database time
+            // never runs ahead of the database, and the commit executes after it is sent. A store may answer without
+            // the database's time (Now 0, the fence in the batch).
+            var sending = Now;
             Committed result;
             try { result = await _store.CommitAsync(batch, cancellationToken); }
             catch (StoreException e) when (e.Failure != Failure.Unknown)
@@ -609,7 +613,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
             }
             Position += batch.Positions;
             Observe(result.Now);
-            _renewed = result.Now;      // a commit that lands renews the lease
+            _renewed = Math.Max(_renewed, sending);      // a commit that lands renews the lease
             foreach (var item in marks.Concat(trial))
                 if (item.Suspect && !trial.Contains(item)) item.Shelved = true;
                 else item.Marked = true;
