@@ -7,6 +7,7 @@
   <ItemGroup>
     <ProjectReference Include="../src/Kernel.Workflows/Kernel.Workflows.csproj" />
     <ProjectReference Include="../models/Native/Kernel.Native.csproj" />
+    <ProjectReference Include="../models/Bpmn/Kernel.Bpmn.csproj" />
   </ItemGroup>
   <ItemGroup>
     <Using Include="Kernel.Runtime" />

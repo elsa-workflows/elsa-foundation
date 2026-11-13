@@ -32,7 +32,8 @@ public static class BpmnCases
             .Service("prepare", v => Set(("prepared", v["order"]?.DeepClone())))
             .Service("child", v => Set(("child-out", $"child of {v["order"]}")))
             .Service("count", v => Set(("count", (v["count"]?.GetValue<int>() ?? 0) + 1)))
-            .Service("note", v => Set(("notes", (v["notes"]?.GetValue<int>() ?? 0) + 1)));
+            .Service("note", v => Set(("notes", (v["notes"]?.GetValue<int>() ?? 0) + 1)))
+            .Service("boom", _ => throw new InvalidOperationException("boom"));
     }
 
     private static ServiceResult Set(params (string Name, JsonNode? Value)[] values) =>
@@ -96,6 +97,21 @@ public static class BpmnCases
         p.Chain("start", "again", "fork", "count", "join", "decide").Chain("fork", "note", "join")
             .Flow("decide", "again", when: $"count < {Rounds}").Flow("decide", "end", isDefault: true);
         yield return new BpmnProcess(p.Build(), Jobs("count", "note"), new JsonObject { ["count"] = 0, ["notes"] = 0 });
+
+        // An event-based gateway: the message or the timer, whichever comes first; the other catch is stopped.
+        p = new ProcessDraft("b-race");
+        p.B.StartEvent("start").EventBasedGateway("race")
+            .IntermediateCatchEvent("reply", new BpmnEventDefinition(BpmnEventDefinitionTypes.Message), bindingRef: "reply")
+            .IntermediateCatchEvent("late", new BpmnEventDefinition(BpmnEventDefinitionTypes.Timer), bindingRef: "late")
+            .ServiceTask("on-time", bindingRef: "big").ServiceTask("too-late", bindingRef: "small").EndEvent("answered").EndEvent("expired");
+        p.Chain("start", "race", "reply", "on-time", "answered").Chain("race", "late", "too-late", "expired");
+        yield return new BpmnProcess(p.Build(), With(Jobs("big", "small"), ("reply", new MessageWork("paid", "order")), ("late", new TimerWork(deadline))));
+
+        // A fork whose one branch fails with no error boundary: the instance ends Faulted and the other branch's job is stopped.
+        p = new ProcessDraft("b-fault");
+        p.B.StartEvent("start").ParallelGateway("fork").ServiceTask("boom", bindingRef: "boom").ServiceTask("note", bindingRef: "note").ParallelGateway("join").EndEvent("end");
+        p.Chain("start", "fork", "boom", "join", "end").Chain("fork", "note", "join");
+        yield return new BpmnProcess(p.Build(), Jobs("boom", "note"), new JsonObject { ["notes"] = 0 });
     }
 
     private static Dictionary<string, Work> Jobs(params string[] services) => services.ToDictionary(s => s, s => (Work)new JobWork(s), StringComparer.Ordinal);
