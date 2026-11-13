@@ -1096,8 +1096,8 @@ delete), with no view to write: `projection: rounds larger than a statement's ch
 deletes alone`. It passes on in-memory, SQLite, PostgreSQL, SQL Server, MySQL and MongoDB. It commits in chunks of 170
 and 200: one commit of 850 new instances failed on MySQL's provider ("The CommandText property has not been properly
 initialized"). A reviewer's probe found the failure from about 420 such turns in one commit, below the kernel's flush
-cap of 500 turns (`WorkerOptions.MaxBatch` counts turns, not rows), with the cause not known; ENGINES.md's 1,000
-instances started at once did land, so the row shape matters. Not fixed here: issue #4358.
+cap of 500 turns (`WorkerOptions.MaxBatch` counts turns, not rows). [ENGINES.md E11](ENGINES.md#e11-oracles-mysql-ef-provider-can-acknowledge-a-partial-batch-4358)
+records the cause and the MySQL fix for #4358.
 
 **Gates.**
 

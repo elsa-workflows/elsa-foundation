@@ -21,6 +21,13 @@ public interface IWorkflowExecutableStore
         cancellationToken.IsCancellationRequested ? ValueTask.FromCanceled<RuntimeExecutionMaterial?>(cancellationToken) :
             ValueTask.FromException<RuntimeExecutionMaterial?>(new NotSupportedException($"{GetType().Name} does not support runtime model material."));
 
+    /// <summary>Reads one exact native/model source after stored-type/UTF8 byte preflight in a consistent snapshot.</summary>
+    /// <remarks>The actual selected provider must match expectedScope, refuse unknown wire shapes and bound decoding
+    /// before loading payloads. Legacy providers/decorators refuse; forwarding an ordinary read is insufficient.</remarks>
+    ValueTask<RuntimeMaterialSourceSnapshot?> FindMaterialBoundedAsync(string artifactId, PersistenceScope expectedScope,
+        RuntimeSourceReadLimits limits, CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<RuntimeMaterialSourceSnapshot?>(new RuntimeSourceReadException("runtime_source_material_profile_unsupported", true));
+
     /// <summary>Saves immutable versioned model material through this artifact provider's coordination boundary.</summary>
     /// <remarks>Providers retain infrastructure failures as contextual domain persistence exceptions with their original cause.
     /// Caller-requested cancellation propagates with the caller's token.</remarks>
