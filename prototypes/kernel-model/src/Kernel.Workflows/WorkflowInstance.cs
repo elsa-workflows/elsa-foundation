@@ -54,6 +54,10 @@ public sealed class WorkflowInstance(IEnumerable<IExecutionModel> models) : IAct
         return unit;
     }
 
+    /// <summary>Decision 4: an instance kept in memory past its short wait is written as it is, at the revision it has.</summary>
+    public TurnOutcome Write(InstanceRow row, object? state, object? pending) =>
+        new(row.Id) { Row = row, State = state, Status = row.Status, Revision = row.Revision, Journal = Journal(row.History, [.. pending as List<object> ?? [], "written"]) };
+
     /// <summary>The instance's own turn: suspend, resume, terminate or delete. A message that changes nothing is consumed and dropped.</summary>
     private static TurnOutcome Control(TurnInput input, Delivery item)
     {

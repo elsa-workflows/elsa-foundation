@@ -13,7 +13,11 @@ public enum InstanceStatus { Running, Finished, Faulted, Cancelled }
 public enum History { Full, State, Minimal }
 
 /// <summary>What a message needs to create its target when the target does not exist.</summary>
-public sealed record StartSpec(string Model, string Definition, string? Input = null, string? Parent = null, bool Ephemeral = false, History History = History.Full);
+/// <summary>
+/// How to create an actor. <c>ShortWait</c>, for an Ephemeral one: how long it may wait in memory, unwritten, for its own
+/// timers and jobs (decision 4); null takes <see cref="WorkerOptions.ShortWait"/>. An HTTP route passes its timeout.
+/// </summary>
+public sealed record StartSpec(string Model, string Definition, string? Input = null, string? Parent = null, bool Ephemeral = false, History History = History.Full, TimeSpan? ShortWait = null);
 
 public sealed record SendOptions(TimeSpan? Delay = null, StartSpec? Start = null);
 

@@ -13,6 +13,12 @@ public sealed record WorkerOptions
     /// <summary>How many idle instances are kept in memory. Above it the least recently used are dropped, and loaded by key again when a message comes.</summary>
     public int MaxInstances { get; init; } = int.MaxValue;
 
+    /// <summary>
+    /// Decision 4: how long an Ephemeral instance may wait in memory, unwritten, for its own short timers and jobs, when
+    /// its start spec does not say (an HTTP route says: its timeout). Past it the instance is written.
+    /// </summary>
+    public TimeSpan ShortWait { get; init; } = TimeSpan.FromSeconds(5);
+
     /// <summary>How many partitions the database has: needed to place a child in another one.</summary>
     public int Partitions { get; init; } = 1;
     /// <summary>How many owners may be lost with a message on trial before it is parked.</summary>
@@ -39,6 +45,9 @@ public sealed record WorkerOptions
 
     public Func<long>? WallClock { get; init; }     // read only under Flaw.WallClockTimers
     public Flaw Flaws { get; init; }
+
+    /// <summary>Called when an instance is kept in memory, unwritten (decision 4). For tests.</summary>
+    public Action<string>? OnKeptInMemory { get; init; }
 
     /// <summary>Called when a turn starts, with the worker's idea of database time. For tests.</summary>
     public Action<InstanceRef, IReadOnlyList<Message>, long>? OnTurn { get; init; }
@@ -99,6 +108,9 @@ public sealed class Worker : IScopeActivation, ITurnServices
     public long Evicted { get; private set; }
     public int Idle => _slots.Values.Count(s => s.Loaded && !s.Busy && s.Inbox.Count == 0 && s.Replies.Count == 0);    // for tests
 
+    /// <summary>The instances held in memory only, never written (decision 4). For tests.</summary>
+    public IEnumerable<string> Unwritten => _slots.Where(s => s.Value.Unwritten).Select(s => s.Key);
+
     /// <summary>The reply addresses of the callers this owner holds, for tests of decision 6.</summary>
     public IEnumerable<string> Callers => _slots.Values.SelectMany(s => s.Replies);
     private long _used;
@@ -113,7 +125,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
     public bool Meeting => _meeting;
     public int Queued => _queue.Count;
     public bool NeedsLoad => _slots.Values.Any(s => !s.Loaded);
-    public bool NeedsFlush => _queue.Count > 0 || _items.Values.Any(Unmarked) || NextTrial().Count > 0;
+    public bool NeedsFlush => _queue.Count > 0 || _items.Values.Any(Unmarked) || NextTrial().Count > 0 || Outgrown().Any();
     public IEnumerable<string> Trial => _trial.Select(i => i.Message.Id);
     public bool NeedsMeet => _meets.Exists(i => !Awaits(i) && !i.Taken);
     public IEnumerable<string> Ready => _slots.Where(s => s.Value.Loaded && !s.Value.Busy && Deliverable(s.Key, s.Value).Count > 0).Select(s => s.Key)
@@ -126,6 +138,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
 
     public bool Has(Flaw flaw) => (_options.Flaws & flaw) != 0;
     public int Partitions => _options.Partitions;
+    public TimeSpan ShortWait => _options.ShortWait;
 
     /// <summary>A turn cancelled a job. Its ticket may be in memory, or still on its way in with a poll.</summary>
     internal void Cancelling(string ticket)
@@ -178,7 +191,8 @@ public sealed class Worker : IScopeActivation, ITurnServices
         Unpin();
         if (busy) return TimeSpan.Zero;
         var now = Now;
-        var next = _items.Values.Where(i => !i.Taken && i.Message.Due is { } due && due > now).Select(i => i.Message.Due!.Value).DefaultIfEmpty(long.MaxValue).Min();
+        var next = _items.Values.Where(i => !i.Taken && i.Message.Due is { } due && due > now).Select(i => i.Message.Due!.Value)
+            .Concat(_slots.Values.Where(s => s.Unwritten).Select(s => s.Until)).DefaultIfEmpty(long.MaxValue).Min();     // or an instance's short wait ends
         return next == long.MaxValue ? null : TimeSpan.FromMilliseconds(next - now);
     }
 
@@ -527,6 +541,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
         if (Has(Flaw.DeliverBeforeCommit)) HandOver(unit, null, hold: true);
         if (Has(Flaw.EmitBeforeCommit)) Release(unit);
         else Release(unit, early: true);    // to callers whose route opted out of waiting for the commit
+        if (unit.Durable) Promote(unit);
         if (unit.Durable) _queue.Add(unit);
         else Apply(unit, null, true);   // nothing to write: an ephemeral run, or messages that were never rows
     }
@@ -539,6 +554,13 @@ public sealed class Worker : IScopeActivation, ITurnServices
     private async Task FlushAsync(bool beat, CancellationToken cancellationToken)
     {
         if (_flushing || !Owns) return;
+        foreach (var (id, slot) in Outgrown().ToList())     // decision 4: past its short wait an instance in memory is written as it is
+        {
+            slot.Busy = true;
+            var unit = Bound(_type.Write(slot.Row!, slot.State, slot.Pending), slot);
+            Promote(unit);
+            _queue.Add(unit);
+        }
         var units = _queue.GetRange(0, Math.Min(_queue.Count, _options.MaxBatch));     // rows per flush are capped
         var marks = _items.Values.Where(Unmarked).Take(_options.MaxBatch).ToList();
         var trial = units.Count == _queue.Count ? NextTrial() : [];    // a trial starts only when this commit leaves nothing else in flight
@@ -574,7 +596,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
         var handOver = _caughtUp || Has(Flaw.HandOverWhileBehind);
         var batch = new CommitBatch(Partition, Epoch, Position, _options.Lease, handOver,
             units.Select(u => new TurnCommit(u.Instance, u.Row, u.Expected,
-                Has(Flaw.KeepConsumedMessages) ? [] : [.. u.Consumed.Where(i => i.Durable && i.Message.KeepUntil is null).Select(i => i.Message.Id), .. Has(Flaw.VolatileJobTicket) ? [] : u.Cancelled],
+                Has(Flaw.KeepConsumedMessages) ? [] : [.. u.Consumed.Where(i => i.Durable && i.Message.KeepUntil is null).Select(i => i.Message.Id), .. Has(Flaw.VolatileJobTicket) ? [] : u.Cancelled.Where(id => !InMemoryOnly(id))],
                 Has(Flaw.KeepConsumedMessages) ? [] : u.Consumed.Where(i => i.Durable && i.Message.KeepUntil is not null).Select(i => i.Message.Id).ToList(),
                 u.Sent.Where(m => !u.Volatile.Contains(m.Id)).ToList(), u.Subscribed, u.Unsubscribed, u.Journal, u.Unsubscribe,
                 u.Held.Where(i => i.Durable).Select(i => i.Message.Id).ToList(), u.Delete)).ToList(),
@@ -614,6 +636,31 @@ public sealed class Worker : IScopeActivation, ITurnServices
         }
     }
 
+    /// <summary>A message held in memory and never written: one that needs no delete when it is cancelled.</summary>
+    private bool InMemoryOnly(string id) => _items.TryGetValue(id, out var held) && !held.Durable;
+
+    /// <summary>Decision 4: instances in memory whose short wait is over, and that no turn or commit has now.</summary>
+    private IEnumerable<KeyValuePair<string, Slot>> Outgrown()
+    {
+        var now = Now;
+        return _slots.Where(s => s.Value.Unwritten && !s.Value.Busy && now >= s.Value.Until);
+    }
+
+    /// <summary>
+    /// Decision 4: an outcome that writes an instance held in memory until now writes what it waits for in memory too:
+    /// its timers and job tickets become rows in the same commit, so a crash after it loses none of them.
+    /// </summary>
+    private void Promote(TurnOutcome unit)
+    {
+        if (unit.Slot is not { Unwritten: true } || Has(Flaw.ForgetShortWaits)) return;
+        foreach (var item in _items.Values.Where(i => !i.Durable && i.Message.Target.Id == unit.Instance && !unit.Consumed.Contains(i) && !unit.Held.Contains(i)
+                     && !unit.Cancelled.Contains(i.Message.Id)).OrderBy(i => i.Seq).ToList())
+        {
+            unit.Sent.Add(item.Message);
+            unit.Promoted.Add(item.Message.Id);
+        }
+    }
+
     private void Fail(List<TurnOutcome> units)
     {
         if (!Has(Flaw.NoResetAfterFailedCommit))
@@ -643,9 +690,19 @@ public sealed class Worker : IScopeActivation, ITurnServices
         }
         if (!handOver)
             foreach (var message in unit.Sent)
-                if (message.Target.Partition == Partition && message.Due is null && !unit.Volatile.Contains(message.Id)) _behind.Add(message.Id);
+                if (message.Target.Partition == Partition && message.Due is null && !unit.Volatile.Contains(message.Id) && !unit.Promoted.Contains(message.Id)) _behind.Add(message.Id);
         HandOver(unit, seqs, hold: handOver && !Has(Flaw.DeliverBeforeCommit));
         if (unit.Slot is not { } slot) return;
+        if (unit.InMemory)       // decision 4: kept in memory, not written
+        {
+            (slot.Unwritten, slot.Until, slot.Pending) = (true, unit.Until, unit.Pending);
+            _options.OnKeptInMemory?.Invoke(unit.Instance);
+        }
+        else if (slot.Unwritten)
+        {
+            (slot.Unwritten, slot.Pending) = (false, null);
+            if (unit.Row is null) slot.Row = null;      // it ended in memory: never written at all
+        }
         if (unit.Row is not null) slot.Row = unit.Row;
         if (unit.Delete) slot.Row = null;
         slot.State = unit.Row is { Status: InstanceStatus.Running } ? unit.State : null;
@@ -659,7 +716,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
     /// Evictable: its committed row is all there is to it. Not while a turn or commit is in flight (a load would read
     /// the row before that commit), not while messages wait for it, not while a caller waits for its output.
     /// </summary>
-    private bool Evictable(Slot slot) => slot.Loaded && (!slot.Busy || Has(Flaw.EvictBusy)) && slot.Inbox.Count == 0 && slot.Replies.Count == 0;
+    private bool Evictable(Slot slot) => slot.Loaded && (!slot.Busy || Has(Flaw.EvictBusy)) && slot.Inbox.Count == 0 && slot.Replies.Count == 0 && !slot.Unwritten;
 
     /// <summary>
     /// Decision 6: a caller's reply address expires at its deadline (the route's timeout). The owner then forgets it, so
@@ -714,6 +771,11 @@ public sealed class Worker : IScopeActivation, ITurnServices
         {
             var durable = !unit.Volatile.Contains(message.Id);
             var seq = durable && seqs is not null ? seqs.Dequeue() : long.MaxValue / 2 + ++_local;
+            if (unit.Promoted.Contains(message.Id))     // held in memory already; from now on a row, seen at this epoch if handed over
+            {
+                if (_items.TryGetValue(message.Id, out var held)) (held.Durable, held.Marked) = (true, hold);
+                continue;
+            }
             if ((hold || !durable) && message.Target.Partition == Partition) Hold(message, seq, durable, marked: true, fresh: unit.Fresh.Contains(message.Id));
         }
     }
@@ -758,6 +820,9 @@ internal sealed class Slot
     public readonly List<Delivery> Inbox = [];
     public object? Ambient;                         // from the starter on this node; gone with this memory
     public readonly HashSet<string> Replies = [];   // callers waiting for what the instance emits
+    public bool Unwritten;                          // decision 4: Row is in memory only, never written
+    public long Until;                              // and may stay so until then
+    public object? Pending;                         // the history its turns in memory left, the actor type's
 }
 
 internal sealed record JobTicket(string Model, string Key, string? Arguments);

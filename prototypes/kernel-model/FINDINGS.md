@@ -1042,3 +1042,59 @@ native counts moved, and why some first failing seeds of the mutation check move
 Every flaw is still caught within 20,000 seeds.
 
 **Not done:** the owner on another node still cannot tell a waiting node it was lost (504 at the deadline, as before).
+
+### 25.6 Short waits of an Ephemeral instance stay in memory (decision 4, F-N7). Run
+
+**What changed.** An Ephemeral instance that has never been written stays unwritten while its turns wait only for
+themselves. That holds for a turn when:
+- every message it sends goes to the instance itself and is a job's ticket or a timer due within the short wait;
+- it subscribes nothing, publishes nothing, and cancels or recalls only what is in memory;
+- it took no message that is a row (`DurableTurn.CanWaitInMemory`).
+
+Its row, state and those messages are then held in memory only (`Slot.Unwritten`), and it is never evicted. The short
+wait is `StartSpec.ShortWait`, which the native HTTP host sets to the request's timeout, else `WorkerOptions.ShortWait`
+(5 s). An instance that ends in memory is never written.
+
+The instance is written, at the revision it has, by:
+- a turn that does anything else, or
+- the end of the short wait (`Worker.Outgrown`, then `IActorType.Write`).
+
+That commit also writes its timers and job tickets as rows (`Worker.Promote`). The history its turns left in memory
+goes into the same commit's journal row (`TurnOutcome.Pending`).
+
+**What it loosens, said plainly.** Its journal starts at the revision it is written at, not at 1. So the simulation's I2
+now allows a late first revision for instances it saw kept in memory (`WorkerOptions.OnKeptInMemory`), and nothing
+else. What happened in memory is in that first row's entries. An unwritten instance is lost with its process, as an
+Ephemeral run always was. Its caller is told "lost".
+
+**Found on the way.** An Ephemeral instance started by a message that is a row (an outside start) was first kept in
+memory too. Its start was then consumed without a commit, and a crash would have lost it: the native simulation caught
+it (I14). Such a turn is now always written.
+
+**The check.** The simulation's HTTP requests are now Ephemeral for the timer and job modes as well, half of them, as
+the respond mode was. I9: an instance held in memory only has no row, unless the commit that writes it is in flight.
+`Flaw.ForgetShortWaits` leaves the timers and tickets in memory when the instance is written. It is caught at seed 10:
+`END 0/h35 (job) ended as Running`.
+
+**Gates** (before: section 25.3, this PR's base):
+
+| Gate | Before | After |
+|---|---|---|
+| `$SIM --seeds 200000` | 0 failed, 0 parked | 0 failed, 0 parked |
+| `$SIM --seeds 20000 --actions 1000` | 0 failed, 13 innocent parked | 0 failed, 11 innocent parked |
+| `$SIM --native --seeds 20000 --actions 1000` | 0 failed, 15 parked; 408,758 matched; 980 reruns, all told | 0 failed, 13 parked; 408,268 matched; 1,008 reruns, all told |
+| `$SIM --mutations --seeds 20000` | every flaw caught (two only in combination) | the same, plus `ForgetShortWaits` at seed 10 |
+| `$SIM --native-mutations --seeds 20000` | 5 of 5 | 5 of 5 |
+| `$NAT smoke` | 31 of 31 | 31 of 31 |
+| `$NAT cost sqlite`, case 3 Ephemeral (job; Delay) | 13 calls, 2 commits each | **0, 0** |
+| `$NAT cost postgres`, case 3 Ephemeral, checked / batch | 6 / 4 round trips, 2 commits | **0 / 0**, 0 commits |
+
+Every other row of both native cost runs is the same.
+
+Schedules moved. The generator draws Ephemeral for more requests, and an instance kept in memory changes what later
+actions find. So the parked and native counts moved, and so did most first failing seeds of the mutation check. Every
+flaw is still caught within 20,000 seeds.
+
+**Not done or not run.**
+- The stores and the EF cost runs: no store or commit code changed.
+- A native cost row for an Ephemeral wait past its short wait (it would be written: two commits, as Balanced).

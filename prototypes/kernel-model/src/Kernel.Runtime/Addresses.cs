@@ -76,5 +76,6 @@ public enum Flaw : long
     TrialBeforeLoad = 1L << 41,    // for the measurement of section 21: a trial may start before its instance is loaded and idle
 
     // Round 4 (FINDINGS 25).
+    ForgetShortWaits = 1L << 44,   // an Ephemeral instance written after waiting in memory leaves its timers and jobs in memory only
     KeepExpiredCallers = 1L << 42, // an owner keeps a caller's reply address past its deadline: it pins the instance and is still sent replies
 }

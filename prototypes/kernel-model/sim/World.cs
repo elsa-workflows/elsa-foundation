@@ -272,6 +272,7 @@ public sealed partial class World
             WallClock = () => Time + Skew[node],
             Flaws = Config.Flaws, Partitions = Config.Partitions, MaxInstances = 2,
             Transport = new Transport(this, Config.Flaws.HasFlag(Flaw.StableNodeName) ? "node" + node : $"node{node}.{Incarnation[node]}"),
+            OnKeptInMemory = instance => Oracle.InMemory.Add(instance),
             OnTurn = (instance, inbox, _) =>
             {
                 Log?.Invoke($"        actor {actor.Id} turns {instance} with [{string.Join(", ", inbox.Select(m => m.Kind + " " + m.Id))}]");
@@ -651,7 +652,7 @@ public sealed class Generator(int seed, World world)
             if (owners.Count == 0) return new Act("tick", r.Next(50));
             var owner = owners[r.Next(owners.Count)];
             var mode = Http.Starts[r.Next(Http.Starts.Length)];
-            var spec = Http.Spec(mode, ephemeral: mode == Http.Respond && r.Next(2) == 0);
+            var spec = Http.Spec(mode, ephemeral: mode != Http.Early && r.Next(2) == 0);     // decision 4: a timer or a job may wait in memory
             return new Act("request", owner.Id, S: mode, M: new Message($"x{n}", InstanceRef.In(owner.Partition, "h" + n), Kinds.Start, Start: spec, ReplyTo: "|q" + n));
         }
         if (roll < 60)
