@@ -24,6 +24,8 @@
   min-height: 0;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
+  container-type: inline-size;
+  container-name: structured-logs;
   color: var(--sl-text);
 }
 
@@ -121,7 +123,7 @@
 .structured-logs-workbench {
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(300px, 380px);
+  grid-template-columns: minmax(0, 1fr) clamp(280px, 28%, 340px);
   gap: 12px;
 }
 
@@ -130,6 +132,7 @@
 }
 
 .structured-logs-rows {
+  position: relative;
   min-height: 0;
   overflow: auto;
   border: 1px solid var(--sl-border);
@@ -146,10 +149,10 @@
 .structured-logs-grid-header,
 .structured-log-row {
   display: grid;
-  grid-template-columns: 86px 92px minmax(118px, 180px) minmax(160px, 280px) minmax(0, 1fr) 28px;
+  grid-template-columns: 86px 92px 80px 100px minmax(250px, 1fr) 28px;
   align-items: center;
   gap: 10px;
-  min-width: 878px;
+  min-width: 710px;
 }
 
 .structured-logs-grid-header {
@@ -208,9 +211,7 @@
 
 .structured-log-message {
   min-width: 0;
-  display: inline-flex;
-  align-items: baseline;
-  gap: 7px;
+  display: block;
   overflow: hidden;
   color: var(--sl-text);
   text-overflow: ellipsis;
@@ -224,7 +225,8 @@
 }
 
 .structured-log-message strong {
-  flex-shrink: 0;
+  display: inline-block;
+  margin-inline-end: 7px;
   border: 1px solid color-mix(in srgb, var(--sl-danger) 35%, transparent);
   border-radius: var(--radius-sm, 4px);
   color: var(--sl-danger);
@@ -327,6 +329,11 @@
 }
 
 .structured-logs-empty {
+  position: sticky;
+  left: 0;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 16px;
   display: grid;
   place-items: center;
   min-height: 132px;
@@ -439,13 +446,10 @@
   white-space: pre-wrap;
 }
 
-@media (max-width: 920px) {
-  .structured-logs-workbench {
+@container structured-logs (width < 1000px) {
+  .structured-logs-workbench:not(.no-selection) {
     grid-template-columns: minmax(0, 1fr);
-  }
-
-  .structured-log-inspector {
-    min-height: 360px;
+    grid-template-rows: minmax(180px, 1fr) minmax(220px, 0.9fr);
   }
 }
 
@@ -465,7 +469,6 @@ html[data-workspace-style="minimal"] .structured-logs-status { box-shadow: none;
 html[data-workspace-style="minimal"] .structured-logs-rows { border-radius: var(--studio-radius-md); font-size: var(--studio-body-size); }
 html[data-workspace-style="minimal"] .structured-logs-grid-header { min-height: var(--studio-table-header-height); background: var(--sl-surface); font-size: var(--studio-label-size); font-weight: 600; text-transform: none; }
 html[data-workspace-style="minimal"] .structured-log-row { min-height: var(--studio-row-height); border-bottom: 1px var(--studio-row-boundary-style) var(--sl-border); font-size: var(--studio-body-size); }
-html[data-workspace-style="minimal"] :is(.structured-logs-grid-header, .structured-log-row) { grid-template-columns: 86px 92px 70px minmax(120px, 1fr) minmax(190px, 1.6fr) 28px; min-width: 700px; }
 html[data-workspace-style="minimal"] .structured-logs-rows.compact .structured-log-row { min-height: 36px; }
 html[data-workspace-style="minimal"] .structured-log-row:hover { background: var(--studio-row-hover); }
 html[data-workspace-style="minimal"] .structured-log-row.selected { background: var(--studio-row-selected); box-shadow: inset 2px 0 0 var(--studio-selection-mark); }
@@ -480,3 +483,57 @@ html[data-workspace-style="minimal"] .structured-log-inspector :is(header, secti
 html[data-workspace-style="minimal"] .structured-log-inspector :is(p, dl) { font-size: var(--studio-body-size); }
 html[data-workspace-style="minimal"] .structured-log-inspector h3 { font-size: 20px; font-weight: 600; }
 html[data-workspace-style="minimal"] .structured-log-inspector dt { font-weight: 500; }
+
+.structured-log-metadata-label {
+  display: none;
+  margin-inline-end: 4px;
+  font-weight: 600;
+}
+
+.structured-logs-empty-content {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  max-width: 100%;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.structured-log-inspector h3 {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+
+@container structured-logs (width <= 620px) {
+  .structured-logs-grid-header {
+    position: absolute;
+    width: 1px;
+    min-width: 0;
+    height: 1px;
+    min-height: 0;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  .structured-log-row {
+    min-width: 0;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 32px;
+    grid-template-areas: "time level actions" "message message message" "source category category";
+    gap: 4px 8px;
+  }
+
+  .structured-log-row > [role="cell"]:first-child { grid-area: time; }
+  .structured-log-level { grid-area: level; justify-self: start; }
+  .structured-log-source { grid-area: source; }
+  .structured-log-category { grid-area: category; }
+  .structured-log-message { grid-area: message; }
+  .structured-log-actions { grid-area: actions; }
+  .structured-log-metadata-label { display: inline; }
+  .structured-log-copy-message { width: 32px; height: 32px; opacity: 1; }
+}

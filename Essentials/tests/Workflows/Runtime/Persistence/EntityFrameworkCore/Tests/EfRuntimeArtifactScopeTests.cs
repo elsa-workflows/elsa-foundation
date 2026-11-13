@@ -1762,7 +1762,7 @@ public sealed partial class EfRuntimeArtifactScopeTests
             () => fixture.Executable.FindAsync("artifact-skew").AsTask());
         Assert.Equal("RuntimeArtifact", skew.Family);
         Assert.Equal("2", skew.Found);
-        Assert.Equal(RuntimeArtifactEfModule.SchemaVersion, skew.Expected);
+        Assert.Equal(RuntimeArtifactEfModule.Chain.CurrentVersion, skew.Expected);
     }
 
     [Fact]
