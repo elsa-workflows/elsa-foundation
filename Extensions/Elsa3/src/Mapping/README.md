@@ -265,9 +265,11 @@ id derives from it alone, as every import did before revisions existed. From rev
 derive from the Elsa 3 version id and R, so the same export imported after a converter upgrade adds `{n}.{R}.0`
 beside `{n}.{R-1}.0` instead of colliding with it (`ELS3-REUSABLE-IDENTITY-COLLISION`); nothing the earlier revision
 wrote is changed or unpublished. Bump the revision in the change that makes the converter emit different content for
-the same input, never otherwise. An older Elsa 3 version of a reusable whose `{m}.{R}.0` would be below a newer
-version that is already published is refused by the activity version bump rule and skipped with its dependents; the
-versions imported at the earlier revision keep running.
+the same input, never otherwise, and only once a released converter may have been used for durable imports. Before
+GA no host keeps durable imports, so the revision stays 0 and rebuilding the store is the upgrade path (spec 235
+R-10). An older Elsa 3 version of a reusable whose `{m}.{R}.0` would be below a newer version that is already
+published is refused by the activity version bump rule and skipped with its dependents; the versions imported at the
+earlier revision keep running.
 
 ## Registration
 
