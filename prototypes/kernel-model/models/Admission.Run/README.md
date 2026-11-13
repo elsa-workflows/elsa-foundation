@@ -14,10 +14,11 @@ Bound one focused build to 600 seconds including queue time and one runner to 60
 build is implicit in a failure. Record actual source, command, exit, discovered/executed schedule/control counts
 and any failure before another run. No host, provider, Docker, cloud resource or old Azure grant is used.
 
-The planned 24 schedules cross root/nested Sequence placement, Balanced/Durable modes and five commit/owner
-cuts, plus four ordinary-child-fault blockage cases. Each simulation action invokes the actual kernel invariants;
-the witness reads committed native metadata and captured transport replies. Four deliberately broken modes must
-fail their named assertions for authored hydration, lost sender-ID deduplication, capacity and pre-commit reply.
+The planned 28 schedules cross root/nested Sequence placement, Balanced/Durable modes and five commit/owner
+cuts, plus four ordinary-child-fault blockage and four combined blocked-signal/admission cases. Each simulation
+action invokes the actual kernel invariants; the witness reads committed native metadata and captured transport
+replies. Five deliberately broken modes must fail their named assertions for authored hydration, lost sender-ID
+deduplication, capacity, pre-commit reply and metadata starvation behind a blocked signal.
 
 The probe's invocation inbox policy is captured on normal activation. Control-only turns do not construct that
 activity, bind its inputs or drain work. Request-correlated replies do not enroll a workflow observer and stay

@@ -21,7 +21,7 @@ public sealed class InvocationInbox
 }
 
 [Flags]
-public enum AdmissionFlaw { None = 0, Hydrate = 1, ForgetIds = 2, IgnoreCapacity = 4, EarlyReply = 8 }
+public enum AdmissionFlaw { None = 0, Hydrate = 1, ForgetIds = 2, IgnoreCapacity = 4, EarlyReply = 8, BlockedSignal = 16 }
 
 internal sealed partial class Burst
 {
@@ -29,10 +29,14 @@ internal sealed partial class Burst
 
     private bool AdmitPrefix()
     {
-        if (turn.Inbox.Count == 0 || turn.Inbox[0].Kind != InvocationInput.Kind) return false;
+        // A held composite signal may stay at the head while authored work waits. It cannot gate metadata admission.
+        var first = AdmissionHas(AdmissionFlaw.BlockedSignal) ? turn.Inbox.FirstOrDefault()
+            : turn.Inbox.FirstOrDefault(m => m.Kind != CompositeSignal.Kind);
+        if (first?.Kind != InvocationInput.Kind) return false;
         var prefix = true;
         foreach (var message in turn.Inbox)
         {
+            if (message.Kind == CompositeSignal.Kind) { turn.Hold(message); continue; }
             prefix &= message.Kind == InvocationInput.Kind;
             if (!prefix) { turn.Hold(message); continue; }
             Admission result;

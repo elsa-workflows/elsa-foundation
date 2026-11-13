@@ -8,8 +8,10 @@ using Kernel.Sim.Native;
 var scenarios = (from mode in new[] { Modes.Balanced, Modes.Durable }
     from nested in new[] { false, true } from cut in Enum.GetValues<Cut>()
     select new Scenario(mode, nested, cut)).Concat(from mode in new[] { Modes.Balanced, Modes.Durable }
-        from nested in new[] { false, true } select new Scenario(mode, nested, Cut.None, true)).ToArray();
-var controls = new[] { AdmissionFlaw.Hydrate, AdmissionFlaw.ForgetIds, AdmissionFlaw.IgnoreCapacity, AdmissionFlaw.EarlyReply };
+        from nested in new[] { false, true } select new Scenario(mode, nested, Cut.None, true))
+    .Concat(from mode in new[] { Modes.Balanced, Modes.Durable } from nested in new[] { false, true }
+        select new Scenario(mode, nested, Cut.None, Signals: true)).ToArray();
+var controls = new[] { AdmissionFlaw.Hydrate, AdmissionFlaw.ForgetIds, AdmissionFlaw.IgnoreCapacity, AdmissionFlaw.EarlyReply, AdmissionFlaw.BlockedSignal };
 if (args.SequenceEqual(["--list"]))
 {
     foreach (var scenario in scenarios) Console.WriteLine("schedule:" + scenario);
@@ -20,15 +22,15 @@ if (args.Length != 0) throw new ArgumentException("Only --list is supported.");
 var passed = 0;
 foreach (var scenario in scenarios)
 {
-    new Witness(scenario.Mode, scenario.Nested, scenario.Cut, blocked: scenario.Blocked).Run();
+    new Witness(scenario.Mode, scenario.Nested, scenario.Cut, blocked: scenario.Blocked, signals: scenario.Signals).Run();
     passed++;
 }
 var detected = 0;
 foreach (var defect in controls)
 {
     var name = defect switch { AdmissionFlaw.Hydrate => "A1", AdmissionFlaw.ForgetIds => "A2",
-        AdmissionFlaw.IgnoreCapacity => "A3", _ => "A4" };
-    try { new Witness(Modes.Balanced, false, Cut.None, defect).Run(); }
+        AdmissionFlaw.IgnoreCapacity => "A3", AdmissionFlaw.EarlyReply => "A4", _ => "A12" };
+    try { new Witness(Modes.Balanced, false, Cut.None, defect, signals: defect == AdmissionFlaw.BlockedSignal).Run(); }
     catch (InvalidOperationException error) when (error.Message.StartsWith(name + ":", StringComparison.Ordinal))
     { Console.WriteLine($"Detected {defect}: {error.Message}"); detected++; continue; }
     throw new InvalidOperationException($"Negative control {defect} did not fail its named assertion {name}.");
@@ -36,9 +38,9 @@ foreach (var defect in controls)
 Console.WriteLine($"{passed}/{scenarios.Length} schedules passed; {detected}/{controls.Length} named controls detected. Model reload only, not host/provider qualification.");
 
 enum Cut { None, BeforeCommit, LostAcknowledgement, Reload, StaleOwner }
-sealed record Scenario(string Mode, bool Nested, Cut Cut, bool Blocked = false);
+sealed record Scenario(string Mode, bool Nested, Cut Cut, bool Blocked = false, bool Signals = false);
 
-sealed class Witness(string mode, bool nested, Cut cut, AdmissionFlaw defect = AdmissionFlaw.None, bool blocked = false)
+sealed class Witness(string mode, bool nested, Cut cut, AdmissionFlaw defect = AdmissionFlaw.None, bool blocked = false, bool signals = false)
 {
     private readonly World _world = new(new Config(2, 1, Flaw.None, Native: true, AdmissionFlaws: defect)) { Auto = true };
     private readonly InstanceRef _instance = InstanceRef.In(0, "admission");
@@ -65,11 +67,13 @@ sealed class Witness(string mode, bool nested, Cut cut, AdmissionFlaw defect = A
         Require(State.Variables["exitDone"]!.GetValue<bool>(), "A0: earlier ordinary work did not commit");
         Require((State.Frames[_frame].Parent is not null) == nested, "A0: placement mismatch");
         var births = ProbeReceiver.Births;
-        ProbeReceiver.Forbidden = true;
+        ProbeReceiver.Forbidden = !signals;
+        if (signals) Add(new("blocked-signal", _instance, CompositeSignal.Kind,
+            Json.Write(new CompositeSignal(_frame, "blocked"))));
         Send("a", "name", null);
         if (cut is Cut.BeforeCommit or Cut.LostAcknowledgement) CommitCut(cut);
         Drain();
-        Require(ProbeReceiver.Births == births, "A1: admission constructed the authored receiver");
+        Require(signals || ProbeReceiver.Births == births, "A1: admission constructed the authored receiver");
         Require(Inbox.Pending.Count == 1 && Inbox.Receipts["a"].Order == 1, "A2: first admission lost");
         var malformed = "request" + ++_transport;
         _requests[malformed] = "";
@@ -132,7 +136,7 @@ sealed class Witness(string mode, bool nested, Cut cut, AdmissionFlaw defect = A
         Send("a", "name", ""); Drain();
         Require(Replies[^1].Result == "Conflict" && Inbox.Pending.Count == 0, "A2: receipt capacity hid an ID conflict");
         Require(Inbox.Receipts.Keys.Order().SequenceEqual(new[] { "a", "b", "d", "e" }.Order()), "A9: accepted receipt disappeared");
-        Console.WriteLine($"PASS {mode},nested={nested},cut={cut}");
+        Console.WriteLine($"PASS {mode},nested={nested},cut={cut},blockedSignal={signals}");
     }
 
     private string Send(string id, string name, string? value, string? frame = null)
@@ -169,7 +173,7 @@ sealed class Witness(string mode, bool nested, Cut cut, AdmissionFlaw defect = A
             if (Actor.Worker.NeedsFlush) Apply(new("flush", Actor.Id));
             if (Actor.Worker.NeedsMeet) Apply(new("meet", Actor.Id));
         }
-        throw new InvalidOperationException("A7: mixed inbox did not drain within its work bound");
+        throw new InvalidOperationException(signals ? "A12: blocked signal starved metadata admission" : "A7: mixed inbox did not drain within its work bound");
     }
     private void CommitCut(Cut failure)
     {
@@ -245,7 +249,7 @@ public sealed class ProbeNotice : Activity
     protected override ValueTask<Transition> ExecuteAsync(ActivityContext context) =>
         new(Complete().With(new EmitEffect("notice", Values.From("ordinary output"))));
 }
-public sealed class ProbeReceiver : CompositeActivity
+public sealed class ProbeReceiver : CompositeActivity, ISignalledComposite
 {
     public static bool Forbidden;
     public static int Births, AttemptsWhileForbidden;
@@ -278,4 +282,7 @@ public sealed class ProbeReceiver : CompositeActivity
     }
     protected override void OnChildFaulted(CompositeContext context, ChildFaulted child) =>
         context.SetState(new ProbeState("AwaitingRecovery"));
+    public bool CanAccept(CompositeContext context) => false;
+    public void Accept(CompositeContext context, string messageId, CompositeSignal signal) =>
+        throw new InvalidOperationException("A12: a blocked signal bypassed its evaluation gate");
 }
