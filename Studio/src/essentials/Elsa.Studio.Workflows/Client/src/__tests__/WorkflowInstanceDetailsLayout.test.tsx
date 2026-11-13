@@ -2,7 +2,7 @@ import React from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { flushSync } from "react-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { StudioWeaverRegistry, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import { StudioWorkspaceTabProvider, type StudioWeaverRegistry, type StudioEndpointContext, type StudioWorkspaceTabHandle } from "@elsa-workflows/studio-sdk";
 import { WorkflowInstanceDetailsPage, WorkflowInstancesPage } from "../workflow-editor/pages";
 import {
   clampRunDetailInspectorWidth,
@@ -13,8 +13,8 @@ import {
 
 vi.mock("../workflow-editor/WorkflowInstances", () => ({
   WorkflowInstances: () => <div>Runs list</div>,
-  WorkflowInstanceDetailsWorkbench: ({ initialInspectorTab, initialActivityExecutionId, initialReturnTo }: { initialInspectorTab?: string; initialActivityExecutionId?: string | null; initialReturnTo?: string | null }) =>
-    <div data-initial-inspector-tab={initialInspectorTab} data-initial-activity-execution-id={initialActivityExecutionId ?? ""} data-initial-return-to={initialReturnTo ?? ""}>Run workbench</div>
+  WorkflowInstanceDetailsWorkbench: ({ initialInspectorTab, initialActivityExecutionId, initialReturnTo, initialHistorySearch }: { initialInspectorTab?: string; initialActivityExecutionId?: string | null; initialReturnTo?: string | null; initialHistorySearch?: string }) =>
+    <div data-initial-inspector-tab={initialInspectorTab} data-initial-activity-execution-id={initialActivityExecutionId ?? ""} data-initial-return-to={initialReturnTo ?? ""} data-initial-history-search={initialHistorySearch}>Run workbench</div>
 }));
 
 let container: HTMLDivElement;
@@ -177,6 +177,27 @@ describe("Run detail page layout", () => {
     await vi.waitFor(() => expect(container.querySelector("[data-initial-return-to]")?.getAttribute("data-initial-return-to")).toBe(returnTo));
     expect(container.querySelector("[data-initial-inspector-tab]")?.getAttribute("data-initial-inspector-tab")).toBe("activity");
     expect(container.querySelector("[data-initial-activity-execution-id]")?.getAttribute("data-initial-activity-execution-id")).toBe("outer-execution");
+  });
+
+  it("uses workspace navigation intents while ignoring the workbench's own address-bar synchronization", async () => {
+    let tabLocation = "/workflows/instances/run-1?historyEvent=A&returnTo=%2Fruns-first";
+    const tab: StudioWorkspaceTabHandle = { id: "retained-run", active: true, get location() { return tabLocation; },
+      isActive: () => true, setTitle: vi.fn(), markPendingWork: vi.fn() };
+    const renderPage = () => flushSync(() => root.render(<StudioWorkspaceTabProvider value={tab}>
+      <WorkflowInstanceDetailsPage context={{} as StudioEndpointContext} ai={{} as StudioWeaverRegistry} navigate={() => {}} />
+    </StudioWorkspaceTabProvider>));
+    window.history.replaceState({}, "", tabLocation); renderPage();
+    const initialSearch = () => container.querySelector("[data-initial-history-search]")?.getAttribute("data-initial-history-search");
+    await vi.waitFor(() => expect(initialSearch()).toContain("historyEvent=A"));
+    // A local causal/event selection writes only the address bar, leaving the host intent unchanged.
+    window.history.replaceState({}, "", "/workflows/instances/run-1?historyEvent=B"); renderPage();
+    expect(initialSearch()).toContain("historyEvent=A");
+    // Real same-run navigation updates the retained tab location as well as the address bar.
+    tabLocation = "/workflows/instances/run-1?bookmark=C&view=diagram&returnTo=%2Fruns-second";
+    window.history.pushState({}, "", tabLocation); renderPage();
+    expect(initialSearch()).toContain("bookmark=C");
+    expect(initialSearch()).toContain("view=diagram");
+    expect(container.querySelector("[data-initial-return-to]")?.getAttribute("data-initial-return-to")).toBe("/runs-second");
   });
 
   it("keeps the initial activity and return context for one run, then refreshes both for another run", async () => {

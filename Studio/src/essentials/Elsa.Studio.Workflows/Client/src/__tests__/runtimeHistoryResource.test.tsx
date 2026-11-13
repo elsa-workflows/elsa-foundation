@@ -21,7 +21,7 @@ beforeEach(() => {
 });
 afterEach(() => { flushSync(() => root.unmount()); container.remove(); vi.restoreAllMocks(); vi.useRealTimers(); });
 
-it.each([401, 403, 404, 409, 501])("clears an inaccessible or invalid exact detail and stops automatic retries (%s)", async status => {
+it.each([400, 401, 403, 404, 409, 501])("clears an inaccessible or invalid exact detail and stops automatic retries (%s)", async status => {
   render(); await settle();
   expect(observed.value?.id).toBe("original");
   read.mockRejectedValueOnce(Object.assign(new Error("private provider detail"), { status }));

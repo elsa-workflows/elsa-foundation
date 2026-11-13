@@ -26,3 +26,9 @@ Exercise completed user-task approval, active wait, duplicate delivery, continua
 Loading, stale/read failure, denied access, unsupported capability, empty filtered results and missing linked targets need explicit states. Live updates preserve reading position and selection. Diagram labels must not imply historical reconstruction.
 
 Composed acceptance must inspect these states in both themes and narrow/desktop layouts, distinguishing assertion success from independent visual acceptance. No product behavior is accepted by this reference alone.
+
+## Workspace implementation acceptance record
+
+S06b's user goal is to explain a run's wait/resumption/fault through one chronology, then inspect the exact event, activity journal or bookmark lifecycle and return without losing context. The selected reference above governs hierarchy; [shared module controls](../../../Studio/docs/module-ui.md), the current compact Inputs and existing run canvas govern implementation continuity. Timeline row selection must retain focus and must not implicitly select a scope or load value payloads. Explicit owner/causal/value actions preserve exact identity, current permissions and Back/return destinations.
+
+Qualify populated/empty/filtered/partial/unsupported/denied/missing/invalid/loading/stale states, passive expiry versus recorded consumption, unknown occurrence/end time, late events without scroll jumps, explicit Data/value access, and selected executions outside the first page. Cover desktop/narrow, light/dark and keyboard. Unit/component and deliberate negative controls are supporting evidence only. Actual normal-host wait/resume/fault/duplicate/expiry/retention journeys and downloadable current-head visuals with independent inspection remain required; S06b is incomplete UX acceptance until that evidence exists.

@@ -17,6 +17,12 @@ import { WorkflowStatusBadge } from "./WorkflowStatusBadge";
 import { formatCaptureMode, formatSnapshotPayload, runtimeValueContextId, RuntimeValueEvidenceCard, RuntimeValueEvidenceContent, RuntimeValueEvidenceResolutionProvider } from "./RuntimeValueEvidence";
 import "./activityInspection.css";
 import type { PreparedAttachedExecution } from "./prepareAttachedExecution";
+import type { RunHistorySelection, RuntimeHistoryEvent } from "../runtimeHistoryTypes";
+import { PanelTabList } from "./PanelTabList";
+
+const ActivityHistoryJournal = lazy(async () => ({ default: (await import("./run-history/RunHistoryTimeline")).ActivityHistoryJournal }));
+const ActivityBookmarkHistory = lazy(async () => ({ default: (await import("./run-history/HistoryInspection")).ActivityBookmarkHistory }));
+const HistoryInspection = lazy(async () => ({ default: (await import("./run-history/HistoryInspection")).HistoryInspection }));
 
 const ReusableBoundaryInspector = lazy(async () => ({ default: (await import("./ReusableBoundaryInspector")).ReusableBoundaryInspector }));
 
@@ -64,9 +70,17 @@ export function WorkflowActivityExecutionDetails({
   onSelectEvidence,
   refreshKey = 0,
   compact = false,
-  prepared
+  prepared,
+  initialView = "data",
+  historyRefreshKey,
+  onSelectHistory,
+  onFocusHistory
 }: {
   prepared?: PreparedAttachedExecution;
+  initialView?: "journal" | "bookmarks" | "data";
+  historyRefreshKey?: string | number;
+  onSelectHistory?(selection: RunHistorySelection): void;
+  onFocusHistory?(activityExecutionId: string): void;
   compact?: boolean;
   refreshKey?: number;
   executionNavigation?: ReactNode;
@@ -95,6 +109,17 @@ export function WorkflowActivityExecutionDetails({
     error: ""
   });
   const [copyStatus, setCopyStatus] = useState("");
+  const bookmarkRefreshKey = historyRefreshKey ?? JSON.stringify([activity?.status, activity?.completedAt, activity?.bookmarkCount, activity?.bookmarkIds]);
+  const historyIdentity = JSON.stringify([selectedContextIdentity, selectedWorkflowExecutionId, selectedActivityExecutionId]);
+  const [historyView, setHistoryView] = useState<{ identity: string; tab: "journal" | "bookmarks" | "data"; selection: RunHistorySelection } | null>(null);
+  const activeHistoryView = historyView?.identity === historyIdentity ? historyView : { identity: historyIdentity, tab: initialView, selection: null };
+  const selectHistory = (selection: RunHistorySelection) => {
+    if (onSelectHistory) onSelectHistory(selection);
+    else setHistoryView({ ...activeHistoryView, selection });
+  };
+  useEffect(() => {
+    if (focusInputKey) setHistoryView({ identity: historyIdentity, tab: "data", selection: null });
+  }, [focusInputKey, historyIdentity]);
 
   const requestedRevision = useRef(refreshKey); requestedRevision.current = refreshKey;
   const refreshInspection = useRef<(() => void) | null>(null);
@@ -188,14 +213,14 @@ export function WorkflowActivityExecutionDetails({
   const executionDetailRows = [
     ...(compact ? [
       { label: "Started", value: startedLabel, copiedLabel: "start time" },
-      { label: "Duration", value: durationLabel, copiedLabel: "duration" },
+      { label: "Elapsed", value: durationLabel, copiedLabel: "duration" },
       { label: "Incidents", value: incidentCount == null ? "Unavailable" : String(incidentCount), copiedLabel: "incident count" }
     ] : []),
     { label: "Activity Execution ID", value: activity.activityExecutionId, copiedLabel: "activity execution ID", code: true },
     { label: "Authored Activity ID", value: activity.authoredActivityId, copiedLabel: "authored activity ID", code: true },
     { label: "Activity type", value: `${activity.activityType}@${activity.activityTypeVersion}`, copiedLabel: "activity type", code: true },
     { label: "Completed", value: completedLabel, copiedLabel: "completion time" },
-    { label: "Bookmarks", value: bookmarkCount == null ? "Unavailable" : String(bookmarkCount), copiedLabel: "bookmark count" },
+    { label: "Current bookmarks", value: bookmarkCount == null ? "Unavailable" : String(bookmarkCount), copiedLabel: "bookmark count" },
     ...(executionAttempt ? [{
       label: "Attempt",
       value: `${executionAttempt.attemptNumber} of ${executionAttempt.totalAttempts ?? "?"}`,
@@ -248,9 +273,11 @@ export function WorkflowActivityExecutionDetails({
 
         {!compact ? <dl className="wf-activity-summary-grid">
           <ActivityMetadataValue label="Started" value={startedLabel} copiedLabel="start time" onCopied={markCopied} onCopyFailed={markCopyFailed} />
-          <ActivityMetadataValue label="Duration" value={durationLabel} copiedLabel="duration" onCopied={markCopied} onCopyFailed={markCopyFailed} />
+          <ActivityMetadataValue label="Elapsed" value={durationLabel} copiedLabel="duration" onCopied={markCopied} onCopyFailed={markCopyFailed} />
           <ActivityMetadataValue label="Incidents" value={incidentCount == null ? "Unavailable" : String(incidentCount)} copiedLabel="incident count" onCopied={markCopied} onCopyFailed={markCopyFailed} />
         </dl> : null}
+
+        <p className="wf-instance-note">Elapsed includes time waiting. Active execution time is not recorded.</p>
 
         {isCompensationHandlerExecution(activity) && activity.provenance?.schedulingActivityExecutionId ? (
           <CompensatesRow
@@ -265,6 +292,18 @@ export function WorkflowActivityExecutionDetails({
       {executionNavigation}
       {childExecutions}
       <WorkflowRunRelatedLinks context={context} session={backendSession} activity={activity} contributions={runRelatedLinks} refreshKey={refreshKey} />
+      <PanelTabList label="Activity execution views" activeTabId={activeHistoryView.tab}
+        tabs={[{ id: "journal", title: "Journal", icon: null, order: 0, render: () => null }, { id: "bookmarks", title: "Bookmarks", icon: null, order: 1, render: () => null }, { id: "data", title: "Data", icon: null, order: 2, render: () => null }]}
+        onSelect={tab => setHistoryView({ identity: historyIdentity, tab: tab as "journal" | "bookmarks" | "data", selection: null })} />
+      {activeHistoryView.selection ? <Suspense fallback={<p role="status">Loading recorded history…</p>}><HistoryInspection context={context}
+        workflowExecutionId={activity.workflowExecutionId} selection={activeHistoryView.selection} refreshKey={bookmarkRefreshKey} onSelect={selectHistory}
+        onBack={() => setHistoryView({ ...activeHistoryView, selection: null })} onFocusTimeline={onFocusHistory} /></Suspense>
+        : activeHistoryView.tab === "journal" ? <Suspense fallback={<p role="status">Loading activity journal…</p>}><ActivityHistoryJournal
+          key={historyIdentity} context={context} workflowExecutionId={activity.workflowExecutionId} activityExecutionId={activity.activityExecutionId}
+          onSelectEvent={(event: RuntimeHistoryEvent) => selectHistory({ kind: "event", id: event.historyEventId })} onOpenTimeline={onFocusHistory} /></Suspense>
+          : activeHistoryView.tab === "bookmarks" ? <Suspense fallback={<p role="status">Loading recorded bookmarks…</p>}><ActivityBookmarkHistory
+            key={historyIdentity} context={context} workflowExecutionId={activity.workflowExecutionId} activityExecutionId={activity.activityExecutionId} refreshKey={bookmarkRefreshKey} onSelect={selectHistory} /></Suspense> : null}
+      {!activeHistoryView.selection && activeHistoryView.tab === "data" ? <>
       {currentInspectionState.status === "ready" && (!compact || recordedIncidents === null || recordedIncidents.length > 0) ? <section className="wf-instance-section" aria-label="Activity incidents">
         <h4>Incidents</h4>
         {recordedIncidents === null ? <p>Incident details are unavailable for this execution.</p> : recordedIncidents.length ? <ul>{recordedIncidents.map(incident => <li key={incident.incidentId}>
@@ -310,6 +349,7 @@ export function WorkflowActivityExecutionDetails({
           </dl>
         </details>
       </section>
+      </> : null}
     </>
   );
 }

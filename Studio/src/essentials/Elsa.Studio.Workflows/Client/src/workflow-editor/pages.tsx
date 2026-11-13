@@ -1,6 +1,6 @@
 import { StudioPageHeader } from "@elsa-workflows/studio-ui";
 import React, { lazy, useCallback, useEffect, useRef, useState } from "react";
-import { useStudioRouteLocation, useStudioWorkspaceTitle } from "@elsa-workflows/studio-sdk";
+import { useStudioRouteLocation, useStudioWorkspaceTab, useStudioWorkspaceTitle } from "@elsa-workflows/studio-sdk";
 import type { StudioBackendSession, StudioContributionAvailability, StudioActivityPropertyEditorContribution, StudioWeaverRegistry, StudioEndpointContext, StudioExpressionEditorContribution, StudioExpressionToolingClient, StudioWorkflowDesignerPanelContribution, StudioWorkflowRunInputEditorContribution, StudioTestStimulusEditorContribution, StudioWorkflowRunRelatedLinkContribution } from "@elsa-workflows/studio-sdk";
 import type { WorkflowWeaverController } from "../workflowWeaver";
 import { WorkflowLazyBoundary } from "../WorkflowLazyBoundary";
@@ -153,16 +153,38 @@ export function WorkflowInstanceDetailsPage({ context, ai, weaver, expressionEdi
   const routeLocation = useStudioRouteLocation();
   const workflowExecutionId = readWorkflowExecutionIdFromUrl(routeLocation.pathname);
   const searchParams = routeLocation.searchParams;
-  // The run view rewrites the selection in the URL as the operator moves around (spec 260 FR-423); read it once per run
-  // so a later render never reloads the run for a selection the view itself wrote. Keep the list destination from that
-  // same initial URL because the detail view may replace its query while the operator moves between activities.
-  const initialSelection = useRef<{ workflowExecutionId: string; activityExecutionId: string | null; returnTo: string | null } | null>(null);
-  if (initialSelection.current?.workflowExecutionId !== workflowExecutionId) {
+  const workspaceTab = useStudioWorkspaceTab();
+  const currentWorkspaceTab = useRef(workspaceTab); currentWorkspaceTab.current = workspaceTab;
+  const [historyNavigation, setHistoryNavigation] = useState(0);
+  useEffect(() => {
+    // The host emits popstate for accepted navigation and stops cross-tab entries in capture phase.
+    // Local replaceState and workspace tab restoration have no such navigation event.
+    const navigated = () => {
+      if (currentWorkspaceTab.current && !currentWorkspaceTab.current.isActive()) return;
+      if (readWorkflowExecutionIdFromUrl(window.location.pathname) === workflowExecutionId)
+        setHistoryNavigation(value => value + 1);
+    };
+    window.addEventListener("popstate", navigated);
+    return () => window.removeEventListener("popstate", navigated);
+  }, [workflowExecutionId]);
+  // The host tab location changes for real navigation, while local selection synchronization only
+  // replaces the address bar. Apply new same-run intents without replaying our own URL writes.
+  const routeIntent = workspaceTab?.location ?? `${routeLocation.pathname}${routeLocation.search}`;
+  const initialSelection = useRef<{ workflowExecutionId: string; routeIntent: string; navigation: number; activityExecutionId: string | null; returnTo: string | null; historySearch: string } | null>(null);
+  if (initialSelection.current?.workflowExecutionId !== workflowExecutionId || initialSelection.current.navigation !== historyNavigation
+      || workspaceTab && initialSelection.current.routeIntent !== routeIntent) {
     initialSelection.current = {
       workflowExecutionId,
+      routeIntent,
+      navigation: historyNavigation,
       activityExecutionId: readRunSelection(routeLocation.search),
-      returnTo: searchParams.get("returnTo")
+      returnTo: searchParams.get("returnTo"),
+      historySearch: routeLocation.search
     };
+  } else if (initialSelection.current.routeIntent !== routeIntent) {
+    // Older hosts expose only the address bar. Preserve the established per-run activity/return
+    // context when local selection writes it, while still forwarding new history targets.
+    initialSelection.current = { ...initialSelection.current, routeIntent, historySearch: routeLocation.search };
   }
   const initialActivityExecutionId = initialSelection.current.activityExecutionId;
   const initialReturnTo = initialSelection.current.returnTo;
@@ -190,7 +212,7 @@ export function WorkflowInstanceDetailsPage({ context, ai, weaver, expressionEdi
       ) : null}
     >
       <WorkflowLazyBoundary label="workflow run">
-        <WorkflowInstanceDetailsWorkbench context={context} ai={ai} weaver={weaver} expressionEditors={expressionEditors} backendSession={backendSession} runRelatedLinks={runRelatedLinks} workflowExecutionId={workflowExecutionId} initialActivityExecutionId={initialActivityExecutionId} initialInspectorTab={initialInspectorTab} initialReturnTo={initialReturnTo} navigate={navigate} />
+        <WorkflowInstanceDetailsWorkbench context={context} ai={ai} weaver={weaver} expressionEditors={expressionEditors} backendSession={backendSession} runRelatedLinks={runRelatedLinks} workflowExecutionId={workflowExecutionId} initialActivityExecutionId={initialActivityExecutionId} initialInspectorTab={initialInspectorTab} initialReturnTo={initialReturnTo} initialHistorySearch={initialSelection.current.historySearch} initialHistoryNavigation={historyNavigation} navigate={navigate} />
       </WorkflowLazyBoundary>
     </WorkflowsPageFrame>
   );
