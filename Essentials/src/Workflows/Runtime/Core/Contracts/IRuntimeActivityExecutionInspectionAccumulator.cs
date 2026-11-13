@@ -1,4 +1,5 @@
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 
 namespace Elsa.Workflows.Runtime.Core.Contracts;
 
@@ -8,6 +9,8 @@ public interface IRuntimeActivityExecutionInspectionAccumulator
     bool SupportsCheckpointValueCapture => false;
 
     /// <summary>Optional actual-owner path; legacy implementations preserve their behavior without invoking the source factory.</summary>
+    /// <exception cref="RuntimeSchedulerWorkUnavailableException">A qualified owner cannot establish required policy/evidence storage; the original cause is retained.</exception>
+    /// <exception cref="RuntimeHistoryIntegrityException">A qualified owner's retained policy or inspection evidence is malformed; the original cause is retained as a hard failure.</exception>
     ValueTask<ActivityExecutionInspectionProjection> BuildProjectionWithSourceAsync(
         ActivityExecutionState state, string checkpointId, DateTimeOffset committedAt, Func<ActivityValueCaptureOrigin> source,
         IReadOnlyCollection<string>? outcomeNames = null,
