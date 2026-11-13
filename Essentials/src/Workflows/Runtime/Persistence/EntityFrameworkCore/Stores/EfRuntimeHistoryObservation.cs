@@ -81,6 +81,6 @@ internal static class EfRuntimeHistoryObservation
 
     // A bounded, purpose-separated64-character receipt fits all providers and cannot masquerade as
     // a native candidate fingerprint. The event's original time/identity remain part of its semantic hash.
-    private static string Fingerprint(RuntimeHistoryEvent item) =>
+    internal static string Fingerprint(RuntimeHistoryEvent item) =>
         RuntimeHistoryIdentity.CreateBinding(["runtime.history.observation.v1", RuntimeHistoryIdentity.Compute(item)]);
 }

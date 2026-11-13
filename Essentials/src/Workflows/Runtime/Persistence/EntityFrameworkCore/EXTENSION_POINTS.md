@@ -104,3 +104,12 @@ default. Explicit foreign registrations remain untouched. All read facets share 
 and actual context/access/declared chain. No independent details/occurrence backend or capture feature
 is added. Native SupportsHistory/pairing and independent mutation/deletion admission remain unadvertised
 until their full provider binding qualifies.
+
+
+The internal independent mutation owner implements the existing observation and retention ports with
+one owned Serializable transaction on the same reader/context/access/chain. It refuses pending caller
+work and caller/ambient/enlisted transactions. A result leaves only after a commit or exact persisted
+receipt reconciliation. Purged replay retains its original acknowledgement without restoring content;
+purge reconciliation pins the boundary actually staged and never broadens it to later arrivals. Failed
+write and acknowledgement reads preserve their causes; access retirement and hard integrity remain
+separate. This source does not register these ports or enable capture/deletion capability.
