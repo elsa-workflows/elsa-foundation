@@ -1,0 +1,6 @@
+#nullable enable
+const Elsa.Workflows.Dashboard.Queries.WorkflowDashboardQueryPermissions.Read = "workflows/dashboard-queries:read" -> string!
+Elsa.Workflows.Dashboard.Queries.WorkflowDashboardQueriesFeature
+Elsa.Workflows.Dashboard.Queries.WorkflowDashboardQueriesFeature.WorkflowDashboardQueriesFeature() -> void
+Elsa.Workflows.Dashboard.Queries.WorkflowDashboardQueryPermissions
+virtual Elsa.Workflows.Dashboard.Queries.WorkflowDashboardQueriesFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void
