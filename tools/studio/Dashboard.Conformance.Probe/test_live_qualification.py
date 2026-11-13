@@ -191,6 +191,34 @@ class VerdictTests(unittest.TestCase):
                 proof.write_text(json.dumps(evidence))
                 with self.assertRaises(ValueError): live.restart_verdict(browser, self.root, 'proof', altered)
 
+    def test_keyboard_enter_drill_qualifies_but_other_keys_do_not(self):
+        original = self.trace.read_bytes()
+        for name in ('Enter', 'Tab', 'Escape'):
+            with self.subTest(name=name):
+                with zipfile.ZipFile(self.trace, 'w') as archive:
+                    for number, role in enumerate(('admin', 'dashboard-reader')):
+                        archive.writestr(f'{number}.trace', '\n'.join(json.dumps(value) for value in [
+                            {'type': 'before', 'method': 'fill', 'params': {'selector': 'username', 'value': role}},
+                            {'type': 'before', 'method': 'press', 'params': {'selector': 'View matching records for result 1', 'key': name}},
+                            {'type': 'frame-snapshot'}]))
+                if name == 'Enter': self.assertEqual(2, len(live.trace_context_evidence(self.trace, owner_drill=True)))
+                else:
+                    with self.assertRaises(ValueError): live.trace_context_evidence(self.trace, owner_drill=True)
+        self.trace.write_bytes(original)
+
+    def test_pointer_or_programmatic_focus_or_absent_real_keys_cannot_qualify(self):
+        path = self.root / 'keyboard.json'
+        test = self.report['suites'][0]['specs'][0]
+        title = test['title']
+        test['tests'][0]['results'][0]['attachments'].append({'name': 'keyboard-proof.json', 'path': str(path)})
+        original = {'pointerEvents': [], 'directFocusCalls': 0, 'tabs': 2, 'focusedTargets': 1, 'keys': {'Enter': 1}}
+        path.write_text(json.dumps(original))
+        live.require_keyboard_artifact(self.report, self.root, title, 'keyboard-proof.json')
+        for key, value in [('pointerEvents', ['mousedown']), ('directFocusCalls', 1), ('tabs', 0), ('focusedTargets', 0), ('keys', {})]:
+            with self.subTest(key=key):
+                path.write_text(json.dumps({**original, key: value}))
+                with self.assertRaises(ValueError): live.require_keyboard_artifact(self.report, self.root, title, 'keyboard-proof.json')
+
     def test_a_reader_screenshot_without_recorded_actions_or_dom_cannot_qualify(self):
         with zipfile.ZipFile(self.trace, 'w') as archive:
             archive.writestr('0-trace.trace', '\n'.join(json.dumps(value) for value in [

@@ -150,6 +150,15 @@ class VerdictTests(unittest.TestCase):
         self.assertEqual(2, kill.call_count)
         self.assertEqual(2, process.wait.call_count)
 
+    def test_retired_group_allows_transient_owned_members_to_finish_exiting(self):
+        from unittest.mock import Mock
+        process = Mock(pid=44); process.poll.return_value = 0
+        with patch.object(acceptance.os, 'killpg', side_effect=PermissionError('retiring group')), \
+             patch.object(acceptance.subprocess, 'check_output', side_effect=[f'{os.getuid()} 44 S\n', '', '']), \
+             patch.object(acceptance.time, 'sleep'):
+            acceptance.stop_group(process)
+        self.assertEqual(2, process.wait.call_count)
+
     def test_permission_denial_cannot_hide_a_live_owned_process(self):
         from unittest.mock import Mock
         for leader in (None, 0):
