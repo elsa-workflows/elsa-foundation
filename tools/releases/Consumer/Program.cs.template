@@ -50,10 +50,24 @@ var semantic = await semanticVerifier.VerifyAsync(imported, new() { ExpectedDige
 if (semantic.Status != ReleaseSemanticStatus.Unsupported || !semantic.Diagnostics.Any(x => x.Code == "unsupported_artifact_codec"))
     throw new InvalidOperationException("The packed verifier failed to refuse the unregistered owner codec.");
 
+var key = new ReleaseMemberKey("transport-witness", "one");
+var built = await scope.ServiceProvider.GetRequiredService<IReleaseBundleBuilder>().BuildAsync(
+    new WitnessContent(imported), [new(key, key, ReleaseRootAction.ActivateServing)]);
+if (built.Bundle is not null || built.Verification.Status != ReleaseSemanticStatus.Unsupported)
+    throw new InvalidOperationException("The packed builder manufactured a bundle without its owner inspection.");
+
 var forbidden = AppDomain.CurrentDomain.GetAssemblies().Select(x => x.GetName().Name ?? "")
     .Where(name => name.StartsWith("Elsa.", StringComparison.Ordinal)
         && name is not "Elsa.Workflows.Publishing.Releases" and not "Elsa.Workflows.Publishing.Releases.Core").ToArray();
 if (forbidden.Length != 0)
     throw new InvalidOperationException("Target transport consumer loaded Design-bearing assemblies: " + string.Join(", ", forbidden));
 Console.WriteLine(JsonSerializer.Serialize(new { outcome = "passed", transportDigest = imported.Digest,
-    members = imported.Members.Count, semanticValidation = "unknown owner refused", semanticStatus = semantic.Status.ToString(), promotion = "not attempted", forbiddenAssemblies = forbidden }));
+    members = imported.Members.Count, semanticValidation = "unknown owner refused by verifier and builder", semanticStatus = semantic.Status.ToString(), promotion = "not attempted", forbiddenAssemblies = forbidden }));
+
+// This fixture declares a null owner version; production readers obtain each exact version from the manifest.
+sealed class WitnessContent(IReleaseBundleTransport transport) : IReleaseContentReader
+{
+    public IReadOnlyList<ReleaseContentMember> Members { get; } = transport.Members.Select(member => new ReleaseContentMember(member, null)).ToArray();
+    public ReleaseContentMember GetMember(ReleaseMemberKey key) => Members.Single(member => member.Key == key);
+    public ReadOnlyMemory<byte> GetPayload(ReleaseMemberKey key) => transport.GetBlobBytes(GetMember(key).Descriptor.PayloadDigest);
+}
