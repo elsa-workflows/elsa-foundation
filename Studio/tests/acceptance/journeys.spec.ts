@@ -2,6 +2,7 @@ import { tabbedSecretsJourney } from "./tabbedSecretsJourney";
 import { templateToastJourney } from "./templateToastJourney";
 import { executableDesignerJourney } from "./executableDesignerJourney";
 import { compactInputsJourney } from "./compactInputsJourney";
+import { timelineSelectionJourney } from "./timelineSelectionJourney";
 import { writeFileSync } from "node:fs";
 import { expect, test, type APIRequestContext, type Page, type TestInfo } from "@playwright/test";
 import { userTaskAuthoringJourney } from "./userTaskAuthoringJourney";
@@ -539,4 +540,8 @@ test("tabbed Secrets authoring and metadata", async ({ page }, info) => {
 
 test("compact runtime Inputs retain exact captured values and accessible technical details", async ({ page }, info) => {
   await compactInputsJourney(page, info, capture, cleanup => { ownedCleanups.get(page)!.push(cleanup); });
+});
+
+test("timeline selection retains its tab and exact occurrence", async ({ page }, info) => {
+  await timelineSelectionJourney(page, info, capture, cleanup => { ownedCleanups.get(page)!.push(cleanup); });
 });

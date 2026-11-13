@@ -1,7 +1,7 @@
 import { notifyStudioNavigationGuardReleased, studioNavigationRequestedEvent, useStudioRouteLocation, useStudioWorkspaceTitle, type ElsaStudioModuleApi, type StudioNavigationRequest } from "@elsa-workflows/studio-sdk";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowLeft, RefreshCw } from "lucide-react";
-import { StudioAlert, StudioButton, StudioPage, StudioPageHeader, StudioResultState } from "@elsa-workflows/studio-ui";
+import { StudioAlert, StudioButton, StudioPage, StudioPageHeader, StudioResultState, StudioField } from "@elsa-workflows/studio-ui";
 import { actor, read, mutate, message, statusOf, type TaskActor, type TaskItem } from "./taskApi";
 import { TaskStatus } from "./TaskStatus";
 import { taskPerson } from "./taskPeople";
@@ -145,8 +145,8 @@ export function TaskDetail({ api, id, identity, onClose, accessNotice }: { api: 
       {respondable ? task.actions.map((action, index) => <StudioButton variant={index === 0 ? "primary" : "default"} key={action} disabled={!canComplete || busy || Boolean(task.form && !Renderer) || Boolean(attempt.current && attempt.current.action !== action)} onClick={() => void act("complete", action)}>{attempt.current?.action === action ? `Retry ${action}` : action}</StudioButton>) : null}
     </div>}
     {identity.canManage && !terminal && !pending ? <fieldset disabled={busy || stale || Boolean(attempt.current)}><legend>Reassign task</legend>
-      <label>Assign to <select value={targetKind} onChange={event => setTargetKind(event.target.value)}><option value="user">User</option><option value="group">Group</option></select></label>
-      <label>{targetKind === "user" ? "User ID" : "Group ID"}<input value={target} onChange={event => setTarget(event.target.value)} /></label>
+      <StudioField label="Assign to"><select value={targetKind} onChange={event => setTargetKind(event.target.value)}><option value="user">User</option><option value="group">Group</option></select></StudioField>
+      <StudioField label={<>{targetKind === "user" ? "User ID" : "Group ID"}</>}><input value={target} onChange={event => setTarget(event.target.value)} /></StudioField>
       <StudioButton disabled={!target.trim()} onClick={() => void act("reassign")}>Reassign</StudioButton></fieldset> : null}
     <details><summary>History</summary><ol>{task.history.map((entry, index) => <li key={`${entry.at}-${index}`}>{entry.operation}{entry.action ? ` · ${entry.action}` : ""} · {taskPerson(identity, entry.actorId, entry.actorName)} · <time dateTime={entry.at}>{new Date(entry.at).toLocaleString()}</time></li>)}</ol></details>
   </>);
