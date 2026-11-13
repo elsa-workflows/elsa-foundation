@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { isActivityHeadingReadable } from "../visibleContent";
 
 for (const host of ["editor", "instance"]) for (const theme of ["light", "dark"]) for (const width of [390, 1440]) {
   test(`keeps keyboard focus through occurrence navigation and its boundaries (${host}, ${theme}, ${width}px)`, async ({ page }, info) => {
@@ -19,6 +20,9 @@ for (const host of ["editor", "instance"]) for (const theme of ["light", "dark"]
     await details.getByRole("list", { name: "Recorded activity executions", exact: true })
       .getByRole("button", { name: /^Execution 1 (Completed|Running)/ }).press("Enter");
     await expect(chooser).toBeFocused();
+    const selectedName = details.locator(".wf-activity-overview-title h4");
+    await expect(selectedName).toHaveText("Notify buyer");
+    await expect.poll(() => selectedName.evaluate(isActivityHeadingReadable)).toBe(true);
     for (let occurrence = 2; occurrence <= 10; occurrence++) {
       await next.press("Enter");
       await expect(chooser).toContainText(`Execution ${occurrence} of 10`);

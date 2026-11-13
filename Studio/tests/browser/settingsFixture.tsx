@@ -1,14 +1,33 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { ShellFrame, getStudioNavigation } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/App";
 import { ThemeProvider } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/components/ThemeProvider";
 import { writeAppearancePreferences, type ThemeModePreference } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/themes/appearance";
 import { SettingsRoute } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/settings/SettingsRoute";
 import type { StudioNavigationContribution } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/sdk";
+import { createNotificationController, type StudioNotificationController } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/sdk";
+import { StudioField } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/ui/forms/Field";
+import { ToastHost } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/ui/feedback/ToastHost";
+import { useCompactNavigation } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/navigation/useCompactNavigation";
 import "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/styles.css";
 
 const searchParams = new URLSearchParams(window.location.search);
 const appearance = (searchParams.get("appearance") ?? "light") as ThemeModePreference | "dark";
 const requestedPath = window.location.pathname.startsWith("/settings") ? window.location.pathname : "/settings/appearance";
+const focusNotices = searchParams.has("focus-notices");
+
+/** Isolated layout contract using the real shell, nested content hooks and notification controller. */
+function FocusedSettingsFields({ controller }: { controller: StudioNotificationController }) {
+  const { contentRef } = useCompactNavigation();
+  return <div ref={contentRef}>
+    <button type="button" onMouseDown={event => event.preventDefault()} onClick={() => controller.api.notify({
+      level: "error", title: "Persistent focus notice",
+      message: "A deliberately wrapped notification exercises the real toast stack while the existing field retains keyboard focus and its unsaved value."
+    })}>Show focus notice</button>
+    {Array.from({ length: 12 }, (_, index) => <StudioField key={index} label={`Setting ${index + 1}`}>
+      <input defaultValue={`Draft ${index + 1}`} />
+    </StudioField>)}
+  </div>;
+}
 
 const moduleNavigation: StudioNavigationContribution[] = [
   { id: "home", label: "Home", path: "/dashboard", order: 10, placement: "main" },
@@ -26,6 +45,7 @@ export function SettingsFixture() {
   });
   const navigation = getStudioNavigation(moduleNavigation, { includeThemeBuilder: true });
   const [path, setPath] = useState(requestedPath);
+  const notifications = useMemo(() => createNotificationController(), []);
 
   useEffect(() => {
     const onPopState = () => {
@@ -50,6 +70,7 @@ export function SettingsFixture() {
         title="Settings"
         backendBaseUrl="https://backend.example/"
         onNavigate={navigate}
+        toastHost={focusNotices ? <ToastHost controller={notifications} navigate={navigate} /> : undefined}
       >
         <SettingsRoute
           path={path}
@@ -58,7 +79,7 @@ export function SettingsFixture() {
           renderSection={section => (
             <section style={{ padding: 8 }}>
               <h2>{section.label}</h2>
-              <p>{section.path} host page.</p>
+              {focusNotices ? <FocusedSettingsFields controller={notifications} /> : <p>{section.path} host page.</p>}
             </section>
           )}
         />
