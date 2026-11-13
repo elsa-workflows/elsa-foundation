@@ -283,3 +283,7 @@ Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleRoot.Member.get -> Elsa.Wor
 Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleRoot.ReleaseBundleRoot(Elsa.Workflows.Publishing.Releases.Core.ReleaseMemberKey! member, Elsa.Workflows.Publishing.Releases.Core.ReleaseMemberKey! content, Elsa.Workflows.Publishing.Releases.Core.ReleaseRootAction action) -> void
 Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticVerificationOptions.MaxInspectionBytes.get -> long
 Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticVerificationOptions.MaxInspectionBytes.init -> void
+Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleBuildResult.<Clone>$() -> Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleBuildResult!
+Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleBuildResult.Equals(Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleBuildResult? other) -> bool
+static Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleBuildResult.operator !=(Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleBuildResult? left, Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleBuildResult? right) -> bool
+static Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleBuildResult.operator ==(Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleBuildResult? left, Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleBuildResult? right) -> bool

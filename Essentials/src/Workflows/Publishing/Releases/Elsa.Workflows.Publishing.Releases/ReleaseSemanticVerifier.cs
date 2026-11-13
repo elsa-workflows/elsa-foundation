@@ -229,6 +229,7 @@ internal sealed class ReleaseSemanticVerifier(IReleaseBundleCodec codec, Release
                 if (prerequisite is null || prerequisite.Member != member || !Text(prerequisite.Key) || !Text(prerequisite.Kind) || !Text(prerequisite.Identity) ||
                     prerequisite.Scheme is not ("exact" or "semver-range" or "integer-range" or "opaque") || !Text(prerequisite.Constraint))
                 { Refuse(ReleaseSemanticStatus.Invalid, "invalid_owner_facts", member); continue; }
+                // release-bundle.md requires prerequisite keys to be unique across the complete bundle.
                 if (!_prerequisiteKeys.Add(prerequisite.Key))
                 { Refuse(ReleaseSemanticStatus.Invalid, "duplicate_actual_prerequisite", member); continue; }
                 if (!Prerequisites.TryAdd(PrerequisiteToken(prerequisite), prerequisite)) Refuse(ReleaseSemanticStatus.Invalid, "duplicate_actual_prerequisite", member);

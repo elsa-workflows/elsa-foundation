@@ -96,3 +96,8 @@ Both features are public/inheritable with virtual `ConfigureServices` and `PostC
 deliberately; host composition still enforces one selected implementation.
 
 There are no events, startup tasks or recurring tasks. The scoped exact-key registry is the semantic strategy composition seam.
+
+`ReleaseSemanticVerificationOptions.MaxInspectionBytes` bounds both builder inspection and the existing `VerifyAsync`
+path. The default is 256 MiB, charged per member even when members share a blob. Verification refuses with
+`semantic_payload_work_limit_exceeded` when exceeded; hosts admitting larger bundles must explicitly raise the budget
+alongside transport limits. Transport acceptance alone does not waive semantic inspection work limits.

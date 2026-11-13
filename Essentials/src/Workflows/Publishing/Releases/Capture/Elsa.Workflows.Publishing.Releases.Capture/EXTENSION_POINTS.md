@@ -5,7 +5,7 @@
 - **Contract:** `Elsa.Workflows.Publishing.Releases.Capture.Core.IReleaseCaptureService`.
 - **Layer:** Core contract; optional Publishing capture orchestration.
 - **Signature:** `CreateAsync(captureId, selections, options, cancellationToken)` returns `ValueTask<ReleaseCaptureReceipt>`;
-  exact types/defaults are in [the contracts](Core/ReleaseSourceCaptureContracts.cs).
+  exact types/defaults are in [the contracts](../Core/ReleaseSourceCaptureContracts.cs).
 - **Override when:** Replacing orchestration while retaining complete source lifetimes, independent verification and confirmed durable acknowledgement.
 - **Dependent callers:** Source creation hosts and capture tests; source API/Studio integration is a later slice.
 - **Kind:** Replacement; exactly one selected implementation per shell.
@@ -23,7 +23,7 @@
 - **Contract:** `Elsa.Workflows.Publishing.Releases.Capture.Core.IReleaseCaptureSource`.
 - **Layer:** Core strategy contract; implementation belongs to the source owner bridge.
 - **Signature:** `ExecuteAsync(selections, limits, capture, cancellationToken)` returns `ValueTask`; the callback receives
-  `ReleaseSourceCapture` and its lifetime token. Exact types are in [the contracts](Core/ReleaseSourceCaptureContracts.cs).
+  `ReleaseSourceCapture` and its lifetime token. Exact types are in [the contracts](../Core/ReleaseSourceCaptureContracts.cs).
 - **Implement when:** Exporting an exact supported owner selection under its actual retention and authorization boundary.
 - **Dependent caller:** `ReleaseCaptureService` after exact selection-kind dispatch.
 - **Kind:** Exact selection-kind strategy; duplicate/invalid claims fail when the capture service resolves.
@@ -44,7 +44,7 @@
 - **Contract:** `Elsa.Workflows.Publishing.Releases.Capture.Core.IReleaseSourceMemberContributor`.
 - **Layer:** Core fan-in contract; implementations belong to the referenced member owners.
 - **Signature:** `ExecuteAsync(containers, captured, limits, capture, cancellationToken)` returns `ValueTask`; the callback
-  receives an `IReleaseContentReader` and lifetime token. Exact types are in [the contracts](Core/ReleaseSourceCaptureContracts.cs).
+  receives an `IReleaseContentReader` and lifetime token. Exact types are in [the contracts](../Core/ReleaseSourceCaptureContracts.cs).
 - **Implement when:** Supplying exact additional members referenced by a supported captured container.
 - **Dependent caller:** `CaptureReleaseSourceMembers` within the retained capture service.
 - **Kind/lifetime:** Scoped fan-in, keyed by unique adapter identity. Several contributors may inspect the same
@@ -66,7 +66,7 @@ there is no source/target fallback while building the manifest.
 
 ## ReleaseSourceMembersCapturing
 
-- **Contract/layer:** Sealed `IEvent` in the optional Capture.Core package, [payload](Core/ReleaseSourceMembersCapturing.cs).
+- **Contract/layer:** Sealed `IEvent` in the optional Capture.Core package, [payload](../Core/ReleaseSourceMembersCapturing.cs).
 - **Publisher:** `ReleaseCaptureService` through `IInlineEventPublisher`; sequential, awaited, default ThrowImmediately.
 - **Aggregation:** One scoped action-named `CaptureReleaseSourceMembers` handler resolves all scoped
   `IReleaseSourceMemberContributor` registrations and holds their callbacks through `CompleteAsync`.

@@ -12,7 +12,7 @@ public sealed class ReleaseCaptureSelection(string kind, string identity, Releas
 }
 
 /// <summary>Exact captured owner content and selected roots, valid only within the source callback.</summary>
-public sealed class ReleaseSourceCapture(IReleaseContentReader content, IReadOnlyList<ReleaseBundleRoot> roots)
+public sealed record ReleaseSourceCapture(IReleaseContentReader content, IReadOnlyList<ReleaseBundleRoot> roots)
 {
     public IReleaseContentReader Content { get; } = content;
     public IReadOnlyList<ReleaseBundleRoot> Roots { get; } = Array.AsReadOnly(roots.ToArray());

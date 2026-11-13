@@ -9,7 +9,7 @@ public sealed class ReleaseBundleRoot(ReleaseMemberKey member, ReleaseMemberKey 
 }
 
 /// <summary>A semantically verified portable bundle, or a located refusal. This is not durable source capture or target admission.</summary>
-public sealed class ReleaseBundleBuildResult(IReleaseBundleTransport? bundle, ReleaseSemanticVerificationResult verification)
+public sealed record ReleaseBundleBuildResult(IReleaseBundleTransport? bundle, ReleaseSemanticVerificationResult verification)
 {
     public IReleaseBundleTransport? Bundle { get; } = bundle;
     public ReleaseSemanticVerificationResult Verification { get; } = verification;

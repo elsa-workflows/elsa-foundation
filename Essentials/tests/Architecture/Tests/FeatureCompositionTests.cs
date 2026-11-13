@@ -10,6 +10,8 @@ using CShells.DependencyInjection;
 using CShells.Features;
 using CShells.Lifecycle;
 using Elsa.Cluster.Readability;
+using Elsa.Persistence.Core;
+using Elsa.Workflows.Publishing.Releases.Persistence.EntityFrameworkCore;
 using Elsa.Tasks.Core;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -282,7 +284,7 @@ public sealed class FeatureCompositionTests
     /// Decorates CShells' own feature factory, so every feature is still constructed by CShells, and hands out a recorder
     /// for the recorder's catalog entry.
     /// </summary>
-    private sealed class RecordingFeatureFactory(Type recorderType) : IShellFeatureFactory
+    private sealed class RecordingFeatureFactory(Type recorderType, string directory) : IShellFeatureFactory
     {
         private readonly Dictionary<string, ShellRecording> _recordings = new(StringComparer.Ordinal);
         private IShellFeatureFactory? _inner;
@@ -303,7 +305,7 @@ public sealed class FeatureCompositionTests
                 _recordings[shell] = recording = new ShellRecording(shell);
 
             if (featureType == recorderType)
-                return (T)(object)new Recorder(recording);
+                return (T)(object)new Recorder(recording, directory);
 
             var feature = _inner!.CreateFeature<T>(featureType, shellSettings, featureContext);
             recording.Constructed(featureType, feature);
@@ -314,9 +316,18 @@ public sealed class FeatureCompositionTests
         /// Composed first because it is requested first and depends on nothing. Its post-configure step runs first too, so
         /// it ends the last feature's span before any other feature post-configures.
         /// </summary>
-        private sealed class Recorder(ShellRecording recording) : IShellFeature, IPostConfigureShellServices
+        private sealed class Recorder(ShellRecording recording, string directory) : IShellFeature, IPostConfigureShellServices
         {
-            public void ConfigureServices(IServiceCollection services) => recording.Attach(services);
+            public void ConfigureServices(IServiceCollection services)
+            {
+                // Capture deliberately has no default archive provider. This host selects an actual backend
+                // before recording feature registrations; production hosts make the same explicit selection.
+                services.AddDbContext<ReleaseArchiveCompositionContext>(options => options.UseSqlite(
+                    $"Data Source={Path.Join(directory, recording.Shell + "-release-archive.db")};Pooling=False"));
+                services.AddReleaseArchiveStore<ReleaseArchiveCompositionContext>(_ =>
+                    new SourceScope(recording.Shell, null, "workflow-release-archive", "architecture-host"));
+                recording.Attach(services);
+            }
 
             public void PostConfigureServices(IServiceCollection services) => recording.EndConfigurePhase();
         }
@@ -341,6 +352,11 @@ public sealed class FeatureCompositionTests
         var type = module.DefineType("CompositionRecorderFeature", TypeAttributes.Public | TypeAttributes.Sealed, typeof(RecorderCatalogEntry));
         type.DefineDefaultConstructor(MethodAttributes.Public);
         return type.CreateType();
+    }
+
+    private sealed class ReleaseArchiveCompositionContext(DbContextOptions<ReleaseArchiveCompositionContext> options) : DbContext(options)
+    {
+        protected override void OnModelCreating(ModelBuilder modelBuilder) => modelBuilder.AddReleaseArchiveModel(Database.ProviderName!);
     }
 
     /// <summary>
@@ -486,7 +502,7 @@ public sealed class FeatureCompositionTests
             try
             {
                 var recorderType = EmitRecorderCatalogEntry();
-                var factory = new RecordingFeatureFactory(recorderType);
+                var factory = new RecordingFeatureFactory(recorderType, directory);
                 var settings = new MinimumSettings(directory);
                 var log = new CapturedLog();
 
