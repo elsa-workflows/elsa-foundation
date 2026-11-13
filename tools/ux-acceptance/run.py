@@ -19,6 +19,7 @@ import urllib.request
 ROOT = Path(__file__).resolve().parents[2]
 PROJECTS = {'desktop-light', 'desktop-dark', 'narrow-light', 'narrow-dark'}
 CAPTURES = {
+    'activity definition identity survives reopening': ['reference', 'activity-created', 'activity-reloaded', 'activity-reopened'],
     'settings tabs and preserved edits': ['reference', 'modules-studio', 'modules-server', 'modules-manifest', 'modules-diagnostics', 'feeds-studio', 'feeds-server', 'features-studio', 'features-server', 'features-error', 'theme-overview', 'theme-tokens', 'theme-mode-last', 'theme-assets', 'theme-preview', 'theme-edited', 'modules-unavailable-content', 'modules-overview-content', 'modules-manifest-content', 'modules-diagnostics-content', 'feeds-operations-content', 'feeds-retention-content', 'feeds-ledger-content', 'feeds-unavailable-content', 'features-studio-list-content', 'features-studio-inspector-content', 'features-server-list-content', 'features-server-inspector-content', 'theme-overview-content', 'theme-tokens-content', 'theme-mode-last-content', 'theme-preview-content', 'theme-preview-validation'],
     'structured logs readability and recovery': ['reference', 'readability-1440', 'readability-1280', 'readability-1024', 'readability-390', 'readability-wrap', 'readability-compact', 'readability-empty', 'readability-reset', 'readability-dock'],
     'structured logs table accessibility': ['reference', 'logs-page', 'logs-selected', 'logs-empty', 'logs-dock'],
