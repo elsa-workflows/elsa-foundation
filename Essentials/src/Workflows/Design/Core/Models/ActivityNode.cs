@@ -113,12 +113,15 @@ public sealed record ActivityChildProjection(
 /// Additional outcomes owned by a child's structural relationships. Publication applies these only
 /// when the child's resolved activity type matches <see cref="ActivityTypeKey"/>. An optional literal
 /// input can also declare a fixed outcome; expression results remain constrained to the pinned names.
+/// <see cref="AllowsMultipleOutcomes"/> lets one completion of the child select several of the names (ADR 0045 §6), as a
+/// graph does that declares several outcomes per completion.
 /// </summary>
 public sealed record ActivityChildOutcomeProjection(
     string NodeId,
     string ActivityTypeKey,
     IReadOnlyCollection<string> OutcomeNames,
-    string? LiteralOutcomeInputKey = null);
+    string? LiteralOutcomeInputKey = null,
+    bool AllowsMultipleOutcomes = false);
 
 /// <summary>
 /// Disclosure-safe public-contract usage contributed by an activity-owned structure for one child.

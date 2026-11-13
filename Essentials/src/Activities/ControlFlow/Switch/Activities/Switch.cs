@@ -4,6 +4,7 @@ using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Switch.Internal;
+using Elsa.Activities.Switch.Models;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -25,6 +26,8 @@ namespace Elsa.Activities.Switch.Activities;
 [ActivityStructure("elsa.switch.structure", "2.0.0")]
 [ActivityOutcome(ActivityOutcomes.Default)]
 [ActivityOutcome(ActivityOutcomes.Break)]
+[SelectsOutcomeOnEveryCompletion]
+[AllowsMultipleOutcomes(SwitchModes.ModeKey, SwitchModes.MatchAny)]
 [ActivityChildSlot(
     "Switch.Case",
     "cases",
@@ -70,6 +73,9 @@ public sealed class Switch : StructuralActivity, IRuntimeStructuralActivity, IRu
     public ValueTask<RuntimeStructuralContinuation> ExecuteStructureAsync(IRuntimeActivityExecutionContext runtimeContext)
     {
         var navigator = runtimeContext.ExecutableNode.GetOrAddRoutingStructure(SwitchNavigator.From);
+        if (navigator.MatchesAny && navigator.SelectAll(Value, _structureInputs) is { Count: > 0 } matches)
+            return ValueTask.FromResult(RuntimeStructuralContinuation.Complete(OutcomeSelection.Named(matches)));
+
         var selection = navigator.Select(Value, _structureInputs);
         var branch = selection.Branch;
 

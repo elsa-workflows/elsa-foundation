@@ -49,6 +49,7 @@ public sealed class ClrAssemblyScanner(
     private static readonly string ActivityChildSlotAttributeFullName = typeof(ActivityChildSlotAttribute).FullName!;
     private static readonly string ActivityOutcomeAttributeFullName = typeof(ActivityOutcomeAttribute).FullName!;
     private static readonly string ActivityValueOutcomesAttributeFullName = typeof(ActivityValueOutcomesAttribute).FullName!;
+    private static readonly string AllowsMultipleOutcomesAttributeFullName = typeof(AllowsMultipleOutcomesAttribute).FullName!;
     private static readonly string ActivityAttributeFullName = typeof(ActivityAttribute).FullName!;
     private static readonly string RefusesSecretBindingAttributeFullName = typeof(RefusesSecretBindingAttribute).FullName!;
     private static readonly string ReplacesActivityTypeAttributeFullName = typeof(ReplacesActivityTypeAttribute).FullName!;
@@ -353,6 +354,7 @@ public sealed class ClrAssemblyScanner(
         var outcomes = new List<string>();
         var seen = new HashSet<string>(StringComparer.Ordinal);
         CustomAttributeData? valueOutcomes = null;
+        CustomAttributeData? allowsMultiple = null;
 
         for (var current = (Type?)type; current is not null; current = current.BaseType)
         {
@@ -361,6 +363,12 @@ public sealed class ClrAssemblyScanner(
                 if (attribute.AttributeType.FullName == ActivityValueOutcomesAttributeFullName)
                 {
                     valueOutcomes ??= attribute;
+                    continue;
+                }
+
+                if (attribute.AttributeType.FullName == AllowsMultipleOutcomesAttributeFullName)
+                {
+                    allowsMultiple ??= attribute;
                     continue;
                 }
 
@@ -373,14 +381,19 @@ public sealed class ClrAssemblyScanner(
         }
 
         var dynamicOutcomes = BuildDynamicOutcomesDescriptor(valueOutcomes);
-        if (outcomes.Count == 0 && dynamicOutcomes is null)
+        var multipleOutcomes = BuildMultipleOutcomesDescriptor(allowsMultiple);
+        if (outcomes.Count == 0 && dynamicOutcomes is null && multipleOutcomes is null)
             return null;
 
         var ports = outcomes.Select(name => new { name, type = "outcome" }).ToArray();
-        var payload = dynamicOutcomes is null
-            ? JsonSerializer.SerializeToElement(new { ports }, SerializerOptions)
-            : JsonSerializer.SerializeToElement(new { ports, dynamicOutcomes }, SerializerOptions);
-        return new ActivityDesignFacet("elsa.outcomes", "1", payload);
+        var payload = new Dictionary<string, object> { ["ports"] = ports };
+        if (dynamicOutcomes is not null)
+            payload["dynamicOutcomes"] = dynamicOutcomes;
+        // The multi-outcome flag (ADR 0045 §6, spec 1208 FR-014): Studio marks such a node as an inclusive fork, with the
+        // same rule the publish compiler pins (static, or when an input equals a value).
+        if (multipleOutcomes is not null)
+            payload["multipleOutcomes"] = multipleOutcomes;
+        return new ActivityDesignFacet("elsa.outcomes", "1", JsonSerializer.SerializeToElement(payload, SerializerOptions));
     }
 
     /// <summary>
@@ -395,13 +408,33 @@ public sealed class ClrAssemblyScanner(
             string.IsNullOrWhiteSpace(sourceInput))
             return null;
 
-        var unmatched = ReadNamedStringArgument(attribute, nameof(ActivityValueOutcomesAttribute.UnmatchedOutcome));
-        return new
+        // Absent means the attribute's default catch-all; an explicit null declares none (a RunJavaScript, spec 1208).
+        var unmatchedArgument = attribute.NamedArguments.FirstOrDefault(argument => argument.MemberName == nameof(ActivityValueOutcomesAttribute.UnmatchedOutcome));
+        var unmatched = unmatchedArgument.MemberName is null
+            ? "Unmatched"
+            : unmatchedArgument.TypedValue.Value as string;
+        var selectsArgument = attribute.NamedArguments.FirstOrDefault(argument => argument.MemberName == nameof(ActivityValueOutcomesAttribute.SelectsOnEveryCompletion));
+        var selectsOnEveryCompletion = selectsArgument.MemberName is null || selectsArgument.TypedValue.Value is true;
+        var descriptor = new Dictionary<string, object>
         {
-            kind = "valuePerItem",
-            source = sourceInput,
-            unmatched = string.IsNullOrWhiteSpace(unmatched) ? "Unmatched" : unmatched
+            ["kind"] = "valuePerItem",
+            ["source"] = sourceInput,
+            // With items configured: true drops Done (every completion selects an item or the catch-all), false keeps
+            // Done next to the items (the Done rule, ADR 0045 §6).
+            ["selectsOnEveryCompletion"] = selectsOnEveryCompletion
         };
+        if (!string.IsNullOrWhiteSpace(unmatched))
+            descriptor["unmatched"] = unmatched;
+        return descriptor;
+    }
+
+    private static object? BuildMultipleOutcomesDescriptor(CustomAttributeData? attribute)
+    {
+        if (attribute is null)
+            return null;
+        if (attribute.ConstructorArguments is [{ Value: string inputKey }, { Value: string equalsValue }])
+            return new Dictionary<string, object> { ["kind"] = "whenInputEquals", ["input"] = inputKey, ["value"] = equalsValue };
+        return new Dictionary<string, object> { ["kind"] = "always" };
     }
 
     private static ActivityChildSlotDesignDescriptor ToSlotDescriptor(CustomAttributeData attribute) =>

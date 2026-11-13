@@ -14,10 +14,12 @@ public sealed class SwitchExecutableStructure
     [JsonConstructor]
     public SwitchExecutableStructure(
         IReadOnlyCollection<SwitchExecutableCase>? cases = null,
-        string? @default = null)
+        string? @default = null,
+        string? mode = null)
     {
         Cases = cases ?? [];
         Default = @default;
+        Mode = string.IsNullOrWhiteSpace(mode) || mode == SwitchModes.MatchFirst ? null : mode;
     }
 
     [JsonPropertyName("cases")]
@@ -25,6 +27,17 @@ public sealed class SwitchExecutableStructure
 
     [JsonPropertyName("default")]
     public string? Default { get; }
+
+    /// <summary>
+    /// <see cref="SwitchModes.MatchAny"/> selects every matching case (spec 1208 FR-031); <see langword="null"/> is the
+    /// default <see cref="SwitchModes.MatchFirst"/>, omitted so existing structures stay byte-identical.
+    /// </summary>
+    [JsonPropertyName("mode")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Mode { get; }
+
+    [JsonIgnore]
+    public bool MatchesAny => Mode == SwitchModes.MatchAny;
 }
 
 /// <summary>

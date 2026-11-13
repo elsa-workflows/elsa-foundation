@@ -572,7 +572,8 @@ public sealed class ExecutableNodeCompiler(
             })
             .ToArray();
         var resultReference = TypeReferenceFactory.FromClrType(resultType, TypeAliasConvention.CanonicalAlias);
-        var outcomes = ResolveOutcomes(activityType, structure, inputBindings).ToHashSet(StringComparer.Ordinal);
+        var outcomeSet = ResolveOutcomeSet(activityType, structure, inputBindings);
+        var outcomes = outcomeSet.Outcomes.ToHashSet(StringComparer.Ordinal);
         if (outcomeProjection is not null && StringComparer.Ordinal.Equals(outcomeProjection.ActivityTypeKey, activityTypeKey))
         {
             outcomes.UnionWith(outcomeProjection.OutcomeNames);
@@ -604,7 +605,8 @@ public sealed class ExecutableNodeCompiler(
             outcomes,
             new ActivityActivationRequirement(typeof(ClrActivityDescriptor).FullName!, TypeAliasConvention.CanonicalAlias(activityType)),
             ResolveSideEffectProfile(activityType),
-            supportsBackgroundExecution: activityType.IsDefined(typeof(BackgroundExecutionSafeAttribute), inherit: true));
+            supportsBackgroundExecution: activityType.IsDefined(typeof(BackgroundExecutionSafeAttribute), inherit: true),
+            allowsMultipleOutcomes: outcomeSet.AllowsMultiple || outcomeProjection?.AllowsMultipleOutcomes == true);
     }
 
     // The rule is shared with the design-time ActivitySideEffectProfileReader (spec 261 FR-513).
@@ -638,7 +640,13 @@ public sealed class ExecutableNodeCompiler(
                     yield return value;
     }
 
-    private static IReadOnlyCollection<string> ResolveOutcomes(
+    /// <summary>
+    /// A node's outcome set and multi-outcome flag, resolved at publication from the activity's static declarations and
+    /// its configuration (ADR 0045 §6; spec 1208 FR-010, FR-011, FR-014). The same rules drive Studio's ports.
+    /// </summary>
+    internal sealed record NodeOutcomeSet(IReadOnlyCollection<string> Outcomes, bool AllowsMultiple);
+
+    internal static NodeOutcomeSet ResolveOutcomeSet(
         Type activityType,
         ExecutableActivityStructure? structure,
         IReadOnlyDictionary<string, RuntimeInputBinding>? inputBindings)
@@ -664,15 +672,41 @@ public sealed class ExecutableNodeCompiler(
 
         if (outcomes.Count == 0)
             outcomes.Add(ActivityOutcomes.Done);
-        return outcomes.ToArray();
+        return new NodeOutcomeSet(outcomes.ToArray(), ResolveAllowsMultiple(activityType, structure, inputBindings));
+    }
+
+    /// <summary>
+    /// Reads <see cref="AllowsMultipleOutcomesAttribute"/>: static, or true when the node's authored literal input (or its
+    /// structure property of the same key) equals the declared value, such as a Switch in <c>MatchAny</c> mode (Q10).
+    /// </summary>
+    private static bool ResolveAllowsMultiple(
+        Type activityType,
+        ExecutableActivityStructure? structure,
+        IReadOnlyDictionary<string, RuntimeInputBinding>? inputBindings)
+    {
+        var declaration = activityType.GetCustomAttribute<AllowsMultipleOutcomesAttribute>(inherit: true);
+        if (declaration is null)
+            return false;
+        if (declaration.InputKey is null)
+            return true;
+
+        if (inputBindings?.GetValueOrDefault(declaration.InputKey)?.LiteralValue is { ValueKind: JsonValueKind.String } literal)
+            return StringComparer.Ordinal.Equals(literal.GetString(), declaration.EqualsValue);
+        return structure is not null &&
+               structure.Payload.ValueKind == JsonValueKind.Object &&
+               structure.Payload.TryGetProperty(declaration.InputKey, out var configured) &&
+               configured.ValueKind == JsonValueKind.String &&
+               StringComparer.Ordinal.Equals(configured.GetString(), declaration.EqualsValue);
     }
 
     /// <summary>
     /// Pins the per-node outcome ports an activity derives from an authored collection input (see
-    /// <see cref="ActivityValueOutcomesAttribute"/>): one outcome named after each configured item plus the
-    /// unmatched catch-all. Reads the compiled literal binding so the pinned names match exactly what the runtime
-    /// emits. When the source input has no authored items the activity keeps only its statically declared outcomes,
-    /// preserving back-compat for an unconfigured node (#926).
+    /// <see cref="ActivityValueOutcomesAttribute"/>): one outcome named after each configured item plus the declared
+    /// catch-all, if any. Names are pinned exactly as written. Reads the compiled literal binding so the pinned names
+    /// match exactly what the runtime emits. When the source input has no authored items the activity keeps only its
+    /// statically declared outcomes, preserving back-compat for an unconfigured node (#926). With items configured, the
+    /// <c>Done</c> rule applies: an activity that selects on every completion has no <c>Done</c>, and one that may
+    /// complete without choosing keeps it next to the items (ADR 0045 §6; spec 1208 FR-012, FR-012a).
     /// </summary>
     private static void AddValueDerivedOutcomes(
         Type activityType,
@@ -701,8 +735,15 @@ public sealed class ExecutableNodeCompiler(
                 added = true;
         }
 
-        if (added)
-            outcomes.Add(declaration.UnmatchedOutcome);
+        if (!added)
+            return;
+
+        if (declaration.UnmatchedOutcome is { } unmatched)
+            outcomes.Add(unmatched);
+        if (declaration.SelectsOnEveryCompletion)
+            outcomes.Remove(ActivityOutcomes.Done);
+        else
+            outcomes.Add(ActivityOutcomes.Done);
     }
 
     private static Type? FindTypedActivityResult(Type activityType)

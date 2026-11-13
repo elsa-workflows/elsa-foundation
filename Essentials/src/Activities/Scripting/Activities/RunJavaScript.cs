@@ -19,24 +19,24 @@ namespace Elsa.Activities.Scripting.Activities;
 /// execution. The evaluator applies its configured timeout, statement, recursion, and cancellation limits.
 /// </para>
 /// <para>
-/// <b>Outcomes (#1114).</b> Authoring <see cref="PossibleOutcomes"/> turns the activity into a branch point: each
-/// listed name becomes an outcome port, and the script <em>routes by returning</em> — its return value, read as a
-/// string, selects the matching port, or <c>Unmatched</c> when it names none of them. This is the same mechanism
-/// <c>SendHttpRequest.ExpectedStatusCodes</c> uses, and it is deliberately chosen over Elsa 3's host-injected
-/// <c>setOutcome()</c>: the sandbox stays closed and side-effect-free, the routing decision stays a pure function
-/// of the script's value, and the ports remain statically inspectable at publish time.
+/// <b>Outcomes (ADR 0045 §6, spec 1208).</b> The script selects outcomes only by returning the value of the built-in
+/// pure constructor <c>complete(result, outcomes)</c>: <c>return complete(order, 'Approved')</c> selects one outcome,
+/// <c>return complete(order, ['Approved', 'Audit'])</c> several, <c>return complete(order, [])</c> none, and
+/// <c>return complete(order)</c> or any ordinary returned value completes with <c>Done</c>. A returned value is the
+/// activity's result only and never selects an outcome, so returning data cannot change the route (#1114 routed by
+/// return value; that is gone, and so is its <c>Unmatched</c> outcome).
 /// </para>
 /// <para>
-/// Elsa 3's <c>setOutcomes()</c> (plural) has no counterpart — an Elsa 4 completion carries exactly one outcome.
-/// <see cref="RunJavaScriptResult.Value"/> is populated in every case, including <c>Unmatched</c>.
+/// Authoring <see cref="PossibleOutcomes"/> declares the node's outcome set: <c>Done</c> plus each listed name, pinned
+/// at publication. A completion may select several of them. A selected name outside the set, or an invalid
+/// <c>complete</c> value, faults the step with <c>VF-ACT-006</c>. The selection takes effect only when the script
+/// completes successfully; a fault discards it.
 /// </para>
 /// </remarks>
-[ActivityValueOutcomes(RunJavaScript.PossibleOutcomesInputKey, UnmatchedOutcome = RunJavaScript.UnmatchedOutcome)]
+[ActivityValueOutcomes(RunJavaScript.PossibleOutcomesInputKey, UnmatchedOutcome = null, SelectsOnEveryCompletion = false)]
+[AllowsMultipleOutcomes]
 public sealed class RunJavaScript(IJavaScriptScriptEvaluator evaluator) : Activity<RunJavaScriptResult>
 {
-    /// <summary>The outcome taken when <see cref="PossibleOutcomes"/> is authored but the script names none of them.</summary>
-    public const string UnmatchedOutcome = "Unmatched";
-
     /// <summary>
     /// The contract key of <see cref="PossibleOutcomes"/>. <c>ActivityValueOutcomes</c> resolves its source by
     /// contract key (that is how the publish compiler looks up the authored binding), not by property name, so the
@@ -56,48 +56,39 @@ public sealed class RunJavaScript(IJavaScriptScriptEvaluator evaluator) : Activi
     public JsonElement Arguments { get; set; } = JsonSerializer.SerializeToElement(new { });
 
     /// <summary>
-    /// The outcome names the script may route to. Each authored name becomes an outcome port on this node; leaving
-    /// it empty keeps the single implicit <c>Done</c> completion.
+    /// The outcome names the script may select with <c>complete(result, outcomes)</c>. Each authored name becomes an
+    /// outcome port on this node, next to <c>Done</c>.
     /// </summary>
     [ActivityInput(Key = PossibleOutcomesInputKey)]
     public ICollection<string>? PossibleOutcomes { get; set; }
 
     protected override async ValueTask<ActivityTransition<RunJavaScriptResult>> ExecuteAsync(ActivityExecutionContext context)
     {
-        var result = string.IsNullOrWhiteSpace(Script)
-            ? null
-            : await evaluator.EvaluateAsync(new JavaScriptScriptEvaluationRequest(
+        if (string.IsNullOrWhiteSpace(Script))
+            return ActivityTransition.Complete(new RunJavaScriptResult(null));
+
+        JavaScriptScriptEvaluationResult evaluation;
+        try
+        {
+            evaluation = await evaluator.EvaluateAsync(new JavaScriptScriptEvaluationRequest(
                 Script,
                 Arguments,
                 context.CancellationToken));
-        var completion = new RunJavaScriptResult(result);
-
-        // With no authored ports there is nothing to route on, so the activity keeps Complete's own default
-        // outcome rather than restating it here.
-        return PossibleOutcomes is { Count: > 0 } outcomes
-            ? ActivityTransition.Complete(completion, SelectOutcome(result, outcomes))
-            : ActivityTransition.Complete(completion);
-    }
-
-    /// <summary>
-    /// Maps the script's return value onto one of the authored ports. Only a JSON string or number can name a port —
-    /// the same restriction the publish compiler applies when it pins the ports from the authored list, and it reads
-    /// a number the same way (raw text), so the two always agree. Anything else — an object, an array, null, or a
-    /// name not in the list — is <see cref="UnmatchedOutcome"/>. The comparison is ordinal: an outcome port is an
-    /// identifier, not display text.
-    /// </summary>
-    private static string SelectOutcome(JsonElement? result, ICollection<string> outcomes)
-    {
-        var selected = result switch
+        }
+        catch (JavaScriptCompletionException exception)
         {
-            { ValueKind: JsonValueKind.String } value => value.GetString(),
-            { ValueKind: JsonValueKind.Number } value => value.GetRawText(),
-            _ => null
-        };
+            return ActivityTransition.Fault<RunJavaScriptResult>(new ActivityFault(exception.Code, exception.Message));
+        }
 
-        return selected is not null && outcomes.Contains(selected, StringComparer.Ordinal)
-            ? selected
-            : UnmatchedOutcome;
+        // The selection travels next to the result; whether its names are in this node's pinned outcome set is checked
+        // when the completion is projected, as for every other activity.
+        var selection = evaluation.SelectionState switch
+        {
+            JavaScriptOutcomeSelectionState.Named => OutcomeSelection.Named(evaluation.OutcomeNames),
+            JavaScriptOutcomeSelectionState.Empty => OutcomeSelection.Empty,
+            _ => OutcomeSelection.Unspecified
+        };
+        return ActivityTransition.Complete(new RunJavaScriptResult(evaluation.Value), selection);
     }
 }
 

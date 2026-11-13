@@ -1,6 +1,5 @@
 #nullable enable
 Elsa.Expressions.JavaScript.Core.Contracts.IJavaScriptScriptEvaluator
-Elsa.Expressions.JavaScript.Core.Contracts.IJavaScriptScriptEvaluator.EvaluateAsync(Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptScriptEvaluationRequest! request) -> System.Threading.Tasks.ValueTask<System.Text.Json.JsonElement?>
 Elsa.Expressions.JavaScript.Core.Contracts.IPortableJavaScriptEvaluator
 Elsa.Expressions.JavaScript.Core.Contracts.IPortableJavaScriptEvaluator.EvaluateAsync(Elsa.Expressions.Core.Models.ExpressionEvaluationRequest! request) -> System.Threading.Tasks.ValueTask<System.Text.Json.JsonElement>
 Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptScriptEvaluationRequest
@@ -10,3 +9,19 @@ Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptScriptEvaluationRequest.Jav
 Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptScriptEvaluationRequest.Source.get -> string!
 Elsa.Expressions.JavaScript.Core.Exceptions.JavaScriptBindingEvaluationException
 Elsa.Expressions.JavaScript.Core.Exceptions.JavaScriptBindingEvaluationException.JavaScriptBindingEvaluationException(string! message, System.Exception! innerException) -> void
+Elsa.Expressions.JavaScript.Core.Contracts.IJavaScriptScriptEvaluator.EvaluateAsync(Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptScriptEvaluationRequest! request) -> System.Threading.Tasks.ValueTask<Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptScriptEvaluationResult!>
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptCompletionException
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptCompletionException.Code.get -> string!
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptCompletionException.JavaScriptCompletionException(string! message) -> void
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptOutcomeSelectionState
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptOutcomeSelectionState.Empty = 2 -> Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptOutcomeSelectionState
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptOutcomeSelectionState.Named = 1 -> Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptOutcomeSelectionState
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptOutcomeSelectionState.Unspecified = 0 -> Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptOutcomeSelectionState
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptScriptBuiltIns
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptScriptEvaluationResult
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptScriptEvaluationResult.JavaScriptScriptEvaluationResult(System.Text.Json.JsonElement? value, Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptOutcomeSelectionState selectionState = Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptOutcomeSelectionState.Unspecified, System.Collections.Generic.IReadOnlyList<string!>? outcomeNames = null) -> void
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptScriptEvaluationResult.OutcomeNames.get -> System.Collections.Generic.IReadOnlyList<string!>!
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptScriptEvaluationResult.SelectionState.get -> Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptOutcomeSelectionState
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptScriptEvaluationResult.Value.get -> System.Text.Json.JsonElement?
+const Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptCompletionException.FaultCode = "VF-ACT-006" -> string!
+const Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptScriptBuiltIns.Complete = "complete" -> string!
