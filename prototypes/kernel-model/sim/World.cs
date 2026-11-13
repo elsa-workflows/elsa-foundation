@@ -272,7 +272,7 @@ public sealed partial class World
             WallClock = () => Time + Skew[node],
             Flaws = Config.Flaws, Partitions = Config.Partitions, MaxInstances = 2,
             Transport = new Transport(this, Config.Flaws.HasFlag(Flaw.StableNodeName) ? "node" + node : $"node{node}.{Incarnation[node]}"),
-            OnKeptInMemory = (instance, revision) => Oracle.InMemory.TryAdd(instance, revision),
+            OnKeptInMemory = (instance, revision) => Oracle.InMemory[instance] = revision,     // the last revision it had in memory
             // Decision 4: an instance leaves memory without a row only when it has ended there.
             OnLeftMemory = (instance, status) => { if (status is InstanceStatus.Running or null) Faults.Add($"I9 {instance} left memory without a row while it was {status?.ToString() ?? "missing"}"); },
             OnTurn = (instance, inbox, _) =>

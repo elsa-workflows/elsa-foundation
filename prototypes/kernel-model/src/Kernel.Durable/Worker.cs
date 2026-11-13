@@ -221,6 +221,20 @@ public sealed class Worker : IScopeActivation, ITurnServices
     internal async Task ReleaseAsync(CancellationToken cancellationToken = default)
     {
         if (!Owns) return;
+        // Decision 4: a stand-down hands its partition over, so what it holds in memory only is written first, unless a
+        // commit is in flight (then those instances are lost with this memory, as in a crash, and their callers told).
+        if (!_flushing && !Has(Flaw.ForgetShortWaits))
+        {
+            foreach (var (_, slot) in _slots.Where(s => s.Value is { Unwritten: true, Busy: false }).ToList())
+            {
+                slot.Busy = true;
+                var unit = Bound(_type.Write(slot.Row!, slot.State, slot.Pending), slot);
+                Promote(unit);
+                _queue.Add(unit);
+            }
+            if (_queue.Count > 0) await FlushAsync(cancellationToken);
+            if (!Owns) return;      // the flush lost the fence: the partition is someone else's already
+        }
         var epoch = Epoch;
         Reset();
         try { await _store.ReleaseAsync(Partition, epoch, cancellationToken); }
