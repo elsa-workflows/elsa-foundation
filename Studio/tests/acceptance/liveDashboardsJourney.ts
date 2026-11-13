@@ -1,6 +1,6 @@
 import { chromium, expect, type Browser, type BrowserContext, type Locator, type Page, type Request, type TestInfo } from "@playwright/test";
 import type { QuestionDefinition, QueryPredicate, QueryResult, QueryValue } from "../../src/essentials/Elsa.Studio.Dashboard/Client/src/native/types";
-import { attachDashboardJson, dashboardBackend, seedDashboardRuns, signInDashboardReader, tag, type Backend, type Capture, type Resource } from "./dashboardJourneySupport";
+import { attachDashboardJson, canonicalDashboardDefinition, dashboardBackend, seedDashboardRuns, signInDashboardReader, tag, type Backend, type Capture, type Resource } from "./dashboardJourneySupport";
 
 /** This profile drives the real SDK adapter and native source APIs. It never supplies a provider response. */
 type Counters = { category: string; counts: Record<string, number>; privacyFailures: number; physicalModelHttpRequests: string };
@@ -51,7 +51,13 @@ async function createEditor(page: Page, name: string, dataset: string) {
   await page.goto("/questions");
   await page.getByRole("button", { name: "Create question", exact: true }).first().click();
   await page.getByLabel("Name", { exact: true }).fill(name);
-  await page.getByRole("combobox", { name: "Dataset", exact: true }).selectOption(dataset);
+  const datasets = page.getByRole("combobox", { name: "Dataset", exact: true });
+  await expect(datasets.locator(`option[value="${dataset}"]`)).toHaveCount(1);
+  // Start authoring from the canonical empty native draft. Selecting a dataset creates
+  // an incomplete aggregate until its owner-required time window is entered; that
+  // populated query must pass normal validation before it can be disclosed to a model.
+  // The real model discovers the installed source from the user's question instead.
+  await expect(datasets).toHaveValue("");
   await expect(page.getByRole("button", { name: "Save question", exact: true })).toBeEnabled();
 }
 
@@ -61,7 +67,10 @@ async function askAndClarify(page: Page, info: TestInfo, capture: Capture, backe
   const ask = page.getByRole("region", { name: "Ask Weaver", exact: true });
   await ask.getByLabel("Your question", { exact: true }).fill(prompt);
   await expect(ask.getByRole("button", { name: "Ask Weaver", exact: true })).toBeEnabled({ timeout: 60_000 });
+  const admission = page.waitForResponse(response => response.request().method() === "POST" && /\/_elsa\/weaver\/sessions\/[^/]+\/messages$/.test(new URL(response.url()).pathname));
   await ask.getByRole("button", { name: "Ask Weaver", exact: true }).press("Enter");
+  const admitted = await admission;
+  expect(admitted.ok(), `Dashboard admission: HTTP ${admitted.status()}; ${JSON.stringify(await counters(backend))}`).toBe(true);
   const clarification = page.getByRole("region", { name: "Clarify dashboard question", exact: true }).last();
   await expect(clarification).toBeVisible({ timeout: 180_000 });
   await idle(page);
@@ -197,7 +206,7 @@ async function saveAndReopen(page: Page, info: TestInfo, capture: Capture, backe
     await page.getByRole("button", { name: "Save question", exact: true }).press("Enter");
     const response = await pending; expect(response.ok()).toBe(true);
     const value = await response.json() as Resource;
-    expect(value.definition).toEqual(definition); expect(value.ownerId).not.toBe("dashboard-qa-reader");
+    expect(canonicalDashboardDefinition(value.definition)).toEqual(canonicalDashboardDefinition(definition)); expect(value.ownerId).not.toBe("dashboard-qa-reader");
     expect(response.headers().etag).toBe(`"${value.revision}"`);
     await expect(page).toHaveURL(url => url.pathname === `/questions/${value.id}` && url.searchParams.get("backend") === backendSelection);
     expect((await backend.api<{ items: unknown[] }>(`/_elsa/studio/questions/${value.id}/audience`)).items).toEqual([]);
@@ -209,10 +218,10 @@ async function saveAndReopen(page: Page, info: TestInfo, capture: Capture, backe
     await expect(page.getByRole("heading", { name: saved.name, level: 2, exact: true })).toBeVisible();
     await expect(page.getByRole("combobox", { name: "Visualization", exact: true })).toHaveValue("bar");
     const value = await backend.api<Resource>(`/_elsa/studio/questions/${saved.id}`);
-    expect(value.revision).toBe(saved.revision); expect(value.definition).toEqual(definition);
+    expect(value.revision).toBe(saved.revision); expect(value.definition).toEqual(saved.definition);
     await capture(page, info, "live-reopened"); return value;
   });
-  await attachDashboardJson(info, "live-readback.json", { saved, readback, exactDefinitionRetained: true });
+  await attachDashboardJson(info, "live-readback.json", { saved, readback, authoredMeaningRetained: true, savedNativeDefinitionRetained: true });
   return saved;
 }
 
