@@ -1017,9 +1017,13 @@ the removed views, both only if the row moved. On SQLite it is one transaction: 
 views, and one delete per 500. SQL Server and MySQL still write one statement per view (`Engine.ViewAsync`), with the
 delete set-based; they are not tuned here. The contract is unchanged.
 
-**The check.** A new required case writes views and removes a deleted instance's view in one round:
-`projection: one round that writes some views and removes a deleted instance's, set-based`. It passes on in-memory,
-SQLite, PostgreSQL, SQL Server, MySQL and MongoDB.
+**The check.** The existing case already projects a round that moves one view and removes another (an instance whose
+view an earlier round wrote). A new required case crosses every chunk of the statements: one round of 850 new
+instances (more than SQLite's 200 views per statement), then one round of 600 deletes alone (more than 500 ids per
+delete), with no view to write: `projection: rounds larger than a statement's chunk: 850 views in one, then 600
+deletes alone`. It passes on in-memory, SQLite, PostgreSQL, SQL Server, MySQL and MongoDB. It commits in chunks of 170
+and 200: one commit of 850 new instances failed on MySQL's provider ("The CommandText property has not been properly
+initialized"), a limit of that provider that the kernel, which flushes at most 500 rows a commit, does not reach.
 
 **Gates.**
 
