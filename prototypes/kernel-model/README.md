@@ -8,8 +8,8 @@ repository: the folder has its own `Directory.Build.*`, `Directory.Packages.prop
 
 What was found is in [FINDINGS.md](FINDINGS.md) (section 24: the three layers and the round 4 names; section 23: the
 merge of the four branches and its gates); what each database engine does to the EF store is in
-[ENGINES.md](ENGINES.md), MongoDB in [MONGO.md](MONGO.md), and native workflows as an execution model in
-[NATIVE.md](NATIVE.md).
+[ENGINES.md](ENGINES.md), MongoDB in [MONGO.md](MONGO.md), native workflows as an execution model in
+[NATIVE.md](NATIVE.md), and write volume and bloat on PostgreSQL in [WRITES.md](WRITES.md).
 
 ## Layout
 
@@ -108,6 +108,7 @@ $EFR x stress sqlite "Data Source=.out/stress.db" seconds=40 messages=5000 [wal=
 $EFR x stress <engine> "<same>" seconds=15 messages=1500 unfenced=1       # the fence broken on purpose: must fail
 $EFR x cost <engine> "<connection;Database=kernel_cost>" proxy=1 [fence=batch]       # round trips on the TCP stream
 $EFR x probe|block|definite|deadlock <engine> "<connection>"                         # ENGINES.md
+$EFR x stress|cost postgres "<connection>" writes=1 [history=state|minimal] [pad=4096] [fillfactor=70] [fastvacuum=1]   # WRITES.md; the container needs -c wal_keep_size=4GB
 ```
 
 `EngineRun.cs` lists every option. The stress test drives round 1's models plus round 3's commands (suspend, resume,
