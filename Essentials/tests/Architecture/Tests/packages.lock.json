@@ -2698,6 +2698,24 @@
       "elsa.workflows.publishing.releases.core": {
         "type": "Project"
       },
+      "elsa.workflows.publishing.releases.persistence.core": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Persistence.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Publishing.Releases.Core": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.workflows.publishing.releases.persistence.entityframeworkcore": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Persistence.EntityFramework": "[4.0.0-dev, )",
+          "Elsa.Workflows.Publishing.Releases.Persistence.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )",
+          "Microsoft.Data.Sqlite": "[10.0.10, )",
+          "Microsoft.EntityFrameworkCore": "[10.0.10, )",
+          "Microsoft.EntityFrameworkCore.Relational": "[10.0.10, )"
+        }
+      },
       "elsa.workflows.runtime": {
         "type": "Project",
         "dependencies": {
@@ -3164,6 +3182,17 @@
           "Microsoft.SqlServer.Server": "[1.0.0, 2.0.0)",
           "System.Configuration.ConfigurationManager": "9.0.13",
           "System.Security.Cryptography.Pkcs": "9.0.13"
+        }
+      },
+      "Microsoft.Data.Sqlite": {
+        "type": "CentralTransitive",
+        "requested": "[10.0.10, )",
+        "resolved": "10.0.10",
+        "contentHash": "58JwZ39lCvRXHfV5O6RQfbHEDu8ZsXI7weRoVRR4jrGRxxkS+qyeuGrN2xD+9VYEICApYr0iTSL6PuU+DdsvPg==",
+        "dependencies": {
+          "Microsoft.Data.Sqlite.Core": "10.0.10",
+          "SQLitePCLRaw.bundle_e_sqlite3": "2.1.11",
+          "SQLitePCLRaw.core": "2.1.11"
         }
       },
       "Microsoft.EntityFrameworkCore": {

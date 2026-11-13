@@ -43,7 +43,7 @@ internal static class InvocationRecreation
         {
             var id = "recreation-message-" + ++serial;
             Apply(new("add", M: new Message(id, target, kind, payload, Start: start,
-                ReplyTo: reply ? ReplyTo.Of("outside", id) : null)));
+                ReplyTo: reply ? ReplyTo.Of("outside", id, world.Time + 30_000) : null)));
         }
         void Drain()
         {
