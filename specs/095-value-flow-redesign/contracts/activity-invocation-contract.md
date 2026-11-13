@@ -67,7 +67,7 @@ are services. `[ActivityInput]` properties are workflow data. Activity code MUST
 An invocation attempt returns exactly one transition:
 
 ```text
-Complete(result, outcome)
+Complete(result, outcomeSelection)
 Suspend(state, triggerRegistrations)
 Fault(normalizedFault)
 Cancel(reason)
@@ -80,6 +80,9 @@ Cancel(reason)
   recovery. Explicitly empty is successful completion without outgoing paths, not cancellation of other running
   branches; the step's pending engine-owned changes still commit. Unspecified means `Done`, which a node declares only
   when a completion may choose no branch.
+- A script's explicitly recognized returned completion/routing form MUST keep the business result and selection
+  separate. Ordinary returned business data MUST NOT implicitly select an outcome. S-3 defines the form's spelling,
+  recognition and validation without requiring an ambient activity object or native outcome setters.
 - `Suspend` carries one immutable private state document and one or more typed trigger registrations.
 - `Fault` carries normalized persistable fault information, never an arbitrary serialized exception.
 - `Cancel` is distinct from both failure and successful authored outcomes.
@@ -274,9 +277,10 @@ node's pinned outcome set, and MUST NOT suppress an undeclared result projection
 fallback setting that turns any invalid outcome name into another outcome is deferred until a concrete use case
 justifies it (ADR 0045 §6, Q6).
 
-Diagnostics MUST NOT include unredacted sensitive values. Activity faults use the normal fault
-transition/incident path; contract and durability failures occur before user code and are not
-converted to authored outcomes.
+Diagnostics MUST NOT include unredacted sensitive values. Activity faults use the normal fault transition/incident
+path. Contract and durability failures detectable before invocation MUST fail before user code; completion-dependent
+checks MUST fail before committing the result or dispatching outcomes. These failures are not converted to authored
+outcomes.
 
 ## 8. Conformance obligations
 

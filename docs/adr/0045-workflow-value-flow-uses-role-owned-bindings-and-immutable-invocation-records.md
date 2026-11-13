@@ -411,14 +411,18 @@ not publish successful values or outcomes through mutable execution-context `Set
   - A script selects by **returning an explicitly recognized completion/routing form** that carries the result and the
     outcome selection as separate channels. The native script surface gains no `setOutcome` / `setOutcomes` setters: the
     sandbox stays closed and side-effect-free, and the routing decision stays a value the script returns rather than a
-    host mutation. The form needs no ambient `activity` object; its exact spelling — a returned data representation or a
-    pure constructor — and its recognition and validation are settled in the implementing spec (S-3).
+    host mutation. The form needs no ambient `activity` object or execution context. Its exact spelling, a returned data
+    representation or a pure constructor, and its recognition and validation are settled in the implementing spec
+    (S-3). Elsa 3's setters remain conversion inputs (below).
   - **Routing and business data stay separate.** An ordinary returned value (a string, number, object, array or null)
     is the activity's result only and selects no outcome. A completion that selects outcomes does so only through the
-    recognized form, which still carries the result on its own channel. This replaces RunJavaScript's routing by return
-    value and its `Unmatched` outcome, so returning data can no longer change the route by accident: "nothing
-    selected" is `Done` (not a silent `Unmatched`), an unknown name faults (not a silent `Unmatched`), and several
-    outcomes are expressible.
+    recognized form, which still carries the result on its own channel; control instructions are never inferred from
+    ordinary business-object properties. This replaces RunJavaScript's routing by return value (recorded in
+    `docs/reports/elsa-4-activity-behavioural-drive-2026-08.md`) and its `Unmatched` outcome, so returning data can no
+    longer change the route by accident: "nothing selected" is `Done` (not a silent `Unmatched`), an unknown name
+    faults (not a silent `Unmatched`), and several outcomes are expressible where the node permits them.
+  - **One set of rules.** A selection follows the same rules whether a C# activity returns it in `Complete` or a script
+    returns it in the recognized form.
   - **Ending routing by return value is deliberate.** A plain returned value is data and never selects a route; only the
     returned completion/routing form selects. A RunJavaScript workflow that relied on returning an outcome name changes
     behavior, so the change is never silent: publication warns when a RunJavaScript script returns a string literal that
@@ -427,7 +431,7 @@ not publish successful values or outcomes through mutable execution-context `Set
     never dispatches a branch while the script is still running.
   - The returned selection is therefore part of the step's transaction (D-3): it is the completion's own data, carried
     back with the result, not a mutable `Set`, so it needs no exception to the sentence above about mutable `Set`
-    methods.
+    methods. The result and the selection commit atomically, before dispatch.
 - **Declared outcomes per node.** The set of outcomes a node may select is resolved at design time. It combines the
   activity's statically declared outcomes with outcomes derived by design-time providers from the node's
   configuration. For example, `SendHttpRequest`'s expected status codes and RunJavaScript's possible outcomes each
@@ -463,7 +467,7 @@ not publish successful values or outcomes through mutable execution-context `Set
     and inspection treat a node that may select several outcomes as an inclusive fork.
   - This replaces the "one outcome per completion" invariant that was proposed before this amendment.
 
-*Effect on Elsa 3 conversion.* These become convertible:
+*Effect on Elsa 3 conversion.* These become convertible where conversion is faithful, and are refused otherwise:
 - Elsa 3's `setOutcome` / `setOutcomes`;
 - Switch in "match any" mode;
 - `Complete` with several outcomes.
@@ -471,29 +475,39 @@ not publish successful values or outcomes through mutable execution-context `Set
 Elsa 3 had no checked outcome set. A computed selection such as `setOutcome(variables.status)` remains supported,
 but the converter must establish a suitable set of possible names and preserve the original routing behavior.
 S-3 defines supported derivations and declarations, using the node's `PossibleOutcomes` and supported script analysis.
-Literal names found in a script are evidence, not necessarily an exhaustive set for a computed selection. The
-converter need not know which outcome a particular execution will select. If it cannot establish faithful conversion,
-it refuses with actionable guidance, such as supplying a suitable outcome declaration (faithful-or-refuse).
+Literal names found in a script, `PossibleOutcomes` and connected ports are evidence, not proof that every computed
+runtime name is covered. The converter need not know which outcome a particular execution will select. If it cannot
+establish faithful conversion, it refuses with actionable guidance, such as supplying a suitable outcome declaration
+(faithful-or-refuse). Turning an Elsa 3 path-ending unknown name into an Elsa 4 fault changes behavior, and a warning
+alone does not make that conversion faithful; any behavior-changing conversion exception must be separately explicit,
+approved and documented.
+
+Elsa 3's setters need not become native Elsa 4 host functions. S-3 establishes when rewriting them to the returned
+form is faithful, including several setter calls (each replaces the pending selection), computed names, early returns
+and returned business data; otherwise conversion refuses with guidance.
 
 Elsa 3's `Done`, which fired next to any branch, maps onto every branch outcome of the converted node, as the
 converter already does for If, Switch and DispatchWorkflow; SendHttpRequest with expected status codes follows the same
 rule. A RunJavaScript with no selection completes with `Done`, in Elsa 3 and here. The converter's rule that maps
 Elsa 3's `Done` to `Unmatched` (spec 239 R8, spec 236 member map) existed only because of routing by return value; it
 becomes `Done` to `Done`. S-3 must prove this preserves routing through conversion, publication and execution,
-including connected RunJavaScript nodes whose `Done` was converted to `Unmatched`.
+including connected RunJavaScript nodes whose `Done` was converted to `Unmatched`. Neither changing the script
+API nor supplying an outcome declaration proves that mapping faithful for every activity or failure path; this
+amendment does not itself implement or prove the `Done` to `Done` rule; S-3 does.
 
 *Left to the implementing spec (S-3):*
 - the spelling, recognition and validation of the script's returned completion/routing form (result and selection on
-  separate channels, no ambient `activity` object);
+  separate channels, no ambient `activity` object, no native setters);
 - removing RunJavaScript's routing by return value and its `Unmatched` outcome, and the converter's R8 rule, with
   conversion, publication and execution evidence;
+- when rewriting Elsa 3's setters to the returned form is faithful;
 - the publish warning for a RunJavaScript script that returns a string literal equal to a connected outcome name;
 - whether publication flags an activity without `Done` that can complete with no selection;
 - the supported derivations and declarations for faithful conversion of computed outcome selections;
 - the shape of the selection in the transition and in persisted completion records;
 - how a multi-outcome declaration appears in the activity contract and in Studio;
 - the activity-declared catch-all handling (a generic per-node fallback is deferred until a concrete use case);
-- the changes to scheduling and joins — including when the default "two arrivals, one run" applies — and spec 266's
+- the changes to scheduling and joins, including when the default "two arrivals, one run" applies, and spec 266's
   exclusivity analysis.
 
 ### 7. Provide a generated method-call authoring facade
