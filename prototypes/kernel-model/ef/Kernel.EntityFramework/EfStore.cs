@@ -497,19 +497,41 @@ public sealed class EfStore(Func<KernelDb> create, bool postgres, bool? fenceInB
 
     public async ValueTask<bool> ProjectAsync(int partition, long from, long to, IReadOnlyList<JournalRow> rows, CancellationToken cancellationToken = default)
     {
+        // Decision 8: each round is set-based. What the round leaves of each instance's view: removed when the round has
+        // its delete (the projector removes a deleted instance's view, as it always did), else moved on by its commits.
+        var deleted = rows.Where(r => r.Revision < 0).Select(r => r.Instance).ToHashSet(StringComparer.Ordinal);
+        var views = rows.Where(r => r.Revision > 0 && !deleted.Contains(r.Instance)).GroupBy(r => r.Instance, StringComparer.Ordinal)
+            .Select(g => (Instance: g.Key, Revision: g.Max(r => r.Revision), Commits: g.Count())).ToList();
         await using var db = create();
-        await using var transaction = await (Engine?.BeginAsync(db, cancellationToken) ?? db.Database.BeginTransactionAsync(cancellationToken));
-        var moved = await db.Database.ExecuteSqlRawAsync(Q("""UPDATE "Projections" SET "Position" = {0} WHERE "Partition" = {1} AND "Position" = {2}"""), [to, partition, from], cancellationToken);
-        if (moved != 1) return false;
-        foreach (var view in rows.Where(r => r.Revision > 0).GroupBy(r => r.Instance))
+        if (postgres && Engine is null)
         {
-            if (Engine is not null) { await Engine.ViewAsync(db, view.Key, partition, view.Max(r => r.Revision), view.Count(), cancellationToken); continue; }
-            await db.Database.ExecuteSqlRawAsync(
-                """INSERT INTO "Views" ("Instance", "Partition", "Revision", "Commits") VALUES ({0}, {1}, {2}, {3}) ON CONFLICT ("Instance") DO UPDATE SET "Revision" = excluded."Revision", "Commits" = "Views"."Commits" + excluded."Commits" """,
-                [view.Key, partition, view.Max(r => r.Revision), view.Count()], cancellationToken);
+            // PostgreSQL: one statement, so one round trip and its own transaction. The view rows are written only if the
+            // projector's row moved from where the round read it.
+            var moved = await db.Database.SqlQueryRaw<int>(
+                """
+                WITH moved AS (UPDATE "Projections" SET "Position" = {0} WHERE "Partition" = {1} AND "Position" = {2} RETURNING 1),
+                up AS (INSERT INTO "Views" ("Instance", "Partition", "Revision", "Commits")
+                       SELECT v.i, {1}, v.r, v.c FROM unnest({3}::text[], {4}::bigint[], {5}::integer[]) AS v(i, r, c) WHERE EXISTS (SELECT 1 FROM moved)
+                       ON CONFLICT ("Instance") DO UPDATE SET "Revision" = excluded."Revision", "Commits" = "Views"."Commits" + excluded."Commits"),
+                gone AS (DELETE FROM "Views" WHERE "Instance" = ANY({6}::text[]) AND EXISTS (SELECT 1 FROM moved))
+                SELECT COUNT(*)::int AS "Value" FROM moved
+                """,
+                to, partition, from, views.Select(v => v.Instance).ToArray(), views.Select(v => v.Revision).ToArray(), views.Select(v => v.Commits).ToArray(), deleted.ToArray())
+                .ToListAsync(cancellationToken);
+            return moved[0] == 1;
         }
-        foreach (var deleted in rows.Where(r => r.Revision < 0))
-            await db.Database.ExecuteSqlRawAsync(Q("""DELETE FROM "Views" WHERE "Instance" = {0}"""), [deleted.Instance], cancellationToken);
+        await using var transaction = await (Engine?.BeginAsync(db, cancellationToken) ?? db.Database.BeginTransactionAsync(cancellationToken));
+        var movedRows = await db.Database.ExecuteSqlRawAsync(Q("""UPDATE "Projections" SET "Position" = {0} WHERE "Partition" = {1} AND "Position" = {2}"""), [to, partition, from], cancellationToken);
+        if (movedRows != 1) return false;
+        if (Engine is not null)     // SQL Server and MySQL: one statement per view, as before (not set-based yet)
+            foreach (var view in views) await Engine.ViewAsync(db, view.Instance, partition, view.Revision, view.Commits, cancellationToken);
+        else
+            foreach (var chunk in views.Chunk(200))     // SQLite: one statement per 200 views
+                await db.Database.ExecuteSqlRawAsync(
+                    $$"""INSERT INTO "Views" ("Instance", "Partition", "Revision", "Commits") VALUES {{string.Join(", ", chunk.Select((_, i) => $"({{{4 * i}}}, {{{4 * i + 1}}}, {{{4 * i + 2}}}, {{{4 * i + 3}}})"))}} ON CONFLICT ("Instance") DO UPDATE SET "Revision" = excluded."Revision", "Commits" = "Views"."Commits" + excluded."Commits" """,
+                    chunk.SelectMany(v => new object[] { v.Instance, partition, v.Revision, v.Commits }), cancellationToken);
+        foreach (var chunk in deleted.Chunk(500))
+            await db.Database.ExecuteSqlRawAsync(Q($"""DELETE FROM "Views" WHERE "Instance" IN ({string.Join(", ", chunk.Select((_, i) => $"{{{i}}}"))})"""), chunk, cancellationToken);
         await transaction.CommitAsync(cancellationToken);
         return true;
     }

@@ -1003,3 +1003,37 @@ holds, 0 deadlocks, 1,143 resets (all fenced), takeovers 572 and 571, settled 21
 is now the fence in the batch, recorded at REPEATABLE READ in ENGINES.md (holds, one take deadlock); with
 `isolation=rc` the fence in the batch has no recorded stress run, and was not run here. README's stress commands now
 show the fence option on every engine.
+
+### 25.7 Set-based projector rounds (decision 8). Run
+
+**What changed.** `EfStore.ProjectAsync` writes a round's view rows set-based. It first works out, in memory, what the
+round leaves of each instance's view:
+- an instance whose delete is in the round is removed, as before (the old code wrote its views and then removed them);
+- every other instance is moved on by its commits.
+
+On PostgreSQL the round's write is one statement, so it is one round trip and its own transaction. A data-modifying
+CTE moves the projector's row only from where the round read it. It upserts the views from `unnest` arrays, and deletes
+the removed views, both only if the row moved. On SQLite it is one transaction: the move, one multi-row upsert per 200
+views, and one delete per 500. SQL Server and MySQL still write one statement per view (`Engine.ViewAsync`), with the
+delete set-based; they are not tuned here. The contract is unchanged.
+
+**The check.** A new required case writes views and removes a deleted instance's view in one round:
+`projection: one round that writes some views and removes a deleted instance's, set-based`. It passes on in-memory,
+SQLite, PostgreSQL, SQL Server, MySQL and MongoDB.
+
+**Gates.**
+
+| Gate | Before | After |
+|---|---|---|
+| EF cost, PostgreSQL (`proxy=1`), "a projector round over the journal so far", checked and batch | 17 round trips | **3** (two reads, one write) |
+| EF cost, SQLite, the same row, checked and batch | 18 engine calls | 7 |
+| Every other row of both cost runs | | the same, counted and sent |
+| Semantic suite, in-memory | 56 passed, 1 skipped | 57 passed, 1 skipped |
+| SQLite (both fences), PostgreSQL (batch and checked) | 54 passed, 2 or 3 reference differ | 55 passed, the same reference cases differ |
+| SQL Server (default), MySQL (default) | 53 passed, 3 reference differ, 1 skipped | 54 passed, the same |
+| MongoDB | 57 passed | 58 passed |
+
+The reference cases that differ are those of M6 (not on main yet) and F8.
+
+**Not run:** the simulation (it uses the in-memory store, unchanged) and the stress tests (the projector does not run in
+them, section 23).

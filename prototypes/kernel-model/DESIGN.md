@@ -388,8 +388,9 @@ Native workflows on PostgreSQL (NATIVE.md's runs, merged kernel): Balanced write
 Ephemeral 0, Balanced 3 / 2; fork-join with a direct resume 11 / 8 (15 / 11 on the native branch: no meet ticket);
 resume at an HttpEndpoint, both requests, 12 / 9 (16 / 12).
 
-- The model's activities do nothing and its history is one journal row per commit. A projector round costs one
-  statement per instance in its page (17 round trips for about a dozen instances); not optimized.
+- The model's activities do nothing and its history is one journal row per commit. A projector round is set-based
+  (decision 8, FINDINGS 25.7): 3 round trips on PostgreSQL (17 before, one statement per instance), 7 engine calls on
+  SQLite (18); SQL Server and MySQL still write one statement per view.
 - MySQL's driver sends four more round trips per transaction than PostgreSQL's (E10).
 
 ## Trade-offs

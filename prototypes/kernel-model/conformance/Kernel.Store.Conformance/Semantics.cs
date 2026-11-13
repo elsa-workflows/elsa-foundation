@@ -747,6 +747,16 @@ public static class Semantics
             views = (await c.S.ReadViewsAsync(["0/a", "0/b"])).ToList();
             Context.Equal("0/a:3:3", string.Join(",", views.Select(v => $"{v.Instance}:{v.Revision}:{v.Commits}")), "view rows after a delete");
         }),
+        new("projection: one round that writes some views and removes a deleted instance's, set-based", Level.Required, async c =>
+        {
+            var lease = await c.Take(0);
+            await c.Lands(() => c.Commit(lease, 0, [Make.New("0/a"), Make.New("0/b"), Make.New("0/c")]));
+            await c.Lands(() => c.Commit(0, lease.Epoch, 3, [Make.Turn("0/a", Make.Row("0/a", 2), expected: 1), Make.Delete("0/b", 1)]));
+            var rows = await c.S.ReadJournalAsync(0, 0, 10);
+            Context.That(await c.S.ProjectAsync(0, 0, 5, rows), "the round did not move");
+            var views = (await c.S.ReadViewsAsync(["0/a", "0/b", "0/c"])).OrderBy(v => v.Instance, StringComparer.Ordinal).ToList();
+            Context.Equal("0/a:2:2,0/c:1:1", string.Join(",", views.Select(v => $"{v.Instance}:{v.Revision}:{v.Commits}")), "views after one round with a delete in it");
+        }),
         new("projection: of many concurrent writes from one position, exactly one moves it", Level.Required, async c =>
         {
             var lease = await c.Take(0);
