@@ -32,7 +32,12 @@ internal sealed class RuntimeHistoryCapture(IWorkflowExecutionStateStore executi
         if (policy.SupportedKinds.Contains("ValueCaptured", StringComparer.Ordinal) && !sourceAvailability.Values()) return false;
         if (policy.SupportedKinds.Any(kind => kind is "BookmarkRemoved" or "BookmarkSuperseded") && !sourceAvailability.CleanupInputs()) return false;
         var available = Kinds.Concat(Version2Kinds).ToHashSet(StringComparer.Ordinal);
-        // Post-commit, delivery and timer owners are qualified in their later source/writer slices.
+        if (policy.SupportedKinds.Intersect(RuntimeHistoryDeliveryObservations.Kinds, StringComparer.Ordinal).Any())
+        {
+            if (!policy.SupportedKinds.Contains("DeliveryReceived", StringComparer.Ordinal) || !sourceAvailability.DeliveryInputs()) return false;
+            available.UnionWith(RuntimeHistoryDeliveryObservations.Kinds);
+        }
+        // Post-commit and timer owners are qualified in their own source/writer slices.
         available.UnionWith(sourceSupport.Where(owner => owner.SourceIntentKind is null).SelectMany(owner => owner.Kinds).Select(RuntimeHistorySourceFacts.EventName));
         return policy.SupportedKinds.All(available.Contains);
     }

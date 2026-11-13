@@ -626,7 +626,7 @@ public static class RuntimeCoreServiceCollectionExtensions
         return services;
     }
 
-    private static TStore ResolveUnderlyingStore<TStore>(IServiceProvider serviceProvider, Type decoratorType)
+    internal static TStore ResolveUnderlyingStore<TStore>(IServiceProvider serviceProvider, Type decoratorType)
         where TStore : class
     {
         var selected = serviceProvider.GetRequiredService<TStore>();

@@ -1,6 +1,9 @@
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Extensions;
+using Elsa.Workflows.Runtime.Services.Checkpoints;
+using Elsa.Workflows.Runtime.Services.Coalescing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -20,6 +23,10 @@ internal static class RuntimeHistoryRegistration
         ArgumentNullException.ThrowIfNull(services);
         services.TryAddSingleton(options ?? new RuntimeHistoryOptions());
         services.TryAddScoped<IRuntimeHistoryStore, InMemoryRuntimeHistoryStore>();
+        services.TryAddScoped<IRuntimeHistoryObservationWriter>(provider => new InMemoryRuntimeHistoryObservationWriter(
+            provider.GetRequiredService<InMemoryRuntimeCheckpointStoreState>(), provider.GetRequiredService<IPersistenceAccessContextAccessor>(),
+            RuntimeCoreServiceCollectionExtensions.ResolveUnderlyingStore<IWorkflowExecutionStateStore>(provider, typeof(CoalescingWorkflowExecutionStateStore)),
+            provider.GetRequiredService<TimeProvider>()));
         services.TryAddScoped<IRuntimeHistorySourceExtension, DefaultRuntimeHistorySourceExtension>();
         services.TryAddScoped<RuntimeHistoryCaptureCapabilities>();
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IRuntimeCheckpointCommitEnricher, RuntimeHistoryCapture>());
@@ -49,7 +56,7 @@ internal static class RuntimeHistoryRegistration
             var kinds = provider.GetServices<RuntimeHistorySourceSupport>().Where(owner => owner.SourceIntentKind is null)
                 .SelectMany(owner => owner.Kinds).Select(RuntimeHistorySourceFacts.EventName);
             var policy = new RuntimeHistoryCapturePolicy("runtime-history-v3", 3, true,
-                RuntimeHistoryCapture.Kinds.Concat(RuntimeHistoryCapture.Version2Kinds).Concat(kinds).ToArray());
+                RuntimeHistoryCapture.Kinds.Concat(RuntimeHistoryCapture.Version2Kinds).Concat(RuntimeHistoryDeliveryObservations.Kinds).Concat(kinds).ToArray());
             if (!provider.GetServices<IRuntimeCheckpointCommitEnricher>().OfType<IRuntimeHistoryCaptureSupport>().Any(capture => capture.CanCapture(policy)))
                 throw Unavailable("The selected actual source/value/capture chain cannot supply this admission profile.");
             return policy;
