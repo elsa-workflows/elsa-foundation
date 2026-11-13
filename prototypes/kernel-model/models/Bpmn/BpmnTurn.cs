@@ -29,7 +29,9 @@ internal sealed class BpmnTurn(BpmnModel model, ITurn turn)
         {
             case BpmnContinuation.Complete complete:
                 turn.Record($"end {complete.Outcome}");
-                turn.SetStatus(InstanceStatus.Finished, complete.Outcome, new JsonObject(_s.Variables.Where(v => _s.Set.Contains(v.Key)).Select(v => KeyValuePair.Create(v.Key, v.Value?.DeepClone()))));
+                // The workflow kernel carries the status (not the BPMN substatus) in the durable child notice.
+                var status = complete.Outcome == BpmnInterpreter.CancelledOutcomeName ? InstanceStatus.Cancelled : InstanceStatus.Finished;
+                turn.SetStatus(status, complete.Outcome, new JsonObject(_s.Variables.Where(v => _s.Set.Contains(v.Key)).Select(v => KeyValuePair.Create(v.Key, v.Value?.DeepClone()))));
                 break;
             case BpmnContinuation.Fault fault:
                 // The interpreter stops nothing on a fault; the instance ends, so nothing it started may run on.
@@ -49,15 +51,15 @@ internal sealed class BpmnTurn(BpmnModel model, ITurn turn)
         switch (m.Kind)
         {
             case Kinds.Start when !_s.Started:
-                _s.Started = true;
-                foreach (var (name, value) in _process.Variables) _s.Variables[name] = value?.DeepClone();
-                foreach (var (name, value) in Json.Read<BpmnStart>(m.Start?.Input ?? "{}").Variables ?? []) _s.Variables[name] = value?.DeepClone();
-                Apply(BpmnModel.Semantics.Start(new BpmnStartRequest(_process.Graph, _s.Tokens, Snapshot())));
+                Start(m, null);
+                break;
+            case Kinds.Event when !_s.Started && m.Start is not null && Events.Delivered(m) is { } trigger:
+                Start(m, new BpmnStartSignal(trigger.Wait));
                 break;
             case BpmnKinds.Timer:
                 Completed(m.Read<TimerDue>().Handle, []);
                 break;
-            case Kinds.Event when Events.Delivered(m) is { } delivered && _s.Live.TryGetValue(delivered.Wait, out var wait) && wait.Kind == WorkKinds.Message:
+            case Kinds.Event when m.Start is null && Events.Delivered(m) is { } delivered && _s.Live.TryGetValue(delivered.Wait, out var wait) && wait.Kind == WorkKinds.Message:
                 // A kept event is given to every catch that subscribes within its window; BPMN consumes a message once,
                 // so a catch that comes round again in a loop must not take the one an earlier catch took.
                 if (_s.Taken?.Contains(delivered.Event) == true || !_s.TakenEvents.Add(new(wait.Key, delivered.Event))) break;
@@ -104,6 +106,15 @@ internal sealed class BpmnTurn(BpmnModel model, ITurn turn)
                 break;
             }
         }
+    }
+
+    private void Start(Message message, BpmnStartSignal? signal)
+    {
+        _s.Started = true;
+        foreach (var (name, value) in _process.Variables) _s.Variables[name] = value?.DeepClone();
+        foreach (var (name, value) in Json.Read<BpmnStart>(message.Start?.Input ?? "{}").Variables ?? []) _s.Variables[name] = value?.DeepClone();
+        if (signal is not null) Merge(Object(message.Payload));
+        Apply(BpmnModel.Semantics.Start(new BpmnStartRequest(_process.Graph, _s.Tokens, Snapshot(), signal)));
     }
 
     /// <summary>A payload that is a JSON object, or nothing: an event's payload is the publisher's, in any form.</summary>

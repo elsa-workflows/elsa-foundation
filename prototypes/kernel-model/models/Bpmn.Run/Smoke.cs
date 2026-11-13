@@ -255,6 +255,7 @@ public static class Smoke
                 $"{json} in {expression} is {expected}");
 
         await ScopeChecks.Run(Registry(), Check);
+        await StartAndCancelChecks.Run(Check);
         Console.WriteLine("conditions");
         foreach (var (body, holds) in new[] { ("s != 'a==b'", true), ("s == 'x<y'", true), ("n >= 2", true), ("n < 2", false), ("flag", true), ("missing", false) })
         {
