@@ -41,6 +41,9 @@ public sealed class CoalescingRuntimePostCommitOutboxStore : IRuntimePostCommitO
     }
 
     private readonly IRuntimePostCommitOutboxStore _inner;
+
+    // Admission must qualify this captured provider, never an unrelated DI holder.
+    internal IRuntimePostCommitOutboxStore PhysicalStore => _inner;
     private readonly IRuntimePostCommitOutboxClaimStore? _innerClaimStore;
     private readonly IRuntimePostCommitOutboxClaimCompletionStore? _innerCompletionStore;
     private readonly IPostCommitOutboxLookupStore? _innerLookupStore;

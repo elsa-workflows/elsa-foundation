@@ -22,6 +22,9 @@ public sealed class CoalescingWorkflowSchedulerWorkQueue(
 {
     private readonly IWorkflowSchedulerWorkQueue _inner = inner.Value;
 
+    // Admission must qualify this captured provider, never an unrelated DI holder.
+    internal IWorkflowSchedulerWorkQueue PhysicalStore => _inner;
+
     public bool SupportsClaimTransitions =>
         sessionAccessor.Current is { IsActive: true } || _inner.SupportsClaimTransitions;
 

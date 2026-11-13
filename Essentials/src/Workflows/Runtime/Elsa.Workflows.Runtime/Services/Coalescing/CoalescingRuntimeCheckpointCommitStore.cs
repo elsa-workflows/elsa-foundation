@@ -56,6 +56,9 @@ public sealed class CoalescingRuntimeCheckpointCommitStore : IRuntimeCheckpointC
 
     private readonly IRuntimeCheckpointCommitStore _inner;
 
+    // Admission must qualify this captured provider, never an unrelated DI holder.
+    internal IRuntimeCheckpointCommitStore PhysicalStore => _inner;
+
     public bool SupportsExactBookmarkResume => _inner.SupportsExactBookmarkResume;
     bool IRuntimeCheckpointCommitStore.SupportsModelParentAdmission => _inner.SupportsModelParentAdmission;
     bool IRuntimeCheckpointCommitStore.SupportsModelCheckpoint => _inner.SupportsModelCheckpoint;
