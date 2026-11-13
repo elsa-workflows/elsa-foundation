@@ -21,15 +21,19 @@ public sealed record LoopOptions
 /// the last pass asked for one (at once, after a timer's delay, or at the next renewal of its lease), runs one at once
 /// when a hint comes, and tells every held scope to read its inbox every <see cref="LoopOptions.PollInterval"/>. One
 /// loop per node: its passes run one after another, so a scope never has two at once and the workers of the node may
-/// share their trial gate.
+/// share their trial gate. The loop runs on a scheduler of the node's own that runs one task at a time, as a grain's
+/// does in Orleans: what a pass starts and awaits elsewhere (a background job's continuation) comes back on it, between
+/// the loop's awaits, and never beside them. A worker is a single-threaded state machine.
 /// </summary>
 public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
 {
     private readonly PartitionRuntime _runtime;
     private readonly LoopOptions _options;
     private readonly long[] _due;        // when each held scope's next pass is due, on the node's clock; long.MaxValue: when woken
+    private readonly IScopeActivation?[] _seen;     // the activation each scope had at the last look: a new one gets a pass at once
     private readonly SemaphoreSlim _signal = new(0, 1);
-    private readonly CancellationTokenSource _stop = new();
+    private readonly CancellationTokenSource _exit = new(), _kill = new();     // leave the loop between passes; stop a pass where it is
+    private readonly TaskScheduler _scheduler = new ConcurrentExclusiveSchedulerPair().ExclusiveScheduler;
     private readonly Stopwatch _clock = Stopwatch.StartNew();
     private Task? _loop;
     private volatile bool _gone;
@@ -38,7 +42,8 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
     {
         _options = options ?? new LoopOptions();
         _runtime = new PartitionRuntime(node, membership, partitions, _options.Window, wake);
-        _due = Enumerable.Repeat(long.MaxValue, partitions).ToArray();
+        _due = new long[partitions];
+        _seen = new IScopeActivation?[partitions];
     }
 
     public string Node => _runtime.Node;
@@ -51,32 +56,43 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
         await _runtime.StartAsync(host, cancellationToken);
         _runtime.Wake.Listen(actor =>
         {
-            if (_gone) return;
-            Volatile.Write(ref _due[ScopeOf(actor)], 0);
+            var scope = ScopeOf(actor);
+            if (_gone || (uint)scope >= (uint)_due.Length) return;
+            Volatile.Write(ref _due[scope], 0);
             Signal();
         });
-        _loop = Task.Run(() => LoopAsync(_stop.Token), CancellationToken.None);
+        _loop = OnNode(LoopAsync);
     }
 
-    /// <summary>Stop the loop and give every scope up: whoever takes them next finds no death.</summary>
+    /// <summary>
+    /// Leave the loop once the pass under way has ended (it is not cancelled, so its commit lands or is refused), then give
+    /// every scope up: whoever takes them next finds no death.
+    /// </summary>
     public async ValueTask StopAsync(CancellationToken cancellationToken = default)
     {
-        if (await HaltAsync()) await _runtime.StopAsync(cancellationToken);
+        if (await HaltAsync(kill: false)) await OnNode(() => _runtime.StopAsync(cancellationToken).AsTask());
     }
 
-    /// <summary>A crash: the loop stops (a pass under way stops at a turn boundary, before its commit) and nothing is given up.</summary>
-    public async ValueTask KillAsync() => await HaltAsync();
+    /// <summary>
+    /// A crash: the loop stops (a pass under way stops at a turn boundary, before its commit) and nothing is given up,
+    /// then or later: a stop or dispose after a kill does nothing.
+    /// </summary>
+    public async ValueTask KillAsync() => await HaltAsync(kill: true);
 
     public ValueTask DisposeAsync() => StopAsync();
 
-    private async Task<bool> HaltAsync()
+    private async Task<bool> HaltAsync(bool kill)
     {
         if (_gone) return false;
         _gone = true;
-        _stop.Cancel();
+        if (kill) _kill.Cancel();
+        _exit.Cancel();
         if (_loop is not null) await _loop;
         return true;
     }
+
+    /// <summary>Run on the node's scheduler, one task at a time with the loop and what it started.</summary>
+    private Task OnNode(Func<Task> work) => Task.Factory.StartNew(work, CancellationToken.None, TaskCreationOptions.DenyChildAttach, _scheduler).Unwrap();
 
     private long Now => _clock.ElapsedMilliseconds;
     private long _errors;
@@ -98,54 +114,60 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
         catch (SemaphoreFullException) { /* already signalled */ }
     }
 
-    private async Task LoopAsync(CancellationToken stop)
+    private async Task LoopAsync()
     {
+        var (exit, kill) = (_exit.Token, _kill.Token);
         var partitions = _due.Length;
         long balanceAt = 0, pollAt = Now + (long)_options.PollInterval.TotalMilliseconds;
-        while (!stop.IsCancellationRequested)
+        while (!exit.IsCancellationRequested)
         {
             try
             {
                 if (Now >= balanceAt)
                 {
-                    await _runtime.BalanceAsync(stop);
                     balanceAt = Now + (long)_options.BalanceEvery.TotalMilliseconds;
+                    await _runtime.BalanceAsync(kill);
                 }
                 if (Now >= pollAt)
                 {
+                    pollAt = Now + (long)_options.PollInterval.TotalMilliseconds;
                     for (var scope = 0; scope < partitions; scope++)
                         if (_runtime.Activation(scope) is { } activation)
                         {
-                            await activation.WokenAsync(null, stop);
+                            await activation.WokenAsync(null, kill);
                             Volatile.Write(ref _due[scope], 0);
                         }
-                    pollAt = Now + (long)_options.PollInterval.TotalMilliseconds;
                 }
-                for (var scope = 0; scope < partitions && !stop.IsCancellationRequested; scope++)
+                for (var scope = 0; scope < partitions && !exit.IsCancellationRequested; scope++)
                 {
-                    if (!_runtime.Owns(scope))
+                    var activation = _runtime.Activation(scope);
+                    if (activation != _seen[scope])
                     {
-                        Volatile.Write(ref _due[scope], 0);    // a scope taken (again) gets its first pass at once
-                        continue;
+                        _seen[scope] = activation;
+                        if (activation is not null) Volatile.Write(ref _due[scope], 0);    // a scope taken (again) gets its first pass at once
                     }
+                    if (activation is null) continue;
                     if (Volatile.Read(ref _due[scope]) > Now) continue;
                     Volatile.Write(ref _due[scope], long.MaxValue);
-                    if (await _runtime.PassAsync(scope, stop) is { } delay) Sooner(ref _due[scope], Now + (long)delay.TotalMilliseconds);
+                    if (await _runtime.PassAsync(scope, kill) is { } delay) Sooner(ref _due[scope], Now + (long)delay.TotalMilliseconds);
+                    else if (!_runtime.Owns(scope)) _seen[scope] = null;   // lost: the node gets the same activation back when it takes the scope again
                 }
             }
-            catch (OperationCanceledException) when (stop.IsCancellationRequested) { break; }
+            catch (OperationCanceledException) when (kill.IsCancellationRequested) { break; }
             catch (Exception e)
             {
                 // The kernel catches what its store throws; anything else is a bug the loop must survive and count.
                 Interlocked.Increment(ref _errors);
                 LastError = e;
+                try { await Task.Delay(TimeSpan.FromMilliseconds(100), exit); }      // no spin on a bug that throws every time
+                catch (OperationCanceledException) { break; }
             }
             var wait = Math.Min(balanceAt, pollAt);
             for (var scope = 0; scope < partitions; scope++)
                 if (_runtime.Owns(scope)) wait = Math.Min(wait, Volatile.Read(ref _due[scope]));
             var ms = Math.Clamp(wait - Now, 0, int.MaxValue);
             if (ms == 0) continue;
-            try { await _signal.WaitAsync(TimeSpan.FromMilliseconds(ms), stop); }
+            try { await _signal.WaitAsync(TimeSpan.FromMilliseconds(ms), exit); }
             catch (OperationCanceledException) { break; }
         }
     }
