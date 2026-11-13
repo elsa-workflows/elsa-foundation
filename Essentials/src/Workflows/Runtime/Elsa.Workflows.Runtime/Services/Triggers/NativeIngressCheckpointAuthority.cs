@@ -10,6 +10,7 @@ namespace Elsa.Workflows.Runtime.Services.Triggers;
 internal static class NativeIngressCheckpointAuthority
 {
     internal static bool RequiresInitialPhysicalAdmission(RuntimeCheckpointCommit commit) =>
+        commit.Metadata.ContainsKey(SavedStimulusStartSeal.OriginMetadata) ||
         commit.Checkpoint.Name == RuntimeCheckpointNames.WorkflowStarted &&
         commit.StateChanges.WorkflowExecution?.State is { } state &&
         (state.IngressOrigin is not null || state.StimulusDeliveryOrigin is not null || state.ModelWorkOrigin?.IngressOrigin is not null);

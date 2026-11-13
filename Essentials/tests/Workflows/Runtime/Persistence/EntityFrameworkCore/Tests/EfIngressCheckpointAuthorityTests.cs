@@ -184,6 +184,8 @@ public sealed class EfIngressCheckpointAuthorityTests
         var childCheckpoint = Assert.Single((await queue.ListAsync(new(downstream.WorkflowExecutionId))).Items);
         foreach (var changed in new Dictionary<string, JsonElement>
         {
+            [nameof(RuntimeCheckpointCommandPayload.CheckpointName)] = JsonSerializer.SerializeToElement("OtherCheckpoint"),
+            [nameof(RuntimeCheckpointCommandPayload.StimulusDeliveryOrigin)] = JsonSerializer.SerializeToElement<object?>(null),
             [nameof(RuntimeCheckpointCommandPayload.PostCommitIntents)] = TamperedRoot(childCheckpoint),
             [nameof(RuntimeCheckpointCommandPayload.Authority)] = JsonSerializer.SerializeToElement(new WorkflowExecutionAuthoritySnapshot("different-system", "different-initiator")),
             [nameof(RuntimeCheckpointCommandPayload.SeedInputs)] = JsonSerializer.SerializeToElement(new { forged = "input" }),

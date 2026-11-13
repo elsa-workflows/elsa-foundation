@@ -40,6 +40,8 @@ public sealed partial class EfRuntimePostCommitOutboxStore
                     var material = await new EfWorkflowExecutableStore(context, accessContextAccessor).FindAsync(
                         candidate.Command.Payload!.Value.Deserialize<WorkflowExecutionStartCommandPayload>()!.RequestedArtifactId, cancellationToken)
                         ?? throw new NotSupportedException("Saved starts need actual retained material.");
+                    if (current.SubscriptionDeliveryProtocolVersion is not null)
+                        RuntimeIngressAdmissionValidation.CheckSource(current, new(scope, publisher.TenantId));
                     var source = current.OpenSavedStartSource(authority, publisher, scope, timeProvider.GetUtcNow());
                     if (candidate.EnqueuedAt < source.Intent.RecordedAt || candidate.EnqueuedAt > timeProvider.GetUtcNow())
                         throw new InvalidDataException("The proposed saved start timestamp is outside its actual source delivery.");

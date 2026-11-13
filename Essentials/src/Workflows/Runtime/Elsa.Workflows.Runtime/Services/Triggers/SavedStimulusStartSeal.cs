@@ -8,6 +8,26 @@ namespace Elsa.Workflows.Runtime.Services.Triggers;
 /// <summary>Canonical validation performed by the physical source owner, never by a caller-supplied witness.</summary>
 internal static class SavedStimulusStartSeal
 {
+    internal const string OriginMetadata = "runtime.savedStimulusStart";
+
+    internal static void ValidateWorkOrigin(RuntimeSchedulerWorkItem work, RuntimeStimulusDeliveryOrigin? origin)
+    {
+        var command = work.CommandMetadata.GetValueOrDefault(OriginMetadata);
+        var envelope = work.EnvelopeMetadata.GetValueOrDefault(OriginMetadata);
+        if (origin is null && command is null && envelope is null) return;
+        if (origin is null || command != JsonSerializer.Serialize(origin) || envelope != command)
+            throw new InvalidDataException("The accepted saved-start marker and queued origin must be preserved together.");
+    }
+
+    internal static void ValidateCommitOrigin(RuntimeCheckpointCommit commit)
+    {
+        if (!commit.Metadata.TryGetValue(OriginMetadata, out var marker)) return;
+        if (commit.Checkpoint.Name != Elsa.Workflows.Runtime.Core.Constants.RuntimeCheckpointNames.WorkflowStarted ||
+            commit.StateChanges.WorkflowExecution is not { Operation: RuntimeStateChangeOperation.Upsert, State.StimulusDeliveryOrigin: { } origin } ||
+            marker != JsonSerializer.Serialize(origin))
+            throw new InvalidDataException("Saved initial command authority requires its canonical physical workflow admission.");
+    }
+
     internal static void Validate(PostCommitDeliveryContext source, WorkflowExecutableStimulusDeliveryAuthority authority,
         WorkflowExecutionCommandEnvelope envelope, IEnumerable<IStimulusDeliveryIntentAdapter> adapters,
         WorkflowExecutable material, IWorkflowExecutableInputValidator? inputValidator)
@@ -27,6 +47,9 @@ internal static class SavedStimulusStartSeal
             defaults = validation.NormalizedInputs;
         }
         var origin = start.StimulusDeliveryOrigin;
+        ValidateWorkOrigin(new(envelope.EnvelopeId, envelope.WorkflowExecutionId, envelope.Command.CommandId, envelope.Command.Kind,
+            envelope.EnvelopeId, envelope.IdempotencyKey, envelope.EnqueuedAt, envelope.EnqueuedAt, envelope.Sequence,
+            envelope.Command.Payload, envelope.Command.Metadata, envelope.Metadata), origin);
         var accepted = start.StartAuthority?.StimulusDelivery;
         if (envelope.WorkflowExecutionId != identity.WorkflowExecutionId || envelope.EnvelopeId != identity.EnvelopeId ||
             envelope.Command.CommandId != identity.CommandId || envelope.Command.Kind != WorkflowExecutionCommandKind.Start ||

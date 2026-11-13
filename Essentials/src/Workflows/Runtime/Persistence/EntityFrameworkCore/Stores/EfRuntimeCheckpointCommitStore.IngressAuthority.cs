@@ -32,6 +32,7 @@ public sealed partial class EfRuntimeCheckpointCommitStore
     private async ValueTask StageIngressExecutionAuthorityAsync(RuntimeCheckpointCommit commit, string scope,
         CancellationToken cancellationToken)
     {
+        SavedStimulusStartSeal.ValidateCommitOrigin(commit);
         if (commit.StateChanges.WorkflowExecution is not { Operation: RuntimeStateChangeOperation.Upsert } change) return;
         NativeIngressCheckpointAuthority.ValidateOriginShape(change.State);
         var origin = change.State.IngressOrigin;

@@ -104,6 +104,9 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
         RuntimeCheckpointCommandPayload payload,
         CancellationToken cancellationToken)
     {
+        SavedStimulusStartSeal.ValidateWorkOrigin(workItem, payload.StimulusDeliveryOrigin);
+        if (payload.StimulusDeliveryOrigin is not null && payload.CheckpointName != RuntimeCheckpointNames.WorkflowStarted)
+            throw new InvalidDataException("Saved initial work must retain its canonical workflow-start checkpoint.");
         if (payload.IngressOrigin is { } origin)
         {
             if (_ingressDeliveryStore is null)

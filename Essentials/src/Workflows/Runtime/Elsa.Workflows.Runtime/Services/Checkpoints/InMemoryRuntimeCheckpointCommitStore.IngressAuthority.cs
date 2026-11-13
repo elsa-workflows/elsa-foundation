@@ -19,6 +19,7 @@ public sealed partial class InMemoryRuntimeCheckpointCommitStore
 
     private async ValueTask ValidateIngressExecutionAsync(RuntimeCheckpointCommit commit, CancellationToken cancellationToken)
     {
+        SavedStimulusStartSeal.ValidateCommitOrigin(commit);
         if (commit.StateChanges.WorkflowExecution is not { Operation: RuntimeStateChangeOperation.Upsert } change) return;
         var proposed = change.State;
         NativeIngressCheckpointAuthority.ValidateOriginShape(proposed);

@@ -34,6 +34,8 @@ internal static class RuntimeSchedulerWorkWriteVersion
 
     internal static bool IsIngress(RuntimeSchedulerWorkItem item)
     {
+        if (item.CommandMetadata.ContainsKey(SavedStimulusStartSeal.OriginMetadata) ||
+            item.EnvelopeMetadata.ContainsKey(SavedStimulusStartSeal.OriginMetadata)) return true;
         if (item.CommandMetadata.ContainsKey(NativeStandaloneTriggerRuntimeTarget.OriginMetadata) ||
             item.EnvelopeMetadata.ContainsKey(NativeStandaloneTriggerRuntimeTarget.OriginMetadata)) return true;
         if (item.Payload is not { ValueKind: JsonValueKind.Object } payload) return false;

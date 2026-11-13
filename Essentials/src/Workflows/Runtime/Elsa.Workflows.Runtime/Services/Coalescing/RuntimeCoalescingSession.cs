@@ -892,7 +892,7 @@ public sealed class RuntimeCoalescingSession
                 recipientSnapshot: existing.RecipientSnapshot,
                 standaloneIngress: existing.StandaloneIngress,
                 subscriptionDeliveryProtocolVersion: existing.SubscriptionDeliveryProtocolVersion,
-                subscriptionDelivery: existing.SubscriptionDelivery);
+                subscriptionDelivery: existing.SubscriptionDelivery, savedStimulusStarts: existing.SavedStimulusStarts);
     }
 
     public void RecordOutboxDelivery(RuntimePostCommitOutboxClaim claim, RuntimePostCommitOutboxDeliveryResult result)

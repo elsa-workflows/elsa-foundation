@@ -291,9 +291,16 @@ public sealed class NativeStandaloneTriggerTargetTests
             childPin.ArtifactHash, node.ExecutableNodeId, "event", "named", null, new Dictionary<string, string>(), Now);
         var snapshot = new StimulusDeliverySnapshot(1, sourceId, fingerprint, StimulusDeliveryScope.From(parent, scope), Now, "event", "named",
             [new(binding, childPin, (WorkflowExecutableSourceProvenance?)null)], [], StimulusDeliverySnapshot.CurrentRetentionAcceptanceVersion);
+        // One workflow source owns an independent subscription and an ordinary saved start.
+        var independentJson = JsonSerializer.SerializeToElement(fixture.Recipient).Deserialize<Dictionary<string, JsonElement>>()!;
+        independentJson[nameof(RuntimeSubscriptionRecipient.StartIdentity)] = JsonSerializer.SerializeToElement(new RuntimeSubscriptionStartIdentity(1, scope, sourceId, fixture.Recipient.SubscriptionId));
+        var independent = JsonSerializer.SerializeToElement(independentJson).Deserialize<RuntimeSubscriptionRecipient>()!;
+        var combined = new RuntimeSubscriptionDelivery(1, sourceId, fingerprint, scope, [independent], [],
+            [new(independent.RecipientId, RuntimeRecipientPhase.Pending)], resourceCaptures:
+            [new("trigger", 1, 1, 1, [independent.SubscriptionId], JsonSerializer.SerializeToElement(new { }))]);
         // Physical accepted-cohort fixture; seal through the real source port before ending its claim.
         fixture.Executions.CheckpointState.OutboxItems[sourceId] = new(sourceId, intent, RuntimePostCommitOutboxStatus.Delivering,
-            Now, Now, null, 1, "previous-owner", Now, null, null, null, 1, Now.AddMinutes(5), 1, scope, snapshot);
+            Now, Now, null, 1, "previous-owner", Now, null, null, null, 1, Now.AddMinutes(5), 1, scope, snapshot, null, 1, combined);
         fixture.CheckpointStore.StimulusAdapters = [new SavedEventAdapter()];
         fixture.CheckpointStore.StimulusInputValidator = new WorkflowExecutableInputValidator(new StringTypes());
         var key = KeyedWorkflowStartIdentity.For("saved-child-key", childPin.ArtifactId);
@@ -305,9 +312,10 @@ public sealed class NativeStandaloneTriggerTargetTests
                 new WorkflowExecutableStimulusDeliveryAuthority(sourceId, fingerprint, scope, "previous-owner", 1, binding.TriggerBindingId)), 0)
             { StimulusDeliveryOrigin = savedOrigin };
         var authority = payload.StartAuthority!.StimulusDelivery!;
+        var initialMetadata = new Dictionary<string, string> { [SavedStimulusStartSeal.OriginMetadata] = JsonSerializer.Serialize(savedOrigin) };
         var proposed = new WorkflowExecutionCommandEnvelope(key.EnvelopeId, key.WorkflowExecutionId,
-            new(key.CommandId, key.WorkflowExecutionId, WorkflowExecutionCommandKind.Start, Now, JsonSerializer.SerializeToElement(payload), new Dictionary<string, string>()),
-            key.StartKey, WorkflowExecutionCommandDeliveryMode.AtLeastOnce, Now, partition: fixture.Recipient.Partition);
+            new(key.CommandId, key.WorkflowExecutionId, WorkflowExecutionCommandKind.Start, Now, JsonSerializer.SerializeToElement(payload), initialMetadata),
+            key.StartKey, WorkflowExecutionCommandDeliveryMode.AtLeastOnce, Now, metadata: initialMetadata, partition: fixture.Recipient.Partition);
         foreach (var changed in new Dictionary<string, JsonElement>
         {
             [nameof(WorkflowExecutionStartCommandPayload.Authority)] = JsonSerializer.SerializeToElement(new WorkflowExecutionAuthoritySnapshot("other-system", "other-initiator")),
@@ -320,7 +328,7 @@ public sealed class NativeStandaloneTriggerTargetTests
             changedPayload[changed.Key] = changed.Value;
             var tampered = new WorkflowExecutionCommandEnvelope(proposed.EnvelopeId, proposed.WorkflowExecutionId,
                 proposed.Command with { Payload = JsonSerializer.SerializeToElement(changedPayload) }, proposed.IdempotencyKey,
-                proposed.DeliveryMode, proposed.EnqueuedAt, partition: proposed.Partition);
+                proposed.DeliveryMode, proposed.EnqueuedAt, metadata: proposed.Metadata, partition: proposed.Partition);
             var refused = await Assert.ThrowsAsync<StimulusDeliveryBoundaryException>(() => fixture.CheckpointStore.SealSavedStartAsync(authority, tampered).AsTask());
             Assert.IsType<InvalidDataException>(refused.InnerException);
             Assert.Null(fixture.Executions.CheckpointState.OutboxItems[sourceId].SavedStimulusStarts);
@@ -329,12 +337,21 @@ public sealed class NativeStandaloneTriggerTargetTests
         fixture.Clock.Advance(TimeSpan.FromSeconds(1));
         var later = new WorkflowExecutionCommandEnvelope(proposed.EnvelopeId, proposed.WorkflowExecutionId,
             proposed.Command with { EnqueuedAt = Now.AddSeconds(1) }, proposed.IdempotencyKey, proposed.DeliveryMode,
-            Now.AddSeconds(1), partition: proposed.Partition);
+            Now.AddSeconds(1), metadata: proposed.Metadata, partition: proposed.Partition);
         Assert.Equal(sealedStart.EnqueuedAt, (await fixture.CheckpointStore.SealSavedStartAsync(authority, later)).EnqueuedAt);
         var physical = fixture.Executions.CheckpointState.OutboxItems[sourceId];
         var sourceClaim = new RuntimePostCommitOutboxClaim(physical, "previous-owner", 1, Now, Now.AddMinutes(5));
-        await fixture.CheckpointStore.RecordDeliveryResultAsync(sourceClaim, new(sourceId, RuntimePostCommitOutboxStatus.Delivered, Now));
-        Assert.NotNull(fixture.Executions.CheckpointState.OutboxItems[sourceId].SavedStimulusStarts);
+        await fixture.CheckpointStore.RecordDeliveryResultAsync(sourceClaim, new(sourceId, RuntimePostCommitOutboxStatus.FailedFinal, Now, "Independent recipient needs operator retry."));
+        var beforeRetry = fixture.Executions.CheckpointState.OutboxItems[sourceId];
+        var request = new RuntimeIngressControlRequest(new(scope, tenant), sourceId, fingerprint, combined.SelectionFingerprint,
+            "trigger", "operator", "retry-request", "request-fingerprint", RuntimeIngressControlKind.RetryRecipients,
+            [new(independent.RecipientId, RuntimeIngressInspection.ProgressFingerprint(combined.Progress.Single()))]);
+        var retried = RuntimeIngressControlRules.Apply(beforeRetry, request, fixture.Clock.GetUtcNow());
+        Assert.Equal(RuntimeIngressControlOutcome.RetryScheduled, Assert.Single(retried.Receipt.Recipients).Outcome);
+        Assert.Equal(RuntimePostCommitOutboxStatus.Pending, retried.Item.Status);
+        Assert.NotNull(retried.Item.SavedStimulusStarts);
+        Assert.True(JsonElement.DeepEquals(beforeRetry.SavedStimulusStarts![key.WorkflowExecutionId], retried.Item.SavedStimulusStarts![key.WorkflowExecutionId]));
+        fixture.Executions.CheckpointState.OutboxItems[sourceId] = retried.Item;
         var start = StartItem(sealedStart);
         using var childDrain = fixture.BeginCheckpoint(key.WorkflowExecutionId);
         await fixture.StartHandler.HandleAsync(start);
@@ -353,6 +370,8 @@ public sealed class NativeStandaloneTriggerTargetTests
         }
         foreach (var changed in new Dictionary<string, JsonElement>
         {
+            [nameof(RuntimeCheckpointCommandPayload.CheckpointName)] = JsonSerializer.SerializeToElement("OtherCheckpoint"),
+            [nameof(RuntimeCheckpointCommandPayload.StimulusDeliveryOrigin)] = JsonSerializer.SerializeToElement<object?>(null),
             [nameof(RuntimeCheckpointCommandPayload.PostCommitIntents)] = TamperedRoot(checkpoint),
             [nameof(RuntimeCheckpointCommandPayload.Authority)] = JsonSerializer.SerializeToElement(new WorkflowExecutionAuthoritySnapshot("different-system", "different-initiator")),
             [nameof(RuntimeCheckpointCommandPayload.SeedInputs)] = JsonSerializer.SerializeToElement(new { forged = "input" }),

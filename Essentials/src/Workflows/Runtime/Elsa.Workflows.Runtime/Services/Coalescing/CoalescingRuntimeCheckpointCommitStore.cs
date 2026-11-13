@@ -345,7 +345,7 @@ public sealed class CoalescingRuntimeCheckpointCommitStore : IRuntimeCheckpointC
             recipientSnapshot: item.RecipientSnapshot,
             standaloneIngress: item.StandaloneIngress,
             subscriptionDeliveryProtocolVersion: item.SubscriptionDeliveryProtocolVersion,
-            subscriptionDelivery: item.SubscriptionDelivery);
+            subscriptionDelivery: item.SubscriptionDelivery, savedStimulusStarts: item.SavedStimulusStarts);
 
     // A claim is taken just before the claimed work runs, and the work item that runs it can exist only in the session's
     // memory: a parent re-claimed to evaluate its finished child runs from such an item. A cap fold at the claim would

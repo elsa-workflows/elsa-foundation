@@ -37,6 +37,8 @@ public sealed partial class InMemoryRuntimeCheckpointCommitStore
                 lock (_state.SyncRoot)
                 {
                     var current = _state.OutboxItems.GetValueOrDefault(authority.SourceOutboxItemId) ?? throw new InvalidDataException("The saved source was removed.");
+                    if (current.SubscriptionDeliveryProtocolVersion is not null)
+                        RuntimeIngressAdmissionValidation.CheckSource(current, new(scope, publisher.TenantId));
                     var source = current.OpenSavedStartSource(authority, publisher, scope, _timeProvider.GetUtcNow());
                     if (candidate.EnqueuedAt < source.Intent.RecordedAt || candidate.EnqueuedAt > _timeProvider.GetUtcNow())
                         throw new InvalidDataException("The proposed saved start timestamp is outside its actual source delivery.");

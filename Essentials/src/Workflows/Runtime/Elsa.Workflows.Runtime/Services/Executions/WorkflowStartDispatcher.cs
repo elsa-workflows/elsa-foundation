@@ -520,6 +520,12 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
         var requestedAt = _timeProvider.GetUtcNow();
         var enqueuedAt = retainedDispatch?.CreatedAt ?? requestedAt;
         var metadata = CreateDispatchMetadata(request, pinnedIdentity, pinnedSource, retainedDispatch, requiredScope, persistenceMode);
+        if (savedOrigin is not null)
+        {
+            var protectedMetadata = metadata.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
+            protectedMetadata[SavedStimulusStartSeal.OriginMetadata] = JsonSerializer.Serialize(savedOrigin);
+            metadata = protectedMetadata;
+        }
         var payload = JsonSerializer.SerializeToElement(new WorkflowExecutionStartCommandPayload(
             pinnedExecutable: pinnedIdentity,
             requestedArtifactId: request.ArtifactId,
@@ -623,6 +629,7 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
         // keeps it on the start until the run's first commit, so a drain that runs a never-committed run again finds the
         // same mode. A caller cannot supply it.
         metadata.Remove(RuntimeMetadataKeys.PersistenceMode);
+        metadata.Remove(SavedStimulusStartSeal.OriginMetadata);
         if (persistenceMode is { } mode)
             metadata[RuntimeMetadataKeys.PersistenceMode] = mode.ToString();
         // Diagnostic breadcrumb only — never read back or matched, so it is safe for this value to track the type name.

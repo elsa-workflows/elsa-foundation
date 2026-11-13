@@ -80,6 +80,7 @@ public sealed class WorkflowStartSchedulerWorkHandler : IWorkflowSchedulerWorkHa
         cancellationToken.ThrowIfCancellationRequested();
 
         var startPayload = DeserializeStartPayload(workItem);
+        SavedStimulusStartSeal.ValidateWorkOrigin(workItem, startPayload.StimulusDeliveryOrigin);
         if (startPayload.StimulusDeliveryOrigin is { } saved &&
             (startPayload.StartAuthority?.StimulusDelivery is not { } accepted || saved.Scope != accepted.Scope ||
              saved.SourceOutboxItemId != accepted.SourceOutboxItemId || saved.IntentFingerprint != accepted.IntentFingerprint ||
