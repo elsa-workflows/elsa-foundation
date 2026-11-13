@@ -27,12 +27,14 @@ The resumption check found an open historical `main is red: CI` tracker, #4177, 
 
 ## Task-ordered review units
 
+The table records landed delivery and the current slice; supporting unmerged implementation/review status is recorded on [#3849](https://github.com/elsa-workflows/elsa-foundation/issues/3849) and its descendant slice PRs. Unmerged source is not delivery acceptance.
+
 Each row names a coherent boundary, not permission to include every donor file matching a prefix. Keep handwritten changes and their behavior tests together, aim for roughly 3k changed lines per PR, and split further when needed. Read the current source before porting; preserve unrelated landed changes. The API/Studio supporting slices may precede durable providers in task order, but must disclose unsupported recording and may not enable an incomplete production path.
 
 | Slice | Tasks | Review boundary and required proof | Status |
 |---|---|---|---|
-| S01 | T001–T003 | Adopt the selected spec/reference, design contracts and this delivery map. Validate documentation and independent boundary review; no runtime/Studio implementation is enabled. | Preparing |
-| S02 | T004 | Immutable history envelope, policy/batch/head/bookmark/query contracts and API tracking. Constructor/identity/safety behavior and compatibility tests. | Not started |
+| S01 | T001–T003 | Adopt the selected spec/reference, design contracts and this delivery map. Validate documentation and independent boundary review; no runtime/Studio implementation is enabled. | [#4227](https://github.com/elsa-workflows/elsa-foundation/pull/4227): merged at 50747adf9c; protected merge-group CI passed; main-push verification pending; no product behavior enabled |
+| S02 | T004 | Immutable history envelope, policy/batch/head/bookmark/query contracts and API tracking. Constructor/identity/safety behavior and compatibility tests. | [#4236](https://github.com/elsa-workflows/elsa-foundation/pull/4236): reconciled with landed S01/current main; source R2 was clean before reconciliation; fresh R3 pending; 24 cases NOT RUN |
 | S03 | T005, T007 | Optional checkpoint write sidecar, fingerprint/fold preservation and writer-reader capability contract. History-free replay and unchanged continuation separation controls. | Not started |
 | S04 | T006, T008 | Actual capture-policy admission, deterministic capture and atomic in-memory participant. Split capture and storage if needed; qualify rollback/replay/no-record and scoped registration before enabling. | Not started |
 | S05 | T009–T010 | Authorized bounded run/event read APIs and honest coverage/capability results, with real handler/authorization and unknown-kind tests. | Not started |
@@ -65,3 +67,6 @@ The donor has approximately18k generated migration lines. Regenerate against the
 ## Slice receipts
 
 Add concise receipts here as work lands: PR, exact merge/head, tasks covered, current proof and remaining limitations. Keep full raw artifacts and detailed review discussion on the owning PR; do not import the prototype's execution diary into each slice.
+
+
+- **S01:** #4227 merged as `50747adf9cd9a61a96fad3a4df3d6bf73fce62e7`, exact protected merge-group [CI43398979581](https://github.com/elsa-workflows/elsa-foundation/actions/runs/43398979581) succeeded. Normal main-push CI43406610930 remains separate and pending at this receipt. The [PR receipt](https://github.com/elsa-workflows/elsa-foundation/pull/4227#issuecomment-6850055615) records actual selected/skipped evidence and the queue commit-message discrepancy; no implementation/UX acceptance or parent closeout.
