@@ -159,6 +159,13 @@ public sealed class EfRuntimeCheckpointCommitStore(
     {
         ArgumentNullException.ThrowIfNull(commit);
         try { return await CommitCoreAsync(commit, decision, cancellationToken); }
+        catch (Exception exception) when (IsHistoryHeadConflict(exception))
+        {
+            // The attempt has rolled back and reconciled its immutable marker. Only allocation
+            // contention leaves as retryable history unavailability; no fence or integrity failure
+            // is swallowed and no unbounded automatic replay is introduced here.
+            throw new RuntimeHistoryUnavailableException(commit.WorkflowExecutionId, "allocating atomic checkpoint history", exception);
+        }
         catch (Exception exception) when ((commit.ExpectedModelExecution is not null || commit.ExpectedModelParentWait is not null) &&
             (exception is IOException or DbUpdateConcurrencyException or
                 WorkflowExecutableRootWriteLeaseLostException or WorkflowExecutableRootWriteLeaseUnavailableException ||
@@ -477,6 +484,13 @@ public sealed class EfRuntimeCheckpointCommitStore(
                     }
                 }
 
+                // Check every new physical checkpoint, including an absent contribution: a retained
+                // Required admission remains owed after capture-module removal. Native admission
+                // policy is read before the incoming workflow state can overwrite it. All reservations,
+                // journal/projection rows and sibling effects remain below this same fence/marker.
+                await EfRuntimeHistoryCheckpoint.StageAsync(context, accessContextAccessor, commit, scope,
+                    _timeProvider.GetUtcNow(), RuntimeHistoryEfModule.Chain, writeCancellationToken);
+
                 await StageExactBookmarkResumeAsync(commit, scope, touchedTestScopes, writeCancellationToken);
                 await StageModelParentWaitAsync(commit, scope, touchedTestScopes, writeCancellationToken);
 
@@ -738,6 +752,10 @@ public sealed class EfRuntimeCheckpointCommitStore(
             change.State.Status is RuntimePostCommitOutboxStatus.Pending or RuntimePostCommitOutboxStatus.Delivering or RuntimePostCommitOutboxStatus.FailedRetryable))
             throw new NotSupportedException("Native model work cannot become terminal without its atomic result-delivery responsibility.");
     }
+
+    private static bool IsHistoryHeadConflict(Exception exception) => exception is EfRuntimeHistoryCheckpoint.HeadAllocationConflictException ||
+        exception is DbUpdateException update && update.Entries.Count > 0 && update.Entries.All(entry => entry.Entity is RuntimeHistoryHeadEntity) &&
+        EfRelationalExceptionClassifier.IsSaveConflict(exception, EfWriteConflict.UniqueKey);
 
     private static void ValidateThinSlice(RuntimeCheckpointCommit commit)
     {

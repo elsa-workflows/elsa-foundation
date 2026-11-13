@@ -82,3 +82,11 @@ merge or deployment; this intermediate source boundary is not a migration-ready 
 upgrade control preserves every original table digest/history ID and requires empty new history storage,
 so schema installation cannot fabricate capture or activity occurrence evidence. No capture feature or
 provider capability is enabled by the schema declaration alone.
+
+The native checkpoint binding calls history staging after its fence boundary and before incoming native
+workflow state staging on every new physical commit, including missing Required contributions. All
+history reservations and derived projections join the existing final participant/marker-last save and
+ambiguous-acknowledgement reconciliation. Allocation-only contention leaves as cause-preserving history
+unavailability after rollback/marker reconciliation; corruption and stale fences remain distinct. Actual
+selected reader/DI/profile admission remains unadvertised until the separately owned read adapter and
+observation/retention/deletion binding qualify. This direct-store source does not enable the public feature.
