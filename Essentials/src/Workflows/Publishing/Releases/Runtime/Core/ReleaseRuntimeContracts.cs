@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Elsa.Workflows.Publishing.Releases.Core;
 using Elsa.Workflows.Runtime.Core.Models;
 
@@ -21,6 +22,13 @@ public sealed class ReleaseActivityVersion(ReleaseRuntimeContentScope scope, str
     JsonElement providerPayload, string compilerFingerprint, string templateId, string templateHash, string sourceReferenceId,
     string sourceKind, string sourceId)
 {
+    [JsonConstructor]
+    public ReleaseActivityVersion(ReleaseRuntimeContentScope scope, string definitionId, string versionId, string version,
+        string activityTypeKey, string resolutionKind, JsonElement contract, string providerKey, string providerSchemaVersion,
+        JsonElement providerPayload, string compilerFingerprint, string templateId, string templateHash, string sourceReferenceId,
+        string sourceKind, string sourceId, ReleaseActivityPublicationEvidence? publication)
+        : this(scope, definitionId, versionId, version, activityTypeKey, resolutionKind, contract, providerKey, providerSchemaVersion,
+            providerPayload, compilerFingerprint, templateId, templateHash, sourceReferenceId, sourceKind, sourceId) => Publication = publication;
     public ReleaseRuntimeContentScope Scope { get; } = scope;
     public string DefinitionId { get; } = definitionId;
     public string VersionId { get; } = versionId;
@@ -37,6 +45,19 @@ public sealed class ReleaseActivityVersion(ReleaseRuntimeContentScope scope, str
     public string SourceReferenceId { get; } = sourceReferenceId;
     public string SourceKind { get; } = sourceKind;
     public string SourceId { get; } = sourceId;
+    /// <summary>Codec profile 2 original publication evidence. Missing in legacy profile 1; never grants target visibility.</summary>
+    public ReleaseActivityPublicationEvidence? Publication { get; }
+}
+
+/// <summary>Original full Provider fragment and publication metadata; physical owner tenant is independent of acquisition Scope.</summary>
+/// <remarks>OwnerTenantKnown distinguishes unknown from known-null/global. It is inert provenance, never a target visibility grant.</remarks>
+public sealed class ReleaseActivityPublicationEvidence(bool ownerTenantKnown, string? ownerTenantId, string contractJson, string providerJson, JsonElement metadata)
+{
+    public bool OwnerTenantKnown { get; } = ownerTenantKnown;
+    public string? OwnerTenantId { get; } = ownerTenantId;
+    public string ContractJson { get; } = contractJson;
+    public string ProviderJson { get; } = providerJson;
+    public JsonElement Metadata { get; } = metadata.Clone();
 }
 
 /// <summary>Copied owner-codec bytes and their descriptor; original owner IDs are preserved.</summary>

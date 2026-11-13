@@ -137,7 +137,8 @@ internal sealed class RuntimeInspection(ReleaseMemberKey member, RuntimeCaptured
     private ReleaseActivityVersion ActivityByVersion(string id, ReleaseRuntimeContentScope scope)
     {
         var descriptor = cache.Member(content, new(ReleaseRuntimeCodecs.ActivityVersionKind, id));
-        if (descriptor.Codec != new ReleaseCodecKey(ReleaseRuntimeCodecs.ActivityVersionKind, ReleaseRuntimeCodecs.ActivityVersion, 1)) throw ReleaseRuntimeArtifactCodec.Refuse("captured_activity_codec_unsupported");
+        if (descriptor.Codec.Kind != ReleaseRuntimeCodecs.ActivityVersionKind || descriptor.Codec.Codec != ReleaseRuntimeCodecs.ActivityVersion ||
+            descriptor.Codec.CodecVersion is not (1 or 2)) throw ReleaseRuntimeArtifactCodec.Refuse("captured_activity_codec_unsupported");
         var target = cache.ActivityVersion(content, descriptor.Key);
         if (target.VersionId != id || target.Scope != scope || descriptor.OwnerVersion != new ReleaseOwnerVersion("semver", target.Version, null))
             throw ReleaseRuntimeArtifactCodec.Refuse("captured_activity_identity_conflict");
