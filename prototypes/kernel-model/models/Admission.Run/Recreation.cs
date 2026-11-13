@@ -11,7 +11,7 @@ internal static class InvocationRecreation
     {
         foreach (var mode in new[] { Modes.Balanced, Modes.Durable })
         foreach (var nested in new[] { false, true }) Reproduce(mode, nested);
-        Console.WriteLine("4/4 delete/recreate counterexamples observed; I22 rejects recreation. Shared identity gate remains OPEN.");
+        Console.WriteLine("4/4 delete/recreate counterexamples observed; I10 rejects ended-to-running recreation before I22. Shared identity gate remains OPEN.");
     }
 
     private static void Reproduce(string mode, bool nested)
@@ -23,7 +23,8 @@ internal static class InvocationRecreation
         var root = nested ? Wf.Sequence("parent", receiver, Wf.Set("after", "returned", true)) : receiver;
         NativeWorkflows.Registry.Add(Wf.Workflow("recreation-probe", root));
         var recreated = false;
-        var sawI22 = false;
+        var sawI10 = false;
+        long endedRevision = 0;
         var serial = 0;
         void Require(bool ok, string message)
         { if (!ok) throw new InvalidOperationException("R1: " + message); }
@@ -32,9 +33,11 @@ internal static class InvocationRecreation
             world.Apply(act);
             if (world.Check() is not { } error) return;
             // The existing oracle deliberately forbids reused IDs. Preserve this failure; do not call the run green.
-            if (!recreated || error != $"I22 {target.Id} was deleted and has a row again")
+            var row = world.Store.Instances.GetValueOrDefault(target.Id);
+            var expected = $"I10 {target.Id} went from revision {endedRevision} Finished to revision {row?.Revision} Running";
+            if (!recreated || row?.Status != InstanceStatus.Running || error != expected)
                 throw new InvalidOperationException("Kernel: " + error);
-            sawI22 = true;
+            sawI10 = true;
         }
         void Add(string kind, string? payload = null, StartSpec? start = null, bool reply = false)
         {
@@ -66,6 +69,7 @@ internal static class InvocationRecreation
         Add(NativeKinds.Resume, Json.Write(new ResumeStimulus("finish"))); Drain();
         Require(world.Store.Instances[target.Id].Status == InstanceStatus.Finished, "ordinary child did not complete workflow");
         if (nested) Require(State().Variables["returned"]!.GetValue<bool>(), "caller did not continue");
+        endedRevision = world.Store.Instances[target.Id].Revision;
         Add(Kinds.Delete); Drain();
         Require(!world.Store.Instances.ContainsKey(target.Id), "normal delete did not remove ended row");
         recreated = true;
@@ -77,8 +81,8 @@ internal static class InvocationRecreation
         var inbox = State().Inboxes![newFrame];
         Require(Last().Result == "Accepted" && Last().Order == 1 && inbox.Pending.Single() == oldInput,
             "old invocation input no longer aliases the new creation; replace this expected-counterexample probe with a regression");
-        Require(sawI22, "existing non-recreation oracle did not report its coverage boundary");
-        Console.WriteLine($"COUNTEREXAMPLE {mode},nested={nested}: {target.Id}/{oldFrame} reused; old input accepted fresh into new creation; I22 observed");
+        Require(sawI10, "existing non-recreation oracle did not report its coverage boundary");
+        Console.WriteLine($"COUNTEREXAMPLE {mode},nested={nested}: {target.Id}/{oldFrame} reused; old input accepted fresh into new creation; I10 observed; I22 not reached");
     }
 }
 
