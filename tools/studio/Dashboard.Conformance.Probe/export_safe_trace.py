@@ -102,6 +102,7 @@ class Exporter:
         for secret in self.secrets:
             forms.update({secret,quote(secret,safe=''),base64.b64encode(secret.encode()).decode(),base64.urlsafe_b64encode(secret.encode()).decode()})
         self.forms=sorted(forms,key=len,reverse=True)
+        self.prefix=re.compile("|".join(re.escape(prefix) for prefix in sorted({form[:4] for form in self.forms}))) if self.forms else None
         self.byte_secrets=[form.encode() for form in self.forms]
 
     def discover(self, value, key=''):
@@ -157,6 +158,10 @@ class Exporter:
             raise UnsafeTrace('Credential too short for safe evidence export')
 
     def text(self, value: str) -> str:
+        # Most DOM strings cannot contain a known credential. Every known form has at
+        # least four characters; this prefilter avoids hundreds of redundant replacements.
+        if len(value)<4 or self.prefix is None or not self.prefix.search(value):
+            return TOKEN.sub('[redacted]',value)
         for form in self.forms:
             value = value.replace(form, '[redacted]')
         return TOKEN.sub('[redacted]',value)
