@@ -10373,3 +10373,470 @@ Elsa.Workflows.Runtime.Core.Contracts.ISchedulerPoisonFenceCapability.RecordFenc
 Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutableSourceReferenceWriter.SaveScopedPublicationAsync(Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableSourceReference! reference, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableIdentity! root, System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableRootWriteLease!>! leases, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableSourceReference!>
 Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableSourceReference.PublicationScope.init -> void
 Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableSourceReference.PublicationScope.get -> Elsa.Workflows.Runtime.Core.Models.PersistenceScope?
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.IStandaloneTriggerStore
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.IStandaloneTriggerStore.FindAsync(Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerScope! scope, string! triggerId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerAggregate?>
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.IStandaloneTriggerStore.FindMutationAsync(Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerScope! scope, string! actorId, string! requestId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerMutationReceipt?>
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.IStandaloneTriggerStore.FindSubscriptionAsync(Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerScope! scope, string! subscriptionId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerSubscription?>
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.IStandaloneTriggerStore.ListAsync(Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerScope! scope, Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerResourceQuery! query, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerResourcePage!>
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.IStandaloneTriggerStore.ListSubscriptionsAsync(Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerScope! scope, Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerSubscriptionQuery! query, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerSubscriptionPage!>
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.IStandaloneTriggerStore.WriteAsync(Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerScope! scope, Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerStoreWrite! write, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerMutationReceipt!>
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.ITriggerInputMapper
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.ITriggerInputMapper.MapAsync(Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInputContract! contract, System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerInputMapping!>! mappings, System.Text.Json.JsonElement sourceEnvelope, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInputValidation!>
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.ITriggerInputMapper.ValidateMappings(Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInputContract! contract, System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerInputMapping!>! mappings) -> Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInputValidation!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.StandaloneTrigger
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.StandaloneTrigger.AssociationRevision.get -> long
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.StandaloneTrigger.Configuration.get -> System.Text.Json.JsonElement
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.StandaloneTrigger.ConfigurationRevision.get -> long
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.StandaloneTrigger.CreatedAt.get -> System.DateTimeOffset
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.StandaloneTrigger.CreatedBy.get -> string!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.StandaloneTrigger.Description.get -> string?
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.StandaloneTrigger.DesiredState.get -> Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerDesiredState
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.StandaloneTrigger.HasActivated.get -> bool
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.StandaloneTrigger.Id.get -> string!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.StandaloneTrigger.Name.get -> string!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.StandaloneTrigger.Origin.get -> Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerManagementOrigin!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.StandaloneTrigger.Revision.get -> long
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.StandaloneTrigger.SchemaVersion.get -> int
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.StandaloneTrigger.StandaloneTrigger(string! id, string! name, string! typeKey, int schemaVersion, System.Text.Json.JsonElement configuration, long revision, long configurationRevision, long associationRevision, Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerDesiredState desiredState, Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerManagementOrigin! origin, System.DateTimeOffset createdAt, System.DateTimeOffset updatedAt, string! createdBy, string? description = null, bool hasActivated = false, string? tenantId = null) -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.StandaloneTrigger.TenantId.get -> string?
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.StandaloneTrigger.TypeKey.get -> string!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.StandaloneTrigger.UpdatedAt.get -> System.DateTimeOffset
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerAggregate
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerAggregate.<Clone>$() -> Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerAggregate!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerAggregate.Deconstruct(out Elsa.Workflows.Runtime.Core.StandaloneTriggers.StandaloneTrigger! Trigger, out System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerSubscription!>! Subscriptions) -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerAggregate.Equals(Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerAggregate? other) -> bool
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerAggregate.Subscriptions.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerSubscription!>!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerAggregate.Subscriptions.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerAggregate.Trigger.get -> Elsa.Workflows.Runtime.Core.StandaloneTriggers.StandaloneTrigger!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerAggregate.Trigger.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerAggregate.TriggerAggregate(Elsa.Workflows.Runtime.Core.StandaloneTriggers.StandaloneTrigger! Trigger, System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerSubscription!>! Subscriptions) -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerDesiredState
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerDesiredState.Deleted = 2 -> Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerDesiredState
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerDesiredState.Enabled = 1 -> Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerDesiredState
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerDesiredState.Paused = 0 -> Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerDesiredState
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerExpressionBinding
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerExpressionBinding.CapabilityProfile.get -> string!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerExpressionBinding.Language.get -> string!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerExpressionBinding.Options.get -> System.Text.Json.JsonElement
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerExpressionBinding.Parameters.get -> System.Collections.Generic.IReadOnlyDictionary<string!, Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerValueBinding!>!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerExpressionBinding.ResultType.get -> Elsa.Primitives.Models.TypeReference!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerExpressionBinding.Source.get -> string!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerExpressionBinding.TriggerExpressionBinding(string! language, string! source, Elsa.Primitives.Models.TypeReference! resultType, System.Text.Json.JsonElement options, string! capabilityProfile, System.Collections.Generic.IReadOnlyDictionary<string!, Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerValueBinding!>! parameters) -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerGrantStatus
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerGrantStatus.Granted = 0 -> Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerGrantStatus
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerGrantStatus.Revoked = 1 -> Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerGrantStatus
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerInputMapping
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerInputMapping.Binding.get -> Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerValueBinding!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerInputMapping.InputName.get -> string!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerInputMapping.TriggerInputMapping(string! inputName, Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerValueBinding! binding) -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerInvocationGrant
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerInvocationGrant.DefinitionId.get -> string!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerInvocationGrant.GrantedAt.get -> System.DateTimeOffset
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerInvocationGrant.GrantedBy.get -> string!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerInvocationGrant.Id.get -> string!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerInvocationGrant.ModelKey.get -> string!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerInvocationGrant.Revision.get -> long
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerInvocationGrant.RevokedAt.get -> System.DateTimeOffset?
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerInvocationGrant.RevokedBy.get -> string?
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerInvocationGrant.SlotName.get -> string!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerInvocationGrant.SourceTypeKey.get -> string!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerInvocationGrant.Status.get -> Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerGrantStatus
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerInvocationGrant.SubscriptionId.get -> string!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerInvocationGrant.TriggerId.get -> string!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerInvocationGrant.TriggerInvocationGrant(string! id, string! triggerId, string! subscriptionId, string! definitionId, string! slotName, string! modelKey, string! sourceTypeKey, long revision, Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerGrantStatus status, string! grantedBy, System.DateTimeOffset grantedAt, string? revokedBy = null, System.DateTimeOffset? revokedAt = null) -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerLiteralBinding
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerLiteralBinding.TriggerLiteralBinding(System.Text.Json.JsonElement value) -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerLiteralBinding.Value.get -> System.Text.Json.JsonElement
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerManagementKind
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerManagementKind.Provider = 1 -> Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerManagementKind
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerManagementKind.Studio = 0 -> Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerManagementKind
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerManagementOrigin
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerManagementOrigin.ConfigurationReadOnly.get -> bool
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerManagementOrigin.Kind.get -> Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerManagementKind
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerManagementOrigin.SourceId.get -> string?
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerManagementOrigin.TriggerManagementOrigin(Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerManagementKind kind, string? sourceId = null, bool configurationReadOnly = false) -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerMutationReceipt
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerMutationReceipt.<Clone>$() -> Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerMutationReceipt!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerMutationReceipt.ActorId.get -> string!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerMutationReceipt.ActorId.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerMutationReceipt.CommittedAt.get -> System.DateTimeOffset
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerMutationReceipt.CommittedAt.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerMutationReceipt.Deconstruct(out string! RequestId, out string! RequestFingerprint, out string! ActorId, out string! TriggerId, out long Revision, out System.DateTimeOffset CommittedAt) -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerMutationReceipt.Equals(Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerMutationReceipt? other) -> bool
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerMutationReceipt.RequestFingerprint.get -> string!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerMutationReceipt.RequestFingerprint.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerMutationReceipt.RequestId.get -> string!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerMutationReceipt.RequestId.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerMutationReceipt.Revision.get -> long
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerMutationReceipt.Revision.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerMutationReceipt.TriggerId.get -> string!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerMutationReceipt.TriggerId.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerMutationReceipt.TriggerMutationReceipt(string! RequestId, string! RequestFingerprint, string! ActorId, string! TriggerId, long Revision, System.DateTimeOffset CommittedAt) -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerOperationException
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerOperationException.Code.get -> string!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerOperationException.Fields.get -> System.Collections.Generic.IReadOnlyDictionary<string!, string!>?
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerOperationException.TriggerOperationException(string! code, string! message, System.Collections.Generic.IReadOnlyDictionary<string!, string!>? fields = null, System.Exception? innerException = null) -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerResourcePage
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerResourcePage.<Clone>$() -> Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerResourcePage!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerResourcePage.Deconstruct(out System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.StandaloneTriggers.StandaloneTrigger!>! Items, out string? Next) -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerResourcePage.Equals(Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerResourcePage? other) -> bool
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerResourcePage.Items.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.StandaloneTriggers.StandaloneTrigger!>!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerResourcePage.Items.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerResourcePage.Next.get -> string?
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerResourcePage.Next.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerResourcePage.TriggerResourcePage(System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.StandaloneTriggers.StandaloneTrigger!>! Items, string? Next) -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerResourceQuery
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerResourceQuery.<Clone>$() -> Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerResourceQuery!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerResourceQuery.After.get -> string?
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerResourceQuery.After.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerResourceQuery.Deconstruct(out int Limit, out string? After, out string? Search, out string? TypeKey, out Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerDesiredState? DesiredState) -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerResourceQuery.DesiredState.get -> Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerDesiredState?
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerResourceQuery.DesiredState.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerResourceQuery.Equals(Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerResourceQuery? other) -> bool
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerResourceQuery.Limit.get -> int
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerResourceQuery.Limit.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerResourceQuery.Search.get -> string?
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerResourceQuery.Search.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerResourceQuery.TriggerResourceQuery(int Limit = 25, string? After = null, string? Search = null, string? TypeKey = null, Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerDesiredState? DesiredState = null) -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerResourceQuery.TypeKey.get -> string?
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerResourceQuery.TypeKey.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerScope
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerScope.<Clone>$() -> Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerScope!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerScope.Deconstruct(out Elsa.Workflows.Runtime.Core.Models.PersistenceScope! Persistence, out string? TenantId) -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerScope.Equals(Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerScope? other) -> bool
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerScope.Persistence.get -> Elsa.Workflows.Runtime.Core.Models.PersistenceScope!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerScope.Persistence.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerScope.TenantId.get -> string?
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerScope.TenantId.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerScope.TriggerScope(Elsa.Workflows.Runtime.Core.Models.PersistenceScope! Persistence, string? TenantId) -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerSourceBinding
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerSourceBinding.Path.get -> System.Collections.Generic.IReadOnlyList<string!>!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerSourceBinding.TriggerSourceBinding(System.Collections.Generic.IReadOnlyList<string!>! path) -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerStoreWrite
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerStoreWrite.<Clone>$() -> Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerStoreWrite!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerStoreWrite.ActorId.get -> string!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerStoreWrite.ActorId.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerStoreWrite.Deconstruct(out string! RequestId, out string! RequestFingerprint, out string! ActorId, out long? ExpectedRevision, out Elsa.Workflows.Runtime.Core.StandaloneTriggers.StandaloneTrigger! Trigger, out System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerSubscription!>! Subscriptions) -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerStoreWrite.Equals(Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerStoreWrite? other) -> bool
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerStoreWrite.ExpectedRevision.get -> long?
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerStoreWrite.ExpectedRevision.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerStoreWrite.RequestFingerprint.get -> string!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerStoreWrite.RequestFingerprint.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerStoreWrite.RequestId.get -> string!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerStoreWrite.RequestId.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerStoreWrite.Subscriptions.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerSubscription!>!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerStoreWrite.Subscriptions.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerStoreWrite.Trigger.get -> Elsa.Workflows.Runtime.Core.StandaloneTriggers.StandaloneTrigger!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerStoreWrite.Trigger.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerStoreWrite.TriggerStoreWrite(string! RequestId, string! RequestFingerprint, string! ActorId, long? ExpectedRevision, Elsa.Workflows.Runtime.Core.StandaloneTriggers.StandaloneTrigger! Trigger, System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerSubscription!>! Subscriptions) -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerSubscription
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerSubscription.DefinitionId.get -> string!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerSubscription.Enabled.get -> bool
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerSubscription.Grant.get -> Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerInvocationGrant?
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerSubscription.Id.get -> string!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerSubscription.MappingRevision.get -> long
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerSubscription.Mappings.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerInputMapping!>!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerSubscription.ModelKey.get -> string!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerSubscription.Origin.get -> Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerManagementOrigin!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerSubscription.Revision.get -> long
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerSubscription.SlotName.get -> string!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerSubscription.TriggerId.get -> string!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerSubscription.TriggerSubscription(string! id, string! triggerId, string! definitionId, string! slotName, string! modelKey, long revision, long mappingRevision, bool enabled, System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerInputMapping!>! mappings, Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerManagementOrigin! origin, Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerInvocationGrant? grant = null) -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerSubscriptionPage
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerSubscriptionPage.<Clone>$() -> Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerSubscriptionPage!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerSubscriptionPage.Deconstruct(out System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerSubscription!>! Items, out string? Next) -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerSubscriptionPage.Equals(Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerSubscriptionPage? other) -> bool
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerSubscriptionPage.Items.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerSubscription!>!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerSubscriptionPage.Items.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerSubscriptionPage.Next.get -> string?
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerSubscriptionPage.Next.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerSubscriptionPage.TriggerSubscriptionPage(System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerSubscription!>! Items, string? Next) -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerSubscriptionQuery
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerSubscriptionQuery.<Clone>$() -> Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerSubscriptionQuery!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerSubscriptionQuery.After.get -> string?
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerSubscriptionQuery.After.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerSubscriptionQuery.Deconstruct(out string? TriggerId, out string? DefinitionId, out string? SlotName, out int Limit, out string? After) -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerSubscriptionQuery.DefinitionId.get -> string?
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerSubscriptionQuery.DefinitionId.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerSubscriptionQuery.Equals(Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerSubscriptionQuery? other) -> bool
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerSubscriptionQuery.Limit.get -> int
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerSubscriptionQuery.Limit.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerSubscriptionQuery.SlotName.get -> string?
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerSubscriptionQuery.SlotName.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerSubscriptionQuery.TriggerId.get -> string?
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerSubscriptionQuery.TriggerId.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerSubscriptionQuery.TriggerSubscriptionQuery(string? TriggerId = null, string? DefinitionId = null, string? SlotName = null, int Limit = 25, string? After = null) -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerValueBinding
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerValueBinding.TriggerValueBinding() -> void
+override Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerAggregate.Equals(object? obj) -> bool
+override Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerAggregate.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerAggregate.ToString() -> string!
+override Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerMutationReceipt.Equals(object? obj) -> bool
+override Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerMutationReceipt.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerMutationReceipt.ToString() -> string!
+override Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerResourcePage.Equals(object? obj) -> bool
+override Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerResourcePage.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerResourcePage.ToString() -> string!
+override Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerResourceQuery.Equals(object? obj) -> bool
+override Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerResourceQuery.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerResourceQuery.ToString() -> string!
+override Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerScope.Equals(object? obj) -> bool
+override Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerScope.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerScope.ToString() -> string!
+override Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerStoreWrite.Equals(object? obj) -> bool
+override Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerStoreWrite.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerStoreWrite.ToString() -> string!
+override Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerSubscriptionPage.Equals(object? obj) -> bool
+override Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerSubscriptionPage.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerSubscriptionPage.ToString() -> string!
+override Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerSubscriptionQuery.Equals(object? obj) -> bool
+override Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerSubscriptionQuery.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerSubscriptionQuery.ToString() -> string!
+static Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerAggregate.operator !=(Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerAggregate? left, Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerAggregate? right) -> bool
+static Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerAggregate.operator ==(Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerAggregate? left, Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerAggregate? right) -> bool
+static Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerMutationReceipt.operator !=(Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerMutationReceipt? left, Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerMutationReceipt? right) -> bool
+static Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerMutationReceipt.operator ==(Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerMutationReceipt? left, Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerMutationReceipt? right) -> bool
+static Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerResourcePage.operator !=(Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerResourcePage? left, Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerResourcePage? right) -> bool
+static Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerResourcePage.operator ==(Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerResourcePage? left, Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerResourcePage? right) -> bool
+static Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerResourceQuery.operator !=(Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerResourceQuery? left, Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerResourceQuery? right) -> bool
+static Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerResourceQuery.operator ==(Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerResourceQuery? left, Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerResourceQuery? right) -> bool
+static Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerScope.operator !=(Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerScope? left, Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerScope? right) -> bool
+static Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerScope.operator ==(Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerScope? left, Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerScope? right) -> bool
+static Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerStoreWrite.operator !=(Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerStoreWrite? left, Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerStoreWrite? right) -> bool
+static Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerStoreWrite.operator ==(Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerStoreWrite? left, Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerStoreWrite? right) -> bool
+static Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerSubscriptionPage.operator !=(Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerSubscriptionPage? left, Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerSubscriptionPage? right) -> bool
+static Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerSubscriptionPage.operator ==(Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerSubscriptionPage? left, Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerSubscriptionPage? right) -> bool
+static Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerSubscriptionQuery.operator !=(Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerSubscriptionQuery? left, Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerSubscriptionQuery? right) -> bool
+static Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerSubscriptionQuery.operator ==(Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerSubscriptionQuery? left, Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerSubscriptionQuery? right) -> bool
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerFinding.Message.get -> string!
+static Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetPage.operator !=(Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetPage? left, Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetPage? right) -> bool
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerFinding.Deconstruct(out string! Code, out string! Message, out string? Field, out string? InputName) -> void
+static Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerFieldChoice.operator ==(Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerFieldChoice? left, Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerFieldChoice? right) -> bool
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerSourceField.Equals(Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerSourceField? other) -> bool
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerConfigurationField.Required.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerFinding.Code.get -> string!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerConfigurationField.Sensitive.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.StandaloneTriggerConfigurationValidating
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerSourceField.Type.get -> string?
+override Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerFinding.Equals(object? obj) -> bool
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTypeDescriptor.TypeKey.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerFieldChoice
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerFinding.<Clone>$() -> Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerFinding!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTypeDescriptor.SourceFields.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerSourceField!>!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.StandaloneTriggerConfigurationValidating.TypeKey.get -> string!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTypeDescriptor.<Clone>$() -> Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTypeDescriptor!
+override Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTypeDescriptor.ToString() -> string!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetQuery.Search.get -> string?
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerConfigurationField.Sensitive.get -> bool
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerSourceField
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerFieldChoice.<Clone>$() -> Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerFieldChoice!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetDescription.DefinitionId.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.IStandaloneTriggerTypeCatalog.List() -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTypeDescriptor!>!
+static Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetPage.operator ==(Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetPage? left, Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetPage? right) -> bool
+static Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetDescription.operator !=(Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetDescription? left, Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetDescription? right) -> bool
+override Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetDescription.Equals(object? obj) -> bool
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetState.Unpublished = 1 -> Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetState
+override Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetQuery.ToString() -> string!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTypeDescriptor.DisplayName.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerConfigurationField
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetQuery.Equals(Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetQuery? other) -> bool
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetDescription.VersionId.get -> string?
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetDescription.TriggerTargetDescription(string! DefinitionId, string! SlotName, string? DisplayName, string! ModelKey, Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetState State, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInputContract? InputContract, string? ContractRevision, string? VersionId, string? Version, string? PublicationId, long? SlotRevision, bool SupportsWorkflowOwnedHttpResponse, System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerFinding!>! Findings) -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetPage.Items.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetDescription!>!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerConfigurationField.Key.get -> string!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerConfigurationField.Label.get -> string!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerSourceField.<Clone>$() -> Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerSourceField!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetDescription
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetDescription.ModelKey.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetDescription.InputContract.init -> void
+override Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetQuery.Equals(object? obj) -> bool
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetDescription.Deconstruct(out string! DefinitionId, out string! SlotName, out string? DisplayName, out string! ModelKey, out Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetState State, out Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInputContract? InputContract, out string? ContractRevision, out string? VersionId, out string? Version, out string? PublicationId, out long? SlotRevision, out bool SupportsWorkflowOwnedHttpResponse, out System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerFinding!>! Findings) -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTypeDescriptor.Description.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetDescription.SupportsWorkflowOwnedHttpResponse.get -> bool
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerConfigurationField.DefaultValue.get -> System.Text.Json.JsonElement?
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetDescription.ModelKey.get -> string!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTypeDescriptor.SourceFields.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerConfigurationField.Type.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetPage
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetPage.Items.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTypeDescriptor.DisplayName.get -> string!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.IStandaloneTriggerTypeCatalog.Find(string! typeKey) -> Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTypeDescriptor?
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTypeDescriptor.Equals(Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTypeDescriptor? other) -> bool
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetDescription.InputContract.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInputContract?
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.ITriggerConfigurationValidator.TypeKey.get -> string!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerSourceField.Path.init -> void
+override Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetQuery.GetHashCode() -> int
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.IStandaloneTriggerTargetDiscovery.DescribeAsync(Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerScope! scope, string! definitionId, string! slotName, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetDescription?>
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerConfigurationField.Label.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.ITriggerConfigurationValidator
+override Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTypeDescriptor.GetHashCode() -> int
+static Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetDescription.operator ==(Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetDescription? left, Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetDescription? right) -> bool
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerConfigurationField.Key.init -> void
+override Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerSourceField.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetPage.ToString() -> string!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerConfigurationField.Deconstruct(out string! Key, out string! Label, out string! Type, out bool Required, out System.Text.Json.JsonElement? DefaultValue, out System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerFieldChoice!>? Choices, out string? Description, out bool Sensitive, out bool ReadOnly) -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerFieldChoice.Equals(Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerFieldChoice? other) -> bool
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerSourceField.Deconstruct(out System.Collections.Generic.IReadOnlyList<string!>! Path, out string! Label, out string? Type) -> void
+override Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerSourceField.ToString() -> string!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.IStandaloneTriggerTypeCatalog
+override Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerConfigurationField.Equals(object? obj) -> bool
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerFinding
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerFieldChoice.Value.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTypeDescriptor.ConfigurationFields.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerConfigurationField!>!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetQuery.<Clone>$() -> Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetQuery!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerFinding.InputName.get -> string?
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerFinding.Field.get -> string?
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetQuery.Deconstruct(out int Limit, out string? After, out string? Search) -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetDescription.ContractRevision.get -> string?
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetQuery.Limit.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerConfigurationField.Equals(Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerConfigurationField? other) -> bool
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerFieldChoice.Label.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerSourceField.Label.get -> string!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetPage.<Clone>$() -> Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetPage!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetDescription.ContractRevision.init -> void
+static Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTypeDescriptor.operator !=(Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTypeDescriptor? left, Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTypeDescriptor? right) -> bool
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetDescription.SlotName.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerConfigurationField.<Clone>$() -> Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerConfigurationField!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetPage.Deconstruct(out System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetDescription!>! Items, out string? Next) -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetDescription.<Clone>$() -> Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetDescription!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerFinding.TriggerFinding(string! Code, string! Message, string? Field = null, string? InputName = null) -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerConfigurationField.Required.get -> bool
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerSourceField.Label.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTypeDescriptor.ConfigurationFields.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerFieldChoice.Deconstruct(out string! Value, out string! Label) -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerFinding.Code.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetPage.Equals(Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetPage? other) -> bool
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.StandaloneTriggerConfigurationValidating.Findings.get -> System.Collections.Generic.ICollection<Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerFinding!>!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetDescription.PublicationId.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetPage.Next.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetDescription.SupportsWorkflowOwnedHttpResponse.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.IStandaloneTriggerTargetDiscovery.ListAsync(Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerScope! scope, Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetQuery! query, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetPage!>
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerFieldChoice.Value.get -> string!
+static Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTypeDescriptor.operator ==(Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTypeDescriptor? left, Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTypeDescriptor? right) -> bool
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTypeDescriptor.Deconstruct(out string! TypeKey, out int SchemaVersion, out string! DisplayName, out string! Family, out System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerConfigurationField!>! ConfigurationFields, out System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerSourceField!>! SourceFields, out string? Description) -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTypeDescriptor
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTypeDescriptor.TypeKey.get -> string!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerFinding.Field.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetQuery.After.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerFinding.Message.init -> void
+static Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerConfigurationField.operator ==(Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerConfigurationField? left, Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerConfigurationField? right) -> bool
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerConfigurationField.Description.get -> string?
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerConfigurationField.Choices.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerFieldChoice!>?
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetDescription.DefinitionId.get -> string!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTypeDescriptor.Description.get -> string?
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetPage.TriggerTargetPage(System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetDescription!>! Items, string? Next) -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetQuery.TriggerTargetQuery(int Limit = 25, string? After = null, string? Search = null) -> void
+override Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetPage.Equals(object? obj) -> bool
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetDescription.VersionId.init -> void
+override Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerSourceField.Equals(object? obj) -> bool
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTypeDescriptor.SchemaVersion.get -> int
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetDescription.Equals(Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetDescription? other) -> bool
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetDescription.State.get -> Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetState
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetPage.Next.get -> string?
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetDescription.Findings.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerFinding!>!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetDescription.SlotRevision.init -> void
+static Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerSourceField.operator !=(Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerSourceField? left, Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerSourceField? right) -> bool
+static Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerConfigurationField.operator !=(Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerConfigurationField? left, Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerConfigurationField? right) -> bool
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetQuery.Limit.get -> int
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetDescription.State.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerConfigurationField.Description.init -> void
+override Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerFieldChoice.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetDescription.GetHashCode() -> int
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.StandaloneTriggerTypesInitializing.StandaloneTriggerTypesInitializing() -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.ITriggerConfigurationValidator.ValidateAsync(int schemaVersion, System.Text.Json.JsonElement configuration, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerFinding!>!>
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.IStandaloneTriggerTypeSource.GetTypes() -> System.Collections.Generic.IEnumerable<Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTypeDescriptor!>!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTypeDescriptor.TriggerTypeDescriptor(string! TypeKey, int SchemaVersion, string! DisplayName, string! Family, System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerConfigurationField!>! ConfigurationFields, System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerSourceField!>! SourceFields, string? Description = null) -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerSourceField.Path.get -> System.Collections.Generic.IReadOnlyList<string!>!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.StandaloneTriggerTypesInitializing.Types.get -> System.Collections.Generic.ICollection<Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTypeDescriptor!>!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetState.Available = 0 -> Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetState
+static Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetQuery.operator ==(Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetQuery? left, Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetQuery? right) -> bool
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerConfigurationField.TriggerConfigurationField(string! Key, string! Label, string! Type = "string", bool Required = false, System.Text.Json.JsonElement? DefaultValue = null, System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerFieldChoice!>? Choices = null, string? Description = null, bool Sensitive = false, bool ReadOnly = false) -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetQuery
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTypeDescriptor.Family.get -> string!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.StandaloneTriggerTypesInitializing
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerConfigurationField.ReadOnly.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.IStandaloneTriggerTypeSource
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetDescription.SlotName.get -> string!
+override Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerConfigurationField.ToString() -> string!
+static Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetQuery.operator !=(Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetQuery? left, Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetQuery? right) -> bool
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerConfigurationField.Type.get -> string!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetState
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerConfigurationField.Choices.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetDescription.SlotRevision.get -> long?
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerSourceField.Type.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetQuery.After.get -> string?
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetDescription.Version.get -> string?
+override Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerFieldChoice.ToString() -> string!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.StandaloneTriggerConfigurationValidating.Configuration.get -> System.Text.Json.JsonElement
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetDescription.DisplayName.init -> void
+static Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerFieldChoice.operator !=(Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerFieldChoice? left, Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerFieldChoice? right) -> bool
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.StandaloneTriggerConfigurationValidating.StandaloneTriggerConfigurationValidating(string! typeKey, int schemaVersion, System.Text.Json.JsonElement configuration) -> void
+override Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetDescription.ToString() -> string!
+static Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerFinding.operator !=(Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerFinding? left, Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerFinding? right) -> bool
+static Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerFinding.operator ==(Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerFinding? left, Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerFinding? right) -> bool
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetState.Unavailable = 2 -> Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetState
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerFinding.Equals(Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerFinding? other) -> bool
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.IStandaloneTriggerTargetDiscovery
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerFinding.InputName.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerConfigurationField.ReadOnly.get -> bool
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerSourceField.TriggerSourceField(System.Collections.Generic.IReadOnlyList<string!>! Path, string! Label, string? Type = null) -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerFieldChoice.Label.get -> string!
+static Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerSourceField.operator ==(Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerSourceField? left, Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerSourceField? right) -> bool
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetDescription.Version.init -> void
+override Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTypeDescriptor.Equals(object? obj) -> bool
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetQuery.Search.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetDescription.Findings.init -> void
+override Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerFinding.GetHashCode() -> int
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTypeDescriptor.SchemaVersion.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTypeDescriptor.Family.init -> void
+override Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerFinding.ToString() -> string!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerFieldChoice.TriggerFieldChoice(string! Value, string! Label) -> void
+override Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetPage.GetHashCode() -> int
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerConfigurationField.DefaultValue.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetDescription.PublicationId.get -> string?
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.StandaloneTriggerConfigurationValidating.SchemaVersion.get -> int
+override Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerFieldChoice.Equals(object? obj) -> bool
+override Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerConfigurationField.GetHashCode() -> int
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetDescription.DisplayName.get -> string?
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetResource.Equals(Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetResource? other) -> bool
+override Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetResource.GetHashCode() -> int
+static Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetResource.operator !=(Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetResource? left, Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetResource? right) -> bool
+override Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetResource.ToString() -> string!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetResource.DefinitionId.get -> string!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetResource.Deconstruct(out string! DefinitionId, out string! SlotName) -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetResource.SlotName.get -> string!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetResource.SlotName.init -> void
+override Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetResource.Equals(object? obj) -> bool
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetResource
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetResource.<Clone>$() -> Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetResource!
+static Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetResource.operator ==(Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetResource? left, Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetResource? right) -> bool
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetResource.DefinitionId.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetResource.TriggerTargetResource(string! DefinitionId, string! SlotName) -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetObservation.SlotName.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetObservation.State.init -> void
+override Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetObservation.GetHashCode() -> int
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerStoreWrite.ObservedTargets.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetObservation.SlotRevision.get -> long?
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetObservation.PublicationId.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetObservation.DefinitionId.get -> string!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetObservation.<Clone>$() -> Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetObservation!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetObservation.SlotName.get -> string!
+override Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetObservation.ToString() -> string!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetObservation.SlotRevision.init -> void
+static Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetObservation.operator ==(Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetObservation? left, Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetObservation? right) -> bool
+override Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetObservation.Equals(object? obj) -> bool
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetObservation.TriggerTargetObservation(string! DefinitionId, string! SlotName, long? SlotRevision, string? PublicationId, string? ContractFingerprint, string? ModelKey, Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetState State) -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetObservation.ModelKey.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerStoreWrite.ObservedTargets.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetObservation!>?
+static Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetObservation.operator !=(Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetObservation? left, Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetObservation? right) -> bool
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetObservation.PublicationId.get -> string?
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetObservation
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetObservation.ModelKey.get -> string?
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetObservation.ContractFingerprint.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetObservation.DefinitionId.init -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetObservation.Deconstruct(out string! DefinitionId, out string! SlotName, out long? SlotRevision, out string? PublicationId, out string? ContractFingerprint, out string? ModelKey, out Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetState State) -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetObservation.Equals(Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetObservation? other) -> bool
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetObservation.ContractFingerprint.get -> string?
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetObservation.State.get -> Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetState
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTypeDescriptor.ConfigurationEditorId.get -> string?
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTypeDescriptor.ConfigurationEditorId.init -> void

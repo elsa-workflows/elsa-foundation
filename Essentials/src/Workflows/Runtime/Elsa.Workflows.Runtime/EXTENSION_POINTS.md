@@ -1245,3 +1245,10 @@ The human-work model and public contracts live in `Runtime.Core/UserTasks`. The 
 
 
 User Task inbox cursors use `UserTaskOptions.CursorEncryptionKey` (Base64, 32 bytes shared by API replicas), falling back to a domain-separated configured `RuntimeRecoveryContinuationOptions.SigningKey`. Only development composition may use ephemeral keys. Key rotation expires existing pages; task state and accepted responses are independent of the cursor key.
+
+### Standalone trigger authoring and mapping
+
+- `TriggerAuthoringRegistration.AddServices` composes metadata and validation without installing source intake, resource persistence or workflow execution. `IStandaloneTriggerTypeSource` contributes detached type/field metadata through the Sequential `StandaloneTriggerTypesInitializing` fan-in; `ITriggerConfigurationValidator` owns one type's scoped configuration validation. Duplicate type owners, missing/duplicate validators and validators without descriptors refuse catalog initialization.
+- `IStandaloneTriggerTypeCatalog` is the single frozen installed authoring catalog. `IStandaloneTriggerTargetDiscovery` is an independent authorized read contract; describing a target does not compose a runtime adapter or grant start authority.
+- `IStandaloneTriggerStore` declares revisioned resource, association and mutation-receipt operations in an explicit trusted `TriggerScope`. This contract slice installs no provider. Resource-owned invocation grants retain creator/granting identity as audit information and bind one exact resource/association/target tuple.
+- `ITriggerInputMapper` is a scoped replacement. The internal `TriggerInputMapper` checks ordinary declared workflow inputs and evaluates installed binding-pure expressions using only detached literal/source parameters. Omission and explicit JSON null remain distinct. Unknown destinations, duplicate mappings, missing evaluators/languages/profiles and incompatible values refuse before admission; evaluator exception text is not exposed. This authoring/mapping slice enables no trigger, target start or delivery pump.
