@@ -34,4 +34,14 @@ public sealed record ActivityScopeCleanupRequest(
     IReadOnlyCollection<string> ActivityExecutionIds,
     IReadOnlyCollection<string> BookmarkIds,
     IReadOnlyCollection<string> TimerIds,
-    IReadOnlyCollection<string> SchedulerWorkItemIds);
+    IReadOnlyCollection<string> SchedulerWorkItemIds)
+{
+    private readonly IReadOnlyList<ActivityExecutionBookmarkSummary>? _historyBookmarks;
+    /// <summary>Optional exact owner inventory before cleanup; absence is not proof of bookmark creation or disposition.</summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<ActivityExecutionBookmarkSummary>? HistoryBookmarks
+    {
+        get => _historyBookmarks;
+        init => _historyBookmarks = value is null ? null : Array.AsReadOnly(value.ToArray());
+    }
+}
