@@ -224,12 +224,17 @@ public sealed class RuntimeHistoryOccurrenceProjectionTests
     }
 
     [Fact]
-    public void Production_runtime_model_stays_unchanged_until_the_owners_generated_migration_slice()
+    public void Production_occurrence_model_preserves_frozen_membership_indexes_and_counter_concurrency()
     {
         using var context = new RuntimeSqliteDbContext(new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite("Data Source=:memory:").Options);
-        Assert.Null(context.Model.FindEntityType(typeof(RuntimeHistoryOccurrenceEntity)));
-        Assert.Null(context.Model.FindEntityType(typeof(RuntimeHistoryOccurrenceMembershipEntity)));
-        Assert.Null(context.Model.FindEntityType(typeof(RuntimeHistoryOccurrenceCounterEntity)));
+        var receipt = context.Model.FindEntityType(typeof(RuntimeHistoryOccurrenceEntity)); Assert.NotNull(receipt);
+        var membership = context.Model.FindEntityType(typeof(RuntimeHistoryOccurrenceMembershipEntity)); Assert.NotNull(membership);
+        var counter = context.Model.FindEntityType(typeof(RuntimeHistoryOccurrenceCounterEntity)); Assert.NotNull(counter);
+        Assert.Contains(receipt.GetIndexes(), index => index.IsUnique && index.Properties.Select(property => property.Name)
+            .SequenceEqual(["ScopeKeyHash", "WorkflowExecutionIdHash", "ActivityExecutionIdHash"]));
+        Assert.Contains(membership.GetIndexes(), index => index.IsUnique && index.Properties.Select(property => property.Name).SequenceEqual(["ScopeOwnerId", "Ordinal"]));
+        Assert.Contains(membership.GetIndexes(), index => index.IsUnique && index.Properties.Select(property => property.Name).SequenceEqual(["ScopeOwnerId", "FirstSequence"]));
+        Assert.True(counter.FindProperty("Revision")!.IsConcurrencyToken);
     }
 
     private static RuntimeHistoryEvent Event(long sequence, string activity, string kind = "ActivityStarted", string? parent = null, bool known = true, string run = "run") =>
