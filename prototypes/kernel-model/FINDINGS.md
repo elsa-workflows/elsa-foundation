@@ -1138,6 +1138,7 @@ on them from outside the store, as in the store suite. The watcher fails a case 
 
 - makes two calls into one node's scope at once (an activation, a pass, a release; a worker is single-threaded);
 - runs a pass after it gave the activation up, or after its node stopped or was killed;
+- gives a scope up after its node's kill returned (a crash gives nothing up, also later);
 - stops a node without giving up every scope it held;
 - gives up an old activation after a newer one of the same node succeeded (that would release the new epoch).
 
@@ -1160,9 +1161,9 @@ commit got back and counts the node's commits the store answered "not landed".
 | poll | Required | A message added without a hint is handled within twice the poll interval and half a second |
 | hint | Reference | With a 20 s poll interval, a hinted message is handled within 2 s |
 | timer | Reference | With a 20 s poll interval, a child's 1.5 s timer fires within 2.5 s of being due |
-| crash | Required | With a 6 s lease, the holder of partition 0 dies while thirty messages come in and it has handled some. Right after the kill (if it took under 3.5 s) every scope it held still refuses a take (a crash gives nothing up); its scopes are taken over and every message is applied once, in order |
+| crash | Required | With a 6 s lease, once no holder changed for two balancing rounds, the holder of partition 0 dies while thirty messages come in and it has handled some. The kill must return within 3.5 s (two thirds of the lease less half a second), and right after it every scope the node held still refuses a take, unless the node began giving it up before the kill (a crash gives nothing up); its scopes are taken over and every message is applied once, in order |
 | stop | Reference | The holder of partition 0 stops; its scopes are taken over before its 6 s lease would have run out |
-| fence | Required | A node stalls until another process has taken the scope (after the node's lease ran out) and died; the node commits after that, the store refuses it, and the runtime activates the scope again |
+| fence | Required | A node stalls until another process has taken the scope (retrying until the node's lease ran out) and died; the node commits after that, the store refuses it, and the runtime activates the scope again |
 | split | Required | Nodes on two sides; the holder's next commit in partition 0 is held in flight for three leases (all its calls wait) while the other side handles the twenty messages sent to it. Partition 0 must have been held on both sides at once, the held commit answered "not landed", and every message applied once, in order |
 | join | Reference | A node that joins gets a share |
 
@@ -1181,14 +1182,14 @@ ghosts, I2, I3/I4, I4, I6, I11, I13), not with liveness, seam or name violations
 ### Results
 
 In-memory store; four partitions. Lease 800 ms and poll interval 400 ms in the cases but crash (6 s lease), stop (6 s
-lease), hint and timer (20 s poll); 600 ms and 300 ms in the stress test. One run each, on a machine shared with other sessions' runs; the stress counts vary from run to run.
+lease), hint and timer (20 s poll); 600 ms and 300 ms in the stress test. One run each, on a machine shared with other sessions' runs, at the suite's final state (`f782bc2a4e`); the stress counts vary from run to run.
 
 | Run | Built-in (`RuntimeNode`) | Orleans |
 |---|---|---|
 | `semantic` | 10 passed, 0 required failed, 0 reference differ | 9 passed, 0 required failed, 1 reference differs (join, R8) |
 | `semantic-broken` | 2 of 2 fence cases failed on the fence | 2 of 2 fence cases failed on the fence |
-| `stress 20 2000` | All properties hold; 48 pairs held at once; 11 held commits refused | All properties hold; 42 pairs held at once; 7 held commits refused; 350 activations asked for while the other side held the scope, 352 declined |
-| `stress-broken 10 1000` | 147 violations | 38 violations |
+| `stress 20 2000` | All properties hold; 51 pairs held at once; 13 held commits refused; 38 passes told by the fence | All properties hold; 44 pairs held at once; 8 held commits refused; 44 passes told by the fence; 355 activations asked for while the other side held the scope, 349 declined |
+| `stress-broken 10 1000` | 175 violations | 17 violations |
 
 With the fence broken, the split case's held commit "threw StoreException: instance 0/c is at revision 20": it was
 not refused, and the store's count check is what stopped it.
@@ -1226,7 +1227,7 @@ not refused, and the store's count check is what stopped it.
   tests set the attempts high enough that nothing is parked. A lock in `TrialGate` is a small layer 2 change (leak L8).
 - **R7. A split costs takes.** Every partition grain on the side that does not hold the fence asks again every
   `RetryEvery`, and each ask is a take: a store round trip on the holder's partition row, declined. In one Orleans
-  stress run (four partitions, `RetryEvery` 150 ms, 20 s of load and its settling) 352 takes were declined. A
+  stress run (four partitions, `RetryEvery` 150 ms, 20 s of load and its settling) 349 takes were declined. A
   deployment pays at most partitions × (sides − 1) / `RetryEvery` takes per second while a split lasts (fewer when
   the store is slow, since the retry is armed after the take answers); backing the retry off towards the lease would
   cut it. A first version also asked on every wake hint; review found it, and a hint now runs only a held scope.
