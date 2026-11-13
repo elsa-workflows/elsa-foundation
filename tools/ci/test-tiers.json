@@ -575,6 +575,11 @@
       "medianMinutes": 0.08
     },
     {
+      "project": "Essentials/tests/Workflows/Publishing/Releases/Tests/Elsa.Workflows.Publishing.Releases.Tests.csproj",
+      "tier": "pr",
+      "medianMinutes": null
+    },
+    {
       "project": "Essentials/tests/Workflows/Runtime/Api/Tests/Elsa.Workflows.Runtime.Api.Tests.csproj",
       "tier": "pr",
       "medianMinutes": 0.37
@@ -882,6 +887,7 @@
           "Extensions/ExtensionBuilder/tests/Api/Tests/Elsa.ExtensionBuilder.Api.Tests.csproj",
           "Essentials/tests/Activities/Http/Tests/Elsa.Activities.Http.Tests.csproj",
           "Essentials/tests/Workflows/Publishing/Tests/Elsa.Workflows.Publishing.Tests.csproj",
+          "Essentials/tests/Workflows/Publishing/Releases/Tests/Elsa.Workflows.Publishing.Releases.Tests.csproj",
           "Essentials/tests/Architecture/Analyzers/Tests/Elsa.Architecture.Analyzers.Tests.csproj",
           "Essentials/tests/Modularity/EntityFramework/Tests/Elsa.Modularity.EntityFramework.Tests.csproj",
           "Essentials/tests/Secrets/Tests/Elsa.Secrets.Tests.csproj",
