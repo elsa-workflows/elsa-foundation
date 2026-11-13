@@ -24,7 +24,7 @@ verbatim copy). Main's product Flowchart is unchanged.
 | `ActivityOutcomes.Done`, `ActivityOutcomes.Break` | `FlowchartOutcomes` | No Elsa constants |
 | `FlowchartStructure.Variables` (removed from the copied record), `FlowchartAuthoredStructure`, the structure handler, start-entry provider, replay-safe routing probe, child-result analysis | Not taken | Design time and Elsa runtime plumbing, not the engine |
 | `ActivitiesFlowchartFeature` (DI) | `FlowchartEngines.Create(options, extraPolicies)` | The same collaborators and built-in policies, without a container |
-| — | `FlowchartOptions.Flaws`: four deliberate defects (no dead paths, no round reset, a dead path that runs its node, a race that leaves its losers), off by default, marked MUTATION in the join coordinator, scope resolver, engine and analyzer | The prototype's mutation check (round 4's graph invariants) |
+| — | `FlowchartOptions.Flaws`: four deliberate defects (no dead paths, no round reset, a dead path that runs its node, a race that leaves its losers), off by default, marked MUTATION in the join coordinator, scope resolver and engine (the analyzer carries the flags for the scope resolver) | The prototype's mutation check (round 4's graph invariants) |
 | — | `FlowchartStep.Live`: the state in memory at the end of a call, before pruning | What the native model's journal entries and the simulation's checks are taken from |
 
 Beyond the table, the files that take main's runtime context (the join coordinator, policy applier, scheduler and

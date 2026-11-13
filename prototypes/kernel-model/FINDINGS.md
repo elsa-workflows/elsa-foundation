@@ -1017,10 +1017,10 @@ items of the same round.)
 of the runtime: execution paths with iteration keys, scopes (root, loop iteration, first-wins race), arrivals at joins,
 the gateway policies, dead paths, the dead-path join as the default and the reachability join beside it, pruning
 (#382). No reference to the kernel, to Elsa or to any package. The first commit of its PR is the verbatim copy; the
-adaptations are at the runtime seam (`models/Graph/README.md`), plus, for the simulation, four deliberate flaws
-(`FlowchartOptions.Flaws`, off by default, marked MUTATION) and the step's unpruned state (`FlowchartStep.Live`): a pure step, `(graph, state, one callback) ->
+adaptations are at the runtime seam (`models/Graph/README.md`): a pure step, `(graph, state, one callback) ->
 (state, schedules, continuation)`, where main reads an `IRuntimeActivityExecutionContext` and returns a
-`RuntimeStructuralContinuation`.
+`RuntimeStructuralContinuation`. For the simulation the library adds four deliberate flaws (`FlowchartOptions.Flaws`,
+off by default, marked MUTATION) and the step's unpruned state (`FlowchartStep.Live`).
 
 `models/Graph.Tests` ports main's conformance corpus (C1 to C9 under both join semantics) and its dead-path, implicit,
 cyclic, fault and loop-iteration join tests, with main's execution-id pools: 41 pass. Main's two determinism
