@@ -27,6 +27,7 @@ export function nativeIndex(document: XMLDocument): Map<string, Element> {
 
 export function nativeNumber(element: Element, name: string): number {
   const raw = element.getAttribute(name);
+  if (raw === null && nativeAttributeDefault(element, name) === 0) return 0;
   if (raw === null || !raw.trim() || !Number.isFinite(Number(raw))) nativeRefuse(`'${element.localName}.${name}' must be finite`);
   return Number(raw);
 }
@@ -108,13 +109,32 @@ export function nativeBoolean(value: string): boolean | undefined {
 /** Match captured primitive intent against the pinned writer's declared default omission only. */
 export function nativePrimitiveMatches(element: Element, name: string, value: unknown): boolean {
   const actual = element.getAttribute(name);
-  const fallback = element.namespaceURI === modelNamespace ? semanticDefaults.get(nativeModelKind(element))?.[name] : undefined;
+  const fallback = nativeAttributeDefault(element, name);
   if (actual === null) return value == null || fallback !== undefined && fallback === value;
   if (typeof value === "boolean" && nativeBooleanAttribute(element, name)) return nativeBoolean(actual) === value;
   if (typeof value === "number" && typeof fallback === "number") return actual.trim() !== "" && Number(actual) === value;
   return actual === (value == null ? null : String(value));
 }
-const numberAttributes = new Set("x y width height size minimum maximum startQuantity completionQuantity".split(" "));
+function nativeAttributeDefault(element: Element, name: string): string | number | boolean | undefined {
+  if (element.namespaceURI === modelNamespace) return semanticDefaults.get(nativeModelKind(element))?.[name];
+  return (element.namespaceURI === boundsNamespace && ["Point", "Bounds"].includes(element.localName)
+    || element.namespaceURI === "http://www.omg.org/spec/DD/20100524/DI" && element.localName === "waypoint") && ["x", "y"].includes(name) ? 0 : undefined;
+}
+function nativeNumericAttribute(element: Element, name: string): "integer" | "real" | undefined {
+  if (element.namespaceURI === modelNamespace) return typeof semanticDefaults.get(nativeModelKind(element))?.[name] === "number"
+    || nativeModelKind(element) === "dataStore" && name === "capacity"
+    || nativeModelKind(element) === "standardLoopCharacteristics" && name === "loopMaximum" ? "integer" : undefined;
+  return element.namespaceURI === boundsNamespace && (element.localName === "Font" && name === "size"
+    || ["Point", "Bounds"].includes(element.localName) && ["x", "y"].includes(name)
+    || element.localName === "Bounds" && ["width", "height"].includes(name))
+    || element.namespaceURI === "http://www.omg.org/spec/DD/20100524/DI" && element.localName === "waypoint" && ["x", "y"].includes(name)
+    || element.namespaceURI === diagramNamespace && element.localName === "BPMNDiagram" && name === "resolution" ? "real" : undefined;
+}
+function nativeNumericValue(element: Element, name: string, value: string): number | undefined {
+  const type = nativeNumericAttribute(element, name), lexical = value.replace(/^[ \t\r\n]+|[ \t\r\n]+$/g, "");
+  const valid = type === "integer" ? /^[+-]?[0-9]+$/.test(lexical) : type === "real" && /^[+-]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?$/.test(lexical);
+  return valid && Number.isFinite(Number(lexical)) ? Number(lexical) : undefined;
+}
 
 /** Complete projected content comparison with only declared serializer spelling/default normalizations. */
 export function nativeImportSignature(element: Element, modelNamespace: string): string {
@@ -131,8 +151,8 @@ export function nativeImportSignature(element: Element, modelNamespace: string):
     let value: string | boolean | number = attribute.value;
     if (!attribute.namespaceURI) {
       if (nativeBooleanAttribute(element, attribute.localName) && nativeBoolean(value) !== undefined) value = nativeBoolean(value)!;
-      else if (numberAttributes.has(attribute.localName) && value.trim() && Number.isFinite(Number(value))) value = Number(value);
-      if (element.namespaceURI === modelNamespace && semanticDefaults.get(nativeModelKind(element))?.[attribute.localName] === value) return [];
+      else if (nativeNumericValue(element, attribute.localName, value) !== undefined) value = nativeNumericValue(element, attribute.localName, value)!;
+      if (nativeAttributeDefault(element, attribute.localName) === value) return [];
     }
     const typedQName = attribute.namespaceURI === "http://www.w3.org/2001/XMLSchema-instance" && attribute.localName === "type";
     const externalQName = element.namespaceURI === modelNamespace && ["calledElement", "structureRef", "implementationRef"].includes(attribute.localName);
@@ -144,21 +164,24 @@ export function nativeImportSignature(element: Element, modelNamespace: string):
       ? [] : opaqueQNameContext(element, attribute.value);
     return [[attribute.namespaceURI ?? "", attribute.localName, value, opaqueContext] as const];
   }).sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
-  const children = [...element.childNodes].flatMap(node => {
-    if (node.nodeType === 1) {
-      const child = node as Element;
-      if (child.namespaceURI === modelNamespace && child.localName === "extensionElements" && !child.children.length && !child.textContent?.trim()
-        && [...child.attributes].every(attribute => attribute.namespaceURI === "http://www.w3.org/2000/xmlns/")) return [];
-      if (child.namespaceURI === "http://www.omg.org/spec/BPMN/20100524/DI" && child.localName === "BPMNLabel" && !child.children.length && !child.textContent?.trim()
-        && [...child.attributes].every(attribute => attribute.namespaceURI === "http://www.w3.org/2000/xmlns/")) return [];
-      return [nativeImportSignature(child, modelNamespace)];
-    }
-    // Comments, PI and CDATA spelling are retained in R, but are not native modeled semantics.
-    if (node.nodeType !== 3 && node.nodeType !== 4) return [];
-    if (element.children.length && !node.textContent?.trim()) return [];
-    const text = node.textContent ?? "";
-    return [JSON.stringify(element.namespaceURI === modelNamespace && (element.localName.endsWith("Ref") || ["incoming", "outgoing"].includes(element.localName)) ? qName(text.trim()) : text)];
-  });
   const typedText = element.namespaceURI === modelNamespace && (element.localName.endsWith("Ref") || ["incoming", "outgoing"].includes(element.localName));
+  const children: string[] = [];
+  let text = "";
+  const flush = () => {
+    if (text && !(element.children.length && !text.trim())) children.push(JSON.stringify(typedText ? qName(text.trim()) : text));
+    text = "";
+  };
+  for (const node of [...element.childNodes]) {
+    if (node.nodeType === 3 || node.nodeType === 4) { text += node.textContent ?? ""; continue; }
+    if (node.nodeType !== 1) continue; // Comments/PI split no modeled body; raw source retains them.
+    flush();
+    const child = node as Element;
+    if (child.namespaceURI === modelNamespace && child.localName === "extensionElements" && !child.children.length && !child.textContent?.trim()
+      && [...child.attributes].every(attribute => attribute.namespaceURI === "http://www.w3.org/2000/xmlns/")) continue;
+    if (child.namespaceURI === diagramNamespace && child.localName === "BPMNLabel" && !child.children.length && !child.textContent?.trim()
+      && [...child.attributes].every(attribute => attribute.namespaceURI === "http://www.w3.org/2000/xmlns/")) continue;
+    children.push(nativeImportSignature(child, modelNamespace));
+  }
+  flush();
   return JSON.stringify([element.namespaceURI, element.localName, attributes, children, typedText ? [] : opaqueTextContext(element)]);
 }

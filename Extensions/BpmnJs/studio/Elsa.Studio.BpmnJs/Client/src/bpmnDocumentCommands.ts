@@ -168,7 +168,7 @@ export function mapBpmnNativeCommandGroup(authoring: BpmnDocumentAuthoring, base
 export function mapBpmnNativeCommandPlan(authoring: BpmnDocumentAuthoring, baseline: BpmnNativeBaseline, group: NativeCommandGroup, nextXml: string): {
   readonly commands: readonly BpmnDocumentCommand[]; readonly diAliases: ReadonlyMap<string, string>;
 } {
-  guardBpmnNativeCopies(authoring, baseline.projection, group.namespaceOrigins);
+  guardBpmnNativeCopies(authoring, baseline.projection, group.namespaceOrigins, nextXml);
   const diAliases = nativeDiAliases(authoring, baseline, group, nextXml);
   const oldAliases = new Map([...baseline.di].map(([id, value]) => [id, value.id]));
   const contextual = contextualizeNativeNamespacePair(authoring, baseline.projection.namespaceContexts,
@@ -327,7 +327,7 @@ function mapBoundedBpmnNativeCommandGroup(authoring: BpmnDocumentAuthoring, base
       case "element.updateProperties": {
         if (!action.properties) nativeRefuse("property command has no fields");
         for (const [name, value] of Object.entries(action.properties)) {
-          if (name === "name" && typeof value === "string" || name === "default" && (typeof value === "string" || value === null)) attribute(action.elementId, name, value);
+          if ((name === "name" || name === "default") && (typeof value === "string" || value == null)) attribute(action.elementId, name, value == null ? null : value);
           else if (name === "di" && record(value)) {
             for (const [flag, flagValue] of Object.entries(record(value)!)) {
               if (!["isMarkerVisible", "isExpanded", "isHorizontal"].includes(flag) || typeof flagValue !== "boolean") nativeRefuse("unmapped DI property");
