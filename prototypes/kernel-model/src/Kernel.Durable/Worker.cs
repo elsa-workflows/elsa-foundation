@@ -669,7 +669,10 @@ public sealed class Worker : IScopeActivation, ITurnServices
                         item.Taken = false;
                         if (item.Key is not null) StartJob(item);
                     }
-                    outcome = await CommitAsync([Bound(_type.Park(slot.Row, unit.Instance, unit.Consumed, unit.Spec, _refusal), slot)], marks, trial, generation, cancellationToken);
+                    // The refused turn never committed its holds. Park owns every delivery that turn took.
+                    var taken = unit.Consumed.Concat(unit.Held).OrderBy(item => item.Seq).ToList();
+                    var parked = _type.Park(slot.Row, unit.Instance, taken, unit.Spec, _refusal);
+                    outcome = await CommitAsync([Bound(parked, slot)], marks, trial, generation, cancellationToken);
                 }
                 if (outcome == Outcome.Landed) (marks, trial) = ([], []);
             }

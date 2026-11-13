@@ -9,6 +9,7 @@ internal static class JobPoisonChecks
         public readonly List<string> Started = [];
         public readonly Dictionary<string, TaskCompletionSource<object?>> Pending = [];
         public readonly List<string> Results = new();
+        public string[] HeldWith = [];
 
         public override ValueTask<object?> ExecuteJobAsync(IJob job, CancellationToken cancellationToken)
         {
@@ -36,6 +37,12 @@ internal static class JobPoisonChecks
                 {
                     var key = message.Read<JobFinished>().Key;
                     Results.Add(key);
+                    if (turn.Instance.Definition == "hold" && key == "poison")
+                    {
+                        turn.Hold(message);
+                        HeldWith = turn.Inbox.Select(m => m.Id).ToArray();
+                        state.Add("held");
+                    }
                     if (cancelOther && key == "poison") turn.CancelJob("other");
                     if (throwOnResult)
                     {
@@ -54,6 +61,34 @@ internal static class JobPoisonChecks
     private static void Check(bool value, string what)
     {
         if (!value) throw new InvalidOperationException(what);
+    }
+
+    internal static async Task RefusedHoldAsync()
+    {
+        var store = new InMemoryStore(1, () => 100);
+        var probe = new Probe(throwOnResult: false, withChild: false);
+        var owner = new Worker("owner", 0, store, new WorkflowInstance([probe]), new WorkerOptions { Monotonic = () => 100 });
+        await new DurableHost([owner]).ActivateAsync(0);
+        await store.AddAsync(new Message("start", new InstanceRef(Id), Kinds.Start, Start: new StartSpec(probe.Key, "hold")));
+        await owner.WokenAsync(null);
+        for (var i = 0; i < 12 && !probe.Pending.ContainsKey("other"); i++) await owner.RunAsync();
+        var checkpoint = store.Instances[Id];
+        store.Refuses = row => row.Status == InstanceStatus.Running && Json.Read<List<string>>(row.State).Contains("held");
+        await store.AddAsync(new Message("next", new InstanceRef(Id), "advance"));
+        await owner.PollAsync();
+        await owner.FlushAsync(); // mark the companion so both deliveries enter the same turn
+        probe.Pending["poison"].SetResult("held result");
+        for (var i = 0; i < 12; i++) await owner.RunAsync();
+        var parked = store.Instances[Id];
+        Check(probe.HeldWith.SequenceEqual([Poison, "next"]), "the refused turn must take both deliveries in order");
+        Check(parked.Status == InstanceStatus.Faulted && parked.State == checkpoint.State
+            && parked.Fault == $"the row of {Id} was refused" && parked.Revision == checkpoint.Revision + 1,
+            "the refused hold must park the committed checkpoint at its next revision");
+        Check(!store.Messages.ContainsKey("next") && !store.Messages.ContainsKey(Poison)
+            && owner.Messages.All(m => m.Id != Poison) && Json.Read<string[]>(parked.Jobs!).SequenceEqual(["other"]),
+            "Park must retire both the consumed delivery and the held result, including its job key and memory reservation");
+        Check(store.Messages.ContainsKey(Other) && !probe.Pending["other"].Task.IsCompleted && owner.Owns && store.Ghost.Count == 0,
+            "an unrelated live sibling must keep its ticket and running token");
     }
 
     internal static async Task CancellationAsync(bool throwOnResult, bool cancelOther, bool refuseCommit = false)

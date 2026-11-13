@@ -1068,11 +1068,13 @@ siblings even on a childless workflow and can forward to children. It preserves 
 A proposed cancellation reserves the ticket once the turn produces an outcome. A throw leaves the sibling free
 to complete. If storage definitely refuses the outcome, the worker releases its reservation before parking. A
 sibling result that completed while the write was pending stays available for the next pass. A successful
-cancellation removes the ticket and cancels the running job's token at commit. The subscription rule is in 25.9.
+cancellation removes the ticket and cancels the running job's token at commit. When a turn's write is definitely
+refused, Park consumes all deliveries the turn took, including any job result it proposed to hold. The subscription
+rule is in 25.9.
 
 | Focused gate | Main `310cd84b91` (includes the Park, reply, lease and mutation-bit changes) | With the job-poison fix |
 |---|---|---|
-| Native.Run `park` | 8 pass | 14 pass. The original two witnesses failed on `7ff84f862c`; childless terminate and both abandoned-cancellation races failed on `27b362312b` |
+| Native.Run `park` | 8 pass | 15 pass. The original two witnesses failed on `7ff84f862c`; childless terminate and both abandoned-cancellation races failed on `27b362312b`; the refused hold failed on `7edc462ef4` |
 | Native.Run `smoke` | All 34 checks pass | All 34 checks pass |
 | Sim `--check-flaws` | 44 distinct single-bit mutations | 45 distinct single-bit mutations, including `JobPoisonAsError` at bit 43 |
 | 1,000 seeds × 300 actions | 0 failed, 0 innocent parkings | Same |
@@ -1085,7 +1087,9 @@ The other loses the model's result-handling turn to an exception, consumes the s
 faulted row and terminates the child after takeover. Both verify checkpoint retention, jobs, subscriptions and
 ticket removal. Three other witnesses trace the sibling's real token and completion through a throw, a
 definite refusal with a completion during the write, and a committed cancellation. The childless terminate
-case verifies the surviving ticket and its token are cleared with the faulted row's next revision. The merged
+case verifies the surviving ticket and its token are cleared with the faulted row's next revision. The refused hold
+takes a job result and a companion message in one turn. The faulting commit retires both, preserves the saved
+checkpoint and leaves the other job running. The merged
 deadline eviction check and the 23 lease checks also passed. Both simulation generators include `dierun`.
 The candidate changes the oracle to recognize parking by the killing job's own ticket. Each count uses the
 oracle from the corresponding version. The mutation result above was rerun after `HideDeliveryHistory` moved

@@ -153,6 +153,7 @@ public static class ParkChecks
         await Case("a throwing turn abandons the cancellation of its sibling job", () => JobPoisonChecks.CancellationAsync(throwOnResult: true, cancelOther: true));
         await Case("a sibling result survives a refused cancellation in flight", () => JobPoisonChecks.CancellationAsync(throwOnResult: false, cancelOther: true, refuseCommit: true));
         await Case("a committed cancellation stops the sibling job", () => JobPoisonChecks.CancellationAsync(throwOnResult: false, cancelOther: true));
+        await Case("a refused hold parks the taken job result and its companion delivery", JobPoisonChecks.RefusedHoldAsync);
         await Case("suspension preserves the wait", async () =>
         {
             var world = new World();
