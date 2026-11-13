@@ -118,9 +118,46 @@ public sealed class RuntimeHistoryMemoryParticipantTests
             Assert.Equal(before!.LastSequence, after.LastSequence);
             Assert.Equal("missed", after.LastPhysicalCommitId);
             Assert.Equal(2, f.Store.ListCommits().Count);
+            await f.Store.CommitAsync(raw, Immediate); // Same-scope gap-only receipt replays.
+            f.Access.Current = PersistenceAccessContext.Scoped(new("scope-b"));
+            await Assert.ThrowsAsync<InvalidOperationException>(async () => await f.Store.CommitAsync(raw, Immediate));
+            f.Access.Current = PersistenceAccessContext.Scoped(new("scope-a"));
         }
         Assert.True(optional.IsEquivalentTo((await f.Executions.FindAsync("run"))!.HistoryCapturePolicy));
         Assert.Equal(WorkflowExecutionStatus.Running, (await f.Executions.FindAsync("run"))!.Status);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task First_optional_admission_without_candidates_pins_scope_policy_and_gap_only_replay(bool clearPolicy)
+    {
+        var optional = new RuntimeHistoryCapturePolicy(Policy.PolicyId, Policy.Version, false, Policy.SupportedKinds);
+        var f = await Fixture.Create(optional, saveNative: false);
+        var initial = Commit("first-optional", null) with
+        { StateChanges = new(new("run", RuntimeStateChangeOperation.Upsert, Workflow(optional), new Dictionary<string, string>()), null, [], [], [], [], []) };
+        await f.Store.CommitAsync(initial, Immediate);
+        var head = await f.Reader.FindHeadAsync("run");
+        Assert.True(head!.HasGaps);
+        Assert.False(head.CapturedFromStart);
+        Assert.Equal(0, head.LastSequence);
+        await f.Store.CommitAsync(initial, Immediate);
+        if (clearPolicy)
+        {
+            var clearing = Commit("clear", null) with
+            { StateChanges = new(new("run", RuntimeStateChangeOperation.Upsert, Workflow(null), new Dictionary<string, string>()), null, [], [], [], [], []) };
+            await Assert.ThrowsAsync<InvalidOperationException>(async () => await f.Store.CommitAsync(clearing, Immediate));
+        }
+        else
+        {
+            f.Access.Current = PersistenceAccessContext.Scoped(new("scope-b"));
+            await Assert.ThrowsAsync<InvalidOperationException>(async () => await f.Store.CommitAsync(Commit("other-scope", null), Immediate));
+            await Assert.ThrowsAsync<InvalidOperationException>(async () => await f.Store.CommitAsync(initial, Immediate));
+            f.Access.Current = PersistenceAccessContext.Scoped(new("scope-a"));
+        }
+        Assert.True(optional.IsEquivalentTo((await f.Executions.FindAsync("run"))!.HistoryCapturePolicy));
+        Assert.Equal(head, await f.Reader.FindHeadAsync("run"));
+        Assert.Single(f.Store.ListCommits());
     }
 
     [Fact]
@@ -301,8 +338,8 @@ public sealed class RuntimeHistoryMemoryParticipantTests
             Reader = new(State, Access, Codec());
         }
         internal static Task<Fixture> Create() => Create(Policy);
-        internal static async Task<Fixture> Create(RuntimeHistoryCapturePolicy? policy)
-        { var f = new Fixture(); await f.Executions.SaveAsync(Workflow(policy)); return f; }
+        internal static async Task<Fixture> Create(RuntimeHistoryCapturePolicy? policy, bool saveNative = true)
+        { var f = new Fixture(); if (saveNative) await f.Executions.SaveAsync(Workflow(policy)); return f; }
     }
     private sealed class NoReads : IWorkflowExecutionStateStore
     {

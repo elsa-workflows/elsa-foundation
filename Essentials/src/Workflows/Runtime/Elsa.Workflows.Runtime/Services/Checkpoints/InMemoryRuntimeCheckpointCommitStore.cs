@@ -443,7 +443,7 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
                         decision,
                         pendingOutboxItems.Select(item => item.OutboxItemId).ToArray(),
                         consumedSchedulerWorkItemIds));
-                    if (commit.HistoryBatches is { Count: > 0 })
+                    if (publishHistory is not null)
                     {
                         _state.OriginalHistoryCommitFingerprints[commit.CommitId] = fingerprint;
                         var owner = (_persistenceAccessContextAccessor!.Current.RequireScope().Value, commit.WorkflowExecutionId);

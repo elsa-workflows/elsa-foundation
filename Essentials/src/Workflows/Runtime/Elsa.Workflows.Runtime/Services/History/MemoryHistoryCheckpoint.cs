@@ -38,9 +38,17 @@ internal static class MemoryHistoryCheckpoint
         {
             if (incomingPolicy?.Required == true || required is not null || head?.Policy.Required == true)
                 throw new RuntimeSchedulerWorkUnavailableException("runtime.history.capture-unavailable", "This execution requires its pinned history capture contribution.");
-            if (head is null) return null;
-            // Optional capture may be unavailable, but the retained coverage must disclose the missing contribution.
-            return () => state.HistoryHeads[key] = head with { HasGaps = true, LastPhysicalCommitId = commit.CommitId, LastCommittedAt = recordedAt };
+            if (head is null && admittedPolicy is null) return null;
+            // Pin even a first optional admission with no candidate group. A missing contribution cannot
+            // erase the native policy/scope choice or acquire captured-from-start coverage later.
+            var gapHead = head is null
+                ? new RuntimeHistoryHead(commit.WorkflowExecutionId, 0, 0, commit.CommitId, recordedAt, admittedPolicy!, false, true, 0)
+                : head with { HasGaps = true, LastPhysicalCommitId = commit.CommitId, LastCommittedAt = recordedAt };
+            return () =>
+            {
+                state.HistoryHeads[key] = gapHead;
+                state.HistoryRunOwners[commit.WorkflowExecutionId] = (scope, gapHead.Policy);
+            };
         }
         var policy = head?.Policy ?? admittedPolicy
             ?? throw new InvalidOperationException("History cannot be enabled retroactively without a pinned admission policy.");
