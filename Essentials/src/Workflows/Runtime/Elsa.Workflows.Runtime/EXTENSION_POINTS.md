@@ -1369,3 +1369,6 @@ not history/result metadata. Other candidates and the bounded backlog walk conti
 its existing per-execution backoff. Partially purged failed executions are not counted as fully purged and
 are not reaped. Requested cancellation/access drift still escape. Three added controls cover repeated
 one-execution pages ahead of healthy live/legacy work and held-terminal partial purge accounting.
+
+The held-terminal control enqueues its pausable item before resume handoff and asserts the actual FIFO
+head plus native pause denial before sweeping; an earlier timestamp alone does not establish held discovery.

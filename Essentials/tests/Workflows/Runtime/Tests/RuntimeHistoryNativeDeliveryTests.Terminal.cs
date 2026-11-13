@@ -167,11 +167,16 @@ public sealed partial class RuntimeHistoryNativeDeliveryTests
         const string healthy = "z-healthy";
         var recording = new ReceiverControl { Match = IsTerminalResumeDecision };
         using var f = await Fixture.CreateAsync("complete", publication: true, configure: recording.Configure);
-        await QueueTerminalResumeAsync(f); var owed = Assert.Single(await f.Queue.ListAllAsync(new(Run)));
+        // Native claim/next-head order is insertion FIFO; timestamps only order the purge's list view.
         await f.Queue.EnqueueAsync(new("held-head", Run, "held-command", WorkflowExecutionCommandKind.StartActivity,
             "held-envelope", "held-key", At.AddSeconds(-1), At.AddSeconds(-1)));
+        await QueueTerminalResumeAsync(f);
+        var owed = Assert.Single(await f.Queue.ListAllAsync(new(Run)), item => item.CommandKind == WorkflowExecutionCommandKind.ResumeBookmark);
         await f.Services.GetRequiredService<IWorkflowHoldStateStore>().SaveAsync(new("control-held", Run,
             activeHolds: [WorkflowHold.ForWorkflowExecution("hold", Run, At, "operator", "Paused")]));
+        var head = (await f.Queue.ListNextWorkItemsAsync([Run]))[Run]; Assert.Equal("held-head", head.WorkItemId);
+        var pause = await f.Services.GetRequiredService<IWorkflowSchedulerPauseGate>().EvaluateAsync(head, default);
+        Assert.NotNull(pause); Assert.False(pause.CanAdvance);
         await SeedHealthyLegacyWorkAsync(f, healthy, terminal: true); recording.PairUnavailable = true;
         var result = await f.SweepTerminalAsync();
         var failed = Assert.Single(result.Dispatches, item => item.WorkflowExecutionId == Run);
