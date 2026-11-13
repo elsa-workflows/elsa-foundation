@@ -1816,6 +1816,7 @@ html[data-nav-mode="top"] .topbar-actions .user-menu {
 
 .theme-overview-editor,
 .theme-token-editor,
+.theme-mode-panel,
 .theme-assets-panel,
 .theme-preview-panel {
   display: grid;
@@ -2018,7 +2019,8 @@ html[data-nav-mode="top"] .topbar-actions .user-menu {
   outline-offset: 2px;
 }
 
-.modules-page {
+.modules-page,
+.modules-tab-panel {
   display: grid;
   gap: 12px;
 }
@@ -3728,3 +3730,8 @@ html[data-theme-material] .otel-panel .otel-traces-layout {
 /* Stat / KPI tiles. Container uses the card surface so material themes slab it. */
 
 /* Shared technical-identity row used by inspectors and diagnostics. */
+
+.modules-tab-panel,
+.theme-builder-view-panel {
+  min-width: 0;
+}
