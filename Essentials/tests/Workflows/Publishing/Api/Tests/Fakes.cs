@@ -20,6 +20,13 @@ using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.Executables;
 using Elsa.Workflows.Runtime.Services.Values;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.DependencyInjection;
+using Elsa.Activities.Design.Core.Contracts;
+using Elsa.Activities.Design.Core.Models;
+using Elsa.Workflows.Design.Core.Contracts;
+using Elsa.Workflows.Design.Validations;
+using Elsa.Workflows.Design.Validations.Core.Contracts;
+using Elsa.Workflows.Design.Validations.Core.Models;
 using WorkflowExecutableHasher = Elsa.Workflows.Publishing.Services.WorkflowExecutableHasher;
 
 namespace Elsa.Workflows.Publishing.Api.Tests;
@@ -49,6 +56,7 @@ internal static class TestWellKnownTypeRegistry
         registry.RegisterType(typeof(DateTime), "DateTime");
         registry.RegisterType(typeof(Guid), "Guid");
         registry.RegisterType(typeof(TestWriteLineActivity), TypeAliasConvention.CanonicalAlias(typeof(TestWriteLineActivity)));
+        registry.RegisterType(typeof(Elsa.Activities.If.Activities.If), TypeAliasConvention.CanonicalAlias(typeof(Elsa.Activities.If.Activities.If)));
         registry.RegisterType(typeof(TestWriteLinesActivity), TypeAliasConvention.CanonicalAlias(typeof(TestWriteLinesActivity)));
         registry.RegisterType(typeof(DeclaredInputsActivity), TypeAliasConvention.CanonicalAlias(typeof(DeclaredInputsActivity)));
         registry.RegisterType(
@@ -74,6 +82,7 @@ internal static class TestActivityAliases
         "activity-write-lines" => TypeAliasConvention.CanonicalAlias(typeof(TestWriteLinesActivity)),
         "activity-sequence" => TypeAliasConvention.CanonicalAlias(typeof(Elsa.Activities.Sequence.Activities.Sequence)),
         "activity-flowchart" => TypeAliasConvention.CanonicalAlias(typeof(Elsa.Activities.Flowchart.Activities.Flowchart)),
+        "activity-if" => TypeAliasConvention.CanonicalAlias(typeof(Elsa.Activities.If.Activities.If)),
         _ => "Object"
     };
 }
@@ -136,7 +145,8 @@ internal static class TestCompiler
         WorkflowExecutablePlacementSidecarContext? placementSidecars = null,
         IRuntimeDurableValueStorageDriverRegistry? storageDrivers = null,
         IExecutableNodeMetadataEnricher? metadataEnricher = null,
-        IIncidentStrategyCatalog? incidentStrategyCatalog = null)
+        IIncidentStrategyCatalog? incidentStrategyCatalog = null,
+        IActivityDataSelectionAnalyzer? dataSelectionAnalyzer = null)
     {
         var publications = activityPublications ?? new EmptyActivityPublicationStore();
         var templates = activityTemplates ?? new EmptyActivityTemplateReader();
@@ -145,6 +155,7 @@ internal static class TestCompiler
         var outputCompiler = new RuntimeOutputCaptureCompiler(storageDrivers ?? new RuntimeDurableValueStorageDriverRegistry(
             [new JsonRuntimeDurableValueStorageDriver()]));
         return new(
+            dataSelectionAnalyzer ?? SourceAuthority(activityVersions, activityStructureService),
             workflowVersions,
             activityVersions,
             publications,
@@ -170,6 +181,50 @@ internal static class TestCompiler
             placementSidecars,
             metadataEnricher,
             incidentStrategyCatalog: incidentStrategyCatalog);
+    }
+
+    // Direct compiler tests compose the real authority against their real fixture catalog and structures.
+    // A fresh operation scope prevents request-local catalog/visibility caches from leaking between compiles.
+    internal static IActivityDataSelectionAnalyzer SourceAuthority(
+        IActivityDefinitionVersionStore versions, IActivityStructureService structures, bool memberReads = false,
+        Action<IServiceCollection>? configure = null) =>
+        new TestSourceAuthority(versions, structures, memberReads, configure);
+
+    private sealed class TestSourceAuthority(IActivityDefinitionVersionStore versions, IActivityStructureService structures, bool memberReads,
+        Action<IServiceCollection>? configure)
+        : IActivityDataSelectionAnalyzer
+    {
+        public async ValueTask<ActivityDataSelectionAnalysis> AnalyzeAsync(ActivityDataSelectionDocument document,
+            ActivityDataSelectionTarget? target = null, ActivityDataSelectionQuery? query = null,
+            CancellationToken cancellationToken = default)
+        {
+            var services = new ServiceCollection();
+            services.AddOptions();
+            new Elsa.Events.EventsFeature().ConfigureServices(services);
+            new WorkflowDesignValidationsFeature { MemberReads = memberReads }.ConfigureServices(services);
+            services.AddSingleton(structures);
+            services.AddSingleton<IActivityDefinitionLookup>(new TestSourceCatalog(versions));
+            configure?.Invoke(services);
+            await using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+            await using var scope = provider.CreateAsyncScope();
+            return await scope.ServiceProvider.GetRequiredService<IActivityDataSelectionAnalyzer>()
+                .AnalyzeAsync(document, target, query, cancellationToken);
+        }
+    }
+
+    private sealed class TestSourceCatalog(IActivityDefinitionVersionStore versions) : IActivityDefinitionLookup
+    {
+        public async Task<IActivityDefinitionVersion> GetVersion(string versionId, CancellationToken cancellationToken = default) =>
+            await versions.GetWithDefinitionAsync(versionId, cancellationToken);
+        public async Task<IActivityDefinitionVersion?> FindVersion(string versionId, CancellationToken cancellationToken = default) =>
+            (await versions.ListAsync(cancellationToken)).SingleOrDefault(version => version.Id == versionId);
+        public Task<IActivityDefinition> GetDefinition(string idOrActivityTypeKey, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+        public Task<IEnumerable<IActivityDefinition>> ListDefinitions(string? id = null, string? category = null,
+            string? searchTerm = null, string? displayName = null, string? description = null, bool? tenantAgnostic = null,
+            CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<IEnumerable<ActivityDefinitionVersionSummary>> ListVersions(string definitionId, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
     }
 
     private sealed class EmptyActivityPublicationStore : IActivityDefinitionVersionPublicationStore

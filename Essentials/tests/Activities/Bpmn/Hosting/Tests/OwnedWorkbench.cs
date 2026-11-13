@@ -18,6 +18,7 @@ internal sealed class OwnedWorkbench : IAsyncDisposable
     private HttpClient client = new(new HttpClientHandler { CookieContainer = new CookieContainer() });
     private Process? process;
     private bool designSharesRuntime;
+    private bool separateActivityDesign;
 
     private OwnedWorkbench(string root) => ContentRoot = root;
 
@@ -25,25 +26,35 @@ internal sealed class OwnedWorkbench : IAsyncDisposable
     public int ProcessId => process?.Id ?? throw new InvalidOperationException("The owned Workbench is stopped.");
     public string RuntimeDatabase => Path.Combine(ContentRoot, "runtime.db");
     public string DesignDatabase => designSharesRuntime ? RuntimeDatabase : Path.Combine(ContentRoot, "design.db");
+    public string ActivityDesignDatabase => separateActivityDesign ? Path.Combine(ContentRoot, "activity-design.db") : DesignDatabase;
     internal string AssemblyPath => Metadata("BpmnHostingWorkbenchAssembly");
     internal string ReaderAssemblyPath => Metadata("BpmnHostingReaderAssembly");
     internal int? LastStoppedExitCode { get; private set; }
+    internal const string NativeParentResumeHoldVariable = "ELSA_BPMN_HOLD_NATIVE_PARENT_RESUME";
+    internal string NativeParentResumeHoldPath => Path.Combine(ContentRoot, "hold-native-parent-resume");
+    internal WorkbenchPersistenceCapture? PersistenceCapture { get; private set; }
 
     public static async Task<OwnedWorkbench> StartAsync(bool directBpmn = false, bool runtimeOnly = false,
         string? legacySnapshotDirectory = null, string? runtimeSnapshotPath = null, double? recoverySweepSeconds = null,
         bool legacyCombinedStore = false, bool runtimeFlowchart = false, bool authoredDirectPublication = false,
-        bool admitNewBpmnExecutions = true)
+        bool admitNewBpmnExecutions = true, bool capturePersistence = false)
     {
         if (legacySnapshotDirectory is not null && runtimeSnapshotPath is not null)
             throw new ArgumentException("Select one actual legacy snapshot source.");
         if (legacyCombinedStore && (runtimeSnapshotPath is null || runtimeOnly))
             throw new ArgumentException("A combined legacy capture requires its whole Runtime/Design store and a combined host profile.");
-        var host = new OwnedWorkbench(Directory.CreateTempSubdirectory("elsa-bpmn-hosting-").FullName) { designSharesRuntime = legacyCombinedStore };
+        var host = new OwnedWorkbench(Directory.CreateTempSubdirectory("elsa-bpmn-hosting-").FullName)
+        {
+            designSharesRuntime = legacyCombinedStore,
+            separateActivityDesign = legacySnapshotDirectory is not null || legacyCombinedStore
+        };
         try
         {
             var source = Metadata("BpmnHostingWorkbenchSource");
             foreach (var name in new[] { "appsettings.json", "appsettings.Development.json", "shells.json" })
                 File.Copy(Path.Combine(source, name), Path.Combine(host.ContentRoot, name));
+            if (capturePersistence)
+                await host.EnablePersistenceCaptureAsync();
             if (legacySnapshotDirectory is not null)
                 foreach (var name in new[] { "runtime", "design" })
                     File.Copy(Path.Combine(legacySnapshotDirectory, name + ".sqlite"), Path.Combine(host.ContentRoot, name + ".db"));
@@ -93,9 +104,17 @@ internal sealed class OwnedWorkbench : IAsyncDisposable
             }
             features["WorkflowsRuntimeEntityFrameworkCore"]!["ConnectionString"] = "Data Source=runtime.db";
             foreach (var name in new[] { "ActivitiesDesignEntityFrameworkCore", "WorkflowsDesignEntityFrameworkCore", "WorkflowsPublishingEntityFrameworkCore" })
-                if (features[name] is { } selected) selected["ConnectionString"] = legacyCombinedStore ? "Data Source=runtime.db" : "Data Source=design.db";
-            if ((legacySnapshotDirectory is not null || legacyCombinedStore) && features["ClrActivityReconciliation"] is JsonObject clr)
-                await host.RestoreClrSourceIdentityAsync(clr);
+                if (features[name] is { } selected)
+                {
+                    // ADR 0078 requires recreating this pre-GA module after its Initial is regenerated.
+                    // Keep the captured Runtime/Workflow Design stores and their recovery assertions intact.
+                    selected["ConnectionString"] = "Data Source=" + Path.GetFileName(
+                        name == "ActivitiesDesignEntityFrameworkCore" ? host.ActivityDesignDatabase : host.DesignDatabase);
+                }
+            if (host.separateActivityDesign)
+                // Recover captured executables without republishing a changed current-build CLR catalog
+                // under the captured immutable source identities. Fresh-store profiles still reconcile it.
+                features.AsObject().Remove("ClrActivityReconciliation");
             await File.WriteAllTextAsync(shellPath, shells.ToJsonString());
             await host.LaunchAsync();
             return host;
@@ -105,32 +124,6 @@ internal sealed class OwnedWorkbench : IAsyncDisposable
             await host.DisposeAsync();
             throw;
         }
-    }
-
-    private async Task RestoreClrSourceIdentityAsync(JsonObject feature)
-    {
-        if (!File.Exists(DesignDatabase)) return;
-        var info = new ProcessStartInfo(Environment.GetEnvironmentVariable("DOTNET_HOST_PATH") ?? "dotnet")
-            { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };
-        foreach (var arg in new[] { ReaderAssemblyPath, "--read-clr-source-identities", DesignDatabase }) info.ArgumentList.Add(arg);
-        using var reader = Process.Start(info) ?? throw Failure("The captured CLR source identity reader did not start.");
-        var output = reader.StandardOutput.ReadToEndAsync(); var error = reader.StandardError.ReadToEndAsync();
-        using var limit = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-        try { await reader.WaitForExitAsync(limit.Token); }
-        catch { if (!reader.HasExited) { reader.Kill(entireProcessTree: true); await reader.WaitForExitAsync(); } throw; }
-        if (reader.ExitCode != 0) throw Failure("The captured CLR source identity could not be read: " + await error);
-        var identities = JsonNode.Parse(await output)!["sourceIds"]!.AsArray().Select(id => id!.GetValue<string>()).ToArray();
-        if (identities.Length == 0) return;
-        if (identities.Length != 1) throw Failure("Multiple captured CLR sources require an explicit source-to-folder binding.");
-        if (feature["Options"] is not JsonObject options)
-        {
-            options = new JsonObject(); feature["Options"] = options;
-        }
-        if (options["SourceId"] is { } configured && configured.GetValue<string>() != identities[0])
-            throw Failure("The configured CLR source identity differs from the captured catalog authority.");
-        // Preserve the logical authority without treating its path-shaped value as a filesystem location.
-        // FolderPath is independent and retains this host's normal current-build scan location.
-        options["SourceId"] = identities[0];
     }
 
     public async Task LoginAsync(string username = "admin")
@@ -148,6 +141,37 @@ internal sealed class OwnedWorkbench : IAsyncDisposable
         if (!response.IsSuccessStatusCode) { session.Dispose(); throw Failure($"Test-account login returned HTTP {(int)response.StatusCode}"); }
         return session;
     }
+
+    /// <summary>
+    /// Holds parent-resume delivery so a crash can land before consumption. The same file freezes
+    /// <c>BpmnEmbeddingDelivery</c> (RunBpmn) and <c>ParentResumeExecutor</c> (DispatchWorkflow / callActivity).
+    /// </summary>
+    internal void HoldNativeParentResume() => File.WriteAllText(NativeParentResumeHoldPath, "hold");
+
+    /// <summary>Holds an active RunBpmn result claim until the owning process is killed.</summary>
+    internal void HoldClaimedBpmnParentResume() => File.WriteAllText(NativeParentResumeHoldPath, "hold-claim");
+
+    /// <summary>Clears the test-only parent-resume hold; a missing file is already released.</summary>
+    internal void ReleaseNativeParentResumeHold() => File.Delete(NativeParentResumeHoldPath);
+
+    /// <summary>
+    /// Test-only EF command/transaction log capture for G3. Patches the copied Workbench appsettings so
+    /// <c>Microsoft.EntityFrameworkCore.Database.Command</c> and <c>.Transaction</c> log at Information.
+    /// Production hosts never set this; the live appsettings files are not changed.
+    /// </summary>
+    private async Task EnablePersistenceCaptureAsync()
+    {
+        var path = Path.Combine(ContentRoot, "appsettings.json");
+        var settings = JsonNode.Parse(await File.ReadAllTextAsync(path))!;
+        var levels = settings["Logging"]!["LogLevel"]!.AsObject();
+        levels["Microsoft.EntityFrameworkCore.Database.Command"] = "Information";
+        levels["Microsoft.EntityFrameworkCore.Database.Transaction"] = "Information";
+        await File.WriteAllTextAsync(path, settings.ToJsonString());
+        PersistenceCapture = new WorkbenchPersistenceCapture();
+    }
+
+    internal WorkbenchPersistenceCapture Capture =>
+        PersistenceCapture ?? throw new InvalidOperationException("Persistence capture was not enabled for this owned host.");
 
     /// <summary>Changes new-execution admission at the next launch; accepted work stays operable.</summary>
     internal async Task SetAdmissionAsync(bool admitNewExecutions)
@@ -307,12 +331,14 @@ internal sealed class OwnedWorkbench : IAsyncDisposable
         };
         foreach (var argument in new[] { assembly, "--contentRoot", ContentRoot, "--urls", "http://127.0.0.1:0" }) info.ArgumentList.Add(argument);
         info.Environment["ASPNETCORE_ENVIRONMENT"] = "Development";
+        info.Environment[NativeParentResumeHoldVariable] = NativeParentResumeHoldPath;
         var listening = new TaskCompletionSource<Uri>(TaskCreationOptions.RunContinuationsAsynchronously);
         var owned = new Process { StartInfo = info, EnableRaisingEvents = true };
         owned.Exited += (_, _) => listening.TrySetException(Failure("The owned Workbench exited before listening"));
         void Observe(string? line)
         {
             if (line is null) return;
+            PersistenceCapture?.Append(line);
             output.Enqueue(line);
             while (output.Count > 1000) output.TryDequeue(out _);
             const string marker = "Now listening on: ";

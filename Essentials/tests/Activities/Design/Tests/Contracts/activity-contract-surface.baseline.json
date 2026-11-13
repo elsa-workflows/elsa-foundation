@@ -1100,7 +1100,7 @@
           "collectionKind": "Single",
           "isRequired": false,
           "isNullable": true,
-          "uiHint": null,
+          "uiHint": "user-task-form-version",
           "defaultValue": null,
           "defaultSyntax": null,
           "uiSpecifications": null
@@ -1137,7 +1137,7 @@
           "isRequired": false,
           "isNullable": false,
           "uiHint": null,
-          "defaultValue": "{}",
+          "defaultValue": {},
           "defaultSyntax": "Object",
           "uiSpecifications": null
         },
@@ -1627,7 +1627,7 @@
           "isRequired": false,
           "isNullable": false,
           "uiHint": null,
-          "defaultValue": "{}",
+          "defaultValue": {},
           "defaultSyntax": null,
           "uiSpecifications": null
         },

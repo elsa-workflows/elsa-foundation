@@ -80,6 +80,13 @@ internal sealed class CompensationScopeStructureHandler : IActivityStructureHand
         return null;
     }
 
+    // A scope runs each step once, and a handler after its own step. The order is the one declared above.
+    public ActivityChildResultFacts AssessChildResult(ActivityNode activity, string producerChildNodeId, string consumerChildNodeId) =>
+        new(ChildrenCompletedBefore(activity, consumerChildNodeId)?.Contains(producerChildNodeId, StringComparer.Ordinal) == true
+            ? ActivityChildResultAvailability.Definite
+            : ActivityChildResultAvailability.Unknown)
+        { EarlierProducerRunCanReachConsumer = false };
+
     public ActivityNodeStructure CompileExecutableStructure(ActivityNode activity)
     {
         var authored = CompensationScopeAuthoredStructureReader.Read(activity);

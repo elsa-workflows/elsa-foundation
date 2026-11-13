@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Configuration;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -167,6 +168,21 @@ public sealed class SourceOwnedStimulusRouterTests
         var retry = await harness.Router.RouteSourceAsync(source);
         Assert.Equal(1, retry.StartedCount); Assert.Equal(originalKey, Assert.Single(harness.Actors.Accepted).IdempotencyKey);
         Assert.True(winner.IsEquivalentTo((await harness.Store.FindAsync(source.SourceOutboxItemId))!.RecipientSnapshot));
+    }
+
+    [Fact]
+    public async Task Source_router_reports_an_input_contract_refusal_per_start_and_still_resumes_and_settles()
+    {
+        // #3728: a start its workflow's input contract refuses is that recipient's outcome, not the delivery's.
+        await using var harness = new Harness(inputContract: new(WorkflowExecutableInputContract.CurrentVersion,
+            [new WorkflowDeclaredInput("count", new TypeReference("Int32"), isRequired: true)]));
+        await harness.SeedMaterial(); await harness.Bind("binding-a"); await harness.Bind("binding-b"); await harness.Wait("existing", "wait-a");
+        var source = await harness.Source();
+        var result = await harness.Router.RouteSourceAsync(source);
+        Assert.Equal(2, result.RefusedStartCount);
+        Assert.All(result.Starts, start => Assert.Equal(WorkflowExecutableInputValidationReasonCodes.MissingRequired, start.Reason));
+        Assert.Equal(BookmarkResumeDispatchStatus.Dispatched, Assert.Single(result.Resumes).Status);
+        Assert.Equal(WorkflowExecutionCommandKind.ResumeBookmark, Assert.Single(harness.Actors.Attempts).Command.Kind);
     }
 
     [Fact]
@@ -447,8 +463,11 @@ public sealed class SourceOwnedStimulusRouterTests
         public IWorkflowExecutableSourceReferenceStore References => Services.GetRequiredService<IWorkflowExecutableSourceReferenceStore>();
         public InMemoryExecutionLivenessStateStore Ownership => (InMemoryExecutionLivenessStateStore)Services.GetRequiredService<IExecutionLivenessStateStore>();
         public CountingLookup Lookup => Services.GetRequiredService<CountingLookup>();
-        public Harness(bool coalescing = false, bool adapter = true, bool legacyStart = false, bool legacyResume = false, bool duplicateAdapter = false)
+        private readonly WorkflowExecutableInputContract? inputContract;
+        public Harness(bool coalescing = false, bool adapter = true, bool legacyStart = false, bool legacyResume = false, bool duplicateAdapter = false,
+            WorkflowExecutableInputContract? inputContract = null)
         {
+            this.inputContract = inputContract;
             var services = new ServiceCollection(); services.AddSingleton<TimeProvider>(Clock); services.AddSingleton<IPersistenceAccessContextAccessor, Access>();
             services.AddSingleton<IWorkflowExecutionActorProvider>(Actors); if (adapter) services.AddSingleton<IStimulusDeliveryIntentAdapter, Adapter>();
             if (duplicateAdapter) services.AddSingleton<IStimulusDeliveryIntentAdapter>(new Adapter());
@@ -465,7 +484,8 @@ public sealed class SourceOwnedStimulusRouterTests
             _ = Store;
             await Services.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(new(Pin,
                 new ExecutableNode("node", "authored", "test/activity", "1.0.0", new RuntimeActivityDescriptor("test", RuntimeActivityDescriptor.InitialSchemaVersion, JsonSerializer.SerializeToElement(new { })), new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, string>()),
-                new Dictionary<string, WorkflowExecutableResumeTarget> { ["resume"] = new("resume", "node", "test", new Dictionary<string, string>()) }, Now, new Dictionary<string, string>(), IncidentStrategyBuiltIns.FaultReference));
+                new Dictionary<string, WorkflowExecutableResumeTarget> { ["resume"] = new("resume", "node", "test", new Dictionary<string, string>()) }, Now, new Dictionary<string, string>(),
+                inputContract, null, IncidentStrategyBuiltIns.FaultReference));
             await Services.GetRequiredService<IWorkflowExecutionStateStore>().SaveAsync(Execution("publisher"));
         }
         public async Task<PostCommitDeliveryContext> Source(bool local = false, string? correlation = null)

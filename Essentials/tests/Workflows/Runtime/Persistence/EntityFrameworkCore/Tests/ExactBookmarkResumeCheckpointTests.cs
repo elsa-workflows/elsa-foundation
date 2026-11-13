@@ -75,6 +75,35 @@ public sealed class ExactBookmarkResumeCheckpointTests
         Assert.Equal(1, await harness.Markers());
     }
 
+    [Fact]
+    public async Task Exact_bookmark_resume_reads_the_ownership_row_even_with_a_usable_fence_cursor()
+    {
+        // A conflict on the fence row is not retried for an exact bookmark resume: it leaves as admission-unavailable.
+        // A fence cursor that is behind would have to be answered with another run, which would admit the commit
+        // instead. So such a commit never uses its cursor (#2564).
+        var commands = new Elsa.Persistence.EntityFramework.Tests.CommandCaptureInterceptor();
+        await using var harness = await Harness.Create(true, commands); await harness.Seed();
+        var cursors = new EfExecutionFenceCursors(harness.Clock);
+        var lease = await new RuntimeExecutionOwnershipService(
+            new EfExecutionLivenessStateStore(harness.Context!, new Access(), new Codec()) { FenceCursors = cursors }, harness.Clock,
+            new RuntimeExecutionOwnershipOptions { OwnerId = "node-a", LeaseDuration = TimeSpan.FromMinutes(1) }).AcquireAsync("target");
+        Assert.True(cursors.TryGet(EfExecutionFenceCursors.Key.For(Scope.Value, lease), out var cursor));
+        var store = new EfRuntimeCheckpointCommitStore(harness.Context!, new Access(), harness.Clock) { FenceCursors = cursors };
+        var commit = Commit(await harness.Capture()) with { ExpectedFence = lease.ToFence() };
+        var before = commands.Commands.Count;
+
+        await store.CommitAsync(commit, new(RuntimeCheckpointPersistenceMode.Immediate));
+
+        var ownership = commands.Commands.Skip(before)
+            .Where(command => command.Contains(RuntimeOperationalStateEfModule.ExecutionLivenessTableName, StringComparison.Ordinal)).ToArray();
+        Assert.Single(ownership, command => command.StartsWith("SELECT", StringComparison.Ordinal));
+        Assert.Single(ownership, command => command.StartsWith("UPDATE", StringComparison.Ordinal));
+        Assert.Null(await harness.Bookmarks.FindAsync("target", "wait"));
+        // The read moved the cursor, as any commit that reads the row does.
+        Assert.True(cursors.TryGet(EfExecutionFenceCursors.Key.For(Scope.Value, lease), out var after));
+        Assert.Equal(cursor.Revision + 1, after.Revision);
+    }
+
     [Theory]
     [InlineData(false, "recreate")] [InlineData(true, "recreate")]
     [InlineData(false, "resave")] [InlineData(true, "resave")]

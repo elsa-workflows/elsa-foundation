@@ -210,14 +210,127 @@ about this item:
 - `RuntimeSchedulerWorkConsumeConflictException`, where the atomic commit's fence-checked consume lost to a
   successor; the commit rolled back and persisted nothing.
 - `RuntimeStaleFencingTokenException`, where a commit was refused because another node now owns the run. The work
-  is the new owner's to run, so this node neither acks nor poisons it.
+  is the new owner's to run, so this node neither acks nor poisons it. The general arm throws the same exception
+  itself when its own ownership check or its fenced poison record refuses (see [What it does](#what-it-does)).
 
 A dispatch that breaches `RuntimeSchedulerWorkClaimOptions.MaxDispatchDuration` deliberately throws a
 `RuntimeSchedulerDispatchDeadlineExceededException`, which is neither of the above and therefore lands
 here on purpose: a hung dispatch becomes a bounded, visible outcome. A work item no handler accepts
 also lands here, via the internal `FaultingMissingSchedulerWorkHandler`.
 
+### Temporarily unavailable work
+
+A handler that throws `RuntimeSchedulerWorkUnavailableException` is usually not a fault. It has its own
+arm, ahead of the general one, which writes no poison record. For a step kind that supports a delayed
+release (`ResumeBookmark`, `InvokeActivity`, `CompleteActivity`, `NotifyParentActivity`,
+`DeliverChildControl`, `Checkpoint`), a live claim that no commit has consumed, and a queue that can
+persist the delay, the claim is released until `RuntimeSchedulerWorkClaimOptions.UnavailableRetryDelay`
+(5 seconds by default) has passed. The item result is `Deferred` and the drain stops. Apart from the
+case below, anything else propagates the exception and leaves the step queued, or already consumed by
+its own commit.
+
+One case is settled differently ([#3683](https://github.com/elsa-workflows/elsa-foundation/issues/3683)).
+If the dispatch sent a non-retaining checkpoint to the checkpoint store before it threw, the store did
+not refuse it outright (see below), and that commit did not consume the claim, the step is not deferred. That checkpoint is durable, or will be at
+the coalescing segment's flush, so running the step again would repeat its effect or hit the
+replay-conflict check. Inside an active segment the commit consumes nothing: it is buffered, folded at
+the cap, or committed by a boundary the segment continues past, and a handler that commits through a
+DI scope of its own holds no claim either. The dispatch frame that the `RetryAfter` release reads below
+records the attempt in every one of these cases. The drainer opens that frame for every claimed
+dispatch of a delayed-release kind, so this holds whatever the provider: on a queue that cannot persist
+the delay (an overlay without visibility snapshots, say) such a step is handled as a fault too, instead
+of propagating. A step of another kind, or on a queue without claims, opens no frame and propagates.
+
+Such a step skips the unavailable arm and is treated as a handler fault. For an execution with a
+selected model protocol, the model-protocol arm catches it first and rethrows it: no acknowledgement,
+no record, and the segment's flush is skipped. No model path reaches that today, because a model
+execution accepts only `ExecuteModel` work, which opens no frame. Every other such step goes to the
+general arm below. It is acknowledged (through the segment's overlay, so the flush commits the effect
+and removes the durable copy together), recorded, and its result is `Faulted`, so with the default
+policy it surfaces as a blocking incident. It is recorded rather than dropped quietly because the
+attempt only says the checkpoint may be durable: a commit that failed some other way, a timeout say,
+may not have landed, and a step acknowledged with no record would then be lost without a trace. A
+`RetryAfter` decision is not released for it, for the same reason as any dispatch that attempted a
+non-retaining checkpoint; `RetryNow` re-enqueues it, as for any fault. A step whose own commit consumed
+its claim is unchanged: the exception propagates and nothing is recorded.
+
+A checkpoint store's own refusal is not an attempt. A store throws `RuntimeSchedulerWorkUnavailableException`
+to refuse a commit, normally without applying it (EF's model admission can also raise it after the write
+landed; see below), and the committer then withdraws that commit's attempt, so a step whose only non-retaining commit was refused this way keeps the delayed
+release above. The withdrawal takes back only that commit: a step that sent another non-retaining
+checkpoint earlier in the same dispatch stays marked and is handled as a fault, even when that earlier
+checkpoint was only buffered and the refused commit was the fold that would have persisted it, because
+the segment's flush can still persist it. Any other exception from the store, a `TimeoutException` from
+a commit that may have landed included, keeps the attempt.
+
+That is how every current throw site keeps the delayed release. The stores throw it to refuse a bookmark
+trigger claim (EF and in-memory, keyed on `ExpectedBookmarkResume`, which only the retaining
+`InitialTriggerClaim` carries), a model decision or parent-wait commit (model executions, which open no
+frame), or a native worker's admission. That admission rides on the worker's `WorkflowStarted`
+checkpoint, which `WorkflowStartSchedulerWorkHandler` queues as a `Checkpoint` step and
+`BpmnNativeWorkCheckpointEnricher` stamps with `ExpectedModelExecution`, so it does open a frame. When the authorizing model decision changed, EF
+refuses it with `runtime.model.native-admission-unavailable` ("cross-model admission remains owed"), and
+because a refusal is not an attempt the step is released and retried, as it was before #3683. EF raises
+the same code for a timeout, lease or provider failure of that admission. Some of those can surface after the
+write committed; the step is then still released, as before #3683, and its retry ends in a replay-conflict
+incident because the rebuilt commit differs from the landed one (#3698). Checkpoint enrichers that refuse with it, such as `WorkflowDispatchControlPolicy.CheckpointFailure`
+and the BPMN enricher's own checks, run before the committer records the attempt. Handlers throw it
+before any commit or after only a retaining claim: `ResumeBookmark` before its commit or after only its
+retaining trigger claim; `InvokeActivity`, parent completion and structural callback evaluation after
+only the retaining attempt claim, which covers an activity that throws it inside `ExecuteAsync`, such as
+Rules' `RunRules`; BPMN and child control before their commits.
+
 ### What it does
+
+Before the numbered steps, the drainer asks whether it still owns the run
+([#4032](https://github.com/elsa-workflows/elsa-foundation/issues/4032)). It asks when an ownership lease for the
+work item's own execution is ambient, which the drain orchestrator arranges, and when it was given the ownership
+service, which `AddWorkflowRuntime` does. The question is `IRuntimeExecutionOwnershipService.EnsureCurrentAsync`
+with the lease's fencing token: one read of the run's ownership record. It refuses a lease that another owner
+took over, a lease that expired, and a lease that an alteration borrowed; it also refuses when the run's lease
+was released or revoked. It does not refuse a run that never had an owner. The refusal is a
+`RuntimeStaleFencingTokenException`, and it leaves the drain as a refused commit does. None of the steps below
+runs: the step is not acknowledged, released or re-enqueued, the retry policy is not asked, and no poison record
+is written. A step that came from the durable queue is still there. Whether it is still claimed depends on
+where the drain took its claim, not on what the drain is doing when the fault arrives. A claim taken on the
+durable queue stays: nothing releases it, and it lapses after the scheduler claim's visibility timeout
+(`RuntimeSchedulerWorkClaimOptions.VisibilityTimeout`, one minute by default). A claim taken in a coalescing
+segment's overlay never reached the durable queue, so the step there is not claimed, also when that segment has
+ended since. A step that existed only in an overlay is not durable, and the run replays from its last durable
+state. The step runs again when a drain of the run next claims it, after the claim has lapsed where there is
+one. Nothing on this path starts that drain. It can be a drain of the run's new owner, the resumption sweep
+where the `Resumption` component is composed, or the next command for the run. The core composition has no
+sweep, so there, unless a drain of the new owner picks the step up, it waits for that command
+([#4075](https://github.com/elsa-workflows/elsa-foundation/issues/4075)). On a queue without claims there is no
+lapse to wait for, and the rest is the same. A refused checkpoint commit leaves its step the same way. The
+exception is a step that a checkpoint commit earlier in the same dispatch already consumed, as in
+step 2: its queue row is gone, so nothing runs again, and what the run's owner has is that commit. That happens
+outside a coalescing segment, where the commit consumes the step itself, and inside one, where a boundary flush
+or a cap-fold flush earlier in the dispatch removes the in-flight step's durable copy.
+
+At the same point the drainer asks the poison store whether it can record under the lease
+(`ISchedulerPoisonFenceCapability.CanRecordFenced`).
+
+Only a confirmed lost lease stops the fault path. The ownership read is a provider read and can fail, and the
+poison store's answer can throw as well. Neither failure says the run was lost, so neither stops the steps
+below, and the dispatch span is tagged `elsa.poison.fence_fallback` with the type of the failure. Stopping there
+would throw out of a drain that still owns its run, and inside an active coalescing segment the orchestrator
+does not flush after a drain that threw, so that drain's buffered checkpoints would be left to replay. What
+follows differs between the two:
+
+- **The ownership read failed.** The step is acknowledged or released, and the poison store is still asked. Where it can
+  check the lease, the record is written under it, so a drain that had in fact lost its run is turned away at
+  the record. Where it cannot, the record is written with no ownership check.
+- **The poison store could not say whether it can check the lease.** The step is acknowledged or released, and
+  the record is written with no ownership check.
+
+Cancellation of the drain is let through from either question. Only an `OperationCanceledException` raised
+while the drain's own token is cancelled counts as that. A store whose client reports a timeout as one has
+failed like any other.
+
+A drainer with no ambient lease for the execution asks neither question and runs the steps as it did before
+this check existed. One without the ownership service does not ask the first. It still asks the poison store,
+and records under the lease where the store can check it.
 
 1. Captures fault info (and inner fault info) through `IRuntimeFaultCapturePolicy`. An exception an
    activity handler lets escape is not masked here; the masking step sits in the handler, between its
@@ -291,6 +404,52 @@ also lands here, via the internal `FaultingMissingSchedulerWorkHandler`.
 | a policy that throws | `Poisoned` | none; treated as no decision, with retry mode `PolicyFailed` and the exception type in the record's metadata |
 | `DoNotRetry`, `Fault`, or no policy | `Poisoned` | none |
 
+   The record is written under the drain's ownership lease when the poison store can check that lease
+   in the same unit of work as the write (`ISchedulerPoisonFenceCapability`). Where the ownership check
+   above was made and passed, it already turned away a drain that had lost its run, so this concerns only a
+   lease lost since that check: taken over, expired or borrowed in between. What that leaves depends on the composition:
+   - **A poison store that can check the lease** refuses the record. It throws
+     `RuntimeStaleFencingTokenException`, nothing is recorded, and the drain ends with that exception. What
+     step 3 and a `RetryNow` re-enqueue did is not undone. Outside an active coalescing segment those writes are
+     durable: the step is acknowledged, re-enqueued for `RetryNow`, or released for an honored `RetryAfter`, and
+     it has no record, which is also what a process crash at that point leaves. In an active coalescing segment
+     the re-enqueue goes to the drain's overlay, and so does the acknowledgement or the release of a step the
+     drain claimed from that overlay. The orchestrator skips the flush when the drain throws, and disposing the
+     scope does not flush either, so nothing the fault arm writes is durable. Replay starts from the last
+     durable segment.
+   - **A poison store that cannot check the lease** writes the record without a check, as before. That is a
+     custom store or decorator without the capability, or a poison store in another backend than the run's
+     ownership state (EF poison with in-memory ownership, or the reverse). The record is also written without a
+     check when the store could not say whether it can check, as described above. What a drain that lost its
+     lease since
+     the check then leaves, as read from the code:
+     - Outside an active coalescing segment: its queue writes and the unfenced record, all durable.
+     - In an active coalescing segment the queue writes are in the drain's overlay, and the record is durable at
+       once, because the poison store is not part of the overlay. The drain returns a `Faulted` result and does
+       not throw, so the orchestrator flushes the segment. What that flush is depends on the segment
+       (`FlushAtQuiescenceAsync` in `RuntimeCoalescingDrainScopeFactory`):
+       - **When the flush is a commit.** That is when the segment has buffered changes, when an earlier cap flush
+         left durably persisted outbox items whose overlay outcome the durable store does not have yet, or when an
+         earlier call of this flush already prepared its commit. The flush goes through the committer under the
+         drain's lease. The lost lease refuses it, and the overlay's queue writes are dropped with it. What is
+         left is the record, with the step still in the durable queue if it came from there.
+       - **When it is a plain queue reconciliation.** That is when none of the three holds. The flush applies the
+         overlay's queue changes to the durable queue without a commit, and so without a fence (#4043). That
+         leaves the queue writes and the record.
+   - **A drainer with no ambient lease for the execution** makes no check and writes the record without one.
+
+   Only a lost lease refuses the record. A fenced write that fails for any other reason, such as a write
+   conflict the store did not retry or a transaction it could not open, says nothing about ownership. The drainer
+   then writes the record through `RecordAsync`, as it does for a store without the capability, so a drain that
+   still owns its run does not end with its step acknowledged and no record because the fenced write failed that
+   way. It can still end so, as before, when the drain's own token is cancelled at the record or when `RecordAsync`
+   itself fails. It tags the dispatch span with
+   `elsa.poison.fence_fallback` and the type of the failure's innermost exception. That record is unfenced:
+   if the lease was also lost since the check, it is written all the same, and what is left is what the second
+   case above leaves. Cancellation of the drain is let through like the stale exception. An
+   `OperationCanceledException` from the fenced write while the drain's own token is not cancelled is a failed
+   write like any other.
+
 5. Returns a `Faulted` work-item result. `DrainAsync` breaks out of its loop, and the orchestrator's
    aggregate stop reason becomes `Faulted`.
 
@@ -299,7 +458,11 @@ decision (not a null, not a no-op): a handler fault parks as `Poisoned` on the f
 default poison store is `InMemoryWorkflowSchedulerPoisonStore`, so poison records are process-local
 until a durable provider is composed.
 
-There is no composition in which step 4 is skipped. The poison store is a **required constructor
+There is no composition in which step 4 is skipped for a drain that still owns its run. A drain whose lease
+was taken over, expired or was borrowed by an alteration does not reach step 4 when the ownership check
+establishes that. When the ownership read failed, or the lease is lost after the check, step 4 runs: the record
+is refused where the poison store can check the lease, and written without a check where it cannot or could not
+say, as described above. The poison store is a **required constructor
 parameter** on `WorkflowSchedulerDrainer` (#1271); passing null throws. This matters because step 3 has
 already ack-deleted the work item by the time poison handling runs, unless it released an honored
 `RetryAfter` instead, so a drainer that could be built without a store would drop the item with no
@@ -490,8 +653,10 @@ Changing the catalog default only affects workflows published afterwards.
 | the retry decision is read before the ack, and a policy that throws counts as no decision | `WorkflowSchedulerDrainer.DecideRetryAsync` |
 | ack-before-poison, and the release of an honored `RetryAfter` in its place | `WorkflowSchedulerDrainer.DispatchAsync` (fault arm), `CanReleaseWithDelay` |
 | a non-retaining checkpoint attempt is recorded before the store call, on the dispatch's async flow | `RuntimeSchedulerDispatchFrame`, `RuntimeCheckpointCommitter.CommitAsync` |
+| temporarily unavailable work is released with its delay, or handled as a fault after a non-retaining checkpoint attempt | `WorkflowSchedulerDrainer.DispatchAsync` (`RuntimeSchedulerWorkUnavailableException` arm and its filter) |
+| a store's unavailable refusal withdraws that commit's attempt and no other | `RuntimeCheckpointCommitter.CommitAsync`, `RuntimeSchedulerDispatchFrame.CheckpointAttempt.Withdraw` |
 | the retry-mode ladder that turns the decision into a record | `WorkflowSchedulerDrainer.HandleHandlerCrashAsync` |
-| the poison store is required by construction, so an ack-deleted fault always leaves a record | `WorkflowSchedulerDrainer` constructor (`ArgumentNullException.ThrowIfNull(poisonStore)`) |
+| the poison store is required by construction, so a drainer always has a store to record an ack-deleted fault in | `WorkflowSchedulerDrainer` constructor (`ArgumentNullException.ThrowIfNull(poisonStore)`) |
 | the dispatch deadline is routed into the poison ladder on purpose | `WorkflowSchedulerDrainer.RenewClaimUntilStoppedAsync`, `RuntimeSchedulerDispatchDeadlineExceededException` |
 | the default retry policy returns an explicit `DoNotRetry` | `Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Incidents/NoopRuntimeDomainRetryPolicy.cs` |
 | poison records become blocking critical incidents with a `WaitForIntervention` outcome, idempotently and best-effort | `Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Incidents/PoisonedSchedulerWorkIncidentObserver.cs` |
@@ -514,9 +679,20 @@ Behavioral guards worth reading alongside the code:
 - `Essentials/tests/Workflows/Runtime/Tests/WorkflowSchedulerPoisonDrainTests.cs`: the retry-mode ladder,
   including that the default policy neither retries nor re-enqueues, and
   `DrainAsync_HandlerFaultWithNoRetryPolicyAtAll_StillLeavesADurableRecord`, which pins that an empty
-  queue after a fault is always paired with a poison record.
+  queue after a fault is paired with a poison record when the drain did not lose its run.
 - `Essentials/tests/Workflows/Runtime/Tests/RuntimeSchedulerDrainTests.cs`:
   `Constructor_RequiresThePoisonStore_SoAnAckDeletedFaultCannotVanish`.
+- `Essentials/tests/Workflows/Runtime/Tests/CoalescingResumeDurableClaimBoundaryTests.cs`: the
+  `Unavailable_*` tests run a real active segment and show that a step which buffered, folded or
+  committed a non-retaining checkpoint before reporting unavailability is recorded and not run again
+  after the flush, while one that committed nothing, or only a retaining checkpoint, is still released
+  (#3683). `Unavailable_refusal_of_the_commit_itself_in_an_active_segment_still_releases_the_work` shows a
+  commit the store refused as unavailable is no attempt.
+- `Essentials/tests/Workflows/Runtime/Tests/RuntimeSchedulerWorkDeferralTests.cs`:
+  `Store_refusing_a_commit_as_unavailable_is_not_a_checkpoint_attempt` releases a `Checkpoint` step whose
+  only commit the store refused, and records one whose earlier non-retaining commit landed. The EF
+  counterpart, `EfRuntimeModelCheckpointTests.A_refused_native_admission_checkpoint_step_is_released_for_retry_not_poisoned`,
+  runs a real native admission refusal through the drainer.
 - `Essentials/tests/Workflows/Runtime/Tests/BlockingIncidentWorkflowFaultObserverTests.cs`: every skip
   condition and the ancestor-faulting rule.
 - `Essentials/tests/Workflows/Runtime/Tests/IncidentResolutionBatchExecutorTests.cs`: batch atomicity and

@@ -28,10 +28,10 @@ def main():
     source = (baseline / "DurableConsumer/Program.cs").read_text()
     changes = [
         ("missing-readability", "services.AddEfSchemaReadability();", "", "start"),
-        ("retired-content-key", 'Encoding.UTF8.GetBytes("synthetic-specialist-durable-content-key-v1")',
-         'Encoding.UTF8.GetBytes(role == "recover" ? "synthetic-wrong-recovery-key" : "synthetic-specialist-durable-content-key-v1")', "recover"),
+        ("retired-content-key", 'Encoding.UTF8.GetBytes("synthetic-agent-durable-content-key-v1")',
+         'Encoding.UTF8.GetBytes(role == "recover" ? "synthetic-wrong-recovery-key" : "synthetic-agent-durable-content-key-v1")', "recover"),
         ("omitted-application", "        await inner.DispatchAsync(source, cancellationToken);",
-         '        if (source.Intent.Kind != "elsa.specialist.applied/1") await inner.DispatchAsync(source, cancellationToken);', "recover"),
+         '        if (source.Intent.Kind != "elsa.agent.applied/1") await inner.DispatchAsync(source, cancellationToken);', "recover"),
     ]
     report = {"baselineSource": receipt["source"], "baselineVersion": receipt["version"], "streamResponses": receipt.get("streamResponses", False),
               "baselineReceiptSha256": hashlib.sha256((baseline / "report.json").read_bytes()).hexdigest(),
@@ -87,7 +87,7 @@ def main():
                 steps.append({"name": role, "exitCode": result.returncode, "status": "ExpectedCrash" if expected else "Passed", "log": str(log)})
             dispatches = len(list((data / "dispatches").glob("dispatch-*.json")))
             database = sqlite3.connect((data / "runtime.db").as_uri() + "?mode=ro", uri=True)
-            turns = [json.loads(row[0]) for row in database.execute("SELECT Payload FROM elsa_specialist_turns")]
+            turns = [json.loads(row[0]) for row in database.execute("SELECT Payload FROM elsa_agent_turns")]
             observations = {"modelDispatches": dispatches, "turnCount": len(turns)}
             if name == "missing-readability":
                 if "ISchemaDormancyCheck" not in (directory / "start.log").read_text() or dispatches or turns:
@@ -101,12 +101,12 @@ def main():
                 if name == "retired-content-key":
                     work = json.loads(database.execute("SELECT ContentJson FROM elsa_runtime_background_activity_work").fetchone()[0])
                     code = decoded(work["result"]["fault"]["code"])
-                    if code != "specialist.journal.protection":
+                    if code != "agent.journal.protection":
                         raise RuntimeError(name + ": wrong background refusal code " + code)
                     observations["nativeRefusalCode"] = code
                 else:
                     workflow = database.execute("SELECT Status FROM elsa_runtime_workflow_execution_state").fetchone()[0]
-                    sources = list(database.execute("SELECT Status, ContentJson FROM elsa_runtime_post_commit_outbox WHERE IntentKind = ?", ("elsa.specialist.applied/1",)))
+                    sources = list(database.execute("SELECT Status, ContentJson FROM elsa_runtime_post_commit_outbox WHERE IntentKind = ?", ("elsa.agent.applied/1",)))
                     if workflow != 3 or not sources or any(status == 2 for status, _ in sources):
                         raise RuntimeError(name + ": wrong native/source failure boundary")
                     # Required-source retry summaries intentionally redact exception messages.

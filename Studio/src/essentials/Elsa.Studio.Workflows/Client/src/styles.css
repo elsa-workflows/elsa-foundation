@@ -376,10 +376,10 @@
   outline-offset: 2px;
 }
 
-.wf-actions button,
-.wf-toolbar button,
-.wf-editor-actions button,
-.wf-link-button {
+.wf-actions button:where(:not(.studio-button)),
+.wf-toolbar button:where(:not(.studio-button)),
+.wf-editor-actions button:where(:not(.studio-button)),
+.wf-link-button:where(:not(.studio-button)) {
   display: inline-flex;
   min-height: 32px;
   align-items: center;
@@ -392,6 +392,17 @@
   font: inherit;
   font-size: 13px;
   padding: 0 10px;
+}
+
+.wf-toolbar button:focus-visible,
+.wf-panel-action-button:focus-visible,
+.wf-panel-tab-list button:focus-visible,
+.wf-instance-meta button:focus-visible,
+.wf-instance-inspector .studio-copyable-identifier__button:focus-visible,
+.wf-instance-canvas .react-flow__controls button:focus-visible,
+.wf-instance-canvas .react-flow__controls-button:focus-visible {
+  outline: 2px solid var(--studio-focus);
+  outline-offset: 2px;
 }
 
 /* Shared buttons own their hover recipe, including the primary foreground/background pair. */
@@ -471,8 +482,9 @@
 }
 
 .wf-run-filters {
-  border-bottom: 1px solid var(--wf-border);
-  background: var(--wf-panel);
+  display: grid;
+  gap: var(--studio-space-3);
+  min-width: 0;
 }
 
 .wf-run-filters .wf-toolbar {
@@ -491,7 +503,9 @@
 
 .wf-run-primary-controls {
   display: inline-flex;
-  flex: 0 0 auto;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
   align-items: center;
   flex-wrap: wrap;
   gap: 6px;
@@ -545,11 +559,12 @@
   min-height: 32px;
   border: 1px solid var(--wf-border);
   border-radius: var(--wf-radius);
-  background: var(--wf-panel-muted);
-  color: var(--wf-text);
+  background: var(--studio-surface);
+  color: var(--studio-text);
   font: inherit;
-  font-size: 13px;
-  padding: 0 9px;
+  font-size: var(--studio-body-size);
+  font-weight: 400;
+  padding: 0 var(--studio-space-2);
 }
 
 .wf-workflow-picker-results {
@@ -666,11 +681,12 @@
   min-height: 32px;
   border: 1px solid var(--wf-border);
   border-radius: var(--wf-radius);
-  background: var(--wf-panel-muted);
-  color: var(--wf-text);
+  background: var(--studio-surface);
+  color: var(--studio-text);
   font: inherit;
-  font-size: 13px;
-  padding: 0 9px;
+  font-size: var(--studio-body-size);
+  font-weight: 400;
+  padding: 0 var(--studio-space-2);
 }
 
 .wf-run-filter-actions {
@@ -965,30 +981,11 @@
   cursor: pointer;
 }
 
-.wf-page:has(.wf-executables-list) {
-  height: 100%;
-  min-height: 0;
-}
-
 .wf-executables-list {
   display: flex;
   flex-direction: column;
+  gap: var(--studio-page-gap);
   min-width: 0;
-  min-height: 0;
-  flex: 1;
-}
-
-.wf-executables-list .studio-table-container {
-  flex: 1 1 auto;
-  min-height: 0;
-}
-
-.wf-executables-list .studio-collection-footer {
-  flex: 0 0 auto;
-  position: sticky;
-  bottom: 0;
-  z-index: 1;
-  background: var(--studio-surface);
 }
 
 .wf-executable-table-scroll {
@@ -2099,10 +2096,9 @@
 
 .runtime-diagnostics-body {
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr) auto;
   gap: 12px;
   min-height: 0;
-  padding: 14px 18px 18px;
+  padding: 0;
 }
 
 .runtime-diagnostics-banner,
@@ -2159,33 +2155,11 @@
   line-height: 1.4;
 }
 
-.runtime-diagnostics-effective {
-  display: grid;
-  min-width: 180px;
-  gap: 2px;
-  border: 1px solid var(--wf-border);
-  border-radius: var(--wf-radius);
-  background: var(--wf-panel-muted);
-  color: var(--wf-muted-text);
-  padding: 8px 10px;
-}
-
-.runtime-diagnostics-effective span {
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: var(--wf-label-tracking, 0);
-  text-transform: var(--wf-label-transform, uppercase);
-}
-
-.runtime-diagnostics-effective strong {
-  color: var(--wf-text);
-  font-size: 13px;
-}
-
-.runtime-diagnostics-effective small {
-  max-width: 260px;
-  font-size: 10px;
-  line-height: 1.35;
+.runtime-diagnostics-effective-note {
+  margin: 0;
+  max-width: 40ch;
+  color: var(--studio-text-muted);
+  line-height: 1.5;
 }
 
 .runtime-diagnostics-levels {
@@ -2196,7 +2170,7 @@
 
 .runtime-diagnostics-level-options {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
   gap: 8px;
 }
 
@@ -2293,7 +2267,7 @@
 
 .runtime-diagnostics-subject {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(180px, 240px);
+  grid-template-columns: minmax(0, 1fr) minmax(18rem, 26rem);
   gap: 12px;
   align-items: center;
   border-bottom: 1px solid var(--wf-border);
@@ -2312,11 +2286,9 @@
 }
 
 .runtime-diagnostics-subject strong {
-  overflow: hidden;
+  overflow-wrap: anywhere;
   color: var(--wf-text);
   font-size: 13px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .runtime-diagnostics-subject em {
@@ -2330,13 +2302,12 @@
   justify-items: end;
 }
 
-.runtime-diagnostics-subject-controls code {
+.runtime-diagnostics-subject-controls .runtime-diagnostics-applied {
   max-width: 100%;
-  overflow: hidden;
   color: var(--wf-muted-text);
-  font-size: 11px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  font-size: var(--studio-label-size);
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .runtime-diagnostics-subject select {
@@ -2358,10 +2329,10 @@
 }
 
 .runtime-diagnostics-policy span {
-  border: 1px solid color-mix(in srgb, var(--wf-warning) 32%, var(--wf-border));
-  border-radius: 999px;
-  background: var(--wf-warning-soft);
-  color: var(--wf-warning-text);
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius);
+  background: var(--studio-surface-muted);
+  color: var(--studio-text-muted);
   font-size: 11px;
   padding: 4px 8px;
 }
@@ -2370,14 +2341,6 @@
   .runtime-diagnostics-section-head {
     align-items: stretch;
     flex-direction: column;
-  }
-
-  .runtime-diagnostics-effective {
-    min-width: 0;
-  }
-
-  .runtime-diagnostics-level-options {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .runtime-diagnostics-subject {
@@ -3476,7 +3439,6 @@
   min-height: 38px;
   border: 1px solid var(--wf-border);
   border-radius: var(--wf-radius);
-  background: var(--wf-panel-muted);
   color: var(--wf-text);
   font: inherit;
   font-size: 14px;
@@ -3487,6 +3449,11 @@
   text-transform: none;
 }
 
+.wf-form-field input,
+.wf-form-field textarea {
+  background: var(--wf-panel-muted);
+}
+
 .wf-form-field textarea {
   min-height: 74px;
   padding: 9px 10px;
@@ -3494,6 +3461,8 @@
 }
 
 .wf-form-field select {
+  /* Preserve the shared host chevron while applying the field surface. */
+  background-color: var(--wf-panel-muted-tone);
   padding-right: 28px;
 }
 
@@ -3665,31 +3634,6 @@
 .wf-status {
   background: var(--wf-success-soft);
   color: var(--studio-success-fg);
-}
-
-.wf-test-run-status {
-  position: relative;
-}
-
-.wf-editor-actions .wf-test-run-trigger {
-  border-color: color-mix(in srgb, var(--wf-success) 34%, var(--wf-border));
-  background: var(--wf-success-soft);
-  color: var(--studio-success-fg);
-  font-weight: 700;
-}
-
-.wf-editor-actions .wf-test-run-status[data-state="rejected"] .wf-test-run-trigger {
-  border-color: color-mix(in srgb, var(--wf-warning) 40%, var(--wf-border));
-  background:
-    linear-gradient(color-mix(in srgb, var(--wf-warning) 12%, transparent) 0 0),
-    var(--wf-panel);
-  color: var(--wf-warning-text);
-}
-
-.wf-editor-actions .wf-test-run-status[data-state="accepted-with-incidents"] .wf-test-run-trigger {
-  border-color: color-mix(in srgb, var(--studio-warning) 48%, var(--studio-border));
-  background: color-mix(in srgb, var(--studio-warning) 10%, var(--studio-surface));
-  color: var(--studio-warning-fg);
 }
 
 .wf-editor-body {
@@ -4114,6 +4058,12 @@
   gap: 8px 16px;
   margin: 0;
   font-size: 13px;
+}
+
+@media (max-width: 700px) {
+  .wf-properties-info {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .wf-properties-info dt {
@@ -4769,7 +4719,8 @@
   margin: 0;
 }
 
-.wf-inspector > .wf-muted {
+.wf-inspector > .wf-muted,
+.wf-workbench-panel-content > .wf-muted {
   margin: 0;
   padding: 12px;
 }
@@ -5234,6 +5185,10 @@
 }
 
 .wf-toolbar-checkbox input {
+  width: 14px;
+  height: 14px;
+  min-height: 0;
+  padding: 0;
   margin: 0;
   accent-color: var(--wf-accent);
 }
@@ -5511,14 +5466,17 @@ button.wf-reference-select {
   min-width: 0;
   border: 1px solid var(--wf-border);
   border-radius: var(--wf-radius);
-  background:
-    linear-gradient(color-mix(in srgb, var(--wf-bg) 58%, transparent) 0 0),
-    var(--wf-surface);
+  background-color: color-mix(in srgb, var(--wf-bg) 58%, var(--wf-panel-tone));
   color: var(--wf-text);
   font: inherit;
   font-size: 12px;
   outline: none;
   padding: 8px 9px;
+}
+
+.wf-property-row select:not([multiple]):not([size]),
+.wf-property-row select:not([multiple])[size="1"] {
+  padding-inline-end: 32px;
 }
 
 .wf-property-row select option {
@@ -6960,7 +6918,11 @@ button.wf-reference-select {
   .wf-editor *::before,
   .wf-editor *::after,
   .wf-lazy-state,
-  .wf-lazy-state * {
+  .wf-lazy-state *,
+  .wf-tokens,
+  .wf-tokens *,
+  .wf-tokens *::before,
+  .wf-tokens *::after {
     animation-duration: 0.001ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.001ms !important;
@@ -7769,4 +7731,36 @@ html[data-theme-material] .availability-search .wf-search {
   height: 15px;
   display: block;
   object-fit: contain;
+}
+
+.runtime-diagnostics-page .wf-section-label {
+  display: flex;
+  align-items: center;
+  gap: var(--studio-space-2);
+}
+.runtime-diagnostics-page .wf-section-label svg { flex: 0 0 auto; }
+
+/* Keep the immutable designer usable beside its details, and stack inspection at compact widths. */
+.wf-executable-workbench .wf-instance-canvas-shell > header h3 {
+  overflow-wrap: anywhere;
+}
+
+@media (width <= 800px) {
+  .wf-executable-workbench:not(.inspector-maximized) {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(24rem, 1fr) auto;
+    gap: var(--studio-space-2, .5rem);
+    overflow-y: auto;
+  }
+
+  .wf-executable-workbench:not(.inspector-maximized) > .wf-instance-inspector {
+    grid-column: 1;
+    grid-row: 2;
+    max-height: 18rem;
+  }
+
+  .wf-executable-workbench:not(.inspector-maximized) > .wf-side-resize-handle,
+  .wf-executable-workbench:not(.inspector-maximized) > .wf-side-resize-spacer {
+    display: none;
+  }
 }

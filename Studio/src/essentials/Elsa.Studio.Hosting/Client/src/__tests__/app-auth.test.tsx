@@ -229,7 +229,7 @@ describe("studio auth mounting", () => {
   });
 
   it("attaches a bearer token and never sends a management-key header on backend requests (#248)", async () => {
-    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ ok: true }), { status: 200 }));
+    const fetchMock = vi.fn<typeof fetch>(async () => new Response(JSON.stringify({ ok: true }), { status: 200 }));
     const manager = stubManager(() => ({ status: "authenticated", roles: [], permissions: [] }));
     manager.getAccessToken = vi.fn(async () => "access-token-1");
 
@@ -245,7 +245,7 @@ describe("studio auth mounting", () => {
   });
 
   it("fails closed when the authenticated Studio context cannot refresh a missing bearer", async () => {
-    const fetchMock = vi.fn(async () => new Response("<html>sign in</html>", { status: 200, headers: { "content-type": "text/html" } }));
+    const fetchMock = vi.fn<typeof fetch>(async () => new Response("<html>sign in</html>", { status: 200, headers: { "content-type": "text/html" } }));
     const manager = stubManager(() => ({ status: "authenticated", roles: [], permissions: [] }));
     manager.getAccessToken = vi.fn(async () => null);
     manager.refresh = vi.fn(async (): Promise<AuthSession> => ({ status: "anonymous", roles: [], permissions: [] }));
@@ -259,7 +259,7 @@ describe("studio auth mounting", () => {
   });
 
   it("falls back to the plain SDK client (no auth) and sends no management-key header when no provider is configured", async () => {
-    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ ok: true }), { status: 200 }));
+    const fetchMock = vi.fn<typeof fetch>(async () => new Response(JSON.stringify({ ok: true }), { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
     const context = createStudioEndpointContext("https://foundation.example/", null);
 
@@ -301,7 +301,7 @@ describe("studio auth mounting", () => {
   });
 
   it("wires the configured token endpoint into the backend manager", async () => {
-    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+    const fetchMock = vi.fn<typeof fetch>(async (input: RequestInfo | URL) => {
       const url = typeof input === "string" ? input : input.toString();
       if (url.endsWith("/_elsa/identity/bootstrap")) {
         return new Response(JSON.stringify({
@@ -369,7 +369,7 @@ function renderBoundary(manager: AuthProviderManager) {
 }
 
 function stubShellFetch() {
-  const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+  const fetchMock = vi.fn<typeof fetch>(async (input: RequestInfo | URL) => {
     const url = typeof input === "string" ? input : input.toString();
     if (url.includes("/_elsa/studio/modules")) {
       return new Response(JSON.stringify(emptyModules()), { status: 200 });
@@ -391,7 +391,7 @@ function emptyModules(): StudioModulesResponse {
 function stubManager(getSession: () => AuthSession): AuthProviderManager {
   return {
     getSession: vi.fn(getSession),
-    getCapabilities: vi.fn(async () => ({ ownershipMode: "foundation-owned", providers: [] })),
+    getCapabilities: vi.fn<AuthProviderManager["getCapabilities"]>(async () => ({ ownershipMode: "foundation-owned", providers: [] })),
     initialize: vi.fn(async () => getSession()),
     login: vi.fn(async () => undefined),
     handleCallback: vi.fn(async () => getSession()),
