@@ -115,8 +115,18 @@ public sealed class RuntimeHistoryDetailsTests
     public async Task Common_event_snapshot_preserves_unknown_kind_version_and_unknown_occurrence()
     {
         var state = Seed();
-        state.HistoryEventsById[("scope-a", "run", "event")] = state.HistoryEventsById[("scope-a", "run", "event")] with
-        { Name = "future.kind", SchemaVersion = 99, OccurredAtKnown = false };
+        var original = state.HistoryEventsById[("scope-a", "run", "event")];
+        state.HistoryEventsById[("scope-a", "run", "event")] = new RuntimeHistoryEvent(
+            original.HistoryEventId, original.WorkflowExecutionId, original.Sequence, original.Category,
+            "future.kind", original.OccurredAt, original.ActivityExecutionId, original.ExecutableNodeId,
+            original.CheckpointId, original.IncidentId, original.Payload, original.Metadata)
+        {
+            SchemaVersion = 99, OccurredAtKnown = false, CheckpointOrdinal = original.CheckpointOrdinal,
+            Authority = original.Authority, BookmarkId = original.BookmarkId, AttemptId = original.AttemptId,
+            ParentActivityExecutionId = original.ParentActivityExecutionId, ActivityAncestryKnown = original.ActivityAncestryKnown,
+            ExecutionScopeId = original.ExecutionScopeId, IterationId = original.IterationId, Causation = original.Causation,
+            PhysicalCommitId = original.PhysicalCommitId, RecordedAt = original.RecordedAt
+        };
         var details = await Reader(state, new Access()).FindEventDetailsAsync("run", "event");
         Assert.Equal("future.kind", details.Event!.Name);
         Assert.Equal(99, details.Event.SchemaVersion);
