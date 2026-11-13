@@ -15,6 +15,15 @@ and content must be checked by the following provider mapping. Head revisions ar
 Event receipts can survive content retirement; full run deletion and retention mutations remain with
 their owning transactions. A known-parent projection does not establish frozen occurrence membership.
 
-The isolated `RuntimeHistoryProjectionSchemaTests` exercise the relational model without changing the
-normal Runtime migration targets. Native participants, checked schema-chain mapping, scoped readers,
-observation append, occurrence projection, generated migrations and production qualification remain open.
+`EfRuntimeHistoryProjectionMapping` is a private helper for the same projections. The eventual provider
+owner supplies its actual `EfSchemaChain`: every read settles compatibility before interpreting stamped
+identity/content and upcasts the complete content column through that chain. The helper declares no
+alternative family, registers no reader and does not qualify an atomic provider. Complete scoped identities,
+filter projections, committed positions and receipt/purge acknowledgement are checked beside hashes.
+Unknown event vocabulary remains recorded; protected payloads and unsafe metadata are refused. Purged
+creation links do not upgrade unknown creation evidence. Counts distinguish run and exact activity owners.
+
+The isolated `RuntimeHistoryProjectionSchemaTests` and `RuntimeHistoryProjectionMappingTests` cover the
+model and checked projection boundary without changing normal Runtime migration targets. Native participants,
+actual declared-family binding, scoped readers, observation append, occurrence projection, generated migrations
+and production qualification remain open.
