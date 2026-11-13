@@ -10678,6 +10678,7 @@ Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryBatch.Candidates.get -> System.
 static Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryIdentity.Compute(Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryEvent! e, int? checkpointOrdinal = null) -> string!
 static Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryIdentity.Position(Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryEvent! e, long sequence, string! physicalCommitId, System.DateTimeOffset recordedAt, int? checkpointOrdinal = null) -> Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryEvent!
 static Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySafety.ValidateMetadata(Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryEvent! e) -> void
+static Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySafety.ValidateObservation(Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryObservation! observation) -> void
 static Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryIdentity.Compute(Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryCandidate! candidate) -> string!
 Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryBatch.SourceFingerprint.get -> string?
 Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryBatch.SourceFingerprint.init -> void
