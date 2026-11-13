@@ -171,6 +171,8 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
         ArgumentNullException.ThrowIfNull(request);
         if (request.DispatchNestingDepth < 0)
             throw new ArgumentOutOfRangeException(nameof(request), "Dispatch nesting depth cannot be negative.");
+        if (request.StartAuthority?.ModelWork is { } modelWorkOrigin)
+            ValidateModelWorkInputs(request, modelWorkOrigin);
         var saved = request.StartAuthority?.Kind == WorkflowExecutableStartAuthorityKind.StimulusDelivery
             ? await ReadStimulusStartAsync(request, requiredScope, cancellationToken) : null;
 
@@ -324,6 +326,7 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
         WorkflowExecutable child, CancellationToken cancellationToken)
     {
         var origin = request.StartAuthority!.ModelWork!;
+        ValidateModelWorkInputs(request, origin);
         if (request.ParentWorkflowExecutionId is not null || request.Authority is null || request.SourceSelection is not null ||
             request.WorkflowExecutionId != origin.WorkerExecutionId || request.Partition?.Value != origin.Scope.Value ||
             request.RunKind != WorkflowRunKind.PublishedRun || !WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(child.Identity, origin.WorkerExecutable))
@@ -337,6 +340,16 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
         // Current work eligibility and committed source authority are checked again by the model's checkpoint
         // enricher; its physical model compare is atomic with the worker's initial state and root-work outbox.
         return new(child.Identity, null, null);
+    }
+
+    private static void ValidateModelWorkInputs(WorkflowExecutionStartDispatchRequest request, RuntimeModelNativeWorkOrigin origin)
+    {
+        var supplied = WorkflowExecutionStartCommandPayload.ToJsonValues(request.Inputs);
+        var matches = origin.FormatVersion == 1 ? supplied.Count == 0 :
+            origin.Inputs is { } captured && supplied.Count == captured.Count &&
+            captured.All(item => supplied.TryGetValue(item.Key, out var value) && JsonElement.DeepEquals(item.Value, value));
+        if (!matches)
+            throw AuthorityRejected("model-work-input-mismatch", "Native model work must preserve its exact committed declared inputs.");
     }
 
     private async ValueTask<ResolvedPinnedExecutable> ResolveRetainedDependencyAsync(

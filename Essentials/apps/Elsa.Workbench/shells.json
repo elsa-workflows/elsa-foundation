@@ -150,7 +150,7 @@
                 "TypeFullName": "System.TimeOnly"
               },
               {
-                "TypeFullName": "System.Collections.Generic.IDictionary\u00602[[System.String, System.Private.CoreLib, Version=10.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Object, System.Private.CoreLib, Version=10.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]"
+                "TypeFullName": "System.Collections.Generic.IDictionary`2[[System.String, System.Private.CoreLib, Version=10.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Object, System.Private.CoreLib, Version=10.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]"
               }
             ]
           },
@@ -219,7 +219,13 @@
           },
           "WorkflowsRuntimeTracing": {},
           "WorkflowsRuntimeTriggers": {},
-          "WorkflowsExecutionEvidence": {}
+          "WorkflowsExecutionEvidence": {},
+          "StudioDashboardApi": {},
+          "StudioDashboardEntityFrameworkCore": {
+            "ConnectionString": "Data Source=elsa-studio-dashboards.db"
+          },
+          "WorkflowDashboardQueries": {},
+          "StudioDashboardWeaver": {}
         },
         "Configuration": {
           "WebRouting": {
