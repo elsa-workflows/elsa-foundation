@@ -1025,7 +1025,8 @@ public sealed partial class EfWorkflowExecutableStore(
         WorkflowExecutableEntity row,
         string scope,
         string expected,
-        string id)
+        string id,
+        RuntimeSourceReadLimits? sourceLimits = null)
     {
         if (EfSchemaVersion.NotReadable(RuntimeArtifactEfModule.Chain, row.SchemaVersion) ||
             row.Id != id || row.ScopeKey != Encode(scope) || row.ScopeKeyHash != Hash(scope) ||
@@ -1037,7 +1038,8 @@ public sealed partial class EfWorkflowExecutableStore(
             throw new InvalidDataException("The persisted workflow executable row is corrupt.");
         try
         {
-            var x = RuntimeArtifactJson.Deserialize<WorkflowExecutable>(RuntimeArtifactEfModule.Chain.Upcast<WorkflowExecutableEntity>(row.SchemaVersion, (nameof(row.ContentJson), row.ContentJson))[nameof(row.ContentJson)]!);
+            var content = RuntimeArtifactEfModule.Chain.Upcast<WorkflowExecutableEntity>(row.SchemaVersion, (nameof(row.ContentJson), row.ContentJson))[nameof(row.ContentJson)]!;
+            var x = sourceLimits is null ? RuntimeArtifactJson.Deserialize<WorkflowExecutable>(content) : RuntimeArtifactJson.DeserializeBounded<WorkflowExecutable>(content, sourceLimits.MaxJsonDepth);
             Validate(x);
             if (x.Identity.ArtifactId != expected || x.Identity.ArtifactHash != row.ArtifactHash)
                 throw new InvalidDataException("The persisted workflow executable identity is corrupt.");
@@ -1050,7 +1052,7 @@ public sealed partial class EfWorkflowExecutableStore(
         }
     }
 
-    private static CoordinationState ReadCoordination(WorkflowExecutableCoordinationEntity row, string scope, string expected, string id)
+    private static CoordinationState ReadCoordination(WorkflowExecutableCoordinationEntity row, string scope, string expected, string id, RuntimeSourceReadLimits? sourceLimits = null)
     {
         if (EfSchemaVersion.NotReadable(RuntimeArtifactEfModule.Chain, row.SchemaVersion) ||
             row.Id != id || row.ScopeKey != Encode(scope) || row.ScopeKeyHash != Hash(scope) ||
@@ -1064,7 +1066,7 @@ public sealed partial class EfWorkflowExecutableStore(
             var content = RuntimeArtifactEfModule.Chain.Upcast<WorkflowExecutableCoordinationEntity>(row.SchemaVersion, (nameof(row.ContentJson), row.ContentJson))[nameof(row.ContentJson)]!;
             using var document = JsonDocument.Parse(content);
             EnsureUniqueProperties(document.RootElement);
-            var state = RuntimeArtifactJson.Deserialize<CoordinationState>(content);
+            var state = sourceLimits is null ? RuntimeArtifactJson.Deserialize<CoordinationState>(content) : RuntimeArtifactJson.DeserializeBounded<CoordinationState>(content, sourceLimits.MaxJsonDepth);
             ValidateCoordination(state);
             return state;
         }
