@@ -2265,6 +2265,13 @@
           "Elsa.Events.Core": "[4.0.0-dev, )"
         }
       },
+      "elsa.studio.dashboard.management": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.31, )",
+          "Elsa.Studio.Dashboard.Core": "[4.0.0-dev, )"
+        }
+      },
       "elsa.studio.preferences.api": {
         "type": "Project",
         "dependencies": {
