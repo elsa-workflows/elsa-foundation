@@ -1030,8 +1030,7 @@ re-run on that main.
 | `$SIM --native-mutations --seeds 20000` | 9 of 9 (the five native flaws and four graph flaws) | the same |
 | `$NAT smoke` | 31 of 31 | 31 of 31 |
 
-The counts are main's because a job that kills the process never reached the threshold in a way that main counted
-differently: what changed is that it is now parked, and the oracle counts that as its own fault. A first version of
+The native counts equal main's (why exactly, given the instances now parked, is not traced). A first version of
 the oracle counted every `dierun` instance as allowed to fault, whatever parked it. A probe over the same 20,000
 native seeds found 6,116 parkings of such instances: 6,114 by their own job's ticket, and two by a message (`0/f2` by
 `x15`, `0/f1` by `x8`, each "on trial when 3 owners were lost"). That version hid those two from the innocent count;
