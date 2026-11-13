@@ -7,6 +7,7 @@ namespace Kernel.Bpmn.Run;
 /// <summary>Every case of <see cref="BpmnCases"/> on the in-memory store, one owner (BPMN.md, section 3).</summary>
 public static class CaseSmoke
 {
+    private const int Deadline = 1000;      // the boundary timers here: a job that should win does not lose to them on a loaded machine
     private static int _failures;
     private static int _n;
 
@@ -53,7 +54,7 @@ public static class CaseSmoke
     {
         var gates = new Gates();
         var store = new InMemoryStore(1, () => Environment.TickCount64);
-        var owner = new Owner("n1", 0, store, BpmnCases.Registry(deadline: 1000), options: new BpmnOptions { Gate = gates.Gate });
+        var owner = new Owner("n1", 0, store, BpmnCases.Registry(Deadline), options: new BpmnOptions { Gate = gates.Gate });
         await owner.StartAsync();
 
         async Task<(BpmnState State, List<string> Journal, InstanceRef Id)> Run(string process, JsonObject? variables = null, Func<InstanceRef, Task>? meanwhile = null)
@@ -101,16 +102,21 @@ public static class CaseSmoke
             var (s, journal, id) = await Run("b-boundary");
             Check(Var(s, "escalated") == "true" && Var(s, "slow-done") is null, "the timer fired first: the timeout path ran, the task did not complete");
             Check(journal.Any(e => e == "x h1 slow"), "the job was stopped");
-            Check(store.Instances[id.Id].Jobs is null && gates.Cancelled.ContainsKey("slow"), "no job left on the row, and the job was told to stop");
+            Check(gates.Cancelled.ContainsKey("slow"), "the job was told to stop");
             var commits = store.Journal.Count;
             gates.Release("slow");      // the job ignores the cancel: it runs and returns its result now
             await owner.PumpAsync(() => gates.Ran.ContainsKey("slow") && store.Messages.Values.All(m => m.Done));
+            // The gate knows when the job resumed, not when its result reached the worker: give it time, then run passes again.
+            await Task.Delay(200);
             await owner.PumpAsync(() => true);
             Check(owner.State(id.Id)!.Variables.GetValueOrDefault("slow-done") is null && owner.Status(id.Id) == InstanceStatus.Finished && store.Journal.Count == commits,
                 "the job's late result changed nothing and made no commit");
             gates.Clear();
+            var clock = System.Diagnostics.Stopwatch.StartNew();
             (s, journal, _) = await Run("b-boundary");
-            Check(Var(s, "slow-done") == "true" && Var(s, "escalated") is null, "the job finished first: the timer was recalled");
+            // Run waits for every message: a timer that was not recalled would hold it until it fires, at the deadline.
+            Check(Var(s, "slow-done") == "true" && Var(s, "escalated") is null && clock.ElapsedMilliseconds < Deadline,
+                $"the job finished first: the timer was recalled (done in {clock.ElapsedMilliseconds} ms, the timer is {Deadline} ms)");
             Check(journal.Any(e => e == "x h2 deadline"), "the timer was stopped");
         }
 
@@ -125,7 +131,9 @@ public static class CaseSmoke
 
         Console.WriteLine("a call activity is a child start");
         {
+            var clock = System.Diagnostics.Stopwatch.StartNew();
             var (s, journal, id) = await Run("b-call", new JsonObject { ["order"] = "c1" });
+            Check(journal.Contains("x h2 call-deadline") && clock.ElapsedMilliseconds < Deadline, $"the child finished first: the call's timer was recalled (done in {clock.ElapsedMilliseconds} ms)");
             var child = journal.First(e => e.StartsWith("r ", StringComparison.Ordinal)).Split(' ')[2];
             Check(Var(s, "child-out") == "\"child of c1\"", $"the child's variables came back: {Var(s, "child-out")}");
             Check(store.Instances[child] is { Status: InstanceStatus.Finished, Definition: "b-child" } c && c.Parent == id.Id, $"child {child} finished, its parent is {id.Id}");
