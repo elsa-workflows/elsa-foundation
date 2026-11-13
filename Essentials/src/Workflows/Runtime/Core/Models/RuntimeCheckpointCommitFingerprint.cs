@@ -45,7 +45,7 @@ public static class RuntimeCheckpointCommitFingerprint
     {
         ArgumentNullException.ThrowIfNull(intent);
         using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
-        Append("elsa.post-commit.intent.v1");
+        Append(intent.HistoryCausation is null ? "elsa.post-commit.intent.v1" : "elsa.post-commit.intent.v2");
         Append(intent.IntentId);
         Append(intent.WorkflowExecutionId);
         Append(intent.Kind);
@@ -55,6 +55,11 @@ public static class RuntimeCheckpointCommitFingerprint
         Append(intent.DependsOnWaitRegistrationId);
         Append(intent.WaitFailurePolicy is { } policy ? ((int)policy).ToString(CultureInfo.InvariantCulture) : null);
         Append(intent.NotBefore?.UtcTicks.ToString(CultureInfo.InvariantCulture));
+        if (intent.HistoryCausation is { } origin)
+        {
+            Append(origin.HistoryEventId); Append(origin.WorkflowExecutionId); Append(origin.DeliveryId);
+            Append(origin.CommandId); Append(origin.SchedulerWorkItemId);
+        }
         if (intent.Payload is { } payload)
         {
             using var stream = new MemoryStream();
@@ -275,6 +280,18 @@ public static class RuntimeCheckpointCommitFingerprint
         var element = commit.ExpectedBookmarkResume is null
             ? JsonSerializer.SerializeToElement(payload, SerializerOptions)
             : JsonSerializer.SerializeToElement(new { ExactBookmarkResumeVersion = 1, Payload = payload, commit.ExpectedBookmarkResume }, ExactBookmarkOptions);
+        if (commit.PostCommitIntents.Any(intent => intent.HistoryCausation is not null) ||
+            commit.StateChanges.PostCommitOutbox.Any(change => change.State?.Intent.HistoryCausation is not null))
+        {
+            // Only the new conditional shape binds original opaque origin/source fields exactly. The legacy
+            // payload serializer may replace unpaired UTF-16; do not derive these identities from that JSON.
+            element = JsonSerializer.SerializeToElement(new { RuntimePostCommitHistoryCausationVersion = 1,
+                Payload = element,
+                Intents = commit.PostCommitIntents.Where(intent => intent.HistoryCausation is not null)
+                    .OrderBy(intent => intent.IntentId, StringComparer.Ordinal).ToArray(),
+                Outbox = commit.StateChanges.PostCommitOutbox.Where(change => change.State?.Intent.HistoryCausation is not null)
+                    .OrderBy(change => change.StateId, StringComparer.Ordinal).ToArray() }, ExactBookmarkOptions);
+        }
         if (commit.Checkpoint.HistoryCausation is { } cause)
             element = JsonSerializer.SerializeToElement(new { RuntimeHistoryCausationVersion = 1, Payload = element, Cause = cause }, ExactBookmarkOptions);
         if (commit.HistorySourceFacts is { Count: > 0 } facts)
