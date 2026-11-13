@@ -53,7 +53,8 @@ public sealed class PartitionRuntime(string node, IMembership membership, int pa
 
     public async ValueTask StopAsync(CancellationToken cancellationToken = default)
     {
-        for (var scope = 0; scope < partitions; scope++) await DeactivateAsync(scope, cancellationToken);
+        // A cancelled token ends it: what is not given up yet runs out by its lease, as after a crash.
+        for (var scope = 0; scope < partitions && !cancellationToken.IsCancellationRequested; scope++) await DeactivateAsync(scope, cancellationToken);
     }
 
     /// <summary>This node holds the scope's fence, as far as layer 2 knows.</summary>
@@ -64,7 +65,10 @@ public sealed class PartitionRuntime(string node, IMembership membership, int pa
 
     public IScopeActivation? Activation(int scope) => _active[scope] is { Active: true } activation ? activation : null;
 
-    /// <summary>Ask layer 2 for the scope: it takes the fence, or declines. A scope already held is taken again, from empty memory.</summary>
+    /// <summary>
+    /// Ask layer 2 for the scope: it takes the fence, or declines. A scope already held is taken again, from empty memory,
+    /// so the new activation is woken: its first pass reads the inbox.
+    /// </summary>
     public async Task<IScopeActivation?> ActivateAsync(int scope, CancellationToken cancellationToken = default)
     {
         if (_activating[scope]) return null;
@@ -72,7 +76,9 @@ public sealed class PartitionRuntime(string node, IMembership membership, int pa
         IScopeActivation? activation;
         try { activation = await (_host ?? throw new InvalidOperationException("The runtime has not started.")).ActivateAsync(scope, cancellationToken); }
         finally { _activating[scope] = false; }
-        if (activation is not null) _active[scope] = activation;
+        if (activation is null) return null;
+        _active[scope] = activation;
+        await activation.WokenAsync(null, cancellationToken);     // a take starts from empty memory: the first pass reads the inbox
         return activation;
     }
 
@@ -103,6 +109,7 @@ public sealed class PartitionRuntime(string node, IMembership membership, int pa
         var held = scopes.Count(s => Owns(s) || Activating(s));
         foreach (var surplus in scopes.Where(Owns).Reverse().Take(held - share).ToList())
         {
+            cancellationToken.ThrowIfCancellationRequested();     // a process that goes away mid-round gives nothing more up
             await DeactivateAsync(surplus, cancellationToken);
             held--;
         }
