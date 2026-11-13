@@ -384,10 +384,14 @@ public sealed partial class RuntimeHistoryApiTests
         if (scenario != "missing") await bookmarks.SaveAsync(scenario == "changed" ? native with { StimulusHash = "changed" } : native);
         var activities = new InMemoryActivityExecutionStateStore();
         var owner = new ActivityExecutionState(new("activity", "run", "node", "authored", "Wait", "1"),
-            scenario == "not-waiting" ? ActivityExecutionStatus.Completed : ActivityExecutionStatus.Suspended,
+            scenario == "superseded" ? ActivityExecutionStatus.Superseded :
+                scenario == "not-waiting" ? ActivityExecutionStatus.Completed : ActivityExecutionStatus.Suspended,
             null, 1, Now, Now, null, null, null, null, null, ActivitySchedulingProvenance.Empty, null,
             scenario == "unowned" ? [] : ["bookmark"], [], 0, 0, new Dictionary<string, string>())
-            { SupersededAt = scenario == "superseded" ? Now : null };
+            {
+                SupersededAt = scenario == "superseded" ? Now : null,
+                SupersededByActivityExecutionId = scenario == "superseded" ? "replacement-activity" : null
+            };
         await activities.SaveAsync(owner);
         var service = new RuntimeHistoryInspectionService(workflows, new Authorization(), new FakeTimeProvider(Now), history, bookmarks, activities);
         var view = await service.FindBookmarkAsync(new("run", "bookmark"));

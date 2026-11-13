@@ -67,8 +67,7 @@ public sealed partial class RuntimeHistoryApiTests
         release.SetResult();
         using var response = await request;
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
-        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-        Assert.False(json.RootElement.TryGetProperty("items", out _));
+        Assert.Empty(await response.Content.ReadAsByteArrayAsync());
         Assert.Equal(0, host.Authorization.ValueReads);
     }
 
