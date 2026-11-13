@@ -14,7 +14,7 @@ costs about 2.1 kB: 0.93 to 1.08 kB inbox, 0.64 to 0.71 kB instance row (more th
 apart. Dead tuples peak at about 1,100 on Instances and 6,600 on Messages. Autovacuum clears them at its default
 one-minute nap, once they pass its threshold. The heaps keep 5 to 15 % free space on Instances and 13 to 30 % on
 Messages. Write volume does not hurt at small states, so the lazy snapshot is not needed for them. Large states are
-where it hurts. An incompressible 4 kB state costs about 6.9 kB of WAL per landed commit, because PostgreSQL rewrites
+where it hurts. An incompressible 4 kB state costs about 6.9 kB of WAL per landed instance commit, because PostgreSQL rewrites
 all of it through TOAST, and the TOAST table grows to 2.1 to 2.3 times its live data. A state that compresses costs
 less, and below about 2 kB compressed it stays in the row. That cost is what decision 10 (values by reference) is for.
 A fill factor of 70 on Messages helps only bursts. A partitioned inbox split by the kernel's partition does not fit
@@ -48,15 +48,17 @@ the current store without changing its keys.
 - **Per instance commit** means per turn of a landed batch that wrote or deleted a row. A stress commit carries 2.25 to
   2.54 of them, depending on how the passes happened to batch. Aborted work is left out, as said above. What stays in
   is committed work that the chaos causes: takes, redelivery marks after takeovers, and polls that marked messages
-  seen for an owner that then lost the partition. So the stress figures are a chaos run's cost per landed commit, and
-  the cost run gives a clean commit's. One bias remains: a commit that landed but whose session was killed before the
-  answer (685 to 775 per run, "unknown" in the summary) is counted in the WAL but not in the landed commits, so the
-  per-commit figures run a few percent high.
+  seen for an owner that then lost the partition. So the stress figures are a chaos run's cost per landed instance commit, and
+  the cost run gives a clean commit's. The commits of unknown outcome (685 to 775 per run,
+  "unknown" in the summary) did not land: in every run the fence's HOT updates of Partitions equal the landed commits
+  plus the takes exactly (for example 5,520 = 4,501 + 1,019), so they are among the aborted transactions and are not
+  missing from the count.
 - **Noise.** Batching, kills and checkpoint timing differ between stress runs, and six other database containers
   from other sessions shared the machine. With aborted work left out, two runs at the same settings agree within 2 %
   (Full 2,125 and 2,144 B; pad 6,913 and 6,931 B). Differences between variants of less than about 5 % are not
-  resolved. The cost runs are deterministic: repeats gave 1,800,800 and 1,800,824 bytes. HOT counts vary a little between
-  repeats of a cost run (see the fill factor row below).
+  resolved. The cost runs repeat closely but not exactly. At fill factor 100 the "by poll" commits gave 1,795,320 to
+  1,800,824 B. At fill factor 70 they gave 1,295,352 to 1,325,568 B, up to 5 % apart on the Messages share. Background
+  autovacuum or autoanalyze can also land in any row, and in a setup (`pg_statistic`, Instances, Journal).
 
 Commands, against PostgreSQL 17.11 in Docker, run one at a time (the stress test kills worker sessions on the whole
 server):
@@ -77,7 +79,7 @@ settings are the defaults: `autovacuum_naptime` 1 min, `max_wal_size` 1 GB, `che
 `full_page_writes` on. `fillfactor=n` and `fastvacuum=1` (per-table `autovacuum_vacuum_scale_factor = 0`, threshold
 500, insert threshold 2,000, no cost delay) are set on Instances and Messages while those tables are still empty.
 
-## The cost run: bytes per commit, deterministic
+## The cost run: bytes per commit, without chaos
 
 Total WAL per instance commit. A row's setup (`before` in `EngineRun.cs`, such as the outside inserts that the
 "by poll" row then polls) is measured separately and given as its own row:
@@ -87,7 +89,7 @@ Total WAL per instance commit. A row's setup (`before` in `EngineRun.cs`, such a
 | ten no-ops, durable, started on the owner (10 commits) | 912 | 904 | 648 | 5,650 | 5,388 | 904 |
 | a start subscription, then an event that starts an instance (1 commit) | 2,256 | 2,256 | 2,000 | 6,808 | 6,552 | 2,256 |
 | 1,000 balanced instances started at once | 708 | 579 | 292 | 5,247 | 4,832 | 708 |
-| 1,000 balanced instances, their starts arriving by poll: the commits | 1,800 | 1,666 | 1,373 | 6,340 | 5,918 | 1,325 |
+| 1,000 balanced instances, their starts arriving by poll: the commits | 1,800 | 1,666 | 1,373 | 6,340 | 5,918 | 1,295 to 1,325 |
 | the same row's setup, per start: the 1,000 outside inserts | 539 | 589 | 576 | 546 | 539 | 539 |
 
 The setup's Messages share is 497 to 510 B per start. The rest is the commit records and, in some columns, up to
@@ -106,15 +108,16 @@ The setup's Messages share is 497 to 510 B per start. The rest is the commit rec
   594 B; see below.
 - **Round trips.** No variant adds any. State, the pad and fill factor give the same counts as Full in every row. At
   1,000 instances Minimal saves a command, because fewer statements fit in fewer batches. The projector round has
-  nothing to read at Minimal (5 commands instead of 17).
+  nothing to read at Minimal (4 commands instead of 16).
 
 ## The stress run: a 40-second producer window, chaos until it ends, then settling
 
 3 nodes and 2 partitions, fence checked. 5,000 outside messages, paced over a 40-second producer window. On this loaded
 machine the producer ran 117 to 190 s, and the chaos lasted as long. Sessions were killed throughout, 2,084 to 3,001
 per run. Each run had about 11,000 instance commits and 4,000 instances, so about 70 instance commits a second. Every
-run ended with "all properties hold". At State and Minimal that check proves less: the journal checks I2 (one journal
-row per revision) and I6 (rows against the position) have few or no rows to compare.
+run ended with "all properties hold". At Minimal that check proves less: the journal checks I2 (one journal row per
+revision) and I6 (rows against the position) have few rows to compare (558 in the Minimal run). At State there is one
+`[]` row per commit, so they compare as much as at Full.
 
 The table gives WAL per landed instance commit. "Total" is all WAL but that of transactions that aborted. The
 per-table columns are the run's own relations, and "other" is commit records and the like. "Aborted" is the WAL of
@@ -169,7 +172,8 @@ Where the bytes go in the first Full run (record types from `pg_walinspect`):
     state plus (instance commits per second × state size × time between vacuums).
   - At 1,000 commits a second of 4 kB states and a one-minute nap, that is about 240 MB of churn space. This is an
     estimate from that formula, not a measurement.
-- **The journal does not bloat.** It is insert-only, and rows go only when an instance is deleted.
+- **The journal stays small.** It is insert-only, and rows go only when an instance is deleted. Its dead tuples
+  (peaks of 769 to 1,059) come from aborted inserts and from deleted instances.
 
 At a sustained 1,000 instance commits per second, these numbers mean about 2.1 MB/s of WAL with small states and about
 6.9 MB/s with incompressible 4 kB states, plus 8 to 12 % for rolled-back attempts under chaos. That should be within
@@ -180,11 +184,11 @@ the WAL with it and the replication traffic behind it.
 
 | mitigation | measured effect | cost | round trips |
 |---|---|---|---|
-| **Fill factor 70 on Instances and Messages** | Under trickle load, HOT updates reach 99 to 100 % (they were 91 to 97 %). WAL per landed commit is 2,049 B against 2,125 to 2,144 B, which is within the spread of the runs. In a burst, when 1,000 outside starts arrive by poll, the commits' Messages WAL falls from 1,062 kB to 564 to 594 kB (44 to 47 % less). With the inserts counted, the row costs 20 % less: 2,339 B per start against 1,864 B. Over the whole cost run, HOT updates of Messages rise from 42 to 51 of 2,212 to 1,175 to 1,241 (`r2-cost-hot.log`). At fill factor 90 there are 434 to 447 HOT updates and the commits cost 1,630 B. | A larger heap. At the end of the stress run, Instances is 1.5 to 1.7 times the baseline's (1.14 MB against 0.69 to 0.75 MB). Messages is 1.6 to 1.7 times (3.56 MB against 2.07 to 2.25 MB). `pgstattuple` gives 35 % and 41 % free. | none (DDL at creation) |
-| **Faster autovacuum per table** (scale factor 0, threshold 500, no cost delay) | Autovacuum runs 2 and 4 times instead of 2 and 3. Peak dead tuples stay in the baseline's range (605 / 5,200). `autovacuum_naptime`, a server setting, bounds how often a table is looked at, so per-table thresholds do little below it. | none | none |
+| **Fill factor 70 on Instances and Messages** | Under trickle load, HOT updates reach 99 to 100 % (they were 91 to 97 %). WAL per landed instance commit is 2,049 B against 2,125 to 2,144 B, which is within the spread of the runs. In a burst, when 1,000 outside starts arrive by poll, the commits' Messages WAL falls from 1,062 kB to 564 to 594 kB (44 to 47 % less). With the inserts counted, the row costs 20 to 22 % less: 2,339 B per start against 1,834 to 1,864 B. Over the whole cost run, HOT updates of Messages rise from 51 of 2,212 to 1,241 (`r2-cost-hot.log`; 42 and 1,241 in the older `cost-hot.log`). At fill factor 90 there are 434 HOT updates and the commits cost 1,638 B (447 and 1,630 B in the older log). | A larger heap. At the end of the stress run, Instances is 1.5 to 1.7 times the baseline's (1.14 MB against 0.69 to 0.75 MB). Messages is 1.6 to 1.7 times (3.56 MB against 2.07 to 2.25 MB). `pgstattuple` gives 35 % and 41 % free. | none (DDL at creation) |
+| **Faster autovacuum per table** (scale factor 0, threshold 500, no cost delay) | Autovacuum runs 2 and 4 times, against 2 and 3 to 4 in the other runs, and peak dead tuples stay in the baseline's range (605 / 5,200): no measurable effect. `autovacuum_naptime`, a server setting, bounds how often a table is looked at, so per-table thresholds do little below it. | none | none |
 | **History State or Minimal** | Saves the journal row. In the cost run that is about 130 B (State) or 415 B (Minimal) per instance commit. In the stress run, the journal's 270 B at Minimal. It is the owner's per-workflow choice, not a store setting. | No history for that workflow (Minimal), or no entries (State). | none; Minimal saves one command per 1,000-instance flush |
 | **Partitioned inbox, split by the kernel's partition** | Not measured, because the current store cannot use it. On a Messages table partitioned by `Partition`, `AddAsync`'s `ON CONFLICT ("Id") DO NOTHING` fails with "there is no unique or exclusion constraint matching the ON CONFLICT specification". PostgreSQL also refuses a unique index on `Id` alone: "unique constraint on partitioned table must include all partitioning columns". Both were probed on PostgreSQL 17.11 (`r2-probe-partitioned.log`). Hash partitioning on `Id` would keep the current keys and give smaller vacuum units. Every poll, which filters on `Partition`, would then touch every partition. That was not tested. | A store change: the message key, the add's conflict target and the delete of consumed rows gain `Partition`. A message id would then be unique per partition, not across the store. That is a narrower guarantee, and an owner decision. It would not cut WAL (the same inserts, updates and deletes), only split vacuum work into smaller tables, and the inbox heap is already small and vacuumed. | none in principle (the same statements) |
-| **Values by reference** (decision 10) | Not measured, because it is not built yet; no branch had it when this was written. The pad runs give its ceiling. An incompressible 4 kB value rewritten at every commit costs about 4.8 kB of WAL per landed commit (6,913 to 6,931 B against 2,125 to 2,144 B), plus the TOAST churn above. A reference written once removes that for every commit that does not change the value. | A table of values, their lifetime, and a read on load. | commit: none if the value rides in the same batch; load: none if read with the row, one more otherwise |
+| **Values by reference** (decision 10) | Not measured, because it is not built yet; no branch had it when this was written. The pad runs give its ceiling. An incompressible 4 kB value rewritten at every commit costs about 4.8 kB of WAL per landed instance commit (6,913 to 6,931 B against 2,125 to 2,144 B), plus the TOAST churn above. A reference written once removes that for every commit that does not change the value. | A table of values, their lifetime, and a read on load. | commit: none if the value rides in the same batch; load: none if read with the row, one more otherwise |
 
 ## Conclusions
 
@@ -196,7 +200,7 @@ the WAL with it and the replication traffic behind it.
    the inbox writes 0.93 to 1.08 kB, the instance row 0.64 to 0.71 kB and the journal 0.28 to 0.29 kB. More than half
    of the instance row's share is TOAST of six growing states. Of the journal's cost, its two indexes are 60 %.
 3. **Large states are the cost.** PostgreSQL rewrites a state of more than about 2 kB (after compression) through
-   TOAST at every commit. For an incompressible 4 kB state, that is about 6.9 kB of WAL per commit, and the TOAST table
+   TOAST at every commit. For an incompressible 4 kB state, that is about 6.9 kB of WAL per instance commit, and the TOAST table
    bloats to 2.1 to 2.3 times its live data. Real JSON compresses, so this is the upper end. Values by reference
    (decision 10) is the fix for large values that do not change every turn. It should be measured with this tooling
    once it lands (`pad=` against the reference).

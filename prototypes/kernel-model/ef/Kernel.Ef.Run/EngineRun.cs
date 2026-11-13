@@ -61,6 +61,8 @@ static class EngineRun
             if (signal != "") { File.Delete(signal + ".calm"); File.Delete(signal + ".stop"); }
             await target.ResetAsync(partitions);
         }
+        // The WAL range would hold the other process's commits, and the tally counts only this one's.
+        if (target.Writes is not null && (workersOnly || signal != "")) { Console.WriteLine("writes=1 measures one process: not with role= or signal="); return 2; }
         var ef = target.Store(create);
         var tally = new Tally(ef);
         IKernelStore store = tally;
@@ -291,7 +293,7 @@ static class EngineRun
         if (writes is not null)
         {
             var wait = target.Int("after", 70);
-            Console.WriteLine($"writes: waiting {wait} s for autovacuum{(target.Shaper is { } padded ? $"; {padded.Padded:N0} rows were written with the pad" : "")}");
+            Console.WriteLine($"writes: waiting {wait} s for autovacuum{(target.Shaper is { } padded ? $"; {padded.Padded.ToString("N0", System.Globalization.CultureInfo.InvariantCulture)} rows were written with the pad" : "")}");
             await Task.Delay(wait * 1000);
             var after = await writes.TakeAsync();
             var tuplesAfter = await writes.TupleStatsAsync();
