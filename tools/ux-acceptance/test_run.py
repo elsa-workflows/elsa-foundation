@@ -260,6 +260,7 @@ class SourcePairTests(unittest.TestCase):
             def command(argv, *_args, **kwargs):
                 calls.append((argv, kwargs.get("cwd")))
                 if "tests/browser/playwright.outlined-fields.config.ts" in argv:
+                    self.assertTrue(1024 <= int(kwargs["env"]["OUTLINED_PORT"]) <= 65535)
                     gallery = Path(kwargs["env"]["OUTLINED_EVIDENCE"]); gallery.mkdir()
                     image = gallery / "unit-fixture.png"; image.write_bytes(b"explicit unit artifact fixture")
                     test = {"expectedStatus": "passed", "status": "expected", "results": [{"status": "passed", "attachments": [{"contentType": "image/png", "path": str(image)}]}]}

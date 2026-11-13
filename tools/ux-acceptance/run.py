@@ -290,10 +290,11 @@ def run(output, journey=None, studio_root=None):
         command(['pnpm', 'build'], output / 'frontend-build.log', cwd=studio_root / 'Studio')
         report['stage'] = 'isolated-field-gallery'
         gallery = output / 'outlined-gallery'
+        gallery_port = free_port()
         command(['pnpm', 'exec', 'playwright', 'test', '--config', 'tests/browser/playwright.outlined-fields.config.ts'],
-                output / 'outlined-gallery.log', cwd=studio_root / 'Studio', env=dict(os.environ, OUTLINED_EVIDENCE=str(gallery)))
+                output / 'outlined-gallery.log', cwd=studio_root / 'Studio', env=dict(os.environ, OUTLINED_EVIDENCE=str(gallery), OUTLINED_PORT=str(gallery_port)))
         report['isolatedFieldGallery'] = {'executed': field_gallery_verdict(json.loads((gallery / 'playwright.json').read_text()), gallery),
-                                          'sourceSha': studio_sha, 'kind': 'isolated-shared-components'}
+                                          'sourceSha': studio_sha, 'kind': 'isolated-shared-components', 'url': f'http://127.0.0.1:{gallery_port}'}
         report['stage'] = 'build'
 
         command(['dotnet', 'build', str(studio_project), '-p:RestoreLockedMode=true', '-m:2', '-nr:false', '-v:q', '-nologo'], output / 'studio-build.log')
