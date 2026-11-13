@@ -206,12 +206,12 @@ describe("secrets page", () => {
     const { container } = render({ getItems: () => [paymentSecret(), secret({ id: "2", name: "other.api", displayName: "Other API" })] });
     await waitForText(container, "Other API");
     await clickSecretAction(container, "payments.api", "Rotate");
-    change(container.querySelector<HTMLInputElement>(".secrets-value-input input")!, "dummy-new-value");
-    await waitFor(() => container.querySelector<HTMLInputElement>(".secrets-value-input input")?.value === "dummy-new-value");
+    change(container.querySelector<HTMLInputElement>('input[data-secret-field="value"]')!, "dummy-new-value");
+    await waitFor(() => container.querySelector<HTMLInputElement>('input[data-secret-field="value"]')?.value === "dummy-new-value");
     flushSync(() => container.querySelector<HTMLButtonElement>("button[aria-label='Show value']")!.click());
-    expect(container.querySelector<HTMLInputElement>(".secrets-value-input input")?.type).toBe("text");
+    expect(container.querySelector<HTMLInputElement>('input[data-secret-field="value"]')?.type).toBe("text");
     await clickSecretAction(container, "other.api", "Rotate");
-    const input = container.querySelector<HTMLInputElement>(".secrets-value-input input")!;
+    const input = container.querySelector<HTMLInputElement>('input[data-secret-field="value"]')!;
     expect(input.value).toBe("");
     expect(input.type).toBe("password");
   });
@@ -302,7 +302,7 @@ describe("secrets page", () => {
     const { container } = render();
     await waitForText(container, "Payments API");
     const status = [...container.querySelectorAll<HTMLSelectElement>(".secrets-filter select")]
-      .find(select => select.parentElement?.textContent?.includes("Status"))!;
+      .find(select => select.labels?.[0]?.textContent === "Status")!;
     selectValue(status, "Revoked");
     await waitForText(container, "No loaded secrets match your filters");
     expect(container.querySelector(".secrets-detail")).toBeNull();
@@ -468,7 +468,7 @@ describe("secrets page", () => {
     await waitForText(container, "Payments API");
 
     const status = [...container.querySelectorAll<HTMLSelectElement>(".secrets-filter select")]
-      .find(select => select.parentElement?.textContent?.includes("Status"))!;
+      .find(select => select.labels?.[0]?.textContent === "Status")!;
     selectValue(status, "Revoked");
     await waitForText(container, "No loaded secrets match your filters");
 
@@ -596,7 +596,7 @@ describe("secrets page", () => {
     expect([...scopeFilter.options].map(option => option.value)).toContain("module.payments");
     expect(scopeFilter.getAttribute("aria-describedby")).toContain("help");
     expect(scopeFilter.labels?.[0]?.textContent).toBe("Scope");
-    expect(scopeFilter.parentElement?.textContent).toContain("Scopes in loaded results");
+    expect(scopeFilter.closest(".secrets-filter")?.textContent).toContain("Scopes in loaded results");
     const describedBy = scopeFilter.getAttribute("aria-describedby")?.split(" ") ?? [];
     expect(describedBy.map(id => container.querySelector(`#${id}`)?.textContent).join(" ")).toContain("up to 100 secrets");
     expect(describedBy.map(id => container.querySelector(`#${id}`)?.textContent).join(" ")).toContain("other scopes may exist");
@@ -750,7 +750,7 @@ describe("secrets page", () => {
     const inputs = Array.from(container.querySelectorAll<HTMLInputElement>(".secrets-create-form input"));
     change(inputs[0], "smtp-password");
     change([...container.querySelectorAll<HTMLInputElement>(".secrets-create-form input")].find(i => i.labels?.[0]?.textContent?.trim() === "Display name")!, "SMTP Password");
-    change(container.querySelector<HTMLInputElement>(".secrets-value-input input")!, "secret-value");
+    change(container.querySelector<HTMLInputElement>('input[data-secret-field="value"]')!, "secret-value");
     clickButton(container, "Create", ".secrets-create-form");
 
     await waitForText(container, "Secret created.");

@@ -1,4 +1,4 @@
-import { StudioPageHeader, StudioButton } from "@elsa-workflows/studio-ui";
+import { StudioPageHeader, StudioButton, StudioField } from "@elsa-workflows/studio-ui";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ElsaStudioModuleApi, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { resolveBackendPath } from "@elsa-workflows/studio-sdk";
@@ -416,10 +416,10 @@ function StructuredLogsHeader({ state, compactControls = false }: { state: Struc
   const statusLabel = getConnectionStatusLabel(state.status);
   const selectedRows = state.selectedEntryId ? state.rows.filter(row => row.id === state.selectedEntryId) : [];
   const levelSelect = (
-    <select ref={state.levelSelectRef} aria-label="Minimum log level" value={state.filters.minLevel} onChange={event => state.setFilters({ ...state.filters, minLevel: event.target.value as StructuredLogFilters["minLevel"] })}>
+    <StudioField label="Minimum log level"><select ref={state.levelSelectRef} aria-label="Minimum log level" value={state.filters.minLevel} onChange={event => state.setFilters({ ...state.filters, minLevel: event.target.value as StructuredLogFilters["minLevel"] })}>
       <option value="">All levels</option>
       {levelOrder.map(level => <option value={level} key={level}>{level}</option>)}
-    </select>
+    </select></StudioField>
   );
 
   return (
@@ -427,10 +427,10 @@ function StructuredLogsHeader({ state, compactControls = false }: { state: Struc
         {!compactControls ? (
           <>
             {levelSelect}
-            <select aria-label="Structured log source" value={state.filters.sourceId} onChange={event => state.setFilters({ ...state.filters, sourceId: event.target.value })}>
+            <StudioField label="Structured log source"><select aria-label="Structured log source" value={state.filters.sourceId} onChange={event => state.setFilters({ ...state.filters, sourceId: event.target.value })}>
               <option value="">All sources</option>
               {state.sources.map(source => <option value={source.id} key={source.id}>{formatStructuredLogSourceLabel(source)}</option>)}
-            </select>
+            </select></StudioField>
             <input
               ref={state.categoryInputRef}
               aria-label="Filter by category"
@@ -442,10 +442,10 @@ function StructuredLogsHeader({ state, compactControls = false }: { state: Struc
         ) : (
           <>
             {levelSelect}
-            <select aria-label="Structured log source" value={state.filters.sourceId} onChange={event => state.setFilters({ ...state.filters, sourceId: event.target.value })}>
+            <StudioField label="Structured log source"><select aria-label="Structured log source" value={state.filters.sourceId} onChange={event => state.setFilters({ ...state.filters, sourceId: event.target.value })}>
               <option value="">All sources</option>
               {state.sources.map(source => <option value={source.id} key={source.id}>{formatStructuredLogSourceLabel(source)}</option>)}
-            </select>
+            </select></StudioField>
           </>
         )}
         <span className={`structured-logs-status ${state.status}`} aria-hidden="true" />
