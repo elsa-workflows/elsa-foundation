@@ -27,7 +27,7 @@
       <span class="opt" data-in="log">A Zeebe-like log provider</span></div>
   </div>
   <p id="profile-note"></p>
-  <div class="principle"><strong>Inline execution</strong> is chosen per workflow or per route: a run that a request starts executes in that request until its first wait, under any persistence mode. Inline plus Ephemeral costs no database calls and no hop. Every profile supports it, because every node owns partitions to place a new instance in.</div>
+  <div class="principle"><strong>Inline execution</strong> is chosen per workflow or per route: a run that a request starts without a caller's key executes in that request until its first wait, under any persistence mode; a keyed start owned by another node answers over a reply address. Inline plus Ephemeral costs no database calls and no hop. Every profile supports it, because every node owns partitions to place a new instance in.</div>
 </section>
 
 <!-- 13 ─────────────────────────────────────────── -->

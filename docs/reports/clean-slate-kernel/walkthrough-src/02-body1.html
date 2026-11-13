@@ -354,7 +354,7 @@
   <ol class="stmts" id="stmts">
     <li class="fence" data-o-tok="7" data-o-first="1" data-rt-tok="RT 1" data-rt-first="RT 1"><span class="rt"></span><span><b>Fence.</b> <code>UPDATE partition SET position = n + k, lease_until = … WHERE id = p AND epoch = e AND position = n</code>. Also renews the lease, so a busy partition needs no heartbeat.</span></li>
     <li class="check" data-o-tok="8" data-o-first="2" data-rt-tok="check" data-rt-first="check"><span class="rt"></span><span><b>Exactly one row changed?</b> If not, roll back and reset. This check must come before COMMIT is sent.</span></li>
-    <li data-o-tok="1" data-o-first="3" data-rt-tok="RT 1" data-rt-first="RT 2"><span class="rt"></span><span>Insert or update the <i>k</i> instance rows, each update <code>WHERE revision = r</code>.</span></li>
+    <li data-o-tok="1" data-o-first="3" data-rt-tok="RT 1" data-rt-first="RT 2"><span class="rt"></span><span>Insert or update the instance rows the batch changed, each update <code>WHERE revision = r</code>.</span></li>
     <li data-o-tok="2" data-o-first="4" data-rt-tok="RT 1" data-rt-first="RT 2"><span class="rt"></span><span>Delete the consumed messages, or mark them <code>done</code> when they carry <code>keep_until</code>. Check the count.</span></li>
     <li data-o-tok="3" data-o-first="5" data-rt-tok="RT 1" data-rt-first="RT 2"><span class="rt"></span><span>Mark <code>seen = e</code> on messages held in memory and not consumed.</span></li>
     <li data-o-tok="4" data-o-first="6" data-rt-tok="RT 1" data-rt-first="RT 2"><span class="rt"></span><span>Insert the sent messages. Each id is derived from the sender and its revision, with a fixed-width ordinal, so a repeat is refused and order holds.</span></li>
