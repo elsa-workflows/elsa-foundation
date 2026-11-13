@@ -35,6 +35,16 @@ COMMON_CAPTURES = ('live-reference', 'live-clarification', 'live-proposal-previe
                    'live-saved-light-desktop', 'live-saved-dark-desktop', 'live-saved-light-narrow', 'live-saved-dark-narrow')
 CAPTURES = {WORKFLOW: (*COMMON_CAPTURES, 'live-drill'),
             ACME: (*COMMON_CAPTURES, 'live-share', 'live-shared-reader', 'live-reader-no-category')}
+# Every actual result gets visible periods/values; bar presentations also earn chart evidence.
+for title in TITLES:
+    result_captures = [f'{prefix}-{part}' for prefix in ('live-proposal-preview', 'live-refined-preview',
+                       'live-saved-light-desktop', 'live-saved-dark-desktop', 'live-saved-light-narrow', 'live-saved-dark-narrow')
+                       for part in ('periods', 'values', 'values-end')]
+    result_captures += [f'{prefix}-chart' for prefix in ('live-refined-preview', 'live-saved-light-desktop',
+                       'live-saved-dark-desktop', 'live-saved-light-narrow', 'live-saved-dark-narrow')]
+    if title == ACME:
+        result_captures += [f'live-shared-reader-{part}' for part in ('periods', 'chart', 'values', 'values-end')]
+    CAPTURES[title] = (*CAPTURES[title], *result_captures)
 JSON_ARTIFACTS = {'live-oracle.json', 'live-counters.json', 'live-readback.json'}
 
 
