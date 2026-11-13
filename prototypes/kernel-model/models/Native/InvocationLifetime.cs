@@ -26,19 +26,22 @@ internal static class InvocationLifetime
     internal static InputReceipt Final(InputReceipt receipt, string status, string outcome, string? reference) =>
         receipt with { Status = status, Outcome = outcome, Clock = reference };
 
-    internal static void Close(NativeState state, string frame, string reason, string? reference, bool keepPayload = false)
+    internal static void Close(NativeState state, string frame, string reason, string? reference, bool keepPayload = false, bool restampCompleted = false)
     {
         if (state.Inboxes?.GetValueOrDefault(frame) is not { Closed: null } inbox) return;
         inbox.Closed = reason;
+        if (restampCompleted)
+            foreach (var (id, receipt) in inbox.Receipts.ToArray())
+                if (receipt.Status == "Completed") inbox.Receipts[id] = receipt with { Clock = reference };
         foreach (var (id, receipt) in inbox.Receipts.ToArray())
             if (receipt.Status is "Queued" or "Selected")
                 inbox.Receipts[id] = Final(receipt, receipt.Status == "Selected" ? "Interrupted" : "NotProcessed", reason, reference);
         if (!keepPayload) inbox.Pending.Clear();
     }
 
-    internal static void Terminate(NativeState state, string reference, string reason, bool keepPayload = false)
+    internal static void Terminate(NativeState state, string reference, string reason, bool keepPayload = false, bool restampCompleted = false)
     {
-        foreach (var frame in state.Inboxes?.Keys.ToArray() ?? []) Close(state, frame, reason, reference, keepPayload);
+        foreach (var frame in state.Inboxes?.Keys.ToArray() ?? []) Close(state, frame, reason, reference, keepPayload, restampCompleted);
     }
 
     internal static long? Deadline(InputReceipt receipt, ICommitClock clock)

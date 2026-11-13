@@ -74,7 +74,7 @@ internal static class TerminalEdges
         h.Apply(new("take", h.World.Of(0, 0).Id)); h.Send(Kinds.Start, start: NativeModel.Spec(workflow.Id)); h.Drain();
         var frames = h.State.Frames.Values.Where(f => f.Node is "fast" or "slow").ToDictionary(f => f.Node, f => f.Id);
         foreach (var frame in frames.Values) { h.Send(InvocationInput.Kind, new InvocationInput(frame, "same-id", "business")); h.Drain(); }
-        h.Send(NativeKinds.Resume, new ResumeStimulus("close")); h.Drain();
+        h.Apply(new("publish", B: 1, S: "event:close")); h.Drain();
         var state = h.State;
         var first = state.Inboxes![frames["fast"]].Receipts["same-id"];
         var second = state.Inboxes[frames["slow"]].Receipts["same-id"];

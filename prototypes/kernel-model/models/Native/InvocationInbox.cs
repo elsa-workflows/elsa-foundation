@@ -26,7 +26,7 @@ public sealed class InvocationInbox
 }
 
 [Flags]
-public enum AdmissionFlaw { None = 0, Hydrate = 1, ForgetIds = 2, IgnoreCapacity = 4, EarlyReply = 8, BlockedSignal = 16, DropMetadata = 32, IgnoreRetention = 64, KeepPayload = 128, Restamp = 256, UnsafeNull = 512, ReleaseClockEarly = 1024 }
+public enum AdmissionFlaw { None = 0, Hydrate = 1, ForgetIds = 2, IgnoreCapacity = 4, EarlyReply = 8, BlockedSignal = 16, DropMetadata = 32, IgnoreRetention = 64, KeepPayload = 128, Restamp = 256, UnsafeNull = 512, ReleaseClockEarly = 1024, RestampCompleted = 2048 }
 
 internal sealed partial class Burst
 {
@@ -62,7 +62,7 @@ internal sealed partial class Burst
         if (AdmissionHas(AdmissionFlaw.DropMetadata)) return ValueTask.CompletedTask;
         if (ended is { } status && turn.Clock.Resolve(WorkflowCommitClock.Terminal) is not null)
             InvocationLifetime.Terminate(_s, WorkflowCommitClock.Terminal, status switch
-            { InstanceStatus.Finished => "completed", InstanceStatus.Cancelled => "cancelled", _ => "faulted" }, AdmissionHas(AdmissionFlaw.KeepPayload));
+            { InstanceStatus.Finished => "completed", InstanceStatus.Cancelled => "cancelled", _ => "faulted" }, AdmissionHas(AdmissionFlaw.KeepPayload), AdmissionHas(AdmissionFlaw.RestampCompleted));
         foreach (var message in turn.Inbox.Where(model.HandlesMetadata))
         {
             Admission result;
@@ -143,7 +143,7 @@ internal sealed partial class Burst
         if (_s.Inboxes?.GetValueOrDefault(frame) is not { Closed: null } inbox) return;
         var reference = inbox.Receipts.Values.Any(r => r.Retention is not null && (r.Status is "Queued" or "Selected"))
             ? turn.Clock.Capture() : null;
-        InvocationLifetime.Close(_s, frame, reason, reference, AdmissionHas(AdmissionFlaw.KeepPayload));
+        InvocationLifetime.Close(_s, frame, reason, reference, AdmissionHas(AdmissionFlaw.KeepPayload), AdmissionHas(AdmissionFlaw.RestampCompleted));
     }
 
     internal void RegisterInbox(Frame frame, int capacity, int receipts, TimeSpan? retention)
