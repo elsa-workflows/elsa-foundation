@@ -50,4 +50,4 @@ children may run. Not ported: main's `FlowchartExecutionEngineTests`, `Flowchart
 `FlowchartExecutionStateGoldenTests`, `FlowchartStateGrowthTests`, `FlowchartRoutingTableDifferentialTests`,
 `FlowchartPolicyContractTests`, `FlowchartIterationKeyDerivationTests` and the activity, structure-conversion,
 scoped-variable and harness tests. Trigger starts and start-entry selection are covered only by the code being
-main's; the native model starts every Flowchart at its start node.
+main's.
