@@ -135,7 +135,7 @@ function toOpaqueReference(secret: SecretPickerMetadata): SecretReference {
 }
 
 function referencesMatch(secret: SecretPickerMetadata, reference: SecretReference) {
-  return secret.name === reference.name
+  return secret.name.toLowerCase() === reference.name.toLowerCase()
     && (!reference.typeName || secret.typeName === reference.typeName)
     && (!reference.scope || secret.scope === reference.scope);
 }

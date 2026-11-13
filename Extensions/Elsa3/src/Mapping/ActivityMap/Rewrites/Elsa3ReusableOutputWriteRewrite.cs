@@ -45,9 +45,9 @@ internal sealed class Elsa3ReusableOutputWriteRewrite : IElsa3NodeRewrite
     }
 
     /// <summary>
-    /// <c>elsa3.output.{first 16 hex characters of SHA-256(output reference key)}</c>: deterministic, and no Elsa 3
-    /// variable id has that shape.
+    /// <c>output.{first 16 hex characters of SHA-256(output reference key)}</c>: deterministic, and an Elsa 3
+    /// variable id (a generated id or a name the author typed) does not take that shape in practice.
     /// </summary>
     internal static string VariableKey(string outputReferenceKey) =>
-        $"elsa3.output.{Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(outputReferenceKey)))[..16]}";
+        $"output.{Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(outputReferenceKey)))[..16]}";
 }

@@ -54,7 +54,13 @@ public sealed class ActivityResultConversionPlanLinker(ValueConversionPlanResolv
         RuntimeInputBinding binding,
         IReadOnlyDictionary<string, ExecutableNode> nodesById)
     {
-        if (binding.Source != RuntimeInputBindingSource.ActivityResult || binding.ConversionPlan is not null)
+        var memberRead = binding.Source == RuntimeInputBindingSource.ActivityResultMember;
+        // A variable member read is never typed at publication, so there is nothing to plan; the runtime checks it.
+        if (binding.Source == RuntimeInputBindingSource.VariableMember)
+            return binding;
+        if (binding.Selection is not null && !memberRead)
+            throw PublishedMemberReadDiagnostics.Unsupported(consumer.ExecutableNodeId, binding);
+        if (binding.Source != RuntimeInputBindingSource.ActivityResult && !memberRead || binding.ConversionPlan is not null)
             return binding;
 
         var reference = binding.ActivityResult!;
@@ -86,6 +92,30 @@ public sealed class ActivityResultConversionPlanLinker(ValueConversionPlanResolv
         var (sourceType, sourceRepresentation) = StringComparer.Ordinal.Equals(reference.ProjectionKey, "$result")
             ? (result.Type, result.EffectiveSourceRepresentation)
             : ResolveProjectionContract(binding, consumer, reference, producer, result, bindingContext);
+        if (memberRead)
+        {
+            // A member read converts from the selected member's contract, never from the producer's whole value.
+            var selection = binding.Selection!;
+            if (selection.Mode == RuntimeReadSelectionMode.DeferredFit)
+            {
+                // Nothing is known to convert from; the runtime checks the member's fit when it reads it, so only
+                // the default conversion can be honoured.
+                if (binding.ConversionRequest is { Mode: not ValueConversionMode.Auto } request)
+                    throw ValueConversionPublicationException.SourceContractUnavailable(
+                        $"VF-COER-001: Activity result member input '{binding.InputName}' on consumer node '{consumer.ExecutableNodeId}' " +
+                        $"requests a '{request.Mode}' conversion, but the selected member's contract is not known at publication.",
+                        ValueConversionRejectionReason.SelectedMemberContractUnknown,
+                        binding.TargetType,
+                        request.Mode,
+                        request.Profile,
+                        bindingContext);
+                return binding;
+            }
+
+            sourceType = selection.SelectedType!;
+            sourceRepresentation = selection.Representation ?? ValueRepresentationDefaults.Infer(sourceType);
+        }
+
         var plan = conversionPlanResolver.Resolve(
             sourceType,
             sourceRepresentation,
@@ -95,6 +125,17 @@ public sealed class ActivityResultConversionPlanLinker(ValueConversionPlanResolv
             binding.ConversionRequest?.Limits,
             binding.ConversionRequest?.Options,
             bindingContext);
+
+        if (memberRead)
+            return new RuntimeInputBinding(
+                binding.InputName,
+                binding.TargetType,
+                binding.EffectivePolicy,
+                binding.Source,
+                binding.Selection,
+                activityResult: binding.ActivityResult,
+                metadata: binding.Metadata,
+                conversionPlan: plan);
 
         return new RuntimeInputBinding(
             binding.InputName,

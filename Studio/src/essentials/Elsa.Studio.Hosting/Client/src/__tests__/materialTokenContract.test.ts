@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { read, ruleDeclarations } from "./themeTestUtils";
 
 const tokensCss = read("../app/ui/tokens.css");
-const consumers = ["../app/ui/tokens.css", "../app/styles.css", "../app/agent/agent.css", "../app/weaver/weaver.css"].map(read);
+const consumers = ["../app/ui/tokens.css", "../app/styles.css", "../app/weaver/weaverControls.css", "../app/weaver/weaver.css"].map(read);
 
 const referenced = (css: string, prefix: string) =>
   [...new Set([...css.matchAll(new RegExp(`var\\((${prefix}[\\w-]+)`, "g"))].map(match => match[1]))].sort();

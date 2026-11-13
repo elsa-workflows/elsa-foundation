@@ -21,9 +21,25 @@ class WorkflowScopeTests(unittest.TestCase):
         self.assertTrue(selected['studio'])
         self.assertFalse(selected['weaver'])
 
-    def test_ready_event_only_starts_affected_weaver(self):
-        selected = self.selected(paths=['Studio/src/Feature.ts'], action='ready_for_review')
-        self.assertEqual(['weaver'], [name for name, enabled in selected.items() if enabled])
+    def test_composed_acceptance_inputs_and_deletions_select_studio(self):
+        for path in ['tools/ux-acceptance/run.py', 'tools/ci/studio_gate.py',
+                     'Studio/tests/acceptance/journeys.spec.ts',
+                     'Essentials/apps/Elsa.Workbench/shells.json',
+                     'Extensions/Agent/agents/Core/Manifest.cs']:
+            with self.subTest(path=path):
+                self.assertTrue(self.selected(paths=[path], pull_request={'draft': True})['studio'])
+
+    def test_ready_event_runs_the_same_proofs_as_a_ready_push(self):
+        for paths in [['Studio/src/Feature.ts'], ['e2e-tests/Invoke-PlatformSourceJourney.ps1'],
+                      ['tools/contributor-pair-proof/run.mjs'], ['.github/workflows/ci.yml'], None]:
+            with self.subTest(paths=paths):
+                selected = self.selected(paths=paths, action='ready_for_review', pull_request={'draft': False})
+                pushed = self.selected(paths=paths, action='synchronize', pull_request={'draft': False})
+                self.assertEqual(pushed, selected)
+                self.assertTrue(any(selected.values()))
+
+    def test_docs_ready_event_does_not_start_unrelated_proofs(self):
+        self.assertFalse(any(self.selected(paths=['docs/README.md'], action='ready_for_review').values()))
 
     def test_push_always_validates_studio_but_scopes_weaver(self):
         self.assertEqual(['studio'], [name for name, enabled in self.selected('push', ['docs/README.md']).items() if enabled])
@@ -53,6 +69,24 @@ class WorkflowScopeTests(unittest.TestCase):
             self.assertEqual(['Studio/deleted.ts'], scope.changed_paths('pull_request', {}, 'a' * 40))
             self.assertIn('--no-renames', run.call_args.args[0])
             self.assertIn('-z', run.call_args.args[0])
+
+    def test_merge_group_scopes_like_a_ready_pull_request(self):
+        event = {'action': 'checks_requested', 'merge_group': {'base_sha': 'b' * 40, 'head_sha': 'a' * 40}}
+        for paths in (['docs/glossary/root.md'], ['Studio/src/Feature.ts'], ['e2e-tests/Invoke-PlatformSourceJourney.ps1'],
+                      ['tools/contributor-pair-proof/run.mjs'], ['.github/workflows/ci.yml'], None):
+            with self.subTest(paths=paths):
+                ready_push = self.selected('pull_request', paths, action='synchronize', pull_request={'draft': False})
+                self.assertEqual(ready_push, self.selected('merge_group', paths, **event))
+        self.assertFalse(any(self.selected('merge_group', ['docs/glossary/root.md'], **event).values()))
+
+    def test_merge_group_diffs_its_base_to_its_head(self):
+        event = {'merge_group': {'base_sha': 'b' * 40, 'head_sha': 'a' * 40}}
+        with patch.object(scope.subprocess, 'run') as run:
+            run.return_value.returncode = 0
+            run.return_value.stdout = 'docs/x.md\0'
+            self.assertEqual(['docs/x.md'], scope.changed_paths('merge_group', event, 'a' * 40))
+            self.assertIn(f"{'b' * 40}...{'a' * 40}", run.call_args.args[0])
+        self.assertIsNone(scope.changed_paths('merge_group', {}, 'a' * 40))
 
     def test_manual_suites_are_isolated(self):
         for suite in [*self.patterns, 'studio-order']:

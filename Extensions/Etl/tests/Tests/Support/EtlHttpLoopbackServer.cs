@@ -62,14 +62,20 @@ internal sealed class EtlHttpLoopbackServer : IAsyncDisposable
 
     public IReadOnlyList<EtlHttpLoopbackRequest> Requests => _requests.ToArray();
 
+    /// <param name="responder">Answers each request.</param>
+    /// <param name="fixedPort">A port to bind instead of a free one, for fixtures whose pinned binding handles hash the endpoint.</param>
     public static Task<EtlHttpLoopbackServer> StartAsync(
-        Func<EtlHttpLoopbackRequest, CancellationToken, ValueTask<EtlHttpLoopbackResponse>> responder)
+        Func<EtlHttpLoopbackRequest, CancellationToken, ValueTask<EtlHttpLoopbackResponse>> responder, int fixedPort = 0)
     {
         ArgumentNullException.ThrowIfNull(responder);
-        using var reservation = new TcpListener(IPAddress.Loopback, 0);
-        reservation.Start();
-        var port = ((IPEndPoint)reservation.LocalEndpoint).Port;
-        reservation.Stop();
+        var port = fixedPort;
+        if (port == 0)
+        {
+            using var reservation = new TcpListener(IPAddress.Loopback, 0);
+            reservation.Start();
+            port = ((IPEndPoint)reservation.LocalEndpoint).Port;
+            reservation.Stop();
+        }
         var baseUri = new Uri($"http://127.0.0.1:{port}/", UriKind.Absolute);
         var listener = new HttpListener();
         listener.Prefixes.Add(baseUri.AbsoluteUri);

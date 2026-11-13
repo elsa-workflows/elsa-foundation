@@ -77,6 +77,11 @@ internal sealed class SwitchStructureHandler(string schemaVersion = SwitchActivi
         return projections;
     }
 
+    // Switch promises no order between its branches, so availability stays unknown. It schedules the chosen branch
+    // itself, once per run, so no earlier run of a branch leads to a later one.
+    public ActivityChildResultFacts AssessChildResult(ActivityNode activity, string producerChildNodeId, string consumerChildNodeId) =>
+        new(ActivityChildResultAvailability.Unknown) { EarlierProducerRunCanReachConsumer = false };
+
     public ActivityNode ReplaceChildren(ActivityNode activity, IReadOnlyCollection<ActivityChildProjection> childProjections)
     {
         var current = ReadAuthoredStructure(activity);

@@ -51,13 +51,13 @@ Known host-owned Slot IDs:
 
 A result renderer may present another module's results: set `resourceModuleIds` to the resource modules it presents,
 and the host matches the result's resource module against them instead of the renderer's own `moduleId` (unset keeps the
-previous match). A result control (`api.agent.resultControls`) is the resource-owning module's interactive control for
+previous match). A result control (`api.weaver.resultControls`) is the resource-owning module's interactive control for
 a result type, such as a designer-history Undo of a change it applied; the host renders every matching control after
 the renderer, so a renderer from another package never needs the owning module's internals.
 
 ## Related run links
 
-Hosts may expose the optional `api.workflowRunRelatedLinks` registry. A `StudioWorkflowRunRelatedLinkContribution` names its native activity types and exact public state-view kind/version, then synchronously returns related Studio routes from that authorized projection. The native inspector owns the read and scope retirement; the host rejects foreign destinations/backends and the target route authorizes its own reads. Contributions never receive private activity frames. Hosts without this Slot retain ordinary native inspection.
+Hosts may expose the optional `api.workflowRunRelatedLinks` registry. A `StudioWorkflowRunRelatedLinkContribution` names its native activity types and exact public state-view kind/version, then synchronously returns related Studio routes from that authorized projection. A provider-owned family of user-defined activities, whose type keys are not known in advance, sets `anyActivityType: true` instead; the host then reads the state view of every selected activity, and the view kind alone decides. The native inspector owns the read and scope retirement; the host rejects foreign destinations/backends and the target route authorizes its own reads. Contributions never receive private activity frames. Hosts without this Slot retain ordinary native inspection.
 
 ## Activity icons
 
@@ -240,9 +240,12 @@ keeps retry IDs stable when a delivery response is uncertain.
 
 ## Weaver Contributions
 
-Studio modules can enrich Weaver through `api.agent` without calling an external
-agent provider from the browser. Weaver is the visible assistant name; `agent`
-is retained for provider-neutral profiles and contribution registries. Provider
+Studio modules can enrich Weaver through `api.weaver` without calling an external
+AI provider from the browser. Weaver is the visible assistant name and the
+name of the SDK surface (`api.weaver`, `StudioWeaver*`, `createWeaverRegistry`,
+`studioSlots.weaver*`) and of the wire names (`weaverScopes`,
+`workflows.weaver.*` ids). The prompt request's `agent` property is the one
+place that says agent: it asks for a named agent other than Weaver. Provider
 access, policy, redaction, approvals, execution, and audit stay in the
 Elsa.Server backend.
 
@@ -270,7 +273,7 @@ to every authenticated user. Mutating capabilities should use `review-required`,
 ## Weaver module participation (candidate)
 
 Register context, prompt actions, capabilities, tool contracts, result renderers and, where the host offers them,
-result controls through `api.agent`. A renderer contributed by one package for another module's results declares that
+result controls through `api.weaver`. A renderer contributed by one package for another module's results declares that
 module in `resourceModuleIds`; a control that only the resource-owning module can perform, such as a designer-history
 Undo of a change it applied, is that module's result control, so neither package needs the other's internals. `api.ai` remains a prompt-dispatch compatibility alias; its old contribution
 registries and `studio.ai.*` Slots have been removed. The SDK package re-exports the canonical

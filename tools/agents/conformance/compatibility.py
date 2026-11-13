@@ -46,12 +46,12 @@ def runtime_snapshot(case):
     # Read only the real state being protected; no schema/data repair or finalization is performed.
     with sqlite3.connect((case / "runtime.db").as_uri() + "?mode=ro", uri=True) as database:
         rows = {}
-        for table in ["elsa_specialist_turns", "elsa_specialist_conversations", "elsa_runtime_workflow_execution_state",
+        for table in ["elsa_agent_turns", "elsa_agent_conversations", "elsa_runtime_workflow_execution_state",
                       "elsa_runtime_background_activity_work", "elsa_runtime_post_commit_outbox"]:
             rows[table] = sorted(database.execute('SELECT * FROM "' + table + '"').fetchall())
         versions = database.execute('SELECT SchemaVersion, FinalizedVersion FROM "__ElsaSchemaFinalization_ElsaRuntime" WHERE Family = ?',
                                     ("RuntimeWorkflowExecution",)).fetchone()
-        turns = [json.loads(row[0]) for row in database.execute("SELECT Payload FROM elsa_specialist_turns")]
+        turns = [json.loads(row[0]) for row in database.execute("SELECT Payload FROM elsa_agent_turns")]
         if len(turns) != 1 or turns[0]["status"] != "Accepted" or not turns[0].get("protectedResult") or turns[0].get("applications"):
             raise RuntimeError("rollback refusal requires one protected accepted/unapplied turn")
         body = json.dumps({"rows": rows, "versions": versions}, sort_keys=True, default=lambda value: value.hex())

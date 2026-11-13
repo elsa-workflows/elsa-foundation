@@ -148,6 +148,25 @@ visual recipe while retaining their column geometry and interaction code.
   for their task. Use the same typography, controls, semantic colors and feedback.
   A compact page header is available through `studio-page-header--compact` for docked panels.
 
+Collection layouts should follow Connections and Workflow Definitions: keep the header,
+filter toolbar, bordered results and footer separated by the shared page gap. Size the
+results to their content rather than stretching a short table to the viewport height.
+Use `--studio-control-height` for toolbar disclosures so their summaries align with
+buttons, search and selects. Empty collections use `StudioResultState` inside the
+results surface, with the create action repeated when permitted; filtered emptiness
+instead offers a way to clear the filters. Keep creation in a dialog or a separate
+view so the collection and creation form do not compete on the same screen. After
+creating a connection, close creation and refresh the collection; open details only
+when the user requests them.
+Keep resource detail and edit views separate from the collection, following Workflow
+Definitions, Templates and Agents; do not render them side by side with the list.
+
+Settings should explain policy differences when they affect the user's selection.
+Avoid duplicate summaries of an already visible selection, reserve warning colors
+for actionable problems, and let effective-value labels wrap instead of truncating
+them while space is available. Add help only where the label and nearby explanation
+leave a meaningful question unanswered.
+
 Decide per feedback surface whether it becomes a notification:
 
 | Existing feedback | Becomes |
@@ -170,3 +189,27 @@ Horizontal overflow belongs inside the table or canvas, never on the page.
 Validate actual interactions and rendered styles; checking class names alone does
 not establish consistency. The Weather sample uses this public recipe without a
 module stylesheet, and the standalone React example uses published package imports.
+
+## Delivery acceptance
+
+For visible or interaction changes, use the repository's [Studio UX acceptance](../../docs/contributing/studio-ux-acceptance.md) workflow. Choose an existing reference and observable states before implementation; verify the actual composed host and independently inspect its screenshots. Reuse shared controls and fix recurring defects in their owning primitive. A component fixture or successful build alone does not establish product acceptance.
+
+## Navigation and focused editors
+
+Set `featureAreas.nav.icon` to the module's icon component; the feature-area registry
+forwards it to the shell, including child entries. Use a recognizable domain icon
+rather than relying on the shell's fallback icon.
+
+In form editors, lead with required authoring work and group optional settings in an
+advanced disclosure. Reveal that disclosure when a saved or local field needs
+correction. Represent provider-fixed values as readable facts while retaining exact
+focus targets for diagnostics. Validation surfaces should have one heading and one
+severity summary; keep server rejection distinct from the severity of its messages,
+and place background explanations behind a help disclosure.
+
+Reusable activity editors put Designer, Inputs, Outputs and Outcomes in the main tab
+row, with collection counts. Show only the active collection and its provider
+mappings; retain mounted default editors so tab changes never discard unapplied
+text. Diagnostic links select the matching collection before focusing the exact
+member or field. Provider boundary editors can use the optional `contractSection`
+prop to show the corresponding output or outcome mappings.

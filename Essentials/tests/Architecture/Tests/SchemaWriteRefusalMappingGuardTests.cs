@@ -18,7 +18,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
-using NativeEndpoints;
+using MinimalEndpoints;
 using Xunit;
 
 namespace Elsa.Architecture.Tests;
@@ -50,8 +50,9 @@ public sealed class SchemaWriteRefusalMappingGuardTests
         typeof(ActivitiesBpmnDirectPublishingFeature),
         typeof(ActivitiesBpmnInterchangeFeature),
         typeof(ActivitiesDesignApiFeature),
-        typeof(Elsa.Agent.Specialists.Api.SpecialistsApiFeature),
-        typeof(Elsa.Agent.Specialists.Review.Api.SpecialistsReviewApiFeature),
+        typeof(Elsa.Agent.Api.AgentApiFeature),
+        typeof(Elsa.Agent.Inspection.Api.AgentInspectionApiFeature),
+        typeof(Elsa.Agent.Review.Api.AgentReviewApiFeature),
         typeof(Elsa.Etl.Design.Api.EtlDesignApiFeature),
         typeof(Elsa.Etl.Runtime.Api.EtlRuntimeApiFeature),
         typeof(ModularityApiFeature),

@@ -1,5 +1,5 @@
 import type { WorkflowEditorDocumentAdapter } from "./WorkflowEditorDocumentAdapter";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { studioNavigationRequestedEvent, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import type { WorkflowDraft } from "../workflowTypes";
 import { updateDraft } from "../api/workflowDesign";
@@ -15,7 +15,10 @@ interface WorkflowPersistenceParams {
   documentAdapter?: WorkflowEditorDocumentAdapter;
   autosaveEnabledByDefault?: boolean;
   editDraft(recipe: WorkflowDraftRecipe): void;
-  setStatus(value: string): void;
+  /** Reconcile an acknowledged live edit with history before adopting the server's normalized representation. */
+  onSaveReconciled?(requested: WorkflowDraft, saved: WorkflowDraft): void;
+  /** The editor's status setter; an updater lets a dropped autosave release only the status it wrote itself. */
+  setStatus: Dispatch<SetStateAction<string>>;
   setError(value: WorkflowErrorInput): void;
   /**
    * The designer-history autosave hold for reviewed Operation Batches (spec 1193 FR-010): autosave is skipped while the
@@ -25,11 +28,15 @@ interface WorkflowPersistenceParams {
   lineageHold?: WorkflowLineageHold;
 }
 
+const autosavingStatus = "Autosaving...";
+
 // Owns draft persistence: the serialised save queue (so concurrent saves apply in order), the
 // last-saved signature that gates autosave, and the debounced autosave effect. `saveDraft` reconciles
 // the server copy back into the live draft via the document reducer; `markSaved` lets the loader seed
 // the baseline so a freshly loaded draft doesn't immediately autosave.
-export function useWorkflowPersistence({ context, draft, documentAdapter, autosaveEnabledByDefault = true, editDraft, setStatus, setError, lineageHold }: WorkflowPersistenceParams) {
+export function useWorkflowPersistence({ context, draft, documentAdapter, autosaveEnabledByDefault = true, editDraft, onSaveReconciled, setStatus, setError, lineageHold }: WorkflowPersistenceParams) {
+  const onSaveReconciledRef = useRef(onSaveReconciled);
+  onSaveReconciledRef.current = onSaveReconciled;
   const lineageHoldRef = useRef(lineageHold);
   lineageHoldRef.current = lineageHold;
   const lineageHeld = lineageHold?.held ?? false;
@@ -49,6 +56,14 @@ export function useWorkflowPersistence({ context, draft, documentAdapter, autosa
   // Keep the latest draft addressable so flushPendingSave can persist unsaved edits without a stale closure.
   const latestDraftRef = useRef<WorkflowDraft | null>(draft);
   latestDraftRef.current = draft;
+  // Each scheduled autosave takes a token and shows "Autosaving..." until it ends. A save that ends reporting its own
+  // status replaces it; one that ends without (cancelled before the debounce, skipped under a hold, or a save whose
+  // result no longer covers the live draft or review) clears it, provided no newer autosave has been scheduled since and
+  // no other action has replaced the status.
+  const autosaveTokenRef = useRef(0);
+  const releaseAutosavingStatus = useCallback((token: number) => {
+    if (token === autosaveTokenRef.current) setStatus(current => current === autosavingStatus ? "" : current);
+  }, [setStatus]);
 
   useEffect(() => {
     const preventNavigation = (event: Event) => {
@@ -101,6 +116,7 @@ export function useWorkflowPersistence({ context, draft, documentAdapter, autosa
         setPersistedDraft(saved);
         const live = latestDraftRef.current;
         const coversLiveDraft = live?.id === draftSnapshot.id && live.definitionId === draftSnapshot.definitionId && getDraftSignature(live) === requestedSignature;
+        if (coversLiveDraft) onSaveReconciledRef.current?.(draftSnapshot, saved);
         const coversReviewGeneration = requestedReviewGeneration === reviewHoldGenerationRef.current;
         if (savedStatus !== "Autosaved" && coversLiveDraft && coversReviewGeneration) { reviewHoldRef.current = false; setReviewHeld(false); }
         // An explicit save marks the batches of the line it wrote, even when the author kept editing while it was in flight:
@@ -150,14 +166,20 @@ export function useWorkflowPersistence({ context, draft, documentAdapter, autosa
     const draftSignature = getDraftSignature(draft);
     if (draftSignature === lastSavedDraftSignatureRef.current) return;
 
-    setStatus("Autosaving...");
+    const token = ++autosaveTokenRef.current;
+    const release = () => releaseAutosavingStatus(token);
+    setStatus(autosavingStatus);
+    let fired = false;
     const timeoutId = window.setTimeout(() => {
-      if (reviewHoldRef.current || lineageHoldRef.current?.isHeld()) return;
-      void saveDraft(draft, "Autosaved").catch(() => undefined);
+      fired = true;
+      if (reviewHoldRef.current || lineageHoldRef.current?.isHeld()) { release(); return; }
+      void saveDraft(draft, "Autosaved").then(release, release);
     }, autosaveDelayMs);
 
-    return () => window.clearTimeout(timeoutId);
-  }, [autosaveEnabled, autosavePaused, reviewHeld, lineageHeld, draft, saveDraft, setStatus]);
+    // Before the timer fires, cancelling drops this autosave; after, its save settles and releases it. A new edit re-runs
+    // this effect, which takes a new token and shows "Autosaving..." again in the same commit.
+    return () => { window.clearTimeout(timeoutId); if (!fired) release(); };
+  }, [autosaveEnabled, autosavePaused, reviewHeld, lineageHeld, draft, saveDraft, setStatus, releaseAutosavingStatus]);
 
   return { persistedDraft, holdForReview, reviewHeld, saveDraft, flushPendingSave, saving, autosaveEnabled, setAutosaveEnabled, autosavePaused, setAutosavePaused, markSaved };
 }

@@ -17,10 +17,10 @@ using Elsa.Activities.Http;
 using Elsa.Activities.Primitives;
 using Elsa.Activities.Runtime;
 using Elsa.Activities.Sequence;
-using Elsa.Agent;
-using Elsa.Agent.Api;
-using Elsa.Agent.GitHubCopilot;
-using Elsa.Agent.Workflows;
+using Elsa.Weaver;
+using Elsa.Weaver.Api;
+using Elsa.Weaver.GitHubCopilot;
+using Elsa.Weaver.Workflows;
 using Elsa.Api.AspNetCore;
 using Elsa.Api.Capabilities;
 using Elsa.Attention.Api;
@@ -82,7 +82,7 @@ using Elsa.Workflows.Runtime.Resumption;
 using Elsa.Workflows.Runtime.Tracing;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
-using NativeEndpoints;
+using MinimalEndpoints;
 using Nuplane;
 using Nuplane.Admin;
 using Nuplane.Loading.Hosting.Builder;
@@ -356,14 +356,14 @@ builder.Services.AddCShellsAspNetCore(shells =>
             typeof(WorkflowsRuntimeReferenceGarbageCollectionFeature).Assembly,
 
             // Agent surface: provider-neutral endpoints, workflow context/proposals, and provider facade.
-            typeof(FoundationAgentAbstractionsFeature).Assembly,
-            typeof(FoundationAgentApiFeature).Assembly,
-            typeof(FoundationWorkflowsAgentFeature).Assembly,
+            typeof(WeaverFeature).Assembly,
+            typeof(WeaverApiFeature).Assembly,
+            typeof(WeaverWorkflowsFeature).Assembly,
             // Runtime-side Weaver workflow contributions (spec 1193 slice F): Executable context and the read-only Executable tool.
-            typeof(Elsa.Agent.Workflows.Runtime.FoundationWorkflowsRuntimeAgentFeature).Assembly,
-            typeof(GitHubCopilotAgentFeature).Assembly,
-            // Opt-in durable Weaver sessions (#3441); enabled only by a shell that lists FoundationAgentEntityFrameworkCore.
-            typeof(Elsa.Agent.Persistence.EntityFrameworkCore.FoundationAgentEntityFrameworkCoreFeature).Assembly,
+            typeof(Elsa.Weaver.Workflows.Runtime.WeaverWorkflowsRuntimeFeature).Assembly,
+            typeof(WeaverGitHubCopilotFeature).Assembly,
+            // Opt-in durable Weaver sessions (#3441); enabled only by a shell that lists WeaverEntityFrameworkCore.
+            typeof(Elsa.Weaver.Persistence.EntityFrameworkCore.WeaverEntityFrameworkCoreFeature).Assembly,
 
             // Identity surface. The authentication stack secures the API: FoundationIdentityAbstractions
             // (provider-agnostic auth/IAM contracts) plus the OIDC authentication provider module, which
@@ -396,20 +396,31 @@ builder.Services.AddCShellsAspNetCore(shells =>
             typeof(ModularityAttentionFeature).Assembly,
             typeof(SecretsAttentionFeature).Assembly,
             typeof(ConnectionsFeature).Assembly,
+            typeof(Elsa.Decisions.DecisionsFeature).Assembly,
+            typeof(Elsa.Decisions.Design.DecisionsDesignFeature).Assembly,
+            typeof(Elsa.Decisions.Api.DecisionsApiFeature).Assembly,
+            typeof(Elsa.Decisions.Persistence.EntityFrameworkCore.DecisionsEntityFrameworkCoreFeature).Assembly,
+            typeof(Elsa.Decisions.Workflows.Design.DecisionsWorkflowsDesignFeature).Assembly,
+            typeof(Elsa.Decisions.Workflows.Runtime.DecisionsWorkflowsRuntimeFeature).Assembly,
+            typeof(Elsa.Decisions.Workflows.Api.DecisionsWorkflowsApiFeature).Assembly,
             typeof(ConnectionsApiFeature).Assembly,
+            // Available for durable local/model connections when explicitly selected in the shell.
+            typeof(Elsa.Connections.Persistence.EntityFrameworkCore.ConnectionsEntityFrameworkCoreFeature).Assembly,
             typeof(ConnectionsDesignFeature).Assembly,
             typeof(ConnectionsWorkflowsFeature).Assembly,
             // The generic human review wait for user-defined agents and its decision API.
-            typeof(Elsa.Agent.Specialists.Review.SpecialistsReviewFeature).Assembly,
-            typeof(Elsa.Agent.Specialists.Review.Api.SpecialistsReviewApiFeature).Assembly,
+            typeof(Elsa.Agent.Review.AgentReviewFeature).Assembly,
+            typeof(Elsa.Agent.Review.Api.AgentReviewApiFeature).Assembly,
             // User-defined agents: authoring, the editor's model reads and the model connection types.
-            typeof(Elsa.Agent.Specialists.Design.SpecialistsDesignFeature).Assembly,
-            typeof(Elsa.Agent.Specialists.Api.SpecialistsApiFeature).Assembly,
-            typeof(Elsa.Agent.Specialists.Anthropic.AnthropicSpecialistsFeature).Assembly,
-            typeof(Elsa.Agent.Specialists.AzureOpenAI.AzureOpenAISpecialistsFeature).Assembly,
-            // The specialist runtime and its durable turn journal.
-            typeof(Elsa.Agent.Specialists.SpecialistsRuntimeFeature).Assembly,
-            typeof(Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.SpecialistsEntityFrameworkCoreFeature).Assembly,
+            typeof(Elsa.Agent.Design.AgentDesignFeature).Assembly,
+            typeof(Elsa.Agent.Api.AgentApiFeature).Assembly,
+            typeof(Elsa.Agent.Anthropic.AnthropicAgentsFeature).Assembly,
+            typeof(Elsa.Agent.AzureOpenAI.AzureOpenAIAgentsFeature).Assembly,
+            typeof(Elsa.Agent.OpenAI.OpenAIAgentsFeature).Assembly,
+            // The agent runtime, its durable turn journal and its evidence reads.
+            typeof(Elsa.Agent.AgentRuntimeFeature).Assembly,
+            typeof(Elsa.Agent.Persistence.EntityFrameworkCore.AgentEntityFrameworkCoreFeature).Assembly,
+            typeof(Elsa.Agent.Inspection.Api.AgentInspectionApiFeature).Assembly,
             // Opt-in finite ETL authoring, native execution and independent runtime inspection.
             typeof(Elsa.Etl.Design.EtlDesignFeature).Assembly,
             typeof(Elsa.Etl.Design.Api.EtlDesignApiFeature).Assembly,

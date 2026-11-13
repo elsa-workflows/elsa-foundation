@@ -247,7 +247,9 @@ Generated, manual, and reflection-based hydrators MUST produce identical observa
 - distinguish omitted, explicit `null`, and pinned default;
 - preserve CLR nullable-reference intent independently of requiredness in the pinned input contract;
 - reject a missing required input;
-- reject `null` for a non-nullable input;
+- reject `null` for a non-nullable input, unless the pinned workflow-level default-on-null policy applies (ADR 0045 §2
+  amendment, D-10), in which case assign the target's type default that the policy substitutes (a non-nullable target
+  without a usable type default still rejects);
 - reject unknown or duplicate input keys;
 - perform no service lookup and no expression evaluation;
 - assign each property at most once.
@@ -264,14 +266,16 @@ allocated, stable member key when applicable, and the pinned contract fingerprin
 | `VF-ACT-003` | Required input absent after binding normalization |
 | `VF-ACT-004` | Input type/nullability violation |
 | `VF-ACT-005` | Input, state, or result is nonpersistable under durable policy |
-| `VF-ACT-006` | Result projection is not declared by the contract; or a selected outcome is outside the node's pinned outcome set; or several outcomes are selected on a node that does not permit them; or the selection is unspecified on a node without `Done` |
+| `VF-ACT-006` | Result projection is not declared by the contract; or a selected outcome is outside the node's pinned outcome set and the activity declares no catch-all outcome it routes such values to; or several outcomes are selected on a node that does not permit them; or the selection is unspecified on a node without `Done` |
 | `VF-ACT-007` | Attempt requested after committed completion |
 | `VF-ACT-008` | Trigger type or identity does not match suspended state |
 | `VF-ACT-009` | Persisted invocation document version is incompatible and cannot be upcast |
 
-An activity or script may explicitly map unfamiliar business data to an ordinary declared catch-all outcome.
-Unknown selected names and undeclared result projections remain errors. S-3 introduces no generic per-node fallback
-that repairs an invalid selected name.
+A catch-all that an activity routes unfamiliar values to (an explicit routing decision inside its own contract, such
+as SendHttpRequest's unmatched status or an activity-declared `Review` / `Unmatched`) MUST itself be declared in the
+node's pinned outcome set, and MUST NOT suppress an undeclared result projection diagnostic. A generic per-node
+fallback setting that turns any invalid outcome name into another outcome is deferred until a concrete use case
+justifies it (ADR 0045 §6, Q6).
 
 Diagnostics MUST NOT include unredacted sensitive values. Activity faults use the normal fault transition/incident
 path. Contract and durability failures detectable before invocation MUST fail before user code; completion-dependent

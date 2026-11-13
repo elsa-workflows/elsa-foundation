@@ -175,6 +175,9 @@
         "resolved": "10.0.10",
         "contentHash": "jSOCVxEwCd4Aq925kJVz1kSO1EpX2OHYKL04qVREXkDU7Ce3pVDdHPYm+fEy8y/th2kJf/DAstRHpJAqoNWP8w=="
       },
+      "elsa.persistence.core": {
+        "type": "Project"
+      },
       "elsa.persistence.schema": {
         "type": "Project",
         "dependencies": {

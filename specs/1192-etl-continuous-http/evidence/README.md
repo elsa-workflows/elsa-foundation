@@ -142,9 +142,9 @@ It also found eight further issues, all adopted:
 
 ## Not covered here
 
-- **Compaction** of accepted pages, requests, batches and retained bytes, which bounds a continuous run's lifetime. It is a follow-up slice, and criterion 1 stays unchecked until it lands.
+- **Compaction** of accepted pages, requests, batches and retained bytes, which bounds a continuous run's lifetime. It is a follow-up slice, and criterion 1 stays unchecked until it lands. Addressed by spec [1196](../../1196-etl-continuous-compaction/spec.md).
 - **Publish-conflict recovery race.** The acquirer captures the winning manifest when a predecessor publishes a page under the same request identity after the successor's re-read. This path is implemented but not exercised by a test.
-- **Superseded late pages.** A superseded attempt that is still in flight when a successor records a caught-up response can later publish a page whose attempt is no longer in the cleared journal; the whole run then fails closed with `etl.http.page-provenance-invalid` (every shard stops and `RunEtl` resumes with that failure) rather than accepting the page. This needs a worker stall longer than its lease while the feed serves the stalled request late, with records appended in between. A poll-generation page identity, planned with compaction, removes it.
+- **Superseded late pages.** A superseded attempt that is still in flight when a successor records a caught-up response can later publish a page whose attempt is no longer in the cleared journal; the whole run then fails closed with `etl.http.page-provenance-invalid` (every shard stops and `RunEtl` resumes with that failure) rather than accepting the page. This needs a worker stall longer than its lease while the feed serves the stalled request late, with records appended in between. A poll-generation page identity removes it: spec [1196](../../1196-etl-continuous-compaction/spec.md).
 - **Host clocks.** Whether a caught-up response ends a draining shard compares the completion host's clock with the worker's, so the hosts' clocks must agree, as leases already require.
 - **Native completion activity.** A native workflow cannot request completion itself.
 - **Other continuous sources:** RabbitMQ, SQL and file drops.

@@ -86,10 +86,19 @@ public interface IEtlConnectorRuntimeStore
         CancellationToken cancellationToken = default);
     ValueTask<EtlStoreStatus> RenewConnectorPartitionAsync(EtlConnectorPartitionLease lease, CancellationToken cancellationToken = default);
     ValueTask<EtlStoreStatus> ReleaseConnectorPartitionAsync(EtlConnectorPartitionLease lease, CancellationToken cancellationToken = default);
+    /// <summary>
+    /// The high watermark of the last completed run for a SQL source checkpoint, or null when none completed (spec 1199). A
+    /// store raises it only in the transaction that completes a run that routed every record: one settled as succeeded, or as
+    /// business error with <c>etl.rows-rejected</c>. A run settled by any other failure, including a rejected delivery,
+    /// leaves it unchanged.
+    /// </summary>
+    ValueTask<long?> FindConnectorSourceWatermarkAsync(EtlScope scope, EtlConnectorSourceWatermarkKey key,
+        CancellationToken cancellationToken = default) => ValueTask.FromResult<long?>(null);
 
 }
 
-public enum EtlConnectorKind { Csv, Http, Jsonl }
+/// <remarks>Append only: identities hash the integer value (spec 1197).</remarks>
+public enum EtlConnectorKind { Csv, Http, Jsonl, Sql, RabbitMq }
 
 /// <summary>A host-resolved connector revision; paths, endpoint URLs and credentials are excluded.</summary>
 public sealed record EtlConnectorBindingRevision(EtlConnectorKind Kind, EtlBindingRevision Revision);
@@ -103,7 +112,27 @@ public sealed record EtlConnectorAdmissionResult(EtlStoreStatus Status, EtlConne
 /// <remarks>The name predates JSON Lines input; the shape is format-neutral. For JSON Lines, index entry 0 is a sentinel covering only a byte order mark.</remarks>
 public sealed record EtlPreparedCsvInput(EtlObjectReference Source, EtlObjectReference Index, long RecordCount);
 /// <summary>Optional inputs prepared before partitions become runnable; absence is explicit.</summary>
-public sealed record EtlConnectorPreparedRun(EtlPreparedCsvInput? File, EtlObjectReference? Lookup);
+public sealed record EtlConnectorPreparedRun(EtlPreparedCsvInput? File, EtlObjectReference? Lookup)
+{
+    /// <summary>
+    /// The highest watermark in a SQL source's snapshot (spec 1199), raised into the source checkpoint when the run completes;
+    /// null when the source has no watermark column or the snapshot has no row with a non-null watermark. Omitted from JSON
+    /// when null.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public long? SourceWatermark { get; init; }
+}
+
+/// <summary>Identifies a SQL source's watermark checkpoint within a scope (spec 1199).</summary>
+/// <param name="DefinitionId">The ETL definition the runs belong to; its versions share the checkpoint.</param>
+/// <param name="SourceAlias">The source binding alias.</param>
+/// <param name="SourceHandle">
+/// The pinned, secret-free handle of the source binding, so pointing the alias at another database or user starts again
+/// from every row rather than filtering the new source by the old checkpoint.
+/// </param>
+/// <param name="Table">The source table.</param>
+/// <param name="Column">The watermark column.</param>
+public sealed record EtlConnectorSourceWatermarkKey(string DefinitionId, string SourceAlias, string SourceHandle, string Table, string Column);
 public sealed record EtlConnectorRunView(EtlRunView Run, EtlConnectorRunBindings Bindings,
     EtlConnectorPreparedRun? Prepared, long RetainedInputBytes);
 
@@ -125,6 +154,12 @@ public sealed record EtlConnectorPartitionLease(EtlScope Scope, string RunId, in
 {
     /// <summary>Retained responsibility returned on acquisition; null only when no batch is owed.</summary>
     public EtlConnectorBatchReservation? OwedBatch { get; init; }
+
+    /// <summary>
+    /// The caught-up polls this continuous shard had recorded when it was claimed; 0 for every other shard. Above 0 it
+    /// is part of the page-cache key, so a stalled attempt's late page never lands under a later poll's key (spec 1196).
+    /// </summary>
+    public long PollGeneration { get; init; }
 }
 
 /// <summary>Authoritative position after an applied or identical replayed transition; no lease on refusal.</summary>

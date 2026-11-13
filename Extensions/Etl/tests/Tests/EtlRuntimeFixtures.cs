@@ -59,6 +59,7 @@ internal static class EtlRuntimeFixtures
         EtlHttpDestination http => ConnectorBinding(EtlConnectorKind.Http, http.Binding, revision: "destination-revision-1"),
         EtlJsonlDestination jsonl => ConnectorBinding(EtlConnectorKind.Jsonl, jsonl.Binding, revision: "destination-revision-1"),
         EtlCsvDestination csv => ConnectorBinding(EtlConnectorKind.Csv, csv.Binding, revision: "destination-revision-1"),
+        EtlRabbitMqDestination rabbitMq => ConnectorBinding(EtlConnectorKind.RabbitMq, rabbitMq.Binding, revision: "destination-revision-1"),
         _ => throw new ArgumentOutOfRangeException(nameof(destination))
     };
 

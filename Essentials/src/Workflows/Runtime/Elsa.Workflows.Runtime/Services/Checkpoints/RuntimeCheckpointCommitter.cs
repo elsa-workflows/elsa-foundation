@@ -25,6 +25,13 @@ public sealed class RuntimeCheckpointCommitter
     private readonly RuntimeInProcessHopFastPathOptions _inProcessHopFastPathOptions;
 
     /// <summary>
+    /// Whether every commit goes to the coalescing commit store first. That store records the rows a commit sends
+    /// to the durable stores, which a session needs before it may answer a point read from memory. A host that
+    /// registered its own commit store over the decorator, or instead of it, gets <see langword="false"/>.
+    /// </summary>
+    internal bool CommitsThroughCoalescingStore => _checkpointCommitStore is Coalescing.CoalescingRuntimeCheckpointCommitStore;
+
+    /// <summary>
     /// Creates the committer. C1 (#1227): the four telescoping constructors collapsed into this single primary
     /// constructor: five required collaborators followed by optional collaborators that default to their no-op
     /// implementations. The ownership context accessor is <b>required by construction</b> so the fence
@@ -99,8 +106,9 @@ public sealed class RuntimeCheckpointCommitter
         // are synchronous and happen after their source values are already computed.
         using var activity = _tracer.StartCheckpointCommit(commit);
 
-        // Carry the ambient ownership identity into the provider-facing envelope. Durable stores decide replay first,
-        // then validate this fence inside the same atomic decision as state, outbox, and the commit marker.
+        // Carry the ambient ownership identity into the provider-facing envelope. A durable store answers a replay of
+        // a saved commit whatever this fence says, and validates the fence of any other commit inside the same atomic
+        // decision as state, outbox, and the commit marker.
         commit = AttachExpectedFence(commit);
 
         if (commit.ModelState is not null && !_checkpointCommitStore.SupportsModelCheckpoint)
@@ -180,9 +188,9 @@ public sealed class RuntimeCheckpointCommitter
             commitToPersist = commitToPersist with { StateChanges = commitToPersist.StateChanges.WithPostCommitOutbox(postCommitOutbox) };
 
         // #3275: from here the commit may become durable, even if the store call then throws or a coalescing segment only
-        // buffers it, so a faulted dispatch can no longer prove it left no effect. Recorded before the call, whatever
-        // follows, for the drainer's RetryAfter release.
-        RuntimeSchedulerDispatchFrame.RecordCheckpointAttempt(commitToPersist);
+        // buffers it, so a faulted dispatch can no longer prove it left no effect. Recorded before the call for the
+        // drainer's delayed release, and kept whatever follows except the store's own unavailable refusal below.
+        var checkpointAttempt = RuntimeSchedulerDispatchFrame.RecordCheckpointAttempt(commitToPersist);
 
         // #1254: the store deletes the claimed item inside this call, but MarkConsumedDurably can only run once it
         // returns. A claim renewal firing in between finds nothing and would read that as a successor having stolen the
@@ -193,7 +201,24 @@ public sealed class RuntimeCheckpointCommitter
         RuntimeCheckpointCommitStoreResult storeResult;
         using (BeginConsumeAttempt(consumedWorkItems))
         {
-            storeResult = await _checkpointCommitStore.CommitAsync(commitToPersist, decision, cancellationToken);
+            try
+            {
+                storeResult = await _checkpointCommitStore.CommitAsync(commitToPersist, decision, cancellationToken);
+            }
+            catch (RuntimeSchedulerWorkUnavailableException)
+            {
+                // #3683: a store throws this to refuse the commit itself, its transaction rolled back, as EF does when a
+                // native worker's model admission changed underneath it ("cross-model admission remains owed"). Nothing was
+                // applied, so this commit is not an attempt and the dispatch keeps its delayed release. Only this commit's
+                // mark is withdrawn: an earlier non-retaining commit of the same dispatch, even one a coalescing segment
+                // only buffered and its refused fold did not persist, still counts, because the flush can persist it.
+                // EF also turns a timeout, lease or provider failure of a model admission into this signal, and some of
+                // those can surface after the write committed. Withdrawing the mark there keeps the release and retry
+                // they had before #3683; a retry of a landed admission then ends in a replay conflict, as before (#3698).
+                // Any other exception, a TimeoutException from a commit that may have landed included, keeps the mark.
+                checkpointAttempt.Withdraw();
+                throw;
+            }
 
             if (storeResult.PendingPostCommitWorkIds.Count != commitToPersist.StateChanges.PostCommitOutbox.Count)
                 throw new InvalidOperationException(
