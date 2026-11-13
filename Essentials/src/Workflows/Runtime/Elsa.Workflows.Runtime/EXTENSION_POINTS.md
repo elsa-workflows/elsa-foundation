@@ -936,6 +936,44 @@ interfaces directly: it always creates its own scope and takes only the staged p
 - **Lease and guard behavior** *(spec 200)*: every implementation keeps root-write leases independent of each other. A holder's acquire, renewal or release never fails or retries because another holder took, renewed or released a different lease on the same artifact. Begin-deletion refuses while any unexpired lease exists, including one committed concurrently with it; an acquire refuses while a live guard exists, including one committed concurrently with it; the guarded delete re-checks both atomically with the delete and removes the artifact's lease records with it. The EF store keeps one row per lease beside the guard-only coordination row, excludes guard and lease by write-then-check, honours leases an earlier build left in the coordination row until they expire, and runs lease operations on a context of their own, so they neither save nor discard changes a caller staged on the shared `RuntimeDbContext`.
 - **Durable-provider controls:** `CacheWorkflowExecutables` defaults to `true` for SQLite and `false` for PostgreSQL/distributed features; `WorkflowExecutableCacheCapacity` defaults to `256` positive artifacts per shell/provider. Disable caching to restore direct durable reads. Telemetry reports bounded hit/miss, eviction reason, and provider-load outcome/duration dimensions without workflow or artifact IDs. Cache state and mutation invalidation are process-local; PostgreSQL hosts must explicitly opt in with an accepted immutable-retention/invalidation policy.
 
+### Bounded source reads on Runtime owner stores *(Core contracts)*
+
+- **Contracts/signatures:** `IWorkflowExecutableStore.FindMaterialBoundedAsync`,
+  `IExecutableActivityTemplateReader.FindBoundedAsync`, and `IWorkflowExecutableSourceReferenceReader.FindBoundedAsync`
+  / `ListByDefinitionVersionBoundedAsync`; exact scope, `RuntimeSourceReadLimits` and cancellation are required.
+- **Layer/kind:** Additive read capabilities on existing replacement stores. Legacy implementations/decorators
+  refuse by default; forwarding an ordinary read does not qualify this stronger boundary.
+- **Default/lifetime:** Existing scoped EF store implementations provide an explicit current-schema, uncompressed,
+  UTF8 SQLite profile. No source access policy or source-capture adapter is installed by these read methods.
+- **Caller/purpose:** Retained release source bridges read exact physical owner material and publication associations
+  before encoding a bundle. A snapshot carries the selected physical partition and charged stored payload bytes;
+  it grants no authorization, retention, activation or import rights.
+- **Consistency/bounds:** Preflight SQL types, metadata and UTF8 byte lengths before fetching payload bytes, then
+  decode and compare projections inside one owned consistent transaction. Refuse duplicate/unknown/case-alias
+  fields and constructor repairs; preserve original pins rather than substituting a selected authored version.
+- **Failure:** `RuntimeSourceReadException` is value-free; `Unsupported` marks an unqualified storage/wire profile.
+  Other providers, payload frames, ambient/caller transactions and pending tracked changes refuse. Provider failures
+  keep their existing contextual persistence exception and original cause; caller cancellation propagates.
+- **Selection:** Hosts select the existing Runtime artifact persistence backend. No event fan-in, temporary container,
+  startup task or separate read backend is introduced. Complete owner retention/source/import witnesses follow separately.
+
+
+Bounded retention uses the additional `IRuntimeBoundedSourceLeaseStore` capability and the
+scope/limits/authorization overload of `IWorkflowExecutableRootWriteLeaseManager.ExecuteFencedAsync`.
+The manager authorizes each newly discovered material before reading its body, bounds the complete
+native/model dependency graph, acquires and renews every exact physical root, then rereads the same
+pins/incarnations before invoking the retained callback. Leases remain live until that awaited callback
+finishes; normal deadline, cancellation and lost-grant rules still apply. This is a retention primitive,
+not authority to capture an unpublished root or a release-source adapter.
+
+The EF implementation admits the same explicit SQLite current-schema, uncompressed UTF-8 profile
+as the bounded readers. Acquisition preflights material, coordination and lease rows inside its owned
+snapshot; renewal preflights the lease row before string hydration. Captured scope and schema-write
+fences remain authoritative. Both built-in cache adapters explicitly forward bounded operations to the
+physical provider and bypass executable body caches. Arbitrary decorators and other providers gain
+no implicit capability; they must preserve all three qualified lease operations themselves. Runtime-only
+consumers gain no Publishing, Design or source-capture package dependency from these primitives.
+
 ### `WorkflowExecutableStoreDecorator` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Derivation base (pass-through decorator scaffold over `IWorkflowExecutableStore`).
 - **Signature:** data/lease/guard operations forward virtually to protected `Inner`; physical coordination stays opaque by default. A cooperating decorator explicitly implements `GetMaterialStore()`.
@@ -1360,3 +1398,10 @@ Native serving-slot changes coordinate route reservations and accepted material 
 `StandaloneTriggerProviderCompositionValidator` runs in shell Prepare at -49, after activation composition validation and before migrators/source startup. It checks final replacement cardinality and the selected provider's owned descriptors, including registrations added after Runtime. A coherent backend replacement owns the resource, ingress, source-commit and reservation group together; partial replacement cannot silently retain native authority.
 
 Bare `AddWorkflowRuntime` library composition remains constructible without Events. New target discovery/admission requires the host's canonical `IInlineEventPublisher`; absence is an unavailable domain refusal before acceptance, with no fallback metadata loop. Library source hosts compose `EventsFeature` explicitly. The native-only executable store supports `FindMaterialAsync` with a per-row incarnation, preserves it on idempotent saves and clears it on either deletion path; it continues to refuse model storage and does not advertise `SupportsModelMaterial`.
+
+### EF standalone resource and reservation storage (schema foundation, #3582)
+
+- **Known implementations:** internal `EfStandaloneTriggerStore` implements `IStandaloneTriggerStore`; internal `EfIngressReservationStore` implements `IRuntimeIngressReservationReader`, both in `Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore` (intra-domain). This schema slice does not register either implementation or activate EF standalone sources.
+- **Schema ownership:** `RuntimeDbContext` owns the resources, association journals, mutation receipts and exclusive reservations. `StandaloneTriggersEfModule` declares their initial `StandaloneTriggers` family at `1.0.0`. Additive migrations cover all four relational providers and retain existing Runtime migration history.
+- **Transaction boundary:** resource `WriteAsync` owns a clean Runtime context transaction and reconciles the mutation receipt before CAS. Internal `StageWriteAsync`, reservation `StageOwnerAsync` and `FenceAsync` require the actual source owner's transaction; they are not independently callable replacement contracts. A later protected EF source-resource composition must commit resource, route/schedule projection and receipt together.
+- **Failures:** public resource and reservation ports wrap stored corruption and provider infrastructure failures in contextual `TriggerOperationException`, retaining the original cause. Caller argument, scope and cancellation errors retain their contracts; schema-version skew remains an explicit domain exception.
