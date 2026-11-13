@@ -54,6 +54,24 @@ export function bpmnSourceAddress(element: Element, parsed: ParsedBpmnDocument):
   return refuseBpmnOperation("the XML property does not belong to this source");
 }
 
+/** Read-only correspondence uses retained idless ordinals, independent of moved identified siblings. */
+export function bpmnSourceCounterpart(element: Element, before: ParsedBpmnDocument, after: ParsedBpmnDocument): Element | undefined {
+  const steps: { namespaceURI: string | null; localName: string; index: number }[] = [];
+  let anchor = element;
+  const identified = (value: Element, parsed: ParsedBpmnDocument) => parsed.byId.get(value.getAttribute("id") ?? "") === value;
+  while (anchor !== after.document.documentElement && !identified(anchor, after)) {
+    const parent: Element | null = anchor.parentElement;
+    if (!parent) return undefined;
+    const siblings = [...parent.children].filter(child => child.namespaceURI === anchor.namespaceURI && child.localName === anchor.localName && !identified(child, after));
+    steps.unshift({ namespaceURI: anchor.namespaceURI, localName: anchor.localName, index: siblings.indexOf(anchor) });
+    anchor = parent;
+  }
+  let found = anchor === after.document.documentElement ? before.document.documentElement : before.byId.get(anchor.getAttribute("id")!);
+  for (const step of steps) found = found && [...found.children]
+    .filter(child => child.namespaceURI === step.namespaceURI && child.localName === step.localName && !identified(child, before))[step.index];
+  return found && (found.namespaceURI ?? "") === (element.namespaceURI ?? "") && found.localName === element.localName ? found : undefined;
+}
+
 export function bpmnFragment(context: BpmnOperationContext, localName: string, attributes: Readonly<Record<string, string>> = {}, namespace: string = ns.model): Element {
   const root = context.parsed.document.documentElement;
   // Reuse source namespace context. Fresh prefixes are local to a new fragment, never rebound globally.

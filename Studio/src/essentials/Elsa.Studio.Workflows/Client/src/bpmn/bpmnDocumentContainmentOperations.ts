@@ -4,7 +4,7 @@ import { applyBpmnDocumentTransaction, bpmnNamespaces as ns, readBpmnDocument, r
 import { planBpmnDocumentMove, projectBpmnDocumentCanvas } from "./bpmnDocumentCanvas";
 import { assessBpmnDocumentConnection, bpmnFlowScope, bpmnOwningProcess, isBpmnModelElement } from "./bpmnDocumentPolicy";
 import { isActivityBearingElementType, isEventElementType, isGatewayElementType, isSubProcessElementType } from "./bpmnNotationTypes";
-import { bpmnChildren, bpmnFragment, bpmnIdentity, bpmnOperationContext, bpmnSourceAddress, insertBpmnFragment,
+import { bpmnChildren, bpmnFragment, bpmnIdentity, bpmnOperationContext, bpmnSourceAddress, bpmnSourceCounterpart, insertBpmnFragment,
   isBpmnOwnedSyntax, refuseBpmnOperation, requireBpmnFlowScope, requireBpmnVisibleElement, resolveBpmnOperationAddress } from "./bpmnDocumentOperationXml";
 import type { BpmnDocumentOperationPlan } from "./bpmnDocumentCreateOperations";
 import { verifyBpmnEventContexts } from "./bpmnDocumentEventContext";
@@ -71,13 +71,13 @@ export function prepareBpmnReparent(owner: ActivityNode, scope: BpmnScopeAddress
     const object = context.parsed.byId.get(objectId(element));
     if (!object || object.localName !== "dataObject" || object.parentElement !== element.parentElement)
       refuseBpmnOperation("the data object's existing ownership needs an explicit reconciliation");
-    if ([...context.parsed.byId.values()].some(reference => isBpmnOwnedSyntax(reference) && reference.localName === "dataObjectReference"
+    if ([...context.parsed.document.getElementsByTagNameNS(ns.model, "dataObjectReference")].some(reference => isBpmnOwnedSyntax(reference)
       && objectId(reference) === bpmnIdentity(object) && !inside(reference))) refuseBpmnOperation("shared data-object references must move together");
     roots.add(object);
   }
   const futureScope = (element: Element) => roots.has(element) ? target : bpmnFlowScope(element);
   const flows: Element[] = [];
-  for (const element of context.parsed.byId.values()) if (isBpmnOwnedSyntax(element) && element.localName === "sequenceFlow") {
+  for (const element of context.parsed.document.getElementsByTagNameNS(ns.model, "sequenceFlow")) if (isBpmnOwnedSyntax(element)) {
     const source = resolveBpmnDocumentReference(context.parsed, element, element.getAttribute("sourceRef"));
     const destination = resolveBpmnDocumentReference(context.parsed, element, element.getAttribute("targetRef"));
     if (!source || !destination || !inside(source) && !inside(destination)) continue;
@@ -110,7 +110,7 @@ export function prepareBpmnReparent(owner: ActivityNode, scope: BpmnScopeAddress
   commands.unshift(...memberships.sort((a, b) => documentOrder.indexOf(b.element) - documentOrder.indexOf(a.element)).map(edit => edit.command));
   for (const element of roots) if (element.parentElement !== target)
     commands.push({ kind: "reparent", target: { elementId: bpmnIdentity(element) }, parent: { elementId: bpmnIdentity(target) } });
-  for (const element of flows) commands.push({ kind: "reparent", target: { elementId: bpmnIdentity(element) },
+  for (const element of [...flows].reverse()) commands.push({ kind: "reparent", target: bpmnSourceAddress(element, context.parsed),
     parent: { elementId: bpmnIdentity(futureScope(resolveBpmnDocumentReference(context.parsed, element, element.getAttribute("sourceRef"))!)!) } });
   if (intent.positions) {
     const allowed = new Set([...roots].flatMap(element => view.nodes.filter(node => node.data.semanticElementId === bpmnIdentity(element)).map(node => node.id)));
@@ -120,29 +120,38 @@ export function prepareBpmnReparent(owner: ActivityNode, scope: BpmnScopeAddress
   // Native configuration is omitted only from this transient syntax assessment, never from the returned plan.
   const syntax = readBpmnDocument(applyBpmnDocumentTransaction(owner, { commands, configuration: { activities: [], bindings: [], scopeHeaders: [] } }));
   verifyBpmnEventContexts(context.parsed, syntax, [...roots].map(bpmnIdentity));
-  const unchangedContext = (element: Element) => {
-    const previous = context.parsed.byId.get(bpmnIdentity(element));
+  const previousElement = (element: Element) => bpmnSourceCounterpart(element, context.parsed, syntax);
+  const affected = (element: Element) => {
+    for (let current: Element | null = element; current; current = current.parentElement) {
+      const previous = context.parsed.byId.get(current.getAttribute("id") ?? "");
+      if (previous && inside(previous)) return true;
+    }
+    return false;
+  };
+  const unchangedContext = (element: Element, previous = previousElement(element)) => {
     const signature = (value: Element) => [bpmnFlowScope(value)?.getAttribute("id"), bpmnOwningProcess(value)?.getAttribute("id")];
     return !!previous && JSON.stringify(signature(previous)) === JSON.stringify(signature(element));
   };
-  for (const edge of syntax.byId.values()) if (isBpmnOwnedSyntax(edge) && ["sequenceFlow", "messageFlow"].includes(edge.localName)) {
+  for (const edge of syntax.document.getElementsByTagNameNS(ns.model, "*")) if (isBpmnOwnedSyntax(edge) && ["sequenceFlow", "messageFlow"].includes(edge.localName)) {
     const source = resolveBpmnDocumentReference(syntax, edge, edge.getAttribute("sourceRef")), destination = resolveBpmnDocumentReference(syntax, edge, edge.getAttribute("targetRef"));
     if (!source || !destination || !inside(context.parsed.byId.get(bpmnIdentity(source))!) && !inside(context.parsed.byId.get(bpmnIdentity(destination))!)) continue;
     if (unchangedContext(source) && unchangedContext(destination)) continue;
     const policy = assessBpmnDocumentConnection(syntax, edge.localName as "sequenceFlow" | "messageFlow", bpmnIdentity(source), bpmnIdentity(destination));
     if (!policy.allowed) refuseBpmnOperation(`containment changes an incident relationship: ${policy.reason}`);
   }
-  for (const edge of syntax.byId.values()) if (isBpmnOwnedSyntax(edge) && ["dataInputAssociation", "dataOutputAssociation"].includes(edge.localName)) {
+  for (const edge of syntax.document.getElementsByTagNameNS(ns.model, "*")) if (isBpmnOwnedSyntax(edge) && ["dataInputAssociation", "dataOutputAssociation"].includes(edge.localName)) {
     const references = [edge.parentElement!, ...[...bpmnChildren(edge, "sourceRef"), ...bpmnChildren(edge, "targetRef")]
       .map(reference => resolveBpmnDocumentReference(syntax, reference, reference.textContent)).filter((element): element is Element => !!element)];
-    if (references.every(unchangedContext)) continue;
-    if (references.some(element => inside(context.parsed.byId.get(bpmnIdentity(element))!))
-      && new Set(references.map(bpmnFlowScope)).size > 1) refuseBpmnOperation("an incident data association needs an explicit scope mapping");
+    if (!references.some(affected)) continue;
+    const previousOwner = previousElement(edge)?.parentElement ?? undefined;
+    if (references.every((element, index) => unchangedContext(element, index === 0 ? previousOwner : previousElement(element)))) continue;
+    if (new Set(references.map(bpmnFlowScope)).size > 1) refuseBpmnOperation("an incident data association needs an explicit scope mapping");
   }
   // Retain independent DI planes; refuse a move that would leave their actual source outside their scope.
-  for (const di of syntax.byId.values()) if (di.namespaceURI === ns.diagram && ["BPMNShape", "BPMNEdge"].includes(di.localName)) {
+  for (const di of syntax.document.getElementsByTagNameNS(ns.diagram, "*")) if (isBpmnOwnedSyntax(di) && ["BPMNShape", "BPMNEdge"].includes(di.localName)) {
     const element = resolveBpmnDocumentReference(syntax, di, di.getAttribute("bpmnElement"));
     if (!element || !inside(context.parsed.byId.get(bpmnIdentity(element))!) && !flows.includes(context.parsed.byId.get(bpmnIdentity(element))!)) continue;
+    if (unchangedContext(element)) continue;
     const plane = di.parentElement!, planeScope = resolveBpmnDocumentReference(syntax, plane, plane.getAttribute("bpmnElement"));
     const represented = planeScope?.localName === "collaboration" && [...planeScope.children].some(participant => participant.localName === "participant"
       && resolveBpmnDocumentReference(syntax, participant, participant.getAttribute("processRef")) === bpmnOwningProcess(element));

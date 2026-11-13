@@ -50,7 +50,10 @@ export function planBpmnReplace(owner: ActivityNode, scope: BpmnScopeAddress, se
   const plan = { transaction: { commands }, selection };
   const next = applyBpmnDocumentTransaction(owner, plan.transaction), parsed = bpmnOperationContext(next, scope).parsed;
   verifyBpmnEventContexts(context.parsed, parsed, [selection.elementId]);
-  for (const flow of parsed.byId.values()) if (isBpmnOwnedSyntax(flow) && ["sequenceFlow", "messageFlow"].includes(flow.localName)) {
+  const replaced = parsed.byId.get(selection.elementId)!;
+  const role = (value: Element) => [value.localName, bpmnEventDefinitions(value), bpmnBoolean(value, "triggeredByEvent"), bpmnBoolean(value, "isForCompensation")];
+  if (JSON.stringify(role(element)) === JSON.stringify(role(replaced))) return plan;
+  for (const flow of parsed.document.getElementsByTagNameNS(ns.model, "*")) if (isBpmnOwnedSyntax(flow) && ["sequenceFlow", "messageFlow"].includes(flow.localName)) {
     const source = resolveBpmnDocumentReference(parsed, flow, flow.getAttribute("sourceRef")), target = resolveBpmnDocumentReference(parsed, flow, flow.getAttribute("targetRef"));
     if (source?.id !== selection.elementId && target?.id !== selection.elementId) continue;
     const policy = assessBpmnDocumentConnection(parsed, flow.localName as "sequenceFlow" | "messageFlow", source?.id ?? "", target?.id ?? "");
@@ -128,7 +131,7 @@ export function prepareBpmnDeleteCore(owner: ActivityNode, scope: BpmnScopeAddre
   let changed: boolean;
   do {
     changed = false; const deleted = ids();
-    for (const element of context.parsed.byId.values()) {
+    for (const element of context.parsed.document.getElementsByTagNameNS(ns.model, "*")) {
       if (!isBpmnModelElement(element) || !standardContext(element) || removed.has(element)) continue;
       const reference = (value: string | null, at = element) => { const target = resolveBpmnDocumentReference(context.parsed, at, value); return target && deleted.has(bpmnIdentity(target)); };
       if (["sequenceFlow", "messageFlow", "association"].includes(element.localName) && ["sourceRef", "targetRef"].some(name => reference(element.getAttribute(name)))
@@ -160,7 +163,8 @@ export function prepareBpmnDeleteCore(owner: ActivityNode, scope: BpmnScopeAddre
   }
   // Reverse document order retains exact idless sibling addresses while preceding members are removed.
   for (const element of [...new Set(removeMembers)].reverse().filter(element => !removeMembers.some(parent => parent !== element && parent.contains(element)))) commands.push({ kind: "remove", target: bpmnSourceAddress(element, context.parsed) });
-  for (const element of roots.reverse()) commands.push({ kind: "remove", target: bpmnSourceAddress(element, context.parsed) });
+  const documentOrder = [...context.parsed.document.getElementsByTagName("*")];
+  for (const element of roots.sort((a, b) => documentOrder.indexOf(b) - documentOrder.indexOf(a))) commands.push({ kind: "remove", target: bpmnSourceAddress(element, context.parsed) });
   if ((bindings.length || headers.length) && !configuration) return { kind: "requiresNativeCleanup", commands, reason: "The host must resolve native ownership and references in the same transaction.", cleanup: { bindingElementIds: bindings.map(binding => binding.elementId), activityRootIds: bindings.flatMap(binding => [binding.childNodeId, binding.listenerNodeId]).filter((id): id is string => typeof id === "string"), headerScopeIds: headers.map(header => header.scopeElementId) } };
   const plan: BpmnDocumentOperationPlan = { transaction: { commands, ...(configuration ? { configuration } : {}) }, selection: null };
   applyBpmnDocumentTransaction(owner, plan.transaction); // Unhandled standard dependencies refuse before any host state changes.

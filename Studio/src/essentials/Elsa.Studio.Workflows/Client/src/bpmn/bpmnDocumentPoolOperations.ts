@@ -31,7 +31,7 @@ export function prepareBpmnPoolDelete(owner: ActivityNode, scope: BpmnScopeAddre
   const process = resolveBpmnDocumentReference(context.parsed, pool, pool.getAttribute("processRef"));
   if (pool.hasAttribute("processRef") && (process?.namespaceURI !== ns.model || process.localName !== "process")) refuseBpmnOperation("repair the pool's actual process reference before deletion");
   const deleting = decision.deleteProcess === true && process !== undefined;
-  if (deleting && [...context.parsed.byId.values()].some(other => other !== pool && isBpmnOwnedSyntax(other) && other.localName === "participant"
+  if (deleting && [...context.parsed.document.getElementsByTagNameNS(ns.model, "participant")].some(other => other !== pool && isBpmnOwnedSyntax(other)
     && resolveBpmnDocumentReference(context.parsed, other, other.getAttribute("processRef")) === process)) refuseBpmnOperation("a shared process must be retained while another participant references it");
   const deleted = (element: Element) => deleting && (process === element || process!.contains(element));
   const bindings = context.parsed.payload.bindings.filter(binding => deleted(context.parsed.byId.get(binding.elementId)!));

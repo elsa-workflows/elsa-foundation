@@ -1,7 +1,7 @@
 import { bpmnNamespaces, resolveBpmnDocumentReference, type ParsedBpmnDocument } from "./bpmnDocument";
 import { assessBpmnBoundaryAttachment, bpmnBoolean, bpmnEventGatewayInputs, bpmnFlowScope } from "./bpmnDocumentPolicy";
 import { bpmnEventDefinitionTypes, isEventElementType } from "./bpmnNotationTypes";
-import { bpmnSourceAddress, isBpmnOwnedSyntax, refuseBpmnOperation } from "./bpmnDocumentOperationXml";
+import { bpmnSourceCounterpart, isBpmnOwnedSyntax, refuseBpmnOperation } from "./bpmnDocumentOperationXml";
 import { bpmnDocumentToolboxShapes } from "./bpmnDocumentToolbox";
 import { readBpmnBooleanAttribute } from "./bpmnXmlBoolean";
 
@@ -24,17 +24,9 @@ export function verifyBpmnEventContexts(before: ParsedBpmnDocument, after: Parse
       attached && bpmnBoolean(attached, "triggeredByEvent"), attached && bpmnBoolean(attached, "isForCompensation"),
       bpmnEventDefinitionTypes(event), readBpmnBooleanAttribute(event, "isInterrupting"), topology(parsed, attached)]);
   };
-  const previous = (element: Element): Element | undefined => {
-    const address = bpmnSourceAddress(element, after);
-    let found = address.documentRoot ? before.document.documentElement : before.byId.get(address.elementId!);
-    for (const step of address.path ?? []) {
-      found = found && [...found.children].filter(child => (child.namespaceURI ?? "") === step.namespaceURI && child.localName === step.localName)[step.index ?? 0];
-    }
-    return found?.namespaceURI === element.namespaceURI && found.localName === element.localName ? found : undefined;
-  };
   for (const event of after.document.getElementsByTagNameNS(bpmnNamespaces.model, "*")) {
     if (!isBpmnOwnedSyntax(event) || !isEventElementType(event.localName)) continue;
-    const old = previous(event);
+    const old = bpmnSourceCounterpart(event, before, after);
     const attached = host(after, event);
     if (!inside(event) && !inside(attached) && !(old && JSON.stringify(topology(before, host(before, old))) !== JSON.stringify(topology(after, attached)))) continue;
     if (old && signature(before, old) === signature(after, event)) continue;
