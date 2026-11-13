@@ -66,6 +66,7 @@ The draft-validation *behavior* is contributed (see below); the validation *outc
 - `Elsa.Workflows.Design.Validations` — `VariableExpressionResolverValidator` *(intra-domain — default)*
 - `Elsa.Workflows.Design.Validations`: `CredentialLiteralValidator` *(intra-domain default; reports the credential-literal findings on the validation panel; the rule is enforced through `ICredentialLiteralValidator` by the writers listed under that contract, not by this registration)*
 - Activity feature validators *(cross-domain — each activity feature ships its own `IDraftValidator` per FR-034)*
+- `Elsa.Activities.Bpmn.Design`: scoped `BpmnScopeViewSourceValidator` and `BpmnDocumentAdmissionValidator`, contributed idempotently by `ActivitiesBpmnDesignFeature` *(cross-domain)*. The first rejects transient scope views in physical source positions and validates schema-2 native ownership without widening lexical projection. The second returns `Bpmn/ExecutionCapability` errors while complete drafts remain saveable; schema-2 and scope-view compilation stay closed. Exact structure kind/schema matching keeps these contributions separate from schema-1 execution and result-order proof. Malformed source JSON/XML crosses the feature boundary as BPMN Core `BpmnDocumentSourceException`, retaining its original parser cause and node/process or view/scope identifiers; explicit structural refusals still fail the write gate.
 - Graph-specific validators such as orphan checks belong to the activity feature that owns graph semantics, such as a future Flowchart module.
 
 ---

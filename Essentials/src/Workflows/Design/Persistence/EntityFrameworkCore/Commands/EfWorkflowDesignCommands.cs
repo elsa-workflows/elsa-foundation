@@ -322,14 +322,17 @@ public sealed class EfUpdateDraftCommand(WorkflowsDesignDbContext db, IPersisten
             return nodeIds;
 
         var stack = new Stack<ActivityNode>();
+        var visited = new HashSet<string>(StringComparer.Ordinal);
         stack.Push(rootActivity);
         while (stack.Count > 0)
         {
             var node = stack.Pop();
-            if (!nodeIds.Add(node.NodeId))
+            if (!visited.Add(node.NodeId))
                 continue;
-
-            foreach (var child in activityStructureService.ProjectChildren(node).SelectMany(slot => slot.Activities))
+            nodeIds.Add(node.NodeId);
+            var ownership = activityStructureService.ProjectOwnership(node);
+            nodeIds.UnionWith(ownership.AdditionalNodeIds);
+            foreach (var child in ownership.Activities)
                 stack.Push(child);
         }
 
