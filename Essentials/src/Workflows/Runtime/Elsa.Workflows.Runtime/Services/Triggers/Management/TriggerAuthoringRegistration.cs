@@ -32,7 +32,7 @@ internal sealed class TriggerTypeCatalog : IStandaloneTriggerTypeCatalog
                 string.IsNullOrWhiteSpace(descriptor.DisplayName) || string.IsNullOrWhiteSpace(descriptor.Family) ||
                 descriptor.ConfigurationFields.Select(field => field.Key).Distinct(StringComparer.Ordinal).Count() != descriptor.ConfigurationFields.Count)
                 throw new InvalidOperationException("A standalone trigger type has invalid authoring metadata.");
-            if (!entries.TryAdd(descriptor.TypeKey, descriptor))
+            if (!entries.TryAdd(descriptor.TypeKey, Detach(descriptor)))
                 throw new InvalidOperationException($"Standalone trigger type '{descriptor.TypeKey}' has multiple owners.");
         }
         if (Interlocked.CompareExchange(ref types, entries.ToFrozenDictionary(StringComparer.Ordinal), null) is not null)
@@ -41,6 +41,19 @@ internal sealed class TriggerTypeCatalog : IStandaloneTriggerTypeCatalog
     public IReadOnlyList<TriggerTypeDescriptor> List() => Entries.Values.OrderBy(type => type.DisplayName, StringComparer.Ordinal).ToArray();
     public TriggerTypeDescriptor? Find(string typeKey) => Entries.GetValueOrDefault(typeKey);
     private FrozenDictionary<string, TriggerTypeDescriptor> Entries => types ?? throw new TriggerOperationException("unavailable", "Trigger authoring metadata has not completed initialization.");
+
+    internal static TriggerTypeDescriptor Detach(TriggerTypeDescriptor descriptor) => descriptor with
+    {
+        ConfigurationFields = Array.AsReadOnly(descriptor.ConfigurationFields.Select(field => field with
+        {
+            DefaultValue = field.DefaultValue?.Clone(),
+            Choices = field.Choices is null ? null : Array.AsReadOnly(field.Choices.ToArray())
+        }).ToArray()),
+        SourceFields = Array.AsReadOnly(descriptor.SourceFields.Select(field => field with
+        {
+            Path = Array.AsReadOnly(field.Path.ToArray())
+        }).ToArray())
+    };
 }
 
 internal sealed class CollectTriggerTypes(IEnumerable<IStandaloneTriggerTypeSource> sources) : IEventHandler<StandaloneTriggerTypesInitializing>
@@ -49,7 +62,11 @@ internal sealed class CollectTriggerTypes(IEnumerable<IStandaloneTriggerTypeSour
     {
         foreach (var source in sources)
             foreach (var type in source.GetTypes())
-            { cancellationToken.ThrowIfCancellationRequested(); domainEvent.Types.Add(type); }
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                // Snapshot before MoveNext can dispose a contributor's JSON document or mutate its collections.
+                domainEvent.Types.Add(TriggerTypeCatalog.Detach(type));
+            }
         return Task.CompletedTask;
     }
 }
