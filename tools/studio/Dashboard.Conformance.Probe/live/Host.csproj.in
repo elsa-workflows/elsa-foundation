@@ -16,6 +16,7 @@
     <Compile Include="__SOURCE_ROOT__/tools/ux-acceptance/DashboardQualificationBootstrap.cs" />
     <Compile Include="__SOURCE_ROOT__/tools/studio/Weaver.Conformance.Probe/fixtures/BackendConsumer/QualificationPrincipals.cs" />
     <Compile Include="__SOURCE_ROOT__/tools/studio/Dashboard.Conformance.Probe/live/DashboardLiveQualification.cs" />
+    <Compile Include="__SOURCE_ROOT__/tools/studio/Dashboard.Conformance.Probe/live/DashboardQualificationStartClock.cs" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="CShells.Management.Api" />

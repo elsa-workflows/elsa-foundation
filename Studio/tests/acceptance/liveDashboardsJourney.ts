@@ -1,6 +1,10 @@
-import { chromium, expect, type Browser, type BrowserContext, type Locator, type Page, type Request, type TestInfo } from "@playwright/test";
-import type { QuestionDefinition, QueryPredicate, QueryResult, QueryValue } from "../../src/essentials/Elsa.Studio.Dashboard/Client/src/native/types";
-import { attachDashboardJson, canonicalDashboardDefinition, dashboardBackend, seedDashboardRuns, signInDashboardReader, tag, type Backend, type Capture, type Resource } from "./dashboardJourneySupport";
+import * as keyboardUi from "./dashboardKeyboard";
+import { readFileSync, writeFileSync } from "node:fs";
+import { chromium, expect, request as playwrightRequest, type Browser, type BrowserContext, type Locator, type Page, type Request, type TestInfo } from "@playwright/test";
+import type { QuestionDefinition, QueryResult } from "../../src/essentials/Elsa.Studio.Dashboard/Client/src/native/types";
+import { attachDashboardJson, canonicalDashboardDefinition, dashboardBackend, signInDashboardReader, tag, type Backend, type Capture, type Resource } from "./dashboardJourneySupport";
+
+import { executeTrendRun, seedWorkflowTrend, workflowTrendOracle, type TrendSeed } from "./liveWorkflowTrendSupport";
 
 /** This profile drives the real SDK adapter and native source APIs. It never supplies a provider response. */
 type Counters = { category: string; counts: Record<string, number>; privacyFailures: number; physicalModelHttpRequests: string };
@@ -40,7 +44,7 @@ function instrumentation(page: Page, backend: Backend) {
 }
 
 /** Capture real values inside Studio/Weaver's scrolling panes, not only the page header. */
-async function captureResultViews(page: Page, info: TestInfo, capture: Capture, name: string, result: Locator) {
+export async function captureResultViews(page: Page, info: TestInfo, capture: Capture, name: string, result: Locator) {
   const target = async (suffix: string, element: Locator) => {
     await element.evaluate(value => value.scrollIntoView({ block: "end", inline: "nearest", behavior: "instant" }));
     await expect(element).toBeInViewport(); await capture(page, info, `${name}-${suffix}`);
@@ -66,8 +70,8 @@ async function idle(page: Page) {
 
 async function createEditor(page: Page, name: string, dataset: string) {
   await page.goto("/questions");
-  await page.getByRole("button", { name: "Create question", exact: true }).first().click();
-  await page.getByLabel("Name", { exact: true }).fill(name);
+  await keyboardUi.click(page.getByRole("button", { name: "Create question", exact: true }).first());
+  await keyboardUi.fill(page.getByLabel("Name", { exact: true }), name);
   const datasets = page.getByRole("combobox", { name: "Dataset", exact: true });
   await expect(datasets.locator(`option[value="${dataset}"]`)).toHaveCount(1);
   // Start authoring from the canonical empty native draft. Selecting a dataset creates
@@ -82,10 +86,10 @@ async function createEditor(page: Page, name: string, dataset: string) {
 async function askAndClarify(page: Page, info: TestInfo, capture: Capture, backend: Backend, prompt: string, supported: RegExp) {
   const before = await counters(backend);
   const ask = page.getByRole("region", { name: "Ask Weaver", exact: true });
-  await ask.getByLabel("Your question", { exact: true }).fill(prompt);
+  await keyboardUi.fill(ask.getByLabel("Your question", { exact: true }), prompt);
   await expect(ask.getByRole("button", { name: "Ask Weaver", exact: true })).toBeEnabled({ timeout: 60_000 });
   const admission = page.waitForResponse(response => response.request().method() === "POST" && /\/_elsa\/weaver\/sessions\/[^/]+\/messages$/.test(new URL(response.url()).pathname));
-  await ask.getByRole("button", { name: "Ask Weaver", exact: true }).press("Enter");
+  await keyboardUi.press(ask.getByRole("button", { name: "Ask Weaver", exact: true }), "Enter");
   const admitted = await admission;
   expect(admitted.ok(), `Dashboard admission: HTTP ${admitted.status()}; ${JSON.stringify(await counters(backend))}`).toBe(true);
   const clarification = page.getByRole("region", { name: "Clarify dashboard question", exact: true }).last();
@@ -100,7 +104,7 @@ async function askAndClarify(page: Page, info: TestInfo, capture: Capture, backe
   await clarification.evaluate(element => element.scrollIntoView({ block: "center", inline: "nearest", behavior: "instant" }));
   await expect(chosen).toBeInViewport();
   await capture(page, info, "live-clarification");
-  await chosen.press("Enter");
+  await keyboardUi.press(chosen, "Enter");
   await expect(page.getByRole("region", { name: "Proposed dashboard question", exact: true }).last()).toBeVisible({ timeout: 180_000 });
   await idle(page);
   const after = await counters(backend);
@@ -113,7 +117,7 @@ async function askAndClarify(page: Page, info: TestInfo, capture: Capture, backe
 
 async function previewProposal(page: Page, proposal: Locator) {
   const response = page.waitForResponse(item => item.request().method() === "POST" && /\/_elsa\/studio\/(dashboard-queries\/preview|questions\/[^/]+\/preview)$/.test(new URL(item.url()).pathname));
-  await proposal.getByRole("button", { name: "Preview proposed question", exact: true }).click();
+  await keyboardUi.click(proposal.getByRole("button", { name: "Preview proposed question", exact: true }));
   const actual = await response; expect(actual.ok()).toBe(true);
   const definition = actual.request().postDataJSON() as QuestionDefinition;
   const result = await actual.json() as QueryResult;
@@ -126,11 +130,11 @@ async function refine(page: Page, info: TestInfo, capture: Capture, backend: Bac
   const proposals = page.getByRole("region", { name: "Proposed dashboard question", exact: true });
   const count = await proposals.count();
   const before = await counters(backend);
-  await proposals.last().getByRole("button", { name: "Refine proposal", exact: true }).click();
+  await keyboardUi.click(proposals.last().getByRole("button", { name: "Refine proposal", exact: true }));
   const dialog = page.getByRole("dialog", { name: "Refine proposed question", exact: true });
   await expect(dialog).toBeVisible();
-  await dialog.getByRole("textbox").fill(message);
-  await dialog.getByRole("button", { name: "Confirm", exact: true }).press("Enter");
+  await keyboardUi.fill(dialog.getByRole("textbox"), message);
+  await keyboardUi.press(dialog.getByRole("button", { name: "Confirm", exact: true }), "Enter");
   await expect(dialog).toBeHidden();
   await expect.poll(() => proposals.count(), { timeout: 180_000 }).toBeGreaterThan(count);
   await idle(page);
@@ -161,34 +165,6 @@ function metricColumn(definition: QuestionDefinition, result: QueryResult, metri
   return columns[0].id;
 }
 
-function resolve(value: QueryValue | undefined, definition: QuestionDefinition) {
-  if (!value?.parameter) return value?.literal;
-  return definition.parameterValues?.[value.parameter]?.literal ?? definition.query.parameters.find(item => item.name === value.parameter)?.default?.literal;
-}
-function conjuncts(predicate?: QueryPredicate): QueryPredicate[] {
-  if (!predicate) return [];
-  expect(predicate.any, "The independent oracle requires a conjunctive source cohort").toBeUndefined();
-  return predicate.all ? predicate.all.flatMap(conjuncts) : [predicate];
-}
-
-function workflowOracle(definition: QuestionDefinition, result: QueryResult, definitionId: string, expected: number) {
-  expect(definition.query.dataset.id).toBe("elsa.workflows.runs");
-  expect(definition.query.form).toBe("aggregate");
-  expect(definition.query.groupBy).toEqual(["status"]);
-  expect(definition.query.time).toMatchObject({ field: "startedAt", window: "last7Days", timeZone: "UTC" });
-  expect(definition.query.comparison).toBeUndefined(); expect(definition.query.having).toBeUndefined();
-  const filters = conjuncts(definition.query.filters);
-  const cohort = filters.filter(item => item.field === "definitionId"); expect(cohort).toHaveLength(1);
-  expect(cohort[0].operator).toBe("eq"); expect(resolve(cohort[0].value, definition)).toBe(definitionId);
-  for (const filter of filters.filter(item => item.field !== "definitionId")) {
-    expect(filter.field).toBe("runKind"); expect(filter.operator).toBe("eq"); expect(resolve(filter.value, definition)).toBe("publishedRun");
-  }
-  const metric = metricColumn(definition, result, "workflow.started-count");
-  expect(result.rows).toHaveLength(1); expect(result.rows[0].values.status.value).toBe("completed");
-  expect(Number(result.rows[0].values[metric].value)).toBe(expected);
-  return { expected, actual: result.rows[0].values[metric].value, definitionId, source: "actual published executable runs read from native runtime API" };
-}
-
 function acmeOracle(definition: QuestionDefinition, result: QueryResult, seeds: ProcessingSeed[], viewer = false) {
   expect(definition.query.dataset.id).toBe("acme.processing.records");
   expect(definition.query.groupBy).toEqual(["customerCategory"]);
@@ -213,7 +189,7 @@ function acmeOracle(definition: QuestionDefinition, result: QueryResult, seeds: 
 async function saveAndReopen(page: Page, info: TestInfo, capture: Capture, backend: Backend, monitor: ReturnType<typeof instrumentation>, definition: QuestionDefinition) {
   expect(monitor.writes, "Ask, clarification, refinement and preview must not save anything").toEqual([]);
   await monitor.native("use-unsaved-draft", async () => {
-    await page.getByRole("region", { name: "Proposed dashboard question", exact: true }).last().getByRole("button", { name: "Use this question", exact: true }).press("Enter");
+    await keyboardUi.press(page.getByRole("region", { name: "Proposed dashboard question", exact: true }).last().getByRole("button", { name: "Use this question", exact: true }), "Enter");
     await expect(page.getByRole("button", { name: "Undo applied proposal", exact: true })).toBeVisible();
     await expect(page.getByRole("combobox", { name: "Visualization", exact: true })).toHaveValue("bar");
     expect(monitor.writes, "Use changes only the ordinary native draft").toEqual([]);
@@ -222,7 +198,7 @@ async function saveAndReopen(page: Page, info: TestInfo, capture: Capture, backe
   const saved = await monitor.native("explicit-save", async () => {
     const backendSelection = new URL(page.url()).searchParams.get("backend");
     const pending = page.waitForResponse(response => response.request().method() === "POST" && /\/_elsa\/studio\/questions$/.test(response.url()));
-    await page.getByRole("button", { name: "Save question", exact: true }).press("Enter");
+    await keyboardUi.press(page.getByRole("button", { name: "Save question", exact: true }), "Enter");
     const response = await pending; expect(response.ok()).toBe(true);
     const value = await response.json() as Resource;
     expect(canonicalDashboardDefinition(value.definition)).toEqual(canonicalDashboardDefinition(definition)); expect(value.ownerId).not.toBe("dashboard-qa-reader");
@@ -246,7 +222,7 @@ async function saveAndReopen(page: Page, info: TestInfo, capture: Capture, backe
 
 async function refresh(page: Page, question: Resource) {
   const pending = page.waitForResponse(response => response.request().method() === "POST" && response.url().endsWith(`/questions/${question.id}/execute`));
-  await page.getByRole("button", { name: "Refresh results", exact: true }).click();
+  await keyboardUi.click(page.getByRole("button", { name: "Refresh results", exact: true }));
   const response = await pending; expect(response.ok()).toBe(true);
   expect(response.request().headers()["if-match"]).toBe(`"${question.revision}"`);
   const result = await response.json() as QueryResult;
@@ -283,49 +259,151 @@ async function removeQuestion(backend: Backend, id?: string) {
 
 export async function liveWorkflowDashboardJourney(page: Page, info: TestInfo, capture: Capture) {
   const backend = await dashboardBackend(page.request);
-  const monitor = instrumentation(page, backend); let saved: Resource | undefined;
-  let ownedSeed: Awaited<ReturnType<typeof seedDashboardRuns>> | undefined;
+  const monitor = instrumentation(page, backend);
+  let saved: Resource | undefined; let dashboard: Resource | undefined; let seed: TrendSeed | undefined;
+  let readerBrowser: Browser | undefined; let readerContext: BrowserContext | undefined; let retained = false;
   try {
-    const seeded = ownedSeed = await seedDashboardRuns(backend, `live-${Date.now()}`);
-    await backend.api("/__qualification/dashboard-live/canaries", "POST", seeded.executionIds);
-    await createEditor(page, `Live Workflow meaning ${Date.now()}`, "elsa.workflows.runs");
+    seed = await seedWorkflowTrend(backend, `live-${Date.now()}`);
+    await backend.api("/__qualification/dashboard-live/canaries", "POST", seed.facts.map(item => item.id));
+    await createEditor(page, `Live weekly failure meaning ${Date.now()}`, "elsa.workflows.runs");
+    const ids = seed.definitions.map(item => item.id).join(", ");
     const turns = await askAndClarify(page, info, capture, backend,
-      `For workflow definition ${seeded.definitionId}, count published runs in the last seven days in UTC grouped by current status. I might mean runs started during that period or completions occurring during that period. Ask me to choose the supported interpretation before proposing. Offer the runs-started cohort explicitly. Use only this definition, the started-count measure, no comparison or result conditions, and begin with a table. Explain retained coverage rather than claiming complete history.`,
+      `Use one definitionId IN filter containing ONLY workflow definitions ${ids}. Show whose failure rate increased this calendar week so far versus the same elapsed part of the previous calendar week, Monday starts in UTC. I might mean the current outcomes of runs STARTED in each period, or outcomes of COMPLETIONS during each period. Ask me to choose before proposing; explicitly offer the supported started-cohort current-status meaning. Initially group by workflow definition identity, include ALL run kinds with NO run-kind filter, use only the declared failure-rate metric with result alias rate and delta.rate greater than zero, no time buckets, and begin with a table. Explain unknown retention coverage.`,
       /started|starting|start cohort/i);
     const initial = await monitor.native("initial-native-preview", () => previewProposal(page, page.getByRole("region", { name: "Proposed dashboard question", exact: true }).last()));
-    const beforeOracle = workflowOracle(initial.definition, initial.result, seeded.definitionId, 3);
+    const beforeOracle = workflowTrendOracle(initial.definition, initial.result, seed, false);
     await capture(page, info, "live-proposal-preview");
     await captureResultViews(page, info, capture, "live-proposal-preview", page.getByRole("region", { name: "Proposed dashboard question", exact: true }).last().locator(".named-result"));
-    const refinement = await refine(page, info, capture, backend, "Keep the exact accepted query, cohort, metric, parameters and UTC window. Change only presentation from a table to a bar chart, using current status as category and the started-count metric as its value. Do not add comparison periods, filters, result conditions or other metrics.");
+    const refinement = await refine(page, info, capture, backend,
+      "Refine the actual query: group by the CURRENT FOLDER PATH (currentFolder), instead of definition identity, and exclude test runs with runKind not equal to testRun. Excluding testRun must not silently mean only publishedRun. Keep the exact two-definition restriction, started-cohort failure-rate measure, Monday calendar-week-to-date UTC window, equal-elapsed prior-week comparison, and positive delta.rate condition. Change the presentation to a bar chart for currentFolder, retaining readable current, baseline and delta failure-rate values. Do not substitute a metric or interval.");
     const final = await monitor.native("refined-native-preview", () => previewProposal(page, page.getByRole("region", { name: "Proposed dashboard question", exact: true }).last()));
-    sameQuery(initial.definition, final.definition); workflowOracle(final.definition, final.result, seeded.definitionId, 3);
+    const refinedOracle = workflowTrendOracle(final.definition, final.result, seed, true);
+    expect(final.definition.query.groupBy).not.toEqual(initial.definition.query.groupBy);
+    expect(final.definition.query.filters).not.toEqual(initial.definition.query.filters);
+    expect(final.definition.visualization.kind).toBe("bar");
+    expect(refinedOracle.expected[0].current).toBe(75); expect(refinedOracle.expected[0].baseline).toBe(25); expect(refinedOracle.expected[0].delta).toBe(50);
+    expect(beforeOracle.expected[0].current).toBe(62.5); expect(beforeOracle.expected[0].delta).toBe(12.5);
+    await attachDashboardJson(info, "live-query-refinement.json", { groupingChanged: true, filtersChanged: true, actualSdkRefinement: true, before: beforeOracle.expected, after: refinedOracle.expected });
     await capture(page, info, "live-refined-preview");
     await captureResultViews(page, info, capture, "live-refined-preview", page.getByRole("region", { name: "Proposed dashboard question", exact: true }).last().locator(".named-result"));
     saved = await saveAndReopen(page, info, capture, backend, monitor, final.definition);
-    const reopened = await monitor.native("reopened-native-refresh", () => refresh(page, saved!));
-    workflowOracle(final.definition, reopened, seeded.definitionId, 3);
+    workflowTrendOracle(final.definition, await monitor.native("reopened-native-refresh", () => refresh(page, saved!)), seed, true);
     const fresh = await monitor.native("native-new-run-and-refresh", async () => {
-      const run = await backend.api<{ workflowExecutionId: string }>(`/runtime/workflows/executables/${seeded.published.artifactId}/execute`, "POST", { sourceReferenceId: seeded.published.sourceReferenceId });
-      await expect.poll(async () => (await backend.api<{ instance: { status: string } }>(`/runtime/workflows/instances/${run.workflowExecutionId}`)).instance.status, { timeout: 30_000 }).toBe("Completed");
-      seeded.executionIds.push(run.workflowExecutionId);
-      await backend.api("/__qualification/dashboard-live/canaries", "POST", seeded.executionIds);
-      return { run, result: await refresh(page, saved!) };
+      const increasing = seed!.definitions[0];
+      seed!.facts.push(await executeTrendRun(backend, increasing.id, increasing.faultPublished, increasing.faultVersion, new Date().toISOString(), true));
+      await backend.api("/__qualification/dashboard-live/canaries", "POST", seed!.facts.map(item => item.id));
+      return refresh(page, saved!);
     });
-    const afterOracle = workflowOracle(final.definition, fresh.result, seeded.definitionId, 4);
+    const afterOracle = workflowTrendOracle(final.definition, fresh, seed, true);
+    expect(afterOracle.expected[0].current).toBe(80); expect(afterOracle.expected[0].delta).toBe(55);
     await capture(page, info, "live-refreshed");
-    await monitor.native("native-saved-drill", async () => {
-      await page.getByRole("button", { name: "View matching records for result 1", exact: true }).click();
-      const drill = page.getByRole("dialog", { name: "Matching source records", exact: true });
-      for (const id of seeded.executionIds) await expect(drill.getByRole("cell", { name: id, exact: true })).toBeVisible();
-      await capture(page, info, "live-drill"); await drill.press("Escape");
-    });
+    await monitor.native("native-saved-drill", () => inspectTrendDrill(page, info, capture, "live-drill", afterOracle.expected[0].currentIds, seed!));
     await savedAppearances(page, info, capture, backend, monitor, saved);
-    await attachDashboardJson(info, "live-oracle.json", { before: beforeOracle, after: afterOracle, sourceExecutionIds: seeded.executionIds, observedInitialInstances: seeded.observedInstances, query: final.definition.query });
-    await attachDashboardJson(info, "live-counters.json", { turns, refinement, after: await counters(backend), nativePhases: monitor.phases, physicalModelHttpRequests: "not exposed by the public SDK factory seam; counts above are actual SDK SendAsync invocations" });
+    await monitor.native("native-share", () => shareQuestion(page, info, capture, "live-question-share"));
+    saved = await backend.api<Resource>(`/_elsa/studio/questions/${saved.id}`);
+    dashboard = await monitor.native("native-dashboard-arrange", () => arrangeTrendDashboard(page, info, capture, backend, saved!));
+    await monitor.native("native-dashboard-share", () => shareQuestion(page, info, capture, "live-dashboard-share"));
+    dashboard = await backend.api<Resource>(`/_elsa/studio/dashboards/${dashboard.id}`);
+    await grantProfile(backend, "dashboard-live-reader");
+    readerBrowser = await chromium.launch();
+    readerContext = await readerBrowser.newContext({ baseURL: process.env.ELSA_STUDIO_URL, viewport: { width: 1440, height: 1000 } });
+    const reader = await readerContext.newPage();
+    await monitor.native("native-independent-viewer-refresh", async () => {
+      await signInDashboardReader(reader, info); await keyboardUi.startKeyboardEvidence(reader); await reader.goto(`/dashboards/${dashboard!.id}`);
+      await expect(reader.getByRole("button", { name: "Save layout", exact: true })).toHaveCount(0);
+      await expect(reader.locator(".named-tile .named-result")).toHaveCount(2);
+      await capture(reader, info, "live-dashboard-reader");
+      await inspectTrendDrill(reader, info, capture, "live-dashboard-reader-drill", afterOracle.expected[0].currentIds, seed!, reader.locator(".named-tile").first());
+    });
+    const manifest: RetainedTrend = { question: saved, dashboard, definition: final.definition, seed };
+    writeFileSync(`${process.env.UX_ACCEPTANCE_OUT}/workflow-retained.json`, JSON.stringify(manifest, null, 2));
+    await attachDashboardJson(info, "live-retained-definitions.json", { dashboardId: dashboard.id, questionId: saved.id, dashboardRevision: dashboard.revision, questionRevision: saved.revision, tileIds: dashboard.tiles.map(item => item.id), deferredToOwnedRestart: true });
+    await attachDashboardJson(info, "live-oracle.json", { before: beforeOracle, refined: refinedOracle, after: afterOracle, sourceFacts: seed.facts, sourceStartInstants: "controlled real start-handler clock; no claim about historical execution duration", query: final.definition.query });
+    await attachDashboardJson(info, "live-counters.json", { turns, refinement, after: await counters(backend), nativePhases: monitor.phases, physicalModelHttpRequests: "not exposed by public SDK factory; actual SDK SendAsync counts retained" });
+    if (keyboardUi.keyboardOnly) await attachDashboardJson(info, "reader-keyboard-proof.json", await keyboardUi.keyboardEvidence(reader));
+    retained = true;
   } finally {
     monitor.dispose();
-    try { await removeQuestion(backend, saved?.id); }
-    finally { if (ownedSeed) await backend.api(`/design/workflows/definitions/${ownedSeed.definitionId}`, "DELETE"); }
+    // Explicit context closure invokes Playwright Test's trace-export hook. Browser.close()
+    // alone shuts down its transport before the independently owned context is exported.
+    try { await readerContext?.close(); }
+    finally {
+      try { await readerBrowser?.close(); }
+      finally { if (!retained) await cleanupRetainedTrend(backend, saved?.id, dashboard?.id, seed); }
+    }
+  }
+}
+
+type RetainedTrend = { question: Resource; dashboard: Resource; definition: QuestionDefinition; seed: TrendSeed };
+async function cleanupRetainedTrend(backend: Backend, questionId?: string, dashboardId?: string, seed?: TrendSeed) {
+  if (dashboardId) {
+    const current = await backend.api<Resource>(`/_elsa/studio/dashboards/${dashboardId}`);
+    await backend.api(`/_elsa/studio/dashboards/${dashboardId}`, "DELETE", undefined, tag(current.revision));
+  }
+  try { await removeQuestion(backend, questionId); }
+  finally { for (const item of seed?.definitions ?? []) await backend.api(`/design/workflows/definitions/${item.id}`, "DELETE"); }
+}
+async function inspectTrendDrill(page: Page, info: TestInfo, capture: Capture, name: string, ids: string[], seed: TrendSeed, scope: Locator = page.locator(".named-preview")) {
+  await keyboardUi.click(scope.getByRole("button", { name: "View matching records for result 1", exact: true }));
+  const dialog = page.getByRole("dialog", { name: "Matching source records", exact: true });
+  for (const id of ids) await expect(dialog.getByRole("cell", { name: id, exact: true })).toBeVisible();
+  for (const fact of seed.facts.filter(item => !ids.includes(item.id))) await expect(dialog.getByRole("cell", { name: fact.id, exact: true })).toHaveCount(0);
+  await capture(page, info, name); await keyboardUi.press(dialog, "Escape");
+}
+async function arrangeTrendDashboard(page: Page, info: TestInfo, capture: Capture, backend: Backend, question: Resource) {
+  await page.goto("/dashboards"); await keyboardUi.click(page.getByRole("button", { name: "Create dashboard", exact: true }).first());
+  await keyboardUi.fill(page.getByLabel("Name", { exact: true }), `Live arranged weekly rates ${Date.now()}`);
+  for (let index = 0; index < 2; index++) {
+    await keyboardUi.click(page.getByRole("button", { name: "Add saved question", exact: true }));
+    const picker = page.getByRole("dialog", { name: "Add saved question", exact: true });
+    await keyboardUi.fill(picker.getByLabel("Search accessible questions", { exact: true }), question.name);
+    await keyboardUi.click(picker.getByRole("button", { name: "Search questions", exact: true }));
+    await keyboardUi.press(picker.getByRole("button", { name: `Add ${question.name}`, exact: true }), "Enter");
+  }
+  await keyboardUi.selectOption(page.getByRole("combobox", { name: "Size for question 1", exact: true }), "wide");
+  await keyboardUi.press(page.getByRole("button", { name: "Move question 1 later", exact: true }), "Enter");
+  await expect(page.getByRole("button", { name: "Move question 2 earlier", exact: true })).toBeFocused();
+  const pending = page.waitForResponse(response => response.request().method() === "POST" && /\/_elsa\/studio\/dashboards$/.test(response.url()));
+  await keyboardUi.press(page.getByRole("button", { name: "Save layout", exact: true }), "Enter");
+  const response = await pending; expect(response.ok()).toBe(true); const saved = await response.json() as Resource;
+  expect(saved.tiles.map(item => item.questionId)).toEqual([question.id, question.id]); expect(saved.tiles.map(item => item.size)).toEqual(["medium", "wide"]);
+  expect(new Set(saved.tiles.map(item => item.id)).size).toBe(2);
+  await page.reload(); await expect(page.locator(".named-tile .named-result")).toHaveCount(2);
+  expect((await backend.api<Resource>(`/_elsa/studio/dashboards/${saved.id}`)).tiles).toEqual(saved.tiles);
+  await capture(page, info, "live-dashboard-arranged"); return saved;
+}
+
+export async function restartWorkflowDashboardJourney(page: Page, info: TestInfo, capture: Capture) {
+  if (process.env.UX_DASHBOARD_RESTART !== "1") throw new Error("The real owned-host restart phase is required");
+  const manifest = JSON.parse(readFileSync(`${process.env.UX_ACCEPTANCE_OUT}/workflow-retained.json`, "utf8")) as RetainedTrend;
+  // Keep the owner's cleanup/observation client separate from the UI's later reader login.
+  const ownerClient = await playwrightRequest.newContext();
+  const backend = await dashboardBackend(ownerClient); const before = await counters(backend);
+  expect(sends(before)).toBe(0);
+  try {
+    const bootstrap = await backend.api<{ data: { enabled: boolean; provider: { isAvailable: boolean } } }>("/_elsa/weaver/bootstrap");
+    expect(bootstrap.data.enabled && bootstrap.data.provider.isAvailable).toBe(false);
+    const question = await backend.api<Resource>(`/_elsa/studio/questions/${manifest.question.id}`);
+    const dashboard = await backend.api<Resource>(`/_elsa/studio/dashboards/${manifest.dashboard.id}`);
+    expect(question.revision).toBe(manifest.question.revision); expect(question.definition).toEqual(manifest.question.definition);
+    expect(dashboard.revision).toBe(manifest.dashboard.revision); expect(dashboard.tiles).toEqual(manifest.dashboard.tiles);
+    await page.goto(`/dashboards/${dashboard.id}`); await expect(page.locator(".named-tile .named-result")).toHaveCount(2);
+    await expect(page.getByRole("combobox", { name: "Size for question 2", exact: true })).toHaveValue("wide");
+    await capture(page, info, "restart-dashboard-owner");
+    await page.goto(`/questions/${question.id}`);
+    const result = await refresh(page, question); const oracle = workflowTrendOracle(manifest.definition, result, manifest.seed, true);
+    await captureResultViews(page, info, capture, "restart-question", page.locator(".named-preview > .named-result"));
+    await inspectTrendDrill(page, info, capture, "restart-owner-drill", oracle.expected[0].currentIds, manifest.seed);
+    await page.context().clearCookies(); await signInDashboardReader(page, info); await page.goto(`/dashboards/${dashboard.id}`);
+    await expect(page.getByRole("button", { name: "Save layout", exact: true })).toHaveCount(0);
+    await expect(page.locator(".named-tile .named-result")).toHaveCount(2);
+    await capture(page, info, "restart-dashboard-reader");
+    await inspectTrendDrill(page, info, capture, "restart-reader-drill", oracle.expected[0].currentIds, manifest.seed, page.locator(".named-tile").first());
+    const after = await counters(backend); expect(sends(after)).toBe(0);
+    await attachDashboardJson(info, "restart-proof.json", { providerDisabled: true, sameQuestion: true, sameDashboard: true, sameTileOrderAndSizes: true, distinctHostLifetimes: true, sdkSendsBefore: sends(before), sdkSendsAfter: sends(after), independentlyComputed: oracle.expected, questionId: question.id, dashboardId: dashboard.id });
+  } finally {
+    try { await cleanupRetainedTrend(backend, manifest.question.id, manifest.dashboard.id, manifest.seed); }
+    finally { await ownerClient.dispose(); }
   }
 }
 
@@ -344,15 +422,22 @@ async function seedProcessing(backend: Backend) {
   return { seeds, from, to };
 }
 
-async function shareQuestion(page: Page, info: TestInfo, capture: Capture) {
-  await page.getByRole("button", { name: "Share", exact: true }).click();
+async function shareQuestion(page: Page, info: TestInfo, capture: Capture, captureName = "live-share") {
+  await keyboardUi.click(page.getByRole("button", { name: "Share", exact: true }));
   const dialog = page.getByRole("dialog", { name: /^Share / });
-  await dialog.getByLabel("Find authorized users or roles", { exact: true }).fill("dashboard-reader");
-  await dialog.getByRole("button", { name: "Search audience", exact: true }).click();
-  await dialog.getByRole("listitem").filter({ hasText: "dashboard-reader" }).getByRole("button", { name: "Add audience", exact: true }).click();
-  await capture(page, info, "live-share");
-  await dialog.getByRole("button", { name: "Save audience", exact: true }).click();
+  await keyboardUi.fill(dialog.getByLabel("Find authorized users or roles", { exact: true }), "dashboard-reader");
+  await keyboardUi.click(dialog.getByRole("button", { name: "Search audience", exact: true }));
+  await keyboardUi.click(dialog.getByRole("listitem").filter({ hasText: "dashboard-reader" }).getByRole("button", { name: "Add audience", exact: true }));
+  await capture(page, info, captureName);
+  // Sharing changes the dashboard revision and starts its ordinary two-wide tile
+  // refresh. Observe both completed reads before adding an independent API readback;
+  // a third concurrent read correctly exceeds the native per-subject admission bound.
+  const tileIds = await page.locator(".named-tile[data-tile-id]").evaluateAll(nodes => nodes.map(node => node.getAttribute("data-tile-id")!));
+  const refreshed = tileIds.map(id => page.waitForResponse(response => response.request().method() === "POST" && new URL(response.url()).pathname.endsWith(`/tiles/${id}/execute`)));
+  await keyboardUi.click(dialog.getByRole("button", { name: "Save audience", exact: true }));
   await expect(dialog).toBeHidden();
+  for (const response of await Promise.all(refreshed)) expect(response.ok()).toBe(true);
+  await expect(page.getByRole("button", { name: /^Cancel refresh for question / })).toHaveCount(0);
 }
 
 async function grantProfile(backend: Backend, profile: "dashboard-live-reader" | "dashboard-live-no-category") {
@@ -397,9 +482,9 @@ export async function liveAcmeDashboardJourney(page: Page, info: TestInfo, captu
     // Sharing is itself a saved revision. Every subsequent read and execution uses its current revision.
     saved = await backend.api<Resource>(`/_elsa/studio/questions/${saved.id}`);
     const viewer = await monitor.native("native-independent-viewer-refresh", async () => {
-      await signInDashboardReader(reader, info);
-      await reader.getByRole("button", { name: "Shared with me", exact: true }).click();
-      await reader.getByRole("link", { name: saved!.name, exact: true }).click();
+      await signInDashboardReader(reader, info); await keyboardUi.startKeyboardEvidence(reader);
+      await keyboardUi.click(reader.getByRole("button", { name: "Shared with me", exact: true }));
+      await keyboardUi.click(reader.getByRole("link", { name: saved!.name, exact: true }));
       await expect(reader.getByRole("button", { name: "Save question", exact: true })).toHaveCount(0);
       await expect(reader.getByRole("button", { name: "Share", exact: true })).toHaveCount(0);
       const result = await refresh(reader, saved!);
@@ -412,12 +497,12 @@ export async function liveAcmeDashboardJourney(page: Page, info: TestInfo, captu
       const denied = await reader.request.get(`${backend.base}/_acme/processing/records/${source.seeds.find(item => !item.shared)!.id}`, { headers: { Authorization: `Bearer ${accessToken}` } });
       expect(denied.status()).toBe(404);
       for (let index = 1; index <= result.rows.length; index++) {
-        await reader.getByRole("button", { name: `View matching records for result ${index}`, exact: true }).click();
+        await keyboardUi.click(reader.getByRole("button", { name: `View matching records for result ${index}`, exact: true }));
         const drill = reader.getByRole("dialog", { name: "Matching source records", exact: true });
         const category = result.rows[index - 1].values.customerCategory.value;
         for (const record of source.seeds.filter(item => item.shared && item.customerCategory === category)) await expect(drill.getByRole("cell", { name: record.id, exact: true })).toBeVisible();
         for (const record of source.seeds.filter(item => !item.shared)) await expect(drill.getByRole("cell", { name: record.id, exact: true })).toHaveCount(0);
-        await drill.press("Escape");
+        await keyboardUi.press(drill, "Escape");
       }
       return oracle;
     });
@@ -425,7 +510,7 @@ export async function liveAcmeDashboardJourney(page: Page, info: TestInfo, captu
       await grantProfile(backend, "dashboard-live-no-category");
       // Native IAM grants are carried by a signed principal. As in the native journey,
       // observe changed grants through a new normal authenticated reader session.
-      await readerContext!.clearCookies(); await signInDashboardReader(reader, info);
+      await readerContext!.clearCookies(); await signInDashboardReader(reader, info); await keyboardUi.startKeyboardEvidence(reader);
       await reader.goto(`/questions/${saved!.id}`);
       await expect(reader.getByText(/^Parts of this definition are withheld under your current access\./)).toBeVisible();
       await expect(reader.locator(".named-query-controls")).toHaveCount(0);
@@ -442,6 +527,7 @@ export async function liveAcmeDashboardJourney(page: Page, info: TestInfo, captu
     await attachDashboardJson(info, "live-oracle.json", { sourceInterval: { from: source.from, to: source.to }, sourceRecords: source.seeds, ownerBefore, ownerAfter, viewer, sourcePersistence: "Acme reference store is ephemeral; page reload is verified, process-restart durability is not claimed", query: final.definition.query });
     await attachDashboardJson(info, "live-counters.json", { turns, refinement, after: await counters(backend), nativePhases: monitor.phases, physicalModelHttpRequests: "not exposed by the public SDK factory seam; counts above are actual SDK SendAsync invocations" });
     expect(readerErrors, "Uncaught independent reader browser errors").toEqual([]);
+    if (keyboardUi.keyboardOnly) await attachDashboardJson(info, "reader-keyboard-proof.json", await keyboardUi.keyboardEvidence(reader));
   } finally {
     monitor.dispose();
     try { await readerContext?.close(); }
@@ -453,4 +539,46 @@ export async function liveAcmeDashboardJourney(page: Page, info: TestInfo, captu
       }
     }
   }
+}
+
+/** An actual provider must explain unavailable business facts without substituting a metric. */
+export async function liveUnsupportedDashboardJourney(page: Page, info: TestInfo, capture: Capture) {
+  const backend = await dashboardBackend(page.request); const monitor = instrumentation(page, backend);
+  const queries: string[] = [];
+  const collect = (request: Request) => {
+    if (request.method() === "POST" && /\/(dashboard-queries\/preview|questions\/[^/]+\/(?:preview|execute))$/.test(new URL(request.url()).pathname)) queries.push(request.url());
+  };
+  page.on("request", collect);
+  try {
+    const beforeResources = await backend.api<{ items: Resource[] }>("/_elsa/studio/questions");
+    await createEditor(page, `Unsupported financial meaning ${Date.now()}`, "acme.processing.records");
+    const prompt = "For Acme processing records, calculate net profit per customer category using revenue minus cost. If revenue, cost or profit are not exposed by the declared dataset, explain that limitation and preserve this request. Do not replace financial profit with processing time or record counts. Do not invent numbers.";
+    const before = await counters(backend); const ask = page.getByRole("region", { name: "Ask Weaver", exact: true });
+    await keyboardUi.fill(ask.getByLabel("Your question", { exact: true }), prompt);
+    await ask.scrollIntoViewIfNeeded(); await capture(page, info, "live-unsupported-request");
+    await expect(ask.getByRole("button", { name: "Ask Weaver", exact: true })).toBeEnabled({ timeout: 60_000 });
+    const admission = page.waitForResponse(response => response.request().method() === "POST" && /\/_elsa\/weaver\/sessions\/[^/]+\/messages$/.test(new URL(response.url()).pathname));
+    await keyboardUi.press(ask.getByRole("button", { name: "Ask Weaver", exact: true }), "Enter");
+    expect((await admission).ok()).toBe(true); await idle(page);
+    const assistant = page.getByRole("region", { name: "Weaver assistant", exact: true });
+    await expect(assistant.locator('.weaver-message[data-role="user"]').filter({ hasText: prompt })).toBeVisible();
+    const explanation = assistant.locator('.weaver-message[data-role="assistant"][data-status="completed"]').last();
+    await expect(explanation).toContainText(/profit|revenue|cost/i);
+    await expect(explanation).toContainText(/not (?:exposed|available|provided|include)|does(?:n't| not)|cannot|can(?:not|'t|’t)|unavailable|unsupported|missing/i);
+    await expect(page.getByRole("region", { name: "Proposed dashboard question", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("combobox", { name: "Dataset", exact: true })).toHaveValue("");
+    await expect(page.getByRole("group", { name: "Metrics", exact: true }).getByRole("combobox")).toHaveCount(0);
+    await expect(page.locator(".named-result")).toHaveCount(0);
+    await explanation.scrollIntoViewIfNeeded(); await expect(explanation).toBeInViewport();
+    await capture(page, info, "live-unsupported-explanation");
+    const userMessage = assistant.locator('.weaver-message[data-role="user"]').filter({ hasText: prompt });
+    await userMessage.scrollIntoViewIfNeeded(); await capture(page, info, "live-unsupported-preserved-question");
+    const after = await counters(backend);
+    expect(sends(after)).toBeGreaterThan(sends(before));
+    expect(after.counts["event.Completed"] ?? 0).toBeGreaterThan(before.counts["event.Completed"] ?? 0);
+    expect(queries).toEqual([]); expect(monitor.writes).toEqual([]);
+    const afterResources = await backend.api<{ items: Resource[] }>("/_elsa/studio/questions");
+    expect(afterResources.items.map(item => [item.id, item.revision])).toEqual(beforeResources.items.map(item => [item.id, item.revision]));
+    await attachDashboardJson(info, "unsupported-proof.json", { before, after, originalRequestPreserved: true, limitationTextObserved: true, proposedQuestions: 0, nativeQueryExecutions: queries.length, resourceWrites: monitor.writes.length, savedResourcesUnchanged: true, selectedDatasetStillEmpty: true, structuredMetricSubstitution: false, explanation: await explanation.innerText(), proseSemanticAcceptance: "requires independent review" });
+  } finally { page.off("request", collect); monitor.dispose(); }
 }

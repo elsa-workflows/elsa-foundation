@@ -1,3 +1,4 @@
+import * as keyboardUi from "./dashboardKeyboard";
 import { expect, type APIRequestContext, type Page, type Request, type TestInfo } from "@playwright/test";
 import { writeFileSync } from "node:fs";
 
@@ -107,6 +108,6 @@ export async function signInDashboardReader(page: Page, info: TestInfo) {
   const form = page.locator('form[action="/_elsa/identity/login"]');
   await form.getByLabel(/username/i).fill("dashboard-reader");
   await form.getByLabel(/password/i).fill("Password123!");
-  await form.getByRole("button", { name: /sign in/i }).click();
+  await keyboardUi.click(form.getByRole("button", { name: /sign in/i }));
   await expect(page.getByRole("heading", { name: "Questions", level: 2, exact: true })).toBeVisible({ timeout: 60_000 });
 }

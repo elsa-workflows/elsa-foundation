@@ -27,9 +27,9 @@ CAPTURES = {
     'structured logs table accessibility': ['reference', 'logs-page', 'logs-selected', 'logs-empty', 'logs-dock'],
     'activity definition identity survives reopening': ['reference', 'activity-created', 'activity-reloaded', 'activity-reopened'],
     'tabbed Secrets authoring and metadata': ['reference', 'secret-section', 'first-invalid-field', 'storage-section', 'details-section', 'persisted-list', 'persisted-metadata', 'metadata-390', 'storage-390', 'configuration-reference', 'configuration-metadata'],
-    'business decisions authoring and explanations': ['reference', 'decisions-list', 'decisions-search', 'decision-create', 'decision-table', 'decision-case-editor', 'decision-case-expectation', 'decision-cases', 'decision-regression', 'decision-published', 'decision-explanation', 'decision-clone', 'decision-conflict', 'decision-history', 'decisions-no-matches', 'decision-imported', 'decision-table-320', 'decision-table-320-scrolled', 'decision-picker', 'decision-picker-new-tab', 'decision-picker-saved-tab', 'decision-picker-selected-toast', 'decision-picker-returned'],
+    'business decisions authoring and explanations': ['reference', 'decisions-list', 'decisions-search', 'decision-create', 'decision-table', 'decision-case-editor', 'decision-case-expectation', 'decision-cases', 'decision-regression', 'decision-published', 'decision-explanation', 'decision-clone', 'decision-conflict', 'decision-history', 'decisions-no-matches', 'decision-imported', 'decision-table-320', 'decision-table-320-scrolled', 'decision-picker', 'decision-picker-new-tab', 'decision-picker-saved-tab', 'decision-picker-selected-toast', 'decision-picker-returned', 'decision-saved-toast'],
     'feature filtering and settings dialogs': ['reference', 'features-server-no-matches', 'features-server-populated', 'features-studio-no-matches', 'features-studio-populated', 'feature-settings-dialog', 'feature-impact-dialog'],
-    'collections and connection creation': ['reference', 'no-matches', 'connections-list', 'secret-create', 'secret-list', 'secret-detail', 'secret-duplicate', 'invalid-name', 'completed'],
+    'collections and connection creation': ['reference', 'no-matches', 'connections-list', 'secret-create', 'secret-list', 'secret-detail', 'secret-duplicate', 'invalid-name', 'completed', 'secret-created-toast', 'secret-dialog-over-toast', 'primary-action-with-toasts', 'toasts-above-expanded-dock', 'toasts-over-maximized-dock', 'notification-history'],
     'publication blockers explain how to correct agent settings': ['reference', 'blocked', 'instructions-focused', 'model-blocked', 'model-focused', 'completed'],
     'save template toast': ['reference', 'save-form', 'saved-toast', 'template-list', 'reopened-template'],
     'workflow template metadata defaults': ['reference', 'template-defaults', 'template-edits', 'template-catalog-entry', 'template-persisted'],
@@ -94,19 +94,25 @@ def signal_owned_group(process, signal_number):
         # Only tolerate this when no living process owned by us remains in that group.
         if process.poll() is None:
             raise
-        members = subprocess.check_output(['ps', '-axo', 'uid=,pgid=,stat='], text=True)
-        if any(len(parts := line.split()) >= 3 and int(parts[0]) == os.getuid()
-               and int(parts[1]) == process.pid and not parts[2].startswith('Z')
-               for line in members.splitlines()):
-            raise
+        # A reaped leader can leave a member visible for a brief exit transition.
+        # Permit only bounded quiescence; a live owned member still fails cleanup.
+        for attempt in range(10):
+            members = subprocess.check_output(['ps', '-axo', 'uid=,pgid=,stat='], text=True)
+            if not any(len(parts := line.split()) >= 3 and int(parts[0]) == os.getuid()
+                       and int(parts[1]) == process.pid and not parts[2].startswith('Z')
+                       for line in members.splitlines()):
+                return
+            if attempt < 9:
+                time.sleep(0.05)
+        raise
 
 
-def stop_group(process):
+def stop_group(process, *, graceful_timeout=15):
     # The leader can exit before Chromium/workers, including a worker that ignores TERM.
     # Drain the group even after its leader exited, then kill any remaining owned members.
     signal_owned_group(process, signal.SIGTERM)
     try:
-        process.wait(timeout=15)
+        process.wait(timeout=graceful_timeout)
     except subprocess.TimeoutExpired:
         pass
     finally:
@@ -250,7 +256,10 @@ def host(directory, dll, url, ready_path, log, env):
             yield process
         finally:
             # The group was created here and cannot be confused with an unrelated port listener.
-            stop_group(process)
+            # .NET's normal host shutdown window is 30 seconds. Leave bounded scheduling
+            # room on the shared machine before killing descendants; callers still require
+            # an actual zero exit code, so a forced kill never qualifies a host restart.
+            stop_group(process, graceful_timeout=45)
 
 
 def prepare_host(project, destination):
