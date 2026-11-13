@@ -15,6 +15,7 @@ import { assertToastPlacementHolds, holdToastForPlacement, releaseToastPlacement
 import { structuredLogsJourney } from "./structuredLogsJourney";
 import { chooseDataJourney } from "./chooseDataJourney";
 import { structuredLogsReadabilityJourney } from "./structuredLogsReadabilityJourney";
+import { phoneContentJourney } from "./phoneContentJourney";
 
 async function capture(page: Page, info: TestInfo, name: string) {
   await assertToastPlacementHolds(page);
@@ -65,6 +66,7 @@ test("business decisions authoring and explanations", async ({ page }, info) => 
 test("settings tabs and preserved edits", async ({ page }, info) => settingsTabsJourney(page, info, capture));
 test("structured logs table accessibility", async ({ page }, info) => structuredLogsJourney(page, info, capture));
 test("structured logs readability and recovery", async ({ page }, info) => structuredLogsReadabilityJourney(page, info, capture));
+test("phone authoring and settings content priority", async ({ page }, info) => phoneContentJourney(page, info, capture));
 
 test.afterEach(async ({ page, playwright }, info) => {
   await releaseToastPlacementHolds(page);

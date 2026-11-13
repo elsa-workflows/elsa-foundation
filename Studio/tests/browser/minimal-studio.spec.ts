@@ -51,7 +51,7 @@ for (const item of presets) test(`${item.name} is a complete, persistent preset 
   await page.addScriptTag({ content: axe.source });
   const violations = await page.evaluate(async () => (window as unknown as Window & { axe: typeof axe }).axe.run(document.querySelector(".studio-shell")!, { runOnly: ["color-contrast", "button-name", "label"] }).then(result => result.violations.map(v => ({ id: v.id, nodes: v.nodes.map(n => n.failureSummary) }))));
   expect(violations).toEqual([]);
-  await page.screenshot({ path: testInfo.outputPath(`${item.name.toLowerCase()}-definitions.png`), fullPage: true });
+  await page.screenshot({ path: testInfo.outputPath(`${item.id.replaceAll(":", "-")}-definitions.png`), fullPage: true });
 });
 
 for (const item of presets) test(`${item.name} keeps workflow headings inside their tracks at desktop and narrow widths`, async ({ page }) => {
