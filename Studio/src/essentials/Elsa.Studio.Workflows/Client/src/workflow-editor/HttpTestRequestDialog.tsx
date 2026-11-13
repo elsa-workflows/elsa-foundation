@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AlertCircle, LoaderCircle, Send, X } from "lucide-react";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
-import { StudioButton, StudioResultState } from "@elsa-workflows/studio-ui";
+import { StudioButton, StudioResultState, StudioField } from "@elsa-workflows/studio-ui";
 import { EditableCombobox } from "../EditableCombobox";
 import { HttpRequestHeadersEditor } from "./HttpRequestHeadersEditor";
 import { makeHttpTestRequestHeaders, type HttpTestRequestHeader } from "./httpTestRequestHeaders";
@@ -277,24 +277,21 @@ export function HttpTestRequestDialog({
           {endpoint ? (
             <form onSubmit={event => { event.preventDefault(); void sendRequest(); }}>
               <div className="wf-http-test-request-line">
-                <label className="wf-form-field wf-http-test-method">
-                  <span>Method</span>
-                  <select aria-label="HTTP method" value={method} disabled={isSending} onChange={event => setMethod(event.target.value)}>
+                <StudioField className="wf-form-field wf-http-test-method" label={<><span>Method</span></>}><select aria-label="HTTP method" value={method} disabled={isSending} onChange={event => setMethod(event.target.value)}>
                     {endpoint.supportedMethods.map(supportedMethod => <option key={supportedMethod} value={supportedMethod}>{supportedMethod}</option>)}
-                  </select>
-                </label>
+                  </select></StudioField>
                 <div className="wf-form-field wf-http-test-path">
                   <span>Request path</span>
                   <div className="wf-http-test-path-input">
-                    <input
+                    <StudioField label="Workflow HTTP mount"><input
                       className="wf-http-test-mount"
                       aria-label="Workflow HTTP mount"
                       value={workflowHttpBasePath ?? ""}
                       size={(workflowHttpBasePath?.length ?? 0) + 1}
                       readOnly
                       spellCheck={false}
-                    />
-                    <input
+                    /></StudioField>
+                    <StudioField label="Endpoint path"><input
                       aria-label="Endpoint path"
                       aria-describedby="http-test-path-hint"
                       value={path}
@@ -304,7 +301,7 @@ export function HttpTestRequestDialog({
                       spellCheck={false}
                       onChange={event => setPath(event.target.value)}
                       placeholder="/orders/1"
-                    />
+                    /></StudioField>
                   </div>
                 </div>
                 <StudioButton type="submit" variant="primary" className="wf-http-test-send" disabled={!currentRequestPath || isSending}>

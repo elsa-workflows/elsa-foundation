@@ -1,3 +1,4 @@
+import { StudioField } from "@elsa-workflows/studio-ui";
 import { useMemo, useState, type FormEvent } from "react";
 import type {
   StudioEndpointContext,
@@ -219,12 +220,12 @@ function WaitCard({
       {wait.isAvailable && wait.modes.length === 0 ? <p className="wf-test-drive-error" role="status">No delivery modes are available for this wait.</p> : null}
       {wait.isAvailable && wait.modes.length ? (
         <form onSubmit={event => { void submit(event); }}>
-          {wait.modes.length > 1 ? <label className="wf-form-field"><span>Mode</span><select value={modeId} disabled={disabled || deliveryPending} onChange={event => {
+          {wait.modes.length > 1 ? <StudioField className="wf-form-field" label={<><span>Mode</span></>}><select value={modeId} disabled={disabled || deliveryPending} onChange={event => {
             const nextModeId = event.currentTarget.value;
             setModeId(nextModeId);
             setAttempt(null);
             onDraftStateChange({ modeId: nextModeId, draft });
-          }}>{wait.modes.map(item => <option key={item.modeId} value={item.modeId}>{item.label}</option>)}</select></label> : null}
+          }}>{wait.modes.map(item => <option key={item.modeId} value={item.modeId}>{item.label}</option>)}</select></StudioField> : null}
           {mode?.description ? <p className="wf-test-drive-description">{mode.description}</p> : null}
           {editor && editorContext ? <editor.component
             option={option}
@@ -233,10 +234,7 @@ function WaitCard({
             disabled={disabled || deliveryPending}
             controlProps={controlProps}
             onChange={value => { setDraft(value); setValidationError(""); onDraftStateChange({ modeId, draft: value, ...(attempt ? { attempt } : {}) }); }}
-          /> : mode?.configurationSchema ? <label className="wf-form-field" htmlFor={controlProps.id}>
-            <span>Wait data</span><textarea {...controlProps} rows={5} value={draft} disabled={disabled || deliveryPending} onChange={event => { const value = event.currentTarget.value; setDraft(value); setValidationError(""); onDraftStateChange({ modeId, draft: value, ...(attempt ? { attempt } : {}) }); }} />
-            <small>Enter JSON matching the driver’s declared schema.</small>
-          </label> : <p className="wf-test-drive-error" role="status">No installed module editor is available, and this wait does not declare a JSON Schema.</p>}
+          /> : mode?.configurationSchema ? <StudioField className="wf-form-field" controlId={controlProps.id} label={<><span>Wait data</span></>}><textarea {...controlProps} rows={5} value={draft} disabled={disabled || deliveryPending} onChange={event => { const value = event.currentTarget.value; setDraft(value); setValidationError(""); onDraftStateChange({ modeId, draft: value, ...(attempt ? { attempt } : {}) }); }} /><small>Enter JSON matching the driver’s declared schema.</small></StudioField> : <p className="wf-test-drive-error" role="status">No installed module editor is available, and this wait does not declare a JSON Schema.</p>}
           {validationError ? <p className="wf-test-drive-error" role="alert">{validationError}</p> : null}
           {deliveryError ? <p className="wf-test-drive-error" role="alert">{deliveryError}</p> : null}
           <button type="submit" disabled={!canDeliver || deliveryPending}>{deliveryPending ? "Delivering…" : editor?.actionLabel ?? "Deliver event"}</button>
