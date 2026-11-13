@@ -55,6 +55,8 @@ You created a definition, published an artifact, and executed that artifact. The
 
 > *Good to know:* the [recorded browser verification](https://github.com/elsa-workflows/elsa-foundation/blob/69f067104c1a977d897911db7ecf16037cfbe542/docs/contributing/published-image-pair.md#recorded-image-provenance-and-hosted-result) covers a specific image pair and Linux/amd64 environment. It is automated technical evidence, rather than a human newcomer trial or proof for every later preview.
 
+> **Limitation:** Native publish (including Studio's **Review & publish**) and direct BPMN publish save the compiled material before the publication that retains it is committed. Until that publication exists, the saved material is not guaranteed to be kept. After the artifact-creation grace period (5 minutes by default), garbage collection may remove it. An interrupted publish can be retried. The default Workbench does not run the garbage-collection pump, so the local demo does not exercise this path.
+
 ---
 
 [Edit this page on GitHub](https://github.com/elsa-workflows/elsa-foundation/edit/main/website/docs/essentials/first-workflow.md).
