@@ -32,7 +32,7 @@ internal static class BoundaryCases
 
     private static async Task ImmutableHeader()
     {
-        await using var h = new Harness(new Http(0)); await h.Activate();
+        await using var h = new Harness(new Http(0, (_, _) => throw new InvalidOperationException("C6: unexpected job body"))); await h.Activate();
         await h.Send(Kinds.Start, start: Http.Spec(Http.Wait) with { Creation = new(1, 0, "header") }, creation: 1);
         var original = h.Row;
         Require(original is { Creation: 1, Status: InstanceStatus.Running }, "normal writer did not create qualified header");
@@ -93,7 +93,7 @@ internal static class BoundaryCases
 
     private static async Task Exhaustion()
     {
-        await using var h = new Harness(new Http(0));
+        await using var h = new Harness(new Http(0, (_, _) => throw new InvalidOperationException("C6: unexpected job body")));
         h.Store.Instances[h.Target.Id] = new(h.Target.Id, "", "", InstanceStatus.Finished, "null", 9, null,
             History: History.Minimal, Creation: long.MaxValue, Retired: true); // reader boundary setup, not 2^63 normal starts
         var before = h.Row; await h.Activate();

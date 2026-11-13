@@ -8,7 +8,7 @@ sealed partial class CreationWitness
 {
     internal void VisitIsolation()
     {
-        NativeWorkflows.Registry.Add(Wf.Workflow("creation-probe", Wf.ForEach("each", Wf.Expr("[1,2]"),
+        NativeWorkflows.Registry.Add(Wf.Workflow("creation-probe", Wf.ForEach("each", Binding.Expr("[1,2]"),
             Wf.Node<VisitReceiver>("receiver").With(Wf.Event("step", "step")))));
         var other = InstanceRef.In(0, "other-creation-probe");
         Apply(new("take", Actor.Id));
