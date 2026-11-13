@@ -10712,3 +10712,104 @@ Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionStartCommandPayload.HistoryC
 Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionStartCommandPayload.HistoryCaptureEnabledAtAdmission.get -> bool?
 Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpointCommandPayload.HistoryCaptureEnabledAtAdmission.get -> bool?
 Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpointCommandPayload.HistoryCaptureEnabledAtAdmission.init -> void
+Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFactKind.ActivityContinuationSuspended = 1 -> Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFactKind
+Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFactKind.ActivityContinuationStarted = 0 -> Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFactKind
+Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFactKind.ActivityContinuationCompleted = 2 -> Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFactKind
+Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFactKind.ActivityContinuationCancelled = 4 -> Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFactKind
+Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFactKind.ChildWorkflowDispatchRequested = 5 -> Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFactKind
+Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFactKind.StimulusPublicationCommitted = 7 -> Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFactKind
+Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFactKind.IncidentResolutionApplied = 10 -> Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFactKind
+Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFactKind.ChildWorkflowSettled = 6 -> Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFactKind
+Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFactKind.ChildControlApplied = 9 -> Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFactKind
+Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFactKind.ActivityRetryScheduled = 11 -> Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFactKind
+Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFactKind.ChildControlAccepted = 8 -> Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFactKind
+Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFactKind.RecoveryRequested = 12 -> Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFactKind
+Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFactKind.ControlApplied = 13 -> Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFactKind
+Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFactKind.CompensationStarted = 16 -> Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFactKind
+Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFactKind.CompensationHandlerCompleted = 18 -> Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFactKind
+Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFactKind.CompensationHandlerScheduled = 17 -> Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFactKind
+Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFactKind.CompensationHandlerFaulted = 19 -> Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFactKind
+Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFactKind.ActivityContinuationFaulted = 3 -> Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFactKind
+Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFactKind.AlterationApplied = 14 -> Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFactKind
+Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFactKind.CompensationRegistered = 15 -> Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFactKind
+Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFactKind.CompensationCompleted = 22 -> Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFactKind
+Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFactKind.TimerCancellationRequested = 23 -> Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFactKind
+Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFactKind.CompensationResolved = 21 -> Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFactKind
+Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFactKind.CompensationConfirmed = 20 -> Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFactKind
+Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpointCommit.HistorySourceFacts.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFact!>?
+Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpointCommit.HistorySourceFacts.init -> void
+Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFact
+override Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFact.ToString() -> string!
+static Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFact.operator !=(Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFact? left, Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFact? right) -> bool
+static Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFact.operator ==(Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFact? left, Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFact? right) -> bool
+override Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFact.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFact.Equals(object? obj) -> bool
+Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFact.Equals(Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFact? other) -> bool
+Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFact.<Clone>$() -> Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFact!
+Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFacts
+Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFact.RuntimeHistorySourceFact(Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFactKind kind, string! subjectId, System.DateTimeOffset occurredAt, string? activityExecutionId = null, string? attemptId = null, Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryCausation? causation = null, string? relatedWorkflowExecutionId = null, string? relatedActivityExecutionId = null, string? timerId = null, string? incidentId = null, string? compensationEntryId = null, string? reasonCode = null, System.Collections.Generic.IReadOnlyList<string!>? outcomeNames = null) -> void
+Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFact.Kind.get -> Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFactKind
+Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFact.SubjectId.get -> string!
+Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFact.OccurredAt.get -> System.DateTimeOffset
+Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFact.ActivityExecutionId.get -> string?
+Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFact.Causation.get -> Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryCausation?
+Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFact.AttemptId.get -> string?
+Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFact.RelatedWorkflowExecutionId.get -> string?
+Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFact.CompensationEntryId.get -> string?
+Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFact.TimerId.get -> string?
+Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFact.OutcomeNames.get -> System.Collections.Generic.IReadOnlyList<string!>!
+Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFact.ReasonCode.get -> string?
+Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFact.IncidentId.get -> string?
+static Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFacts.ForPolicy(Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryCapturePolicy? policy, System.Collections.Generic.IEnumerable<Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFact!>! facts) -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFact!>?
+Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFact.RelatedActivityExecutionId.get -> string?
+Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFactKind
+Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFactKind.ActivityContinuationReturned = 24 -> Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFactKind
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeActivityExecutionInspectionAccumulator.BuildProjectionWithSourceAsync(Elsa.Workflows.Runtime.Core.Models.ActivityExecutionState! state, string! checkpointId, System.DateTimeOffset committedAt, System.Func<Elsa.Workflows.Runtime.Core.Models.ActivityValueCaptureOrigin!>! source, System.Collections.Generic.IReadOnlyCollection<string!>? outcomeNames = null, System.Collections.Generic.IReadOnlyCollection<Elsa.Workflows.Runtime.Core.Models.ActivityExecutionBookmarkSummary!>? bookmarks = null, System.Collections.Generic.IReadOnlyCollection<Elsa.Workflows.Runtime.Core.Models.ActivityExecutionIncidentSummary!>? incidents = null, System.Collections.Generic.IReadOnlyCollection<Elsa.Workflows.Runtime.Core.Models.ActivityExecutionInspectionValueSnapshot!>? valueSnapshots = null, System.Collections.Generic.IReadOnlyDictionary<string!, string!>? metadata = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Models.ActivityExecutionInspectionProjection!>
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeActivityExecutionInspectionAccumulator.SupportsCheckpointValueCapture.get -> bool
+Elsa.Workflows.Runtime.Core.Models.ActivityExecutionInspectionProjection.CheckpointValueCapture.get -> Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpointValueCapture?
+Elsa.Workflows.Runtime.Core.Models.ActivityExecutionInspectionProjection.CheckpointValueCapture.init -> void
+Elsa.Workflows.Runtime.Core.Models.ActivityValueCapturePhase
+Elsa.Workflows.Runtime.Core.Models.ActivityValueCapturePhase.Container = 5 -> Elsa.Workflows.Runtime.Core.Models.ActivityValueCapturePhase
+Elsa.Workflows.Runtime.Core.Models.ActivityValueCapturePhase.Invoke = 1 -> Elsa.Workflows.Runtime.Core.Models.ActivityValueCapturePhase
+Elsa.Workflows.Runtime.Core.Models.ActivityValueCapturePhase.Output = 4 -> Elsa.Workflows.Runtime.Core.Models.ActivityValueCapturePhase
+Elsa.Workflows.Runtime.Core.Models.ActivityValueCapturePhase.Resume = 2 -> Elsa.Workflows.Runtime.Core.Models.ActivityValueCapturePhase
+Elsa.Workflows.Runtime.Core.Models.ActivityValueCapturePhase.Structural = 3 -> Elsa.Workflows.Runtime.Core.Models.ActivityValueCapturePhase
+Elsa.Workflows.Runtime.Core.Models.ActivityValueCapturePhase.Unknown = 0 -> Elsa.Workflows.Runtime.Core.Models.ActivityValueCapturePhase
+Elsa.Workflows.Runtime.Core.Models.ActivityValueCaptureOrigin
+Elsa.Workflows.Runtime.Core.Models.ActivityValueCaptureOrigin.<Clone>$() -> Elsa.Workflows.Runtime.Core.Models.ActivityValueCaptureOrigin!
+Elsa.Workflows.Runtime.Core.Models.ActivityValueCaptureOrigin.ActivityValueCaptureOrigin(string! workflowExecutionId, string? schedulerWorkItemId, Elsa.Workflows.Runtime.Core.Models.ActivityValueCapturePhase phase) -> void
+Elsa.Workflows.Runtime.Core.Models.ActivityValueCaptureOrigin.Equals(Elsa.Workflows.Runtime.Core.Models.ActivityValueCaptureOrigin? other) -> bool
+Elsa.Workflows.Runtime.Core.Models.ActivityValueCaptureOrigin.Phase.get -> Elsa.Workflows.Runtime.Core.Models.ActivityValueCapturePhase
+Elsa.Workflows.Runtime.Core.Models.ActivityValueCaptureOrigin.SchedulerWorkItemId.get -> string?
+Elsa.Workflows.Runtime.Core.Models.ActivityValueCaptureOrigin.WorkflowExecutionId.get -> string!
+Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpointValueCapture
+Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpointValueCapture.<Clone>$() -> Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpointValueCapture!
+Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpointValueCapture.CheckpointId.get -> string!
+Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpointValueCapture.Equals(Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpointValueCapture? other) -> bool
+Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpointValueCapture.EvidenceIds.get -> System.Collections.Generic.IReadOnlyList<string!>!
+Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpointValueCapture.RuntimeCheckpointValueCapture(string! checkpointId, string? schedulerWorkItemId, System.Collections.Generic.IReadOnlyList<string!>! evidenceIds) -> void
+Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpointValueCapture.SchedulerWorkItemId.get -> string?
+override Elsa.Workflows.Runtime.Core.Models.ActivityValueCaptureOrigin.Equals(object? obj) -> bool
+override Elsa.Workflows.Runtime.Core.Models.ActivityValueCaptureOrigin.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Core.Models.ActivityValueCaptureOrigin.ToString() -> string!
+override Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpointValueCapture.Equals(object? obj) -> bool
+override Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpointValueCapture.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpointValueCapture.ToString() -> string!
+static Elsa.Workflows.Runtime.Core.Models.ActivityValueCaptureOrigin.FromWorkItem(Elsa.Workflows.Runtime.Core.Models.RuntimeSchedulerWorkItem! workItem) -> Elsa.Workflows.Runtime.Core.Models.ActivityValueCaptureOrigin!
+static Elsa.Workflows.Runtime.Core.Models.ActivityValueCaptureOrigin.operator !=(Elsa.Workflows.Runtime.Core.Models.ActivityValueCaptureOrigin? left, Elsa.Workflows.Runtime.Core.Models.ActivityValueCaptureOrigin? right) -> bool
+static Elsa.Workflows.Runtime.Core.Models.ActivityValueCaptureOrigin.operator ==(Elsa.Workflows.Runtime.Core.Models.ActivityValueCaptureOrigin? left, Elsa.Workflows.Runtime.Core.Models.ActivityValueCaptureOrigin? right) -> bool
+static Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpointValueCapture.operator !=(Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpointValueCapture? left, Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpointValueCapture? right) -> bool
+static Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpointValueCapture.operator ==(Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpointValueCapture? left, Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpointValueCapture? right) -> bool
+static Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFacts.IsFinalProfile(Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryCapturePolicy? policy) -> bool
+Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFactKind.IncidentProjectionReconciled = 28 -> Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFactKind
+Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFactKind.IncidentStrategyEvaluated = 27 -> Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFactKind
+Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFactKind.IncidentSuppressed = 29 -> Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFactKind
+Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFactKind.IncidentCreated = 25 -> Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFactKind
+Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFactKind.IncidentDecisionApplied = 30 -> Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFactKind
+Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFactKind.IncidentResolved = 26 -> Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFactKind
+static Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFacts.EventName(Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFactKind kind) -> string!
+static Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFacts.ForPolicy(Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryCapturePolicy? policy, System.Func<System.Collections.Generic.IEnumerable<Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFact!>!>! facts) -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFact!>?
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeHistorySourceExtension
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeHistorySourceExtension.AddFactsAsync(Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpointCommit! commit, System.Func<Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryCapturePolicy!, System.Collections.Generic.IEnumerable<Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFact!>!>! facts, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpointCommit!>
+Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFactKind.CompensationAbandoned = 31 -> Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFactKind
+Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFactKind.DurableStateRecorded = 32 -> Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFactKind
