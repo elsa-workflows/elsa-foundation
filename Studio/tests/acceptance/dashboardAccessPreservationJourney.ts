@@ -44,6 +44,7 @@ export async function dashboardAccessPreservationJourney(page: Page, info: TestI
     expect(saved.definition).toMatchObject({ query: { limit: 23 } }); question = saved;
     await reader.reload(); await expect(reader.getByLabel("Maximum result rows/groups", { exact: true })).toHaveValue("23");
     await expect(reader.getByRole("button", { name: "Share", exact: true })).toHaveCount(0);
+    await reader.getByLabel("Maximum result rows/groups", { exact: true }).scrollIntoViewIfNeeded();
     await capture(reader, info, "editor-authorized-save-reopened");
     await ui.click(reader.getByRole("button", { name: "Copy saved version", exact: true }));
     const dialog = reader.getByRole("dialog", { name: "Save a private copy", exact: true });
@@ -53,6 +54,8 @@ export async function dashboardAccessPreservationJourney(page: Page, info: TestI
     const copyResponse = await copied; expect(copyResponse.ok()).toBe(true); const copy = await copyResponse.json() as Resource;
     expect(copy.id).not.toBe(question.id); expect(copy.ownerId).toBe("dashboard-qa-reader"); expect(copy.definition).toEqual(question.definition);
     await expect(reader.getByRole("button", { name: "Share", exact: true })).toHaveCount(0);
+    await expect(reader.getByLabel("Maximum result rows/groups", { exact: true })).toHaveValue("23");
+    await reader.getByLabel("Maximum result rows/groups", { exact: true }).scrollIntoViewIfNeeded();
     await capture(reader, info, "editor-private-copy-without-sharing-rights");
     const exchange = await reader.request.get(`${backend.base}/_elsa/identity/token`); expect(exchange.ok()).toBe(true);
     const { accessToken } = await exchange.json() as { accessToken: string };
@@ -69,14 +72,20 @@ export async function dashboardAccessPreservationJourney(page: Page, info: TestI
     const original = await homeResponse.json() as Layout;
     const scope = { "X-Elsa-Studio-Host-Id": homeResponse.request().headers()["x-elsa-studio-host-id"] ?? "default" };
     const widgets = page.locator(".dashboard-grid > .dashboard-widget");
-    await expect(widgets.first()).toBeVisible();
+    async function settledHome() {
+      await expect(widgets.first()).toBeVisible();
+      await expect(page.locator('.dashboard-grid > .dashboard-widget[aria-busy="true"]')).toHaveCount(0, { timeout: 30_000 });
+      await expect(widgets.locator(".dashboard-widget-body").getByText(/^Loading(?:…|\.\.\.)$/)).toHaveCount(0, { timeout: 30_000 });
+      await expect(widgets.locator(".dashboard-widget-body").getByRole("alert")).toHaveCount(0);
+    }
+    await settledHome();
     await expect(page.locator('.dashboard-grid > .dashboard-widget[aria-busy="true"]')).toHaveCount(0, { timeout: 30_000 });
     const knownIds = await widgets.evaluateAll(nodes => nodes.map(node => node.getAttribute("data-widget-id")));
     const missing = { id: `uninstalled.${suffix}`, size: "medium", visible: true, options: { retained: "Absent module settings must survive ordinary Home edits" } };
     try {
       const value = { widgets: [...original.value.widgets, missing] };
       await backend.api("/_elsa/studio/home-layout", "PUT", { schemaVersion: 1, value }, { ...scope, ...(original.source === "user" && original.revision ? tag(original.revision) : { "If-None-Match": "*" }) });
-      await page.reload(); await expect(widgets.first()).toBeVisible();
+      await page.reload(); await settledHome();
       await expect(page.locator(`.dashboard-widget[data-widget-id="${missing.id}"]`)).toHaveCount(0);
       await expect(page.locator('.dashboard-grid > .dashboard-widget[aria-busy="true"]')).toHaveCount(0, { timeout: 30_000 });
       expect(await widgets.evaluateAll(nodes => nodes.map(node => node.getAttribute("data-widget-id")))).toEqual(knownIds);
@@ -88,7 +97,7 @@ export async function dashboardAccessPreservationJourney(page: Page, info: TestI
       await ui.press(move, "Enter"); expect((await pending).ok()).toBe(true);
       const afterEdit = await backend.api<Layout>("/_elsa/studio/home-layout", "GET", undefined, scope);
       expect(afterEdit.value.widgets.find(item => item.id === missing.id)).toEqual(missing);
-      await page.reload(); await expect(widgets.nth(1)).toHaveAttribute("data-widget-id", firstId!);
+      await page.reload(); await expect(widgets.nth(1)).toHaveAttribute("data-widget-id", firstId!); await settledHome();
       const reopened = await backend.api<Layout>("/_elsa/studio/home-layout", "GET", undefined, scope);
       expect(reopened.value.widgets.find(item => item.id === missing.id)).toEqual(missing);
       await capture(page, info, "home-missing-contribution-preserved-after-save-reopen");
