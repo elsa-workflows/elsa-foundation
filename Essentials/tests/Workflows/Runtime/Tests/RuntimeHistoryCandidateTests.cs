@@ -61,6 +61,25 @@ public sealed class RuntimeHistoryCandidateTests
             await Assert.ThrowsAsync<InvalidOperationException>(async () => await fixture.Capture.ValidateFinalAsync(changed));
     }
 
+    [Theory]
+    [InlineData("coverage")]
+    [InlineData("time")]
+    [InlineData("empty-checkpoint")]
+    [InlineData("offset")]
+    public async Task Final_validation_refuses_replaced_batch_headers_even_when_candidate_content_is_unchanged(string changed)
+    {
+        var empty = changed == "empty-checkpoint";
+        using var fixture = await Fixture.Create(Policy("ActivityStarted"));
+        var captured = await fixture.Capture.EnrichAsync(Commit("headers", empty ? "no-transition" : RuntimeCheckpointNames.ActivityStarted,
+            activity: empty ? null : Activity(ActivityExecutionStatus.Running)));
+        var original = Assert.Single(captured.HistoryBatches!);
+        var replacement = new RuntimeHistoryBatch(original.Policy,
+            empty ? "different-checkpoint" : original.LogicalCheckpointId,
+            changed == "time" ? original.OccurredAt.AddMinutes(1) : changed == "offset" ? original.OccurredAt.ToOffset(TimeSpan.FromHours(1)) : original.OccurredAt,
+            changed == "coverage" || original.StartsAtRunStart, original.Candidates) { SourceFingerprint = original.SourceFingerprint };
+        await Assert.ThrowsAsync<InvalidOperationException>(async () => await fixture.Capture.ValidateFinalAsync(captured with { HistoryBatches = [replacement] }));
+    }
+
     [Fact]
     public async Task An_undeclared_kind_or_different_selected_source_bridge_cannot_qualify_capture()
     {
