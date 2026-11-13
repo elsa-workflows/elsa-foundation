@@ -1,6 +1,7 @@
 import type { ActivityNode, VariableDefinition } from "../workflowTypes";
 import { getChildSlots } from "../workflowAdapter";
 import { bpmnStructureKind } from "./bpmnTypes";
+import { serializeBpmnXml } from "./bpmnDocumentXml";
 
 /** Complete-source authoring contract. No persisted flat graph or second diagram store. */
 export const bpmnDocumentSchemaVersion = "2.0.0";
@@ -260,14 +261,19 @@ export function readBpmnDocument(owner: ActivityNode): ParsedBpmnDocument {
     ...(raw.scopeHeaders !== undefined ? { scopeHeaders: headers } : {}) }, document, byId, process };
 }
 
-/** QName references may qualify a local ID with the document's target namespace. */
-export function resolveBpmnDocumentReference(parsed: ParsedBpmnDocument, context: Element, reference: string | null): Element | undefined {
+function localReferenceId(document: XMLDocument, context: Element, reference: string | null): string | undefined {
   if (!reference) return undefined;
   const value = reference.trim();
-  if (!value.includes(":")) return parsed.byId.get(value);
+  if (!value.includes(":")) return value;
   const parts = value.split(":");
-  if (parts.length !== 2 || context.lookupNamespaceURI(parts[0]) !== parsed.document.documentElement.getAttribute("targetNamespace")) return undefined;
-  return parsed.byId.get(parts[1]);
+  const targetNamespace = document.documentElement.getAttribute("targetNamespace");
+  if (!targetNamespace || parts.length !== 2 || !parts[0] || !parts[1] || context.lookupNamespaceURI(parts[0]) !== targetNamespace) return undefined;
+  return parts[1];
+}
+/** QName references may qualify a local ID with the document's target namespace. */
+export function resolveBpmnDocumentReference(parsed: ParsedBpmnDocument, context: Element, reference: string | null): Element | undefined {
+  const id = localReferenceId(parsed.document, context, reference);
+  return id === undefined ? undefined : parsed.byId.get(id);
 }
 
 function resolve(parsed: ParsedBpmnDocument, address: BpmnXmlAddress): Element {
@@ -338,7 +344,7 @@ function rejectOpaqueQNameResolution(target: Element, prefix: string) {
     if (values.some(value => value.includes(`${prefix}:`))) fail("namespace declaration would resolve retained opaque QName content");
   }
 }
-function preserveNamespaceContext(element: Element, destination: Element) {
+function preserveNamespaceContext(element: Element, destination: Element, preserveInheritedXml = true) {
   // Destination-only prefixes cannot be undeclared in XML 1.0. Refuse a move that would give
   // retained opaque content a new meaning, just as explicit namespace introduction does.
   const destinationPrefixes = new Set<string>();
@@ -350,7 +356,7 @@ function preserveNamespaceContext(element: Element, destination: Element) {
   }
   for (const prefix of destinationPrefixes)
     if (destination.lookupNamespaceURI(prefix) && !element.lookupNamespaceURI(prefix)) rejectOpaqueQNameResolution(element, prefix);
-  preserveXmlContext(element, destination);
+  if (preserveInheritedXml) preserveXmlContext(element, destination);
   const declarations = new Map<string, string>();
   for (let current: Element | null = element; current; current = current.parentElement) {
     for (const attribute of [...current.attributes]) {
@@ -446,8 +452,10 @@ function standardReferenceAttribute(element: Element, attribute: Attr) {
 function rejectRemovedReferences(previousIds: ReadonlyMap<string, Element>, nextIds: ReadonlyMap<string, Element>, document: XMLDocument) {
   const removed = new Set([...previousIds.keys()].filter(id => !nextIds.has(id)));
   if (!removed.size) return;
-  const removedReference = (element: Element, value: string) => removed.has(value)
-    || value.includes(":") && element.lookupNamespaceURI(value.split(":")[0]) === document.documentElement.getAttribute("targetNamespace") && removed.has(value.split(":")[1]);
+  const removedReference = (element: Element, value: string) => {
+    const id = localReferenceId(document, element, value);
+    return id !== undefined && removed.has(id);
+  };
   for (const element of [...document.getElementsByTagName("*")]) {
     if (!standardReferenceContext(element)) continue;
     for (const attribute of [...element.attributes]) {
@@ -511,6 +519,8 @@ function applyCommand(parsed: ParsedBpmnDocument, command: BpmnDocumentCommand) 
       const fragment = parseXml(command.xml).documentElement;
       const before = command.kind === "insert" && command.before ? resolve(parsed, command.before) : null;
       if (before && before.parentElement !== target) fail("insertion anchor must be a direct child of its parent");
+      // Imported fragments retain their namespace context, while new content inherits XML base/lang.
+      preserveNamespaceContext(fragment, target, false);
       target.insertBefore(parsed.document.importNode(fragment, true), before);
       return;
     }
@@ -680,14 +690,14 @@ export function applyBpmnDocumentTransaction(owner: ActivityNode, transaction: B
   // intermediate arrays are not projected or persisted; only the final source is admitted below.
   parsed = { ...parsed, payload: { ...parsed.payload, ...configuration } };
   const originalIds = parsed.byId;
-  const before = new XMLSerializer().serializeToString(parsed.document);
+  const before = serializeBpmnXml(parsed.document);
   for (const command of commands) {
     applyCommand(parsed, command);
     // Refresh identity lookups between operations, catching collisions before committing anything.
     parsed = { ...parsed, byId: indexDocument(parsed.document) };
   }
   rejectRemovedReferences(originalIds, parsed.byId, parsed.document);
-  const documentXml = new XMLSerializer().serializeToString(parsed.document);
+  const documentXml = serializeBpmnXml(parsed.document);
   if (documentXml === before && !configurationChanged) return owner;
   const next = { ...owner, structure: { ...owner.structure!, payload: { ...owner.structure!.payload, ...configuration,
     documentXml: documentXml === before ? parsed.payload.documentXml : documentXml } } };
