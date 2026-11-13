@@ -167,9 +167,12 @@ int NativeMutations(int seeds)
             });
             if (!found.IsEmpty) caught = found.MinBy(f => f.Seed);
         }
-        if (caught is null) missed++;
+        // The graph engine's flaws must be caught by the check each is for (NATIVE.md section 6), not by another first.
+        var expected = NativeSwitch.ExpectedCheck.GetValueOrDefault(mutation);
+        var wrong = caught is { } w && expected is not null && !w.Violation.StartsWith(expected + " ", StringComparison.Ordinal);
+        if (caught is null || wrong) missed++;
         Console.WriteLine(caught is { } c
-            ? $"{mutation}: CAUGHT at seed {c.Seed} after {acts} actions, {clock.ElapsedMilliseconds} ms: {c.Violation}"
+            ? $"{mutation}: CAUGHT at seed {c.Seed} after {acts} actions, {clock.ElapsedMilliseconds} ms: {c.Violation}{(wrong ? $" -- BY THE WRONG CHECK, expected {expected}" : "")}"
             : $"{mutation}: NOT CAUGHT in {seeds} seeds ({acts} actions, {clock.ElapsedMilliseconds} ms)");
     }
     return missed;
