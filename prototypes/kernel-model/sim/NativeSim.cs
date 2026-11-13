@@ -24,7 +24,7 @@ public sealed class NativeOracle
     public readonly Dictionary<string, int> Effects = new(StringComparer.Ordinal);                   // instance|frame -> side effects run
     // The graph checks (G1-G5): what the graph engine's journal entries said, and the instance revisions already read.
     public readonly HashSet<string> Fired = new(StringComparer.Ordinal);                             // instance|frame|node|round
-    public readonly Dictionary<string, List<string>> CancelledNodes = new(StringComparer.Ordinal);   // instance|frame -> nodes of cancelled paths
+    public readonly Dictionary<string, List<string>> CancelledNodes = new(StringComparer.Ordinal);   // instance|frame|round -> nodes of cancelled paths
     public readonly Dictionary<string, long> GraphRevisions = new(StringComparer.Ordinal);
 
     public NativeOracle(int partitions) => Read = new long[partitions];
@@ -144,7 +144,7 @@ public sealed partial class World
         switch (kind)
         {
             case "x":
-                Oracle.List(Native.CancelledNodes, key).Add(p[4]);
+                Oracle.List(Native.CancelledNodes, key + "|" + p[5]).Add(p[4]);
                 break;
             case "f":
             {
@@ -159,7 +159,7 @@ public sealed partial class World
                 // A first-wins race cancels its losers, so the join behind them is owed an arrival nobody will make; the
                 // engine releases it when the graph goes quiet. That is the one way an inbound may go unanswered: from a
                 // cancelled node, or from a node only a cancelled branch leads to.
-                var cut = CutOff(flow, Native.CancelledNodes.GetValueOrDefault(key) ?? []);
+                var cut = CutOff(flow, Native.CancelledNodes.GetValueOrDefault(key + "|" + round) ?? []);
                 var missing = inbound.Except(live).Except(dead).Where(m => !cut.Contains(m)).ToList();
                 if (missing.Count > 0) Faults.Add($"G3 {instance}: the join {node} of {flowId} fired in round {round} before {string.Join(", ", missing)} arrived, live or dead");
                 break;
@@ -209,6 +209,12 @@ public sealed partial class World
                 var runningPaths = running.Select(r => Flowchart.PathOf(r.Tag)).ToHashSet(StringComparer.Ordinal);
                 var live = graph.ExecutionPaths.Where(p => p.Status is ExecutionPathStatus.Active or ExecutionPathStatus.Waiting).ToList();
                 if (live.Count == 0 && running.Count == 0) Faults.Add($"G4 {row.Id}: the graph {frame.Node} has no live path and has not completed");
+                // A live path is a token on its way: its node runs, or it waits at a join that something running can
+                // still release. Nothing running and a live path left is a token lost (the mix parks no path by policy).
+                if (live.Count > 0 && running.Count == 0) Faults.Add($"G1 {row.Id}: the graph {frame.Node} has live paths ({string.Join(", ", live.Select(p => p.ExecutionPathId + " at " + p.CurrentNodeId))}) and nothing runs");
+                var withChild = graph.ActiveChildren.Select(c => c.ExecutionPathId).ToHashSet(StringComparer.Ordinal);
+                foreach (var path in live.Where(p => p.Status == ExecutionPathStatus.Active && !withChild.Contains(p.ExecutionPathId)))
+                    Faults.Add($"G1 {row.Id}: path {path.ExecutionPathId} of {frame.Node} is active at {path.CurrentNodeId} and has no child");
                 foreach (var child in graph.ActiveChildren.Where(c => !runningPaths.Contains(c.ExecutionPathId)))
                     Faults.Add($"G1 {row.Id}: path {child.ExecutionPathId} of {frame.Node} waits for node {child.NodeId}, which does not run");
                 var over = graph.Scopes.Where(s => s.Kind == ExecutionScopeKind.Race && s.Status != ExecutionScopeStatus.Active).Select(s => s.ExecutionScopeId).ToHashSet(StringComparer.Ordinal);
@@ -300,6 +306,12 @@ public static class NativeSwitch
 {
     public static bool On;
     public static NativeFlaw Flaws;
+
+    /// <summary>The check each of the graph engine's flaws is for; the mutation check fails if another catches it first.</summary>
+    public static readonly Dictionary<NativeFlaw, string> ExpectedCheck = new()
+    {
+        [NativeFlaw.NoDeadPaths] = "G3", [NativeFlaw.NoRoundReset] = "G2", [NativeFlaw.DeadPathRunsNode] = "G1", [NativeFlaw.CancelLeavesPaths] = "G5",
+    };
 }
 
 /// <summary>The same workflow and input, run alone on one worker with no faults: what a faulty run must end with.</summary>
