@@ -85,10 +85,11 @@ internal sealed class PartitionKeeper(OrleansActorRuntime runtime, IGrainFactory
         var options = runtime.Options;
         while (!stoppingToken.IsCancellationRequested && !runtime.Stopping.IsCancellationRequested)
         {
+            // Each call is capped at a round, so a grain that cannot answer (a silo on its way out) holds up no other.
             var calls = Enumerable.Range(0, options.Partitions).Select(async p =>
             {
-                try { await grains.GetGrain<IPartitionGrain>(p).EnsureAsync(); }
-                catch (Exception) { /* a silo on its way out: the next round calls again */ }
+                try { await grains.GetGrain<IPartitionGrain>(p).EnsureAsync().WaitAsync(options.KeepEvery, stoppingToken); }
+                catch (Exception) { /* the next round calls again */ }
             });
             await Task.WhenAll(calls);
             try { await Task.Delay(options.KeepEvery, stoppingToken); }
