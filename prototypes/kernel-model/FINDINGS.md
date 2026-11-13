@@ -1028,7 +1028,9 @@ Running: `--flaw JobPoisonAsError` is caught at seed 2, `I14 1/f2 ended as Runni
 | `$SIM --native-mutations --seeds 20000` | 5 of 5 | the same |
 | `$NAT smoke` | 31 of 31 | 31 of 31 |
 
-No schedule moved (every first failing seed is the same). The two fewer innocent instances in the native runs follow
-from the oracle's change, reasoned, not traced per instance: a fragile instance that started a killing job is no
-longer counted as innocent when it is parked. Not run: the stores (no store
+Every first failing seed is the same. The two fewer innocent instances in the native runs are the oracle's change,
+traced: a run of the same 20,000 seeds with a probe that prints each parked instance that is fragile only through
+`dierun` found 6,116, of which 6,114 were parked by their own job's ticket and two by a message (`0/f2` by `x15`, `0/f1`
+by `x8`, each "on trial when 3 owners were lost"). The old oracle counted those two as innocent; 15 - 2 = 13. The
+non-native runs have no such case (12 before and after). Not run: the stores (no store
 or commit code changed).
