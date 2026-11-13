@@ -159,6 +159,13 @@ public sealed class EfRuntimeCheckpointCommitStore(
     {
         ArgumentNullException.ThrowIfNull(commit);
         try { return await CommitCoreAsync(commit, decision, cancellationToken); }
+        catch (Exception exception) when (IsHistoryHeadConflict(exception))
+        {
+            // The attempt has rolled back and reconciled its immutable marker. Only allocation
+            // contention leaves as retryable history unavailability; no fence or integrity failure
+            // is swallowed and no unbounded automatic replay is introduced here.
+            throw new RuntimeHistoryUnavailableException(commit.WorkflowExecutionId, "allocating atomic checkpoint history", exception);
+        }
         catch (Exception exception) when ((commit.ExpectedModelExecution is not null || commit.ExpectedModelParentWait is not null) &&
             (exception is IOException or DbUpdateConcurrencyException or
                 WorkflowExecutableRootWriteLeaseLostException or WorkflowExecutableRootWriteLeaseUnavailableException ||
@@ -186,6 +193,13 @@ public sealed class EfRuntimeCheckpointCommitStore(
             throw new RuntimeSchedulerWorkUnavailableException("runtime.model.checkpoint-unavailable",
                 $"Model checkpoint '{commit.CommitId}' for execution '{commit.WorkflowExecutionId}', input '{commit.ModelState.Input.InputId}' " +
                 $"in scope '{commit.ModelState.State.Scope.Value}' is unavailable.", exception);
+        }
+        catch (Exception exception) when (commit.HistoryBatches is { Count: > 0 } &&
+            EfRuntimeHistoryCheckpoint.IsProviderUnavailable(exception, cancellationToken))
+        {
+            // Legacy native failures and the preceding exact-admission/model domain cases keep
+            // their existing boundary. Captured plain writes retain their history run/operation/cause.
+            throw new RuntimeHistoryUnavailableException(commit.WorkflowExecutionId, "committing atomic checkpoint history", exception);
         }
     }
 
@@ -330,7 +344,7 @@ public sealed class EfRuntimeCheckpointCommitStore(
             EfRuntimeAlterationCheckpointParticipationGate.MarkDurable(context, commit, scope);
             return immediate;
         }
-        catch when (!readsMarkerFirst && !markerAbsentAfterFailure && !transactionCommitRequested &&
+        catch (Exception original) when (!readsMarkerFirst && !markerAbsentAfterFailure && !transactionCommitRequested &&
             !cancellationToken.IsCancellationRequested)
         {
             // A failure is about to leave a commit that did not read its marker first, and no marker read that
@@ -348,7 +362,15 @@ public sealed class EfRuntimeCheckpointCommitStore(
             // attempt had asked its transaction to commit: its marker insert had succeeded, so no marker was durable
             // before it and there is no replay to answer. The caller has cancelled: then whatever failure was raised
             // leaves as it is.
-            if (await FindMarkerAsync(scope, commit.CommitId, cancellationToken) is not { } durable)
+            RuntimeCheckpointCommitEntity? durable;
+            try { durable = await FindMarkerAsync(scope, commit.CommitId, cancellationToken); }
+            catch (Exception lookupFailure) when ((commit.HistoryBatches is { Count: > 0 } || original is RuntimeHistoryUnavailableException) &&
+                EfRuntimeHistoryCheckpoint.IsProviderUnavailable(lookupFailure, cancellationToken))
+            {
+                throw new RuntimeHistoryUnavailableException(commit.WorkflowExecutionId, "reconciling atomic checkpoint history",
+                    new AggregateException(original, lookupFailure));
+            }
+            if (durable is null)
                 throw;
             return ReplayOf(durable);
         }
@@ -476,6 +498,13 @@ public sealed class EfRuntimeCheckpointCommitStore(
                             writeCancellationToken);
                     }
                 }
+
+                // Check every new physical checkpoint, including an absent contribution: a retained
+                // Required admission remains owed after capture-module removal. Native admission
+                // policy is read before the incoming workflow state can overwrite it. All reservations,
+                // journal/projection rows and sibling effects remain below this same fence/marker.
+                await EfRuntimeHistoryCheckpoint.StageAsync(context, accessContextAccessor, commit, scope,
+                    _timeProvider.GetUtcNow(), RuntimeHistoryEfModule.Chain, writeCancellationToken);
 
                 await StageExactBookmarkResumeAsync(commit, scope, touchedTestScopes, writeCancellationToken);
                 await StageModelParentWaitAsync(commit, scope, touchedTestScopes, writeCancellationToken);
@@ -685,6 +714,12 @@ public sealed class EfRuntimeCheckpointCommitStore(
                 throw new RuntimeSchedulerWorkUnavailableException("runtime.bookmark.admission-unavailable",
                     "Exact bookmark admission could not reconcile its durable checkpoint.", new AggregateException(original, lookupFailure));
             }
+            catch (Exception lookupFailure) when ((commit.HistoryBatches is { Count: > 0 } || original is RuntimeHistoryUnavailableException) &&
+                EfRuntimeHistoryCheckpoint.IsProviderUnavailable(lookupFailure, token))
+            {
+                throw new RuntimeHistoryUnavailableException(commit.WorkflowExecutionId, "reconciling atomic checkpoint history",
+                    new AggregateException(original, lookupFailure));
+            }
 
             markerAbsentAfterFailure = found is null;
             return found;
@@ -738,6 +773,10 @@ public sealed class EfRuntimeCheckpointCommitStore(
             change.State.Status is RuntimePostCommitOutboxStatus.Pending or RuntimePostCommitOutboxStatus.Delivering or RuntimePostCommitOutboxStatus.FailedRetryable))
             throw new NotSupportedException("Native model work cannot become terminal without its atomic result-delivery responsibility.");
     }
+
+    private static bool IsHistoryHeadConflict(Exception exception) => exception is EfRuntimeHistoryCheckpoint.HeadAllocationConflictException ||
+        exception is DbUpdateException update && update.Entries.Count > 0 && update.Entries.All(entry => entry.Entity is RuntimeHistoryHeadEntity) &&
+        EfRelationalExceptionClassifier.IsSaveConflict(exception, EfWriteConflict.UniqueKey);
 
     private static void ValidateThinSlice(RuntimeCheckpointCommit commit)
     {

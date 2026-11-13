@@ -53,111 +53,130 @@ internal static class EfRuntimeHistoryCheckpoint
             incoming is not null && (native.HistoryCaptureEnabledAtAdmission != incoming.HistoryCaptureEnabledAtAdmission ||
                 !(policy?.IsEquivalentTo(incoming.HistoryCapturePolicy) ?? incoming.HistoryCapturePolicy is null))))
             throw new InvalidOperationException("History must retain the native execution's admitted policy, including legacy absence.");
-        var mapping = new Mapping(chain);
-        var headId = Mapping.Id("head", scope, run);
-        var headRow = await context.Set<RuntimeHistoryHeadEntity>().SingleOrDefaultAsync(row => row.Id == headId, cancellationToken);
-        var head = headRow is null ? null : mapping.Read(headRow, scope, run);
         EnsureAccess();
-        if (head is not null && !head.Policy.IsEquivalentTo(policy))
-            throw new RuntimeHistoryIntegrityException(run, "the retained head disagrees with the native admission policy");
-        if (batches is not { Count: > 0 })
-        {
-            if (policy?.Required == true)
-                throw new RuntimeSchedulerWorkUnavailableException("runtime.history.capture-unavailable", "The pinned required history contribution remains owed.");
-            if (policy is null) return [];
-            await EfExecutionLivenessStateStore.EnsureWorkflowExecutionNotDeletedAsync(context, scope, run, cancellationToken);
-            var gap = head is null ? new RuntimeHistoryHead(run, 0, 0, commit.CommitId, recordedAt, policy, false, true, 0)
-                : head with { HasGaps = true, LastPhysicalCommitId = commit.CommitId, LastCommittedAt = recordedAt };
-            EnsureAccess();
-            await ReserveHeadAsync(context, mapping, chain, scope, run, headRow, gap, cancellationToken);
-            EnsureAccess(); return [];
-        }
+        // Native admission is the authority. A confirmed uncaptured run must not depend on
+        // history storage/readability, and a batch cannot retrofit that admission choice.
         if (policy is null)
-            throw new InvalidOperationException("History cannot be enabled retroactively without a pinned native admission policy.");
-        await EfExecutionLivenessStateStore.EnsureWorkflowExecutionNotDeletedAsync(context, scope, run, cancellationToken);
-        var ordered = new List<(RuntimeHistoryCandidate Candidate, string Fingerprint)>();
-        var seen = new Dictionary<string, string>(StringComparer.Ordinal);
-        foreach (var batch in batches)
         {
-            RuntimeHistorySafety.Validate(batch, run);
-            if (!policy.IsEquivalentTo(batch.Policy)) throw new InvalidOperationException("History groups disagree with the native pinned policy.");
-            foreach (var candidate in batch.Candidates)
+            if (batches is { Count: > 0 })
+                throw new InvalidOperationException("History cannot be enabled retroactively without a pinned native admission policy.");
+            return [];
+        }
+        try
+        {
+            var mapping = new Mapping(chain);
+            var headId = Mapping.Id("head", scope, run);
+            var headRow = await context.Set<RuntimeHistoryHeadEntity>().SingleOrDefaultAsync(row => row.Id == headId, cancellationToken);
+            var head = headRow is null ? null : mapping.Read(headRow, scope, run);
+            EnsureAccess();
+            if (head is not null && !head.Policy.IsEquivalentTo(policy))
+                throw new RuntimeHistoryIntegrityException(run, "the retained head disagrees with the native admission policy");
+            if (batches is not { Count: > 0 })
             {
-                var fingerprint = RuntimeHistoryIdentity.Compute(candidate);
-                if (seen.TryGetValue(candidate.Event.HistoryEventId, out var prior))
+                if (policy?.Required == true)
+                    throw new RuntimeSchedulerWorkUnavailableException("runtime.history.capture-unavailable", "The pinned required history contribution remains owed.");
+                await EfExecutionLivenessStateStore.EnsureWorkflowExecutionNotDeletedAsync(context, scope, run, cancellationToken);
+                var gap = head is null ? new RuntimeHistoryHead(run, 0, 0, commit.CommitId, recordedAt, policy, false, true, 0)
+                    : head with { HasGaps = true, LastPhysicalCommitId = commit.CommitId, LastCommittedAt = recordedAt };
+                EnsureAccess();
+                await ReserveHeadAsync(context, mapping, chain, scope, run, headRow, gap, cancellationToken);
+                EnsureAccess(); return [];
+            }
+            await EfExecutionLivenessStateStore.EnsureWorkflowExecutionNotDeletedAsync(context, scope, run, cancellationToken);
+            var ordered = new List<(RuntimeHistoryCandidate Candidate, string Fingerprint)>();
+            var seen = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (var batch in batches)
+            {
+                RuntimeHistorySafety.Validate(batch, run);
+                if (!policy.IsEquivalentTo(batch.Policy)) throw new InvalidOperationException("History groups disagree with the native pinned policy.");
+                foreach (var candidate in batch.Candidates)
                 {
-                    if (prior != fingerprint) throw new InvalidOperationException("Conflicting history identities cannot be folded.");
-                    continue;
+                    var fingerprint = RuntimeHistoryIdentity.Compute(candidate);
+                    if (seen.TryGetValue(candidate.Event.HistoryEventId, out var prior))
+                    {
+                        if (prior != fingerprint) throw new InvalidOperationException("Conflicting history identities cannot be folded.");
+                        continue;
+                    }
+                    seen.Add(candidate.Event.HistoryEventId, fingerprint); ordered.Add((candidate, fingerprint));
                 }
-                seen.Add(candidate.Event.HistoryEventId, fingerprint); ordered.Add((candidate, fingerprint));
             }
-        }
-        var retained = new Dictionary<string, RuntimeHistoryEventEntity>(StringComparer.Ordinal);
-        foreach (var chunk in seen.Keys.Select(id => Mapping.Id("event", scope, run, id)).Chunk(128))
-        foreach (var row in await context.Set<RuntimeHistoryEventEntity>().AsNoTracking().Where(row => chunk.Contains(row.Id)).ToArrayAsync(cancellationToken))
-        {
-            var receipt = mapping.ReadReceipt(row, scope, run, head);
-            if (!receipt.IsPurged) _ = mapping.Read(row, scope, run, head);
-            if (receipt.CandidateFingerprint != seen.GetValueOrDefault(receipt.HistoryEventId))
-                throw new InvalidOperationException("A retained history identity has conflicting content.");
-            retained.Add(receipt.HistoryEventId, row);
-        }
-        await ValidateCleanupSourcesAsync(context, commit, scope, ordered.Select(entry => entry.Candidate).ToArray(), retained, cancellationToken);
-        var bookmarkRows = new Dictionary<string, RuntimeHistoryBookmarkEntity>(StringComparer.Ordinal);
-        foreach (var chunk in ordered.Where(entry => entry.Candidate.BookmarkMutation is not null)
-            .Select(entry => Mapping.Id("bookmark", scope, run, entry.Candidate.BookmarkMutation!.Bookmark.Identity.BookmarkId)).Distinct(StringComparer.Ordinal).Chunk(128))
-        foreach (var row in await context.Set<RuntimeHistoryBookmarkEntity>().Where(row => chunk.Contains(row.Id)).ToArrayAsync(cancellationToken))
-        {
-            var bookmark = mapping.Read(row, scope, run, head);
-            bookmarkRows.Add(bookmark.Bookmark.Identity.BookmarkId, row);
-        }
-        var sequence = head?.LastSequence ?? 0;
-        var newCount = ordered.Count(entry => !retained.ContainsKey(entry.Candidate.Event.HistoryEventId));
-        var next = new RuntimeHistoryHead(run, head is { FirstSequence: > 0 } ? head.FirstSequence : newCount == 0 ? 0 : checked(sequence + 1),
-            checked(sequence + newCount), commit.CommitId, recordedAt, policy, head?.CapturedFromStart ?? batches.Any(batch => batch.StartsAtRunStart),
-            head?.HasGaps ?? false, head?.PurgedThroughSequence ?? 0);
-        EnsureAccess();
-        await ReserveHeadAsync(context, mapping, chain, scope, run, headRow, next, cancellationToken);
-        var events = new List<RuntimeHistoryEvent>(newCount);
-        var deltas = new Dictionary<string, (string? Activity, long Total, long Active)>(StringComparer.Ordinal);
-        foreach (var entry in ordered)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            if (retained.ContainsKey(entry.Candidate.Event.HistoryEventId)) continue;
-            var stored = RuntimeHistoryIdentity.Position(entry.Candidate.Event, checked(++sequence), commit.CommitId, recordedAt, entry.Candidate.CheckpointOrdinal);
-            context.Set<RuntimeHistoryEventEntity>().Add(mapping.Row(scope, stored, entry.Fingerprint)); events.Add(stored);
-            if (entry.Candidate.BookmarkMutation is not { } mutation) continue;
-            var bookmarkId = mutation.Bookmark.Identity.BookmarkId;
-            bookmarkRows.TryGetValue(bookmarkId, out var row);
-            // A projection updated earlier in this same group is already beyond the original head.
-            var previous = row is null ? null : mapping.Read(row, scope, run, next);
-            if (previous is not null && !SameSummary(previous.Bookmark, mutation.Bookmark))
-                throw new InvalidOperationException("A history bookmark cannot change its immutable owner or definition.");
-            var active = mutation.Status == RuntimeHistoryBookmarkStatus.Active;
-            if (active && previous is { Status: not RuntimeHistoryBookmarkStatus.Active })
-                throw new InvalidOperationException("A disposed bookmark needs a new handle before it can wait again.");
-            var item = new RuntimeHistoryBookmark(mutation.Bookmark, stored.ExecutableNodeId ?? previous?.ExecutableNodeId, mutation.Status,
-                previous?.CreatedHistoryEventId ?? (active ? stored.HistoryEventId : null), active ? null : stored.HistoryEventId,
-                stored.HistoryEventId, stored.Sequence, previous?.FirstRecordedSequence ?? stored.Sequence,
-                active || stored.OccurredAtKnown == false ? null : stored.OccurredAt, mutation.Reason, mutation.SelectedBookmarkId,
-                previous?.PriorState == RuntimeHistoryCreationEvidence.CreationEvent || active ? RuntimeHistoryCreationEvidence.CreationEvent : RuntimeHistoryCreationEvidence.CreationMetadata)
-                { SupersededByActivityExecutionId = mutation.RelatedActivityExecutionId ?? previous?.SupersededByActivityExecutionId };
-            var mapped = mapping.Row(scope, item);
-            if (row is null) { row = mapped; bookmarkRows.Add(bookmarkId, row); context.Set<RuntimeHistoryBookmarkEntity>().Add(row); }
-            else { row.Status = mapped.Status; row.ContentJson = mapped.ContentJson; row.SchemaVersion = chain.CurrentVersion; row.Revision = checked(row.Revision + 1); }
-            foreach (var activity in new[] { null, item.Bookmark.Identity.ActivityExecutionId })
+            var retained = new Dictionary<string, RuntimeHistoryEventEntity>(StringComparer.Ordinal);
+            foreach (var chunk in seen.Keys.Select(id => Mapping.Id("event", scope, run, id)).Chunk(128))
+            foreach (var row in await context.Set<RuntimeHistoryEventEntity>().AsNoTracking().Where(row => chunk.Contains(row.Id)).ToArrayAsync(cancellationToken))
             {
-                var subject = Mapping.CountSubject(activity); deltas.TryGetValue(subject, out var delta);
-                deltas[subject] = (activity, checked(delta.Total + (previous is null ? 1 : 0)),
-                    checked(delta.Active + (active ? 1 : 0) - (previous?.Status == RuntimeHistoryBookmarkStatus.Active ? 1 : 0)));
+                var receipt = mapping.ReadReceipt(row, scope, run, head);
+                if (!receipt.IsPurged) _ = mapping.Read(row, scope, run, head);
+                if (receipt.CandidateFingerprint != seen.GetValueOrDefault(receipt.HistoryEventId))
+                    throw new InvalidOperationException("A retained history identity has conflicting content.");
+                retained.Add(receipt.HistoryEventId, row);
             }
+            await ValidateCleanupSourcesAsync(context, commit, scope, ordered.Select(entry => entry.Candidate).ToArray(), retained, cancellationToken);
+            var bookmarkRows = new Dictionary<string, RuntimeHistoryBookmarkEntity>(StringComparer.Ordinal);
+            foreach (var chunk in ordered.Where(entry => entry.Candidate.BookmarkMutation is not null)
+                .Select(entry => Mapping.Id("bookmark", scope, run, entry.Candidate.BookmarkMutation!.Bookmark.Identity.BookmarkId)).Distinct(StringComparer.Ordinal).Chunk(128))
+            foreach (var row in await context.Set<RuntimeHistoryBookmarkEntity>().Where(row => chunk.Contains(row.Id)).ToArrayAsync(cancellationToken))
+            {
+                var bookmark = mapping.Read(row, scope, run, head);
+                bookmarkRows.Add(bookmark.Bookmark.Identity.BookmarkId, row);
+            }
+            var sequence = head?.LastSequence ?? 0;
+            var newCount = ordered.Count(entry => !retained.ContainsKey(entry.Candidate.Event.HistoryEventId));
+            var next = new RuntimeHistoryHead(run, head is { FirstSequence: > 0 } ? head.FirstSequence : newCount == 0 ? 0 : checked(sequence + 1),
+                checked(sequence + newCount), commit.CommitId, recordedAt, policy, head?.CapturedFromStart ?? batches.Any(batch => batch.StartsAtRunStart),
+                head?.HasGaps ?? false, head?.PurgedThroughSequence ?? 0);
+            EnsureAccess();
+            await ReserveHeadAsync(context, mapping, chain, scope, run, headRow, next, cancellationToken);
+            var events = new List<RuntimeHistoryEvent>(newCount);
+            var deltas = new Dictionary<string, (string? Activity, long Total, long Active)>(StringComparer.Ordinal);
+            foreach (var entry in ordered)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                if (retained.ContainsKey(entry.Candidate.Event.HistoryEventId)) continue;
+                var stored = RuntimeHistoryIdentity.Position(entry.Candidate.Event, checked(++sequence), commit.CommitId, recordedAt, entry.Candidate.CheckpointOrdinal);
+                context.Set<RuntimeHistoryEventEntity>().Add(mapping.Row(scope, stored, entry.Fingerprint)); events.Add(stored);
+                if (entry.Candidate.BookmarkMutation is not { } mutation) continue;
+                var bookmarkId = mutation.Bookmark.Identity.BookmarkId;
+                bookmarkRows.TryGetValue(bookmarkId, out var row);
+                // A projection updated earlier in this same group is already beyond the original head.
+                var previous = row is null ? null : mapping.Read(row, scope, run, next);
+                if (previous is not null && !SameSummary(previous.Bookmark, mutation.Bookmark))
+                    throw new InvalidOperationException("A history bookmark cannot change its immutable owner or definition.");
+                var active = mutation.Status == RuntimeHistoryBookmarkStatus.Active;
+                if (active && previous is { Status: not RuntimeHistoryBookmarkStatus.Active })
+                    throw new InvalidOperationException("A disposed bookmark needs a new handle before it can wait again.");
+                var item = new RuntimeHistoryBookmark(mutation.Bookmark, stored.ExecutableNodeId ?? previous?.ExecutableNodeId, mutation.Status,
+                    previous?.CreatedHistoryEventId ?? (active ? stored.HistoryEventId : null), active ? null : stored.HistoryEventId,
+                    stored.HistoryEventId, stored.Sequence, previous?.FirstRecordedSequence ?? stored.Sequence,
+                    active || stored.OccurredAtKnown == false ? null : stored.OccurredAt, mutation.Reason, mutation.SelectedBookmarkId,
+                    previous?.PriorState == RuntimeHistoryCreationEvidence.CreationEvent || active ? RuntimeHistoryCreationEvidence.CreationEvent : RuntimeHistoryCreationEvidence.CreationMetadata)
+                    { SupersededByActivityExecutionId = mutation.RelatedActivityExecutionId ?? previous?.SupersededByActivityExecutionId };
+                var mapped = mapping.Row(scope, item);
+                if (row is null) { row = mapped; bookmarkRows.Add(bookmarkId, row); context.Set<RuntimeHistoryBookmarkEntity>().Add(row); }
+                else { row.Status = mapped.Status; row.ContentJson = mapped.ContentJson; row.SchemaVersion = chain.CurrentVersion; row.Revision = checked(row.Revision + 1); }
+                foreach (var activity in new[] { null, item.Bookmark.Identity.ActivityExecutionId })
+                {
+                    var subject = Mapping.CountSubject(activity); deltas.TryGetValue(subject, out var delta);
+                    deltas[subject] = (activity, checked(delta.Total + (previous is null ? 1 : 0)),
+                        checked(delta.Active + (active ? 1 : 0) - (previous?.Status == RuntimeHistoryBookmarkStatus.Active ? 1 : 0)));
+                }
+            }
+            await StageAncestryAsync(context, mapping, scope, run, events, cancellationToken);
+            await StageCountsAsync(context, mapping, scope, run, deltas, cancellationToken);
+            EnsureAccess();
+            await EfRuntimeHistoryOccurrenceProjection.StageAsync(context, scope, run, chain, events, cancellationToken);
+            EnsureAccess(); return events.AsReadOnly();
         }
-        await StageAncestryAsync(context, mapping, scope, run, events, cancellationToken);
-        await StageCountsAsync(context, mapping, scope, run, deltas, cancellationToken);
-        EnsureAccess();
-        await EfRuntimeHistoryOccurrenceProjection.StageAsync(context, scope, run, chain, events, cancellationToken);
-        EnsureAccess(); return events.AsReadOnly();
+        // A first-head save also flushes the native tracked fence touch. Leave its concurrency
+        // exception intact for the owner's bounded renewal/stale-fence classification after rollback.
+        catch (Exception exception) when (exception is not DbUpdateConcurrencyException && IsProviderUnavailable(exception, cancellationToken))
+        { throw new RuntimeHistoryUnavailableException(run, "staging checkpoint history", exception); }
     }
+
+    internal static bool IsProviderUnavailable(Exception exception, CancellationToken token) =>
+        exception is not (InvalidDataException or RuntimeHistoryUnavailableException or RuntimeHistoryIntegrityException or RuntimeStaleFencingTokenException or
+            RuntimeCheckpointReplayConflictException or RuntimeSchedulerWorkUnavailableException) &&
+        !(exception is OperationCanceledException && token.IsCancellationRequested) &&
+        (exception is IOException or TimeoutException or OperationCanceledException || EfRelationalExceptionClassifier.IsProviderFailure(exception));
 
     internal static async ValueTask ReserveHeadAsync(RuntimeDbContext context, Mapping mapping, EfSchemaChain chain,
         string scope, string run, RuntimeHistoryHeadEntity? previous, RuntimeHistoryHead next, CancellationToken cancellationToken)
