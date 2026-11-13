@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Data.Common;
 using System.Transactions;
 using Elsa.Foundation.Identity.Core.Authentication;
@@ -228,6 +229,42 @@ public sealed class AuthenticationSessionPersistenceTests
             if (Failure is not null) throw Failure;
             return base.NonQueryExecutingAsync(command, eventData, result, cancellationToken);
         }
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Qualified_content_upgrade_preserves_prior_payload_without_fabricating_a_link_revision(bool hasLinkRevision)
+    {
+        using var data = new OwnedData();
+        await using var node = await Node(data, migrate: false);
+        await using var scope = Scope(node);
+        var context = scope.ServiceProvider.GetRequiredService<ExternalAuthenticationDbContext>();
+        var migrator = context.GetService<Microsoft.EntityFrameworkCore.Migrations.IMigrator>();
+        await migrator.MigrateAsync(context.Database.GetMigrations().Single(id => id.EndsWith("_DurableSessions", StringComparison.Ordinal)));
+        var store = scope.ServiceProvider.GetRequiredService<IAuthenticationSessionStore>();
+        var session = Session() with
+        {
+            ConnectionKey = "company", ConnectionRecordId = "deployment:company", Issuer = "https://issuer.example",
+            ExternalSubject = "opaque-subject", ExternalLinkRevision = "existing-link-revision"
+        };
+        Assert.True(await store.TryCreateAsync(session));
+        var written = (await store.FindAsync(session.TenantId, session.Id))!;
+        var legacy = session with { ExternalLinkRevision = hasLinkRevision ? session.ExternalLinkRevision : null };
+        var tenantKey = await context.Database.SqlQueryRaw<string>("SELECT TenantKey AS Value FROM identity_authentication_sessions").SingleAsync();
+        var userKey = await context.Database.SqlQueryRaw<string>("SELECT UserKey AS Value FROM identity_authentication_sessions").SingleAsync();
+        var protector = scope.ServiceProvider.GetRequiredService<IDataProtectionProvider>().CreateProtector("Elsa.AuthenticationSession.v1",
+            tenantKey, session.Id, userKey,
+            session.CreatedAt.ToUnixTimeMilliseconds().ToString(System.Globalization.CultureInfo.InvariantCulture),
+            session.ExpiresAt.ToUnixTimeMilliseconds().ToString(System.Globalization.CultureInfo.InvariantCulture));
+        var protectedPayload = protector.Protect(JsonSerializer.Serialize(legacy));
+        await context.Database.ExecuteSqlInterpolatedAsync($"UPDATE identity_authentication_sessions SET ProtectedPayload = {protectedPayload}, SchemaVersion = '1.1.0'");
+        await migrator.MigrateAsync();
+        Assert.Equal(legacy with { Revision = written.Revision }, await store.FindAsync(session.TenantId, session.Id));
+        Assert.Equal(protectedPayload, await context.Database.SqlQueryRaw<string>("SELECT ProtectedPayload AS Value FROM identity_authentication_sessions").SingleAsync());
+        Assert.Equal("1.1.0", await context.Database.SqlQueryRaw<string>("SELECT SchemaVersion AS Value FROM identity_authentication_sessions").SingleAsync());
+        // Readable historical content is not current sign-in authority. The later canonical session guard
+        // must reject a missing/stale link revision; a migration must never manufacture that authority.
     }
 
     [Fact]
