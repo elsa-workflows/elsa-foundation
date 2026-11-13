@@ -1269,6 +1269,7 @@ User Task inbox cursors use `UserTaskOptions.CursorEncryptionKey` (Base64, 32 by
 ### `StandaloneTriggerTypesInitializing` and `StandaloneTriggerConfigurationValidating` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Sequential authoring fan-in events through the normal `IInlineEventPublisher`.
 - **Signature:** initialization carries a `Types` collection; configuration validation carries `TypeKey`, `SchemaVersion`, a cloned JSON `Configuration` and a `Findings` collection.
+- **Publication sites:** `InitializeTriggerTypes.ExecuteAsync` publishes initialization. Configuration validation has no production publisher in this precursor; its focused composition test publishes it directly. The later management slice will own its normal publication site.
 - **Handlers:** `CollectTriggerTypes` is the registered initialization aggregator; `ValidateTriggerConfiguration` is the registered scoped validation aggregator. Both are registered by `TriggerAuthoringRegistration.AddServices` with `TryAddEnumerable`.
 - **Contribution/override:** modules contribute through the source/validator contracts above; do not duplicate the aggregating handlers. Event metadata and findings do not authorize an execution or mutate a trigger resource.
 
