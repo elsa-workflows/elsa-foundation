@@ -22,9 +22,11 @@ export async function userTaskAuthoringJourney(page: Page, info: TestInfo, captu
     return Boolean(box && bounds && box.x >= bounds.x && box.y >= bounds.y && box.x + box.width <= bounds.x + bounds.width && box.y + box.height <= bounds.y + bounds.height);
   };
   // Every run panel tab shows its whole label beside the panel buttons; none scrolls under them (#4069).
-  const expectRunTabsUnclipped = async () => {
+  // Pass collapsed only where the run panel is folded away (the narrow canvas view); everywhere else the tabs must show.
+  const expectRunTabsUnclipped = async (collapsed = false) => {
     const tablist = page.getByRole("tablist", { name: "Run details tabs", exact: true });
-    if (!await tablist.isVisible()) return;
+    if (collapsed) { await expect(tablist).toBeHidden(); return; }
+    await expect(tablist).toBeVisible();
     for (const tab of await tablist.getByRole("tab").all()) await expect.poll(() => inside(tab, tablist)).toBe(true);
   };
   const editorViews = page.getByRole("tablist", { name: "Editor view tabs", exact: true });
@@ -169,14 +171,25 @@ export async function userTaskAuthoringJourney(page: Page, info: TestInfo, captu
   await page.getByLabel("Output name", { exact: true }).fill("RenamedData");
   await editorViews.getByRole("tab", { name: "Designer", exact: true }).click();
   await expect(page.getByRole("combobox", { name: "Output Name", exact: true })).toHaveAttribute("aria-invalid", "true");
-  // aria-invalid is also visible: the field's border and its message take the danger colour (#4069).
+  // aria-invalid is also visible: the field's border takes the danger fill and its message the danger text (#4069).
   const expectVisiblyInvalid = async () => {
     const message = page.locator(".wf-property-row-error");
     await expect(message).toBeVisible();
-    const danger = await message.evaluate(element => getComputedStyle(element).color);
     const muted = await page.locator(".wf-property-row-header label").first().evaluate(element => getComputedStyle(element).color);
-    expect(danger).not.toBe(muted);
-    await expect.poll(() => page.getByRole("combobox", { name: "Output Name", exact: true }).evaluate(element => getComputedStyle(element).borderTopColor)).toBe(danger);
+    const [dangerText, dangerFill] = await message.evaluate(element => {
+      const probe = (value: string) => {
+        const swatch = document.createElement("span");
+        swatch.style.color = value;
+        element.append(swatch);
+        const color = getComputedStyle(swatch).color;
+        swatch.remove();
+        return color;
+      };
+      return [probe("var(--studio-danger-fg, var(--wf-danger))"), probe("var(--studio-danger, var(--wf-danger))")];
+    });
+    expect(dangerText).not.toBe(muted);
+    await expect.poll(() => message.evaluate(element => getComputedStyle(element).color)).toBe(dangerText);
+    await expect.poll(() => page.getByRole("combobox", { name: "Output Name", exact: true }).evaluate(element => getComputedStyle(element).borderTopColor)).toBe(dangerFill);
   };
   await expectVisiblyInvalid();
   await captureInspector("renamed-output", page.getByRole("combobox", { name: "Output Name", exact: true }));
@@ -285,7 +298,7 @@ export async function userTaskAuthoringJourney(page: Page, info: TestInfo, captu
     }).toBe(true);
   }
   await expect(page.locator(".react-flow__edge-text").filter({ hasText: /^Approve$/ })).toHaveCount(0);
-  await expectRunTabsUnclipped();
+  await expectRunTabsUnclipped(projectViewport.width < 600);
   if (projectViewport.width < 600) {
     // On a phone the run header stays compact: title and instance id share a line, and the run's
     // name, back link and status share another (#4069).
@@ -295,6 +308,8 @@ export async function userTaskAuthoringJourney(page: Page, info: TestInfo, captu
     const identity = (await page.locator(".wf-run-identity").boundingBox())!;
     expect(identity.height).toBeLessThanOrEqual(48);
     const toolbar = (await page.getByRole("group", { name: "Run workspace actions", exact: true }).boundingBox())!;
+    // The whole run header (title through run tools) stays a small part of the viewport; it took about half before.
+    expect(toolbar.y + toolbar.height - title.y).toBeLessThanOrEqual(projectViewport.height * 0.2);
     await info.attach("narrow-run-header.json", { body: JSON.stringify({ titleTop: title.y, toolbarBottom: toolbar.y + toolbar.height, viewportHeight: projectViewport.height }), contentType: "application/json" });
   }
   await capture(page, info, "run-outcomes");
@@ -355,13 +370,9 @@ export async function userTaskAuthoringJourney(page: Page, info: TestInfo, captu
     }
   };
   // Frame the outcome labels with their node's name, so the capture shows whose outcomes they are (#4069).
-  // A pane too narrow for both keeps the labels, which is what this step must prove readable.
-  const taskName = runtimeTask.locator(".wf-node-copy strong");
-  let framedWithNode = true;
-  try { await panTo([...await outcomeLabels.all(), taskName], true); }
-  catch { framedWithNode = false; await panTo(await outcomeLabels.all(), true); }
+  await panTo([...await outcomeLabels.all(), runtimeTask.locator(".wf-node-copy strong")], true);
   for (const label of ["Approve", "Reject", "Unmatched"]) await expect(outcomeLabels.filter({ hasText: new RegExp(`^${label}$`) })).toBeVisible();
-  await info.attach("runtime-outcome-readable-font.json", { body: JSON.stringify({ initialFont, overviewFont, recoveredFont: await renderedOutcomeFont(), framedWithNode }), contentType: "application/json" });
+  await info.attach("runtime-outcome-readable-font.json", { body: JSON.stringify({ initialFont, overviewFont, recoveredFont: await renderedOutcomeFont() }), contentType: "application/json" });
   await capture(page, info, "run-outcomes-readable");
   const runtimeOutput = page.locator(`.react-flow__node[data-id="${outputNodeId}"]`);
   await panTo([runtimeOutput]);

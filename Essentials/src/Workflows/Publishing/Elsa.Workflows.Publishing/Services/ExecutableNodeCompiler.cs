@@ -39,6 +39,16 @@ public sealed class ExecutableNodeCompiler(
 
     private readonly ValueConversionPlanResolver _conversionPlanResolver = conversionPlanResolver ?? new(wellKnownTypeRegistry: wellKnownTypeRegistry);
 
+    /// <summary>Compiles a root without workflow outputs; kept so existing binary callers bind unchanged.</summary>
+    public ExecutableNode CompileRoot(
+        ActivityNode rootActivity,
+        ActivityTreeProjection projection,
+        IReadOnlyDictionary<string, ActivityDefinitionVersion> activityRows,
+        IReadOnlyDictionary<string, ExecutableNode>? placedActivities,
+        IEnumerable<VariableDefinition>? workflowVariables,
+        IEnumerable<InputDefinition>? workflowInputs) =>
+        CompileRoot(rootActivity, projection, activityRows, placedActivities, workflowVariables, workflowInputs, workflowOutputs: null);
+
     public ExecutableNode CompileRoot(
         ActivityNode rootActivity,
         ActivityTreeProjection projection,

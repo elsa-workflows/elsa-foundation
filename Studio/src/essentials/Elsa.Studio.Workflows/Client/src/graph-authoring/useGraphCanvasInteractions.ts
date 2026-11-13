@@ -565,7 +565,9 @@ export function useGraphCanvasInteractions({
     if (bounds && bounds.width > 0 && bounds.height > 0) {
       const start = reactFlowInstance.screenToFlowPosition({ x: bounds.left, y: bounds.top });
       const end = reactFlowInstance.screenToFlowPosition({ x: bounds.right, y: bounds.bottom });
-      visible = { x: start.x, y: start.y, width: end.x - start.x, height: end.y - start.y };
+      // The selection toolbar keeps its screen size, so below zoom 1 the top reserve needs more canvas room than it covers.
+      const toolbarInset = placementReserve.top * Math.max(0, 1 / reactFlowInstance.getZoom() - 1);
+      visible = { x: start.x, y: start.y + toolbarInset, width: end.x - start.x, height: Math.max(0, end.y - start.y - toolbarInset) };
     }
     const rects = nodes.map(node => {
       const measured = reactFlowInstance.getInternalNode(node.id)?.measured;
