@@ -39,6 +39,7 @@ MANIFEST = "tools/ci/test-tiers.json"
 NS = {"t": "http://microsoft.com/schemas/VisualStudio/TeamTest/2010"}
 FAILED = {"Failed", "Error", "Timeout", "Aborted"}
 TEST_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_.+]*$")
+_XUNIT_FAILURE = re.compile(r"\[xUnit\.net \d+:\d{2}:\d{2}(?:\.\d+)?\] .+ \[FAIL\]")
 
 
 @dataclass
@@ -95,11 +96,12 @@ def read_trx(directory: str) -> Results:
             if summary is not None and summary.get("outcome") == "Aborted" or \
                     counters is not None and counters.get("aborted", "0") != "0":
                 results.aborted.append(f"{name}: the test run was aborted")
-            # Only an Error-level run message signals a host that stopped; Warning and Informational messages carry
-            # ordinary test output, which may well contain words like "crashed".
+            # xUnit also emits ordinary per-test failures at Error level. A method named "crash" or "abort"
+            # does not mean the test host stopped; independent abort metadata and host diagnostics still apply.
             for info in document.iterfind(".//t:RunInfo", NS):
                 text = " ".join("".join(info.itertext()).split())
-                if info.get("outcome") == "Error" and ("abort" in text.lower() or "crash" in text.lower()):
+                if info.get("outcome") == "Error" and not _XUNIT_FAILURE.fullmatch(text) and \
+                        ("abort" in text.lower() or "crash" in text.lower()):
                     results.aborted.append(f"{name}: {text[:200]}")
     return results
 
@@ -360,6 +362,30 @@ def self_test() -> int:
         _trx(crashed, [("A.T", "Ok", "Passed", quick)],
              run_info='<RunInfo outcome="Error"><Text>The active test run was aborted. Reason: Test host process crashed</Text></RunInfo>')
         check("an error that the host crashed is an abort", bool(read_trx(crashed).aborted))
+
+        for method in ("Pending_parent_resume_crash", "Abort_child"):
+            failed = os.path.join(tmp, method, "try1")
+            retried = os.path.join(tmp, method, "try2")
+            info = (f'<RunInfo outcome="Error"><Text>[xUnit.net 00:24:47.82] '
+                    f'A.T.{method} [FAIL]</Text></RunInfo>')
+            _trx(failed, [("A.T", method, "Failed", quick)], run_info=info)
+            _trx(retried, [("A.T", method, "Passed", quick)])
+            first, second = read_trx(failed), read_trx(retried)
+            check(f"{method}: the ordinary xUnit failure is retained without a host abort",
+                  first.failed() == [f"A.T.{method}"] and not first.aborted)
+            v = decide(manifest, runs[:1], [first], [second])
+            check(f"{method}: an allowed successful retry passes and remains reported",
+                  v.ok and v.passed_on_retry == [f"A.T.{method}"])
+            _trx(retried, [("A.T", method, "Failed", quick)])
+            v = decide(manifest, runs[:1], [first], [read_trx(retried)])
+            check(f"{method}: a failed retry still fails", not v.ok and v.failed_twice == [f"A.T.{method}"])
+
+        # An ordinary failure diagnostic must not suppress an independent abort counter.
+        path = os.path.join(failed, "r.trx")
+        document = ET.parse(path)
+        document.getroot().find(".//t:Counters", NS).set("aborted", "1")
+        document.write(path)
+        check("an abort counter still fails alongside an ordinary xUnit failure", bool(read_trx(failed).aborted))
 
         v = case("missing", None, None)
         check("run with no TRX: shard fails", not v.ok and any("wrote no TRX" in a for a in v.aborted))
