@@ -97,8 +97,8 @@ public static class Smoke
             await owner.StartAsync();
             owner.Worker.Post(new Message("m1", InstanceRef.In(0, "dj"), Kinds.Start, Start: NativeModel.Spec("smoke-decision-join", mode)), fresh: true);
             await owner.PumpAsync(until: () => owner.Status("0/dj") is InstanceStatus.Finished);
-            // The hang, shown: the decision's False branch never runs, so the join waits for an arrival that never
-            // comes. The flowchart ends when nothing under it runs, without the join and without what follows it.
+            // The missed join, shown: the decision's False branch never runs, so the join waits for an arrival that
+            // never comes. The flowchart ends when nothing under it runs, without the join and without what follows it.
             var output = owner.State("0/dj")?.Variables["output"]?.GetValue<string>();
             Check(output == "left no no", $"{mode}: the join never fired: '{output}'");
         }

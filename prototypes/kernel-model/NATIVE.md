@@ -73,7 +73,7 @@ What changed, and why:
 | A stateful activity's inputs are evaluated again on resume, not taken from a pinned snapshot | No snapshot to store. The activities that wait keep what they need in their state |
 | Sequence is stateless: the next child follows from the position of the one that completed | Smaller state |
 | `If` children fill named slots (Then, Else); its outcome is True or False either way | The same activity works inside a flowchart |
-| A flowchart completes when nothing under it runs; a join that can no longer be reached is skipped | No dead-path elimination (reasoned: an All join after a decision that skips a branch never fires) |
+| A flowchart completes when nothing under it runs; a join that can no longer be reached is skipped | No dead-path elimination (run: `smoke`, "an All join after a decision": the join and what follows it never run, and the flowchart completes without them) |
 | No DI, no services in activities. The host gates Background work and performs External effects | Enough for the spike; the activity map's DI would come back unchanged |
 | A tiny expression language (`Expression.cs`), compiled to closures once per text | Instead of JavaScript |
 | `Cancel` maps to completion with outcome Cancelled | There is no cancel callback on composites yet |
