@@ -1,4 +1,5 @@
 using Elsa.Workflows.Publishing.Releases.Runtime.Core;
+using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using System.Collections.Concurrent;
 using System.Reflection;
@@ -331,6 +332,8 @@ public sealed class FeatureCompositionTests
                 // This host explicitly denies source exports. Runtime source acquisition has no production policy default.
                 services.AddSingleton<IReleaseRuntimeSourceContextAccessor>(new ReleaseSourceCompositionPolicy());
                 services.AddSingleton<IReleaseRuntimeSourceAuthorization>(new ReleaseSourceCompositionPolicy());
+                services.AddSingleton<INativeReleaseCaptureContextAccessor>(new ReleaseSourceCompositionPolicy());
+                services.AddSingleton<INativeReleaseCaptureAuthorization>(new ReleaseSourceCompositionPolicy());
                 recording.Attach(services);
             }
 
@@ -359,13 +362,16 @@ public sealed class FeatureCompositionTests
         return type.CreateType();
     }
 
-    private sealed class ReleaseSourceCompositionPolicy : IReleaseRuntimeSourceContextAccessor, IReleaseRuntimeSourceAuthorization
+    private sealed class ReleaseSourceCompositionPolicy : IReleaseRuntimeSourceContextAccessor, IReleaseRuntimeSourceAuthorization, INativeReleaseCaptureContextAccessor, INativeReleaseCaptureAuthorization
     {
         public ReleaseRuntimeContentScope Current { get; } = new("architecture-host", null, "architecture-source");
         public ValueTask<bool> AuthorizeMaterialAsync(ReleaseRuntimeContentScope context, string artifactId, string artifactHash,
             WorkflowExecutableIdentity? fullPin, CancellationToken cancellationToken = default) => ValueTask.FromResult(false);
         public ValueTask<bool> AuthorizeTemplateAsync(ReleaseRuntimeContentScope context, string templateId, string templateHash,
             CancellationToken cancellationToken = default) => ValueTask.FromResult(false);
+        public ValueTask<bool> AuthorizeWorkflowVersionAsync(ReleaseRuntimeContentScope context, string definitionVersionId, CancellationToken cancellationToken = default) => ValueTask.FromResult(false);
+        public ValueTask<bool> AuthorizeSelectedMaterialAsync(ReleaseRuntimeContentScope context, string definitionVersionId, string sourceReferenceId,
+            string artifactId, CancellationToken cancellationToken = default) => ValueTask.FromResult(false);
     }
 
     private sealed class ReleaseArchiveCompositionContext(DbContextOptions<ReleaseArchiveCompositionContext> options) : DbContext(options)

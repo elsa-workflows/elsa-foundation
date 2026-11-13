@@ -274,3 +274,15 @@ the source adapter must independently require a real activated published associa
 
 Provider reads and connection cleanup wrap infrastructure failures in `PublicationSourceSnapshotPersistenceException`,
 with the original cause, publication identity and physical scope. Cancellation and coded source refusals propagate.
+
+## Native published-root release source
+
+`WorkflowsPublishingReleaseCaptureFeature` is optional. It registers `IReleaseCaptureSource` with
+identity `elsa.native-workflow-source/1` for `elsa.workflow-definition-version`; it adds no compiler,
+import, activation or export policy. It requires the Capture/Runtime-source features and exact original
+qualified snapshots. See [the source boundary](SourceCapture/README.md) for unsupported provenance profiles.
+
+| Port | Kind / layer / default | Signature | Override and dependent callers |
+|---|---|---|---|
+| `INativeReleaseCaptureContextAccessor` | Replacement, Publishing.Core; no default | `ReleaseRuntimeContentScope Current { get; }` | Select exactly one trusted source namespace, matching Runtime source acquisition and the physical persistence scope. Used before acquisition and around the callback. It grants no access. |
+| `INativeReleaseCaptureAuthorization` | Replacement, Publishing.Core; no default | `ValueTask<bool> AuthorizeWorkflowVersionAsync(ReleaseRuntimeContentScope context, string definitionVersionId, CancellationToken cancellationToken = default)` and `ValueTask<bool> AuthorizeSelectedMaterialAsync(ReleaseRuntimeContentScope context, string definitionVersionId, string sourceReferenceId, string artifactId, CancellationToken cancellationToken = default)` | The host explicitly admits original authored bytes/provenance and the selected root body before its full producer pin is known. Runtime source policy independently admits the retained closure. `NativeReleaseCaptureSource` checks permission before each relevant provider read and propagates requested cancellation. |
