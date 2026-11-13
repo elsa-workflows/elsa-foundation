@@ -42,6 +42,11 @@ public static class Smoke
                     ("join", Gateway.ParallelJoin)),
                 Set("out", "output", Expr("branch + ' ' + joined + ' ' + after"))),
             ("branch", null), ("joined", "no"), ("after", "no"), ("output", null));
+        // A run started by a trigger inside a Flowchart begins at the trigger, not at the start node (main's SelectEntryNode).
+        yield return Workflow("smoke-flow-trigger", Sequence("root",
+                Flowchart("flow", [Set("a", "path", "start"), Event("go", "never"), Set("got", "path", "trigger")], [new("go", "got")]),
+                Set("out", "output", Var("path"))),
+            ("path", "none"), ("output", null));
         yield return Workflow("http-early", Sequence("root", HttpEndpoint("http-in", "early", respondBeforeCommit: true), Respond("answer", "early"), Event("wait", "never")));
     }
 
@@ -101,6 +106,17 @@ public static class Smoke
             // flowchart ended when nothing under it ran. Now the untaken connection is a dead path that reaches the join.
             var output = owner.State("0/dj")?.Variables["output"]?.GetValue<string>();
             Check(output == "left yes yes", $"{mode}: the join fired on one live and one dead arrival: '{output}'");
+        }
+
+        Console.WriteLine("Flowchart: a run started by a trigger inside it");
+        {
+            var store = new InMemoryStore(1, () => Environment.TickCount64);
+            var owner = new Owner("n1", 0, store, registry, new Network());
+            await owner.StartAsync();
+            owner.Worker.Post(new Message("m1", InstanceRef.In(0, "ft"), Kinds.Start, Start: NativeModel.Spec("smoke-flow-trigger", Modes.Balanced, triggerNode: "go", trigger: JsonValue.Create("hi"))), fresh: true);
+            await owner.PumpAsync(until: () => owner.Status("0/ft") is InstanceStatus.Finished);
+            var output = owner.State("0/ft")?.Variables["output"]?.GetValue<string>();
+            Check(output == "trigger", $"it began at the trigger, which took the delivery: '{output}'");
         }
 
         await HttpAsync(registry);

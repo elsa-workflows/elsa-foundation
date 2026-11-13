@@ -230,31 +230,51 @@ public sealed class Flowchart : CompositeActivity
     // Active) are not written; reading them back gives the same records.
     private static readonly JsonSerializerOptions Compact = new(JsonSerializerDefaults.Web) { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingDefault };
 
+    // A run started by a trigger that is a child of this Flowchart begins there (main's SelectEntryNode), so that the
+    // trigger is delivered; otherwise at the start node.
     protected internal override void Execute(CompositeContext context) =>
-        Step(context, null, (engine, run) => engine.Start(GraphOf(context.Node), run));
+        Step(context, null, (engine, run) => engine.Start(GraphOf(context.Node), run), context.PendingTrigger);
 
     protected internal override void OnChildCompleted(CompositeContext context, ChildCompleted child)
     {
         var (path, scope) = Decode(child.Tag);
-        var before = ReadEngineState(context.ReadState<JsonNode>());
+        if (!TryReadState(context, out var before)) return;
         Step(context, before, (engine, run) => engine.OnChildCompleted(GraphOf(context.Node), run, before,
             new FlowchartChildCompletion(child.Node, child.Frame, [child.Outcome], path, scope)));
     }
 
+    // The engine faults the Flowchart when a child faults (main, #308); the fault the instance carries is the child's
+    // own, as the other native composites pass it on, not the engine's generic flowchart.child.faulted.
     protected internal override void OnChildFaulted(CompositeContext context, ChildFaulted child)
     {
-        var before = ReadEngineState(context.ReadState<JsonNode>());
-        Step(context, before, (engine, run) => engine.OnChildFaulted(GraphOf(context.Node), run, before, child.Node));
+        if (!TryReadState(context, out var before)) return;
+        Step(context, before, (engine, run) => engine.OnChildFaulted(GraphOf(context.Node), run, before, child.Node), fault: child.Fault);
     }
 
-    private static void Step(CompositeContext context, FlowchartExecutionState? before, Func<FlowchartExecutionEngine, FlowchartRun, FlowchartStep> call)
+    /// <summary>The engine's state before this callback; corrupt state faults the Flowchart.</summary>
+    private static bool TryReadState(CompositeContext context, out FlowchartExecutionState? state)
+    {
+        try
+        {
+            state = ReadEngineState(context.ReadState<JsonNode>());
+            return true;
+        }
+        catch (JsonException exception)
+        {
+            context.Fault(new ActivityFault("flowchart.invalid", exception.Message));
+            state = null;
+            return false;
+        }
+    }
+
+    private static void Step(CompositeContext context, FlowchartExecutionState? before, Func<FlowchartExecutionEngine, FlowchartRun, FlowchartStep> call, string? trigger = null, ActivityFault? fault = null)
     {
         FlowchartStep step;
         try
         {
-            step = call(EngineFor(context), new FlowchartRun(context.FrameId));
+            step = call(EngineFor(context), new FlowchartRun(context.FrameId, trigger));
         }
-        catch (Exception exception) when (exception is FlowchartExecutionException or InvalidOperationException)
+        catch (Exception exception) when (exception is FlowchartExecutionException or InvalidOperationException or JsonException)
         {
             context.Fault(new ActivityFault("flowchart.invalid", exception.Message));
             return;
@@ -266,7 +286,10 @@ public sealed class Flowchart : CompositeActivity
         foreach (var entry in Trace(context.FrameId, context.Node.Id, before, step)) context.Record(entry);
         foreach (var scheduled in step.Scheduled)
         {
-            if (scheduled.SchedulingCause == "join") context.RecordJoin($"{scheduled.NodeId}:{scheduled.IterationKey ?? "-"}");
+            // A join fires once per completion that releases it, in its round (behind a merge it may fire once per token,
+            // so the round alone is not unique); a merge continues on every arrival and records no join.
+            if (scheduled.SchedulingCause == "join" && context.Node.Gateways.GetValueOrDefault(scheduled.NodeId) != Gateway.Merge)
+                context.RecordJoin($"{scheduled.NodeId}:{scheduled.IterationKey ?? "-"}:{scheduled.SchedulingActivityExecutionId}");
             context.Schedule(context.Children.First(c => c.Id == scheduled.NodeId), Encode(scheduled.ExecutionPathId, scheduled.ExecutionScopeId));
         }
         switch (step.Kind)
@@ -275,7 +298,7 @@ public sealed class Flowchart : CompositeActivity
                 context.Complete(step.Outcome ?? FlowchartOutcomes.Done);
                 return;
             case FlowchartStepKind.Fault:
-                context.Fault(new ActivityFault(step.Fault!.Code, step.Fault.Message));
+                context.Fault(fault ?? new ActivityFault(step.Fault!.Code, step.Fault.Message));
                 return;
         }
 
