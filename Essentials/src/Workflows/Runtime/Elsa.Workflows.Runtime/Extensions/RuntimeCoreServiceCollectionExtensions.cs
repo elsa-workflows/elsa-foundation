@@ -592,7 +592,7 @@ public static class RuntimeCoreServiceCollectionExtensions
                 serviceProvider.GetService<IStimulusDeliveryStore>(),
                 serviceProvider.GetServices<IStimulusDeliveryIntentAdapter>(),
                 serviceProvider.GetRequiredService<IWorkflowExecutableInputValidator>())
-            { HistoryAdmission = () => RuntimeHistoryRegistration.ResolveAdmission(serviceProvider) };
+            { HistoryAdmission = workflowExecutionId => RuntimeHistoryRegistration.ResolveAdmission(serviceProvider, workflowExecutionId) };
         });
         services.TryAddScoped<IWorkflowDispatchRetentionCollector, WorkflowDispatchRetentionCollector>();
         services.TryAddSingleton<WorkflowDispatchRetentionCursor>();

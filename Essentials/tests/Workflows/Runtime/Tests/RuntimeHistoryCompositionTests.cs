@@ -46,7 +46,7 @@ public sealed class RuntimeHistoryCompositionTests
         using var provider = services.BuildServiceProvider(validateScopes: true);
         using var scope = provider.CreateScope();
         var dispatcher = Assert.IsType<WorkflowStartDispatcher>(scope.ServiceProvider.GetRequiredService<IWorkflowStartDispatcher>());
-        var admission = dispatcher.HistoryAdmission!.Invoke();
+        var admission = dispatcher.HistoryAdmission!.Invoke("admission-run");
         Assert.Null(admission.Policy);
         if (installed) Assert.False(admission.Enabled); else Assert.Null(admission.Enabled);
         Assert.Equal(0, reads);
@@ -67,7 +67,7 @@ public sealed class RuntimeHistoryCompositionTests
         using var scope = provider.CreateScope();
         var selected = scope.ServiceProvider;
         var dispatcher = Assert.IsType<WorkflowStartDispatcher>(selected.GetRequiredService<IWorkflowStartDispatcher>());
-        var admission = dispatcher.HistoryAdmission!.Invoke();
+        var admission = dispatcher.HistoryAdmission!.Invoke("admission-run");
         var policy = Assert.IsType<RuntimeHistoryCapturePolicy>(admission.Policy);
         Assert.True(admission.Enabled);
         Assert.True(policy.Required);
@@ -80,7 +80,7 @@ public sealed class RuntimeHistoryCompositionTests
         var committer = selected.GetRequiredService<RuntimeCheckpointCommitter>();
         await committer.CommitAsync(Commit("started", ActivityExecutionStatus.Running));
         options.Enabled = false;
-        var next = dispatcher.HistoryAdmission.Invoke();
+        var next = dispatcher.HistoryAdmission.Invoke("admission-run");
         Assert.Null(next.Policy);
         Assert.False(next.Enabled);
         await committer.CommitAsync(Commit("completed", ActivityExecutionStatus.Completed));
@@ -89,6 +89,32 @@ public sealed class RuntimeHistoryCompositionTests
         Assert.Equal(new long[] { 1, 2 }, page.Items.Select(e => e.Sequence));
         Assert.True(policy.IsEquivalentTo(page.Head!.Policy));
         Assert.False(page.Head.CapturedFromStart); // This component seeds native admission; it does not claim a start journey.
+    }
+
+    [Fact]
+    public void Admission_snapshots_the_enabled_choice_before_provider_qualification_can_change_options()
+    {
+        var options = new RuntimeHistoryOptions();
+        var services = Services(new Access());
+        RuntimeHistoryRegistration.AddServices(services, options);
+        var readerResolutions = 0;
+        services.AddScoped<IRuntimeHistoryStore>(provider =>
+        {
+            readerResolutions++;
+            options.Enabled = false;
+            return new InMemoryRuntimeHistoryStore(provider.GetRequiredService<InMemoryRuntimeCheckpointStoreState>(),
+                provider.GetRequiredService<IPersistenceAccessContextAccessor>(), provider.GetRequiredService<IRuntimeRecoveryContinuationCodec>());
+        });
+        using var provider = services.BuildServiceProvider(validateScopes: true);
+        using var scope = provider.CreateScope();
+        var admission = RuntimeHistoryRegistration.ResolveAdmission(scope.ServiceProvider, "admission-run");
+        Assert.True(admission.Enabled);
+        Assert.True(admission.Policy!.Required);
+        Assert.False(options.Enabled);
+        var later = RuntimeHistoryRegistration.ResolveAdmission(scope.ServiceProvider, "later-admission");
+        Assert.False(later.Enabled);
+        Assert.Null(later.Policy);
+        Assert.Equal(1, readerResolutions);
     }
 
     [Theory]
@@ -112,7 +138,7 @@ public sealed class RuntimeHistoryCompositionTests
         }
         using var provider = services.BuildServiceProvider(validateScopes: true);
         using var scope = provider.CreateScope();
-        var exception = Assert.Throws<RuntimeSchedulerWorkUnavailableException>(() => RuntimeHistoryRegistration.ResolveAdmission(scope.ServiceProvider));
+        var exception = Assert.Throws<RuntimeSchedulerWorkUnavailableException>(() => RuntimeHistoryRegistration.ResolveAdmission(scope.ServiceProvider, "admission-run"));
         Assert.Equal("runtime.history.capture-unavailable", exception.Code);
         if (missing == "reader") Assert.IsType<IOException>(exception.InnerException);
         Assert.Empty(scope.ServiceProvider.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>().ListCommits());
@@ -127,7 +153,7 @@ public sealed class RuntimeHistoryCompositionTests
         services.AddSingleton(RuntimeHistorySourceSupport.ForSourceOwner("future-owner", [RuntimeHistorySourceFactKind.ChildWorkflowSettled]));
         using var provider = services.BuildServiceProvider(validateScopes: true);
         using var scope = provider.CreateScope();
-        var policy = RuntimeHistoryRegistration.ResolvePolicy(scope.ServiceProvider)!;
+        var policy = RuntimeHistoryRegistration.ResolvePolicy(scope.ServiceProvider, "admission-run")!;
         Assert.Contains("ActivityContinuationStarted", policy.SupportedKinds);
         Assert.DoesNotContain("ChildWorkflowSettled", policy.SupportedKinds);
     }
@@ -143,7 +169,14 @@ public sealed class RuntimeHistoryCompositionTests
         services.AddScoped<IRuntimeHistoryStore>(_ => throw cause);
         using var provider = services.BuildServiceProvider(validateScopes: true);
         using var scope = provider.CreateScope();
-        Assert.Same(cause, Record.Exception(() => RuntimeHistoryRegistration.ResolvePolicy(scope.ServiceProvider)));
+        var caught = Record.Exception(() => RuntimeHistoryRegistration.ResolvePolicy(scope.ServiceProvider, "admission-run"));
+        if (cancelled) Assert.Same(cause, caught);
+        else
+        {
+            var integrity = Assert.IsType<RuntimeHistoryIntegrityException>(caught);
+            Assert.Same(cause, integrity.InnerException);
+            Assert.Contains("admission-run", integrity.Message);
+        }
     }
 
     [Theory]
@@ -160,7 +193,7 @@ public sealed class RuntimeHistoryCompositionTests
         services.AddScoped<IRuntimeHistoryStore>(_ => throw failure);
         using var provider = services.BuildServiceProvider(validateScopes: true);
         using var scope = provider.CreateScope();
-        var caught = Record.Exception(() => RuntimeHistoryRegistration.ResolvePolicy(scope.ServiceProvider));
+        var caught = Record.Exception(() => RuntimeHistoryRegistration.ResolvePolicy(scope.ServiceProvider, "admission-run"));
         if (kind == "provider") Assert.Same(failure, Assert.IsType<RuntimeSchedulerWorkUnavailableException>(caught).InnerException);
         else Assert.Same(failure, caught);
     }

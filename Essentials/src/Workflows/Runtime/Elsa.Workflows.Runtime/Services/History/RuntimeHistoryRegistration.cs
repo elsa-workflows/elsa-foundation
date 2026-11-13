@@ -25,16 +25,20 @@ internal static class RuntimeHistoryRegistration
         if (!services.Any(descriptor => ReferenceEquals(descriptor.ImplementationInstance, IncidentSources))) services.AddSingleton(IncidentSources);
     }
 
-    internal static (RuntimeHistoryCapturePolicy? Policy, bool? Enabled) ResolveAdmission(IServiceProvider provider)
-    {
-        var options = provider.GetService<RuntimeHistoryOptions>();
-        return (ResolvePolicy(provider), options is null ? null : options.Enabled);
-    }
-
-    internal static RuntimeHistoryCapturePolicy? ResolvePolicy(IServiceProvider provider)
+    internal static (RuntimeHistoryCapturePolicy? Policy, bool? Enabled) ResolveAdmission(IServiceProvider provider, string workflowExecutionId)
     {
         ArgumentNullException.ThrowIfNull(provider);
-        if (provider.GetService<RuntimeHistoryOptions>() is not { Enabled: true }) return null;
+        ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
+        var options = provider.GetService<RuntimeHistoryOptions>();
+        bool? enabled = options is null ? null : options.Enabled;
+        return (enabled == true ? ResolveQualifiedPolicy(provider, workflowExecutionId) : null, enabled);
+    }
+
+    internal static RuntimeHistoryCapturePolicy? ResolvePolicy(IServiceProvider provider, string workflowExecutionId) =>
+        ResolveAdmission(provider, workflowExecutionId).Policy;
+
+    private static RuntimeHistoryCapturePolicy ResolveQualifiedPolicy(IServiceProvider provider, string workflowExecutionId)
+    {
         try
         {
             var writer = provider.GetRequiredService<IRuntimeCheckpointCommitStore>();
@@ -48,6 +52,10 @@ internal static class RuntimeHistoryRegistration
             if (!provider.GetServices<IRuntimeCheckpointCommitEnricher>().OfType<IRuntimeHistoryCaptureSupport>().Any(capture => capture.CanCapture(policy)))
                 throw Unavailable("The selected actual source/value/capture chain cannot supply this admission profile.");
             return policy;
+        }
+        catch (Exception exception) when (RuntimeHistoryReadFailures.IsMalformed(exception))
+        {
+            throw new RuntimeHistoryIntegrityException(workflowExecutionId, "the selected admission history provider could not interpret its retained data", exception);
         }
         catch (Exception exception) when (exception is not RuntimeSchedulerWorkUnavailableException && !IsHardOrCancelled(exception) &&
             !RuntimeHistoryReadFailures.IsMalformed(exception) &&
