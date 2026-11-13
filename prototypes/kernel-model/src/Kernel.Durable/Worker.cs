@@ -216,7 +216,13 @@ public sealed class Worker : IScopeActivation, ITurnServices
         if ((!Has(Flaw.IgnoreJobGeneration) && generation != Volatile.Read(ref _generation)) || !Owns) return false;
         if (Has(Flaw.IgnoreLeaseDeadline)) return true;
         if (Volatile.Read(ref _expiredGeneration) == generation) return false;
-        if (_options.Monotonic() < Volatile.Read(ref _safeUntil)) return true;
+        var now = _options.Monotonic();
+        var deadline = Volatile.Read(ref _safeUntil);
+        // Clock callbacks and scheduler delays can overlap a reset and retake of this same Worker. Never combine
+        // an old generation with a deadline read from the replacement lease.
+        if ((!Has(Flaw.IgnoreJobGeneration) && generation != Volatile.Read(ref _generation)) || !Owns ||
+            Volatile.Read(ref _expiredGeneration) == generation) return false;
+        if (now < deadline) return true;
         // A delayed renewal acknowledgement must not revive a generation whose job was already discarded. Off-turn
         // callbacks only latch a number; the worker's own loop performs Reset. Never overwrite a newer generation.
         long seen;

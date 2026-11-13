@@ -180,6 +180,35 @@ public static class LeaseChecks
         allowGuard.Set(); await runningScheduler.WaitAsync(TimeSpan.FromSeconds(5));
         Check(old.Owns && oldJobs == 0, "an entered old-generation callback cannot borrow a renewed lease");
 
+        // Pause inside the clock read after the first generation check. Retake writes a later deadline before the
+        // old callback returns from the clock. It must not combine an old generation with the replacement deadline.
+        time += 20_000; store = new InMemoryStore(1, () => time); wire = new DelayedCommit(store);
+        scheduler = new HeldScheduler(); oldJobs = 0;
+        var clockEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var allowClock = new ManualResetEventSlim();
+        int schedulerThread = 0, blockClock = 1;
+        long BlockingClock()
+        {
+            if (Environment.CurrentManagedThreadId == Volatile.Read(ref schedulerThread) && Interlocked.Exchange(ref blockClock, 0) == 1)
+            {
+                clockEntered.TrySetResult();
+                if (!allowClock.Wait(TimeSpan.FromSeconds(5))) throw new TimeoutException("clock release");
+            }
+            return Volatile.Read(ref time);
+        }
+        old = new Worker("clock-race", 0, wire, new WorkflowInstance([new Runner((_, _) => { Interlocked.Increment(ref oldJobs); return new ValueTask<object?>((object?)null); })]),
+            new WorkerOptions { Monotonic = BlockingClock, Flaws = flaw, JobScheduler = scheduler,
+                BeforeScheduledJobCheck = () => Volatile.Write(ref schedulerThread, Environment.CurrentManagedThreadId) });
+        await Start(old);
+        await store.AddAsync(new Message("clock-race", new InstanceRef(id), "go", Json.Write("work"), Start: Runner.Spec));
+        await old.PollAsync(); await old.LoadAsync(); await old.FlushAsync(); old.RunTurn(id); await old.FlushAsync();
+        var clockRace = Task.Run(scheduler.RunAll);
+        await clockEntered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        Interlocked.Add(ref time, 11_000);
+        await old.DisposeAsync(); await Start(old);
+        allowClock.Set(); await clockRace.WaitAsync(TimeSpan.FromSeconds(5));
+        Check(old.Owns && oldJobs == 0, "an old callback cannot combine its generation with a retaken lease's deadline");
+
         // Work that began before the local deadline may still have an outside effect after the lease expires.
         time += 20_000; store = new InMemoryStore(1, () => time); wire = new DelayedCommit(store);
         oldJobs = newJobs = oldEffects = 0; oldWork = new TaskCompletionSource<object?>(); newWork = new TaskCompletionSource<object?>();
