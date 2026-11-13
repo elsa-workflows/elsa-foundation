@@ -102,12 +102,14 @@ public sealed class ReleaseArchiveCompositionTests
         var writer = scope.ServiceProvider.GetRequiredService<IReleaseArchiveWriter>();
         var capabilities = scope.ServiceProvider.GetRequiredService<IReleaseArchiveStoreCapabilities>();
         var readError = await Assert.ThrowsAsync<ReleaseArchiveStoreException>(() => reader.FindAsync("capture").AsTask());
-        var writeError = await Assert.ThrowsAsync<ReleaseArchiveStoreException>(() => writer.CreateAsync("capture", new MemoryStream(new ArchiveFixture().Zip())).AsTask());
+        using var zip = new MemoryStream(new ArchiveFixture().Zip());
+        var writeError = await Assert.ThrowsAsync<ReleaseArchiveStoreException>(() => writer.CreateAsync("capture", zip).AsTask());
         var observeError = await Assert.ThrowsAsync<ReleaseArchiveStoreException>(() => capabilities.GetCapabilitiesAsync().AsTask());
         foreach (var error in new[] { readError, writeError, observeError }) Assert.Equal("archive_shared_connection_unsupported", error.Code);
         Assert.Same(connection, caller.Database.GetDbConnection());
         Assert.Same(enlisted, caller.Database.CurrentTransaction);
         Assert.Equal(ConnectionState.Open, connection.State);
+        Assert.Equal(0, zip.Position);
         await using var command = connection.CreateCommand(); command.Transaction = physical; command.CommandText = "SELECT 1";
         Assert.Equal(1L, await command.ExecuteScalarAsync());
         await physical.RollbackAsync();

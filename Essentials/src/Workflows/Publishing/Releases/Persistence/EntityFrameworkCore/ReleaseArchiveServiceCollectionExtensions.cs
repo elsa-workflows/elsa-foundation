@@ -19,7 +19,8 @@ public static class ReleaseArchiveServiceCollectionExtensions
     {
         ArgumentNullException.ThrowIfNull(services);
         ArgumentNullException.ThrowIfNull(scopeFactory);
-        var previous = services.Select(x => x.ImplementationInstance).OfType<ReleaseArchiveBackendSelection>().SingleOrDefault();
+        var previous = services.Where(x => !x.IsKeyedService && x.ServiceType == typeof(ReleaseArchiveBackendSelection))
+            .Select(x => x.ImplementationInstance).OfType<ReleaseArchiveBackendSelection>().SingleOrDefault();
         if (previous is not null && replaceExisting)
             previous.RemoveOwnedSelection();
         else if (previous is not null || services.Any(x => ReleaseArchiveBackendSelection.IsPort(x.ServiceType)))

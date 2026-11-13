@@ -254,6 +254,7 @@ internal sealed class EfReleaseArchiveStore<TContext>(TContext configured, IRele
         }
         catch (InvalidOperationException exception) { throw new ReleaseArchiveStoreException("archive_scope_invalid", exception); }
         ReleaseArchiveModelBuilderExtensions.EnsureProvider(configured.Database.ProviderName);
+        _ = RequireIndependentOptions();
         var scopeKey = EfRelationalIdentity.HashLengthFramed(scope.Authority, scope.Partition,
             scope.TenantId is null ? "null" : "tenant", scope.TenantId ?? "", scope.Kind);
         return new ArchiveIdentity(scopeKey, EfRelationalIdentity.HashLengthFramed(scopeKey, captureId), captureId,
@@ -263,16 +264,21 @@ internal sealed class EfReleaseArchiveStore<TContext>(TContext configured, IRele
 
     private TContext Fresh()
     {
+        var builder = new DbContextOptionsBuilder<TContext>(RequireIndependentOptions());
+        EfRelationalProviderBinding.ConfigureSqliteConnectionSafety(builder);
+        var constructor = typeof(TContext).GetConstructor([typeof(DbContextOptions<TContext>)]) ??
+            throw new ReleaseArchiveStoreException("archive_context_constructor_invalid");
+        return (TContext)constructor.Invoke([builder.Options]);
+    }
+
+    private DbContextOptions<TContext> RequireIndependentOptions()
+    {
         if (configured.GetType() != typeof(TContext) || configured.GetService<IDbContextOptions>() is not DbContextOptions<TContext> options)
             throw new ReleaseArchiveStoreException("archive_context_options_unsupported");
         // An explicit connection would share the caller's transaction and disposal ownership.
         if (RelationalOptionsExtension.Extract(options).Connection is not null)
             throw new ReleaseArchiveStoreException("archive_shared_connection_unsupported");
-        var builder = new DbContextOptionsBuilder<TContext>(options);
-        EfRelationalProviderBinding.ConfigureSqliteConnectionSafety(builder);
-        var constructor = typeof(TContext).GetConstructor([typeof(DbContextOptions<TContext>)]) ??
-            throw new ReleaseArchiveStoreException("archive_context_constructor_invalid");
-        return (TContext)constructor.Invoke([builder.Options]);
+        return options;
     }
 
     private static async Task<ReadSnapshot> BeginReadSnapshotAsync(DbContext context, CancellationToken cancellationToken)
