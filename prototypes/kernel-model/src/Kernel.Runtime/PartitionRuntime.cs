@@ -53,7 +53,8 @@ public sealed class PartitionRuntime(string node, IMembership membership, int pa
 
     public async ValueTask StopAsync(CancellationToken cancellationToken = default)
     {
-        for (var scope = 0; scope < partitions; scope++) await DeactivateAsync(scope, cancellationToken);
+        // A cancelled token ends it: what is not given up yet runs out by its lease, as after a crash.
+        for (var scope = 0; scope < partitions && !cancellationToken.IsCancellationRequested; scope++) await DeactivateAsync(scope, cancellationToken);
     }
 
     /// <summary>This node holds the scope's fence, as far as layer 2 knows.</summary>

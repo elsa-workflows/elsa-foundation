@@ -156,12 +156,14 @@ a concurrent stress test with injected connection failures and the provider's ow
 |---|---|---|
 | In-memory | A lock; the reference, and the simulation's store | Suite, simulation |
 | EF Core, PostgreSQL | The fence as its own statement (3 round trips) or as concurrency tokens in the one `SaveChanges` (2) | Suite, stress, cost |
-| EF Core, SQL Server | `Engine` dialect: `OUTPUT`, `MERGE`; **RCSI on** (E5); an index for the take (E8); `MaxBatchSize(1000)` (E7) | Suite, stress, cost |
+| EF Core, SQL Server | `Engine` dialect: `OUTPUT`, `MERGE`; **RCSI on** (E5); an index for the take (E8); `MaxBatchSize(1000)` (E7); **the checked fence by default** (E9) | Suite, stress, cost |
 | EF Core, MySQL | Dialect: no `RETURNING`, `INSERT IGNORE`, upserts; the take at READ COMMITTED (E8); `MaxBatchSize(1000)` | Suite, stress, cost |
 | EF Core, SQLite | One writer; `seq` assigned under the write lock; BUSY is transient | Suite, stress, cost |
 | MongoDB 8.0 | A replica set; the fence then one ordered client-level bulk write in a transaction; an upsert fence at index 0 when it rides in the batch; abort before reporting a failure (M2) | Suite, stress, cost |
 
-Every provider turns EF's savepoints off (E4). The set-based deletes of a terminate and a delete are statements of
+The EF store's default fence is the one decided on 12 and 13 November: in the batch on every engine but SQL Server,
+whose default is the checked fence (`Engine.FenceInBatchByDefault`; E9). Either can still be chosen. The MongoDB store
+keeps its own default, the checked fence. Every provider turns EF's savepoints off (E4). The set-based deletes of a terminate and a delete are statements of
 their own on EF, after the batch, so that with the fence in the batch they run only after it held; on MongoDB they are
 in the one bulk write.
 

@@ -35,7 +35,8 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
     private readonly CancellationTokenSource _exit = new(), _kill = new();     // leave the loop between passes; stop a pass where it is
     private readonly TaskScheduler _scheduler = new ConcurrentExclusiveSchedulerPair().ExclusiveScheduler;
     private readonly Stopwatch _clock = Stopwatch.StartNew();
-    private Task? _loop;
+    private Task? _loop, _halted;
+    private readonly object _halting = new();
     private volatile bool _gone;
 
     public RuntimeNode(string node, IMembership membership, int partitions, LoopOptions? options = null, IWakeSignal? wake = null)
@@ -70,29 +71,36 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
     /// </summary>
     public async ValueTask StopAsync(CancellationToken cancellationToken = default)
     {
-        bool halted;
-        using (cancellationToken.Register(_kill.Cancel))      // a stop that may not wait any longer becomes a kill
-            halted = await HaltAsync(kill: false);
-        if (halted && !_kill.IsCancellationRequested) await OnNode(() => _runtime.StopAsync(cancellationToken).AsTask());
+        using (cancellationToken.Register(_kill.Cancel))      // a stop that may not wait any longer becomes a kill, also during the release
+            await HaltAsync();
     }
 
     /// <summary>
-    /// A crash: the loop stops (a pass under way stops at a turn boundary, before its commit) and nothing is given up,
-    /// then or later: a stop or dispose after a kill does nothing. Background jobs already under way run on, as in a
-    /// process that lives on after it was declared dead; their results are dropped with the worker's memory.
+    /// A crash: the loop stops (a pass under way stops at a turn boundary, before its commit) and nothing more is given
+    /// up, also when a stop is under way: a kill during a stop ends its release. A stop or dispose after a kill does
+    /// nothing. Background jobs already under way run on, as in a process that lives on after it was declared dead;
+    /// their results are dropped with the worker's memory.
     /// </summary>
-    public async ValueTask KillAsync() => await HaltAsync(kill: true);
+    public async ValueTask KillAsync()
+    {
+        _kill.Cancel();
+        await HaltAsync();
+    }
 
     public ValueTask DisposeAsync() => StopAsync();
 
-    private async Task<bool> HaltAsync(bool kill)
+    /// <summary>The first stop or kill leaves the loop and, unless killed, gives every scope up; every caller waits for it.</summary>
+    private Task HaltAsync()
     {
-        if (_gone) return false;
+        lock (_halting) return _halted ??= HaltOnceAsync();
+    }
+
+    private async Task HaltOnceAsync()
+    {
         _gone = true;
-        if (kill) _kill.Cancel();
         _exit.Cancel();
         if (_loop is not null) await _loop;
-        return true;
+        if (!_kill.IsCancellationRequested) await OnNode(() => _runtime.StopAsync(_kill.Token).AsTask());
     }
 
     /// <summary>Run on the node's scheduler, one task at a time with the loop and what it started.</summary>
