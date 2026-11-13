@@ -58,17 +58,22 @@ public interface IWakeSignal
     void Listen(Action<InstanceRef> woken);
 }
 
-/// <summary>The wake signal of one process: a call to every listener, at once.</summary>
+/// <summary>The wake signal of one process: a call to every listener, at once, on the sender's thread.</summary>
 public sealed class InProcessWakeSignal : IWakeSignal
 {
     private readonly List<Action<InstanceRef>> _listeners = [];
 
     public void Send(InstanceRef actor)
     {
-        foreach (var listener in _listeners.ToList()) listener(actor);
+        Action<InstanceRef>[] listeners;
+        lock (_listeners) listeners = [.. _listeners];
+        foreach (var listener in listeners) listener(actor);
     }
 
-    public void Listen(Action<InstanceRef> woken) => _listeners.Add(woken);
+    public void Listen(Action<InstanceRef> woken)
+    {
+        lock (_listeners) _listeners.Add(woken);
+    }
 }
 
 /// <summary>What a heartbeat sees: how many nodes were heard from within the window, and which partitions nobody holds.</summary>
