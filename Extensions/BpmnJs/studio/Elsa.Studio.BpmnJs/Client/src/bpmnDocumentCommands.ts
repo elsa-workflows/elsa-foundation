@@ -5,6 +5,7 @@ import { guardBpmnNativeCopies } from "./bpmnDocumentCopyGuard";
 import { diffBpmnNativeCommandGroup } from "./bpmnDocumentDiff";
 import { nativeDiAliases, normalizeNativeDiIds } from "./bpmnDocumentDiAliases";
 import { contextualizeNativeNamespacePair, type NativeNamespaceOrigin, type NativeNamespaceSnapshot } from "./bpmnDocumentNamespaceContext";
+import { captureNativePropertyIntents, type NativePropertyIntent } from "./bpmnDocumentIntent";
 
 /** Immutable, optional-module-only snapshots of the pinned command context. No modeler objects escape. */
 export interface NativeCommandAction {
@@ -15,6 +16,7 @@ export interface NativeCommandAction {
   readonly oldParentId?: string;
   readonly parentId?: string;
   readonly properties?: Readonly<Record<string, unknown>>;
+  readonly propertyIntents?: readonly NativePropertyIntent[];
   readonly newLabel?: string;
   readonly oldElementId?: string;
   readonly newElementId?: string;
@@ -44,6 +46,8 @@ function snapshotAction(command: string, context: Record<string, unknown>): Nati
   const target = record(element?.labelTarget ?? context.labelTarget) ?? element;
   const di = record(target?.di);
   const properties = record(context.properties);
+  const propertyIntents = properties && captureNativePropertyIntents(context.moddleElement ?? target?.businessObject, properties);
+  if (command === "element.updateLabel" && context.newLabel != null && typeof context.newLabel !== "string") nativeRefuse("label command has no qualified text intent");
   const relatedIds = new Set<string>();
   const references = (value: unknown, seen = new Set<unknown>()) => {
     if (!value || typeof value !== "object" || seen.has(value)) return;
@@ -92,8 +96,8 @@ function snapshotAction(command: string, context: Record<string, unknown>): Nati
     ...(diIds.length ? { diIds: Object.freeze(diIds) } : {}),
     ...(moddle ? { moddleOwnerId: id(moddle), ...(moddleDocumentRoot ? { moddleDocumentRoot: true } : {}) } : {}),
     ...(moddlePath.length ? { moddlePath: Object.freeze(moddlePath) } : {}),
-    ...(properties ? { properties: structuredClone(copied), propertyNames: Object.freeze(Object.keys(properties)) } : {}),
-    ...(relatedIds.size ? { relatedIds: Object.freeze([...relatedIds]) } : {}), ...(typeof context.newLabel === "string" ? { newLabel: context.newLabel } : {}) });
+    ...(properties ? { properties: Object.freeze(Object.fromEntries(Object.entries(structuredClone(copied!)).map(([name, value]) => [name, value && typeof value === "object" ? Object.freeze(value) : value]))), propertyNames: Object.freeze(Object.keys(properties)), propertyIntents } : {}),
+    ...(relatedIds.size ? { relatedIds: Object.freeze([...relatedIds]) } : {}), ...(command === "element.updateLabel" ? { newLabel: context.newLabel as string ?? "" } : {}) });
 }
 
 /** Contexts copy at the complete group boundary. Teardown belongs to clean controller retirement, not fallible view detachment. */

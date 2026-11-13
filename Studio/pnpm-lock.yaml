@@ -146,6 +146,9 @@ importers:
       bpmn-js:
         specifier: 18.31.1
         version: 18.31.1
+      moddle-xml:
+        specifier: 12.3.2
+        version: 12.3.2(moddle@8.2.1)
       react:
         specifier: ^18.0.0 || ^19.0.0
         version: 19.2.7

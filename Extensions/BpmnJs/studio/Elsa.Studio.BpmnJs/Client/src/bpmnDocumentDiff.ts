@@ -2,6 +2,7 @@ import type { BpmnDocumentAuthoring, BpmnDocumentCommand, BpmnXmlAddress } from 
 import type { NativeCommandAction, NativeCommandGroup } from "./bpmnDocumentCommands";
 import type { BpmnNativeBaseline } from "./bpmnDocumentProjection";
 import { nativeChildren, nativeImportSignature, nativeIndex, nativePrimitiveMatches, nativeRefuse, nativeSignature, nativeXml } from "./bpmnDocumentXml";
+import { assertNativePropertyIntents, nativeModeledProperty as modeledProperty } from "./bpmnDocumentIntent";
 
 const xmlns = "http://www.w3.org/2000/xmlns/";
 const xsi = "http://www.w3.org/2001/XMLSchema-instance";
@@ -41,15 +42,6 @@ function propertyMatch(name: string, property: Element) {
     || name === "loopCharacteristics" && ["standardLoopCharacteristics", "multiInstanceLoopCharacteristics"].includes(property.localName)
     || ({ label: "BPMNLabel", labelStyle: "BPMNLabelStyle", font: "Font", bounds: "Bounds" } as Record<string, string>)[name] === property.localName;
 }
-function modeledProperty(owner: Element, path: readonly string[]): Element {
-  for (const name of path) {
-    const candidates = [...owner.children].filter(child => propertyMatch(name, child));
-    if (candidates.length !== 1) nativeRefuse("idless modeled property path is missing or ambiguous");
-    owner = candidates[0];
-  }
-  return owner;
-}
-
 
 /**
  * Reconcile modeled changes through granular source operations. B and N are transient native trees;
@@ -119,12 +111,19 @@ export function diffBpmnNativeCommandGroup(authoring: BpmnDocumentAuthoring, bas
     .concat([...element.children].flatMap(child => child.namespaceURI === ns.model && (child.localName.endsWith("Ref") || ["incoming", "outgoing", "categoryValueRef"].includes(child.localName))
       ? [reference(child, child.textContent?.trim() ?? "")].filter((value): value is string => !!value) : []));
   for (const action of group.actions) {
-    if (!action.properties) continue;
+    if (!["element.updateProperties", "element.updateModdleProperties"].includes(action.command)) continue;
     const owner = action.moddleDocumentRoot ? next.documentElement : newIndex.get(action.moddleOwnerId ?? action.elementId ?? "");
-    if (!owner) continue;
+    if (!owner) nativeRefuse("property command owner is unavailable");
     const element = modeledProperty(owner, action.moddlePath ?? []);
-    for (const [name, value] of Object.entries(action.properties)) {
-      if (value && typeof value === "object" || name === "di") continue;
+    const intents = action.propertyIntents ?? [], captured = new Set(intents.map(intent => intent.name));
+    if (captured.size !== intents.length || intents.some(intent => !fieldNames(action).includes(intent.name))) nativeRefuse("property intent membership is unqualified");
+    assertNativePropertyIntents(intents, element, oldIndex, newIndex, ns.model);
+    for (const name of fieldNames(action)) {
+      if (captured.has(name)) continue;
+      if (!action.properties || !Object.hasOwn(action.properties, name)) nativeRefuse("modeled property intent snapshot is unavailable");
+      const value = action.properties[name];
+      if (name === "di") continue;
+      if (typeof value === "object" && value !== null || value == null && !element.hasAttribute(name) && !oldIndex.get(action.moddleOwnerId ?? action.elementId ?? "")?.hasAttribute(name)) nativeRefuse("modeled child/reference property needs its captured intent snapshot");
       const actual = name === "body" ? element.textContent : element.getAttribute(name);
       if (!(name === "body" ? actual === (value == null ? null : String(value)) : nativePrimitiveMatches(element, name, value))) nativeRefuse("modeled property differs from completed command intent");
     }

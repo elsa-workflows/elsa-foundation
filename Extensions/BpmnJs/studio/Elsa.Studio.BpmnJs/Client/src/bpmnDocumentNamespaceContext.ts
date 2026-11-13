@@ -1,6 +1,7 @@
 import type { BpmnDocumentAuthoring } from "@elsa-workflows/studio-workflows";
 import type { NativeCommandAction } from "./bpmnDocumentCommands";
 import { nativeRefuse, nativeXml } from "./bpmnDocumentXml";
+import { nativeIntentElement, nativeModeledProperty } from "./bpmnDocumentIntent";
 
 const xmlns = "http://www.w3.org/2000/xmlns/", xsi = "http://www.w3.org/2001/XMLSchema-instance";
 const xml = "http://www.w3.org/XML/1998/namespace";
@@ -93,6 +94,26 @@ export function contextualizeNativeNamespacePair(authoring: BpmnDocumentAuthorin
     for (const child of [...parent.children]) correspond(child);
   };
   correspond(next.documentElement);
+  const intended = new Map<Element, NativeNamespaceContext>();
+  const bindIntent = (source: Element, target: Element, contexts: ReadonlyMap<string, NativeNamespaceContext>) => {
+    if (kind(source) !== kind(target)) return;
+    intended.set(target, contexts.get(key(source))!);
+    for (let index = 0; index < source.children.length; index++) if (target.children[index]) bindIntent(source.children[index], target.children[index], contexts);
+  };
+  for (const action of actions) if (action.propertyIntents?.length) {
+    const owner = action.moddleDocumentRoot ? next.documentElement : [...next.getElementsByTagName("*")].find(element => element.getAttribute("id") === (action.moddleOwnerId ?? action.elementId));
+    if (!owner) nativeRefuse("captured property namespace owner is unavailable");
+    const target = nativeModeledProperty(owner, action.moddlePath ?? []);
+    for (const intent of action.propertyIntents) {
+      const source = nativeIntentElement(intent), contexts = captureNativeNamespaceContexts(source.ownerDocument);
+      const children = [...target.children].filter(child => intent.kinds.includes(`${child.namespaceURI}|${child.localName}`));
+      [...source.children].forEach((child, index) => { if (children[index]) bindIntent(child, children[index], contexts); });
+      for (const reference of intent.references) {
+        const element = [...next.getElementsByTagName("*")].find(element => element.getAttribute("id") === reference.id);
+        if (element && !old.has(`id:${reference.id}`)) { const source = nativeIntentElement(reference); bindIntent(source, element, captureNativeNamespaceContexts(source.ownerDocument)); }
+      }
+    }
+  }
   const copies = new Map<string, { root: Element; contexts: ReadonlyMap<string, NativeNamespaceContext> }>();
   for (const origin of origins) {
     if (old.has(`id:${origin.elementId}`) || copies.has(origin.elementId) || !origin.snapshot || origin.snapshot.ownerNodeId !== ownerNodeId) nativeRefuse("copied source namespace correspondence is unavailable");
@@ -117,7 +138,7 @@ export function contextualizeNativeNamespacePair(authoring: BpmnDocumentAuthorin
     const result = document.implementation.createDocument(null, null), effective = new Map<Element, Bindings>();
     const visit = (element: Element, inherited: Bindings, outputParent?: Element): Element => {
       const previous = isNext ? matched.get(element) : old.get(key(element));
-      let context = previous ? contexts.get(key(previous)) : undefined;
+      let context = isNext && intended.get(element) || (previous ? contexts.get(key(previous)) : undefined);
       for (let ancestor: Element | null = element; ancestor; ancestor = ancestor.parentElement) {
         const copied = copies.get(ancestor.getAttribute("id") ?? "");
         if (!copied) continue;
@@ -130,7 +151,7 @@ export function contextualizeNativeNamespacePair(authoring: BpmnDocumentAuthorin
       const typedBinding = (prefix: string) => [element, ...element.getElementsByTagName("*")].some(member => [...member.attributes].some(attribute => typed(attribute)
         && (qName(attribute.value)?.[1] ?? "") === prefix && attribute.value !== (matched.get(member)?.getAttributeNS(attribute.namespaceURI, attribute.localName) ?? contexts.get(key(member))?.attributes.get(field(attribute)))));
       if (isNext) for (const [prefix, namespace] of declarations) {
-        const original = importing ? context?.own.get(prefix) : previous && own(previous).get(prefix);
+        const original = importing || intended.has(element) ? context?.own.get(prefix) : previous && own(previous).get(prefix);
         if (original !== undefined && original !== namespace) nativeRefuse("unaccounted native namespace rebinding outside the declared normalization ledger");
         if (namespace !== bindings.get(prefix) && original === undefined && !typedBinding(prefix)) {
           const nameUse = [element, ...element.getElementsByTagName("*")].some(member => (member.prefix ?? "") === prefix && member.namespaceURI === namespace

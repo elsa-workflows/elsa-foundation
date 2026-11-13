@@ -7,7 +7,7 @@ import ModdleCopy from "bpmn-js/lib/features/copy-paste/ModdleCopy";
 import type { ModdleElement } from "bpmn-js/lib/model/Types";
 import { collectBpmnNativeCommandGroups, mapBpmnNativeCommandGroup, type NativeCommandAction, type NativeCommandEvents, type NativeCommandGroup } from "../bpmnDocumentCommands";
 import { snapshotNativeNamespaces } from "../bpmnDocumentNamespaceContext";
-import { authoring, edit, modeled, owner, rawXml } from "./bpmnDocumentFixture";
+import { authoring, capturePropertyActions, edit, modeled, owner, rawXml } from "./bpmnDocumentFixture";
 import { bindBpmnNativeBaseline } from "../bpmnDocumentProjection";
 
 const ns = authoring.bpmnNamespaces, xmlns = "http://www.w3.org/2000/xmlns/";
@@ -85,7 +85,8 @@ describe("projection-owned namespace contexts", () => {
     const result = await modeled(canonical), next = edit(result.baseline.xml, (document, index) => {
       document.documentElement.setAttributeNS(xmlns, "xmlns:newdef", "urn:new-definition"); index.get("work")!.setAttribute("calledElement", "newdef:After");
     });
-    const commands = mapBpmnNativeCommandGroup(authoring, result.baseline, { id: 1, trigger: "execute", actions: [{ command: "element.updateModdleProperties", elementId: "work", propertyNames: ["calledElement"] }] }, next);
+    const actions = await capturePropertyActions(result.baseline, [{ command: "element.updateModdleProperties", elementId: "work", propertyNames: ["calledElement"] }], next);
+    const commands = mapBpmnNativeCommandGroup(authoring, result.baseline, { id: 1, trigger: "execute", actions }, next);
     const retained = authoring.readBpmnDocument(authoring.applyBpmnDocumentCommands(canonical, commands)), work = retained.byId.get("work")!;
     const opaque = work.getElementsByTagNameNS("urn:vendor", "configuration")[0];
     expect(opaque.textContent).toBe("newdef:Kept"); expect(opaque.lookupNamespaceURI("newdef")).toBeNull();
@@ -113,7 +114,8 @@ describe("projection-owned namespace contexts", () => {
         if (erase) for (const doc of docs) for (const attribute of [...doc.attributes]) if (attribute.namespaceURI === xmlns) doc.removeAttributeNode(attribute);
         task.insertBefore(docs[1], docs[0]);
       });
-      const group = { id: 1, trigger: "execute" as const, actions: [{ command: "element.updateModdleProperties", elementId: "script", propertyNames: ["documentation"] }] };
+      const actions = await capturePropertyActions(result.baseline, [{ command: "element.updateModdleProperties", elementId: "script", propertyNames: ["documentation"] }], reorder(result.baseline.xml));
+      const group = { id: 1, trigger: "execute" as const, actions };
       const commands = mapBpmnNativeCommandGroup(authoring, result.baseline, group, reorder(result.baseline.xml));
       const retained = authoring.readBpmnDocument(authoring.applyBpmnDocumentCommands(canonical, commands)), docs = [...retained.byId.get("script")!.children].filter(child => child.localName === "documentation");
       expect(docs.map(doc => [doc.textContent, doc.lookupNamespaceURI("q")])).toEqual([[text[1], "urn:second"], [text[0], "urn:first"]]);

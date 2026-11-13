@@ -3,7 +3,10 @@ import type { ActivityNode, BpmnDocumentAuthoring, BpmnScopeAddress } from "@els
 import * as owning from "../../../../../../../Studio/src/essentials/Elsa.Studio.Workflows/Client/src/bpmn/bpmnDocument";
 import { planBpmnDocumentSyntaxChange } from "../../../../../../../Studio/src/essentials/Elsa.Studio.Workflows/Client/src/bpmn/bpmnDocumentSyntaxChange";
 import { serializeBpmnXml } from "../../../../../../../Studio/src/essentials/Elsa.Studio.Workflows/Client/src/bpmn/bpmnDocumentXml";
-import { projectBpmnNativeDocument, bindBpmnNativeBaseline } from "../bpmnDocumentProjection";
+import { projectBpmnNativeDocument, bindBpmnNativeBaseline, type BpmnNativeBaseline } from "../bpmnDocumentProjection";
+import type { NativeCommandAction } from "../bpmnDocumentCommands";
+import { captureNativePropertyIntents } from "../bpmnDocumentIntent";
+import { contextualizeNativeNamespacePair } from "../bpmnDocumentNamespaceContext";
 import SubprocessCompatibility from "bpmn-js/lib/features/drilldown/SubprocessCompatibility";
 // @ts-expect-error bpmn-moddle10.3.1 does not publish declarations for its runtime entry.
 import { BpmnModdle } from "bpmn-moddle";
@@ -70,4 +73,21 @@ export function deferred<T>() {
   let resolve!: (value: T) => void, reject!: (error: unknown) => void;
   const promise = new Promise<T>((yes, no) => { resolve = yes; reject = no; });
   return { promise, resolve, reject };
+}
+
+/** These XML edits are requested test input, captured before the native writer produces nextXml. */
+export async function capturePropertyActions(baseline: BpmnNativeBaseline, actions: readonly NativeCommandAction[], intendedXml: string): Promise<readonly NativeCommandAction[]> {
+  const intended = contextualizeNativeNamespacePair(authoring, baseline.projection.namespaceContexts, baseline.xml, intendedXml, [], baseline.projection.owner.nodeId, false, actions).next;
+  const parsed = await new BpmnModdle().fromXML(intended);
+  if (parsed.warnings.length) throw new Error(JSON.stringify(parsed.warnings));
+  return actions.map(action => {
+    if (!["element.updateProperties", "element.updateModdleProperties"].includes(action.command)) return action;
+    let target = action.moddleDocumentRoot ? parsed.rootElement : parsed.elementsById[action.moddleOwnerId ?? action.elementId ?? ""];
+    for (const field of action.moddlePath ?? []) {
+      target = target.get(field);
+      if (Array.isArray(target)) { if (target.length !== 1) throw new Error("Ambiguous requested test property"); target = target[0]; }
+    }
+    const properties = Object.fromEntries((action.propertyNames ?? Object.keys(action.properties ?? {})).map(name => [name, Object.hasOwn(action.properties ?? {}, name) ? action.properties![name] : target.get(name)]));
+    return { ...action, propertyNames: Object.keys(properties), properties: Object.fromEntries(Object.entries(properties).filter(([, value]) => value == null || typeof value !== "object")), propertyIntents: captureNativePropertyIntents(target, properties) };
+  });
 }

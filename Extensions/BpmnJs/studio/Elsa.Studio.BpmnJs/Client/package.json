@@ -5,7 +5,8 @@
   "type": "module",
   "dependencies": {
     "@elsa-workflows/studio-sdk": "workspace:*",
-    "bpmn-js": "18.31.1"
+    "bpmn-js": "18.31.1",
+    "moddle-xml": "12.3.2"
   },
   "peerDependencies": {
     "@elsa-workflows/studio-workflows": "workspace:*",

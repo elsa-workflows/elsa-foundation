@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { mapBpmnNativeCommandGroup, mapBpmnNativeCommandPlan, type NativeCommandAction } from "../bpmnDocumentCommands";
 import { bindBpmnNativeBaseline, projectBpmnNativeDocument } from "../bpmnDocumentProjection";
-import { authoring, edit, modeled, owner, rawXml, scope } from "./bpmnDocumentFixture";
+import { authoring, capturePropertyActions, edit, modeled, owner, rawXml, scope } from "./bpmnDocumentFixture";
 // @ts-expect-error pinned bpmn-moddle has no declarations for its runtime entry.
 import { BpmnModdle } from "bpmn-moddle";
 
@@ -19,8 +19,9 @@ async function capture(xml: string) {
 }
 async function change(actions: readonly NativeCommandAction[], editNative: (document: XMLDocument, index: Map<string, Element>) => void, source = owner()) {
   const { baseline } = await modeled(source);
-  const next = await capture(edit(baseline.xml, editNative));
-  const commands = mapBpmnNativeCommandGroup(authoring, baseline, { id: 1, trigger: "execute", actions }, next);
+  const intended = edit(baseline.xml, editNative), requested = await capturePropertyActions(baseline, actions, intended);
+  const next = await capture(intended);
+  const commands = mapBpmnNativeCommandGroup(authoring, baseline, { id: 1, trigger: "execute", actions: requested }, next);
   const plan = authoring.planBpmnDocumentSyntaxChange(source, commands);
   const candidate = authoring.applyBpmnDocumentTransaction(source, plan.transaction);
   return { baseline, next, commands, candidate, parsed: authoring.readBpmnDocument(candidate), plan };
@@ -147,7 +148,7 @@ describe("unenabled full-source modeled command differ", () => {
     expect(result.commands).toContainEqual({ kind: "attribute", target: { documentRoot: true }, name: "name", value: "Definitions name" });
     const { baseline } = await modeled();
     const next = edit(baseline.xml, (_document, byId) => { byId.get("end")!.setAttribute("name", "End"); byId.get("other")!.setAttribute("isExecutable", "true"); });
-    expect(() => mapBpmnNativeCommandGroup(authoring, baseline, { id: 1, trigger: "execute", actions: [{ command: "element.updateModdleProperties", elementId: "end", propertyNames: ["name"] }] }, next)).toThrow(/unaccounted/);
+    expect(() => mapBpmnNativeCommandGroup(authoring, baseline, { id: 1, trigger: "execute", actions: [{ command: "element.updateModdleProperties", elementId: "end", properties: { name: "End" } }] }, next)).toThrow(/unaccounted/);
   });
 
   it("retains structural edits as the next proved baseline after inserted/removed DI", async () => {
@@ -256,7 +257,8 @@ describe("unenabled full-source modeled command differ", () => {
       const docs = [...index.get("work")!.children].filter(child => child.localName === "documentation");
       docs[0].textContent = "Changed"; docs[1].remove();
     });
-    expect(() => mapBpmnNativeCommandGroup(authoring, baseline, { id: 2, trigger: "execute", actions: [{ command: "element.updateModdleProperties", elementId: "work", propertyNames: ["documentation"] }] }, next)).toThrow(/opaque source correspondence/);
+    const actions = await capturePropertyActions(baseline, [{ command: "element.updateModdleProperties", elementId: "work", propertyNames: ["documentation"] }], next);
+    expect(() => mapBpmnNativeCommandGroup(authoring, baseline, { id: 2, trigger: "execute", actions }, next)).toThrow(/opaque source correspondence/);
   });
 
   it("refuses ordinal guesses when ambiguous idless members carry opaque metadata on standard descendants", async () => {
@@ -266,7 +268,8 @@ describe("unenabled full-source modeled command differ", () => {
       const parent = index.get("end")!, [first, second] = [...parent.children];
       first.firstElementChild!.textContent = "PT3H"; second.firstElementChild!.textContent = "PT4H"; parent.insertBefore(second, first);
     });
-    expect(() => mapBpmnNativeCommandGroup(authoring, baseline, { id: 1, trigger: "execute", actions: [{ command: "element.updateModdleProperties", elementId: "end", propertyNames: ["eventDefinitions"] }] }, next)).toThrow(/opaque|correspondence/);
+    const actions = await capturePropertyActions(baseline, [{ command: "element.updateModdleProperties", elementId: "end", propertyNames: ["eventDefinitions"] }], next);
+    expect(() => mapBpmnNativeCommandGroup(authoring, baseline, { id: 1, trigger: "execute", actions }, next)).toThrow(/opaque|correspondence/);
   });
 
   it("refuses an unrelated idless property change even when another property on the same activity was requested", async () => {
@@ -275,7 +278,9 @@ describe("unenabled full-source modeled command differ", () => {
       append(index.get("work")!, '<b:documentation>Requested</b:documentation>');
       append(index.get("work")!, '<b:standardLoopCharacteristics/>');
     });
-    expect(() => mapBpmnNativeCommandGroup(authoring, baseline, { id: 1, trigger: "execute", actions: [{ command: "element.updateModdleProperties", elementId: "work", propertyNames: ["documentation"] }] }, next)).toThrow(/unaccounted/);
+    const intended = edit(baseline.xml, (_document, index) => { append(index.get("work")!, '<b:documentation>Requested</b:documentation>'); });
+    const actions = await capturePropertyActions(baseline, [{ command: "element.updateModdleProperties", elementId: "work", propertyNames: ["documentation"] }], intended);
+    expect(() => mapBpmnNativeCommandGroup(authoring, baseline, { id: 1, trigger: "execute", actions }, next)).toThrow(/unaccounted/);
   });
 
   it("refuses a semantic deletion reported only as a move and refuses off-scope canvas targets", async () => {

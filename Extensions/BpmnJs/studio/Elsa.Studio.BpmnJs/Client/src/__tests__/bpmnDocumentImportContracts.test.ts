@@ -7,11 +7,17 @@ import UpdatePropertiesHandler from "bpmn-js/lib/features/modeling/cmd/UpdatePro
 import BpmnFactory from "bpmn-js/lib/features/modeling/BpmnFactory";
 import ModdleCopy from "bpmn-js/lib/features/copy-paste/ModdleCopy";
 import { collectBpmnNativeCommandGroups, mapBpmnNativeCommandGroup, type NativeCommandEvents, type NativeCommandGroup } from "../bpmnDocumentCommands";
+import { captureNativePropertyIntents } from "../bpmnDocumentIntent";
 import { snapshotNativeNamespaces } from "../bpmnDocumentNamespaceContext";
 import { authoring, edit, modeled, owner, rawXml } from "./bpmnDocumentFixture";
 
 const ns = authoring.bpmnNamespaces;
 describe("pinned import and command contracts", () => {
+  it("captures a valid Bounds object with the pinned schema's inherited zero coordinate defaults", async () => {
+    const native = await modeled(), shape = native.definitions.diagrams.find((entry: { id: string }) => entry.id === "main").plane.planeElement[0];
+    const bounds = native.moddle.create("dc:Bounds", { width: 100, height: 80 });
+    expect(captureNativePropertyIntents(shape, { bounds })).toHaveLength(1);
+  });
   it.each([
     ["loopMaximum", (xml: string) => xml.replace('<bpmn:outgoing>q:flow</bpmn:outgoing>', '<bpmn:outgoing>q:flow</bpmn:outgoing><bpmn:standardLoopCharacteristics loopMaximum="01"/>'), 'loopMaximum="1"'],
     ["capacity", (xml: string) => xml.replace('<bpmn:process id="process">', '<bpmn:dataStore id="store" capacity="01"/><bpmn:process id="process">'), 'capacity="1"'],
