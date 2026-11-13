@@ -1352,3 +1352,19 @@ revalidates pairing/access and preserves Required write failure as owed work. Ac
 different now-current receiver decision. See the [owning catalog](../../../Activities/Runtime/Elsa.Activities.Runtime/EXTENSION_POINTS.md#atomic-saved-resume-admission-loss-3849-s10i).
 All15 new and35 affected component controls are NOT RUN. No new public contract/schema/dependency/friend/
 module/host is added; other receiver branches, authored journeys, durable provider and UX acceptance remain open.
+
+### Multiple saved publication recipients (#3849, S10j)
+
+Nine additional component controls exercise one actual public Primitives publication/native processor/saved
+cohort through two native queued recipients and actual consumption/callback/history paths. Eight rows vary
+both original capture choices and whether the second callback returns a fault; a ninth retires one saved wait
+after handoff. Each captured recipient has its own receipt and causal consumption/outcome in its own ordered
+history; one source remains one publication/routing invocation. Uncaptured recipients keep the original source
+cause without acquiring history, and one recipient's fault/retirement does not invent effects on the other.
+
+All9 new and50 existing native delivery/publication/receiver component controls are NOT RUN. Both runs reuse
+activity/bookmark IDs to exercise run scoping. Native workflow/invocation/private state/schema and controlled
+callback activations remain supplied; a second wait is created by the actual native handler. Existing fixture
+defaults are unchanged. This is not authored start/whole-workflow, concurrent node/authority, durable provider/
+restart, hosted control sensitivity or composed UX qualification. No production/API/schema/reference/dependency/
+friend/module/host change is added. T026 and parent remain open.
