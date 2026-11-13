@@ -121,7 +121,10 @@ sealed class PgWrites(string connection)
     public async Task<Snapshot> TakeAsync()
     {
         await using var c = await OpenAsync();
-        var wal = (await RowsAsync(c, "SELECT pg_current_wal_lsn()::text, wal_bytes, wal_records, wal_fpi FROM pg_stat_wal"))[0];
+        // The insert position, not the write position: a record not yet written (a prune during a read, say) belongs to this
+        // window. pg_walinspect reads only flushed WAL, so wait for the WAL writer to flush up to it (200 ms by default).
+        var wal = (await RowsAsync(c, "SELECT pg_current_wal_insert_lsn()::text, wal_bytes, wal_records, wal_fpi FROM pg_stat_wal"))[0];
+        for (var tries = 0; tries < 100 && !(bool)(await RowsAsync(c, "SELECT pg_current_wal_flush_lsn() >= $1::pg_lsn", (string)wal[0]))[0][0]; tries++) await Task.Delay(20);
         var rows = await RowsAsync(c, """
             SELECT s.relname, s.n_tup_ins, s.n_tup_upd, s.n_tup_hot_upd, s.n_tup_del, s.n_live_tup, s.n_dead_tup, s.vacuum_count, s.autovacuum_count,
                    pg_relation_size(s.relid), pg_indexes_size(s.relid), CASE WHEN c.reltoastrelid = 0 THEN 0 ELSE pg_total_relation_size(c.reltoastrelid) END
