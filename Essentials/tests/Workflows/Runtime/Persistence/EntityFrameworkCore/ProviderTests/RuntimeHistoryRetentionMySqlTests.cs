@@ -1,6 +1,7 @@
 using System.Data;
 using System.Data.Common;
 using Elsa.Persistence.EntityFramework;
+using Elsa.Persistence.Schema;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Configuration;
