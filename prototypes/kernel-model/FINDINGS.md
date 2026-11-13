@@ -1002,3 +1002,43 @@ holds, 0 deadlocks, 1,143 resets (all fenced), takeovers 572 and 571, settled 21
 is now the fence in the batch, recorded at REPEATABLE READ in ENGINES.md (holds, one take deadlock); with
 `isolation=rc` the fence in the batch has no recorded stress run, and was not run here. README's stress commands now
 show the fence option on every engine.
+
+### 25.3 Reply addresses carry the caller's deadline (decision 6). Run
+
+**What changed.** `ReplyTo.Of(node, request, deadline, beforeCommit)`: the reply address carries an absolute deadline,
+in database milliseconds, equal to the route's timeout (the native HTTP host passes its request's deadline, 30 s).
+The owner reads it with its own estimate of database time (`Worker.Now`):
+
+- a turn's release adds a caller to its instance only while the caller's deadline has not passed;
+- every send to a caller past its deadline is dropped (`Worker.Send`);
+- after every pass, and before every eviction, the owner forgets expired callers (`Unpin`). A caller pins its
+  instance against eviction while it waits, so an expired one no longer does.
+
+The receiving node already ended the request at its deadline (504); what is new is the owner's side, which before held
+the address until the instance ended, however long that took.
+
+**The check.** The simulation gives one request in four a deadline of 250 ms, shorter than its models' 300 ms timers,
+so callers expire while their instances run on (the others keep 30 s). After every settling pass it checks that no
+owner holds a caller past its deadline (I15). `Flaw.KeepExpiredCallers` (the owner keeps them) is caught at seed 2:
+`I15 actor 14 still holds the reply address node0.2|1040193|q31 past its deadline`.
+
+**Gates** (before: section 24):
+
+| Gate | Before | After |
+|---|---|---|
+| `$SIM --seeds 200000` | 0 failed, 0 parked | 0 failed, 0 parked |
+| `$SIM --seeds 20000 --actions 1000` | 0 failed, 12 innocent parked | 0 failed, 13 innocent parked |
+| `$SIM --native --seeds 20000 --actions 1000` | 0 failed, 15 parked; 409,284 matched; 972 reruns, all told | 0 failed, 15 parked; 408,758 matched; 980 reruns, all told |
+| `$SIM --mutations --seeds 20000` | every flaw as section 24 | every flaw caught as before, two only in combination as before, and `KeepExpiredCallers` at seed 2 |
+| `$SIM --native-mutations --seeds 20000` | 5 of 5 (seeds 1, 6, 1, 12, 1) | the same |
+| `$NAT smoke` | 31 of 31 | 31 of 31 |
+| `$NAT cost sqlite` | every row ok | identical |
+
+The schedules moved: the short deadlines end requests sooner, and the generator picks among open requests (a
+disconnect), so a seed's actions after the first short request differ. That is why the innocent-parked count and the
+native counts moved, and why some first failing seeds of the mutation check moved: `ProjectorBlindWrite` 25 to 38,
+`NoDeadline` 31 to 1, `SuspendDuringTrial` 2,016 to 3,156, `TurnNewerState` 225 to 1,857 (its 1,000-action runs),
+`RunBeforeMark` at seed 1 with another violation (I21 instead of IDLE), and a few action counts at the same seeds.
+Every flaw is still caught within 20,000 seeds.
+
+**Not done:** the owner on another node still cannot tell a waiting node it was lost (504 at the deadline, as before).
