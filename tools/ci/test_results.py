@@ -39,6 +39,7 @@ MANIFEST = "tools/ci/test-tiers.json"
 NS = {"t": "http://microsoft.com/schemas/VisualStudio/TeamTest/2010"}
 FAILED = {"Failed", "Error", "Timeout", "Aborted"}
 TEST_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_.+]*$")
+HOST_STOP = re.compile(r"\b(?:abort(?:ed|ing)?|crash(?:ed|ing)?)\b", re.IGNORECASE)
 
 
 @dataclass
@@ -95,11 +96,11 @@ def read_trx(directory: str) -> Results:
             if summary is not None and summary.get("outcome") == "Aborted" or \
                     counters is not None and counters.get("aborted", "0") != "0":
                 results.aborted.append(f"{name}: the test run was aborted")
-            # Only an Error-level run message signals a host that stopped; Warning and Informational messages carry
-            # ordinary test output, which may well contain words like "crashed".
+            # Match diagnostic words, not fragments of test identifiers such as Recovers_after_crash. Adapters also
+            # put ordinary failed-test output in Error-level messages; those failures still use the retry path.
             for info in document.iterfind(".//t:RunInfo", NS):
                 text = " ".join("".join(info.itertext()).split())
-                if info.get("outcome") == "Error" and ("abort" in text.lower() or "crash" in text.lower()):
+                if info.get("outcome") == "Error" and HOST_STOP.search(text):
                     results.aborted.append(f"{name}: {text[:200]}")
     return results
 
@@ -287,7 +288,8 @@ def _run(command: list[str]) -> subprocess.CompletedProcess:
 
 # Self-test -----------------------------------------------------------------------------------------------------------
 
-def _trx(directory: str, tests: list[tuple[str, str, str, str]], aborted: bool = False, run_info: str = "") -> None:
+def _trx(directory: str, tests: list[tuple[str, str, str, str]], aborted: bool = False, run_info: str = "",
+         aborted_count: int = 0) -> None:
     """Writes a minimal TRX: tests are (class, method, outcome, duration)."""
     os.makedirs(directory, exist_ok=True)
     unit_tests = "".join(f'<UnitTest id="{i}" name="{c}.{m}" storage="x.dll"><TestMethod className="{c}" name="{m}"/></UnitTest>'
@@ -297,7 +299,7 @@ def _trx(directory: str, tests: list[tuple[str, str, str, str]], aborted: bool =
     outcome = "Aborted" if aborted else "Completed"
     with open(os.path.join(directory, "r.trx"), "w", encoding="utf-8") as handle:
         handle.write(f'<TestRun xmlns="{NS["t"]}"><Results>{results}</Results><TestDefinitions>{unit_tests}</TestDefinitions>'
-                     f'<ResultSummary outcome="{outcome}"><Counters aborted="0"/><RunInfos>{run_info}</RunInfos></ResultSummary></TestRun>')
+                     f'<ResultSummary outcome="{outcome}"><Counters aborted="{aborted_count}"/><RunInfos>{run_info}</RunInfos></ResultSummary></TestRun>')
 
 
 def self_test() -> int:
@@ -360,6 +362,26 @@ def self_test() -> int:
         _trx(crashed, [("A.T", "Ok", "Passed", quick)],
              run_info='<RunInfo outcome="Error"><Text>The active test run was aborted. Reason: Test host process crashed</Text></RunInfo>')
         check("an error that the host crashed is an abort", bool(read_trx(crashed).aborted))
+
+        named_crash = os.path.join(tmp, "named-crash")
+        _trx(named_crash, [("A.T", "Recovers_after_crash", "Failed", quick)],
+             run_info='<RunInfo outcome="Error"><Text>[xUnit.net] A.T.Recovers_after_crash [FAIL]</Text></RunInfo>')
+        named_results = read_trx(named_crash)
+        check("an error naming a failed crash test is retryable, not a host abort",
+              not named_results.aborted and named_results.failed() == ["A.T.Recovers_after_crash"])
+        check("a named crash test that passes its retry lets the shard pass",
+              decide(manifest, runs[:1], [named_results],
+                     [Results(outcomes={"A.T.Recovers_after_crash": "Passed"}, files=1)]).ok)
+        for label, message in (("identifier", "A.T.abort_and_crash_recovery [FAIL]"),
+                               ("host-crash", "Test host process crashed"),
+                               ("run-abort", "The active test run was aborted")):
+            directory = os.path.join(tmp, label)
+            _trx(directory, [("A.T", "Ok", "Passed", quick)],
+                 run_info=f'<RunInfo outcome="Error"><Text>{message}</Text></RunInfo>')
+            check(f"run diagnostic: {label}", bool(read_trx(directory).aborted) == (label != "identifier"))
+        counted_abort = os.path.join(tmp, "counted-abort")
+        _trx(counted_abort, [("A.T", "Ok", "Passed", quick)], aborted_count=1)
+        check("an explicit aborted counter fails even without a run diagnostic", bool(read_trx(counted_abort).aborted))
 
         v = case("missing", None, None)
         check("run with no TRX: shard fails", not v.ok and any("wrote no TRX" in a for a in v.aborted))
