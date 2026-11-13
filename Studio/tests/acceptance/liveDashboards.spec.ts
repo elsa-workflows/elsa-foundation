@@ -1,5 +1,8 @@
 import { writeFileSync } from "node:fs";
 import { expect, test, type Page, type TestInfo } from "@playwright/test";
+import { attachDashboardJson } from "./dashboardJourneySupport";
+import * as keyboardUi from "./dashboardKeyboard";
+import { dashboardAccessPreservationJourney } from "./dashboardAccessPreservationJourney";
 import { nativeDashboardEdgesJourney } from "./nativeDashboardEdgesJourney";
 import { liveAcmeDashboardJourney, liveWorkflowDashboardJourney, restartWorkflowDashboardJourney, liveUnsupportedDashboardJourney } from "./liveDashboardsJourney";
 
@@ -30,10 +33,14 @@ test.beforeEach(async ({ page }, info) => {
   await form.getByLabel(/password/i).fill("Password123!");
   await form.getByRole("button", { name: /sign in/i }).click();
   await expect(page.getByRole("heading", { name: "Questions", level: 2, exact: true })).toBeVisible({ timeout: 60_000 });
+  await keyboardUi.startKeyboardEvidence(page);
   await capture(page, info, "live-reference");
 });
 
-test.afterEach(async ({ page }) => { expect(errors.get(page), "Uncaught browser errors").toEqual([]); });
+test.afterEach(async ({ page }, info) => {
+  expect(errors.get(page), "Uncaught browser errors").toEqual([]);
+  if (keyboardUi.keyboardOnly && info.status === "passed") await attachDashboardJson(info, "keyboard-proof.json", await keyboardUi.keyboardEvidence(page));
+});
 
 if (process.env.UX_DASHBOARD_UNSUPPORTED === "1") {
   test("live unsupported Dashboard question preserves the request without fabrication", async ({ page }, info) => liveUnsupportedDashboardJourney(page, info, capture));
@@ -44,4 +51,5 @@ if (process.env.UX_DASHBOARD_UNSUPPORTED === "1") {
 } else {
   test("live Workflow question clarification refinement and native refresh", async ({ page }, info) => liveWorkflowDashboardJourney(page, info, capture));
   test("live Acme business dimension clarification refinement and viewer results", async ({ page }, info) => liveAcmeDashboardJourney(page, info, capture));
+  if (keyboardUi.keyboardOnly) test("native Dashboard editor rights and unavailable Home contribution preservation", async ({ page }, info) => dashboardAccessPreservationJourney(page, info, capture));
 }
