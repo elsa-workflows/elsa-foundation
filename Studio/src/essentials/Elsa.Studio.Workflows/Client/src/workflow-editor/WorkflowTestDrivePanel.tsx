@@ -1,3 +1,4 @@
+import { StudioField } from "@elsa-workflows/studio-ui";
 import "../workflowTestDrive.css";
 import { Suspense, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import type {
@@ -249,9 +250,7 @@ export function WorkflowTestDrivePanel({
       {loading ? <p role="status">Loading available starts…</p> : null}
       <Suspense fallback={<p className="wf-test-drive-loading" role="status">Loading Test Run editor…</p>}>
       <form onSubmit={event => { void submit(event); }}>
-        <label className="wf-form-field">
-          <span>Start</span>
-          <select value={selectedOptionId ? `trigger:${selectedOptionId}` : "direct"} disabled={busy || loading || isStale} onChange={event => {
+        <StudioField className="wf-form-field" label={<><span>Start</span></>}><select value={selectedOptionId ? `trigger:${selectedOptionId}` : "direct"} disabled={busy || loading || isStale} onChange={event => {
             const value = event.currentTarget.value;
             if (value === "direct") {
               setSelectedOptionId("");
@@ -270,20 +269,16 @@ export function WorkflowTestDrivePanel({
           }}>
             <option value="direct">Direct start</option>
             {options.map(option => <option key={option.optionId} value={`trigger:${option.optionId}`} disabled={option.isAvailable === false}>{option.label}{option.nodeId ? ` · ${option.nodeId}` : ""}{option.isAvailable === false ? " · unavailable" : ""}</option>)}
-          </select>
-        </label>
+          </select></StudioField>
         {selectedOption && selectedOption.modes.length > 1 ? (
-          <label className="wf-form-field">
-            <span>Mode</span>
-            <select value={selectedModeId} disabled={busy || isStale} onChange={event => {
+          <StudioField className="wf-form-field" label={<><span>Mode</span></>}><select value={selectedModeId} disabled={busy || isStale} onChange={event => {
               const mode = selectedOption.modes.find(candidate => candidate.modeId === event.currentTarget.value);
               setSelectedModeId(event.currentTarget.value);
               setStimulusDraft(defaultStimulusDraft(selectedOption, mode));
               setStimulusError("");
             }}>
               {selectedOption.modes.map(mode => <option key={mode.modeId} value={mode.modeId}>{mode.label}</option>)}
-            </select>
-          </label>
+            </select></StudioField>
         ) : null}
         {selectedOption?.reason && selectedOption.isAvailable === false ? <div className="wf-test-drive-error" role="status">{selectedOption.reason}{selectedOption.nodeId ? ` · Node ${selectedOption.nodeId}` : ""}</div> : null}
         {triggerUnavailableReason && selectedOption?.isAvailable !== false ? <div className="wf-test-drive-error" role="status">{triggerUnavailableReason}</div> : null}
@@ -300,11 +295,7 @@ export function WorkflowTestDrivePanel({
                 onChange={value => { setStimulusDraft(value); setStimulusError(""); }}
               />
             ) : selectedMode.configurationSchema ? (
-              <label className="wf-form-field" htmlFor="workflow-test-stimulus">
-                <span>Trigger data</span>
-                <textarea id="workflow-test-stimulus" aria-label="Trigger data" aria-invalid={Boolean(stimulusError)} rows={5} value={stimulusDraft} disabled={busy || isStale} onChange={event => setStimulusDraft(event.currentTarget.value)} />
-                <small>Enter JSON matching the trigger’s declared schema.</small>
-              </label>
+              <StudioField className="wf-form-field" controlId="workflow-test-stimulus" label={<><span>Trigger data</span></>}><textarea id="workflow-test-stimulus" aria-label="Trigger data" aria-invalid={Boolean(stimulusError)} rows={5} value={stimulusDraft} disabled={busy || isStale} onChange={event => setStimulusDraft(event.currentTarget.value)} /><small>Enter JSON matching the trigger’s declared schema.</small></StudioField>
             ) : <p className="wf-test-drive-description">This trigger does not require data.</p>}
             {stimulusError ? <small className="wf-test-drive-error" role="alert">{stimulusError}</small> : null}
           </div>

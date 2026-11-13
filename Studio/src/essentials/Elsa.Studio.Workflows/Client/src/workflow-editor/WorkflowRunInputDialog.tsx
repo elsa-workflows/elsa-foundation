@@ -1,3 +1,4 @@
+import { StudioField } from "@elsa-workflows/studio-ui";
 import { Component, useEffect, useId, useRef, useState, type ErrorInfo, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
 import type { StudioWorkflowRunInputEditorContribution } from "@elsa-workflows/studio-sdk";
 import type { WorkflowInput } from "../workflowTypes";
@@ -126,6 +127,7 @@ export function WorkflowRunInputField({ input, editors, value, error, disabled, 
   const controlProps = {
     id: fieldId,
     "aria-label": label,
+    "data-studio-field-control": "",
     "aria-describedby": describedBy,
     "aria-invalid": Boolean(error),
     "aria-required": Boolean(input.isRequired)
@@ -140,9 +142,7 @@ export function WorkflowRunInputField({ input, editors, value, error, disabled, 
   const fallback = renderInputControl(input, common, onChange);
 
   return (
-    <label className="wf-form-field" htmlFor={fieldId}>
-      <span>{label}{input.isRequired ? " *" : ""}</span>
-      <small className="wf-run-input-type">{formatArgumentType(input.type)}</small>
+    <StudioField className="wf-form-field" controlId={fieldId} label={<>{label}{input.isRequired ? " *" : ""}</>} meta={<small className="wf-run-input-type">{formatArgumentType(input.type)}</small>}>
       {EditorComponent ? (
         <WorkflowRunInputEditorBoundary
           editorId={editor.id}
@@ -161,7 +161,7 @@ export function WorkflowRunInputField({ input, editors, value, error, disabled, 
       ) : fallback}
       {input.description ? <small id={descriptionId}>{input.description}</small> : null}
       {error ? <small id={errorId} role="alert">{error}</small> : null}
-    </label>
+    </StudioField>
   );
 }
 

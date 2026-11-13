@@ -36,8 +36,6 @@ public sealed class RuntimeInputBindingCompiler(
     private const string VariableExpressionType = "Variable";
     private const string WorkflowRequestExpressionType = "WorkflowRequest";
     private const string ActivityResultExpressionType = "ActivityResult";
-    private const string ActivityResultMemberExpressionType = "ActivityResultMember";
-    private const string VariableMemberExpressionType = "VariableMember";
     private const string DefaultExpressionType = "Default";
     private const string ReferenceKeyMetadataKey = "referenceKey";
 
@@ -433,11 +431,14 @@ public sealed class RuntimeInputBindingCompiler(
 
         RefuseMemberSelectionOnWholeValueRead(nodeId, inputDefinition, value);
 
-        if (string.Equals(value.ExpressionType, ActivityResultMemberExpressionType, StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(value.ExpressionType, ActivityDataReadRoles.ActivityResultMember, StringComparison.OrdinalIgnoreCase))
             return CompileActivityResultMemberInput(nodeId, inputDefinition, value, effectivePolicy, conversion);
 
-        if (string.Equals(value.ExpressionType, VariableMemberExpressionType, StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(value.ExpressionType, ActivityDataReadRoles.VariableMember, StringComparison.OrdinalIgnoreCase))
             return CompileVariableMemberInput(nodeId, inputDefinition, value, effectivePolicy, conversion);
+
+        if (string.Equals(value.ExpressionType, ActivityDataReadRoles.WorkflowRequestMember, StringComparison.OrdinalIgnoreCase))
+            return CompileWorkflowRequestMemberInput(nodeId, inputDefinition, value, effectivePolicy, conversion);
 
         // Studio's object editor serializes arrays and objects as JSON under the "Object" syntax. The value is
         // authored data, not an executable expression, so preserve it as a durable literal. This is particularly
@@ -730,15 +731,7 @@ public sealed class RuntimeInputBindingCompiler(
                 "A member read of a variable names the variable and its declaring scope.");
         var segments = ReadMemberPath(nodeId, inputDefinition, payload);
         var targetType = ToValueTypeDescriptor(inputDefinition);
-        if (conversion is { Mode: not AuthoredValueConversionMode.Auto })
-            throw ValueConversionPublicationException.SourceContractUnavailable(
-                $"VF-COER-001: Variable member input '{inputDefinition.ReferenceKey}' on node '{nodeId}' requests a '{conversion.Mode}' conversion, " +
-                "but the selected member's contract is not known at publication.",
-                ValueConversionRejectionReason.SelectedMemberContractUnknown,
-                targetType,
-                AuthoredValueConversionMapper.Mode(conversion),
-                AuthoredValueConversionMapper.Profile(conversion),
-                InputBindingContext(nodeId, inputDefinition));
+        RefuseConversionOfUntypedMember(nodeId, inputDefinition, targetType, conversion, "Variable");
 
         return new RuntimeInputBinding(
             inputDefinition.ReferenceKey,
@@ -748,6 +741,51 @@ public sealed class RuntimeInputBindingCompiler(
             new RuntimeReadSelection(RuntimeReadSelection.CurrentSchemaVersion, segments, RuntimeReadSelectionMode.DeferredFit),
             variable: new RuntimeVariableReference(variableKey, scopeId),
             metadata: BuildInputMetadata(inputDefinition));
+    }
+
+    /// <summary>
+    /// Compiles a read of one member of a workflow request member. A legacy dotted path is refused, not combined with
+    /// the member path. Like a variable member, it is always deferred: a request can be seeded by any caller.
+    /// </summary>
+    private static RuntimeInputBinding CompileWorkflowRequestMemberInput(
+        string nodeId,
+        InputDefinition inputDefinition,
+        ArgumentValue value,
+        ValueProtectionPolicy effectivePolicy,
+        AuthoredValueConversionRequest? conversion)
+    {
+        var payload = value.Value is JsonElement element ? element : default;
+        var memberKey = payload.ValueKind == JsonValueKind.Object ? ReadOptionalStringProperty(payload, "memberKey") : null;
+        if (payload.ValueKind != JsonValueKind.Object || payload.TryGetProperty("path", out _) || string.IsNullOrWhiteSpace(memberKey))
+            throw Refusal(nodeId, inputDefinition, "ActivityData/InvalidSource",
+                "A member read of a workflow request names the request member and declares no legacy path.");
+        var segments = ReadMemberPath(nodeId, inputDefinition, payload);
+        var targetType = ToValueTypeDescriptor(inputDefinition);
+        RefuseConversionOfUntypedMember(nodeId, inputDefinition, targetType, conversion, "Workflow request");
+
+        return new RuntimeInputBinding(
+            inputDefinition.ReferenceKey,
+            targetType,
+            effectivePolicy,
+            RuntimeInputBindingSource.WorkflowRequestMember,
+            new RuntimeReadSelection(RuntimeReadSelection.CurrentSchemaVersion, segments, RuntimeReadSelectionMode.DeferredFit),
+            workflowRequest: new RuntimeWorkflowRequestReference(memberKey),
+            metadata: BuildInputMetadata(inputDefinition));
+    }
+
+    // With nothing known to convert from, only the default conversion of a member can be honoured.
+    private static void RefuseConversionOfUntypedMember(string nodeId, InputDefinition inputDefinition, ValueTypeDescriptor targetType,
+        AuthoredValueConversionRequest? conversion, string role)
+    {
+        if (conversion is { Mode: not AuthoredValueConversionMode.Auto })
+            throw ValueConversionPublicationException.SourceContractUnavailable(
+                $"VF-COER-001: {role} member input '{inputDefinition.ReferenceKey}' on node '{nodeId}' requests a '{conversion.Mode}' conversion, " +
+                "but the selected member's contract is not known at publication.",
+                ValueConversionRejectionReason.SelectedMemberContractUnknown,
+                targetType,
+                AuthoredValueConversionMapper.Mode(conversion),
+                AuthoredValueConversionMapper.Profile(conversion),
+                InputBindingContext(nodeId, inputDefinition));
     }
 
     private static string[] ReadMemberPath(string nodeId, InputDefinition inputDefinition, JsonElement payload) =>
@@ -765,6 +803,7 @@ public sealed class RuntimeInputBindingCompiler(
             _ when string.Equals(value.ExpressionType, ActivityResultExpressionType, StringComparison.OrdinalIgnoreCase) => ActivityResultExpressionType,
             _ when string.Equals(value.ExpressionType, VariableExpressionType, StringComparison.OrdinalIgnoreCase) => VariableExpressionType,
             _ when string.Equals(value.ExpressionType, WorkflowRequestExpressionType, StringComparison.OrdinalIgnoreCase) => WorkflowRequestExpressionType,
+            _ when string.Equals(value.ExpressionType, InputReadLowering.InputExpressionType, StringComparison.OrdinalIgnoreCase) => InputReadLowering.InputExpressionType,
             _ => null
         };
         if (wholeValueRole is null || value.Value is not JsonElement { ValueKind: JsonValueKind.Object } payload)

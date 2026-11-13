@@ -73,7 +73,7 @@ describe("entered secret visibility", () => {
     const scopeSelect = fieldControl<HTMLSelectElement>(container, "Scope");
     selectOption(scopeSelect, "Custom…");
     change(container.querySelector<HTMLInputElement>("input[id^='scope-custom-']")!, " Payments:Production ");
-    change(container.querySelector<HTMLInputElement>(".secrets-value-input input")!, "replacement-value");
+    change(container.querySelector<HTMLInputElement>('input[data-secret-field="value"]')!, "replacement-value");
 
     flushSync(() => container.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
     await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
@@ -82,7 +82,7 @@ describe("entered secret visibility", () => {
 
   it.each(["create", "rotate"] as const)("masks by default, toggles without submitting, and resets when reopening %s", mode => {
     const { container, onSave, render } = renderDialog(mode);
-    const input = container.querySelector<HTMLInputElement>(".secrets-value-input input")!;
+    const input = container.querySelector<HTMLInputElement>('input[data-secret-field="value"]')!;
     change(input, "dummy-pasted-value");
     expect(input.type).toBe("password");
     expect(input.labels?.[0].textContent).toBe(mode === "create" ? "Value" : "New value");
@@ -103,15 +103,15 @@ describe("entered secret visibility", () => {
     flushSync(() => toggle.click());
     render(null);
     render(mode);
-    expect(container.querySelector<HTMLInputElement>(".secrets-value-input input")?.type).toBe("password");
+    expect(container.querySelector<HTMLInputElement>('input[data-secret-field="value"]')?.type).toBe("password");
   });
 
   it("remasks when the selected secret type changes without losing entered text", () => {
     const { container } = renderDialog("create");
-    change(container.querySelector<HTMLInputElement>(".secrets-value-input input")!, "dummy-pasted-value");
+    change(container.querySelector<HTMLInputElement>('input[data-secret-field="value"]')!, "dummy-pasted-value");
     flushSync(() => container.querySelector<HTMLButtonElement>("button[aria-label='Show value']")!.click());
     selectOption(fieldControl<HTMLSelectElement>(container, "Type"), "json");
-    const input = container.querySelector<HTMLInputElement>(".secrets-value-input input")!;
+    const input = container.querySelector<HTMLInputElement>('input[data-secret-field="value"]')!;
     expect(input.type).toBe("password");
     expect(input.value).toBe("dummy-pasted-value");
   });
@@ -411,9 +411,9 @@ describe("Create dialog regression contract", () => {
       opener.click();
     });
     const dialog = container.querySelector<HTMLElement>("[role='dialog']")!;
-    const input = dialog.querySelector<HTMLInputElement>(mode === "create" ? "input" : ".secrets-value-input input")!;
+    const input = dialog.querySelector<HTMLInputElement>(mode === "create" ? "input" : 'input[data-secret-field="value"]')!;
     change(input, mode === "create" ? "test-key" : "replacement-value");
-    if (mode === "create") change(dialog.querySelectorAll<HTMLInputElement>(".secrets-value-input input")[0], "replacement-value");
+    if (mode === "create") change(dialog.querySelectorAll<HTMLInputElement>('input[data-secret-field="value"]')[0], "replacement-value");
     flushSync(() => dialog.querySelector<HTMLButtonElement>("button[type='submit']")!.click());
     await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
 
@@ -451,7 +451,7 @@ describe("Create dialog regression contract", () => {
     expect(actions.parentElement).toBe(dialog.querySelector("form"));
 
     const technicalName = dialog.querySelector<HTMLInputElement>("input")!;
-    const value = dialog.querySelector<HTMLInputElement>(".secrets-value-input input")!;
+    const value = dialog.querySelector<HTMLInputElement>('input[data-secret-field="value"]')!;
     change(technicalName, "preserved.secret");
     change(value, "preserved-secret-value");
     flushSync(() => dialog.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
