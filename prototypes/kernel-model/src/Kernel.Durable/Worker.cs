@@ -463,12 +463,13 @@ public sealed class Worker : IScopeActivation, ITurnServices
         {
             if (item.Ticket || item.Taken) continue;    // taken here: recalled by a commit in flight
             var control = Kinds.IsControl(item.Message.Kind);
-            var identityReply = item.Message.Start?.Creation is not null || CreationProtocol.TargetError(slot.Row, item.Message) is not null;
+            var identityReply = item.Message.Start?.Creation is not null || slot.Row?.Creation > 0 && item.Message.Start is not null ||
+                CreationProtocol.TargetError(slot.Row, item.Message) is not null;
             if (suspended && !control && !identityReply) continue;    // identity refusal does not activate suspended authored work
             if (Awaits(item)) break;    // nothing overtakes a message that waits for its mark
-            // Qualified creation envelopes are dispatched individually, including stale controls before hydration.
-            // This first prototype favors an explicit boundary over batching mixed creation commands.
-            if (slot.Row?.Creation > 0 || item.Message.TargetCreation is not null || item.Message.Start?.Creation is not null)
+            // Keep lifecycle changes/refusals separate. Compatible messages of this creation retain normal batching.
+            if (item.Message.Start?.Creation is not null || CreationProtocol.TargetError(slot.Row, item.Message) is not null ||
+                slot.Row?.Creation > 0 && (item.Message.Start is not null || _type.SingleMessage(item.Message)))
             {
                 if (due.Count == 0 && (item.Message.Due is not { } dueAt || dueAt <= now)) due.Add(item);
                 break;
@@ -529,8 +530,9 @@ public sealed class Worker : IScopeActivation, ITurnServices
         foreach (var item in due) (item.Taken, item.Held) = (true, false);
         (slot.Busy, slot.Used) = (true, ++_used);
         var request = due[0].Message;
-        var creationError = request.Start?.Creation is not null
-            ? !CreationIdentityAvailable ? "CreationIdentityUnavailable"
+        var creationError = request.Start is not null && (request.Start.Creation is not null || slot.Row?.Creation > 0)
+            ? request.Start.Creation is null ? "IdentityRequired"
+                : !CreationIdentityAvailable ? "CreationIdentityUnavailable"
                 : request.TargetCreation is { } target && target != request.Start.Creation.Generation ? "WrongCreation"
                 : CreationProtocol.StartError(slot.Row, request.Start)
             : CreationProtocol.TargetError(slot.Row, request);

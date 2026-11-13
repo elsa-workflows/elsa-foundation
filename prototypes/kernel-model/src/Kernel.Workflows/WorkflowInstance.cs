@@ -11,6 +11,7 @@ namespace Kernel.Workflows;
 public sealed class WorkflowInstance(IEnumerable<IExecutionModel> models) : IActorType
 {
     private readonly Dictionary<string, IExecutionModel> _models = models.ToDictionary(m => m.Key, StringComparer.Ordinal);
+    public bool SingleMessage(Message message) => message.Kind == WorkflowKinds.ChildFinished;
 
     /// <summary>
     /// A running instance is suspended, or its row was written by a newer version of its model than this node has (finding F14: an older model

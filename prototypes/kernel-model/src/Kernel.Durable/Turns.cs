@@ -8,6 +8,9 @@ namespace Kernel.Durable;
 /// </summary>
 public interface IActorType
 {
+    /// <summary>An owner command that needs a single-message boundary but still obeys normal withholding.</summary>
+    bool SingleMessage(Message message) => false;
+
     /// <summary>The actor cannot be given its messages now; commands still pass. Suspended, say.</summary>
     bool Withholds(InstanceRow row, ITurnServices services);
 

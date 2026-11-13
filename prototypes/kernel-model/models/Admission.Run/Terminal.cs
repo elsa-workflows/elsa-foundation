@@ -65,8 +65,8 @@ internal static class TerminalReceipts
         void Add(string kind, object? payload = null, StartSpec? start = null, bool reply = false)
         {
             var id = "terminal-message-" + ++serial;
-            Apply(new("add", M: new Message(id, target, kind, payload is null ? null : Json.Write(payload), Start: start,
-                ReplyTo: reply ? ReplyTo.Of("outside", id, world.Time + 30_000, beforeCommit: true) : null)));
+            Apply(new("add", M: CreationFixture.Pin(new Message(id, target, kind, payload is null ? null : Json.Write(payload), Start: start,
+                ReplyTo: reply ? ReplyTo.Of("outside", id, world.Time + 30_000, beforeCommit: true) : null))));
         }
         void Drain()
         {
@@ -162,7 +162,7 @@ internal static class TerminalReceipts
             Apply(new("tick", checked((int)(latestUntil!.Value - world.Time))));
         }
         Add(Kinds.Delete); Drain();
-        Require(world.Store.Instances.ContainsKey(target.Id) == (nested && ending == "completed"), "T2", "normal delete ignored expiry/running owner");
+        Require(world.Store.Instances[target.Id].Retired != (nested && ending == "completed"), "T2", "normal delete ignored expiry/running owner");
         NativeWorkflows.Registry.Add(workflow);
         TerminalReceiver.Forbidden = false;
         Console.WriteLine($"PASS terminal:{mode},nested={nested},ending={ending}");
