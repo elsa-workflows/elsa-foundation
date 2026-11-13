@@ -13,11 +13,11 @@ public sealed class WorkflowInstance(IEnumerable<IExecutionModel> models) : IAct
     private readonly Dictionary<string, IExecutionModel> _models = models.ToDictionary(m => m.Key, StringComparer.Ordinal);
 
     /// <summary>
-    /// Suspended, or its row was written by a newer version of its model than this node has (finding F14: an older model
+    /// A running instance is suspended, or its row was written by a newer version of its model than this node has (finding F14: an older model
     /// would read the newer state wrongly and write it back older).
     /// </summary>
     public bool Withholds(InstanceRow row, ITurnServices services) =>
-        (row.Suspended && !services.Has(Flaw.DeliverWhileSuspended)) || (row.StateVersion > _models[row.Model].StateVersion && !services.Has(Flaw.TurnNewerState));
+        row.Status == InstanceStatus.Running && ((row.Suspended && !services.Has(Flaw.DeliverWhileSuspended)) || (row.StateVersion > _models[row.Model].StateVersion && !services.Has(Flaw.TurnNewerState)));
 
     public TurnOutcome? Command(TurnInput input)
     {
@@ -43,13 +43,14 @@ public sealed class WorkflowInstance(IEnumerable<IExecutionModel> models) : IAct
 
     public ValueTask<object?> ExecuteJobAsync(string model, IJob job, CancellationToken cancellationToken) => _models[model].ExecuteJobAsync(job, cancellationToken);
 
-    /// <summary>Park: the instance becomes faulted with the error, the messages are consumed, the partition goes on.</summary>
+    /// <summary>Park: retain the committed checkpoint, fault the instance, consume its deliveries and remove its active waits.</summary>
     public TurnOutcome Park(InstanceRow? row, string actor, IReadOnlyList<Delivery> taken, StartSpec? spec, string error)
     {
         var next = row is { } r ? r with { Status = InstanceStatus.Faulted, Revision = r.Revision + 1, Fault = error }
             : spec is null ? null
             : new InstanceRow(actor, spec.Model, spec.Definition, InstanceStatus.Faulted, "null", 1, spec.Parent, error, History: spec.History);
-        var unit = new TurnOutcome(actor) { Row = next, Expected = row?.Revision, Consumed = [.. taken], Journal = next is null ? null : Journal(next.History, ["parked: " + error]), Status = next?.Status };
+        if (next is not null && row is not { Status: not InstanceStatus.Running }) next = WorkflowCommitClock.End(next);
+        var unit = new TurnOutcome(actor) { Row = next, Expected = row?.Revision, Consumed = [.. taken], Journal = next is null ? null : Journal(next.History, ["parked: " + error]), Status = next?.Status, Unsubscribe = next is not null };
         if (next?.Parent is not null) unit.Sent.Add(Finished(next, null));
         return unit;
     }
@@ -80,6 +81,7 @@ public sealed class WorkflowInstance(IEnumerable<IExecutionModel> models) : IAct
         var instance = input.Actor;
         var running = row.Status == InstanceStatus.Running;
         var next = row with { Status = running ? InstanceStatus.Cancelled : row.Status, Revision = row.Revision + 1, Jobs = null, Children = null, Suspended = false };
+        if (running) next = WorkflowCommitClock.End(next);
         var children = row.Children is { } list && !input.Services.Has(Flaw.TerminateRootOnly) ? Json.Read<List<string>>(list) : [];
         var unit = new TurnOutcome(instance)
         {

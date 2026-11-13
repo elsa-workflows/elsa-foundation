@@ -198,7 +198,8 @@ describe("workflows module", () => {
       expect.objectContaining({ id: "studio.workflows.variable-reference", createDefaultValue: expect.any(Function) }),
       expect.objectContaining({ id: "elsa.object-expression-editor", createDefaultValue: expect.any(Function) }),
       expect.objectContaining({ id: "studio.workflows.input-reference", createDefaultValue: expect.any(Function) }),
-      expect.objectContaining({ id: "studio.workflows.activity-result-reference", createDefaultValue: expect.any(Function) })
+      expect.objectContaining({ id: "studio.workflows.activity-result-reference", createDefaultValue: expect.any(Function) }),
+      expect.objectContaining({ id: "studio.workflows.activity-data-member-reference", createDefaultValue: expect.any(Function) })
     ]);
   });
 

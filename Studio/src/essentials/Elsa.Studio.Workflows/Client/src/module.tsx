@@ -7,7 +7,7 @@ import "./styles.css";
 import "./workspaceAppearance.css";
 import { registerVariableReferenceContribution } from "./variableReferenceContribution";
 import { registerInputReferenceContribution } from "./inputReferenceContribution";
-import { registerActivityResultReferenceContribution } from "./activityResultReferenceContribution";
+import { registerActivityDataMemberReferenceContribution, registerActivityResultReferenceContribution } from "./activityResultReferenceContribution";
 import { WorkflowLazyBoundary } from "./WorkflowLazyBoundary";
 import { activityGraphImplementationEditorContribution, activityGraphSchema2ImplementationEditorContribution } from "./activityGraphContribution";
 import { clearActivityDefinitionRecoveryForIdentity } from "./activityDefinitionRecovery";
@@ -89,6 +89,7 @@ export function register(api: ElsaStudioModuleApi) {
   api.expressionEditors.add(createObjectExpressionEditorContribution(() => api.propertyEditors.list()));
   registerInputReferenceContribution(api.expressionEditors);
   registerActivityResultReferenceContribution(api.expressionEditors);
+  registerActivityDataMemberReferenceContribution(api.expressionEditors);
   api.propertyEditors.add(compensationTargetPropertyEditor);
   api.workflowTestStimulusEditors?.add(httpWorkflowTestStimulusEditor);
   api.workflowTestStimulusEditors?.add(eventWorkflowTestStimulusEditor);

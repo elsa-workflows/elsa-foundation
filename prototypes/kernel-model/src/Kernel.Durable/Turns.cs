@@ -32,6 +32,7 @@ public interface ITurnServices
 {
     /// <summary>Database time as far as this owner knows.</summary>
     long Now { get; }
+    bool CommitClockAvailable { get; }
 
     /// <summary>How many partitions the store has: to place an actor in another one.</summary>
     int Partitions { get; }
@@ -51,7 +52,7 @@ public sealed class Delivery(Message message, long seq)
     internal bool Marked;             // its row says seen at this epoch
     internal bool Suspect;            // another owner had it: it is tried apart before anything else is believed of it
     internal bool Shelved;            // a suspect whose row says seen at this epoch, not yet tried
-    internal bool Again;              // its row was seen at an earlier epoch: a turn may have run with it (DurableTurn.Redelivered)
+    internal bool Again;              // its polled row already had a seen or trial marker (DurableTurn.Redelivered)
     internal bool Held;               // a turn handed it back: it waits for something new to come with
     internal int Attempts;
     internal bool Ticket;             // a kernel message, not (yet) for the model
@@ -153,9 +154,11 @@ public sealed class DurableTurn
         foreach (var message in Inbox)
             if (message.Kind == Kinds.JobFinished) _jobs.Remove(message.Read<JobFinished>().Key);    // its result is being handled: no longer in flight
         Revision = (input.Row?.Revision ?? 0) + 1;
+        Clock = new TurnClock(input.Row, Revision, input.Services);
     }
 
     public InstanceRef Actor { get; }
+    public ICommitClock Clock { get; }
     public IReadOnlyList<Message> Inbox { get; }
 
     /// <summary>The revision this turn's commit writes.</summary>
@@ -179,7 +182,7 @@ public sealed class DurableTurn
         if (request.ReplyTo is { } to) _replied.Add(new(request.Id, to, channel, item));
     }
 
-    public bool Redelivered(Message message) => _input.Taken.FirstOrDefault(i => i.Message.Id == message.Id)?.Again ?? false;
+    public bool Redelivered(Message message) => !Services.Has(Flaw.HideDeliveryHistory) && (_input.Taken.FirstOrDefault(i => i.Message.Id == message.Id)?.Again ?? false);
 
     // A message's id is derived from its sender and the sender's revision. Finding F8: the ordinal has a fixed width,
     // because Entity Framework sends the inserts of one commit in key order and the database hands out seq in that order.
@@ -281,7 +284,7 @@ public sealed class DurableTurn
             Send(Actor, Kinds.Meet, _subscribed.Where(_kept.Contains).ToArray());
             if (Services.Has(Flaw.MeetWithoutTicket)) _volatile.Add(_sent[^1].Id);
         }
-        unit.Row = row;
+        unit.Row = row with { CommitTimes = ((TurnClock)Clock).Snapshot() };
         unit.Expected = _input.Row is null ? null : Revision - 1;
         unit.State = state;
         unit.Journal = journal;

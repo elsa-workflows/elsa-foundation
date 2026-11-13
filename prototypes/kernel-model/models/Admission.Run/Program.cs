@@ -5,6 +5,12 @@ using Kernel.Runtime;
 using Kernel.Sim;
 using Kernel.Sim.Native;
 
+if (args.SequenceEqual(["--recreate"]))
+{
+    InvocationRecreation.Run();
+    return;
+}
+
 var scenarios = (from mode in new[] { Modes.Balanced, Modes.Durable }
     from nested in new[] { false, true } from cut in Enum.GetValues<Cut>()
     select new Scenario(mode, nested, cut)).Concat(from mode in new[] { Modes.Balanced, Modes.Durable }
@@ -77,7 +83,7 @@ sealed class Witness(string mode, bool nested, Cut cut, AdmissionFlaw defect = A
         Require(Inbox.Pending.Count == 1 && Inbox.Receipts["a"].Order == 1, "A2: first admission lost");
         var malformed = "request" + ++_transport;
         _requests[malformed] = "";
-        Add(new(malformed, _instance, InvocationInput.Kind, Payload: null, ReplyTo: ReplyTo.Of("outside", malformed)));
+        Add(new(malformed, _instance, InvocationInput.Kind, Payload: null, ReplyTo: ReplyTo.Of("outside", malformed, _world.Time + 30_000)));
         Drain();
         Require(Replies[^1].Result == "Invalid" && Inbox.Pending.Count == 1 && State.Frames.ContainsKey(_frame),
             "A11: absent payload parked the receiver or changed admitted work");
@@ -144,7 +150,7 @@ sealed class Witness(string mode, bool nested, Cut cut, AdmissionFlaw defect = A
         var transport = "request" + ++_transport;
         _requests[transport] = id;
         Add(new(transport, _instance, InvocationInput.Kind, Json.Write(new InvocationInput(frame ?? _frame, id, name, value)),
-            ReplyTo: ReplyTo.Of("outside", transport, beforeCommit: true)));
+            ReplyTo: ReplyTo.Of("outside", transport, _world.Time + 30_000, beforeCommit: true)));
         return transport;
     }
     private string Resume(string name)
