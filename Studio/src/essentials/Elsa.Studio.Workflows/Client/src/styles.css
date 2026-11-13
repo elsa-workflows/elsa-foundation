@@ -1398,6 +1398,7 @@
   flex: 1;
 }
 
+/* The border width is READ_ONLY_MINIMAP_BORDER in readOnlyMinimap.ts; the readable first view keeps clear of it. */
 .wf-instance-canvas .react-flow__minimap {
   background: var(--studio-surface);
   border: 1px solid var(--studio-border);

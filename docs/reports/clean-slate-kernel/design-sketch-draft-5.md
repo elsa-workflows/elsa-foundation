@@ -21,7 +21,7 @@ The prototype is `prototypes/kernel-model/`, in stacked PRs #4250 to #4260 (not 
 Owner decisions on this proposal. They become binding when the design is approved; changing one is an owner decision.
 
 **Kernel defaults:**
-1. **Activity side effects:** at least once in Balanced; idempotency keys are documented; Durable mode where a repeat is unacceptable.
+1. **Activity side effects:** at least once in Balanced; idempotency keys are documented. Durable mode narrows the window, but no mode prevents a repeat after a crash between an effect and its commit: effects that must not repeat need idempotency keys or reconciliation.
 2. **History level:** Full by default; a busy workflow may choose State only.
 3. **Lease:** 10 seconds, so failover takes about 10 seconds and idle load stays low.
 4. **Partitions:** 64 by default on server databases, 1 on SQLite.
@@ -108,7 +108,7 @@ There is no fourth "runtime" plug-in. A **deployment profile** is a named preset
 
 A workflow behaves the same under every profile. The guarantees it gets come from its persistence mode, which its author chooses, not from the deployment. No capability flag makes a workflow fail on one profile: synchronous HTTP works on all of them.
 
-**Inline execution** is chosen per workflow or per route. A run that a request starts executes in that request until its first wait, under any persistence mode. Inline plus Ephemeral costs no database calls and no hop. Every profile supports it, because every node owns partitions to place the new instance in.
+**Inline execution** is chosen per workflow or per route. A run that a request starts without a caller's key executes in that request until its first wait, under any persistence mode, because it is placed in a partition the receiving node owns. A start with a caller's key goes to the key's partition; when another node owns it, the run executes there and the response comes back over a reply address, one hop. Inline plus Ephemeral costs no database calls and no hop. Every profile supports it, because every node owns partitions to place the new instance in.
 
 ## The idea in five sentences
 
@@ -167,7 +167,7 @@ The owner of partition `p` at epoch `e`, which believes the position is `n`, com
 
 1. `UPDATE partition SET position = n + k, lease_until = <now + lease> WHERE id = p AND epoch = e AND position = n`.
 2. **Check that it changed exactly one row before anything else is sent.** If not, roll back and reset.
-3. Insert or update the `k` instance rows, each update `WHERE revision = r`.
+3. Insert or update the instance rows the batch changed (with or without a journal row), each update `WHERE revision = r`.
 4. Delete the messages those turns consumed, or mark them `done` when they carry `keep_until`. Check the count.
 5. Mark `seen = e` on messages the owner holds in memory and did not consume.
 6. Insert the messages those turns sent. A message's id is derived from its sender and the sender's revision.
@@ -221,7 +221,7 @@ Rows per flush are capped (parameter limits, lock escalation). On the server eng
 ## Events
 
 - **Subscribing** is part of a turn's commit. A wait that asks for kept events also sends the instance a message that says "read the events for these keys". The owner reads `event`, delivers what it finds, and a later commit deletes that message. A new owner inherits it and reads again.
-- **Publishing** inserts the event with `keep_until`, commits, then reads `subscription` and adds one message per match, with an id derived from event and wait.
+- **Publishing** inserts the event with `keep_until`, commits, then reads `subscription` and adds one message per match, with an id derived from event and wait. A turn that publishes puts a publish ticket in its own commit; the owner carries it out after the commit, and a new owner repeats it, so a crash between the event and the fan-out loses nothing. A publisher outside the kernel gets its answer only after the fan-out and retries until both are done; the derived ids make the retry harmless.
 - Each side looks after its own commit, so when the two cross, at least one sees the other, and the derived id removes the double.
 - Built and measured as a sample model: correlation as an ordinary instance per key (`sim/Correlation.cs`, no kernel change), which needs no tables and no rule, at the cost of one hop. Decision 5 keeps the tables as the kernel's mechanism.
 
@@ -378,7 +378,7 @@ The projector runs as a background worker, off the hot path, in its own transact
 
 **The viewer's read path** (owner decision, 12 November):
 
-- **The tail read.** To show one run, the API reads that run's projected rows, plus its journal rows past the projector's cursor, and expands the tail in memory. The view is always current, with no waiting and no extra writes.
+- **The tail read.** To show one run, the API reads the projector's cursor first, then that run's projected rows and its journal rows past that cursor, and expands the tail in memory. A round that commits between the reads shows up in both and is removed by position, never as a gap. The view is always current, with no waiting and no extra writes.
 - **Catch-up on request.** The API may ask the projector to run a round for that partition now. Rounds per partition are coalesced, so many viewers cause one round.
 - **Committed history only.** Studio never makes an owner commit, and never shows uncommitted state.
 - **Live watching** is a push stream to Studio of the journal entries each commit added. It carries committed entries only, and is part of the Studio work in the program plan.
@@ -424,7 +424,7 @@ What the design gains, what it pays for it, and the lever that moves the balance
 | 2 | One writer per partition: no locks, no reads before a turn, many instances per commit | Takeover waits for the lease to run out, so failover takes about one lease; a hot partition has one writer; one large state delays its partition's commit; the number of partitions is fixed when the database is created | Partition count; lease length |
 | 3 | An idle owner needs no traffic of its own... | ...except a heartbeat per owned partition (an empty fenced commit) about three times per lease, so an idle cluster still writes | Lease length |
 | 4 | Batching: many commits in one transaction under load | A commit waits for the one before it, so latency rises a little under load while throughput rises a lot | Rows per flush |
-| 5 | Balanced mode: one commit per wait | After a crash, the activities since the last commit run again. Activity code runs at least once; its effect on workflow state happens exactly once. Side effects outside Elsa may repeat | Persistence mode per workflow; Durable for what must not repeat |
+| 5 | Balanced mode: one commit per wait | After a crash, the activities since the last commit run again. Activity code runs at least once; its effect on workflow state happens exactly once. Side effects outside Elsa may repeat | Persistence mode per workflow; Durable narrows the window; idempotency keys for what must not repeat |
 | 6 | Background jobs do not block the instance | A background job can run more than once after a crash; external calls need idempotency keys | None: inherent, as in Temporal |
 | 7 | The run viewer costs nothing on the hot path | The run view stays current by reading the journal tail (decision 11, not built); lists and other views over projected rows lag the projector; the projector's own writes still cost database calls, most at Full history | History level per workflow |
 | 8 | Instances only talk through messages: no races, no cross-run locks | No code can read another instance's state: a question to another instance is a message or a read of a projection that may lag. Some features become a little harder to write | None: it is the design |
