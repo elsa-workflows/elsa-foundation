@@ -381,8 +381,8 @@ static class EngineRun
 
         // Decision 10: what a commit costs as the state grows. Every turn rewrites the whole state, so the round trips stay
         // the same and the bytes, and the time, grow with it. sizes= in kilobytes; each size runs three times.
-        Console.WriteLine("\nstate size (decision 10): a Balanced instance that rewrites its whole state at each of ten commits");
-        Console.WriteLine($"{"state",10} {"bytes per commit",17} {"counted per commit",19} {"ms per commit, median of 3",27}");
+        Console.WriteLine("\nstate size (decision 10): an instance that commits at every turn (Durable-shaped), its whole state each time, ten commits; random letters, so nothing compresses");
+        Console.WriteLine($"{"state",10} {"chars per commit",17} {"counted per commit",19} {"ms per commit, median of 3",27}");
         foreach (var kb in target.Get("sizes", "1,10,100,1000").Split(",").Select(int.Parse))
         {
             var (times, counted) = (new List<double>(), 0L);
@@ -395,7 +395,7 @@ static class EngineRun
                 times.Add(clock.Elapsed.TotalMilliseconds / 10);
                 counted = counter.Commands + counter.Transactions.Ended + (target.Engine == "postgres" ? 0 : counter.Transactions.Begun);
             }
-            Console.WriteLine($"{kb + " KB",10} {Json.Write(new BlobState { Data = new string('x', kb * 1024) }).Length,17} {counted / 10.0,19:F1} {times.Order().ElementAt(1),27:F1}");
+            Console.WriteLine($"{kb + " KB",10} {Json.Write(new BlobState { Data = Blob.Letters(kb * 1024, 0) }).Length,17} {counted / 10.0,19:F1} {times.Order().ElementAt(1),27:F1}");
         }
 
         await using var check = create();
@@ -981,7 +981,14 @@ public sealed class Blob : Model<BlobState>
     public override string Key => "blob";
     public static StartSpec Spec(int size, int turns) => new("blob", "b", Json.Write(new BlobInput(size, turns)));
 
-    public override object CreateState(StartSpec start) => Json.Read<BlobInput>(start.Input!) is var input ? new BlobState { Data = new string('x', input.Size), Left = input.Turns } : null!;
+    public override object CreateState(StartSpec start) => Json.Read<BlobInput>(start.Input!) is var input ? new BlobState { Data = Letters(input.Size, input.Size), Left = input.Turns } : null!;
+
+    /// <summary>Random letters from a fixed seed: text a database cannot compress much (PostgreSQL compresses large values).</summary>
+    public static string Letters(int size, int seed)
+    {
+        var random = new Random(seed);
+        return string.Create(size, random, (span, r) => { for (var i = 0; i < span.Length; i++) span[i] = (char)('a' + r.Next(26)); });
+    }
 
     protected override void Turn(ITurn turn, BlobState state)
     {

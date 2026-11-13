@@ -466,7 +466,7 @@ numbers.
 - **Reply addresses** should carry the caller's deadline; an owner on another node cannot tell a waiting node it was
   lost.
 - **Delete and keys:** a start after a delete creates a new instance with the same id.
-- **State size** (decision 10): the cost run measures it (FINDINGS 25.9: round trips flat, time growing with the bytes;
-  at 1 MB a commit costs two to three times a 1 KB one on PostgreSQL); values by reference are not built.
+- **State size** (decision 10): the cost run measures it (FINDINGS 25.9: round trips flat; at 1 MB a commit costs
+  about two to three times a 1 KB one on PostgreSQL); values by reference are not built.
 - **The notifier between nodes**, **one database**: as in draft 5.
 - **MySQL's driver** costs four round trips per commit more than PostgreSQL's (E10).

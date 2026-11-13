@@ -1006,28 +1006,39 @@ show the fence option on every engine.
 
 ### 25.9 State size: the benchmark (decision 10, first part). Run
 
-**What changed.** The EF cost run (`$EFR x cost`) ends with a state-size table. A Balanced instance of a new benchmark
-model (`Blob`, in `ef/Kernel.Ef.Run/EngineRun.cs`) holds a string of N kilobytes, changes it at each turn, and ends each
-turn with a message to itself. So each of its ten commits rewrites the whole state. For N = 1, 10, 100 and 1,000
-(`sizes=` to choose), it prints the state's bytes per commit, the counted round trips per commit (commands, COMMITs
-and, but for PostgreSQL, BEGINs, as the rest of the run counts), and the median of three runs of the milliseconds per
-commit. The rest of the cost run is unchanged.
+**What changed.** The EF cost run (`$EFR x cost`) ends with a state-size table. A new benchmark model (`Blob`, in
+`ef/Kernel.Ef.Run/EngineRun.cs`) holds a state of N kilobytes of random letters from a fixed seed. Random letters are
+text a database cannot compress much. The instance changes its state at each turn and ends each turn with a message to
+itself, so each of its ten commits rewrites the whole state (the Durable shape of the cost run's other rows, a commit
+per turn).
 
-**What it shows.** The round trips stay flat as the state grows, and the time grows with the bytes. On this machine
-(shared with other sessions' runs, SQL Server under amd64 emulation) the milliseconds are only indicative:
+For N = 1, 10, 100 and 1,000 (`sizes=` to choose) the table prints:
+- the characters per commit (the state's JSON; on SQL Server's `nvarchar` that is two bytes each);
+- the counted round trips per commit, counted as the rest of the run counts them;
+- the median of three runs of the milliseconds per commit.
+
+The earlier rows of the cost run are unchanged. Its `check` line counts the twelve Blob instances (four sizes, three
+runs each) and their journal rows, which all finish.
+
+**What it shows.** The round trips stay flat as the state grows. The milliseconds come from one session on a machine
+shared with other sessions' runs, with SQL Server under amd64 emulation, so they are only indicative:
 
 | Engine, fence | Counted per commit | ms per commit at 1 / 10 / 100 / 1,000 KB |
 |---|---|---|
-| PostgreSQL 17, batch | 2 | 3.3 / 3.3 / 3.6 / 8.7 |
-| PostgreSQL 17, checked | 3 | 3.5 / 3.8 / 4.2 / 8.3 |
-| SQLite (WAL), batch | 7.7 | 1.7 / 1.7 / 2.0 / 3.6 |
-| SQLite (WAL), checked | 7.7 | 1.6 / 1.3 / 2.5 / 4.1 |
-| SQL Server 2022 (RCSI), default (checked) | 4 | 4.4 / 5.9 / 7.0 / 30.6 |
-| MySQL 8.4, default (batch) | 3 | 6.6 / 8.2 / 32.8 / 18.9 |
+| PostgreSQL 17, batch | 2 | 3.2 / 3.2 / 4.8 / 8.2 |
+| PostgreSQL 17, checked | 3 | 3.7 / 2.9 / 5.0 / 9.6 |
+| SQLite (WAL), batch | 7.7 | 1.4 / 1.4 / 2.0 / 3.9 |
+| SQLite (WAL), checked | 7.7 | 1.6 / 1.2 / 1.5 / 3.9 |
+| SQL Server 2022 (RCSI), default (checked) | 4 | 7.3 / 7.1 / 20.1 / 36.4 |
+| MySQL 8.4, default (batch) | 3 | 5.8 / 5.2 / 7.5 / 19.3 |
 
-The bytes per commit are 1,044, 10,260, 102,420 and 1,024,020: the JSON of the state. Up to 100 KB a commit costs
-little more than at 1 KB on PostgreSQL and SQLite. At 1 MB it costs about two to three times as much on PostgreSQL,
-and seven times on SQL Server. MySQL's 100 KB run being slower than its 1 MB run is noise of one run of three.
+The characters per commit are 1,044, 10,260, 102,420 and 1,024,020. Below 100 KB the differences are small and not
+monotonic run to run. At 1 MB a commit costs about two to three times a 1 KB one on PostgreSQL and SQLite, three times
+on MySQL, and five times on SQL Server (whose 1 MB state is about 2 MB on the wire).
+
+An earlier run with a state of one repeated letter, which PostgreSQL compresses, gave about the same PostgreSQL
+figures (8.3 to 8.7 ms at 1 MB). In that run MySQL's 100 KB median (32.8 ms) was above its 1 MB median (18.9 ms),
+which is unexplained, and it did not recur here.
 
 **Not done here:** values by reference (the second part of decision 10). This benchmark is the measurement the
 decision asks for first; "segments only if measurements show the need".
