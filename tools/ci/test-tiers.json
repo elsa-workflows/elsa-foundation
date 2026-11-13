@@ -781,6 +781,11 @@
       "project": "Extensions/Decisions/tests/Workflows/Api/Tests/Elsa.Decisions.Workflows.Api.Tests.csproj",
       "tier": "pr",
       "medianMinutes": null
+    },
+    {
+      "project": "Extensions/Weaver/tests/Dashboard/Tests/Elsa.Weaver.Dashboard.Tests.csproj",
+      "tier": "pr",
+      "medianMinutes": 0.03
     }
   ],
   "splits": {
@@ -965,6 +970,7 @@
           "Essentials/tests/Activities/ControlFlow/Tests/Elsa.Activities.ControlFlow.Tests.csproj",
           "Essentials/tests/Studio/Dashboard/QueryTests/Elsa.Studio.Dashboard.QueryTests.csproj",
           "Essentials/tests/Workflows/Dashboard/QueryTests/Elsa.Workflows.Dashboard.QueryTests.csproj",
+          "Extensions/Weaver/tests/Dashboard/Tests/Elsa.Weaver.Dashboard.Tests.csproj",
           "Essentials/tests/Studio/Dashboard/ResourceTests/Elsa.Studio.Dashboard.ResourceTests.csproj",
           "Essentials/tests/Studio/Preferences/Tests/Elsa.Studio.Preferences.Tests.csproj",
           "Essentials/tests/Workflows/Runtime/Reconciliation/Tests/Elsa.Workflows.Runtime.Reconciliation.Tests.csproj",

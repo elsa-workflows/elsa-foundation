@@ -2384,6 +2384,16 @@
           "Microsoft.Extensions.AI.Abstractions": "[10.10.1, )"
         }
       },
+      "elsa.weaver.dashboard": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.31, )",
+          "Elsa.Api.Capabilities": "[4.0.0-dev, )",
+          "Elsa.Studio.Dashboard.Core": "[4.0.0-dev, )",
+          "Elsa.Weaver": "[4.0.0-dev, )",
+          "Elsa.Weaver.Core": "[4.0.0-dev, )"
+        }
+      },
       "elsa.weaver.githubcopilot": {
         "type": "Project",
         "dependencies": {
