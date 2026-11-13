@@ -33,6 +33,15 @@ public static class Smoke
         yield return Workflow("smoke-child", Sequence("root", Delay("d", 50), Set("o", "output", "child done")));
         yield return Workflow("smoke-listener", Sequence("root", Event("hear", Expr("'ping-' + input.key")), Set("o", "output", "heard")));
         yield return Workflow("smoke-wait", Sequence("root", Event("wait", "never"), Set("o", "output", "late")));
+        // NATIVE.md section 1: an All join after a decision. The decision takes True, so nothing ever arrives from the
+        // False branch; without dead paths the join cannot tell that, and it never fires.
+        yield return Workflow("smoke-decision-join", Sequence("root",
+                Flowchart("flow",
+                    [If("decide", true), Set("left", "branch", "left"), Set("right", "branch", "right"), Set("join", "joined", "yes"), Set("after", "after", "yes")],
+                    [new("decide", "left", "True"), new("decide", "right", "False"), new("left", "join"), new("right", "join"), new("join", "after")],
+                    ("join", JoinMode.All)),
+                Set("out", "output", Expr("branch + ' ' + joined + ' ' + after"))),
+            ("branch", null), ("joined", "no"), ("after", "no"), ("output", null));
         yield return Workflow("http-early", Sequence("root", HttpEndpoint("http-in", "early", respondBeforeCommit: true), Respond("answer", "early"), Event("wait", "never")));
     }
 
@@ -78,6 +87,20 @@ public static class Smoke
             await store.AddAsync(new Message("c1", InstanceRef.In(0, "w"), NativeKinds.Cancel, KeepUntil: Environment.TickCount64 + 60_000));
             await owner.PumpAsync(poll: true, until: () => owner.Status("0/w") == InstanceStatus.Cancelled);
             Check(store.Subscriptions.Count == 0, "cancelled: the subscription is gone");
+        }
+
+        Console.WriteLine("Flowchart: an All join after a decision (NATIVE.md section 1)");
+        foreach (var mode in new[] { Modes.Balanced, Modes.Durable })     // Ephemeral leaves no row to read
+        {
+            var store = new InMemoryStore(1, () => Environment.TickCount64);
+            var owner = new Owner("n1", 0, store, registry, new Network());
+            await owner.StartAsync();
+            owner.Worker.Post(new Message("m1", InstanceRef.In(0, "dj"), Kinds.Start, Start: NativeModel.Spec("smoke-decision-join", mode)), fresh: true);
+            await owner.PumpAsync(until: () => owner.Status("0/dj") is InstanceStatus.Finished);
+            // The missed join, shown: the decision's False branch never runs, so the join waits for an arrival that
+            // never comes. The flowchart ends when nothing under it runs, without the join and without what follows it.
+            var output = owner.State("0/dj")?.Variables["output"]?.GetValue<string>();
+            Check(output == "left no no", $"{mode}: the join never fired: '{output}'");
         }
 
         await HttpAsync(registry);
