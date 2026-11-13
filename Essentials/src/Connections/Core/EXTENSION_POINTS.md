@@ -16,6 +16,8 @@ database connection string, or `RuntimeConnectionToken`.
   [EF persistence](../Persistence/EntityFrameworkCore/README.md) replaces it. `GetCapabilitiesAsync`
   returns the configured metadata provider and its durability; existing contributions default to
   unspecified/non-durable until they explicitly supply `ConnectionRepositoryCapabilities`.
+  Saves compare both revision and ordinal creation identity atomically. Known identities cannot change through save;
+  legacy empty identities can update only equally empty legacy data and remain unknown for retained mapping guards.
 - `IConnectionManager`: lifecycle facade (create, update, test, revoke, delete).
 - `IConnectionResolver`: point-of-use resolution. Tenant-scoped; owner/run-as is reserved and only
   `tenant` is valid in v1. `IResolvedConnection.Version` identifies the metadata revision captured
@@ -23,7 +25,9 @@ database connection string, or `RuntimeConnectionToken`.
   requiring revision-bound access must refuse zero rather than separately reading a newer revision.
   `IncarnationId` distinguishes delete/recreate of the same name even when versions repeat. The
   compatibility default is null; new manager-created definitions retain their opaque creation ID
-  through saves. Revision-bound clients must require both identities and resolve credentials again
+  through saves. `ConnectionMetadata` exposes these same observations. Supplied resolve expectations
+  must match that single resolved document; a retained mapping normally supplies only its incarnation
+  so later ordinary settings/credential rotation remains effective. Revision-bound clients must require both identities and resolve credentials again
   before use, since a referenced secret can be revoked independently of connection metadata.
 - `IConnectionCredentialSource` implementations, keyed by `Kind`: how a connection field's material
   is obtained. Built-ins are `secret` (`ISecretValueResolver`) and `named-credential`
