@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from "react";
-import { StudioButton, StudioDialogFooter } from "@elsa-workflows/studio-ui";
+import { StudioButton, StudioDialogFooter, StudioField } from "@elsa-workflows/studio-ui";
 import { RefreshCw } from "lucide-react";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import {
@@ -114,7 +114,7 @@ export function WorkflowBulkTagsDialog({ context, definitionIds, onClose, onSave
       <div className="wf-organization-scroll">
         {loading ? <p role="status">Checking selected workflows and current revisions…</p> : null}
         {!loading && !canEdit ? <p role="alert">Every selected workflow must be available and permit tag changes. Close this dialog and adjust your selection, or reload after an access change.</p> : null}
-        <label>Change<select aria-label="Bulk tag change" disabled={busy || creatingTag || Boolean(outcomes)} value={action} onChange={event => { setAction(event.target.value as "add" | "remove"); changed(); }}><option value="add">Add tags</option><option value="remove">Remove tags</option></select></label>
+        <StudioField label="Change"><select aria-label="Bulk tag change" disabled={busy || creatingTag || Boolean(outcomes)} value={action} onChange={event => { setAction(event.target.value as "add" | "remove"); changed(); }}><option value="add">Add tags</option><option value="remove">Remove tags</option></select></StudioField>
         <WorkflowTagAssignmentsEditor context={context} assignments={assignments} disabled={busy || !canEdit || Boolean(outcomes)} allowRetired={action === "remove"} onBusyChange={setCreatingTag} onChange={next => { setAssignments(next); changed(); }} />
         {preview ? <div className="wf-library-preview" role="region" aria-label="Bulk tag preview"><p>{action === "add" ? "Add" : "Remove"} {assignments.length} tag assignment{assignments.length === 1 ? "" : "s"} {action === "add" ? "to" : "from"} these {targets.length} explicitly selected workflows.</p><ul>{targets.map(target => <li key={target.definitionId}><code>{target.definitionId}</code></li>)}</ul><p>Each workflow is checked against its inspected revision. Other tags are retained.</p></div> : null}
         {outcomes ? <div role="status" aria-label="Bulk tag results"><p>Bulk tag results</p><ul>{outcomes.map(outcome => <li key={outcome.definitionId}><code>{outcome.definitionId}</code>: {outcome.status}{outcome.message ? ` — ${outcome.message}` : ""}</li>)}</ul><button type="button" disabled={busy} onClick={() => { setRefresh(value => value + 1); setOutcomes(null); setPreview(false); keyRef.current = workflowOperationKey(); }}>Reload targets for another edit</button></div> : null}

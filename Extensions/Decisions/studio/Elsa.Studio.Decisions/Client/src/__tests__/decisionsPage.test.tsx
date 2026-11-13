@@ -16,7 +16,7 @@ describe("Decisions Studio journeys", () => {
     const navigate = (path: string) => update(<DecisionsPage api={api} navigate={navigate} assetId={new URL(path, "https://studio.test").searchParams.get("decision") ?? undefined} />);
     const { host, update } = mount(<DecisionsPage api={api} navigate={navigate} isNew />);
     await vi.waitFor(() => expect(host.querySelector('input[aria-label="Input 1 name"]')).not.toBeNull());
-    type(Array.from(host.querySelectorAll<HTMLInputElement>("input")).find(input => input.parentElement?.textContent === "Name")!, asset.name);
+    type(Array.from(host.querySelectorAll<HTMLInputElement>("input")).find(input => input.labels?.[0]?.textContent === "Name")!, asset.name);
     click(button(host, "Save decision"));
     await vi.waitFor(() => expect(host.querySelector(".decision-draft-bar")?.textContent).toContain("Saved draft"));
     expect(button(host, "Validate").disabled).toBe(false);
@@ -41,7 +41,7 @@ describe("Decisions Studio journeys", () => {
     api.backend.http.postJson.mockResolvedValue(asset as never);
     await vi.waitFor(() => expect(host.querySelector('input[aria-label="Input 1 name"]')).not.toBeNull());
     expect(host.querySelector(".decision-draft-bar")?.textContent).toContain("Unsaved decision"); expect(host.querySelector(".decision-draft-bar")?.textContent).not.toContain("Saved draft");
-    const name = Array.from(host.querySelectorAll<HTMLInputElement>("input")).find(input => input.parentElement?.textContent === "Name")!;
+    const name = Array.from(host.querySelectorAll<HTMLInputElement>("input")).find(input => input.labels?.[0]?.textContent === "Name")!;
     type(name, "Purchase approval"); click(button(host, "Save decision"));
     await vi.waitFor(() => expect(navigate).toHaveBeenCalledWith("/decisions?decision=approval"));
     expect(api.backend.http.postJson).toHaveBeenCalledWith("/tenant/decisions", expect.objectContaining({ name: "Purchase approval", xml: expect.stringContaining("decisionTable") }));
@@ -51,12 +51,12 @@ describe("Decisions Studio journeys", () => {
   it.each(["description", "sensitivity"])("guards a new decision's %s-only edit before its name is entered", async field => {
     const api = stubApi(), navigate = vi.fn(), { host } = mount(<DecisionsPage api={api} navigate={navigate} isNew />);
     await vi.waitFor(() => expect(host.querySelector('input[aria-label="Input 1 name"]')).not.toBeNull());
-    if (field === "description") type(Array.from(host.querySelectorAll<HTMLInputElement>("input")).find(input => input.parentElement?.textContent === "Description")!, "Only unsaved metadata");
+    if (field === "description") type(Array.from(host.querySelectorAll<HTMLInputElement>("input")).find(input => input.labels?.[0]?.textContent === "Description")!, "Only unsaved metadata");
     else click(host.querySelector<HTMLInputElement>('.decision-metadata input[type="checkbox"]')!);
     const probe = new CustomEvent(studioNavigationRequestedEvent, { cancelable: true, detail: { fromPath: "/decisions?new=1", toPath: "/workflows", intent: "probe" } }); window.dispatchEvent(probe); expect(probe.defaultPrevented).toBe(true);
     api.dialogs.confirm.mockResolvedValue(false); click(button(host, "Back to decisions"));
     await vi.waitFor(() => expect(api.dialogs.confirm).toHaveBeenCalled()); expect(navigate).not.toHaveBeenCalled();
-    if (field === "description") expect(Array.from(host.querySelectorAll<HTMLInputElement>("input")).find(input => input.parentElement?.textContent === "Description")!.value).toBe("Only unsaved metadata");
+    if (field === "description") expect(Array.from(host.querySelectorAll<HTMLInputElement>("input")).find(input => input.labels?.[0]?.textContent === "Description")!.value).toBe("Only unsaved metadata");
     else expect(host.querySelector<HTMLInputElement>('.decision-metadata input[type="checkbox"]')!.checked).toBe(true);
   });
   it("preserves unsaved table work after a conflicting save and supports explicit reload", async () => {
@@ -120,7 +120,7 @@ describe("Decisions Studio journeys", () => {
     const { host } = mount(<CasePanel api={api} asset={asset} xml={asset.xml!} dirty={false} />);
     await vi.waitFor(() => expect(host.textContent).toContain("No saved cases yet")); click(button(host, "Add case"));
     const form = host.querySelector("form")!; type(form.querySelector<HTMLInputElement>("input")!, status);
-    const outcomes = Array.from(form.querySelectorAll("select")).find(element => element.parentElement?.textContent?.startsWith("Expected outcome"))!;
+    const outcomes = Array.from(form.querySelectorAll("select")).find(element => element.labels?.[0]?.textContent?.startsWith("Expected outcome"))!;
     expect(Array.from(outcomes.options).map(option => option.value)).toEqual(["Success", "NoMatch", "HitPolicyViolation", "InvalidInput"]); select(outcomes, status);
     expect(form.querySelector('[aria-label="Expected result"]')).toBeNull(); click(button(host, "Save case"));
     await vi.waitFor(() => expect(host.querySelector("form")).toBeNull());
@@ -159,7 +159,7 @@ describe("Decisions Studio journeys", () => {
     api.backend.http.putJson.mockRejectedValueOnce(new Error("Save unavailable")).mockResolvedValueOnce({ ...asset, description: "Updated", revision: "r2" } as never);
     const { host } = mount(<DecisionsPage api={api} navigate={vi.fn()} assetId={asset.id} />);
     await vi.waitFor(() => expect(host.querySelector('input[aria-label="Input 1 name"]')).not.toBeNull());
-    const description = Array.from(host.querySelectorAll<HTMLInputElement>("input")).find(input => input.parentElement?.textContent === "Description")!;
+    const description = Array.from(host.querySelectorAll<HTMLInputElement>("input")).find(input => input.labels?.[0]?.textContent === "Description")!;
     type(description, "Updated"); click(button(host, "Save decision"));
     await vi.waitFor(() => expect(host.textContent).toContain("Save unavailable"));
     expect(description.value).toBe("Updated"); expect(api.notifications.notify).not.toHaveBeenCalled();
@@ -187,7 +187,7 @@ describe("Decisions Studio journeys", () => {
     request.mockImplementation(() => pending);
     const { host, update } = mount(<DecisionsPage api={api} navigate={navigate} assetId={asset.id} versionId={operation === "clone" ? "v1" : undefined} />);
     await vi.waitFor(() => expect(host.querySelector('input[aria-label="Input 1 name"]')).not.toBeNull());
-    if (operation === "save") type(Array.from(host.querySelectorAll<HTMLInputElement>("input")).find(input => input.parentElement?.textContent === "Description")!, "Updated");
+    if (operation === "save") type(Array.from(host.querySelectorAll<HTMLInputElement>("input")).find(input => input.labels?.[0]?.textContent === "Description")!, "Updated");
     click(button(host, operation === "save" ? "Save decision" : operation === "clone" ? "Clone to draft" : "Publish"));
     await vi.waitFor(() => expect(request).toHaveBeenCalledOnce());
     update(<button>Current backend</button>); controller.setScope("backend-b:user-a");

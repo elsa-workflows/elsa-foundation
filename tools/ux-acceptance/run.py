@@ -19,6 +19,7 @@ import urllib.request
 ROOT = Path(__file__).resolve().parents[2]
 PROJECTS = {'desktop-light', 'desktop-dark', 'narrow-light', 'narrow-dark'}
 CAPTURES = {
+    'structured logs table accessibility': ['reference', 'logs-page', 'logs-selected', 'logs-empty', 'logs-dock'],
     'tabbed Secrets authoring and metadata': ['reference', 'secret-section', 'first-invalid-field', 'storage-section', 'details-section', 'persisted-list', 'persisted-metadata', 'metadata-390', 'storage-390', 'configuration-reference', 'configuration-metadata'],
     'business decisions authoring and explanations': ['reference', 'decisions-list', 'decisions-search', 'decision-create', 'decision-table', 'decision-case-editor', 'decision-case-expectation', 'decision-cases', 'decision-regression', 'decision-published', 'decision-explanation', 'decision-clone', 'decision-conflict', 'decision-history', 'decisions-no-matches', 'decision-imported', 'decision-table-320', 'decision-table-320-scrolled', 'decision-picker', 'decision-picker-new-tab', 'decision-picker-saved-tab', 'decision-picker-selected-toast', 'decision-picker-returned', 'decision-saved-toast'],
     'feature filtering and settings dialogs': ['reference', 'features-server-no-matches', 'features-server-populated', 'features-studio-no-matches', 'features-studio-populated', 'feature-settings-dialog', 'feature-impact-dialog'],
@@ -32,6 +33,7 @@ CAPTURES = {
     'agent authoring and navigation': ['reference', 'agents-list', 'agent-create', 'agent-designer', 'agent-model', 'advanced-settings', 'inputs', 'outputs', 'input-general', 'input-presentation', 'input-advanced', 'output-general', 'output-presentation', 'output-advanced', 'completed'],
     'user task authoring and workflow result': ['reference', 'form-authoring', 'published-form', 'task-authoring', 'form-selection', 'json-output-definitions', 'renamed-output', 'removed-output', 'output-picker', 'frozen-task-form', 'run-outcomes-initial', 'run-outcomes', 'run-outcomes-readable', 'run-output-reached', 'workflow-result', 'task-fault-causes', 'task-fault-details', 'prefill-fault'],
     'compact runtime Inputs retain exact captured values and accessible technical details': ['reference', 'compact-values', 'technical-details', 'nested-values', 'details-closed', 'technical-details-320', 'compact-values-320'],
+    'timeline selection retains its tab and exact occurrence': ['reference', 'timeline-populated', 'timeline-click', 'timeline-keyboard', 'activity-details', 'timeline-return'],
 }
 JOURNEYS = set(CAPTURES)
 
@@ -100,6 +102,33 @@ def verdict(report, artifacts, journeys=None):
             file = Path(item.get('path', '')).resolve()
             if not file.is_relative_to(artifacts.resolve()) or not file.is_file() or not file.stat().st_size:
                 raise ValueError(f'{project} / {title}: missing or unsafe artifact {item.get("name")}')
+    return len(rows)
+
+
+def field_gallery_verdict(report, artifacts):
+    """Retain renderer-level evidence separately from composed product acceptance."""
+    rows = []
+    def walk(suites):
+        for suite in suites:
+            for spec in suite.get('specs', []):
+                for test in spec.get('tests', []):
+                    rows.append((spec.get('title'), test))
+            walk(suite.get('suites', []))
+    walk(report.get('suites', []))
+    expected = report.get('config', {}).get('metadata', {}).get('outlinedCases')
+    if not expected or len(rows) != expected or len({title for title, _ in rows}) != expected or report.get('errors'):
+        raise ValueError('Incomplete Outlined field gallery inventory')
+    for title, test in rows:
+        results = test.get('results', [])
+        if test.get('expectedStatus') != 'passed' or test.get('status') != 'expected' or len(results) != 1 or results[0].get('status') != 'passed':
+            raise ValueError(f'{title}: not a single successful field-gallery execution')
+        images = [item for item in results[0].get('attachments', []) if item.get('contentType') == 'image/png']
+        if not images:
+            raise ValueError(f'{title}: missing field-state screenshot')
+        for item in images:
+            file = Path(item.get('path', '')).resolve()
+            if not file.is_relative_to(artifacts.resolve()) or not file.is_file() or not file.stat().st_size:
+                raise ValueError(f'{title}: missing or unsafe field-state screenshot')
     return len(rows)
 
 
@@ -174,6 +203,14 @@ def run(output, journey=None):
         studio_project = ROOT / 'Studio/src/apps/Elsa.Studio.Web/Elsa.Studio.Web.csproj'
         command(['dotnet', 'build', str(backend_project), '-p:RestoreLockedMode=true', '-v:q', '-nologo', '-m:1', '/nr:false'], output / 'backend-build.log')
         command(['pnpm', 'build'], output / 'frontend-build.log', cwd=ROOT / 'Studio')
+        report['stage'] = 'isolated-field-gallery'
+        gallery = output / 'outlined-gallery'
+        command(['pnpm', 'exec', 'playwright', 'test', '--config', 'tests/browser/playwright.outlined-fields.config.ts'],
+                output / 'outlined-gallery.log', cwd=ROOT / 'Studio', env=dict(os.environ, OUTLINED_EVIDENCE=str(gallery)))
+        report['isolatedFieldGallery'] = {'executed': field_gallery_verdict(json.loads((gallery / 'playwright.json').read_text()), gallery),
+                                          'sourceSha': sha, 'kind': 'isolated-shared-components'}
+        report['stage'] = 'build'
+
         command(['dotnet', 'build', str(studio_project), '-p:RestoreLockedMode=true', '-v:q', '-nologo', '-m:1', '/nr:false'], output / 'studio-build.log')
         with tempfile.TemporaryDirectory(prefix='elsa-ux-acceptance-') as temporary:
             data = Path(temporary)

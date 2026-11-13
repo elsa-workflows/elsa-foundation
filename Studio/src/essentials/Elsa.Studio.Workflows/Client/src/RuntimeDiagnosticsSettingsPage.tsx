@@ -1,4 +1,4 @@
-import { StudioPageHeader, StudioButton } from "@elsa-workflows/studio-ui";
+import { StudioPageHeader, StudioButton, StudioField } from "@elsa-workflows/studio-ui";
 import { getNotifications, useNotificationGuard } from "./workflow-editor/notifications";
 import React, { useEffect, useMemo, useState } from "react";
 import { Info, DatabaseZap, Save, ShieldCheck } from "lucide-react";
@@ -125,12 +125,10 @@ export function RuntimeDiagnosticsSettingsPage({ context }: { context: StudioEnd
               const requested = draft.subjectOverrides[subject.id] ?? "inherit";
               const effective = settings ? effectiveSubjectLevel(settings, subject.id) : null;
               return (
-                <label className="runtime-diagnostics-subject" key={subject.id}>
-                  <span>
+                <StudioField className="runtime-diagnostics-subject" key={subject.id} label={<><span>
                     <strong>{subject.label}</strong>
                     <em>{subject.detail}</em>
-                  </span>
-                  <span className="runtime-diagnostics-subject-controls">
+                  </span></>}><span className="runtime-diagnostics-subject-controls">
                     {effective && <span className="runtime-diagnostics-applied">Runtime applies: {formatLevel(effective)}</span>}
                     <select
                       value={requested}
@@ -140,8 +138,7 @@ export function RuntimeDiagnosticsSettingsPage({ context }: { context: StudioEnd
                       <option value="inherit">Inherit default</option>
                       {allowedLevels.map(level => <option value={level} key={level}>{formatLevel(level)}</option>)}
                     </select>
-                  </span>
-                </label>
+                  </span></StudioField>
               );
             })}
           </div>
