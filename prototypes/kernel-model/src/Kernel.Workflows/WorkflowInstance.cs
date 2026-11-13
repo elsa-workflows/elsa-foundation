@@ -17,15 +17,26 @@ public sealed class WorkflowInstance(IEnumerable<IExecutionModel> models) : IAct
     /// would read the newer state wrongly and write it back older).
     /// </summary>
     public bool Withholds(InstanceRow row, ITurnServices services) =>
-        (row.Status == InstanceStatus.Running && row.Suspended && !services.Has(Flaw.DeliverWhileSuspended)) ||
-        ((row.Status == InstanceStatus.Running || _models[row.Model] is IModelMetadata) &&
-         row.StateVersion > _models[row.Model].StateVersion && !services.Has(Flaw.TurnNewerState));
+        row.Status == InstanceStatus.Running && ((row.Suspended && !services.Has(Flaw.DeliverWhileSuspended)) || (row.StateVersion > _models[row.Model].StateVersion && !services.Has(Flaw.TurnNewerState)));
 
     public TurnOutcome? Command(TurnInput input)
     {
         var (row, first) = (input.Row, input.Taken[0]);
         if (row is { } current && Kinds.IsControl(first.Message.Kind) && (current.Status == InstanceStatus.Running || current.Children is not null || first.Message.Kind == Kinds.Delete))
             return Control(input, first);       // a terminate still goes on to the children of a finished instance
+        if (row is { Status: not InstanceStatus.Running } && _models[row.Model] is IModelMetadata reader &&
+            row.StateVersion > _models[row.Model].StateVersion && !input.Services.Has(Flaw.TurnNewerState) &&
+            input.Taken.Any(d => reader.HandlesMetadata(d.Message)))
+        {
+            // Keep private future state opaque, answer the capability mismatch, and still drain ordinary late input.
+            var next = row with { Revision = row.Revision + 1 };
+            var unavailable = new ModelMetadataUnavailable(input.Actor, row.Model, row.StateVersion, _models[row.Model].StateVersion);
+            var result = new TurnOutcome(input.Actor) { Row = next, Expected = row.Revision, Revision = next.Revision,
+                Status = row.Status, Consumed = [.. input.Taken], Journal = Journal(row.History, [unavailable]) };
+            foreach (var item in input.Taken.Where(d => reader.HandlesMetadata(d.Message)))
+                if (item.Message.ReplyTo is { } route) result.Replied.Add(new(item.Message.Id, route, Request.Response, unavailable));
+            return result;
+        }
         if (row is { Status: not InstanceStatus.Running } &&
             !(_models[row.Model] is IModelMetadata metadata && input.Taken.Any(d => metadata.HandlesMetadata(d.Message))))
             return new TurnOutcome(input.Actor) { Consumed = [.. input.Taken], Status = row.Status };    // a finished target: consumed and dropped

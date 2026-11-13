@@ -36,6 +36,8 @@ public interface IExecutionModel
     ValueTask<object?> ExecuteJobAsync(IJob job, CancellationToken cancellationToken);
 }
 
+public sealed record ModelMetadataUnavailable(string Actor, string Model, int StoredVersion, int AvailableVersion);
+
 /// <summary>Optional model-owned metadata; the workflow actor keeps command and commit authority.</summary>
 public interface IModelMetadata
 {

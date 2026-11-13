@@ -109,8 +109,8 @@ public sealed class Worker : IScopeActivation, ITurnServices
     public int Idle => _slots.Values.Count(s => s.Loaded && !s.Busy && s.Inbox.Count == 0 && s.Replies.Count == 0);    // for tests
     private long _used;
 
-    /// <summary>Database time as far as this worker knows: the latest reading plus what its monotonic clock has counted since.</summary>
     public bool CommitClockAvailable => _store.CommitClockAvailable;
+    /// <summary>Database time as far as this worker knows: the latest reading plus what its monotonic clock has counted since.</summary>
     public long Now => Has(Flaw.WallClockTimers) ? _options.WallClock!() : _anchor + _options.Monotonic();
 
     /// <summary>Database time as far as this worker knows, whatever the flaws: what the lease is reckoned in.</summary>

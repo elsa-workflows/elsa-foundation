@@ -78,3 +78,9 @@ A real dispatched workflow child also completes under an ordinary caller. The ha
 child-finished message IDs and ordinary return-work calls, then issues repeated cold child receipt queries.
 No second parent notice or caller execution is allowed. An isolated source mutation of that guard is required
 alongside the seven internal controls; it is not counted as a passing ordinary run.
+
+The metadata hook preserves main's terminal late-message draining. If the saved model state is newer than the
+reader, metadata requests receive a generic ModelMetadataUnavailable result after a fenced opaque-state commit;
+ordinary late input still drains. The shared clock runner asserts this through a deliberately older model. This
+is a protocol/model-version fixture, not an actual future-native binary rollout qualification. The consuming
+slice also clarifies the exact Committed.Now contract and centralizes the model clock-reference prefix.
