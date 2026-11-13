@@ -6,20 +6,26 @@ using Kernel.Sim.Native;
 
 var names = (from mode in new[] { Modes.Balanced, Modes.Durable } from nested in new[] { false, true }
     from cut in new[] { "recreation", "before-apply", "lost-ack" } select (mode, nested, cut)).ToArray();
+var parentNames = (from mode in new[] { Modes.Balanced, Modes.Durable }
+    from cut in new[] { "pending", "before-apply", "lost-ack" } select (mode, cut)).ToArray();
+if (args.SequenceEqual(["--parent-race"]))
+{ foreach (var (mode, cut) in parentNames) new CreationWitness(mode, false).ParentRace(cut); return; }
 if (args.SequenceEqual(["--job-ack"]))
 { foreach (var qualified in new[] { false, true }) foreach (var caughtUp in new[] { false, true }) await JobAcknowledgement.Run(qualified, caughtUp); return; }
 if (args.SequenceEqual(["--list"]))
 {
     foreach (var name in names) Console.WriteLine("creation:" + name);
+    foreach (var name in parentNames) Console.WriteLine("creation:parent-race," + name);
     foreach (var qualified in new[] { false, true }) foreach (var caughtUp in new[] { false, true }) Console.WriteLine($"creation:job-ack,qualified={qualified},caughtUp={caughtUp}");
     return;
 }
 if (args.Length != 0) throw new ArgumentException("Only --list is supported.");
 foreach (var (mode, nested, cut) in names) new CreationWitness(mode, nested).Run(cut);
+foreach (var (mode, cut) in parentNames) new CreationWitness(mode, false).ParentRace(cut);
 foreach (var qualified in new[] { false, true }) foreach (var caughtUp in new[] { false, true }) await JobAcknowledgement.Run(qualified, caughtUp);
-Console.WriteLine("16/16 initial creation schedules passed. Remaining shared propagation/adverse controls are NOT qualified by this initial runner.");
+Console.WriteLine("22/22 creation schedules passed. Remaining shared propagation/adverse controls are NOT qualified by this runner.");
 
-sealed class CreationWitness(string mode, bool nested)
+sealed partial class CreationWitness(string mode, bool nested)
 {
     private readonly World _world = new(new Config(2, 1, Flaw.None, Native: true)) { Auto = true };
     private readonly InstanceRef _target = InstanceRef.In(0, "creation-probe");
@@ -34,31 +40,33 @@ sealed class CreationWitness(string mode, bool nested)
     private void Apply(Act action)
     { _world.Apply(action); if (_world.Check() is { } error) throw new InvalidOperationException("Kernel: " + error); }
     private StartSpec Spec(long generation) => NativeModel.Spec("creation-probe", mode) with { Creation = new(generation, generation - 1, "intent-" + generation) };
-    private void Send(string kind, long? creation, object? payload = null, StartSpec? start = null, bool reply = false)
+    private void Send(string kind, long? creation, object? payload = null, StartSpec? start = null, bool reply = false, InstanceRef? target = null)
     {
         var id = "creation-message-" + ++_serial;
-        Apply(new("add", M: new Message(id, _target, kind, payload is null ? null : Json.Write(payload), Start: start,
+        Apply(new("add", M: new Message(id, target ?? _target, kind, payload is null ? null : Json.Write(payload), Start: start,
             ReplyTo: reply ? ReplyTo.Of("outside", id, _world.Time + 120_000, beforeCommit: true) : null, TargetCreation: creation)));
     }
-    private void Drain()
+    private void Drain(InstanceRef? target = null)
     {
+        var id = (target ?? _target).Id;
         for (var i = 0; i < 200; i++)
         {
             Apply(new("poll", Actor.Id)); if (Actor.Worker.NeedsLoad) Apply(new("load", Actor.Id));
-            if (Actor.Worker.Ready.Contains(_target.Id)) Apply(new("turn", Actor.Id, S: _target.Id));
+            if (Actor.Worker.Ready.Contains(id)) Apply(new("turn", Actor.Id, S: id));
             else if (!Actor.Worker.NeedsFlush && !Actor.Worker.NeedsMeet) return;
             if (Actor.Worker.NeedsFlush) Apply(new("flush", Actor.Id));
             if (Actor.Worker.NeedsMeet) Apply(new("meet", Actor.Id));
         }
         throw new InvalidOperationException("C0: creation witness exceeded its work bound");
     }
-    private void Prepare()
+    private void Prepare(InstanceRef? target = null)
     {
+        var id = (target ?? _target).Id;
         for (var i = 0; i < 100; i++)
         {
             Apply(new("poll", Actor.Id)); if (Actor.Worker.NeedsLoad) Apply(new("load", Actor.Id));
-            if (Actor.Worker.Ready.Contains(_target.Id))
-            { Apply(new("turn", Actor.Id, S: _target.Id)); Require(Actor.Worker.Queued > 0, "C0", "no actual creation turn staged"); return; }
+            if (Actor.Worker.Ready.Contains(id))
+            { Apply(new("turn", Actor.Id, S: id)); Require(Actor.Worker.Queued > 0, "C0", "no actual creation turn staged"); return; }
             if (Actor.Worker.NeedsFlush) Apply(new("flush", Actor.Id));
         }
         throw new InvalidOperationException("C0: creation did not become ready");
