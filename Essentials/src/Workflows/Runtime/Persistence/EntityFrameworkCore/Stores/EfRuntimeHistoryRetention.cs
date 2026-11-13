@@ -1,3 +1,4 @@
+using System.Data;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
@@ -119,4 +120,3 @@ internal static class EfRuntimeHistoryRetention
             entry.State = EntityState.Detached;
     }
 }
-using System.Data;
