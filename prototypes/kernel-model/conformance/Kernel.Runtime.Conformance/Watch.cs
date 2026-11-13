@@ -39,6 +39,14 @@ public sealed class Watcher
 
     public IScopeHost Wrap(string node, IScopeHost inner) => new Host(this, node, inner);
 
+    /// <summary>The harness tears the cluster down: from here on what a killed node does on its way out is not the runtime's.</summary>
+    public void TearingDown()
+    {
+        lock (_lock) _tearingDown = true;
+    }
+
+    private bool _tearingDown;
+
     /// <summary>The node crashed (its kill has returned): its activations are no one's now, whatever their memory says, and none of them may start a pass.</summary>
     public void Dead(string node)
     {
@@ -165,6 +173,9 @@ public sealed class Watcher
                 // would give up the new epoch.
                 if (watcher._generations.GetValueOrDefault((node, scope)) > generation && inner.Active)
                     watcher._violations.Add($"SEAM {node} gave up an old activation of scope {scope} after activating it again");
+                // A crash gives nothing up, then or later: a release that begins after the kill returned is the runtime's.
+                if (watcher._gone.GetValueOrDefault(node) == "was killed" && inner.Active && !watcher._tearingDown)
+                    watcher._violations.Add($"SEAM {node} gave scope {scope} up after it was killed: a crash gives nothing up");
             }
             watcher.Enter(node, scope, "gave up");
             try { await inner.DisposeAsync(); }

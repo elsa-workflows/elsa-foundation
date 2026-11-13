@@ -149,6 +149,7 @@ public sealed class Harness : IAsyncDisposable
         if (_stopped) return;
         _stopped = true;
         foreach (var node in Alive) await StopAsync(node);
+        Watcher.TearingDown();
         await _cluster.DisposeAsync();
     }
 
