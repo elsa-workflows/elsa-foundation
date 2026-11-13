@@ -10825,3 +10825,5 @@ Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryEvent.OccurredAtKnown.get -> bo
 Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryEvent.OccurredAtKnown.init -> void
 Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFact.OccurredAtKnown.get -> bool?
 Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFact.OccurredAtKnown.init -> void
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeHistoryCaptureSupport
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeHistoryCaptureSupport.CanCapture(Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryCapturePolicy! policy) -> bool

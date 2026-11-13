@@ -159,11 +159,14 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
             if (!expected.MatchesAdmission(observed, execution, state, access.RequireScope(), _timeProvider.GetUtcNow())) return;
         }
         if ((bookmark is not null || hasClaimedResume) &&
-            state.Status is not (ActivityExecutionStatus.Completed or ActivityExecutionStatus.Faulted or ActivityExecutionStatus.Cancelled or ActivityExecutionStatus.Recovered) &&
-            serviceProvider.GetServices<IEventHandler<ActivityResumeValidating>>().Any())
+            state.Status is not (ActivityExecutionStatus.Completed or ActivityExecutionStatus.Faulted or ActivityExecutionStatus.Cancelled or ActivityExecutionStatus.Recovered))
         {
-            var validation = new ActivityResumeValidating(state, executableNode, resumePayload);
-            await serviceProvider.GetRequiredService<IInlineEventPublisher>().Publish(validation, cancellationToken);
+            await ActivityHistoryPreflight.ReadPolicyAndValidateAsync(serviceProvider, workItem.WorkflowExecutionId, cancellationToken);
+            if (serviceProvider.GetServices<IEventHandler<ActivityResumeValidating>>().Any())
+            {
+                var validation = new ActivityResumeValidating(state, executableNode, resumePayload);
+                await serviceProvider.GetRequiredService<IInlineEventPublisher>().Publish(validation, cancellationToken);
+            }
         }
 
         if (hasClaimedResume)
