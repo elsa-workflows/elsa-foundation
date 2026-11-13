@@ -137,6 +137,8 @@
     <ProjectReference Include="..\..\..\src\Connections\Core\Elsa.Connections.Core.csproj" />
     <ProjectReference Include="..\..\..\src\Studio\Preferences\Core\Elsa.Studio.Preferences.Core.csproj" />
     <ProjectReference Include="../../../src/Studio/Dashboard/Core/Elsa.Studio.Dashboard.Core.csproj" />
+    <ProjectReference Include="../../../src/Workflows/Runtime/Inspection/Core/Elsa.Workflows.Runtime.Inspection.Core.csproj" />
+    <ProjectReference Include="../../../src/Workflows/Dashboard/Queries/Elsa.Workflows.Dashboard.Queries.csproj" />
     <ProjectReference Include="../../../src/Studio/Dashboard/Api/Elsa.Studio.Dashboard.Api.csproj" />
     <ProjectReference Include="../../../src/Studio/Dashboard/Persistence/EntityFrameworkCore/Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.csproj" />
     <ProjectReference Include="../../../src/Studio/Dashboard/Management/Elsa.Studio.Dashboard.Management.csproj" />

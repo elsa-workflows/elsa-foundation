@@ -262,3 +262,7 @@ not automatic constitution violations.
 
 - [Studio server contracts and frontend lifecycle catalog](Studio/src/essentials/Elsa.Studio.Api/EXTENSION_POINTS.md)
 - [API capability contributor catalog](Essentials/src/Api/Capabilities/Elsa.Api.Capabilities/EXTENSION_POINTS.md)
+
+- [Workflow inspection authorization](Essentials/src/Workflows/Runtime/Inspection/Core/EXTENSION_POINTS.md)
+
+- [Workflow Dashboard source](Essentials/src/Workflows/Dashboard/Queries/EXTENSION_POINTS.md)
