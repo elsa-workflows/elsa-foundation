@@ -120,6 +120,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
     public IEnumerable<string> Callers => _slots.Values.SelectMany(s => s.Replies);
     private long _used;
 
+    public bool CreationIdentityAvailable => _store.CreationIdentityAvailable;
     public bool CommitClockAvailable => _store.CommitClockAvailable;
     /// <summary>Database time as far as this worker knows: the latest reading plus what its monotonic clock has counted since.</summary>
     public long Now => Has(Flaw.WallClockTimers) ? _options.WallClock!() : _anchor + _options.Monotonic();
@@ -149,8 +150,8 @@ public sealed class Worker : IScopeActivation, ITurnServices
     /// Diagnostic: capture before a ticket is removed. The task ends after its driver queues or discards the result;
     /// it does not establish that a model consumed the result or committed a logical job outcome.
     /// </summary>
-    public Task? JobCompletion(string instance, string key) =>
-        _items.GetValueOrDefault(TicketId(instance, key)) is { } ticket
+    public Task? JobCompletion(string instance, string key, long creation = 0) =>
+        _items.GetValueOrDefault(TicketId(instance, key, creation)) is { } ticket
             && ticket.Message.Target.Id == instance && ticket.Key == key ? ticket.JobDriver : null;
 
     public bool Has(Flaw flaw) => (_options.Flaws & flaw) != 0;
@@ -165,7 +166,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
     void ITurnServices.Cancelling(string ticket) => Cancelling(ticket);
 
     /// <summary>A job's ticket: derived from instance and key, so a later turn can delete it without holding it.</summary>
-    public static string TicketId(string instance, string key) => $"{instance}!{key}";
+    public static string TicketId(string instance, string key, long creation = 0) => creation > 0 ? $"{instance}@{creation}!{key}" : $"{instance}!{key}";
 
     // ---- the seam to layer 1 --------------------------------------------------------------------------------------
 
@@ -388,10 +389,10 @@ public sealed class Worker : IScopeActivation, ITurnServices
             item.Ticket = true;
             item.Key = message.Read<JobTicket>().Key;
             item.Taken = _cancelling.Contains(message.Id);
-            StartJob(item);
         }
         if (!_slots.TryGetValue(message.Target.Id, out var slot)) _slots[message.Target.Id] = slot = new Slot { Loaded = fresh };
         Insert(slot, item);
+        if (item.Key is not null) StartJob(item);
     }
 
     private static void Insert(Slot slot, Delivery item)
@@ -413,7 +414,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
     /// An instance that cannot be given its messages now, as its actor type says (<see cref="IActorType.Withholds"/>).
     /// Kernel messages still pass.
     /// </summary>
-    private bool Withheld(Slot slot) => slot.Row is { } row && _type.Withholds(row, this);
+    private bool Withheld(Slot slot) => slot.Row is { Retired: false } row && _type.Withholds(row, this);
 
     /// <summary>
     /// Finding F2: suspects are tried apart from everything else. A fenced commit writes that they are on trial at this
@@ -462,8 +463,16 @@ public sealed class Worker : IScopeActivation, ITurnServices
         {
             if (item.Ticket || item.Taken) continue;    // taken here: recalled by a commit in flight
             var control = Kinds.IsControl(item.Message.Kind);
-            if (suspended && !control) continue;    // a suspended instance is given nothing; its messages wait in order
+            var identityReply = item.Message.Start?.Creation is not null || CreationProtocol.TargetError(slot.Row, item.Message) is not null;
+            if (suspended && !control && !identityReply) continue;    // identity refusal does not activate suspended authored work
             if (Awaits(item)) break;    // nothing overtakes a message that waits for its mark
+            // Qualified creation envelopes are dispatched individually, including stale controls before hydration.
+            // This first prototype favors an explicit boundary over batching mixed creation commands.
+            if (slot.Row?.Creation > 0 || item.Message.TargetCreation is not null || item.Message.Start?.Creation is not null)
+            {
+                if (due.Count == 0 && (item.Message.Due is not { } dueAt || dueAt <= now)) due.Add(item);
+                break;
+            }
             if (control)
             {
                 // The kernel's, alone, after what came before it, except held messages, which wait for something new and
@@ -494,7 +503,12 @@ public sealed class Worker : IScopeActivation, ITurnServices
         _loading = false;
         var found = rows.ToDictionary(r => r.Id, StringComparer.Ordinal);
         foreach (var id in ids)
-            if (_slots.TryGetValue(id, out var slot) && !slot.Loaded) (slot.Row, slot.Loaded, slot.Used) = (found.GetValueOrDefault(id), true, ++_used);
+            if (_slots.TryGetValue(id, out var slot) && !slot.Loaded)
+            {
+                (slot.Row, slot.Loaded, slot.Used) = (found.GetValueOrDefault(id), true, ++_used);
+                Volatile.Write(ref slot.ActiveCreation, slot.Row is { Retired: false } row ? row.Creation : -1);
+            }
+        foreach (var ticket in _items.Values.Where(i => i.Key is not null).ToArray()) StartJob(ticket);
         Evict();
     }
 
@@ -514,8 +528,20 @@ public sealed class Worker : IScopeActivation, ITurnServices
         slot.Inbox.RemoveAll(due.Contains);
         foreach (var item in due) (item.Taken, item.Held) = (true, false);
         (slot.Busy, slot.Used) = (true, ++_used);
-        var creator = slot.Row is null ? due.FindIndex(i => i.Message.Start is not null) : -1;
+        var request = due[0].Message;
+        var creationError = request.Start?.Creation is not null
+            ? !CreationIdentityAvailable ? "CreationIdentityUnavailable"
+                : request.TargetCreation is { } target && target != request.Start.Creation.Generation ? "WrongCreation"
+                : CreationProtocol.StartError(slot.Row, request.Start)
+            : CreationProtocol.TargetError(slot.Row, request);
+        if (creationError is not null)
+        {
+            Enqueue(Bound(CreationProtocol.Refuse(instance, slot.Row, due, creationError), slot));
+            return;
+        }
+        var creator = slot.Row is null or { Retired: true } ? due.FindIndex(i => i.Message.Start is not null) : -1;
         var spec = creator < 0 ? null : due[creator].Message.Start;
+        slot.Starting = spec;
         var input = new TurnInput(this, slot, instance, due, Math.Max(creator, 0), spec);
         if (_type.Command(input) is { } command)
             Enqueue(Bound(command, slot));
@@ -543,6 +569,17 @@ public sealed class Worker : IScopeActivation, ITurnServices
     private static TurnOutcome Bound(TurnOutcome unit, Slot slot)
     {
         unit.Slot = slot;
+        if (unit.Row is { Retired: false } row)
+        {
+            if (slot.Row is null or { Retired: true } && slot.Starting?.Creation is { } start)
+            {
+                unit.Row = row with { Creation = start.Generation, StartIntent = CreationProtocol.Fingerprint(slot.Starting), ParentCreation = slot.Starting.ParentCreation };
+                unit.Expected = slot.Row?.Revision;
+                unit.Revision = unit.Row.Revision;
+            }
+            else if (slot.Row is { Creation: > 0 } previous)
+                unit.Row = row with { Creation = previous.Creation, StartIntent = previous.StartIntent, ParentCreation = previous.ParentCreation };
+        }
         return unit;
     }
 
@@ -553,10 +590,21 @@ public sealed class Worker : IScopeActivation, ITurnServices
 
     private void StartJob(Delivery ticket)
     {
+        Slot? creationSlot = null;
+        if (ticket.Message.TargetCreation is not null)
+        {
+            if (!_slots.TryGetValue(ticket.Message.Target.Id, out creationSlot) || !creationSlot.Loaded) return;
+            if (CreationProtocol.TargetError(creationSlot.Row, ticket.Message) is not null)
+            {
+                ticket.Cancel?.Cancel();
+                ticket.Ticket = false; ticket.Key = null;
+                return; // the normal fenced dispatch consumes/refuses this stale target
+            }
+        }
         // Callers finish their current collection operation before standing down, so a refused ticket is never stranded.
         if (!CanStartWork || ticket.Cancel is not null || ticket.Taken || Awaits(ticket) || Blocked || (_trial.Count > 0 && !_trial.Contains(ticket))) return;
         ticket.Cancel = new CancellationTokenSource();
-        ticket.JobDriver = DriveJob(ticket, ticket.Message.Read<JobTicket>());
+        ticket.JobDriver = DriveJob(ticket, ticket.Message.Read<JobTicket>(), creationSlot);
     }
 
     private bool JobMayRun(long generation)
@@ -567,24 +615,26 @@ public sealed class Worker : IScopeActivation, ITurnServices
         return false;
     }
 
-    private async Task DriveJob(Delivery ticket, JobTicket job)
+    private async Task DriveJob(Delivery ticket, JobTicket job, Slot? creationSlot)
     {
         var generation = _generation;
+        bool MayRun() => JobMayRun(generation) && (creationSlot is null || Volatile.Read(ref creationSlot.ActiveCreation) == ticket.Message.TargetCreation);
         string? result = null, error = null;
-        var (context, token) = (new JobContext(ticket.Message.Target, job.Key, job.Arguments), ticket.Cancel!.Token);
+        var (context, token) = (new JobContext(ticket.Message.Target, job.Key, job.Arguments, ticket.Message.TargetCreation ?? 0), ticket.Cancel!.Token);
         try
         {
+            if (!MayRun()) return;
             result = Json.Write(_options.JobScheduler is { } scheduler
                 ? await Task.Factory.StartNew(() =>
                 {
                     _options.BeforeScheduledJobCheck?.Invoke();
-                    return JobMayRun(generation) ? _type.ExecuteJobAsync(job.Model, context, token).AsTask()
+                    return MayRun() ? _type.ExecuteJobAsync(job.Model, context, token).AsTask()
                         : Task.FromCanceled<object?>(new CancellationToken(true));
                 }, token, TaskCreationOptions.DenyChildAttach, scheduler).Unwrap()
                 : await _type.ExecuteJobAsync(job.Model, context, token));
         }
         catch (Exception e) { error = e.Message; }
-        if (ticket.Taken || !JobMayRun(generation)) return; // next pass stands down if the deadline passed
+        if (ticket.Taken || !MayRun()) return; // an old actor creation cannot publish a job result
         // The ticket becomes the result: same id, so it is consumed once, by the turn that handles it.
         ticket.Message = ticket.Message with { Kind = Kinds.JobFinished, Payload = Json.Write(new JobFinished(job.Key, result, error)) };
         ticket.Ticket = false;
@@ -696,6 +746,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
             Committed result;
             try
             {
+                if (!CreationIdentityAvailable) CreationProtocol.RejectUnsupported(batch);
                 if (!CommitClockAvailable) CommitClockFacts.RejectUnsupported(batch);
                 result = await _store.CommitAsync(batch, cancellationToken);
             }
@@ -769,17 +820,21 @@ public sealed class Worker : IScopeActivation, ITurnServices
         if (!handOver)
             foreach (var message in unit.Sent)
                 if (message.Target.Partition == Partition && message.Due is null && !unit.Volatile.Contains(message.Id)) _behind.Add(message.Id);
+        if (unit.Slot is { } committed)
+        {
+            if (unit.Row is not null) committed.Row = unit.Row;
+            if (unit.Delete && unit.Row is not { Retired: true }) committed.Row = null;
+            Volatile.Write(ref committed.ActiveCreation, committed.Row is { Retired: false } row ? row.Creation : -1);
+        }
         HandOver(unit, seqs, hold: handOver && !Has(Flaw.DeliverBeforeCommit));
         if (unit.Slot is not { } slot) return;
-        if (unit.Row is not null) slot.Row = unit.Row;
-        if (unit.Delete) slot.Row = null;
         slot.State = unit.Row is { Status: InstanceStatus.Running } ? unit.State : null;
         slot.Busy = false;
         if (!Has(Flaw.EmitBeforeCommit)) Release(unit);
         for (var i = 0; i < unit.Replied.Count; i++)
         {
             var reply = unit.Replied[i];
-            Send(reply.To, $"{unit.Instance}#{unit.Revision}.reply:{i}", reply.Channel, reply.Item);
+            Send(reply.To, $"{Origin(unit)}#{unit.Revision}.reply:{i}", reply.Channel, reply.Item);
         }
         if (slot.Row is null && slot.Inbox.Count == 0) _slots.Remove(unit.Instance);
         Evict();
@@ -824,11 +879,13 @@ public sealed class Worker : IScopeActivation, ITurnServices
             if (item.Message.ReplyTo is { } to && !Expired(to) && !unit.Replied.Any(r => r.Message == item.Message.Id)) slot.Replies.Add(to);
         var callers = slot.Replies.Where(to => Has(Flaw.EmitBeforeCommit) || ReplyTo.Parse(to).BeforeCommit == early).ToList();
         for (var i = 0; i < unit.Emitted.Count; i++)
-            foreach (var to in callers) Send(to, $"{unit.Instance}#{unit.Revision}.{i}", unit.Emitted[i].Channel, unit.Emitted[i].Item);
+            foreach (var to in callers) Send(to, $"{Origin(unit)}#{unit.Revision}.{i}", unit.Emitted[i].Channel, unit.Emitted[i].Item);
         if (early || unit.Status == InstanceStatus.Running) return;
-        foreach (var to in slot.Replies) Send(to, unit.Instance + "#end", null, null, unit.Status, unit.Status is null ? "missing" : null);
+        foreach (var to in slot.Replies) Send(to, Origin(unit) + "#end", null, null, unit.Status, unit.Status is null ? "missing" : null);
         slot.Replies.Clear();
     }
+
+    private static string Origin(TurnOutcome unit) => (unit.Row ?? unit.Slot?.Row)?.Creation is > 0 and var creation ? $"{unit.Instance}@{creation}" : unit.Instance;
 
     private void Send(string to, string key, string? channel, object? item, InstanceStatus? status = null, string? error = null)
     {
@@ -881,7 +938,9 @@ public sealed class TrialGate
 
 internal sealed class Slot
 {
+    public long ActiveCreation;    // volatile latch captured by background drivers; retired/missing is -1
     public InstanceRow? Row;        // the committed row; null while the instance does not exist
+    public StartSpec? Starting;     // creation intent of this staged activation, including a failed initial turn
     public object? State;           // the live state between turns, equal to Row.State
     public bool Loaded, Busy;
     public long Used;               // when a turn last started or it was loaded: the least recent idle one goes first
@@ -892,4 +951,4 @@ internal sealed class Slot
 
 internal sealed record JobTicket(string Model, string Key, string? Arguments);
 
-internal sealed record JobContext(InstanceRef Instance, string Key, string? Arguments) : IJob;
+internal sealed record JobContext(InstanceRef Instance, string Key, string? Arguments, long Creation = 0) : IJob;

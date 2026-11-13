@@ -5,10 +5,10 @@ namespace Kernel.Workflows;
 
 public enum Placement { WithParent, Spread }
 
-public sealed record InstanceInfo(InstanceRef Ref, string Model, string Definition, string? Parent);
+public sealed record InstanceInfo(InstanceRef Ref, string Model, string Definition, string? Parent, long Creation = 0);
 
 /// <summary>What a parent is told when a child ends.</summary>
-public sealed record ChildFinished(string Child, InstanceStatus Status, string? Output);
+public sealed record ChildFinished(string Child, InstanceStatus Status, string? Output, long Creation = 0);
 
 /// <summary>The message kinds of the workflow instance; the durable layer's own are in <see cref="Kinds"/>.</summary>
 public static class WorkflowKinds

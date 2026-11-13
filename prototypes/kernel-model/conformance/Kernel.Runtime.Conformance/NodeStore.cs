@@ -9,6 +9,7 @@ namespace Kernel.Runtime.Conformance;
 /// </summary>
 public sealed class NodeStore(IKernelStore inner) : IKernelStore
 {
+    public bool CreationIdentityAvailable => inner.CreationIdentityAvailable;
     public bool CommitClockAvailable => inner.CommitClockAvailable;
     private readonly object _lock = new();
     private TaskCompletionSource? _stall;

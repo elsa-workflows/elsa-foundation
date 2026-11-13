@@ -51,6 +51,7 @@ public sealed partial class World
 {
     public readonly Oracle Oracle = new();
     private readonly Dictionary<string, (long Revision, InstanceStatus Status)> _known = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, (long Generation, bool Retired)> _creations = new(StringComparer.Ordinal);
     private readonly HashSet<string> _late = new(StringComparer.Ordinal);
     private readonly HashSet<string> _gone = new(StringComparer.Ordinal);    // deleted, and seen gone
     private readonly Dictionary<string, int> _versions = new(StringComparer.Ordinal);   // instances whose row first appeared after their parent had ended
@@ -115,7 +116,10 @@ public sealed partial class World
         // I6 for the view: each view row counts exactly the journal rows of its instance up to its projector's position.
         var projected = Store.Journal.Values.Where(j => j.Revision > 0 && j.Position <= Store.Projection[j.Partition]).GroupBy(j => j.Instance)
             .ToDictionary(g => g.Key, g => (Revision: g.Max(j => j.Revision), Commits: g.Count()), StringComparer.Ordinal);
-        var deletions = Store.Journal.Values.Where(j => j.Revision < 0).ToDictionary(j => j.Instance, j => j, StringComparer.Ordinal);
+        var deletions = Store.Journal.Values.Where(j => j.Revision < 0).GroupBy(j => j.Instance)
+            .ToDictionary(g => g.Key, g => g.MaxBy(j => j.Position)!, StringComparer.Ordinal);
+        if (_creations.FirstOrDefault(c => c.Value.Generation > 0 && !Store.Instances.ContainsKey(c.Key)) is { Key: not null } lostCreation)
+            return $"I22 {lostCreation.Key} lost its retained creation high-water mark";
         foreach (var id in deletions.Keys.Where(id => Oracle.Deleted.Contains(id) && !Store.Instances.ContainsKey(id))) _gone.Add(id);   // also those created and deleted between two checks
         foreach (var (id, view) in Store.Views)
             if (deletions.TryGetValue(id, out var deletion) && deletion.Position > Store.Projection[deletion.Partition]) continue;    // deleted; the projector has not got there yet
@@ -131,10 +135,27 @@ public sealed partial class World
         }
         foreach (var row in Store.Instances.Values)
         {
+            if (_creations.TryGetValue(row.Id, out var birth) && row.Creation != birth.Generation)
+            {
+                if (!birth.Retired || birth.Generation <= 0 || birth.Generation == long.MaxValue || row.Creation != birth.Generation + 1 || row.Retired || row.Revision != 1)
+                    return $"I10 {row.Id} changed creation {birth.Generation} to {row.Creation} without a valid observed retirement";
+                _known.Remove(row.Id); _versions.Remove(row.Id); _gone.Remove(row.Id);
+            }
+            if (row.Retired)
+            {
+                if (row.Creation <= 0 || !Oracle.Deleted.Contains(row.Id) || !deletions.ContainsKey(row.Id) || row.Status == InstanceStatus.Running ||
+                    row.Model != "" || row.Definition != "" || row.State != "null" || row.Jobs is not null || row.Children is not null || row.Fault is not null || row.CommitTimes is not null)
+                    return $"I22 {row.Id} has an invalid lifecycle tombstone";
+                _gone.Add(row.Id); _versions.Remove(row.Id);
+            }
+            _creations[row.Id] = (row.Creation, row.Retired);
             if (!commits.ContainsKey(row.Id) && row.History != History.Minimal) return $"I2 {row.Id} has a row and no journal row";
             // I18: a state is read at its own version or upgraded; no model writes back a state older than the row's.
-            if (_versions.TryGetValue(row.Id, out var version) && row.StateVersion < version) return $"I18 {row.Id} went from state version {version} back to {row.StateVersion}";
-            _versions[row.Id] = row.StateVersion;
+            if (!row.Retired)
+            {
+                if (_versions.TryGetValue(row.Id, out var version) && row.StateVersion < version) return $"I18 {row.Id} went from state version {version} back to {row.StateVersion}";
+                _versions[row.Id] = row.StateVersion;
+            }
             // I19: a rebind is the instance's from the next turn on, in its row and in every turn that follows.
             if (row.Model == "counter" && State<CounterState>(row.Id) is { } bound && (bound.Wrong.Count > 0 || row.Definition != (bound.Bound ?? Counter.Spec.Definition)))
                 return $"I19 {row.Id} is bound to {bound.Bound ?? Counter.Spec.Definition}, its row says {row.Definition}{(bound.Wrong.Count > 0 ? ", and a turn " + bound.Wrong[0] : "")}";
@@ -144,7 +165,7 @@ public sealed partial class World
                 return $"I10 {row.Id} went from revision {before.Revision} {before.Status} to revision {row.Revision} {row.Status}";
             if (!_known.ContainsKey(row.Id) && row.Parent is { } up && Store.Instances.GetValueOrDefault(up) is { Status: not InstanceStatus.Running }) _late.Add(row.Id);
             _known[row.Id] = (row.Revision, row.Status);
-            if (row.Status != InstanceStatus.Faulted) continue;
+            if (row.Retired || row.Status != InstanceStatus.Faulted) continue;
             // I14: parked for losing owners only at the threshold; otherwise only an instance that really fails is parked.
             var poison = row.Fault is { } fault && fault.StartsWith("message ") ? fault[8..fault.IndexOf(" was on trial")] : null;
             if (poison is not null && _attempts.GetValueOrDefault(poison) < Config.Attempts) return $"I14 {row.Id} was parked before the threshold: {row.Fault}";
@@ -157,7 +178,7 @@ public sealed partial class World
             if (!Oracle.Deleted.Contains(gone) || !deletions.ContainsKey(gone)) return $"I10 the row of {gone} disappeared";
             _gone.Add(gone);
         }
-        if (_gone.FirstOrDefault(Store.Instances.ContainsKey) is { } back) return $"I22 {back} was deleted and has a row again";
+        if (_gone.FirstOrDefault(id => Store.Instances.GetValueOrDefault(id) is { Retired: false }) is { } back) return $"I22 {back} was deleted and has a row again";
         return Oracle.Ghosts.FirstOrDefault(Store.Instances.ContainsKey) is { } ghost ? $"I10 {ghost} was created by a message without a start spec" : null;
     }
 

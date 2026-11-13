@@ -22,6 +22,17 @@ public sealed class WorkflowInstance(IEnumerable<IExecutionModel> models) : IAct
     public TurnOutcome? Command(TurnInput input)
     {
         var (row, first) = (input.Row, input.Taken[0]);
+        if (row is { Creation: > 0 } && first.Message.Kind == WorkflowKinds.ChildFinished)
+        {
+            try
+            {
+                if (first.Message.Payload is null || first.Message.Read<ChildFinished>() is not { } finished)
+                    return CreationProtocol.Refuse(input.Actor, row, input.Taken, "InvalidChildCompletion");
+                if (!ChildRegistry.Read(row.Children).Contains(new(finished.Child, finished.Creation)))
+                    return CreationProtocol.Refuse(input.Actor, row, input.Taken, "UnknownChildCreation");
+            }
+            catch (System.Text.Json.JsonException) { return CreationProtocol.Refuse(input.Actor, row, input.Taken, "InvalidChildCompletion"); }
+        }
         if (row is { } current && Kinds.IsControl(first.Message.Kind) && (current.Status == InstanceStatus.Running || current.Children is not null || first.Message.Kind == Kinds.Delete))
             return Control(input, first);       // a terminate still goes on to the children of a finished instance
         if (row is { Status: not InstanceStatus.Running } && _models[row.Model] is IModelMetadata reader &&
@@ -62,7 +73,8 @@ public sealed class WorkflowInstance(IEnumerable<IExecutionModel> models) : IAct
     {
         var next = row is { } r ? r with { Status = InstanceStatus.Faulted, Revision = r.Revision + 1, Fault = error }
             : spec is null ? null
-            : new InstanceRow(actor, spec.Model, spec.Definition, InstanceStatus.Faulted, "null", 1, spec.Parent, error, History: spec.History);
+            : new InstanceRow(actor, spec.Model, spec.Definition, InstanceStatus.Faulted, "null", 1, spec.Parent, error, History: spec.History,
+                Creation: spec.Creation?.Generation ?? 0, StartIntent: CreationProtocol.Fingerprint(spec), ParentCreation: spec.ParentCreation);
         if (next is not null && row is not { Status: not InstanceStatus.Running }) next = WorkflowCommitClock.End(next);
         var unit = new TurnOutcome(actor) { Row = next, Expected = row?.Revision, Consumed = [.. taken], Journal = next is null ? null : Journal(next.History, ["parked: " + error]), Status = next?.Status, Unsubscribe = next is not null };
         if (next?.Parent is not null) unit.Sent.Add(Finished(next, null));
@@ -82,7 +94,8 @@ public sealed class WorkflowInstance(IEnumerable<IExecutionModel> models) : IAct
             // Only an ended instance is deleted. What arrives for it afterwards is dropped as for a missing target.
             return row.Status == InstanceStatus.Running || row.StateVersion > _models[row.Model].StateVersion ||
                 (_models[row.Model] is IModelMetadata metadata && metadata.ProtectsDeletion(ReadState(row, _models[row.Model], input.Services), input.Services.Now, new DurableTurn(input).Clock)) ? new TurnOutcome(instance) { Consumed = [item], State = input.State, Status = row.Status }
-                : new TurnOutcome(instance) { Delete = true, Expected = row.Revision, Consumed = [item], Unsubscribe = true, Status = row.Status, Journal = Json.Write(new[] { "deleted" }) };
+                : new TurnOutcome(instance) { Delete = true, Row = row.Creation > 0 ? CreationProtocol.Retire(row) : null,
+                    Expected = row.Revision, Consumed = [item], Unsubscribe = true, Status = row.Status, Journal = Json.Write(new[] { "deleted" }) };
         var suspended = item.Message.Kind == Kinds.Suspend;
         if (row.Status != InstanceStatus.Running) return new TurnOutcome(instance) { Consumed = [item], Status = row.Status };
         if (row.Suspended == suspended) return new TurnOutcome(instance) { Consumed = [item], State = input.State };
@@ -107,13 +120,14 @@ public sealed class WorkflowInstance(IEnumerable<IExecutionModel> models) : IAct
             next = next with { State = Json.Write(state), StateVersion = _models[row.Model].StateVersion };
         }
         if (running) next = WorkflowCommitClock.End(next);
-        var children = row.Children is { } list && !input.Services.Has(Flaw.TerminateRootOnly) ? Json.Read<List<string>>(list) : [];
+        var children = !input.Services.Has(Flaw.TerminateRootOnly) ? ChildRegistry.Read(row.Children) : [];
         var unit = new TurnOutcome(instance)
         {
             Row = next, Expected = row.Revision, Consumed = [item], Status = next.Status, Revision = next.Revision, Unsubscribe = running,
             Journal = Journal(row.History, ["terminated"]),
-            Sent = children.Select((child, i) => new Message($"{instance}#{next.Revision}.{i:D4}", new InstanceRef(child), Kinds.Terminate, Sender: instance)).ToList(),
-            Cancelled = (row.Jobs is { } jobs ? Json.Read<List<string>>(jobs) : []).Select(key => Worker.TicketId(instance, key)).ToList(),
+            Sent = children.Select((child, i) => new Message($"{Origin(row)}#{next.Revision}.{i:D4}", new InstanceRef(child.Id), Kinds.Terminate, Sender: instance,
+                TargetCreation: child.Creation > 0 ? child.Creation : null)).ToList(),
+            Cancelled = (row.Jobs is { } jobs ? Json.Read<List<string>>(jobs) : []).Select(key => Worker.TicketId(instance, key, row.Creation)).ToList(),
         };
         foreach (var ticket in unit.Cancelled) input.Services.Cancelling(ticket);
         if (running && row.Parent is not null) unit.Sent.Add(Finished(next, null));
@@ -126,5 +140,8 @@ public sealed class WorkflowInstance(IEnumerable<IExecutionModel> models) : IAct
 
     /// <summary>The parent's notice that a child ended.</summary>
     internal static Message Finished(InstanceRow row, string? output) =>
-        new($"{row.Id}#{row.Revision}.end", new InstanceRef(row.Parent!), WorkflowKinds.ChildFinished, Json.Write(new ChildFinished(row.Id, row.Status, output)), row.Id);
+        new($"{Origin(row)}#{row.Revision}.end", new InstanceRef(row.Parent!), WorkflowKinds.ChildFinished, Json.Write(new ChildFinished(row.Id, row.Status, output, row.Creation)), row.Id,
+            TargetCreation: row.ParentCreation > 0 ? row.ParentCreation : null);
+
+    private static string Origin(InstanceRow row) => row.Creation > 0 ? $"{row.Id}@{row.Creation}" : row.Id;
 }

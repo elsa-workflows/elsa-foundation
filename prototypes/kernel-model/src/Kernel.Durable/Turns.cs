@@ -33,6 +33,7 @@ public interface ITurnServices
     /// <summary>Database time as far as this owner knows.</summary>
     long Now { get; }
     bool CommitClockAvailable { get; }
+    bool CreationIdentityAvailable { get; }
 
     /// <summary>How many partitions the store has: to place an actor in another one.</summary>
     int Partitions { get; }
@@ -79,7 +80,9 @@ public sealed class TurnInput
 
     internal Slot Slot { get; }
     public string Actor { get; }
-    public InstanceRow? Row => Slot.Row;
+    public InstanceRow? Row => Slot.Row is { Retired: false } row ? row : null;
+    public InstanceRow? Previous => Slot.Row;
+    public long Creation => Row?.Creation ?? Spec?.Creation?.Generation ?? 0;
 
     /// <summary>The live state between turns, equal to the row's; null when it is not in memory.</summary>
     public object? State => Slot.State;
@@ -172,6 +175,7 @@ public sealed class DurableTurn
     public int SentCount => _sent.Count;
     public int SubscribedCount => _subscribed.Count;
     private string Id => Actor.Id;
+    private string Origin => _input.Creation > 0 ? $"{Id}@{_input.Creation}" : Id;
     private ITurnServices Services => _input.Services;
 
     public void Emit(string channel, object? item) => _emitted.Add((channel, item));
@@ -188,12 +192,13 @@ public sealed class DurableTurn
     // A message's id is derived from its sender and the sender's revision. Finding F8: the ordinal has a fixed width,
     // because Entity Framework sends the inserts of one commit in key order and the database hands out seq in that order.
     public string Send(InstanceRef target, string kind, object? payload = null, SendOptions? options = null) =>
-        Send($"{Id}#{Revision}.{_ordinal++:D4}", target, kind, payload, options);
+        Send($"{Origin}#{Revision}.{_ordinal++:D4}", target, kind, payload, options);
 
     private string Send(string id, InstanceRef target, string kind, object? payload, SendOptions? options = null)
     {
         _sent.Add(new Message(id, target, kind, payload is null ? null : Json.Write(payload), Id, options?.Start,
-            options?.Delay is { } delay ? Services.Now + (long)delay.TotalMilliseconds : null));
+            options?.Delay is { } delay ? Services.Now + (long)delay.TotalMilliseconds : null,
+            TargetCreation: options?.TargetCreation ?? options?.Start?.Creation?.Generation ?? (target == Actor && _input.Creation > 0 ? _input.Creation : null)));
         return id;
     }
 
@@ -219,14 +224,14 @@ public sealed class DurableTurn
         _started.Add(key);
         // Finding F4: the intent is also a message to self, a ticket, so after a crash the inbox alone says what to do next.
         // Its id is derived from instance and key, so a later turn can delete it without holding it.
-        Send(Worker.TicketId(Id, key), Actor, Kinds.Job, new JobTicket(_input.Model, key, arguments is null ? null : Json.Write(arguments)));
+        Send(Worker.TicketId(Id, key, _input.Creation), Actor, Kinds.Job, new JobTicket(_input.Model, key, arguments is null ? null : Json.Write(arguments)));
         if (Services.Has(Flaw.VolatileJobTicket)) _volatile.Add(_sent[^1].Id);
     }
 
     public void CancelJob(string key)
     {
         if (!_jobs.Remove(key)) return;     // not in flight: never started, done, or its result is in this turn's inbox
-        var ticket = Worker.TicketId(Id, key);
+        var ticket = Worker.TicketId(Id, key, _input.Creation);
         if (_started.Remove(key)) _sent.RemoveAll(m => m.Id == ticket);
         else _cancelled.Add(ticket);
         Services.Cancelling(ticket);     // from here on its result is nobody's
@@ -241,15 +246,15 @@ public sealed class DurableTurn
 
     public void Subscribe(string key, string wait, bool keep = false)
     {
-        _subscribed.Add(new SubscriptionRow(key, Id, wait));
+        _subscribed.Add(new SubscriptionRow(key, Id, wait, Creation: _input.Creation));
         if (keep) _kept.Add(_subscribed[^1]);
     }
-    public void Unsubscribe(string key, string wait) => _unsubscribed.Add(new SubscriptionRow(key, Id, wait));
+    public void Unsubscribe(string key, string wait) => _unsubscribed.Add(new SubscriptionRow(key, Id, wait, Creation: _input.Creation));
 
     // NATIVE N1: the publish is a ticket to self, so "the inbox alone says what is owed" holds for it too.
     public string Publish(string key, string? payload, TimeSpan keep)
     {
-        var id = $"{Id}#{Revision}.{_ordinal:D4}";
+        var id = $"{Origin}#{Revision}.{_ordinal:D4}";
         Send(Actor, Kinds.Publish, new EventRow(key, id, payload, Services.Now + (long)keep.TotalMilliseconds));
         return id;
     }
@@ -286,7 +291,7 @@ public sealed class DurableTurn
             if (Services.Has(Flaw.MeetWithoutTicket)) _volatile.Add(_sent[^1].Id);
         }
         unit.Row = row with { CommitTimes = ((TurnClock)Clock).Snapshot() };
-        unit.Expected = _input.Row is null ? null : Revision - 1;
+        unit.Expected = _input.Previous?.Revision;
         unit.State = state;
         unit.Journal = journal;
         unit.Sent = _sent;

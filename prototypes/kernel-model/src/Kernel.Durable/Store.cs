@@ -8,13 +8,14 @@ namespace Kernel.Durable;
 /// <c>Definition</c>, <c>Status</c>, <c>Parent</c>, <c>Fault</c>, <c>Suspended</c> and <c>Children</c>, the instances it started
 /// that have not finished. One row, so one write per commit: a seam leak (FINDINGS section 24). JSON arrays or null.
 /// </summary>
-public sealed record InstanceRow(string Id, string Model, string Definition, InstanceStatus Status, string State, long Revision, string? Parent, string? Fault = null, string? Jobs = null, History History = History.Full, bool Suspended = false, string? Children = null, int StateVersion = 1, string? CommitTimes = null);
+public sealed record InstanceRow(string Id, string Model, string Definition, InstanceStatus Status, string State, long Revision, string? Parent, string? Fault = null, string? Jobs = null, History History = History.Full, bool Suspended = false, string? Children = null, int StateVersion = 1, string? CommitTimes = null,
+    long Creation = 0, bool Retired = false, string? StartIntent = null, long ParentCreation = 0);
 
 /// <summary>A message row as a poll returns it.</summary>
 public sealed record Stored(Message Message, long Seq, long Seen, int Attempts, long Trial);
 
 /// <summary>A wait of an instance; or, with <c>Start</c> and no instance, a definition that starts an instance for every event of the key.</summary>
-public sealed record SubscriptionRow(string Key, string Instance, string Wait, StartSpec? Start = null);
+public sealed record SubscriptionRow(string Key, string Instance, string Wait, StartSpec? Start = null, long Creation = 0);
 
 public sealed record EventRow(string Key, string Id, string? Payload, long KeepUntil);
 
@@ -77,6 +78,9 @@ public sealed class StoreException(Failure failure, string message, Exception? i
 /// </summary>
 public interface IKernelStore : IMembership
 {
+    /// <summary>Qualified creation headers, retired high-water marks and exact target envelopes; default unavailable.</summary>
+    bool CreationIdentityAvailable => false;
+
     /// <summary>
     /// Qualified immutable clock facts in the same atomic commit; unavailable by default. A qualified store returns
     /// the exact authoritative stamp time in Committed.Now; the generic permission to omit that time does not apply.
@@ -140,7 +144,8 @@ public static class Events
     /// the double is refused; a start's target is derived from event and subscription too, so it is created once.
     /// </summary>
     public static Message Deliver(EventRow e, SubscriptionRow s, int partitions = 1) => s.Start is null
-        ? new($"ev:{e.Id}:{s.Instance}:{s.Wait}", new InstanceRef(s.Instance), Kinds.Event, e.Payload, KeepUntil: e.KeepUntil)
+        ? new($"ev:{e.Id}:{s.Instance}{(s.Creation > 0 ? "@" + s.Creation : "")}:{s.Wait}", new InstanceRef(s.Instance), Kinds.Event, e.Payload, KeepUntil: e.KeepUntil,
+            TargetCreation: s.Creation > 0 ? s.Creation : null)
         : new($"ev:{e.Id}::{s.Wait}", InstanceRef.In(InstanceRef.Spread($"{e.Id}:{s.Wait}", partitions), $"on:{e.Id}:{s.Wait}"), Kinds.Event, e.Payload, Start: s.Start, KeepUntil: e.KeepUntil);
 
     /// <summary>
@@ -150,7 +155,7 @@ public static class Events
     public static (string Event, string Wait)? Delivered(Message m)
     {
         if (m.Kind != Kinds.Event || !m.Id.StartsWith("ev:", StringComparison.Ordinal)) return null;
-        var marker = m.Start is null ? $":{m.Target.Id}:" : "::";
+        var marker = m.Start is null ? $":{m.Target.Id}{(m.TargetCreation is > 0 ? "@" + m.TargetCreation : "")}:" : "::";
         var at = m.Id.LastIndexOf(marker, StringComparison.Ordinal);
         return at < 3 ? null : (m.Id[3..at], m.Id[(at + marker.Length)..]);
     }

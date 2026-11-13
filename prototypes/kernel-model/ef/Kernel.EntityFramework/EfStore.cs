@@ -275,6 +275,7 @@ public sealed class EfStore(Func<KernelDb> create, bool postgres, bool? fenceInB
 
     public async ValueTask<Committed> CommitAsync(CommitBatch batch, CancellationToken cancellationToken = default)
     {
+        CreationProtocol.RejectUnsupported(batch);
         CommitClockFacts.RejectUnsupported(batch);
         // FINDINGS 25.2 (M6): subscriptions are idempotent. The change tracker writes them as rows, so subscribing what is
         // there is a key violation and unsubscribing what is not is a count that does not match. A commit whose first
@@ -467,6 +468,7 @@ public sealed class EfStore(Func<KernelDb> create, bool postgres, bool? fenceInB
 
     public async ValueTask<bool> AddAsync(Message message, CancellationToken cancellationToken = default)
     {
+        CreationProtocol.RejectUnsupported(message);
         await using var db = create();
         var m = ToEntity(message, 0, 0);
         if (Engine is not null) return await Engine.AddAsync(db, m, cancellationToken);
@@ -505,6 +507,7 @@ public sealed class EfStore(Func<KernelDb> create, bool postgres, bool? fenceInB
 
     public async ValueTask SubscribeAsync(SubscriptionRow subscription, CancellationToken cancellationToken = default)
     {
+        CreationProtocol.RejectUnsupported(subscription);
         await using var db = create();
         if (Engine is not null) { await Engine.SubscribeAsync(db, subscription, cancellationToken); return; }
         await db.Database.ExecuteSqlRawAsync(

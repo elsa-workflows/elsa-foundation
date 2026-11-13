@@ -90,6 +90,7 @@ public sealed class Actor(int id, int node, int partition)
 /// <summary>What a worker sees as its store: the shared in-memory store behind a wire the simulation controls.</summary>
 public sealed class Wire(World world, Actor actor) : IKernelStore
 {
+    public bool CreationIdentityAvailable => world.Store.CreationIdentityAvailable;
     public bool CommitClockAvailable => world.Store.CommitClockAvailable;
     private ValueTask<T> Send<T>(string kind, string text, Func<ValueTask<T>> op)
     {
