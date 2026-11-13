@@ -147,6 +147,7 @@ public static class Cases
                 $"{a.Name} handled none of partition 0's messages before the crash");
             var held = Enumerable.Range(0, h.Partitions).Where(p => h.Watcher.Holders(h.Partitions)[p].Contains(a.Name)).ToList();
             var killing = Stopwatch.StartNew();
+            var killedAt = Environment.TickCount64;
             await h.KillAsync(a);
             // A crash gives nothing up: right after the kill every scope the node held still has its lease, so a take is
             // refused. The node renewed it within a third of a lease before the kill, so two thirds are left at least;
@@ -155,7 +156,9 @@ public static class Cases
             var bound = h.Lease * 2 / 3 - TimeSpan.FromMilliseconds(500);
             That(killing.Elapsed < bound, $"the kill took {killing.ElapsedMilliseconds} ms: the check that a crash gives nothing up needs it under {bound.TotalMilliseconds} ms");
             foreach (var p in held)
-                That(await h.Outside.TakeAsync(p, "probe", h.Lease / 6) is null, $"the killed node gave partition {p} up: a crash gives nothing up");
+                if (await h.Outside.TakeAsync(p, "probe", h.Lease / 6) is not null)
+                    // A release the node had begun before the kill was its own decision, not the crash's.
+                    That(h.StoreOf(a.Name).ReleaseBegan(p) is { } began && began < killedAt, $"the killed node gave partition {p} up: a crash gives nothing up");
             await adding;
             await Settle(h, "every scope taken over");
             await Applied(h, 0, "c", tokens, h.Lease * 3 + Slack);
@@ -182,9 +185,11 @@ public static class Cases
             int commits, refused;
             try
             {
-                await Task.Delay(h.Lease + TimeSpan.FromMilliseconds(200));
-                var thief = await h.Outside.TakeAsync(0, "thief", h.Lease);      // another process takes it, then dies without releasing it
-                That(thief is not null, "the stalled node's lease on partition 0 did not run out");
+                await Task.Delay(h.Lease);
+                // Another process takes it once the node's lease has run out (a commit that slipped in just before the
+                // stall may have renewed it), then dies without releasing it.
+                That(await Harness.WaitAsync(async () => await h.Outside.TakeAsync(0, "thief", h.Lease) is not null, h.Lease * 3),
+                    "the stalled node's lease on partition 0 did not run out");
                 // The stalled node must try to write after its scope was taken (its renewal beat at the latest); only
                 // then is the store's answer the fence's.
                 (commits, refused) = (store.Commits, store.Refused);
