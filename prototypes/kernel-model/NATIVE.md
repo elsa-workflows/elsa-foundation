@@ -213,7 +213,10 @@ commit for the toy), so those columns are not shown.
 Native instances join the mix (40% of the outside actions when `--native` is on): sequences with an External
 activity, a three-way join over event waits, a two-of-three threshold join, a flowchart parallel join over two waits,
 two waited children in a Parallel plus a detached one, a ForEach with a Delay in the body, a While and a background job,
-and publishers that publish to other instances' waits. Starts come from outside (retried) or are handed to an owner
+publishers that publish to other instances' waits, and (round 4) `n-graph`, the graph engine's shapes in one Flowchart:
+a loop from the start node with a fork and an implicit join in its body, the decision that leaves it (its untaken
+side is a dead path every round), a first-wins race between an Event and a Delay (the loser is cancelled and the join
+behind it released), and an All join after a decision. Starts come from outside (retried) or are handed to an owner
 in memory; events come by publish (before or after the wait), by direct resume, or from the publishers; some
 instances are cancelled. Modes are mixed. The kernel's faults are the simulation's, unchanged.
 
@@ -226,6 +229,23 @@ Checks:
 | N3 | A child is started once and its parent resumes once | A child id is started by one frame, a frame starts one child, a child wait is resumed only by its own child and once; at the end every waited child of a finished parent resumed it exactly once |
 | N4 | A non-replay-safe activity's attempt is committed before it runs in Durable mode | When an External effect happens, the committed journal holds its attempt |
 | N5 | Final variables and outputs match a run without faults | Every finished native instance (children too) has the variables of the same definition and input run alone, without faults; everything started from outside finished or was cancelled by request |
+
+The graph invariants of the design sketch (round 4, `sim/NativeSim.cs`: `NoteGraph`, `CheckGraphStates`). They read
+the native Flowchart's own journal entries, which ride in the turn's commit: `g|x` a path the step cancelled, `g|f` a
+node a join or continuation scheduled, with the sources of the arrivals it consumed, live and dead (taken from the
+engine's unpruned state, `FlowchartStep.Live`), `g|c` a completion with the paths still live. They also read the
+committed state of instances with a Flowchart; which connections reach a node comes from the definition.
+
+| Check | The sketch's words | How |
+|---|---|---|
+| G1 | Path conservation: every path created is completed, discarded as dead, or still live | In committed state every active path has its child and the child runs, and a graph with live paths has something running under it (otherwise a token is lost); in the journal no node runs on dead arrivals only |
+| G2 | A join fires at most once per round | No node fires twice with the same iteration key |
+| G3 | An All join fires once every inbound flow of its round has arrived, live or dead | At each firing of a node with several inbound connections the consumed arrivals cover every inbound source; the exception is a branch a first-wins race cut off in that round (a cancelled node, or one only cancelled nodes lead to), which the engine releases when the graph goes quiet |
+| G4 | A graph completes exactly when it has no live path | A completion has no live path; a Flowchart frame with no live path and nothing running under it fails |
+| G5 | No path outlives its cancelled scope | No live path in a race scope that is over; no child runs on a cancelled path |
+
+G2 and G3 skip a merge and every node forward of it: a merge passes every token on, so a node behind it may fire
+once per token in a round. The mix has no merge.
 
 Results (run):
 
@@ -244,9 +264,21 @@ The checks bite (run: `--native-mutations`, each flaw alone, first failing seed)
 | `ResumeAnyChild` | A child-finished resumes every child wait | N3, seed 2: `the wait for child 1/j5~1.1 was resumed by child 1/j5~1.0` |
 | `NoAttemptCommit` | Durable runs an External activity without committing its attempt first | N4, seed 2 |
 | `ScopeInMemory` | The iteration scope is kept in memory only | N5, seed 6: `sum=53; without faults it ends with sum=63` |
+| `NoDeadPaths` (round 4) | An untaken connection emits no dead arrival | G3, seed 2: `the join end of graph fired in round head:2 before no arrived, live or dead` (the graph went quiet and the engine released the join without the decision's untaken side) |
+| `NoRoundReset` (round 4) | A loop-closing connection opens no new round | G2, seed 2: `node a of graph fired twice in round -` |
+| `DeadPathRunsNode` (round 4) | An all-dead node is run instead of passing the deadness on | G1, seed 2: `a dead path ran node race of graph (round -)` |
+| `CancelLeavesPaths` (round 4) | A first-wins race completes without cancelling its losers | G5, seed 2: `path path:280 at r1 of graph lives on in the race scope scope:275, which is over` |
+
+The four graph flaws are the engine's (`FlowchartOptions.Flaws`, marked MUTATION in `models/Graph`); the mutation
+check fails one that another check catches first. The round-4 seeds are those of the mix with `n-graph` in it, which
+moves every seed; the five older flaws' first seeds moved with it.
 
 Found while building the checks (run): one seed of 1,000 actions failed my own event check because a parked
-instance keeps its subscriptions (seed 500963); the check now skips instances that do not run. And a threshold join
+instance keeps its subscriptions (seed 500963); the check now skips instances that do not run. Round 4 met the same
+in the kernel's I8 (seed 2282 at 1,000 actions, once `n-graph` shifted the seeds), which now skips an instance the
+poison rule parked while its faulted row exists; and a native defect: in Durable mode a cancel recalled a fired
+Delay's timer message that an earlier turn had consumed, because the resume still waited in the agenda (I9, seed
+8486); a timer whose message has arrived is no longer recalled. And a threshold join
 is not deterministic in which branch activities complete: three events in one inbox complete all three Event
 activities before the join cancels the third branch; one by one, the third is cancelled while it waits. Variables
 agree either way, so for that workflow only the variables are compared.
