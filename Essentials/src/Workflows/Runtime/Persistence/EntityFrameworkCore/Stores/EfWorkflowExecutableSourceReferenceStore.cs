@@ -604,7 +604,12 @@ public sealed partial class EfWorkflowExecutableSourceReferenceStore(
                 row.DefinitionVersionIdHash != Hash(Decode(row.DefinitionVersionId)) ||
                 row.Revision <= 0 || string.IsNullOrWhiteSpace(row.IncarnationId))
                 throw new InvalidDataException("The persisted workflow executable source reference row is corrupt.");
-            var envelope = JsonNode.Parse(content)?.AsObject() ?? throw new InvalidDataException("The persisted workflow executable source reference envelope is empty.");
+            var content = RuntimeArtifactEfModule.Chain.Upcast<WorkflowExecutableSourceReferenceEntity>(row.SchemaVersion,
+                (nameof(row.ContentJson), row.ContentJson))[nameof(row.ContentJson)]!;
+            WorkflowExecutableSourceReference value;
+            if (sourceLimits is null)
+            {
+                var envelope = JsonNode.Parse(content)?.AsObject() ?? throw new InvalidDataException("The persisted workflow executable source reference envelope is empty.");
                 if (!StringComparer.Ordinal.Equals(ReadString(envelope, "collection"), "workflowExecutableSourceReference") ||
                     !StringComparer.Ordinal.Equals(Decode(ReadString(envelope, "artifactId")), Decode(row.ArtifactId)) || envelope["reference"] is null)
                     throw new InvalidDataException("The persisted workflow executable source reference envelope projection is corrupt.");
