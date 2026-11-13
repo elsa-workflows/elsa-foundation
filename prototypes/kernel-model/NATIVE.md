@@ -282,9 +282,11 @@ own: no flaw of the plan aims at it, so that it bites is not shown. The round-4 
 moves every seed; the five older flaws' first seeds and messages above are round 4's (`InFlightInMemory` is now caught first by N5, not N1).
 
 Found while building the checks (run): one seed of 1,000 actions failed my own event check because a parked
-instance keeps its subscriptions (seed 500963); the check now skips instances that do not run. Round 4 met the same
-in the kernel's I8 (seed 2282 at 1,000 actions, once `n-graph` shifted the seeds), which now skips an instance the
-poison rule parked while its faulted row exists; and a native defect: in Durable mode a cancel recalled a fired
+instance kept its subscriptions (seed 500963); at that stage the check skipped instances that did not run. Round 4 met the same
+in the kernel's I8 (seed 2282 at 1,000 actions, once `n-graph` shifted the seeds), which initially exempted an instance the
+poison rule parked while its faulted row existed. The owner's 13 November decision now removes active subscriptions
+when Park faults the instance; I8 requires that cleanup and retains its saved waits only as inactive checkpoint data.
+Also found: in Durable mode a cancel recalled a fired
 Delay's timer message that an earlier turn had consumed, because the resume still waited in the agenda (I9, seed
 8486); a timer whose message has arrived is no longer recalled. And a threshold join
 is not deterministic in which branch activities complete: three events in one inbox complete all three Event
@@ -317,7 +319,8 @@ Frictions, without a change:
 - **F-N6. A model cannot tell a redelivery.** Scenario: N4. In Durable, an External effect whose attempt was
   committed ran again under that same attempt 629 times in 20,000 seeds (476 in 5,000 of 1,000), each time after a
   turn's result was lost. To raise "may have run" as an incident instead, a turn needs to know that its message was
-  held by a lost owner; the kernel knows (`Delivery.Suspect`) and could put it on the message. Run.
+  held by a lost owner; the kernel knows (`Delivery.Suspect`) and could put it on the message. Run. The later decision
+  makes the exposed value an observed-history hint, not proof that an unflagged turn has never run; see [LEASE.md](LEASE.md).
 - **F-N7. Ephemeral is lost at the first wait.** Scenario: HTTP case 3. A 20 ms Delay or a background job before the
   response is a message, so the instance commits twice (4 to 6 round trips) where it would otherwise cost zero. Short
   timers kept in memory for an instance that is not written would keep request-response workflows at zero. Run.

@@ -16,7 +16,8 @@ public sealed class WeaverGitHubCopilotProvider(
     IGitHubCopilotClientFactory clientFactory,
     IOptions<WeaverGitHubCopilotOptions> options,
     IWeaverToolInvoker toolInvoker,
-    ILogger<WeaverGitHubCopilotProvider> logger) : IWeaverProvider, IWeaverHarness
+    ILogger<WeaverGitHubCopilotProvider> logger,
+    IWeaverSessionService? sessions = null) : IWeaverProvider, IWeaverHarness
 {
     public const string Id = "github-copilot";
 
@@ -35,21 +36,32 @@ public sealed class WeaverGitHubCopilotProvider(
         if (!readiness.Available)
             return new WeaverProviderSession(session.Id, ProviderId, BuildMetadata(readiness, []));
 
-        await using var client = clientFactory.Create(BuildClientRequest(readiness));
-        await client.StartAsync(cancellationToken);
-        await using var providerSession = await client.CreateSessionAsync(BuildSessionRequest(session.Id), cancellationToken);
+        if (string.IsNullOrWhiteSpace(session.TenantId))
+            throw new ArgumentException("A trusted tenant is required to create a Copilot session.", nameof(session));
 
-        var metadata = BuildMetadata(readiness, []);
-        metadata["sessionId"] = providerSession.SessionId;
-        metadata["workspace"] = string.IsNullOrWhiteSpace(providerSession.WorkspacePath) ? "sdk-managed" : "configured";
-        return new WeaverProviderSession(session.Id, ProviderId, metadata);
+        try
+        {
+            await using var client = clientFactory.Create(BuildClientRequest(readiness, session.TenantId));
+            await client.StartAsync(cancellationToken);
+            await using var providerSession = await client.CreateSessionAsync(BuildSessionRequest(session.Id), cancellationToken);
+            var metadata = BuildMetadata(readiness, []);
+            metadata["sessionId"] = providerSession.SessionId;
+            metadata["workspace"] = string.IsNullOrWhiteSpace(providerSession.WorkspacePath) ? "sdk-managed" : "configured";
+            return new WeaverProviderSession(session.Id, ProviderId, metadata);
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception error)
+        { throw new InvalidOperationException("GitHub Copilot session creation failed: " + NormalizeMessage(error)); }
     }
 
     // Single-step entry point used when the host orchestrator drives the loop (i.e. when the provider is consumed as
     // a plain IWeaverProvider). Because this provider also implements IWeaverHarness, the orchestrator routes it through
     // RunTurnAsync instead — so for the default wiring this path (and its prompt-based toolCall protocol) is a
     // fallback that is not exercised in production today; it keeps the IWeaverProvider contract whole and tool-aware.
-    public async IAsyncEnumerable<WeaverStreamEvent> ContinueTurnAsync(WeaverTurnContext context, [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    public IAsyncEnumerable<WeaverStreamEvent> ContinueTurnAsync(WeaverTurnContext context, CancellationToken cancellationToken = default)
+        => GuardSdkTurn(ContinueTurnCoreAsync(context, cancellationToken), cancellationToken);
+
+    private async IAsyncEnumerable<WeaverStreamEvent> ContinueTurnCoreAsync(WeaverTurnContext context, [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         var readiness = GetReadiness();
         if (!readiness.Available)
@@ -58,7 +70,14 @@ public sealed class WeaverGitHubCopilotProvider(
             yield break;
         }
 
-        await using var client = clientFactory.Create(BuildClientRequest(readiness));
+        var owner = sessions is null ? null : await sessions.FindOwnerAsync(context.SessionId, cancellationToken);
+        if (owner is null || string.IsNullOrWhiteSpace(owner.TenantId) || string.IsNullOrWhiteSpace(owner.ActorId))
+        {
+            yield return Error("weaver.provider.github_copilot.session_owner_unavailable",
+                "The trusted conversation owner is unavailable. Start a current supported conversation.", 503);
+            yield break;
+        }
+        await using var client = clientFactory.Create(BuildClientRequest(readiness, owner.TenantId));
         IGitHubCopilotSession? session = null;
         WeaverStreamEvent? setupError = null;
         WeaverStreamEvent? reset = null;
@@ -144,12 +163,22 @@ public sealed class WeaverGitHubCopilotProvider(
         | WeaverHarnessCapabilities.Mcp
         | WeaverHarnessCapabilities.Permissions;
 
-    public async IAsyncEnumerable<WeaverStreamEvent> RunTurnAsync(WeaverHarnessTurnRequest request, [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    public IAsyncEnumerable<WeaverStreamEvent> RunTurnAsync(WeaverHarnessTurnRequest request, CancellationToken cancellationToken = default)
+        => GuardSdkTurn(RunTurnCoreAsync(request, cancellationToken), cancellationToken);
+
+    private async IAsyncEnumerable<WeaverStreamEvent> RunTurnCoreAsync(WeaverHarnessTurnRequest request, [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         var readiness = GetReadiness();
         if (!readiness.Available)
         {
             yield return Error("weaver.provider.github_copilot.unavailable", readiness.Status, 503);
+            yield break;
+        }
+
+        if (string.IsNullOrWhiteSpace(request.TenantId) || string.IsNullOrWhiteSpace(request.ActorId))
+        {
+            yield return Error("weaver.provider.github_copilot.session_owner_unavailable",
+                "A trusted actor and tenant are required for this conversation.", 503);
             yield break;
         }
 
@@ -172,7 +201,7 @@ public sealed class WeaverGitHubCopilotProvider(
             { Invoker = new ObservingToolInvoker(request.ToolInvoker ?? toolInvoker, tool.Descriptor, output.Writer) })).ToArray();
         var customToolNames = aiFunctions.Select(tool => tool.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-        await using var client = clientFactory.Create(BuildClientRequest(readiness));
+        await using var client = clientFactory.Create(BuildClientRequest(readiness, request.TenantId));
         IGitHubCopilotSession? session = null;
         WeaverStreamEvent? setupError = null;
         WeaverStreamEvent? reset = null;
@@ -223,14 +252,78 @@ public sealed class WeaverGitHubCopilotProvider(
             var prompt = request.IsReceiptContinuation
                 ? BuildReceiptContinuationPrompt(request.PendingToolResults)
                 : BuildPrompt(message);
-            var pump = PumpTurnAsync(session, prompt, output.Writer, toolNames, customToolNames, cancellationToken);
-
-            await foreach (var item in output.Reader.ReadAllAsync(cancellationToken))
-                yield return item;
-
-            await pump;
+            using var pumpCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            var pump = PumpTurnAsync(session, prompt, output.Writer, toolNames, customToolNames, pumpCancellation.Token);
+            try
+            {
+                await foreach (var item in output.Reader.ReadAllAsync(cancellationToken))
+                    yield return item;
+                await pump;
+            }
+            finally
+            {
+                // A consumer can dispose after a partial event without cancelling its request.
+                // Stop and join the owned SDK producer before disposing its session/client.
+                await pumpCancellation.CancelAsync();
+                await pump;
+            }
         }
     }
+
+    // Own the complete iterator lifetime: construction and async cleanup may fail as well as
+    // MoveNext. Never let an SDK exception (including its inner chain) escape to generic logging.
+    private async IAsyncEnumerable<WeaverStreamEvent> GuardSdkTurn(IAsyncEnumerable<WeaverStreamEvent> turn,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        IAsyncEnumerator<WeaverStreamEvent>? iterator = null;
+        WeaverStreamEvent? failure = null;
+        WeaverStreamEvent? completion = null;
+        try
+        {
+            try { iterator = turn.GetAsyncEnumerator(cancellationToken); }
+            catch (Exception error)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                failure = TurnFailure(error);
+            }
+
+            while (iterator is not null && failure is null)
+            {
+                var moved = false;
+                try
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    moved = await iterator.MoveNextAsync();
+                    cancellationToken.ThrowIfCancellationRequested();
+                }
+                catch (Exception error)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    failure = TurnFailure(error);
+                }
+                if (failure is not null || !moved) break;
+                // A clean SDK completion is not established until owned session/client cleanup
+                // has finished. A cleanup fault must not be reported after a successful terminal.
+                if (iterator.Current.Kind == WeaverStreamEventKind.Completed) completion = iterator.Current;
+                else yield return iterator.Current;
+            }
+        }
+        finally
+        {
+            if (iterator is not null)
+            {
+                try { await iterator.DisposeAsync(); }
+                catch (Exception error) { failure ??= TurnFailure(error); }
+            }
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
+        if (failure is not null) yield return failure;
+        else if (completion is not null) yield return completion;
+    }
+
+    private WeaverStreamEvent TurnFailure(Exception error) =>
+        Error("weaver.provider.github_copilot.turn_failed", NormalizeMessage(error), 502);
 
     private async Task PumpTurnAsync(IGitHubCopilotSession session, string prompt, ChannelWriter<WeaverStreamEvent> writer,
         Dictionary<string, string> toolNames, IReadOnlySet<string> customToolNames, CancellationToken cancellationToken)
@@ -258,7 +351,7 @@ public sealed class WeaverGitHubCopilotProvider(
         }
     }
 
-    private static WeaverStreamEvent? MapHarnessEvent(GitHubCopilotStreamEvent raw, Dictionary<string, string> toolNames, IReadOnlySet<string> customToolNames)
+    private WeaverStreamEvent? MapHarnessEvent(GitHubCopilotStreamEvent raw, Dictionary<string, string> toolNames, IReadOnlySet<string> customToolNames)
     {
         switch (raw.Kind)
         {
@@ -278,12 +371,12 @@ public sealed class WeaverGitHubCopilotProvider(
                 var succeeded = raw.Success ?? string.IsNullOrEmpty(raw.ErrorMessage);
                 if (customToolNames.Contains(name) && succeeded) return null;
                 var summary = customToolNames.Contains(name)
-                    ? "Tool function transport failed: " + (raw.ErrorMessage ?? "SDK execution failed.")
-                    : succeeded ? "Tool completed." : raw.ErrorMessage ?? "Tool failed.";
+                    ? "Tool function transport failed: " + NormalizeMessage(raw.ErrorMessage ?? "SDK execution failed.")
+                    : succeeded ? "Tool completed." : NormalizeMessage(raw.ErrorMessage ?? "Tool failed.");
                 return new(NewId(), WeaverStreamEventKind.ToolCallCompleted, null, raw.ToolCallId, null, DateTimeOffset.UtcNow, null, new WeaverToolCallOutcome(raw.ToolCallId ?? string.Empty, name, succeeded, summary));
             }
             case GitHubCopilotStreamEventKind.Error:
-                return Error(raw.ErrorCode ?? "weaver.provider.github_copilot.sdk_error", raw.ErrorMessage ?? "GitHub Copilot stream failed.", 502);
+                return Error(NormalizeMessage(raw.ErrorCode ?? "weaver.provider.github_copilot.sdk_error"), NormalizeMessage(raw.ErrorMessage ?? "GitHub Copilot stream failed."), 502);
             default:
                 return null;
         }
@@ -363,12 +456,12 @@ public sealed class WeaverGitHubCopilotProvider(
             value.ReasoningEffort,
             value.Streaming,
             value.SystemMessage,
-            value.AvailableTools.ToList(),
+            (customTools ?? []).Select(tool => tool.Name).Where(name => value.AvailableTools.Count == 0 || value.AvailableTools.Contains(name, StringComparer.Ordinal)).ToList(),
             value.ExcludedTools.ToList(),
             customTools);
     }
 
-    private GitHubCopilotClientRequest BuildClientRequest(ProviderReadiness readiness)
+    private GitHubCopilotClientRequest BuildClientRequest(ProviderReadiness readiness, string? tenantId = null)
     {
         var value = options.Value;
         return new(
@@ -377,7 +470,7 @@ public sealed class WeaverGitHubCopilotProvider(
             value.RuntimeUrl,
             value.RuntimeConnectionToken,
             value.BaseDirectory,
-            value.WorkingDirectory);
+            value.WorkingDirectory) { TenantId = tenantId };
     }
 
     private ProviderReadiness GetReadiness()
@@ -576,7 +669,7 @@ public sealed class WeaverGitHubCopilotProvider(
             GitHubCopilotStreamEventKind.Started => new(NewId(), WeaverStreamEventKind.Started, null, null, null, DateTimeOffset.UtcNow),
             GitHubCopilotStreamEventKind.MessageDelta => TryMapStructuredResult(item.Content, context, out var result) ? result : new(NewId(), WeaverStreamEventKind.MessageDelta, item.Content, null, null, DateTimeOffset.UtcNow, WeaverResultKind.Message),
             GitHubCopilotStreamEventKind.Completed => new(NewId(), WeaverStreamEventKind.Completed, null, null, null, DateTimeOffset.UtcNow),
-            GitHubCopilotStreamEventKind.Error => Error(item.ErrorCode ?? "weaver.provider.github_copilot.sdk_error", NormalizeMessage(item.ErrorMessage), 502),
+            GitHubCopilotStreamEventKind.Error => Error(NormalizeMessage(item.ErrorCode ?? "weaver.provider.github_copilot.sdk_error"), NormalizeMessage(item.ErrorMessage), 502),
             _ => Error("weaver.provider.github_copilot.unknown_event", "GitHub Copilot SDK returned an unknown stream event.", 502)
         };
 
@@ -607,7 +700,7 @@ public sealed class WeaverGitHubCopilotProvider(
         {
             "message" => new(NewId(), WeaverStreamEventKind.MessageDelta, envelope.Message, null, null, DateTimeOffset.UtcNow, WeaverResultKind.Message),
             "toolCall" when envelope.ToolCall is { } toolCall && !string.IsNullOrWhiteSpace(toolCall.Name) => MapToolCall(toolCall, context),
-            "error" => Error(envelope.ErrorCode ?? "weaver.provider.github_copilot.result_error", NormalizeMessage(envelope.ErrorMessage), 502),
+            "error" => Error(NormalizeMessage(envelope.ErrorCode ?? "weaver.provider.github_copilot.result_error"), NormalizeMessage(envelope.ErrorMessage), 502),
             _ => Error("weaver.provider.github_copilot.unsupported_result", "GitHub Copilot returned an unsupported result protocol. Module results must come from installed tools.", 502)
         };
         return true;
@@ -651,7 +744,7 @@ public sealed class WeaverGitHubCopilotProvider(
             ["sdkPackage"] = "GitHub.Copilot.SDK",
             ["sdkVersion"] = typeof(GitHub.Copilot.CopilotClient).Assembly.GetName().Version?.ToString() ?? "unknown",
             ["toolMutationPolicy"] = "elsa-owned-proposals",
-            ["toolApproval"] = "sdk-permission-requests-denied"
+            ["toolApproval"] = "installed-custom-callbacks-only"
         };
 
         if (models.Count > 0)
