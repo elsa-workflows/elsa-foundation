@@ -7,4 +7,4 @@ callback. Template acquisition produces bounded owned copies; it does not acquir
 It does not select published roots, import owner catalogs, or grant activation authority.
 
 Target-only Runtime codecs remain in the separate parent package and acquire no source/capture dependency.
-See [extension contracts](EXTENSION_POINTS.md) and [delivery slices](../../../../../../../../specs/1225-workflow-release-promotion/delivery-slices.md).
+See [extension contracts](EXTENSION_POINTS.md) and [delivery slices](../../../../../../../specs/1225-workflow-release-promotion/delivery-slices.md).
