@@ -214,6 +214,26 @@ public sealed class RuntimeHistoryQueryTests
             await fixture.Reader.FindEventAsync("run", "event-1"));
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Missing_exact_event_distinguishes_unpurged_receipts_from_acknowledged_purge(bool purged)
+    {
+        var fixture = new Fixture();
+        fixture.Append(1);
+        var key = (fixture.Access.Scope, "run");
+        fixture.State.HistoryEventsById.Remove((fixture.Access.Scope, "run", "event-1"));
+        Assert.Null(await fixture.Reader.FindEventAsync("run", "unknown-event"));
+        if (purged)
+        {
+            fixture.State.HistoryHeads[key] = fixture.State.HistoryHeads[key] with { FirstSequence = 2, PurgedThroughSequence = 1 };
+            fixture.State.HistoryEvents[key].Clear();
+            Assert.Null(await fixture.Reader.FindEventAsync("run", "event-1"));
+        }
+        else
+            await Assert.ThrowsAsync<RuntimeHistoryIntegrityException>(async () => await fixture.Reader.FindEventAsync("run", "event-1"));
+    }
+
     [Fact]
     public async Task ExactBookmarkCannotExposeAnUnacknowledgedLifecycle()
     {

@@ -90,6 +90,39 @@ public sealed class RuntimeHistoryMemoryParticipantTests
         Assert.Null((await f.Executions.FindAsync("run"))!.HistoryCapturePolicy);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Optional_capture_allows_a_missing_contribution_but_never_an_implicit_policy_clear(bool clearPolicy)
+    {
+        var optional = new RuntimeHistoryCapturePolicy(Policy.PolicyId, Policy.Version, false, Policy.SupportedKinds);
+        var f = await Fixture.Create(optional);
+        var original = Batch("optional-start", starts: true);
+        var batch = new RuntimeHistoryBatch(optional, original.LogicalCheckpointId, original.OccurredAt, original.StartsAtRunStart, original.Candidates);
+        await f.Store.CommitAsync(Commit("initial", [batch]), Immediate);
+        var before = await f.Reader.FindHeadAsync("run");
+        var raw = Commit("missed", null);
+        if (clearPolicy)
+        {
+            raw = raw with { StateChanges = new(new("run", RuntimeStateChangeOperation.Upsert,
+                Workflow(null) with { Status = WorkflowExecutionStatus.Completed, CompletedAt = At }, new Dictionary<string, string>()), null, [], [], [], [], []) };
+            await Assert.ThrowsAsync<InvalidOperationException>(async () => await f.Store.CommitAsync(raw, Immediate));
+            Assert.Equal(before, await f.Reader.FindHeadAsync("run"));
+            Assert.Single(f.Store.ListCommits());
+        }
+        else
+        {
+            await f.Store.CommitAsync(raw, Immediate);
+            var after = await f.Reader.FindHeadAsync("run");
+            Assert.True(after!.HasGaps);
+            Assert.Equal(before!.LastSequence, after.LastSequence);
+            Assert.Equal("missed", after.LastPhysicalCommitId);
+            Assert.Equal(2, f.Store.ListCommits().Count);
+        }
+        Assert.True(optional.IsEquivalentTo((await f.Executions.FindAsync("run"))!.HistoryCapturePolicy));
+        Assert.Equal(WorkflowExecutionStatus.Running, (await f.Executions.FindAsync("run"))!.Status);
+    }
+
     [Fact]
     public async Task Writer_qualification_requires_exact_state_native_owner_and_access_accessor()
     {
@@ -117,9 +150,11 @@ public sealed class RuntimeHistoryMemoryParticipantTests
         Assert.Null(await f.Reader.FindHeadAsync("run"));
         Assert.Null(await f.Reader.FindEventAsync("run", "event-first"));
         await Assert.ThrowsAsync<InvalidOperationException>(async () => await f.Store.CommitAsync(captured, Immediate));
+        await Assert.ThrowsAsync<InvalidOperationException>(async () => await f.Store.CommitAsync(Commit("missing-other-scope", null), Immediate));
+        Assert.Single(f.Store.ListCommits());
         await Assert.ThrowsAsync<ArgumentException>(async () => await f.Reader.ReadPageAsync(new("run", limit: 1, continuationToken: page.NextContinuationToken)));
         f.Access.Current = PersistenceAccessContext.Global;
-        await Assert.ThrowsAsync<RuntimeSchedulerWorkUnavailableException>(async () => await f.Store.CommitAsync(Commit("unscoped-required", null), Immediate));
+        await Assert.ThrowsAsync<InvalidOperationException>(async () => await f.Store.CommitAsync(Commit("unscoped-required", null), Immediate));
         var legacy = Commit("legacy", null) with { Checkpoint = new("legacy-checkpoint", "test", "other-run", At, [], new Dictionary<string, string>()) };
         await f.Store.CommitAsync(legacy, Immediate);
         await f.Store.CommitAsync(legacy, Immediate);

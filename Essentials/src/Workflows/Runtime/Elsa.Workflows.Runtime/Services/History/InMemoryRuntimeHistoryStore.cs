@@ -48,12 +48,17 @@ internal sealed class InMemoryRuntimeHistoryStore(
         lock (state.SyncRoot)
         {
             var item = state.HistoryEventsById.GetValueOrDefault((scope, workflowExecutionId, historyEventId));
+            var head = state.HistoryHeads.GetValueOrDefault((scope, workflowExecutionId));
+            ValidateHead(workflowExecutionId, head);
+            if (item is null && state.HistoryReceiptPositions.TryGetValue((scope, workflowExecutionId, historyEventId), out var position))
+            {
+                if (head is null || position <= 0 || position > head.LastSequence || position > head.PurgedThroughSequence)
+                    throw new RuntimeHistoryIntegrityException(workflowExecutionId, "an exact event receipt has unacknowledged missing content");
+            }
             if (item is not null && (item.WorkflowExecutionId != workflowExecutionId || item.HistoryEventId != historyEventId))
                 throw new RuntimeHistoryIntegrityException(workflowExecutionId, "an exact event projection names a different resource");
             if (item is not null)
             {
-                var head = state.HistoryHeads.GetValueOrDefault((scope, workflowExecutionId));
-                ValidateHead(workflowExecutionId, head);
                 if (head is null || item.Sequence <= 0 || item.Sequence < head.FirstSequence ||
                     item.Sequence <= head.PurgedThroughSequence || item.Sequence > head.LastSequence)
                     throw new RuntimeHistoryIntegrityException(workflowExecutionId, "an exact event has no acknowledged retained position");

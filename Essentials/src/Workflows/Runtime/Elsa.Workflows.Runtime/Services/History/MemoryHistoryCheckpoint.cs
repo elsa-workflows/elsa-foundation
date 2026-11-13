@@ -30,14 +30,18 @@ internal static class MemoryHistoryCheckpoint
         }
         var key = (scope, commit.WorkflowExecutionId);
         if (state.HistoryDeletedRuns.Contains(key)) throw new InvalidOperationException("Deleted execution history cannot be recreated.");
+        if (state.HistoryRunOwners.TryGetValue(commit.WorkflowExecutionId, out var owner) && owner.Scope != scope)
+            throw new InvalidOperationException("A captured native run cannot change its history scope.");
+        state.HistoryHeads.TryGetValue(key, out var head);
         state.RequiredHistoryRuns.TryGetValue(key, out var required);
         if (batches is not { Count: > 0 })
         {
-            if (incomingPolicy?.Required == true || required is not null)
+            if (incomingPolicy?.Required == true || required is not null || head?.Policy.Required == true)
                 throw new RuntimeSchedulerWorkUnavailableException("runtime.history.capture-unavailable", "This execution requires its pinned history capture contribution.");
-            return null;
+            if (head is null) return null;
+            // Optional capture may be unavailable, but the retained coverage must disclose the missing contribution.
+            return () => state.HistoryHeads[key] = head with { HasGaps = true, LastPhysicalCommitId = commit.CommitId, LastCommittedAt = recordedAt };
         }
-        state.HistoryHeads.TryGetValue(key, out var head);
         var policy = head?.Policy ?? admittedPolicy
             ?? throw new InvalidOperationException("History cannot be enabled retroactively without a pinned admission policy.");
         if (commit.StateChanges.WorkflowExecution is not null && !policy.IsEquivalentTo(incomingPolicy))
@@ -96,7 +100,8 @@ internal static class MemoryHistoryCheckpoint
         return () =>
         {
             state.HistoryHeads[key] = nextHead;
-            if (policy.Required) { state.RequiredHistoryRuns[key] = policy; state.RequiredHistoryRunIds.Add(commit.WorkflowExecutionId); }
+            state.HistoryRunOwners[commit.WorkflowExecutionId] = (scope, policy);
+            if (policy.Required) state.RequiredHistoryRuns[key] = policy;
             foreach (var e in events) state.PublishHistoryEvent(scope, e, seen[e.HistoryEventId]);
             foreach (var projection in bookmarks.Values) state.PublishHistoryBookmark(scope, projection);
         };

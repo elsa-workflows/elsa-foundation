@@ -346,14 +346,20 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         var incomingPolicy = commit.StateChanges.WorkflowExecution?.State.HistoryCapturePolicy;
         var admittedHistoryPolicy = incomingPolicy;
         var historyAccess = _persistenceAccessContextAccessor?.Current;
-        var requiresHistory = incomingPolicy?.Required == true;
+        (string Scope, RuntimeHistoryCapturePolicy Policy)? retainedHistoryOwner;
         lock (_state.SyncRoot)
-            requiresHistory |= historyAccess?.Scope is { } capturedScope
-                ? _state.RequiredHistoryRuns.ContainsKey((capturedScope.Value, commit.WorkflowExecutionId))
-                : _state.RequiredHistoryRunIds.Contains(commit.WorkflowExecutionId);
-        if (requiresHistory && !hasHistoryBatch)
+            retainedHistoryOwner = _state.HistoryRunOwners.TryGetValue(commit.WorkflowExecutionId, out var owner) ? owner : null;
+        if (retainedHistoryOwner is { } known)
+        {
+            if (historyAccess is null)
+                throw new RuntimeSchedulerWorkUnavailableException("runtime.history.capture-unavailable", "A captured execution requires its owning persistence scope.");
+            var selected = historyAccess.RequireScope();
+            if (!StringComparer.Ordinal.Equals(selected.Value, known.Scope))
+                throw new InvalidOperationException("The captured native execution belongs to a different history scope.");
+        }
+        if ((incomingPolicy?.Required == true || retainedHistoryOwner?.Policy.Required == true) && !hasHistoryBatch)
             throw new RuntimeSchedulerWorkUnavailableException("runtime.history.capture-unavailable", "The execution requires its pinned history contribution.");
-        if (hasHistoryBatch || incomingPolicy is not null)
+        if (hasHistoryBatch || incomingPolicy is not null || retainedHistoryOwner is not null && commit.StateChanges.WorkflowExecution is not null)
         {
             if (!((IRuntimeCheckpointCommitStore)this).SupportsHistory || historyAccess is null)
                 throw new RuntimeSchedulerWorkUnavailableException("runtime.history.capture-unavailable", "History persistence requires its exact scoped native provider.");
@@ -459,7 +465,7 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
 
         void EnsureHistoryAccess()
         {
-            if ((hasHistoryBatch || incomingPolicy is not null) && _persistenceAccessContextAccessor!.Current != historyAccess)
+            if ((hasHistoryBatch || incomingPolicy is not null || retainedHistoryOwner is not null) && _persistenceAccessContextAccessor!.Current != historyAccess)
                 throw new InvalidOperationException("Persistence access changed during history checkpoint admission.");
         }
     }
