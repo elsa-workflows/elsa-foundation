@@ -260,7 +260,7 @@ export async function liveWorkflowDashboardJourney(page: Page, info: TestInfo, c
   const backend = await dashboardBackend(page.request);
   const monitor = instrumentation(page, backend);
   let saved: Resource | undefined; let dashboard: Resource | undefined; let seed: TrendSeed | undefined;
-  let readerBrowser: Browser | undefined; let retained = false;
+  let readerBrowser: Browser | undefined; let readerContext: BrowserContext | undefined; let retained = false;
   try {
     seed = await seedWorkflowTrend(backend, `live-${Date.now()}`);
     await backend.api("/__qualification/dashboard-live/canaries", "POST", seed.facts.map(item => item.id));
@@ -305,8 +305,8 @@ export async function liveWorkflowDashboardJourney(page: Page, info: TestInfo, c
     dashboard = await backend.api<Resource>(`/_elsa/studio/dashboards/${dashboard.id}`);
     await grantProfile(backend, "dashboard-live-reader");
     readerBrowser = await chromium.launch();
-    const context = await readerBrowser.newContext({ baseURL: process.env.ELSA_STUDIO_URL, viewport: { width: 1440, height: 1000 } });
-    const reader = await context.newPage();
+    readerContext = await readerBrowser.newContext({ baseURL: process.env.ELSA_STUDIO_URL, viewport: { width: 1440, height: 1000 } });
+    const reader = await readerContext.newPage();
     await monitor.native("native-independent-viewer-refresh", async () => {
       await signInDashboardReader(reader, info); await reader.goto(`/dashboards/${dashboard!.id}`);
       await expect(reader.getByRole("button", { name: "Save layout", exact: true })).toHaveCount(0);
@@ -321,8 +321,14 @@ export async function liveWorkflowDashboardJourney(page: Page, info: TestInfo, c
     await attachDashboardJson(info, "live-counters.json", { turns, refinement, after: await counters(backend), nativePhases: monitor.phases, physicalModelHttpRequests: "not exposed by public SDK factory; actual SDK SendAsync counts retained" });
     retained = true;
   } finally {
-    monitor.dispose(); await readerBrowser?.close();
-    if (!retained) await cleanupRetainedTrend(backend, saved?.id, dashboard?.id, seed);
+    monitor.dispose();
+    // Explicit context closure invokes Playwright Test's trace-export hook. Browser.close()
+    // alone shuts down its transport before the independently owned context is exported.
+    try { await readerContext?.close(); }
+    finally {
+      try { await readerBrowser?.close(); }
+      finally { if (!retained) await cleanupRetainedTrend(backend, saved?.id, dashboard?.id, seed); }
+    }
   }
 }
 
