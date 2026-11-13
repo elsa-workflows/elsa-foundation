@@ -2,15 +2,24 @@
 
 ## Script outcome API
 
-The form is open (spec Q1, reconciliation row 14). Whatever form is chosen, it MUST:
-- select one name, several names, or an explicitly empty selection;
-- leave the selection unspecified when the script selects nothing;
-- never read a selection from the content of ordinary returned data;
-- take effect only on successful completion.
+A script selects by returning the value of the built-in pure constructor `complete(result, outcomes)` (spec FR-007
+to FR-007b, Q1). There are no setters.
 
-Per the #3389 draft at `18cccb00b`: `setOutcome(name)` and `setOutcomes(names)`; each call replaces the pending
-selection, and `setOutcomes([])` is explicitly empty. If row 14 adds an explicitly recognized returned completion
-value, this section adds its shape and the precedence rule.
+| Script returns | Result | Selection |
+|---|---|---|
+| `order` (ordinary data) | `order` | unspecified (`Done`) |
+| `complete(order)` | `order` | unspecified (`Done`) |
+| `complete(order, 'Approved')` | `order` | `Approved` |
+| `complete(order, ['Approved', 'Notify'])` | `order` | `Approved`, `Notify` |
+| `complete(order, [])` | `order` | explicitly empty |
+| `{ result: order, outcomes: ['Approved'] }` | that object | unspecified: a look-alike is data |
+
+- Calling `complete` changes nothing; only returning its value selects. The selection takes effect only on successful
+  completion.
+- The value is recognized by a brand only the evaluator holds, and only as the script's own returned value. Nested in
+  returned data it faults with `VF-ACT-006`.
+- `outcomes` is a string or an array of strings; anything else faults with `VF-ACT-006`. Repeats count once.
+- `complete` exists only in script activities, not in input-binding expressions, and is a reserved built-in name.
 
 ## Ports
 

@@ -4,8 +4,8 @@
 
 **Prerequisites**: plan.md, spec.md, research.md, data-model.md, contracts/outcome-selection.md, quickstart.md
 
-**Provisional**: do not start any task before this spec is approved and #3052's specs are defined. That means #3389 is
-agreed and row 14 is decided (see the spec's *Approval* and Q1). T001 is the gate.
+**Gate**: do not start any task before this spec is approved (D-18: per spec, on the initiative branch). ADR 0045 §6
+is merged and Q1 is decided. T001 is the gate.
 
 **Tests**: framework §2.23 requires them for every logic-bearing change, and SC-001 to SC-006 require them too. The
 application declares no TDD cadence, so within each story tests follow the implementation. One exception is written
@@ -16,13 +16,13 @@ failing without the change.
 
 **Paths**: under `Essentials/src` unless another root is given.
 
-**Row 14**: tasks that depend on the script outcome API's form are marked *(API)*. They name the setters of the #3389
-draft. If the call adds an explicitly recognized returned completion value, only those tasks change.
+**Script form**: tasks marked *(API)* implement the returned form `complete(result, outcomes)` (FR-007 to FR-007b).
+There are no setters.
 
 ## Phase 1: Setup
 
-- [ ] T001 Confirm that #3389 is agreed and row 14 is decided. Diff the agreed ADR 0045 §6 and spec 095 text against
-  spec.md, and amend spec, plan, contract and these tasks for any change (including the answers to Q1–Q11) before
+- [ ] T001 Confirm that this spec is approved. Diff the merged ADR 0045 §6 and spec 095 text (`70399f75f`,
+  `a5d22a454`, and anything later on the initiative branch) against spec.md, and amend spec, plan, contract and these tasks for any change (including the answers to Q1–Q11) before
   starting. Also read Elsa 3's SendHttpRequest (elsa-core) and record whether `Done` fires on "Failed to
   connect" and "Timeout" (research R-7, FR-029a). Confirm that #3195 is fixed, and #3287 for the fixtures that read
   variables: without them no converted RunJavaScript runs, so T013, T015 and T030 cannot pass (research R-7)
@@ -54,11 +54,14 @@ draft. If the call adds an explicitly recognized returned completion value, only
 
 ## Phase 3: User Story 1 - A script chooses its outcomes explicitly (P1) 🎯 MVP
 
-- [ ] T009 [US1] *(API)* Add an outcome sink to `JavaScriptScriptEvaluationRequest` and return
-  `(Value, Selection)` from `IJavaScriptScriptEvaluator` (`Expressions/JavaScript/Core/Contracts/`); register
-  `setOutcome(name)` and `setOutcomes(names)` in `Expressions/JavaScript/Jint/Services/JintJavaScriptScriptEvaluator.cs`,
-  each replacing the pending selection; `setOutcomes([])` is `Empty`. Keep `JavaScriptExecutionApi.cs` L77–80
-  returning the value only
+- [ ] T009 [US1] *(API)* Return `(Value, Selection)` from `IJavaScriptScriptEvaluator`
+  (`Expressions/JavaScript/Core/Contracts/`). Install the built-in `complete(result, outcomes)` for script activities in
+  `Expressions/JavaScript/Jint/Services/JintJavaScriptScriptEvaluator.cs`: a pure constructor returning a branded,
+  frozen completion value (P-6). Recognize it on the top-level returned value only; omitted outcomes → `Unspecified`,
+  `[]` → `Empty`, names → `Named` (repeats counted once); a nested completion value or an invalid `outcomes` faults with
+  `VF-ACT-006`; a look-alike plain object is data. Add `complete` to the reserved built-in names; do not install it in
+  `binding-readonly-v1`. Keep `JavaScriptExecutionApi.cs` L77–80 returning the value only. Tests for each case of
+  FR-007 to FR-007b
 - [ ] T010 [US1] Remove `SelectOutcome`, `UnmatchedOutcome` and routing by return value from
   `Activities/Scripting/Activities/RunJavaScript.cs`; complete with the evaluator's selection; rewrite the doc comment
   (L22–31)
@@ -130,8 +133,8 @@ draft. If the call adds an explicitly recognized returned completion value, only
   (`WorkflowIntrinsicExecutor.cs` L325–349) and `GraphActivity.cs` L124–131 carry several outcomes when the graph
   declares the flag; tests
 - [ ] T027 [US5] *(API)* Convert `setOutcome` / `setOutcomes` instead of refusing them: remove them from
-  `RefusedHostFunctions` in `Extensions/Elsa3/src/Mapping/Services/Elsa3ExpressionRewriter.cs` L510–522, rewrite to the
-  script outcome API, and preserve routing per Q7: the known set from `PossibleOutcomes`, literals and connected
+  `RefusedHostFunctions` in `Extensions/Elsa3/src/Mapping/Services/Elsa3ExpressionRewriter.cs` L510–522, rewrite to
+  `return complete(<value>, <pending>)` (P-12), and preserve routing per Q7: the known set from `PossibleOutcomes`, literals and connected
   ports, plus a converter-declared catch-all with no connection that the script selects for any other name, with
   Elsa 3 `Done` mapped onto it; refuse with guidance when no faithful route exists or `PossibleOutcomes` is empty and
   the name is computed; no warning-only conversion; update

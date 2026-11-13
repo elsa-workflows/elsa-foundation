@@ -34,6 +34,6 @@
 - This is an architecture spec for an engine contract, so it names Elsa's own contracts (outcome names, `Done`,
   `VF-ACT-006`, RunJavaScript, Switch) as the subject of the requirements. Code locations stay in `research.md`.
 - Open decisions are not `[NEEDS CLARIFICATION]` markers: they are the *Open questions for the approvers* table
-  (Q1–Q11), answered on the PR, as in specs 1201 and 1207. Q1 (the script outcome API) is decided on the call
-  (reconciliation row 14); no requirement depends on its outcome.
+  (Q1–Q11), answered on the PR, as in specs 1201 and 1207. Q1 (the script outcome API) is decided: the returned form
+  `complete(result, outcomes)` (FR-007 to FR-007b).
 - Provisional: applies the #3389 draft at `18cccb00b`.

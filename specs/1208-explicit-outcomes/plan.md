@@ -2,8 +2,8 @@
 
 **Branch**: `agent/claude/3052-s3-explicit-outcomes` | **Date**: 2026-11-04 | **Spec**: [spec.md](spec.md)
 
-**Status**: provisional, like the spec. The ADR PR it waits on is listed in the spec's *Approval* section. Nothing here
-is implemented until #3052's specs are defined and this spec is approved.
+**Status**: follows the spec. The ADR it applies is merged (spec *Approval*). Implementation starts on the initiative
+branch once this spec is approved (D-18).
 
 ## Summary
 
@@ -16,9 +16,8 @@ technical approach (research R-1 to R-11):
   taken connections to one node become two arrivals at its implicit join instead of a fault.
 - **Outcome sets carry a multi-outcome flag.** The publish compiler pins it with the set, per node. RunJavaScript's set
   is `Done` plus its possible outcomes; `Unmatched` goes.
-- **Scripts select through the script outcome API.** The evaluator returns a selection next to the result. Its form
-  follows row 14 (Q1); the plan's tasks name setters per the #3389 draft and mark what changes if the call chooses
-  otherwise.
+- **Scripts select by returning `complete(result, outcomes)`.** The evaluator recognizes the returned completion
+  value and returns a selection next to the result (FR-007, Q1). There are no setters.
 - **Two validation layers.** An Acornima pass at publication checks literal names; the completion projector checks
   computed names and the multi-outcome flag, and faults with the `VF-ACT-006` code.
 - **Connection ports are checked at publication** (FR-019, Q9).
@@ -52,7 +51,7 @@ publication, which the expression tooling already does for expressions.
 - Records written before the change stay readable (Q11).
 - Runtime takes no Design reference (§E2.2): the multi-outcome flag reaches runtime through the pinned executable.
 - Elsa 3 knowledge stays in `Extensions/Elsa3` (§E2.7).
-- No requirement depends on the outcome of row 14 (Q1).
+- The script form is `complete(result, outcomes)` (Q1, FR-007).
 
 **Scale/Scope**: about 15 runtime sites build a one-name list (R-2); one compiler method (R-4); two Flowchart
 normalizers and one duplicate-target check (R-3); one activity (RunJavaScript), one mode (Switch), one boundary
@@ -85,13 +84,13 @@ normalizers and one duplicate-target check (R-3); one activity (RunJavaScript), 
 | P-3 | Runtime handlers | FR-003, FR-024. The one-name lists in R-2 become `selection.ResolveNames()`. `NormalizeOutcomeNames` loses `defaultToDone` for selections: empty stays empty. Non-routing parents ignore the selection (Q3). |
 | P-4 | Flowchart | FR-021, FR-022. `NormalizeOutcomes` keeps empty empty (the default is resolved before, by P-1). The duplicate-target fault goes; each taken connection is an arrival (Q4). |
 | P-5 | Outcome set with flag | FR-010 to FR-014, Q2, Q10. `ResolveOutcomes` returns the set and `AllowsMultiple`. An activity declares the flag statically (`[ActivityOutcomes(AllowsMultiple = true)]`) or through a provider (Switch: mode). The `Done` rule (model A, Q2): `Done` exactly when a completion may choose no branch; SendHttpRequest with expected codes drops it (FR-012a). `ActivityValueOutcomesAttribute.UnmatchedOutcome` becomes optional; RunJavaScript sets none. Names are pinned as written. |
-| P-6 | Script outcome API | FR-007, FR-008, Q1. `JavaScriptScriptEvaluationRequest` gains an outcome sink; the result is `(JsonElement? Value, OutcomeSelection Selection)`. Per the #3389 draft the sink is `setOutcome(name)` / `setOutcomes(names)`, the last call wins, `setOutcomes([])` is empty. If row 14 adds a returned completion value, P-6 adds its recognition and precedence; nothing else changes. |
+| P-6 | Script outcome API | FR-007 to FR-008, Q1. `JintJavaScriptScriptEvaluator` installs the built-in `complete(result, outcomes)` for script activities only (not in the `binding-readonly-v1` surface). It returns a frozen object carrying a brand only the evaluator holds (for example a host-created object type), so script data cannot forge it. The evaluator checks the brand on the top-level returned value only and returns `(JsonElement? Value, OutcomeSelection Selection)`: `outcomes` omitted → `Unspecified`, `[]` → `Empty`, names → `Named` (repeats counted once). A brand found nested in the returned value, or an invalid `outcomes`, faults with `VF-ACT-006`. `complete` joins the reserved built-in names (D-5). |
 | P-7 | Validation | FR-015 to FR-018, FR-020, Q6. A publication diagnostic `VF-AUTH-010` from an Acornima pass over RunJavaScript scripts. `ActivityCompletionProjector` checks each name and the flag and faults with code `VF-ACT-006`. Activity-declared catch-alls are ordinary declared outcomes; no node-level fallback. Publication adds `VF-AUTH-012` (warning: returned string literal equal to a connected outcome) and `VF-AUTH-013` (no `Done`, no guaranteed selection). |
 | P-8 | Connection ports | FR-019, Q9. `FlowchartStructureHandler.CompileExecutableStructure` checks each connection's source port against the source node's pinned set: `VF-AUTH-011`. |
 | P-9 | Switch "match any" | FR-031. A `Mode` input (`MatchFirst` default, `MatchAny`); the provider sets the flag for `MatchAny`. |
 | P-10 | Complete and graph boundary | FR-032. Graph `Complete` and Finish accept several literal outcomes when the graph declares the flag; `GraphActivity` maps every selected outcome. |
 | P-11 | Studio | FR-009, FR-013. `readValueOutcomePorts` adds `Done` instead of the unmatched port for RunJavaScript; connections on vanished ports are flagged. |
-| P-12 | Elsa 3 converter | FR-026 to FR-030, Q7. Remove the `Done` → `Unmatched` rule; rewrite `setOutcome` / `setOutcomes` to the script outcome API; preserve routing per Q7 (a converter-declared catch-all with no connection for names outside the known set) or refuse; convert Switch `MatchAny` and Complete with several literal outcomes; remove `ELS3-BEHAVIOUR-SCRIPT-OUTCOME-ROUTING`. |
+| P-12 | Elsa 3 converter | FR-026 to FR-030, Q7. Remove the `Done` → `Unmatched` rule; rewrite `setOutcome` / `setOutcomes` to the returned form: a converter-owned local holds the pending selection, each setter call replaces it, and each return (and a final completion value) becomes `return complete(<value>, <pending>)`, refusing where that rewrite cannot be shown faithful; preserve routing per Q7 (a converter-declared catch-all with no connection for names outside the known set) or refuse; convert Switch `MatchAny` and Complete with several literal outcomes; remove `ELS3-BEHAVIOUR-SCRIPT-OUTCOME-ROUTING`. |
 | P-13 | Diagnostics | [contracts/outcome-selection.md](contracts/outcome-selection.md). |
 
 ## Project Structure
@@ -127,7 +126,7 @@ Essentials/src/Activities/Flowchart/Internal/Policies/FlowchartPolicyConnectionS
 Essentials/src/Workflows/Publishing/Elsa.Workflows.Publishing/Services/ExecutableNodeCompiler.cs
 Essentials/src/Workflows/Publishing/Elsa.Workflows.Publishing/Services/ScriptOutcomeLiteralValidator.cs  # new
 Essentials/src/Activities/Scripting/Activities/RunJavaScript.cs
-Essentials/src/Expressions/JavaScript/{Core/Contracts,Jint/Services}/*               # outcome sink
+Essentials/src/Expressions/JavaScript/{Core/Contracts,Jint/Services}/*               # complete(result, outcomes)
 Essentials/src/Activities/ControlFlow/Switch/*                                       # MatchAny
 Essentials/src/Activities/Graph/Runtime/Activities/{GraphActivity,Complete}.cs
 Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/WorkflowIntrinsicExecutor.cs  # Finish

@@ -113,7 +113,7 @@ Already a list: `RuntimeCompleteActivityCommandPayload.OutcomeNames` (L22, L47, 
 - Every Elsa 4 activity selects exactly one outcome today: Switch (`Switch.cs` L70–113, first match or `Default`), If,
   Parallel, Graph `Complete` (`Complete.cs` L35–56), the Finish intrinsic, SendHttpRequest, BpmnDecision.
 - A Switch would allow several only in "match any" mode, which is node configuration (F-5). The same holds for
-  RunJavaScript only if its script uses `setOutcomes`, but that cannot be known for a computed call, so RunJavaScript
+  RunJavaScript only if its script returns `complete` with several names, but that cannot be known for a computed call, so RunJavaScript
   allows several always.
 - Spec 266 (#3286, D-2a) already reads "the node's activity contract allows several outcomes" to treat a node as an
   inclusive fork. The current unordered-write analysis on `main` (`ValueFlowValidator.cs` L157–179, L530–565) ignores

@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-04
 
-**Status**: Draft — **provisional**. Approval waits on the ADR PRs listed under *Approval*.
+**Status**: Draft. The ADR it applies is agreed and merged; approval waits on the approvers' agreement to this text, including the script form (Q1).
 
 **Initiative**: part of [#3052](https://github.com/elsa-workflows/elsa-foundation/issues/3052), spec row **S-3**,
 decision **D-4**.
@@ -20,20 +20,16 @@ successfully. A node's possible outcomes are known at design time and pinned whe
 
 ## Approval
 
-> **Provisional.** This spec may be drafted now (see [initiatives](../../docs/contributing/initiatives.md#phases)).
-> It cannot be approved until every ADR it applies is agreed. If an ADR changes before agreement, this spec follows it.
+**Which ADR text this spec applies.** The outcome contract amendment of ADR 0045 §6 and spec 095, as accepted on
+2026-11-12 and merged into the initiative branch (`70399f75f`, with the review refinements of #3763 in `a5d22a454`).
+Where it does not touch ADR 0045 or spec 095, the initiative branch's version applies.
 
-**Which ADR text this spec applies.** The outcome contract amendment exists only as the draft on #3389. This spec
-applies that draft, at the head named below, as if it were agreed. Where the draft does not touch ADR 0045 or spec 095,
-the version on `main` applies. The answers in *Open questions* hold only on that basis: if the draft changes, the
-answers are rechecked.
-
-| ADR PR | What this spec takes from it | Draft applied | State on 2026-11-04 |
+| ADR PR | What this spec takes from it | Text applied | State |
 |---|---|---|---|
-| [#3389](https://github.com/elsa-workflows/elsa-foundation/pull/3389), ADR 0045 §6 and spec 095 outcome contract (D-4) | The outcome selection (unspecified, names, explicitly empty), the `Done` rule, selection on successful completion only, design-time outcome sets and the multi-outcome flag pinned per node, two-layer name validation, `VF-ACT-006`, connection ports checked at publication, unconnected outcomes, multi-outcome completion as an inclusive fork, the end of routing by return value and of `Unmatched`, the converter's `Done` mapping | `9c2cc3894` | In review. Amended on 4 Nov (`18cccb00b`) with the `Done` rule (Q2), @sfmskywalker's non-API points from [#3763](https://github.com/elsa-workflows/elsa-foundation/pull/3763) (Q5) and this spec's findings (Q3, Q4, Q9, Q10); **reframed on 5 Nov (`9c2cc3894`)** around a returned completion/routing form after @sfmskywalker's [direction](https://github.com/elsa-workflows/elsa-foundation/pull/3389#issuecomment-6642477464), with the Q4 join and Q6 fallback refinements. The script API is now resolved (Q1: the returned form, no native setters). @FransVanEk approved the earlier text (30 Oct, `c9dcb326b`) and must re-approve the reframe; @j03y-nxxbz agrees |
+| [#3389](https://github.com/elsa-workflows/elsa-foundation/pull/3389), ADR 0045 §6 and spec 095 outcome contract (D-4) | The outcome selection (unspecified, names, explicitly empty), the `Done` rule, selection on successful completion only, design-time outcome sets and the multi-outcome flag pinned per node, two-layer name validation, `VF-ACT-006`, connection ports checked at publication, unconnected outcomes, multi-outcome completion as an inclusive fork, the end of routing by return value and of `Unmatched`, the converter's `Done` mapping | merged `70399f75f`, `a5d22a454` | **Accepted 2026-11-12 (D-4; D-14 moved to #4193, so the default join only) and merged.** History: amended on 4 Nov (`18cccb00b`) with the `Done` rule (Q2), @sfmskywalker's non-API points from [#3763](https://github.com/elsa-workflows/elsa-foundation/pull/3763) (Q5) and this spec's findings (Q3, Q4, Q9, Q10); **reframed on 5 Nov (`9c2cc3894`)** around a returned completion/routing form after @sfmskywalker's [direction](https://github.com/elsa-workflows/elsa-foundation/pull/3389#issuecomment-6642477464), with the Q4 join and Q6 fallback refinements. The script API is now resolved (Q1: the returned form, no native setters). @FransVanEk approved the earlier text (30 Oct, `c9dcb326b`) and must re-approve the reframe; @j03y-nxxbz agrees |
 
 **#3763** (@sfmskywalker's stacked proposal on #3389): points 2–6 are adopted in `18cccb00b` (Q5); point 1, the API, is
-Q1.
+Q1. Its remaining refinements are merged in `a5d22a454` and applied here (FR-007a, FR-027).
 
 **Related, not blocking:**
 - [#3286](https://github.com/elsa-workflows/elsa-foundation/pull/3286) (spec 266, ADR 0048, decision D-2a) reads
@@ -45,8 +41,8 @@ Q1.
   selection commits with. This spec only requires that the selection is part of the completion.
 
 **Approval plan**: the initiative's approvers, @sfmskywalker and @FransVanEk (technical architects), approve the final
-text; @j03y-nxxbz is the author and records agreement in a PR comment. **Implementation**: not before every spec of
-#3052 is defined, as #3052 agreed.
+text; @j03y-nxxbz is the author and records agreement in a PR comment. **Implementation**: on the initiative branch
+once this spec is approved (D-18, 13 Nov); it lands on `main` with the initiative.
 
 ## Rule and boundary
 
@@ -60,7 +56,7 @@ text; @j03y-nxxbz is the author and records agreement in a PR comment. **Impleme
 - *Multi-outcome completion*: a completion whose selection names more than one outcome.
 - *Script outcome API*: how a script makes a selection — the explicitly recognized **returned completion/routing
   form** (Q1, resolved on #3389), carrying the result and the selection on separate channels, with no native setters.
-  Its exact spelling is settled here (FR-007).
+  Its spelling, settled here (FR-007): the value of Elsa's built-in pure constructor `complete(result, outcomes)`.
 
 **In scope**: the outcome selection in the activity transition, the durable completion records and recovery; the
 script outcome API in RunJavaScript (form per Q1); removal of RunJavaScript's routing by return value and of its
@@ -71,7 +67,7 @@ Complete with several outcomes); the documents that state "one outcome per compl
 
 **Out of scope**:
 - The setters-vs-returned-form decision (Q1, reconciliation row 14): settled on #3389 (the returned completion form,
-  no native setters). This spec settles that form's exact spelling (in scope, FR-007).
+  no native setters). This spec settles that form's spelling, `complete(result, outcomes)` (in scope, FR-007).
 - Spec 266's unordered-write warning itself (#3286). It reads the multi-outcome flag this spec pins.
 - The other half of `ELS3-BEHAVIOUR-HTTP-OUTCOME-SINGLE`: without expected status codes, a non-2xx response goes to
   `Failed` in Elsa 4. It is not about how many outcomes fire (Q8).
@@ -284,10 +280,28 @@ pins exactly those ports, and a connection on a port the node does not declare i
 
 **Scripts**
 
-- **FR-007**: A RunJavaScript script MUST be able to select one outcome, several outcomes, or an explicitly empty
-  selection by **returning the recognized completion/routing form** (its spelling per Q1), which carries the result and
-  the selection on separate channels and needs no ambient `activity` object. The script MUST complete with an
-  unspecified selection when it returns ordinary data or selects nothing.
+- **FR-007**: A RunJavaScript script MUST select outcomes by **returning the value of Elsa's built-in pure
+  constructor `complete(result, outcomes)`** (Q1). It carries the result and the selection on separate channels and
+  needs no ambient `activity` object:
+  - `return complete(order, 'Approved')` selects one outcome;
+  - `return complete(order, ['Approved', 'Notify'])` selects several;
+  - `return complete(order, [])` is an explicitly empty selection;
+  - `return complete(order)` (outcomes omitted or `undefined`) leaves the selection unspecified, as `return order` does.
+
+  `result` is the activity's result and is materialized like any returned value (ADR 0046). The script MUST complete
+  with an unspecified selection when it returns ordinary data.
+- **FR-007a**: *Recognition.* `complete` is pure: calling it changes nothing, and only returning its value selects.
+  - The value carries a brand held by the evaluator that script data cannot forge. A plain object of the same shape
+    (`{ result, outcomes }`) is ordinary data (FR-008).
+  - It is recognized only as the script's own returned value. A completion value nested inside returned data, or
+    stored as a result, faults the step with `VF-ACT-006`.
+  - `complete` is installed for script activities only, not for input-binding expressions (they select no outcome).
+    It is a reserved built-in name (ADR 0045 §5, D-5): a script that declares `complete` gets the reserved-name
+    publish diagnostic.
+- **FR-007b**: *Validation.* `outcomes` MUST be a string or an array of strings. Anything else (`null`, a number, an
+  object, a blank name) faults the step with `VF-ACT-006`. A name repeated in the array counts once, in the order of
+  its first occurrence. String literals passed as `outcomes` are checked at publication (FR-015); computed names are
+  checked at run time (FR-016, FR-017).
 - **FR-008**: A script's ordinary returned value (a string, number, object, array or null) MUST be the activity's
   result only. Its content MUST NOT select an outcome.
 - **FR-008a**: Publication MUST warn (`VF-AUTH-012`, a warning, not a refusal) when a RunJavaScript script returns a
@@ -353,8 +367,9 @@ pins exactly those ports, and a connection on a port the node does not declare i
 
 - **FR-026**: The converter MUST map Elsa 3 RunJavaScript `Done` to Elsa 4 `Done`, whether or not possible outcomes
   are set. Spec 239's R8 rule (`Done` → `Unmatched`) MUST be removed. This fixes #3295.
-- **FR-027**: The converter MUST convert Elsa 3 `setOutcome` / `setOutcomes` to the recognized returned completion
-  form (per Q1) — Elsa 3 setters are conversion inputs, never native Elsa 4 host functions — and MUST **preserve the
+- **FR-027**: The converter MUST convert Elsa 3 `setOutcome` / `setOutcomes` to the returned form
+  `complete(result, outcomes)` (FR-007): each setter call replaces the pending selection, and the script returns
+  `complete(<its returned value>, <pending selection>)` — Elsa 3 setters are conversion inputs, never native Elsa 4 host functions — and MUST **preserve the
   original routing or refuse with guidance** (Q7). A warning does not make changed routing faithful, so it MUST NOT be
   used to convert a case whose routing would change.
   - `PossibleOutcomes`, the literal names in the script and the connected ports are evidence for the converted
@@ -409,7 +424,7 @@ answers.
 
 | # | Question | Proposal | @j03y-nxxbz |
 |---|---|---|---|
-| Q1 | **The script outcome API** (reconciliation row 14). Setters only (`setOutcome` / `setOutcomes`), or an explicitly recognized returned completion/routing value that carries the result and the selection separately? | **Resolved (4–5 Nov): the returned completion/routing form, no native setters.** @sfmskywalker [directed](https://github.com/elsa-workflows/elsa-foundation/pull/3389#issuecomment-6642477464) reframing around an explicitly recognized returned form — result and selection on separate channels, no ambient `activity` object; the native script surface gains no `setOutcome` / `setOutcomes`. The ADR §6 reframe (#3389 `9c2cc3894`) applies this and @j03y-nxxbz agrees; @FransVanEk's earlier "setters only" must be re-confirmed against the reframe. The exact spelling — a returned data representation or a pure constructor — plus recognition and validation are this spec's to settle (FR-007); ordinary business data still selects nothing (FR-008). | The returned completion form (row 14, reframed); "setters only" is withdrawn |
+| Q1 | **The script outcome API** (reconciliation row 14). Setters only (`setOutcome` / `setOutcomes`), or an explicitly recognized returned completion/routing value that carries the result and the selection separately? | **Resolved (4–5 Nov): the returned completion/routing form, no native setters.** @sfmskywalker [directed](https://github.com/elsa-workflows/elsa-foundation/pull/3389#issuecomment-6642477464) reframing around an explicitly recognized returned form — result and selection on separate channels, no ambient `activity` object; the native script surface gains no `setOutcome` / `setOutcomes`. The ADR §6 reframe (#3389 `9c2cc3894`) applies this and @j03y-nxxbz agrees; @FransVanEk's earlier "setters only" must be re-confirmed against the reframe. **Spelling (13 Nov): a pure constructor, `return complete(result, outcomes)`** (FR-007 to FR-007b): a returned data representation was rejected because it would have to recognize control instructions in a plain object, which ordinary business data can imitate. Ordinary business data still selects nothing (FR-008). | The returned completion form (row 14, reframed); "setters only" is withdrawn |
 | Q2 | **The `Done` rule.** #3389 says an unspecified selection means `Done`, but not which activities have `Done`. Elsa 4 declares `Done` on activities that do not branch (WriteLine, Delay, Sequence, Flowchart) and not on activities that always branch (If: `True`, `False`; Switch: cases, `Default`). A RunJavaScript with possible outcomes pins no `Done` (research R-4). Elsa 3 instead fires `Done` on every completion, next to any branch. | **Model A, Elsa 4's shape:** `Done` means "completed without choosing a branch" and never fires with a branch. An activity whose completion may choose no branch has `Done` (RunJavaScript: `Done` plus its possible outcomes); one whose every completion chooses a branch has none. An unspecified selection without `Done` is a defect in the activity's code and faults saying so (FR-002a). Elsa 3's always-firing `Done` converts by mapping onto every branch, as the converter already does for If, Switch and DispatchWorkflow (research R-7). Rejected, model B: `Done` on every activity, firing with any branch, as in Elsa 3; it would make every node an inclusive fork. Applied to #3389 in `18cccb00b`. | Model A. Elsa 4 is the better source of truth |
 | Q3 | What does a parent that does not route by outcomes (Sequence, the workflow root, a loop body) do with an explicitly empty selection? | It treats it like any other successful completion: a Sequence goes on, the root completes. Only parents that route by outcomes (Flowchart, the graph boundary) read the selection. Applied to #3389 in `18cccb00b`. | Agrees |
 | Q4 | Two selected outcomes whose connections lead to the same node. The engine faults today on duplicate targets. | Each taken connection is an arrival at the target. **By default** the target's synchronizing implicit join (ADR 0064, dead-path join) accounts for one activation's arrivals and runs it once, after both arrivals (two arrivals, one run). Loop re-entry and independent activations stay distinct executions (@sfmskywalker, [card 17](https://github.com/elsa-workflows/elsa-foundation/pull/3389#issuecomment-6645085675)). Applied to #3389 in `9c2cc3894`. **The per-arrival mode is out (D-14, meeting of 2026-11-12):** join behaviour moves to its own initiative, and #3389 keeps the default join only (`fae896808`). | Agrees |
