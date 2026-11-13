@@ -1,3 +1,4 @@
+using Elsa.Workflows.Runtime.Inspection.Core;
 using System.Text.Json;
 using CShells.DependencyInjection;
 using CShells.Features;

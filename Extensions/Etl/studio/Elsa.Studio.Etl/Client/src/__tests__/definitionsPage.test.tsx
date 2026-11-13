@@ -48,6 +48,7 @@ vi.mock("../etlApi", async importOriginal => ({
   validateEtlDraft: vi.fn()
 }));
 
+const notifications = { notify: vi.fn((_input: { level: string; title: string; message?: string }) => ({ id: "test", update() {}, dismiss() {} })), track: <T,>(work: Promise<T>) => work };
 describe("ETL definitions page", () => {
   beforeEach(() => {
     vi.mocked(listEtlConnectorDefinitions).mockResolvedValue(page([summary("orders")]));
@@ -80,6 +81,7 @@ describe("ETL definitions page", () => {
   });
 
   afterEach(() => {
+  notifications.notify.mockClear();
     cleanupActive();
     vi.restoreAllMocks();
     vi.resetAllMocks();
@@ -98,7 +100,8 @@ describe("ETL definitions page", () => {
     change(inputByLabel(rendered.host, "Output field 1 name"), "displayName");
     expect(buttonByText(rendered.host, "Validate saved revision").disabled).toBe(true);
     click(buttonByText(rendered.host, "Save draft"));
-    await waitFor(() => expect(rendered.host.textContent).toContain("Saved new-pipeline at revision 2"));
+    await waitFor(() => expect(notifications.notify).toHaveBeenCalledWith(expect.objectContaining({ level: "success", title: expect.stringContaining("Saved new-pipeline at revision 2") })));
+    expect(rendered.host.querySelector(".etl-notice")?.textContent ?? "").not.toContain("Saved new-pipeline at revision 2");
     expect(updateEtlConnectorDraft).toHaveBeenCalledWith(context, "new-pipeline", expect.objectContaining({
       expectedRevision: 1,
       pipeline: expect.objectContaining({ mapping: [{ name: "displayName", origin: "source", field: "name" }] })
@@ -164,7 +167,8 @@ describe("ETL definitions page", () => {
 
     change(inputByLabel(rendered.host, "Output field 1 name"), "displayName");
     click(buttonByText(rendered.host, "Save draft"));
-    await waitFor(() => expect(rendered.host.textContent).toContain("Saved orders at revision 5"));
+    await waitFor(() => expect(notifications.notify).toHaveBeenCalledWith(expect.objectContaining({ level: "success", title: expect.stringContaining("Saved orders at revision 5") })));
+    expect(rendered.host.querySelector(".etl-notice")?.textContent ?? "").not.toContain("Saved orders at revision 5");
     expect(updateEtlDraft).toHaveBeenCalledWith(context, "orders", expect.objectContaining({
       expectedRevision: 4,
       pipeline: expect.objectContaining({ mapping: [{ name: "displayName", origin: "source", field: "name" }] })
@@ -351,7 +355,7 @@ function mount(context: StudioEndpointContext, dialogs = createDialogs(), profil
     host,
     root,
     render(nextContext: StudioEndpointContext, nextProfile = profile) {
-      flushSync(() => root.render(<EtlDefinitionsPage context={nextContext} dialogs={dialogs} profile={nextProfile} />));
+      flushSync(() => root.render(<EtlDefinitionsPage context={nextContext} dialogs={dialogs} notifications={notifications} profile={nextProfile} />));
     },
     cleanup() {
       flushSync(() => root.unmount());

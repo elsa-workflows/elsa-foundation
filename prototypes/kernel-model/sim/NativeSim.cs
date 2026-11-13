@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Text.Json.Nodes;
+using Kernel.Graph.Models;
 using Kernel.Native;
 using Kernel.Sim.Native;
 
@@ -21,6 +22,10 @@ public sealed class NativeOracle
     public readonly Dictionary<string, string> ChildOf = new(StringComparer.Ordinal);                // child -> parent|frame (waited)
     public readonly Dictionary<string, int> Resumes = new(StringComparer.Ordinal);                   // child -> resumes of its parent
     public readonly Dictionary<string, int> Effects = new(StringComparer.Ordinal);                   // instance|frame -> side effects run
+    // The graph checks (G1-G5): what the graph engine's journal entries said, and the instance revisions already read.
+    public readonly HashSet<string> Fired = new(StringComparer.Ordinal);                             // instance|frame|node|round
+    public readonly Dictionary<string, List<string>> CancelledNodes = new(StringComparer.Ordinal);   // instance|frame|round -> nodes of cancelled paths
+    public readonly Dictionary<string, long> GraphRevisions = new(StringComparer.Ordinal);
 
     public NativeOracle(int partitions) => Read = new long[partitions];
 }
@@ -35,6 +40,7 @@ public sealed partial class World
     private NativeModel NativeModelFor(Actor actor) => new(NativeWorkflows.Registry, new NativeOptions
     {
         Flaws = Config.NativeFlaws,
+        AdmissionFlaws = Config.AdmissionFlaws,
         Gate = async (job, cancel) => await Work(actor, job, cancel),
         OnExternal = (instance, frame, _, attempt, again) => External(instance.Id, frame, attempt, again),
     });
@@ -88,10 +94,16 @@ public sealed partial class World
                 if (Store.Instances.GetValueOrDefault(row.Instance)?.Model != NativeModel.ModelKey) continue;
                 foreach (var entry in Json.Read<List<string>>(row.Entries)) Note(row.Instance, entry);
             }
+        CheckGraphStates();
     }
 
     private void Note(string instance, string entry)
     {
+        if (entry.StartsWith("g|", StringComparison.Ordinal))
+        {
+            NoteGraph(instance, entry);
+            return;
+        }
         var parts = entry.Split(':');
         switch (parts[0])
         {
@@ -116,6 +128,106 @@ public sealed partial class World
                 if (forChild != byChild) Faults.Add($"N3 {instance}: the wait for child {forChild} was resumed by child {byChild}");
                 if ((Native.Resumes[byChild] = Native.Resumes.GetValueOrDefault(byChild) + 1) > 1) Faults.Add($"N3 the finish of child {byChild} resumed its parent {instance} twice");
                 break;
+        }
+    }
+
+    /// <summary>
+    /// G1, G2, G3 and G4 from the graph engine's journal entries (models/Native, Flowchart.Trace). The graph each entry is
+    /// checked against is the definition's, not the engine's state: which connections reach a node.
+    /// </summary>
+    private void NoteGraph(string instance, string entry)
+    {
+        var p = entry.Split('|');
+        var (kind, frame, flowId) = (p[1], p[2], p[3]);
+        var key = instance + "|" + frame;
+        if (Store.Instances.GetValueOrDefault(instance) is not { } row) return;
+        var flow = NativeWorkflows.Registry.Get(row.Definition).Nodes[flowId];
+        switch (kind)
+        {
+            case "x":
+                Oracle.List(Native.CancelledNodes, key + "|" + p[5]).Add(p[4]);
+                break;
+            case "f":
+            {
+                var (node, round) = (p[4], p[5]);
+                var live = p[6].Split(',', StringSplitOptions.RemoveEmptyEntries);
+                var dead = p[7].Split(',', StringSplitOptions.RemoveEmptyEntries);
+                // A merge passes every token on, so a node behind one may fire once per token in a round and be released
+                // by the graph going quiet with only the merge's side answered: G2 and G3 hold where no merge lies upstream.
+                var graph = Flowchart.GraphOf(flow);
+                var merge = flow.Gateways.Any(g => g.Value == Gateway.Merge && graph.CanReachForward(g.Key, node));
+                if (live.Length == 0) Faults.Add($"G1 {instance}: a dead path ran node {node} of {flowId} (round {round}): every arrival it took was dead");
+                if (!merge && !Native.Fired.Add($"{key}|{node}|{round}")) Faults.Add($"G2 {instance}: node {node} of {flowId} fired twice in round {round}");
+                var inbound = flow.Connections.Where(c => c.Target == node).Select(c => c.Source).Distinct().ToList();
+                if (merge || inbound.Count <= 1) break;
+                // A first-wins race cancels its losers, so the join behind them is owed an arrival nobody will make; the
+                // engine releases it when the graph goes quiet. That is the one way an inbound may go unanswered: from a
+                // cancelled node, or from a node only a cancelled branch leads to.
+                var cut = CutOff(flow, Native.CancelledNodes.GetValueOrDefault(key + "|" + round) ?? []);
+                var missing = inbound.Except(live).Except(dead).Where(m => !cut.Contains(m)).ToList();
+                if (missing.Count > 0) Faults.Add($"G3 {instance}: the join {node} of {flowId} fired in round {round} before {string.Join(", ", missing)} arrived, live or dead");
+                break;
+            }
+            case "c":
+                if (int.Parse(p[4]) > 0) Faults.Add($"G4 {instance}: the graph {flowId} completed with {p[4]} live paths");
+                break;
+        }
+    }
+
+    /// <summary>The cancelled nodes and every node all of whose inbound connections come from them, transitively.</summary>
+    private static HashSet<string> CutOff(Kernel.Native.Node flow, IEnumerable<string> cancelled)
+    {
+        var cut = new HashSet<string>(cancelled, StringComparer.Ordinal);
+        for (var grew = true; grew;)
+        {
+            grew = false;
+            foreach (var node in flow.Children.Select(c => c.Id).Where(n => !cut.Contains(n)))
+            {
+                var sources = flow.Connections.Where(c => c.Target == node).Select(c => c.Source).ToList();
+                if (sources.Count > 0 && sources.All(cut.Contains)) grew = cut.Add(node) || grew;
+            }
+        }
+        return cut;
+    }
+
+    /// <summary>
+    /// G1, G4 and G5 on the committed state of every native instance with a flowchart that changed since it was last
+    /// read: a path that is live has its child; a graph with no live path and nothing running has completed; no path
+    /// lives on in a race scope that is over, and no child runs on a cancelled path.
+    /// </summary>
+    private void CheckGraphStates()
+    {
+        foreach (var row in Store.Instances.Values)
+        {
+            if (row.Model != NativeModel.ModelKey || !NativeWorkflows.Graphs.Contains(row.Definition)) continue;
+            if (Native.GraphRevisions.TryGetValue(row.Id, out var seen) && seen == row.Revision) continue;
+            Native.GraphRevisions[row.Id] = row.Revision;
+            if (row.Status != InstanceStatus.Running || Parked.Contains(row.Id)) continue;
+            var state = Json.Read<NativeState>(row.State);
+            var nodes = NativeWorkflows.Registry.Get(row.Definition).Nodes;
+            foreach (var frame in state.Frames.Values.Where(f => nodes[f.Node].Type == typeof(Flowchart)))
+            {
+                if (Flowchart.ReadEngineState(frame.State) is not { } graph) continue;
+                var running = state.Frames.Values.Where(f => f.Parent == frame.Id).Select(f => (f.Id, f.Tag))
+                    .Concat(state.Agenda.Where(w => !w.Resume && w.Parent == frame.Id).Select(w => (Id: w.Frame, w.Tag))).ToList();
+                var runningPaths = running.Select(r => Flowchart.PathOf(r.Tag)).ToHashSet(StringComparer.Ordinal);
+                var live = graph.ExecutionPaths.Where(p => p.Status is ExecutionPathStatus.Active or ExecutionPathStatus.Waiting).ToList();
+                if (live.Count == 0 && running.Count == 0) Faults.Add($"G4 {row.Id}: the graph {frame.Node} has no live path and has not completed");
+                // A live path is a token on its way: its node runs, or it waits at a join that something running can
+                // still release. Nothing running and a live path left is a token lost (the mix parks no path by policy).
+                if (live.Count > 0 && running.Count == 0) Faults.Add($"G1 {row.Id}: the graph {frame.Node} has live paths ({string.Join(", ", live.Select(p => p.ExecutionPathId + " at " + p.CurrentNodeId))}) and nothing runs");
+                var withChild = graph.ActiveChildren.Select(c => c.ExecutionPathId).ToHashSet(StringComparer.Ordinal);
+                foreach (var path in live.Where(p => p.Status == ExecutionPathStatus.Active && !withChild.Contains(p.ExecutionPathId)))
+                    Faults.Add($"G1 {row.Id}: path {path.ExecutionPathId} of {frame.Node} is active at {path.CurrentNodeId} and has no child");
+                foreach (var child in graph.ActiveChildren.Where(c => !runningPaths.Contains(c.ExecutionPathId)))
+                    Faults.Add($"G1 {row.Id}: path {child.ExecutionPathId} of {frame.Node} waits for node {child.NodeId}, which does not run");
+                var over = graph.Scopes.Where(s => s.Kind == ExecutionScopeKind.Race && s.Status != ExecutionScopeStatus.Active).Select(s => s.ExecutionScopeId).ToHashSet(StringComparer.Ordinal);
+                foreach (var path in live.Where(p => over.Contains(p.ExecutionScopeId)))
+                    Faults.Add($"G5 {row.Id}: path {path.ExecutionPathId} at {path.CurrentNodeId} of {frame.Node} lives on in the race scope {path.ExecutionScopeId}, which is over");
+                var cancelled = graph.ExecutionPaths.Where(p => p.Status == ExecutionPathStatus.Canceled).Select(p => p.ExecutionPathId).ToHashSet(StringComparer.Ordinal);
+                foreach (var (id, tag) in running.Where(r => cancelled.Contains(Flowchart.PathOf(r.Tag) ?? "")))
+                    Faults.Add($"G5 {row.Id}: child {id} of {frame.Node} runs on the cancelled path {Flowchart.PathOf(tag)}");
+            }
         }
     }
 
@@ -178,7 +290,7 @@ public sealed partial class World
             var expected = NativeReference.Of(row.Definition, state.Variables.GetValueOrDefault("input"));
             var actual = NativeReference.Describe(state.Variables);
             if (actual != expected.Variables) return $"N5 {row.Id} ({row.Definition}) ended with {actual}; without faults it ends with {expected.Variables}";
-            if (row.Definition == "n-join2") { Interlocked.Increment(ref NativeInstances); continue; }   // a threshold join: which branch activities complete depends on how events were batched; variables only
+            if (row.Definition is "n-join2" or "n-graph") { Interlocked.Increment(ref NativeInstances); continue; }   // a threshold join (how events were batched) or a race (which racer won) decides which activities complete; variables only
             var types = NativeReference.Types(row.Definition, Native.CompletedNodes.GetValueOrDefault(row.Id) ?? []);
             if (types != expected.Types) return $"N1 {row.Id} ({row.Definition}) completed [{types}]; without faults it completes [{expected.Types}]";
             Interlocked.Increment(ref NativeInstances);
@@ -198,6 +310,12 @@ public static class NativeSwitch
 {
     public static bool On;
     public static NativeFlaw Flaws;
+
+    /// <summary>The check each of the graph engine's flaws is for; the mutation check fails if another catches it first.</summary>
+    public static readonly Dictionary<NativeFlaw, string> ExpectedCheck = new()
+    {
+        [NativeFlaw.NoDeadPaths] = "G3", [NativeFlaw.NoRoundReset] = "G2", [NativeFlaw.DeadPathRunsNode] = "G1", [NativeFlaw.CancelLeavesPaths] = "G5",
+    };
 }
 
 /// <summary>The same workflow and input, run alone on one worker with no faults: what a faulty run must end with.</summary>

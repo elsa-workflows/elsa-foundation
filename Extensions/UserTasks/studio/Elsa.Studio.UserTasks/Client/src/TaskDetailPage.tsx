@@ -1,7 +1,7 @@
 import { notifyStudioNavigationGuardReleased, studioNavigationRequestedEvent, useStudioRouteLocation, useStudioWorkspaceTitle, type ElsaStudioModuleApi, type StudioNavigationRequest } from "@elsa-workflows/studio-sdk";
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, RefreshCw } from "lucide-react";
-import { StudioAlert, StudioButton, StudioPage, StudioPageHeader, StudioResultState } from "@elsa-workflows/studio-ui";
+import { StudioAlert, StudioButton, StudioPage, StudioPageHeader, StudioResultState, StudioField } from "@elsa-workflows/studio-ui";
 import { actor, read, mutate, message, statusOf, type TaskActor, type TaskItem } from "./taskApi";
 import { TaskStatus } from "./TaskStatus";
 import { taskPerson } from "./taskPeople";
@@ -40,6 +40,8 @@ export function TaskDetail({ api, id, identity, onClose, accessNotice }: { api: 
   const [errors, setErrors] = useState<Record<string, string>>({}); const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false); const [missing, setMissing] = useState(false); const [stale, setStale] = useState(false);
   const [targetKind, setTargetKind] = useState("user"); const [target, setTarget] = useState("");
+  const owner = useMemo(() => ({ api, id }), [api, id]);
+  const currentOwner = useRef(owner); currentOwner.current = owner;
   const content = useRef<HTMLDivElement>(null); const focused = useRef<string | null>(null);
   useStudioWorkspaceTitle(task?.title, "User task");
   useEffect(() => {
@@ -68,7 +70,7 @@ export function TaskDetail({ api, id, identity, onClose, accessNotice }: { api: 
   useEffect(() => { if (task?.status !== "CompletionPending") return; const timer = setInterval(() => void refresh(), 2000); return () => clearInterval(timer); }, [task?.status, refresh]);
   const act = async (operation: string, action?: string) => {
     if (!task || busyRef.current) return;
-    busyRef.current = true; setBusy(true); setNotice(""); setValidationNotice(false); setErrors({}); ++sequence.current;
+    busyRef.current = true; setBusy(true); setNotice(""); setValidationNotice(false); setErrors({}); const operationSequence = ++sequence.current;
     const retrying = operation === "complete" && attempt.current !== null;
     try {
       let request: Record<string, unknown> = { requestId: crypto.randomUUID() };
@@ -80,12 +82,16 @@ export function TaskDetail({ api, id, identity, onClose, accessNotice }: { api: 
       }
       if (operation === "reassign") request = { ...request, assigneeId: targetKind === "user" ? target : null, groupId: targetKind === "group" ? target : null };
       const result = await mutate(api, task, operation, request);
+      if (currentOwner.current !== owner) return;
+      if (sequence.current !== operationSequence) { await refresh(); return; }
       setTask(result); if (result.decision) { setData(result.decision.response.data); edited.current = false; }
       // A successful write confirms this request. Runtime delivery may remain pending independently.
       attempt.current = null;
       if (operation === "complete") edited.current = false;
-      setNotice(result.status === "CompletionPending" ? responsePendingNotice : "Task updated.");
+      if (result.status === "CompletionPending") setNotice(responsePendingNotice);
+      else api.notifications?.notify({ level: "success", title: "Task updated." });
     } catch (failure) {
+      if (currentOwner.current !== owner) return;
       const status = statusOf(failure); setNotice(status === 409 ? "This task changed. Refresh to review its current state; your entered values are preserved." : message(failure));
       if (status === 409 || status === 403 || status === 404) setStale(true);
       if (status >= 400 && status < 500 && !retrying) attempt.current = null;
@@ -145,8 +151,8 @@ export function TaskDetail({ api, id, identity, onClose, accessNotice }: { api: 
       {respondable ? task.actions.map((action, index) => <StudioButton variant={index === 0 ? "primary" : "default"} key={action} disabled={!canComplete || busy || Boolean(task.form && !Renderer) || Boolean(attempt.current && attempt.current.action !== action)} onClick={() => void act("complete", action)}>{attempt.current?.action === action ? `Retry ${action}` : action}</StudioButton>) : null}
     </div>}
     {identity.canManage && !terminal && !pending ? <fieldset disabled={busy || stale || Boolean(attempt.current)}><legend>Reassign task</legend>
-      <label>Assign to <select value={targetKind} onChange={event => setTargetKind(event.target.value)}><option value="user">User</option><option value="group">Group</option></select></label>
-      <label>{targetKind === "user" ? "User ID" : "Group ID"}<input value={target} onChange={event => setTarget(event.target.value)} /></label>
+      <StudioField label="Assign to"><select value={targetKind} onChange={event => setTargetKind(event.target.value)}><option value="user">User</option><option value="group">Group</option></select></StudioField>
+      <StudioField label={<>{targetKind === "user" ? "User ID" : "Group ID"}</>}><input value={target} onChange={event => setTarget(event.target.value)} /></StudioField>
       <StudioButton disabled={!target.trim()} onClick={() => void act("reassign")}>Reassign</StudioButton></fieldset> : null}
     <details><summary>History</summary><ol>{task.history.map((entry, index) => <li key={`${entry.at}-${index}`}>{entry.operation}{entry.action ? ` · ${entry.action}` : ""} · {taskPerson(identity, entry.actorId, entry.actorName)} · <time dateTime={entry.at}>{new Date(entry.at).toLocaleString()}</time></li>)}</ol></details>
   </>);

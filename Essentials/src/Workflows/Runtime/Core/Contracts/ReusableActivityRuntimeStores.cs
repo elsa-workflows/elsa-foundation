@@ -144,6 +144,13 @@ public interface IWorkflowExecutableSourceReferenceWriter
         return ValueTask.FromException<WorkflowExecutableSourceReference>(new NotSupportedException("Fenced source-reference publication is unavailable."));
     }
 
+    /// <summary>Protected logical-slot publication stamps its actual physical scope independently from its source tenant.</summary>
+    /// <remarks>Requires the same exact material/root closure fencing as SaveWithRootWriteLeasesAsync. Generic source saves cannot assert this marker.</remarks>
+    ValueTask<WorkflowExecutableSourceReference> SaveScopedPublicationAsync(WorkflowExecutableSourceReference reference,
+        WorkflowExecutableIdentity root, IReadOnlyList<WorkflowExecutableRootWriteLease> leases, CancellationToken cancellationToken = default) =>
+        cancellationToken.IsCancellationRequested ? ValueTask.FromCanceled<WorkflowExecutableSourceReference>(cancellationToken) :
+            ValueTask.FromException<WorkflowExecutableSourceReference>(new NotSupportedException("Protected scoped logical publication is unavailable."));
+
     ValueTask<bool> RetireAsync(string sourceReferenceId, DateTimeOffset deletedAt, string? reason = null, CancellationToken cancellationToken = default);
     /// <summary>
     /// Atomically retires a live reference only when <paramref name="expectedLiveReference"/> is still the stored

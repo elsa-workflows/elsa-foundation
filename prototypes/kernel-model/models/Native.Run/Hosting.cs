@@ -6,13 +6,14 @@ namespace Kernel.Native.Run;
 /// <summary>One node's owner of one partition, with the native model; its live output goes over the network's transport.</summary>
 public sealed class Owner
 {
-    public Owner(string node, int partition, IKernelStore store, WorkflowRegistry registry, Network network, Func<long>? monotonic = null, NativeOptions? native = null)
+    public Owner(string node, int partition, IKernelStore store, WorkflowRegistry registry, Network network, Func<long>? monotonic = null, NativeOptions? native = null, TimeSpan? lease = null)
     {
         Requests = network.Node(node);
         Model = new NativeModel(registry, new NativeOptions { Flaws = native?.Flaws ?? NativeFlaw.None, Gate = native?.Gate, OnExternal = native?.OnExternal });
         Worker = new Worker(node, partition, store, new WorkflowInstance([Model, new Kernel.Sim.Sequence()]), new WorkerOptions
         {
             Monotonic = monotonic ?? (static () => Environment.TickCount64),
+            Lease = lease ?? Defaults.Lease,
             Transport = network.From(node),
         });
         Host = new DurableHost([Worker]);
