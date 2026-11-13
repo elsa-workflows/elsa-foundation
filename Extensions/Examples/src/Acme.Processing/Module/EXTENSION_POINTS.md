@@ -13,7 +13,7 @@ Each contract below is a scoped **replacement** in **Core**. Register one host i
 | [`IProcessingRecordWriter.AddAsync(ProcessingRecord, CancellationToken)`](../Core/ProcessingContracts.cs) → `ValueTask` | `InMemoryProcessingStore`, `Acme.Processing`; [implementation](ProcessingRecords.cs) | Install matching command storage while preserving tenant identity and immutable record ownership. `ProcessingRecords.CreateAsync` consumes it after current authorization and input validation. |
 | [`IProcessingRecords.CreateAsync(ProcessingCreate, CancellationToken)` / `FindAsync(string, CancellationToken)` / `ReadAsync(int, string?, CancellationToken)`](../Core/ProcessingContracts.cs) → `ValueTask<string>` / `ValueTask<ProcessingRecordView?>` / `ValueTask<ProcessingRecordViewPage>` | `ProcessingRecords`, `Acme.Processing`; [implementation](ProcessingRecords.cs) | Replace the native record facade while preserving current tenant, record and category authority. The ordinary HTTP create/list/detail endpoints consume it. |
 
-The default reader/writer share singleton `ProcessingMemoryState`; this application-wide reference store is ephemeral. Replacement integrations supply their own storage lifecycle. Logic services and request authority remain scoped.
+The default reader/writer share singleton `ProcessingMemoryState`; this application-wide reference store is ephemeral. Replacement integrations supply their own storage lifecycle. Logic services and request authority remain scoped. Default drill proofs and cursors use process-local keys: refresh after restart or an instance change. A production integration needs shared integrity keys alongside persistent storage.
 
 ## Implementable contributor interfaces
 
