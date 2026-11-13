@@ -89,6 +89,12 @@ public sealed record ActivityDataSelectionAnalysis(
     /// publication can pin the selected member's contract. A read the analysis could not type is listed as not known.
     /// </summary>
     public ImmutableArray<ActivityDataMemberReadFacts> MemberReads { get; init; } = [];
+
+    /// <summary>
+    /// Whether the analysis that produced this result offers and admits member reads. A client offers member
+    /// selection only when it is true; an answer that does not carry it reads as false.
+    /// </summary>
+    public bool MemberReadsEnabled { get; init; }
 }
 
 /// <summary>

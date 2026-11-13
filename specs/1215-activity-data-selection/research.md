@@ -725,7 +725,7 @@ What T019 still needs is tests:
 **Where it lives.** The picker stays in the existing chooser: `ActivityDataBrowser` in an `AnchoredPopover` with
 `SkeletonRows` (`SC/ActivityDataChooser.tsx:15,124`), opened from Choose data (`:406`) or the syntax-picker entry
 (`SC/ActivityPropertiesPanel.tsx:608-619,948-951`). It is offered only where `offersActivityData` allows
-(`SC/activityDataSelection.ts:93-100`) and the server returns `memberReads: true`. Without that it behaves exactly as
+(`SC/activityDataSelection.ts:93-100`) and the server returns `memberReadsEnabled: true`. Without that it behaves exactly as
 today.
 
 **Source families.** Today `groupActivityOutputSources` keeps only result sources and says inputs and variables keep
@@ -777,12 +777,12 @@ member type and the target type next to each other, and publish reports the mism
 ### 5. Slice plan
 
 Each slice is about 500 lines or less, has its own tests and is merged on its own. Member authoring stays hidden until
-`memberReads` is true, so a partial merge is inert.
+`memberReadsEnabled` is true, so a partial merge is inert.
 
 | Slice | Content | Proof |
 |---|---|---|
 | **S0 server (first)** | The `MemberReads` fact (A1 or A2). The off-state refusal of a focused member path. The workflow endpoint returns the analysis on `invalid`. Starts after #4213 merges. | Analyzer rows (off/on, each family, refused focused path); endpoint tests for both endpoints; contract docs. |
-| **S1 client and wire (T018, T019)** | `readSource` / `readTarget` keep the full shape tree, `scopeId`, target type and findings. Add `requestFocusedSource(source, memberPath, limits)` for both endpoints and read `memberReads`. Canonical member wire rows. No UI. | `api/__tests__` reader rows (truncated and unknown trees, defensive drops); wire save → Code Apply → reopen rows for four kinds plus a future kind. |
+| **S1 client and wire (T018, T019)** | `readSource` / `readTarget` keep the full shape tree, `scopeId`, target type and findings. Add `requestFocusedSource(source, memberPath, limits)` for both endpoints and read `memberReadsEnabled`. Canonical member wire rows. No UI. | `api/__tests__` reader rows (truncated and unknown trees, defensive drops); wire save → Code Apply → reopen rows for four kinds plus a future kind. |
 | **S2 picker model (T022 model)** | Pure functions: family grouping with shadowing, path model (exact segments, bounds, literal entry), descriptors and provenance text for member kinds, reason text. | Unit rows only. |
 | **S3 picker UI (T020–T022, T023)** | Nested browsing in `ActivityDataBrowser`; focused requests with cancel, stale and revoked handling; the defensive kind check; the `chooseData` descriptor fix; the member reference editor; workflow editor only. | Behaviour tests beside `activityInputOptionsUi.test.tsx` and `workflowInputPersistence.test.ts`: one-edit history, literal escaping, loading/empty/error/Retry, keyboard, no hidden save, protected values kept. |
 | **S4 backend e2e (T024)** | A restart-style script in `e2e-tests/` on the owned-server lifecycle (`e2e-tests/README.md:72-112`), with `MemberReads` on. For each family: catalog → save → publish → execute; Known versus deferred; a type-fit refusal with no write; consumer input and producer completion evidence. Needs only S0 and can run beside S2–S3. | The script and its run receipt. |
@@ -793,18 +793,22 @@ decides S1's reader and the Studio gate, and it is the only server change.
 
 ### 6. Risks and owner decisions
 
-Decisions:
+Decided (13 Nov):
 
-- **A. Advertisement form.** A1 (analysis fact, recommended) or A2 (separate capability, new project reference).
-- **B. Workflow endpoint returns findings on `invalid`.** Recommended yes. This is an observable change inside contract
-  v1.
-- **C. Design-time type fit.** Either (i) add a known-incompatible fact for Known result members in the focused
-  query, which needs a conversion-compatibility check available to the analyzer (today it sits in Publishing); or
-  (ii) defer it, show both types, and let publish refuse. Recommended (ii) for this leaf, with (i) as a follow-up.
-- **D. Case of CLR-seeded names (#4178).** Ship with the exact-name hint now, or wait for normalisation. Recommended:
-  ship with the hint.
-- **E. How the acceptance and e2e hosts turn the setting on.** Recommended: a per-run shell override; the Workbench
-  default in `Essentials/apps/Elsa.Workbench/shells.json:200` stays off.
+- **A. Advertisement form: A1.** An init bool on `ActivityDataSelectionAnalysis`, set by the analyzer from its
+  options. It is named `MemberReadsEnabled` (wire `memberReadsEnabled`), because the analysis already has a
+  `MemberReads` list of admitted reads.
+- **B. The workflow endpoint returns findings on `invalid`**, after the same rechecks as a supported answer, as the
+  activity-definition endpoint already does.
+- **C. Design-time type fit is deferred** to #4311. The picker shows both types and publication refuses a mismatch.
+- **D. Ship with the exact-name hint**; #4178 stays open.
+- **E. A per-run override turns `MemberReads` on** for the e2e and acceptance hosts; the Workbench default in
+  `Essentials/apps/Elsa.Workbench/shells.json:200` stays off.
+
+As delivered in S0, the off-state refusal is a finding with no source, the form every refused focused source
+already takes (the stored member read is refused the same way). A member path on a focused source that has no
+member read (a scoped result read, a legacy dotted request read) is `ActivityData/InvalidSource` in either setting,
+because the same trap applied there with member reads on.
 
 Risks:
 
