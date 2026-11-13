@@ -62,7 +62,8 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
             Volatile.Write(ref _due[scope], 0);
             Signal();
         });
-        _loop = OnNode(LoopAsync);
+        lock (_halting)
+            if (_halted is null) _loop = OnNode(LoopAsync);     // a stop or kill that came first leaves the node unstarted
     }
 
     /// <summary>
@@ -100,7 +101,11 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
         _gone = true;
         _exit.Cancel();
         if (_loop is not null) await _loop;
-        if (!_kill.IsCancellationRequested) await OnNode(() => _runtime.StopAsync(_kill.Token).AsTask());
+        if (_kill.IsCancellationRequested) return;
+        // A kill, or a stop that may not wait any longer, stops waiting for a release under way as well: what is not
+        // given up runs out by its lease, as after a crash.
+        try { await OnNode(() => _runtime.StopAsync(_kill.Token).AsTask()).WaitAsync(_kill.Token); }
+        catch (OperationCanceledException) when (_kill.IsCancellationRequested) { }
     }
 
     /// <summary>Run on the node's scheduler, one task at a time with the loop and what it started.</summary>
