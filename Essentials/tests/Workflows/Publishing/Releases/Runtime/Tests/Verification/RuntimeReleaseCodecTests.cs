@@ -13,6 +13,22 @@ public sealed class RuntimeReleaseCodecTests
 {
     private readonly ReleaseRuntimeArtifactCodec _codec = new();
 
+    [Theory]
+    [InlineData(70, 80)]
+    [InlineData(110, 128)]
+    [InlineData(170, 256)]
+    public void Opaque_json_above_serializer_default_round_trips_with_the_selected_codec_depth(int depth, int maximum)
+    {
+        var json = string.Concat(Enumerable.Repeat("{\"nested\":", depth)) + "1" + new string('}', depth);
+        using var document = JsonDocument.Parse(json, new JsonDocumentOptions { MaxDepth = maximum });
+        var activity = RuntimeReleaseFixture.ActivityVersion(RuntimeReleaseFixture.Template(), providerPayload: document.RootElement);
+        var limits = new Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleLimits { MaxJsonDepth = maximum };
+        var encoded = _codec.EncodeActivityVersion(activity, limits);
+        Assert.Equal(json, _codec.DecodeActivityVersion(encoded.GetPayloadBytes(), limits).ProviderPayload.GetRawText());
+        Assert.Throws<ReleaseRuntimeArtifactException>(() => _codec.EncodeActivityVersion(activity,
+            new() { MaxJsonDepth = 64 }));
+    }
+
     [Fact]
     public void New_wire_envelope_preserves_original_pin_opaque_json_aliases_and_copied_bytes()
     {

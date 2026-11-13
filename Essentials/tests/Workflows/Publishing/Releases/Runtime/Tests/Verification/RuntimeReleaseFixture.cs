@@ -63,9 +63,9 @@ internal sealed class RuntimeReleaseFixture : IReleaseContentReader
     public static ReleaseWorkflowSelection Selection(WorkflowExecutable workflow) => new(Scope, "selected-definition", "selected-version", "2.0.0",
         "{\"rootActivity\":{\"opaque\":true}}", "WorkflowDefinitionVersion", "original-source-version", "1.0.0", "original-source-reference",
         WorkflowExecutableReferenceScope.Published, workflow.Identity);
-    public static ReleaseActivityVersion ActivityVersion(ExecutableActivityTemplate template, string versionId = "activity-version") => new(Scope,
+    public static ReleaseActivityVersion ActivityVersion(ExecutableActivityTemplate template, string versionId = "activity-version", JsonElement? providerPayload = null) => new(Scope,
         "activity-definition", versionId, "1.0.0", "fixture.Activity", "ReusableTemplateBoundary", Json("{\"inputs\":[],\"outputs\":[]}"),
-        "fixture-provider", "1", Json("{\"z\":1,\"a\":2}"), template.ProviderFingerprint, template.TemplateId, template.TemplateHash,
+        "fixture-provider", "1", providerPayload ?? Json("{\"z\":1,\"a\":2}"), template.ProviderFingerprint, template.TemplateId, template.TemplateHash,
         "original-activity-source", "DesignActivity", "original-activity-source-id");
     public static JsonElement Json(string value) { using var document = JsonDocument.Parse(value); return document.RootElement.Clone(); }
 

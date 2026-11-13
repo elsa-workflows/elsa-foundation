@@ -36,11 +36,14 @@ public static class ActivityTemplateHasher
     }
 
     public static string ComputeCanonicalValueHash(object value)
+        => ComputeCanonicalValueHash(JsonSerializer.SerializeToElement(value));
+
+    /// <summary>Hashes an already parsed JSON value without applying a second serializer depth limit.</summary>
+    public static string ComputeCanonicalValueHash(JsonElement value)
     {
-        var element = JsonSerializer.SerializeToElement(value);
         using var stream = new MemoryStream();
         using (var writer = new Utf8JsonWriter(stream))
-            WriteCanonical(writer, element);
+            WriteCanonical(writer, value);
         return $"sha256:{Convert.ToHexStringLower(SHA256.HashData(stream.ToArray()))}";
     }
 
