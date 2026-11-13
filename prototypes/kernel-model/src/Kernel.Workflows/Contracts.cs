@@ -80,6 +80,8 @@ public interface ITurn
     /// that has no parent (merge, friction F-N5): it reports to nobody, and since its id is minted here it needs no read.
     /// </summary>
     InstanceRef Start(StartSpec spec, Placement placement = Placement.WithParent, bool detached = false);
+    /// <summary>The exact address retained by this parent's child registry; never resolves a replacement's current row.</summary>
+    CreationAddress ChildAddress(InstanceRef child);
     void StartJob(string key, object? arguments = null);
     void CancelJob(string key);
     void Hold(Message message);                 // not consumed: handed to the next turn again, in its place in the order

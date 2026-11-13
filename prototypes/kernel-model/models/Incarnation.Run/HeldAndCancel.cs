@@ -10,7 +10,7 @@ sealed partial class CreationWitness
     {
         HeldReceiver.Accepts = 0;
         NativeWorkflows.Registry.Add(Wf.Workflow("held-child", Wf.Event("release", "release")))
-            .Add(Wf.Workflow("creation-probe", Wf.Node<HeldReceiver>("receiver").With(Wf.Dispatch("call", "held-child", true))));
+            .Add(Wf.Workflow("creation-probe", Wf.Node<HeldReceiver>("receiver").With(Wf.Dispatch("call", "held-child", true, mode: mode))));
         Apply(new("take", Actor.Id)); Send(Kinds.Start, 1, start: Spec(1)); Drain();
         var child = _world.Store.Messages.Values.Single(m => m.Message.Start?.Parent == _target.Id).Message.Target; Drain(child);
         Send(CompositeSignal.Kind, 1, new CompositeSignal(Frame, "deferred")); Drain();
@@ -33,7 +33,7 @@ sealed partial class CreationWitness
     {
         NativeWorkflows.Registry.Add(Wf.Workflow("cancel-child", Wf.Event("waiting", "waiting")))
             .Add(Wf.Workflow("creation-probe", Wf.Node<FirstWait>("receiver")
-                .With(Wf.Dispatch("call", "cancel-child", true), Wf.Event("winner", "winner"))));
+                .With(Wf.Dispatch("call", "cancel-child", true, mode: mode), Wf.Event("winner", "winner"))));
         Apply(new("take", Actor.Id)); Send(Kinds.Start, 1, start: Spec(1)); Drain();
         var child = _world.Store.Messages.Values.Single(m => m.Message.Start?.Parent == _target.Id).Message.Target; Drain(child);
         Send(NativeKinds.Resume, 1, new ResumeStimulus("winner")); Drain();

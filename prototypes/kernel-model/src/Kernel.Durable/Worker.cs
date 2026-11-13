@@ -474,7 +474,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
             if (item.Message.Start?.Creation is not null || CreationProtocol.TargetError(slot.Row, item.Message) is not null ||
                 slot.Row?.Creation > 0 && (item.Message.Start is not null || _type.SingleMessage(item.Message)))
             {
-                if (due.Count == 0 && (item.Message.Due is not { } dueAt || dueAt <= now)) due.Add(item);
+                if (due.TrueForAll(i => i.Held) && (item.Message.Due is not { } dueAt || dueAt <= now)) due = [item];
                 break;
             }
             if (control)
@@ -835,6 +835,10 @@ public sealed class Worker : IScopeActivation, ITurnServices
         if (unit.Slot is not { } slot) return;
         slot.State = unit.Row is { Status: InstanceStatus.Running } ? unit.State : null;
         slot.Busy = false;
+        // Successful standalone completion is a new stimulus for earlier deferred input. Revisit only after its
+        // checkpoint lands; identity refusals have no row and must not activate that authored input.
+        if (unit.Row is not null && unit.Consumed is [var completion] && _type.SingleMessage(completion.Message))
+            foreach (var held in slot.Inbox.Where(i => i.Held && i.Seq < completion.Seq)) held.Held = false;
         if (!Has(Flaw.EmitBeforeCommit)) Release(unit);
         for (var i = 0; i < unit.Replied.Count; i++)
         {

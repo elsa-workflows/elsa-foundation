@@ -107,7 +107,7 @@ public sealed class Work
     [JsonIgnore] internal bool Gone;       // only under NativeFlaw.InFlightInMemory
 }
 
-public sealed record WaitEntry(string Frame, string Kind, string Key);
+public sealed record WaitEntry(string Frame, string Kind, string Key, long Creation = 0);
 
 // ---- the model -----------------------------------------------------------------------------------------------------
 
@@ -386,7 +386,7 @@ internal sealed partial class Burst(NativeModel model, ITurn turn, CancellationT
                 break;
             case ChildTrigger c:
                 var child = turn.Start(NativeModel.Spec(c.Workflow, c.Mode, c.Input as JsonObject));
-                _s.Waits[id] = new WaitEntry(frame.Id, "child", child.Id);
+                _s.Waits[id] = new WaitEntry(frame.Id, "child", child.Id, turn.ChildAddress(child).Creation);
                 turn.Record($"s:{frame.Id}:{child.Id}");
                 break;
         }
@@ -398,7 +398,9 @@ internal sealed partial class Burst(NativeModel model, ITurn turn, CancellationT
         {
             case "event": turn.Unsubscribe(wait.Key, id); break;
             case "job" when cancel: turn.CancelJob(wait.Key); break;
-            case "child" when cancel: turn.Send(new InstanceRef(wait.Key), NativeKinds.Cancel); break;
+            case "child" when cancel:
+                turn.Send(new InstanceRef(wait.Key), NativeKinds.Cancel, options: new SendOptions(TargetCreation: wait.Creation > 0 ? wait.Creation : null));
+                break;
             case "timer" when cancel && wait.Key.Length > 0: turn.Recall(wait.Key); break;      // its row goes with this commit
         }
     }

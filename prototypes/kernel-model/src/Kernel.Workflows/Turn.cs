@@ -66,6 +66,7 @@ internal sealed class Turn : ITurn
     }
 
     public void StartJob(string key, object? arguments = null) => _durable.StartJob(key, arguments);
+    public CreationAddress ChildAddress(InstanceRef child) => _children.Single(c => c.Id == child.Id);
     public void CancelJob(string key) => _durable.CancelJob(key);
     public void Hold(Message message) => _durable.Hold(message);
     public void Subscribe(string key, string wait, bool keep = false) => _durable.Subscribe(key, wait, keep);
