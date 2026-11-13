@@ -1245,3 +1245,51 @@ The human-work model and public contracts live in `Runtime.Core/UserTasks`. The 
 
 
 User Task inbox cursors use `UserTaskOptions.CursorEncryptionKey` (Base64, 32 bytes shared by API replicas), falling back to a domain-separated configured `RuntimeRecoveryContinuationOptions.SigningKey`. Only development composition may use ephemeral keys. Key rotation expires existing pages; task state and accepted responses are independent of the cursor key.
+
+### `IStandaloneTriggerTypeSource` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Metadata contribution, collected by one Sequential startup fan-in.
+- **Signature:** `IEnumerable<TriggerTypeDescriptor> GetTypes()` returns type keys, supported format, fields and source metadata; it grants no invocation authority.
+- **Registration:** register implementations as `IStandaloneTriggerTypeSource` with normal DI, add the matching scoped validator, then call `TriggerAuthoringRegistration.AddServices(services)`.
+- **Aggregation/override:** `CollectTriggerTypes` consumes every source and detaches JSON defaults and nested collections before advancing its iterator. `TriggerTypeCatalog` freezes a second owned snapshot by exact ordinal type key. Duplicate owners refuse initialization; replace/remove a source explicitly rather than relying on registration order.
+- **Default implementation:** no source type is installed by this authoring slice.
+
+### `ITriggerConfigurationValidator` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Scoped contribution, one exact owner per installed type key.
+- **Signature:** `TypeKey`; `ValidateAsync(schemaVersion, configuration, cancellationToken)` returns safe `TriggerFinding` records without source execution.
+- **Registration:** `services.AddScoped<ITriggerConfigurationValidator, MyValidator>()` alongside the source descriptor. Initialization refuses missing/duplicate owners and validators without a descriptor.
+- **Aggregation/override:** `ValidateTriggerConfiguration` invokes the selected type's one owner. Replace that owner explicitly; it must reject unknown formats and report findings without echoing secret values.
+- **Default implementation:** none. A metadata source alone cannot pass initialization without its validator.
+
+### `IStandaloneTriggerTypeCatalog` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Replacement authoring-read contract, independently composed from runtime sources.
+- **Signature:** `List()` and `Find(typeKey)` expose the frozen installed descriptor set. Reading the default catalog before initialization fails visibly.
+- **Registration/default:** `TriggerAuthoringRegistration.AddServices` uses `TryAddSingleton` for the internal `TriggerTypeCatalog` and its contract alias. Normal DI replacement supplies a custom catalog and owns its read/initialization policy; adding a competing default is not an ordering mechanism.
+- **Usage:** consumer metadata remains advisory. Neither catalog access nor a custom catalog installs persistence, source intake or target-start authority.
+
+### `StandaloneTriggerTypesInitializing` and `StandaloneTriggerConfigurationValidating` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Sequential authoring fan-in events through the normal `IInlineEventPublisher`.
+- **Signature:** initialization carries a `Types` collection; configuration validation carries `TypeKey`, `SchemaVersion`, a cloned JSON `Configuration` and a `Findings` collection.
+- **Publication sites:** `InitializeTriggerTypes.ExecuteAsync` publishes initialization. Configuration validation has no production publisher in this precursor; its focused composition test publishes it directly. The later management slice will own its normal publication site.
+- **Handlers:** `CollectTriggerTypes` is the registered initialization aggregator; `ValidateTriggerConfiguration` is the registered scoped validation aggregator. Both are registered by `TriggerAuthoringRegistration.AddServices` with `TryAddEnumerable`.
+- **Contribution/override:** modules contribute through the source/validator contracts above; do not duplicate the aggregating handlers. Event metadata and findings do not authorize an execution or mutate a trigger resource.
+
+### `InitializeTriggerTypes` *(Runtime startup task)*
+- **Kind:** Scoped `IStartupTask`, registered once by `TriggerAuthoringRegistration.AddServices`.
+- **Signature:** `ExecuteAsync(cancellationToken)` publishes the initialization event, verifies exact source/validator ownership, then freezes the default catalog.
+- **Ownership/override:** Runtime owns this authoring-only initialization. A module adds descriptors/validators rather than replacing the task. Repeated `AddServices` calls do not duplicate it or its handlers; no delivery pump or workflow runtime is installed.
+
+### `IStandaloneTriggerTargetDiscovery` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Authorized authoring query replacement, independent of runtime preparation/dispatch.
+- **Signature:** `ListAsync(TriggerScope, TriggerTargetQuery, ...)` and `DescribeAsync(TriggerScope, definitionId, slotName, ...)` return detached logical target/input descriptions.
+- **Registration/default/override:** no provider is installed by this slice. Later target composition supplies one scoped implementation using normal DI replacement. An absent provider remains unavailable; metadata cannot become saved start authority.
+
+### `IStandaloneTriggerStore` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Scoped provider replacement for revisioned resources, canonical associations and mutation receipts.
+- **Signature:** scoped find/list resource and association reads, mutation-receipt lookup, and `WriteAsync(TriggerScope, TriggerStoreWrite, ...)`. A resource-owned grant binds its exact resource/association/target tuple; actor identity is audit attribution.
+- **Registration/default/override:** no provider is installed by this contract slice. A later coherent provider must own atomic revision/idempotency comparison and physical scope/tenant checks; it is not selected through descriptor discovery or registration order.
+
+### `ITriggerInputMapper` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Scoped replacement using the ordinary declared workflow-input validator.
+- **Signature:** `ValidateMappings(contract, mappings)` performs preflight without evaluation; `MapAsync(contract, mappings, detachedSource, ...)` returns validated normalized values/findings.
+- **Implementation/registration:** Runtime's internal `TriggerInputMapper` supports literal/source selectors and installed binding-pure expressions. This authoring helper does not register a mapper automatically; later runtime composition selects it, or a host replaces the scoped contract through normal DI.
+- **Usage/override:** preserve missing versus explicit null, exact numeric values, declared destinations and safe failures. Unknown languages/profiles, unavailable evaluators and incompatible values refuse before admission. Only detached declared parameters reach expressions, and evaluator exception text is not disclosed. Mapping installs no trigger or delivery pump.
