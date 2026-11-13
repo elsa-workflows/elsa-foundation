@@ -15,6 +15,7 @@ public sealed partial class EfRuntimeCheckpointCommitStore
             throw new InvalidDataException("The actual immutable accepted ingress source is unavailable.");
         var source = EfRuntimePostCommitOutboxStore.ReadChecked(row, scope.Value, sourceOutboxItemId);
         // Join the source row's CAS with this transaction. A concurrent cleanup or progress write must retry.
+        row.SchemaVersion = RuntimeSchemaWriteVersion.For(context, RuntimePostCommitOutboxEfModule.SchemaFamily, RuntimePostCommitOutboxEfModule.SchemaVersion, row.SchemaVersion);
         row.Revision = checked(row.Revision + 1);
         return source;
     }
@@ -32,10 +33,12 @@ public sealed partial class EfRuntimeCheckpointCommitStore
         CancellationToken cancellationToken)
     {
         if (commit.StateChanges.WorkflowExecution is not { Operation: RuntimeStateChangeOperation.Upsert } change) return;
+        NativeIngressCheckpointAuthority.ValidateOriginShape(change.State);
         var origin = change.State.IngressOrigin;
+        var saved = change.State.StimulusDeliveryOrigin;
         var workerOrigin = change.State.ModelWorkOrigin?.IngressOrigin;
-        if (origin is null && workerOrigin is null) return;
-        if ((origin?.Scope ?? workerOrigin!.Scope).Value != scope) throw new InvalidDataException("The ingress workflow changed physical scope.");
+        if (origin is null && workerOrigin is null && saved is null) return;
+        if ((saved?.Scope ?? origin?.Scope ?? workerOrigin!.Scope).Value != scope) throw new InvalidDataException("The ingress workflow changed physical scope.");
         var id = EfWorkflowExecutionStateStore.CreateId(scope, commit.WorkflowExecutionId);
         var row = await context.WorkflowExecutionStates.SingleOrDefaultAsync(item => item.Id == id, cancellationToken);
         if (row is not null)
@@ -47,6 +50,14 @@ public sealed partial class EfRuntimeCheckpointCommitStore
         }
         if (commit.Checkpoint.Name != RuntimeCheckpointNames.WorkflowStarted)
             throw new InvalidDataException("Ingress workflow authority requires its exact initial physical checkpoint.");
+        if (saved is not null)
+        {
+            var retained = await ReadIngressCheckpointSourceAsync(saved.Scope, saved.SourceOutboxItemId, cancellationToken);
+            var savedMaterial = await new EfWorkflowExecutableStore(context, accessContextAccessor).FindAsync(change.State.PinnedExecutable.ArtifactId, cancellationToken)
+                ?? throw new NotSupportedException("Saved stimulus admission needs its actual retained native material.");
+            SavedStimulusCheckpointAuthority.ValidateInitial(commit, retained, saved.Scope, savedMaterial);
+            return;
+        }
         if (origin is null)
         {
             if (commit.ExpectedModelExecution?.IngressOrigin?.IsEquivalentTo(workerOrigin) != true)

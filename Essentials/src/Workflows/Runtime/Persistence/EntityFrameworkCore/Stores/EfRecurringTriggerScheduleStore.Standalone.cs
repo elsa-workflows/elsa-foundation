@@ -8,7 +8,14 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 
 public sealed partial class EfRecurringTriggerScheduleStore
 {
-    public async ValueTask<bool> ExhaustClaimAsync(RecurringTriggerOccurrenceClaim claim, CancellationToken cancellationToken = default)
+    /// <exception cref="TriggerOperationException">A provider failure or corrupt schedule prevents settlement; the original cause and scope are retained.</exception>
+    public ValueTask<bool> ExhaustClaimAsync(RecurringTriggerOccurrenceClaim claim, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(claim);
+        return EfTriggerBoundary.RunAsync(() => ExhaustClaimCoreAsync(claim, cancellationToken), RequireScope(), claim.Schedule.ScheduleId);
+    }
+
+    private async ValueTask<bool> ExhaustClaimCoreAsync(RecurringTriggerOccurrenceClaim claim, CancellationToken cancellationToken)
     {
         if (claim.Schedule.Resource is null || await LoadHeldAsync(claim, cancellationToken) is not { } held) return false;
         context.RecurringTriggerSchedules.Attach(held.Row);

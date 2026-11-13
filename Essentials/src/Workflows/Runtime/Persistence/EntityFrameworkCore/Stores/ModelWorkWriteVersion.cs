@@ -11,7 +11,7 @@ internal static class ModelWorkWriteVersion
 {
     public static string For(RuntimeDbContext context, WorkflowExecutionState state, string? storedVersion = null)
     {
-        var minimum = state.IngressOrigin is not null || state.ModelWorkOrigin?.IngressOrigin is not null
+        var minimum = state.StimulusDeliveryOrigin is not null || state.IngressOrigin is not null || state.ModelWorkOrigin?.IngressOrigin is not null
             ? RuntimeWorkflowExecutionEfModule.IngressSchemaVersion
             : state.ModelWorkOrigin is null ? RuntimeWorkflowExecutionEfModule.SchemaVersion : RuntimeWorkflowExecutionEfModule.ModelWorkSchemaVersion;
         if (storedVersion is not null && Version.Parse(storedVersion) > Version.Parse(minimum)) minimum = storedVersion;

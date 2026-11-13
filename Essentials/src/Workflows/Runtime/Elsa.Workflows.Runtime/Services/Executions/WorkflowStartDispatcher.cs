@@ -179,7 +179,7 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
         // A keyed start that already ran is answered before anything else is resolved: the existing execution is the
         // answer even if the workflow has since been unpublished, so a redelivery converges instead of failing (#2195).
         var keyed = KeyedWorkflowStartIdentity.TryGet(request);
-        if (keyed is not null && await FindKeyedStartAsync(request, keyed, cancellationToken, saved) is { } duplicate)
+        if (keyed is not null && await FindKeyedStartAsync(request, keyed, cancellationToken, saved?.Recipient) is { } duplicate)
         {
             if (saved is not null) _ = await ReadStimulusStartAsync(request, requiredScope, cancellationToken);
             return duplicate;
@@ -189,7 +189,7 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
             ?? throw new WorkflowExecutableNotFoundException(request.ArtifactId);
 
         var resolved = saved is not null
-            ? ResolveStimulusExecutable(saved, executable)
+            ? ResolveStimulusExecutable(saved.Recipient, executable)
             : request.StartAuthority?.Kind == WorkflowExecutableStartAuthorityKind.ModelWork
             ? await ResolveModelWorkAsync(request, executable, cancellationToken)
             : request.StartAuthority?.Kind == WorkflowExecutableStartAuthorityKind.RetainedDependency
@@ -224,6 +224,7 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
             partition,
             requiredScope,
             _persistenceModeResolver?.Resolve(executable),
+            saved?.Origin,
             dispatchOptions,
             cancellationToken);
     }
@@ -271,7 +272,7 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
         return DuplicateStartResult(existing, keyed.EnvelopeId, existing.PinnedExecutable, existing.PinnedSource);
     }
 
-    private async ValueTask<StimulusStartRecipient> ReadStimulusStartAsync(WorkflowExecutionStartDispatchRequest request,
+    private async ValueTask<SavedStimulusStart> ReadStimulusStartAsync(WorkflowExecutionStartDispatchRequest request,
         WorkflowExecutableReferenceScope requiredScope, CancellationToken cancellationToken)
     {
         if (_stimulusDeliveryStore is null)
@@ -287,7 +288,11 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
         if (!_stimulusRequests.Owns(source.Intent.Kind))
             throw AuthorityRejected("stimulus-delivery-source-input-unavailable", "Saved start admission requires the canonical intent's owning decoder.");
         var canonical = _stimulusRequests.Read(source);
-        StimulusDeliveryServices.ValidateWinner(source, canonical);
+        var publisher = _workflowExecutionStateStore is null ? null :
+            await _workflowExecutionStateStore.FindAsync(source.Intent.WorkflowExecutionId, cancellationToken);
+        if (publisher is null)
+            throw AuthorityRejected("stimulus-delivery-publisher-unavailable", "The actual saved source publisher is unavailable.");
+        StimulusDeliveryServices.ValidateWinner(source, canonical, publisher);
         if (request.RequestedBy != canonical.RequestedBy || !SameStimulusInput(request.StimulusInput, canonical.Input))
             throw AuthorityRejected("stimulus-delivery-input-mismatch", "The saved start differs from its canonical persisted stimulus input or source identity.");
         var recipient = snapshot.Starts.SingleOrDefault(entry => entry.Binding.TriggerBindingId == authority.TriggerBindingId);
@@ -307,8 +312,12 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
             request.Variables.Count != 0 || request.Inputs.Count != 0 ||
             !WorkflowExecutionAuthoritySnapshot.Matches(request.Authority, request.RequestedBy, request.RequestedBy))
             throw AuthorityRejected("stimulus-delivery-context-mismatch", "The saved start cannot override its ordinary root scope or authority.");
-        return recipient;
+        var origin = NativeIngressCheckpointAuthority.HasBoundScope(publisher, source.Scope.Value)
+            ? new RuntimeStimulusDeliveryOrigin(1, source.Scope, source.SourceOutboxItemId, source.IntentFingerprint, authority.TriggerBindingId) : null;
+        return new(recipient, origin);
     }
+
+    private sealed record SavedStimulusStart(StimulusStartRecipient Recipient, RuntimeStimulusDeliveryOrigin? Origin);
 
     private static bool SameStimulusInput(JsonElement? supplied, JsonElement? canonical) =>
         supplied.HasValue == canonical.HasValue && (!supplied.HasValue ||
@@ -503,6 +512,7 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
         WorkflowExecutionPartition partition,
         WorkflowExecutableReferenceScope requiredScope,
         PersistenceMode? persistenceMode,
+        RuntimeStimulusDeliveryOrigin? savedOrigin,
         WorkflowExecutionCommandDispatchOptions? dispatchOptions,
         CancellationToken cancellationToken)
     {
@@ -527,9 +537,9 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
             startAuthority: request.StartAuthority,
             dispatchNestingDepth: request.DispatchNestingDepth,
             testScope: request.TestScope,
-            triggerMetadata: request.TriggerMetadata));
+            triggerMetadata: request.TriggerMetadata) { StimulusDeliveryOrigin = savedOrigin });
         if (request.StartAuthority?.Kind == WorkflowExecutableStartAuthorityKind.StimulusDelivery)
-            ValidateSavedCommandRoundTrip(request, pinnedIdentity, pinnedSource, partition, payload);
+            ValidateSavedCommandRoundTrip(request, pinnedIdentity, pinnedSource, partition, payload, savedOrigin);
 
         // A retained dispatch and a keyed start both name their command and envelope deterministically, so a repeated
         // delivery enqueues the same start work item and the queue keeps the first.
@@ -578,7 +588,7 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
     }
 
     private static void ValidateSavedCommandRoundTrip(WorkflowExecutionStartDispatchRequest request,
-        WorkflowExecutableIdentity identity, WorkflowExecutableSourceProvenance? source, WorkflowExecutionPartition partition, JsonElement payload)
+        WorkflowExecutableIdentity identity, WorkflowExecutableSourceProvenance? source, WorkflowExecutionPartition partition, JsonElement payload, RuntimeStimulusDeliveryOrigin? savedOrigin)
     {
         // Ordinary command wire is unchanged. Invalid UTF-16 in an internal capture must not silently
         // become a different binding/provenance when System.Text.Json replaces an unpaired surrogate.
@@ -592,7 +602,8 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
             !AuthorityEquals(restored.Authority, request.Authority) || actual is null ||
             actual.SourceOutboxItemId != expected.SourceOutboxItemId || actual.IntentFingerprint != expected.IntentFingerprint ||
             actual.Scope != expected.Scope || actual.OwnerId != expected.OwnerId || actual.FencingToken != expected.FencingToken ||
-            actual.TriggerBindingId != expected.TriggerBindingId)
+            actual.TriggerBindingId != expected.TriggerBindingId ||
+            (savedOrigin is null ? restored.StimulusDeliveryOrigin is not null : !savedOrigin.IsEquivalentTo(restored.StimulusDeliveryOrigin)))
             throw AuthorityRejected("stimulus-delivery-command-unrepresentable", "The ordinary start command cannot preserve the exact saved binding and provenance.");
     }
 

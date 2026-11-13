@@ -337,7 +337,8 @@ public sealed partial class EfRuntimePostCommitOutboxStore : IRuntimePostCommitO
                     StimulusDeliverySnapshot? result = null;
                     await retentionLeases.ExecuteFencedAsync(roots, "stimulus:" + source.SourceOutboxItemId + ":" + Guid.NewGuid().ToString("N"), async (grants, token) =>
                     {
-                        if (subscriptions is null) await retentionSources.ValidateCapturedInScopeAsync(candidate.Starts, scope, token);
+                        if (subscriptions is null && !NativeIngressCheckpointAuthority.HasBoundScope(initial.Publisher, scope.Value))
+                            await retentionSources.ValidateCapturedInScopeAsync(candidate.Starts, scope, token);
                         else await retentionSources.ValidateCapturedInTenantAsync(candidate.Starts, scope, initial.Publisher.TenantId, token);
                         await using var transaction = subscriptions is null ? await context.Database.BeginTransactionAsync(token) :
                             await context.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable, token);

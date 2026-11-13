@@ -484,13 +484,14 @@ public sealed partial class EfRecurringTriggerScheduleStore(
     public ValueTask<bool> ReleaseClaimAsync(RecurringTriggerOccurrenceClaim claim, DateTimeOffset visibleAt, CancellationToken cancellationToken = default) =>
         ReleaseClaimAsync(claim, visibleAt, null, cancellationToken);
 
+    /// <exception cref="Core.StandaloneTriggers.TriggerOperationException">A provider failure or corrupt schedule prevents release; the original cause and scope are retained.</exception>
     public ValueTask<bool> ReleaseClaimWithFailureAsync(RecurringTriggerOccurrenceClaim claim, DateTimeOffset visibleAt,
         RecurringTriggerScheduleFailureReason failureReason, CancellationToken cancellationToken = default)
     {
         if (!Enum.IsDefined(failureReason)) throw new ArgumentOutOfRangeException(nameof(failureReason));
         ArgumentNullException.ThrowIfNull(claim);
         if (claim.Schedule.Resource is null) throw new ArgumentException("An admission failure reason requires a resource-owned schedule.", nameof(claim));
-        return ReleaseClaimAsync(claim, visibleAt, failureReason, cancellationToken);
+        return EfTriggerBoundary.RunAsync(() => ReleaseClaimAsync(claim, visibleAt, failureReason, cancellationToken), RequireScope(), claim.Schedule.ScheduleId);
     }
 
     private async ValueTask<bool> ReleaseClaimAsync(RecurringTriggerOccurrenceClaim claim, DateTimeOffset visibleAt,

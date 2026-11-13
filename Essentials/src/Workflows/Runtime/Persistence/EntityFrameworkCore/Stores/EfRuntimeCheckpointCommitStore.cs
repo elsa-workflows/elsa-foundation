@@ -236,7 +236,7 @@ public sealed partial class EfRuntimeCheckpointCommitStore(
         ValidateThinSlice(commit);
         if (commit.StateChanges.WorkflowExecution is { } workflowExecution)
         {
-            if (workflowExecution.State.IngressOrigin is null && workflowExecution.State.ModelWorkOrigin?.IngressOrigin is null)
+            if (workflowExecution.State.StimulusDeliveryOrigin is null && workflowExecution.State.IngressOrigin is null && workflowExecution.State.ModelWorkOrigin?.IngressOrigin is null)
                 accessContextAccessor.Current.EnsureTenantScope(workflowExecution.State.TenantId);
             if (workflowExecution.State.TestScope is { } testScope)
                 accessContextAccessor.Current.EnsureTenantScope(testScope.TenantId);

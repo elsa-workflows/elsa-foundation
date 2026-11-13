@@ -295,6 +295,7 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
             Authority = priorWorkflowState?.Authority ?? payload.Authority,
             ModelWorkOrigin = priorWorkflowState?.ModelWorkOrigin ?? payload.ModelWorkOrigin,
             IngressOrigin = priorWorkflowState?.IngressOrigin ?? payload.IngressOrigin,
+            StimulusDeliveryOrigin = priorWorkflowState?.StimulusDeliveryOrigin ?? payload.StimulusDeliveryOrigin,
             DispatchNestingDepth = priorWorkflowState?.DispatchNestingDepth ?? payload.DispatchNestingDepth,
             TestScope = priorWorkflowState?.TestScope ?? payload.TestScope,
             RootVariableFrame = priorWorkflowState?.RootVariableFrame ?? CreateRootVariableFrame(workItem.WorkflowExecutionId, payload.SeedVariables, executable)
@@ -396,6 +397,7 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
             Authority = priorWorkflowState?.Authority ?? payload.Authority,
             ModelWorkOrigin = priorWorkflowState?.ModelWorkOrigin ?? payload.ModelWorkOrigin,
             IngressOrigin = priorWorkflowState?.IngressOrigin ?? payload.IngressOrigin,
+            StimulusDeliveryOrigin = priorWorkflowState?.StimulusDeliveryOrigin ?? payload.StimulusDeliveryOrigin,
             DispatchNestingDepth = priorWorkflowState?.DispatchNestingDepth ?? payload.DispatchNestingDepth,
             TestScope = priorWorkflowState?.TestScope ?? payload.TestScope,
             RootVariableFrame = priorWorkflowState?.RootVariableFrame is { } rootFrame

@@ -12,8 +12,11 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
 
 public sealed class EfScheduleObservationBoundaryTests
 {
-    [Fact]
-    public async Task Observation_wraps_a_physical_read_failure_with_its_scope_schedule_and_original_cause()
+    [Theory]
+    [InlineData("observe")]
+    [InlineData("exhaust")]
+    [InlineData("release")]
+    public async Task Schedule_operations_wrap_physical_failure_without_mutating_the_held_claim(string operation)
     {
         var fault = new FailingRead();
         await using var connection = new SqliteConnection("Data Source=:memory:");
@@ -22,13 +25,26 @@ public sealed class EfScheduleObservationBoundaryTests
             .UseSqlite(connection).AddInterceptors(fault).Options);
         await context.Database.EnsureCreatedAsync();
         var schedules = new EfRecurringTriggerScheduleStore(context, new Access(), new AdmissionCodec());
+        var now = DateTimeOffset.UtcNow;
+        var schedule = RecurringTriggerSchedule.ForResource(new("resource", 1, 1, "timer", "Test.Timer", new("physical-shell"), null),
+            RecurringScheduleKind.Interval, "PT5M", now, now);
+        await schedules.SaveAsync(schedule);
+        var claim = Assert.Single(await schedules.ClaimDueAsync(new("owner", now, TimeSpan.FromMinutes(1), 1)));
         fault.Armed = true;
-        var failure = await Assert.ThrowsAsync<TriggerOperationException>(() => schedules.ObserveAsync("schedule").AsTask());
+        async Task Call()
+        {
+            if (operation == "observe") _ = await schedules.ObserveAsync(schedule.ScheduleId);
+            else if (operation == "exhaust") _ = await schedules.ExhaustClaimAsync(claim);
+            else _ = await schedules.ReleaseClaimWithFailureAsync(claim, now.AddMinutes(1), RecurringTriggerScheduleFailureReason.NoEligibleSubscribers);
+        }
+        var failure = await Assert.ThrowsAsync<TriggerOperationException>(Call);
         Assert.Equal("unavailable", failure.Code); Assert.Same(fault.Cause, failure.InnerException);
-        Assert.Equal("physical-shell", failure.Fields!["scope"]); Assert.Equal("schedule", failure.Fields["identity"]);
+        Assert.Equal("physical-shell", failure.Fields!["scope"]); Assert.Equal(schedule.ScheduleId, failure.Fields["identity"]);
         fault.Armed = false;
-        Assert.Null(await schedules.ObserveAsync("schedule"));
-        Assert.Empty(await context.RecurringTriggerSchedules.ToArrayAsync());
+        Assert.True((await schedules.ObserveAsync(schedule.ScheduleId))!.OccurrenceInFlight);
+        Assert.True(await schedules.ReleaseClaimAsync(claim, now.AddMinutes(1)));
+        Assert.False(await schedules.ExhaustClaimAsync(claim));
+        Assert.False(await schedules.ReleaseClaimWithFailureAsync(claim, now.AddMinutes(1), RecurringTriggerScheduleFailureReason.NoEligibleSubscribers));
     }
     private sealed class Access : IPersistenceAccessContextAccessor
     { public PersistenceAccessContext Current => PersistenceAccessContext.Scoped(new("physical-shell")); }

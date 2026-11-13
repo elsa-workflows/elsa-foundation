@@ -80,6 +80,11 @@ public sealed class WorkflowStartSchedulerWorkHandler : IWorkflowSchedulerWorkHa
         cancellationToken.ThrowIfCancellationRequested();
 
         var startPayload = DeserializeStartPayload(workItem);
+        if (startPayload.StimulusDeliveryOrigin is { } saved &&
+            (startPayload.StartAuthority?.StimulusDelivery is not { } accepted || saved.Scope != accepted.Scope ||
+             saved.SourceOutboxItemId != accepted.SourceOutboxItemId || saved.IntentFingerprint != accepted.IntentFingerprint ||
+             saved.TriggerBindingId != accepted.TriggerBindingId))
+            throw new InvalidDataException("The saved scope origin differs from the accepted ordinary start authority.");
         RuntimeCommittedRecipient? ingress = null;
         if (startPayload.StartAuthority?.StandaloneTrigger is { } origin)
         {
@@ -373,7 +378,8 @@ public sealed class WorkflowStartSchedulerWorkHandler : IWorkflowSchedulerWorkHa
             testScope: startPayload.TestScope)
         {
             ModelWorkOrigin = startPayload.StartAuthority?.ModelWork,
-            IngressOrigin = startPayload.StartAuthority?.StandaloneTrigger
+            IngressOrigin = startPayload.StartAuthority?.StandaloneTrigger,
+            StimulusDeliveryOrigin = startPayload.StimulusDeliveryOrigin
         };
 
         if (payload.IngressOrigin is not null)

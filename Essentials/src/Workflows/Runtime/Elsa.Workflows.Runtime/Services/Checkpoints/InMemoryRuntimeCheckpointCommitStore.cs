@@ -742,7 +742,7 @@ public sealed partial class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheck
                 throw new NotSupportedException("Verified cohort installation requires coherent native material, execution, ownership and root-lease stores.");
             var publisher = await _retentionExecutions.FindAsync(source.Intent.WorkflowExecutionId, cancellationToken) ??
                 throw new InvalidDataException("The authoritative publisher is missing.");
-            if (subscriptions is null) access.EnsureTenantScope(publisher.TenantId);
+            if (subscriptions is null && !NativeIngressCheckpointAuthority.HasBoundScope(publisher, scope.Value)) access.EnsureTenantScope(publisher.TenantId);
             lock (_state.SyncRoot)
             {
                 var current = Source();
@@ -757,7 +757,8 @@ public sealed partial class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheck
             StimulusDeliverySnapshot? result = null;
             await _rootWriteLeaseManager.ExecuteFencedAsync(roots, "stimulus:" + source.SourceOutboxItemId + ":" + Guid.NewGuid().ToString("N"), async (grants, token) =>
             {
-                if (subscriptions is null) await _retentionSources.ValidateCapturedInScopeAsync(candidate.Starts, scope, token);
+                if (subscriptions is null && !NativeIngressCheckpointAuthority.HasBoundScope(publisher, scope.Value))
+                    await _retentionSources.ValidateCapturedInScopeAsync(candidate.Starts, scope, token);
                 else await _retentionSources.ValidateCapturedInTenantAsync(candidate.Starts, scope, publisher.TenantId, token);
                 result = await _state.ExecuteWriteGateAsync(async gateToken =>
                 {
@@ -765,7 +766,7 @@ public sealed partial class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheck
                         throw new InvalidDataException("The authoritative publisher was removed.");
                     if (!WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(currentPublisher.PinnedExecutable, publisher.PinnedExecutable))
                         throw new InvalidDataException("The publisher executable changed before cohort acceptance.");
-                    if (subscriptions is null) access.EnsureTenantScope(currentPublisher.TenantId);
+                    if (subscriptions is null && !NativeIngressCheckpointAuthority.HasBoundScope(currentPublisher, scope.Value)) access.EnsureTenantScope(currentPublisher.TenantId);
                     lock (_state.SyncRoot)
                     {
                         var current = Source();
@@ -786,7 +787,7 @@ public sealed partial class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheck
                         {
                             ownershipToken.ThrowIfCancellationRequested();
                             WorkflowExecutableStartSourceResolver.ValidateCapturedUnderReferenceGate(candidate.Starts,
-                                currentReferences.Values.ToArray(), scope, _timeProvider.GetUtcNow(), subscriptions is not null, currentPublisher.TenantId);
+                                currentReferences.Values.ToArray(), scope, _timeProvider.GetUtcNow(), subscriptions is not null || NativeIngressCheckpointAuthority.HasBoundScope(currentPublisher, scope.Value), currentPublisher.TenantId);
                             lock (_state.SyncRoot)
                             {
                                 var current = Source();
@@ -848,7 +849,7 @@ public sealed partial class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheck
                     initial = _state.OutboxItems.GetValueOrDefault(source.SourceOutboxItemId) ?? throw new InvalidDataException("The exact stimulus source is missing.");
                 var publisher = await _retentionExecutions.FindAsync(initial.RequireWorkflowIntent().WorkflowExecutionId, ct)
                     ?? throw new InvalidDataException("The authoritative stimulus publisher is missing.");
-                if (initial.SubscriptionDeliveryProtocolVersion is null) access.EnsureTenantScope(publisher.TenantId);
+                if (initial.SubscriptionDeliveryProtocolVersion is null && !NativeIngressCheckpointAuthority.HasBoundScope(publisher, scope.Value)) access.EnsureTenantScope(publisher.TenantId);
                 lock (_state.SyncRoot)
                 {
                     var current = _state.OutboxItems.GetValueOrDefault(source.SourceOutboxItemId) ?? throw new InvalidDataException("The stimulus source was removed.");
@@ -881,7 +882,7 @@ public sealed partial class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheck
                 var publisherStore = (IWorkflowExecutionStateStore?)_retentionExecutions ?? _workflowExecutionStateStore;
                 var publisher = publisherStore is null ? null : await publisherStore.FindAsync(initial.RequireWorkflowIntent().WorkflowExecutionId, ct);
                 if (publisher is null) throw new InvalidDataException("The authoritative saved-start publisher is missing.");
-                if (initial.SubscriptionDeliveryProtocolVersion is null) access.EnsureTenantScope(publisher.TenantId);
+                if (initial.SubscriptionDeliveryProtocolVersion is null && !NativeIngressCheckpointAuthority.HasBoundScope(publisher, scope.Value)) access.EnsureTenantScope(publisher.TenantId);
                 lock (_state.SyncRoot)
                 {
                     var current = _state.OutboxItems.GetValueOrDefault(authority.SourceOutboxItemId) ?? throw new InvalidDataException("The saved-start source was removed.");
@@ -1146,7 +1147,7 @@ public sealed partial class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheck
         if (_workflowExecutionStateStore is null || stateChange is null)
             return;
 
-        if (stateChange.State.IngressOrigin is not null || stateChange.State.ModelWorkOrigin?.IngressOrigin is not null)
+        if (stateChange.State.StimulusDeliveryOrigin is not null || stateChange.State.IngressOrigin is not null || stateChange.State.ModelWorkOrigin?.IngressOrigin is not null)
         {
             var physical = ExactResumeExecutions;
             if (physical is null || !ReferenceEquals(physical.CheckpointState, _state))

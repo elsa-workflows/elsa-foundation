@@ -5,6 +5,12 @@ using Elsa.Serialization.Core;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Configuration;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Extensions;
+using Elsa.Workflows.Runtime.Extensions;
+using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.DependencyInjection;
+using Elsa.Workflows.Runtime.Services.Bookmarks;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.StandaloneTriggers;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
@@ -35,7 +41,7 @@ public sealed class EfIngressCheckpointAuthorityTests
         var tenant = distinctTenant ? "logical-tenant" : scope.Value;
         var partition = new WorkflowExecutionPartition(scope.Value);
         var access = new Access(scope);
-        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await using var connection = new SqliteConnection($"Data Source=file:ingress-authority-{Guid.NewGuid():N};Mode=Memory;Cache=Shared");
         await connection.OpenAsync();
         await using var context = new RuntimeSqliteDbContext(new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(connection).Options);
         await context.Database.EnsureCreatedAsync();
@@ -133,14 +139,111 @@ public sealed class EfIngressCheckpointAuthorityTests
             new("publisher", now, TimeSpan.FromMinutes(1), 10, workflowExecutionId: current.WorkflowExecutionId)))
             .Where(item => item.OutboxItemId == eventSource.OutboxItemId));
         var eventContext = new PostCommitDeliveryContext(eventClaim, scope);
-        var cohort = new StimulusDeliverySnapshot(1, eventContext.SourceOutboxItemId, eventContext.IntentFingerprint,
-            StimulusDeliveryScope.From(current, scope), now, "event", "named", [], [], StimulusDeliverySnapshot.CurrentRetentionAcceptanceVersion);
-        var installed = await ((IStimulusDeliveryStore)outbox).InstallAsync(eventContext, cohort);
-        Assert.Equal(tenant, installed.Scope.TenantId); Assert.Equal(scope, installed.Scope.PersistenceScope);
-        var reopened = await ((IStimulusDeliveryStore)outbox).ReadSourceAsync(eventContext);
-        Assert.True(installed.IsEquivalentTo(reopened.Claim.Item.RecipientSnapshot));
+        var slots = new EfWorkflowActivationAuthority(context, access);
+        var bindings = new EfWorkflowTriggerBindingStore(context, access);
+        var schedules = new EfRecurringTriggerScheduleStore(context, access, new AdmissionCodec(), clock);
+        var coordinator = new WorkflowActivationCoordinator(materials, slots,
+            new EfWorkflowActivationSwitch(slots, bindings, sources, access, clock, schedules), sources, leases, clock,
+            triggerIndexer: new TargetIndexer(bindings, schedules, now), triggerBindingStore: bindings, recurringScheduleStore: schedules);
+        var publication = new WorkflowExecutableSourceReference(WorkflowActivationReferenceIdentity.Create("target-publication"), identity.ArtifactId,
+            "definition", "target", "1", identity.DefinitionId, identity.DefinitionVersionId, "1", now, now,
+            WorkflowExecutableReferenceScope.Published, TenantId: tenant);
+        var activated = await coordinator.ActivateMaterialAsync(new(identity.DefinitionId,
+            (await ((IWorkflowExecutableStore)materials).FindMaterialAsync(identity.ArtifactId))!, publication, "default",
+            "target-publication", WorkflowActivationSource.Publishing, 0));
+        Assert.True(activated.Succeeded);
+        // Exercise production router selection and retention; only the mailbox boundary records dispatch.
+        var recording = new RecordingActors(now);
+        var services = new ServiceCollection();
+        services.AddSingleton<TimeProvider>(clock); services.AddSingleton<IWorkflowExecutionActorProvider>(recording);
+        services.AddSingleton(new PersistenceModeOptions()); services.AddSingleton<IStimulusDeliveryIntentAdapter, EventAdapter>();
+        services.AddWorkflowRuntime(); services.AddPersistenceCore(scope.Value);
+        services.AddRuntimeEntityFrameworkCore(new() { Provider = "Sqlite", ConnectionString = connection.ConnectionString,
+            RecoveryContinuationSigningKey = new string('k', 32), HierarchyCursorSigningKey = new string('h', 32) });
+        services.Replace(ServiceDescriptor.Singleton<IPersistenceAccessContextAccessor>(access));
+        services.AddScoped<IGlobalBookmarkStimulusLookup, GlobalBookmarkStimulusLookup>(); services.AddWorkflowStimulusRouter();
+        await using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+        await using var operation = provider.CreateAsyncScope();
+        var routed = await operation.ServiceProvider.GetRequiredService<IStimulusRouter>().RouteSourceAsync(eventContext);
+        Assert.Single(routed.Starts); Assert.Empty(routed.Resumes);
+        var stored = (await outbox.FindAsync(eventSource.OutboxItemId))!.RecipientSnapshot!;
+        Assert.Equal(tenant, stored.Scope.TenantId); Assert.Equal(scope, stored.Scope.PersistenceScope);
+        Assert.Equal("target-binding", Assert.Single(stored.Starts).Binding.TriggerBindingId);
+        Assert.Single(recording.Accepted);
+        Assert.Equal(tenant, recording.Accepted[0].Command.Payload!.Value.Deserialize<WorkflowExecutionStartCommandPayload>()!.TenantId);
+        var downstream = recording.Accepted[0];
+        var downstreamPayload = downstream.Command.Payload!.Value.Deserialize<WorkflowExecutionStartCommandPayload>()!;
+        Assert.NotNull(downstreamPayload.StimulusDeliveryOrigin);
+        await ((IRuntimePostCommitOutboxClaimStore)outbox).RecordDeliveryResultAsync(eventClaim,
+            new(eventClaim.OutboxItemId, RuntimePostCommitOutboxStatus.Delivered, now));
+        var startHandler = new WorkflowStartSchedulerWorkHandler(materials, queue, new RuntimeExecutionIdGenerator(clock), clock, executions);
+        var childStart = new RuntimeSchedulerWorkItem(downstream.EnvelopeId, downstream.WorkflowExecutionId, downstream.Command.CommandId,
+            downstream.Command.Kind, downstream.EnvelopeId, downstream.IdempotencyKey, downstream.EnqueuedAt, now, downstream.Sequence,
+            downstream.Command.Payload, downstream.Command.Metadata, downstream.Metadata);
+        await startHandler.HandleAsync(childStart);
+        var childCheckpoint = Assert.Single((await queue.ListAsync(new(downstream.WorkflowExecutionId))).Items);
+        var forgedJson = childCheckpoint.Payload!.Value.Deserialize<Dictionary<string, JsonElement>>()!;
+        forgedJson[nameof(RuntimeCheckpointCommandPayload.StimulusDeliveryOrigin)] = JsonSerializer.SerializeToElement(new RuntimeStimulusDeliveryOrigin(
+            1, scope, eventSource.OutboxItemId, eventContext.IntentFingerprint, "not-in-cohort"));
+        var forged = new RuntimeSchedulerWorkItem(childCheckpoint.WorkItemId, childCheckpoint.WorkflowExecutionId, childCheckpoint.CommandId,
+            childCheckpoint.CommandKind, childCheckpoint.EnvelopeId, childCheckpoint.IdempotencyKey, childCheckpoint.EnqueuedAt, childCheckpoint.RecordedAt,
+            childCheckpoint.Sequence, JsonSerializer.SerializeToElement(forgedJson), childCheckpoint.CommandMetadata, childCheckpoint.EnvelopeMetadata);
+        await Assert.ThrowsAsync<InvalidDataException>(() => handler.HandleAsync(forged).AsTask());
+        Assert.Null(await executions.FindAsync(downstream.WorkflowExecutionId));
+        Assert.Equal(childCheckpoint.WorkItemId, Assert.Single((await queue.ListAsync(new(downstream.WorkflowExecutionId))).Items).WorkItemId);
+        await handler.HandleAsync(childCheckpoint);
+        await queue.DeleteAsync(downstream.WorkflowExecutionId, childCheckpoint.WorkItemId);
+        var child = (await executions.FindAsync(downstream.WorkflowExecutionId))!;
+        Assert.Equal(tenant, child.TenantId); Assert.Null(child.IngressOrigin);
+        Assert.True(downstreamPayload.StimulusDeliveryOrigin!.IsEquivalentTo(child.StimulusDeliveryOrigin));
+        var childContinuation = new RuntimeCheckpointCommit("child-continue", new("child-checkpoint", RuntimeCheckpointNames.PostCommitIntentRecorded,
+            child.WorkflowExecutionId, now, [], new Dictionary<string, string>()),
+            new(new(child.WorkflowExecutionId, RuntimeStateChangeOperation.Upsert, child with { UpdatedAt = now.AddSeconds(1) }, new Dictionary<string, string>()),
+                null, [], [], [], [], [], null, null, null, null, null, Array.Empty<ConsumedSchedulerWorkItem>()), [], new Dictionary<string, string>());
+        await checkpoints.CommitAsync(childContinuation, new(RuntimeCheckpointPersistenceMode.Immediate));
+        Assert.True(child.StimulusDeliveryOrigin!.IsEquivalentTo((await executions.FindAsync(child.WorkflowExecutionId))!.StimulusDeliveryOrigin));
+
     }
 
+    private sealed class TargetIndexer(IWorkflowTriggerBindingStore bindings, IRecurringTriggerScheduleStore schedules, DateTimeOffset now) : IWorkflowTriggerIndexer
+    {
+        public ValueTask<IReadOnlyCollection<WorkflowTriggerBinding>> IndexAsync(WorkflowExecutable executable, CancellationToken cancellationToken = default) =>
+            ValueTask.FromException<IReadOnlyCollection<WorkflowTriggerBinding>>(new NotSupportedException());
+        public async ValueTask<IReadOnlyCollection<WorkflowTriggerBinding>> PrepareActivationAsync(WorkflowExecutable executable,
+            string activationId, string slotId, CancellationToken cancellationToken = default)
+        {
+            var id = executable.Identity;
+            var binding = new WorkflowTriggerBinding("target-binding", id.ArtifactId, id.DefinitionId, id.ArtifactVersion, id.ArtifactHash,
+                executable.RootActivity.ExecutableNodeId, "event", "named", null, new Dictionary<string, string>(), now, activationId, slotId);
+            await bindings.PrepareActivationAsync(activationId, [binding], cancellationToken);
+            await schedules.PrepareActivationAsync(activationId, [], cancellationToken);
+            return [binding];
+        }
+    }
+    private sealed class EventAdapter : IStimulusDeliveryIntentAdapter
+    {
+        public string IntentKind => "publish";
+        public StimulusDispatchRequest CreateRequest(RuntimePostCommitIntent intent) => new("event", "named", intent.Payload,
+            idempotencyKey: intent.IdempotencyKey, requestedBy: "publish") { ResumeAllMatchingBookmarks = true };
+    }
+    private sealed class RecordingActors(DateTimeOffset now) : IWorkflowExecutionActorProvider
+    {
+        public List<WorkflowExecutionCommandEnvelope> Accepted { get; } = [];
+        public WorkflowExecutionActorCapabilities Capabilities => WorkflowExecutionActorCapabilities.InProcessMailbox;
+        public ValueTask<IWorkflowExecutionActor> GetAgentAsync(WorkflowExecutionActorActivationRequest request, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<IWorkflowExecutionActor>(new Actor(this, request.WorkflowExecutionId, now));
+        public ValueTask PassivateAsync(WorkflowExecutionActorPassivationRequest request, CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
+        private sealed class Actor(RecordingActors owner, string id, DateTimeOffset now) : IWorkflowExecutionActor
+        {
+            public WorkflowExecutionActorDescriptor Descriptor => new(id, "recording:" + id, "recording-component", WorkflowExecutionActorStatus.Active,
+                WorkflowExecutionActorCapabilities.InProcessMailbox, now);
+            public ValueTask<WorkflowExecutionCommandDispatchResult> EnqueueAsync(WorkflowExecutionCommandEnvelope envelope, CancellationToken cancellationToken = default)
+            {
+                owner.Accepted.Add(envelope);
+                return ValueTask.FromResult(new WorkflowExecutionCommandDispatchResult(envelope.EnvelopeId, id, WorkflowExecutionCommandDispatchStatus.Accepted, now));
+            }
+        }
+    }
     private sealed class Access(PersistenceScope scope) : IPersistenceAccessContextAccessor
     { public PersistenceAccessContext Current => PersistenceAccessContext.Scoped(scope); }
     private sealed class PhysicalSealedSourceReader(IPostCommitOutboxLookupStore lookup) : IRuntimeIngressDeliveryStore
