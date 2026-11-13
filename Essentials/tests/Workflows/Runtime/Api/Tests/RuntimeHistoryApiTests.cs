@@ -285,6 +285,41 @@ public sealed class RuntimeHistoryApiTests
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
     }
 
+    [Theory]
+    [InlineData("event-after-head")]
+    [InlineData("event-before-retained")]
+    [InlineData("event-purged")]
+    [InlineData("bookmark-after-head")]
+    [InlineData("bookmark-no-first-position")]
+    [InlineData("bookmark-reversed-positions")]
+    public async Task Exact_positions_must_belong_to_the_acknowledged_composite_snapshot(string scenario)
+    {
+        await using var host = await Host.StartAsync();
+        host.Authenticate();
+        if (scenario == "event-after-head") host.History.Head = Head() with { LastSequence = 0 };
+        if (scenario == "event-before-retained") host.History.Head = Head() with { FirstSequence = 2, LastSequence = 2 };
+        if (scenario == "event-purged") host.History.Head = Head() with { FirstSequence = 2, PurgedThroughSequence = 1 };
+        if (scenario == "bookmark-after-head") host.History.Bookmark = host.History.Bookmark! with { LastSequence = 2 };
+        if (scenario == "bookmark-no-first-position") host.History.Bookmark = host.History.Bookmark! with { FirstRecordedSequence = 0 };
+        if (scenario == "bookmark-reversed-positions") host.History.Bookmark = host.History.Bookmark! with { FirstRecordedSequence = 2 };
+        using var response = await host.Client.GetAsync(Path + (scenario.StartsWith("event", StringComparison.Ordinal) ? "/events/event" : "/bookmarks/bookmark"));
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task A_head_cannot_replace_absent_or_known_disabled_native_admission_policy(bool disabled)
+    {
+        var workflows = new InMemoryWorkflowExecutionStateStore();
+        await workflows.SaveAsync(Workflow() with { HistoryCapturePolicy = null, HistoryCaptureEnabledAtAdmission = disabled ? false : null });
+        var service = new RuntimeHistoryInspectionService(workflows, new Authorization(), new FakeTimeProvider(Now), new Projection());
+        Assert.Equal("invalid", (await service.ReadAsync(new("run"))).Coverage.State);
+        Assert.Equal("invalid", (await service.ListBookmarksAsync(new("run"))).Coverage.State);
+        await Assert.ThrowsAsync<RuntimeHistoryIntegrityException>(() => service.FindEventAsync(new("run", "event")));
+        await Assert.ThrowsAsync<RuntimeHistoryIntegrityException>(() => service.FindBookmarkAsync(new("run", "bookmark")));
+    }
+
     [Fact]
     public async Task Cancellation_propagates_without_becoming_invalid_history()
     {
@@ -335,6 +370,32 @@ public sealed class RuntimeHistoryApiTests
     }
 
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Eligibility_uses_one_observation_instant_after_an_owner_read_crosses_expiry(bool testScope)
+    {
+        var clock = new FakeTimeProvider(Now);
+        var workflows = new InMemoryWorkflowExecutionStateStore();
+        var workflow = Workflow();
+        if (testScope) workflow = workflow with { TestScope = new("test-scope", Now.AddSeconds(1), "tenant-a", new("test")) };
+        await workflows.SaveAsync(workflow);
+        var native = NativeBookmark(testScope ? null : Now.AddSeconds(1));
+        var bookmarks = new InMemoryBookmarkStateStore();
+        await bookmarks.SaveAsync(native);
+        var owner = new ActivityExecutionState(new("activity", "run", "node", "authored", "Wait", "1"), ActivityExecutionStatus.Suspended,
+            null, 1, Now, Now, null, null, null, null, null, ActivitySchedulingProvenance.Empty, null,
+            ["bookmark"], [], 0, 0, new Dictionary<string, string>());
+        var activities = new AdvancingOwner(owner, () => clock.Advance(TimeSpan.FromSeconds(2)));
+        var service = new RuntimeHistoryInspectionService(workflows, new Authorization(), clock, new Projection { Bookmark = Bookmark(native) }, bookmarks, activities);
+        var view = await service.FindBookmarkAsync(new("run", "bookmark"));
+        Assert.Equal("Active", view.Bookmark.Status);
+        Assert.Equal(testScope ? "ineligible" : "expired", view.Bookmark.Eligibility);
+        Assert.Equal(testScope ? "test-scope-expired" : "handle-expired", view.Bookmark.EligibilityReason);
+        Assert.Equal(Now.AddSeconds(2), view.Bookmark.EligibilityObservedAt);
+        Assert.NotNull(await bookmarks.FindAsync("run", "bookmark"));
+    }
+
+    [Theory]
     [InlineData(false, false, 0)]
     [InlineData(true, false, 2)]
     [InlineData(true, true, 4)]
@@ -347,7 +408,7 @@ public sealed class RuntimeHistoryApiTests
     }
 
     private static RuntimeHistoryHead Head() => new("run", 1, 1, "physical", Now, Policy, true, false, 0);
-    private static WorkflowExecutionState Workflow() => new("run", new("artifact", "1", "hash"), WorkflowExecutionStatus.Running,
+    private static WorkflowExecutionState Workflow() => new("run", new("artifact", "definition", "version", "1", "hash"), WorkflowExecutionStatus.Running,
         null, Now, Now, Now, null, null, null, "tenant-a", new Dictionary<string, string>())
         { HistoryCapturePolicy = Policy, HistoryCaptureEnabledAtAdmission = true };
     private static BookmarkState NativeBookmark(DateTimeOffset? expires = null) => new("bookmark", "run", "activity", "node", "resume", "signal", "hash", null, new Dictionary<string, string>(), Now, expires);
@@ -384,6 +445,14 @@ public sealed class RuntimeHistoryApiTests
         public bool SupportsHistory => paired;
         public bool CanCommitHistory(IRuntimeHistoryStore reader) => paired;
         public ValueTask<RuntimeCheckpointCommitStoreResult> CommitAsync(RuntimeCheckpointCommit commit, RuntimeCheckpointPersistenceDecision decision, CancellationToken token = default) => throw new InvalidOperationException("Inspection cannot write.");
+    }
+
+    private sealed class AdvancingOwner(ActivityExecutionState owner, Action advance) : IActivityExecutionStateStore
+    {
+        public ValueTask<ActivityExecutionState?> FindAsync(string run, string activity, CancellationToken token = default) { advance(); return ValueTask.FromResult<ActivityExecutionState?>(owner); }
+        public ValueTask<ActivityExecutionState> SaveAsync(ActivityExecutionState state, CancellationToken token = default) => throw new InvalidOperationException("Inspection cannot write.");
+        public ValueTask<RuntimeStorePage<ActivityExecutionState>> ListPageAsync(ActivityExecutionStatePageQuery query, CancellationToken token = default) => throw new InvalidOperationException("Inspection must use exact lookup.");
+        public ValueTask<RuntimeStorePage<ActivityExecutionState>> ListByParentPageAsync(ActivityExecutionStateParentPageQuery query, CancellationToken token = default) => throw new InvalidOperationException("Inspection must use exact lookup.");
     }
 
     private sealed class Authorization : IActivityInspectionContextAsync

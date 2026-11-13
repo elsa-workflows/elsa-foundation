@@ -8,7 +8,7 @@ using MinimalEndpoints;
 
 namespace Elsa.Workflows.Runtime.Api.Endpoints.History.Page;
 
-[Get("runtime/workflows/instances/{workflowExecutionId}/history", History = true)]
+[Get("runtime/workflows/instances/{workflowExecutionId}/history")]
 [RequirePermission(WorkflowRuntimePermissions.WorkflowRuntimeRead)]
 [ActivityInspectionProblems("reading run history", History = true)]
 public sealed class Endpoint(RuntimeHistoryInspectionService history) : ApiEndpoint<GetRuntimeHistory, RuntimeHistoryPageView>

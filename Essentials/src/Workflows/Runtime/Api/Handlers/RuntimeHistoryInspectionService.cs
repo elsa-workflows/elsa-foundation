@@ -50,7 +50,8 @@ public sealed class RuntimeHistoryInspectionService(IWorkflowExecutionStateStore
         var (head, item) = await details.FindEventDetailsAsync(request.WorkflowExecutionId, request.HistoryEventId, token);
         if (item is null) throw new RuntimeResourceMissingSignal();
         EnsureEventOwner(workflow.WorkflowExecutionId, item);
-        if (item.HistoryEventId != request.HistoryEventId || head is null)
+        if (item.HistoryEventId != request.HistoryEventId || head is null || item.Sequence <= 0 ||
+            item.Sequence < head.FirstSequence || item.Sequence <= head.PurgedThroughSequence || item.Sequence > head.LastSequence)
             throw new RuntimeHistoryIntegrityException(workflow.WorkflowExecutionId, "event detail disagrees with the requested snapshot");
         return new(await CoverageAsync(workflow, head, token), RuntimeHistoryEventView.From(item), time.GetUtcNow());
     }
@@ -84,7 +85,8 @@ public sealed class RuntimeHistoryInspectionService(IWorkflowExecutionStateStore
         if (history is not IRuntimeHistoryDetailsStore details) throw new RuntimeHistoryUnsupportedSignal();
         var (head, item) = await details.FindBookmarkDetailsAsync(request.WorkflowExecutionId, request.BookmarkId, token);
         if (item is null) throw new RuntimeResourceMissingSignal();
-        if (item.Bookmark.Identity.BookmarkId != request.BookmarkId || head is null)
+        if (item.Bookmark.Identity.BookmarkId != request.BookmarkId || head is null ||
+            item.FirstRecordedSequence <= 0 || item.LastSequence < item.FirstRecordedSequence || item.LastSequence > head.LastSequence)
             throw new RuntimeHistoryIntegrityException(workflow.WorkflowExecutionId, "bookmark detail disagrees with the requested snapshot");
         return new(await CoverageAsync(workflow, head, token), await BookmarkAsync(workflow, item, token), time.GetUtcNow());
     }
@@ -107,6 +109,7 @@ public sealed class RuntimeHistoryInspectionService(IWorkflowExecutionStateStore
             throw new RuntimeHistoryIntegrityException(workflow.WorkflowExecutionId, "bookmark belongs to a different run");
         string eligibility;
         string? reason = null;
+        DateTimeOffset? eligibilityExpiresAt = null;
         if (item.Status is not (RuntimeHistoryBookmarkStatus.Active or RuntimeHistoryBookmarkStatus.Unknown)) eligibility = "not-active";
         else if (bookmarks is null) { eligibility = "unknown"; reason = "eligibility-unavailable"; }
         else
@@ -122,6 +125,7 @@ public sealed class RuntimeHistoryInspectionService(IWorkflowExecutionStateStore
                         native.ActivityExecutionId != item.Bookmark.Identity.ActivityExecutionId ||
                         native.ResumeTargetId != item.Bookmark.Identity.ResumeTargetId || item.ExecutableNodeId is { } node && native.ExecutableNodeId != node)
                         throw new RuntimeHistoryIntegrityException(item.Bookmark.Identity.WorkflowExecutionId, "native bookmark ownership disagrees with its recorded lifecycle");
+                    eligibilityExpiresAt = native.ExpiresAt;
                     var now = time.GetUtcNow();
                     if (native.StimulusType != item.Bookmark.StimulusType || native.StimulusHash != item.Bookmark.StimulusHash ||
                         native.CreatedAt != item.Bookmark.CreatedAt || native.ExpiresAt != item.Bookmark.ExpiresAt)
@@ -151,14 +155,25 @@ public sealed class RuntimeHistoryInspectionService(IWorkflowExecutionStateStore
                 eligibility = "unknown"; reason = "eligibility-unavailable";
             }
         }
-        return RuntimeHistoryBookmarkView.From(item, time.GetUtcNow(), eligibility, reason);
+        // The owner read above may cross an expiry boundary. Attribute the time-sensitive
+        // decision to one final observation instant rather than the earlier handle read.
+        var observedAt = time.GetUtcNow();
+        if (eligibility == "eligible" && eligibilityExpiresAt is { } expiresAt && expiresAt <= observedAt)
+            { eligibility = "expired"; reason = "handle-expired"; }
+        else if (eligibility == "eligible" && workflow.TestScope?.IsExpired(observedAt) == true)
+            { eligibility = "ineligible"; reason = "test-scope-expired"; }
+        return RuntimeHistoryBookmarkView.From(item, observedAt, eligibility, reason);
     }
 
     private ValueTask<RuntimeHistoryCoverageView> CoverageAsync(WorkflowExecutionState workflow, RuntimeHistoryHead? head, CancellationToken token)
     {
         token.ThrowIfCancellationRequested();
-        if (head is not null && (head.WorkflowExecutionId != workflow.WorkflowExecutionId ||
-            workflow.HistoryCapturePolicy is { } retained && !retained.IsEquivalentTo(head.Policy)))
+        if (workflow.HistoryCaptureEnabledAtAdmission == false && (head is not null || workflow.HistoryCapturePolicy is not null) ||
+            head is not null && (head.WorkflowExecutionId != workflow.WorkflowExecutionId ||
+            workflow.HistoryCapturePolicy is not { } retained || !retained.IsEquivalentTo(head.Policy) ||
+            head.FirstSequence < 0 || head.LastSequence < 0 || head.PurgedThroughSequence < 0 ||
+            head.PurgedThroughSequence > head.LastSequence ||
+            head.FirstSequence > head.LastSequence && (head.LastSequence == long.MaxValue || head.FirstSequence != head.LastSequence + 1)))
             throw new RuntimeHistoryIntegrityException(workflow.WorkflowExecutionId, "coverage disagrees with its native owner");
         var policy = head?.Policy ?? workflow.HistoryCapturePolicy;
         bool? captureAvailable = null;

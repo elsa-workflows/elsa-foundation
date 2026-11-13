@@ -8,7 +8,7 @@ using MinimalEndpoints;
 
 namespace Elsa.Workflows.Runtime.Api.Endpoints.History.Bookmarks;
 
-[Get("runtime/workflows/instances/{workflowExecutionId}/history/bookmarks", History = true)]
+[Get("runtime/workflows/instances/{workflowExecutionId}/history/bookmarks")]
 [RequirePermission(WorkflowRuntimePermissions.WorkflowRuntimeRead)]
 [ActivityInspectionProblems("reading run bookmark history", History = true)]
 public sealed class Endpoint(RuntimeHistoryInspectionService history) : ApiEndpoint<GetRuntimeHistoryBookmarks, RuntimeHistoryBookmarkPageView>
