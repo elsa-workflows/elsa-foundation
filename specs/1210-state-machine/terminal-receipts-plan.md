@@ -31,6 +31,12 @@ ID cannot substitute for that occurrence. Metadata queries and retries must work
 removed, and after root workflow completion/termination. They must not require the authored definition or an
 activity factory merely to read retained receipts.
 
+Also settle the kernel's workflow-actor delete/recreate rule: local frame counters alone cannot distinguish
+two creations of a reused actor ID. Exercise an actual normal delete/recreate and a late old invocation address.
+Require the shared execution-incarnation identity or an enforced non-reuse contract; do not add a private
+StateMachine nonce or count within-row frame uniqueness as this proof. If that shared rule is not yet available,
+preserve the counterexample and keep the corresponding M0 gate open while coordinating with #4229.
+
 Use the original accepted digest/version and order. A same-ID/same-contents retry returns the current receipt;
 changed contents conflict, including after completion/cancellation. A new input to an ended invocation is
 refused, never appended. A missing or expired receipt is distinct from a previously accepted final result.
