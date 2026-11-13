@@ -1,4 +1,5 @@
-using System.Data;
+using System.Transactions;
+using IsolationLevel = System.Data.IsolationLevel;
 using System.Globalization;
 using System.Text.Json;
 using Elsa.Persistence.EntityFramework;
