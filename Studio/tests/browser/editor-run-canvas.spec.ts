@@ -40,8 +40,7 @@ for (const theme of ["light", "dark"]) {
     await expect(page.getByLabel("Inspector panel", { exact: true }).getByText("Current: 1", { exact: true })).toBeVisible();
   });
 
-  // TEMPORARY (#4040): repeat the flaky case in CI. Reverted before review.
-  for (const attempt of Array.from({ length: 25 }, (_, index) => index + 1)) test(`keeps the existing canvas and viewport when attaching and detaching a run (${theme}) #${attempt}`, async ({ page }) => {
+  test(`keeps the existing canvas and viewport when attaching and detaching a run (${theme})`, async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 950 });
     await page.goto(`/?mode=activity-duplicate-editor&run-canvas=unique&theme=${theme}`);
     const canvas = page.getByLabel("Workflow canvas", { exact: true });
