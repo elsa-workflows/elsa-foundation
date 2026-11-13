@@ -67,6 +67,19 @@ public sealed partial class EfRuntimeHistoryCheckpointTests
         Assert.Equal(revision, head.Revision); Assert.Equal(1, head.LastSequence); Assert.Equal(2, head.FirstSequence);
     }
 
+    [Fact]
+    public async Task Older_request_refreshes_a_clean_tracked_head_after_another_context_commits_retirement()
+    {
+        await using var database = await CapturedDatabaseAsync(); await using var stale = database.Open();
+        var old = await stale.Set<RuntimeHistoryHeadEntity>().SingleAsync(); Assert.Equal(0, old.PurgedThroughSequence);
+        var native = await stale.WorkflowExecutionStates.SingleAsync(); Assert.Equal(1, await PurgeAsync(database, 1));
+        await using var transaction = await stale.Database.BeginTransactionAsync();
+        Assert.Equal(1, await StagePurge(stale, 0));
+        Assert.Equal(EntityState.Detached, stale.Entry(old).State); Assert.Equal(EntityState.Unchanged, stale.Entry(native).State);
+        await transaction.CommitAsync();
+        await using var read = database.Open(); Assert.Equal(1, (await read.Set<RuntimeHistoryHeadEntity>().SingleAsync()).PurgedThroughSequence);
+    }
+
     [Theory]
     [InlineData(false)] [InlineData(true)]
     public async Task Missing_native_or_capture_history_cannot_be_created_by_retention(bool missingNative)
