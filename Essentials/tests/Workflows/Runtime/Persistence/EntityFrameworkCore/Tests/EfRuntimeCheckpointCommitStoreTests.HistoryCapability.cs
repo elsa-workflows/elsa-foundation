@@ -71,6 +71,23 @@ public sealed partial class EfRuntimeCheckpointCommitStoreTests
         Assert.Equal(System.Data.ConnectionState.Closed, context.Database.GetDbConnection().State);
     }
 
+    [Fact]
+    public void Retaining_content_without_the_occurrence_ordinal_cannot_qualify_history_pairing()
+    {
+        using var context = new MissingOrdinalCapabilityContext(new DbContextOptionsBuilder<MissingOrdinalCapabilityContext>().UseSqlite("Data Source=:memory:").Options);
+        var access = new HistoryCapabilityAccess();
+        var membership = context.Model.FindEntityType(typeof(RuntimeHistoryOccurrenceMembershipEntity)); Assert.NotNull(membership);
+        Assert.NotNull(membership.FindProperty(nameof(RuntimeHistoryOccurrenceMembershipEntity.ContentJson)));
+        Assert.Null(membership.FindProperty(nameof(RuntimeHistoryOccurrenceMembershipEntity.Ordinal)));
+        Assert.Throws<InvalidOperationException>(() =>
+        { _ = context.Set<RuntimeHistoryOccurrenceMembershipEntity>().Where(row => row.Ordinal >= 0).Take(1).ToQueryString(); });
+        var reader = new EfRuntimeHistoryStore(context, access, HistoryCapabilityCodec, RuntimeHistoryEfModule.Chain);
+        IRuntimeCheckpointCommitStore writer = new EfRuntimeCheckpointCommitStore(context, access);
+        var observer = new EfRuntimeHistoryMutationStore(context, access, reader, TimeProvider.System, RuntimeHistoryEfModule.Chain);
+        Assert.False(writer.CanCommitHistory(reader)); Assert.False(observer.CanRecordHistory(reader));
+        Assert.Equal(System.Data.ConnectionState.Closed, context.Database.GetDbConnection().State);
+    }
+
     private sealed class HistoryCapabilityAccess : IPersistenceAccessContextAccessor
     { public PersistenceAccessContext Current { get; init; } = PersistenceAccessContext.Scoped(new("tenant-a")); }
 
@@ -81,6 +98,16 @@ public sealed partial class EfRuntimeCheckpointCommitStoreTests
         {
             base.OnModelCreating(builder);
             builder.Ignore<RuntimeHistoryOccurrenceMembershipEntity>();
+        }
+    }
+
+    private sealed class MissingOrdinalCapabilityContext(DbContextOptions<MissingOrdinalCapabilityContext> options) : RuntimeDbContext(options)
+    {
+        protected override void ConfigureProvider(ModelBuilder builder) { }
+        protected override void OnModelCreating(ModelBuilder builder)
+        {
+            base.OnModelCreating(builder);
+            builder.Entity<RuntimeHistoryOccurrenceMembershipEntity>().Ignore(row => row.Ordinal);
         }
     }
 }
