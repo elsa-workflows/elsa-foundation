@@ -597,7 +597,6 @@ public sealed class RuntimeHistoryBookmarkDeliveryOwnerTests
             services.AddSingleton<TimeProvider>(clock);
             services.AddSingleton<IWorkflowExecutionActorProvider>(actors);
             services.AddSingleton<IStimulusDeliveryIntentAdapter, SavedAdapter>();
-            services.AddSingleton<IWorkflowExecutableRootWriteLeaseManager>(PassThroughWorkflowExecutableRootWriteLeaseManager.Instance);
             services.AddWorkflowRuntime();
             services.AddWorkflowStimulusRouter();
             RuntimeHistoryRegistration.AddServices(services, new() { Enabled = profile is "captured" or "receipt-only" });

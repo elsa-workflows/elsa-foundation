@@ -36,6 +36,7 @@ public sealed partial class InMemoryRuntimeCheckpointStoreState
         var owner = (scope, e.WorkflowExecutionId);
         if (!HistoryEvents.TryGetValue(owner, out var history)) HistoryEvents[owner] = history = [];
         history.Add(e);
+        PublishHistoryOccurrence(scope, e);
         HistoryEventsById[(scope, e.WorkflowExecutionId, e.HistoryEventId)] = e;
         HistoryCandidateFingerprints[(scope, e.WorkflowExecutionId, e.HistoryEventId)] = fingerprint;
         HistoryReceiptPositions[(scope, e.WorkflowExecutionId, e.HistoryEventId)] = e.Sequence;
@@ -100,6 +101,7 @@ public sealed partial class InMemoryRuntimeCheckpointStoreState
             RequiredHistoryRuns.Remove(owner);
             if (HistoryRunOwners.TryGetValue(run, out var nativeOwner) && nativeOwner.Scope == scope) HistoryRunOwners.Remove(run);
             HistoryHeads.Remove(owner);
+            DeleteHistoryOccurrences(scope, run);
             HistoryEvents.Remove(owner);
             HistoryActiveBookmarks.Remove(owner);
             if (HistoryCommitIds.Remove(owner, out var commits)) foreach (var id in commits) ScrubHistoryCommitContent(id);

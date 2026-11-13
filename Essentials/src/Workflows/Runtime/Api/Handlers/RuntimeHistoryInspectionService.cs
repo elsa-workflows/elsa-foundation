@@ -10,7 +10,7 @@ using Microsoft.Extensions.Logging;
 namespace Elsa.Workflows.Runtime.Api.Handlers;
 
 /// <summary>Reauthorizes every history read before touching the scoped provider or resolving an exact target.</summary>
-public sealed class RuntimeHistoryInspectionService(IWorkflowExecutionStateStore workflows,
+public sealed partial class RuntimeHistoryInspectionService(IWorkflowExecutionStateStore workflows,
     IActivityInspectionContextAsync authorization, TimeProvider time, IRuntimeHistoryStore? history = null,
     IBookmarkStateStore? bookmarks = null, IActivityExecutionStateStore? activities = null,
     ILogger<RuntimeHistoryInspectionService>? logger = null)

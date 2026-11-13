@@ -131,7 +131,9 @@ public sealed partial class RuntimePostCommitDurableSourceTests
         var processor = new RuntimePostCommitOutboxProcessor(selected, legacy, services.GetRequiredService<TimeProvider>());
         await Assert.ThrowsAsync<RuntimePostCommitSourceBoundaryException>(() => processor.ProcessAsync(new(10)).AsTask());
         Assert.Null(legacy.Intent);
-        var retained = (await store.FindDurableAsync("source:send"))!;
+        await Assert.ThrowsAsync<InvalidDataException>(() => store.FindDurableAsync("source:send").AsTask());
+        // Raw lookup establishes retention only; it is never a durable-authority fallback.
+        var retained = (await ((IPostCommitOutboxLookupStore)store).FindAsync("source:send"))!;
         Assert.NotEqual(RuntimePostCommitOutboxStatus.Delivered, retained.Status); Assert.Equal(0, retained.DeliveryAttemptCount);
     }
 
@@ -140,7 +142,7 @@ public sealed partial class RuntimePostCommitDurableSourceTests
     public async Task Context_capable_replacement_requires_actual_recording_opt_in_before_handoff_or_acknowledgement(string support)
     {
         var registrations = HistoryServices();
-        ContextAwareLegacyDispatcher replacement = support == "legacy-context" ? new() : new QualifyingContextDispatcher(support == "qualified");
+        ContextAwareLegacyDispatcher replacement = support == "legacy-context" ? new ContextAwareLegacyDispatcher() : new QualifyingContextDispatcher(support == "qualified");
         registrations.Replace(ServiceDescriptor.Singleton<IRuntimePostCommitIntentDispatcher>(replacement));
         using var provider = registrations.BuildServiceProvider(); using var scope = provider.CreateScope();
         var services = scope.ServiceProvider; var store = services.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>();

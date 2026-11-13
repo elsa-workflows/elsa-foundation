@@ -19,13 +19,13 @@ public sealed partial class RuntimeHistoryNativeDeliveryTests
         using var f = await Fixture.CreateAsync("complete", publication: true, configure: services =>
         { race.Configure(services); recording.Configure(services); });
         await f.SeedPublisherAsync(); await f.PublishAsync(); await f.ProcessPublicationsAsync();
-        var work = Assert.Single(await f.Queue.ListAllAsync(new(Run)));
+        var work = Assert.Single(await f.Queue.ListAllAsync(new RuntimeSchedulerWorkQuery(Run)));
         Assert.Equal(RuntimeSchedulerWorkItemResultStatus.Deferred, Assert.Single((await f.DrainAsync()).Items).Status);
-        Assert.Equal(work.WorkItemId, Assert.Single(await f.Queue.ListAllAsync(new(Run))).WorkItemId);
+        Assert.Equal(work.WorkItemId, Assert.Single(await f.Queue.ListAllAsync(new RuntimeSchedulerWorkQuery(Run))).WorkItemId);
         f.Clock.Advance(TimeSpan.FromSeconds(6));
         Assert.Empty((await f.DrainAsync()).Items); // The normal drainer still forbids terminal activity execution.
         await f.SweepTerminalAsync();
-        Assert.Empty(await f.Queue.ListAllAsync(new(Run))); Assert.Equal(0, f.Activator.Calls);
+        Assert.Empty(await f.Queue.ListAllAsync(new RuntimeSchedulerWorkQuery(Run))); Assert.Equal(0, f.Activator.Calls);
         var events = (await f.History.ReadPageAsync(new(Run))).Items;
         Assert.Equal(failure == "after-commit" ? 1 : 0, events.Count(IsReceiverObservation));
         var discarded = Assert.Single(events, IsTerminalResumeDecision);
@@ -41,12 +41,12 @@ public sealed partial class RuntimeHistoryNativeDeliveryTests
         var recording = new ReceiverControl { Failure = failure, Match = IsTerminalResumeDecision };
         using var f = await Fixture.CreateAsync("complete", publication: true, configure: recording.Configure);
         await QueueTerminalResumeAsync(f);
-        var work = Assert.Single(await f.Queue.ListAllAsync(new(Run)));
+        var work = Assert.Single(await f.Queue.ListAllAsync(new RuntimeSchedulerWorkQuery(Run)));
         AssertTerminalFailure(await f.SweepTerminalAsync());
-        Assert.Equal(work.WorkItemId, Assert.Single(await f.Queue.ListAllAsync(new(Run))).WorkItemId);
+        Assert.Equal(work.WorkItemId, Assert.Single(await f.Queue.ListAllAsync(new RuntimeSchedulerWorkQuery(Run))).WorkItemId);
         Assert.Equal(failure == "after-commit" ? 1 : 0, (await f.History.ReadPageAsync(new(Run))).Items.Count(IsTerminalResumeDecision));
         await f.SweepTerminalAsync();
-        Assert.Empty(await f.Queue.ListAllAsync(new(Run))); Assert.Equal(0, f.Activator.Calls);
+        Assert.Empty(await f.Queue.ListAllAsync(new RuntimeSchedulerWorkQuery(Run))); Assert.Equal(0, f.Activator.Calls);
         var observations = (await f.History.ReadPageAsync(new(Run))).Items.Where(IsTerminalResumeDecision).ToArray();
         Assert.Equal(failure == "after-commit" ? 2 : 1, observations.Length); Assert.Equal(2, recording.Attempts.Count);
         Assert.Equal(observations.Length, observations.Select(item => item.HistoryEventId).Distinct(StringComparer.Ordinal).Count());
@@ -59,10 +59,10 @@ public sealed partial class RuntimeHistoryNativeDeliveryTests
         using var f = await Fixture.CreateAsync("complete", publication: true);
         await QueueTerminalResumeAsync(f);
         AssertTerminalFailure(await f.SweepTerminalAsync(recording: false));
-        Assert.Single(await f.Queue.ListAllAsync(new(Run))); Assert.Equal(0, f.Activator.Calls);
+        Assert.Single(await f.Queue.ListAllAsync(new RuntimeSchedulerWorkQuery(Run))); Assert.Equal(0, f.Activator.Calls);
         Assert.DoesNotContain((await f.History.ReadPageAsync(new(Run))).Items, IsTerminalResumeDecision);
         await f.SweepTerminalAsync();
-        Assert.Empty(await f.Queue.ListAllAsync(new(Run)));
+        Assert.Empty(await f.Queue.ListAllAsync(new RuntimeSchedulerWorkQuery(Run)));
         Assert.Single((await f.History.ReadPageAsync(new(Run))).Items, IsTerminalResumeDecision);
     }
 
@@ -73,9 +73,9 @@ public sealed partial class RuntimeHistoryNativeDeliveryTests
         using var f = await Fixture.CreateAsync("complete", publication: true, configure: recording.Configure);
         await QueueTerminalResumeAsync(f); recording.PairUnavailable = true;
         AssertTerminalFailure(await f.SweepTerminalAsync());
-        Assert.Single(await f.Queue.ListAllAsync(new(Run))); Assert.Empty(recording.Attempts);
+        Assert.Single(await f.Queue.ListAllAsync(new RuntimeSchedulerWorkQuery(Run))); Assert.Empty(recording.Attempts);
         recording.PairUnavailable = false; await f.SweepTerminalAsync();
-        Assert.Empty(await f.Queue.ListAllAsync(new(Run))); Assert.Equal(0, f.Activator.Calls);
+        Assert.Empty(await f.Queue.ListAllAsync(new RuntimeSchedulerWorkQuery(Run))); Assert.Equal(0, f.Activator.Calls);
         Assert.Single((await f.History.ReadPageAsync(new(Run))).Items, IsTerminalResumeDecision);
     }
 
@@ -85,7 +85,7 @@ public sealed partial class RuntimeHistoryNativeDeliveryTests
         using var f = await Fixture.CreateAsync("complete", publication: true, transformPolicy: policy => new(
             policy.PolicyId, policy.Version, policy.Required, policy.SupportedKinds.Where(kind => kind != "DeliveryUnmatched").ToArray()));
         await QueueTerminalResumeAsync(f); await f.SweepTerminalAsync();
-        Assert.Empty(await f.Queue.ListAllAsync(new(Run))); Assert.Equal(0, f.Activator.Calls);
+        Assert.Empty(await f.Queue.ListAllAsync(new RuntimeSchedulerWorkQuery(Run))); Assert.Equal(0, f.Activator.Calls);
         Assert.DoesNotContain((await f.History.ReadPageAsync(new(Run))).Items, IsTerminalResumeDecision);
     }
 
@@ -100,7 +100,7 @@ public sealed partial class RuntimeHistoryNativeDeliveryTests
         var retained = Assert.IsType<RuntimeHistoryIntegrityException>(Assert.Single(log.Exceptions));
         Assert.IsType<IOException>(Assert.IsType<InvalidDataException>(retained.InnerException).InnerException);
         Assert.DoesNotContain("private", JsonSerializer.Serialize(result.Dispatches));
-        Assert.Single(await f.Queue.ListAllAsync(new(Run))); Assert.Equal(0, f.Activator.Calls);
+        Assert.Single(await f.Queue.ListAllAsync(new RuntimeSchedulerWorkQuery(Run))); Assert.Equal(0, f.Activator.Calls);
         Assert.DoesNotContain((await f.History.ReadPageAsync(new(Run))).Items, IsTerminalResumeDecision);
     }
 
@@ -116,7 +116,7 @@ public sealed partial class RuntimeHistoryNativeDeliveryTests
         await QueueTerminalResumeAsync(f);
         var failure = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => f.SweepTerminalAsync(cancellationToken: source.Token));
         Assert.Same(original, failure); Assert.Equal(source.Token, failure.CancellationToken);
-        Assert.Single(await f.Queue.ListAllAsync(new(Run))); Assert.Equal(0, f.Activator.Calls);
+        Assert.Single(await f.Queue.ListAllAsync(new RuntimeSchedulerWorkQuery(Run))); Assert.Equal(0, f.Activator.Calls);
     }
 
     [Fact]
@@ -130,7 +130,7 @@ public sealed partial class RuntimeHistoryNativeDeliveryTests
         await QueueTerminalResumeAsync(f);
         await Assert.ThrowsAsync<RuntimeSchedulerWorkUnavailableException>(() => f.SweepTerminalAsync());
         access.Current = original;
-        Assert.Single(await f.Queue.ListAllAsync(new(Run))); Assert.Equal(0, f.Activator.Calls);
+        Assert.Single(await f.Queue.ListAllAsync(new RuntimeSchedulerWorkQuery(Run))); Assert.Equal(0, f.Activator.Calls);
         Assert.Single((await f.History.ReadPageAsync(new(Run))).Items, IsTerminalResumeDecision);
     }
 
@@ -142,7 +142,7 @@ public sealed partial class RuntimeHistoryNativeDeliveryTests
         var recording = new ReceiverControl { Match = IsTerminalResumeDecision };
         using var f = await Fixture.CreateAsync("complete", publication: true, configure: recording.Configure);
         await QueueTerminalResumeAsync(f);
-        var owed = Assert.Single(await f.Queue.ListAllAsync(new(Run)));
+        var owed = Assert.Single(await f.Queue.ListAllAsync(new RuntimeSchedulerWorkQuery(Run)));
         await SeedHealthyLegacyWorkAsync(f, healthy, healthyTerminal); recording.PairUnavailable = true;
         var blockedObserved = false; var healthyProgressed = false;
         for (var pass = 0; pass < 8 && !(blockedObserved && healthyProgressed); pass++)
@@ -151,13 +151,13 @@ public sealed partial class RuntimeHistoryNativeDeliveryTests
                 recoveryScanBatchSize: 1, maxExecutionsPerSweep: 1));
             blockedObserved |= result.Dispatches.Any(item => item.WorkflowExecutionId == Run &&
                 item.Outcome == RuntimeResumptionDispatchOutcome.Faulted && item.Failure == "runtime.history.capture-unavailable");
-            healthyProgressed |= healthyTerminal ? (await f.Queue.ListAllAsync(new(healthy))).Count == 0 :
+            healthyProgressed |= healthyTerminal ? (await f.Queue.ListAllAsync(new RuntimeSchedulerWorkQuery(healthy))).Count == 0 :
                 result.Dispatches.Any(item => item.WorkflowExecutionId == healthy &&
                     item.Outcome is RuntimeResumptionDispatchOutcome.Accepted or RuntimeResumptionDispatchOutcome.Duplicate);
             Assert.DoesNotContain(result.Dispatches, item => item.WorkflowExecutionId == healthy && item.Outcome == RuntimeResumptionDispatchOutcome.Faulted);
         }
         Assert.True(blockedObserved); Assert.True(healthyProgressed);
-        Assert.Equal(owed.WorkItemId, Assert.Single(await f.Queue.ListAllAsync(new(Run))).WorkItemId);
+        Assert.Equal(owed.WorkItemId, Assert.Single(await f.Queue.ListAllAsync(new RuntimeSchedulerWorkQuery(Run))).WorkItemId);
         Assert.Equal(0, f.Activator.Calls); Assert.DoesNotContain((await f.History.ReadPageAsync(new(Run))).Items, IsTerminalResumeDecision);
     }
 
@@ -171,7 +171,7 @@ public sealed partial class RuntimeHistoryNativeDeliveryTests
         await f.Queue.EnqueueAsync(new("held-head", Run, "held-command", WorkflowExecutionCommandKind.StartActivity,
             "held-envelope", "held-key", At.AddSeconds(-1), At.AddSeconds(-1)));
         await QueueTerminalResumeAsync(f);
-        var owed = Assert.Single(await f.Queue.ListAllAsync(new(Run)), item => item.CommandKind == WorkflowExecutionCommandKind.ResumeBookmark);
+        var owed = Assert.Single(await f.Queue.ListAllAsync(new RuntimeSchedulerWorkQuery(Run)), item => item.CommandKind == WorkflowExecutionCommandKind.ResumeBookmark);
         await f.Services.GetRequiredService<IWorkflowHoldStateStore>().SaveAsync(new("control-held", Run,
             activeHolds: [WorkflowHold.ForWorkflowExecution("hold", Run, At, "operator", "Paused")]));
         var head = (await f.Queue.ListNextWorkItemsAsync([Run]))[Run]; Assert.Equal("held-head", head.WorkItemId);
@@ -182,8 +182,8 @@ public sealed partial class RuntimeHistoryNativeDeliveryTests
         var failed = Assert.Single(result.Dispatches, item => item.WorkflowExecutionId == Run);
         Assert.Equal(RuntimeResumptionDispatchOutcome.Faulted, failed.Outcome); Assert.Equal("runtime.history.capture-unavailable", failed.Failure);
         Assert.Equal(1, result.TerminalExecutionsPurged); Assert.Equal(2, result.PurgedWorkItemCount);
-        Assert.Empty(await f.Queue.ListAllAsync(new(healthy)));
-        Assert.Equal(owed.WorkItemId, Assert.Single(await f.Queue.ListAllAsync(new(Run))).WorkItemId); Assert.Equal(0, f.Activator.Calls);
+        Assert.Empty(await f.Queue.ListAllAsync(new RuntimeSchedulerWorkQuery(healthy)));
+        Assert.Equal(owed.WorkItemId, Assert.Single(await f.Queue.ListAllAsync(new RuntimeSchedulerWorkQuery(Run))).WorkItemId); Assert.Equal(0, f.Activator.Calls);
     }
 
     private static async Task SeedHealthyLegacyWorkAsync(Fixture f, string id, bool terminal)

@@ -10876,3 +10876,41 @@ Elsa.Workflows.Runtime.Core.Contracts.IRuntimeCheckpointCommitEnricher.CanSupply
 Elsa.Workflows.Runtime.Core.Contracts.IStimulusRouter.CanRecordHistory(string! intentKind, Elsa.Workflows.Runtime.Core.Contracts.IRuntimeHistoryObservationWriter! writer, Elsa.Workflows.Runtime.Core.Contracts.IRuntimeHistoryStore! reader) -> bool
 Elsa.Workflows.Runtime.Core.Contracts.IWorkflowStartDispatcher.CanPreserveHistoryCausation(string! intentKind, Elsa.Workflows.Runtime.Core.Contracts.IRuntimeHistoryObservationWriter! writer, Elsa.Workflows.Runtime.Core.Contracts.IRuntimeHistoryStore! reader) -> bool
 static Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFacts.PublicationObservationKinds.get -> System.Collections.Generic.IReadOnlyList<string!>!
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeHistoryOccurrenceStore
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeHistoryOccurrenceStore.ReadOccurrencesAsync(Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryOccurrenceQuery! query, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryOccurrencePage!>
+Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryOccurrenceAvailability
+Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryOccurrenceAvailability.Available = 0 -> Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryOccurrenceAvailability
+Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryOccurrenceAvailability.Partial = 1 -> Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryOccurrenceAvailability
+Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryOccurrenceAvailability.Unavailable = 2 -> Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryOccurrenceAvailability
+Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryOccurrenceAvailability.Invalidated = 3 -> Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryOccurrenceAvailability
+Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryOccurrenceAvailability.TargetUnavailable = 4 -> Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryOccurrenceAvailability
+Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryOccurrenceQuery
+Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryOccurrenceQuery.RuntimeHistoryOccurrenceQuery(string! workflowExecutionId, int limit = 50, string? sequenceToken = null, long? position = null, string? anchorActivityExecutionId = null, string? activityExecutionId = null, bool includeDescendants = false, string? accessBinding = null) -> void
+Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryOccurrenceQuery.WorkflowExecutionId.get -> string!
+Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryOccurrenceQuery.Limit.get -> int
+Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryOccurrenceQuery.SequenceToken.get -> string?
+Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryOccurrenceQuery.Position.get -> long?
+Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryOccurrenceQuery.AnchorActivityExecutionId.get -> string?
+Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryOccurrenceQuery.ActivityExecutionId.get -> string?
+Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryOccurrenceQuery.IncludeDescendants.get -> bool
+Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryOccurrenceQuery.AccessBinding.get -> string?
+Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryOccurrence
+Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryOccurrence.RuntimeHistoryOccurrence(long position, Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryEvent! observation, string? previousActivityExecutionId = null, string? nextActivityExecutionId = null) -> void
+Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryOccurrence.Position.get -> long
+Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryOccurrence.Observation.get -> Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryEvent!
+Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryOccurrence.PreviousActivityExecutionId.get -> string?
+Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryOccurrence.NextActivityExecutionId.get -> string?
+Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryOccurrencePage
+Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryOccurrencePage.RuntimeHistoryOccurrencePage(Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryHead? head, Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryOccurrenceAvailability availability, string? reason, long upperSequence, long retainedAfterSequence, long? totalCount, long? selectedPosition, System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryOccurrence!>! items, string? sequenceToken, bool hasNewerHistory) -> void
+Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryOccurrencePage.Head.get -> Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryHead?
+Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryOccurrencePage.Availability.get -> Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryOccurrenceAvailability
+Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryOccurrencePage.Reason.get -> string?
+Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryOccurrencePage.UpperSequence.get -> long
+Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryOccurrencePage.RetainedAfterSequence.get -> long
+Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryOccurrencePage.TotalCount.get -> long?
+Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryOccurrencePage.SelectedPosition.get -> long?
+Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryOccurrencePage.Items.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryOccurrence!>!
+Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryOccurrencePage.SequenceToken.get -> string?
+Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryOccurrencePage.HasNewerHistory.get -> bool
+static Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryOccurrence.IsEligible(Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryEvent! observation) -> bool
+static Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryOccurrence.IsEligibleKind(string! name) -> bool

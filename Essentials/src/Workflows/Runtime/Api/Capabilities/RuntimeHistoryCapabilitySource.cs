@@ -21,6 +21,8 @@ public sealed class RuntimeHistoryCapabilitySource(IRuntimeCheckpointCommitStore
             new("workflow-history-page", "runtime/workflows/instances/{workflowExecutionId}/history", templated: true),
             new("workflow-history-bookmarks", "runtime/workflows/instances/{workflowExecutionId}/history/bookmarks", templated: true)
         };
+        if (history is IRuntimeHistoryOccurrenceStore)
+            links.Add(new("workflow-history-occurrences", "runtime/workflows/instances/{workflowExecutionId}/history/occurrences", templated: true));
         if (history is IRuntimeHistoryDetailsStore)
         {
             links.Add(new("workflow-history-event", "runtime/workflows/instances/{workflowExecutionId}/history/events/{historyEventId}", templated: true));
