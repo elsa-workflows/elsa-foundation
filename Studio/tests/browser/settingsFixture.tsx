@@ -14,18 +14,23 @@ const searchParams = new URLSearchParams(window.location.search);
 const appearance = (searchParams.get("appearance") ?? "light") as ThemeModePreference | "dark";
 const requestedPath = window.location.pathname.startsWith("/settings") ? window.location.pathname : "/settings/appearance";
 const focusNotices = searchParams.has("focus-notices");
+const nestedFocus = searchParams.has("nested-focus");
 
 /** Isolated layout contract using the real shell, nested content hooks and notification controller. */
 function FocusedSettingsFields({ controller }: { controller: StudioNotificationController }) {
   const { contentRef } = useCompactNavigation();
+  const fields = Array.from({ length: 12 }, (_, index) => <StudioField key={index} label={`Setting ${index + 1}`}>
+    <input defaultValue={`Draft ${index + 1}`} />
+  </StudioField>);
   return <div ref={contentRef}>
     <button type="button" onMouseDown={event => event.preventDefault()} onClick={() => controller.api.notify({
       level: "error", title: "Persistent focus notice",
       message: "A deliberately wrapped notification exercises the real toast stack while the existing field retains keyboard focus and its unsaved value."
     })}>Show focus notice</button>
-    {Array.from({ length: 12 }, (_, index) => <StudioField key={index} label={`Setting ${index + 1}`}>
-      <input defaultValue={`Draft ${index + 1}`} />
-    </StudioField>)}
+    {nestedFocus ? <>
+      <div data-nested-focus-port style={{ height: 260, overflowY: "auto" }}>{fields}</div>
+      <div style={{ height: 400 }} aria-hidden="true" />
+    </> : fields}
   </div>;
 }
 

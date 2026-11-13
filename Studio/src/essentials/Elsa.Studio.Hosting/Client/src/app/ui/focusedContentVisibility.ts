@@ -40,17 +40,21 @@ function createFocusObserver(document: Document) {
   };
 
   const geometry = (field: HTMLElement) => {
-    const visible: Bounds = { left: 0, right: view.innerWidth, top: 0, bottom: view.innerHeight };
     const ports: HTMLElement[] = [];
-    // Internal value wrappers clip text intentionally; measure the whole field's ancestors.
     for (let parent = field.parentElement; parent; parent = parent.parentElement) {
+      const style = view.getComputedStyle(parent);
+      if (/(auto|scroll)/.test(style.overflowY) && parent.clientHeight > 0) ports.push(parent);
+    }
+    // Native whole-field reveal handles inner clipping; fixed overlays need the outer scrollport.
+    const port = ports.at(-1) ?? document.scrollingElement as HTMLElement | null;
+    const visible: Bounds = { left: 0, right: view.innerWidth, top: 0, bottom: view.innerHeight };
+    for (let parent = port; parent; parent = parent.parentElement) {
       const style = view.getComputedStyle(parent);
       const bounds = parent.getBoundingClientRect();
       if (/(auto|scroll|hidden|clip)/.test(style.overflowY) && parent.clientHeight > 0) {
         const top = bounds.top + parent.clientTop;
         visible.top = Math.max(visible.top, top);
         visible.bottom = Math.min(visible.bottom, top + parent.clientHeight);
-        if (/(auto|scroll)/.test(style.overflowY)) ports.push(parent);
       }
       if (/(auto|scroll|hidden|clip)/.test(style.overflowX) && parent.clientWidth > 0) {
         const left = bounds.left + parent.clientLeft;
@@ -58,10 +62,19 @@ function createFocusObserver(document: Document) {
         visible.right = Math.min(visible.right, left + parent.clientWidth);
       }
     }
-    // Prefer a real inner scroller. If content currently fits, reserve in the outer scrollport.
-    const port = ports.find(element => element.scrollHeight > element.clientHeight + 1)
-      ?? ports.at(-1) ?? document.scrollingElement as HTMLElement | null;
-    return { port, visible };
+    const innerHeight = Math.min(...ports.filter(element => element !== port).map(element => element.clientHeight));
+    return { port, visible, innerHeight };
+  };
+
+  const controlBounds = (focused: HTMLElement): Bounds => {
+    const control = focused.getBoundingClientRect();
+    const labels = Array.from((focused as HTMLInputElement).labels ?? []);
+    const named = (focused.getAttribute("aria-labelledby") ?? "").split(/\s+/).map(id => document.getElementById(id)).filter((element): element is HTMLElement => element !== null);
+    const bounds = [...labels, ...named].map(label => label.getBoundingClientRect());
+    return {
+      left: Math.min(control.left, ...bounds.map(label => label.left)), right: Math.max(control.right, ...bounds.map(label => label.right)),
+      top: Math.min(control.top, ...bounds.map(label => label.top)), bottom: Math.max(control.bottom, ...bounds.map(label => label.bottom))
+    };
   };
 
   const fieldBounds = (field: HTMLElement): Bounds => {
@@ -83,30 +96,52 @@ function createFocusObserver(document: Document) {
 
     focused.scrollIntoView?.({ block: "nearest", inline: "nearest", behavior: "instant" });
     const field = focused.closest<HTMLElement>(".studio-form-control, .studio-choice-field, label") ?? focused;
-    let { port, visible } = geometry(field);
+    let { port, visible, innerHeight } = geometry(field);
     if (padding && padding.element !== port) {
       restoreStyle(padding); padding = null; clearance = 0;
-      ({ port, visible } = geometry(field));
+      ({ port, visible, innerHeight } = geometry(field));
     }
     if (!port || visible.bottom <= visible.top) { release(); return; }
 
+    let boundedControl = false;
     let target = fieldBounds(field);
-    const availableHeight = Math.max(0, visible.bottom - visible.top - gap * 2);
-    // Unfittable editors retain native caret/scroll behavior instead of an impossible reveal loop.
+    let availableHeight = Math.max(0, Math.min(visible.bottom - visible.top - gap * 2, innerHeight));
+    if (target.bottom - target.top <= availableHeight) {
+      field.scrollIntoView?.({ block: "nearest", inline: "nearest", behavior: "instant" });
+      ({ port, visible, innerHeight } = geometry(field));
+      if (!port) { release(); return; }
+      target = fieldBounds(field);
+      availableHeight = Math.max(0, Math.min(visible.bottom - visible.top - gap * 2, innerHeight));
+    }
+    if (target.bottom - target.top > availableHeight) { boundedControl = true; target = controlBounds(focused); }
+    // An unfittable native editor retains its normal caret/scroll behavior; never hide a notice.
     if (target.bottom - target.top > availableHeight) { release(); return; }
+    const ownerBounds = port.getBoundingClientRect();
+    const top = Math.max(visible.top, ownerBounds.top + port.clientTop + gap);
 
     const host = document.querySelector<HTMLElement>(".studio-toast-host");
     restoreStyle(toastLimit); toastLimit = null;
     if (host && host.getClientRects().length && overlapsHorizontally(target, host.getBoundingClientRect())) {
       const bounds = host.getBoundingClientRect();
-      const limit = Math.max(0, bounds.bottom - visible.top - (target.bottom - target.top) - gap * 2);
+      const controls = [...host.querySelectorAll<HTMLElement>(".studio-toast-dismiss")].map(button => {
+        const toast = button.closest<HTMLElement>(".studio-toast")!;
+        const style = view.getComputedStyle(toast);
+        return button.getBoundingClientRect().height + [style.paddingTop, style.paddingBottom, style.borderTopWidth, style.borderBottomWidth].reduce((sum, value) => sum + (parseFloat(value) || 0), 0);
+      }).filter(height => height > 0);
+      const minimum = controls.length ? Math.max(...controls) : bounds.height;
+      const budget = bounds.bottom - top - minimum - gap;
+      if (target.bottom - target.top > budget) { boundedControl = true; target = controlBounds(focused); }
+      if (target.bottom - target.top > budget || target.bottom - target.top > availableHeight) {
+        release(); focused.scrollIntoView?.({ block: "nearest", inline: "nearest", behavior: "instant" }); return;
+      }
+      const limit = Math.max(minimum, bounds.bottom - top - (target.bottom - target.top) - gap);
       if (bounds.height > limit) {
         toastLimit = saveStyle(host, "max-height");
         host.style.setProperty("max-height", `${limit}px`, "important");
       }
     }
 
-    let bottom = visible.bottom - gap;
+    let bottom = Math.min(visible.bottom, ownerBounds.top + port.clientTop + port.clientHeight - gap);
     let obstructedColumn = false;
     if (host) {
       const hostBounds = host.getBoundingClientRect();
@@ -122,7 +157,7 @@ function createFocusObserver(document: Document) {
     }
 
     const reserve = obstructedColumn && (target.bottom > bottom || clearance > 0)
-      ? Math.max(0, visible.bottom - bottom) : 0;
+      ? Math.max(0, ownerBounds.top + port.clientTop + port.clientHeight - bottom) : 0;
     if (reserve > 0) {
       padding ??= saveStyle(port, "padding-block-end");
       const scrollTop = port.scrollTop;
@@ -135,8 +170,7 @@ function createFocusObserver(document: Document) {
       restoreStyle(padding); padding = null; clearance = 0;
     }
 
-    target = fieldBounds(field);
-    const top = visible.top + gap;
+    target = boundedControl ? controlBounds(focused) : fieldBounds(field);
     const oversized = target.bottom - target.top > bottom - top;
     let delta = 0;
     if (oversized || target.top < top) delta = target.top - top;
@@ -161,6 +195,7 @@ function createFocusObserver(document: Document) {
     }
   };
   document.addEventListener("focusin", schedule);
+  document.addEventListener("focusout", schedule);
   document.addEventListener(toastLayoutEvent, schedule);
   view.addEventListener("resize", schedule);
 
@@ -178,6 +213,7 @@ function createFocusObserver(document: Document) {
         else {
           view.cancelAnimationFrame(frame); resize?.disconnect(); mutations.disconnect();
           document.removeEventListener("focusin", schedule); document.removeEventListener(toastLayoutEvent, schedule);
+          document.removeEventListener("focusout", schedule);
           view.removeEventListener("resize", schedule);
           release(); observers.delete(document);
         }
