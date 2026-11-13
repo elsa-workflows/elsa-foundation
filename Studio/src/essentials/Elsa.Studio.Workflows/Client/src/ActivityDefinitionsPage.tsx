@@ -12,7 +12,7 @@ import type {
   StudioWorkflowRunInputEditorContribution
 } from "@elsa-workflows/studio-sdk";
 import { authSessionEndedEvent, authSessionStartedEvent, useStudioWorkspaceWhenActive } from "@elsa-workflows/studio-sdk";
-import { CopyableIdentifier, StudioButton, StudioPageHeader, StudioSearchInput, StudioResultState, SkeletonRows } from "@elsa-workflows/studio-ui";
+import { CopyableIdentifier, StudioButton, StudioPageHeader, StudioSearchInput, StudioResultState, SkeletonRows, StudioField } from "@elsa-workflows/studio-ui";
 import {
   type ActivityDefinitionCollectionRequest,
   type ActivityDefinitionManagementView
@@ -371,7 +371,7 @@ function ActivityDefinitionCollection({ context, baseUrl, authorityRevision, aut
           <summary>Advanced filters</summary>
           <div className="ad-disclosure-panel ad-advanced-filter-fields">
             <label><span>Provider key</span><input value={providerInput} onChange={event => setProviderInput(event.target.value)} placeholder="Exact provider key" /></label>
-            <label><span>Rows per page</span><select value={pageSize} onChange={event => setPageSize(Number(event.target.value) as PageSize)}><option value={10}>10</option><option value={25}>25</option><option value={50}>50</option></select></label>
+            <StudioField label={<><span>Rows per page</span></>}><select value={pageSize} onChange={event => setPageSize(Number(event.target.value) as PageSize)}><option value={10}>10</option><option value={25}>25</option><option value={50}>50</option></select></StudioField>
           </div>
         </details>
       </section>

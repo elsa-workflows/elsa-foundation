@@ -15,10 +15,17 @@ is forbidden because older compilers/readers can silently ignore such a field.
 
 | `expressionType` | Required `value` fields |
 |---|---|
-| `InputMember` | `referenceKey`, `memberPath` |
-| `WorkflowRequestMember` | `memberKey`, `memberPath` |
+| `InputMember` | `referenceKey`, `memberPath`; lowered at publication to `WorkflowRequestMember` (see below) |
+| `WorkflowRequestMember` | `memberKey`, `memberPath`; a legacy dotted `path` is refused, not combined |
 | `VariableMember` | `referenceKey`, `declaringScopeId`, `memberPath` |
 | `ActivityResultMember` | `producerNodeId`, `projectionKey`, `memberPath`; existing producer `isOptional` defaults to false |
+
+An `InputMember` read names a declared input by its reference key and means the request member read of that
+input: at a workflow boundary the request member is the input's name, in a reusable body the boundary input's
+reference key. Publication lowers it to `WorkflowRequestMember { memberKey, memberPath }` with the member path
+unchanged; a reference key that names no single declared input is refused as `ActivityData/UnknownInput`. A whole
+`Input` read is lowered the same way to `WorkflowRequest { memberKey }`. Variable, request and input member reads are
+never typed at publication, so an explicit, non-Auto conversion on them is refused.
 
 `producerScopeId` is optional and legacy on `ActivityResult` only. `ActivityResultMember` declares
 none, and one that does is refused (`ActivityData/InvalidSource`), at authoring, publication and in the
