@@ -6,10 +6,12 @@ break it all. It tests the design before product code exists. It shares nothing 
 repository: the folder has its own `Directory.Build.*`, `Directory.Packages.props`, `NuGet.config`, `global.json` and
 `.editorconfig`.
 
-What was found is in [FINDINGS.md](FINDINGS.md) (section 24: the three layers and the round 4 names; section 23: the
-merge of the four branches and its gates); what each database engine does to the EF store is in
+What was found is in [FINDINGS.md](FINDINGS.md) (section 27: the runtime conformance suite and the Orleans adapter;
+section 26: the graph engine; section 25: round 4's decided items; section 24: the three layers and the round 4 names;
+section 23: the merge of the four branches and its gates); what each database engine does to the EF store is in
 [ENGINES.md](ENGINES.md), MongoDB in [MONGO.md](MONGO.md), native workflows as an execution model in
-[NATIVE.md](NATIVE.md), and BPMN on the `Bpmn.Semantics` interpreter in [BPMN.md](BPMN.md).
+[NATIVE.md](NATIVE.md), write volume and bloat on PostgreSQL in [WRITES.md](WRITES.md), and BPMN on the
+`Bpmn.Semantics` interpreter in [BPMN.md](BPMN.md).
 
 ## Layout
 
@@ -19,7 +21,9 @@ merge of the four branches and its gates); what each database engine does to the
 | `src/Kernel.Durable` | Layer 2, durable actors: `Worker` (a partition's activation: inbox, fenced commit, timers, background jobs, events, poison, journal), `DurableHost`, the seam to layer 3 (`IActorType`, `DurableTurn`), the store contract, the in-memory store, the projector, reply addresses for live output |
 | `src/Kernel.Workflows` | Layer 3, actor types: `WorkflowInstance` (status, definition, parent and children, suspend, resume, terminate, rebind, delete, the history envelope) and the execution-model contract (`IExecutionModel`, `ITurn`) |
 | `sim` | Toy execution models, the deterministic simulation, the invariant checks, the shrinker and the mutation check; `NativeSim.cs` puts native instances in the mix |
-| `models/Native` | The native Elsa workflow model: authoring surface, activities, interpreter, HTTP routes and host on the kernel's live output |
+| `models/Graph` | The graph engine: main's Flowchart engine (paths, arrivals, dead paths, gateways) as a library with no kernel or Elsa reference; README says what was adapted |
+| `models/Graph.Tests` | Main's Flowchart conformance corpus and join tests against the graph engine |
+| `models/Native` | The native Elsa workflow model: authoring surface, activities (its Flowchart on the graph engine), interpreter, HTTP routes and host on the kernel's live output |
 | `models/Native.Run` | Native smoke tests, cost and memory measurement |
 | `models/Bpmn` | BPMN as an execution model: the `Bpmn.Semantics` 0.5.0 interpreter (NuGet, pinned) behind the contract, the host's table of work, the spike's cases |
 | `models/Bpmn.Run` | BPMN smoke tests and cost measurement |
@@ -28,6 +32,11 @@ merge of the four branches and its gates); what each database engine does to the
 | `ef/Kernel.Ef.Conformance` | The conformance suite against the EF store, every engine |
 | `conformance/Kernel.Store.Conformance` | The store conformance suite: semantic cases, the stress test, the cost runs, for any provider |
 | `conformance/Kernel.Store.Conformance.Run` | The suite against the in-memory store |
+| `conformance/Kernel.Runtime.Conformance` | The runtime conformance suite: semantic cases, the fence broken on purpose, the stress test, for any actor runtime |
+| `conformance/Kernel.Runtime.Conformance.Run` | The runtime suite against the built-in runtime |
+| `runtime/Kernel.Runtime.Hosting` | `RuntimeNode`: the built-in runtime of one node on a clock |
+| `runtime/Kernel.Runtime.Orleans` | The Orleans adapter: each partition a grain |
+| `runtime/Kernel.Runtime.Orleans.Conformance` | The runtime suite against the Orleans adapter, on Orleans' in-process test cluster |
 | `mongo/Kernel.Mongo` | The storage interface on MongoDB |
 | `mongo/Kernel.Mongo.Run` | The suite against MongoDB, its connection killer, probes |
 
@@ -36,7 +45,8 @@ merge of the four branches and its gates); what each database engine does to the
 One project at a time (they share `obj/` folders through project references):
 
 ```
-for p in sim models/Native.Run models/Bpmn.Run ef/Kernel.Ef.Run ef/Kernel.Ef.Conformance conformance/Kernel.Store.Conformance.Run mongo/Kernel.Mongo.Run; do dotnet build $p -c Release; done
+for p in sim models/Native.Run models/Bpmn.Run ef/Kernel.Ef.Run ef/Kernel.Ef.Conformance conformance/Kernel.Store.Conformance.Run mongo/Kernel.Mongo.Run conformance/Kernel.Runtime.Conformance.Run runtime/Kernel.Runtime.Orleans.Conformance; do dotnet build $p -c Release; done
+dotnet test models/Graph.Tests -c Release      # the graph engine's corpus
 ```
 
 ## The simulation
@@ -82,15 +92,30 @@ MO="mongodb://localhost:<mongo>/?directConnection=true"
 SQL Server runs under amd64 emulation on arm64: slow, but the counts are not affected. Stop every container afterwards
 (`docker stop km-pg km-mssql km-mysql km-mongo`).
 
+## The runtime conformance suite
+
+On the in-memory store, the built-in runtime and the Orleans adapter (Orleans' in-process test cluster on its in-memory
+transport: no socket, no cloud). Each command's exit code says whether the runtime conforms; the `-broken` forms break
+the store's fence on purpose and must fail on it.
+
+```
+RTC="dotnet conformance/Kernel.Runtime.Conformance.Run/bin/Release/net10.0/Kernel.Runtime.Conformance.Run.dll"
+ORC="dotnet runtime/Kernel.Runtime.Orleans.Conformance/bin/Release/net10.0/Kernel.Runtime.Orleans.Conformance.dll"
+$RTC semantic [filter]; $RTC semantic-broken
+$RTC stress 20 2000; $RTC stress-broken 10 1000
+$ORC semantic [filter]; $ORC semantic-broken
+$ORC stress 20 2000; $ORC stress-broken 10 1000
+```
+
 ## The store conformance suite
 
 ```
 dotnet conformance/Kernel.Store.Conformance.Run/bin/Release/net10.0/Kernel.Store.Conformance.Run.dll semantic     # in memory
 EFC="dotnet ef/Kernel.Ef.Conformance/bin/Release/net10.0/Kernel.Ef.Conformance.dll"
-$EFC sqlite [--fence-in-batch] semantic
-$EFC postgres "$PG" [--fence-in-batch] [--m5] semantic                 # --m5: E1 switched off, must fail the fence cases
-$EFC sqlserver "$MS" [--fence-in-batch] [--rcsi-off] semantic
-$EFC mysql "$MY;uid=root;pwd=kernel" [--fence-in-batch] [--rc] semantic
+$EFC sqlite [--fence-in-batch|--checked-fence] semantic               # no flag: the engine's default fence, below
+$EFC postgres "$PG" [--fence-in-batch|--checked-fence] [--m5] semantic # --m5: E1 switched off, must fail the fence cases
+$EFC sqlserver "$MS" [--fence-in-batch|--checked-fence] [--rcsi-off] semantic
+$EFC mysql "$MY;uid=root;pwd=kernel" [--fence-in-batch|--checked-fence] [--rc] semantic
 MOR="dotnet mongo/Kernel.Mongo.Run/bin/Release/net10.0/Kernel.Mongo.Run.dll"
 $MOR "$MO" [--fence-in-batch] semantic
 $MOR "$MO" semantic-broken                                             # the fence broken on purpose: its cases must fail
@@ -105,16 +130,18 @@ $MOR "$MO" probe crash|limits
 ```
 EFR="dotnet ef/Kernel.Ef.Run/bin/Release/net10.0/Kernel.Ef.Run.dll"
 mkdir -p .out                                                             # the SQLite files live here
-$EFR x stress postgres "$PG;Database=kernel_stress" seconds=40 messages=5000 [fence=batch]
-$EFR x stress sqlserver "$MS;Database=kernel_stress" seconds=40 messages=5000          # RCSI on unless rcsi=0
-$EFR x stress mysql "$MY;database=kernel_stress" seconds=40 messages=5000 [isolation=rc]
-$EFR x stress sqlite "Data Source=.out/stress.db" seconds=40 messages=5000 [wal=0]
-$EFR x stress <engine> "<same>" seconds=15 messages=1500 unfenced=1       # the fence broken on purpose: must fail
-$EFR x cost <engine> "<connection;Database=kernel_cost>" proxy=1 [fence=batch]       # round trips on the TCP stream
+$EFR x stress postgres "$PG;Database=kernel_stress" seconds=40 messages=5000 [fence=checked|batch]
+$EFR x stress sqlserver "$MS;Database=kernel_stress" seconds=40 messages=5000 [fence=checked|batch]   # RCSI on unless rcsi=0
+$EFR x stress mysql "$MY;database=kernel_stress" seconds=40 messages=5000 [fence=checked|batch] [isolation=rc]
+$EFR x stress sqlite "Data Source=.out/stress.db" seconds=40 messages=5000 [fence=checked|batch] [wal=0]
+$EFR x stress <engine> "<same>" seconds=15 messages=1500 unfenced=1 fence=<as recorded>   # the fence broken on purpose: must fail (ENGINES.md: batch on PostgreSQL, checked elsewhere)
+$EFR x cost <engine> "<connection;Database=kernel_cost>" proxy=1 [fence=checked|batch]       # round trips on the TCP stream
 $EFR x probe|block|definite|deadlock <engine> "<connection>"                         # ENGINES.md
+$EFR x stress|cost postgres "<connection>" writes=1 [history=state|minimal] [pad=4096] [fillfactor=70] [fastvacuum=1]   # WRITES.md; the container needs -c wal_keep_size=4GB
 ```
 
-`EngineRun.cs` lists every option. The stress test drives round 1's models plus round 3's commands (suspend, resume,
+Without a fence option the EF store takes the engine's default: the fence in the batch, but the checked fence on SQL
+Server (decided 13 November; ENGINES.md E9). `EngineRun.cs` lists every option. The stress test drives round 1's models plus round 3's commands (suspend, resume,
 terminate, delete) and starts on events. Do not run the conformance suite on an engine while a stress test runs there:
 the stress test kills the suite's sessions too.
 
@@ -149,11 +176,12 @@ $SIM --native --seeds 20000 --actions 1000
 $SIM --mutations --seeds 20000
 $SIM --native-mutations --seeds 20000
 dotnet conformance/Kernel.Store.Conformance.Run/bin/Release/net10.0/Kernel.Store.Conformance.Run.dll semantic
-$EFC sqlite semantic; $EFC sqlite --fence-in-batch semantic
+$EFC sqlite --checked-fence semantic; $EFC sqlite --fence-in-batch semantic
 $NAT smoke; $NAT cost sqlite
-mkdir -p .out; $EFR x cost sqlite "Data Source=.out/cost.db" [fence=batch]                  # delete .out/cost.db* between runs
-$EFR x cost postgres "$PG;Database=kernel_cost" proxy=1 [fence=batch]
-$EFC postgres "$PG" [--fence-in-batch] semantic
+dotnet test models/Graph.Tests -c Release
+mkdir -p .out; $EFR x cost sqlite "Data Source=.out/cost.db" fence=checked                # and fence=batch; delete .out/cost.db* between runs
+$EFR x cost postgres "$PG;Database=kernel_cost" proxy=1 fence=checked                     # and fence=batch
+$EFC postgres "$PG" --checked-fence semantic; $EFC postgres "$PG" --fence-in-batch semantic
 $NAT cost postgres "$PG;Database=kernel_native"
 ```
 

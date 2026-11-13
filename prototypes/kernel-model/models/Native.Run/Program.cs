@@ -53,8 +53,9 @@ static class Cost
         var store = new Sizing(ef);
         var registry = Reference.Registry();
         var network = new Network();
-        var owner = new Owner("A", 0, store, registry, network);
-        var other = new Owner("B", 1, store, registry, network);
+        // A cost run counts the work, not the lease's upkeep: with an hour's lease no pass renews it inside a row, however slow the engine.
+        var owner = new Owner("A", 0, store, registry, network, lease: TimeSpan.FromHours(1));
+        var other = new Owner("B", 1, store, registry, network, lease: TimeSpan.FromHours(1));
         await owner.StartAsync();
         await other.StartAsync();
         var failures = 0;
@@ -66,6 +67,10 @@ static class Cost
         Console.WriteLine("|---|---|---:|---:|---:|---:|---|");
         async Task Row(string name, string mode, Func<Task<bool>> body)
         {
+            // Both leases fresh before counting starts: an idle pass beats a third of a lease after the last renewal,
+            // and a row's count should not depend on how long the rows before it took.
+            await owner.Worker.BeatAsync();
+            await other.Worker.BeatAsync();
             counter.Reset();
             store.Reset();
             var trace = Environment.GetEnvironmentVariable("NATIVE_TRACE") is { Length: > 0 } t && $"{name}, {mode}".StartsWith(t, StringComparison.Ordinal);
@@ -125,6 +130,18 @@ static class Cost
                 return Finished(owner, id);
             });
         }
+
+        foreach (var mode in new[] { Modes.Ephemeral, Modes.Balanced, Modes.Durable })
+            await Row("flowchart, three event branches and an All join, three direct resumes", mode, async () =>
+            {
+                var id = Next("fc3");
+                owner.Worker.Post(new Message($"{id}#start", id, Kinds.Start, Start: NativeModel.Spec("flowchart-3-events", mode, Wf.Object(("event", $"ev-{id}")))), fresh: true);
+                await owner.PumpAsync();
+                for (var i = 1; i <= 3; i++)
+                    await store.AddAsync(new Message($"{id}#resume{i}", id, NativeKinds.Resume, Json.Write(new ResumeStimulus($"ev-{id}-{i}")), KeepUntil: keep));
+                await owner.PumpAsync(poll: true);
+                return Finished(owner, id);
+            });
 
         foreach (var mode in new[] { Modes.Ephemeral, Modes.Balanced, Modes.Durable })
             await Row("http-reference (case 1)", mode, async () =>

@@ -2,11 +2,13 @@ import { tabbedSecretsJourney } from "./tabbedSecretsJourney";
 import { templateToastJourney } from "./templateToastJourney";
 import { executableDesignerJourney } from "./executableDesignerJourney";
 import { compactInputsJourney } from "./compactInputsJourney";
+import { timelineSelectionJourney } from "./timelineSelectionJourney";
 import { writeFileSync } from "node:fs";
 import { expect, test, type APIRequestContext, type Page, type TestInfo } from "@playwright/test";
 import { userTaskAuthoringJourney } from "./userTaskAuthoringJourney";
 import { userTasksJourney } from "./userTasksJourney";
 import { decisionsJourney } from "./decisionsJourney";
+import { structuredLogsJourney } from "./structuredLogsJourney";
 import { chooseDataJourney } from "./chooseDataJourney";
 
 async function capture(page: Page, info: TestInfo, name: string) {
@@ -42,6 +44,7 @@ test("user task authoring and workflow result", async ({ page }, info) => {
   }, cleanup => { ownedCleanups.get(page)!.push(cleanup); });
 });
 test("business decisions authoring and explanations", async ({ page }, info) => decisionsJourney(page, info, capture));
+test("structured logs table accessibility", async ({ page }, info) => structuredLogsJourney(page, info, capture));
 
 test.afterEach(async ({ page, playwright }, info) => {
   const creations = createdWorkflows.get(page) ?? [];
@@ -535,4 +538,8 @@ test("tabbed Secrets authoring and metadata", async ({ page }, info) => {
 
 test("compact runtime Inputs retain exact captured values and accessible technical details", async ({ page }, info) => {
   await compactInputsJourney(page, info, capture, cleanup => { ownedCleanups.get(page)!.push(cleanup); });
+});
+
+test("timeline selection retains its tab and exact occurrence", async ({ page }, info) => {
+  await timelineSelectionJourney(page, info, capture, cleanup => { ownedCleanups.get(page)!.push(cleanup); });
 });

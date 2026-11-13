@@ -1446,12 +1446,12 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
     }
   }, [browserContext, context, data?.executableGraph, labelForExecution, rememberExecution, workflowExecutionId]);
 
-  const selectBrowserExecution = (execution: ActivityExecutionStateSummary, updateScope = true, focusCanvas = true) => {
+  const selectBrowserExecution = (execution: ActivityExecutionStateSummary, updateScope = true, focusCanvas = true, inspectorTab: InstanceInspectorTab = "activity") => {
     rememberExecution(execution);
     rememberedExecutions.current.set(JSON.stringify([browserContext, executionScope?.activityExecutionId, execution.executableNodeId]), execution);
     beginEvidenceNavigation();
     setSelectedEvidenceId(execution.activityExecutionId);
-    setActiveInspectorTab("activity");
+    setActiveInspectorTab(inspectorTab);
     const nodeId = findExecutableGraphNodeId(data?.executableGraph, execution) ?? execution.authoredActivityId;
     if (focusCanvas) requestCanvasFocus(nodeId);
     if (updateScope && executionScope?.executableNodeId === execution.executableNodeId && executionScope.activityExecutionId !== execution.activityExecutionId)
@@ -1459,10 +1459,10 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
     openInspector();
   };
 
-  const selectActivityExecution = (activityExecutionId: string) => {
+  const selectActivityExecution = (activityExecutionId: string, inspectorTab: InstanceInspectorTab = "activity") => {
     const known = associationActivities.find(item => item.activityExecutionId === activityExecutionId);
     if (!known) return;
-    selectBrowserExecution(known);
+    selectBrowserExecution(known, true, inspectorTab !== "timeline", inspectorTab);
     focusNodePath(findExecutableGraphNodeId(data?.executableGraph, known) ?? known.authoredActivityId);
     void restoreExecutionContext(known, false);
   };
@@ -2392,7 +2392,7 @@ function WorkflowInstanceInspector({
   onViewInput(incident: IncidentStateSummary): void;
   onLoadMoreIncidentAssociations(): Promise<void>;
   focusInputKey: string | null;
-  onSelectActivityExecution(activityExecutionId: string): void;
+  onSelectActivityExecution(activityExecutionId: string, inspectorTab?: InstanceInspectorTab): void;
   renderIncidentActions?: OperatorActionsApi["renderIncidentActions"];
   guidanceForIncident?: OperatorActionsApi["guidanceForIncident"];
   onOpenDefinition?(definitionId: string): void;
@@ -2510,7 +2510,7 @@ function WorkflowInstanceInspector({
                     activityCatalog={activityCatalog}
                     executableGraph={executableGraph}
                     selectedEvidenceId={selectedEvidenceId}
-                    onSelectEvidence={openActivityEvidence}
+                    onSelectEvidence={evidenceId => onSelectActivityExecution(evidenceId, "timeline")}
                   />
                 </>
               ) : activeTab === "activity" ? (activityContent ??
