@@ -10,17 +10,19 @@ namespace Kernel.Bpmn;
 /// </summary>
 public static class BpmnCases
 {
-    public const int Deadline = 300;      // the boundary timer, in milliseconds
+    public const int Deadline = 300;      // the boundary timers, in milliseconds (the simulation's clock is its own)
     public const int Rounds = 3;          // the loop's rounds
 
-    public static ProcessRegistry Registry()
+    /// <param name="deadline">The boundary timers: on a real clock, a longer one keeps a race the job should win from going to the timer under load.</param>
+    public static ProcessRegistry Registry(int deadline = Deadline)
     {
         var registry = new ProcessRegistry();
-        foreach (var process in Processes()) registry.Add(process);
+        foreach (var process in Processes(deadline)) registry.Add(process);
         return registry
             .Service("a", _ => Set(("a", "A")))
             .Service("b", _ => Set(("b", "B")))
             .Service("big", _ => Set(("size", "big")))
+            .Service("medium", _ => Set(("size", "medium")))
             .Service("small", _ => Set(("size", "small")))
             .Service("express", _ => Set(("express-done", true)))
             .Service("insured", _ => Set(("insured-done", true)))
@@ -36,7 +38,7 @@ public static class BpmnCases
     private static ServiceResult Set(params (string Name, JsonNode? Value)[] values) =>
         new(new JsonObject(values.Select(v => KeyValuePair.Create(v.Name, v.Value))));
 
-    private static IEnumerable<BpmnProcess> Processes()
+    private static IEnumerable<BpmnProcess> Processes(int deadline)
     {
         // Parallel: a fork into two service tasks and a join.
         var p = new ProcessDraft("b-parallel");
@@ -44,11 +46,13 @@ public static class BpmnCases
         p.Chain("start", "fork", "ta", "join", "end").Chain("fork", "tb", "join");
         yield return new BpmnProcess(p.Build(), Jobs("a", "b"));
 
-        // Exclusive: the first flow whose condition holds, else the default.
+        // Exclusive: the first flow whose condition holds (above 100 both do), else the default.
         p = new ProcessDraft("b-exclusive");
-        p.B.StartEvent("start").ExclusiveGateway("xor").ServiceTask("big", bindingRef: "big").ServiceTask("small", bindingRef: "small").ExclusiveGateway("merge").EndEvent("end");
-        p.Flow("start", "xor").Flow("xor", "big", when: "amount > 100").Flow("xor", "small", isDefault: true).Chain("big", "merge", "end").Flow("small", "merge");
-        yield return new BpmnProcess(p.Build(), Jobs("big", "small"), new JsonObject { ["amount"] = 0 });
+        p.B.StartEvent("start").ExclusiveGateway("xor").ServiceTask("big", bindingRef: "big").ServiceTask("medium", bindingRef: "medium").ServiceTask("small", bindingRef: "small")
+            .ExclusiveGateway("merge").EndEvent("end");
+        p.Flow("start", "xor").Flow("xor", "big", when: "amount > 100").Flow("xor", "medium", when: "amount > 50").Flow("xor", "small", isDefault: true)
+            .Chain("big", "merge", "end").Flow("medium", "merge").Flow("small", "merge");
+        yield return new BpmnProcess(p.Build(), Jobs("big", "medium", "small"), new JsonObject { ["amount"] = 0 });
 
         // Inclusive: every flow whose condition holds, else the default; the join waits only for what can still arrive.
         p = new ProcessDraft("b-inclusive");
@@ -64,7 +68,7 @@ public static class BpmnCases
             .BoundaryEvent("deadline", attachedTo: "slow", new BpmnEventDefinition(BpmnEventDefinitionTypes.Timer), interrupting: true, bindingRef: "deadline")
             .ServiceTask("escalate", bindingRef: "escalate").EndEvent("timed-out");
         p.Chain("start", "slow", "done").Chain("deadline", "escalate", "timed-out");
-        yield return new BpmnProcess(p.Build(), With(Jobs("slow", "escalate"), ("deadline", new TimerWork(Deadline))));
+        yield return new BpmnProcess(p.Build(), With(Jobs("slow", "escalate"), ("deadline", new TimerWork(deadline))));
 
         // A message catch after a service task: a message published before the catch subscribes is kept and still counts.
         p = new ProcessDraft("b-early");
@@ -79,7 +83,7 @@ public static class BpmnCases
             .BoundaryEvent("call-deadline", attachedTo: "call", new BpmnEventDefinition(BpmnEventDefinitionTypes.Timer), interrupting: true, bindingRef: "call-deadline")
             .EndEvent("late");
         p.Chain("start", "call", "end").Chain("call-deadline", "late");
-        yield return new BpmnProcess(p.Build(), new Dictionary<string, Work> { ["child"] = new CallWork("b-child"), ["call-deadline"] = new TimerWork(Deadline) });
+        yield return new BpmnProcess(p.Build(), new Dictionary<string, Work> { ["child"] = new CallWork("b-child"), ["call-deadline"] = new TimerWork(deadline) });
         p = new ProcessDraft("b-child");
         p.B.StartEvent("start").ServiceTask("work", bindingRef: "child-work").EndEvent("end");
         p.Chain("start", "work", "end");

@@ -88,6 +88,14 @@ public sealed partial class World
     {
         var parts = entry.Split(' ');
         var id = instance.Id;
+        // The kernel parks a job that was on trial when too many owners were lost (FINDINGS section 7, rule 3): its result is
+        // an error, an uncaught one faults the process, and the fault is the kernel's. So is a caller's whose call failed so.
+        if ((parts[0] == "e" && entry.Contains(" was on trial when ", StringComparison.Ordinal)) || (parts[0] == "r" && Parked.Contains(parts[2])))
+        {
+            if (Parked.Add(id)) Interlocked.Increment(ref Bystanders);
+            Oracle.Fragiles[id] = true;     // so I14 counts its fault as the kernel's
+            Count(parts[0] == "e" ? "bpmn job parked by the kernel" : "bpmn call failed by a parked child");
+        }
         if (parts[0] == "x") (Bpmn.Stopped.TryGetValue(id, out var stopped) ? stopped : Bpmn.Stopped[id] = new(StringComparer.Ordinal)).Add(parts[2]);
         if (parts[0] != "j") return;
         var (element, merged) = (parts[1], parts[2]);
