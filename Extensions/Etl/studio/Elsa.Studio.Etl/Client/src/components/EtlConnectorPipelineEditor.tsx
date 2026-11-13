@@ -1,3 +1,4 @@
+import { StudioField } from "@elsa-workflows/studio-ui";
 import React, { useId } from "react";
 import type { EtlColumn, EtlConnectorBindingSummary, EtlDiagnostic, EtlPipelineV2 } from "../etlTypes";
 import { EtlConnectorBudgetsEditor } from "./EtlConnectorBudgetsEditor";
@@ -107,8 +108,8 @@ function DestinationEditor({ label, role, destination, outputFields, bindings, b
   const id = useId();
   return (
     <div className="etl-editor-route">
-      <div className="etl-editor-field">
-        <label htmlFor={`${id}-kind`}>{label} destination kind</label>
+      <div className="etl-editor-field"><StudioField controlId={`${id}-kind`} label={<>{label} destination kind</>}>
+
         <select id={`${id}-kind`} value={destination.kind} disabled={disabled} onChange={event => {
           const kind = event.currentTarget.value as EtlPipelineV2["routes"]["main"]["kind"];
           onChange(kind === "sql" ? { kind, binding: destination.binding, table: "", key: [] }
@@ -123,7 +124,7 @@ function DestinationEditor({ label, role, destination, outputFields, bindings, b
           {/* Likewise only the main route publishes to RabbitMQ (spec 1200). */}
           {role === "MainOutput" && <option value="rabbitmq">RabbitMQ exchange</option>}
         </select>
-      </div>
+      </StudioField></div>
       <PipelineBindingSelect
         label={`${label} binding`}
         role={role}
@@ -139,13 +140,13 @@ function DestinationEditor({ label, role, destination, outputFields, bindings, b
       />
       {destination.kind === "sql" && (
         <>
-          <div className="etl-editor-field">
-            <label htmlFor={`${id}-table`}>{label} table</label>
+          <div className="etl-editor-field"><StudioField controlId={`${id}-table`} label={<>{label} table</>}>
+
             <input id={`${id}-table`} value={destination.table} disabled={disabled} placeholder="schema.table"
               aria-describedby={`${id}-table-help`}
               onChange={event => onChange({ ...destination, table: event.currentTarget.value })} />
             <small id={`${id}-table-help`}>The host binding must allow this table. Its columns are the output field names.</small>
-          </div>
+          </StudioField></div>
           <fieldset className="etl-editor-field">
             <legend>{label} key</legend>
             <small>Rows are upserted by these fields; map them from required source fields.</small>
@@ -166,20 +167,20 @@ function DestinationEditor({ label, role, destination, outputFields, bindings, b
       )}
       {destination.kind === "rabbitmq" && (
         <>
-          <div className="etl-editor-field">
-            <label htmlFor={`${id}-exchange`}>{label} exchange</label>
+          <div className="etl-editor-field"><StudioField controlId={`${id}-exchange`} label={<>{label} exchange</>}>
+
             <input id={`${id}-exchange`} value={destination.exchange} disabled={disabled} placeholder="Default exchange"
               aria-describedby={`${id}-exchange-help`}
               onChange={event => onChange({ ...destination, exchange: event.currentTarget.value })} />
             <small id={`${id}-exchange-help`}>The host binding must allow this exchange; leave it empty for the default exchange.</small>
-          </div>
-          <div className="etl-editor-field">
-            <label htmlFor={`${id}-routing-key`}>{label} routing key</label>
+          </StudioField></div>
+          <div className="etl-editor-field"><StudioField controlId={`${id}-routing-key`} label={<>{label} routing key</>}>
+
             <input id={`${id}-routing-key`} value={destination.routingKey} disabled={disabled}
               aria-describedby={`${id}-routing-key-help`}
               onChange={event => onChange({ ...destination, routingKey: event.currentTarget.value })} />
             <small id={`${id}-routing-key-help`}>Each record is one message with this routing key. A queue must match it, or the run fails.</small>
-          </div>
+          </StudioField></div>
         </>
       )}
     </div>
@@ -221,13 +222,13 @@ function RunModeEditor({ pipeline, disabled, onChange }: {
         }} />
         <span>Run continuously</span>
       </label>
-      {continuous ? <div className="etl-editor-field">
-        <label htmlFor={`${id}-interval`}>Poll interval (seconds)</label>
+      {continuous ? <div className="etl-editor-field"><StudioField controlId={`${id}-interval`} label="Poll interval (seconds)">
+
         <input id={`${id}-interval`} type="number" inputMode="numeric" min={1} max={86400} step={1} value={continuous.pollIntervalSeconds}
           disabled={disabled} aria-describedby={`${id}-interval-help`}
           onChange={event => onChange({ ...pipeline, continuous: { pollIntervalSeconds: Math.trunc(Number(event.currentTarget.value)) || 0 } })} />
         <small id={`${id}-interval-help`}>How long a caught-up shard waits before polling again, from 1 to 86,400 seconds.</small>
-      </div> : null}
+      </StudioField></div> : null}
     </section>
   );
 }
