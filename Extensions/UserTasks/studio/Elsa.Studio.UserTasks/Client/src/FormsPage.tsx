@@ -110,11 +110,11 @@ export function FormsPage({ api }: { api: ElsaStudioModuleApi }) {
           {["text", "multiline", "number", "boolean", "date", "choice"].map(kind => <option key={kind}>{kind}</option>)}</select></StudioField>
         <label><input type="checkbox" checked={item.required} onChange={event => field(index, { required: event.target.checked })} /> Required</label>
         <label><input type="checkbox" checked={item.readOnly} onChange={event => field(index, { readOnly: event.target.checked })} /> Read only</label>
-        <label>Help text<input value={item.help ?? ""} onChange={event => field(index, { help: event.target.value })} /></label>
-        {item.kind === "choice" ? <label>Choices, one per line<textarea value={item.choices?.join("\n") ?? ""} onChange={event => field(index, { choices: event.target.value.split("\n") })} /></label> : null}
-        {item.kind === "number" ? <><label>Minimum<input type="number" value={item.minimum ?? ""} onChange={event => field(index, { minimum: event.target.value === "" ? undefined : Number(event.target.value) })} /></label>
-          <label>Maximum<input type="number" value={item.maximum ?? ""} onChange={event => field(index, { maximum: event.target.value === "" ? undefined : Number(event.target.value) })} /></label></> : null}
-        {item.kind === "text" || item.kind === "multiline" ? <label>Maximum characters<input type="number" min="1" value={item.maxLength ?? ""} onChange={event => field(index, { maxLength: event.target.value === "" ? undefined : Number(event.target.value) })} /></label> : null}
+        <StudioField label="Help text"><input value={item.help ?? ""} onChange={event => field(index, { help: event.target.value })} /></StudioField>
+        {item.kind === "choice" ? <StudioField label="Choices, one per line"><textarea value={item.choices?.join("\n") ?? ""} onChange={event => field(index, { choices: event.target.value.split("\n") })} /></StudioField> : null}
+        {item.kind === "number" ? <><StudioField label="Minimum"><input type="number" value={item.minimum ?? ""} onChange={event => field(index, { minimum: event.target.value === "" ? undefined : Number(event.target.value) })} /></StudioField>
+          <StudioField label="Maximum"><input type="number" value={item.maximum ?? ""} onChange={event => field(index, { maximum: event.target.value === "" ? undefined : Number(event.target.value) })} /></StudioField></> : null}
+        {item.kind === "text" || item.kind === "multiline" ? <StudioField label="Maximum characters"><input type="number" min="1" value={item.maxLength ?? ""} onChange={event => field(index, { maxLength: event.target.value === "" ? undefined : Number(event.target.value) })} /></StudioField> : null}
         <StudioButton variant="ghost" aria-label={`Remove field ${index + 1}`} title={`Remove field ${index + 1}`} onClick={() => setForm({ ...form, fields: form.fields.filter((_, i) => i !== index) })}><RemoveIcon /></StudioButton>
       </fieldset>)}
       <div className="user-task-actions"><StudioButton disabled={form.fields.length >= 100} onClick={() => setForm({ ...form, fields: [...form.fields, { key: "", label: "", kind: "text", required: false, readOnly: false }] })}>Add field</StudioButton>

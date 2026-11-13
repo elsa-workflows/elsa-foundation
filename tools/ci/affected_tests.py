@@ -11,7 +11,7 @@ directory: an MSBuild Import, a linked Compile, a None/Content item copied to th
 a repository-relative path a test's C# builds with Path.Combine (evidence under specs/, Studio fixtures, sibling apps).
 
 Anything this script cannot place selects everything: a shared build input, CI or map tooling, a path outside every
-project that is not documentation, a deleted project, or a diff it cannot read. A path only the jobs that always run
+project that is not documentation, a deleted project, or a diff it cannot read. An isolated prototype path with no server consumer selects no shard. A path only the jobs that always run
 read (Markdown, a spec contract, a solution filter) and the separate Studio tree select no shard of their own. When
 unsure it widens a PR's tests: a false positive costs runner minutes, a false negative is caught only by the merge
 queue.
@@ -53,11 +53,14 @@ CONTRACTS = "specs/*/contracts/**"
 # imports or references them, so such a path no test claims has no server test to select. Their shared build inputs
 # (Studio/Directory.*, Studio/NuGet.config) still select everything: the Extensions' Studio projects import them.
 SEPARATE_TREES = ("Studio/", "tools/studio/")
+PROTOTYPES = "prototypes/"
 
 # A relative path inside an MSBuild file: `../x`, `$(MSBuildThisFileDirectory)../x`, `$(MSBuildProjectDirectory)/../x`.
 MSBUILD_PATH = re.compile(r"(?:\$\(MSBuild(?:ThisFile|Project)Directory\)[/\\]?)?(?:\.\.[/\\])+[^\"'<>;|\s]*")
 # `$(MSBuildThisFileDirectory)VersionLines.props` in a Directory.* file: a sibling it imports.
 MSBUILD_SIBLING = re.compile(r"\$\(MSBuildThisFileDirectory\)([^\"'<>;|\s$]+)")
+# Imports can also be plain paths relative to their containing MSBuild file, including a same-directory filename.
+MSBUILD_IMPORT = re.compile(r"<Import\b[^>]*\bProject\s*=\s*[\"']([^\"']+)[\"']", re.IGNORECASE)
 CS_STRING = re.compile(r'(?<![$@\w])"((?:[^"\\\n]|\\.)*)"')
 CS_PATH_CALL = re.compile(r"\bPath\.(?:Combine|Join|GetFullPath)\s*\(")
 
@@ -264,7 +267,7 @@ def build_graph(tree: Tree) -> Graph:
         if ".md" in text:
             markdown_projects.add(project)
         base = posixpath.dirname(project)
-        for token in MSBUILD_PATH.findall(text):
+        for token in MSBUILD_PATH.findall(text) + MSBUILD_IMPORT.findall(text):
             resolved = _resolve(base, token)
             if resolved:
                 claim(project, resolved)
@@ -289,10 +292,39 @@ def build_graph(tree: Tree) -> Graph:
     directory_files = [path for path in tree.files if posixpath.basename(path).startswith("Directory.")]
     for path, text in tree.read_many(directory_files).items():
         base = posixpath.dirname(path)
-        for token in MSBUILD_PATH.findall(text) + MSBUILD_SIBLING.findall(text):
+        # Prototype roots opt out of the repository build and own their MSBuild inputs. Attribute those inputs and
+        # their imports to projects in that subtree, so an explicit server reference still reaches their consumers.
+        scoped = {project for project in projects if project.startswith(base + "/")} if path.startswith(PROTOTYPES) else set()
+        for project in scoped:
+            claims.append((path, project, True))
+        for token in MSBUILD_PATH.findall(text) + MSBUILD_SIBLING.findall(text) + MSBUILD_IMPORT.findall(text):
             resolved = _resolve(base, token)
-            if resolved and resolved in tree.file_set:
-                shared_imports.add(resolved)
+            if resolved:
+                if path.startswith(PROTOTYPES):
+                    for project in scoped:
+                        claims.append((resolved, project, True))
+                else:
+                    shared_imports.add(resolved)
+
+    # Follow imported prototype MSBuild files too. An external project importing a prototype's props must keep its
+    # tests when a nested import changes; a repository-wide Directory import still selects every shard.
+    pending = [(prefix, consumer) for prefix, consumer, _ in claims if prefix.startswith(PROTOTYPES)]
+    pending += [(path, None) for path in shared_imports if path.startswith(PROTOTYPES)]
+    visited = set()
+    while pending:
+        path, consumer = pending.pop()
+        if (path, consumer) in visited or not path.endswith((".props", ".targets")):
+            continue
+        visited.add((path, consumer))
+        text = tree.read(path)
+        for token in MSBUILD_PATH.findall(text) + MSBUILD_SIBLING.findall(text) + MSBUILD_IMPORT.findall(text):
+            resolved = _resolve(posixpath.dirname(path), token)
+            if resolved:
+                if consumer is None:
+                    shared_imports.add(resolved)
+                else:
+                    claim(consumer, resolved)
+                pending.append((resolved, consumer))
 
     solution_text = tree.read(SOLUTION) if SOLUTION in tree.file_set else ""
     solution = set(re.findall(r'Path="([^"]+\.csproj)"', solution_text))
@@ -333,6 +365,12 @@ class Decision:
 def shared_input(path: str, graph: Graph | None = None) -> str | None:
     """Why this path selects everything on its own, or None."""
     name = posixpath.basename(path)
+    if graph is not None and any(path == prefix or path.startswith(prefix + "/") for prefix in graph.shared_imports):
+        # A wildcard import is resolved to its stable directory prefix; every matching descendant remains shared.
+        return "imported by a shared Directory.* file"
+    if path.startswith(PROTOTYPES):
+        # Other prototype-local build inputs are scoped to their consumers, rather than every server shard.
+        return None
     if path.startswith(SHARED_PREFIXES) or path in SHARED_FILES:
         return "CI, map or build tooling"
     if name.startswith("Directory.") and name.endswith((".props", ".targets", ".rsp")):
@@ -341,8 +379,6 @@ def shared_input(path: str, graph: Graph | None = None) -> str | None:
         return "a shared build input"
     if name.endswith(SHARED_SUFFIXES):
         return "a solution or analyzer file"
-    if graph is not None and path in graph.shared_imports:
-        return "imported by a Directory.* file"
     return None
 
 
@@ -370,9 +406,15 @@ def decide(paths: list[str], graph: Graph, always_run: set[str] = frozenset()) -
         why = shared_input(path, graph)
         if why:
             return Decision(True, f"`{path}` is {why}")
-        if path.endswith(".csproj") and path not in graph.projects:
+        if path.endswith(".csproj") and path not in graph.projects and not path.startswith(PROTOTYPES):
             return Decision(True, f"`{path}` is a project this change deletes")
         owners = graph.owners(path)
+        if path.startswith(PROTOTYPES) and posixpath.basename(path).startswith("Directory.") \
+                and path.endswith((".props", ".targets", ".rsp")):
+            # Implicit MSBuild inputs own their subtree even when this change deletes the file, so the head graph
+            # can still follow a server project's reference to one of the prototype projects below it.
+            prefix = posixpath.dirname(path) + "/"
+            owners += [project for project in graph.projects if project.startswith(prefix)]
         if path.endswith(".md"):
             owners = [owner for owner in owners if owner in graph.markdown_projects]
         shared = next((owner for owner in owners if owner in graph.shared_imports), None)
@@ -385,7 +427,7 @@ def decide(paths: list[str], graph: Graph, always_run: set[str] = frozenset()) -
             placed.append(path)
         if owners or placed_by_claim:
             continue
-        if path.startswith(SEPARATE_TREES) or read_only_by_always_run_jobs(path):
+        if path.startswith((*SEPARATE_TREES, PROTOTYPES)) or read_only_by_always_run_jobs(path):
             continue
         if change_scope.first_full_run_path([path]) is None:
             continue  # documentation no project reads
@@ -481,6 +523,18 @@ def fixture_tree() -> Tree:
         "EXTENSION_POINTS.md": "",
         "src/README.md": "",
         "tools/studio/Probe/browser.mjs": "",
+        "prototypes/kernel/Directory.Build.props": '<Project><Import Project="$(MSBuildThisFileDirectory)Version.props" /></Project>',
+        "prototypes/kernel/Directory.Packages.props": "<Project />",
+        "prototypes/kernel/Version.props": "<Project />",
+        "prototypes/kernel/sim/Sim.csproj": _csproj(),
+        "prototypes/kernel/sim/World.cs": "",
+        "prototypes/kernel/run.sh": "",
+        "prototypes/kernel/Shared.targets": "<Project />",
+        "prototypes/kernel/Nested.props": '<Project><Import Project="$(MSBuildThisFileDirectory)Version.props" /></Project>',
+        "prototypes/other/Other.csproj": _csproj(),
+        "tests/Prototype/Prototype.Tests.csproj": _csproj("../../prototypes/kernel/sim/Sim.csproj"),
+        "tests/Import/Import.Tests.csproj": _csproj(extra='<Import Project="../../prototypes/kernel/Shared.targets" />'),
+        "tests/Nested/Nested.Tests.csproj": _csproj(extra='<Import Project="../../prototypes/kernel/Nested.props" />'),
     })
 
 
@@ -556,6 +610,70 @@ def self_test() -> int:
     d = run("src/Orphan/Orphan.cs")
     check("an untested solution project needs the solution build", d.unbuilt == {"src/Orphan/Orphan.csproj"})
     check("an always-built project alone is built", "src/Core/Core.csproj" not in run("src/Core/Thing.cs").unbuilt)
+
+    d = run("prototypes/kernel/run.sh", "prototypes/kernel/Notes.txt")
+    check("isolated prototype scripts select no server shard", not d.everything and not d.affected)
+    d = run("prototypes/kernel/sim/World.cs")
+    check("a real reference to a prototype still selects its consumer", not d.everything and d.affected == {
+        "prototypes/kernel/sim/Sim.csproj", "tests/Prototype/Prototype.Tests.csproj"})
+    d = run("prototypes/kernel/Shared.targets")
+    check("an explicit prototype import still selects its consumer", not d.everything and
+          d.affected == {"tests/Import/Import.Tests.csproj"})
+    for path in ("prototypes/kernel/Directory.Build.props", "prototypes/kernel/Version.props"):
+        d = run(path)
+        expected = {"prototypes/kernel/sim/Sim.csproj", "tests/Prototype/Prototype.Tests.csproj"}
+        if path.endswith("Version.props"):
+            expected.add("tests/Nested/Nested.Tests.csproj")
+        check(f"prototype build inputs select their own consumers: {path}", not d.everything and d.affected == expected)
+    for path in ("prototypes/kernel/global.json", "prototypes/kernel/NuGet.config", "prototypes/kernel/Kernel.slnx"):
+        check(f"prototype-local configuration does not select every shard: {path}", not run(path).everything)
+    d = run("prototypes/kernel/run.sh", "src/Leaf/Leaf.cs")
+    check("mixed prototype and server changes retain the server selection", not d.everything and d.affected == {
+        "src/Leaf/Leaf.csproj", "tests/Leaf/Leaf.Tests.csproj"})
+    check("a shared root input with prototypes still selects everything",
+          run("Directory.Build.props", "prototypes/kernel/run.sh").everything)
+    shared_files = {path: fixture_tree().read(path) for path in fixture_tree().files}
+    shared_files["Directory.Build.props"] = '<Project><Import Project="$(MSBuildThisFileDirectory)prototypes/kernel/Version.props" /></Project>'
+    check("a prototype file imported by the shared root still selects everything",
+          decide(["prototypes/kernel/Version.props"], build_graph(_tree(shared_files)), arch).everything)
+    shared_files["Directory.Build.props"] = '<Project><Import Project="prototypes/kernel/Version.props" /></Project>'
+    check("a literal prototype import from the shared root still selects everything",
+          decide(["prototypes/kernel/Version.props"], build_graph(_tree(shared_files)), arch).everything)
+    shared_files["prototypes/kernel/Nested.props"] = '<Project><Import Project="Version.props" /></Project>'
+    literal_graph = build_graph(_tree(shared_files | {"Directory.Build.props": "<Project />"}))
+    d = decide(["prototypes/kernel/Version.props"], literal_graph, arch)
+    check("a literal nested import retains the explicit external consumer",
+          not d.everything and "tests/Nested/Nested.Tests.csproj" in d.affected)
+    shared_files["Directory.Build.props"] = '<Project><Import Project="prototypes/kernel/*.props" /></Project>'
+    check("a shared wildcard prototype import selects everything under its prefix",
+          decide(["prototypes/kernel/Version.props"], build_graph(_tree(shared_files)), arch).everything)
+    check("a shared wildcard does not claim a sibling prototype root",
+          not decide(["prototypes/other/Notes.txt"], build_graph(_tree(shared_files)), arch).everything)
+    shared_files["Directory.Build.props"] = '<Project><Import Project="prototypes/kernel/Nested.props" /></Project>'
+    shared_files["prototypes/kernel/Nested.props"] = '<Project><Import Project="*.props" /></Project>'
+    check("a nested shared wildcard prototype import selects everything under its prefix",
+          decide(["prototypes/kernel/Version.props"], build_graph(_tree(shared_files)), arch).everything)
+    shared_files["prototypes/kernel/Nested.props"] = '<Project><Import Project="Version.props" /></Project>'
+    shared_files["Directory.Build.props"] = '<Project><Import Project="$(MSBuildThisFileDirectory)prototypes/kernel/Nested.props" /></Project>'
+    check("a nested prototype import from the shared root still selects everything",
+          decide(["prototypes/kernel/Version.props"], build_graph(_tree(shared_files)), arch).everything)
+    del shared_files["prototypes/kernel/Version.props"]
+    check("a deleted nested shared prototype import still selects everything",
+          decide(["prototypes/kernel/Version.props"], build_graph(_tree(shared_files)), arch).everything)
+    shared_files["Directory.Build.props"] = '<Project><Import Project="$(MSBuildThisFileDirectory)prototypes/kernel/Version.props" /></Project>'
+    check("a deleted direct shared prototype import still selects everything",
+          decide(["prototypes/kernel/Version.props"], build_graph(_tree(shared_files)), arch).everything)
+    del shared_files["prototypes/kernel/sim/Sim.csproj"]
+    shared_files["Directory.Build.props"] = "<Project />"
+    d = decide(["prototypes/kernel/sim/Sim.csproj"], build_graph(_tree(shared_files)), arch)
+    check("deleting a prototype project retains explicit consumers without selecting everything",
+          not d.everything and d.affected == {"tests/Prototype/Prototype.Tests.csproj"})
+    for filename in ("Directory.Build.props", "Directory.Packages.props"):
+        files = {path: fixture_tree().read(path) for path in fixture_tree().files}
+        files.pop(f"prototypes/kernel/{filename}", None)
+        d = decide([f"prototypes/kernel/{filename}"], build_graph(_tree(files)), arch)
+        check(f"a deleted implicit prototype build input retains referenced consumers: {filename}",
+              not d.everything and "tests/Prototype/Prototype.Tests.csproj" in d.affected)
 
     for failure in failures:
         print(f"affected_tests self-test: {failure}", file=sys.stderr)

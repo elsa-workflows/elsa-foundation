@@ -74,12 +74,17 @@ internal static class PlacedReferenceRemapper
         IReadOnlyDictionary<string, string> placedNodeIds,
         string graphScopeId)
     {
-        // A request member read is not remapped yet; result and variable member reads are.
-        if (binding.Selection is not null && binding.Source is not (RuntimeInputBindingSource.ActivityResultMember or RuntimeInputBindingSource.VariableMember))
+        if (binding.Selection is not null && binding.Source is not (RuntimeInputBindingSource.ActivityResultMember
+                or RuntimeInputBindingSource.VariableMember or RuntimeInputBindingSource.WorkflowRequestMember))
             throw PublishedMemberReadDiagnostics.Unsupported(null, binding);
 
         switch (binding.Source)
         {
+            // Inside a placed body the request is the boundary's own inputs, keyed by the boundary input's reference
+            // key, which placement does not rename; a request read, whole or member, therefore names the same member
+            // wherever the body is placed and is returned as it is.
+            case RuntimeInputBindingSource.WorkflowRequestMember:
+                return binding;
             case RuntimeInputBindingSource.VariableMember when binding.Variable is { } memberVariable:
             {
                 // The scope moves with the placement as a whole-value read's does; the selection is carried unchanged.

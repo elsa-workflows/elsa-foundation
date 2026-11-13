@@ -142,3 +142,157 @@ describe("canvas editor saved preference", () => {
     expect(localStorage.length).toBe(0);
   });
 });
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason: unknown) => void;
+  const promise = new Promise<T>((finish, fail) => { resolve = finish; reject = fail; });
+  return { promise, resolve, reject };
+}
+
+describe("canvas editor preference ordering across stores", () => {
+  beforeEach(() => localStorage.clear());
+
+  it("finishes an earlier store GET before a recreated store reads and saves the latest recovery choice", async () => {
+    const earlier = api(), current = api();
+    const response = deferred<unknown>(), started = deferred<void>();
+    earlier.backend.http.getJson = vi.fn().mockImplementation(() => { started.resolve(); return response.promise; });
+    current.backend.http.getJson = vi.fn().mockResolvedValue(document("before", "r1"));
+    current.backend.http.putJson = vi.fn().mockResolvedValue(document("chosen", "r2"));
+    const oldRead = createCanvasEditorPreferences(earlier).load();
+    await started.promise;
+    const store = createCanvasEditorPreferences(current), read = store.load();
+    await Promise.resolve();
+    const concurrentReads = vi.mocked(current.backend.http.getJson).mock.calls.length;
+    response.resolve(document("before", "r1"));
+    expect(await oldRead).toBe("before");
+    expect(await read).toBe("before");
+    await store.save("chosen");
+    expect(concurrentReads).toBe(0);
+    expect(current.backend.http.putJson).toHaveBeenCalledWith(expect.any(String), expect.anything(),
+      { headers: { "X-Elsa-Studio-Host-Id": "studio", "If-Match": '"r1"' } });
+    expect(await createCanvasEditorPreferences(api()).load()).toBe("chosen");
+  });
+
+  it("finishes an accepted earlier store PUT response before another store reads r2 and saves r3", async () => {
+    const earlier = api(), current = api();
+    let server = document("before", "r1");
+    earlier.backend.http.getJson = vi.fn().mockImplementation(async () => server);
+    current.backend.http.getJson = vi.fn().mockImplementation(async () => server);
+    const response = deferred<unknown>(), accepted = deferred<void>();
+    earlier.backend.http.putJson = vi.fn().mockImplementation(async (_path, _body, options) => {
+      expect(options?.headers).toMatchObject({ "If-Match": '"r1"' });
+      server = document("first", "r2");
+      accepted.resolve();
+      return response.promise;
+    });
+    current.backend.http.putJson = vi.fn().mockImplementation(async (_path, _body, options) => {
+      expect(options?.headers).toMatchObject({ "If-Match": '"r2"' });
+      server = document("chosen", "r3");
+      return server;
+    });
+    const oldStore = createCanvasEditorPreferences(earlier);
+    expect(await oldStore.load()).toBe("before");
+    const oldWrite = oldStore.save("first");
+    await accepted.promise;
+    const store = createCanvasEditorPreferences(current), read = store.load();
+    await Promise.resolve();
+    const concurrentReads = vi.mocked(current.backend.http.getJson).mock.calls.length;
+    response.resolve(server);
+    await oldWrite;
+    expect(await read).toBe("first");
+    await store.save("chosen");
+    expect(concurrentReads).toBe(0);
+    expect(server).toEqual(document("chosen", "r3"));
+    expect(await createCanvasEditorPreferences(api()).load()).toBe("chosen");
+  });
+
+  it("keeps a pending successor ordered when an older scope operation settles", async () => {
+    const firstApi = api(), secondApi = api(), thirdApi = api();
+    const firstResponse = deferred<unknown>(), firstStarted = deferred<void>();
+    const secondResponse = deferred<unknown>(), secondStarted = deferred<void>();
+    firstApi.backend.http.getJson = vi.fn().mockImplementation(() => { firstStarted.resolve(); return firstResponse.promise; });
+    secondApi.backend.http.getJson = vi.fn().mockImplementation(() => { secondStarted.resolve(); return secondResponse.promise; });
+    thirdApi.backend.http.getJson = vi.fn().mockResolvedValue(document("saved", "r1"));
+    thirdApi.backend.http.putJson = vi.fn().mockResolvedValue(document("chosen", "r2"));
+    const firstRead = createCanvasEditorPreferences(firstApi).load();
+    await firstStarted.promise;
+    const secondRead = createCanvasEditorPreferences(secondApi).load();
+    firstResponse.resolve(document("saved", "r1"));
+    await firstRead;
+    await secondStarted.promise;
+    const store = createCanvasEditorPreferences(thirdApi), thirdRead = store.load();
+    await Promise.resolve();
+    const concurrentReads = vi.mocked(thirdApi.backend.http.getJson).mock.calls.length;
+    secondResponse.resolve(document("saved", "r1"));
+    await secondRead;
+    expect(await thirdRead).toBe("saved");
+    await store.save("chosen");
+    expect(concurrentReads).toBe(0);
+    expect(await createCanvasEditorPreferences(api()).load()).toBe("chosen");
+  });
+
+  it.each([
+    ["subject", () => api("another-user")],
+    ["tenant", () => api("user", "another-tenant")],
+    ["host", () => api("user", "tenant", "another-host")],
+    ["backend", () => api("user", "tenant", "studio", "https://other.example")]
+  ] as const)("lets a different %s scope complete while an earlier scope is pending", async (_scope, differentApi) => {
+    const earlier = api(), current = differentApi();
+    const response = deferred<unknown>(), started = deferred<void>();
+    earlier.backend.http.getJson = vi.fn().mockImplementation(() => { started.resolve(); return response.promise; });
+    current.backend.http.getJson = vi.fn().mockResolvedValue(document("before", "r1"));
+    current.backend.http.putJson = vi.fn().mockResolvedValue(document("chosen", "r2"));
+    const oldRead = createCanvasEditorPreferences(earlier).load();
+    await started.promise;
+    try {
+      const store = createCanvasEditorPreferences(current);
+      expect(await store.load()).toBe("before");
+      await store.save("chosen");
+      expect(current.backend.http.putJson).toHaveBeenCalledTimes(1);
+    } finally {
+      response.resolve(document("earlier", "r1"));
+      await oldRead;
+    }
+    expect(await createCanvasEditorPreferences(differentApi()).load()).toBe("chosen");
+    expect(await createCanvasEditorPreferences(api()).load()).toBe("earlier");
+  });
+
+  it.each([403, 409, 412])("recovers another queued store after a refused %s write without sharing its CAS revision", async status => {
+    const earlier = api(), current = api();
+    earlier.backend.http.getJson = vi.fn().mockResolvedValue(document("saved", "r1"));
+    current.backend.http.getJson = vi.fn().mockResolvedValue(document("saved", "r1"));
+    current.backend.http.putJson = vi.fn().mockResolvedValue(document("chosen", "r2"));
+    const response = deferred<unknown>(), started = deferred<void>();
+    earlier.backend.http.putJson = vi.fn().mockImplementation(() => { started.resolve(); return response.promise; });
+    const oldStore = createCanvasEditorPreferences(earlier);
+    await oldStore.load();
+    const oldWrite = oldStore.save("refused");
+    const refused = expect(oldWrite).rejects.toMatchObject({ status });
+    await started.promise;
+    const store = createCanvasEditorPreferences(current), read = store.load();
+    await Promise.resolve();
+    const concurrentReads = vi.mocked(current.backend.http.getJson).mock.calls.length;
+    response.reject(Object.assign(new Error("Refused"), { status }));
+    await refused;
+    expect(await read).toBe("saved");
+    expect(await createCanvasEditorPreferences(api()).load()).toBe("saved");
+    await store.save("chosen");
+    expect(concurrentReads).toBe(0);
+    expect(current.backend.http.putJson).toHaveBeenCalledWith(expect.any(String), expect.anything(),
+      { headers: { "X-Elsa-Studio-Host-Id": "studio", "If-Match": '"r1"' } });
+    expect(await createCanvasEditorPreferences(api()).load()).toBe("chosen");
+    earlier.backend.http.putJson = vi.fn().mockRejectedValue(Object.assign(new Error("Stale"), { status: 412 }));
+    await expect(oldStore.save("stale")).rejects.toMatchObject({ status: 412 });
+    expect(earlier.backend.http.putJson).toHaveBeenCalledWith(expect.any(String), expect.anything(),
+      { headers: { "X-Elsa-Studio-Host-Id": "studio", "If-Match": '"r1"' } });
+    expect(await createCanvasEditorPreferences(api()).load()).toBe("chosen");
+    earlier.backend.http.getJson = vi.fn().mockResolvedValue(document("chosen", "r2"));
+    expect(await oldStore.load()).toBe("chosen");
+    earlier.backend.http.putJson = vi.fn().mockResolvedValue(document("recovered", "r3"));
+    await oldStore.save("recovered");
+    expect(earlier.backend.http.putJson).toHaveBeenCalledWith(expect.any(String), expect.anything(),
+      { headers: { "X-Elsa-Studio-Host-Id": "studio", "If-Match": '"r2"' } });
+    expect(await createCanvasEditorPreferences(api()).load()).toBe("recovered");
+  });
+});

@@ -400,7 +400,7 @@ describe("publication channel UX", () => {
 
   it("shows exact-version editing only when the backend advertises it", () => {
     const unsupported = render(review());
-    expect(unsupported.querySelector("fieldset")).toBeNull();
+    expect(unsupported.querySelector("fieldset:not([role=presentation])")).toBeNull();
     unmount();
 
     const supported = render(review({
@@ -414,7 +414,7 @@ describe("publication channel UX", () => {
         issues: []
       }
     }));
-    expect(supported.querySelector("fieldset")).not.toBeNull();
+    expect(supported.querySelector("fieldset:not([role=presentation])")).not.toBeNull();
     expect(text(supported)).toContain("Next version: 2.0.0");
   });
 

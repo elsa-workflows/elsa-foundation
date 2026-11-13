@@ -1,3 +1,4 @@
+import { StudioField } from "@elsa-workflows/studio-ui";
 import React, { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { StudioEndpointContext, StudioExpressionEditorProps } from "@elsa-workflows/studio-sdk";
 import { pickConnections } from "./connectionsApi";
@@ -58,8 +59,8 @@ export function ConnectionPickerEditor({
   const selectionDisabled = !!disabled || visibleState.status !== "ready";
 
   return (
-    <div className="connection-picker-editor">
-      <label htmlFor={selectId}>Connection</label>
+    <div className="connection-picker-editor"><StudioField controlId={selectId} label="Connection">
+
       <select
         ref={selectRef}
         id={selectId}
@@ -92,7 +93,7 @@ export function ConnectionPickerEditor({
         {unavailable ? "This connection is unavailable." : null}
         {needsAuthorization ? "Needs authorization. Promotion still succeeds; a run will fault until authorized." : null}
       </p>
-    </div>
+    </StudioField></div>
   );
 }
 

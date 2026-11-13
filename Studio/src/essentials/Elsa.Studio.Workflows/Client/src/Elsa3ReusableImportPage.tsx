@@ -1,4 +1,4 @@
-import { StudioPageHeader } from "@elsa-workflows/studio-ui";
+import { StudioPageHeader, StudioField } from "@elsa-workflows/studio-ui";
 import {
   useEffect,
   useMemo,
@@ -509,16 +509,12 @@ export function Elsa3ReusableImportPage({
             <small>{file ? `${file.name} · ${formatBytes(file.size)}` : `Browser bound: ${formatBytes(maximumClientUploadBytes)}`}</small>
           </label>
           <span style={styles.or}>or</span>
-          <label style={styles.field}>
-            <span>Existing immutable collection handle</span>
-            <input
+          <StudioField style={styles.field} label={<><span>Existing immutable collection handle</span></>}><input
               value={collectionHandleInput}
               disabled={uploadStatus === "loading" || applyStatus === "loading"}
               onChange={event => changeCollectionHandle(event.target.value)}
               placeholder="Authorized collection handle"
-            />
-            <small>The handle is scope-bound and expires according to the server.</small>
-          </label>
+            /><small>The handle is scope-bound and expires according to the server.</small></StudioField>
         </div>
         <div style={styles.actions}>
           <button type="button" onClick={() => void upload()} disabled={!file || uploadStatus === "loading" || applyStatus === "loading"}>

@@ -49,8 +49,10 @@ export async function executableDesignerJourney(page: Page, info: TestInfo, capt
     await expect(page.locator(".wf-sequence-step")).toHaveCount(3);
     const narrow = (info.project.use.viewport?.width ?? 1440) < 800;
     if (narrow) {
-      await page.getByRole("button", { name: "Collapse inspector panel", exact: true }).click();
-      await page.getByRole("button", { name: "Collapse activities panel", exact: true }).click();
+      for (const name of ["Collapse inspector panel", "Collapse activities panel"]) {
+        const control = page.getByRole("button", { name, exact: true });
+        if (await control.count()) await control.click();
+      }
     }
     await expect(page.locator('.wf-sequence-step[data-id="first"]')).toBeVisible();
     await expect.poll(async () => (await page.locator('.wf-sequence-step[data-id="first"]').boundingBox())?.width ?? 0).toBeGreaterThan(180);
