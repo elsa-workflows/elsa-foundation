@@ -1,0 +1,28 @@
+{
+  "format": "elsa-safe-playwright-trace-v1",
+  "traceVersion": 8,
+  "sourceSha": "2161b81b9267fb3b5c9af9966e6b65ef02b0f1bd",
+  "exporterSha256": "6a786027984dc706c464ab503d8e1dfca2a0c2288d053c0033888703b25ba918",
+  "sha256": "e1d765516e18f3e8589dff1b8de1e1fb87177efc73b4d7c84bb5b57afb0c2c19",
+  "counts": {
+    "omittedRunnerTraces": 1,
+    "actions": 131,
+    "snapshots": 212,
+    "omittedDiagnosticRecords": 487,
+    "omittedAuthenticationFrames": 43,
+    "omittedUnrecordedSnapshotLinks": 5,
+    "networkSummaries": 531,
+    "contexts": 2,
+    "renderingResources": 144
+  },
+  "omissions": [
+    "authentication screenshots",
+    "request and dynamic response bodies",
+    "headers and cookies",
+    "API results",
+    "scripts and source files",
+    "console arguments",
+    "runner trace"
+  ],
+  "viewerInspection": "required before publication"
+}

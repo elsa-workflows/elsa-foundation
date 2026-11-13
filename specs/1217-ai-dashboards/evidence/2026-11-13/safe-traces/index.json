@@ -1,0 +1,182 @@
+[
+  {
+    "name": "native-desktop-light",
+    "format": "elsa-safe-playwright-trace-v1",
+    "traceVersion": 8,
+    "sourceSha": "9d65c70a3a1095a29462f81cbdf97bc22762c373",
+    "exporterSha256": "6a786027984dc706c464ab503d8e1dfca2a0c2288d053c0033888703b25ba918",
+    "sha256": "f155f1da632e41561c2c83a8ee28318f768fee0ab6fb5eb42a6563a425cc4fad",
+    "counts": {
+      "omittedRunnerTraces": 1,
+      "actions": 1560,
+      "snapshots": 2829,
+      "omittedDiagnosticRecords": 5288,
+      "omittedAuthenticationFrames": 61,
+      "omittedUnrecordedSnapshotLinks": 8,
+      "networkSummaries": 2526,
+      "contexts": 2,
+      "renderingResources": 1448
+    },
+    "omissions": [
+      "authentication screenshots",
+      "request and dynamic response bodies",
+      "headers and cookies",
+      "API results",
+      "scripts and source files",
+      "console arguments",
+      "runner trace"
+    ],
+    "viewerInspection": "passed; actual local TraceViewer actions/After DOM opened independently with styled populated UI, zero page errors",
+    "independentCredentialScan": "passed; zero matches across all six archives, 6248 private credential forms checked"
+  },
+  {
+    "name": "home-desktop-light",
+    "format": "elsa-safe-playwright-trace-v1",
+    "traceVersion": 8,
+    "sourceSha": "6f7db4b23dd22891edb2523eb08b0912ead90ad5",
+    "exporterSha256": "6a786027984dc706c464ab503d8e1dfca2a0c2288d053c0033888703b25ba918",
+    "sha256": "c1951819c4dfad22ba4c9d618f6404e2f5af96ee268584b56f65f4535aee06b1",
+    "counts": {
+      "omittedRunnerTraces": 1,
+      "actions": 285,
+      "snapshots": 540,
+      "omittedDiagnosticRecords": 1013,
+      "omittedAuthenticationFrames": 27,
+      "omittedUnrecordedSnapshotLinks": 2,
+      "networkSummaries": 939,
+      "contexts": 1,
+      "renderingResources": 397
+    },
+    "omissions": [
+      "authentication screenshots",
+      "request and dynamic response bodies",
+      "headers and cookies",
+      "API results",
+      "scripts and source files",
+      "console arguments",
+      "runner trace"
+    ],
+    "viewerInspection": "passed; actual local TraceViewer actions/After DOM opened independently with styled populated UI, zero page errors",
+    "independentCredentialScan": "passed; zero matches across all six archives, 6248 private credential forms checked"
+  },
+  {
+    "name": "comparison-desktop-light",
+    "format": "elsa-safe-playwright-trace-v1",
+    "traceVersion": 8,
+    "sourceSha": "9d65c70a3a1095a29462f81cbdf97bc22762c373",
+    "exporterSha256": "6a786027984dc706c464ab503d8e1dfca2a0c2288d053c0033888703b25ba918",
+    "sha256": "55384a75abb63aab1a2ed5a048e9ad65cf18e9c248b08fe206ac3899b300f27e",
+    "counts": {
+      "omittedRunnerTraces": 1,
+      "actions": 141,
+      "snapshots": 204,
+      "omittedDiagnosticRecords": 744,
+      "omittedAuthenticationFrames": 30,
+      "omittedUnrecordedSnapshotLinks": 2,
+      "networkSummaries": 362,
+      "contexts": 1,
+      "renderingResources": 152
+    },
+    "omissions": [
+      "authentication screenshots",
+      "request and dynamic response bodies",
+      "headers and cookies",
+      "API results",
+      "scripts and source files",
+      "console arguments",
+      "runner trace"
+    ],
+    "viewerInspection": "passed; actual local TraceViewer actions/After DOM opened independently with styled populated UI, zero page errors",
+    "independentCredentialScan": "passed; zero matches across all six archives, 6248 private credential forms checked"
+  },
+  {
+    "name": "weekly-workflow",
+    "format": "elsa-safe-playwright-trace-v1",
+    "traceVersion": 8,
+    "sourceSha": "2161b81b9267fb3b5c9af9966e6b65ef02b0f1bd",
+    "exporterSha256": "6a786027984dc706c464ab503d8e1dfca2a0c2288d053c0033888703b25ba918",
+    "sha256": "aececcc3f2b0c6f7833ae84df4e0097393d0f2ed5f6f52a86fb103273faf7df2",
+    "counts": {
+      "omittedRunnerTraces": 1,
+      "actions": 575,
+      "snapshots": 687,
+      "omittedDiagnosticRecords": 3298,
+      "omittedAuthenticationFrames": 9,
+      "omittedUnrecordedSnapshotLinks": 2,
+      "networkSummaries": 1158,
+      "contexts": 2,
+      "renderingResources": 656
+    },
+    "omissions": [
+      "authentication screenshots",
+      "request and dynamic response bodies",
+      "headers and cookies",
+      "API results",
+      "scripts and source files",
+      "console arguments",
+      "runner trace"
+    ],
+    "viewerInspection": "passed; actual local TraceViewer actions/After DOM opened independently with styled populated UI, zero page errors",
+    "independentCredentialScan": "passed; zero matches across all six archives, 6248 private credential forms checked"
+  },
+  {
+    "name": "weekly-acme",
+    "format": "elsa-safe-playwright-trace-v1",
+    "traceVersion": 8,
+    "sourceSha": "2161b81b9267fb3b5c9af9966e6b65ef02b0f1bd",
+    "exporterSha256": "6a786027984dc706c464ab503d8e1dfca2a0c2288d053c0033888703b25ba918",
+    "sha256": "16dee3361c515ddd1e54ac818d12490dd24afd96135afe3d83da724f6f3b475d",
+    "counts": {
+      "omittedRunnerTraces": 1,
+      "actions": 394,
+      "snapshots": 584,
+      "omittedDiagnosticRecords": 1529,
+      "omittedAuthenticationFrames": 33,
+      "omittedUnrecordedSnapshotLinks": 4,
+      "networkSummaries": 901,
+      "contexts": 2,
+      "renderingResources": 522
+    },
+    "omissions": [
+      "authentication screenshots",
+      "request and dynamic response bodies",
+      "headers and cookies",
+      "API results",
+      "scripts and source files",
+      "console arguments",
+      "runner trace"
+    ],
+    "viewerInspection": "passed; actual local TraceViewer actions/After DOM opened independently with styled populated UI, zero page errors",
+    "independentCredentialScan": "passed; zero matches across all six archives, 6248 private credential forms checked"
+  },
+  {
+    "name": "weekly-restart",
+    "format": "elsa-safe-playwright-trace-v1",
+    "traceVersion": 8,
+    "sourceSha": "2161b81b9267fb3b5c9af9966e6b65ef02b0f1bd",
+    "exporterSha256": "6a786027984dc706c464ab503d8e1dfca2a0c2288d053c0033888703b25ba918",
+    "sha256": "e1d765516e18f3e8589dff1b8de1e1fb87177efc73b4d7c84bb5b57afb0c2c19",
+    "counts": {
+      "omittedRunnerTraces": 1,
+      "actions": 131,
+      "snapshots": 212,
+      "omittedDiagnosticRecords": 487,
+      "omittedAuthenticationFrames": 43,
+      "omittedUnrecordedSnapshotLinks": 5,
+      "networkSummaries": 531,
+      "contexts": 2,
+      "renderingResources": 144
+    },
+    "omissions": [
+      "authentication screenshots",
+      "request and dynamic response bodies",
+      "headers and cookies",
+      "API results",
+      "scripts and source files",
+      "console arguments",
+      "runner trace"
+    ],
+    "viewerInspection": "passed; actual local TraceViewer actions/After DOM opened independently with styled populated UI, zero page errors",
+    "independentCredentialScan": "passed; zero matches across all six archives, 6248 private credential forms checked"
+  }
+]

@@ -1,6 +1,6 @@
 # Implementation Plan: AI-authored personal and shared dashboards
 
-**12 November delivery:** #3913 was closed without merging. This stack starts from current main; checked tasks below describe preserved implementation on `424c09e279`, not code already landed. See [delivery slices](delivery-slices.md) for the current integration state. Prior test receipts are historical supporting evidence.
+**13 November delivery:** Source slices and production follow-ups have landed; [delivery slices](delivery-slices.md) and the [evidence ledger](evidence/2026-11-13/README.md) identify exact commits and scoped passes. Final keyboard/editor/Home and resulting-main obligations remain open.
 
 **Branch**: `agent/codex/3604-ai-dashboards` | **Date**: 2026-11-06 | **Spec**: [spec.md](spec.md)
 
