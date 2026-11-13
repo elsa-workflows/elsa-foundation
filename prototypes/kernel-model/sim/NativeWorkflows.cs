@@ -15,8 +15,11 @@ public static class NativeWorkflows
     /// <summary>The workflows the generator starts, with the events each waits for (by the key in its input).</summary>
     public static readonly (string Workflow, int Events)[] Mix =
     [
-        ("n-seq", 0), ("n-join", 3), ("n-join2", 3), ("n-flow", 2), ("n-dispatch", 0), ("n-loop", 0), ("n-pub", 0),
+        ("n-seq", 0), ("n-join", 3), ("n-join2", 3), ("n-flow", 2), ("n-dispatch", 0), ("n-loop", 0), ("n-pub", 0), ("n-graph", 1),
     ];
+
+    /// <summary>The workflows with a Flowchart, whose committed states the graph checks read.</summary>
+    public static readonly HashSet<string> Graphs = new(StringComparer.Ordinal) { "n-flow", "n-graph" };
 
     private static WorkflowRegistry Build()
     {
@@ -44,6 +47,27 @@ public static class NativeWorkflows
                     [new("f1", "f2"), new("f1", "f3"), new("f2", "f4"), new("f3", "f4")], ("f4", Gateway.ParallelJoin)),
                 Set("out", "output", Expr("'flow ' + joined"))),
             ("joined", 0), ("output", null)));
+        // The graph engine's shapes (NATIVE.md, section 6): a loop from the start node with a fork and an implicit join
+        // in its body (a join per round), the decision that leaves it (its untaken side is a dead path every round), a
+        // first-wins race between an event and a timer (the loser is cancelled; the join behind it is released), and an
+        // All join after a decision (it fires on one live and one dead arrival). Which racer wins depends on the run, so
+        // only the variables are compared.
+        registry.Add(Workflow("n-graph", Sequence("root",
+                Flowchart("graph",
+                [
+                    Set("head", "round", Expr("round + 1")), Delay("a", 100), Set("b", "hits", Expr("hits + 1")), WriteLine("join", "joined"),
+                    If("decide", Expr("round < 3")), WriteLine("race", "race"), Event("r1", Expr("input.key + '-1'")), Delay("r2", 300),
+                    WriteLine("raced", "raced"), If("check", Expr("hits == 3")), Set("yes", "verdict", "ok"), Set("no", "verdict", "bad"), Set("end", "done", "yes"),
+                ],
+                [
+                    new("head", "a"), new("head", "b"), new("a", "join"), new("b", "join"), new("join", "decide"),
+                    new("decide", "head", "True"), new("decide", "race", "False"),
+                    new("race", "r1"), new("race", "r2"), new("r1", "raced"), new("r2", "raced"),
+                    new("raced", "check"), new("check", "yes", "True"), new("check", "no", "False"), new("yes", "end"), new("no", "end"),
+                ],
+                ("race", Gateway.FirstWins), ("end", Gateway.ParallelJoin)),
+                Set("out", "output", Expr("verdict + ' ' + done + ' ' + round + ' ' + hits"))),
+            ("round", 0), ("hits", 0), ("verdict", null), ("done", "no"), ("output", null)));
         registry.Add(Workflow("n-dispatch", Sequence("root",
                 Parallel("par", null,
                     Dispatch("c1", "n-child", wait: true).Capture("first", "Output"),

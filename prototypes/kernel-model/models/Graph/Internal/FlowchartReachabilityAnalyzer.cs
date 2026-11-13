@@ -4,6 +4,9 @@ namespace Kernel.Graph.Internal;
 
 public sealed class FlowchartReachabilityAnalyzer
 {
+    /// <summary>The engine's deliberate flaws (not main's); set by <see cref="FlowchartEngines.Create"/>.</summary>
+    public FlowchartFlaws Flaws { get; init; }
+
     public bool CanReach(FlowchartGraph graph, string sourceNodeId, string targetNodeId) =>
         graph.CanReach(sourceNodeId, targetNodeId);
 

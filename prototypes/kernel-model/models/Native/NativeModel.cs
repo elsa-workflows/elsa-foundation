@@ -27,6 +27,11 @@ public enum NativeFlaw
     ResumeAnyChild = 1 << 2,    // a child-finished resumes every child wait, not the one for that child
     NoAttemptCommit = 1 << 3,   // Durable: an External activity runs without its attempt committed first
     ScopeInMemory = 1 << 4,     // an iteration scope is kept in memory only
+    // The graph engine's flaws (FlowchartFlaws), one per graph invariant G1-G5 (NATIVE.md, section 6):
+    NoDeadPaths = 1 << 5,       // an untaken connection emits no dead arrival
+    NoRoundReset = 1 << 6,      // a loop-closing connection opens no new round
+    DeadPathRunsNode = 1 << 7,  // a node whose every inbound arrived dead is run
+    CancelLeavesPaths = 1 << 8, // a first-wins race completes without cancelling its losers
 }
 
 /// <summary>An HTTP start gives its trigger as the turn's ambient value instead (the kernel's Ambient: never stored).</summary>
@@ -427,6 +432,8 @@ internal sealed class Burst(NativeModel model, ITurn turn, CancellationToken can
 
     internal void RecordJoin(Frame frame, string node) => turn.Record($"j:{frame.Id}:{node}");
 
+    internal void Record(string entry) => turn.Record(entry);
+
     internal void Fail(Frame frame, ActivityFault fault)
     {
         _s.Frames.Remove(frame.Id);
@@ -566,6 +573,7 @@ public sealed class CompositeContext
     public void Complete(string outcome = "Done", JsonNode? result = null) => _burst.Complete(_frame, outcome, result);
     public void Join() => _burst.Join(_frame);
     public void RecordJoin(string node) => _burst.RecordJoin(_frame, node);
+    internal void Record(string entry) => _burst.Record(entry);
     public void Fault(ActivityFault fault) => _burst.Fail(_frame, fault);
     public void Cancel(string childFrame) => _burst.Cancel(childFrame);
 }

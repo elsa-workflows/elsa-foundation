@@ -79,4 +79,11 @@ public sealed record FlowchartStep(
     FlowchartExecutionState State,
     IReadOnlyList<FlowchartScheduledNode> Scheduled,
     string? Outcome = null,
-    FlowchartFault? Fault = null);
+    FlowchartFault? Fault = null)
+{
+    /// <summary>
+    /// The state as it is in memory at the end of the call, before pruning: what this call consumed, completed and
+    /// cancelled is still in it. For a host's journal and checks; <see cref="State"/> is what is carried on.
+    /// </summary>
+    public FlowchartExecutionState Live { get; init; } = State;
+}

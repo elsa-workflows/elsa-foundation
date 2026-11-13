@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -223,31 +224,35 @@ public sealed class While : CompositeActivity
 public sealed class Flowchart : CompositeActivity
 {
     private static readonly ConditionalWeakTable<Node, FlowchartGraph> Graphs = new();
-    private static readonly FlowchartExecutionEngine Engine = FlowchartEngines.Create();
+    private static readonly ConcurrentDictionary<FlowchartFlaws, FlowchartExecutionEngine> Engines = new();
 
     // The engine's state is rewritten at every commit of the instance, so it is kept compact: defaults (nulls, zeros,
     // Active) are not written; reading them back gives the same records.
     private static readonly JsonSerializerOptions Compact = new(JsonSerializerDefaults.Web) { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingDefault };
 
     protected internal override void Execute(CompositeContext context) =>
-        Step(context, run => Engine.Start(GraphOf(context.Node), run));
+        Step(context, null, (engine, run) => engine.Start(GraphOf(context.Node), run));
 
     protected internal override void OnChildCompleted(CompositeContext context, ChildCompleted child)
     {
         var (path, scope) = Decode(child.Tag);
-        Step(context, run => Engine.OnChildCompleted(GraphOf(context.Node), run, ReadState(context),
+        var before = ReadEngineState(context.ReadState<JsonNode>());
+        Step(context, before, (engine, run) => engine.OnChildCompleted(GraphOf(context.Node), run, before,
             new FlowchartChildCompletion(child.Node, child.Frame, [child.Outcome], path, scope)));
     }
 
-    protected internal override void OnChildFaulted(CompositeContext context, ChildFaulted child) =>
-        Step(context, run => Engine.OnChildFaulted(GraphOf(context.Node), run, ReadState(context), child.Node));
+    protected internal override void OnChildFaulted(CompositeContext context, ChildFaulted child)
+    {
+        var before = ReadEngineState(context.ReadState<JsonNode>());
+        Step(context, before, (engine, run) => engine.OnChildFaulted(GraphOf(context.Node), run, before, child.Node));
+    }
 
-    private static void Step(CompositeContext context, Func<FlowchartRun, FlowchartStep> call)
+    private static void Step(CompositeContext context, FlowchartExecutionState? before, Func<FlowchartExecutionEngine, FlowchartRun, FlowchartStep> call)
     {
         FlowchartStep step;
         try
         {
-            step = call(new FlowchartRun(context.FrameId));
+            step = call(EngineFor(context), new FlowchartRun(context.FrameId));
         }
         catch (Exception exception) when (exception is FlowchartExecutionException or InvalidOperationException)
         {
@@ -258,6 +263,7 @@ public sealed class Flowchart : CompositeActivity
         // Diagnostics are main's audit trail and the engine never reads them back; here the journal is the trail, so
         // they are not kept in the instance's state (the rest is the state main stages).
         context.SetState(JsonSerializer.SerializeToNode(step.State with { Diagnostics = [] }, Compact));
+        foreach (var entry in Trace(context.FrameId, context.Node.Id, before, step)) context.Record(entry);
         foreach (var scheduled in step.Scheduled)
         {
             if (scheduled.SchedulingCause == "join") context.RecordJoin($"{scheduled.NodeId}:{scheduled.IterationKey ?? "-"}");
@@ -280,10 +286,53 @@ public sealed class Flowchart : CompositeActivity
             if (!active.Contains(Decode(tag).Path ?? "")) context.Cancel(frame);
     }
 
-    private static FlowchartExecutionState? ReadState(CompositeContext context) =>
-        context.ReadState<JsonNode>()?.Deserialize<FlowchartExecutionState>(Compact);
+    /// <summary>
+    /// The graph engine's journal entries for one step (DESIGN.md: each engine writes its own), what the simulation's
+    /// graph checks read: the paths this step cancelled (<c>g|x</c>), every node scheduled by a join or a continuation
+    /// with the sources of the arrivals it consumed, live and dead (<c>g|f</c>), and a completion with the paths still
+    /// live (<c>g|c</c>). They ride in the turn's commit, so they cost no database call.
+    /// </summary>
+    private static IEnumerable<string> Trace(string frame, string flow, FlowchartExecutionState? before, FlowchartStep step)
+    {
+        var live = step.Live;
+        var wasCancelled = before?.ExecutionPaths.Where(p => p.Status == ExecutionPathStatus.Canceled).Select(p => p.ExecutionPathId).ToHashSet(StringComparer.Ordinal) ?? [];
+        foreach (var path in live.ExecutionPaths.Where(p => p.Status == ExecutionPathStatus.Canceled && !wasCancelled.Contains(p.ExecutionPathId)))
+            yield return $"g|x|{frame}|{flow}|{path.CurrentNodeId}|{path.IterationKey ?? "-"}";
 
-    private static FlowchartGraph GraphOf(Node node) => Graphs.GetValue(node, static n => FlowchartGraph.From(
+        // An arrival's own status says Consumed once a node took it; whether it was dead is in the state before (a
+        // dead arrival carried over) or in this step's diagnostic for the dead path it rode on.
+        var beforeArrivals = before?.Arrivals.ToDictionary(a => a.ArrivalId, StringComparer.Ordinal) ?? [];
+        var deadPaths = live.Diagnostics.Where(d => d.Kind == FlowchartDiagnosticKind.DeadPath && d.ExecutionPathId is not null).Select(d => d.ExecutionPathId!).ToHashSet(StringComparer.Ordinal);
+        var consumed = live.Arrivals
+            .Where(a => a.Status == FlowchartArrivalStatus.Consumed && beforeArrivals.GetValueOrDefault(a.ArrivalId)?.Status != FlowchartArrivalStatus.Consumed)
+            .Select(a => (Arrival: a, Dead: beforeArrivals.GetValueOrDefault(a.ArrivalId)?.Status == FlowchartArrivalStatus.Dead || deadPaths.Contains(a.ExecutionPathId)))
+            .ToList();
+        foreach (var scheduled in step.Scheduled.Where(s => s.SchedulingCause is "join" or "continuation"))
+        {
+            var taken = consumed.Where(c => c.Arrival.TargetNodeId == scheduled.NodeId && c.Arrival.ExecutionScopeId == scheduled.ExecutionScopeId && c.Arrival.IterationKey == scheduled.IterationKey).ToList();
+            yield return $"g|f|{frame}|{flow}|{scheduled.NodeId}|{scheduled.IterationKey ?? "-"}|{string.Join(",", taken.Where(t => !t.Dead).Select(t => t.Arrival.SourceNodeId))}|{string.Join(",", taken.Where(t => t.Dead).Select(t => t.Arrival.SourceNodeId))}";
+        }
+        if (step.Kind == FlowchartStepKind.Complete)
+            yield return $"g|c|{frame}|{flow}|{live.ExecutionPaths.Count(p => p.Status is ExecutionPathStatus.Active or ExecutionPathStatus.Waiting)}";
+    }
+
+    private static FlowchartExecutionEngine EngineFor(CompositeContext context)
+    {
+        var flaws = FlowchartFlaws.None;
+        if (context.Flawed(NativeFlaw.NoDeadPaths)) flaws |= FlowchartFlaws.NoDeadPaths;
+        if (context.Flawed(NativeFlaw.NoRoundReset)) flaws |= FlowchartFlaws.NoRoundReset;
+        if (context.Flawed(NativeFlaw.DeadPathRunsNode)) flaws |= FlowchartFlaws.DeadPathRunsNode;
+        if (context.Flawed(NativeFlaw.CancelLeavesPaths)) flaws |= FlowchartFlaws.CancelLeavesPaths;
+        return Engines.GetOrAdd(flaws, static f => FlowchartEngines.Create(new FlowchartOptions { Flaws = f }));
+    }
+
+    /// <summary>The engine's state as a Flowchart frame keeps it (for the simulation's checks too).</summary>
+    public static FlowchartExecutionState? ReadEngineState(JsonNode? state) => state?.Deserialize<FlowchartExecutionState>(Compact);
+
+    /// <summary>The path a child of a Flowchart frame runs on, from its tag.</summary>
+    public static string? PathOf(string? tag) => Decode(tag).Path;
+
+    public static FlowchartGraph GraphOf(Node node) => Graphs.GetValue(node, static n => FlowchartGraph.From(
         [.. n.Children.Select(child => new FlowchartNode(child.Id))],
         new FlowchartStructure(
             [.. n.Connections.Select(c => new FlowchartConnection(new FlowchartEndpoint(c.Source, c.Outcome), new FlowchartEndpoint(c.Target)))],

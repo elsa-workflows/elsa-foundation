@@ -31,8 +31,9 @@ public static class FlowchartEngines
     public static FlowchartExecutionEngine Create(FlowchartOptions? options = null, params IFlowchartPolicy[] extraPolicies)
     {
         var registry = new FlowchartPolicyRegistry([.. BuiltInPolicies(), .. extraPolicies]);
-        var analyzer = new FlowchartReachabilityAnalyzer();
-        var joinCoordinator = new FlowchartJoinCoordinator(registry, options ?? new FlowchartOptions());
+        options ??= new FlowchartOptions();
+        var analyzer = new FlowchartReachabilityAnalyzer { Flaws = options.Flaws };
+        var joinCoordinator = new FlowchartJoinCoordinator(registry, options);
         return new FlowchartExecutionEngine(analyzer, registry, joinCoordinator, new FlowchartPolicyApplier(analyzer, joinCoordinator), new FlowchartStatePersister());
     }
 }
