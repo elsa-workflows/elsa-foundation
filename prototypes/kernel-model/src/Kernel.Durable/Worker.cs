@@ -136,14 +136,6 @@ public sealed class Worker : IScopeActivation, ITurnServices
     public bool Has(Flaw flaw) => (_options.Flaws & flaw) != 0;
     public int Partitions => _options.Partitions;
 
-    /// <summary>A turn cancelled a job. Its ticket may be in memory, or still on its way in with a poll.</summary>
-    internal void Cancelling(string ticket)
-    {
-        _cancelling.Add(ticket);
-        if (_items.TryGetValue(ticket, out var held)) held.Taken = true;
-    }
-    void ITurnServices.Cancelling(string ticket) => Cancelling(ticket);
-
     /// <summary>A job's ticket: derived from instance and key, so a later turn can delete it without holding it.</summary>
     public static string TicketId(string instance, string key) => $"{instance}!{key}";
 
@@ -508,7 +500,9 @@ public sealed class Worker : IScopeActivation, ITurnServices
                 : await _type.ExecuteJobAsync(job.Model, context, token));
         }
         catch (Exception e) { error = e.Message; }
-        if (generation != _generation || ticket.Taken) return;      // reset, or cancelled beside completion
+        // A cancellation in flight can still be refused. Keep a completed result on the ticket until the
+        // commit either forgets it or releases its cancellation mark. A landed cancellation already removed it.
+        if (generation != _generation || !_items.TryGetValue(ticket.Message.Id, out var current) || current != ticket) return;
         // The ticket becomes the result: same id, so it is consumed once, by the turn that handles it.
         ticket.Message = ticket.Message with { Kind = Kinds.JobFinished, Payload = Json.Write(new JobFinished(job.Key, result, error)) };
         ticket.Ticket = false;
@@ -552,6 +546,13 @@ public sealed class Worker : IScopeActivation, ITurnServices
 
     private void Enqueue(TurnOutcome unit)
     {
+        // A throwing turn never publishes its proposed cancellations. A sealed turn reserves its tickets
+        // until its commit lands, including tickets that arrive while the commit waits.
+        foreach (var id in unit.Cancelled)
+        {
+            _cancelling.Add(id);
+            if (_items.TryGetValue(id, out var item)) item.Taken = true;
+        }
         if (Has(Flaw.DeliverBeforeCommit)) HandOver(unit, null, hold: true);
         if (Has(Flaw.EmitBeforeCommit)) Release(unit);
         else Release(unit, early: true);    // to callers whose route opted out of waiting for the commit
@@ -587,7 +588,17 @@ public sealed class Worker : IScopeActivation, ITurnServices
                 // The marks ride with the first of these commits that lands.
                 outcome = await CommitAsync([unit], marks, trial, generation, cancellationToken);
                 if (outcome == Outcome.Refused && unit.Slot is { } slot)
+                {
+                    // Park replaces this unit: its proposed cancellations will never be committed.
+                    foreach (var id in unit.Cancelled)
+                    {
+                        _cancelling.Remove(id);
+                        if (!_items.TryGetValue(id, out var item)) continue;
+                        item.Taken = false;
+                        if (item.Key is not null) StartJob(item);
+                    }
                     outcome = await CommitAsync([Bound(_type.Park(slot.Row, unit.Instance, unit.Consumed, unit.Spec, _refusal), slot)], marks, trial, generation, cancellationToken);
+                }
                 if (outcome == Outcome.Landed) (marks, trial) = ([], []);
             }
             if (outcome == Outcome.Refused && generation == _generation) Reset();   // nothing left to set apart

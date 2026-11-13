@@ -22,7 +22,7 @@ public sealed class WorkflowInstance(IEnumerable<IExecutionModel> models) : IAct
     public TurnOutcome? Command(TurnInput input)
     {
         var (row, first) = (input.Row, input.Taken[0]);
-        if (row is { } current && Kinds.IsControl(first.Message.Kind) && (current.Status == InstanceStatus.Running || current.Children is not null || first.Message.Kind == Kinds.Delete))
+        if (row is { } current && Kinds.IsControl(first.Message.Kind) && (current.Status == InstanceStatus.Running || current.Children is not null || first.Message.Kind == Kinds.Terminate && current.Jobs is not null || first.Message.Kind == Kinds.Delete))
             return Control(input, first);       // a terminate still goes on to the children of a finished instance
         if (row is { Status: not InstanceStatus.Running })
         {
@@ -112,7 +112,6 @@ public sealed class WorkflowInstance(IEnumerable<IExecutionModel> models) : IAct
             Sent = children.Select((child, i) => new Message($"{instance}#{next.Revision}.{i:D4}", new InstanceRef(child), Kinds.Terminate, Sender: instance)).ToList(),
             Cancelled = (row.Jobs is { } jobs ? Json.Read<List<string>>(jobs) : []).Select(key => Worker.TicketId(instance, key)).ToList(),
         };
-        foreach (var ticket in unit.Cancelled) input.Services.Cancelling(ticket);
         if (running && row.Parent is not null) unit.Sent.Add(Finished(next, null));
         return unit;
     }

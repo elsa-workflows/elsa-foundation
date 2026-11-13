@@ -3,11 +3,12 @@ namespace Kernel.Native.Run;
 /// <summary>Job tickets, the parked checkpoint and the later termination of its child, through real workers.</summary>
 internal static class JobPoisonChecks
 {
-    private sealed class Probe(bool throwOnResult) : Kernel.Sim.Model<List<string>>
+    private sealed class Probe(bool throwOnResult, bool withChild = true, bool cancelOther = false) : Kernel.Sim.Model<List<string>>
     {
         public override string Key => "job-park-probe";
         public readonly List<string> Started = [];
         public readonly Dictionary<string, TaskCompletionSource<object?>> Pending = [];
+        public readonly List<string> Results = new();
 
         public override ValueTask<object?> ExecuteJobAsync(IJob job, CancellationToken cancellationToken)
         {
@@ -26,15 +27,21 @@ internal static class JobPoisonChecks
                 if (message.Kind == Kinds.Start)
                 {
                     state.Add("saved");
-                    turn.Start(new StartSpec(Key, "child"));
+                    if (withChild) turn.Start(new StartSpec(Key, "child"));
                     turn.Subscribe("approval", "waiting");
                     turn.StartJob("poison");
                     turn.StartJob("other");
                 }
-                if (throwOnResult && message.Kind == Kinds.JobFinished)
+                if (message.Kind == Kinds.JobFinished)
                 {
-                    state.Add("uncommitted");
-                    throw new InvalidOperationException("job result turn failed");
+                    var key = message.Read<JobFinished>().Key;
+                    Results.Add(key);
+                    if (cancelOther && key == "poison") turn.CancelJob("other");
+                    if (throwOnResult)
+                    {
+                        state.Add("uncommitted");
+                        throw new InvalidOperationException("job result turn failed");
+                    }
                 }
             }
         }
@@ -47,6 +54,66 @@ internal static class JobPoisonChecks
     private static void Check(bool value, string what)
     {
         if (!value) throw new InvalidOperationException(what);
+    }
+
+    internal static async Task CancellationAsync(bool throwOnResult, bool cancelOther, bool refuseCommit = false)
+    {
+        var store = new InMemoryStore(1, () => 100);
+        var probe = new Probe(throwOnResult, withChild: false, cancelOther: cancelOther);
+        var owner = new Worker("owner", 0, store, new WorkflowInstance([probe]), new WorkerOptions { Monotonic = () => 100 });
+        async Task Drive(Func<bool> done)
+        {
+            for (var i = 0; i < 12 && !done(); i++) await owner.RunAsync();
+        }
+        await new DurableHost([owner]).ActivateAsync(0);
+        await store.AddAsync(new Message("start", new InstanceRef(Id), Kinds.Start, Start: new StartSpec(probe.Key, "solo")));
+        await owner.WokenAsync(null);
+        await Drive(() => probe.Pending.ContainsKey("other"));
+        var checkpoint = store.Instances[Id];
+        Check(checkpoint.Children is null && probe.Pending.ContainsKey("other"), "start must leave two jobs and no children");
+        var sibling = probe.Pending["other"].Task;
+        if (refuseCommit)
+        {
+            store.Refuses = row =>
+            {
+                if (row.Status != InstanceStatus.Running || row.Jobs is not null) return false;
+                // Complete the sibling with its cancellation reserved, before the failed write returns.
+                probe.Pending["other"].TrySetResult("during refused commit");
+                return true;
+            };
+        }
+        probe.Pending["poison"].SetResult("first");
+        await Drive(() => !store.Messages.ContainsKey(Poison));
+        var after = store.Instances[Id];
+        if (!throwOnResult && !refuseCommit)
+        {
+            Check(after.Status == InstanceStatus.Running && after.Jobs is null && sibling.IsCanceled && !store.Messages.ContainsKey(Other),
+                "committed cancellation must remove the sibling ticket and cancel the running job");
+            Check(probe.Results.SequenceEqual(["poison"]), "a committed cancellation must suppress the sibling result");
+            return;
+        }
+        var fault = refuseCommit ? $"the row of {Id} was refused" : "job result turn failed";
+        Check(after.Status == InstanceStatus.Faulted && after.Fault == fault && after.State == checkpoint.State
+            && after.Children is null && Json.Read<string[]>(after.Jobs!).SequenceEqual(["other"]) && store.Messages.ContainsKey(Other)
+            && (refuseCommit ? sibling.IsCompletedSuccessfully : !sibling.IsCompleted),
+            "Park must retain the live sibling ticket, token and saved checkpoint");
+        if (cancelOther)
+        {
+            if (!refuseCommit) probe.Pending["other"].SetResult("late");
+            await Drive(() => !store.Messages.ContainsKey(Other));
+            Check(!store.Messages.ContainsKey(Other) && store.Instances[Id] == (after with { Jobs = null, Revision = after.Revision + 1 }),
+                "abandoned cancellation must allow the sibling result to retire the ticket on this same owner");
+        }
+        else
+        {
+            await store.AddAsync(new Message("stop", new InstanceRef(Id), Kinds.Terminate));
+            await owner.WokenAsync(null);
+            await Drive(() => !store.Messages.ContainsKey("stop"));
+            Check(!store.Messages.ContainsKey("stop") && !store.Messages.ContainsKey(Other) && sibling.IsCanceled
+                && store.Instances[Id] == (after with { Jobs = null, Revision = after.Revision + 1 }),
+                "terminate of a childless parked row must retire its sibling ticket and cancel its running job");
+        }
+        Check(probe.Results.SequenceEqual(["poison"]) && owner.Owns && store.Ghost.Count == 0, "the parked model must not handle the sibling result or lose the fence");
     }
 
     internal static async Task RunAsync(bool resultThrows)

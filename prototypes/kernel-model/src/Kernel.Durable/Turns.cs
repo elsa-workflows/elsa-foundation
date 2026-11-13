@@ -38,8 +38,6 @@ public interface ITurnServices
 
     bool Has(Flaw flaw);
 
-    /// <summary>A job's ticket (or a recalled message) goes with this turn's commit: from here on its result is nobody's.</summary>
-    void Cancelling(string ticket);
 }
 
 /// <summary>A message as the durable layer holds it in memory. An actor type reads the message; the rest is layer 2's.</summary>
@@ -205,7 +203,6 @@ public sealed class DurableTurn
         if (Inbox.Any(m => m.Id == message) || _cancelled.Contains(message)) return;     // given to this turn: consumed with it
         if (_sent.RemoveAll(m => m.Id == message) > 0) return;      // sent by this turn: never written
         _cancelled.Add(message);        // its row goes with this commit, as a cancelled job's ticket does
-        Services.Cancelling(message);
     }
 
     public void StartJob(string key, object? arguments = null)
@@ -225,7 +222,6 @@ public sealed class DurableTurn
         var ticket = Worker.TicketId(Id, key);
         if (_started.Remove(key)) _sent.RemoveAll(m => m.Id == ticket);
         else _cancelled.Add(ticket);
-        Services.Cancelling(ticket);     // from here on its result is nobody's
     }
 
     public void Hold(Message message)
