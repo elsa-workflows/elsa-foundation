@@ -119,7 +119,7 @@ public sealed partial class RuntimeHistoryNativeDeliveryTests
         Assert.Equal(faulted ? ActivityExecutionStatus.Faulted : ActivityExecutionStatus.Completed, native.Status);
         var attempt = Assert.Single(native.Attempts!, item => item.Reason == ActivityAttemptReason.Resume);
         Assert.NotNull(attempt.EndedAt);
-        Assert.Equal(faulted ? ActivityTransitionKind.Fault : ActivityTransitionKind.Complete, attempt.TransitionKind);
+        Assert.Equal(faulted ? Elsa.Workflows.Runtime.Core.Models.ActivityTransitionKind.Fault : Elsa.Workflows.Runtime.Core.Models.ActivityTransitionKind.Complete, attempt.TransitionKind);
         var delivery = Assert.Single(native.TriggerDeliveries!, item => item.DeliveryId == attempt.TriggerDeliveryId);
         Assert.Equal(ActivityTriggerDeliveryStatus.Consumed, delivery.Status); Assert.Empty(native.BookmarkIds);
         var incidents = await f.Services.GetRequiredService<IIncidentStateStore>().ListAsync(run);
