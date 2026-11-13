@@ -10849,3 +10849,6 @@ Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpoint.HistoryStartsAtAdmission.in
 Elsa.Workflows.Runtime.Core.Models.ActivityScopeCleanupRequest.HistoryBookmarks.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.ActivityExecutionBookmarkSummary!>?
 Elsa.Workflows.Runtime.Core.Models.ActivityScopeCleanupRequest.HistoryBookmarks.init -> void
 Elsa.Workflows.Runtime.Core.Contracts.IActivityScopeCleanupStore.SupportsHistoryBookmarks.get -> bool
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeHistoryDetailsStore
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeHistoryDetailsStore.FindEventDetailsAsync(string! workflowExecutionId, string! historyEventId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<(Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryHead? Head, Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryEvent? Event)>
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeHistoryDetailsStore.FindBookmarkDetailsAsync(string! workflowExecutionId, string! bookmarkId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<(Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryHead? Head, Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryBookmark? Bookmark)>
