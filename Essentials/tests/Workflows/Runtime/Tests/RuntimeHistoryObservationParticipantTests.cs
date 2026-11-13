@@ -318,7 +318,7 @@ public sealed class RuntimeHistoryObservationParticipantTests
         Assert.Null(await f.Reader.FindHeadAsync("run"));
         Assert.False((await f.Writer.RecordAsync(observation)).Recorded);
         Assert.Empty((await f.Reader.ReadPageAsync(new("run"))).Items);
-        Assert.Empty((await f.Reader.ReadPageAsync(new("run", BookmarkId: "native-only"))).Items);
+        Assert.Empty((await f.Reader.ReadPageAsync(new("run", bookmarkId: "native-only"))).Items);
         Assert.Empty(f.State.HistoryBookmarkEvents);
         Assert.Empty(f.State.HistoryBookmarkEventIds);
         Assert.Empty(f.State.HistoryCandidateFingerprints);
@@ -365,7 +365,7 @@ public sealed class RuntimeHistoryObservationParticipantTests
         Assert.Equal(WorkflowExecutionDeletionResult.Deleted, await deletion.TryDeleteTerminalAsync(candidate));
         Assert.Null(await executions.FindAsync("run"));
         Assert.Null(await reader.FindHeadAsync("run"));
-        Assert.Empty((await reader.ReadPageAsync(new("run", BookmarkId: "native-only"))).Items);
+        Assert.Empty((await reader.ReadPageAsync(new("run", bookmarkId: "native-only"))).Items);
         Assert.Empty(state.HistoryBookmarkEvents);
         Assert.Empty(state.HistoryBookmarkEventIds);
         Assert.Empty(state.HistoryCandidateFingerprints);
