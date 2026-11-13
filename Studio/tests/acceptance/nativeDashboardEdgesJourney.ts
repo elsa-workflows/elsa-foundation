@@ -1,4 +1,4 @@
-import { expect, type Page, type TestInfo } from "@playwright/test";
+import { expect, type Dialog, type Page, type TestInfo } from "@playwright/test";
 import { attachDashboardJson, dashboardBackend, observeNativeWeaverBoundary, tag, type Capture, type Resource } from "./dashboardJourneySupport";
 import { captureResultViews } from "./liveDashboardsJourney";
 import type { QueryResult } from "../../src/essentials/Elsa.Studio.Dashboard/Client/src/native/types";
@@ -65,7 +65,7 @@ export async function nativeDashboardEdgesJourney(page: Page, info: TestInfo, ca
     await page.getByRole("group", { name: "Group by", exact: true }).getByLabel("Customer category", { exact: true }).check();
     const selections = ["processing.record-count", "processing.failure-rate", "processing.average-time-ms"];
     for (let index = 0; index < selections.length; index++) {
-      await page.getByRole("button", { name: "Add metric", exact: true }).click();
+      if (index > 0) await page.getByRole("button", { name: "Add metric", exact: true }).click();
       await page.getByRole("combobox", { name: `Metric ${index + 1}`, exact: true }).selectOption(selections[index]);
       await page.getByLabel("Result name", { exact: true }).nth(index).fill(["count", "rate", "duration"][index]);
     }
@@ -137,8 +137,13 @@ export async function nativeDashboardEdgesJourney(page: Page, info: TestInfo, ca
     // Restoring a feature reloads the shell; Acme's reference record store is intentionally
     // ephemeral, so finish its value observations before qualifying Workflow's bucket bound.
     await feature(true); disabled = false;
+    // Reopen the saved repaired definition to refresh the dataset catalog after shell reload.
+    const discardOwnedDraft = async (dialog: Dialog) => { expect(["confirm", "beforeunload"]).toContain(dialog.type()); await dialog.accept(); };
+    page.on("dialog", discardOwnedDraft);
+    try { await page.reload(); }
+    finally { page.off("dialog", discardOwnedDraft); }
+    await expect(page.getByRole("combobox", { name: "Dataset", exact: true }).locator('option[value="elsa.workflows.runs"]')).toHaveCount(1);
     await page.getByRole("combobox", { name: "Dataset", exact: true }).selectOption("elsa.workflows.runs");
-    await page.getByRole("button", { name: "Add metric", exact: true }).click();
     await page.getByRole("combobox", { name: "Metric 1", exact: true }).selectOption("workflow.started-count");
     await page.getByLabel("Result name", { exact: true }).fill("count");
     await page.getByRole("combobox", { name: "Time field", exact: true }).selectOption("startedAt");
@@ -146,13 +151,17 @@ export async function nativeDashboardEdgesJourney(page: Page, info: TestInfo, ca
     await page.getByLabel("From (inclusive UTC instant)", { exact: true }).fill(new Date(Date.now() - 32 * 86_400_000).toISOString());
     await page.getByLabel("To (exclusive UTC instant)", { exact: true }).fill(to);
     await page.getByRole("combobox", { name: "Time bucket", exact: true }).selectOption("hour");
-    const bounded = await preview(); expect(bounded.outcome).toBe("limitExceeded"); expect(bounded.errorCode).toBe("QUERY_LIMIT");
-    await expect(page.getByRole("heading", { name: "Query limit reached", exact: true })).toBeVisible();
-    await captureState("edge-bounded-cost-rejection");
+    const boundResponse = page.waitForResponse(response => response.request().method() === "POST" && new URL(response.url()).pathname.endsWith(`/questions/${question!.id}/preview`));
+    await page.getByRole("button", { name: "Preview question", exact: true }).click();
+    const rejected = await boundResponse; expect(rejected.status()).toBe(422);
+    const bounded = await rejected.json() as { code: string; message: string }; expect(bounded.code).toBe("QUERY_LIMIT");
+    await expect(page.getByRole("alert").filter({ hasText: bounded.message })).toBeVisible();
+    await page.getByRole("alert").filter({ hasText: bounded.message }).scrollIntoViewIfNeeded();
+    await capture(page, info, "edge-bounded-cost-rejection");
     await page.getByLabel("From (inclusive UTC instant)", { exact: true }).fill(from);
     const retry = await preview(); expect(retry.outcome).toBe("succeeded"); await captureState("edge-bounded-cost-retry");
     const after = await counters(); expect(after.counts["session.send"] ?? 0).toBe(0); await boundary.verify(info, "edge-native");
-    await attachDashboardJson(info, "native-edge-proof.json", { actualModuleDisabledAndRestored: true, explicitRepairSavedNewRevision: true, sameQuestion: original.id === question.id, oldHistoryWithheld: true, newHistoryAvailable: true, noEligibleDenominator: true, noEligibleValues: true, staleReason: "definition changed", priorResultGeneratedAtRetained: true, emptyBaselineCoverage: "unknown", boundedCostError: bounded.errorCode, boundedCostRetrySucceeded: true, failureKind: "owned browser transport offline", failedValuesWithheld: true, transportRetrySucceeded: true, sdkSendsBefore: before.counts["session.send"] ?? 0, sdkSendsAfter: after.counts["session.send"] ?? 0 });
+    await attachDashboardJson(info, "native-edge-proof.json", { actualModuleDisabledAndRestored: true, explicitRepairSavedNewRevision: true, sameQuestion: original.id === question.id, oldHistoryWithheld: true, newHistoryAvailable: true, noEligibleDenominator: true, noEligibleValues: true, staleReason: "definition changed", priorResultGeneratedAtRetained: true, emptyBaselineCoverage: "unknown", boundedCostError: bounded.code, boundedCostRetrySucceeded: true, failureKind: "owned browser transport offline", failedValuesWithheld: true, transportRetrySucceeded: true, sdkSendsBefore: before.counts["session.send"] ?? 0, sdkSendsAfter: after.counts["session.send"] ?? 0 });
   } finally {
     boundary.dispose();
     try { if (disabled) await feature(true); }

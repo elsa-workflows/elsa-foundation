@@ -274,4 +274,18 @@ class NativeEdgeVerdictTests(unittest.TestCase):
         self.assertEqual(1,live.native_edge_verdict(report,root,'fixture-sha'))
         return report
 
+class NativeSourceFenceTests(unittest.TestCase):
+    def test_changed_source_invalidates_native_qualification_flag(self):
+        with tempfile.TemporaryDirectory() as directory:
+            output=Path(directory)/'proof'
+            options=argparse.Namespace(output=output,mode='native-edges',model='pinned',account_access_restored=False)
+            def success(_output,_options,_native,report):report.update(status='passed',stage='complete',nativeEdgesQualified=True)
+            with patch.object(live,'materialize',return_value=(Path('project'),Path('hook'),[])),patch.object(live,'build'),patch.object(live,'execute_live',side_effect=success),patch.object(live,'source_state',side_effect=[{'sha':'before','dirty':''},{'sha':'after','dirty':''}]):
+                with self.assertRaises(ValueError):live.run(options)
+            report=json.loads((output/'report.json').read_text())
+            self.assertEqual('failed',report['status'])
+            self.assertFalse(report['nativeEdgesQualified'])
+            self.assertFalse(report['liveQualified'])
+
+
 if __name__ == '__main__': unittest.main()

@@ -560,14 +560,14 @@ def run(options):
             report['providerCalls'] = 'disabled; native edge SDK counts required zero' if options.mode == 'native-edges' else 'actual preflight requested once; see preflight and SDK counter evidence'
             execute_live(output, options, native_helpers(), report)
         if source_state() != start:
-            report.update(liveQualified=False)
+            report.update(liveQualified=False, nativeEdgesQualified=False)
             raise ValueError('Source changed during the run; evidence cannot qualify a revision')
     except LiveUnavailable:
         report.update(status='unavailable', liveQualified=False)
         raise
     except BaseException as failure:
         # Tool/provider exceptions may hold request data. Retain only a fixed category and exception type.
-        report.update(status='failed', liveQualified=False, failureType=type(failure).__name__)
+        report.update(status='failed', liveQualified=False, nativeEdgesQualified=False, failureType=type(failure).__name__)
         raise
     finally:
         report['finishedAt'] = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
