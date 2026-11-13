@@ -1,3 +1,4 @@
+import { activityDefinitionTitleJourney } from "./activityDefinitionTitleJourney";
 import { tabbedSecretsJourney } from "./tabbedSecretsJourney";
 import { templateToastJourney } from "./templateToastJourney";
 import { executableDesignerJourney } from "./executableDesignerJourney";
@@ -46,6 +47,8 @@ test("user task authoring and workflow result", async ({ page }, info) => {
     creations.push({ url: `${process.env.UX_BACKEND_URL}/design/workflows/definitions`, id });
   }, cleanup => { ownedCleanups.get(page)!.push(cleanup); });
 });
+test("activity definition identity survives reopening", async ({ page }, info) => activityDefinitionTitleJourney(page, info, capture));
+
 test("business decisions authoring and explanations", async ({ page }, info) => decisionsJourney(page, info, capture));
 test("settings tabs and preserved edits", async ({ page }, info) => settingsTabsJourney(page, info, capture));
 test("structured logs table accessibility", async ({ page }, info) => structuredLogsJourney(page, info, capture));
