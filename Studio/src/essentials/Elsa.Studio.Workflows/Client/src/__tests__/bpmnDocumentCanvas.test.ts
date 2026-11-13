@@ -5,6 +5,15 @@ import { documentCanvasOwner, documentCanvasScope } from "./bpmnDocumentCanvasFi
 
 function canvas() { return projectBpmnDocumentCanvas(documentCanvasOwner(), documentCanvasScope); }
 function sourceElement(owner: ReturnType<typeof documentCanvasOwner>, id: string) { return readBpmnDocument(owner).byId.get(id)!; }
+function laneDependencyOwner(edit: (document: Document, byId: (id: string) => Element) => void) {
+  return documentCanvasOwner(xml => {
+    const document = new DOMParser().parseFromString(xml, "application/xml");
+    const byId = (id: string) => [...document.getElementsByTagName("*")].find(element => element.getAttribute("id") === id)!;
+    [...document.getElementsByTagNameNS(bpmnNamespaces.diagram, "BPMNEdge")].forEach(edge => edge.remove());
+    edit(document, byId);
+    return new XMLSerializer().serializeToString(document);
+  });
+}
 function ownerWithThreePointRoute(vertical = false, collinear = false) {
   return documentCanvasOwner(xml => {
     const document = new DOMParser().parseFromString(xml, "application/xml");
@@ -27,6 +36,85 @@ function ownerWithThreePointRoute(vertical = false, collinear = false) {
 }
 
 describe("complete document canvas projection", () => {
+  it.each(["missing", "ambiguous"])("does not invent a pool parent when the declared inner lane DI is %s", state => {
+    const owner = laneDependencyOwner((_document, byId) => {
+      const lane = byId("LaneB1DI");
+      if (state === "missing") lane.remove();
+      else { const copy = lane.cloneNode(true) as Element; copy.setAttribute("id", "LaneB1CopyDI"); lane.after(copy); }
+    });
+    const before = structuredClone(owner), view = projectBpmnDocumentCanvas(owner, documentCanvasScope);
+    expect(view.nodes.find(node => node.id === "ODI")!.parentId).toBeUndefined();
+    expect(view.diagnostics).toContainEqual(expect.objectContaining({ code: "missing-parent-di", diId: "ODI",
+      relatedDiIds: expect.arrayContaining(["LaneBDI", "PoolDI"]) }));
+    for (const id of ["ODI", "LaneBDI", "PoolDI", ...(state === "ambiguous" ? ["LaneB1DI", "LaneB1CopyDI"] : [])]) {
+      const node = view.nodes.find(item => item.id === id)!;
+      expect(() => planBpmnDocumentMove(view, new Map([[id, { x: node.position.x + 20, y: node.position.y }]]))).toThrow(/parent DI/);
+    }
+    const pool = view.nodes.find(node => node.id === "PoolDI")!.data.absoluteBounds;
+    expect(() => planBpmnDocumentResize(view, "PoolDI", { ...pool, height: pool.height + 40 })).toThrow(/parent DI/);
+    const lane = view.nodes.find(node => node.id === "LaneADI")!.data.absoluteBounds;
+    expect(() => planBpmnDocumentResize(view, "LaneADI", { ...lane, height: lane.height + 20 })).toThrow(/parent DI/);
+    expect(planBpmnDocumentMove(view, new Map(view.nodes.map(node => [node.id, node.position])))).toEqual([]);
+    const independentLane = view.nodes.find(node => node.id === "LaneADI")!;
+    const laneCommands = planBpmnDocumentMove(view, new Map([[independentLane.id, { x: independentLane.position.x + 20, y: independentLane.position.y }]]));
+    expect(laneCommands.some(command => command.kind === "bounds" && ["ODI", "LaneBDI"].includes(command.shapeId))).toBe(false);
+    const unrelated = view.nodes.find(node => node.id === "Pool2DI")!;
+    const next = applyBpmnDocumentCommands(owner, planBpmnDocumentMove(view, new Map([[unrelated.id, { x: unrelated.position.x + 20, y: unrelated.position.y }]])));
+    expect(sourceElement(next, "ODI").outerHTML).toBe(sourceElement(owner, "ODI").outerHTML);
+    expect(sourceElement(next, "P").outerHTML).toBe(sourceElement(owner, "P").outerHTML);
+    expect(next.structure!.payload.activities).toBe(owner.structure!.payload.activities);
+    expect(owner).toEqual(before);
+  });
+
+  it.each(["equal-depth", "different-depth"])("fences disjoint %s lane memberships and their related container geometry", state => {
+    const owner = laneDependencyOwner((document, byId) => {
+      const add = (laneId: string) => { const reference = document.createElementNS(bpmnNamespaces.model, "bpmn:flowNodeRef"); reference.textContent = "O"; byId(laneId).prepend(reference); };
+      add("LaneA");
+      if (state === "equal-depth") {
+        [...byId("LaneB1").children].find(element => element.localName === "flowNodeRef" && element.textContent === "O")!.remove();
+        add("LaneB");
+      }
+    });
+    const before = structuredClone(owner), view = projectBpmnDocumentCanvas(owner, documentCanvasScope);
+    expect(view.nodes.find(node => node.id === "ODI")!.parentId).toBeUndefined();
+    expect(view.diagnostics).toContainEqual(expect.objectContaining({ code: "ambiguous-lane-membership", diId: "ODI",
+      relatedDiIds: expect.arrayContaining(["LaneADI", "LaneBDI", "PoolDI"]) }));
+    for (const id of ["ODI", "LaneADI", "LaneBDI", "PoolDI", ...(state === "different-depth" ? ["LaneB1DI"] : [])]) {
+      const node = view.nodes.find(item => item.id === id)!;
+      expect(() => planBpmnDocumentMove(view, new Map([[id, { x: node.position.x + 20, y: node.position.y }]]))).toThrow(/ambiguous/);
+    }
+    const pool = view.nodes.find(node => node.id === "PoolDI")!.data.absoluteBounds;
+    expect(() => planBpmnDocumentResize(view, "PoolDI", { ...pool, height: pool.height + 40 })).toThrow(/ambiguous/);
+    const lane = view.nodes.find(node => node.id === "LaneADI")!.data.absoluteBounds;
+    expect(() => planBpmnDocumentResize(view, "LaneADI", { ...lane, height: lane.height + 20 })).toThrow(/ambiguous/);
+    expect(planBpmnDocumentMove(view, new Map(view.nodes.map(node => [node.id, node.position])))).toEqual([]);
+    const independentTask = view.nodes.find(node => node.id === "TDI")!;
+    const taskCommands = planBpmnDocumentMove(view, new Map([[independentTask.id, { x: independentTask.position.x + 20, y: independentTask.position.y }]]));
+    expect(taskCommands.some(command => command.kind === "bounds" && command.shapeId === "ODI")).toBe(false);
+    const unrelated = view.nodes.find(node => node.id === "Pool2DI")!;
+    const next = applyBpmnDocumentCommands(owner, planBpmnDocumentMove(view, new Map([[unrelated.id, { x: unrelated.position.x + 20, y: unrelated.position.y }]])));
+    expect(sourceElement(next, "ODI").outerHTML).toBe(sourceElement(owner, "ODI").outerHTML);
+    expect(sourceElement(next, "P").outerHTML).toBe(sourceElement(owner, "P").outerHTML);
+    expect(next.structure!.payload.activities).toBe(owner.structure!.payload.activities);
+    expect(owner).toEqual(before);
+  });
+
+  it("accepts genuine ancestor-chain lane membership and translates its complete dependent shape family", () => {
+    const owner = documentCanvasOwner(xml => xml.replace('<bpmn:lane id="LaneB">', '<bpmn:lane id="LaneB"><bpmn:flowNodeRef>O</bpmn:flowNodeRef>'));
+    const before = structuredClone(owner), view = projectBpmnDocumentCanvas(owner, documentCanvasScope), lane = view.nodes.find(node => node.id === "LaneBDI")!;
+    expect(view.nodes.find(node => node.id === "ODI")).toMatchObject({ parentId: "LaneB1DI", data: { laneIds: ["LaneB1", "LaneB"] } });
+    expect(view.diagnostics.some(diagnostic => diagnostic.code === "ambiguous-lane-membership" && diagnostic.diId === "ODI")).toBe(false);
+    const commands = planBpmnDocumentMove(view, new Map([[lane.id, { x: lane.position.x + 20, y: lane.position.y }]]));
+    for (const id of ["LaneBDI", "LaneB1DI", "ODI", "CDI", "HDI", "HEDI"]) {
+      const previous = view.nodes.find(node => node.id === id)!.data.absoluteBounds;
+      expect(commands).toContainEqual({ kind: "bounds", shapeId: id, bounds: { ...previous, x: previous.x + 20 } });
+    }
+    const next = applyBpmnDocumentCommands(owner, commands);
+    for (const id of ["TDI", "Pool2DI", "ChildDiagram", "P"]) expect(sourceElement(next, id).outerHTML).toBe(sourceElement(owner, id).outerHTML);
+    expect(next.structure!.payload.activities).toBe(owner.structure!.payload.activities);
+    expect(owner).toEqual(before);
+  });
+
   it("keeps ancestor lane dependencies when a boundary host and its subprocess both lack DI", () => {
     const owner = documentCanvasOwner(xml => {
       const document = new DOMParser().parseFromString(xml, "application/xml");

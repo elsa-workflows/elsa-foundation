@@ -143,10 +143,16 @@ export function projectBpmnDocumentCanvas(owner: ActivityNode, address: BpmnScop
     } else if (element.localName !== "participant") {
       const memberships = laneMembership(element).sort((a, b) => depth(b) - depth(a));
       membershipById.set(shape.shapeId, memberships.map(lane => identity(lane)!));
-      if (memberships.length > 1 && depth(memberships[0]) === depth(memberships[1])) {
-        diagnostics.push({ code: "ambiguous-lane-membership", elementId: shape.elementId, diId: shape.shapeId, message: "Flow node belongs to several equally nested lanes; memberships are retained." });
-      } else parent = pick(identity(memberships[0]), center(shape.bounds), shape);
-      parent ??= semanticParent(element, shape);
+      const deepest = memberships[0];
+      // Depth orders a real ancestor chain; it cannot choose between disjoint lane branches.
+      if (deepest && memberships.some(lane => lane !== deepest && !lane.contains(deepest))) {
+        diagnostics.push({ code: "ambiguous-lane-membership", elementId: shape.elementId, diId: shape.shapeId,
+          relatedDiIds: containerInstances(element).map(container => container.shapeId),
+          message: "Flow node belongs to disjoint lane branches; memberships are retained without inferring a visual parent." });
+      } else if (deepest) {
+        parent = pick(identity(deepest), center(shape.bounds), shape);
+        if (!parent) missingParent(element, shape, deepest);
+      } else parent = semanticParent(element, shape);
     }
     if (parent && parent.shapeId !== shape.shapeId) parentById.set(shape.shapeId, parent.shapeId);
   }
@@ -252,7 +258,7 @@ function geometryCommands(canvas: BpmnDocumentCanvas, next: ReadonlyMap<string, 
       ...(edge.elementType === "dataInputAssociation" || edge.elementType === "dataOutputAssociation" ? [identity(edge.element.parentElement)] : [])];
     if (references.some(reference => reference && changed.has(reference))) fail(`edge '${edge.edgeId}' needs its missing endpoint DI before this move`);
   }
-  for (const diagnostic of canvas.diagnostics.filter(item => item.code === "ambiguous-di-parent" && item.diId)) {
+  for (const diagnostic of canvas.diagnostics.filter(item => ["ambiguous-di-parent", "ambiguous-lane-membership"].includes(item.code) && item.diId)) {
     for (const id of [diagnostic.diId!, ...(diagnostic.relatedDiIds ?? [])]) {
       const old = nodes.get(id)?.data.absoluteBounds, bounds = next.get(id);
       if (old && bounds && !equalBounds(old, bounds)) fail("visual parent DI is ambiguous for this move");
