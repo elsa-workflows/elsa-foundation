@@ -418,7 +418,7 @@ not publish successful values or outcomes through mutable execution-context `Set
   - **Routing and business data stay separate.** An ordinary returned value (a string, number, object, array or null)
     is the activity's result only and selects no outcome. A completion that selects outcomes does so only through the
     recognized form, which still carries the result on its own channel; control instructions are never inferred from
-    ordinary business-object properties. This replaces RunJavaScript's routing by return value (#1114, recorded in
+    ordinary business-object properties. This replaces RunJavaScript's routing by return value (recorded in
     `docs/reports/elsa-4-activity-behavioural-drive-2026-08.md`) and its `Unmatched` outcome, so returning data can no
     longer change the route by accident: "nothing selected" is `Done` (not a silent `Unmatched`), an unknown name
     faults (not a silent `Unmatched`), and several outcomes are expressible where the node permits them.
@@ -491,7 +491,7 @@ converter already does for If, Switch and DispatchWorkflow; SendHttpRequest with
 rule. A RunJavaScript with no selection completes with `Done`, in Elsa 3 and here. The converter's rule that maps
 Elsa 3's `Done` to `Unmatched` (spec 239 R8, spec 236 member map) existed only because of routing by return value; it
 becomes `Done` to `Done`. S-3 must prove this preserves routing through conversion, publication and execution,
-including connected RunJavaScript nodes whose `Done` was converted to `Unmatched` (#3295). Neither changing the script
+including connected RunJavaScript nodes whose `Done` was converted to `Unmatched`. Neither changing the script
 API nor supplying an outcome declaration proves that mapping faithful for every activity or failure path; this
 amendment does not implement or prove the fix.
 
