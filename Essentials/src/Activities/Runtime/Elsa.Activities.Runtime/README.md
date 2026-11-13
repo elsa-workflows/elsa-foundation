@@ -121,3 +121,8 @@ The atomic saved-recipient claim can also reject a wait which passed the first r
 It describes only the rejected admission and grants no consumption or callback authority. Required
 recording failure keeps the work owed; later re-entry observes the state then present. The
 [owning catalog](EXTENSION_POINTS.md#atomic-saved-resume-admission-loss-3849-s10i) records controls and limits.
+
+If the workflow became terminal and recording failed, the normal drainer keeps refusing activity execution.
+The existing Runtime resumption cleanup instead observes the queued saved resume as terminal/ineligible
+before deleting its residue. Missing/unacknowledged retained history stops that purge until a later sweep;
+this separate diagnostic observation does not manufacture a callback or bookmark consumption.

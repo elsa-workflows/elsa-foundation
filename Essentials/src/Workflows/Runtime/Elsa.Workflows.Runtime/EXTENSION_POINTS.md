@@ -1350,5 +1350,15 @@ rejects the saved recipient between preliminary eligibility and atomic admission
 The original native policy and explicit access context survive the claim attempt; the same private owner
 revalidates pairing/access and preserves Required write failure as owed work. Actual re-entry can record a
 different now-current receiver decision. See the [owning catalog](../../../Activities/Runtime/Elsa.Activities.Runtime/EXTENSION_POINTS.md#atomic-saved-resume-admission-loss-3849-s10i).
-All15 new and35 affected component controls are NOT RUN. No new public contract/schema/dependency/friend/
-module/host is added; other receiver branches, authored journeys, durable provider and UX acceptance remain open.
+The existing terminal resumption purge also records `DeliveryUnmatched` / `terminal-resume-ineligible`
+before deleting exact saved-resume residue. It retains terminal status as authoritative: no activity executes
+and no bookmark consumption is invented. Recording failure keeps the native source queued for another sweep;
+a real retry is another observed cleanup decision. Live-owner exclusion, bounded paging and targeted deletion
+remain the existing purge's responsibility. The additive `RuntimeResumptionService` constructor receives the
+actual paired Core writer/reader; its original constructor remains and cannot waive retained obligations.
+No source/capture-chain qualification is claimed for this pure observation beyond the selected provider's
+native policy/scope/deletion contract; it enables no native activity effect.
+
+All28 new and35 prior native component controls plus the existing resumption suite are NOT RUN. One Runtime
+constructor/API baseline entry is added; no Core contract/schema/reference/dependency/friend/module/host.
+Other receiver branches, authored journeys, durable provider and UX acceptance remain open.

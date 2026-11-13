@@ -5,6 +5,7 @@ using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.Executions;
+using Elsa.Workflows.Runtime.Services.History;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -84,6 +85,30 @@ public sealed class RuntimeResumptionService(
     // removes an item (Delete returning false) cannot spin this loop forever. Bounded residue is expected — one
     // stranded RunSchedulerWork row per prior sweep — so a handful of BacklogBatchSize pages always suffices.
     private const int MaxPurgePagesPerExecution = 16;
+
+    private readonly IRuntimeHistoryObservationWriter? terminalHistoryWriter;
+    private readonly IRuntimeHistoryStore? terminalHistoryReader;
+
+    /// <summary>Pairs terminal residual-work observations with the selected history reader before purging.</summary>
+    public RuntimeResumptionService(IRuntimeHistoryObservationWriter historyWriter, IRuntimeHistoryStore historyReader,
+        IRuntimePostCommitOutboxProcessor outboxProcessor, IWorkflowSchedulerWorkQueue workQueue,
+        IRuntimeRecoveryScanner recoveryScanner, IWorkflowExecutionActorProvider agentProvider,
+        IRuntimeExecutionIdGenerator idGenerator, TimeProvider timeProvider,
+        IWorkflowExecutionStateStore workflowExecutionStateStore, IWorkflowSchedulerPauseGate pauseGate,
+        RuntimeResumptionDiscoveryStateStore discoveryStateStore, IExecutionLivenessStateStore executionLivenessStateStore,
+        IWorkflowExecutionPartitionAccessor? partitionAccessor = null, IRuntimeRecoverySweepCursorStore? recoveryCursorStore = null,
+        IPersistenceAccessContextAccessor? persistenceAccessContextAccessor = null,
+        IEnumerable<IRuntimeRecoveryCandidateSource>? recoveryCandidateSources = null,
+        ILogger<RuntimeResumptionService>? logger = null, IPersistenceOperationScopeFactory? operationScopeFactory = null,
+        IRuntimeAdmissionLoadSignal? loadSignal = null)
+        : this(outboxProcessor, workQueue, recoveryScanner, agentProvider, idGenerator, timeProvider,
+            workflowExecutionStateStore, pauseGate, discoveryStateStore, executionLivenessStateStore, partitionAccessor,
+            recoveryCursorStore, persistenceAccessContextAccessor, recoveryCandidateSources, logger, operationScopeFactory, loadSignal)
+    {
+        ArgumentNullException.ThrowIfNull(historyWriter); ArgumentNullException.ThrowIfNull(historyReader);
+        terminalHistoryWriter = historyWriter; terminalHistoryReader = historyReader;
+    }
+
 
     public async ValueTask<RuntimeResumptionSweepResult> SweepAsync(RuntimeResumptionSweepRequest request, CancellationToken cancellationToken = default)
     {
@@ -181,8 +206,8 @@ public sealed class RuntimeResumptionService(
         string workflowExecutionId,
         CancellationToken cancellationToken)
     {
-        if (!await IsTerminalAsync(workflowExecutionId, cancellationToken))
-            return TerminalPurge.NotTerminal;
+        var execution = await workflowExecutionStateStore.FindAsync(workflowExecutionId, cancellationToken);
+        if (execution is null || !execution.Status.IsTerminal()) return TerminalPurge.NotTerminal;
 
         // The terminal checkpoint commits before the drain that wrote it ends: that drain still owns the execution and
         // reconciles its own scheduler queue after the commit (#2601). Deleting its queued work under it breaks that
@@ -191,7 +216,7 @@ public sealed class RuntimeResumptionService(
         if (await IsOwnedByLiveDrainAsync(workflowExecutionId, cancellationToken))
             return TerminalPurge.Owned;
 
-        var purged = await PurgeResidualSchedulerWorkAsync(request, workflowExecutionId, cancellationToken);
+        var purged = await PurgeResidualSchedulerWorkAsync(request, execution, cancellationToken);
         await ReapTerminalMailboxAsync(workflowExecutionId, cancellationToken);
         return new TerminalPurge(IsTerminal: true, PurgedCount: purged);
     }
@@ -206,12 +231,6 @@ public sealed class RuntimeResumptionService(
             RuntimeExecutionOwnershipStateId.For(workflowExecutionId),
             cancellationToken);
         return ownership?.ExecutionLease is { } lease && !lease.IsExpired(timeProvider.GetUtcNow());
-    }
-
-    private async ValueTask<bool> IsTerminalAsync(string workflowExecutionId, CancellationToken cancellationToken)
-    {
-        var state = await workflowExecutionStateStore.FindAsync(workflowExecutionId, cancellationToken);
-        return state is not null && state.Status.IsTerminal();
     }
 
     // Straggler reaper (#542). The eager terminal-eviction trigger runs at drain end on the node that owns
@@ -236,9 +255,10 @@ public sealed class RuntimeResumptionService(
     // is empty or the safety cap is hit. Returns the number of items removed.
     private async ValueTask<int> PurgeResidualSchedulerWorkAsync(
         RuntimeResumptionSweepRequest request,
-        string workflowExecutionId,
+        WorkflowExecutionState execution,
         CancellationToken cancellationToken)
     {
+        var workflowExecutionId = execution.WorkflowExecutionId;
         var purged = 0;
         for (var page = 0; page < MaxPurgePagesPerExecution; page++)
         {
@@ -251,6 +271,8 @@ public sealed class RuntimeResumptionService(
 
             foreach (var item in listed.Items)
             {
+                await RuntimeTerminalResumeHistory.RecordAsync(item, execution, terminalHistoryWriter, terminalHistoryReader,
+                    persistenceAccessContextAccessor, timeProvider.GetUtcNow(), cancellationToken);
                 if (await workQueue.DeleteAsync(workflowExecutionId, item.WorkItemId, cancellationToken))
                     purged++;
             }

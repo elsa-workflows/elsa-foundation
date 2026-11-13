@@ -217,6 +217,7 @@ public sealed partial class RuntimeHistoryNativeDeliveryTests
     private sealed class ReceiverControl
     {
         internal string? Failure; internal Action<CancellationToken>? Before; internal Action? After;
+        internal Func<RuntimeHistoryEvent, bool>? Match; internal bool PairUnavailable;
         internal List<RuntimeHistoryObservation> Attempts { get; } = [];
         internal void Configure(IServiceCollection services)
         {
@@ -226,10 +227,10 @@ public sealed partial class RuntimeHistoryNativeDeliveryTests
         }
         private sealed class ReceiverWriter(IRuntimeHistoryObservationWriter inner, ReceiverControl owner) : IRuntimeHistoryObservationWriter
         {
-            public bool CanRecordHistory(IRuntimeHistoryStore selectedStore) => inner.CanRecordHistory(selectedStore);
+            public bool CanRecordHistory(IRuntimeHistoryStore selectedStore) => !owner.PairUnavailable && inner.CanRecordHistory(selectedStore);
             public async ValueTask<RuntimeHistoryObservationResult> RecordAsync(RuntimeHistoryObservation observation, CancellationToken cancellationToken = default)
             {
-                if (!IsReceiverObservation(observation.Event)) return await inner.RecordAsync(observation, cancellationToken);
+                if (!(owner.Match?.Invoke(observation.Event) ?? IsReceiverObservation(observation.Event))) return await inner.RecordAsync(observation, cancellationToken);
                 owner.Attempts.Add(observation); owner.Before?.Invoke(cancellationToken);
                 if (owner.Failure == "hard") throw new InvalidDataException("private malformed history", new IOException("private nested IO"));
                 if (owner.Attempts.Count == 1 && owner.Failure == "before-commit") throw new IOException("private before-commit IO");
