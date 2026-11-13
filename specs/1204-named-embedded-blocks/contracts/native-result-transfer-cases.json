@@ -116,7 +116,7 @@
     },
     {
       "activityVersionId": "activity-while-v1",
-      "activityTypeKey": "Elsa.Activities.ControlFlow.While.Activities.While",
+      "activityTypeKey": "Elsa.Activities.While.Activities.While",
       "version": "1.0.0",
       "category": "Control Flow",
       "displayName": "While",
@@ -233,7 +233,7 @@
   "versions": {
     "activity-sequence-v1": "Elsa.Activities.Sequence.Activities.Sequence",
     "activity-flowchart-v1": "Elsa.Activities.Flowchart.Activities.Flowchart",
-    "activity-while-v1": "Elsa.Activities.ControlFlow.While.Activities.While",
+    "activity-while-v1": "Elsa.Activities.While.Activities.While",
     "inline-version": "Elsa.Activities.Primitives.Activities.Inline"
   },
   "cases": [

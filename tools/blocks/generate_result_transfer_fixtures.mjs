@@ -16,9 +16,10 @@ try {
   const { preservesJavaScriptWithAddedVariable } = await server.ssrLoadModule(resolve(repository, "Extensions/ExpressionEditors.JavaScript/studio/Elsa.Studio.ExpressionEditors.JavaScript/Client/src/variableAdditionPreservation.ts"));
   const expressionScopePreservation = { revision: "javascript-variable-addition-v1", allowsVariableAddition: preservesJavaScriptWithAddedVariable };
   const fixtures = await server.ssrLoadModule(resolve(client, "src/__tests__/fixtures.ts"));
+  const whileActivity = { ...fixtures.whileActivity, activityTypeKey: "Elsa.Activities.While.Activities.While" };
   const catalog = [fixtures.sequenceActivity, fixtures.flowchartActivity].map(item => ({ ...item,
     ports: [{ name: "Done" }, { name: "Break" }], designFacets: [...item.designFacets ?? [], { kind: "elsa.outcomes", schemaVersion: "1", payload: { ports: [{ name: "Done" }, { name: "Break" }] } }] }));
-  catalog.push(fixtures.whileActivity, { ...fixtures.writeLine, activityVersionId: "inline-version", activityTypeKey: "Elsa.Activities.Primitives.Activities.Inline", ports: [{ name: "Done" }],
+  catalog.push(whileActivity, { ...fixtures.writeLine, activityVersionId: "inline-version", activityTypeKey: "Elsa.Activities.Primitives.Activities.Inline", ports: [{ name: "Done" }],
     inputs: [{ name: "Expression", referenceKey: "Expression", typeName: "Object", collectionKind: "Single", isNullable: true, isRequired: false }], outputs: [] }, fixtures.setVariableActivity);
   const cases = [];
   for (const kind of ["sequence", "flowchart"]) for (const profile of ["direct", "parameter", "loop"]) {
@@ -54,7 +55,7 @@ try {
         { id: "increment", source: { nodeId: "increment", port: "Done" }, target: { nodeId: "producer" } },
         { id: "consume", source: { nodeId: "producer", port: "Done" }, target: { nodeId: "consumer" } }
       ] });
-      const repeat = adapter.createActivityNode(fixtures.whileActivity, "loop");
+      const repeat = adapter.createActivityNode(whileActivity, "loop");
       repeat.inputs = [{ referenceKey: "Condition", value: argument("JavaScript", "getVariable('Counter') < 3") }];
       repeat.structure.payload.body = body;
       answer.inputs[1].value = argument("Variable", { referenceKey: "counter" });
@@ -80,7 +81,7 @@ try {
   const bytes = JSON.stringify({ formatVersion: 1, kind: "pure-planner-golden-documents-not-runtime-evidence", catalog, versions: {
     [fixtures.sequenceActivity.activityVersionId]: "Elsa.Activities.Sequence.Activities.Sequence",
     [fixtures.flowchartActivity.activityVersionId]: "Elsa.Activities.Flowchart.Activities.Flowchart",
-    [fixtures.whileActivity.activityVersionId]: fixtures.whileActivity.activityTypeKey,
+    [whileActivity.activityVersionId]: whileActivity.activityTypeKey,
     "inline-version": "Elsa.Activities.Primitives.Activities.Inline"
   }, cases }, null, 2) + "\n";
   if (process.argv.includes("--check")) {

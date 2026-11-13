@@ -1,4 +1,4 @@
-import type { ActivityNode } from "../workflowTypes";
+import type { ActivityNode, VariableDefinition } from "../workflowTypes";
 import { getChildSlots, sequenceStructureKind, flowchartStructureKind } from "../workflowAdapter";
 import { compensationScopeStructureKind, compensationStepsSlotId } from "../compensationScope";
 import type { NativeBlockContext, NativeBlockDocument } from "./nativeBlocks";
@@ -173,7 +173,7 @@ export function transferNativeBlockResults(context: NativeBlockContext, proposed
   const body = block.structure!.payload;
   const captures = new Map<string, ActivityNode[]>();
   const added = [...transfers.values()].map(transfer => {
-    const variable = { referenceKey: transfer.key, name: allocateName(), type: { alias: "Elsa.Any", collectionKind: "single" }, storageDriverType: null, default: null };
+    const variable: VariableDefinition = { referenceKey: transfer.key, name: allocateName(), type: { alias: "Elsa.Any", collectionKind: "single" }, storageDriverType: null, default: null };
     const capture: ActivityNode = { nodeId: transfer.nodeId, activityVersionId: setDescriptors[0].activityVersionId, inputs: [{ referenceKey: "value", value: {
       expressionType: "ActivityResult", value: { producerNodeId: transfer.producerId, projectionKey: transfer.projection, ...(transfer.scope ? { producerScopeId: transfer.scope } : {}) }
     } }], outputs: [], intrinsic: { kind: "set", valueType: variable.type, variable: { referenceKey: transfer.key, declaringScopeId: ownerId } } };
@@ -206,9 +206,12 @@ export function transferNativeBlockResults(context: NativeBlockContext, proposed
       if (!record(oldInput) || !record(oldInput.value)) return input;
       if (!reference.parameter && oldInput.value === reference.argument)
         return { ...(input as Fields), value: { ...oldInput.value, expressionType: "Variable", value: { referenceKey: transfer.key, declaringScopeId: ownerId } } };
-      if (reference.parameter && record(oldInput.value.value) && oldInput.value.value.parameters === reference.argument && record(input) && record(input.value) && record(input.value.value) && record(input.value.value.parameters))
+      if (reference.parameter && record(oldInput.value.value) && oldInput.value.value.parameters === reference.argument && record(input) && record(input.value) && record(input.value.value) && record(input.value.value.parameters)) {
+        const parameters = { ...input.value.value.parameters };
         for (const [key, binding] of Object.entries(reference.argument)) if (binding === reference.binding)
-          input.value.value.parameters = { ...input.value.value.parameters, [key]: { kind: "Variable", declaringScopeNodeId: ownerId, variableKey: transfer.key } };
+          parameters[key] = { kind: "Variable", declaringScopeNodeId: ownerId, variableKey: transfer.key };
+        input.value.value.parameters = parameters;
+      }
       return input;
     });
   }
