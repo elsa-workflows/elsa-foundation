@@ -1,4 +1,4 @@
-import { StudioPageHeader, StudioButton } from "@elsa-workflows/studio-ui";
+import { StudioPageHeader, StudioButton, StudioField } from "@elsa-workflows/studio-ui";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { House, Plus, RefreshCw } from "lucide-react";
 import {
@@ -188,10 +188,10 @@ export function HomePage({ api }: { api: ElsaStudioModuleApi }) {
   return (
     <section ref={pageRef} className={`studio-page dashboard-page home-page${editing ? " home-page--editing" : ""}`}>
       <StudioPageHeader headingLevel={2} title="Home" description={editing ? "Add, remove and reorder widgets. Changes save as you go." : "What to know and do next."} actions={<>
-          <label>Refresh <select value={refreshIntervalMs} onChange={event => setRefreshIntervalMs(Number(event.target.value))}>
+          <StudioField label="Refresh"><select value={refreshIntervalMs} onChange={event => setRefreshIntervalMs(Number(event.target.value))}>
             {([[0, "Off"], [60_000, "1 minute"], [300_000, "5 minutes"], [900_000, "15 minutes"], [1_800_000, "30 minutes"]] as const)
               .map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-          </select></label>
+          </select></StudioField>
           <StudioButton type="button" onClick={() => setRefreshVersion(value => value + 1)}><RefreshCw size={15} /> Refresh all</StudioButton>
           {editing ? (
             <>
