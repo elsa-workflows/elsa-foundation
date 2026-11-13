@@ -74,7 +74,7 @@
     <div class="card"><h4>13 · Events meet</h4><p>An event and a wait for its key, both committed in the window, meet exactly once.</p></div>
     <div class="card"><h4>14 · One bad instance</h4><p>A failing instance is parked and its partition goes on; a message is parked for killing processes only after the threshold.</p></div>
   </div>
-  <p>The simulation passes at 200,000 runs of 300 actions and 20,000 of 1,000, also with native instances in the mix; mutation checks break the kernel one rule at a time and each is caught, except two rules that another rule covers, which are caught when that rule is broken too; the store conformance suite (57 cases) runs on the in-memory store, SQLite, PostgreSQL, SQL Server, MySQL and MongoDB; a stress test with killed connections holds on all five engines and fails on every one with the fence broken on purpose. The figures and seeds are in the prototype's FINDINGS.md (sections 22 to 24); the engine findings, among them E9 (SQL Server deadlocks with the fence in the batch), in ENGINES.md.</p>
+  <p>The simulation passes at 200,000 runs of 300 actions and 20,000 of 1,000, also with native instances in the mix; mutation checks break the kernel one rule at a time and each is caught, except two rules that another rule covers, which are caught when that rule is broken too; the store conformance suite (current counts and qualifications are in the <a href="https://github.com/elsa-workflows/elsa-foundation/blob/main/prototypes/kernel-model/README.md">prototype README</a>) runs on the in-memory store, SQLite, PostgreSQL, SQL Server, MySQL and MongoDB; a stress test with killed connections holds on all five engines and fails on every one with the fence broken on purpose. The figures and seeds are in the prototype's FINDINGS.md (sections 22 to 24); the engine findings, among them E9 (SQL Server deadlocks with the fence in the batch), in ENGINES.md.</p>
 </section>
 
 <!-- 15 ─────────────────────────────────────────── -->
@@ -130,7 +130,7 @@
         <li>SQL Server's checked fence as its default</li>
       </ul></div>
     <div class="card"><h4>Decided 12 November</h4>
-      <p class="note">Built in the prototype: the fence in the batch, the event tables and job poison counting. Partly: the wake signal (an in-process implementation, round 4). Not built yet: the Orleans adapter, short waits in memory, reply deadlines, the recreate rule, set-based projector rounds, parking a poisoned job, values by reference and the viewer's tail read.</p>
+      <p class="note">The prototype's <a href="https://github.com/elsa-workflows/elsa-foundation/blob/main/prototypes/kernel-model/README.md">README</a> and <a href="https://github.com/elsa-workflows/elsa-foundation/blob/main/prototypes/kernel-model/FINDINGS.md">findings</a> track current implementation coverage and its limits. The decisions below record the proposed design.</p>
       <ul>
         <li>Commit fence in the batch by default (2 round trips on PostgreSQL); fence first stays an option</li>
         <li>A pluggable wake signal between nodes; polling remains the guarantee</li>
@@ -187,7 +187,7 @@
       </ul></div>
   </div>
   <p class="note">Standalone jobs (Elsa.Jobs on the kernel) are in neither column: their release is decided in the design proposal.</p>
-  <p>Done in round 4 stage A: the three layers and the renames. Next, before the design proposal: build the card decisions with SQL Server's checked fence and the Orleans adapter with a runtime conformance suite; extract the graph engine; run the BPMN, StateMachine, agent, standalone-jobs (with the worker protocol) and ETL fan-out spikes; measure write volume. Then the design proposal (a new ADR, a program plan and a list of ADRs to retire), then the Fable review. No product code until the design is approved.</p>
+  <p>Program <a href="https://github.com/elsa-workflows/elsa-foundation/issues/4229">#4229</a> tracks the remaining prototype work and its evidence. The design proposal includes a new ADR, a program plan, the architecture references and a list of ADRs to retire, followed by the Fable review and owner approval. No product code until the design is approved.</p>
 </section>
 </main>
 </div>

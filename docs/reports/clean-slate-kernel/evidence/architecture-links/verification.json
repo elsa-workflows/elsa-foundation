@@ -1,0 +1,46 @@
+{
+  "walkthroughSha256": "4b5b14475c2184a99f3d678f4b063801fe7a778b63b14f3c8c0c81802ba397b5",
+  "sourceConcatenationEqual": true,
+  "checks": [
+    {
+      "width": 390,
+      "theme": "light",
+      "cards": 8,
+      "ownershipSteps": 8,
+      "jumpBackEqual": true,
+      "documentOverflow": false,
+      "minNewTextContrast": 5.400604469635271,
+      "consoleErrors": []
+    },
+    {
+      "width": 390,
+      "theme": "dark",
+      "cards": 8,
+      "ownershipSteps": 8,
+      "jumpBackEqual": true,
+      "documentOverflow": false,
+      "minNewTextContrast": 4.993240715785386,
+      "consoleErrors": []
+    },
+    {
+      "width": 1440,
+      "theme": "light",
+      "cards": 8,
+      "ownershipSteps": 8,
+      "jumpBackEqual": true,
+      "documentOverflow": false,
+      "minNewTextContrast": 5.400604469635271,
+      "consoleErrors": []
+    },
+    {
+      "width": 1440,
+      "theme": "dark",
+      "cards": 8,
+      "ownershipSteps": 8,
+      "jumpBackEqual": true,
+      "documentOverflow": false,
+      "minNewTextContrast": 4.993240715785386,
+      "consoleErrors": []
+    }
+  ]
+}
