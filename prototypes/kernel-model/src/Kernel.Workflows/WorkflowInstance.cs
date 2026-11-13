@@ -13,11 +13,11 @@ public sealed class WorkflowInstance(IEnumerable<IExecutionModel> models) : IAct
     private readonly Dictionary<string, IExecutionModel> _models = models.ToDictionary(m => m.Key, StringComparer.Ordinal);
 
     /// <summary>
-    /// Suspended, or its row was written by a newer version of its model than this node has (finding F14: an older model
+    /// A running instance is suspended, or its row was written by a newer version of its model than this node has (finding F14: an older model
     /// would read the newer state wrongly and write it back older).
     /// </summary>
     public bool Withholds(InstanceRow row, ITurnServices services) =>
-        (row.Suspended && !services.Has(Flaw.DeliverWhileSuspended)) || (row.StateVersion > _models[row.Model].StateVersion && !services.Has(Flaw.TurnNewerState));
+        row.Status == InstanceStatus.Running && ((row.Suspended && !services.Has(Flaw.DeliverWhileSuspended)) || (row.StateVersion > _models[row.Model].StateVersion && !services.Has(Flaw.TurnNewerState)));
 
     public TurnOutcome? Command(TurnInput input)
     {

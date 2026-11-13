@@ -1070,6 +1070,12 @@ match fault-free execution; this sweep parks no innocent instance, so the determ
 Provider conformance and cost evidence for the unchanged unsubscribe operation remains separate; no new all-provider
 or round-trip execution result is claimed here.
 
+Independent review found a combined path the initial six cases omitted: a refused Resume parks the previous
+suspended checkpoint. Withholding that faulted row indefinitely prevented already-routed events from reaching the
+drop path. Withholding now applies only to running instances; faulted instances consume late deliveries without
+deserializing their inactive checkpoint. Two additional real-worker cases failed before this correction, including
+an older owner holding a newer-version checkpoint. All eight cases now pass while preserving state and version.
+
 ## 26. Round 4: the graph engine. Run
 
 The owner's decision of 12 November (design sketch draft 5, "Containers and their semantics"): the native model stays

@@ -8,9 +8,10 @@ public static class ParkChecks
         public int Value { get; set; } = 7;
     }
 
-    private sealed class Probe : Kernel.Sim.Model<ProbeState>
+    private sealed class Probe(int version = 1) : Kernel.Sim.Model<ProbeState>
     {
         public override string Key => "park-probe";
+        public override int StateVersion => version;
         protected override void Turn(ITurn turn, ProbeState state)
         {
             foreach (var message in turn.Inbox)
@@ -31,12 +32,14 @@ public static class ParkChecks
         public long Time = 100;
         public readonly InMemoryStore Store;
         public readonly Worker First;
-        public World()
+        private readonly int _version;
+        public World(int version = 1)
         {
+            _version = version;
             Store = new InMemoryStore(1, () => Time);
             First = Owner("first");
         }
-        public Worker Owner(string name) => new(name, 0, Store, new WorkflowInstance([new Probe()]),
+        public Worker Owner(string name, int? version = null) => new(name, 0, Store, new WorkflowInstance([new Probe(version ?? _version)]),
             new WorkerOptions { Monotonic = () => Time, MaxAttempts = 1 });
         public async Task Arm(History history = History.Full)
         {
@@ -96,8 +99,10 @@ public static class ParkChecks
     public static async Task<int> RunAsync()
     {
         var failures = 0;
+        var cases = 0;
         async Task Case(string label, Func<Task> run)
         {
+            cases++;
             try { await run(); Console.WriteLine("pass " + label); }
             catch (Exception error) { failures++; Console.WriteLine("FAIL " + label + ": " + error.Message); }
         }
@@ -151,7 +156,27 @@ public static class ParkChecks
             Require(world.Store.Subscriptions.Count == 1, "suspension must preserve subscriptions");
             Require(world.Store.Instances["0/probe"].Status == InstanceStatus.Running, "suspension is not a fault");
         });
-        Console.WriteLine($"park: {6 - failures} passed, {failures} failed");
+        foreach (var version in new[] { 1, 2 })
+            await Case("refused resume retains an inactive version " + version + " checkpoint", async () =>
+            {
+                var world = new World(version);
+                await world.Arm();
+                await world.Send(world.First, Kinds.Suspend);
+                await Pump(world.First, () => world.Store.Instances["0/probe"].Suspended);
+                var owner = world.First;
+                if (version == 2)
+                {
+                    world.Time += 11_000;
+                    owner = world.Owner("older-model", version: 1);
+                    await new DurableHost([owner]).ActivateAsync(0);
+                }
+                var before = world.Store.Instances["0/probe"].State;
+                world.Store.Refuses = row => row.Status == InstanceStatus.Running && !row.Suspended;
+                await world.Send(owner, Kinds.Resume);
+                await CheckPark(world, owner, before, Kinds.Resume);
+                Require(world.Store.Instances["0/probe"].StateVersion == version, "dropping a late event must not deserialize or downgrade the checkpoint");
+            });
+        Console.WriteLine($"park: {cases - failures} passed, {failures} failed");
         return failures == 0 ? 0 : 1;
     }
 }
