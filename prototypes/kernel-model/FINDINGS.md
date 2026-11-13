@@ -1004,7 +1004,110 @@ is now the fence in the batch, recorded at REPEATABLE READ in ENGINES.md (holds,
 `isolation=rc` the fence in the batch has no recorded stress run, and was not run here. README's stress commands now
 show the fence option on every engine.
 
-## 26. The runtime conformance suite and the Orleans adapter. Run
+## 26. Round 4: the graph engine. Run
+
+The owner's decision of 12 November (design sketch draft 5, "Containers and their semantics"): the native model stays
+one activity tree, each container brings its own semantics, and the Flowchart runs on a graph engine extracted from
+main's Flowchart, not invented. Plan step 1 of that section is what this round did. (Section 25 is the owner's decided
+items of the same round.)
+
+### The engine: extracted, and the same as main's
+
+`models/Graph` is main's Elsa 4 Flowchart engine (`Essentials/src/Activities/Flowchart` at `a3eb06e851`) lifted out
+of the runtime: execution paths with iteration keys, scopes (root, loop iteration, first-wins race), arrivals at joins,
+the gateway policies, dead paths, the dead-path join as the default and the reachability join beside it, pruning
+(#382). No reference to the kernel, to Elsa or to any package. The first commit of its PR is the verbatim copy; the
+adaptations are at the runtime seam (`models/Graph/README.md`): a pure step, `(graph, state, one callback) ->
+(state, schedules, continuation)`, where main reads an `IRuntimeActivityExecutionContext` and returns a
+`RuntimeStructuralContinuation`. For the simulation the library adds four deliberate flaws (`FlowchartOptions.Flaws`,
+off by default, marked MUTATION) and the step's unpruned state (`FlowchartStep.Live`).
+
+`models/Graph.Tests` ports main's conformance corpus (C1 to C9 under both join semantics) and its dead-path, implicit,
+cyclic, fault and loop-iteration join tests, with main's execution-id pools: 41 pass. Main's two determinism
+byte-locks pass with main's golden strings, so for those runs the extracted engine makes the same state mutations as
+main's, in the same order. That is the evidence that "extract, don't invent" held.
+
+### The missed join, shown, then gone
+
+NATIVE.md reasoned that the native Flowchart never fires an All join after a decision. Run first (smoke,
+`smoke-decision-join`): the join and the node after it never ran, and the Flowchart completed without them (`left no
+no`; a missed join, not a stuck instance). On the graph engine the untaken connection is a dead path that reaches the
+join, which fires on one live and one dead arrival (`left yes yes`, Balanced and Durable).
+
+### The port
+
+The native `Flowchart` is the engine's host: it schedules what the engine asks for (path and scope on the child's
+tag), hands completions and faults back, keeps the engine's state as its private state, and cancels a child whose
+path the engine cancelled. What changed for authors, and why:
+
+| Change | Why |
+|---|---|
+| `JoinMode` (All, Any) is gone; `Gateway` names main's policy kinds (Decision, ParallelFork, ParallelJoin, InclusiveFork, InclusiveJoin, FirstWins, Merge) | Explicit join modes replace inference. A node with several inbound connections and no gateway is an implicit join decided by the dead-path join, main's default (the sketch's "decisions this needs"). The old Any (fire on the first arrival only) had no user and has no equal in main; Merge (every arrival) and FirstWins (cancel the losers) are the nearest |
+| A run starts at one node: a pending trigger that is a child, else the start node | Main's `SelectEntryNode`; the old Flowchart started every child without inbound connections. Unlike main, the trigger counts only while undelivered, and no node carries main's trigger flag |
+| A first-wins loser is cancelled | Main lets the loser run on and ignores its completion; the sketch says Elsa's first-wins cancels the losers, and G5 requires it |
+| A child's fault is the Flowchart's fault | The engine faults the Flowchart (main, #308) with a generic `flowchart.child.faulted`; the native composites pass the child's own fault on |
+| Diagnostics are not kept in the state, and the state is written compactly (defaults left out) | The engine never reads diagnostics; the journal is the trail. The state is rewritten at every commit |
+
+**Cost.** Round trips are unchanged: every row of `cost sqlite` equals main's, and a new Flowchart row (three Event
+branches, an All join, three direct resumes) has the old native Flowchart's counts (29 / 29 / 85 SQLite engine
+calls in Ephemeral, Balanced and Durable). The state is larger: 1,233 bytes per commit in Balanced (at most 2,135)
+against 584 (836) for the old native Flowchart, measured with the same row on #4330's head before the port (#4333's
+description has both). That is main's state shape (paths, scopes and arrivals with their ids) after leaving out
+diagnostics and defaults; reshaping it means changing main's model, which this round did not do.
+
+### G1 to G5 in the simulation
+
+The sketch's graph invariants are checked under the kernel's faults (NATIVE.md section 6 has the table): G1 path
+conservation, G2 a join fires at most once per round, G3 an All join fires once every inbound of its round has
+arrived, live or dead, G4 a graph completes exactly when no path is live, G5 no path outlives its cancelled scope.
+They read the native Flowchart's journal entries (`g|x`, `g|f`, `g|c`, in the turn's commit, no extra database call)
+and the committed state; the definition, not the engine, says which connections reach a node. A new workflow,
+`n-graph`, runs the engine's shapes under the faults: a loop with a fork and join, the decision that leaves it, a
+first-wins race between an Event and a Delay, and an All join after a decision.
+
+The four mutations of the plan, as engine flaws (`FlowchartOptions.Flaws`), are each caught by their own check at seed
+2, and the mutation check now fails a graph flaw that another check catches first: `NoDeadPaths` by G3,
+`NoRoundReset` by G2, `DeadPathRunsNode` by G1, `CancelLeavesPaths` by G5. G4 has no mutation of its own (none of the
+plan's aims at it), so that it bites is not shown.
+
+| Run (20,000 seeds unless said) | Main | Round 4, graph engine |
+|---|---|---|
+| 300 actions | 0 failed | 0 failed |
+| `--native`, 300 actions | 0 failed; 144,318 matched | 0 failed; 133,483 matched (the mix has `n-graph`, which moves every seed) |
+| `--native`, 1,000 actions, 5,000 from 500001 | 0 failed; 103,091; 2 parked | 0 failed; 97,388; 2 parked |
+| `--native`, 1,000 actions | 0 failed; 409,284; 15 parked | 0 failed; 386,774; 14 parked |
+| `--mutations` | 37 of 39 caught | the same, each at the same seed |
+| `--native-mutations` | 5 of 5 | 9 of 9, the four graph flaws by their own check |
+
+### What the round found
+
+- **G3's exception had to be narrow.** The engine releases a join behind a first-wins race's cancelled loser when the
+  graph goes quiet (main's `ReleaseStarvedJoins`), so an inbound may go unanswered there. The first exception ("a
+  node reachable from a cancelled one") also excused the decision behind the race, and `NoDeadPaths` went uncaught; the
+  run showed it. The exception now covers only the cancelled nodes and nodes only they lead to, in the same round.
+- **A native defect** (I9, seed 8486 at 1,000 actions): in Durable mode a cancel recalled a fired Delay's timer
+  message that an earlier turn had consumed, because its resume still waited in the agenda. A timer whose message has
+  arrived is no longer recalled. The old mix never cancelled an instance with a Delay.
+- **A kernel check met a kernel behaviour** (I8, seed 2282 at 1,000 actions, once `n-graph` moved the seeds): the
+  poison rule parks an instance without removing its subscriptions, and I8's stray-subscription test failed it. I8
+  now skips an instance the poison rule parked while its faulted row exists (#4337, its own PR; the gates are main's).
+- **N2 is narrowed for Flowchart joins.** A join behind a merge fires once per token in a round, so N2's entry names
+  the scheduling id; G2 holds a join to once per round. G2 and G3 skip a merge and every node forward of it.
+
+### Open, and for the owner
+
+- **Should Park remove a parked instance's subscriptions?** The kernel keeps them (a parked instance is faulted, not
+  deleted; recovery might want its waits). The simulation now accepts that; a kernel decision, not made here.
+- **Main's engine, possibly:** a decision with both outcomes connected to one node schedules that node on the live
+  arrival and then carries the dead arrival from the same source through it as well, which could fire a later join
+  twice. Found by reading (a reviewer), not run; it is main's behaviour and no workflow in the mix has that shape. A
+  corpus case on main would settle it.
+- **State size** of a Flowchart, above. Paths and arrivals by reference, or a smaller encoding, are the levers.
+- **Not covered by the mix:** merges, inclusive gateways, a race inside a loop, a trigger inside a Flowchart under
+  the faults (smoke covers the trigger entry). The BPMN spike (its own session) does not use this engine; comparing
+  the two join codes is the sketch's next step.
+
+## 27. The runtime conformance suite and the Orleans adapter. Run
 
 The owner's decisions of 12 November: the actor runtime is its own layer and must be swappable; runtimes host
 partitions only, so Orleans hosts each partition as a grain, with no grain per instance and no sweep. This section is
@@ -1042,8 +1145,10 @@ It counts activations asked for while another node held the scope, the ones laye
 one scope held at once on two live nodes, and passes that started holding the scope and ended without it. The harness
 also checks that every node started under the name it asked layer 2 for and that no name comes twice (F9).
 
-A provider starts nodes on two **sides**. Nodes on different sides do not see each other, as in a network split, so
-each side's runtime may activate the same scope at once. `NodeStore`, each node's way to the store, can **stall** (a
+A provider starts nodes on two **sides**, as in a network split; a side splits what the runtime carries itself.
+Orleans' sides are two clusters with their own membership and directory, so each side activates every scope. The
+built-in runtime's sides split only its wake signal (its membership is the store, which both sides reach), so its
+double activations come from stalls and held commits. `NodeStore`, each node's way to the store, can **stall** (a
 pause longer than the lease) or **hold the node's next commit of a partition's turns in flight** (a commit sent just
 before the split), so that it executes under an epoch that is no longer the partition's. It records what the held
 commit got back and counts the node's commits the store answered "not landed".
@@ -1058,7 +1163,7 @@ commit got back and counts the node's commits the store answered "not landed".
 | crash | Required | The holder of partition 0 dies while thirty messages come in and it has handled some; its scopes are taken over and every message is applied once, in order |
 | stop | Reference | The holder of partition 0 stops; its scopes are taken over before its 6 s lease would have run out |
 | fence | Required | A node stalls past its lease, another process takes the scope and dies; the node commits after that, the store refuses it, and the runtime activates the scope again |
-| split | Required | Nodes on two sides; the holder's commit of twenty messages is held in flight for three leases while the other side handles them. Partition 0 must have been held on both sides at once, the held commit answered "not landed", and every message applied once, in order |
+| split | Required | Nodes on two sides; the holder's next commit in partition 0 is held in flight for three leases (all its calls wait) while the other side handles the twenty messages sent to it. Partition 0 must have been held on both sides at once, the held commit answered "not landed", and every message applied once, in order |
 | join | Reference | A node that joins gets a share |
 
 Every required case also ends with no due message left in any partition, and every case's violations are read after
@@ -1120,10 +1225,11 @@ not refused, and the store's count check is what stopped it.
   does not hold there: a crash during a trial may count against a message in another partition's trial. The stress
   tests set the attempts high enough that nothing is parked. A lock in `TrialGate` is a small layer 2 change (leak L8).
 - **R7. A split costs takes.** Every partition grain on the side that does not hold the fence asks again every
-  `RetryEvery`, and each ask is a take: a store round trip on the holder's partition row, declined. In the Orleans
-  stress run (four partitions, `RetryEvery` 150 ms) that was about 350 declined takes in 30 s. A deployment pays about
-  partitions × (sides − 1) / `RetryEvery` takes per second while a split lasts; backing the retry off towards the lease
-  would cut it. A first version also asked on every wake hint; review found it, and a hint now runs only a held scope.
+  `RetryEvery`, and each ask is a take: a store round trip on the holder's partition row, declined. In one Orleans
+  stress run (four partitions, `RetryEvery` 150 ms, 20 s of load and its settling) 352 takes were declined. A
+  deployment pays at most partitions × (sides − 1) / `RetryEvery` takes per second while a split lasts (fewer when
+  the store is slow, since the retry is armed after the take answers); backing the retry off towards the lease would
+  cut it. A first version also asked on every wake hint; review found it, and a hint now runs only a held scope.
 - **R8. Orleans does not move active grains to a silo that joins.** The partition grains stay where they were first
   activated, so a new silo holds nothing until a silo leaves or dies (the reference case "join" differs). Orleans'
   activation rebalancer or a placement director would spread them.
@@ -1154,8 +1260,8 @@ not refused, and the store's count check is what stopped it.
   comes back. The default stays inline, which the simulation needs.
 - **R15. A cost row could count a renewal.** With R1, a row of a cost run that takes more than a third of a lease
   (3.3 s by default) counts a beat. Under load, SQLite's "1,000 balanced instances, their starts arriving by poll"
-  counted one more commit (4,005 commands instead of 4,004). The cost runs now give their workers an hour's lease and
-  beat both owners before each row; a lease's length changes no round trip.
+  counted one more commit (4,005 commands instead of 4,004). The cost runs now give their workers an hour's lease (the
+  EF and native runs also beat both owners before each row); a lease's length changes no round trip.
 - **R16. A stop must drain and a kill must win.** `RuntimeNode`'s first stop cancelled the pass under way, so a commit
   in flight had an unknown outcome, the worker reset, and the scope was never released (its successor found a death).
   A stop now lets the pass end, then releases; a kill, or a cancelled stop token, during a stop ends the release.
@@ -1165,13 +1271,14 @@ not refused, and the store's count check is what stopped it.
 Not moved, on purpose. The store suite's and the EF engines' stress tests run every worker as if it owned its
 partition, with no runtime: they are the adversary of the fence, and a runtime in front of them would take away the
 double activations they test. The cost runs and the native host own one partition each and drain it: through
-`PartitionRuntime` their round trips would be the same and the change a rename, and through `RuntimeNode` its
+`PartitionRuntime` their round trips would be the same and the change would test nothing they do not, and through `RuntimeNode` its
 balancing rounds would add heartbeats to every count. What L13 asked for, hosts that run on a runtime, is now the
 runtime suite, on the built-in runtime and on Orleans.
 
 ### The gates of R1
 
-Before: main at `a3eb06e851`. After: the renewal's branch (#4345). Times removed, outputs compared line by line.
+Before: main at `a3eb06e851`. After: the renewal's branch (#4345). Times removed, outputs compared line by line. The
+cost runs ran again against main at `acda0dd642` (the SQL Server fence default) after R15, with the same result.
 
 | Gate | Result |
 |---|---|

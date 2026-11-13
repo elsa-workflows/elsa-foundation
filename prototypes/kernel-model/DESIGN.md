@@ -2,7 +2,9 @@
 
 Status: the design of the kernel model after round 4 stage A, which split the merged kernel into three layer projects
 and renamed step to turn and off-step work (run) to background job, at the owner's decisions of 12 November. Stage A
-changed no behaviour: every gate gives the numbers it gave before (FINDINGS section 24). The source of design intent is
+changed no behaviour: every gate gives the numbers it gave before (FINDINGS section 24). Round 4's graph engine
+(FINDINGS section 26) puts the native Flowchart on main's Flowchart engine (`models/Graph`) and adds the graph
+invariants G1 to G5 to the simulation; it changes no kernel behaviour and no round trip. The source of design intent is
 draft 5 of the kernel sketch (three layers, partitions only, deployment profiles, persistence as an abstraction,
 synchronous HTTP, trade-offs). This text says what the code is; where the code and draft 5 differ, the section "Where
 the code and draft 5 differ" says which and why. What was found, with the seeds and traces, is in
@@ -37,7 +39,7 @@ native model.
 |---|---|---|
 | 1. Actor runtime | Placement of scopes on nodes, activation and deactivation, one pass at a time per scope, wake-ups between nodes. No guarantee about messages or state | `src/Kernel.Runtime`: the seam (`IActorRuntime`, `IScopeHost`, `IScopeActivation`), the wake signal (`IWakeSignal`, `InProcessWakeSignal`), membership (`IMembership`, `Cluster`), and `PartitionRuntime`, the built-in runtime (fair share from `node` heartbeats, activations, passes). Also `InstanceRef`, `Flaw` and `Defaults` |
 | 2. Durable actors | The durable inbox, a turn's state and messages committed atomically, the fence, timers, background jobs, events, poison, the journal, live output | `src/Kernel.Durable`: `Worker` (one partition's `IScopeActivation`), `DurableHost` (the `IScopeHost`), the seam to layer 3 (`IActorType`, `TurnInput`, `TurnOutcome`, `Delivery`, `DurableTurn`, `ITurnServices`), `IKernelStore` and `InMemoryStore`, `Projector`, `Requests` and `IReplyTransport`, messages and kinds |
-| 3. Actor types | What an actor does with its messages | `src/Kernel.Workflows`: `WorkflowInstance`, the one actor type (definition and version, status, parent and children, cancel of a tree, suspend, resume, terminate, rebind, delete, the history envelope), and the execution-model contract it runs (`IExecutionModel`, `ITurn`). Models: the simulation's toy models, `NativeModel` |
+| 3. Actor types | What an actor does with its messages | `src/Kernel.Workflows`: `WorkflowInstance`, the one actor type (definition and version, status, parent and children, cancel of a tree, suspend, resume, terminate, rebind, delete, the history envelope), and the execution-model contract it runs (`IExecutionModel`, `ITurn`). Models: the simulation's toy models, `NativeModel` (its Flowchart runs on the graph engine of `models/Graph`, main's Flowchart engine) |
 
 Dependencies point downward only: `Kernel.Workflows` references `Kernel.Durable`, which references `Kernel.Runtime`,
 which references nothing. Where a clean cut would have changed behaviour or round trips, the code keeps what it had and
@@ -102,7 +104,7 @@ public interface IWakeSignal                       // layer 1, pluggable; not du
   runs whole passes. During faults it still calls the pieces of a pass (poll, load, turn, flush, beat, meet) as separate
   seeded actions, so that a seed keeps its schedule. The EF, MongoDB, conformance and native hosts own one or a few
   partitions without balancing: they activate through `DurableHost` and run passes with `RunAsync` in their own loop
-  (on purpose: FINDINGS section 26, L13). Two runtimes run on a clock of their own, and the runtime conformance suite
+  (on purpose: FINDINGS section 27, L13). Two runtimes run on a clock of their own, and the runtime conformance suite
   runs them both:
   - `RuntimeNode` (`runtime/Kernel.Runtime.Hosting`) is the built-in runtime of one node: one loop around a
     `PartitionRuntime` that balances, runs a held scope's pass when the last one asked, at once on a hint, and wakes
@@ -116,10 +118,11 @@ public interface IWakeSignal                       // layer 1, pluggable; not du
     after one died. Orleans may activate a grain on each side of a network split; the fence lets one of them write.
 - **The runtime conformance suite** (`conformance/Kernel.Runtime.Conformance`) runs ten cases, a mutation (the store's
   fence broken) and a stress test against any runtime, through the seam only. Its cases force two activations of one
-  scope at once, by nodes on two sides of a split and by commits held in flight past the lease, and require that the
+  scope at once (Orleans clusters on two sides of a split; under either runtime, stalls and commits held in flight
+  past the lease), and require that the
   fence refused the stale one; with the fence broken they must fail. The built-in runtime passes every case; Orleans
   passes every required case and differs on one reference case (a silo that joins gets no grains). FINDINGS section
-  26 has the cases, the numbers and what they found.
+  27 has the cases, the numbers and what they found.
 
 ### Deployment profiles
 
@@ -345,7 +348,8 @@ public interface ITurn
   sees its own cancel first.
 - **Models compose through messages only.** A parent starts a child of any model and gets `child-finished`.
 - **How the known models sit on it:** native (built: activity frames, agenda, waits and variables as state; slow
-  activities are background jobs; NATIVE.md); BPMN (tokens; tasks are jobs; kept waits for early messages; start subscriptions for
+  activities are background jobs; a Flowchart's paths, arrivals and dead paths are the graph engine's, in its frame's
+  state, and add no database call; NATIVE.md); BPMN (tokens; tasks are jobs; kept waits for early messages; start subscriptions for
   message start events; `Recall` for boundary timers that do not fire); ETL (cursors; children spread over partitions);
   agents (a checkpoint; tool calls are jobs; streamed output is emitted); durable entities (operations with a reply-to).
 
@@ -381,9 +385,12 @@ a position that is missing below the partition's position: it was deleted, not w
 kept events: an event and a wait both committed within the window are delivered once; for the others, an event
 published after the wait committed is delivered once); 14 one bad instance; 15 callers; 16 suspended; 17 termination;
 18 state versions; 19 rebind; 20 event starts; 21 memory bound; 22 delete; 23 fair share. With native instances in the
-mix: N1 an activity completes once, N2 a join fires once, N3 a child starts once and resumes once, N4 a Durable
+mix: N1 an activity completes once, N2 a join fires once (a Flowchart join once per scheduling id; G2 holds it to once per round where no merge lies
+upstream), N3 a child starts once and resumes once, N4 a Durable
 External effect runs only under a committed attempt, N5 final variables equal a run without faults, and N6 (merge) an
-External effect that runs again is told that its turn may have run before.
+External effect that runs again is told that its turn may have run before. The graph invariants of the sketch (round 4):
+G1 path conservation, G2 a join fires at most once per round, G3 an All join fires once every inbound of its round has
+arrived, live or dead (G2 and G3 skip a merge and every node forward of it; the mix has no merge), G4 a graph completes exactly when no path is live, G5 no path outlives its cancelled scope.
 
 ## What it costs (measured on the model)
 
@@ -446,7 +453,7 @@ marked.
 | `IScopeActivation` has `WokenAsync` and `RunAsync` | Also `Scope` and `Active`, so a runtime can see that layer 2 lost the fence | The runtime must know when to activate again; nothing else changed |
 | The runtime polls; a wake-up is a hint | `PartitionRuntime` has no timer: its host calls `BalanceAsync`, `PassAsync` and `WokenAsync(null)` when its poll interval passes | No clock or thread in the kernel, so the simulation decides every moment |
 | Layer 3 owns the workflow instance's data | One `instance` row with both layers' columns; the command kinds and `InstanceStatus` in layer 2 | One write per commit; see FINDINGS section 24 for every leak |
-| An Orleans adapter and a runtime conformance suite | Both built; the seam gained what they needed: a pass renews an idle lease, a new activation is woken, and where a job's body runs | FINDINGS section 26 (R1, R4, R14) |
+| An Orleans adapter and a runtime conformance suite | Both built; the seam gained what they needed: a pass renews an idle lease, a new activation is woken, and where a job's body runs | FINDINGS section 27 (R1, R4, R14) |
 | Workflow instance owns children, cancel of a tree, the history envelope | `WorkflowInstance` does (layer 3); layer 2 carries `Unsubscribe`, `Delete` and the journal entries it is given | Built in stage A from round 3's code |
 | `ITurn.Ambient` is `IAmbient`; `Record(JournalEntry)`; `Describe(state)` for lists | `object?`; `Record(object)`; no `Describe` | Not needed by any model built; the envelope is not designed |
 | `Emit(channel, object item)`, "a workflow can opt out and respond before its commit" | Opt-out per **route**, on the caller's reply address | The owner's default of 12 November; a route is the HTTP layer's notion, so the model needs nothing |
@@ -461,20 +468,25 @@ marked.
 ## What the tests did and did not show
 
 Run on the merged kernel (FINDINGS section 23) and again on the layered kernel of stage A (section 24), with the same
-numbers.
+numbers; round 4's graph engine (section 26) ran again what it touched, with its own numbers below.
 
 - **Simulation:** 200,000 runs of 300 actions and 20,000 of 1,000 pass, without and with native instances; 12 and 15
-  innocent messages parked at the threshold in the 1,000-action runs, which invariant 14 allows.
+  innocent messages parked at the threshold in the 1,000-action runs, which invariant 14 allows (stage A's numbers).
+  Round 4, with `n-graph` in the native mix and the graph checks on: 20,000 runs of 300 actions and 20,000 of 1,000
+  pass with native instances, 14 parked in the 1,000-action runs; 20,000 of 300 without.
 - **Mutation check:** 39 mutations at 20,000 runs (37 kernel flaws alone and two in combination): all caught but the two that another rule covers, at the first
-  failing seeds round 3 recorded; the five native flaws are caught too.
+  failing seeds round 3 recorded; the five native flaws are caught too, and round 4's four graph flaws, each by its own
+  graph check (FINDINGS section 26). G4 has no mutation of its own: that it bites is not shown.
+- **Graph engine:** main's Flowchart conformance corpus and join tests pass against the extracted engine (41), with
+  main's two determinism byte-locks byte-identical.
 - **Store conformance suite:** 57 semantic cases pass (required) on in-memory, SQLite, PostgreSQL, SQL Server, MySQL
   and MongoDB, with either fence; the reference cases differ where the contract is silent (M6, F8).
 - **Stress:** 40 s and 5,000 outside messages with killed sessions, stalls and takeovers, including round 3's commands
   and starts on events: every property holds on PostgreSQL, SQL Server (RCSI, checked fence), MySQL, MongoDB and
   SQLite. With the fence broken on purpose every engine fails (26 to 611 violations).
-- **Runtime conformance suite** (FINDINGS section 26): the built-in runtime on a clock and the Orleans adapter on
+- **Runtime conformance suite** (FINDINGS section 27): the built-in runtime on a clock and the Orleans adapter on
   Orleans' in-process test cluster pass every required case and the stress test, including two activations of one
-  scope at once on two sides of a split, which the fence refuses; with the fence broken both fail.
+  scope at once, which the fence refuses; with the fence broken both fail.
 - **Not tested:** a runtime on a store other than the in-memory one (the suite takes any provider); Orleans across
   processes or machines; a three-node MongoDB replica set or any failover; SQL Server on native
   hardware; MySQL's SERIALIZABLE and SQL Server's SNAPSHOT; the stress test with native instances; the projector and
@@ -482,7 +494,7 @@ numbers.
 
 ## Open questions
 
-- **The seam to layer 1** is built and proven by two runtimes (FINDINGS section 26). Open: a way for layer 2 to ask
+- **The seam to layer 1** is built and proven by two runtimes (FINDINGS section 27). Open: a way for layer 2 to ask
   its runtime for a pass when a job finishes (R12); a leave in membership (R5); a lock in `TrialGate` for runtimes that
   run a node's scopes at once (R6); backing off a declined activation (R7).
 - **Poison counting** (FINDINGS sections 7, 21): innocent parking is rare but not zero; recovery of a backlog is serial.
