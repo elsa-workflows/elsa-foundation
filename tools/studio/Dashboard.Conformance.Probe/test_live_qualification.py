@@ -292,7 +292,7 @@ class UnsupportedVerdictTests(unittest.TestCase):
     def test_fabrication_substitution_or_missing_actual_provider_cannot_qualify(self):
         with tempfile.TemporaryDirectory() as directory:
             root=Path(directory)
-            evidence={'before':{'category':'actual-sdk-forwarding','counts':{},'privacyFailures':0},'after':{'category':'actual-sdk-forwarding','counts':{'session.send':1,'event.Completed':1},'privacyFailures':0},'originalRequestPreserved':True,'unavailableMeaningExplained':True,'proposedQuestions':0,'nativeQueryExecutions':0,'resourceWrites':0,'savedResourcesUnchanged':True,'selectedDatasetStillEmpty':True,'metricSubstitution':False}
+            evidence={'before':{'category':'actual-sdk-forwarding','counts':{},'privacyFailures':0},'after':{'category':'actual-sdk-forwarding','counts':{'session.send':1,'event.Completed':1},'privacyFailures':0},'originalRequestPreserved':True,'limitationTextObserved':True,'proposedQuestions':0,'nativeQueryExecutions':0,'resourceWrites':0,'savedResourcesUnchanged':True,'selectedDatasetStillEmpty':True,'structuredMetricSubstitution':False,'explanation':'Acme does not expose revenue or cost, so net profit cannot be calculated. Supply an authorized financial dataset to continue.','proseSemanticAcceptance':'requires independent review'}
             names={'source','trace','unsupported-proof.json'}|{f'{name}.{suffix}' for name in live.UNSUPPORTED_CAPTURES for suffix in ('png','aria.yml')}
             for name in names:
                 if name=='trace':continue
@@ -301,14 +301,21 @@ class UnsupportedVerdictTests(unittest.TestCase):
             with zipfile.ZipFile(trace,'w') as archive:archive.writestr('0-trace.trace','{"type":"frame-snapshot","snapshot":{"html":"Your question"}}\n')
             report={'suites':[{'specs':[{'title':live.UNSUPPORTED_TITLE,'tests':[{'projectName':'live-desktop','expectedStatus':'passed','status':'expected','results':[{'status':'passed','attachments':[{'name':name,'path':str(trace if name=='trace' else root/name)} for name in names]}]}]}]}]}
             self.assertEqual(1,live.unsupported_verdict(report,root,'fixture-sha'))
-            for change in ('proposedQuestions','nativeQueryExecutions','resourceWrites','metricSubstitution','originalRequestPreserved','savedResourcesUnchanged','provider'):
+            for change in ('proposedQuestions','nativeQueryExecutions','resourceWrites','structuredMetricSubstitution','originalRequestPreserved','savedResourcesUnchanged','provider'):
                 altered=copy.deepcopy(evidence)
                 if change=='provider':altered['after']['counts']['session.send']=0
-                elif change=='metricSubstitution':altered[change]=True
+                elif change=='structuredMetricSubstitution':altered[change]=True
                 elif change in {'originalRequestPreserved','savedResourcesUnchanged'}:altered[change]=False
                 else:altered[change]=1
                 (root/'unsupported-proof.json').write_text(json.dumps(altered))
                 with self.subTest(change=change),self.assertRaises(ValueError):live.unsupported_verdict(report,root,'fixture-sha')
+
+
+class UnsupportedExplanationTests(unittest.TestCase):
+    def test_mixed_refusal_and_fabricated_financial_answer_cannot_qualify(self):
+        for explanation in ('Profit is unavailable, but your net profit is $100.', 'Revenue is missing, but net profit equals 100.', 'Cost is unsupported; margin is 20%.'):
+            with self.subTest(explanation=explanation),self.assertRaises(ValueError):live.require_unsupported_explanation(explanation)
+        live.require_unsupported_explanation('The dataset does not expose revenue or cost. Net profit cannot be calculated from processing duration or record counts. Supply an authorized financial dataset or revise the question.')
 
 
 if __name__ == '__main__': unittest.main()

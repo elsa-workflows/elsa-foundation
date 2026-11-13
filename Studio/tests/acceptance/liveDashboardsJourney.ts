@@ -569,6 +569,6 @@ export async function liveUnsupportedDashboardJourney(page: Page, info: TestInfo
     expect(queries).toEqual([]); expect(monitor.writes).toEqual([]);
     const afterResources = await backend.api<{ items: Resource[] }>("/_elsa/studio/questions");
     expect(afterResources.items.map(item => [item.id, item.revision])).toEqual(beforeResources.items.map(item => [item.id, item.revision]));
-    await attachDashboardJson(info, "unsupported-proof.json", { before, after, originalRequestPreserved: true, unavailableMeaningExplained: true, proposedQuestions: 0, nativeQueryExecutions: queries.length, resourceWrites: monitor.writes.length, savedResourcesUnchanged: true, selectedDatasetStillEmpty: true, metricSubstitution: false });
+    await attachDashboardJson(info, "unsupported-proof.json", { before, after, originalRequestPreserved: true, limitationTextObserved: true, proposedQuestions: 0, nativeQueryExecutions: queries.length, resourceWrites: monitor.writes.length, savedResourcesUnchanged: true, selectedDatasetStillEmpty: true, structuredMetricSubstitution: false, explanation: await explanation.innerText(), proseSemanticAcceptance: "requires independent review" });
   } finally { page.off("request", collect); monitor.dispose(); }
 }

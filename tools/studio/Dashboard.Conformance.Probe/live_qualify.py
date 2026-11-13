@@ -417,6 +417,17 @@ UNSUPPORTED_TITLE = 'live unsupported Dashboard question preserves the request w
 UNSUPPORTED_CAPTURES = ('live-reference','live-unsupported-request','live-unsupported-explanation','live-unsupported-preserved-question')
 
 
+def require_unsupported_explanation(text):
+    # This blocks concrete mixed-refusal/numeric-answer failures. It is deliberately not a
+    # substitute for independent semantic inspection of the actual model explanation.
+    if not isinstance(text,str) or not text.strip() or len(text)>12000:
+        raise ValueError('Retain one bounded actual unsupported-question explanation')
+    if not re.search(r'profit|revenue|cost',text,re.I) or not re.search(r"not (?:exposed|available|provided|include|declared)|does(?:n't| not)|cannot|can(?:not|'t|’t)|unavailable|unsupported|missing|lack",text,re.I):
+        raise ValueError('The actual explanation must identify the missing financial meaning')
+    if re.search(r'[$€£]\s*[-+]?\d|\b(?:net\s+profit|profit|revenue|cost|margin)\s*(?:(?:is|was|of|equals|would\s+be|are)\s*)?[:=]?\s*[-+]?\d|\d+(?:\.\d+)?\s*%',text,re.I):
+        raise ValueError('A refusal mixed with a numerical financial answer cannot qualify')
+
+
 def unsupported_verdict(report, output, expected_sha):
     rows=[]
     def visit(suites):
@@ -432,8 +443,10 @@ def unsupported_verdict(report, output, expected_sha):
     if set(paths)!=required or any(not path.is_relative_to(output.resolve()) or not path.is_file() or not path.stat().st_size for path in paths.values()):raise ValueError('Required unsupported-question experience evidence is missing')
     if paths['source'].read_text().strip()!=expected_sha:raise ValueError('Unsupported question source differs from the committed runner')
     proof=json.loads(paths['unsupported-proof.json'].read_text())
-    if any(proof.get(key) is not True for key in ('originalRequestPreserved','unavailableMeaningExplained','savedResourcesUnchanged','selectedDatasetStillEmpty')) or proof.get('metricSubstitution') is not False:raise ValueError('The unsupported request and its meaning must be preserved')
+    if any(proof.get(key) is not True for key in ('originalRequestPreserved','limitationTextObserved','savedResourcesUnchanged','selectedDatasetStillEmpty')) or proof.get('structuredMetricSubstitution') is not False:raise ValueError('The unsupported request and its meaning must be preserved')
     if any(proof.get(key)!=0 for key in ('proposedQuestions','nativeQueryExecutions','resourceWrites')):raise ValueError('Unsupported business facts must not produce a substituted proposal, query or saved resource')
+    require_unsupported_explanation(proof.get('explanation'))
+    if proof.get('proseSemanticAcceptance')!='requires independent review':raise ValueError('Machine protocol checks cannot claim full prose acceptance')
     before=proof.get('before',{});after=proof.get('after',{})
     if before.get('category')!='actual-sdk-forwarding' or after.get('category')!='actual-sdk-forwarding' or before.get('privacyFailures')!=0 or after.get('privacyFailures')!=0:raise ValueError('Actual SDK privacy-boundary evidence is required')
     if after.get('counts',{}).get('session.send',0)<=before.get('counts',{}).get('session.send',0) or after.get('counts',{}).get('event.Completed',0)<=before.get('counts',{}).get('event.Completed',0) or after.get('counts',{}).get('event.Error',0):raise ValueError('A completed actual provider turn is required')
