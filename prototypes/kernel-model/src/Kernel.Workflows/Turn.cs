@@ -32,6 +32,7 @@ internal sealed class Turn : ITurn
 
     public InstanceInfo Instance { get; }
     public long Now => _input.Services.Now;
+    public ICommitClock Clock => _durable.Clock;
     public IReadOnlyList<Message> Inbox => _durable.Inbox;
     public object State { get; set; } = null!;
     public object? Ambient => _durable.Ambient;
@@ -80,6 +81,9 @@ internal sealed class Turn : ITurn
         var unit = _durable.Outcome(_status);
         // An ephemeral instance that ends in the turn that created it, and leaves nothing for anyone else, is never written.
         if (created && _input.Spec!.Ephemeral && _status != InstanceStatus.Running && _durable.SentCount == 0 && _durable.SubscribedCount == 0) return unit;
-        return _durable.Seal(unit, row, State, WorkflowInstance.Journal(history, _entries));
+        unit = _durable.Seal(unit, row, State, WorkflowInstance.Journal(history, _entries));
+        if (_status != InstanceStatus.Running && _input.Row is not { Status: not InstanceStatus.Running })
+            unit.Row = WorkflowCommitClock.End(unit.Row!);
+        return unit;
     }
 }

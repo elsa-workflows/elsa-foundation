@@ -205,7 +205,8 @@ public sealed class ReleaseArchiveStoreTests
         await using var readScope = reopened.CreateAsyncScope();
         var restored = readScope.ServiceProvider.GetRequiredService<IReleaseArchiveReader>();
         for (var index = 0; index < tasks.Length; index++) Assert.NotNull(await restored.FindAsync("pooled-" + index));
-        SqliteConnection.ClearAllPools();
+        await using var ownedPool = new SqliteConnection(connectionString);
+        SqliteConnection.ClearPool(ownedPool);
     }
 
     [Fact]

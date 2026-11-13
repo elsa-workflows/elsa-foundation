@@ -49,6 +49,7 @@ public interface ITurn
 {
     InstanceInfo Instance { get; }
     long Now { get; } // the existing database-anchored owner clock
+    ICommitClock Clock { get; }
     IReadOnlyList<Message> Inbox { get; }
     object State { get; set; }
     object? Ambient { get; }                    // what the starter on this node gave: this activation only, never stored
