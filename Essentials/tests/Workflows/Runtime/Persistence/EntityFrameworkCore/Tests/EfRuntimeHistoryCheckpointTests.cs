@@ -22,11 +22,12 @@ public sealed class EfRuntimeHistoryCheckpointTests
     private const string Run = "run";
     private static readonly DateTimeOffset Now = new(2030, 1, 2, 3, 4, 5, TimeSpan.Zero);
     private static readonly RuntimeHistoryCapturePolicy Policy = new("policy", 1, true,
-        ["ActivityStarted", "ActivityCompleted", "BookmarkCreated", "BookmarkConsumed", "BookmarkRemoved"]);
+        ["ActivityStarted", "ActivityCompleted", "ActivityResumeClaimed", "BookmarkCreated", "BookmarkConsumed", "BookmarkRemoved"]);
     private static readonly EfSchemaChain Chain = EfSchemaChain.For(new EfSchemaFamilyDescriptor("RuntimeHistory", "Workflows.Runtime", "1.0.0", typeof(EfRuntimeHistoryCheckpointTests).Assembly)
     {
         ContentColumns = new[] { typeof(RuntimeHistoryHeadEntity), typeof(RuntimeHistoryEventEntity), typeof(RuntimeHistoryBookmarkEntity),
-            typeof(RuntimeHistoryActivityEntity), typeof(RuntimeHistoryBookmarkCountEntity) }.Select(type => new EfSchemaColumn(type, "ContentJson")).ToArray()
+            typeof(RuntimeHistoryActivityEntity), typeof(RuntimeHistoryBookmarkCountEntity), typeof(RuntimeHistoryOccurrenceEntity),
+            typeof(RuntimeHistoryOccurrenceMembershipEntity), typeof(RuntimeHistoryOccurrenceCounterEntity) }.Select(type => new EfSchemaColumn(type, "ContentJson")).ToArray()
     });
 
     [Fact]
@@ -267,13 +268,68 @@ public sealed class EfRuntimeHistoryCheckpointTests
         await transaction.RollbackAsync(); await AssertRowsAsync(database, 0);
     }
 
+    [Fact]
+    public async Task Checkpoint_staging_projects_first_completion_and_child_membership_once_across_resume()
+    {
+        await using var database = await Database.CreateAsync();
+        await PersistAsync(database, Commit("first", [Batch("logical",
+            Candidate("logical", "root-completed", 0, name: "ActivityCompleted", activity: "root"),
+            Candidate("logical", "child-started", 1, parent: "root", activity: "child"),
+            Candidate("logical", "root-later", 2, activity: "root"),
+            Candidate("logical", "child-later", 3, name: "ActivityCompleted", parent: "root", activity: "child"))]));
+        await PersistAsync(database, Commit("resume", [Batch("resume", Candidate("resume", "root-resumed", 0, name: "ActivityResumeClaimed", activity: "root"))]));
+        await using var read = database.Open();
+        var receipts = await read.Set<RuntimeHistoryOccurrenceEntity>().OrderBy(row => row.FirstSequence).ToArrayAsync();
+        Assert.Equal(new[] { "root-completed", "child-started" }, receipts.Select(row => EfRelationalIdentity.Decode(row.FirstHistoryEventId)));
+        Assert.Equal(new long[] { 1, 2 }, receipts.Select(row => row.FirstSequence));
+        Assert.All(receipts, row => Assert.True(row.AncestryKnown));
+        var rootScope = EfRelationalIdentity.Encode("root");
+        var descendants = await read.Set<RuntimeHistoryOccurrenceMembershipEntity>().Where(row => row.ActivityScopeId == rootScope)
+            .OrderBy(row => row.Ordinal).ToArrayAsync();
+        Assert.Equal(new[] { "root", "child" }, descendants.Select(row => EfRelationalIdentity.Decode(row.ActivityExecutionId)));
+        Assert.Equal(new long[] { 0, 1 }, descendants.Select(row => row.Ordinal));
+        var global = await read.Set<RuntimeHistoryOccurrenceCounterEntity>().SingleAsync(row => row.ActivityScopeId == null);
+        Assert.Equal(2, global.NextOrdinal); Assert.Equal(5, global.CoveredThroughSequence);
+        Assert.Equal(5, (await read.Set<RuntimeHistoryHeadEntity>().SingleAsync()).LastSequence);
+    }
+
+    [Fact]
+    public async Task Occurrence_insert_failure_rolls_back_the_earlier_head_reservation_and_journal()
+    {
+        await using var database = await Database.CreateAsync();
+        await using (var context = database.Open())
+        {
+            await context.Database.ExecuteSqlRawAsync("""
+                CREATE TRIGGER fail_occurrence_member BEFORE INSERT ON elsa_runtime_history_occurrence_member
+                BEGIN SELECT RAISE(ABORT, 'controlled occurrence insert failure'); END;
+                """);
+            await using var transaction = await context.Database.BeginTransactionAsync();
+            await Stage(context, Commit("physical", [Batch("logical", Candidate("logical", "event", 0))]));
+            await Assert.ThrowsAsync<DbUpdateException>(() => context.SaveChangesAsync());
+            await transaction.RollbackAsync();
+        }
+        await AssertRowsAsync(database, 0);
+    }
+
+    [Fact]
+    public async Task A_chain_omitting_occurrence_content_cannot_commit_a_partial_projection()
+    {
+        await using var database = await Database.CreateAsync(); await using var context = database.Open();
+        await using var transaction = await context.Database.BeginTransactionAsync();
+        var incomplete = EfSchemaChain.For(new EfSchemaFamilyDescriptor("RuntimeHistory", "Workflows.Runtime", "1.0.0", typeof(EfRuntimeHistoryCheckpointTests).Assembly)
+        { ContentColumns = Chain.ContentColumns.Where(column => !column.Entity.Name.StartsWith("RuntimeHistoryOccurrence", StringComparison.Ordinal)).ToArray() });
+        await Assert.ThrowsAsync<InvalidOperationException>(() => EfRuntimeHistoryCheckpoint.StageAsync(context, new Accessor(),
+            Commit("physical", [Batch("logical", Candidate("logical", "event", 0))]), Scope, Now.AddDays(1), incomplete, CancellationToken.None).AsTask());
+        await transaction.RollbackAsync(); await AssertRowsAsync(database, 0);
+    }
+
     private static RuntimeHistoryCandidate Candidate(string checkpoint, string id, int ordinal, RuntimeHistoryBookmarkMutation? mutation = null,
-        string name = "ActivityStarted", bool knownTime = false, string? parent = null)
+        string name = "ActivityStarted", bool knownTime = false, string? parent = null, string activity = "activity")
     {
         if (mutation is not null) name = mutation.Status switch { RuntimeHistoryBookmarkStatus.Active => "BookmarkCreated",
             RuntimeHistoryBookmarkStatus.Consumed => "BookmarkConsumed", _ => "BookmarkRemoved" };
         return new(new(id, Run, 0, mutation is null ? RuntimeHistoryEventCategory.ActivityLifecycle : RuntimeHistoryEventCategory.BookmarkLifecycle,
-            name, Now, "activity", checkpointId: checkpoint) { Authority = RuntimeHistoryAuthority.CommittedTransition,
+            name, Now, activity, checkpointId: checkpoint) { Authority = RuntimeHistoryAuthority.CommittedTransition,
             BookmarkId = mutation?.Bookmark.Identity.BookmarkId, OccurredAtKnown = knownTime, ActivityAncestryKnown = true,
             ParentActivityExecutionId = parent }, ordinal, mutation);
     }
@@ -298,6 +354,9 @@ public sealed class EfRuntimeHistoryCheckpointTests
         {
             Assert.Empty(await context.Set<RuntimeHistoryHeadEntity>().ToArrayAsync()); Assert.Empty(await context.Set<RuntimeHistoryBookmarkEntity>().ToArrayAsync());
             Assert.Empty(await context.Set<RuntimeHistoryActivityEntity>().ToArrayAsync()); Assert.Empty(await context.Set<RuntimeHistoryBookmarkCountEntity>().ToArrayAsync());
+            Assert.Empty(await context.Set<RuntimeHistoryOccurrenceEntity>().ToArrayAsync());
+            Assert.Empty(await context.Set<RuntimeHistoryOccurrenceMembershipEntity>().ToArrayAsync());
+            Assert.Empty(await context.Set<RuntimeHistoryOccurrenceCounterEntity>().ToArrayAsync());
         }
         else Assert.Equal(count, (await context.Set<RuntimeHistoryHeadEntity>().SingleAsync()).LastSequence);
     }
@@ -316,7 +375,11 @@ public sealed class EfRuntimeHistoryCheckpointTests
     }
     private sealed class HistoryContext(DbContextOptions<HistoryContext> options) : RuntimeDbContext(options)
     {
-        protected override void ConfigureProvider(ModelBuilder builder) => RuntimeHistoryEntityConfiguration.Configure(builder);
+        protected override void ConfigureProvider(ModelBuilder builder)
+        {
+            RuntimeHistoryEntityConfiguration.Configure(builder);
+            RuntimeHistoryOccurrenceEntityConfiguration.Configure(builder);
+        }
     }
     private sealed class Database(SqliteConnection keeper) : IAsyncDisposable
     {

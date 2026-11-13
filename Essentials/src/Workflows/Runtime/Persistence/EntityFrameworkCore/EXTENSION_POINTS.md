@@ -33,6 +33,15 @@ Missing Required contributions remain owed; missing Optional contributions produ
 native writer must invoke that check for missing contributions too. This seam is not yet called by the production
 writer and does not qualify any selected reader, deletion family or capture profile.
 
+The checkpoint seam calls `EfRuntimeHistoryOccurrenceProjection.StageAsync` with only its newly positioned
+events, in the same context/transaction. The three internal occurrence receipt/membership/counter shapes and
+`RuntimeHistoryOccurrenceEntityConfiguration` preserve first-observation membership, bounded scope ordinals,
+unknown-baseline/semantics evidence and receipts through prefix content retention. They copy no journal content.
+`StageDeleteAsync` joins full run retirement; the actual native deletion adapter still needs that binding.
+All append owners, including independent observations, must stage their new events so the projection's covered
+prefix remains coherent. A lagging or unsupported projection must not be advertised as an empty playable run.
+The normal Runtime model still registers none of these history/occurrence tables.
+
 The isolated schema/mapping/checkpoint tests cover private projections and relational staging without changing
 normal Runtime migration targets. Actual native entry-point/marker integration and family binding, scoped readers,
 observation append, occurrence projection, retention/deletion, generated migrations and production qualification

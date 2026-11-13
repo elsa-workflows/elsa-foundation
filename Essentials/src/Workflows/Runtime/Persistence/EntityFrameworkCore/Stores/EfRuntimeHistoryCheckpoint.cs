@@ -154,6 +154,8 @@ internal static class EfRuntimeHistoryCheckpoint
         }
         await StageAncestryAsync(context, mapping, scope, run, events, cancellationToken);
         await StageCountsAsync(context, mapping, scope, run, deltas, cancellationToken);
+        EnsureAccess();
+        await EfRuntimeHistoryOccurrenceProjection.StageAsync(context, scope, run, chain, events, cancellationToken);
         EnsureAccess(); return events.AsReadOnly();
     }
 
