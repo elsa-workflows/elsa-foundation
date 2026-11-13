@@ -101,6 +101,7 @@ $MOR "$MO" probe crash|limits
 
 ```
 EFR="dotnet ef/Kernel.Ef.Run/bin/Release/net10.0/Kernel.Ef.Run.dll"
+mkdir -p .out                                                             # the SQLite files live here
 $EFR x stress postgres "$PG;Database=kernel_stress" seconds=40 messages=5000 [fence=batch]
 $EFR x stress sqlserver "$MS;Database=kernel_stress" seconds=40 messages=5000          # RCSI on unless rcsi=0
 $EFR x stress mysql "$MY;database=kernel_stress" seconds=40 messages=5000 [isolation=rc]
@@ -138,7 +139,7 @@ $SIM --native-mutations --seeds 20000
 dotnet conformance/Kernel.Store.Conformance.Run/bin/Release/net10.0/Kernel.Store.Conformance.Run.dll semantic
 $EFC sqlite semantic; $EFC sqlite --fence-in-batch semantic
 $NAT smoke; $NAT cost sqlite
-$EFR x cost sqlite "Data Source=.out/cost.db" [fence=batch]                  # delete .out/cost.db* between runs
+mkdir -p .out; $EFR x cost sqlite "Data Source=.out/cost.db" [fence=batch]                  # delete .out/cost.db* between runs
 $EFR x cost postgres "$PG;Database=kernel_cost" proxy=1 [fence=batch]
 $EFC postgres "$PG" [--fence-in-batch] semantic
 $NAT cost postgres "$PG;Database=kernel_native"
