@@ -44,12 +44,12 @@ public sealed class WorkflowInstance(IEnumerable<IExecutionModel> models) : IAct
     public ValueTask<object?> ExecuteJobAsync(string model, IJob job, CancellationToken cancellationToken) => _models[model].ExecuteJobAsync(job, cancellationToken);
 
     /// <summary>Park: the instance becomes faulted with the error, the messages are consumed, the partition goes on.</summary>
-    public TurnOutcome Park(InstanceRow? row, string actor, IReadOnlyList<Delivery> taken, StartSpec? spec, string error)
+    public TurnOutcome Park(InstanceRow? row, string actor, IReadOnlyList<Delivery> taken, StartSpec? spec, string error, object? pending = null)
     {
         var next = row is { } r ? r with { Status = InstanceStatus.Faulted, Revision = r.Revision + 1, Fault = error }
             : spec is null ? null
             : new InstanceRow(actor, spec.Model, spec.Definition, InstanceStatus.Faulted, "null", 1, spec.Parent, error, History: spec.History);
-        var unit = new TurnOutcome(actor) { Row = next, Expected = row?.Revision, Consumed = [.. taken], Journal = next is null ? null : Journal(next.History, ["parked: " + error]), Status = next?.Status };
+        var unit = new TurnOutcome(actor) { Row = next, Expected = row?.Revision, Consumed = [.. taken], Journal = next is null ? null : Journal(next.History, [.. pending as List<object> ?? [], "parked: " + error]), Status = next?.Status };
         if (next?.Parent is not null) unit.Sent.Add(Finished(next, null));
         return unit;
     }

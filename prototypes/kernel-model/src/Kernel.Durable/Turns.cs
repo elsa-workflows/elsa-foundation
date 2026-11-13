@@ -20,8 +20,11 @@ public interface IActorType
     /// <summary>One turn of the actor's own code. If it throws, the durable layer parks the actor (<see cref="Park"/>).</summary>
     ValueTask<TurnOutcome> TurnAsync(TurnInput input);
 
-    /// <summary>Park: the actor faults with the error, its messages are consumed, the partition goes on.</summary>
-    TurnOutcome Park(InstanceRow? row, string actor, IReadOnlyList<Delivery> taken, StartSpec? spec, string error);
+    /// <summary>
+    /// Park: the actor faults with the error, its messages are consumed, the partition goes on. <paramref name="pending"/>
+    /// is the history its turns in memory left, for an actor that was never written (decision 4).
+    /// </summary>
+    TurnOutcome Park(InstanceRow? row, string actor, IReadOnlyList<Delivery> taken, StartSpec? spec, string error, object? pending = null);
 
     /// <summary>
     /// Decision 4: an actor kept in memory past its short wait is written as it is, without a turn of its own code.
@@ -62,6 +65,7 @@ public sealed class Delivery(Message message, long seq)
     internal bool Shelved;            // a suspect whose row says seen at this epoch, not yet tried
     internal bool Again;              // its row was seen at an earlier epoch: a turn may have run with it (DurableTurn.Redelivered)
     internal bool Held;               // a turn handed it back: it waits for something new to come with
+    internal Message? Original;       // a job's ticket as it was before its result replaced it (decision 4: what is written)
     internal int Attempts;
     internal bool Ticket;             // a kernel message, not (yet) for the model
     internal bool Taken;              // a turn or a commit in flight has it
@@ -261,7 +265,7 @@ public sealed class DurableTurn
 
     /// <summary>
     /// Decision 4: what this turn leaves can wait in memory until <paramref name="until"/>. Everything it sends goes to the
-    /// actor itself and is a job's ticket or due by then; it subscribes nothing, publishes nothing, and cancels or recalls
+    /// actor itself and is a job's ticket, or a message due by then (one without a due time is due now); it subscribes nothing, publishes nothing, and cancels or recalls
     /// only what is in memory too. And it took no message that is a row: consuming one needs a commit, and a start that is
     /// a row (an outside start, say) must not be lost with the memory.
     /// </summary>

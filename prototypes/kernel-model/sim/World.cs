@@ -272,7 +272,9 @@ public sealed partial class World
             WallClock = () => Time + Skew[node],
             Flaws = Config.Flaws, Partitions = Config.Partitions, MaxInstances = 2,
             Transport = new Transport(this, Config.Flaws.HasFlag(Flaw.StableNodeName) ? "node" + node : $"node{node}.{Incarnation[node]}"),
-            OnKeptInMemory = instance => Oracle.InMemory.Add(instance),
+            OnKeptInMemory = (instance, revision) => Oracle.InMemory.TryAdd(instance, revision),
+            // Decision 4: an instance leaves memory without a row only when it has ended there.
+            OnLeftMemory = (instance, status) => { if (status is InstanceStatus.Running or null) Faults.Add($"I9 {instance} left memory without a row while it was {status?.ToString() ?? "missing"}"); },
             OnTurn = (instance, inbox, _) =>
             {
                 Log?.Invoke($"        actor {actor.Id} turns {instance} with [{string.Join(", ", inbox.Select(m => m.Kind + " " + m.Id))}]");
@@ -702,10 +704,13 @@ public sealed class Generator(int seed, World world)
             return new Act("register", S: "d" + which, M: new Message("", default, "s" + which % 2));
         }
         if (roll == 8 && world.CatchingUp.Count > 0) return new Act("catch-up", S: world.CatchingUp[r.Next(world.CatchingUp.Count)].Wait);
-        var rows = world.Store.Instances.Values.Where(i => i.Status == InstanceStatus.Running).Select(i => i.Id).Order(StringComparer.Ordinal).ToList();
+        // Decision 4: instances held in memory only, never written, get suspends and resumes too; they are written first.
+        var rows = world.Store.Instances.Values.Where(i => i.Status == InstanceStatus.Running).Select(i => i.Id)
+            .Concat(world.Actors.Where(a => !a.Dead).SelectMany(a => a.Worker.Unwritten)).Distinct().Order(StringComparer.Ordinal).ToList();
         if (rows.Count == 0) return new Act("tick", r.Next(50));
         var target = rows[r.Next(rows.Count)];
-        var kind = world.Store.Instances[target].Suspended == (r.Next(4) == 0) ? Kinds.Suspend : Kinds.Resume;
+        if (!world.Store.Instances.ContainsKey(target)) World.Count("a suspend or resume for an instance held in memory");
+        var kind = (world.Store.Instances.GetValueOrDefault(target)?.Suspended ?? false) == (r.Next(4) == 0) ? Kinds.Suspend : Kinds.Resume;
         return new Act("add", M: new Message($"x{_serial++}", new InstanceRef(target), kind, KeepUntil: world.Time + 3_600_000));
     }
 

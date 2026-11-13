@@ -18,7 +18,7 @@ public sealed class Oracle
     public readonly HashSet<string> Trees = [];                                          // roots of trees started from outside
     public readonly Dictionary<string, List<string>> Events = new();                   // key -> events published
     public readonly List<SubscriptionRow> Starts = [];                                   // start subscriptions registered
-    public readonly HashSet<string> InMemory = [];                                       // decision 4: instances kept in memory, unwritten, at some point
+    public readonly Dictionary<string, long> InMemory = new(StringComparer.Ordinal);      // decision 4: instances kept in memory, unwritten, and their first revision there
     public readonly HashSet<string> Deleted = [];                                        // instances that were sent a delete
 
     public bool Accepts(Message m) => m.Kind != "cancel" || Parents.ContainsKey(m.Target.Id) || (Runners.TryGetValue(m.Target.Id, out var keys) && keys.Contains(m.Read<string>()));
@@ -129,8 +129,8 @@ public sealed partial class World
             if (Store.Instances.GetValueOrDefault(id) is not { } row) return $"I2 the journal has a commit of {id} and there is no row";
             if (row.History == History.Minimal) return $"I6 {id} keeps minimal history and has journal rows";
             // Decision 4: an Ephemeral instance that waited in memory is written at the revision it had there, so its
-            // journal starts at that revision; with no gap after it.
-            var first = Oracle.InMemory.Contains(id) ? revisions[0] : 1;
+            // journal starts at that revision, never before the first one it had in memory, and has no gap after it.
+            var first = Oracle.InMemory.TryGetValue(id, out var kept) && revisions[0] >= kept ? revisions[0] : 1;
             if (revisions.Count != row.Revision - first + 1 || revisions[0] != first || revisions[^1] != row.Revision) return $"I2 {id} is at revision {row.Revision} and the journal has its commits [{string.Join(", ", revisions)}]";
         }
         foreach (var row in Store.Instances.Values)

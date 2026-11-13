@@ -1048,43 +1048,71 @@ Every flaw is still caught within 20,000 seeds.
 
 **What changed.** An Ephemeral instance that has never been written stays unwritten while its turns wait only for
 themselves. That holds for a turn when:
-- every message it sends goes to the instance itself and is a job's ticket or a timer due within the short wait;
+- every message it sends goes to the instance itself and is a job's ticket, or is due within the short wait (a message
+  without a due time is due now);
 - it subscribes nothing, publishes nothing, and cancels or recalls only what is in memory;
 - it took no message that is a row (`DurableTurn.CanWaitInMemory`).
 
 Its row, state and those messages are then held in memory only (`Slot.Unwritten`), and it is never evicted. The short
 wait is `StartSpec.ShortWait`, which the native HTTP host sets to the request's timeout, else `WorkerOptions.ShortWait`
-(5 s). An instance that ends in memory is never written.
+(5 s).
 
-The instance is written, at the revision it has, by:
-- a turn that does anything else, or
-- the end of the short wait (`Worker.Outgrown`, then `IActorType.Write`).
+It is written, at the revision it has, in three cases:
+- **A turn that does anything else.** The turn's row is then inserted, not updated.
+- **The end of the short wait** (`Worker.Outgrown`, then `IActorType.Write`).
+- **Before anything durable reaches it.** A message that is a row, or a kernel command, finds it written first
+  (`Worker.RunTurn`). Then it is an ordinary instance for whatever the message does.
 
-That commit also writes its timers and job tickets as rows (`Worker.Promote`). The history its turns left in memory
-goes into the same commit's journal row (`TurnOutcome.Pending`).
+The commit that writes it also writes, as rows:
+- what it still waits for in memory: timers, job tickets and held messages (`Worker.Promote`). A finished job is written
+  as its ticket, so a later owner runs it again and puts its result first (F7).
+- the history of its turns in memory, in the same commit's journal row (`TurnOutcome.Pending`). This holds for a park
+  too (`IActorType.Park` takes it).
 
-**What it loosens, said plainly.** Its journal starts at the revision it is written at, not at 1. So the simulation's I2
-now allows a late first revision for instances it saw kept in memory (`WorkerOptions.OnKeptInMemory`), and nothing
-else. What happened in memory is in that first row's entries. An unwritten instance is lost with its process, as an
-Ephemeral run always was. Its caller is told "lost".
+A park of an instance in memory whose write the store refused carries no state (`"null"`): there is no accepted row to
+fall back on. An instance that ends in memory writes nothing at all. What it still waited for goes with it, and its
+jobs are cancelled (`Worker.ForgetInMemory`).
 
-**Found on the way.** An Ephemeral instance started by a message that is a row (an outside start) was first kept in
-memory too. Its start was then consumed without a commit, and a crash would have lost it: the native simulation caught
-it (I14). Such a turn is now always written.
+**What it loosens, said plainly.**
+- **Late journal start.** The instance's journal starts at the revision it is written at, not at 1. The simulation's I2
+  now allows a first revision at or after the first revision the instance had in memory (`WorkerOptions.OnKeptInMemory`),
+  for those instances only. What happened in memory is in that first row's entries.
+- **Lost with its process.** An unwritten instance is lost with its process, as an Ephemeral run always was, and its
+  caller is told "lost".
 
-**The check.** The simulation's HTTP requests are now Ephemeral for the timer and job modes as well, half of them, as
-the respond mode was. I9: an instance held in memory only has no row, unless the commit that writes it is in flight.
-`Flaw.ForgetShortWaits` leaves the timers and tickets in memory when the instance is written. It is caught at seed 10:
-`END 0/h35 (job) ended as Running`.
+**Found on the way.**
+- **An outside start kept in memory.** An Ephemeral instance started by a message that is a row was first kept in
+  memory too. Its start was then consumed without a commit, so a crash would have lost it. The native simulation caught
+  it (I14). Such a turn is now always written.
+- **The first review round found five more.**
+  - A command or a park on an instance in memory updated a row that does not exist.
+  - A command that changes nothing dropped the running instance from memory.
+  - A held message stayed in memory only after the write.
+  - An instance that ended in memory with a recall still cost a commit, and its leftover timers were journalled later.
+  - The history was lost on the park and command paths.
+  - All are fixed by the rules above.
+
+**The checks.**
+- **Ephemeral requests.** The simulation's HTTP requests are now Ephemeral for the timer and job modes too, half of
+  them, as the respond mode was.
+- **Commands reach instances in memory.** Its suspends and resumes also target instances held in memory (400 in 4,000
+  seeds).
+- **I9, rows.** An instance held in memory only has no row, unless the commit that writes it is in flight.
+- **I9, leaving memory.** An instance leaves memory without a row only when it has ended (`WorkerOptions.OnLeftMemory`).
+- **Mutations.**
+  - `Flaw.ForgetShortWaits` leaves the timers and tickets in memory when the instance is written. Caught at seed 10:
+    `END 0/h35 (job) ended as Running`.
+  - `Flaw.NoWriteFirst` gives a command to an instance in memory without writing it first. Caught at seed 2,551:
+    `I9 1/h10 left memory without a row while it was Running`.
 
 **Gates** (before: section 25.3, this PR's base):
 
 | Gate | Before | After |
 |---|---|---|
 | `$SIM --seeds 200000` | 0 failed, 0 parked | 0 failed, 0 parked |
-| `$SIM --seeds 20000 --actions 1000` | 0 failed, 13 innocent parked | 0 failed, 11 innocent parked |
-| `$SIM --native --seeds 20000 --actions 1000` | 0 failed, 15 parked; 408,758 matched; 980 reruns, all told | 0 failed, 13 parked; 408,268 matched; 1,008 reruns, all told |
-| `$SIM --mutations --seeds 20000` | every flaw caught (two only in combination) | the same, plus `ForgetShortWaits` at seed 10 |
+| `$SIM --seeds 20000 --actions 1000` | 0 failed, 13 innocent parked | 0 failed, 12 innocent parked |
+| `$SIM --native --seeds 20000 --actions 1000` | 0 failed, 15 parked; 408,758 matched; 980 reruns, all told | 0 failed, 14 parked; 408,370 matched; 1,011 reruns, all told |
+| `$SIM --mutations --seeds 20000` | every flaw caught (two only in combination) | the same, plus `ForgetShortWaits` at seed 10 and `NoWriteFirst` at seed 2,551 |
 | `$SIM --native-mutations --seeds 20000` | 5 of 5 | 5 of 5 |
 | `$NAT smoke` | 31 of 31 | 31 of 31 |
 | `$NAT cost sqlite`, case 3 Ephemeral (job; Delay) | 13 calls, 2 commits each | **0, 0** |
@@ -1092,10 +1120,11 @@ the respond mode was. I9: an instance held in memory only has no row, unless the
 
 Every other row of both native cost runs is the same.
 
-Schedules moved. The generator draws Ephemeral for more requests, and an instance kept in memory changes what later
-actions find. So the parked and native counts moved, and so did most first failing seeds of the mutation check. Every
-flaw is still caught within 20,000 seeds.
+Schedules moved. The generator draws Ephemeral for more requests and sends commands to instances in memory, and an
+instance kept in memory changes what later actions find. So the parked and native counts moved, and so did most first
+failing seeds of the mutation check. Every flaw is still caught within 20,000 seeds.
 
 **Not done or not run.**
-- The stores and the EF cost runs: no store or commit code changed.
-- A native cost row for an Ephemeral wait past its short wait (it would be written: two commits, as Balanced).
+- The stores and the EF cost runs. No store code changed. The worker's commit path did, for instances in memory only.
+- A native cost row for an Ephemeral wait past its short wait. It would be written: two commits, as Balanced.
+- A simulation model that holds a message, or throws, while in memory. Those two rules are reasoned, not run.

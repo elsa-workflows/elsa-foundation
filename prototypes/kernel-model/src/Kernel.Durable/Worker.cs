@@ -46,8 +46,11 @@ public sealed record WorkerOptions
     public Func<long>? WallClock { get; init; }     // read only under Flaw.WallClockTimers
     public Flaw Flaws { get; init; }
 
-    /// <summary>Called when an instance is kept in memory, unwritten (decision 4). For tests.</summary>
-    public Action<string>? OnKeptInMemory { get; init; }
+    /// <summary>Called when an instance is kept in memory, unwritten (decision 4), with its revision there. For tests.</summary>
+    public Action<string, long>? OnKeptInMemory { get; init; }
+
+    /// <summary>Called when an instance held in memory leaves it without a row, with the status it left with. For tests.</summary>
+    public Action<string, InstanceStatus?>? OnLeftMemory { get; init; }
 
     /// <summary>Called when a turn starts, with the worker's idea of database time. For tests.</summary>
     public Action<InstanceRef, IReadOnlyList<Message>, long>? OnTurn { get; init; }
@@ -192,7 +195,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
         if (busy) return TimeSpan.Zero;
         var now = Now;
         var next = _items.Values.Where(i => !i.Taken && i.Message.Due is { } due && due > now).Select(i => i.Message.Due!.Value)
-            .Concat(_slots.Values.Where(s => s.Unwritten).Select(s => s.Until)).DefaultIfEmpty(long.MaxValue).Min();     // or an instance's short wait ends
+            .Concat(_slots.Values.Where(s => s.Unwritten && s.Until > now).Select(s => s.Until)).DefaultIfEmpty(long.MaxValue).Min();     // or an instance's short wait ends
         return next == long.MaxValue ? null : TimeSpan.FromMilliseconds(next - now);
     }
 
@@ -441,6 +444,14 @@ public sealed class Worker : IScopeActivation, ITurnServices
         if (Blocked || (_trial.Count > 0 && !OnTrial(instance))) return;
         var due = Deliverable(instance, slot);
         if (due.Count == 0) return;
+        if (slot.Unwritten && due.Exists(i => i.Durable || Kinds.IsControl(i.Message.Kind)) && !Has(Flaw.NoWriteFirst))
+        {
+            // Decision 4: a message from outside, or a command, finds an instance kept in memory written first; then it
+            // is an ordinary instance, with a row, for whatever the message does.
+            slot.Busy = true;
+            Enqueue(Bound(_type.Write(slot.Row!, slot.State, slot.Pending), slot));
+            return;
+        }
         slot.Inbox.RemoveAll(due.Contains);
         foreach (var item in due) (item.Taken, item.Held) = (true, false);
         (slot.Busy, slot.Used) = (true, ++_used);
@@ -465,7 +476,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
         catch (Exception e)
         {
             if (generation != _generation) return;
-            unit = _type.Park(input.Row, input.Actor, input.Taken, input.Spec, e.Message);   // a turn that throws parks its instance
+            unit = _type.Park(input.Row, input.Actor, input.Taken, input.Spec, e.Message, input.Unwritten ? input.Pending : null);   // a turn that throws parks its instance
         }
         if (generation == _generation) Enqueue(Bound(unit, input.Slot));   // otherwise it ran under an older epoch: discarded
     }
@@ -496,6 +507,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
         catch (Exception e) { error = e.Message; }
         if (generation != _generation || ticket.Taken) return;      // reset, or cancelled beside completion
         // The ticket becomes the result: same id, so it is consumed once, by the turn that handles it.
+        ticket.Original ??= ticket.Message;
         ticket.Message = ticket.Message with { Kind = Kinds.JobFinished, Payload = Json.Write(new JobFinished(job.Key, result, error)) };
         ticket.Ticket = false;
         // Finding F7: a result goes ahead of whatever else waits, so a turn never sees a cancel first and the result after it.
@@ -541,8 +553,12 @@ public sealed class Worker : IScopeActivation, ITurnServices
         if (Has(Flaw.DeliverBeforeCommit)) HandOver(unit, null, hold: true);
         if (Has(Flaw.EmitBeforeCommit)) Release(unit);
         else Release(unit, early: true);    // to callers whose route opted out of waiting for the commit
-        if (unit.Durable) Promote(unit);
-        if (unit.Durable) _queue.Add(unit);
+        if (EndsInMemory(unit)) Apply(unit, null, true);     // decision 4: it ended in memory; nothing of it was ever a row
+        else if (unit.Durable)
+        {
+            Promote(unit);
+            _queue.Add(unit);
+        }
         else Apply(unit, null, true);   // nothing to write: an ephemeral run, or messages that were never rows
     }
 
@@ -581,7 +597,13 @@ public sealed class Worker : IScopeActivation, ITurnServices
                 // The marks ride with the first of these commits that lands.
                 outcome = await CommitAsync([unit], marks, trial, generation, cancellationToken);
                 if (outcome == Outcome.Refused && unit.Slot is { } slot)
-                    outcome = await CommitAsync([Bound(_type.Park(slot.Row, unit.Instance, unit.Consumed, unit.Spec, _refusal), slot)], marks, trial, generation, cancellationToken);
+                {
+                    // An instance kept in memory has no accepted row: it is parked without the state the store refused.
+                    var park = Bound(slot.Unwritten ? _type.Park(slot.Row! with { State = "null" }, unit.Instance, unit.Consumed, unit.Spec, _refusal, slot.Pending)
+                        : _type.Park(slot.Row, unit.Instance, unit.Consumed, unit.Spec, _refusal), slot);
+                    Promote(park);
+                    outcome = await CommitAsync([park], marks, trial, generation, cancellationToken);
+                }
                 if (outcome == Outcome.Landed) (marks, trial) = ([], []);
             }
             if (outcome == Outcome.Refused && generation == _generation) Reset();   // nothing left to set apart
@@ -652,13 +674,29 @@ public sealed class Worker : IScopeActivation, ITurnServices
     /// </summary>
     private void Promote(TurnOutcome unit)
     {
-        if (unit.Slot is not { Unwritten: true } || Has(Flaw.ForgetShortWaits)) return;
-        foreach (var item in _items.Values.Where(i => !i.Durable && i.Message.Target.Id == unit.Instance && !unit.Consumed.Contains(i) && !unit.Held.Contains(i)
+        if (unit.Slot is not { Unwritten: true }) return;
+        // Whoever wrote the outcome (a turn, a command, a park) saw the row in memory: it is not in the table, so it is
+        // inserted, not updated at its revision.
+        if (unit.Row is not null) unit.Expected = null;
+        if (Has(Flaw.ForgetShortWaits)) return;
+        // Held ones too: a held result is still in flight in the row's jobs. A finished job is written as its ticket, so a
+        // later owner runs it again and puts its result first (F7), instead of a result row ordered behind a cancel.
+        foreach (var item in _items.Values.Where(i => !i.Durable && i.Message.Target.Id == unit.Instance && !unit.Consumed.Contains(i)
                      && !unit.Cancelled.Contains(i.Message.Id)).OrderBy(i => i.Seq).ToList())
         {
-            unit.Sent.Add(item.Message);
+            unit.Sent.Add(item.Original ?? item.Message);
             unit.Promoted.Add(item.Message.Id);
         }
+    }
+
+    /// <summary>Decision 4: an instance kept in memory ended there, and its turn leaves nothing that is a row.</summary>
+    private bool EndsInMemory(TurnOutcome unit) =>
+        unit.Slot is { Unwritten: true } && !unit.InMemory && unit.Row is null && unit.Journal is null && !unit.Delete
+        && !unit.Consumed.Exists(i => i.Durable) && unit.Sent.TrueForAll(m => unit.Volatile.Contains(m.Id)) && unit.Cancelled.TrueForAll(InMemoryOnly);
+
+    private void ForgetInMemory(string instance)
+    {
+        foreach (var item in _items.Values.Where(i => !i.Durable && i.Message.Target.Id == instance).ToList()) Forget(item);   // its timers go, its jobs are cancelled
     }
 
     private void Fail(List<TurnOutcome> units)
@@ -696,12 +734,17 @@ public sealed class Worker : IScopeActivation, ITurnServices
         if (unit.InMemory)       // decision 4: kept in memory, not written
         {
             (slot.Unwritten, slot.Until, slot.Pending) = (true, unit.Until, unit.Pending);
-            _options.OnKeptInMemory?.Invoke(unit.Instance);
+            _options.OnKeptInMemory?.Invoke(unit.Instance, unit.Revision);
         }
         else if (slot.Unwritten)
         {
             (slot.Unwritten, slot.Pending) = (false, null);
-            if (unit.Row is null) slot.Row = null;      // it ended in memory: never written at all
+            if (unit.Row is null)       // it ended in memory: never written at all, and what it still waited for goes with it
+            {
+                _options.OnLeftMemory?.Invoke(unit.Instance, unit.Status);
+                slot.Row = null;
+                ForgetInMemory(unit.Instance);
+            }
         }
         if (unit.Row is not null) slot.Row = unit.Row;
         if (unit.Delete) slot.Row = null;

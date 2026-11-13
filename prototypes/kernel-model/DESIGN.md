@@ -343,12 +343,12 @@ the native model (merge):
 - **Respond, then continue; wait first** (a timer, a background job): the request stays open, the instance stays in
   memory, up to the request's deadline.
 - **Short waits in memory** (decision 4, FINDINGS 25.6). An Ephemeral instance whose turn sends only itself timers due
-  within its short wait, or job tickets, and takes no message that is a row, stays in memory unwritten: its row, state
-  and those messages are memory only (`Slot.Unwritten`). The short wait is `StartSpec.ShortWait`, which an HTTP route
-  sets to its timeout, else `WorkerOptions.ShortWait` (5 s). If it ends there, nothing is ever written. A turn that
-  does anything else, or the end of the short wait, writes it: the row at the revision it has, its timers and job
-  tickets as rows in the same commit, and the history of its turns in memory in that commit's journal row. Its journal
-  therefore starts at that revision. An unwritten instance is never evicted, and is lost with the process, as an
+  within its short wait, or job tickets, and takes no message that is a row, stays in memory unwritten (`Slot.Unwritten`).
+  The short wait is `StartSpec.ShortWait`, which an HTTP route sets to its timeout, else `WorkerOptions.ShortWait` (5 s).
+  If it ends there, nothing is ever written. It is written, at the revision it has, by a turn that does anything else,
+  by the end of the short wait, and before anything that is a row or a command reaches it. That commit also writes
+  its timers, job tickets and held messages as rows, and the history of its turns in memory in its journal row; its
+  journal therefore starts at that revision. An unwritten instance is never evicted, and is lost with the process, as an
   Ephemeral run always was.
 - **A request that resumes a waiting workflow** adds a delivery carrying its reply address; the owner, on any node,
   sends what the turn emits, and the end, over the runtime's transport (`IReplyTransport`), which is not durable.
