@@ -144,6 +144,12 @@ public sealed class Worker : IScopeActivation, ITurnServices
         _slots.Where(s => s.Value.Loaded).Select(s => (s.Key, s.Value.Row, s.Value.State is null ? null : Json.Write(s.Value.State), s.Value.Busy));
     public IEnumerable<(string Id, bool Durable, bool Taken)> Messages => _items.Values.Select(i => (i.Message.Id, i.Durable, i.Taken));
 
+    /// <summary>
+    /// Diagnostic: capture before a ticket is removed. The task ends after its driver queues or discards the result;
+    /// it does not establish that a model consumed the result or committed a logical job outcome.
+    /// </summary>
+    public Task? JobCompletion(string instance, string key) => _items.GetValueOrDefault(TicketId(instance, key))?.JobDriver;
+
     public bool Has(Flaw flaw) => (_options.Flaws & flaw) != 0;
     public int Partitions => _options.Partitions;
 
@@ -547,7 +553,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
         // Callers finish their current collection operation before standing down, so a refused ticket is never stranded.
         if (!CanStartWork || ticket.Cancel is not null || ticket.Taken || Awaits(ticket) || Blocked || (_trial.Count > 0 && !_trial.Contains(ticket))) return;
         ticket.Cancel = new CancellationTokenSource();
-        _ = DriveJob(ticket, ticket.Message.Read<JobTicket>());
+        ticket.JobDriver = DriveJob(ticket, ticket.Message.Read<JobTicket>());
     }
 
     private bool JobMayRun(long generation)

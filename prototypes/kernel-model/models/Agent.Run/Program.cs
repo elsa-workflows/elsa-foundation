@@ -137,20 +137,20 @@ static class Scenarios
         var held = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
         var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var signalled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        Task<object?>? completedBody = null;
+        var bodyReady = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var returnPermit = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var cancelledStore = new InMemoryStore(1, () => time);
-        ValueTask<object?> HeldTool(IJob job, CancellationToken token)
+        async ValueTask<object?> HeldTool(IJob job, CancellationToken token)
         {
             RequireJob();
-            async Task<object?> Body()
-            {
-                using var registration = token.Register(() => signalled.TrySetResult());
-                started.TrySetResult();
-                var answer = await held.Task; // deliberately ignores cancellation like a non-cooperative external effect
-                RequireJob();
-                return answer;
-            }
-            return new ValueTask<object?>(completedBody = Body());
+            using var registration = token.Register(() => signalled.TrySetResult());
+            started.TrySetResult();
+            var answer = await held.Task; // deliberately ignores cancellation like a non-cooperative external effect
+            RequireJob();
+            bodyReady.TrySetResult();
+            await returnPermit.Task; // withhold the actual return to distinguish body readiness from driver completion
+            RequireJob();
+            return answer;
         }
         var cancelWorker = new Worker("cancel", 0, cancelledStore,
             new WorkflowInstance([new AgentModel(HeldTool)]), new WorkerOptions { JobScheduler = TaskScheduler.Default, Monotonic = () => time });
@@ -159,6 +159,7 @@ static class Scenarios
         cancelWorker.Post(new Message("s", InstanceRef.In(0, "cancelled"), Kinds.Start, Start: new StartSpec(AgentModel.ModelKey, "coordinator")), fresh: true);
         await Pump(cancelWorker, () => started.Task.IsCompleted && cancelledStore.Instances.TryGetValue("0/cancelled", out var r) && Json.Read<Conversation>(r.State).Stage == "tool");
         Check(started.Task.IsCompleted, "the tool actually started before cancellation");
+        var driver = cancelWorker.JobCompletion("0/cancelled", "lookup") ?? throw new Exception("started job has no driver task");
         await cancelledStore.AddAsync(new Message("cancel", InstanceRef.In(0, "cancelled"), "cancel", KeepUntil: time + 60_000));
         await Pump(cancelWorker, () => cancelledStore.Instances["0/cancelled"].Status == InstanceStatus.Cancelled, poll: true);
         await signalled.Task.WaitAsync(TimeSpan.FromSeconds(5));
@@ -166,8 +167,10 @@ static class Scenarios
         Check(cancelled.Status == InstanceStatus.Cancelled && !cancelledStore.Messages.ContainsKey(Worker.TicketId("0/cancelled", "lookup")),
             "cancellation signalled the running tool and removed its ticket");
         held.SetResult("late");
-        await completedBody!.WaitAsync(TimeSpan.FromSeconds(5));
-        await Task.Yield(); // run the captured owner continuation that discards the cancelled ticket's result
+        await bodyReady.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        Check(!driver.IsCompleted, "the worker driver is still pending while the tool withholds its return");
+        returnPermit.TrySetResult();
+        await driver.WaitAsync(TimeSpan.FromSeconds(5));
         for (var i = 0; i < 5; i++) { await cancelWorker.WokenAsync(null); await cancelWorker.RunAsync(); }
         Check(cancelledStore.Instances["0/cancelled"] == cancelled && !cancelledStore.Messages.ContainsKey(Worker.TicketId("0/cancelled", "lookup")),
             "non-cooperative tool completed late without changing the terminal row or recreating its ticket");
