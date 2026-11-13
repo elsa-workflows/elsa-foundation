@@ -1,0 +1,4 @@
+#nullable enable
+Elsa.Studio.Dashboard.Management.DashboardManagementFeature
+Elsa.Studio.Dashboard.Management.DashboardManagementFeature.DashboardManagementFeature() -> void
+virtual Elsa.Studio.Dashboard.Management.DashboardManagementFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void

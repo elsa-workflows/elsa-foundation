@@ -252,6 +252,8 @@ not automatic constitution violations.
 
 ## Studio
 
+- [Dashboard native management](Essentials/src/Studio/Dashboard/Management/EXTENSION_POINTS.md)
+
 - [Dashboard query, resource and authoring contracts](Essentials/src/Studio/Dashboard/Core/EXTENSION_POINTS.md)
 
 - [Studio server contracts and frontend lifecycle catalog](Studio/src/essentials/Elsa.Studio.Api/EXTENSION_POINTS.md)
