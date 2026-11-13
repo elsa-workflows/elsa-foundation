@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using Elsa.Workflows.Publishing.Releases.Core;
+using Xunit;
 
 namespace Elsa.Workflows.Publishing.Releases.Tests;
 
