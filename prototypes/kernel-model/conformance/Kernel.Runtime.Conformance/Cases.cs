@@ -40,6 +40,19 @@ public static class Cases
         return h.Alive.Single(n => n.Name == name);
     }
 
+    /// <summary>Every scope held by exactly one node, and no holder changed for two balancing rounds: the cluster has its shares.</summary>
+    private static async Task Steady(Harness h)
+    {
+        await Settle(h);
+        var (seen, since) = (Holders(h), Stopwatch.StartNew());
+        That(await h.WaitAsync(() =>
+        {
+            var now = Holders(h);
+            if (now != seen) (seen, since) = (now, Stopwatch.StartNew());
+            return h.Settled() && since.Elapsed >= h.Lease / 2;
+        }, h.Lease * 4 + Slack), $"the holders did not stay put for two balancing rounds: {Holders(h)}");
+    }
+
     private static async Task Settle(Harness h, string what = "every scope held by exactly one node")
     {
         That(await h.WaitAsync(h.Settled, h.Lease * 4 + Slack), $"not {what} in time: {Holders(h)}");
@@ -122,8 +135,8 @@ public static class Cases
             await h.StartAsync();
             await h.StartAsync();
             await Settle(h);
+            await Steady(h);
             var a = Holder(h, 0);       // the node that holds partition 0 dies while it has its messages in hand
-            var held = Enumerable.Range(0, h.Partitions).Where(p => h.Watcher.Holders(h.Partitions)[p].Contains(a.Name)).ToList();
             var tokens = Enumerable.Range(0, 30).Select(i => "k" + i).ToList();
             var id = InstanceRef.In(0, "c").Id;
             var adding = Task.Run(async () =>
@@ -132,15 +145,17 @@ public static class Cases
             });
             That(await Harness.WaitAsync(async () => (await h.RowAsync(id)) is { } row && Json.Read<CounterState>(row.State).Tokens.Count >= 3, Slack),
                 $"{a.Name} handled none of partition 0's messages before the crash");
+            var held = Enumerable.Range(0, h.Partitions).Where(p => h.Watcher.Holders(h.Partitions)[p].Contains(a.Name)).ToList();
             var killing = Stopwatch.StartNew();
             await h.KillAsync(a);
             // A crash gives nothing up: right after the kill every scope the node held still has its lease, so a take is
             // refused. The node renewed it within a third of a lease before the kill, so two thirds are left at least;
-            // the check counts only if the kill took less than that, with half a second to spare.
+            // the kill must return within that, with half a second to spare, or the case fails. The probe's own lease
+            // is short, so a probe that wins delays the takeover little.
             var bound = h.Lease * 2 / 3 - TimeSpan.FromMilliseconds(500);
             That(killing.Elapsed < bound, $"the kill took {killing.ElapsedMilliseconds} ms: the check that a crash gives nothing up needs it under {bound.TotalMilliseconds} ms");
             foreach (var p in held)
-                That(await h.Outside.TakeAsync(p, "probe", h.Lease) is null, $"the killed node gave partition {p} up: a crash gives nothing up");
+                That(await h.Outside.TakeAsync(p, "probe", h.Lease / 6) is null, $"the killed node gave partition {p} up: a crash gives nothing up");
             await adding;
             await Settle(h, "every scope taken over");
             await Applied(h, 0, "c", tokens, h.Lease * 3 + Slack);
