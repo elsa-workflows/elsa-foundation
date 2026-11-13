@@ -8,6 +8,11 @@ import process from "node:process";
 const require = createRequire(new URL("../../Studio/package.json", import.meta.url));
 const ts = require("typescript");
 const path = process.env.CAPTURE_SOURCE ?? fileURLToPath(new URL("../../Studio/tests/acceptance/journeys.spec.ts", import.meta.url));
+const toastControls = {};
+const toastSource = readFileSync(new URL("../../Studio/tests/acceptance/toastPlacementControl.ts", import.meta.url), "utf8");
+new Function("exports", ts.transpileModule(toastSource, {
+  compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS }
+}).outputText)(toastControls);
 const source = ts.createSourceFile(path, readFileSync(path, "utf8"), ts.ScriptTarget.Latest, true);
 assert.equal(source.parseDiagnostics.length, 0);
 const capture = source.statements.find(node => ts.isFunctionDeclaration(node) && node.name?.text === "capture");
@@ -21,9 +26,9 @@ async function exercise(projectWidth, actualWidth, boxes, noFixedViewport = fals
   const files = new Map();
   const expect = (actual, message) => ({ toEqual: expected => assert.deepEqual(actual, expected, message) });
   expect.poll = callback => ({ async toBe(expected) { assert.equal(await callback(), expected); } });
-  const run = new Function("expect", "writeFileSync", "document", "innerWidth", "exports",
+  const run = new Function("expect", "writeFileSync", "document", "innerWidth", "exports", "assertToastPlacementHolds",
     `${compiled.outputText}\nreturn exports.capture;`)(expect, (file, value) => files.set(file, value),
-      { documentElement: { scrollWidth: actualWidth } }, actualWidth, exports);
+      { documentElement: { scrollWidth: actualWidth } }, actualWidth, exports, toastControls.assertToastPlacementHolds);
   let screenshots = 0;
   const attached = [];
   const page = {

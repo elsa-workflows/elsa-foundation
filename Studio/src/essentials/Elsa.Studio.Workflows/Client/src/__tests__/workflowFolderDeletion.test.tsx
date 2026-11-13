@@ -1,3 +1,4 @@
+import { getNotifications } from "../workflow-editor/notifications";
 import { describe, expect, it, vi } from "vitest";
 import { button, click, definition, pagedDefinitionCapabilities, renderWorkflowRoute, response, waitForCondition, waitForText } from "./workflowDefinitionTestHelpers";
 
@@ -32,7 +33,7 @@ describe("workflow folder deletion", () => {
     await click(button(container, "Delete"));
     await waitForText(container, "2 active workflows");
     await click(button(container, "Delete folder"));
-    await waitForText(container, "Deleted folder Demo");
+    await vi.waitFor(() => expect(getNotifications().notify).toHaveBeenCalledWith(expect.objectContaining({ level: "success", title: "Deleted folder Demo" })));
     expect(container.querySelector('[data-folder-id="parent"]')).toBeNull();
     await waitForCondition(() => expect(document.activeElement).toBe(container.querySelector('[data-tree-key="all"]')));
   });
@@ -65,7 +66,7 @@ describe("workflow folder deletion", () => {
     await click(button(container, "Delete"));
     await waitForText(container, "2 active workflows");
     await click(button(container, "Delete folder"));
-    await waitForText(container, "Deleted folder Demo");
+    await vi.waitFor(() => expect(getNotifications().notify).toHaveBeenCalledWith(expect.objectContaining({ level: "success", title: "Deleted folder Demo" })));
     expect(container.textContent).toContain("Grandchild");
     expect(container.textContent).toContain("Invoices");
     expect(button(container, "Collapse Child")).not.toBeNull();
@@ -106,7 +107,7 @@ describe("workflow folder deletion", () => {
     await click(button(container, deleteWorkflows ? "Delete folder and 2 workflows" : "Delete folder"));
     await waitForCondition(() => expect(commits).toHaveLength(1));
     expect(commits[0]).toEqual({ previewRevision: "preview-1", deleteWorkflows, operationKey: expect.any(String) });
-    await waitForText(container, "Deleted folder Demo");
+    await vi.waitFor(() => expect(getNotifications().notify).toHaveBeenCalledWith(expect.objectContaining({ level: "success", title: "Deleted folder Demo" })));
     expect(container.querySelector('[role="dialog"]')).toBeNull();
     expect(new URLSearchParams(window.location.search).get("unfiled")).toBe("true");
   });

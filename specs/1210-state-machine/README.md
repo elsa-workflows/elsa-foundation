@@ -57,3 +57,6 @@ rules from storage/actor placement and labels its new choices and remaining qual
 
 The bounded [selection reference model](selection-model/README.md) makes candidate and phase-plan rules
 executable. Its tests are algorithm evidence only; actual runtime integration and the remaining Q1 rules stay open.
+
+The [Studio authoring and inspection proposal](contracts/studio.md) defines Q3's document, navigation,
+validation and operator journeys before implementation. Its acceptance journeys are planned, not observed UI proof.

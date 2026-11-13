@@ -133,6 +133,8 @@ export function reconcileHomeLayout(
 
 export class HomeLayoutStore {
   private revision?: string;
+  // Remote reads and resets can confirm there is no personal document despite an inherited ETag.
+  private userRevisionKnown = false;
   private pendingWrite: Promise<void> = Promise.resolve();
 
   constructor(private readonly api: ElsaStudioModuleApi, private readonly scope: StudioPreferenceScope) {}
@@ -147,6 +149,7 @@ export class HomeLayoutStore {
       const document = await this.api.backend.http.getJson<HomeLayoutDocument>(homeLayoutRoute, { headers: this.headers() });
       const normalized = normalizeDocument(document);
       this.revision = normalized.source === "user" ? normalized.revision : undefined;
+      this.userRevisionKnown = true;
       return normalized;
     } catch {
       return this.loadLocal();
@@ -176,6 +179,9 @@ export class HomeLayoutStore {
       if (!hasStatus(error, 404)) throw error;
     }
     this.revision = undefined;
+    this.userRevisionKnown = true;
+    // Keep device edits, but a successful deletion retires their old personal precondition.
+    this.saveLocal({ ...this.loadLocal(), revision: undefined });
     return this.load();
   }
 
@@ -190,7 +196,7 @@ export class HomeLayoutStore {
   }
 
   private async saveNow(document: HomeLayoutDocument): Promise<HomeLayoutDocument> {
-    const revision = this.revision ?? document.revision;
+    const revision = this.userRevisionKnown ? this.revision : document.revision;
     const headers = { ...this.headers(), ...preconditionHeaders(revision) };
     try {
       const saved = await this.api.backend.http.putJson<HomeLayoutDocument>(homeLayoutRoute, {
@@ -198,10 +204,11 @@ export class HomeLayoutStore {
         value: document.value
       }, { headers });
       this.revision = saved.revision;
+      this.userRevisionKnown = true;
       return normalizeDocument(saved);
     } catch (error) {
       if (hasStatus(error, 409) || hasStatus(error, 412)) throw error;
-      return this.saveLocal(document);
+      return this.saveLocal({ ...document, revision });
     }
   }
 

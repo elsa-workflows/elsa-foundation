@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { expect, type Locator, type Page, type TestInfo } from "@playwright/test";
+import { holdToastForPlacement } from "./toastPlacementControl";
 
 type Capture = (page: Page, info: TestInfo, name: string) => Promise<void>;
 interface Asset { id: string; revision: string; sourceHash: string }
@@ -22,6 +23,14 @@ export async function decisionsJourney(page: Page, info: TestInfo, capture: Capt
     await expect(locator).toBeVisible(); await locator.scrollIntoViewIfNeeded();
     await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => resolve())));
     await capture(page, info, name);
+  }
+  async function confirmation(name: string, title: string) {
+    const toast = page.locator(".studio-toast").filter({ has: page.getByText(title, { exact: true }) }).last();
+    await expect(toast).toBeVisible();
+    await expect(surface.getByText(title, { exact: true })).toHaveCount(0);
+    const hold = await holdToastForPlacement(page, toast);
+    try { await part(name, surface.locator("#decisions-title")); }
+    finally { await hold.release(); }
   }
   async function confirm(name: string) {
     const dialog = page.getByRole("dialog").or(page.getByRole("alertdialog"));
@@ -98,7 +107,7 @@ export async function decisionsJourney(page: Page, info: TestInfo, capture: Capt
   await part("decisions-search", search);
   if ((info.project.use.viewport?.width ?? 0) >= 1440) {
     const entry = page.getByRole("link", { name: "Decisions", exact: true });
-    if (!await entry.isVisible()) await page.getByRole("button", { name: /More tools/ }).click();
+    if (!await entry.isVisible()) await build.click();
     await expect(entry.locator("svg.lucide-scale")).toBeVisible();
   }
   await button("New decision").click(); await expect(surface.getByRole("heading", { name: "New decision", exact: true })).toBeVisible();
@@ -117,7 +126,7 @@ export async function decisionsJourney(page: Page, info: TestInfo, capture: Capt
     await surface.getByRole("textbox", { name: `Rule ${index + 1}, input customerCategory`, exact: true }).fill(row[1]);
     await surface.getByRole("textbox", { name: `Rule ${index + 1}, output approvalLevel`, exact: true }).fill(row[2]);
   }
-  const asset = await save(); await tabTitle(`Approval policy ${suffix} · Draft`); await button("Validate").click();
+  const asset = await save(); await confirmation("decision-saved-toast", "Decision saved"); await tabTitle(`Approval policy ${suffix} · Draft`); await button("Validate").click();
   await expect(surface.getByText("The saved draft is valid for the supported DMN profile.", { exact: true })).toBeVisible();
   await page.reload(); await expect(surface.getByRole("textbox", { name: "Rule 4, output approvalLevel", exact: true })).toHaveValue('"Account owner"');
   await tabTitle(`Approval policy ${suffix} · Draft`);
@@ -137,8 +146,7 @@ export async function decisionsJourney(page: Page, info: TestInfo, capture: Capt
   await button("Publish").click(); const publication = await publishing; expect(publication.ok(), await publication.text()).toBe(true);
   const published = await publication.json() as Version;
   await expect(button("Clone to draft")).toBeVisible(); await expect(surface.getByRole("textbox", { name: "Rule 1, input amount", exact: true })).toBeDisabled();
-  await tabTitle(`Approval policy ${suffix} · Version ${published.number}`);
-  await part("decision-published", surface.locator("#decisions-title"));
+  await confirmation("decision-published", `Version ${published.number} published`);
   await surface.getByRole("textbox", { name: "Evaluate input amount", exact: true }).fill("9007199254740993");
   await surface.getByRole("textbox", { name: "Evaluate input customerCategory", exact: true }).fill("Standard");
   await button("Evaluate decision").click(); const explanation = surface.getByRole("region", { name: "Decision evaluation explanation" });
@@ -149,12 +157,14 @@ export async function decisionsJourney(page: Page, info: TestInfo, capture: Capt
   const downloadWait = page.waitForEvent("download"); await button("Export DMN").click(); const download = await downloadWait;
   const sourcePath = info.outputPath("approval.dmn"); await download.saveAs(sourcePath); await info.attach("approval.dmn", { path: sourcePath, contentType: "application/xml" });
   await button("Clone to draft").click(); await confirm("Clone to draft"); await expect(surface.getByText("Saved draft", { exact: true })).toBeVisible();
-  await expect(surface.getByRole("textbox", { name: "Rule 1, input amount", exact: true })).toBeEnabled(); await part("decision-clone", surface.locator("#decisions-title"));
+  await expect(surface.getByRole("textbox", { name: "Rule 1, input amount", exact: true })).toBeEnabled(); await confirmation("decision-clone", "Version copied to the draft");
 
   const second = await page.context().newPage();
   try {
     await second.goto(page.url()); await second.locator(".decisions-page").getByLabel("Description", { exact: true }).fill("Concurrent editor saved this description.");
-    await second.getByRole("button", { name: "Save decision", exact: true }).click(); await expect(second.getByText("Decision saved.", { exact: true })).toBeVisible();
+    await second.getByRole("button", { name: "Save decision", exact: true }).click();
+    await expect(second.locator(".studio-toast").getByText("Decision saved", { exact: true })).toBeVisible();
+    await expect(second.locator(".decisions-page").getByText("Decision saved", { exact: true })).toHaveCount(0);
   } finally { await second.close(); }
   await surface.getByRole("textbox", { name: "Rule 1, input amount", exact: true }).fill("<= 999"); await button("Save decision").click();
   await expect(surface.getByText("Your unsaved work is still here.", { exact: false })).toBeVisible();

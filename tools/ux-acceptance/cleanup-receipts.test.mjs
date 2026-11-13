@@ -8,6 +8,11 @@ import process from "node:process";
 const require = createRequire(new URL("../../Studio/package.json", import.meta.url));
 const ts = require("typescript");
 const sourcePath = process.env.CLEANUP_RECEIPT_SOURCE ?? fileURLToPath(new URL("../../Studio/tests/acceptance/journeys.spec.ts", import.meta.url));
+const toastControls = {};
+const toastSource = readFileSync(new URL("../../Studio/tests/acceptance/toastPlacementControl.ts", import.meta.url), "utf8");
+new Function("exports", ts.transpileModule(toastSource, {
+  compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS }
+}).outputText)(toastControls);
 const source = ts.createSourceFile(sourcePath, readFileSync(sourcePath, "utf8"), ts.ScriptTarget.Latest, true);
 assert.equal(source.parseDiagnostics.length, 0, "The actual acceptance source parses");
 const hooks = [];
@@ -32,7 +37,7 @@ function sensitiveError() {
   return error;
 }
 
-async function exercise({ contextError, deleteError, deleteStatus = 204, cleanups = [] } = {}) {
+async function exercise({ contextError, deleteError, deleteStatus = 204, cleanups = [], toastReleaseError } = {}) {
   const page = { context: () => ({ async storageState() { return { cookies: [] }; } }) };
   const createdWorkflows = new WeakMap([[page, [{ id: "metadata-owned", url: "http://owned.invalid/templates", authorization: authMarker }]]]);
   const designerDefinitions = new WeakMap([[page, ["frame-owned", "sequence-owned"]]]);
@@ -40,9 +45,12 @@ async function exercise({ contextError, deleteError, deleteStatus = 204, cleanup
   const browserErrors = new WeakMap([[page, []]]);
   const assertions = (actual, message) => ({ toEqual: expected => assert.deepEqual(actual, expected, message) });
   const exports = {};
-  const hook = new Function("createdWorkflows", "designerDefinitions", "ownedCleanups", "browserErrors", "expect", "process", "exports",
+  const hook = new Function("createdWorkflows", "designerDefinitions", "ownedCleanups", "browserErrors", "expect", "process", "exports", "releaseToastPlacementHolds",
     `${compiled.outputText}\nreturn exports.cleanup;`)(createdWorkflows, designerDefinitions, ownedCleanups, browserErrors, assertions,
-      { env: { ELSA_WORKBENCH_URL: "http://owned.invalid" } }, exports);
+      { env: { ELSA_WORKBENCH_URL: "http://owned.invalid" } }, exports, async page => {
+        await toastControls.releaseToastPlacementHolds(page);
+        if (toastReleaseError !== undefined) throw toastReleaseError;
+      });
   const attempts = [];
   let attachment;
   let failure;
@@ -129,5 +137,15 @@ test("registered journey cleanup runs all callbacks and sanitizes failures", asy
   ] });
   assert.deepEqual(calls, ["failed", "succeeded"]);
   assert.ok(result.failure);
+  assert.ok(!result.failure.message.includes(cookieMarker) && !result.failure.message.includes(authMarker));
+});
+
+test("a failed toast release still attempts every owned record and keeps teardown failed", async () => {
+  let cleanupCalled = false;
+  const result = await exercise({ toastReleaseError: sensitiveError(), cleanups: [async () => { cleanupCalled = true; }] });
+  assert.equal(cleanupCalled, true);
+  assert.equal(result.receipt.receipts.length, 3);
+  assert.ok(result.failure);
+  assert.match(result.failure.message, /toast-release-failed/);
   assert.ok(!result.failure.message.includes(cookieMarker) && !result.failure.message.includes(authMarker));
 });

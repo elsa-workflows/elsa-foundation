@@ -6,7 +6,22 @@ import { register as registerConnections } from "../../../../../../../Extensions
 import { register as registerSecrets } from "../../../../../../../Extensions/Secrets/studio/Elsa.Studio.Secrets/Client/src/module";
 import { register as registerUserTasks } from "../../../../../../../Extensions/UserTasks/studio/Elsa.Studio.UserTasks/Client/src/module";
 
+import { register as registerDashboard } from "../../../../Elsa.Studio.Dashboard/Client/src/module";
+
 describe("registered integration navigation", () => {
+  it("keeps Home first and saved analytics discoverable in Operate", () => {
+    const api = createStudioRegistry({ hostVersion: "1", sdkVersion: "1", ...createEndpointContext("https://studio.example") });
+    registerDashboard(api);
+    const visible = filterAccessibleNavigation(api.navigation.list());
+    expect(getTopLevelNavigationItemsByPlacement(visible, "main").map(item => item.path)).toEqual(["/dashboard"]);
+    const analytics = getTopLevelNavigationItemsByPlacement(visible, "operate");
+    expect(analytics.map(item => ({ label: item.label, path: item.path }))).toEqual([
+      { label: "Dashboards", path: "/dashboards" },
+      { label: "Questions", path: "/questions" }
+    ]);
+    for (const item of analytics) expect(item.requiresBackend).toEqual([{ id: "elsa.api.studio-dashboard", contractVersion: "1" }]);
+  });
+
   it("places Connections before Secrets using actual module contributions", () => {
     const api = createStudioRegistry({ hostVersion: "1", sdkVersion: "1", ...createEndpointContext("https://studio.example") });
     registerSecrets(api);
