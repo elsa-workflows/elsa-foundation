@@ -27,7 +27,12 @@
       "runner trace"
     ],
     "viewerInspection": "passed; actual local TraceViewer actions/After DOM opened independently with styled populated UI, zero page errors",
-    "independentCredentialScan": "passed; zero matches across all six archives, 6248 private credential forms checked"
+    "independentCredentialScan": "passed; zero matches across all six archives, 6248 private credential forms checked",
+    "download": {
+      "url": "https://raw.githubusercontent.com/elsa-workflows/elsa-foundation/0692299d503a5af7e5896dad8e9ee6f4e45cbaa7/specs/1217-ai-dashboards/evidence/2026-11-13/safe-traces/native-desktop-light.zip",
+      "repositoryCommit": "0692299d503a5af7e5896dad8e9ee6f4e45cbaa7",
+      "bytes": 61862272
+    }
   },
   {
     "name": "home-desktop-light",
@@ -57,7 +62,12 @@
       "runner trace"
     ],
     "viewerInspection": "passed; actual local TraceViewer actions/After DOM opened independently with styled populated UI, zero page errors",
-    "independentCredentialScan": "passed; zero matches across all six archives, 6248 private credential forms checked"
+    "independentCredentialScan": "passed; zero matches across all six archives, 6248 private credential forms checked",
+    "download": {
+      "url": "https://raw.githubusercontent.com/elsa-workflows/elsa-foundation/0692299d503a5af7e5896dad8e9ee6f4e45cbaa7/specs/1217-ai-dashboards/evidence/2026-11-13/safe-traces/home-desktop-light.zip",
+      "repositoryCommit": "0692299d503a5af7e5896dad8e9ee6f4e45cbaa7",
+      "bytes": 11302829
+    }
   },
   {
     "name": "comparison-desktop-light",
@@ -87,7 +97,12 @@
       "runner trace"
     ],
     "viewerInspection": "passed; actual local TraceViewer actions/After DOM opened independently with styled populated UI, zero page errors",
-    "independentCredentialScan": "passed; zero matches across all six archives, 6248 private credential forms checked"
+    "independentCredentialScan": "passed; zero matches across all six archives, 6248 private credential forms checked",
+    "download": {
+      "url": "https://raw.githubusercontent.com/elsa-workflows/elsa-foundation/0692299d503a5af7e5896dad8e9ee6f4e45cbaa7/specs/1217-ai-dashboards/evidence/2026-11-13/safe-traces/comparison-desktop-light.zip",
+      "repositoryCommit": "0692299d503a5af7e5896dad8e9ee6f4e45cbaa7",
+      "bytes": 5350020
+    }
   },
   {
     "name": "weekly-workflow",
@@ -117,7 +132,12 @@
       "runner trace"
     ],
     "viewerInspection": "passed; actual local TraceViewer actions/After DOM opened independently with styled populated UI, zero page errors",
-    "independentCredentialScan": "passed; zero matches across all six archives, 6248 private credential forms checked"
+    "independentCredentialScan": "passed; zero matches across all six archives, 6248 private credential forms checked",
+    "download": {
+      "url": "https://raw.githubusercontent.com/elsa-workflows/elsa-foundation/0692299d503a5af7e5896dad8e9ee6f4e45cbaa7/specs/1217-ai-dashboards/evidence/2026-11-13/safe-traces/weekly-workflow.zip",
+      "repositoryCommit": "0692299d503a5af7e5896dad8e9ee6f4e45cbaa7",
+      "bytes": 25866094
+    }
   },
   {
     "name": "weekly-acme",
@@ -147,7 +167,12 @@
       "runner trace"
     ],
     "viewerInspection": "passed; actual local TraceViewer actions/After DOM opened independently with styled populated UI, zero page errors",
-    "independentCredentialScan": "passed; zero matches across all six archives, 6248 private credential forms checked"
+    "independentCredentialScan": "passed; zero matches across all six archives, 6248 private credential forms checked",
+    "download": {
+      "url": "https://raw.githubusercontent.com/elsa-workflows/elsa-foundation/0692299d503a5af7e5896dad8e9ee6f4e45cbaa7/specs/1217-ai-dashboards/evidence/2026-11-13/safe-traces/weekly-acme.zip",
+      "repositoryCommit": "0692299d503a5af7e5896dad8e9ee6f4e45cbaa7",
+      "bytes": 21432235
+    }
   },
   {
     "name": "weekly-restart",
@@ -177,7 +202,12 @@
       "runner trace"
     ],
     "viewerInspection": "passed; actual local TraceViewer actions/After DOM opened independently with styled populated UI, zero page errors",
-    "independentCredentialScan": "passed; zero matches across all six archives, 6248 private credential forms checked"
+    "independentCredentialScan": "passed; zero matches across all six archives, 6248 private credential forms checked",
+    "download": {
+      "url": "https://raw.githubusercontent.com/elsa-workflows/elsa-foundation/0692299d503a5af7e5896dad8e9ee6f4e45cbaa7/specs/1217-ai-dashboards/evidence/2026-11-13/safe-traces/weekly-restart.zip",
+      "repositoryCommit": "0692299d503a5af7e5896dad8e9ee6f4e45cbaa7",
+      "bytes": 4110510
+    }
   },
   {
     "name": "keyboard-workflow",
@@ -207,7 +237,12 @@
       "runner trace"
     ],
     "viewerInspection": "passed; independently opened actual local TraceViewer ordered keyboard actions and styled After DOM including editor23, settled Home, refined comparisons, authorized reader drill and provider-disabled restart; zero page errors",
-    "independentCredentialScan": "passed; zero matches across four R5 archives, 2968 private credential forms checked"
+    "independentCredentialScan": "passed; zero matches across four R5 archives, 2968 private credential forms checked",
+    "download": {
+      "url": "https://raw.githubusercontent.com/elsa-workflows/elsa-foundation/0692299d503a5af7e5896dad8e9ee6f4e45cbaa7/specs/1217-ai-dashboards/evidence/2026-11-13/safe-traces/keyboard-workflow.zip",
+      "repositoryCommit": "0692299d503a5af7e5896dad8e9ee6f4e45cbaa7",
+      "bytes": 45444562
+    }
   },
   {
     "name": "keyboard-acme",
@@ -237,7 +272,12 @@
       "runner trace"
     ],
     "viewerInspection": "passed; independently opened actual local TraceViewer ordered keyboard actions and styled After DOM including editor23, settled Home, refined comparisons, authorized reader drill and provider-disabled restart; zero page errors",
-    "independentCredentialScan": "passed; zero matches across four R5 archives, 2968 private credential forms checked"
+    "independentCredentialScan": "passed; zero matches across four R5 archives, 2968 private credential forms checked",
+    "download": {
+      "url": "https://raw.githubusercontent.com/elsa-workflows/elsa-foundation/0692299d503a5af7e5896dad8e9ee6f4e45cbaa7/specs/1217-ai-dashboards/evidence/2026-11-13/safe-traces/keyboard-acme.zip",
+      "repositoryCommit": "0692299d503a5af7e5896dad8e9ee6f4e45cbaa7",
+      "bytes": 34880892
+    }
   },
   {
     "name": "keyboard-access",
@@ -267,7 +307,12 @@
       "runner trace"
     ],
     "viewerInspection": "passed; independently opened actual local TraceViewer ordered keyboard actions and styled After DOM including editor23, settled Home, refined comparisons, authorized reader drill and provider-disabled restart; zero page errors",
-    "independentCredentialScan": "passed; zero matches across four R5 archives, 2968 private credential forms checked"
+    "independentCredentialScan": "passed; zero matches across four R5 archives, 2968 private credential forms checked",
+    "download": {
+      "url": "https://raw.githubusercontent.com/elsa-workflows/elsa-foundation/0692299d503a5af7e5896dad8e9ee6f4e45cbaa7/specs/1217-ai-dashboards/evidence/2026-11-13/safe-traces/keyboard-access.zip",
+      "repositoryCommit": "0692299d503a5af7e5896dad8e9ee6f4e45cbaa7",
+      "bytes": 6516586
+    }
   },
   {
     "name": "keyboard-restart",
@@ -297,6 +342,11 @@
       "runner trace"
     ],
     "viewerInspection": "passed; independently opened actual local TraceViewer ordered keyboard actions and styled After DOM including editor23, settled Home, refined comparisons, authorized reader drill and provider-disabled restart; zero page errors",
-    "independentCredentialScan": "passed; zero matches across four R5 archives, 2968 private credential forms checked"
+    "independentCredentialScan": "passed; zero matches across four R5 archives, 2968 private credential forms checked",
+    "download": {
+      "url": "https://raw.githubusercontent.com/elsa-workflows/elsa-foundation/0692299d503a5af7e5896dad8e9ee6f4e45cbaa7/specs/1217-ai-dashboards/evidence/2026-11-13/safe-traces/keyboard-restart.zip",
+      "repositoryCommit": "0692299d503a5af7e5896dad8e9ee6f4e45cbaa7",
+      "bytes": 7349901
+    }
   }
 ]

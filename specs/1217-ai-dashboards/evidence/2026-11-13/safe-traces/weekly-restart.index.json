@@ -24,5 +24,10 @@
     "console arguments",
     "runner trace"
   ],
-  "viewerInspection": "required before publication"
+  "viewerInspection": "required before publication",
+  "download": {
+    "url": "https://raw.githubusercontent.com/elsa-workflows/elsa-foundation/0692299d503a5af7e5896dad8e9ee6f4e45cbaa7/specs/1217-ai-dashboards/evidence/2026-11-13/safe-traces/weekly-restart.zip",
+    "repositoryCommit": "0692299d503a5af7e5896dad8e9ee6f4e45cbaa7",
+    "bytes": 4110510
+  }
 }
