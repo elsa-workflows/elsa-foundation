@@ -111,6 +111,22 @@ public sealed partial class RuntimeHistoryOccurrenceReaderTests
     }
 
     [Theory]
+    [InlineData(false, false, false)] [InlineData(false, false, true)]
+    [InlineData(false, true, false)] [InlineData(false, true, true)]
+    [InlineData(true, false, false)] [InlineData(true, false, true)]
+    [InlineData(true, true, false)] [InlineData(true, true, true)]
+    public async Task Boundary_member_loss_cannot_shrink_or_rebase_a_frozen_or_retained_sequence(bool partial, bool frozen, bool last)
+    {
+        await using var db = await Database.Create(); await db.Append([Event(1, "a"), Event(2, "b"), Event(3, "c")]);
+        if (partial) await db.PurgeProjection(1);
+        var admission = await db.Read(); await db.Append([Event(4, "d")]);
+        var ordinal = last ? frozen ? 2 : 3 : partial ? 1 : 0;
+        await using (var context = db.Open())
+            await context.Set<RuntimeHistoryOccurrenceMembershipEntity>().Where(row => row.ActivityScopeId == null && row.Ordinal == ordinal).ExecuteDeleteAsync();
+        await Assert.ThrowsAsync<RuntimeHistoryIntegrityException>(() => db.Read(new("run", sequenceToken: frozen ? admission.SequenceToken : null)));
+    }
+
+    [Theory]
     [InlineData(false)] [InlineData(true)]
     public async Task A_newer_content_family_stamp_remains_schema_skew_not_corruption(bool counter)
     {

@@ -19,7 +19,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 internal static class EfRuntimeHistoryOccurrenceReader
 {
     private const string Purpose = "runtime-history-occurrences-ef-v1";
-    private sealed record Window(string Binding, long Upper, long Purged, string Policy);
+    private sealed record Window(string Binding, long Upper, long Purged, string Policy, long? FirstOrdinal, long? Count);
 
     internal static async ValueTask<RuntimeHistoryOccurrencePage> ReadAsync(RuntimeDbContext context, string physicalScope,
         EfSchemaChain callerChain, IRuntimeRecoveryContinuationCodec callerCodec, RuntimeHistoryOccurrenceQuery query,
@@ -108,20 +108,25 @@ internal static class EfRuntimeHistoryOccurrenceReader
         if (exactOnly) count = exactScope!.FirstSequence > lower ? 1 : 0;
         else if (source is not null)
         {
+            var precedingRow = lower == 0 ? null : await members.Where(row => row.FirstSequence <= lower)
+                .OrderByDescending(row => row.FirstSequence).FirstOrDefaultAsync(token);
             var firstRow = await members.Where(row => row.FirstSequence > lower && row.FirstSequence <= upper)
                 .OrderBy(row => row.FirstSequence).FirstOrDefaultAsync(token);
             var lastRow = await members.Where(row => row.FirstSequence <= upper).OrderByDescending(row => row.FirstSequence).FirstOrDefaultAsync(token);
-            if (firstRow is not null)
-            {
-                var first = Member(firstRow); var last = lastRow is null ? throw Invalid(run, "the first member has no frozen final member") : Member(lastRow);
-                if (first.Ordinal > last.Ordinal || last.Ordinal >= source.NextOrdinal || last.FirstSequence < first.FirstSequence)
-                    throw Invalid(run, "the frozen member boundaries disagree with the allocation counter");
-                firstOrdinal = first.Ordinal; count = checked(last.Ordinal - first.Ordinal + 1);
-            }
-            else if (lastRow is not null) _ = Member(lastRow);
-            if (upper == head.LastSequence && lower == 0 && count != source.NextOrdinal)
-                throw Invalid(run, "the complete member boundaries disagree with the allocation counter");
+            var preceding = precedingRow is null ? null : Member(precedingRow);
+            firstOrdinal = preceding is null ? 0 : checked(preceding.Ordinal + 1);
+            var expectedLast = window is null ? source.NextOrdinal - 1 : checked(window.FirstOrdinal!.Value + window.Count!.Value - 1);
+            var first = firstRow is null ? null : Member(firstRow); var last = lastRow is null ? null : Member(lastRow);
+            if (window is not null && firstOrdinal != window.FirstOrdinal || expectedLast >= source.NextOrdinal ||
+                last is null && expectedLast != -1 || last is not null && last.Ordinal != expectedLast)
+                throw Invalid(run, "the frozen member boundaries disagree with their admitted allocation proof");
+            count = expectedLast < firstOrdinal ? 0 : checked(expectedLast - firstOrdinal + 1);
+            if (count == 0 && first is not null || count > 0 && (first is null || first.Ordinal != firstOrdinal ||
+                last is null || last.FirstSequence < first.FirstSequence || last.FirstSequence <= lower))
+                throw Invalid(run, "a retained occurrence boundary is missing or disagrees with its dense ordinal");
         }
+        if (window is not null && (window.FirstOrdinal != firstOrdinal || window.Count != count))
+            throw Invalid(run, "the retained occurrence range changed without acknowledged invalidation");
         long selected = query.Position ?? 0;
         if (query.AnchorActivityExecutionId is { } anchor)
         {
@@ -192,7 +197,7 @@ internal static class EfRuntimeHistoryOccurrenceReader
                     member.Ordinal < last && index + 1 < slice.Length ? EfRelationalIdentity.Decode(slice[index + 1].Activity) : null));
             }
         }
-        var nextToken = query.SequenceToken ?? codec.Encode(Purpose, JsonSerializer.SerializeToUtf8Bytes(new Window(binding, upper, lower, Policy(head.Policy))));
+        var nextToken = query.SequenceToken ?? codec.Encode(Purpose, JsonSerializer.SerializeToUtf8Bytes(new Window(binding, upper, lower, Policy(head.Policy), firstOrdinal, count)));
         return new(head, head.CapturedFromStart && lower == 0 ? RuntimeHistoryOccurrenceAvailability.Available : RuntimeHistoryOccurrenceAvailability.Partial,
             lower > 0 ? "retained-prefix-purged" : head.CapturedFromStart ? null : "capture-not-from-start",
             upper, lower, count, count == 0 ? null : selected, items.AsReadOnly(), nextToken, newer);
@@ -220,7 +225,8 @@ internal static class EfRuntimeHistoryOccurrenceReader
         try
         {
             var value = JsonSerializer.Deserialize<Window>(codec.Decode(Purpose, token));
-            if (value is null || value.Binding != binding || value.Upper < 0 || value.Purged < 0 || value.Purged > value.Upper || string.IsNullOrEmpty(value.Policy))
+            if (value is null || value.Binding != binding || value.Upper < 0 || value.Purged < 0 || value.Purged > value.Upper || string.IsNullOrEmpty(value.Policy) ||
+                value.FirstOrdinal is null or < 0 || value.Count is null or < 0 || value.FirstOrdinal > long.MaxValue - value.Count)
                 throw new FormatException();
             return value;
         }
