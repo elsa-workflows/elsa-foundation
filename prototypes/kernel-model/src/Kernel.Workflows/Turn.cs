@@ -53,7 +53,8 @@ internal sealed class Turn : ITurn
     {
         // With its parent by default, so a call tree talks in memory and commits together; spread, for a wide fan-out.
         if (Instance.Creation == 0 && spec.Creation is not null) throw new NotSupportedException("an unqualified parent cannot pin a qualified child");
-        var name = $"{Id[(Id.IndexOf('/') + 1)..]}{(Instance.Creation > 0 ? "@" + Instance.Creation : "")}~{_durable.Revision}.{_durable.Ordinal}";
+        var stem = Instance.Creation > 0 ? CreationProtocol.Origin(Id, Instance.Creation) : Id[(Id.IndexOf('/') + 1)..];
+        var name = $"{stem}~{_durable.Revision}.{_durable.Ordinal}";
         var child = InstanceRef.In(placement == Placement.Spread ? InstanceRef.Spread(name, _input.Services.Partitions) : Instance.Ref.Partition, name);
         var creation = Instance.Creation > 0 ? new CreationStart(1, 0,
             Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(child.Id)))) : null;

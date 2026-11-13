@@ -144,5 +144,5 @@ public sealed class WorkflowInstance(IEnumerable<IExecutionModel> models) : IAct
         new($"{Origin(row)}#{row.Revision}.end", new InstanceRef(row.Parent!), WorkflowKinds.ChildFinished, Json.Write(new ChildFinished(row.Id, row.Status, output, row.Creation)), row.Id,
             TargetCreation: row.ParentCreation > 0 ? row.ParentCreation : null);
 
-    private static string Origin(InstanceRow row) => row.Creation > 0 ? $"{row.Id}@{row.Creation}" : row.Id;
+    private static string Origin(InstanceRow row) => CreationProtocol.Origin(row.Id, row.Creation);
 }

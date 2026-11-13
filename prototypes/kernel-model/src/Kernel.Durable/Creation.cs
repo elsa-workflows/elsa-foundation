@@ -10,6 +10,9 @@ public sealed record CreationResult(string Actor, string Result, long? Requested
 /// <summary>Prototype shared lifecycle rules. The execution model never owns the creation header.</summary>
 public static class CreationProtocol
 {
+    // Length-prefix the full physical address: neither user punctuation nor a different parent partition aliases it.
+    public static string Origin(string actor, long creation) => creation > 0 ? $"c{actor.Length}_{actor}_{creation}" : actor;
+
     public static string? Fingerprint(StartSpec? start) => start?.Creation is null ? null
         : "v1:" + Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(Json.Write(start))));
     public static void RejectUnsupported(CommitBatch batch)

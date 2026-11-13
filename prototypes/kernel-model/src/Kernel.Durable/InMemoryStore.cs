@@ -179,6 +179,7 @@ public sealed class InMemoryStore(int partitions, Func<long> clock, Flaw flaws =
 
     public ValueTask<bool> AddAsync(Message message, CancellationToken cancellationToken = default)
     {
+        if (!CreationIdentityAvailable) CreationProtocol.RejectUnsupported(message);
         lock (_gate)
         {
             if (Messages.ContainsKey(message.Id)) return new(false);
@@ -200,6 +201,7 @@ public sealed class InMemoryStore(int partitions, Func<long> clock, Flaw flaws =
 
     public ValueTask SubscribeAsync(SubscriptionRow subscription, CancellationToken cancellationToken = default)
     {
+        if (!CreationIdentityAvailable) CreationProtocol.RejectUnsupported(subscription);
         lock (_gate) Subscriptions.Add(subscription);
         return default;
     }

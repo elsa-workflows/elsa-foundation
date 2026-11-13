@@ -178,7 +178,7 @@ public sealed class DurableTurn
     public int SentCount => _sent.Count;
     public int SubscribedCount => _subscribed.Count;
     private string Id => Actor.Id;
-    private string Origin => _input.Creation > 0 ? $"{Id}@{_input.Creation}" : Id;
+    private string Origin => CreationProtocol.Origin(Id, _input.Creation);
     private ITurnServices Services => _input.Services;
 
     public void Emit(string channel, object? item) => _emitted.Add((channel, item));

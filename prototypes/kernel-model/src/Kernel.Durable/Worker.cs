@@ -166,7 +166,8 @@ public sealed class Worker : IScopeActivation, ITurnServices
     void ITurnServices.Cancelling(string ticket) => Cancelling(ticket);
 
     /// <summary>A job's ticket: derived from instance and key, so a later turn can delete it without holding it.</summary>
-    public static string TicketId(string instance, string key, long creation = 0) => creation > 0 ? $"{instance}@{creation}!{key}" : $"{instance}!{key}";
+    public static string TicketId(string instance, string key, long creation = 0) => creation > 0
+        ? $"{CreationProtocol.Origin(instance, creation)}!{key.Length}_{key}" : $"{instance}!{key}";
 
     // ---- the seam to layer 1 --------------------------------------------------------------------------------------
 
@@ -887,7 +888,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
         slot.Replies.Clear();
     }
 
-    private static string Origin(TurnOutcome unit) => (unit.Row ?? unit.Slot?.Row)?.Creation is > 0 and var creation ? $"{unit.Instance}@{creation}" : unit.Instance;
+    private static string Origin(TurnOutcome unit) => CreationProtocol.Origin(unit.Instance, (unit.Row ?? unit.Slot?.Row)?.Creation ?? 0);
 
     private void Send(string to, string key, string? channel, object? item, InstanceStatus? status = null, string? error = null)
     {
