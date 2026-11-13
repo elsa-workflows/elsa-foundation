@@ -24,9 +24,24 @@ public sealed class EtlModel(bool duplicate = false, bool excessCredit = false) 
     public string Key => ModelKey;
     public Type StateType => typeof(EtlState);
     public int StateVersion => 1;
-    public object CreateState(StartSpec start) => new EtlState { Input = Json.Read<RangeInput>(start.Input!) };
+    public object CreateState(StartSpec start)
+    {
+        var input = Json.Read<RangeInput>(start.Input!);
+        if (input.Fanout < 2 || input.Credit < 1 || input.Start < 0 || input.Count < 1 ||
+            (long)input.Start + input.Count > int.MaxValue)
+            throw new ArgumentOutOfRangeException(nameof(start), "Invalid ETL fanout, credit, or range.");
+        return new EtlState { Input = input };
+    }
     public object UpgradeState(string state, int fromVersion) => throw new NotSupportedException();
     public ValueTask<object?> ExecuteJobAsync(IJob job, CancellationToken cancellationToken) => throw new NotSupportedException();
+
+    public static int SpanFor(int count, int fanout)
+    {
+        if (count < 1 || fanout < 2) throw new ArgumentOutOfRangeException(nameof(count));
+        long span = 1;
+        while ((count + span - 1) / span > fanout) span = Math.Min(count, span * fanout);
+        return (int)span;
+    }
 
     public ValueTask TurnAsync(ITurn turn, CancellationToken cancellationToken)
     {
@@ -54,12 +69,10 @@ public sealed class EtlModel(bool duplicate = false, bool excessCredit = false) 
             turn.SetStatus(InstanceStatus.Finished, output: new Total(s.Count, s.Sum));
             return ValueTask.CompletedTask;
         }
-        int span = 1;
-        if (!input.Direct)
-            while ((input.Count + (long)span - 1) / span > input.Fanout) span *= input.Fanout;
+        var span = input.Direct ? 1 : SpanFor(input.Count, input.Fanout);
         while (s.Cursor < input.Count && s.Pending.Count < input.Credit + (excessCredit ? 1 : 0))
         {
-            var count = Math.Min(span, input.Count - s.Cursor);
+            var count = (int)Math.Min(span, input.Count - (long)s.Cursor);
             var range = input with { Start = input.Start + s.Cursor, Count = count, Direct = false };
             var child = turn.Start(new StartSpec(ModelKey, "range", Json.Write(range), History: History.Minimal), Placement.Spread);
             s.Pending.Add(child.Id, range);

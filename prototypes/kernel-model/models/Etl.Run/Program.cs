@@ -5,9 +5,10 @@ using Kernel.Etl.Run;
 using Kernel.Runtime;
 using Kernel.Workflows;
 
+if (args.Contains("--validate-inputs")) return ValidateInputs();
 int size = args.Contains("--size") ? int.Parse(args[Array.IndexOf(args, "--size") + 1]) : 256;
 bool duplicate = args.Contains("--mutate-count"), excess = args.Contains("--mutate-credit");
-if (size < 2) throw new ArgumentOutOfRangeException(nameof(size));
+if (size < 65) { Console.Error.WriteLine("The tree comparison requires at least 65 leaves."); return 2; }
 var tree = await Run(size, direct: false, fault: true, duplicate, excess);
 var direct = await Run(size, direct: true, fault: false, duplicate, excess);
 var expected = (long)size * (size + 1) / 2;
@@ -95,4 +96,22 @@ static async Task<RunResult> Run(int size, bool direct, bool fault, bool duplica
     return new(direct ? "direct" : "tree", state.Count, state.Sum, maxPending, rootTurns, rootMessages, store.Instances.Count,
         partitionsUsed, states.All(s => s.Input.PayloadRef == "blob://dataset/1"), wire.Injected, recovered, stopwatch.Elapsed.TotalSeconds);
 }
+
+static int ValidateInputs()
+{
+    var model = new EtlModel();
+    bool rejected = true;
+    foreach (var input in new[] { new RangeInput(0, 1, "ref", 1, 8), new RangeInput(0, 1, "ref", 2, 0),
+                 new RangeInput(-1, 1, "ref", 2, 1), new RangeInput(0, 0, "ref", 2, 1),
+                 new RangeInput(int.MaxValue, 1, "ref", 2, 1) })
+    {
+        try { model.CreateState(new StartSpec(EtlModel.ModelKey, "range", Json.Write(input))); rejected = false; }
+        catch (ArgumentOutOfRangeException) { }
+    }
+    var valid = (EtlState)model.CreateState(new StartSpec(EtlModel.ModelKey, "range", Json.Write(new RangeInput(0, int.MaxValue, "ref", int.MaxValue, 1))));
+    bool ok = rejected && valid.Input.Count == int.MaxValue && EtlModel.SpanFor(int.MaxValue, 2) == 1_073_741_824;
+    Console.WriteLine(ok ? "invalid inputs rejected; maximum legal range and span accepted" : "FAIL input validation");
+    return ok ? 0 : 1;
+}
+
 record RunResult(string Name, long Count, long Sum, int MaxPending, int RootTurns, int RootMessages, int Instances, int Partitions, bool ReferencesIntact, bool Injected, bool Recovered, double Seconds);
