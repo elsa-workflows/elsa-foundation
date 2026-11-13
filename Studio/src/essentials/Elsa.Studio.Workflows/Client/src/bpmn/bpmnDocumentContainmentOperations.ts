@@ -4,7 +4,7 @@ import { applyBpmnDocumentTransaction, bpmnNamespaces as ns, readBpmnDocument, r
 import { planBpmnDocumentMove, projectBpmnDocumentCanvas } from "./bpmnDocumentCanvas";
 import { assessBpmnDocumentConnection, bpmnFlowScope, bpmnOwningProcess, isBpmnModelElement } from "./bpmnDocumentPolicy";
 import { isActivityBearingElementType, isEventElementType, isGatewayElementType, isSubProcessElementType } from "./bpmnNotationTypes";
-import { bpmnChildren, bpmnFragment, bpmnIdentity, bpmnOperationContext, bpmnSourceAddress, bpmnSourceCounterpart, insertBpmnFragment,
+import { bpmnChildren, bpmnFragment, bpmnIdentity, bpmnInsertionBefore, bpmnOperationContext, bpmnSourceAddress, bpmnSourceCounterpart, insertBpmnFragment,
   isBpmnOwnedSyntax, refuseBpmnOperation, requireBpmnFlowScope, requireBpmnVisibleElement, resolveBpmnOperationAddress } from "./bpmnDocumentOperationXml";
 import type { BpmnDocumentOperationPlan } from "./bpmnDocumentCreateOperations";
 import { verifyBpmnEventContexts } from "./bpmnDocumentEventContext";
@@ -81,6 +81,7 @@ export function prepareBpmnReparent(owner: ActivityNode, scope: BpmnScopeAddress
     const source = resolveBpmnDocumentReference(context.parsed, element, element.getAttribute("sourceRef"));
     const destination = resolveBpmnDocumentReference(context.parsed, element, element.getAttribute("targetRef"));
     if (!source || !destination || !inside(source) && !inside(destination)) continue;
+    if (futureScope(source) === bpmnFlowScope(source) && futureScope(destination) === bpmnFlowScope(destination)) continue;
     if (futureScope(source) !== futureScope(destination)) refuseBpmnOperation("an incident sequence flow would cross standard scopes");
     if (element.parentElement !== futureScope(source)) flows.push(element);
   }
@@ -108,10 +109,13 @@ export function prepareBpmnReparent(owner: ActivityNode, scope: BpmnScopeAddress
   // Descending document order keeps all idless membership addresses valid.
   const documentOrder = [...context.parsed.document.getElementsByTagName("*")];
   commands.unshift(...memberships.sort((a, b) => documentOrder.indexOf(b.element) - documentOrder.indexOf(a.element)).map(edit => edit.command));
+  const reparent = (element: Element, parent: Element): BpmnDocumentCommand => {
+    const before = bpmnInsertionBefore(context, parent, element);
+    return { kind: "reparent", target: bpmnSourceAddress(element, context.parsed), parent: bpmnSourceAddress(parent, context.parsed), ...(before ? { before } : {}) };
+  };
   for (const element of roots) if (element.parentElement !== target)
-    commands.push({ kind: "reparent", target: { elementId: bpmnIdentity(element) }, parent: { elementId: bpmnIdentity(target) } });
-  for (const element of [...flows].reverse()) commands.push({ kind: "reparent", target: bpmnSourceAddress(element, context.parsed),
-    parent: { elementId: bpmnIdentity(futureScope(resolveBpmnDocumentReference(context.parsed, element, element.getAttribute("sourceRef"))!)!) } });
+    commands.push(reparent(element, target));
+  for (const element of [...flows].reverse()) commands.push(reparent(element, futureScope(resolveBpmnDocumentReference(context.parsed, element, element.getAttribute("sourceRef"))!)!));
   if (intent.positions) {
     const allowed = new Set([...roots].flatMap(element => view.nodes.filter(node => node.data.semanticElementId === bpmnIdentity(element)).map(node => node.id)));
     if ([...intent.positions.keys()].some(id => !allowed.has(id))) refuseBpmnOperation("containment geometry must address the moved actual DI instances");

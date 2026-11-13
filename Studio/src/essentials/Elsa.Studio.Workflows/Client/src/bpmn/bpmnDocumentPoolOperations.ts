@@ -45,7 +45,7 @@ export function prepareBpmnPoolDelete(owner: ActivityNode, scope: BpmnScopeAddre
   bpmnOperationContext(owner, nextScope);
   const selected = deleting && process === context.parsed.process;
   const alternatives = [...context.parsed.document.documentElement.children].filter(element => element.namespaceURI === ns.model
-    && element.localName === "process" && element !== process).map(bpmnIdentity);
+    && element.localName === "process" && element !== process).flatMap(element => element.getAttribute("id") ? [bpmnIdentity(element)] : []);
   if (decision.nextProcessId && (!selected || !alternatives.includes(decision.nextProcessId))) refuseBpmnOperation("choose an actual retained replacement process");
   const transition: BpmnPoolTransitionRequirement = { nextScope, cleanup, ...(selected ? {
     selectedProcess: { from: bpmnIdentity(process!), requested: decision.nextProcessId, available: alternatives, ownerConfigurationRequired: true as const }

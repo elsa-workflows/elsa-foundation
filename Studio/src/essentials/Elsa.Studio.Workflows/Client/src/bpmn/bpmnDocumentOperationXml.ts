@@ -149,7 +149,7 @@ const flow = new Set(["task", "userTask", "serviceTask", "manualTask", "scriptTa
   "startEvent", "endEvent", "intermediateCatchEvent", "intermediateThrowEvent", "boundaryEvent", "exclusiveGateway", "inclusiveGateway", "parallelGateway", "eventBasedGateway", "complexGateway", "sequenceFlow", "dataObject", "dataObjectReference", "dataStoreReference"]);
 const artifacts = new Set(["textAnnotation", "association", "group"]);
 function rank(parent: Element, child: Element) {
-  const name = child.localName;
+  const name = ["performer", "humanPerformer", "potentialOwner"].includes(child.localName) ? "resourceRole" : child.localName;
   if (name === "documentation") return 0;
   if (name === "extensionElements") return 1;
   if (parent.localName === "definitions") return child.namespaceURI === ns.diagram ? 4 : name === "import" ? 2 : name === "relationship" ? 5 : 3;
@@ -162,12 +162,17 @@ function rank(parent: Element, child: Element) {
     dataInputAssociation: 10, dataOutputAssociation: 10.5, inputSet: 11, outputSet: 11, resourceRole: 11, standardLoopCharacteristics: 12, multiInstanceLoopCharacteristics: 12,
     laneSet: 13, completionCondition: 16 } as Record<string, number>)[name] ?? (flow.has(name) ? 14 : artifacts.has(name) ? 15 : name.endsWith("EventDefinition") || name === "eventDefinitionRef" ? 12 : undefined);
 }
-/** Inserts only the new member at its schema position, retaining every existing sibling and its order. */
-export function insertBpmnFragment(context: BpmnOperationContext, parent: Element, element: Element): BpmnDocumentCommand {
+/** Shared creation/reparent position; existing sibling order and source identities stay untouched. */
+export function bpmnInsertionBefore(context: BpmnOperationContext, parent: Element, element: Element): BpmnXmlAddress | undefined {
   const order = rank(parent, element);
   const before = order === undefined ? undefined : [...parent.children].find(child => child.namespaceURI === ns.model || child.namespaceURI === ns.diagram
     ? (rank(parent, child) ?? -1) > order : false);
-  return { kind: "insert", parent: bpmnSourceAddress(parent, context.parsed), xml: bpmnXml(element), ...(before ? { before: bpmnSourceAddress(before, context.parsed) } : {}) };
+  return before ? bpmnSourceAddress(before, context.parsed) : undefined;
+}
+/** Inserts only the new member at its schema position, retaining every existing sibling and its order. */
+export function insertBpmnFragment(context: BpmnOperationContext, parent: Element, element: Element): BpmnDocumentCommand {
+  const before = bpmnInsertionBefore(context, parent, element);
+  return { kind: "insert", parent: bpmnSourceAddress(parent, context.parsed), xml: bpmnXml(element), ...(before ? { before } : {}) };
 }
 
 export function requireBpmnFlowScope(context: BpmnOperationContext, elementId?: string): Element {
