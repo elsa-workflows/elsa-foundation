@@ -90,9 +90,9 @@ omit the field. Their table/collection census, serializers and indexes above the
 
 Opt-in and requested facts travel in the ordinary owner commit. In the supporting in-memory path, retained facts
 cannot be restamped or forged, and existing opt-in cannot be removed. Models can release their `turn:` facts in a
-later commit; the workflow owner separately keeps `workflow:end` when an opted-in workflow first ends, including
-control and parking paths. Removing the instance removes its facts. Resolving a reference only reads already-loaded
-metadata; it neither creates a fact nor adds a journal or clock query. Ordinary models retain null metadata.
+later commit; the workflow owner separately keeps `workflow:end` when an opted-in workflow persists its first
+terminal checkpoint, including control and parking paths. Removing the instance removes its facts. Resolving a
+reference only reads already-loaded metadata; it neither creates a fact nor adds a journal or clock query. Ordinary models retain null metadata.
 
 This optional fact-storage contract is distinct from the Jobs proposal's `SupportsCommitWindow` guard: immutable
 past timestamps do not authorize job effects or enforce an authority window at commit. Neither feature selects a
@@ -231,7 +231,7 @@ engine-generated index names. All MongoDB collections have the ordinary unique `
 MySQL also declares `Messages.Seq` as an alternate key so its auto-increment column leads a key.
 PostgreSQL and SQL Server configure sequence/identity generation; SQLite supplies the value in the store.
 No additional due-time, seen-epoch, instance-suspension, job-state, event-expiry or membership-expiry index is declared.
-There is no physical `CommitTimes` index or provider clock-lookup query in the current EF/Mongo implementations.
+The current EF/Mongo implementations have no index or lookup query for a stored commit-time reference.
 No EF foreign-key relationships are declared between these tables. Target, parent and instance references are
 application fields; a durable message may target an instance that has not been created or has already ended.
 The poll indexes supply a useful ordering path; they are not covering indexes for the full message payload or every
