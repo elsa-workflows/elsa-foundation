@@ -97,7 +97,7 @@ public sealed class ReleaseOccurrenceFacts(ReleaseSemanticStatus status, IReadOn
     public IReadOnlyList<ReleaseSemanticDiagnostic> Diagnostics { get; } = Array.AsReadOnly((diagnostics ?? []).ToArray());
 }
 
-/// <summary>Replacement by exact codec key; ambiguous or invalid claims fail registry composition. Performs no compilation, writes or external content lookup.</summary>
+/// <summary>Exact-key strategy; adapters coexist, with one implementation per codec key. Ambiguous or invalid claims fail registry composition. Performs no compilation, writes or external content lookup.</summary>
 public interface IReleaseArtifactSemanticVerifier
 {
     ReleaseSemanticAdapterIdentity Identity { get; }
@@ -106,7 +106,7 @@ public interface IReleaseArtifactSemanticVerifier
         IReleaseContentReader content, CancellationToken cancellationToken = default);
 }
 
-/// <summary>Replacement by exact occurrence-site key; a complete leaf verdict must be explicit.</summary>
+/// <summary>Exact-key strategy; adapters coexist, with one implementation per occurrence-site key. A complete leaf verdict must be explicit.</summary>
 public interface IReleaseOccurrenceInspector
 {
     ReleaseSemanticAdapterIdentity Identity { get; }
