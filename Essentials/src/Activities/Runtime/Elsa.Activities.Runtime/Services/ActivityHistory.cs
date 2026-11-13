@@ -50,6 +50,15 @@ internal sealed class ActivityHistory(RuntimeSchedulerWorkItem work, string acti
     internal void Outcome(RuntimeHistorySourceFactKind kind, IReadOnlyList<string>? outcomes = null)
     { if (_started) Record(kind, outcomes: outcomes); }
 
+    internal IReadOnlyList<RuntimeHistorySourceFact> MaterializeFault()
+    {
+        // A returned callback can still fail during disposal or outcome processing. Preserve its return,
+        // then record the actual fault decision once; a thrown callback already supplied that fact.
+        if (_started && !_facts.Any(fact => fact.Kind == RuntimeHistorySourceFactKind.ActivityContinuationFaulted))
+            Record(RuntimeHistorySourceFactKind.ActivityContinuationFaulted, "outcome-processing-failed");
+        return Materialize();
+    }
+
     internal IReadOnlyList<RuntimeHistorySourceFact> Materialize(RuntimeStructuralContinuation? continuation = null) =>
         Array.AsReadOnly(_facts.Where(fact => fact.Kind is RuntimeHistorySourceFactKind.ActivityContinuationStarted or RuntimeHistorySourceFactKind.ActivityContinuationReturned)
             .Concat(_started ? continuation?.MaterializeHistorySourceFacts(_returnedAt) ?? [] : [])

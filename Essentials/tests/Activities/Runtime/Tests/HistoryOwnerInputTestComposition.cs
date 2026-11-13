@@ -18,8 +18,9 @@ internal static class HistoryOwnerInputTestComposition
     {
         services.AddSingleton(executions);
         services.RemoveAll<RuntimeCheckpointCommitter>();
+        var hadNativeAccess = services.Any(service => service.ServiceType == typeof(IPersistenceAccessContextAccessor));
         services.AddWorkflowRuntime(); // Use the real lazy source handoff factory, preserving the harness's existing native stores.
-        services.RemoveAll<IPersistenceAccessContextAccessor>(); // Preserve this component harness's existing unscoped native boundary.
+        if (!hadNativeAccess) services.RemoveAll<IPersistenceAccessContextAccessor>(); // Preserve either original native boundary, including exact-resume scope.
         services.RemoveAll<IRuntimeCheckpointCommitEnricher>();
         services.AddSingleton<IRuntimeCheckpointCommitEnricher, OwnerInputCapture>();
         var reader = new UnusedReader();

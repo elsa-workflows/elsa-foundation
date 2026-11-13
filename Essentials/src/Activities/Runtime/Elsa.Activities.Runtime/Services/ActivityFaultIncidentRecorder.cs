@@ -353,7 +353,12 @@ public sealed record ActivityFaultIncidentRecordRequest(
     IReadOnlyCollection<RuntimeSchedulerWorkItem>? PostCommitSchedulerWorkItemsOrNull = null)
 {
     internal StructuralChildControlContribution? ChildControlContribution { get; init; }
-    public IReadOnlyList<RuntimeHistorySourceFact>? HistorySourceFacts { get; init; }
+    private readonly IReadOnlyList<RuntimeHistorySourceFact>? _historySourceFacts;
+    public IReadOnlyList<RuntimeHistorySourceFact>? HistorySourceFacts
+    {
+        get => _historySourceFacts;
+        init => _historySourceFacts = value is null ? null : Array.AsReadOnly(value.ToArray());
+    }
 
     /// <summary>Scheduler work items to enqueue as post-commit intents on the incident checkpoint (never null).</summary>
     public IReadOnlyCollection<RuntimeSchedulerWorkItem> PostCommitSchedulerWorkItems => PostCommitSchedulerWorkItemsOrNull ?? [];

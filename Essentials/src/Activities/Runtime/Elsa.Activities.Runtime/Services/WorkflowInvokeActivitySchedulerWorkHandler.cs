@@ -560,7 +560,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
                 ? exception
                 : ActivityActivationLeaseDisposer.CombineExecutionFailure(exception, disposalException);
             var subStatus = disposalException is null ? "ActivityFaulted" : "ActivityDisposalFailed";
-            await RecordFaultAsync(activityFaultIncidentRecorder, activityExecutionStateStore, checkpointCommitter, faultMasking, workItem, invokePayload, state, fault, subStatus, valueSnapshots, cancellationToken, history?.Materialize());
+            await RecordFaultAsync(activityFaultIncidentRecorder, activityExecutionStateStore, checkpointCommitter, faultMasking, workItem, invokePayload, state, fault, subStatus, valueSnapshots, cancellationToken, history?.MaterializeFault());
             return;
         }
 
@@ -579,7 +579,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
                 activationDisposalException,
                 "ActivityDisposalFailed",
                 valueSnapshots,
-                cancellationToken, history?.Materialize());
+                cancellationToken, history?.MaterializeFault());
             return;
         }
 

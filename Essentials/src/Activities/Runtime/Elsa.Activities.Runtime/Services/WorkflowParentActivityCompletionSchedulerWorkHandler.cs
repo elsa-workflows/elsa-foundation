@@ -517,7 +517,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
                 fault,
                 subStatus,
                 valueSnapshots,
-                cancellationToken, historyFacts: history?.Materialize());
+                cancellationToken, historyFacts: history?.MaterializeFault());
             return;
         }
 
@@ -536,7 +536,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
                 activationDisposalException,
                 "ActivityDisposalFailed",
                 valueSnapshots,
-                cancellationToken, historyFacts: history?.Materialize());
+                cancellationToken, historyFacts: history?.MaterializeFault());
             return;
         }
 
@@ -786,7 +786,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
                 exception,
                 "ParentCompletionFaulted",
                 valueSnapshots,
-                cancellationToken, historyFacts: history?.Materialize());
+                cancellationToken, historyFacts: history?.MaterializeFault());
             return;
         }
 

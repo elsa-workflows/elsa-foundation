@@ -288,7 +288,7 @@ internal static class StructuralCallbackEvaluation
             var subStatus = disposalException is null ? definition.FaultSubStatus : "ActivityDisposalFailed";
             await RecordParentFaultAsync(
                 activityFaultIncidentRecorder, activityExecutionStateStore, checkpointCommitter, faultMasking, timeProvider,
-                workItem, payload, definition, parentState, fault, subStatus, valueSnapshots, cancellationToken, historyFacts: history?.Materialize());
+                workItem, payload, definition, parentState, fault, subStatus, valueSnapshots, cancellationToken, historyFacts: history?.MaterializeFault());
             return;
         }
 
@@ -298,7 +298,7 @@ internal static class StructuralCallbackEvaluation
         {
             await RecordParentFaultAsync(
                 activityFaultIncidentRecorder, activityExecutionStateStore, checkpointCommitter, faultMasking, timeProvider,
-                workItem, payload, definition, parentState, activationDisposalException, "ActivityDisposalFailed", valueSnapshots, cancellationToken, historyFacts: history?.Materialize());
+                workItem, payload, definition, parentState, activationDisposalException, "ActivityDisposalFailed", valueSnapshots, cancellationToken, historyFacts: history?.MaterializeFault());
             return;
         }
 
@@ -449,7 +449,7 @@ internal static class StructuralCallbackEvaluation
         {
             await RecordParentFaultAsync(
                 activityFaultIncidentRecorder, activityExecutionStateStore, checkpointCommitter, faultMasking, timeProvider,
-                workItem, payload, definition, currentParentState, exception, definition.FaultSubStatus, valueSnapshots, cancellationToken, historyFacts: history?.Materialize());
+                workItem, payload, definition, currentParentState, exception, definition.FaultSubStatus, valueSnapshots, cancellationToken, historyFacts: history?.MaterializeFault());
             return;
         }
 
