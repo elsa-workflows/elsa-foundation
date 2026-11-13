@@ -966,7 +966,8 @@ fence in the batch had to be asked for. The runners take the same default: `fenc
 `--checked-fence` beside `--fence-in-batch` in the conformance runner. So a run given no fence option is now a
 different run on PostgreSQL, SQLite and MySQL (the fence in the batch) from the one ENGINES.md and section 24 recorded
 under the same command (checked); README's commands name the mode where a recorded result depends on it, and the
-broken-fence stress command pins `fence=checked`. `$EFR x cost` runs one mode per call, the engine's default unless
+broken-fence stress command names the mode ENGINES.md recorded for each engine (batch on PostgreSQL, checked
+elsewhere). `$EFR x cost` runs one mode per call, the engine's default unless
 told; `$NAT cost` and the old `cost` commands run both modes, as before. The old PostgreSQL `stress` and `probe`
 commands of section 4 keep the checked fence they were recorded with. The MongoDB store keeps its own default
 (checked); the decision is EF's.
