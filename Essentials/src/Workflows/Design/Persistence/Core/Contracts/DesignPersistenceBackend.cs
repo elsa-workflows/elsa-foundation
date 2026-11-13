@@ -17,6 +17,7 @@ public sealed class DesignPersistenceBackend
         typeof(Elsa.Workflows.Design.Core.Contracts.IWorkflowDefinitionLookup),
         typeof(Elsa.Workflows.Design.Persistence.Core.Stores.IWorkflowDefinitionStore),
         typeof(Elsa.Workflows.Design.Persistence.Core.Stores.IWorkflowDefinitionVersionStore),
+        typeof(Elsa.Workflows.Design.Persistence.Core.Stores.IWorkflowVersionSnapshotReader),
         typeof(Elsa.Workflows.Design.Persistence.Core.Stores.IWorkflowDefinitionDraftStore),
         typeof(Elsa.Workflows.Design.Persistence.Core.Stores.IWorkflowDefinitionVersionLayoutStore),
         typeof(Elsa.Workflows.Design.Persistence.Core.Stores.IWorkflowDefinitionListProjectionStore),

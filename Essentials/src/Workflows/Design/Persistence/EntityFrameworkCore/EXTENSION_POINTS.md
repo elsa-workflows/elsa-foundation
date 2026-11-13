@@ -98,3 +98,14 @@ fingerprint is a `WorkflowLibraryConflictException`. A concurrent create under t
 returns the winner's row after the same reread. The store writer's `DesignOperationKey` stays a fresh server key, so the
 `designOperation` ledger plays no part in this recovery. The `WorkflowLibraryOperationKeys` migration adds the columns
 and indexes for SQLite, SQL Server, PostgreSQL and MySQL.
+
+## Exact authored-version source snapshots
+
+| Contract | Kind, layer and default | Signature | Replacement guidance and callers |
+|---|---|---|---|
+| `IWorkflowVersionSnapshotReader` | Replacement in Workflow Design Persistence.Core; EF selects `EfWorkflowVersionSnapshotReader` as an owned backend descriptor | `ValueTask<WorkflowVersionSnapshot?> FindAsync(string versionId, string expectedPartition, WorkflowVersionSnapshotLimits limits, CancellationToken cancellationToken = default)` | Preserve original `StateSource` text, bounded stored types/UTF-8 and exact physical identity in one owned read snapshot. Scope grants no export permission. Future native release capture consumes this capability; this slice installs no capture source. |
+
+The first profile explicitly admits current-schema, uncompressed UTF-8 SQLite rows. Unsupported storage,
+caller transactions or pending changes refuse without taking ownership. Missing rows return null; malformed
+or ambiguous rows refuse. Provider failures retain `DesignPersistenceException` and the original cause.
+Snapshot bytes are copied before the read transaction ends. This does not deserialize authoring state or compile.
