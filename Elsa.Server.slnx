@@ -921,4 +921,11 @@
     <Project Path="Extensions/Decisions/src/Workflows/Runtime/Elsa.Decisions.Workflows.Runtime.csproj" />
     <Project Path="Extensions/Decisions/src/Workflows/Api/Elsa.Decisions.Workflows.Api.csproj" />
   </Folder>
+  <Folder Name="/Extensions/Examples/src/Acme.Processing/">
+    <Project Path="Extensions/Examples/src/Acme.Processing/Core/Acme.Processing.Core.csproj" />
+    <Project Path="Extensions/Examples/src/Acme.Processing/Module/Acme.Processing.csproj" />
+  </Folder>
+  <Folder Name="/Extensions/Examples/tests/">
+    <Project Path="Extensions/Examples/tests/Acme.Processing.Tests/Acme.Processing.Tests.csproj" />
+  </Folder>
 </Solution>

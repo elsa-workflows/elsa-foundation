@@ -881,6 +881,19 @@
           "xunit.extensibility.core": "[2.9.3]"
         }
       },
+      "acme.processing": {
+        "type": "Project",
+        "dependencies": {
+          "Acme.Processing.Core": "[4.0.0-dev, )",
+          "CShells.Abstractions": "[0.0.31, )",
+          "CShells.AspNetCore.Abstractions": "[0.0.31, )",
+          "Elsa.Foundation.Identity.Core": "[4.0.0-dev, )",
+          "Elsa.Studio.Dashboard.Core": "[4.0.0-dev, )"
+        }
+      },
+      "acme.processing.core": {
+        "type": "Project"
+      },
       "elsa.activities.bpmn": {
         "type": "Project",
         "dependencies": {

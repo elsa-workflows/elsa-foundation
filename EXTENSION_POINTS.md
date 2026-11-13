@@ -270,3 +270,5 @@ not automatic constitution violations.
 - [Weaver Dashboard authoring](Extensions/Weaver/src/Dashboard/EXTENSION_POINTS.md)
 
 - [Copilot SDK adapter boundary](Extensions/Weaver/src/GitHubCopilot/EXTENSION_POINTS.md)
+
+- [Independent Acme Processing dataset module](Extensions/Examples/src/Acme.Processing/Module/EXTENSION_POINTS.md)
