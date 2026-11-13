@@ -65,6 +65,10 @@ public sealed class BookmarkResumeDispatchRequest
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public StimulusResumeRecipient? ExpectedRecipient { get; init; }
 
+    /// <summary>Diagnostic causation only; this pointer supplies no delivery or execution authority.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RuntimeHistoryCausation? HistoryCausation { get; init; }
+
     public string WorkflowExecutionId { get; }
     public string StimulusType { get; }
     public string StimulusHash { get; }

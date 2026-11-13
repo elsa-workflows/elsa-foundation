@@ -9273,6 +9273,7 @@ Elsa.Workflows.Runtime.Core.Contracts.IStimulusDeliveryStore.ReadSourceAsync(Els
 Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitOutboxItem.OpenStimulusDeliverySource(Elsa.Workflows.Runtime.Core.Models.PostCommitDeliveryContext! expected, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionState! publisher, Elsa.Workflows.Runtime.Core.Models.PersistenceScope! scope, System.DateTimeOffset observedAt) -> Elsa.Workflows.Runtime.Core.Models.PostCommitDeliveryContext!
 Elsa.Workflows.Runtime.Core.Contracts.IStimulusDeliveryIntentAdapter
 Elsa.Workflows.Runtime.Core.Contracts.IBookmarkResumeDispatcher.CanDispatchSavedStimulus(Elsa.Workflows.Runtime.Core.Contracts.IStimulusDeliveryStore! sources, Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutableStore! material, Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutionStateStore! executions) -> bool
+Elsa.Workflows.Runtime.Core.Contracts.IBookmarkResumeDispatcher.CanRecordHistory(Elsa.Workflows.Runtime.Core.Contracts.IRuntimeHistoryObservationWriter! writer, Elsa.Workflows.Runtime.Core.Contracts.IRuntimeHistoryStore! reader) -> bool
 Elsa.Workflows.Runtime.Core.Contracts.IBookmarkResumeDispatcher.DispatchAsync(Elsa.Workflows.Runtime.Core.Models.PostCommitDeliveryContext! source, string! workflowExecutionId, string! bookmarkId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Models.BookmarkResumeDispatchResult!>
 Elsa.Workflows.Runtime.Core.Contracts.IStimulusDeliveryIntentAdapter.IntentKind.get -> string!
 Elsa.Workflows.Runtime.Core.Contracts.IStimulusDeliveryIntentAdapter.CreateRequest(Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitIntent! intent) -> Elsa.Workflows.Runtime.Core.Models.StimulusDispatchRequest!
@@ -9474,6 +9475,8 @@ Elsa.Workflows.Runtime.Core.Models.ExecutableActivityTemplateOccurrenceOverlay.I
 Elsa.Workflows.Runtime.Core.Models.ExecutableActivityTemplateOccurrenceOverlay.InputContracts.init -> void
 Elsa.Workflows.Runtime.Core.Models.BookmarkResumeDispatchRequest.ExpectedRecipient.get -> Elsa.Workflows.Runtime.Core.Models.StimulusResumeRecipient?
 Elsa.Workflows.Runtime.Core.Models.BookmarkResumeDispatchRequest.ExpectedRecipient.init -> void
+Elsa.Workflows.Runtime.Core.Models.BookmarkResumeDispatchRequest.HistoryCausation.get -> Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryCausation?
+Elsa.Workflows.Runtime.Core.Models.BookmarkResumeDispatchRequest.HistoryCausation.init -> void
 Elsa.Workflows.Runtime.Core.UserTasks.IUserTaskAccess
 Elsa.Workflows.Runtime.Core.UserTasks.IUserTaskAccess.GetActorAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.UserTasks.UserTaskActor!>
 Elsa.Workflows.Runtime.Core.UserTasks.IUserTaskAccess.ValidateAssignmentAsync(string! tenantId, string? assigneeId, string? groupId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
