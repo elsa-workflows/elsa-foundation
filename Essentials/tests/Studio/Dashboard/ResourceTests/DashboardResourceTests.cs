@@ -357,14 +357,17 @@ internal sealed class ResourceHost : IAsyncDisposable
     { this.provider = provider; Path = path; this.ownsPath = ownsPath; Validator = validator; }
     public string Path { get; }
     public ResourceValidator Validator { get; }
-    public static async Task<ResourceHost> CreateAsync(string? path = null, bool initialize = true, bool withAudienceDirectory = true)
+    public static async Task<ResourceHost> CreateAsync(string? path = null, bool initialize = true, bool withAudienceDirectory = true, Microsoft.EntityFrameworkCore.Diagnostics.DbCommandInterceptor? interceptor = null)
     {
         var owned = path is null;
         path ??= System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"elsa-dashboard-resources-{Guid.NewGuid():N}.db");
         var services = new ServiceCollection(); var validator = new ResourceValidator();
         services.AddSingleton<IDashboardDefinitionValidator>(validator);
         if (withAudienceDirectory) services.AddSingleton<IDashboardAudienceDirectory, ResourceDirectory>();
-        services.AddDbContext<DashboardResourcesSqliteDbContext>(options => options.UseSqlite($"Data Source={path};Pooling=False"));
+        services.AddDbContext<DashboardResourcesSqliteDbContext>(options => {
+            options.UseSqlite($"Data Source={path};Pooling=False");
+            if (interceptor is not null) options.AddInterceptors(interceptor);
+        });
         services.AddDashboardResourcesEntityFrameworkCore<DashboardResourcesSqliteDbContext>();
         services.AddDashboardResources();
         var provider = services.BuildServiceProvider();
@@ -379,6 +382,8 @@ internal sealed class ResourceHost : IAsyncDisposable
     }
     public async Task<T> With<T>(Func<IDashboardResourceService, ValueTask<T>> action)
     { await using var scope = provider.CreateAsyncScope(); return await action(scope.ServiceProvider.GetRequiredService<IDashboardResourceService>()); }
+    public async Task<T> WithStore<T>(Func<IDashboardResourceStore, ValueTask<T>> action)
+    { await using var scope = provider.CreateAsyncScope(); return await action(scope.ServiceProvider.GetRequiredService<IDashboardResourceStore>()); }
     public async Task WithContext(Func<DashboardResourcesSqliteDbContext, Task> action)
     { await using var scope = provider.CreateAsyncScope(); await action(scope.ServiceProvider.GetRequiredService<DashboardResourcesSqliteDbContext>()); }
     public async ValueTask DisposeAsync()

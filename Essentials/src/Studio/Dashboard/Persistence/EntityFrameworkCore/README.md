@@ -1,10 +1,10 @@
 # Dashboard definition persistence
 
-**Current slice:** only built-in SQLite composition/migrations are supplied. Non-SQLite provider selection fails explicitly; relational migrations and provider qualification follow in the stack. Generic consumer contexts own their provider/model/migrations.
+**Current slice:** built-in SQLite, SQL Server, PostgreSQL and MySQL composition/migrations are supplied. Generic consumer contexts own their provider/model/migrations. Provider-matrix qualification is recorded separately from migration/script tests.
 
 This package stores named question/dashboard definitions, audiences, bounded content history and keyed-create outcomes. It stores no result cache, model transcript or credential. Source records stay with their owning modules.
 
-`StudioDashboardEntityFrameworkCore` selects Sqlite through the existing EF provider binding. Other built-in providers are rejected until their migration slice lands. Hosts supply the provider package and owned connection configuration. `Studio.Dashboard` owns its migration history and schema family `StudioDashboard`. Migrations are under `Migrations/DashboardResources/{provider}`.
+`StudioDashboardEntityFrameworkCore` selects Sqlite, SqlServer, PostgreSql or MySql through the existing EF provider binding. Hosts supply the provider package and owned connection configuration. `Studio.Dashboard` owns its migration history and schema family `StudioDashboard`. Migrations are under `Migrations/DashboardResources/{provider}`.
 
 Hosts may call `AddDashboardResourcesEntityFrameworkCore(DashboardResourcePersistenceOptions)` directly to select the supplied module context. An ordinary existing `DbContext` can instead call `modelBuilder.AddDashboardResourcesModel(Database.ProviderName!)` from its model configuration and register through `AddDashboardResourcesEntityFrameworkCore<TContext>()`. It needs no Dashboard base class or marker interface. Configure exactly one store; conflicting registrations are diagnosed.
 
@@ -22,4 +22,6 @@ History records each revision's actual modifier. An old edited document lacking 
 
 Limits are 100 owned questions and 50 owned dashboards per actor/tenant; 5,000 questions and 2,000 dashboards per tenant; 50 tiles; 100 grants; and 20 prior revisions. Limit failures reject the whole write. Native services still evaluate current actor, ACL and disclosure on every operation.
 
-`Essentials/tests/Studio/Dashboard/ResourceTests` applies actual SQLite migrations and checks native resource-service behavior; HTTP tests follow with the API. Its ordinary consumer-context witness applies a combined migration with an unrelated table, verifies that the consumer's tracked changes and comparer survive resource CAS, reopens saved definitions in a new service provider and rejects unreadable schemas or missing capabilities. Relational migration/snapshot/script and actual provider-matrix tests follow in the next slice. Provider evidence remains separate from composed Studio, live-model and independent UX acceptance.
+`Essentials/tests/Studio/Dashboard/ResourceTests` applies actual SQLite migrations and checks native resource-service behavior; HTTP tests follow with the API. Its ordinary consumer-context witness applies a combined migration with an unrelated table, verifies that the consumer's tracked changes and comparer survive resource CAS, reopens saved definitions in a new service provider and rejects unreadable schemas or missing capabilities. Relational migration/snapshot/script tests and the separately classified owned-container provider matrix cover the additional providers. Provider evidence remains separate from composed Studio, live-model and independent UX acceptance.
+
+Collection and reuse scans read at most16 records per database query and omit history from returned documents. Services retain only lightweight listing metadata while ordering/filtering, then re-read selected resources under current access. Find/write/history paths retain full revisions for atomic updates. Existing JSON storage still transfers historical bytes per row; this bounds materialization, not database-byte traffic.

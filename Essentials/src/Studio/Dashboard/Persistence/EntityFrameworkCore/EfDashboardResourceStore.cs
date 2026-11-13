@@ -28,15 +28,18 @@ internal sealed class EfDashboardResourceStore<TContext>(TContext configuredCont
         catch (Exception error) when (EfRelationalExceptionClassifier.IsStoreBoundaryFailure(error)) { throw Unavailable(error); }
     }
 
-    public async ValueTask<IReadOnlyList<DashboardResourceDocument>> ListAsync(string tenantId, string kind, CancellationToken cancellationToken = default)
+    public async ValueTask<IReadOnlyList<DashboardResourceDocument>> ReadPageAsync(string tenantId, string kind, string? afterId = null, CancellationToken cancellationToken = default)
     {
         try
         {
             await using var context = CreateContext();
             var scope = Hash(tenantId);
-            var rows = await context.Set<DashboardResourceRow>().AsNoTracking().Where(row => row.ScopeId == scope && row.Kind == kind && !row.Deleted)
-                .OrderBy(row => row.Id).ToArrayAsync(cancellationToken);
-            return rows.Select(row => Read(row, tenantId, kind, null)).ToArray();
+            if (afterId?.Length > 128) throw new DashboardResourceException("validation", "The store continuation is invalid.");
+            var afterKey = afterId is null ? null : Hash(tenantId, kind, afterId);
+            var rows = await context.Set<DashboardResourceRow>().AsNoTracking()
+                .Where(row => row.ScopeId == scope && row.Kind == kind && !row.Deleted && (afterKey == null || row.Id.CompareTo(afterKey) > 0))
+                .OrderBy(row => row.Id).Take(16).ToArrayAsync(cancellationToken);
+            return rows.Select(row => Read(row, tenantId, kind, null, includeHistory: false)).ToArray();
         }
         catch (Exception error) when (EfRelationalExceptionClassifier.IsStoreBoundaryFailure(error)) { throw Unavailable(error); }
     }
@@ -165,7 +168,29 @@ internal sealed class EfDashboardResourceStore<TContext>(TContext configuredCont
         { throw new DashboardResourceException("schemaIncompatible", "Stored Dashboard operation or quota metadata uses a schema this backend cannot read. Run a compatible backend before retrying.", error); }
     }
 
-    private static DashboardResourceDocument Read(DashboardResourceRow row, string tenantId, string kind, string? id)
+    private static string WithoutHistory(string text)
+    {
+        using var payload = JsonDocument.Parse(text);
+        if (payload.RootElement.ValueKind != JsonValueKind.Object) throw new JsonException("Invalid resource document.");
+        using var stream = new MemoryStream();
+        using (var writer = new Utf8JsonWriter(stream))
+        {
+            writer.WriteStartObject();
+            foreach (var property in payload.RootElement.EnumerateObject())
+            {
+                if (!property.Name.Equals("history", StringComparison.OrdinalIgnoreCase)) property.WriteTo(writer);
+                else
+                {
+                    if (property.Value.ValueKind != JsonValueKind.Array) throw new JsonException("Invalid resource history.");
+                    writer.WriteStartArray(property.Name); writer.WriteEndArray();
+                }
+            }
+            writer.WriteEndObject();
+        }
+        return Encoding.UTF8.GetString(stream.ToArray());
+    }
+
+    private static DashboardResourceDocument Read(DashboardResourceRow row, string tenantId, string kind, string? id, bool includeHistory = true)
     {
         try { EfSchemaVersion.EnsureReadable(DashboardResourcesEfModule.Chain, row.SchemaVersion); }
         catch (EfSchemaVersionSkewException error)
@@ -178,6 +203,7 @@ internal sealed class EfDashboardResourceStore<TContext>(TContext configuredCont
         DashboardResourceDocument document;
         try
         {
+            if (!includeHistory) text = WithoutHistory(text);
             document = JsonSerializer.Deserialize<DashboardResourceDocument>(text, Json)
                 ?? throw new DashboardResourceException("unavailable", "The stored resource is invalid.");
         }

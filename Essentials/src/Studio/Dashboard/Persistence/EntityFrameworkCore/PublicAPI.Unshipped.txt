@@ -50,6 +50,30 @@ Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.Migrations.DashboardResour
 ~override Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.Migrations.DashboardResources.Sqlite.Initial.BuildTargetModel(Microsoft.EntityFrameworkCore.ModelBuilder modelBuilder) -> void
 ~override Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.Migrations.DashboardResources.Sqlite.Initial.Down(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder migrationBuilder) -> void
 ~override Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.Migrations.DashboardResources.Sqlite.Initial.Up(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder migrationBuilder) -> void
+Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.DashboardResourcesSqlServerDbContext
+Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.DashboardResourcesSqlServerDbContext.DashboardResourcesSqlServerDbContext(Microsoft.EntityFrameworkCore.DbContextOptions<Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.DashboardResourcesSqlServerDbContext!>! options) -> void
+const Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.DashboardResourcesSqlServerDbContext.ExpectedProviderName = "Microsoft.EntityFrameworkCore.SqlServer" -> string!
+Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.Migrations.DashboardResources.SqlServer.Initial
+Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.Migrations.DashboardResources.SqlServer.Initial.Initial() -> void
+~override Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.Migrations.DashboardResources.SqlServer.Initial.BuildTargetModel(Microsoft.EntityFrameworkCore.ModelBuilder modelBuilder) -> void
+~override Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.Migrations.DashboardResources.SqlServer.Initial.Down(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder migrationBuilder) -> void
+~override Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.Migrations.DashboardResources.SqlServer.Initial.Up(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder migrationBuilder) -> void
+Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.DashboardResourcesPostgreSqlDbContext
+Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.DashboardResourcesPostgreSqlDbContext.DashboardResourcesPostgreSqlDbContext(Microsoft.EntityFrameworkCore.DbContextOptions<Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.DashboardResourcesPostgreSqlDbContext!>! options) -> void
+const Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.DashboardResourcesPostgreSqlDbContext.ExpectedProviderName = "Npgsql.EntityFrameworkCore.PostgreSQL" -> string!
+Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.Migrations.DashboardResources.PostgreSql.Initial
+Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.Migrations.DashboardResources.PostgreSql.Initial.Initial() -> void
+~override Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.Migrations.DashboardResources.PostgreSql.Initial.BuildTargetModel(Microsoft.EntityFrameworkCore.ModelBuilder modelBuilder) -> void
+~override Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.Migrations.DashboardResources.PostgreSql.Initial.Down(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder migrationBuilder) -> void
+~override Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.Migrations.DashboardResources.PostgreSql.Initial.Up(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder migrationBuilder) -> void
+Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.DashboardResourcesMySqlDbContext
+Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.DashboardResourcesMySqlDbContext.DashboardResourcesMySqlDbContext(Microsoft.EntityFrameworkCore.DbContextOptions<Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.DashboardResourcesMySqlDbContext!>! options) -> void
+const Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.DashboardResourcesMySqlDbContext.ExpectedProviderName = "MySql.EntityFrameworkCore" -> string!
+Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.Migrations.DashboardResources.MySql.Initial
+Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.Migrations.DashboardResources.MySql.Initial.Initial() -> void
+~override Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.Migrations.DashboardResources.MySql.Initial.BuildTargetModel(Microsoft.EntityFrameworkCore.ModelBuilder modelBuilder) -> void
+~override Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.Migrations.DashboardResources.MySql.Initial.Down(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder migrationBuilder) -> void
+~override Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.Migrations.DashboardResources.MySql.Initial.Up(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder migrationBuilder) -> void
 Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.DashboardResourceModelBuilderExtensions
 static Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.DashboardResourceModelBuilderExtensions.AddDashboardResourcesModel(this Microsoft.EntityFrameworkCore.ModelBuilder! modelBuilder, string! providerName) -> Microsoft.EntityFrameworkCore.ModelBuilder!
 Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.DashboardResourcePersistenceRegistration

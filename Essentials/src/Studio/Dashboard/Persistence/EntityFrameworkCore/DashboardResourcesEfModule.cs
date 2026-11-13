@@ -3,7 +3,8 @@ using Elsa.Specifications.PackageManifest.Generator.Hints;
 using Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore;
 
 [assembly: EfModule("Studio.Dashboard", typeof(DashboardResourceDbContext), HistoryModule = DashboardResourcesEfModule.HistoryModuleName,
-    Sqlite = typeof(DashboardResourcesSqliteDbContext), DisplayName = "Studio Dashboards")]
+    Sqlite = typeof(DashboardResourcesSqliteDbContext), SqlServer = typeof(DashboardResourcesSqlServerDbContext),
+    PostgreSql = typeof(DashboardResourcesPostgreSqlDbContext), MySql = typeof(DashboardResourcesMySqlDbContext), DisplayName = "Studio Dashboards")]
 [assembly: ManifestExtension("efModules", "Studio.Dashboard")]
 [assembly: EfSchemaFamily(DashboardResourcesEfModule.SchemaFamily, "Studio.Dashboard", DashboardResourcesEfModule.SchemaVersion)]
 [assembly: EfSchemaContent(DashboardResourcesEfModule.SchemaFamily, typeof(DashboardResourceRow), nameof(DashboardResourceRow.DocumentJson))]
