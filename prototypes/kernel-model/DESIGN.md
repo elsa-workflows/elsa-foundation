@@ -260,9 +260,13 @@ terminate (every wait of the instance) and a delete (its journal rows); then COM
 - **Redelivery:** `ITurn.Redelivered(message)` is true when the row was seen at an earlier epoch, so a turn that took
   it may have run and its result been lost (merge, F-N6). "May have run", never "did run".
 - **Poison:** suspects (rows another owner had) are tried apart, alone in the process (F2, F11), one at a time or in
-  halving groups; a take that finds a death adds one attempt to what was on trial; at the threshold the message is
-  parked with its instance. A trial starts only when its turn can run at once (F13); a suspect of a withheld instance
+  halving groups; a take that finds a death adds one attempt to what was on trial; at the threshold the instance is
+  parked and the deliveries consumed. A trial starts only when its turn can run at once (F13); a suspect of a withheld instance
   is shelved (F12). A turn that throws parks its instance at once.
+- **Park (owner decision, 13 November):** its fenced commit faults the instance, consumes its deliveries and removes
+  every active subscription, while retaining the last committed state, fault details and configured history. The
+  parent still receives the faulted-child notice. Later arrivals are dropped. Suspension preserves subscriptions;
+  a future explicit recovery operation must restore waits, with kept-event semantics needed for events in the gap.
 - **Hold:** a turn hands a message back; it keeps its place and comes with the next turn.
 - **Edge cases:** a message to a missing target without a start spec is dropped and journalled; to an ended instance,
   consumed and dropped.
@@ -374,6 +378,11 @@ the native model (merge):
   memory, up to the request's deadline.
 - **A request that resumes a waiting workflow** adds a delivery carrying its reply address; the owner, on any node,
   sends what the turn emits, and the end, over the runtime's transport (`IReplyTransport`), which is not durable.
+- **The reply address carries the caller's deadline** (decision 6, FINDINGS 25.3): `ReplyTo.Of(node, request,
+  deadline)`, absolute, in database milliseconds, computed as request start plus the route's timeout. Past it the owner drops the address: it
+  sends that caller nothing more, and the caller no longer keeps the instance in memory (a caller pins an instance
+  against eviction while it waits). The simulation checks after every settling pass that no owner holds a caller past
+  its deadline (`Flaw.KeepExpiredCallers` breaks it).
 - **The caller** (`Requests`) takes the first response or end and ignores the rest. A reset tells every caller it knows
   "lost" (503). An owner lost on another node is noticed only by the deadline (504).
 - Disconnect and timeout end the wait and leave the instance alone.
@@ -510,8 +519,8 @@ numbers; round 4's graph engine (section 26) ran again what it touched, with its
 - **Poison counting** (FINDINGS sections 7, 21): innocent parking is rare but not zero; recovery of a backlog is serial.
 - **Kept events for plain waits:** the publisher still inserts every event with its window, because a kept wait may
   subscribe later; a deployment where no wait keeps could skip the insert. Not built.
-- **Reply addresses** should carry the caller's deadline; an owner on another node cannot tell a waiting node it was
-  lost.
+- **Reply addresses** carry the caller's deadline (round 4); an owner on another node still cannot tell a waiting node
+  it was lost.
 - **Delete and keys:** a start after a delete creates a new instance with the same id.
 - **State size**, **the notifier between nodes**, **one database**: as in draft 5.
 - **MySQL's driver** costs four round trips per commit more than PostgreSQL's (E10).
