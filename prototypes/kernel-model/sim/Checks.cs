@@ -276,9 +276,10 @@ public sealed partial class World
             if (State<OnEventState>(row.Id) is { } got && (got.Got.Count > 1 || got.Got.Exists(id => !row.Id.EndsWith(id.Replace("ev:", "on:").Replace("::", ":")))))
                 return $"I20 {row.Id} was started by [{string.Join(", ", got.Got)}]";
         // A running tree leaf waits; nothing else that is no waiter may, and a terminated leaf's wait is gone with its commit.
-        // A parked instance keeps its subscriptions (WorkflowInstance.Park consumes the messages and faults the row; NATIVE.md
-        // section 6 found it for the native checks): it is faulted, not deleted, so its waits are not stray.
-        if (rows.FirstOrDefault(g => !Oracle.Waiters.ContainsKey(g.Key) && !Parked.Contains(g.Key) && Store.Instances.GetValueOrDefault(g.Key) is not { Model: "tree" or Kernel.Native.NativeModel.ModelKey, Status: InstanceStatus.Running }) is { } stray)
+        // An instance the poison rule parked keeps its subscriptions (WorkflowInstance.Park consumes the messages and faults
+        // the row; NATIVE.md section 6 found it for the native checks): while its faulted row exists, its waits are not
+        // stray. Once the row is deleted they are.
+        if (rows.FirstOrDefault(g => !Oracle.Waiters.ContainsKey(g.Key) && !(Parked.Contains(g.Key) && Store.Instances.GetValueOrDefault(g.Key) is { Status: InstanceStatus.Faulted }) && Store.Instances.GetValueOrDefault(g.Key) is not { Model: "tree" or Kernel.Native.NativeModel.ModelKey, Status: InstanceStatus.Running }) is { } stray)
             return $"I8 {stray.Key} has a subscription and is {(Store.Instances.GetValueOrDefault(stray.Key) is { } row ? row.Status.ToString() : "no waiter")}";
         foreach (var id in Oracle.Waiters.Keys)
         {
