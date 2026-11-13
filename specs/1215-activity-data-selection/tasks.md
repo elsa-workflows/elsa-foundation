@@ -202,7 +202,10 @@ traversal or identity inference from labels. Pure literal-path helpers retain em
 JSON-array breadcrumb identity and the server's 64-segment/4096-UTF-16-unit bounds. Four member-kind readers,
 reference descriptors and provenance helpers are available to S3 but are not registered with any UI. Browsing requires
 an enabled capability, the current unambiguous source packet and its exact focused path; protected/restricted sources
-stay excluded or disabled. Unknown/truncated/map metadata permits only exact literal key queries; no array index,
+stay excluded or disabled. A non-null admitted binding remains the selection authority, including optional reads
+whose conditional availability/reason is informational; this adds no optional-authoring toggle. Member readers and
+provenance reject any own lowercase `path` property, including null, while leaving the stored payload untouched.
+Unknown/truncated/map metadata permits only exact literal key queries; no array index,
 fan-out, runtime key discovery or target compatibility is inferred. The existing whole-output model/UI is unchanged.
 S3 UI, S4 real runtime proof and S5 composed acceptance remain pending; this source slice closes no T022 or program
 acceptance box. The S0 cosmetic backend wording nit remains deferred.

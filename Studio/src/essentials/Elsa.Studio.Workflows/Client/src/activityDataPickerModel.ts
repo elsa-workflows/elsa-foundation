@@ -62,7 +62,7 @@ export function activityDataBreadcrumbs(path: readonly string[]) {
 
 export function readActivityDataMemberReference(binding: ActivityDataBinding): ActivityDataMemberReference | null {
   const value = record(binding.value);
-  if (!value || !isActivityDataMemberPath(value.memberPath)) return null;
+  if (!value || Object.prototype.hasOwnProperty.call(value, "path") || !isActivityDataMemberPath(value.memberPath)) return null;
   const memberPath = [...value.memberPath];
   switch (binding.expressionType) {
     case "ActivityResultMember":
@@ -73,7 +73,7 @@ export function readActivityDataMemberReference(binding: ActivityDataBinding): A
       return text(value.referenceKey) && text(value.declaringScopeId)
         ? { kind: binding.expressionType, referenceKey: value.referenceKey, declaringScopeId: value.declaringScopeId, memberPath } : null;
     case "WorkflowRequestMember":
-      return text(value.memberKey) && value.path == null ? { kind: binding.expressionType, memberKey: value.memberKey, memberPath } : null;
+      return text(value.memberKey) ? { kind: binding.expressionType, memberKey: value.memberKey, memberPath } : null;
     case "InputMember":
       return text(value.referenceKey) ? { kind: binding.expressionType, referenceKey: value.referenceKey, memberPath } : null;
     default: return null;
@@ -238,7 +238,7 @@ function sourceReason(result: ActivityDataContextResult, source: ActivityDataSou
   if (identity.role === "ActivityResult" && source.activityResultSource &&
     (identity.key !== source.activityResultSource.producerNodeId || identity.projection !== source.activityResultSource.projectionKey))
     return "The source identity is inconsistent.";
-  if (source.availability !== "definite") return "This source is not definitely available before this input.";
+  // The server-published binding admits the read; conditional availability/reasons can describe an optional read.
   if (source.binding.expressionType.endsWith("Member") && result.memberReadsEnabled !== true) return "Member selection is not enabled on this server.";
   const allowed = result.target?.constraint?.allowedExpressionTypes;
   return allowed && !allowed.some(role => role.toLowerCase() === identity.role.toLowerCase()) ? "This input does not accept this source." : null;

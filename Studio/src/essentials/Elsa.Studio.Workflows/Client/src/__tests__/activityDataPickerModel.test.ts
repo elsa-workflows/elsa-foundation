@@ -66,7 +66,7 @@ describe("data source families", () => {
 
   it("keeps future, unavailable, conditional and restricted sources disabled, while excluding protected metadata", () => {
     const sources = [output(), source("future", { expressionType: "FutureSource", value: {} }),
-      { ...output("loop"), binding: null, reasonCode: "EarlierProducerRun" }, { ...output("conditional"), availability: "conditional" },
+      { ...output("loop"), binding: null, reasonCode: "EarlierProducerRun" }, { ...output("conditional"), binding: null, availability: "conditional", reasonCode: "ConditionalOccurrence" },
       { ...output("secret"), shape: shape({ isSensitive: true }) }];
     const groups = groupActivityDataSources(result(sources, { target: { displayName: "ID", constraint: {
       owner: "test", message: "Only literals", allowedExpressionTypes: ["Literal"] } } }), labels);
@@ -75,6 +75,27 @@ describe("data source families", () => {
     expect(groupActivityDataSources(result(sources, { state: "invalid" }), labels)).toEqual([]);
     expect(groupActivityDataSources(result(sources), { ...labels, readOnly: true })).toEqual([]);
     expect(groupActivityDataSources(result(sources, { target: { displayName: "Secret", constraint: null, isCredential: true } }), labels)).toEqual([]);
+  });
+});
+
+describe("server-admitted optional result reads", () => {
+  const offered = (member: boolean) => ({ ...output(), availability: "conditional", reasonCode: "ConditionalOccurrence",
+    binding: { expressionType: member ? "ActivityResultMember" : "ActivityResult",
+      value: { ...whole.value, isOptional: true, ...(member ? { memberPath: ["customer"] } : {}) } },
+    shape: shape({ state: "unknown" }) });
+  it.each([false, true])("keeps an admitted optional result selectable (member:%s)", member => {
+    const candidate = offered(member);
+    const option = groupActivityDataSources(result([candidate]), labels)[0]!.options[0]!;
+    expect(option.unavailableReason).toBeNull();
+    expect(option.source.binding).toBe(candidate.binding);
+    expect(option.source).toMatchObject({ availability: "conditional", reasonCode: "ConditionalOccurrence" });
+  });
+  it.each([false, true])("keeps admitted optional member browsing available (member:%s)", member => {
+    const candidate = offered(member);
+    const model = activityDataMemberBrowser(result([candidate]), candidate.id, member ? ["customer"] : [], labels);
+    expect(model).toMatchObject({ reason: null, allowLiteral: true });
+    expect(activityDataMemberBrowser(result([candidate], { memberReadsEnabled: false }), candidate.id, member ? ["customer"] : [], labels))
+      .toMatchObject({ allowLiteral: false, members: [] });
   });
 });
 
@@ -116,6 +137,17 @@ describe("member reference presentation", () => {
       { expressionType: "VariableMember", value: { referenceKey: "key", memberPath: ["id"] } },
       { expressionType: "WorkflowRequestMember", value: { memberKey: "key", path: "legacy.path", memberPath: ["id"] } },
       { expressionType: "FutureSource", value: { memberPath: ["id"] } }]) expect(readActivityDataMemberReference(binding)).toBeNull();
+  });
+  it.each([
+    { expressionType: "ActivityResultMember", value: { ...whole.value } },
+    { expressionType: "VariableMember", value: { referenceKey: "customer", declaringScopeId: "loop" } },
+    { expressionType: "WorkflowRequestMember", value: { memberKey: "request" } },
+    { expressionType: "InputMember", value: { referenceKey: "input" } }
+  ].flatMap(binding => ["legacy", null].map(path => ({ ...binding, value: { ...binding.value, memberPath: ["id"], path } }))))("rejects own path:$value.path without altering the stored $expressionType payload", binding => {
+    const before = structuredClone(binding);
+    expect(readActivityDataMemberReference(binding)).toBeNull();
+    expect(describeActivityDataMember(binding, [], labels)).toBeNull();
+    expect(binding).toEqual(before);
   });
   it("shows literal provenance and only the actual focused result type, never guesses target compatibility", () => {
     const binding = { expressionType: "ActivityResultMember", value: { ...whole.value, memberPath: ["billing.address", ""] } };
