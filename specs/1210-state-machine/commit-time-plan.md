@@ -24,7 +24,10 @@ An arbitrary grace period, admission timestamp or query-time restamp cannot esta
 ## Narrow execution contract
 
 1. Extend the prototype actor row with optional commit-clock metadata. Ordinary actors that never request it
-   retain a null field and their existing behavior. Representation and API names remain engineering choices.
+   retain a null field and their existing behavior. Register the requirement at normal invocation activation or
+   admission in the same fenced commit, before the first retention promise is accepted. This generic opt-in is
+   visible even when every receipt is still pending and future private model state cannot be interpreted.
+   Representation and API names remain engineering choices.
 2. A model can request a reference to its current turn's commit-time fact, resolve a retained reference without
    creating/restamping it, and release facts it no longer owns. Requests in the same turn may share one fact.
    References are local to the actual actor occurrence; they do not solve the separately open delete/recreate ID bug.
@@ -76,6 +79,8 @@ Prove on the actual actor/store path:
 - Apply without acknowledgement, reload/take over and resolve the same fact; before-apply loss creates no fact.
 - Stage an actual old-owner clock write, let a new owner commit, then execute the stale call: fence refuses it.
 - Same-turn requests share a stable fact; later turns/ordinary controls do not overwrite it; resolve never creates.
+- Force termination through an older model before any pending receipt has finalized or requested a fact: the
+  committed generic opt-in still makes the workflow owner capture its original terminal anchor.
 - Release only the owned fact, preserve other references and terminal ownership; old rows without metadata still run.
 - Unsupported store capability refuses the new promise and clock write; ordinary native/model workflows still work.
 - Actual failed-start → metadata lookup → normal Delete terminates without a null-state crash or a busy slot.
