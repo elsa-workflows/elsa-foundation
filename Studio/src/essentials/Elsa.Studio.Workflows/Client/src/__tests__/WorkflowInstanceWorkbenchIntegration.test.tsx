@@ -41,6 +41,12 @@ const useActualReactFlow = vi.hoisted(() => ({ enabled: false }));
 
 vi.mock("../api/runtime", () => ({
   ...api,
+  // Native fetch rejects an already-aborted read. Keep a retired workbench's delayed
+  // import continuation from entering the next test's replacement inspection mock.
+  getActivityExecutionInspection: async (...args: Parameters<typeof import("../api/runtime").getActivityExecutionInspection>) => {
+    args[3]?.throwIfAborted();
+    return api.getActivityExecutionInspection(...args);
+  },
   WorkflowInstanceHealthFilterUnavailableError: class extends Error {}
 }));
 vi.mock("../api/activityDesign", () => ({ listActivities: api.listActivities }));
@@ -609,7 +615,11 @@ describe("workflow run workbench incident navigation", () => {
     api.getWorkflowInstance.mockResolvedValue(workflowDetails({ activities: [], incidents }));
     api.supportsActivityExecutionInspection.mockResolvedValue(true);
     let transientAttempt = 0;
+    let phase = "initial";
+    const inspectionTrace: unknown[] = [];
     api.getActivityExecutionInspection.mockImplementation(async (_context, workflowExecutionId: string, activityExecutionId: string) => {
+      if (inspectionTrace.length < 12) inspectionTrace.push({ workflowExecutionId, activityExecutionId, phase, transientAttempt,
+        stack: new Error().stack?.split("\n").slice(1, 7) });
       if (activityExecutionId === "denied-execution") throw Object.assign(new Error("Forbidden"), { status: 403 });
       if (activityExecutionId === "mismatch-execution") return activityInspection({ activityExecutionId: "different-execution", workflowExecutionId });
       transientAttempt++;
@@ -618,9 +628,20 @@ describe("workflow run workbench incident navigation", () => {
     });
 
     renderWorkbench();
-    await vi.waitFor(() => expect(container.textContent).toContain("You do not have permission to inspect 1 exact activity execution"));
-    expect(container.textContent).toContain("Runtime returned a different run or activity execution for 1 association");
-    expect(container.textContent).toContain("Some affected activities are not shown yet (1 remaining)");
+    try {
+      await vi.waitFor(() => expect(container.textContent).toContain("You do not have permission to inspect 1 exact activity execution"));
+      expect(container.textContent).toContain("Runtime returned a different run or activity execution for 1 association");
+      expect(api.getActivityExecutionInspection.mock.calls.map(([, , id]) => id)).toEqual([
+        "denied-execution", "mismatch-execution", "transient-execution"
+      ]);
+      expect(container.textContent).toContain("Some affected activities are not shown yet (1 remaining)");
+    } catch (error) {
+      console.error("Initial incident association diagnostic", JSON.stringify({ inspectionTrace,
+        runReads: api.getWorkflowInstance.mock.calls.length, executableReads: api.getExecutable.mock.calls.length,
+        inspectionSupportReads: api.supportsActivityExecutionInspection.mock.calls.length }));
+      throw error;
+    }
+    phase = "manual-retry";
     click(buttonByText(container, "Load more affected activities (1)"));
 
     await vi.waitFor(() => expect(transientAttempt).toBe(2));

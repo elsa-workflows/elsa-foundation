@@ -36,4 +36,9 @@ internal sealed class StimulusDeliveryRequestProjector
             throw new InvalidDataException("The stimulus adapter changed the immutable source key or declared an unsupported routing override.");
         return request;
     }
+
+    internal RuntimeWorkflowSubscriptionSource SubscriptionSource(PostCommitDeliveryContext source) =>
+        _adapters.TryGetValue(source.Intent.Kind, out var adapter)
+            ? adapter.CreateSubscriptionSource(source.Intent) ?? throw new NotSupportedException("The owning stimulus adapter does not declare independent broadcast subscriptions.")
+            : throw new NotSupportedException("The workflow source has no owning stimulus decoder.");
 }

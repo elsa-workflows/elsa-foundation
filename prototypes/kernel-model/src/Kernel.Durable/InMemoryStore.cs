@@ -9,6 +9,8 @@ namespace Kernel.Durable;
 /// </summary>
 public sealed class InMemoryStore(int partitions, Func<long> clock, Flaw flaws = Flaw.None) : IKernelStore
 {
+    public bool CommitClockAvailable { get; set; } = true;
+
     public sealed class PartitionRow
     {
         public string? Owner;
@@ -60,6 +62,7 @@ public sealed class InMemoryStore(int partitions, Func<long> clock, Flaw flaws =
 
     public ValueTask<Committed> CommitAsync(CommitBatch batch, CancellationToken cancellationToken = default)
     {
+        if (!CommitClockAvailable) CommitClockFacts.RejectUnsupported(batch);
         lock (_gate)
         {
             var (p, now) = (Partitions[batch.Partition], clock());
@@ -81,6 +84,7 @@ public sealed class InMemoryStore(int partitions, Func<long> clock, Flaw flaws =
                         if (Refuses?.Invoke(row) == true) throw new StoreException(Failure.Definite, $"the row of {row.Id} was refused");
                         var revision = Instances.GetValueOrDefault(row.Id)?.Revision;
                         if (revision != turn.Expected) Diverged($"instance {row.Id} is at revision {revision?.ToString() ?? "none"}, the commit expected {turn.Expected?.ToString() ?? "none"}");
+                        CommitClockFacts.Validate(row, Instances.GetValueOrDefault(row.Id));
                     }
                     foreach (var id in turn.Consumed.Concat(turn.Done).Concat(turn.Held ?? []))
                         if (!Has(Flaw.DeleteWithoutCount) && Messages.GetValueOrDefault(id) is not { Done: false }) Diverged($"consumed message {id} is not there");
@@ -94,7 +98,7 @@ public sealed class InMemoryStore(int partitions, Func<long> clock, Flaw flaws =
             var (next, seqs) = (batch.Position, new List<long>());
             foreach (var turn in batch.Turns)
             {
-                if (turn.Row is not null) Instances[turn.Row.Id] = turn.Row;
+                if (turn.Row is not null) Instances[turn.Row.Id] = CommitClockFacts.Stamp(turn.Row, now);
                 if (turn.Delete)
                 {
                     Instances.Remove(turn.Instance);

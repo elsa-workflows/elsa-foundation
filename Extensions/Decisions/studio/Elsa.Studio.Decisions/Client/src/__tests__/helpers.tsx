@@ -2,7 +2,7 @@ import React from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { vi } from "vitest";
-import type { ElsaStudioModuleApi } from "@elsa-workflows/studio-sdk";
+import type { ElsaStudioModuleApi, StudioNotificationInput } from "@elsa-workflows/studio-sdk";
 import { newDecisionXml } from "../decisionXml";
 import type { DecisionAsset } from "../decisionsApi";
 export const asset: DecisionAsset = { id: "approval", name: "Approval", description: "Purchase approval", revision: "r1", sourceHash: "hash1", xml: newDecisionXml(), isSensitive: false, createdAt: "2026-11-05T10:00:00Z", updatedAt: "2026-11-05T10:00:00Z" };
@@ -13,9 +13,10 @@ export function stubApi(grants = ["read", "manage", "publish", "evaluate", "test
     backend: { baseUrl: "https://server.example/tenant", http: { getJson, postJson: vi.fn(), putJson: vi.fn(), deleteJson: vi.fn(), requestJson: vi.fn(), requestResponse: vi.fn() } },
     backendSession: { capabilities: { capabilities: [{ id: "elsa.api.decisions", contractVersion: "1", links: [{ rel: "decisions", href: "decisions" }] }] }, identity: { status: "authenticated", subject: "user", tenantId: "tenant", roles: [], permissions: grants.map(grant => `decisions:${grant}`) } },
     runtime: { identity: { subject: "user", tenantId: "tenant" } }, featureAreas: registry(), propertyEditors: registry(), expressionEditors: registry(),
-    dialogs: { confirm: vi.fn(async () => true), prompt: vi.fn(async () => "Imported approval"), alert: vi.fn() }
+    dialogs: { confirm: vi.fn(async () => true), prompt: vi.fn(async () => "Imported approval"), alert: vi.fn() },
+    notifications: { notify: vi.fn((_input: StudioNotificationInput) => ({ id: "decision-toast", update: vi.fn(), dismiss: vi.fn() })), track: <T,>(work: Promise<T>) => work }
   };
-  return api as unknown as ElsaStudioModuleApi & { backend: typeof api.backend; dialogs: typeof api.dialogs };
+  return api as unknown as ElsaStudioModuleApi & { backend: typeof api.backend; dialogs: typeof api.dialogs; notifications: typeof api.notifications };
 }
 export function render(content: React.ReactNode) {
   const host = document.createElement("div"); document.body.append(host); const root = createRoot(host); flushSync(() => root.render(content));
