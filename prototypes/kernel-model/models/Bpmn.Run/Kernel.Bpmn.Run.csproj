@@ -6,6 +6,7 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../Bpmn/Kernel.Bpmn.csproj" />
+    <ProjectReference Include="../../ef/Kernel.EntityFramework/Kernel.EntityFramework.csproj" />
   </ItemGroup>
   <ItemGroup>
     <Using Include="Kernel.Runtime" />

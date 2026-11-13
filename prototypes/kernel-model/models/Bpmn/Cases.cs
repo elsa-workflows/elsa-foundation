@@ -92,6 +92,17 @@ public static class BpmnCases
         p.Chain("start", "again", "fork", "count", "join", "decide").Chain("fork", "note", "join")
             .Flow("decide", "again", when: $"count < {Rounds}").Flow("decide", "end", isDefault: true);
         yield return new BpmnProcess(p.Build(), Jobs("count", "note"), new JsonObject { ["count"] = 0, ["notes"] = 0 });
+
+        // Not in the simulation's mix: an inclusive join inside a loop, one flow taken, beside a parallel branch that waits
+        // at a parallel join downstream. Bpmn.Semantics 0.5.0 faults it with bpmn.join.deadlock (BPMN.md, section 7).
+        p = new ProcessDraft("b-inclusive-loop");
+        p.B.StartEvent("start").ExclusiveGateway("again").ParallelGateway("fork").InclusiveGateway("or").ServiceTask("express", bindingRef: "express")
+            .ServiceTask("insured", bindingRef: "insured").InclusiveGateway("or-join").ServiceTask("side", bindingRef: "note").ParallelGateway("join")
+            .ServiceTask("count", bindingRef: "count").ExclusiveGateway("decide").EndEvent("end");
+        p.Chain("start", "again", "fork", "or").Flow("or", "express", when: "express").Flow("or", "insured", when: "insured")
+            .Chain("express", "or-join", "join").Chain("insured", "or-join").Chain("fork", "side", "join").Chain("join", "count", "decide")
+            .Flow("decide", "again", when: $"count < {Rounds}").Flow("decide", "end", isDefault: true);
+        yield return new BpmnProcess(p.Build(), Jobs("express", "insured", "note", "count"), new JsonObject { ["express"] = true, ["insured"] = false, ["count"] = 0, ["notes"] = 0 });
     }
 
     private static Dictionary<string, Work> Jobs(params string[] services) => services.ToDictionary(s => s, s => (Work)new JobWork(s), StringComparer.Ordinal);

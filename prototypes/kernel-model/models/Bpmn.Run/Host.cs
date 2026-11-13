@@ -25,8 +25,11 @@ public sealed class Owner
     public BpmnState? State(string id) => Worker.Instances.FirstOrDefault(i => i.Id == id) is { State: { } json } ? Json.Read<BpmnState>(json)
         : Worker.Instances.FirstOrDefault(i => i.Id == id).Row is { } row ? Json.Read<BpmnState>(row.State) : null;
 
-    /// <summary>Run what is ready until <paramref name="until"/> holds and nothing is busy, polling the inbox when idle.</summary>
-    public async Task PumpAsync(Func<bool> until, bool poll = false, int timeoutMs = 10_000)
+    /// <summary>
+    /// Run what is ready until <paramref name="until"/> holds and nothing is busy. Polls once at the start when asked, and
+    /// whenever idle unless <paramref name="keepPolling"/> is off (the cost measurement counts every poll).
+    /// </summary>
+    public async Task PumpAsync(Func<bool> until, bool poll = false, int timeoutMs = 10_000, bool keepPolling = true)
     {
         if (poll) await Worker.WokenAsync(null);
         var deadline = Environment.TickCount64 + timeoutMs;
@@ -40,7 +43,7 @@ public sealed class Owner
             if (!busy)
             {
                 await Task.Delay(1);
-                await Worker.WokenAsync(null);    // the next pass reads the inbox
+                if (keepPolling) await Worker.WokenAsync(null);    // the next pass reads the inbox
             }
         }
     }
