@@ -72,7 +72,7 @@ internal sealed class RuntimeHistoryCapture(IWorkflowExecutionStateStore executi
         if (!CanCapture(policy))
             throw new RuntimeSchedulerWorkUnavailableException("runtime.history.capture-unavailable", "The retained history capture chain is unavailable.");
         var expected = Build(commit, policy);
-        if (expected.LogicalCheckpointId != batches[0].LogicalCheckpointId || expected.OccurredAt != batches[0].OccurredAt ||
+        if (expected.LogicalCheckpointId != batches[0].LogicalCheckpointId || !expected.OccurredAt.EqualsExact(batches[0].OccurredAt) ||
             expected.StartsAtRunStart != batches[0].StartsAtRunStart || !expected.Candidates.Select(RuntimeHistoryIdentity.Compute)
                 .SequenceEqual(batches[0].Candidates.Select(RuntimeHistoryIdentity.Compute), StringComparer.Ordinal))
             throw new InvalidOperationException("The final checkpoint no longer agrees with its semantic history candidates.");

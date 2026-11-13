@@ -65,6 +65,7 @@ public sealed class RuntimeHistoryCandidateTests
     [InlineData("coverage")]
     [InlineData("time")]
     [InlineData("empty-checkpoint")]
+    [InlineData("offset")]
     public async Task Final_validation_refuses_replaced_batch_headers_even_when_candidate_content_is_unchanged(string changed)
     {
         var empty = changed == "empty-checkpoint";
@@ -74,7 +75,7 @@ public sealed class RuntimeHistoryCandidateTests
         var original = Assert.Single(captured.HistoryBatches!);
         var replacement = new RuntimeHistoryBatch(original.Policy,
             empty ? "different-checkpoint" : original.LogicalCheckpointId,
-            changed == "time" ? original.OccurredAt.AddMinutes(1) : original.OccurredAt,
+            changed == "time" ? original.OccurredAt.AddMinutes(1) : changed == "offset" ? original.OccurredAt.ToOffset(TimeSpan.FromHours(1)) : original.OccurredAt,
             changed == "coverage" || original.StartsAtRunStart, original.Candidates) { SourceFingerprint = original.SourceFingerprint };
         await Assert.ThrowsAsync<InvalidOperationException>(async () => await fixture.Capture.ValidateFinalAsync(captured with { HistoryBatches = [replacement] }));
     }
