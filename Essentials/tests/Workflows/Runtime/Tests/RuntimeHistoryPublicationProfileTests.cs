@@ -180,6 +180,20 @@ public sealed class RuntimeHistoryPublicationProfileTests
     }
 
     [Theory]
+    [InlineData("rebind")] [InlineData("rewrite")] [InlineData("remove-source")]
+    public async Task Physical_flush_preserves_the_exact_original_send_inventory_even_when_an_existing_event_is_reused(string mode)
+    {
+        using var f = new Fixture(decorated: true, change: services => services.AddScoped<IRuntimeCheckpointCommitEnricher>(sp =>
+            new LatePublication(mode, true, sp.GetServices<RuntimePostCommitIntentHandlerContribution>().ToArray())));
+        await f.SeedAsync(RuntimeHistoryRegistration.ResolvePolicy(f.Services, "publisher")!);
+        await using var drain = f.Services.GetRequiredService<IRuntimeCoalescingDrainScopeFactory>().Begin("publisher", new(PersistenceMode.Balanced, RunHasRecord: true));
+        var pending = await f.PublishAsync();
+        var refusal = await Assert.ThrowsAsync<RuntimeCheckpointCommitValidationException>(() => drain.FlushAtQuiescenceAsync().AsTask());
+        Assert.Contains("original logical history sources", refusal.Message);
+        Assert.Empty(f.Writer.ListCommits()); Assert.Null(await f.Writer.FindDurableAsync(pending.OutboxItemId)); Assert.Equal(0, f.Actors.Calls);
+    }
+
+    [Theory]
     [InlineData(false, "io")] [InlineData(true, "io")] [InlineData(false, "malformed-io")] [InlineData(true, "malformed-io")]
     [InlineData(false, "argument")] [InlineData(true, "argument")] [InlineData(false, "cancelled")] [InlineData(true, "cancelled")]
     public void Direct_public_qualification_normalizes_provider_failure_without_losing_kind_or_cause(bool router, string failureKind)
@@ -296,8 +310,23 @@ public sealed class RuntimeHistoryPublicationProfileTests
         {
             if (commit.Checkpoint.Metadata.ContainsKey(RuntimeMetadataKeys.CoalescedFlush) != onlyFlush) return ValueTask.FromResult(commit);
             if (mode == "remove-fact") return ValueTask.FromResult(commit with { HistorySourceFacts = [] });
+            if (mode == "remove-source") return ValueTask.FromResult(commit with
+            { StateChanges = commit.StateChanges.WithPostCommitOutbox(commit.StateChanges.PostCommitOutbox.Where(change => change.State.Intent.Kind != Kind).ToArray()) });
+            if (mode == "rewrite")
+            {
+                var row = Assert.Single(commit.StateChanges.PostCommitOutbox.Where(change => change.State.Intent.Kind == Kind)).State;
+                var changed = new RuntimePostCommitIntent(row.Intent.IntentId, row.Intent.WorkflowExecutionId, Kind, row.Intent.RecordedAt,
+                    row.Intent.ActivityExecutionId, "rewritten-key", row.Intent.Payload, row.Intent.Metadata) { HistoryCausation = row.Intent.HistoryCausation };
+                var replacement = new RuntimePostCommitOutboxItem(row.OutboxItemId, changed, row.Status, row.RecordedAt, row.AvailableAt,
+                    row.RetryPolicy, row.DeliveryAttemptCount, row.DeliveringOwnerId, row.DeliveryStartedAt, row.DeliveredAt, row.LastFailureMessage,
+                    row.Metadata, row.DeliveryFencingToken, row.DeliveryVisibleAfter, row.StimulusDeliveryProtocolVersion, row.StimulusDeliverySourceScope, row.RecipientSnapshot);
+                return ValueTask.FromResult(commit with { StateChanges = commit.StateChanges.WithPostCommitOutbox(commit.StateChanges.PostCommitOutbox
+                    .Select(change => change.StateId == row.OutboxItemId ? change with { State = replacement } : change).ToArray()) });
+            }
             var original = commit.PostCommitIntents.Concat(commit.StateChanges.PostCommitOutbox.Select(change => change.State.Intent)).First(intent => intent.Kind == Kind);
             var late = new RuntimePostCommitIntent("late", commit.WorkflowExecutionId, Kind, At, "activity", "late-key", original.Payload);
+            if (mode == "rebind") late = late with { HistoryCausation = original.HistoryCausation! with
+                { DeliveryId = RuntimePostCommitOutboxIdentity.CreateLogicalValue(commit.CommitId, late.IntentId) } };
             if (mode == "logical") return ValueTask.FromResult(commit with { PostCommitIntents = commit.PostCommitIntents.Append(late).ToArray() });
             var pending = commit.PostCommitIntents.Append(late).Select(intent => RuntimePostCommitOutboxItems.CreatePending(commit, intent, contributions, Scope));
             var changes = commit.StateChanges.PostCommitOutbox.Concat(pending.Select(item =>

@@ -58,7 +58,8 @@ internal sealed class PublishStimulusHistoryEnricher(IPersistenceAccessContextAc
             if (commit.PostCommitIntents.Any(IsPublication) || pending.Any(item => item.Intent.HistoryCausation is not { } cause ||
                 cause.WorkflowExecutionId != commit.WorkflowExecutionId || cause.DeliveryId != item.OutboxItemId ||
                 item.StimulusDeliverySourceScope != scope ||
-                !events.Any(itemEvent => itemEvent.HistoryEventId == cause.HistoryEventId && itemEvent.WorkflowExecutionId == commit.WorkflowExecutionId)))
+                !events.Any(itemEvent => itemEvent.HistoryEventId == cause.HistoryEventId && itemEvent.WorkflowExecutionId == commit.WorkflowExecutionId &&
+                    itemEvent.HistoryEventId == RuntimeHistoryIdentity.CreateId(itemEvent.CheckpointId!, "StimulusPublicationCommitted", item.Intent.IntentId))))
                 throw Changed();
             return ValueTask.CompletedTask;
         }

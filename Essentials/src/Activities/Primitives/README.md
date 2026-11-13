@@ -59,7 +59,7 @@ their original unstamped replay identity. Its source-kind declaration is idempot
 kinds only when the actual committer input owner, native source/provider pair, handler, router and both
 recipient transports qualify. The existing enricher's default-false `CanSupplyHistorySource` checks the
 selected source extension; the committer checks its actual frozen input-owner set. A declaration alone
-cannot activate recording. Final validation requires exact facts/origins for the final logical publication inputs and preserves original scoped sources/captured groups through a physical flush; a later contributor cannot introduce an unrecorded send. Nonempty partial publication bundles refuse capture. No production history module is enabled. See the
+cannot activate recording. Final validation requires exact facts/origins for the final logical publication inputs and preserves original scoped sources/captured groups through a physical flush; a later contributor cannot introduce an unrecorded send. The native committer conserves the exact original caused-source inventory through flush enrichment, rejecting additions, rewrites and omissions; an event must also bind its own intent ID. Nonempty partial publication bundles refuse capture. No production history module is enabled. See the
 [Runtime extension catalog](../../Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md) for the shared source boundary.
 
 The same feature constructs its scoped `PublishStimulusExecutor` with the actual selected source, native
