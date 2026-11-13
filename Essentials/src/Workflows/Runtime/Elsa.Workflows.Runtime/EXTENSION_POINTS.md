@@ -1388,3 +1388,8 @@ callback activations remain supplied; a second wait is created by the actual nat
 defaults are unchanged. This is not authored start/whole-workflow, concurrent node/authority, durable provider/
 restart, hosted control sensitivity or composed UX qualification. No production/API/schema/reference/dependency/
 friend/module/host change is added. T026 and parent remain open.
+
+These controls re-read each exact native run/activity after both drains and assert completion/fault code,
+ended resume-attempt transition, consumed delivery, cleared waits and native incident state before the
+capture-specific history branch. Uncaptured rows therefore prove their native outcome too; absence of
+history and a Completed scheduler result alone cannot distinguish callback completion from a returned fault.

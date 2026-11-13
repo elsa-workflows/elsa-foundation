@@ -112,6 +112,19 @@ public sealed partial class RuntimeHistoryNativeDeliveryTests
 
     private static async Task AssertBroadcastOutcomeAsync(Fixture f, string run, bool captured, RuntimeHistoryEvent? receipt, bool faulted)
     {
+        // Capture controls diagnostic recording, never the authoritative callback outcome. Re-read both exact
+        // native run/activity identities after both drains, so the second outcome cannot overwrite the first.
+        var native = (await f.Services.GetRequiredService<IActivityExecutionStateStore>().FindAsync(run, ActivityId))!;
+        Assert.Equal(run, native.Execution.WorkflowExecutionId); Assert.Equal(ActivityId, native.Execution.ActivityExecutionId);
+        Assert.Equal(faulted ? ActivityExecutionStatus.Faulted : ActivityExecutionStatus.Completed, native.Status);
+        var attempt = Assert.Single(native.Attempts!, item => item.Reason == ActivityAttemptReason.Resume);
+        Assert.NotNull(attempt.EndedAt);
+        Assert.Equal(faulted ? ActivityTransitionKind.Fault : ActivityTransitionKind.Complete, attempt.TransitionKind);
+        var delivery = Assert.Single(native.TriggerDeliveries!, item => item.DeliveryId == attempt.TriggerDeliveryId);
+        Assert.Equal(ActivityTriggerDeliveryStatus.Consumed, delivery.Status); Assert.Empty(native.BookmarkIds);
+        var incidents = await f.Services.GetRequiredService<IIncidentStateStore>().ListAsync(run);
+        if (faulted) { Assert.Equal("approval.rejected", native.Fault!.Code); Assert.Single(incidents); }
+        else { Assert.Null(native.Fault); Assert.NotNull(native.Completion); Assert.Empty(incidents); }
         var page = await f.History.ReadPageAsync(new(run, limit: 200));
         if (!captured)
         {
