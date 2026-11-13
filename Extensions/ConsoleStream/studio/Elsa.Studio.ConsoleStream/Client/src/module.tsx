@@ -1,4 +1,4 @@
-import { StudioPageHeader, StudioButton } from "@elsa-workflows/studio-ui";
+import { StudioPageHeader, StudioButton, StudioField } from "@elsa-workflows/studio-ui";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as signalR from "@microsoft/signalr";
 import type { ElsaStudioModuleApi, StudioEndpointContext, StudioHostId } from "@elsa-workflows/studio-sdk";
@@ -429,7 +429,7 @@ function ConsoleStreamView({ page = false }: { page?: boolean }) {
               </StudioButton>
             ))}
           </div>
-          <select
+          <StudioField label="Console source"><select
             aria-label="Console source"
             value={selectedSourceId}
             onChange={event => setSelectedSourceId(event.target.value)}>
@@ -437,7 +437,7 @@ function ConsoleStreamView({ page = false }: { page?: boolean }) {
             {sources.map(source => (
               <option value={source.id} key={source.id}>{formatConsoleSourceLabel(source)}</option>
             ))}
-          </select>
+          </select></StudioField>
           <span className={connected ? "console-stream-status online" : "console-stream-status"} />
           <span>{connected ? "live" : "waiting"}</span>
           <span>stdout</span>

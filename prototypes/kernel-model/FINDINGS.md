@@ -1004,6 +1004,51 @@ is now the fence in the batch, recorded at REPEATABLE READ in ENGINES.md (holds,
 `isolation=rc` the fence in the batch has no recorded stress run, and was not run here. README's stress commands now
 show the fence option on every engine.
 
+### 25.2 Subscribing twice and removing what is absent (M6). Run
+
+**What the contract says now.** `TurnCommit.Subscribed` and `Unsubscribed` are idempotent: a wait that is there
+already stays one wait, and removing one that is not there changes nothing; neither is a count that does not match.
+Within a turn its subscribes apply before its unsubscribes, as the in-memory store always did. The conformance
+suite's two reference cases of M6 are required, and a third case covers a commit that names a wait twice and one that
+subscribes and unsubscribes the same wait.
+
+**How each store meets it.** In memory: a set, as before. MongoDB: an upsert and a delete without a count, as before
+(it passed both cases already). EF: the change tracker writes a subscription as a row, so a wait that is there is a key
+violation (definite, which parked the instance) and an absent one removed is a count that does not match (not landed,
+which reset the partition). The EF store now:
+
+- writes each wait a batch names once, with what the batch leaves of it (`Waits`), so a batch never tracks the same
+  row twice;
+- when the batch fails with a count that does not match on a subscription, or with a definite error while it
+  subscribes something and the fence still holds, rolls back and sends the batch once more with its waits as
+  statements of their own after the `SaveChanges`: `INSERT ... ON CONFLICT DO NOTHING` (PostgreSQL, SQLite), `INSERT
+  ... WHERE NOT EXISTS` (SQL Server), `INSERT ... ON DUPLICATE KEY UPDATE` (MySQL: `INSERT IGNORE` would also turn a value too long
+  into a warning and cut it), and a plain `DELETE` by key. Only the partition's
+  owner writes its instances' waits, under the fence, so nothing races the check.
+
+The common path costs nothing more: the waits are still in the one batch. The second attempt costs a commit's round
+trips plus one per wait. A batch pays it when its first count that does not match is on a wait (a wait removed while
+absent, or a stale owner's batch whose unsubscribe is checked before its fence), or when it subscribes anything and
+fails with a definite error while the fence holds (a wait that is there, or any other definite error, which then fails
+the second attempt too, and each of the kernel's one-by-one commits after it). M6 reasoned that the kernel's own turns
+never re-subscribe or remove what is absent.
+
+**Gates.**
+
+| Store | Fence | Before (section 24, and 25.1) | After |
+|---|---|---|---|
+| In memory | – | 56 passed, 1 skipped | 57 passed, 1 skipped |
+| SQLite | checked, batch | 54 passed, 2 reference differ (the two of M6), 1 skipped | 57 passed, 0 reference differ, 1 skipped |
+| PostgreSQL 17 | checked, batch | 54 passed, 3 reference differ | 57 passed, 1 reference differ (F8) |
+| SQL Server 2022 (RCSI) | checked, batch | 53 passed, 3 reference differ, 1 skipped | 56 passed, 1 reference differ (F8), 1 skipped |
+| MySQL 8.4 (REPEATABLE READ) | batch, checked | (ENGINES.md) | 56 passed, 1 reference differ (F8), 1 skipped |
+| MongoDB 8.0 | checked | (MONGO.md) | 58 passed |
+
+EF cost runs, SQLite and PostgreSQL (`proxy=1`), each fence: every counted and sent round trip the same as before; the
+TCP-read column of the PostgreSQL rows of 100 and 1,000 instances moved by up to three reads, the noise README
+describes. Not run: the simulation (it uses the in-memory store, unchanged) and the stress tests (not run for this
+item; whether their models ever reach the second attempt was not checked).
+
 ## 26. Round 4: the graph engine. Run
 
 The owner's decision of 12 November (design sketch draft 5, "Containers and their semantics"): the native model stays
