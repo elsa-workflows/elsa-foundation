@@ -370,6 +370,16 @@ public static class Semantics
             var result = await c.Lands(() => c.Commit(lease, 0, [Make.New("0/a", sent)]));
             await SentInOrder(c, sent, result);
         }),
+        new("commit: promotion sends an older timer before a newer one across revision 9 to 10", Level.Required, async c =>
+        {
+            var lease = await c.Take(0);
+            var target = InstanceRef.In(1, "b");
+            var due = lease.Now;
+            Message[] sent = [new("0/a#9.0001", target, "A", Sender: "0/a", Due: due), new("0/a#10.0000", target, "B", Sender: "0/a", Due: due)];
+            var promotion = Make.Turn("0/a", Make.Row("0/a", 10), sent: sent);
+            var result = await c.Lands(() => c.Commit(lease, 0, [promotion]));
+            await SentInOrder(c, sent, result);
+        }),
         new("commit: seqs of one commit follow the order sent, whatever the ids", Level.Reference, async c =>
         {
             var lease = await c.Take(0);
