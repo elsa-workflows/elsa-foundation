@@ -60,6 +60,7 @@ public static partial class ExternalAuthenticationApi
         api.MapUnboundOperation("GET", path + "/preview/{key}/results/{handle}", "ExternalAuthenticationPreviewResult", typeof(ExternalAuthenticationPreview), 200, null,
                 context => Run(context, Preview), name: "ExternalAuthenticationPreviewResult", containFailures: false)
             .RequirePermission(DefaultIdentityPermissionKeys.IdentityProvidersManage);
+        MapManagement(endpoints);
     }
 
     private static async Task Run(HttpContext context, Func<HttpContext, Task> handler, int maximumBody = 16384)
