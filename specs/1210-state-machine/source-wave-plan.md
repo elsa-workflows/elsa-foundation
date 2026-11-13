@@ -48,6 +48,17 @@ domain already used for message rows. Durable allocation, backup/restore and nam
 provider gates. Reusing an expired caller ID creates a new installation and cannot replace a manifest still
 referenced by earlier work; any version/index stays transactionally within the event family.
 
+Before the first install call, the publisher must durably record a stable publication-attempt key in its
+existing source intent. A qualified native publication ticket's exact message ID and sender creation can
+provide that identity; the current caller-controlled `EventRow.Id` alone cannot. An external ingress needs
+an equivalent accepted durable intent before participating; that ingress remains unavailable until qualified.
+The source transaction installs/compares `(attempt key, semantic envelope digest) -> installation` atomically.
+Lost acknowledgement reuses that pre-existing key rather than requesting another allocated identity.
+Keep the mapping while its manifest or promised receipt remains needed, even after caller-ID/payload expiry.
+Explicit reuse of a caller ID has a different attempt key. An expired/unknown retry reports that condition;
+it never resolves to the newest publication with that caller ID. Native lease/intent and ingress authorization
+must be checked by the source owner; a sender payload cannot assert ownership of an earlier attempt.
+
 The first cut installs all initial messages with the manifest, adding no new dispatch pump. Oversized cohorts
 are refused atomically under an explicit experimental bound. Large fan-out/provider costs require shared-owner
 design before adoption; this sets no product limit. Native publication tickets retire only after successful
@@ -125,24 +136,33 @@ These are scope gates. A local-only witness cannot close arbitrary composite, ch
 a non-packable runner. Prove fixed membership, duplicate/conflict, empty cohorts, later registration/replacement
 visits, caught-up registration, before-apply/lost-ack installation and atomic bound refusal. Enable no chart
 selection here. Other providers remain unavailable rather than dropping fields.
+Use normally committed publisher intents/subscriptions, not seeded successful manifests. Also lose an install
+acknowledgement, expire/reuse the caller ID with a new attempt, then replay the original ticket: it must recover
+the original installation/cohort. Forged, unknown and expired attempt references cannot adopt the new one.
 
 **B — native readiness.** A generic composite fixture composes ordinary Event, Sequence, Parallel, waits,
 yields, faults and callbacks across Balanced/Durable and root/nested use. Opposite callback orders produce
 the same ready set from one closed wave. Delayed recipients, pending agenda work, undelivered child/return
 messages and recovery blockage prevent early closure. Qualify A-then-B with retained A data, normal retries,
 cancellation and stale-visit rejection. Do not add a second StateMachine interpreter.
+Two normal-native topologies are mandatory: independently authored triggers in separate parallel regions,
+and independent child-owned/parent-owned triggers. Each receives one actual publication under one installed
+cohort. Reverse and delay the relevant deliveries and continuations; require the same exact closed-wave
+occurrence accounting, with no ancestor fallback while the child's runnable responsibility remains owed.
 
 **C — transitive/chart integration.** Extend through normal workflow/model calls, background placement and
 catch-up/start ingress. Only after those boundaries are proved connect the reviewed selector, normal guard
 recovery and phase work. Reuse admission/terminal/identity probes without counting their inventories as this
 proof. Full product/Studio/native-compensation qualification remains the delivery goal.
+Selector integration must execute both topologies: compatible regional reactions are selected together and
+an eligible child suppresses its parent. These are actual integration paths, not only pure-selector tests.
 
 Each stage gets a discovered inventory and isolated named controls: rescan on retry, omit a cohort member,
 close on mailbox emptiness/yield, lose a transfer, classify retained A as current readiness, accept a forged
 route, publish closure/wake before commit, and ignore stale creation/visit identity. A control must fail its
 named assertion, not merely throw or time out. Keep all failure/unrun history and source/assembly hashes.
 
-Bound focused builds to600seconds, deterministic runners to60seconds and affected sweeps to180seconds, through
+Bound focused builds to 600 seconds, deterministic runners to 60 seconds and affected sweeps to 180 seconds, through
 the build-slot wrapper with one processor. No service/cloud/old Azure grant, whole-solution build or additional
 infrastructure is implicit. Independent source and raw-evidence acceptance precede dependent integration.
 
@@ -150,7 +170,7 @@ infrastructure is implicit. Independent source and raw-evidence acceptance prece
 
 This is architecture development in the existing Active StateMachine bucket. Current changes are spec/work-order
 links only: check links/scope/whitespace, claim no executable result. Ratified runtime/design separation and
-ADR0080 remain gates; provisional Model X/§E2.9 are not approval. This installs no glossary meaning, public API,
+ADR 0080 remain gates; provisional Model X/§E2.9 are not approval. This installs no glossary meaning, public API,
 extension point or solution filter. Actual code later carries the corresponding normal catalogs/maps/gates.
 
 <proposed_plan>
