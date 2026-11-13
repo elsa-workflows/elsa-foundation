@@ -65,7 +65,7 @@ internal abstract class WidgetEffectsTool(WidgetEffectOwner owner, WidgetFaultCo
 
     public async Task<WeaverResult<WeaverToolResult>> ExecuteAsync(WeaverPreparedToolInvocation invocation, CancellationToken cancellationToken = default)
     {
-        owner.RecordExecutionEntry(invocation, Descriptor.Name);
+        await owner.RecordExecutionEntryAsync(invocation, Descriptor.Name, cancellationToken);
         try
         {
             if (invocation.ToolName != Descriptor.Name || invocation.ModuleId != WidgetContract.Module || invocation.ToolContractVersion != "1"

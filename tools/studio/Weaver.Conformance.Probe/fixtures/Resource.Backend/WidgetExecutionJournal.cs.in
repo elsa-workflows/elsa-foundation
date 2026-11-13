@@ -6,35 +6,41 @@ using Elsa.Studio.Preferences.Core.Models;
 
 namespace Acme.Home.Weaver;
 
-internal sealed record WidgetExecutionEntry(string Actor, string Tenant, string Host, string ToolName, string RequestedToolName,
+internal sealed record WidgetExecutionEntry(string Actor, string Tenant, string Host, string RequestedActor, string RequestedTenant, string ToolName, string RequestedToolName,
     string SessionId, string TurnId, string InvocationId, string ToolCallId, int EntryNumber);
 
 // An entry means only that this module's ExecuteAsync was entered, never that an effect ran or succeeded.
 // The operator must provision the private file with Header before enabling observation. Missing files are never recreated.
 internal sealed class WidgetExecutionJournal(WidgetEffectsSettings settings)
 {
-    internal const string Header = """{"Format":"acme.home.execution-entries","Version":1}""";
+    internal const string Header = """{"Format":"acme.home.execution-entries","Version":2}""";
     private const int MaximumBytes = 2 * 1024 * 1024;
     private const int MaximumEntries = 4096;
     private static readonly UTF8Encoding Utf8 = new(false, true);
     private readonly object sync = new();
     private bool failed;
 
-    internal void Record(WeaverPreparedToolInvocation invocation, string toolName, string host)
+    internal bool IsConfigured => settings.ExecutionObservationFile.Length > 0;
+
+    internal void Record(StudioPreferenceKey actual, WeaverPreparedToolInvocation invocation, string toolName)
     {
         // Ordinary fixture profiles retain their old tool behaviour. They cannot report an observed zero through Read.
         if (settings.ExecutionObservationFile.Length == 0) return;
+        if (actual.Namespace != StudioPreferenceNamespaces.HomeLayout)
+            throw new WidgetFixtureException("Execution entry requires its actual personal Home owner.",
+                new InvalidDataException("A foreign namespace cannot select this observation journal."));
         lock (sync)
         {
             try
             {
                 WidgetFixtureFiles.Check(settings.ExecutionObservationFile);
                 RequireAvailable();
+                RequireWritable();
                 using var file = new FileStream(settings.ExecutionObservationFile, FileMode.Open, FileAccess.ReadWrite, FileShare.Read);
                 var rows = Decode(file);
-                var row = new WidgetExecutionEntry(invocation.ActorId, invocation.TenantId, host, toolName, invocation.ToolName,
+                var row = new WidgetExecutionEntry(actual.SubjectId, actual.TenantId, actual.StudioHostId, invocation.ActorId, invocation.TenantId, toolName, invocation.ToolName,
                     invocation.SessionId, invocation.TurnId, invocation.InvocationId, invocation.ToolCallId,
-                    rows.Count(item => item.Actor == invocation.ActorId && item.Tenant == invocation.TenantId && item.Host == host) + 1);
+                    rows.Count(item => item.Actor == actual.SubjectId && item.Tenant == actual.TenantId && item.Host == actual.StudioHostId) + 1);
                 Validate(row, rows);
                 if (rows.Count >= MaximumEntries) throw new InvalidDataException("Widget execution observation limit reached.");
                 var bytes = Utf8.GetBytes(JsonSerializer.Serialize(row) + "\n");
@@ -49,9 +55,7 @@ internal sealed class WidgetExecutionJournal(WidgetEffectsSettings settings)
             }
             catch (Exception error) when (error is IOException or UnauthorizedAccessException or JsonException or DecoderFallbackException)
             {
-                failed = true;
-                MarkFailed();
-                throw new WidgetFixtureException("The module execution entry could not be retained. No effect has been attempted by this callback.", error);
+                throw Invalidate(error);
             }
         }
     }
@@ -60,19 +64,27 @@ internal sealed class WidgetExecutionJournal(WidgetEffectsSettings settings)
     {
         lock (sync)
         {
+            // Caller misuse has not established this journal's resource namespace.
+            // It must not poison a configured owner's observations or create a marker elsewhere.
+            if (settings.ExecutionObservationFile.Length == 0 || key.Namespace != StudioPreferenceNamespaces.HomeLayout)
+                throw new WidgetFixtureException("Module execution observations are unavailable.",
+                    new InvalidDataException("Execution observation requires its configured personal Home resource."));
+            var ownedPath = false;
             try
             {
-                if (settings.ExecutionObservationFile.Length == 0)
-                    throw new InvalidDataException("Execution observation is not configured.");
-                if (key.Namespace != StudioPreferenceNamespaces.HomeLayout)
-                    throw new InvalidDataException("Execution observation belongs to the personal Home resource.");
                 WidgetFixtureFiles.Check(settings.ExecutionObservationFile);
+                ownedPath = true;
                 RequireAvailable();
+                RequireWritable();
                 using var file = new FileStream(settings.ExecutionObservationFile, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
                 return Decode(file).Where(row => row.Actor == key.SubjectId && row.Tenant == key.TenantId && row.Host == key.StudioHostId).ToArray();
             }
             catch (Exception error) when (error is IOException or UnauthorizedAccessException or JsonException or DecoderFallbackException)
-            { throw new WidgetFixtureException("Module execution observations are unavailable.", error); }
+            {
+                failed = true;
+                var retained = ownedPath && MarkFailed();
+                throw new WidgetFixtureException("Module execution observations are unavailable.", error, retained);
+            }
         }
     }
 
@@ -83,23 +95,55 @@ internal sealed class WidgetExecutionJournal(WidgetEffectsSettings settings)
         if (failed || File.Exists(marker)) throw new InvalidDataException("A module execution entry was not retained; this observation cannot prove a count.");
     }
 
-    private void MarkFailed()
+    internal WidgetFixtureException Invalidate(Exception error)
+    {
+        lock (sync)
+        {
+            failed = true;
+            var retained = IsConfigured && MarkFailed();
+            return new WidgetFixtureException("Module execution observation is incomplete; retain the failure externally and use a fresh observation path.", error, retained);
+        }
+    }
+
+    private void RequireWritable()
+    {
+        var parent = Path.GetDirectoryName(settings.ExecutionObservationFile)!;
+        var directory = UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute;
+        var regular = UnixFileMode.UserRead | UnixFileMode.UserWrite;
+        if ((File.GetUnixFileMode(parent) & directory) != directory
+            || (File.GetUnixFileMode(settings.ExecutionObservationFile) & regular) != regular)
+            throw new InvalidDataException("Execution observation namespace is not armed for writing.");
+        using (var writable = new FileStream(settings.ExecutionObservationFile, FileMode.Open, FileAccess.ReadWrite, FileShare.ReadWrite)) { }
+        var probe = settings.ExecutionObservationFile + ".probe";
+        WidgetFixtureFiles.Check(probe);
+        var options = new FileStreamOptions { Mode = FileMode.CreateNew, Access = FileAccess.Write, Share = FileShare.Read,
+            UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite };
+        using (var file = new FileStream(probe, options)) { file.WriteByte(1); file.Flush(true); }
+        File.Delete(probe); // Failure leaves the probe in place; never clear an unconfirmed observation automatically.
+    }
+
+    private bool MarkFailed()
     {
         try
         {
             var marker = settings.ExecutionObservationFile + ".failed";
             WidgetFixtureFiles.Check(marker);
-            if (File.Exists(marker)) return;
+            if (File.Exists(marker)) return true;
+            var directory = UnixFileMode.UserWrite | UnixFileMode.UserExecute;
+            if ((File.GetUnixFileMode(Path.GetDirectoryName(marker)!) & directory) != directory)
+                throw new InvalidDataException("Execution invalidation namespace is not writable.");
             var options = new FileStreamOptions { Mode = FileMode.CreateNew, Access = FileAccess.Write, Share = FileShare.Read };
             if (!OperatingSystem.IsWindows()) options.UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
             using var file = new FileStream(marker, options);
             file.Write(Utf8.GetBytes("Execution observation is incomplete; retain this failure and use a fresh observation path.\n"));
             file.Flush(true);
+            return true;
         }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException)
         {
-            // The current instance stays poisoned even when storage cannot retain
-            // the marker. Such an I/O failure cannot qualify a restart witness.
+            // No durable-retention claim when storage fails. The caller/qualifier
+            // must retain failed/unknown outside this namespace and never reuse it.
+            return false;
         }
     }
 
@@ -113,9 +157,9 @@ internal sealed class WidgetExecutionJournal(WidgetEffectsSettings settings)
         {
             using var document = JsonDocument.Parse(line);
             var value = document.RootElement;
-            if (value.ValueKind != JsonValueKind.Object || value.EnumerateObject().Count() != 10
-                || value.EnumerateObject().Select(item => item.Name).Distinct(StringComparer.Ordinal).Count() != 10
-                || value.EnumerateObject().Any(item => item.Name is not ("Actor" or "Tenant" or "Host" or "ToolName" or "RequestedToolName"
+            if (value.ValueKind != JsonValueKind.Object || value.EnumerateObject().Count() != 12
+                || value.EnumerateObject().Select(item => item.Name).Distinct(StringComparer.Ordinal).Count() != 12
+                || value.EnumerateObject().Any(item => item.Name is not ("Actor" or "Tenant" or "Host" or "RequestedActor" or "RequestedTenant" or "ToolName" or "RequestedToolName"
                     or "SessionId" or "TurnId" or "InvocationId" or "ToolCallId" or "EntryNumber")))
                 throw new InvalidDataException("Invalid widget execution observation.");
             var row = JsonSerializer.Deserialize<WidgetExecutionEntry>(line) ?? throw new InvalidDataException("Invalid widget execution observation.");
@@ -128,11 +172,11 @@ internal sealed class WidgetExecutionJournal(WidgetEffectsSettings settings)
 
     private static void Validate(WidgetExecutionEntry row, IReadOnlyCollection<WidgetExecutionEntry> rows)
     {
-        var fields = new[] { row.Actor, row.Tenant, row.Host, row.ToolName, row.RequestedToolName,
+        var fields = new[] { row.Actor, row.Tenant, row.Host, row.RequestedActor, row.RequestedTenant, row.ToolName, row.RequestedToolName,
             row.SessionId, row.TurnId, row.InvocationId, row.ToolCallId };
         // Preserve even malformed invocation identities: recording precedes the module's validation.
         if (fields.Any(value => value is null || value.Length > 256) || !WidgetEffects.Tools.Contains(row.ToolName, StringComparer.Ordinal)
-            || string.IsNullOrWhiteSpace(row.Host)
+            || string.IsNullOrWhiteSpace(row.Actor) || string.IsNullOrWhiteSpace(row.Tenant) || string.IsNullOrWhiteSpace(row.Host)
             || row.EntryNumber != rows.Count(item => item.Actor == row.Actor && item.Tenant == row.Tenant && item.Host == row.Host) + 1)
             throw new InvalidDataException("Invalid widget execution observation.");
     }

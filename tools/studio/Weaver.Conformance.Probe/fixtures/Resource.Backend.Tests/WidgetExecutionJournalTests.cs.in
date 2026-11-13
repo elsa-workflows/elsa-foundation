@@ -34,6 +34,7 @@ public sealed class WidgetExecutionJournalTests
         Assert.Equal(name, entry.ToolName);
         Assert.Equal(prepared.ToolName, entry.RequestedToolName);
         Assert.Equal(prepared.ActorId, entry.Actor); Assert.Equal(prepared.TenantId, entry.Tenant);
+        Assert.Equal(prepared.ActorId, entry.RequestedActor); Assert.Equal(prepared.TenantId, entry.RequestedTenant);
         Assert.Equal(WidgetTestEnvironment.HostId, entry.Host);
         Assert.Equal(prepared.SessionId, entry.SessionId); Assert.Equal(prepared.TurnId, entry.TurnId);
         Assert.Equal(prepared.ToolCallId, entry.ToolCallId); Assert.Equal(prepared.InvocationId, entry.InvocationId);
@@ -137,7 +138,7 @@ public sealed class WidgetExecutionJournalTests
         Assert.True((await tool.ExecuteAsync(prepared)).Value!.Succeeded);
         Assert.Empty(env.Executions.Read(other));
         var foreign = prepared with { ActorId = other.SubjectId, TenantId = other.TenantId };
-        env.Executions.Record(foreign, tool.Descriptor.Name, other.StudioHostId);
+        env.Executions.Record(other, foreign, tool.Descriptor.Name);
         Assert.Equal(1, Assert.Single(env.Executions.Read(other)).EntryNumber);
         Assert.Equal(1, Assert.Single(env.Executions.Read(env.Native.Key)).EntryNumber);
         var observed = JsonSerializer.SerializeToElement(await env.Owner.ExecutionEntriesAsync(default));
@@ -212,6 +213,148 @@ public sealed class WidgetExecutionJournalTests
     }
 
     [Theory]
+    [InlineData("json", "header")]
+    [InlineData("json", "prefix")]
+    [InlineData("utf8", "header")]
+    [InlineData("utf8", "prefix")]
+    [InlineData("shape", "header")]
+    [InlineData("shape", "prefix")]
+    [InlineData("missing", "header")]
+    [InlineData("missing", "prefix")]
+    public async Task Failed_reads_alone_poison_restored_zero_or_lower_counts_across_fresh_readers(string corruption, string restored)
+    {
+        using var files = new EffectFiles();
+        var path = Provision(files);
+        using var env = await EffectsEnvironment.CreateAsync(settings: new("", "", path));
+        var tool = env.Tool(WidgetEffects.Check);
+        var prepared = env.Freeze((await env.PrepareAsync(tool)).Value!, tool);
+        for (var index = 0; index < 2; index++) Assert.True((await tool.ExecuteAsync(prepared)).Value!.Succeeded);
+        Assert.Equal(2, env.Executions.Read(env.Native.Key).Count);
+        var prefix = string.Join("\n", File.ReadAllLines(path).Take(2)) + "\n";
+        if (corruption == "json") files.Write(path, WidgetExecutionJournal.Header + "\n{");
+        else if (corruption == "utf8") File.WriteAllBytes(path, [0xff]);
+        else if (corruption == "shape") files.Write(path, prefix.Replace("\"EntryNumber\":1", "\"EntryNumber\":\"1\""));
+        else File.Delete(path);
+        await Assert.ThrowsAsync<WidgetFixtureException>(() => env.Owner.ExecutionEntriesAsync(default));
+        Assert.True(File.Exists(path + ".failed"));
+        files.Write(path, restored == "header" ? WidgetExecutionJournal.Header + "\n" : prefix);
+        // No intervening ExecuteAsync or Record: the failed read itself must be sufficient.
+        Assert.Throws<WidgetFixtureException>(() => env.Executions.Read(env.Native.Key));
+        Assert.Throws<WidgetFixtureException>(() => new WidgetExecutionJournal(new("", "", path)).Read(env.Native.Key));
+        await Assert.ThrowsAsync<WidgetFixtureException>(() => env.Owner.ExecutionEntriesAsync(default));
+        Assert.Equal(0, env.Native.Preferences.WriteAttempts);
+    }
+
+    [Fact]
+    public async Task Unconfigured_or_foreign_namespace_reads_do_not_poison_an_owned_journal()
+    {
+        using var files = new EffectFiles();
+        var path = Provision(files);
+        using var env = await EffectsEnvironment.CreateAsync(settings: new("", "", path));
+        var tool = env.Tool(WidgetEffects.Check);
+        var prepared = env.Freeze((await env.PrepareAsync(tool)).Value!, tool);
+        Assert.True((await tool.ExecuteAsync(prepared)).Value!.Succeeded);
+        var original = File.ReadAllText(path);
+        files.Write(path, "{");
+        Assert.Throws<WidgetFixtureException>(() => env.Executions.Read(env.Native.Key with { Namespace = "foreign-resource" }));
+        Assert.Throws<WidgetFixtureException>(() => new WidgetExecutionJournal(new("", "")).Read(env.Native.Key));
+        Assert.False(File.Exists(path + ".failed"));
+        files.Write(path, original);
+        Assert.Single(env.Executions.Read(env.Native.Key));
+        Assert.Single(new WidgetExecutionJournal(new("", "", path)).Read(env.Native.Key));
+        Assert.Equal(new[] { path }, Directory.GetFiles(files.Root));
+    }
+
+    [Fact]
+    public async Task Append_and_invalidation_failure_cannot_make_a_fresh_readonly_reader_report_zero()
+    {
+        using var files = new EffectFiles();
+        var path = Provision(files);
+        using var env = await EffectsEnvironment.CreateAsync(settings: new("", "", path));
+        var tool = env.Tool(WidgetEffects.Check);
+        var prepared = env.Freeze((await env.PrepareAsync(tool)).Value!, tool);
+        try
+        {
+            File.SetUnixFileMode(path, UnixFileMode.UserRead);
+            File.SetUnixFileMode(files.Root, UnixFileMode.UserRead | UnixFileMode.UserExecute);
+            var failure = await Assert.ThrowsAsync<WidgetFixtureException>(() => tool.ExecuteAsync(prepared));
+            Assert.False(failure.ObservationInvalidationRetained);
+            Assert.False(File.Exists(path + ".failed"));
+            Assert.Equal(WidgetExecutionJournal.Header + "\n", File.ReadAllText(path));
+            // No repair and no intervening Record: actual namespace arming must fail for a fresh reader too.
+            var reopened = new WidgetExecutionJournal(new("", "", path));
+            Assert.Throws<WidgetFixtureException>(() => reopened.Read(env.Native.Key));
+            Assert.Equal(0, env.Native.Preferences.WriteAttempts);
+        }
+        finally
+        {
+            File.SetUnixFileMode(files.Root, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+            File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+        }
+    }
+
+    [Theory]
+    [InlineData("actor", "")]
+    [InlineData("actor", "foreign-actor")]
+    [InlineData("tenant", "")]
+    [InlineData("tenant", "foreign-tenant")]
+    public async Task Actual_owner_observes_entered_callbacks_even_when_requested_identity_is_blank_or_mismatched(string field, string requested)
+    {
+        using var files = new EffectFiles();
+        var path = Provision(files);
+        using var env = await EffectsEnvironment.CreateAsync(settings: new("", "", path));
+        var tool = env.Tool(WidgetEffects.Check);
+        var prepared = env.Freeze((await env.PrepareAsync(tool)).Value!, tool);
+        prepared = field == "actor" ? prepared with { ActorId = requested } : prepared with { TenantId = requested };
+        Assert.NotNull((await tool.ExecuteAsync(prepared)).Error);
+        var entry = Assert.Single(env.Executions.Read(env.Native.Key));
+        Assert.Equal(env.Native.Key.SubjectId, entry.Actor); Assert.Equal(env.Native.Key.TenantId, entry.Tenant);
+        Assert.Equal(prepared.ActorId, entry.RequestedActor); Assert.Equal(prepared.TenantId, entry.RequestedTenant);
+        var observed = JsonSerializer.SerializeToElement(await env.Owner.ExecutionEntriesAsync(default));
+        Assert.Equal(1, observed.GetProperty("entryCount").GetInt32());
+        Assert.Equal(0, env.Native.Preferences.WriteAttempts);
+        Assert.Empty(env.Journal.Read(env.Native.Key));
+    }
+
+    [Theory]
+    [InlineData("principal")]
+    [InlineData("request")]
+    [InlineData("authentication")]
+    public async Task Missing_actual_requester_invalidates_observation_instead_of_attributing_from_requested_strings(string missing)
+    {
+        using var files = new EffectFiles();
+        var path = Provision(files);
+        using var env = await EffectsEnvironment.CreateAsync(settings: new("", "", path));
+        var tool = env.Tool(WidgetEffects.Check);
+        var prepared = env.Freeze((await env.PrepareAsync(tool)).Value!, tool);
+        var original = env.Native.Http.HttpContext!;
+        var principal = original.User;
+        if (missing == "principal") env.Principal.Missing = true;
+        else if (missing == "request") env.Native.Http.HttpContext = null;
+        else original.User = new ClaimsPrincipal();
+        var failure = await Assert.ThrowsAsync<WidgetFixtureException>(() => tool.ExecuteAsync(prepared));
+        Assert.True(failure.ObservationInvalidationRetained);
+        env.Principal.Missing = false;
+        env.Native.Http.HttpContext = original; original.User = principal;
+        Assert.Throws<WidgetFixtureException>(() => new WidgetExecutionJournal(new("", "", path)).Read(env.Native.Key));
+        await Assert.ThrowsAsync<WidgetFixtureException>(() => env.Owner.ExecutionEntriesAsync(default));
+        Assert.Equal(0, env.Native.Preferences.WriteAttempts);
+    }
+
+    [Fact]
+    public async Task An_unconfirmed_write_probe_blocks_a_count_even_when_the_existing_journal_is_readable()
+    {
+        using var files = new EffectFiles();
+        var path = Provision(files);
+        using var env = await EffectsEnvironment.CreateAsync(settings: new("", "", path));
+        files.Write(path + ".probe", "unconfirmed");
+        await Assert.ThrowsAsync<WidgetFixtureException>(() => env.Owner.ExecutionEntriesAsync(default));
+        Assert.Equal("unconfirmed", File.ReadAllText(path + ".probe"));
+        Assert.True(File.Exists(path + ".failed"));
+        Assert.Throws<WidgetFixtureException>(() => new WidgetExecutionJournal(new("", "", path)).Read(env.Native.Key));
+    }
+
+    [Theory]
     [InlineData("unauthenticated")]
     [InlineData("missing-principal")]
     [InlineData("denied-read")]
@@ -282,6 +425,7 @@ public sealed class WidgetExecutionJournalTests
     [InlineData("fault")]
     [InlineData("rendezvous")]
     [InlineData("failure-marker")]
+    [InlineData("write-probe")]
     public void Observation_and_its_failure_marker_cannot_alias_another_fixture_control(string collision)
     {
         using var files = new EffectFiles();
@@ -290,7 +434,7 @@ public sealed class WidgetExecutionJournalTests
         if (collision == "checks") feature.CheckObservationFile = path;
         else if (collision == "fault") feature.EffectFaultControlFile = path;
         else if (collision == "rendezvous") feature.WriteRendezvousControlFile = path;
-        else feature.EffectFaultControlFile = path + ".failed";
+        else feature.EffectFaultControlFile = path + (collision == "failure-marker" ? ".failed" : ".probe");
         Assert.Throws<InvalidOperationException>(() => feature.ConfigureServices(new ServiceCollection()));
         Assert.Equal(WidgetExecutionJournal.Header + "\n", File.ReadAllText(path));
     }

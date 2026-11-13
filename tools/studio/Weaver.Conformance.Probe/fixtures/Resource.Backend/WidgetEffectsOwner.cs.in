@@ -56,7 +56,19 @@ internal static class WidgetEffects
 internal sealed class WidgetEffectOwner(IServiceProvider services, IHttpContextAccessor http, IAuthSessionService auth,
     WidgetResource resource, WidgetHost host, WidgetRunJournal journal, WidgetExecutionJournal executions)
 {
-    internal void RecordExecutionEntry(WeaverPreparedToolInvocation invocation, string toolName) => executions.Record(invocation, toolName, host.Id);
+    internal async Task RecordExecutionEntryAsync(WeaverPreparedToolInvocation invocation, string toolName, CancellationToken ct)
+    {
+        if (!executions.IsConfigured) return;
+        try
+        {
+            var current = CaptureCurrentRequest();
+            var actual = await AuthorizeCurrentAsync(ct);
+            current();
+            executions.Record(actual, invocation, toolName);
+        }
+        catch (WidgetFixtureException error) when (error.ObservationInvalidationRetained is not null) { throw; }
+        catch (Exception error) { throw executions.Invalidate(error); }
+    }
 
     internal Task<StudioPreferenceKey> AuthorizeAsync(string? actor, string? tenant, bool write, CancellationToken ct)
     {
@@ -202,4 +214,7 @@ internal sealed class WidgetEffectOwner(IServiceProvider services, IHttpContextA
     }
 }
 
-internal sealed class WidgetFixtureException(string message, Exception inner) : Exception(message, inner);
+internal sealed class WidgetFixtureException(string message, Exception inner, bool? observationInvalidationRetained = null) : Exception(message, inner)
+{
+    internal bool? ObservationInvalidationRetained { get; } = observationInvalidationRetained;
+}

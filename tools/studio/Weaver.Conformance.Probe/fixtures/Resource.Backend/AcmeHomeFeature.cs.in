@@ -35,6 +35,7 @@ public class AcmeHomeWidgetFeature : IWebShellFeature
         if (ExecutionObservationFile.Length > 0) WidgetFixtureFiles.Check(ExecutionObservationFile);
         var fixtureFiles = new[] { CheckObservationFile, EffectFaultControlFile, ExecutionObservationFile, WriteRendezvousControlFile, WriteRendezvousReceiptFile,
             ExecutionObservationFile.Length == 0 ? "" : ExecutionObservationFile + ".failed",
+            ExecutionObservationFile.Length == 0 ? "" : ExecutionObservationFile + ".probe",
             WriteRendezvousControlFile.Length == 0 ? "" : WriteRendezvousControlFile + ".claimed" }.Where(path => path.Length > 0).ToArray();
         if (fixtureFiles.Distinct(StringComparer.Ordinal).Count() != fixtureFiles.Length)
             throw new InvalidOperationException("Widget observation and control files must be distinct.");
@@ -84,10 +85,12 @@ public class AcmeHomeWidgetFeature : IWebShellFeature
             {
                 return Results.Problem(statusCode: refusal.Error.StatusCode, title: refusal.Error.Code, detail: refusal.Error.Message);
             }
-            catch (WidgetFixtureException)
+            catch (WidgetFixtureException error)
             {
                 return Results.Problem(statusCode: 503, title: "acme.home.effects.execution_observation_unavailable",
-                    detail: "The module execution observations could not be established.");
+                    detail: "Retain the failed/unknown observation externally and use a fresh observation path.",
+                    extensions: new Dictionary<string, object?> { ["requiresFreshObservationPath"] = true,
+                        ["invalidationRetained"] = error.ObservationInvalidationRetained });
             }
         }).RequireAuthorization();
         endpoints.MapGet(WidgetEffects.ChecksEndpoint, async (HttpContext http, WidgetEffectOwner owner, CancellationToken ct) =>
