@@ -150,6 +150,40 @@ public sealed class EfDesignAtomicWriteScopedCatalogTests
         Assert.Equal("activity.definition.create.v1", marker.OperationKind);
     }
 
+    [Fact]
+    public async Task Sqlite_activity_version_reconciler_startup_task_with_publishing_keeps_the_shell_scope()
+    {
+        await using var connection = await OpenDatabaseAsync();
+        await using var db = CreateContext(connection);
+        var access = new BindableAccess(PersistenceAccessContext.Scoped(new PersistenceScope("default")));
+        var stores = new EfActivityDesignStores(db, access, new EfDesignAtomicWrite(db, access));
+        var incoming = CreateCatalogVersion();
+        var publisher = new ScopeRequiringPublisher(access);
+        var services = new ServiceCollection();
+        services.AddSingleton<IPersistenceAccessContextBinder>(access);
+        services.AddSingleton<IActivitySourceVersionPublisher>(publisher);
+        services.AddSingleton<IActivityVersionReconciler>(new ActivityVersionReconciler(
+            NullLogger<ActivityVersionReconciler>.Instance,
+            new DefaultActivityDefinitionHasher(),
+            new DirectPublisher(incoming),
+            Options.Create(new ActivityVersionReconcilerOptions()),
+            stores,
+            stores,
+            stores,
+            stores,
+            stores,
+            [publisher]));
+        await using var provider = services.BuildServiceProvider();
+
+        await new ActivityVersionReconcilerStartupTask(provider.GetRequiredService<IServiceScopeFactory>())
+            .ExecuteAsync(CancellationToken.None);
+
+        Assert.Equal("default", publisher.PublicationScope);
+        Assert.Equal(PersistenceAccessPolicy.Ordinary, access.Current.AccessPolicy);
+        Assert.False(access.Current.IsGlobal);
+        Assert.Equal("default", access.Current.RequireScope().Value);
+    }
+
     private static readonly string[] AuthoringUnits =
         ["activityDefinition", "activityDefinitionAuthoring", "activityDefinitionDraft", "activityDefinitionDraftLayout"];
 
@@ -258,6 +292,20 @@ public sealed class EfDesignAtomicWriteScopedCatalogTests
         public PersistenceAccessContext Current { get; private set; } = current;
 
         public void Bind(PersistenceAccessContext context) => Current = context;
+    }
+
+    private sealed class ScopeRequiringPublisher(IPersistenceAccessContextAccessor access) : IActivitySourceVersionPublisher
+    {
+        public string? PublicationScope { get; private set; }
+
+        public Task<ActivitySourceVersionPublicationResult> PublishAsync(
+            IActivityDefinition definition,
+            IActivityDefinitionVersion version,
+            CancellationToken cancellationToken = default)
+        {
+            PublicationScope = access.Current.RequireScope(admitPrivileged: true).Value;
+            return Task.FromResult(ActivitySourceVersionPublicationResult.Published);
+        }
     }
 
     private sealed class DirectPublisher(IActivityDefinitionVersion version) : IInlineEventPublisher

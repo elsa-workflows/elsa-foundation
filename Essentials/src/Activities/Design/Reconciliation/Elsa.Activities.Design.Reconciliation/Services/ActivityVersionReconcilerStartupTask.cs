@@ -14,8 +14,10 @@ namespace Elsa.Activities.Design.Reconciliation.Services;
 /// It takes no lock and is not a <c>[SingleNodeTask]</c> (#2192). Its inputs are node-local, the assemblies and catalogs
 /// this node loaded, so a node that skipped the pass because another node held a lock would never reconcile its own. Two
 /// nodes running it at once converge instead (#2189): the second one's writes replay or read back the first one's.
-/// The pass is host-wide catalog maintenance, so it binds <see cref="PersistenceAccessContext.PrivilegedGlobal"/> in a
-/// dedicated scope rather than inheriting the shell's ordinary default partition.
+/// Catalog-only hosts write host-wide (<c>TenantId</c> null) rows through <c>activity.definition.create.v1</c>, so the
+/// pass binds <see cref="PersistenceAccessContext.PrivilegedGlobal"/> in a dedicated child scope. Publishing hosts keep
+/// the shell's ordinary default partition: Runtime template publication <c>RequireScope</c>s that partition, which is
+/// how the pass ran on main when <c>WorkflowsPublishingApi</c> was installed.
 /// </remarks>
 [Order(1)]
 public sealed class ActivityVersionReconcilerStartupTask(IServiceScopeFactory scopeFactory) : IStartupTask
@@ -24,8 +26,12 @@ public sealed class ActivityVersionReconcilerStartupTask(IServiceScopeFactory sc
     {
         await using var scope = scopeFactory.CreateAsyncScope();
         var services = scope.ServiceProvider;
-        services.GetRequiredService<IPersistenceAccessContextBinder>().Bind(
-            PersistenceAccessContext.PrivilegedGlobal(new("activity-version-reconciliation")));
+        if (services.GetService<IActivitySourceVersionPublisher>() is null)
+        {
+            services.GetRequiredService<IPersistenceAccessContextBinder>().Bind(
+                PersistenceAccessContext.PrivilegedGlobal(new("activity-version-reconciliation")));
+        }
+
         await services.GetRequiredService<IActivityVersionReconciler>().Reconcile(cancellationToken);
     }
 }

@@ -1,3 +1,4 @@
+using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Reconciliation;
 using Elsa.Activities.Design.Reconciliation.Services;
 using Elsa.Locking.Core;
@@ -67,6 +68,21 @@ public sealed class NodeLocalReconcilerStartupTaskTests
     }
 
     [Fact]
+    public async Task The_activity_version_reconciler_keeps_the_shell_scope_when_a_publisher_is_registered()
+    {
+        var reconciler = new SpyReconciler();
+        var binder = new RecordingBinder();
+        await using var provider = StartupServices(reconciler, binder, publisher: new UnusedPublisher());
+
+        await _executor.ExecuteTaskAsync(
+            new ActivityVersionReconcilerStartupTask(provider.GetRequiredService<IServiceScopeFactory>()),
+            CancellationToken.None);
+
+        Assert.Equal(1, reconciler.Passes);
+        Assert.Null(binder.Bound);
+    }
+
+    [Fact]
     public async Task The_workflow_version_reconciler_runs_while_another_node_holds_every_lock()
     {
         var reconciler = new SpyReconciler();
@@ -119,12 +135,24 @@ public sealed class NodeLocalReconcilerStartupTaskTests
 
     private static ServiceProvider StartupServices(
         IActivityVersionReconciler reconciler,
-        IPersistenceAccessContextBinder? binder = null)
+        IPersistenceAccessContextBinder? binder = null,
+        IActivitySourceVersionPublisher? publisher = null)
     {
         var services = new ServiceCollection();
         services.AddSingleton(reconciler);
         services.AddSingleton(binder ?? new RecordingBinder());
+        if (publisher is not null)
+            services.AddSingleton(publisher);
         return services.BuildServiceProvider();
+    }
+
+    private sealed class UnusedPublisher : IActivitySourceVersionPublisher
+    {
+        public Task<ActivitySourceVersionPublicationResult> PublishAsync(
+            IActivityDefinition definition,
+            IActivityDefinitionVersion version,
+            CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("The catalog-only spy does not publish.");
     }
 
     private sealed class RecordingBinder : IPersistenceAccessContextBinder
