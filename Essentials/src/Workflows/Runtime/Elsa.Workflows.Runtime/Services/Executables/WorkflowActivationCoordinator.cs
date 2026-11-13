@@ -415,7 +415,8 @@ public sealed partial class WorkflowActivationCoordinator(
     {
         try
         {
-            reference = await MintOrResumeSourceReferenceAsync(reference, cancellationToken, command.Identity, rootWriteLeases);
+            reference = await MintOrResumeSourceReferenceAsync(reference, cancellationToken, command.Identity, rootWriteLeases,
+                command.Material?.NativeWorkflow is not null && _executableStore?.GetMaterialStore() is InMemoryWorkflowExecutableStore);
             cancellationToken.ThrowIfCancellationRequested();
         }
         catch (SourceReferenceResumeConflictException exception)
@@ -508,7 +509,7 @@ public sealed partial class WorkflowActivationCoordinator(
         WorkflowExecutableSourceReference candidate,
         CancellationToken cancellationToken,
         WorkflowExecutableIdentity identity,
-        IReadOnlyList<WorkflowExecutableRootWriteLease>? rootWriteLeases)
+        IReadOnlyList<WorkflowExecutableRootWriteLease>? rootWriteLeases, bool nativeFencedPublication)
     {
         var existing = await sourceReferenceStore.FindAsync(candidate.SourceReferenceId, cancellationToken);
         if (existing is null)
@@ -516,7 +517,9 @@ public sealed partial class WorkflowActivationCoordinator(
             try
             {
                 if (rootWriteLeases is not null)
-                    return await sourceReferenceStore.SaveScopedPublicationAsync(candidate, identity, rootWriteLeases, cancellationToken);
+                    return nativeFencedPublication
+                        ? await sourceReferenceStore.SaveWithRootWriteLeasesAsync(candidate, identity, rootWriteLeases, cancellationToken)
+                        : await sourceReferenceStore.SaveScopedPublicationAsync(candidate, identity, rootWriteLeases, cancellationToken);
                 await sourceReferenceStore.SaveAsync(candidate, cancellationToken);
                 return candidate;
             }

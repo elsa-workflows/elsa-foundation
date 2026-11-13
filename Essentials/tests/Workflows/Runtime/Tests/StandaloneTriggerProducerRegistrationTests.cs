@@ -1,3 +1,4 @@
+using Elsa.Workflows.Runtime.Extensions;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Extensions;
@@ -7,6 +8,7 @@ using Elsa.Workflows.Runtime.Services.Checkpoints;
 using Elsa.Workflows.Runtime.Services.Triggers;
 using Elsa.Workflows.Runtime.Tests.Fixtures;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Xunit;
 
 namespace Elsa.Workflows.Runtime.Tests;
@@ -50,6 +52,33 @@ public sealed class StandaloneTriggerProducerRegistrationTests
         var second = Assert.IsType<CapturedPort<SecondSource>>(scope.ServiceProvider.GetRequiredService<IStandaloneTriggerIngress<SecondSource>>());
         Assert.Equal("First.Event", first.Descriptor.SourceFamily);
         Assert.Equal(distinctFamily ? "Second.Event" : "First.Event", second.Descriptor.SourceFamily);
+    }
+
+    [Theory]
+    [InlineData(false)] [InlineData(true)]
+    public async Task Completed_composition_rejects_duplicate_replacements_before_source_startup(bool beforeRuntime)
+    {
+        var services = new ServiceCollection();
+        if (beforeRuntime)
+        {
+            services.AddSingleton<IRuntimeIngressDeliveryStore, SupportedIngress>();
+            services.AddSingleton<IRuntimeIngressDeliveryStore, SupportedIngress>();
+        }
+        services.AddWorkflowRuntime();
+        if (!beforeRuntime) services.AddSingleton<IRuntimeIngressDeliveryStore, SupportedIngress>();
+        using var provider = services.BuildServiceProvider();
+        var validator = provider.GetRequiredService<StandaloneTriggerProviderCompositionValidator>();
+        await Assert.ThrowsAsync<InvalidOperationException>(() => validator.InitializeAsync());
+    }
+
+    [Fact]
+    public async Task Completed_composition_rejects_an_overwritten_owned_port()
+    {
+        var services = new ServiceCollection(); services.AddWorkflowRuntime();
+        services.Replace(ServiceDescriptor.Singleton<IRuntimeIngressDeliveryStore, SupportedIngress>());
+        using var provider = services.BuildServiceProvider();
+        await Assert.ThrowsAsync<InvalidOperationException>(() => provider
+            .GetRequiredService<StandaloneTriggerProviderCompositionValidator>().InitializeAsync());
     }
 
     private sealed class FirstSource;

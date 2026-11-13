@@ -1,3 +1,4 @@
+using Elsa.Workflows.Runtime.Services.Triggers;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
@@ -331,6 +332,49 @@ public sealed class StandaloneTriggerPublicConsumerTests
         ConsumerModule.AddAuthoring(services);
         using var duplicateProvider = services.BuildServiceProvider(); using var duplicateScope = duplicateProvider.CreateScope();
         await Assert.ThrowsAsync<InvalidOperationException>(() => InitializeTypesAsync(duplicateScope.ServiceProvider));
+    }
+
+    [Fact]
+    public async Task Native_material_activation_uses_the_selected_fenced_source_writer_for_logical_publication()
+    {
+        var services = RuntimeServices();
+        services.AddScoped<IWorkflowTriggerBindingExtractor, WorkflowTriggerBindingExtractor>();
+        services.AddScoped<IWorkflowTriggerIndexer, WorkflowTriggerIndexer>();
+        using var provider = services.BuildServiceProvider(); using var scope = provider.CreateScope();
+        var selected = scope.ServiceProvider; Bind(selected);
+        var executables = selected.GetRequiredService<IWorkflowExecutableStore>();
+        var executable = new WorkflowExecutable(new("activation-material", "material-producer", "material-version", "1", "hash"),
+            new("root", "authored", "consumer/activity", "1", new("consumer", "1", JsonSerializer.SerializeToElement(new { })),
+                new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, string>()),
+            new Dictionary<string, WorkflowExecutableResumeTarget>(), Now, new Dictionary<string, string>(),
+            new(1, []), [], IncidentStrategyBuiltIns.FaultReference);
+        await executables.SaveAsync(executable);
+        var material = (await executables.FindMaterialAsync(executable.Identity.ArtifactId))!;
+        var reference = new WorkflowExecutableSourceReference("candidate", material.Identity.ArtifactId, "definition", "logical-definition", "1",
+            "logical-definition", "logical-version", "1", Now, Now, WorkflowExecutableReferenceScope.Published, TenantId: Scope.TenantId);
+        var result = await selected.GetRequiredService<IWorkflowActivationCoordinator>().ActivateMaterialAsync(new("logical-definition", material,
+            reference, "Published", "material-activation", WorkflowActivationSource.Publishing, 0));
+        Assert.True(result.Succeeded, result.Diagnostic);
+        Assert.Equal("material-activation", (await selected.GetRequiredService<IWorkflowActivationAuthority>().FindAsync("logical-definition", "Published"))!.ActiveActivationId);
+        var saved = (await selected.GetRequiredService<IWorkflowExecutableSourceReferenceStore>().FindAsync(
+            WorkflowActivationReferenceIdentity.Create("material-activation")))!;
+        Assert.True(saved.IsLive(Now)); Assert.Equal(material.Identity.ArtifactId, saved.ArtifactId);
+        Assert.Equal("logical-definition", saved.DefinitionId); Assert.Null(saved.PublicationScope);
+        Assert.Equal(WorkflowActivationProjectionState.Active,
+            await selected.GetRequiredService<IWorkflowTriggerBindingStore>().FindActivationStateAsync("material-activation"));
+    }
+
+    [Fact]
+    public async Task Unknown_committed_authority_is_a_domain_refusal_with_source_identity_and_cause()
+    {
+        var services = RuntimeServices();
+        using var provider = services.BuildServiceProvider(); using var scope = provider.CreateScope();
+        Bind(scope.ServiceProvider);
+        var ingress = scope.ServiceProvider.GetRequiredService<IRuntimeIngressDeliveryStore>();
+        var origin = new RuntimeIngressCommandOrigin("absent-source", new string('a', 64), new string('b', 64), Scope.Persistence, "recipient");
+        var failure = await Assert.ThrowsAsync<TriggerOperationException>(() => ingress.ReadCommittedRecipientAsync(origin).AsTask());
+        Assert.Equal("conflict", failure.Code); Assert.IsType<InvalidDataException>(failure.InnerException);
+        Assert.Contains(origin.SourceOutboxItemId, failure.Message);
     }
 
     private static async Task<RuntimePostCommitOutboxItem> ReadAcceptedAsync(IServiceProvider services, StandaloneTriggerIngressResult result, string key)

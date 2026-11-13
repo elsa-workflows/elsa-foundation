@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.StandaloneTriggers;
@@ -58,33 +59,49 @@ internal sealed partial class InMemoryRuntimeIngressDeliveryStore
 
     public ValueTask<RuntimeCommittedIngressWait> ReadCommittedWaitAsync(RuntimeIngressWaitOrigin origin, CancellationToken cancellationToken = default)
     {
-        RequireScope(origin.Scope, cancellationToken);
-        lock (State.SyncRoot) return ValueTask.FromResult(RuntimeIngressAdmissionValidation.CommittedWait(Find(origin.SourceOutboxItemId), origin));
+        try
+        {
+
+            RequireScope(origin.Scope, cancellationToken);
+            lock (State.SyncRoot) return ValueTask.FromResult(RuntimeIngressAdmissionValidation.CommittedWait(Find(origin.SourceOutboxItemId), origin));
+        }
+        catch (Exception exception) when (exception is InvalidDataException or JsonException)
+        {
+            throw InvalidAuthority(origin.SourceOutboxItemId, exception);
+        }
     }
 
     public async ValueTask<RuntimePostCommitOutboxItem> RecordWaitReceiptAsync(RuntimeDeliverySourceContext source, RuntimeIngressWaitReceipt receipt,
         CancellationToken cancellationToken = default)
     {
-        RequireScope(source.Scope, cancellationToken); RequireWaitBoundary();
-        return await State.ExecuteWriteGateAsync(async token =>
+        try
         {
-            RuntimeCommittedIngressWait target;
-            lock (State.SyncRoot)
+
+            RequireScope(source.Scope, cancellationToken); RequireWaitBoundary();
+            return await State.ExecuteWriteGateAsync(async token =>
             {
-                var current = RuntimeIngressAdmissionValidation.CheckClaim(Find(source.SourceOutboxItemId), source, time.GetUtcNow());
-                target = RuntimeIngressAdmissionValidation.WaitReceiptTarget(current, receipt);
-                if (current.SubscriptionDelivery!.WaitDelivery!.Progress.Single(progress => progress.WaitId == receipt.WaitId).Receipt is not null) return current;
-            }
-            var observed = await waitEvidence!.ReconcileAsync(target.Item, target.Recipient, target.Seal, token) ??
-                throw new TriggerOperationException("unavailable", "The ordinary wait has no observed physical resume or positive retirement; delivery remains owed.");
-            lock (State.SyncRoot)
-            {
-                var current = RuntimeIngressAdmissionValidation.CheckClaim(Find(source.SourceOutboxItemId), source, time.GetUtcNow());
-                var replacement = RuntimeIngressAdmissionValidation.AcceptObservedWait(current, observed);
-                State.OutboxItems[current.OutboxItemId] = replacement;
-                return replacement;
-            }
-        }, cancellationToken);
+                RuntimeCommittedIngressWait target;
+                lock (State.SyncRoot)
+                {
+                    var current = RuntimeIngressAdmissionValidation.CheckClaim(Find(source.SourceOutboxItemId), source, time.GetUtcNow());
+                    target = RuntimeIngressAdmissionValidation.WaitReceiptTarget(current, receipt);
+                    if (current.SubscriptionDelivery!.WaitDelivery!.Progress.Single(progress => progress.WaitId == receipt.WaitId).Receipt is not null) return current;
+                }
+                var observed = await waitEvidence!.ReconcileAsync(target.Item, target.Recipient, target.Seal, token) ??
+                    throw new TriggerOperationException("unavailable", "The ordinary wait has no observed physical resume or positive retirement; delivery remains owed.");
+                lock (State.SyncRoot)
+                {
+                    var current = RuntimeIngressAdmissionValidation.CheckClaim(Find(source.SourceOutboxItemId), source, time.GetUtcNow());
+                    var replacement = RuntimeIngressAdmissionValidation.AcceptObservedWait(current, observed);
+                    State.OutboxItems[current.OutboxItemId] = replacement;
+                    return replacement;
+                }
+            }, cancellationToken);
+        }
+        catch (Exception exception) when (exception is InvalidDataException or JsonException)
+        {
+            throw InvalidAuthority(source.SourceOutboxItemId, exception);
+        }
     }
 
     public ValueTask<RuntimePostCommitOutboxItem> RecordWaitFailureAsync(RuntimeDeliverySourceContext source, string waitId,

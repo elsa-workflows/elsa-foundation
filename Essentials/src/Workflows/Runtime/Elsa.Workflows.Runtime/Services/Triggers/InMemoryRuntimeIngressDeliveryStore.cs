@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.StandaloneTriggers;
@@ -29,116 +30,132 @@ internal sealed partial class InMemoryRuntimeIngressDeliveryStore(IStandaloneTri
     public ValueTask<RuntimeIngressAdmissionReceipt?> FindAcceptedAsync(TriggerScope scope, string sourceOutboxItemId,
         string requestFingerprint, CancellationToken cancellationToken = default)
     {
-        Require(scope, cancellationToken);
-        ArgumentException.ThrowIfNullOrWhiteSpace(sourceOutboxItemId); ArgumentException.ThrowIfNullOrWhiteSpace(requestFingerprint);
-        lock (State.SyncRoot)
-            return ValueTask.FromResult(State.OutboxItems.TryGetValue(sourceOutboxItemId, out var item)
-                ? RuntimeIngressAdmissionValidation.Replay(item, scope, sourceOutboxItemId, requestFingerprint) : null);
+        try
+        {
+
+            Require(scope, cancellationToken);
+            ArgumentException.ThrowIfNullOrWhiteSpace(sourceOutboxItemId); ArgumentException.ThrowIfNullOrWhiteSpace(requestFingerprint);
+            lock (State.SyncRoot)
+                return ValueTask.FromResult(State.OutboxItems.TryGetValue(sourceOutboxItemId, out var item)
+                    ? RuntimeIngressAdmissionValidation.Replay(item, scope, sourceOutboxItemId, requestFingerprint) : null);
+        }
+        catch (Exception exception) when (exception is InvalidDataException or JsonException)
+        {
+            throw InvalidAuthority(sourceOutboxItemId, exception);
+        }
     }
 
     public async ValueTask<RuntimeIngressAdmissionReceipt> AdmitAsync(RuntimeIngressAdmissionRequest request, CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(request);
-        Require(request.Scope, cancellationToken);
-        ArgumentNullException.ThrowIfNull(request.Candidate);
-        var source = request.Candidate.StandaloneIngress ?? throw new InvalidDataException("Standalone admission requires its actual standalone source arm.");
-        var replay = await FindAcceptedAsync(request.Scope, source.OutboxItemId, source.RequestFingerprint, cancellationToken);
-        if (replay is not null) return replay;
-        ArgumentNullException.ThrowIfNull(request.Targets);
-        request = request with { Targets = Array.AsReadOnly(request.Targets.ToArray()) };
-        RuntimeIngressAdmissionValidation.CheckCandidate(request);
-        if (await PrepareWaitsAsync(request, cancellationToken) is { } capturedWaits)
-            request = request with { Candidate = RuntimeIngressWaitCapture.Attach(request.Candidate, capturedWaits) };
-        var material = (InMemoryWorkflowExecutableStore)executables.GetMaterialStore();
-        var sourceReferences = (InMemoryWorkflowExecutableSourceReferenceStore)references;
-        var authority = (InMemoryWorkflowActivationAuthority)slots;
-        if (request.Candidate.SubscriptionDelivery!.Recipients.Any(recipient => recipient.ModelProtocol is not null))
-            throw new NotSupportedException("The selected native material provider cannot retain model material.");
-        RuntimeIngressAdmissionReceipt? accepted = null;
         try
         {
-            await leases.ExecuteFencedAsync(request.Candidate.SubscriptionDelivery.Recipients.Select(recipient => recipient.Material)
-                .Concat(request.Candidate.SubscriptionDelivery.WaitDelivery?.Recipients.Select(recipient => recipient.Expected.RegistrationCapture!.Executable) ?? []).Distinct().ToArray(),
-            "standalone-ingress:" + source.OutboxItemId + ":" + Guid.NewGuid().ToString("N"), async (grants, token) =>
+
+            ArgumentNullException.ThrowIfNull(request);
+            Require(request.Scope, cancellationToken);
+            ArgumentNullException.ThrowIfNull(request.Candidate);
+            var source = request.Candidate.StandaloneIngress ?? throw new InvalidDataException("Standalone admission requires its actual standalone source arm.");
+            var replay = await FindAcceptedAsync(request.Scope, source.OutboxItemId, source.RequestFingerprint, cancellationToken);
+            if (replay is not null) return replay;
+            ArgumentNullException.ThrowIfNull(request.Targets);
+            request = request with { Targets = Array.AsReadOnly(request.Targets.ToArray()) };
+            RuntimeIngressAdmissionValidation.CheckCandidate(request);
+            if (await PrepareWaitsAsync(request, cancellationToken) is { } capturedWaits)
+                request = request with { Candidate = RuntimeIngressWaitCapture.Attach(request.Candidate, capturedWaits) };
+            var material = (InMemoryWorkflowExecutableStore)executables.GetMaterialStore();
+            var sourceReferences = (InMemoryWorkflowExecutableSourceReferenceStore)references;
+            var authority = (InMemoryWorkflowActivationAuthority)slots;
+            if (request.Candidate.SubscriptionDelivery!.Recipients.Any(recipient => recipient.ModelProtocol is not null))
+                throw new NotSupportedException("The selected native material provider cannot retain model material.");
+            RuntimeIngressAdmissionReceipt? accepted = null;
+            try
             {
-                accepted = await State.ExecuteWriteGateAsync(async gateToken =>
+                await leases.ExecuteFencedAsync(request.Candidate.SubscriptionDelivery.Recipients.Select(recipient => recipient.Material)
+                    .Concat(request.Candidate.SubscriptionDelivery.WaitDelivery?.Recipients.Select(recipient => recipient.Expected.RegistrationCapture!.Executable) ?? []).Distinct().ToArray(),
+                "standalone-ingress:" + source.OutboxItemId + ":" + Guid.NewGuid().ToString("N"), async (grants, token) =>
                 {
-                    var ownership = (InMemoryExecutionLivenessStateStore)((InMemoryWorkflowExecutionStateStore)executions).ExecutionLivenessStateStore!;
-                    return await ownership.ExecuteOwnershipAtomicAsync(async ownershipToken =>
+                    accepted = await State.ExecuteWriteGateAsync(async gateToken =>
                     {
-                        await FenceWaitsAsync(request, ownershipToken);
-                        foreach (var recipient in request.Candidate.SubscriptionDelivery.Recipients)
-                            if (await executions.IsDeletionTombstonedAsync(recipient.StartIdentity.WorkflowExecutionId, ownershipToken) ||
-                                await executions.FindAsync(recipient.StartIdentity.WorkflowExecutionId, ownershipToken) is not null)
-                                throw new InvalidDataException("The deterministic target identity was already used or retired before admission.");
-                        return material.ExecuteUnderRootWriteLeases(grants, time,
-                    () => material.ExecuteUnderMaterialGate(actualMaterial => sourceReferences.ExecuteUnderReferenceGate(actualReferences =>
-                    {
-                        // Publication switches use reference -> authority. Holding the actual authority gate fences creation of absent slots too.
-                        lock (authority.Gate)
-                        lock (State.SyncRoot)
+                        var ownership = (InMemoryExecutionLivenessStateStore)((InMemoryWorkflowExecutionStateStore)executions).ExecutionLivenessStateStore!;
+                        return await ownership.ExecuteOwnershipAtomicAsync(async ownershipToken =>
                         {
-                            gateToken.ThrowIfCancellationRequested();
-                            if (State.OutboxItems.TryGetValue(source.OutboxItemId, out var winner))
-                                return RuntimeIngressAdmissionValidation.Replay(winner, request.Scope, source.OutboxItemId, source.RequestFingerprint);
-                            var aggregate = State.StandaloneTriggers.GetValueOrDefault((request.Scope.Persistence.Value, request.Scope.TenantId, source.TriggerId)) ??
-                                throw new TriggerOperationException("conflict", "The trigger was removed before admission.");
-                            RuntimeIngressAdmissionValidation.CheckAggregate(request, aggregate);
-                            foreach (var target in request.Targets)
-                            {
-                                var actualSlot = authority.Current(target.DefinitionId, target.SlotName);
-                                var actualReference = actualSlot?.ActiveActivationId is { } activation
-                                    ? actualReferences.GetValueOrDefault(WorkflowActivationReferenceIdentity.Create(activation)) : null;
-                                RuntimeIngressAdmissionValidation.CheckTarget(request, target, actualSlot, actualReference, time.GetUtcNow());
-                            }
+                            await FenceWaitsAsync(request, ownershipToken);
                             foreach (var recipient in request.Candidate.SubscriptionDelivery.Recipients)
+                                if (await executions.IsDeletionTombstonedAsync(recipient.StartIdentity.WorkflowExecutionId, ownershipToken) ||
+                                    await executions.FindAsync(recipient.StartIdentity.WorkflowExecutionId, ownershipToken) is not null)
+                                    throw new InvalidDataException("The deterministic target identity was already used or retired before admission.");
+                            return material.ExecuteUnderRootWriteLeases(grants, time,
+                        () => material.ExecuteUnderMaterialGate(actualMaterial => sourceReferences.ExecuteUnderReferenceGate(actualReferences =>
+                        {
+                            // Publication switches use reference -> authority. Holding the actual authority gate fences creation of absent slots too.
+                            lock (authority.Gate)
+                            lock (State.SyncRoot)
                             {
-                                var actual = actualMaterial.SingleOrDefault(value => value.Identity.ArtifactId == recipient.Material.ArtifactId) ??
-                                    throw new InvalidDataException("The accepted target material was removed.");
-                                RuntimeIngressAdmissionValidation.CheckMaterial(recipient, new RuntimeExecutionMaterial(actual, "native-memory"));
-                            }
-                            if (source.RecordedAt > time.GetUtcNow()) throw new InvalidDataException("The source admission time is in the future.");
-                            if (request.Targets.Any(target => request.Candidate.SubscriptionDelivery.Recipients.Any(recipient =>
-                                recipient.SubscriptionId == target.SubscriptionId) && target.SourceReference?.IsLive(time.GetUtcNow()) != true))
-                                throw new InvalidDataException("An accepted target source expired before admission.");
-                            return material.ExecuteUnderRootWriteLeases(grants, time, () =>
-                            {
-                                RuntimeIngressAdmissionReceipt Commit(DateTimeOffset? occurrenceDeadline = null)
+                                gateToken.ThrowIfCancellationRequested();
+                                if (State.OutboxItems.TryGetValue(source.OutboxItemId, out var winner))
+                                    return RuntimeIngressAdmissionValidation.Replay(winner, request.Scope, source.OutboxItemId, source.RequestFingerprint);
+                                var aggregate = State.StandaloneTriggers.GetValueOrDefault((request.Scope.Persistence.Value, request.Scope.TenantId, source.TriggerId)) ??
+                                    throw new TriggerOperationException("conflict", "The trigger was removed before admission.");
+                                RuntimeIngressAdmissionValidation.CheckAggregate(request, aggregate);
+                                foreach (var target in request.Targets)
                                 {
-                                    if (request.Reservation is not null)
-                                    {
-                                        var checkedReservation = false;
-                                        CheckReservationAdmission(request, ref checkedReservation);
-                                        if (!checkedReservation) throw new NotSupportedException("The selected ingress reservation cannot be fenced atomically.");
-                                    }
-                                    if (occurrenceDeadline is { } deadline && deadline <= time.GetUtcNow())
-                                        throw new TriggerOperationException("conflict", "The schedule occurrence expired before source acceptance.");
-                                    if (request.Candidate.SubscriptionDelivery.WaitDelivery?.Recipients.Any(recipient =>
-                                        recipient.Expected.ExpiresAt <= time.GetUtcNow()) == true)
-                                        throw new TriggerOperationException("conflict", "An ordinary wait expired before source acceptance.");
-                                    State.OutboxItems.Add(source.OutboxItemId, request.Candidate);
-                                    return new(request.Candidate, false);
+                                    var actualSlot = authority.Current(target.DefinitionId, target.SlotName);
+                                    var actualReference = actualSlot?.ActiveActivationId is { } activation
+                                        ? actualReferences.GetValueOrDefault(WorkflowActivationReferenceIdentity.Create(activation)) : null;
+                                    RuntimeIngressAdmissionValidation.CheckTarget(request, target, actualSlot, actualReference, time.GetUtcNow());
                                 }
-                                if (request.ScheduleClaim is not { } occurrence) return Commit();
-                                StandaloneScheduleAuthority.Validate(occurrence, source);
-                                if (schedules is not InMemoryRecurringTriggerScheduleStore recurring)
-                                    throw new NotSupportedException("The actual selected native recurring schedule store is unavailable.");
-                                return recurring.ExecuteUnderStandaloneOccurrenceClaim(occurrence, time, deadline => Commit(deadline));
-                            }, ownershipToken);
-                        }
-                    })), ownershipToken);
-                    }, gateToken);
-                }, token);
-                }, cancellationToken);
+                                foreach (var recipient in request.Candidate.SubscriptionDelivery.Recipients)
+                                {
+                                    var actual = actualMaterial.SingleOrDefault(value => value.Identity.ArtifactId == recipient.Material.ArtifactId) ??
+                                        throw new InvalidDataException("The accepted target material was removed.");
+                                    RuntimeIngressAdmissionValidation.CheckMaterial(recipient, new RuntimeExecutionMaterial(actual, "native-memory"));
+                                }
+                                if (source.RecordedAt > time.GetUtcNow()) throw new InvalidDataException("The source admission time is in the future.");
+                                if (request.Targets.Any(target => request.Candidate.SubscriptionDelivery.Recipients.Any(recipient =>
+                                    recipient.SubscriptionId == target.SubscriptionId) && target.SourceReference?.IsLive(time.GetUtcNow()) != true))
+                                    throw new InvalidDataException("An accepted target source expired before admission.");
+                                return material.ExecuteUnderRootWriteLeases(grants, time, () =>
+                                {
+                                    RuntimeIngressAdmissionReceipt Commit(DateTimeOffset? occurrenceDeadline = null)
+                                    {
+                                        if (request.Reservation is not null)
+                                        {
+                                            var checkedReservation = false;
+                                            CheckReservationAdmission(request, ref checkedReservation);
+                                            if (!checkedReservation) throw new NotSupportedException("The selected ingress reservation cannot be fenced atomically.");
+                                        }
+                                        if (occurrenceDeadline is { } deadline && deadline <= time.GetUtcNow())
+                                            throw new TriggerOperationException("conflict", "The schedule occurrence expired before source acceptance.");
+                                        if (request.Candidate.SubscriptionDelivery.WaitDelivery?.Recipients.Any(recipient =>
+                                            recipient.Expected.ExpiresAt <= time.GetUtcNow()) == true)
+                                            throw new TriggerOperationException("conflict", "An ordinary wait expired before source acceptance.");
+                                        State.OutboxItems.Add(source.OutboxItemId, request.Candidate);
+                                        return new(request.Candidate, false);
+                                    }
+                                    if (request.ScheduleClaim is not { } occurrence) return Commit();
+                                    StandaloneScheduleAuthority.Validate(occurrence, source);
+                                    if (schedules is not InMemoryRecurringTriggerScheduleStore recurring)
+                                        throw new NotSupportedException("The actual selected native recurring schedule store is unavailable.");
+                                    return recurring.ExecuteUnderStandaloneOccurrenceClaim(occurrence, time, deadline => Commit(deadline));
+                                }, ownershipToken);
+                            }
+                        })), ownershipToken);
+                        }, gateToken);
+                    }, token);
+                    }, cancellationToken);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+            catch
+            {
+                var winner = await FindAcceptedAsync(request.Scope, source.OutboxItemId, source.RequestFingerprint, cancellationToken);
+                if (winner is not null) return winner;
+                throw;
+            }
+            return accepted ?? throw new InvalidOperationException("Ingress admission produced no physical acceptance.");
         }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
-        catch
+        catch (Exception exception) when (exception is InvalidDataException or JsonException)
         {
-            var winner = await FindAcceptedAsync(request.Scope, source.OutboxItemId, source.RequestFingerprint, cancellationToken);
-            if (winner is not null) return winner;
-            throw;
+            throw InvalidAuthority(request.Candidate.OutboxItemId, exception);
         }
-        return accepted ?? throw new InvalidOperationException("Ingress admission produced no physical acceptance.");
     }
 
     public ValueTask<RuntimePostCommitOutboxItem> ReadSourceAsync(RuntimeDeliverySourceContext source, CancellationToken cancellationToken = default) =>
@@ -169,28 +186,36 @@ internal sealed partial class InMemoryRuntimeIngressDeliveryStore(IStandaloneTri
     public async ValueTask<RuntimePostCommitOutboxItem> RecordReceiptAsync(RuntimeDeliverySourceContext source, RuntimeTargetAcceptanceReceipt receipt,
         CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(source); ArgumentNullException.ThrowIfNull(receipt);
-        RequireScope(source.Scope, cancellationToken);
-        return await State.ExecuteWriteGateAsync(async token =>
+        try
         {
-            RuntimeCommittedRecipient target;
-            lock (State.SyncRoot)
+
+            ArgumentNullException.ThrowIfNull(source); ArgumentNullException.ThrowIfNull(receipt);
+            RequireScope(source.Scope, cancellationToken);
+            return await State.ExecuteWriteGateAsync(async token =>
             {
-                var current = RuntimeIngressAdmissionValidation.CheckClaim(Find(source.SourceOutboxItemId), source, time.GetUtcNow());
-                target = RuntimeIngressAdmissionValidation.ReceiptTarget(current, receipt);
-                if (current.SubscriptionDelivery!.Progress.Single(progress => progress.RecipientId == receipt.RecipientId).Receipt is not null) return current;
-            }
-            await CheckPublisherAsync(target.Item, source.Scope, token);
-            var observed = await evidence!.ReconcileAsync(target.Item, target.Recipient, target.Seal, token) ??
-                throw new TriggerOperationException("unavailable", "The deterministic target has no observed physical acceptance; dispatch remains owed.");
-            lock (State.SyncRoot)
-            {
-                var current = RuntimeIngressAdmissionValidation.CheckClaim(Find(source.SourceOutboxItemId), source, time.GetUtcNow());
-                var replacement = RuntimeIngressAdmissionValidation.AcceptObserved(current, observed);
-                State.OutboxItems[current.OutboxItemId] = replacement;
-                return replacement;
-            }
-        }, cancellationToken);
+                RuntimeCommittedRecipient target;
+                lock (State.SyncRoot)
+                {
+                    var current = RuntimeIngressAdmissionValidation.CheckClaim(Find(source.SourceOutboxItemId), source, time.GetUtcNow());
+                    target = RuntimeIngressAdmissionValidation.ReceiptTarget(current, receipt);
+                    if (current.SubscriptionDelivery!.Progress.Single(progress => progress.RecipientId == receipt.RecipientId).Receipt is not null) return current;
+                }
+                await CheckPublisherAsync(target.Item, source.Scope, token);
+                var observed = await evidence!.ReconcileAsync(target.Item, target.Recipient, target.Seal, token) ??
+                    throw new TriggerOperationException("unavailable", "The deterministic target has no observed physical acceptance; dispatch remains owed.");
+                lock (State.SyncRoot)
+                {
+                    var current = RuntimeIngressAdmissionValidation.CheckClaim(Find(source.SourceOutboxItemId), source, time.GetUtcNow());
+                    var replacement = RuntimeIngressAdmissionValidation.AcceptObserved(current, observed);
+                    State.OutboxItems[current.OutboxItemId] = replacement;
+                    return replacement;
+                }
+            }, cancellationToken);
+        }
+        catch (Exception exception) when (exception is InvalidDataException or JsonException)
+        {
+            throw InvalidAuthority(source.SourceOutboxItemId, exception);
+        }
     }
 
     public ValueTask<RuntimePostCommitOutboxItem> RecordRecipientFailureAsync(RuntimeDeliverySourceContext source, string recipientId,
@@ -200,62 +225,94 @@ internal sealed partial class InMemoryRuntimeIngressDeliveryStore(IStandaloneTri
     public ValueTask<RuntimeCommittedRecipient> ReadCommittedRecipientAsync(RuntimeCommittedRecipientAuthority authority,
         CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(authority);
-        RequireScope(authority.Scope, cancellationToken);
-        lock (State.SyncRoot)
+        try
         {
-            var item = Find(authority.SourceOutboxItemId);
-            return ValueTask.FromResult(RuntimeIngressAdmissionValidation.Committed(item, authority));
+
+            ArgumentNullException.ThrowIfNull(authority);
+            RequireScope(authority.Scope, cancellationToken);
+            lock (State.SyncRoot)
+            {
+                var item = Find(authority.SourceOutboxItemId);
+                return ValueTask.FromResult(RuntimeIngressAdmissionValidation.Committed(item, authority));
+            }
+        }
+        catch (Exception exception) when (exception is InvalidDataException or JsonException)
+        {
+            throw InvalidAuthority(authority.SourceOutboxItemId, exception);
         }
     }
 
     public ValueTask<RuntimeCommittedRecipient> ReadCommittedRecipientAsync(RuntimeIngressCommandOrigin origin,
         CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(origin);
-        RequireScope(origin.Scope, cancellationToken);
-        lock (State.SyncRoot)
+        try
         {
-            var item = Find(origin.SourceOutboxItemId);
-            return ValueTask.FromResult(RuntimeIngressAdmissionValidation.Committed(item, origin));
+
+            ArgumentNullException.ThrowIfNull(origin);
+            RequireScope(origin.Scope, cancellationToken);
+            lock (State.SyncRoot)
+            {
+                var item = Find(origin.SourceOutboxItemId);
+                return ValueTask.FromResult(RuntimeIngressAdmissionValidation.Committed(item, origin));
+            }
+        }
+        catch (Exception exception) when (exception is InvalidDataException or JsonException)
+        {
+            throw InvalidAuthority(origin.SourceOutboxItemId, exception);
         }
     }
 
     public async ValueTask<RuntimeIngressCancellationReceipt> CancelPendingAsync(RuntimeIngressCancellationRequest request,
         CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(request); ArgumentNullException.ThrowIfNull(request.RecipientIds);
-        Require(request.Scope, cancellationToken);
-        return await State.ExecuteWriteGateAsync(_ =>
+        try
         {
-            lock (State.SyncRoot)
+
+            ArgumentNullException.ThrowIfNull(request); ArgumentNullException.ThrowIfNull(request.RecipientIds);
+            Require(request.Scope, cancellationToken);
+            return await State.ExecuteWriteGateAsync(_ =>
             {
-                var result = RuntimeIngressAdmissionValidation.Cancel(Find(request.SourceOutboxItemId), request);
-                State.OutboxItems[request.SourceOutboxItemId] = result.Item;
-                return ValueTask.FromResult(result);
-            }
-        }, cancellationToken);
+                lock (State.SyncRoot)
+                {
+                    var result = RuntimeIngressAdmissionValidation.Cancel(Find(request.SourceOutboxItemId), request);
+                    State.OutboxItems[request.SourceOutboxItemId] = result.Item;
+                    return ValueTask.FromResult(result);
+                }
+            }, cancellationToken);
+        }
+        catch (Exception exception) when (exception is InvalidDataException or JsonException)
+        {
+            throw InvalidAuthority(request.SourceOutboxItemId, exception);
+        }
     }
 
     private async ValueTask<RuntimePostCommitOutboxItem> MutateAsync(RuntimeDeliverySourceContext source,
         Func<RuntimePostCommitOutboxItem, RuntimePostCommitOutboxItem> mutate, CancellationToken cancellationToken)
     {
-        ArgumentNullException.ThrowIfNull(source);
-        RequireScope(source.Scope, cancellationToken);
-        return await State.ExecuteWriteGateAsync(async token =>
+        try
         {
-            RuntimePostCommitOutboxItem observed;
-            lock (State.SyncRoot)
-                observed = RuntimeIngressAdmissionValidation.CheckClaim(Find(source.SourceOutboxItemId), source, time.GetUtcNow());
-            await CheckPublisherAsync(observed, source.Scope, token);
-            lock (State.SyncRoot)
+
+            ArgumentNullException.ThrowIfNull(source);
+            RequireScope(source.Scope, cancellationToken);
+            return await State.ExecuteWriteGateAsync(async token =>
             {
-                var current = RuntimeIngressAdmissionValidation.CheckClaim(Find(source.SourceOutboxItemId), source, time.GetUtcNow());
-                var replacement = mutate(current);
-                State.OutboxItems[current.OutboxItemId] = replacement;
-                return replacement;
-            }
-        }, cancellationToken);
+                RuntimePostCommitOutboxItem observed;
+                lock (State.SyncRoot)
+                    observed = RuntimeIngressAdmissionValidation.CheckClaim(Find(source.SourceOutboxItemId), source, time.GetUtcNow());
+                await CheckPublisherAsync(observed, source.Scope, token);
+                lock (State.SyncRoot)
+                {
+                    var current = RuntimeIngressAdmissionValidation.CheckClaim(Find(source.SourceOutboxItemId), source, time.GetUtcNow());
+                    var replacement = mutate(current);
+                    State.OutboxItems[current.OutboxItemId] = replacement;
+                    return replacement;
+                }
+            }, cancellationToken);
+        }
+        catch (Exception exception) when (exception is InvalidDataException or JsonException)
+        {
+            throw InvalidAuthority(source.SourceOutboxItemId, exception);
+        }
     }
 
     private RuntimePostCommitOutboxItem Find(string id) => State.OutboxItems.GetValueOrDefault(id) ??
@@ -283,4 +340,7 @@ internal sealed partial class InMemoryRuntimeIngressDeliveryStore(IStandaloneTri
         if (!SupportsAdmission) throw new NotSupportedException("Standalone ingress requires one coherent native resource, outbox, publication and retention family.");
         access.Current.RequireScope(); access.Current.EnsureScope(scope);
     }
+    private static TriggerOperationException InvalidAuthority(string sourceId, Exception cause) =>
+        new("conflict", $"Ingress delivery '{sourceId}' has invalid physical authority.", innerException: cause);
+
 }

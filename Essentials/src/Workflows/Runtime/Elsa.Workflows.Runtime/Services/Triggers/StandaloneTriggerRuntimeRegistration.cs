@@ -28,6 +28,7 @@ internal static class StandaloneTriggerRuntimeRegistration
 {
     internal static void AddServices(IServiceCollection services)
     {
+        StandaloneTriggerProviderCompositionValidator.Register(services);
         services.TryAddScoped<ITriggerInputMapper, TriggerInputMapper>();
         services.TryAddScoped<TriggerTargetResolver>();
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IEventHandler<TriggerTargetModelsDiscovering>, CollectTriggerTargetModels>());
