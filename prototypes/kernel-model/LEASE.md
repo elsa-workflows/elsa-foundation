@@ -17,3 +17,12 @@ The former fault-free settling loop advanced the clock by 11 seconds on every ro
 On this branch, the deterministic witness passed all 23 checks; disabling the lease guard failed its delayed take, mark, ticket and scheduler-dispatch checks, and disabling the generation check failed the entered-callback witness. Suppressing the history hint made N6 fail at seed 14 in a 300-action replay; the prior latch run found it in 92 of 1,000 seeds. With the revised settling schedule, both the general and native 20,000-seed × 1,000-action sweeps on the prior latch implementation (`c4a611a9b7`) had zero failed seeds; they parked 11 and 20 innocent instances respectively. The native run compared 386,472 finished instances and saw 779 repeated effects; all 779 happened to carry the hint in that run. This result does not change the hint's contract.
 
 Those large sweeps predate the later generation recheck; they are not an exact-head result. After the generation recheck, focused 2,000-seed × 1,000-action general and native sweeps had zero failed seeds, with two innocent instances parked in each. Both formerly failing settling seeds (140 and 1084) passed. The existing 39 kernel mutation entries and all 9 native/graph mutations were caught within their 20,000-seed caps. Six kernel mutation entries were caught by the 150-round IDLE result rather than a dedicated safety invariant, so a matching count alone does not establish unchanged detection strength after the settling change. The native smoke passed all 34 checks. After the recheck, SQLite native cost output for both fences was byte-identical to base `6854e81dcc` (commands, commits, round trips and state sizes). PostgreSQL cost, the 200,000-seed 300-action sweep, and #4353's distinct generator and integration were not run here. The deterministic checks use an in-memory store, not a production provider.
+
+## Mutation isolation on integration
+
+The reply-deadline merge and lease prototype initially shared bit 42 between `KeepExpiredCallers` and
+`IgnoreLeaseDeadline`. That made selecting either flag enable both behaviors. The flags now have distinct bits;
+`HideDeliveryHistory` also avoids the bit reserved by the open job-poison prototype. The simulator rejects duplicate,
+zero or composite named mutation bits at startup, and `--check-flaws` checks this without running a simulation.
+Historical integration controls before this correction do not establish independent mutation selection. The
+correction's receipt records the rerun of the individual controls and existing mutation suites.
