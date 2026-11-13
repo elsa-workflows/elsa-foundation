@@ -89,6 +89,14 @@ internal sealed class RuntimePlacementReleaseInspector(IReleaseRuntimeSiteReader
             foreach (var (space, frame) in frames)
             {
                 token.ThrowIfCancellationRequested();
+                if (frame.Origin.Segments.Count > 3)
+                {
+                    var parentOrigin = new ActivityInvocationOrigin(frame.Origin.Segments.Take(frame.Origin.Segments.Count - 2).ToArray());
+                    var occurrence = frame.Origin.Segments[^2].Id;
+                    if (!frames.TryGetValue(parentOrigin.ComputePlacementNamespace(), out var parent) ||
+                        !parent.Template.DirectDependencies.Any(dependency => dependency.OccurrenceId == occurrence && dependency.DefinitionVersionId == frame.Activity.VersionId))
+                        throw Refuse("placement_parent_frame_missing");
+                }
                 var nodes = groups[space];
                 if (nodes.Count != frame.Template.NodesById.Count || nodes.Select(node => node.Metadata["activity.templateNodeId"]).Distinct(StringComparer.Ordinal).Count() != nodes.Count)
                     throw Refuse("placement_template_node_inventory_mismatch");
