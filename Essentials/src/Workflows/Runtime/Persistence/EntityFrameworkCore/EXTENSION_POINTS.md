@@ -113,3 +113,11 @@ receipt reconciliation. Purged replay retains its original acknowledgement witho
 purge reconciliation pins the boundary actually staged and never broadens it to later arrivals. Failed
 write and acknowledgement reads preserve their causes; access retirement and hard integrity remain
 separate. This source does not register these ports or enable capture/deletion capability.
+
+
+Native execution deletion retires all eight history shapes inside the same root lock/ownership
+transaction, before removing the retention root. Both deletion entry points retire captured history;
+canonical terminal cleanup also removes any remaining history family. Confirmed uncaptured direct
+root deletion remains independent of history-only storage. Hard/access/schema failures clear staged
+tracker state, preserving rollback and preventing later accidental tombstone publication. Prefix
+retention still keeps replay receipts until this full run retirement; no capture capability is enabled.
