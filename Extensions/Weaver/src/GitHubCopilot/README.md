@@ -43,13 +43,19 @@ Supported settings:
   local development only.
 - `RuntimeUrl` and `RuntimeConnectionToken`: connect to an already running
   Copilot runtime instead of spawning the bundled runtime.
-- `BaseDirectory`: SDK-owned Copilot state directory. Elsa does not persist SDK
-  internals.
+- `BaseDirectory`: root for SDK-owned state when Elsa spawns the runtime; a hash of the trusted
+  server tenant partitions session directories beneath it. The default is a host temporary
+  Elsa directory. Provider diagnostics use a separately tagged directory. The SDK ignores
+  this option for `RuntimeUrl`: that runtime's operator must provide its tenant isolation and
+  state/credential storage boundaries. Elsa does not persist SDK internals.
 - `WorkingDirectory`: process/session working directory for the SDK runtime.
 - `Model`, `ReasoningEffort`, `SystemMessage`, `Streaming`: passed to Copilot
   session configuration.
-- `AvailableTools` and `ExcludedTools`: SDK tool filters. Mutating built-in tool
-  names are excluded by default, and permission requests are denied by policy.
+- `AvailableTools` and `ExcludedTools`: filters for the installed policy-guarded Weaver
+  tools. The allowlist always contains only currently supplied custom tools; an explicit
+  configured allowlist narrows that set. It cannot add an ambient SDK tool. SDK permission
+  requests may enter only a current installed, allowlisted custom callback in the same session;
+  the callback then passes through Elsa's guarded invoker. All ambient requests are denied.
 
 ## Local development
 
@@ -65,6 +71,11 @@ CLI install is required for the default stdio runtime path. The first build may
 download the platform runtime into the project `obj` directory.
 
 ## Session lifecycle
+
+The SDK runs in `CopilotClientMode.Empty`, with explicit custom tools and its server defaults
+for disabled ambient instructions, skills, plugins, environment, telemetry and memory. This
+keeps the SDK's agent loop while the installed modules own all product reads and effects.
+Use a runtime supporting this pinned SDK profile when selecting an external runtime.
 
 Elsa `WeaverSession.Id` is used as the Copilot SDK session ID. Elsa stores only
 provider-neutral session state. Copilot conversation/runtime state remains owned
@@ -97,9 +108,14 @@ Cancellation is passed through to the SDK session stream. The SDK adapter aborts
 
 ## Tool and proposal policy
 
-Copilot SDK permission requests are denied by this provider. Mutations must be represented as
+Only current installed custom tool callbacks pass the SDK permission gate, so Elsa's own
+invoker can check current authority and policy. SDK shell, file, network, MCP, memory and
+unknown tool permission requests are denied. Mutations must be represented as
 Elsa-owned proposals and executed through Elsa approval, revision validation,
 permission checks, and audit.
+
+The fallback host-driven `ContinueTurnAsync` path also requires the session service to resolve
+the trusted owner. A missing owner never falls back to a shared or diagnostics state directory.
 
 This is deliberate: the current Weaver facade has proposal approval
 semantics, but it does not yet have a durable provider-neutral pending SDK tool

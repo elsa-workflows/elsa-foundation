@@ -11,6 +11,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Elsa.Testing;
 using Elsa.Weaver.Services;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Weaver.Tests;
 
@@ -22,8 +23,18 @@ namespace Elsa.Weaver.Tests;
 /// inner exceptions) and prove the secret never reaches it on any provider Debug-log path, while
 /// the redaction marker does.
 /// </summary>
-public sealed class WeaverProviderLogRedactionTests
+public sealed class WeaverProviderLogRedactionTests : IDisposable
 {
+    private readonly ServiceProvider _services = WeaverTestServices.Create();
+    private readonly Task<WeaverSession> _ownedSession;
+
+    public WeaverProviderLogRedactionTests()
+    {
+        _ownedSession = _services.GetRequiredService<IWeaverSessionService>().CreateAsync(new("tenant-1", "actor-1", "fixture",
+            WeaverGitHubCopilotProvider.Id, "explain", "Logging fixture", WeaverPolicy.Default, new Dictionary<string, string>()));
+    }
+
+    public void Dispose() => _services.Dispose();
     private const string AnthropicSecret = "sk-ant-SECRET-4242";
     private const string CopilotSecret = "ghp_SECRETTOKEN4242";
     private const string RedactionMarker = "[redacted]";
@@ -56,7 +67,7 @@ public sealed class WeaverProviderLogRedactionTests
     public async Task Copilot_resume_failure_on_the_provider_path_does_not_leak_the_token_to_the_log_sink()
     {
         var (provider, logger, _) = BuildCopilot(resumeException: SecretfulCopilotException());
-        var context = WeaverTurnContext.ForMessage("s1", "Hi", []);
+        var context = WeaverTurnContext.ForMessage((await _ownedSession).Id, "Hi", []);
 
         await Collect(provider.ContinueTurnAsync(context));
 
@@ -69,7 +80,7 @@ public sealed class WeaverProviderLogRedactionTests
     public async Task Copilot_resume_failure_on_the_harness_path_does_not_leak_the_token_to_the_log_sink()
     {
         var (provider, logger, _) = BuildCopilot(resumeException: SecretfulCopilotException());
-        var request = new WeaverHarnessTurnRequest("s1", "actor-1", [new(WeaverRole.User, "do it")], [], [], WeaverPolicy.Default);
+        var request = new WeaverHarnessTurnRequest("s1", "actor-1", [new(WeaverRole.User, "do it")], [], [], WeaverPolicy.Default) { TenantId = "tenant-1" };
 
         await Collect(provider.RunTurnAsync(request));
 
@@ -190,7 +201,7 @@ public sealed class WeaverProviderLogRedactionTests
 
     // --- Builders ---
 
-    private static (WeaverGitHubCopilotProvider Provider, RecordingLogger<WeaverGitHubCopilotProvider> Logger, ScriptableCopilotClient Client) BuildCopilot(
+    private (WeaverGitHubCopilotProvider Provider, RecordingLogger<WeaverGitHubCopilotProvider> Logger, ScriptableCopilotClient Client) BuildCopilot(
         Exception? resumeException = null,
         Exception? pingException = null)
     {
@@ -200,14 +211,15 @@ public sealed class WeaverProviderLogRedactionTests
         return (provider, logger, client);
     }
 
-    private static WeaverGitHubCopilotProvider BuildCopilotProvider(
+    private WeaverGitHubCopilotProvider BuildCopilotProvider(
         WeaverGitHubCopilotOptions options,
         RecordingLogger<WeaverGitHubCopilotProvider> logger,
         ScriptableCopilotClient client)
     {
         // This suite exercises the SDK logging boundary without executing tools/effects.
         var invoker = new WeaverTestToolInvoker();
-        return new WeaverGitHubCopilotProvider(new ScriptableCopilotClientFactory(client), Options.Create(options), invoker, logger);
+        return new WeaverGitHubCopilotProvider(new ScriptableCopilotClientFactory(client), Options.Create(options), invoker, logger,
+            _services.GetRequiredService<IWeaverSessionService>());
     }
 
     private static async Task<List<WeaverStreamEvent>> Collect(IAsyncEnumerable<WeaverStreamEvent> events)
