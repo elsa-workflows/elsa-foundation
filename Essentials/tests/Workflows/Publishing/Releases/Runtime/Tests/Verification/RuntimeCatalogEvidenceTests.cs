@@ -83,6 +83,30 @@ public sealed class RuntimeCatalogEvidenceTests
         Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Code == "captured_runtime_codec_profile_conflict");
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Captured_workflow_associations_resolve_both_catalog_profiles(bool originalEvidence)
+    {
+        // This isolates the artifact scanner's captured association route. Opaque placement inspection
+        // remains mandatory; this controlled node is not an actual compiler/publication witness.
+        var fixture = Create(); var value = fixture.Version;
+        if (!originalEvidence) value = new(value.Scope, value.DefinitionId, value.VersionId, value.Version, value.ActivityTypeKey, value.ResolutionKind,
+            value.Contract, value.ProviderKey, value.ProviderSchemaVersion, value.ProviderPayload, value.CompilerFingerprint, value.TemplateId,
+            value.TemplateHash, value.SourceReferenceId, value.SourceKind, value.SourceId);
+        fixture.Content.Add(fixture.Content.Codec.EncodeActivityVersion(value));
+        var workflow = RuntimeReleaseFixture.Workflow(RuntimeReleaseFixture.Node(metadata: new Dictionary<string, string>
+        {
+            ["activity.templateHash"] = value.TemplateHash, ["activity.definitionVersionId"] = value.VersionId,
+            ["activity.definitionId"] = value.DefinitionId, ["activity.version"] = value.Version, ["activity.sourceReferenceId"] = value.SourceReferenceId
+        }));
+        var member = fixture.Content.Add(fixture.Content.Codec.EncodeWorkflow(new(value.Scope, workflow)));
+        var facts = await fixture.Content.Verify(member);
+        Assert.Equal(ReleaseSemanticStatus.Verified, facts.Status);
+        Assert.Contains(facts.Edges, edge => edge.To == new ReleaseMemberKey(ReleaseRuntimeCodecs.ActivityVersionKind, value.VersionId));
+        Assert.Contains(facts.Sites, site => site.Site.SiteKind == ReleaseRuntimeSiteKinds.Placement);
+    }
+
     private static JsonElement DeepJson(string json)
     {
         using var document = JsonDocument.Parse(json, new JsonDocumentOptions { MaxDepth = 128 });
