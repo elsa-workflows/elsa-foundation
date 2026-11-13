@@ -2272,6 +2272,16 @@
           "Elsa.Studio.Dashboard.Core": "[4.0.0-dev, )"
         }
       },
+      "elsa.studio.dashboard.persistence.entityframeworkcore": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.31, )",
+          "Elsa.Persistence.EntityFramework": "[4.0.0-dev, )",
+          "Elsa.Studio.Dashboard.Core": "[4.0.0-dev, )",
+          "Microsoft.EntityFrameworkCore": "[10.0.10, )",
+          "Microsoft.EntityFrameworkCore.Relational": "[10.0.10, )"
+        }
+      },
       "elsa.studio.preferences.api": {
         "type": "Project",
         "dependencies": {

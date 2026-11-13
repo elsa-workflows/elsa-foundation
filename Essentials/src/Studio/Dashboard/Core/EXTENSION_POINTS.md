@@ -16,7 +16,7 @@ Each of these contracts selects exactly one implementation per runtime context. 
 | `IDashboardAudienceDirectory` | Resolve permitted same-tenant audience candidates |
 | `IDashboardAuthoringService` | Prepare authoring context and delegate conversation to the configured Weaver runtime |
 
-Actor/scope values are server-owned inputs. Constructing a record does not establish authority. Implementations recheck current resource and source access; sharing a definition grants no access to source rows or privileged cached results. Authoring proposals carry target, client generation and working revision and are never save receipts.
+Actor/scope values are server-owned inputs. The native boundary resolves one canonical Dashboard actor from the current normalized identity. Query scope uses that actor's tenant and canonical UserId as SubjectId; AuthenticationSubjectId remains the owning authentication/Weaver identity and is never compared as though it were the canonical user ID. Hosts must derive both from the same current request and must not pair records from different callers. Constructing a record does not establish authority. Implementations recheck current resource and source access; sharing a definition grants no access to source rows or privileged cached results. Authoring proposals carry target, client generation and working revision and are never save receipts.
 
 ## Named contribution events
 

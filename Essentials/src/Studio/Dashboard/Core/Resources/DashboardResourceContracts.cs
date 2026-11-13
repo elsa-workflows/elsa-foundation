@@ -33,7 +33,7 @@ public interface IDashboardAudienceDirectory
 public interface IDashboardResourceService
 {
     ValueTask<DashboardResourcePage> ListAsync(DashboardActor actor, string kind, string? ownership = null, string? search = null,
-        CancellationToken cancellationToken = default, string? continuationToken = null);
+        string? continuationToken = null, CancellationToken cancellationToken = default);
     ValueTask<DashboardResourceView> GetAsync(DashboardActor actor, string kind, string id, CancellationToken cancellationToken = default);
     ValueTask<DashboardResourceDocument> GetAuthorizedQuestionAsync(DashboardActor actor, string id, CancellationToken cancellationToken = default);
     ValueTask<DashboardResourceView> CreateAsync(DashboardActor actor, string kind, DashboardResourceInput input, CancellationToken cancellationToken = default);

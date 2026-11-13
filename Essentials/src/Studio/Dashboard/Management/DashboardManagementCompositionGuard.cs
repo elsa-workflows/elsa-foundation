@@ -12,8 +12,8 @@ internal sealed class DashboardManagementCompositionGuard(IServiceCollection ser
     {
         cancellationToken.ThrowIfCancellationRequested();
         Require(typeof(IDashboardQueryService), required: true);
-        Require(typeof(IDashboardResourceService));
-        Require(typeof(IDashboardDefinitionValidator));
+        Require(typeof(IDashboardResourceService), required: true);
+        Require(typeof(IDashboardDefinitionValidator), required: true);
         Require(typeof(IDashboardResourceStore));
         Require(typeof(IDashboardActorContext));
         Require(typeof(IDashboardAudienceDirectory));

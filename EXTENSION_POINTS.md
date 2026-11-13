@@ -252,6 +252,8 @@ not automatic constitution violations.
 
 ## Studio
 
+- [Dashboard definition persistence](Essentials/src/Studio/Dashboard/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md)
+
 - [Dashboard native management](Essentials/src/Studio/Dashboard/Management/EXTENSION_POINTS.md)
 
 - [Dashboard query, resource and authoring contracts](Essentials/src/Studio/Dashboard/Core/EXTENSION_POINTS.md)

@@ -1,0 +1,83 @@
+#nullable enable
+Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.DashboardResourceDbContext
+Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.DashboardResourceDbContext.DashboardResourceDbContext(Microsoft.EntityFrameworkCore.DbContextOptions! options) -> void
+Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.DashboardResourceDbContext.Resources.get -> Microsoft.EntityFrameworkCore.DbSet<Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.DashboardResourceRow!>!
+Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.DashboardResourceDbContext.Scopes.get -> Microsoft.EntityFrameworkCore.DbSet<Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.DashboardResourceScopeRow!>!
+Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.DashboardResourceDbContext.Operations.get -> Microsoft.EntityFrameworkCore.DbSet<Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.DashboardResourceOperationRow!>!
+override Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.DashboardResourceDbContext.OnModelCreating(Microsoft.EntityFrameworkCore.ModelBuilder! modelBuilder) -> void
+virtual Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.DashboardResourceDbContext.ConfigureProvider(Microsoft.EntityFrameworkCore.ModelBuilder! modelBuilder) -> void
+Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.DashboardResourceRow
+Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.DashboardResourceRow.DashboardResourceRow() -> void
+Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.DashboardResourceRow.Id.get -> string!
+Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.DashboardResourceRow.Id.set -> void
+Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.DashboardResourceRow.ScopeId.get -> string!
+Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.DashboardResourceRow.ScopeId.set -> void
+Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.DashboardResourceRow.OwnerKey.get -> string!
+Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.DashboardResourceRow.OwnerKey.set -> void
+Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.DashboardResourceRow.Kind.get -> string!
+Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.DashboardResourceRow.Kind.set -> void
+Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.DashboardResourceRow.Revision.get -> string!
+Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.DashboardResourceRow.Revision.set -> void
+Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.DashboardResourceRow.SchemaVersion.get -> string!
+Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.DashboardResourceRow.SchemaVersion.set -> void
+Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.DashboardResourceRow.DocumentJson.get -> string!
+Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.DashboardResourceRow.DocumentJson.set -> void
+Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.DashboardResourceRow.Deleted.get -> bool
+Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.DashboardResourceRow.Deleted.set -> void
+Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.DashboardResourceScopeRow
+Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.DashboardResourceScopeRow.DashboardResourceScopeRow() -> void
+Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.DashboardResourceScopeRow.Id.get -> string!
+Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.DashboardResourceScopeRow.Id.set -> void
+Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.DashboardResourceScopeRow.Revision.get -> string!
+Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.DashboardResourceScopeRow.Revision.set -> void
+Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.DashboardResourceScopeRow.SchemaVersion.get -> string!
+Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.DashboardResourceScopeRow.SchemaVersion.set -> void
+Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.DashboardResourceOperationRow
+Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.DashboardResourceOperationRow.DashboardResourceOperationRow() -> void
+Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.DashboardResourceOperationRow.Id.get -> string!
+Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.DashboardResourceOperationRow.Id.set -> void
+Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.DashboardResourceOperationRow.ResourceKey.get -> string!
+Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.DashboardResourceOperationRow.ResourceKey.set -> void
+Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.DashboardResourceOperationRow.Fingerprint.get -> string!
+Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.DashboardResourceOperationRow.Fingerprint.set -> void
+Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.DashboardResourceOperationRow.SchemaVersion.get -> string!
+Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.DashboardResourceOperationRow.SchemaVersion.set -> void
+Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.DashboardResourcesSqliteDbContext
+Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.DashboardResourcesSqliteDbContext.DashboardResourcesSqliteDbContext(Microsoft.EntityFrameworkCore.DbContextOptions<Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.DashboardResourcesSqliteDbContext!>! options) -> void
+const Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.DashboardResourcesSqliteDbContext.ExpectedProviderName = "Microsoft.EntityFrameworkCore.Sqlite" -> string!
+Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.Migrations.DashboardResources.Sqlite.Initial
+Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.Migrations.DashboardResources.Sqlite.Initial.Initial() -> void
+~override Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.Migrations.DashboardResources.Sqlite.Initial.BuildTargetModel(Microsoft.EntityFrameworkCore.ModelBuilder modelBuilder) -> void
+~override Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.Migrations.DashboardResources.Sqlite.Initial.Down(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder migrationBuilder) -> void
+~override Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.Migrations.DashboardResources.Sqlite.Initial.Up(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder migrationBuilder) -> void
+Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.DashboardResourceModelBuilderExtensions
+static Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.DashboardResourceModelBuilderExtensions.AddDashboardResourcesModel(this Microsoft.EntityFrameworkCore.ModelBuilder! modelBuilder, string! providerName) -> Microsoft.EntityFrameworkCore.ModelBuilder!
+Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.DashboardResourcePersistenceRegistration
+static Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.DashboardResourcePersistenceRegistration.AddDashboardResourcesEntityFrameworkCore<TContext>(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+static Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.DashboardResourcePersistenceRegistration.AddDashboardResourcesEntityFrameworkCore(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.DashboardResourcePersistenceOptions! options) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.DashboardResourcePersistenceOptions
+Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.DashboardResourcePersistenceOptions.DashboardResourcePersistenceOptions() -> void
+Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.DashboardResourcePersistenceOptions.Provider.get -> string!
+Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.DashboardResourcePersistenceOptions.Provider.set -> void
+Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.DashboardResourcePersistenceOptions.ConnectionString.get -> string?
+Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.DashboardResourcePersistenceOptions.ConnectionString.set -> void
+Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.DashboardResourcePersistenceOptions.ConnectionName.get -> string?
+Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.DashboardResourcePersistenceOptions.ConnectionName.set -> void
+Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.DashboardResourcePersistenceOptions.Schema.get -> string?
+Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.DashboardResourcePersistenceOptions.Schema.set -> void
+Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.DashboardResourcesEntityFrameworkCoreFeature
+Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.DashboardResourcesEntityFrameworkCoreFeature.DashboardResourcesEntityFrameworkCoreFeature() -> void
+Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.DashboardResourcesEntityFrameworkCoreFeature.Provider.get -> string!
+Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.DashboardResourcesEntityFrameworkCoreFeature.Provider.set -> void
+Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.DashboardResourcesEntityFrameworkCoreFeature.ConnectionString.get -> string?
+Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.DashboardResourcesEntityFrameworkCoreFeature.ConnectionString.set -> void
+Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.DashboardResourcesEntityFrameworkCoreFeature.ConnectionName.get -> string?
+Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.DashboardResourcesEntityFrameworkCoreFeature.ConnectionName.set -> void
+Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.DashboardResourcesEntityFrameworkCoreFeature.Schema.get -> string?
+Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.DashboardResourcesEntityFrameworkCoreFeature.Schema.set -> void
+virtual Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.DashboardResourcesEntityFrameworkCoreFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void
+Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.DashboardResourcesEfModule
+static readonly Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.DashboardResourcesEfModule.Chain -> Elsa.Persistence.EntityFramework.EfSchemaChain!
+const Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.DashboardResourcesEfModule.HistoryModuleName = "ElsaStudioDashboard" -> string!
+const Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.DashboardResourcesEfModule.SchemaVersion = "1.0.0" -> string!
+const Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.DashboardResourcesEfModule.SchemaFamily = "StudioDashboard" -> string!

@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 2,
+  "capabilities": [
+    {
+      "name": "ef-provider",
+      "description": "The EF Core relational provider selected by the host.",
+      "options": [
+        {
+          "name": "Sqlite",
+          "packageId": "Microsoft.EntityFrameworkCore.Sqlite",
+          "version": "[10.0.10]"
+        }
+      ]
+    }
+  ]
+}
