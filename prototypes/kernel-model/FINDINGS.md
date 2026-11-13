@@ -1162,7 +1162,7 @@ commit got back and counts the node's commits the store answered "not landed".
 | timer | Reference | With a 20 s poll interval, a child's 1.5 s timer fires within 2.5 s of being due |
 | crash | Required | With a 6 s lease, the holder of partition 0 dies while thirty messages come in and it has handled some. Right after the kill (if it took under 3.5 s) every scope it held still refuses a take (a crash gives nothing up); its scopes are taken over and every message is applied once, in order |
 | stop | Reference | The holder of partition 0 stops; its scopes are taken over before its 6 s lease would have run out |
-| fence | Required | A node stalls past its lease, another process takes the scope and dies; the node commits after that, the store refuses it, and the runtime activates the scope again |
+| fence | Required | A node stalls until another process has taken the scope (after the node's lease ran out) and died; the node commits after that, the store refuses it, and the runtime activates the scope again |
 | split | Required | Nodes on two sides; the holder's next commit in partition 0 is held in flight for three leases (all its calls wait) while the other side handles the twenty messages sent to it. Partition 0 must have been held on both sides at once, the held commit answered "not landed", and every message applied once, in order |
 | join | Reference | A node that joins gets a share |
 
@@ -1180,8 +1180,8 @@ ghosts, I2, I3/I4, I4, I6, I11, I13), not with liveness, seam or name violations
 
 ### Results
 
-In-memory store; four partitions; lease 800 ms and poll interval 400 ms in the cases, 600 ms and 300 ms in the stress
-test. One run each, on a machine shared with other sessions' runs; the stress counts vary from run to run.
+In-memory store; four partitions. Lease 800 ms and poll interval 400 ms in the cases but crash (6 s lease), stop (6 s
+lease), hint and timer (20 s poll); 600 ms and 300 ms in the stress test. One run each, on a machine shared with other sessions' runs; the stress counts vary from run to run.
 
 | Run | Built-in (`RuntimeNode`) | Orleans |
 |---|---|---|
