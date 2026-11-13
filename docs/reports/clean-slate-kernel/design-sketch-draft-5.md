@@ -4,7 +4,7 @@ Status: **proposed, not approved; no product code exists.** The owner decisions 
 
 Draft 4 separates three layers, at the owner's decision of 12 November: an actor runtime, a durable layer, and workflow instances as one actor type. Every runtime hosts partitions, so the sections that describe partitions hold for any runtime. The prototype's code was split into the three layers in round 4 stage A, with every gate unchanged. Draft 5 renames step to turn and run (off-step work) to job, at the owner's decision of 12 November; the runtime's call into a partition is a pass. It also adds the containers' semantics: Flowchart on a graph engine extracted from today's Flowchart, StateMachine on its own statechart engine, and BPMN hosted on the Bpmn.Semantics interpreter (valence-works/bpmn).
 
-The prototype is `prototypes/kernel-model/`, in stacked PRs #4250 to #4260 (not yet on main). The commit hashes its documents cite are kept at the tag `prototype/kernel-model-history`.
+The prototype is `prototypes/kernel-model/` on main (landed through PRs #4250 to #4260). The commit hashes its documents cite are kept at the tag `prototype/kernel-model-history`.
 
 ## Requirements (the owner's, 12 November)
 
