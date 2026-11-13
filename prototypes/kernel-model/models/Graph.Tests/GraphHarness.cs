@@ -65,7 +65,7 @@ internal static class GraphHarness
             graph = FlowchartGraph.From([.. children.Select(child => new FlowchartNode(child.NodeId, child.IsTrigger))], new FlowchartStructure(connections, startNodeId, nodeMetadata));
             status = Apply(engine.Start(graph, new FlowchartRun(containerId, triggerNodeId)));
         }
-        catch (FlowchartExecutionException exception)
+        catch (Exception exception) when (exception is FlowchartExecutionException or InvalidOperationException)
         {
             return new GraphRun(order, GraphRunStatus.Faulted, null, null, exception.Message);
         }
@@ -83,8 +83,9 @@ internal static class GraphHarness
                     ? engine.OnChildFaulted(graph, run, state, next.NodeId)
                     : engine.OnChildCompleted(graph, run, state, new FlowchartChildCompletion(next.NodeId, executionId, probe.Outcomes ?? [FlowchartOutcomes.Done], next.ExecutionPathId, next.ExecutionScopeId)));
             }
-            catch (FlowchartExecutionException exception)
+            catch (Exception exception) when (exception is FlowchartExecutionException or InvalidOperationException)
             {
+                // Main's runtime faults the container on an engine exception (and on a terminal decision that schedules).
                 status = GraphRunStatus.Faulted;
                 faultMessage = exception.Message;
             }

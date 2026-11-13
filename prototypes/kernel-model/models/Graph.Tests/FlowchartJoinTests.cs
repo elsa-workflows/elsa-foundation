@@ -21,9 +21,10 @@ public sealed class FlowchartJoinTests
         var run = Run(null,
             [new("node-a"), new("node-b"), new("node-c"), new("node-d")],
             [Connection("node-a", "node-b"), Connection("node-a", "node-c"), Connection("node-b", "node-d"), Connection("node-c", "node-d")],
-            startNodeId: "node-a");
+            startNodeId: "node-a",
+            executionIds: ["actexec-flowchart", "actexec-a", "actexec-b", "actexec-c", "actexec-d"]);    // main's pool: no extra run fits
 
-        Assert.Equal(1, run.RunCount("node-d"));
+        Assert.Equal(["node-a", "node-b", "node-c", "node-d"], run.Order);
         Assert.Equal(GraphRunStatus.Completed, run.Status);
     }
 
@@ -33,10 +34,10 @@ public sealed class FlowchartJoinTests
         var run = Run(null,
             [new("node-a", ["Left"]), new("node-b"), new("node-c"), new("node-d")],
             [Connection("node-a", "node-b", "Left"), Connection("node-a", "node-c", "Right"), Connection("node-b", "node-d"), Connection("node-c", "node-d")],
-            startNodeId: "node-a");
+            startNodeId: "node-a",
+            executionIds: ["actexec-flowchart", "actexec-a", "actexec-b", "actexec-d"]);
 
-        Assert.Equal(0, run.RunCount("node-c"));
-        Assert.Equal(1, run.RunCount("node-d"));
+        Assert.Equal(["node-a", "node-b", "node-d"], run.Order);
         Assert.Equal(GraphRunStatus.Completed, run.Status);
     }
 
@@ -52,10 +53,10 @@ public sealed class FlowchartJoinTests
                 Connection("node-c", "node-d", "Join"),
                 Connection("node-c", "node-e", "Skip")
             ],
-            startNodeId: "node-a");
+            startNodeId: "node-a",
+            executionIds: ["actexec-flowchart", "actexec-a", "actexec-b", "actexec-c", "actexec-e", "actexec-d"]);
 
-        Assert.Equal(1, run.RunCount("node-d"));
-        Assert.Equal(1, run.RunCount("node-e"));
+        Assert.Equal(["node-a", "node-b", "node-c", "node-e", "node-d"], run.Order);
         Assert.Equal(GraphRunStatus.Completed, run.Status);
     }
 
@@ -140,7 +141,8 @@ public sealed class FlowchartJoinTests
     {
         var run = Run(null,
             [new("node-a"), new("node-b", Faults: true), new("node-c"), new("node-d")],
-            [Connection("node-a", "node-b"), Connection("node-a", "node-c"), Connection("node-b", "node-d"), Connection("node-c", "node-d")]);
+            [Connection("node-a", "node-b"), Connection("node-a", "node-c"), Connection("node-b", "node-d"), Connection("node-c", "node-d")],
+            executionIds: ["actexec-flowchart", "actexec-a", "actexec-b", "actexec-c"]);
 
         // The sibling branch still ran (a faulted container's scheduled children run on, as in main's harness); the
         // join never fired.
@@ -159,6 +161,7 @@ public sealed class FlowchartJoinTests
             [Connection("node-a", "node-b"), Connection("node-b", "node-a", "again"), Connection("node-b", "node-c", "done")],
             startNodeId: "node-a",
             nodeMetadata: new Dictionary<string, FlowchartNodeMetadata> { ["node-b"] = new("test/loop-once") },
+            executionIds: ["actexec-flowchart", "actexec-a1", "actexec-b1", "actexec-a2", "actexec-b2", "actexec-c"],
             policies: [new ScriptedPolicy("test/loop-once", "node-a", "node-c")]);
 
     [Fact]
@@ -168,7 +171,7 @@ public sealed class FlowchartJoinTests
 
         Assert.NotNull(run.FlowchartState);
         Assert.Equal(1, run.FlowchartState.LoopIterationCounters["node-a"]);
-        Assert.Equal(1, run.RunCount("node-c"));
+        Assert.Equal(["node-a", "node-b", "node-a", "node-b", "node-c"], run.Order);
     }
 
     [Fact]
@@ -187,9 +190,58 @@ public sealed class FlowchartJoinTests
         var run = Run(null,
             [new("node-a"), new("node-b"), new("node-c")],
             [Connection("node-a", "node-b"), Connection("node-b", "node-c"), Connection("node-c", "node-b")],
-            startNodeId: "node-a");
+            startNodeId: "node-a",
+            executionIds: ["actexec-flowchart"]);
 
+        Assert.Empty(run.Order);
         Assert.Equal(GraphRunStatus.Faulted, run.Status);
         Assert.Contains("ambiguous", run.FaultMessage, StringComparison.Ordinal);
+    }
+
+    // ---- the seam ----------------------------------------------------------------------------------------------------
+
+    /// <summary>An empty Flowchart completes at once with Done, as main's <c>RuntimeStructuralContinuation.Complete()</c>.</summary>
+    [Fact]
+    public void EmptyGraph_CompletesAtOnceWithDone()
+    {
+        var step = FlowchartEngines.Create().Start(FlowchartGraph.From([], null), new FlowchartRun("actexec-flowchart"));
+
+        Assert.Equal(FlowchartStepKind.Complete, step.Kind);
+        Assert.Equal(FlowchartOutcomes.Done, step.Outcome);
+        Assert.Empty(step.Scheduled);
+    }
+
+    /// <summary>
+    /// A policy that schedules one node and then fails: main's runtime refuses a terminal decision that also schedules
+    /// children, so the child is never run; here the engine refuses it in the same words.
+    /// </summary>
+    [Fact]
+    public void TerminalDecisionThatAlsoSchedules_IsRefused_AndNothingRuns()
+    {
+        var run = Run(null,
+            [new("node-a"), new("node-b"), new("node-c")],
+            [Connection("node-a", "node-b"), Connection("node-a", "node-c")],
+            startNodeId: "node-a",
+            nodeMetadata: new Dictionary<string, FlowchartNodeMetadata> { ["node-a"] = new(HalfBadPolicy.Kind) },
+            policies: [new HalfBadPolicy()]);
+
+        Assert.Equal(["node-a"], run.Order);
+        Assert.Equal(GraphRunStatus.Faulted, run.Status);
+        Assert.Contains("terminal structural decision", run.FaultMessage, StringComparison.Ordinal);
+    }
+
+    /// <summary>Schedules a real node, then one that does not exist: the decision fails after it scheduled.</summary>
+    private sealed class HalfBadPolicy : IFlowchartPolicy
+    {
+        public const string Kind = "test/half-bad";
+
+        public string PolicyKind => Kind;
+        public string DisplayName => "Half Bad";
+
+        public FlowchartPolicyDecision Execute(IFlowchartPolicyContext context) =>
+            new([
+                new FlowchartPolicyCommand(FlowchartPolicyCommandKind.ScheduleNode, nodeId: "node-b"),
+                new FlowchartPolicyCommand(FlowchartPolicyCommandKind.ScheduleNode, nodeId: "node-missing")
+            ]);
     }
 }
