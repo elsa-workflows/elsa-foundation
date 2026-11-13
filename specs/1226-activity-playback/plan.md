@@ -4,11 +4,13 @@
 
 **Input**: #4366; the owner now authorizes Spec Kit planning, tasks and end-to-end implementation. This supersedes the original capture-only instruction.
 
+**Dependency implementation authority**: The owner's subsequent instruction explicitly requests coordination with #3849 to implement T003, then continue this feature end to end. The [implementation handoff request](https://github.com/elsa-workflows/elsa-foundation/issues/3849#issuecomment-6858677569) records that scope; it does not transfer the existing owner's claim or qualify an unmerged source stack. The [accepted S14a handoff](https://github.com/elsa-workflows/elsa-foundation/issues/3849#issuecomment-6858916502) fixes base `f2638c8ac8f23cb3f08071db4d68b793a84d9217` and the owning paths/PR boundary. Runtime facet source authoring is underway in a separate worktree; EF/providers/retention/composition and final qualification remain with #3849.
+
 ## Summary
 
 Add Previous/Next, Play/Pause, four presentation speeds and ordinal scrubbing to recorded run inspection. Reuse the workbench's exact occurrence selection, pinned scope resolution, permission context and conservative transition evidence. Keep playback transport separate from live observation.
 
-**Implementation status: blocked at foundational task T003.** The current production activity browser explicitly provides a live collection with no cross-request snapshot. It has no authoritative occurrence-entry history, frozen membership, ordinal seek or coverage/gap response. The existing history owner (#3849/spec1211) owns those missing foundations. A timestamp-sorted list, forged cursor, client-side count fence or fixture-backed history would not implement this specification. Planning is complete; production implementation cannot start until the dependency is delivered and qualified. See [research](research.md) and the [proposed dependency contract](contracts/playback-inspection.md).
+**Dependent playback implementation status: blocked at foundational task T003.** The current production activity browser explicitly provides a live collection with no cross-request snapshot. It has no authoritative occurrence-entry history, frozen membership, ordinal seek or coverage/gap response. The existing history owner (#3849/spec1211) owns those missing foundations. A timestamp-sorted list, forged cursor, client-side count fence or fixture-backed history would not implement this specification. Coordinated runtime prerequisite implementation is authorized after its source boundary is agreed; dependent playback/user-story implementation begins after that facet is delivered and qualified. See [research](research.md) and the [proposed dependency contract](contracts/playback-inspection.md).
 
 ## Technical Context
 

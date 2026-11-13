@@ -1,6 +1,6 @@
 # Proposed dependency and UI contract
 
-**Status**: proposed boundary for planning; no endpoint, registration, storage model or recording support is implemented. This is the prerequisite required by spec1225 FR026, to be reviewed with the spec1211 runtime-history owner.
+**Status**: proposed boundary for planning; no endpoint, registration, storage model or recording support is implemented. This is the prerequisite required by spec1226 FR026, to be reviewed with the spec1211 runtime-history owner.
 
 ## Runtime-owned occurrence sequence facet
 
@@ -18,6 +18,19 @@ Read operations must support:
 The owning reader must prove stable membership despite appends and late materialization; a last timestamp, count, offset or hash-derived execution sequence is not such proof. Retention changes must invalidate/disclose the affected segment rather than shift ordinals silently. Count, selected rows, bounds and coverage must refer to a coherent authorized read. Existing records without the necessary order/coverage do not get fabricated backfill.
 
 Concrete endpoint/signature/provider changes belong to a separately reviewed owner implementation. Required controls include provider restart, concurrent append/retention, equal/out-of-order timestamps, nested/parallel identity, denied scope, cursor-purpose mismatch and bounded distant seek. Preserve existing history capture/checkpoint budgets; do not add another journal or force recording modes.
+
+### Implementation controls from the existing history stack
+
+Source inspection of S05b (`d90ce8549116`) and S06b (`84765a2320de`) identifies these additional controls for the coordinated implementation. These heads are review inputs, not a delivered or qualified playback base.
+
+- Define eligible first committed occurrence observations explicitly. Intrinsic execution can first record completion; requiring `ActivityStarted` would omit it. Continuation/resume facts for the same exact execution do not add occurrences. Preserve the actual observation kind rather than invent a captured start.
+- Freeze scope membership as well as event positions. The current in-memory reader consults `HistoryParents`, which later events can enrich. An ancestry link learned after admission cannot silently change an old sequence's count or members. Unknown ancestry and a known root are different states.
+- Preserve or invalidate first-occurrence identity across retention. Recomputing a minimum over retained lifecycle rows can reintroduce an old execution at its later continuation. Existing event identity/position receipts alone do not retain the occurrence association.
+- Do not infer located internal segments from the current global `HasGaps` flag. Admit only a range whose continuity the owner can prove; otherwise report its limitation explicitly.
+- Distinguish a committed event prefix from source closure. Later materialized observations stay outside the admitted membership and appear through the separate newer-history indication; existing settlement fields do not prove that every expected source fact has arrived.
+- Provide provider-owned bounded ordinal/count/anchor access. Repeatedly fetching event pages until enough distinct executions have accumulated is not ordinal seeking. Any derived index must share the existing history publication transaction/lock and replay identity.
+
+Qualification must include parent enrichment after admission, purge across the original occurrence observation, repeated continuations, intrinsic-first completion, late occurrence materialization, and a distant ordinal lookup measured independently of the preceding event count. Reuse the existing history snapshot, cursor-binding, atomic replay, authorization-before-read and paired-capability controls. The durable provider must implement the same facet before normal composed-host readiness is claimed.
 
 ## Private Studio boundary
 

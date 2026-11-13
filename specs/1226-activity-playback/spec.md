@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-13
 
-**Status**: Approved — owner authorized planning, tasks and end-to-end implementation on2026-11-13; implementation awaits the verified runtime-history dependency described in [plan.md](plan.md).
+**Status**: In progress — owner authorized planning, tasks and end-to-end implementation on2026-11-13; coordinated runtime prerequisite authoring is underway; dependent playback awaits the verified runtime-history dependency described in [plan.md](plan.md).
 
 **Tracking**: [Feature #4366](https://github.com/elsa-workflows/elsa-foundation/issues/4366).
 
