@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { AnonymousAuthProvider, AuthProvider, homeWidgetIds, registerHomeWidget, type AuthProviderManager, type AuthSession } from "@elsa-workflows/studio-sdk";
 import { HomePage } from "../HomePage";
 import { DashboardPreferenceStore, reconcileDashboardPreferences } from "../dashboardPreferences";
-import { HomeLayoutStore, homeLayoutDefaultRoute, homeLayoutRoute, reconcileHomeLayout } from "../homeLayout";
+import { HomeLayoutStore, homeLayoutDefaultRoute, homeLayoutLocalStoragePrefix, homeLayoutRoute, reconcileHomeLayout, type HomeLayoutDocument } from "../homeLayout";
 import { register } from "../module";
 import { flush, seedHomeLayout, stubApi, waitUntil, widget } from "./testSupport";
 
@@ -273,6 +273,7 @@ describe("dashboard widget contract", () => {
     const values = new Map<string, string>();
     vi.stubGlobal("localStorage", { getItem: (key: string) => values.get(key) ?? null, setItem: (key: string, value: string) => values.set(key, value), removeItem: (key: string) => { values.delete(key); } });
     const api = stubApi();
+    vi.spyOn(api.backend.http, "getJson");
     const first = new HomeLayoutStore(api, { studioHostId: "studio-a", backendBaseUrl: "backend", subjectId: "anonymous", tenantId: "tenant-a" });
     const second = new HomeLayoutStore(api, { studioHostId: "studio-a", backendBaseUrl: "backend", subjectId: "anonymous", tenantId: "tenant-b" });
     const document = { source: "local" as const, namespace: "home-layout", schemaVersion: 1, value: { widgets: [{ id: "home.recent-runs", size: "full" as const, visible: true }] } };
@@ -292,7 +293,146 @@ describe("dashboard widget contract", () => {
     ]);
     await first.reset();
     expect((await first.load()).source).toBe("builtin");
+    expect(api.backend.http.getJson).not.toHaveBeenCalled();
+    expect(api.backend.http.putJson).not.toHaveBeenCalled();
+    expect(api.backend.http.deleteJson).not.toHaveBeenCalled();
     vi.unstubAllGlobals();
+  });
+
+  it("creates a personal Home layout from an inherited default before queuing and advancing personal revisions", async () => {
+    const api = stubApi();
+    const inherited: HomeLayoutDocument = { source: "default", namespace: "home-layout", schemaVersion: 1, revision: "admin-r7", value: { widgets: [] } };
+    const writes: Array<{ value: HomeLayoutDocument["value"]; headers: Record<string, string> }> = [];
+    let revision = 0;
+    let releaseFirst!: () => void;
+    const firstWrite = new Promise<void>(resolve => { releaseFirst = resolve; });
+    const getJson = vi.fn(async () => inherited);
+    const putJson = vi.fn(async (_url: string, body: { value: HomeLayoutDocument["value"] }, options: { headers: Record<string, string> }) => {
+      writes.push({ value: body.value, headers: options.headers });
+      if (writes.length === 1) await firstWrite;
+      const matches = revision ? options.headers["If-Match"] === `"user-r${revision}"` : options.headers["If-None-Match"] === "*";
+      if (!matches) throw Object.assign(new Error("The personal layout precondition failed."), { status: 412 });
+      return { ...inherited, source: "user", revision: `user-r${++revision}`, value: body.value };
+    });
+    Object.assign(api.backend.http, { getJson, putJson });
+    const store = new HomeLayoutStore(api, { studioHostId: "studio", backendBaseUrl: "backend", subjectId: "alice", tenantId: "tenant" });
+    const loaded = await store.load();
+    // Home edits retain the inherited metadata while changing the source to user.
+    const edited: HomeLayoutDocument = { ...loaded, source: "user", value: { widgets: [{ id: "home.recent-runs", size: "medium", visible: true }] } };
+    const resized: HomeLayoutDocument = { ...edited, value: { widgets: [{ ...edited.value.widgets[0], size: "full" }] } };
+    const saves = Promise.all([store.save(edited), store.save(resized)]);
+    await waitUntil(() => putJson.mock.calls.length > 0);
+    try { expect(putJson).toHaveBeenCalledTimes(1); } finally { releaseFirst(); }
+    const saved = await saves;
+    expect(saved.map(document => document.revision)).toEqual(["user-r1", "user-r2"]);
+    await store.save({ ...edited, value: { widgets: [{ ...edited.value.widgets[0], visible: false }] } });
+    expect(writes.map(write => write.headers["If-Match"])).toEqual([undefined, '"user-r1"', '"user-r2"']);
+    expect(writes.map(write => write.headers["If-None-Match"])).toEqual(["*", undefined, undefined]);
+    expect(writes.map(write => write.value.widgets[0])).toEqual([edited.value.widgets[0], resized.value.widgets[0], { ...edited.value.widgets[0], visible: false }]);
+  });
+
+  it("creates a new personal layout after reset returns an inherited default revision", async () => {
+    const api = stubApi();
+    const personal: HomeLayoutDocument = { source: "user", namespace: "home-layout", schemaVersion: 1, revision: "user-r8", value: { widgets: [] } };
+    const inherited: HomeLayoutDocument = { ...personal, source: "default", revision: "admin-r9" };
+    const getJson = vi.fn().mockResolvedValueOnce(personal).mockResolvedValue(inherited);
+    const putJson = vi.fn(async (_url: string, body: { value: HomeLayoutDocument["value"] }, options: { headers: Record<string, string> }) => {
+      if (options.headers["If-None-Match"] !== "*" || options.headers["If-Match"]) throw Object.assign(new Error("No personal layout exists after reset."), { status: 412 });
+      return { ...personal, revision: "user-r10", value: body.value };
+    });
+    Object.assign(api.backend.http, { getJson, putJson });
+    const store = new HomeLayoutStore(api, { studioHostId: "studio", backendBaseUrl: "backend", subjectId: "alice", tenantId: "tenant" });
+    await store.load();
+    const reset = await store.reset();
+    expect(reset).toMatchObject({ source: "default", revision: "admin-r9" });
+    const saved = await store.save({ ...reset, source: "user", value: { widgets: [{ id: "home.recent-runs", size: "medium", visible: true }] } });
+    expect(saved).toMatchObject({ source: "user", revision: "user-r10" });
+    expect(api.backend.http.deleteJson).toHaveBeenCalledWith(homeLayoutRoute, { headers: { "X-Elsa-Studio-Host-Id": "studio" } });
+  });
+
+  it("keeps reset authoritative when reloading falls back to a stale device document", async () => {
+    const api = stubApi();
+    const scope = { studioHostId: "studio", backendBaseUrl: "backend", subjectId: "alice", tenantId: "tenant" };
+    const device: HomeLayoutDocument = { source: "local", namespace: "home-layout", schemaVersion: 1, revision: "old-user-r4", value: { widgets: [{ id: "home.recent-runs", size: "full", visible: true }] } };
+    localStorage.setItem(`${homeLayoutLocalStoragePrefix}${encodeURIComponent(JSON.stringify(scope))}`, JSON.stringify(device));
+    const getJson = vi.fn().mockRejectedValue(new Error("The reload is offline."));
+    const putJson = vi.fn(async (_url: string, body: { value: HomeLayoutDocument["value"] }, options: { headers: Record<string, string> }) => {
+      if (options.headers["If-None-Match"] !== "*" || options.headers["If-Match"]) throw Object.assign(new Error("The reset deleted the personal layout."), { status: 412 });
+      return { ...device, source: "user", revision: "user-r5", value: body.value };
+    });
+    Object.assign(api.backend.http, { getJson, putJson });
+    const store = new HomeLayoutStore(api, scope);
+    const reset = await store.reset();
+    expect(reset).toMatchObject({ source: "local", value: device.value });
+    expect(reset.revision).toBeUndefined();
+    const saved = await store.save({ ...reset, source: "user" });
+    expect(saved).toMatchObject({ source: "user", revision: "user-r5", value: device.value });
+  });
+
+  it("retains create preconditions while an inherited Home edit falls back to device storage", async () => {
+    const api = stubApi();
+    const scope = { studioHostId: "studio", backendBaseUrl: "backend", subjectId: "alice", tenantId: "tenant" };
+    const inherited: HomeLayoutDocument = { source: "default", namespace: "home-layout", schemaVersion: 1, revision: "admin-r2", value: { widgets: [] } };
+    const getJson = vi.fn().mockResolvedValueOnce(inherited).mockRejectedValue(new Error("Offline"));
+    const putJson = vi.fn().mockRejectedValueOnce(new Error("Offline")).mockImplementation(async (_url: string, body: { value: HomeLayoutDocument["value"] }, options: { headers: Record<string, string> }) => {
+      if (options.headers["If-None-Match"] !== "*" || options.headers["If-Match"]) throw Object.assign(new Error("The personal layout still does not exist."), { status: 412 });
+      return { ...inherited, source: "user", revision: "user-r1", value: body.value };
+    });
+    Object.assign(api.backend.http, { getJson, putJson });
+    const store = new HomeLayoutStore(api, scope);
+    const loaded = await store.load();
+    const value: HomeLayoutDocument["value"] = { widgets: [{ id: "home.recent-runs", size: "full", visible: false }] };
+    const device = await store.save({ ...loaded, source: "user", value });
+    expect(device).toMatchObject({ source: "local", value });
+    expect(await store.load()).toEqual(device);
+    const saved = await store.save({ ...device, source: "user" });
+    expect(saved).toMatchObject({ source: "user", revision: "user-r1", value });
+  });
+
+  it.each(["default", "user"] as const)("retains only personal revision provenance after offline %s saves and store recreation", async source => {
+    const api = stubApi();
+    const scope = { studioHostId: "recreated-" + source, backendBaseUrl: "backend", subjectId: "alice", tenantId: "tenant" };
+    const initial: HomeLayoutDocument = { source, namespace: "home-layout", schemaVersion: 1, revision: source === "default" ? "admin-r2" : "user-r2", value: { widgets: [] } };
+    const getJson = vi.fn().mockResolvedValueOnce(initial).mockRejectedValue(new Error("Offline"));
+    const putJson = vi.fn().mockRejectedValueOnce(new Error("Offline")).mockImplementation(async (_url: string, body: { value: HomeLayoutDocument["value"] }, options: { headers: Record<string, string> }) => {
+      expect(options.headers[source === "default" ? "If-None-Match" : "If-Match"]).toBe(source === "default" ? "*" : '"user-r2"');
+      return { ...initial, source: "user", revision: "user-r3", value: body.value };
+    });
+    Object.assign(api.backend.http, { getJson, putJson });
+    const first = new HomeLayoutStore(api, scope);
+    const device = await first.save(await first.load());
+    expect(device.revision).toBe(source === "default" ? undefined : "user-r2");
+    const second = new HomeLayoutStore(api, scope);
+    expect(await second.save(await second.load())).toMatchObject({ source: "user", revision: "user-r3" });
+  });
+
+  it("persists reset's known absence across offline store recreation without dropping device values", async () => {
+    const api = stubApi();
+    const scope = { studioHostId: "reset-recreated", backendBaseUrl: "backend", subjectId: "alice", tenantId: "tenant" };
+    const device: HomeLayoutDocument = { source: "local", namespace: "home-layout", schemaVersion: 1, revision: "old-user-r4", value: { widgets: [{ id: "home.recent-runs", size: "full", visible: true }] } };
+    localStorage.setItem(`${homeLayoutLocalStoragePrefix}${encodeURIComponent(JSON.stringify(scope))}`, JSON.stringify(device));
+    Object.assign(api.backend.http, { getJson: vi.fn().mockRejectedValue(new Error("Offline")), putJson: vi.fn(async (_url: string, body: { value: HomeLayoutDocument["value"] }, options: { headers: Record<string, string> }) => {
+      expect(options.headers["If-None-Match"]).toBe("*"); expect(options.headers["If-Match"]).toBeUndefined();
+      return { ...device, source: "user", revision: "user-r5", value: body.value };
+    }) });
+    await new HomeLayoutStore(api, scope).reset();
+    const second = new HomeLayoutStore(api, scope);
+    const saved = await second.save(await second.load());
+    expect(saved).toMatchObject({ source: "user", revision: "user-r5", value: device.value });
+  });
+
+  it("uses a supplied personal revision when saving through a store that has not loaded", async () => {
+    const api = stubApi();
+    const personal: HomeLayoutDocument = { source: "user", namespace: "home-layout", schemaVersion: 1, revision: "user-r4", value: { widgets: [{ id: "home.recent-runs", size: "full", visible: true }] } };
+    const getJson = vi.fn();
+    const putJson = vi.fn(async (_url: string, body: { value: HomeLayoutDocument["value"] }, options: { headers: Record<string, string> }) => {
+      if (options.headers["If-Match"] !== '"user-r4"' || options.headers["If-None-Match"]) throw Object.assign(new Error("The personal layout already exists."), { status: 412 });
+      return { ...personal, revision: "user-r5", value: body.value };
+    });
+    Object.assign(api.backend.http, { getJson, putJson });
+    const store = new HomeLayoutStore(api, { studioHostId: "studio", backendBaseUrl: "backend", subjectId: "alice", tenantId: "tenant" });
+    expect(await store.save(personal)).toMatchObject({ source: "user", revision: "user-r5", value: personal.value });
+    expect(getJson).not.toHaveBeenCalled();
   });
 
   it("updates the current server default with compare-and-swap without advancing the personal revision", async () => {
