@@ -7,6 +7,7 @@ using Elsa.Workflows.Runtime.Services.ActivityExecutions;
 using Elsa.Workflows.Runtime.Services.Checkpoints;
 using Elsa.Workflows.Runtime.Services.Dispatch;
 using Elsa.Workflows.Runtime.Services.Executions;
+using Elsa.Workflows.Runtime.Services.History;
 using Elsa.Workflows.Runtime.Services.Incidents;
 using Elsa.Workflows.Runtime.Services.Scheduler;
 using Microsoft.Extensions.Time.Testing;
@@ -25,6 +26,31 @@ public sealed class PoisonedSchedulerWorkIncidentObserverTests
     private readonly Harness _harness;
 
     public PoisonedSchedulerWorkIncidentObserverTests() => _harness = new(_now);
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Actual_poison_incident_owner_hands_off_creation_once_with_work_causation(bool captured)
+    {
+        var harness = new Harness(_now, historySources: true);
+        var workflow = await harness.SaveWorkflow(WorkflowExecutionStatus.Running);
+        // Source-only qualification; no required capture policy or physical history writer is enabled.
+        await harness.WorkflowStore.SaveAsync(workflow with
+        {
+            HistoryCapturePolicy = captured ? new("runtime-history-v3", 3, false, ["IncidentRecorded"]) : null
+        });
+        await harness.RecordPoison(RuntimeSchedulerPoisonDisposition.Poisoned);
+        await harness.Observer.OnDrainedAsync(harness.Envelope, harness.FaultedDrainResult);
+        await harness.Observer.OnDrainedAsync(harness.Envelope, harness.FaultedDrainResult);
+        var commit = Assert.Single(harness.CommitStore.ListCommits()).Commit;
+        if (!captured) { Assert.Null(commit.HistorySourceFacts); return; }
+        var fact = Assert.Single(commit.HistorySourceFacts!);
+        Assert.Equal(RuntimeHistorySourceFactKind.IncidentCreated, fact.Kind);
+        Assert.Equal(Assert.Single(commit.StateChanges.Incidents).StateId, fact.IncidentId);
+        Assert.Equal("workitem-1", fact.Causation!.SchedulerWorkItemId);
+        Assert.Equal(_now, fact.OccurredAt);
+        Assert.Null(fact.ReasonCode);
+    }
 
     private static IReadOnlyDictionary<string, string> ActivityAddressMetadata() => new Dictionary<string, string>
     {
@@ -171,15 +197,23 @@ public sealed class PoisonedSchedulerWorkIncidentObserverTests
         Assert.Empty(commit.StateChanges.ActivityExecutionInspections);
     }
 
-    [Fact]
-    public async Task OnDrainedAsync_WhenInitialActivityReadFails_RepairsCanonicalIncidentOnLaterFaultedDrain()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task OnDrainedAsync_WhenInitialActivityReadFails_RepairsCanonicalIncidentOnLaterFaultedDrain(bool captured)
     {
         var backingActivityStore = new InMemoryActivityExecutionStateStore();
         var activityStore = new FailOnceActivityExecutionStateStore(backingActivityStore);
         var harness = new Harness(
             _now,
             activityExecutionStateStore: activityStore,
-            activityStore: backingActivityStore);
+            activityStore: backingActivityStore,
+            historySources: captured);
+        if (captured)
+        {
+            var workflow = await harness.SaveWorkflow(WorkflowExecutionStatus.Running);
+            await harness.WorkflowStore.SaveAsync(workflow with { HistoryCapturePolicy = new("runtime-history-v3", 3, false, ["IncidentRecorded"]) });
+        }
         await harness.SaveActivity();
         await harness.RecordPoison(
             RuntimeSchedulerPoisonDisposition.Poisoned,
@@ -222,6 +256,14 @@ public sealed class PoisonedSchedulerWorkIncidentObserverTests
             .Select(item => item.Commit)
             .Single(commit => commit.CommitId.Contains("scheduler-poison-repair", StringComparison.Ordinal));
         Assert.Empty(repairCommit.StateChanges.Incidents);
+        if (captured)
+        {
+            var fact = Assert.Single(repairCommit.HistorySourceFacts!);
+            Assert.Equal(RuntimeHistorySourceFactKind.IncidentProjectionReconciled, fact.Kind);
+            Assert.Equal(incident.IncidentId, fact.IncidentId);
+            Assert.Equal(incident.CreatedAt, fact.OccurredAt);
+        }
+        else Assert.Null(repairCommit.HistorySourceFacts);
         Assert.Equal("activity-1", Assert.Single(repairCommit.Checkpoint.ActivityExecutionIds));
         Assert.NotEqual(
             harness.CommitStore.ListCommits().Select(item => item.Commit.Checkpoint.CheckpointId).First(),
@@ -800,7 +842,8 @@ public sealed class PoisonedSchedulerWorkIncidentObserverTests
             IActivityExecutionStateStore? activityExecutionStateStore = null,
             IActivityExecutionInspectionStore? activityExecutionInspectionStore = null,
             InMemoryActivityExecutionInspectionStore? inspectionStore = null,
-            InMemoryActivityExecutionStateStore? activityStore = null)
+            InMemoryActivityExecutionStateStore? activityStore = null,
+            bool historySources = false)
         {
             _now = now;
             ActivityStore = activityStore ?? new InMemoryActivityExecutionStateStore();
@@ -813,7 +856,10 @@ public sealed class PoisonedSchedulerWorkIncidentObserverTests
                 incidentStateStore: commitIncidentStore ?? IncidentStore,
                 activityExecutionInspectionWriter: InspectionStore,
                 rootWriteLeaseManager: PassThroughWorkflowExecutableRootWriteLeaseManager.Instance);
-            CheckpointCommitter = new RuntimeCheckpointCommitter(new ImmediateRuntimeCheckpointPersistencePolicy(), CommitStore, new AsyncLocalRuntimeExecutionOwnershipContextAccessor(), [], []);
+            CheckpointCommitter = new RuntimeCheckpointCommitter(new ImmediateRuntimeCheckpointPersistencePolicy(), CommitStore, new AsyncLocalRuntimeExecutionOwnershipContextAccessor(), [], [])
+            {
+                HistorySourceResolver = () => historySources ? new DefaultRuntimeHistorySourceExtension(WorkflowStore) : null
+            };
             TimeProvider = new FakeTimeProvider(now);
             var inspectionAccumulator = new RuntimeActivityExecutionInspectionAccumulator(InspectionStore);
             Observer = new PoisonedSchedulerWorkIncidentObserver(

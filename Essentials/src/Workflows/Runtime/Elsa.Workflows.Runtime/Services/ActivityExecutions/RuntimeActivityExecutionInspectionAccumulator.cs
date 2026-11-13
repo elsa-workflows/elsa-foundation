@@ -1,4 +1,3 @@
-using System.Data.Common;
 using System.Text.Json;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -54,12 +53,12 @@ public sealed class RuntimeActivityExecutionInspectionAccumulator : IRuntimeActi
         if (_history is not null && _executions is not null)
         {
             try { policy = (await _executions.FindAsync(state.Execution.WorkflowExecutionId, cancellationToken))?.HistoryCapturePolicy; }
-            catch (Exception exception) when (IsMalformed(exception))
+            catch (Exception exception) when (RuntimeHistoryReadFailures.IsMalformed(exception))
             {
                 throw new RuntimeHistoryIntegrityException(state.Execution.WorkflowExecutionId,
                     "the admitted value-capture policy could not be interpreted", exception);
             }
-            catch (Exception exception) when (!cancellationToken.IsCancellationRequested && IsUnavailable(exception))
+            catch (Exception exception) when (!cancellationToken.IsCancellationRequested && RuntimeHistoryReadFailures.IsUnavailable(exception))
             {
                 throw new RuntimeSchedulerWorkUnavailableException("runtime.history.capture-unavailable",
                     $"The value owner could not read the admitted policy for execution '{state.Execution.WorkflowExecutionId}'.", exception);
@@ -73,12 +72,12 @@ public sealed class RuntimeActivityExecutionInspectionAccumulator : IRuntimeActi
             throw new InvalidOperationException("Value capture provenance belongs to a different workflow.");
         ActivityExecutionInspectionProjection? existing;
         try { existing = await _store.FindAsync(state.Execution.WorkflowExecutionId, state.Execution.ActivityExecutionId, cancellationToken); }
-        catch (Exception exception) when (capture && IsMalformed(exception))
+        catch (Exception exception) when (capture && RuntimeHistoryReadFailures.IsMalformed(exception))
         {
             throw new RuntimeHistoryIntegrityException(state.Execution.WorkflowExecutionId,
                 $"inspection evidence for activity '{state.Execution.ActivityExecutionId}' could not be interpreted", exception);
         }
-        catch (Exception exception) when (capture && !cancellationToken.IsCancellationRequested && IsUnavailable(exception))
+        catch (Exception exception) when (capture && !cancellationToken.IsCancellationRequested && RuntimeHistoryReadFailures.IsUnavailable(exception))
         {
             throw new RuntimeSchedulerWorkUnavailableException("runtime.history.capture-unavailable",
                 $"The value owner could not read inspection evidence for execution '{state.Execution.WorkflowExecutionId}' activity '{state.Execution.ActivityExecutionId}'.", exception);
@@ -149,20 +148,4 @@ public sealed class RuntimeActivityExecutionInspectionAccumulator : IRuntimeActi
     private static bool JsonEqual(JsonElement? left, JsonElement? right) =>
         left.HasValue == right.HasValue && (!left.HasValue || JsonElement.DeepEquals(left.Value, right!.Value));
 
-    private static bool IsMalformed(Exception exception) =>
-        exception is InvalidDataException or JsonException or RuntimeHistoryIntegrityException ||
-        exception.InnerException is { } cause && IsMalformed(cause);
-
-    private static bool IsUnavailable(Exception exception)
-    {
-        if (IsMalformed(exception) || RuntimeCheckpointCommitValidationException.IsCauseOf(exception)) return false;
-        var unavailable = false;
-        for (Exception? cause = exception; cause is not null; cause = cause.InnerException)
-        {
-            if (cause is ArgumentException) return false;
-            unavailable |= cause is IOException or DbException or TimeoutException or NotSupportedException or
-                OperationCanceledException or RuntimeHistoryUnavailableException or RuntimeSchedulerWorkUnavailableException;
-        }
-        return unavailable;
-    }
 }

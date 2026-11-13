@@ -78,4 +78,15 @@ public sealed record RuntimeHistorySourceFact
     public string? CompensationEntryId { get; }
     public string? ReasonCode { get; }
     public IReadOnlyList<string> OutcomeNames { get; }
+
+    /// <summary>Exact immutable owner-input equality, without serialization or timestamp normalization.</summary>
+    public bool IsEquivalentTo(RuntimeHistorySourceFact other)
+    {
+        ArgumentNullException.ThrowIfNull(other);
+        return Kind == other.Kind && SubjectId == other.SubjectId && OccurredAt.EqualsExact(other.OccurredAt) &&
+            ActivityExecutionId == other.ActivityExecutionId && AttemptId == other.AttemptId && Causation == other.Causation &&
+            RelatedWorkflowExecutionId == other.RelatedWorkflowExecutionId && RelatedActivityExecutionId == other.RelatedActivityExecutionId &&
+            TimerId == other.TimerId && IncidentId == other.IncidentId && CompensationEntryId == other.CompensationEntryId &&
+            ReasonCode == other.ReasonCode && OutcomeNames.SequenceEqual(other.OutcomeNames, StringComparer.Ordinal);
+    }
 }

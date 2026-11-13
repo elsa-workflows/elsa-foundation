@@ -514,7 +514,11 @@ public static class RuntimeCoreServiceCollectionExtensions
                 serviceProvider.GetService<IRuntimeCoalescingSessionAccessor>(),
                 serviceProvider.GetService<IRuntimeLiveDrainDeliveryAccessor>(),
                 serviceProvider.GetService<RuntimeInProcessHopFastPathOptions>(),
-                serviceProvider.GetService<IPersistenceAccessContextAccessor>()));
+                serviceProvider.GetService<IPersistenceAccessContextAccessor>())
+            {
+                HistoryStoreResolver = () => serviceProvider.GetService<IRuntimeHistoryStore>(),
+                HistorySourceResolver = () => serviceProvider.GetService<IRuntimeHistorySourceExtension>()
+            });
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IRuntimeCheckpointCommitEnricher, WorkflowDispatchCheckpointEnricher>());
         services.TryAddSingleton<IRuntimePayloadCapturePolicy, DefaultRuntimePayloadCapturePolicy>();
         services.TryAddSingleton<IWorkflowExecutableInputValidator, WorkflowExecutableInputValidator>();
