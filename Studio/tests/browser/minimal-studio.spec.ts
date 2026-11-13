@@ -121,7 +121,8 @@ test("minimal logs preserve live controls, selected details and empty state", as
   await page.getByRole("button", { name: "Close structured log details", exact: true }).click();
   await page.getByRole("textbox", { name: "Filter by category", exact: true }).fill("empty");
   await expect(page.getByRole("row", { name: /Select Information structured log/ })).toHaveCount(0);
-  await expect(page.getByText("No structured logs received yet.", { exact: true })).toBeVisible();
+  await expect(page.getByText("No logs match these filters.", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Reset filters", exact: true })).toBeVisible();
 });
 
 test("a public UI consumer opts into Minimal without host CSS", async ({ page }) => {
