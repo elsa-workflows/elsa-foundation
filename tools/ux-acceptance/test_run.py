@@ -119,6 +119,7 @@ class VerdictTests(unittest.TestCase):
         settings = {}
         shells = {'CShells': {'Shells': {'default': {'Features': {'WeaverGitHubCopilot': {'Enabled': True}}}}}}
         acceptance.configure_dashboard_qualification(settings, shells)
+        self.assertFalse(settings['Elsa']['Readiness']['WarmDefaultShell'])
         qualification = settings['Qualification']
         self.assertEqual(1, len(qualification['Principals']))
         self.assertEqual('default', qualification['Principals'][0]['tenant'])
