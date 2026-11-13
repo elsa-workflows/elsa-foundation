@@ -80,7 +80,18 @@ public static class Smoke
         p.Chain("start", "raise", "go-on", "end");
         registry.Add(new BpmnProcess(p.Build(), new Dictionary<string, Work> { ["go-on"] = new JobWork("go-on") }));
 
+        // A fork with a call activity beside a service task: the child gives back only what it set.
+        p = new ProcessDraft("smoke-call-fork");
+        p.B.StartEvent("start").ParallelGateway("fork").CallActivity("call", "smoke-child", bindingRef: "call").ServiceTask("inc", bindingRef: "inc").ParallelGateway("join").EndEvent("end");
+        p.Chain("start", "fork", "call", "join", "end").Chain("fork", "inc", "join");
+        registry.Add(new BpmnProcess(p.Build(), new Dictionary<string, Work> { ["call"] = new CallWork("smoke-child"), ["inc"] = new JobWork("inc") }, new JsonObject { ["n"] = 0 }));
+        p = new ProcessDraft("smoke-child");
+        p.B.StartEvent("start").ServiceTask("work", bindingRef: "child-work").EndEvent("end");
+        p.Chain("start", "work", "end");
+        registry.Add(new BpmnProcess(p.Build(), new Dictionary<string, Work> { ["child-work"] = new JobWork("child-work") }));
+
         return registry
+            .Service("child-work", _ => new ServiceResult(new JsonObject { ["child-out"] = "done" }))
             .Service("note", _ => new ServiceResult(new JsonObject { ["noted"] = true }))
             .Service("go-on", _ => new ServiceResult(new JsonObject { ["went-on"] = true }))
             .Service("quote", v => new ServiceResult(new JsonObject { ["quote"] = $"quote for {v["order"]}" }))
@@ -160,6 +171,20 @@ public static class Smoke
             var vars = owner.State(id.Id)!.Variables;
             Check(owner.Status(id.Id) == InstanceStatus.Finished && vars.ContainsKey("noted") && vars.ContainsKey("went-on"),
                 $"the boundary ran and the child went on: {owner.Status(id.Id)}, {string.Join(" | ", Journal(id))}");
+        }
+
+        Console.WriteLine("a called child gives back only the variables it set");
+        {
+            gates.Services.Add("child-work");
+            var id = InstanceRef.In(0, "call-fork");
+            owner.Worker.Post(new Message("m6", id, Kinds.Start, Start: BpmnModel.Spec("smoke-call-fork")), fresh: true);
+            await owner.PumpAsync(() => owner.State(id.Id)?.Variables["n"]?.GetValue<int>() == 1);     // the branch beside the call has set n
+            gates.Release("child-work");
+            await owner.PumpAsync(() => owner.Status(id.Id) == InstanceStatus.Finished && Settled());
+            var vars = owner.State(id.Id)!.Variables;
+            Check(vars["n"]!.GetValue<int>() == 1 && vars["child-out"]?.GetValue<string>() == "done", $"n is {vars["n"]} (the child's stale copy is 0), child-out is {vars.GetValueOrDefault("child-out")}");
+            gates.Services.Clear();
+            gates.Held.Clear();
         }
 
         Console.WriteLine("conditions");

@@ -47,6 +47,9 @@ public sealed class BpmnState
     /// that comes round again must skip it. It grows by one id per message taken (BPMN.md: friction F-B1).
     /// </summary>
     public HashSet<string> Taken { get; set; } = new(StringComparer.Ordinal);
+
+    /// <summary>The variables set since the start: what a called child gives back, so it does not overwrite its parent's with stale copies.</summary>
+    public HashSet<string> Set { get; set; } = new(StringComparer.Ordinal);
 }
 
 public sealed class BpmnOptions

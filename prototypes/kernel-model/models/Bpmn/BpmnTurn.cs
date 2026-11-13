@@ -28,7 +28,7 @@ internal sealed class BpmnTurn(BpmnModel model, ITurn turn)
         {
             case BpmnContinuation.Complete complete:
                 turn.Record($"end {complete.Outcome}");
-                turn.SetStatus(InstanceStatus.Finished, complete.Outcome, new JsonObject(_s.Variables.Select(v => KeyValuePair.Create(v.Key, v.Value?.DeepClone()))));
+                turn.SetStatus(InstanceStatus.Finished, complete.Outcome, new JsonObject(_s.Variables.Where(v => _s.Set.Contains(v.Key)).Select(v => KeyValuePair.Create(v.Key, v.Value?.DeepClone()))));
                 break;
             case BpmnContinuation.Fault fault:
                 // The interpreter stops nothing on a fault; the instance ends, so nothing it started may run on.
@@ -115,7 +115,11 @@ internal sealed class BpmnTurn(BpmnModel model, ITurn turn)
 
     private void Merge(JsonObject? variables)
     {
-        foreach (var (name, value) in variables ?? []) _s.Variables[name] = value?.DeepClone();
+        foreach (var (name, value) in variables ?? [])
+        {
+            _s.Variables[name] = value?.DeepClone();
+            _s.Set.Add(name);
+        }
     }
 
     /// <summary>A report for work no longer in the ledger (a stale timer, a second delivery) changes nothing.</summary>
