@@ -162,9 +162,11 @@ test("feature filtering and settings dialogs", async ({ page }, info) => {
   await expect(category).toHaveAttribute("aria-pressed", "true");
   await expect(category).toBeFocused();
   await expect(list.locator(".feature-management-card").first()).toBeVisible();
+  await capture(page, info, "features-category-filtered");
   await categorySearch.fill("no-such-category-acceptance");
   await expect(rail.getByText("No categories match.", { exact: true })).toBeVisible();
   await expect(list.locator(".feature-management-card").first()).toBeVisible();
+  await capture(page, info, "features-category-no-matches");
   await rail.getByRole("button", { name: "Clear category search", exact: true }).press("Enter");
   await expect(categorySearch).toHaveValue("");
   await expect(categorySearch).toBeFocused();
@@ -173,16 +175,19 @@ test("feature filtering and settings dialogs", async ({ page }, info) => {
   await categories.getByRole("button", { name: /^All categories/ }).press("Space");
   await expect(categories.getByRole("button", { name: /^All categories/ })).toHaveAttribute("aria-pressed", "true");
   // Evaluate the module's available width, which includes the host's settings navigation.
-  const composition = await rail.evaluate(element => {
+  const readComposition = () => rail.evaluate(element => {
     const layout = element.parentElement!;
     const listColumn = layout.querySelector(".feature-management-list-column")!;
     const railRect = element.getBoundingClientRect();
     const listRect = listColumn.getBoundingClientRect();
+    const inspectorRect = layout.querySelector(".feature-management-inspector")!.getBoundingClientRect();
     const containerWidth = layout.getBoundingClientRect().width;
     return {
       containerWidth,
       railRight: railRect.right,
       listLeft: listRect.left,
+      listRight: listRect.right,
+      inspectorLeft: inspectorRect.left,
       railBottom: railRect.bottom,
       listTop: listRect.top,
       contained: Array.from(element.querySelectorAll("button, input")).every(control => {
@@ -192,12 +197,36 @@ test("feature filtering and settings dialogs", async ({ page }, info) => {
       overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth
     };
   });
+  const composition = await readComposition();
   expect(composition.contained).toBe(true);
   expect(composition.overflow).toBeLessThanOrEqual(1);
   if (composition.containerWidth >= 960) expect(composition.railRight).toBeLessThanOrEqual(composition.listLeft);
   else expect(composition.railBottom).toBeLessThanOrEqual(composition.listTop);
   await rail.scrollIntoViewIfNeeded();
   await capture(page, info, "features-category-rail");
+  const referenceViewport = page.viewportSize()!;
+  if (referenceViewport.width >= 700) {
+    // Studio's navigation leaves the 1440px reference below the side-rail breakpoint.
+    // Qualify the actual three-column host at a wider viewport, then restore the project.
+    try {
+      await page.setViewportSize({ width: 1920, height: referenceViewport.height });
+      await category.focus();
+      await expect(category).toBeInViewport();
+      await capture(page, info, "features-category-rail-wide");
+      const wide = await readComposition();
+      expect(wide.containerWidth).toBeGreaterThanOrEqual(960);
+      expect(wide.railRight).toBeLessThanOrEqual(wide.listLeft);
+      expect(wide.listRight).toBeLessThanOrEqual(wide.inspectorLeft);
+      expect(wide.contained).toBe(true);
+      expect(wide.overflow).toBeLessThanOrEqual(1);
+      const finalCategory = categories.getByRole("button").last();
+      await finalCategory.focus();
+      await expect(finalCategory).toBeInViewport();
+      await capture(page, info, "features-category-rail-wide-end");
+    } finally {
+      await page.setViewportSize(referenceViewport);
+    }
+  }
   if ((page.viewportSize()?.width ?? 1440) < 700) {
     const normalViewport = page.viewportSize()!;
     await page.setViewportSize({ width: 320, height: normalViewport.height });

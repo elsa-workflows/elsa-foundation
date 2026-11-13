@@ -221,8 +221,11 @@ for (const mode of ["light", "dark"] as const) {
         expect(geometry.width >= 960 ? geometry.beside : geometry.above).toBe(true);
         await longCategory.scrollIntoViewIfNeeded();
         await search.focus();
-        await testInfo.attach(`categories-${mode}-${viewport.viewportWidth}-${viewport.moduleWidth ?? "full"}`, {
-          body: await page.screenshot(), contentType: "image/png"
+        const captureName = `categories-${mode}-${viewport.viewportWidth}-${viewport.moduleWidth ?? "full"}`;
+        const screenshot = testInfo.outputPath(`${captureName}.png`);
+        await page.screenshot({ path: screenshot });
+        await testInfo.attach(captureName, {
+          path: screenshot, contentType: "image/png"
         });
       });
     }

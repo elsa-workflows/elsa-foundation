@@ -45,6 +45,6 @@
 - [x] T021 Replace CategorySelect with the visible accessible rail and per-host category search; remove obsolete popover behavior/styles.
 - [x] T022 Add responsive rail/list/inspector composition, bounded category scrolling, wrapping labels and shared theme/focus treatment.
 - [x] T023 Extend module behavior tests for search/selection/reset/counts, no-match recovery, host isolation and no mutation/network reads; preserve existing suites.
-- [x] T024 Extend the composed Features journey for keyboard navigation, category filtering/recovery and viewport containment; preserve settings and impact proof.
+- [x] T024 Extend the composed Features journey for keyboard navigation, category filtering/recovery and viewport containment, including the roomy side rail; preserve settings and impact proof and retain the isolated long-label images for review.
 - [ ] T025 Run affected whole light suites and a regression bite-proof, then obtain current-head hosted CI/composed evidence and independent correctness/standards/UX acceptance.
 - [ ] T026 Record final acceptance evidence, complete gated merge and verify descendant main. Implementation status alone does not establish delivery acceptance.
