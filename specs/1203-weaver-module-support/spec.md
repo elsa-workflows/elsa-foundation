@@ -546,7 +546,7 @@ Negative cases:
   - The Program's own follow-ups are triaged under the 29 October delegation.
   - Every follow-up is recorded on #3428.
   - A follow-up in a parked program's area is filed without a parent.
-  - Nothing that already exists is filed: context-budget progress goes on #3710, the OAuth grant leftover is #3779 (fixed in leaf 2), and Full payloads stay with Studio ADR 0009.
+  - Nothing that already exists is filed: context-budget progress goes on #3710, the OAuth grant leftover is #3779 (assigned to leaf 2, #3833), and Full payloads stay with Studio ADR 0009.
 
   Leaf 0 also records on #3428:
   - every narrowing;
@@ -690,7 +690,7 @@ Negative cases:
   - Agents: #3519. Runtime agents: #2892.
   - Weaver: #3710, #3720 and #3761.
   - Feed credentials: #3735.
-  - OAuth grant leftover: #3779, fixed in leaf 2.
+  - OAuth grant leftover: #3779, assigned to leaf 2 (#3833).
 - **Out of scope**:
   - releases, deployments and provider purchases;
   - live-provider credentials and credential extraction;
