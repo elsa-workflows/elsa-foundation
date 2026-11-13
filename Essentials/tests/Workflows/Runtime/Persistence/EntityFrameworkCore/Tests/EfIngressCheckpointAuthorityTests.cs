@@ -1,3 +1,4 @@
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using System.Reflection;
 using System.Text.Json;
 using Elsa.Primitives.Models;
@@ -198,7 +199,14 @@ public sealed class EfIngressCheckpointAuthorityTests
             var changedWork = new RuntimeSchedulerWorkItem(childCheckpoint.WorkItemId, childCheckpoint.WorkflowExecutionId, childCheckpoint.CommandId,
                 childCheckpoint.CommandKind, childCheckpoint.EnvelopeId, childCheckpoint.IdempotencyKey, childCheckpoint.EnqueuedAt, childCheckpoint.RecordedAt,
                 childCheckpoint.Sequence, JsonSerializer.SerializeToElement(changedPayload), childCheckpoint.CommandMetadata, childCheckpoint.EnvelopeMetadata);
-            await Assert.ThrowsAsync<InvalidDataException>(() => handler.HandleAsync(changedWork).AsTask());
+            var refusal = await Record.ExceptionAsync(() => handler.HandleAsync(changedWork).AsTask());
+            if (changed.Key is nameof(RuntimeCheckpointCommandPayload.CheckpointName) or nameof(RuntimeCheckpointCommandPayload.StimulusDeliveryOrigin))
+            {
+                var domain = Assert.IsType<RuntimeCheckpointCommitValidationException>(refusal);
+                Assert.IsType<InvalidDataException>(domain.InnerException);
+                Assert.Contains(changedWork.WorkflowExecutionId, domain.Message);
+            }
+            else Assert.IsType<InvalidDataException>(refusal);
             Assert.Null(await executions.FindAsync(downstream.WorkflowExecutionId));
         }
         var forgedJson = childCheckpoint.Payload!.Value.Deserialize<Dictionary<string, JsonElement>>()!;
@@ -207,7 +215,8 @@ public sealed class EfIngressCheckpointAuthorityTests
         var forged = new RuntimeSchedulerWorkItem(childCheckpoint.WorkItemId, childCheckpoint.WorkflowExecutionId, childCheckpoint.CommandId,
             childCheckpoint.CommandKind, childCheckpoint.EnvelopeId, childCheckpoint.IdempotencyKey, childCheckpoint.EnqueuedAt, childCheckpoint.RecordedAt,
             childCheckpoint.Sequence, JsonSerializer.SerializeToElement(forgedJson), childCheckpoint.CommandMetadata, childCheckpoint.EnvelopeMetadata);
-        await Assert.ThrowsAsync<InvalidDataException>(() => handler.HandleAsync(forged).AsTask());
+        var forgedRefusal = await Assert.ThrowsAsync<RuntimeCheckpointCommitValidationException>(() => handler.HandleAsync(forged).AsTask());
+        Assert.IsType<InvalidDataException>(forgedRefusal.InnerException);
         Assert.Null(await executions.FindAsync(downstream.WorkflowExecutionId));
         Assert.Equal(childCheckpoint.WorkItemId, Assert.Single((await queue.ListAsync(new(downstream.WorkflowExecutionId))).Items).WorkItemId);
         await handler.HandleAsync(childCheckpoint);

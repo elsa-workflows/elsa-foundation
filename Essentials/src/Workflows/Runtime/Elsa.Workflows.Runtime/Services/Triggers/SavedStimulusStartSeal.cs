@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.Executions;
@@ -17,6 +18,16 @@ internal static class SavedStimulusStartSeal
         if (origin is null && command is null && envelope is null) return;
         if (origin is null || command != JsonSerializer.Serialize(origin) || envelope != command)
             throw new InvalidDataException("The accepted saved-start marker and queued origin must be preserved together.");
+    }
+
+    internal static RuntimeCheckpointCommitValidationException RefuseWork(RuntimeSchedulerWorkItem work, string detail) =>
+        new($"Saved initial work '{work.WorkItemId}' for workflow '{work.WorkflowExecutionId}' was refused.", new InvalidDataException(detail));
+
+    internal static void ValidateHandlerOrigin(RuntimeSchedulerWorkItem work, RuntimeStimulusDeliveryOrigin? origin)
+    {
+        try { ValidateWorkOrigin(work, origin); }
+        catch (InvalidDataException exception)
+        { throw new RuntimeCheckpointCommitValidationException($"Saved initial work '{work.WorkItemId}' for workflow '{work.WorkflowExecutionId}' was refused.", exception); }
     }
 
     internal static void ValidateCommitOrigin(RuntimeCheckpointCommit commit)

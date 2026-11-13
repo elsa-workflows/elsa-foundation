@@ -384,7 +384,14 @@ public sealed class NativeStandaloneTriggerTargetTests
             var changedWork = new RuntimeSchedulerWorkItem(checkpoint.WorkItemId, checkpoint.WorkflowExecutionId, checkpoint.CommandId,
                 checkpoint.CommandKind, checkpoint.EnvelopeId, checkpoint.IdempotencyKey, checkpoint.EnqueuedAt, checkpoint.RecordedAt,
                 checkpoint.Sequence, JsonSerializer.SerializeToElement(changedPayload), checkpoint.CommandMetadata, checkpoint.EnvelopeMetadata);
-            await Assert.ThrowsAsync<InvalidDataException>(() => fixture.CheckpointHandler.HandleAsync(changedWork).AsTask());
+            var refusal = await Record.ExceptionAsync(() => fixture.CheckpointHandler.HandleAsync(changedWork).AsTask());
+            if (changed.Key is nameof(RuntimeCheckpointCommandPayload.CheckpointName) or nameof(RuntimeCheckpointCommandPayload.StimulusDeliveryOrigin))
+            {
+                var domain = Assert.IsType<RuntimeCheckpointCommitValidationException>(refusal);
+                Assert.IsType<InvalidDataException>(domain.InnerException);
+                Assert.Contains(changedWork.WorkflowExecutionId, domain.Message);
+            }
+            else Assert.IsType<InvalidDataException>(refusal);
             Assert.Null(await fixture.Executions.FindAsync(key.WorkflowExecutionId));
         }
         var forgedJson = checkpoint.Payload!.Value.Deserialize<Dictionary<string, JsonElement>>()!;
@@ -393,11 +400,17 @@ public sealed class NativeStandaloneTriggerTargetTests
         var forged = new RuntimeSchedulerWorkItem(checkpoint.WorkItemId, checkpoint.WorkflowExecutionId, checkpoint.CommandId,
             checkpoint.CommandKind, checkpoint.EnvelopeId, checkpoint.IdempotencyKey, checkpoint.EnqueuedAt, checkpoint.RecordedAt,
             checkpoint.Sequence, JsonSerializer.SerializeToElement(forgedJson), checkpoint.CommandMetadata, checkpoint.EnvelopeMetadata);
-        await Assert.ThrowsAsync<InvalidDataException>(() => fixture.CheckpointHandler.HandleAsync(forged).AsTask());
+        var forgedRefusal = await Assert.ThrowsAsync<RuntimeCheckpointCommitValidationException>(() => fixture.CheckpointHandler.HandleAsync(forged).AsTask());
+        Assert.IsType<InvalidDataException>(forgedRefusal.InnerException);
         Assert.Null(await fixture.Executions.FindAsync(key.WorkflowExecutionId));
         Assert.Equal(checkpoint.WorkItemId, Assert.Single((await fixture.SelectedQueue.ListAsync(new(key.WorkflowExecutionId))).Items).WorkItemId);
         await fixture.CheckpointHandler.HandleAsync(checkpoint);
         await fixture.Queue.DeleteAsync(key.WorkflowExecutionId, checkpoint.WorkItemId);
+        var admittedCommit = Assert.Single(fixture.CheckpointStore.ListCommits(), item => item.Commit.WorkflowExecutionId == key.WorkflowExecutionId).Commit;
+        Assert.Equal(JsonSerializer.Serialize(savedOrigin), admittedCommit.Metadata[SavedStimulusStartSeal.OriginMetadata]);
+        var rootWork = admittedCommit.PostCommitIntents.Single().Payload!.Value.Deserialize<RuntimeSchedulerWorkItem>()!;
+        Assert.False(rootWork.CommandMetadata.ContainsKey(SavedStimulusStartSeal.OriginMetadata));
+        Assert.False(rootWork.EnvelopeMetadata.ContainsKey(SavedStimulusStartSeal.OriginMetadata));
         var child = (await fixture.Executions.FindAsync(key.WorkflowExecutionId))!;
         Assert.Equal(tenant, child.TenantId); Assert.Null(child.IngressOrigin); Assert.True(savedOrigin.IsEquivalentTo(child.StimulusDeliveryOrigin));
         await fixture.CheckpointStore.CommitAsync(StateCommit(child with { UpdatedAt = Now.AddSeconds(1) }, "saved-continuation", []),

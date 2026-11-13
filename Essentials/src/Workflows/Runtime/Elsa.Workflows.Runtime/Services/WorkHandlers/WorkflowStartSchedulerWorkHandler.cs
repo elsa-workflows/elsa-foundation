@@ -74,18 +74,19 @@ public sealed class WorkflowStartSchedulerWorkHandler : IWorkflowSchedulerWorkHa
         return workItem.CommandKind == WorkflowExecutionCommandKind.Start;
     }
 
+    /// <exception cref="RuntimeCheckpointCommitValidationException">Invalid saved initial authority or marker; retains the cause and work/execution identifiers before effects.</exception>
     public async ValueTask HandleAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(workItem);
         cancellationToken.ThrowIfCancellationRequested();
 
         var startPayload = DeserializeStartPayload(workItem);
-        SavedStimulusStartSeal.ValidateWorkOrigin(workItem, startPayload.StimulusDeliveryOrigin);
+        SavedStimulusStartSeal.ValidateHandlerOrigin(workItem, startPayload.StimulusDeliveryOrigin);
         if (startPayload.StimulusDeliveryOrigin is { } saved &&
             (startPayload.StartAuthority?.StimulusDelivery is not { } accepted || saved.Scope != accepted.Scope ||
              saved.SourceOutboxItemId != accepted.SourceOutboxItemId || saved.IntentFingerprint != accepted.IntentFingerprint ||
              saved.TriggerBindingId != accepted.TriggerBindingId))
-            throw new InvalidDataException("The saved scope origin differs from the accepted ordinary start authority.");
+            throw SavedStimulusStartSeal.RefuseWork(workItem, "The saved scope origin differs from the accepted ordinary start authority.");
         RuntimeCommittedRecipient? ingress = null;
         if (startPayload.StartAuthority?.StandaloneTrigger is { } origin)
         {
