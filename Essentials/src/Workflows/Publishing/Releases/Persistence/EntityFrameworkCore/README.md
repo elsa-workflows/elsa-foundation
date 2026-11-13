@@ -42,6 +42,7 @@ creation must require durable capture and a successful archive acknowledgement b
 
 Creation validates the caller-owned ZIP stream, then commits header, original manifest, binary blob rows and attachment
 rows in one owned `EfSharedTransaction`. Fresh contexts neither flush caller-tracked changes nor enlist caller transactions.
+Capture timestamps use the host's registered `TimeProvider`, defaulting to `TimeProvider.System`; retries retain the first timestamp.
 The first raw manifest and each blob/attachment have independent SHA-256 and byte-length stamps. These detect changed
 stored representation, including attachments and manifest whitespace outside the normalized release digest; they establish
 local archive integrity, not publisher origin. Reads first project actual SQLite `length(BLOB)` metadata and enforce every
@@ -55,6 +56,7 @@ directly through `ValidateParts`; they do not recompress ZIP files or reserve SQ
 after that snapshot leaves its coherent original bytes readable; a subsequent read observes and refuses the corruption.
 No store/registration method creates tables, migrates schemas or
 changes schema finalization. Operators prepare the host separately; a missing/partial schema is visibly unavailable.
+Payload reads use one bounded query per entry to recheck each row; large attachment sets therefore add round trips.
 
 An equal-content retry under the same capture ID returns `Existing` and retains the first manifest bytes and creation time.
 Manifest whitespace/property/set order and ZIP layout are transport formatting; exact blob bytes and attachment path/bytes

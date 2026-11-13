@@ -24,7 +24,8 @@ public sealed class ReleaseArchiveStoreTests
     {
         await using var database = await ArchiveDatabase.CreateAsync();
         var fixture = new ArchiveFixture();
-        await using (var services = database.Services())
+        var createdAt = new DateTimeOffset(2030, 1, 2, 3, 4, 5, TimeSpan.Zero);
+        await using (var services = ArchiveFixture.Services(database.ConnectionString, timeProvider: new FixedTimeProvider(createdAt)))
         await using (var scope = services.CreateAsyncScope())
         {
             var capabilities = await scope.ServiceProvider.GetRequiredService<IReleaseArchiveStoreCapabilities>().GetCapabilitiesAsync();
@@ -40,6 +41,7 @@ public sealed class ReleaseArchiveStoreTests
         await using var readScope = reopened.CreateAsyncScope();
         var capture = await readScope.ServiceProvider.GetRequiredService<IReleaseArchiveReader>().FindAsync("capture-not-a-digest");
         Assert.NotNull(capture);
+        Assert.Equal(createdAt, capture.CreatedAt);
         Assert.Equal(ArchiveFixture.DefaultScope, capture.Scope);
         Assert.Equal(ReleaseArchiveValidationLevel.TransportOnly, capture.ValidationLevel);
         Assert.Equal(fixture.ManifestBytes, capture.Transport.GetManifestBytes());
@@ -518,16 +520,17 @@ public sealed class ReleaseArchiveStoreTests
         await using var scope = services.CreateAsyncScope();
         var fixture = new ArchiveFixture();
         var writer = scope.ServiceProvider.GetRequiredService<IReleaseArchiveWriter>();
-        foreach (var id in new[] { "scope", "missing", "bytes", "schema", "tracked" })
+        foreach (var id in new[] { "scope", "missing", "bytes", "schema", "tracked", "invalid-name" })
             await writer.CreateAsync(id, new MemoryStream(fixture.Zip()));
         var context = scope.ServiceProvider.GetRequiredService<ConsumerContext>();
         await context.Database.ExecuteSqlInterpolatedAsync($"UPDATE elsa_release_archives SET Authority={EfRelationalIdentity.Encode("wrong")} WHERE CaptureId={EfRelationalIdentity.Encode("scope")}");
         await context.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM elsa_release_archive_entries WHERE CaptureId={EfRelationalIdentity.Encode("missing")}");
         await context.Database.ExecuteSqlInterpolatedAsync($"UPDATE elsa_release_archive_entries SET Content={new byte[] { 1, 2 }} WHERE CaptureId={EfRelationalIdentity.Encode("bytes")} AND EntryKind=1");
         await context.Database.ExecuteSqlInterpolatedAsync($"UPDATE elsa_release_archives SET SchemaVersion={"future"} WHERE CaptureId={EfRelationalIdentity.Encode("schema")}");
+        await context.Database.ExecuteSqlInterpolatedAsync($"UPDATE elsa_release_archive_entries SET Name={"not-base64!"} WHERE CaptureId={EfRelationalIdentity.Encode("invalid-name")}");
         var reader = scope.ServiceProvider.GetRequiredService<IReleaseArchiveReader>();
         Assert.Equal("archive_scope_identity_mismatch", (await Assert.ThrowsAsync<ReleaseArchiveStoreException>(() => reader.FindAsync("scope").AsTask())).Code);
-        foreach (var id in new[] { "missing", "bytes", "schema" })
+        foreach (var id in new[] { "missing", "bytes", "schema", "invalid-name" })
             Assert.Equal("archive_stored_content_invalid", (await Assert.ThrowsAsync<ReleaseArchiveStoreException>(() => reader.FindAsync(id).AsTask())).Code);
         var tracked = await context.Set<ReleaseArchiveRow>().SingleAsync(x => x.CaptureId == EfRelationalIdentity.Encode("tracked"));
         tracked.Manifest = [0];
@@ -690,6 +693,11 @@ public sealed class ReleaseArchiveStoreTests
             Changed = true;
             return result;
         }
+    }
+
+    private sealed class FixedTimeProvider(DateTimeOffset utcNow) : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() => utcNow;
     }
 
     private sealed class ArchiveDatabase : IAsyncDisposable
