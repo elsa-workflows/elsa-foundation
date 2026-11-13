@@ -30,3 +30,6 @@ internal sealed class RuntimeRunDeletionRejectedSignal(int status, string detail
     public int Status { get; } = status;
     public string Detail { get; } = detail;
 }
+
+/// <summary>The selected reader cannot supply the requested coherent history detail.</summary>
+internal sealed class RuntimeHistoryUnsupportedSignal : Exception;

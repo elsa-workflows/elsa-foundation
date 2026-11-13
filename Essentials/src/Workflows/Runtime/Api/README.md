@@ -29,6 +29,7 @@ CShells__Shells__default__Features__WorkflowsRuntimeApi__WorkflowAlterationPaylo
 | Execution | `POST /runtime/workflows/executables/{artifactId}/execute`, `POST /runtime/workflows/stimuli` |
 | Activation slots | `GET /runtime/workflows/activation-slots/{definitionId}`, `GET /runtime/workflows/activation-slots/{definitionId}/{slotName}` |
 | Instances | `GET /runtime/workflows/instances`, `GET /runtime/workflows/instances/page`, `GET /runtime/workflows/instances/{workflowExecutionId}`, `GET .../incidents`, `GET .../activity-executions/{activityExecutionId}` |
+| Run history (optional) | `GET .../instances/{workflowExecutionId}/history`, `GET .../history/events/{historyEventId}`, `GET .../history/bookmarks`, `GET .../history/bookmarks/{bookmarkId}` |
 | Detached dispatches | `GET /runtime/workflows/dispatches?parentWorkflowExecutionId=...|childWorkflowExecutionId=...|status=...`, `GET /runtime/workflows/dispatches/{dispatchId}` |
 | Diagnostics | `GET/PUT /runtime/workflows/diagnostics/settings` |
 | Alteration plans | `POST /runtime/workflows/alteration-plans`, `GET /runtime/workflows/alteration-plans/{planId}`, `GET /runtime/workflows/alteration-plans/{planId}/jobs/page`, `GET /runtime/workflows/alteration-plans/{planId}/jobs/{jobId}`, `POST /runtime/workflows/alteration-plans/{planId}/cancel` |
@@ -138,3 +139,9 @@ authorize candidates before composing the visible count and cursor page; EF firs
 health. This authorization path still scans all matching provider pages and retains authorized matches in
 memory. Other providers apply health while traversing bounded candidate pages; no path limits filtering to
 the first page. A tenant-scope label alone never grants inspection access.
+
+### Optional run history reads
+
+History routes require `workflows/runtime:read` and the run's existing structure permission. Use the optional `workflow-history-page`, `workflow-history-event`, `workflow-history-bookmarks` and `workflow-history-bookmark` capability templates. A legacy provider can supply page/inventory links without the optional composite exact-details contract. Pages forward one bounded window (`limit`1–500, default100), opaque `cursor` and exact activity/descendant/bookmark/category/name/search filters. Enum query values use their names. Bookmark inventory uses activity/descendant/status filters. Follow continuations explicitly; an empty searched window can still advance.
+
+Responses distinguish retained coverage, present capture availability and current bookmark eligibility. Missing native handles do not imply consumption; viewing expiry does not write an event. Unknown occurrence time is null, with its source flag; `recordedAt` is independent. Raw event payloads are never returned. Exact responses pair their target with its coverage head from one provider snapshot. Unknown/missing and denied runs have equivalent404s; query/cursor failures are400, exact corrupt history409, temporary history-provider failure503 and unavailable composite detail support501. Page/list corruption yields explicit invalid coverage and no rows. Current timer/delivery-owner settlement remains unknown with a partial limitation until its owning support is installed. Inspection registration alone does not enable capture or rewrite existing run policy.

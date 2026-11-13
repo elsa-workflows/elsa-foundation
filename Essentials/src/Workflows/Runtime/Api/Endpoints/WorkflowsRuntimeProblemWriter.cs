@@ -1,4 +1,5 @@
 using Elsa.Api.AspNetCore;
+using Elsa.Workflows.Runtime.Api.Models;
 using Microsoft.AspNetCore.Http;
 using MinimalEndpoints;
 
@@ -14,6 +15,10 @@ internal sealed class WorkflowsRuntimeProblemWriter : IEndpointProblemWriter
     public Task WriteAsync(HttpContext context, EndpointProblem problem)
     {
         ArgumentNullException.ThrowIfNull(problem);
+        if (problem.StatusCode == StatusCodes.Status400BadRequest &&
+            context.GetEndpoint()?.Metadata.GetMetadata<ActivityInspectionProblemShapeMetadata>() is { History: true })
+            return ActivityExecutionProblemDetails.HistoryAsync(context, problem.StatusCode,
+                "runtime.history.request-invalid", "Invalid run history request", "The history query or continuation is invalid.");
         if (problem.StatusCode == StatusCodes.Status400BadRequest && problem.Errors.ContainsKey("serializerErrors"))
             return RuntimeProblemWriting.ValidationProblemAsync(context, problem.Errors);
 
