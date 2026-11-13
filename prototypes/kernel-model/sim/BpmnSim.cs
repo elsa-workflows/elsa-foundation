@@ -43,7 +43,7 @@ public sealed partial class World
             var process = BpmnMix.Processes[r.Next(BpmnMix.Processes.Length)];
             var key = "b" + n;
             var variables = BpmnMix.Input(process, key, r);
-            if (process == "b-early") Bpmn.Orders.Add(key);
+            if (process is "b-early" or "b-race") Bpmn.Orders.Add(key);
             var spec = BpmnModel.Spec(process, variables);
             if (r.Next(4) == 0)
             {
@@ -233,7 +233,7 @@ public sealed partial class World
             var joins = string.Join(" ", Bpmn.Joins.GetValueOrDefault(row.Id) ?? []);
             // A boundary timer won when it stopped the work it races: then the run without faults is the one where it wins.
             var stopped = Bpmn.Stopped.GetValueOrDefault(row.Id) ?? [];
-            var timed = row.Definition switch { "b-boundary" => stopped.Contains("slow"), "b-call" => stopped.Contains("call"), _ => false };
+            var timed = row.Definition switch { "b-boundary" => stopped.Contains("slow"), "b-call" => stopped.Contains("call"), "b-race" => stopped.Contains("reply"), _ => false };
             var expected = BpmnReference.Of(row.Definition, input, timerFirst: timed);
             if (actual != expected.Variables) return $"G6 {row.Id} ({row.Definition}) ended with {actual}; without faults it ends with {expected.Variables}";
             if (joins != expected.Joins) return $"G2 {row.Id} ({row.Definition}) fired joins [{joins}]; without faults it fires [{expected.Joins}]";
@@ -267,13 +267,13 @@ public static class BpmnSwitch
 public static class BpmnMix
 {
     public static readonly ProcessRegistry Registry = BpmnCases.Registry();
-    public static readonly string[] Processes = ["b-parallel", "b-exclusive", "b-inclusive", "b-boundary", "b-early", "b-call", "b-loop", "b-fault"];
+    public static readonly string[] Processes = ["b-parallel", "b-exclusive", "b-inclusive", "b-boundary", "b-early", "b-call", "b-loop", "b-fault", "b-race"];
 
     public static JsonObject Input(string process, string key, Random r) => process switch
     {
         "b-exclusive" => new JsonObject { ["amount"] = r.Next(200) },
         "b-inclusive" => new JsonObject { ["express"] = r.Next(2) == 0, ["insured"] = r.Next(2) == 0 },
-        "b-early" or "b-call" => new JsonObject { ["order"] = key },
+        "b-early" or "b-call" or "b-race" => new JsonObject { ["order"] = key },
         _ => [],
     };
 }
@@ -286,7 +286,7 @@ public static class BpmnReference
     public static string Describe(Dictionary<string, JsonNode?> variables) =>
         string.Join(", ", variables.OrderBy(v => v.Key, StringComparer.Ordinal).Select(v => $"{v.Key}={v.Value?.ToJsonString() ?? "null"}"));
 
-    /// <summary><paramref name="timerFirst"/>: the jobs a boundary timer races never finish, so the timer wins.</summary>
+    /// <summary><paramref name="timerFirst"/>: the jobs and messages a timer races never come, so the timer wins.</summary>
     public static (string Variables, string Joins) Of(string process, JsonObject input, bool timerFirst) =>
         Cache.GetOrAdd($"{process}|{input.ToJsonString()}|{timerFirst}", _ => Run(process, input, timerFirst));
 
@@ -312,7 +312,7 @@ public static class BpmnReference
             worker.WokenAsync(null).AsTask().Wait();
             worker.RunAsync().AsTask().Wait();
             foreach (var s in store.Subscriptions.Where(s => s.Instance == id.Id).ToList())
-                if (published.Add(s.Key)) Events.PublishAsync(store, new EventRow(s.Key, "e-" + s.Key, null, time + 3_600_000)).AsTask().Wait();
+                if (!timerFirst && published.Add(s.Key)) Events.PublishAsync(store, new EventRow(s.Key, "e-" + s.Key, null, time + 3_600_000)).AsTask().Wait();
             time += 10;     // slowly: a job finishes well before a boundary timer of 300 ms, unless timerFirst holds it
         }
         var row = store.Instances[id.Id];
