@@ -54,3 +54,6 @@ independent acceptance, protected merge and resulting-main verification remain r
 
 The [selection and phase contract](contracts/selection.md) is the next engineering proposal. It separates chart
 rules from storage/actor placement and labels its new choices and remaining qualification; it does not close Q1.
+
+The bounded [selection reference model](selection-model/README.md) makes candidate and phase-plan rules
+executable. Its tests are algorithm evidence only; actual runtime integration and the remaining Q1 rules stay open.
