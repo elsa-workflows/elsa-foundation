@@ -71,8 +71,9 @@ export async function userTaskAuthoringJourney(page: Page, info: TestInfo, captu
   await page.getByRole("textbox", { name: "Form ID", exact: true }).scrollIntoViewIfNeeded();
   await capture(page, info, "form-authoring");
   await page.getByRole("button", { name: "Publish form version", exact: true }).click();
-  // #4068: publication is confirmed on the page, so no toast covers the heading on a narrow screen.
-  await expect(page.getByRole("status").filter({ hasText: `Published ${title} version 1.` })).toBeVisible();
+  // Publication is transient; the published immutable form remains inspectable after confirmation.
+  await expect(page.locator(".studio-toast").filter({ hasText: "Form version published." })).toBeVisible();
+  await expect(page.locator(".studio-alert[data-tone=success]")).toHaveCount(0);
   await expect(page.getByRole("group", { name: "Form published", exact: true })).toHaveCount(0);
   const formRow = page.getByRole("row").filter({ hasText: formId });
   const formLink = formRow.getByRole("button", { name: title, exact: true });

@@ -51,7 +51,6 @@ export function ExtensionBuilderProvider({ api, children }: { api: ElsaStudioMod
   // Every Extension Builder call is routed through the Studio management bridge on the Studio origin (ADR 0037, #256),
   // so the whole module runs on api.host and the browser never talks to the backend host-control surface directly.
   const context = api.host;
-  const tracker = useOperationTracker();
 
   const [state, setState] = useState<BuilderState>("loading");
   const [managementUnavailable, setManagementUnavailable] = useState<BackendManagementUnavailable | null>(null);
@@ -114,6 +113,7 @@ export function ExtensionBuilderProvider({ api, children }: { api: ElsaStudioMod
   const selectedWorkspace = workspaces.find(workspace => workspace.id === selectedWorkspaceId) ?? (!selectedWorkspaceId ? workspaces[0] ?? null : null);
   const selectedRepository = repositories.find(repository => repository.id === selectedWorkspaceId) ?? repositories.find(repository => repository.id === selectedWorkspace?.id) ?? repositories[0] ?? null;
   const selectedProject = selectedWorkspace?.projects.find(project => project.id === selectedProjectId) ?? selectedWorkspace?.projects[0] ?? null;
+  const tracker = useOperationTracker(api.notifications, context, JSON.stringify([enteredWorkspaceId, selectedWorkspace?.id, selectedProject?.id, selectedSolutionPath]));
   selectedIds.current = { workspaceId: selectedWorkspace?.id ?? "", projectId: selectedProject?.id ?? "" };
   activeFilePathRef.current = activeFilePath;
   const fileRows = useMemo(() => [...files].sort((a, b) => fileSortKey(a).localeCompare(fileSortKey(b))), [files]);
@@ -317,7 +317,7 @@ export function ExtensionBuilderProvider({ api, children }: { api: ElsaStudioMod
     activeBuild, buildHistory, buildLog, buildCommand, buildTargetPath, runtimeStatus, promotionResult,
     sourceControlStatus, sourceControlDiff, commitMessage, activeInspectorTab, dockOpen, extensionName,
     workspaceName, serverLocalPath, serverLocalName, cloneRepositoryUrl, cloneRepositoryName, projectDraft,
-    templateDraft, workingBranchName, allowProtectedBranchEdit, newFilePath, status: tracker.status, error: tracker.error,
+    templateDraft, workingBranchName, allowProtectedBranchEdit, newFilePath, error: tracker.error,
     selectedWorkspace, selectedRepository, selectedProject, selectedProjectId, latestArtifact, inWorkspace,
     canBuild, buildDisabledReason, canPromote, defaultWorkingBranchName, buildInProgress,
     isBusy: tracker.isBusy,
