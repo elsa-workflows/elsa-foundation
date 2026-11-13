@@ -93,9 +93,8 @@ public interface ITurn
     void Unsubscribe(string key, string wait);
 
     /// <summary>
-    /// True when this message was held by an owner before this one, so a turn that took it may have run already and
-    /// its result been lost (merge, friction F-N6). A first delivery is false. It may say true for a message whose
-    /// earlier owner never ran it: "may have run", never "did run".
+    /// True when a polled row was already marked seen or on trial when observed. This is a delivery-history hint,
+    /// not proof that a turn executed. False does not prove no other owner ran it, including during takeover races.
     /// </summary>
     bool Redelivered(Message message);
 

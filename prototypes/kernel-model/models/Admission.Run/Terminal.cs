@@ -66,7 +66,7 @@ internal static class TerminalReceipts
         {
             var id = "terminal-message-" + ++serial;
             Apply(new("add", M: new Message(id, target, kind, payload is null ? null : Json.Write(payload), Start: start,
-                ReplyTo: reply ? ReplyTo.Of("outside", id, beforeCommit: true) : null)));
+                ReplyTo: reply ? ReplyTo.Of("outside", id, world.Time + 30_000, beforeCommit: true) : null)));
         }
         void Drain()
         {

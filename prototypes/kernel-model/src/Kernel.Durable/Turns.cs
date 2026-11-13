@@ -52,7 +52,7 @@ public sealed class Delivery(Message message, long seq)
     internal bool Marked;             // its row says seen at this epoch
     internal bool Suspect;            // another owner had it: it is tried apart before anything else is believed of it
     internal bool Shelved;            // a suspect whose row says seen at this epoch, not yet tried
-    internal bool Again;              // its row was seen at an earlier epoch: a turn may have run with it (DurableTurn.Redelivered)
+    internal bool Again;              // its polled row already had a seen or trial marker (DurableTurn.Redelivered)
     internal bool Held;               // a turn handed it back: it waits for something new to come with
     internal int Attempts;
     internal bool Ticket;             // a kernel message, not (yet) for the model
@@ -182,7 +182,7 @@ public sealed class DurableTurn
         if (request.ReplyTo is { } to) _replied.Add(new(request.Id, to, channel, item));
     }
 
-    public bool Redelivered(Message message) => _input.Taken.FirstOrDefault(i => i.Message.Id == message.Id)?.Again ?? false;
+    public bool Redelivered(Message message) => !Services.Has(Flaw.HideDeliveryHistory) && (_input.Taken.FirstOrDefault(i => i.Message.Id == message.Id)?.Again ?? false);
 
     // A message's id is derived from its sender and the sender's revision. Finding F8: the ordinal has a fixed width,
     // because Entity Framework sends the inserts of one commit in key order and the database hands out seq in that order.

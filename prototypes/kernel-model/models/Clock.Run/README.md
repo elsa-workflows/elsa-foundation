@@ -3,7 +3,7 @@
 Proposed, non-packable, in-memory-only slice of the [reviewed plan](../../../../specs/1210-state-machine/commit-time-plan.md).
 It does not implement StateMachine or approve product kernel/provider architecture.
 
-`--list` inventories seven schedules. They use the actual workflow actor, durable worker, in-memory store and
+`--list` inventories eight schedules. They use the actual workflow actor, durable worker, in-memory store and
 controlled simulation wire: delayed application, before-apply loss, applied/lost acknowledgement, cold takeover,
 an actual stale commit executed after takeover, pending-only future-state termination by an older model, and
 an unqualified clock capability. Each action checks existing kernel invariants. Unsupported direct-batch refusal
@@ -38,3 +38,7 @@ This first cut does not yet qualify native terminal receipts, the retained T4 fa
 failed-start JSONnull, actual provider clocks, parent-notice counts, full statecharts, Studio or M0 adoption.
 Those require the terminal slice and remaining plan gates, not this shared clock runner. No result is asserted
 by this README until an exact-source packet is recorded on its PR.
+
+The latest-main integration also exercises a clock-enabled real worker through the delayed-commit decorator:
+the state and immutable timestamp commit before acknowledgement, and the cache keeps that same timestamp when
+the delayed acknowledgement arrives. Lease guards and reply-deadline regressions must pass on the combined head.

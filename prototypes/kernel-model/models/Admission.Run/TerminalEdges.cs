@@ -26,7 +26,7 @@ internal sealed class EdgeHarness(AdmissionFlaw defect)
     {
         var id = "edge-message-" + ++_serial;
         Apply(new("add", M: new Message(id, target ?? Target, kind, input is null ? null : Json.Write(input), Start: start,
-            ReplyTo: reply ? ReplyTo.Of("outside", id) : null)));
+            ReplyTo: reply ? ReplyTo.Of("outside", id, World.Time + 30_000) : null)));
     }
     internal void Drain()
     {

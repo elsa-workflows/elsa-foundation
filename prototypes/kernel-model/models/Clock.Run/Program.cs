@@ -4,10 +4,37 @@ using Kernel.Sim;
 using Kernel.Workflows;
 
 var names = new[] { "normal", "before-apply", "lost-ack", "reload", "stale-commit", "future-pending-end", "unsupported" };
-if (args.SequenceEqual(["--list"])) { foreach (var name in names) Console.WriteLine("clock:" + name); return; }
+if (args.SequenceEqual(["--list"])) { foreach (var name in names) Console.WriteLine("clock:" + name); Console.WriteLine("clock:delayed-wrapper"); return; }
 if (args.Length != 0) throw new ArgumentException("Only --list is supported.");
 foreach (var name in names) new ClockWitness(name).Run();
-Console.WriteLine("7/7 shared clock schedules passed. In-memory protocol only; terminal receipt integration remains open.");
+await DelayedClock();
+Console.WriteLine("8/8 shared clock schedules passed. In-memory protocol only; terminal receipt integration remains open.");
+
+static async Task DelayedClock()
+{
+    long time = 100;
+    var store = new InMemoryStore(1, () => time);
+    var wire = new DelayedCommit(store);
+    await using var worker = new Worker("clock-delay", 0, wire, new WorkflowInstance([new ClockProbe(2)]),
+        new WorkerOptions { Monotonic = () => time });
+    await new DurableHost([worker]).ActivateAsync(0); await worker.PollAsync();
+    var target = InstanceRef.In(0, "delayed-clock");
+    worker.Post(new Message("delayed-clock-start", target, Kinds.Start, Start: new("clock-probe", "probe")), fresh: true);
+    worker.RunTurn(target.Id);
+    time += 2000;
+    wire.DelayNext = true;
+    var flush = worker.FlushAsync();
+    await wire.Landed.Task.WaitAsync(TimeSpan.FromSeconds(5));
+    var row = store.Instances.GetValueOrDefault(target.Id);
+    var reference = row is null ? null : Json.Read<ClockState>(row.State)?.First;
+    if (!wire.CommitClockAvailable || row?.Status != InstanceStatus.Running || reference is null ||
+        CommitClockFacts.Read(row)?.GetValueOrDefault(reference) != time)
+        throw new InvalidOperationException("C8: delayed wrapper lost clock capability or authoritative stamp");
+    time += 100; wire.Reply.TrySetResult(); await flush;
+    if (!worker.Owns || worker.Instances.Single(x => x.Id == target.Id).Row?.CommitTimes != row.CommitTimes)
+        throw new InvalidOperationException("C8: delayed acknowledgement changed committed clock facts");
+    Console.WriteLine("PASS clock:delayed-wrapper");
+}
 
 sealed class ClockWitness(string scenario)
 {
@@ -30,7 +57,7 @@ sealed class ClockWitness(string scenario)
     {
         var id = "clock-message-" + ++_serial;
         Apply(new("add", M: new Message(id, _target, kind, Start: kind == Kinds.Start ? new("clock-probe", "probe", input) : null,
-            ReplyTo: reply ? ReplyTo.Of("outside", id) : null)));
+            ReplyTo: reply ? ReplyTo.Of("outside", id, _world.Time + 30_000) : null)));
     }
     private void Prepare()
     {

@@ -43,7 +43,7 @@ internal static class InvocationRecreation
         {
             var id = "recreation-message-" + ++serial;
             Apply(new("add", M: new Message(id, target, kind, payload, Start: start,
-                ReplyTo: reply ? ReplyTo.Of("outside", id) : null)));
+                ReplyTo: reply ? ReplyTo.Of("outside", id, world.Time + 30_000) : null)));
         }
         void Drain()
         {
@@ -70,7 +70,9 @@ internal static class InvocationRecreation
         Require(world.Store.Instances[target.Id].Status == InstanceStatus.Finished, "ordinary child did not complete workflow");
         if (nested) Require(State().Variables["returned"]!.GetValue<bool>(), "caller did not continue");
         endedRevision = world.Store.Instances[target.Id].Revision;
-        Apply(new("tick", 60_000)); // normal deletion may release the ended row only after its receipt promise
+        // Let the receipt promise expire while renewing the real owner lease in bounded steps.
+        for (var elapsed = 0; elapsed < 60_000; elapsed += 5000)
+        { Apply(new("tick", 5000)); Apply(new("beat", actor.Id)); }
         Add(Kinds.Delete); Drain();
         Require(!world.Store.Instances.ContainsKey(target.Id), "normal delete did not remove ended row");
         recreated = true;
