@@ -1,3 +1,4 @@
+import { activityDefinitionTitleJourney } from "./activityDefinitionTitleJourney";
 import { tabbedSecretsJourney } from "./tabbedSecretsJourney";
 import { templateToastJourney } from "./templateToastJourney";
 import { executableDesignerJourney } from "./executableDesignerJourney";
@@ -12,6 +13,8 @@ import { decisionsJourney } from "./decisionsJourney";
 import { settingsTabsJourney } from "./settingsTabsJourney";
 import { structuredLogsJourney } from "./structuredLogsJourney";
 import { chooseDataJourney } from "./chooseDataJourney";
+import { structuredLogsReadabilityJourney } from "./structuredLogsReadabilityJourney";
+import { phoneContentJourney } from "./phoneContentJourney";
 
 async function capture(page: Page, info: TestInfo, name: string) {
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
@@ -45,9 +48,13 @@ test("user task authoring and workflow result", async ({ page }, info) => {
     creations.push({ url: `${process.env.UX_BACKEND_URL}/design/workflows/definitions`, id });
   }, cleanup => { ownedCleanups.get(page)!.push(cleanup); });
 });
+test("activity definition identity survives reopening", async ({ page }, info) => activityDefinitionTitleJourney(page, info, capture));
+
 test("business decisions authoring and explanations", async ({ page }, info) => decisionsJourney(page, info, capture));
 test("settings tabs and preserved edits", async ({ page }, info) => settingsTabsJourney(page, info, capture));
 test("structured logs table accessibility", async ({ page }, info) => structuredLogsJourney(page, info, capture));
+test("structured logs readability and recovery", async ({ page }, info) => structuredLogsReadabilityJourney(page, info, capture));
+test("phone authoring and settings content priority", async ({ page }, info) => phoneContentJourney(page, info, capture));
 
 test.afterEach(async ({ page, playwright }, info) => {
   const creations = createdWorkflows.get(page) ?? [];

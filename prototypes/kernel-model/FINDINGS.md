@@ -1049,6 +1049,46 @@ TCP-read column of the PostgreSQL rows of 100 and 1,000 instances moved by up to
 describes. Not run: the simulation (it uses the in-memory store, unchanged) and the stress tests (not run for this
 item; whether their models ever reach the second attempt was not checked).
 
+### 25.7 Set-based projector rounds (decision 8). Run
+
+**What changed.** `EfStore.ProjectAsync` writes a round's view rows set-based. It first works out, in memory, what the
+round leaves of each instance's view:
+- an instance whose delete is in the round is removed, as before (the old code wrote its views and then removed them);
+- every other instance is moved on by its commits.
+
+On PostgreSQL the round's write is one statement, so it is one round trip and its own transaction. A data-modifying
+CTE moves the projector's row only from where the round read it. It upserts the views from `unnest` arrays, and deletes
+the removed views, both only if the row moved. On SQLite it is one transaction: the move, one multi-row upsert per 200
+views, and one delete per 500. SQL Server and MySQL still write one statement per view (`Engine.ViewAsync`), with the
+delete set-based; they are not tuned here. The contract is unchanged.
+
+**The check.** The existing case already projects a round that moves one view and removes another (an instance whose
+view an earlier round wrote). A new required case crosses every chunk of the statements: one round of 850 new
+instances (more than SQLite's 200 views per statement), then one round of 600 deletes alone (more than 500 ids per
+delete), with no view to write: `projection: rounds larger than a statement's chunk: 850 views in one, then 600
+deletes alone`. It passes on in-memory, SQLite, PostgreSQL, SQL Server, MySQL and MongoDB. It commits in chunks of 170
+and 200: one commit of 850 new instances failed on MySQL's provider ("The CommandText property has not been properly
+initialized"). A reviewer's probe found the failure from about 420 such turns in one commit, below the kernel's flush
+cap of 500 turns (`WorkerOptions.MaxBatch` counts turns, not rows), with the cause not known; ENGINES.md's 1,000
+instances started at once did land, so the row shape matters. Not fixed here: issue #4358.
+
+**Gates.**
+
+| Gate | Before | After |
+|---|---|---|
+| EF cost, PostgreSQL (`proxy=1`), "a projector round over the journal so far", checked and batch | 17 round trips | **3** (two reads, one write) |
+| EF cost, SQLite, the same row, checked and batch | 18 engine calls | 7 |
+| Every other row of both cost runs | | the same, counted and sent |
+| Semantic suite, in-memory | 56 passed, 1 skipped | 57 passed, 1 skipped |
+| SQLite (both fences), PostgreSQL (batch and checked) | 54 passed, 2 or 3 reference differ | 55 passed, the same reference cases differ |
+| SQL Server (default), MySQL (default) | 53 passed, 3 reference differ, 1 skipped | 54 passed, the same |
+| MongoDB | 57 passed | 58 passed |
+
+These original gate runs predate the subscription change in section 25.2. Their reference differences are M6 and F8; M6 is required after that change.
+
+**Not run:** the simulation (it uses the in-memory store, unchanged) and the stress tests (the projector does not run in
+them, section 23).
+
 ## 26. Round 4: the graph engine. Run
 
 The owner's decision of 12 November (design sketch draft 5, "Containers and their semantics"): the native model stays
