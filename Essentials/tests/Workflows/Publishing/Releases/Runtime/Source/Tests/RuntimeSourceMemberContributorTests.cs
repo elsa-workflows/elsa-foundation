@@ -301,7 +301,7 @@ public sealed class RuntimeSourceMemberContributorTests
         }
         public async ValueTask DisposeAsync()
         {
-            await _scope.DisposeAsync(); await _provider.DisposeAsync(); SqliteConnection.ClearAllPools();
+            await _scope.DisposeAsync(); await _provider.DisposeAsync();
             File.Delete(_path); File.Delete(_path + "-wal"); File.Delete(_path + "-shm");
         }
     }
