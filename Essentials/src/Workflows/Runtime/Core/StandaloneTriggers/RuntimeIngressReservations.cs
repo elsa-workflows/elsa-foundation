@@ -32,6 +32,7 @@ public sealed record RuntimeIngressReservationQuery(string StimulusType, int Lim
 public sealed record RuntimeIngressReservationPage(IReadOnlyList<RuntimeIngressReservation> Items, string? Next);
 
 /// <summary>Replacement contract: reads actual scoped reservation authority. Unsupported composition never supplies an empty successful lookup.</summary>
+/// <remarks>Provider infrastructure failures are reported as <see cref="TriggerOperationException"/> with the original cause and scoped identifiers.</remarks>
 public interface IRuntimeIngressReservationReader
 {
     bool SupportsReservations => false;

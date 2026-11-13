@@ -9,9 +9,14 @@ public sealed class RuntimePostCommitOutboxEntity
     public string OutboxItemId { get; set; } = null!;
     public string OutboxItemIdHash { get; set; } = null!;
     public string OutboxItemIdOrderKey { get; set; } = null!;
-    public string WorkflowExecutionId { get; set; } = null!;
-    public string WorkflowExecutionIdHash { get; set; } = null!;
-    public string WorkflowExecutionIdOrderKey { get; set; } = null!;
+    public string? WorkflowExecutionId { get; set; }
+    public string? WorkflowExecutionIdHash { get; set; }
+    public string? WorkflowExecutionIdOrderKey { get; set; }
+    /// <summary>Null preserves the historical workflow source; external sources have explicit checked projections.</summary>
+    public int? SourceKind { get; set; }
+    public string? SourceId { get; set; }
+    public string? TriggerIdHash { get; set; }
+    public string? SourceKeyHash { get; set; }
     public string IntentKind { get; set; } = null!;
     public string IntentKindHash { get; set; } = null!;
     public int Status { get; set; }
