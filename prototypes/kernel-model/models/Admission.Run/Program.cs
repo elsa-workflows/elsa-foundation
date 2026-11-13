@@ -11,6 +11,12 @@ if (args.SequenceEqual(["--recreate"]))
     return;
 }
 
+if (args.SequenceEqual(["--terminal"]) || args.SequenceEqual(["--list-terminal"]))
+{
+    TerminalReceipts.Run(args[0] == "--list-terminal");
+    return;
+}
+
 var scenarios = (from mode in new[] { Modes.Balanced, Modes.Durable }
     from nested in new[] { false, true } from cut in Enum.GetValues<Cut>()
     select new Scenario(mode, nested, cut)).Concat(from mode in new[] { Modes.Balanced, Modes.Durable }
@@ -267,7 +273,7 @@ public sealed class ProbeReceiver : CompositeActivity, ISignalledComposite
     }
     protected override void Execute(CompositeContext context)
     {
-        context.RegisterInputInbox(2, 4);
+        context.RegisterInputInbox(2, 4, TimeSpan.FromMinutes(1));
         context.SetState(new ProbeState("Waiting"));
         context.Schedule(context.Children.Single(c => c.Id == "phase"));
     }

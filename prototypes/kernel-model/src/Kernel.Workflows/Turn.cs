@@ -23,6 +23,7 @@ internal sealed class Turn : ITurn
         _input = input;
         _durable = new DurableTurn(input);
         var (row, spec) = (input.Row, input.Spec);
+        _status = row?.Status ?? InstanceStatus.Running;
         Instance = new InstanceInfo(new InstanceRef(input.Actor), row?.Model ?? spec!.Model, row?.Definition ?? spec!.Definition, row is null ? spec!.Parent : row.Parent);
         _children = row?.Children is { } children ? Json.Read<List<string>>(children) : [];
         foreach (var message in Inbox)
@@ -30,6 +31,7 @@ internal sealed class Turn : ITurn
     }
 
     public InstanceInfo Instance { get; }
+    public long Now => _input.Services.Now;
     public IReadOnlyList<Message> Inbox => _durable.Inbox;
     public object State { get; set; } = null!;
     public object? Ambient => _durable.Ambient;
@@ -72,7 +74,9 @@ internal sealed class Turn : ITurn
         if (_status != InstanceStatus.Running || Has(Flaw.HoldLoses)) _durable.HoldNothing();     // nothing is held into an ended instance
         var row = new InstanceRow(Id, Instance.Model, _definition ?? Instance.Definition, _status, Json.Write(State), _durable.Revision, Instance.Parent, Jobs: _durable.Jobs(), History: history,
             Children: _children.Count == 0 ? null : Json.Write(_children), StateVersion: version);
-        if (_status != InstanceStatus.Running && row.Parent is not null) _durable.Add(WorkflowInstance.Finished(row, _output is null ? null : Json.Write(_output)));
+        if (_input.Row is { Status: not InstanceStatus.Running } ended)
+            row = ended with { State = Json.Write(State), Revision = _durable.Revision, StateVersion = version };
+        if (_status != InstanceStatus.Running && _input.Row is not { Status: not InstanceStatus.Running } && row.Parent is not null) _durable.Add(WorkflowInstance.Finished(row, _output is null ? null : Json.Write(_output)));
         var unit = _durable.Outcome(_status);
         // An ephemeral instance that ends in the turn that created it, and leaves nothing for anyone else, is never written.
         if (created && _input.Spec!.Ephemeral && _status != InstanceStatus.Running && _durable.SentCount == 0 && _durable.SubscribedCount == 0) return unit;

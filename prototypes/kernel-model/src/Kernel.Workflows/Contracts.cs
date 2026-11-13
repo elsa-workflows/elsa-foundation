@@ -36,9 +36,19 @@ public interface IExecutionModel
     ValueTask<object?> ExecuteJobAsync(IJob job, CancellationToken cancellationToken);
 }
 
+/// <summary>Optional model-owned metadata; the workflow actor keeps command and commit authority.</summary>
+public interface IModelMetadata
+{
+    bool HandlesMetadata(Message message);
+    ValueTask MetadataAsync(ITurn turn, CancellationToken cancellationToken);
+    void TerminateMetadata(object state, long now);
+    bool ProtectsDeletion(object state, long now);
+}
+
 public interface ITurn
 {
     InstanceInfo Instance { get; }
+    long Now { get; } // the existing database-anchored owner clock
     IReadOnlyList<Message> Inbox { get; }
     object State { get; set; }
     object? Ambient { get; }                    // what the starter on this node gave: this activation only, never stored
