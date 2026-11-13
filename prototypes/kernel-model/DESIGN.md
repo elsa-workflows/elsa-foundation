@@ -148,6 +148,7 @@ a concurrent stress test with injected connection failures and the provider's ow
 | `ProjectedAsync`, `ProjectAsync`, `ReadViewsAsync` | The projector's own row and the partition's position; a move of the projector's row only from where it was read, with the view rows, in one transaction; the viewer's read |
 | `SweepAsync` | Delete done outside commands and events whose window passed |
 | Failures | Unknown (reset), transient (try the same batch again), definite (commit one by one, park the one that fails). When a provider cannot tell, unknown (M4) |
+| Subscriptions | Idempotent (FINDINGS 25.2): a wait subscribed twice is one row; removing one that is not there changes nothing; within a turn its subscribes apply before its unsubscribes. EF writes them in the batch and, only when one of them fails the batch, sends it once more with them as statements that tolerate both |
 | Order key | A later send from the same sender gets a larger key (M1). An identity column on SQL; on MongoDB a clock in the sender's partition document, cut under the fence |
 
 | Provider | How | Evidence |
@@ -448,7 +449,8 @@ numbers.
 - **Mutation check:** 39 mutations at 20,000 runs (37 kernel flaws alone and two in combination): all caught but the two that another rule covers, at the first
   failing seeds round 3 recorded; the five native flaws are caught too.
 - **Store conformance suite:** 57 semantic cases pass (required) on in-memory, SQLite, PostgreSQL, SQL Server, MySQL
-  and MongoDB, with either fence; the reference cases differ where the contract is silent (M6, F8).
+  and MongoDB, with either fence; the reference cases differ where the contract is silent (F8). Round 4 made the two
+  subscription cases of M6 required (idempotent), and every store passes them (FINDINGS 25.2).
 - **Stress:** 40 s and 5,000 outside messages with killed sessions, stalls and takeovers, including round 3's commands
   and starts on events: every property holds on PostgreSQL, SQL Server (RCSI, checked fence), MySQL, MongoDB and
   SQLite. With the fence broken on purpose every engine fails (26 to 611 violations).
