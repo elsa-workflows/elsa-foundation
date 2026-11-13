@@ -232,7 +232,8 @@ terminate (every wait of the instance) and a delete (its journal rows); then COM
   it may have run and its result been lost (merge, F-N6). "May have run", never "did run".
 - **Poison:** suspects (rows another owner had) are tried apart, alone in the process (F2, F11), one at a time or in
   halving groups; a take that finds a death adds one attempt to what was on trial; at the threshold the message is
-  parked with its instance. A trial starts only when its turn can run at once (F13); a suspect of a withheld instance
+  parked with its instance. A job's ticket is counted the same way, and past the threshold it is not run: its instance
+  is parked, faulted, with the ticket consumed (decision 9; FINDINGS 25.5). A trial starts only when its turn can run at once (F13); a suspect of a withheld instance
   is shelved (F12). A turn that throws parks its instance at once.
 - **Hold:** a turn hands a message back; it keeps its place and comes with the next turn.
 - **Edge cases:** a message to a missing target without a start spec is dropped and journalled; to an ended instance,

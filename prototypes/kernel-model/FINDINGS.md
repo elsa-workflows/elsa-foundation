@@ -1003,3 +1003,31 @@ holds, 0 deadlocks, 1,143 resets (all fenced), takeovers 572 and 571, settled 21
 is now the fence in the batch, recorded at REPEATABLE READ in ENGINES.md (holds, one take deadlock); with
 `isolation=rc` the fence in the batch has no recorded stress run, and was not run here. README's stress commands now
 show the fence option on every engine.
+
+### 25.5 A poisoned job parks its instance (decision 9). Run
+
+**What changed.** A job's ticket was already counted like any message: it goes on trial alone, and a take after a lost
+owner adds an attempt. At the threshold, round 3 turned the ticket into an error result (`JobFinished` with "the job
+was on trial when N owners were lost") and the instance went on. Now `Worker.Hold` neither starts such a job nor
+rewrites its ticket; the ticket is given to a turn as it is, and `RunTurn` parks the instance: faulted with "message
+<ticket> was on trial when N owners were lost", the ticket consumed, as for any poison message. The old rule stays as
+`Flaw.JobPoisonAsError`.
+
+**The check.** The simulation's oracle now counts an instance whose job kills the process (the fragile model's
+`dierun`) as one that may be faulted, as it already did for a turn that kills it. With the old rule the instance ends
+Running: `--flaw JobPoisonAsError` is caught at seed 2, `I14 1/f2 ended as Running`.
+
+**Gates** (before: section 24):
+
+| Gate | Before | After |
+|---|---|---|
+| `$SIM --seeds 200000` | 0 failed, 0 parked | 0 failed, 0 parked |
+| `$SIM --seeds 20000 --actions 1000` | 0 failed, 12 innocent parked | the same |
+| `$SIM --native --seeds 20000 --actions 1000` | 0 failed, 15 innocent parked; 409,284 matched; 972 reruns | 0 failed, 13 innocent parked; the rest the same |
+| `$SIM --mutations --seeds 20000` | as section 24 | every flaw at the same seed, plus `JobPoisonAsError` at seed 2 |
+| `$SIM --native-mutations --seeds 20000` | 5 of 5 | the same |
+| `$NAT smoke` | 31 of 31 | 31 of 31 |
+
+No schedule moved (every first failing seed is the same). The two fewer innocent instances in the native runs are
+fragile instances parked for their own job, which the oracle used to count as innocent. Not run: the stores (no store
+or commit code changed).
