@@ -854,7 +854,7 @@ describe("WeaverSurface", () => {
   it.each(["unknown-proposal", "unknown-approval", "approved"] as const)(
     "requires recognized proposal and approval states before FullAuto executes: %s", async state => {
       const api = readyApi(); const client = readyClient();
-      client.bootstrap = vi.fn(async () => ({ ...await readyClient().bootstrap(), policy: { ...(await readyClient().bootstrap()).policy, defaultAutonomyMode: "full-auto" } }));
+      client.bootstrap = vi.fn(async () => ({ ...await readyClient().bootstrap(), policy: { ...(await readyClient().bootstrap()).policy, defaultAutonomyMode: "full-auto" as const } }));
       client.approveProposal = vi.fn(async () => ({ proposalId: "proposal", approvalStatus: state === "unknown-approval" ? "uncertain" as const : "approved" as const }));
       const invocation = preparedInvocation(api); invocation.executionLocation = "server"; invocation.client = null; invocation.requiresApproval = false;
       const subscribeStream = ((_context, _url, emit) => {

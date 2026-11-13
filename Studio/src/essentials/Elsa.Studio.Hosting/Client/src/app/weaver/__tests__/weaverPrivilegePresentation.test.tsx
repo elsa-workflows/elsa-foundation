@@ -73,7 +73,7 @@ describe("effective proposal privilege presentation", () => {
       expect(container.querySelector('article')?.getAttribute("data-status")).toBe("performed");
       expect(container.textContent).toContain("Owning module result");
       expect(container.textContent).not.toContain("Persisted resource");
-      const buttons = [...container.querySelectorAll("footer button")];
+      const buttons = [...container.querySelectorAll<HTMLButtonElement>("footer button")];
       expect(buttons.map(button => button.textContent?.trim())).toEqual(["Approve", "Deny", "Apply"]);
       expect(buttons.every(button => button.disabled)).toBe(true);
       buttons.forEach(button => button.click());
