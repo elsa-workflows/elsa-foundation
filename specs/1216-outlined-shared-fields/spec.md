@@ -2,7 +2,7 @@
 
 **Feature Branch**: `agent/codex/4219-outlined-shared-fields`
 **Created**: 2026-11-12
-**Status**: Implemented (delivery gates tracked by T014 and PR #4244)
+**Status**: Implemented — delivery gates tracked by T014 and PR #4244
 **Input**: “Let's roll the Outlined style out across our shared components and themes. Deliver it end to end.”
 **Issue / program**: #4219 / #2559. Reference: accepted Outlined Secrets production #4076 and #3878.
 
