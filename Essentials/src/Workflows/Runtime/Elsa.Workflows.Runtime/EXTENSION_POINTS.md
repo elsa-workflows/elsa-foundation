@@ -1372,3 +1372,24 @@ one-execution pages ahead of healthy live/legacy work and held-terminal partial 
 
 The held-terminal control enqueues its pausable item before resume handoff and asserts the actual FIFO
 head plus native pause denial before sweeping; an earlier timestamp alone does not establish held discovery.
+
+### Multiple saved publication recipients (#3849, S10j)
+
+Nine additional component controls exercise one actual public Primitives publication/native processor/saved
+cohort through two native queued recipients and actual consumption/callback/history paths. Eight rows vary
+both original capture choices and whether the second callback returns a fault; a ninth retires one saved wait
+after handoff. Each captured recipient has its own receipt and causal consumption/outcome in its own ordered
+history; one source remains one publication/routing invocation. Uncaptured recipients keep the original source
+cause without acquiring history, and one recipient's fault/retirement does not invent effects on the other.
+
+All9 new and66 existing native delivery/publication/receiver component controls are NOT RUN. Both runs reuse
+activity/bookmark IDs to exercise run scoping. Native workflow/invocation/private state/schema and controlled
+callback activations remain supplied; a second wait is created by the actual native handler. Existing fixture
+defaults are unchanged. This is not authored start/whole-workflow, concurrent node/authority, durable provider/
+restart, hosted control sensitivity or composed UX qualification. No production/API/schema/reference/dependency/
+friend/module/host change is added. T026 and parent remain open.
+
+These controls re-read each exact native run/activity after both drains and assert completion/fault code,
+ended resume-attempt transition, consumed delivery, cleared waits and native incident state before the
+capture-specific history branch. Uncaptured rows therefore prove their native outcome too; absence of
+history and a Completed scheduler result alone cannot distinguish callback completion from a returned fault.
