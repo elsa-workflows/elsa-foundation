@@ -154,7 +154,9 @@ public sealed partial class BpmnCompleteSourceCompilationTests
     private static ActivityNode Sequence(string id, params ActivityNode[] children) => new(id, "sequence-version", [], [],
         new(SequenceActivity.StructureKind, SequenceActivity.StructureSchemaVersion, JsonSerializer.SerializeToElement(new { activities = children, variables = Array.Empty<VariableDefinition>() }, Web)));
 
-    private static ActivityDefinitionVersion[] Versions() => [Version("bpmn-version", typeof(BpmnProcess), BpmnProcess.StructureKind), Version("sequence-version", typeof(SequenceActivity), SequenceActivity.StructureKind)];
+    private static ActivityDefinitionVersion[] Versions() => [Version("bpmn-version", typeof(BpmnProcess), BpmnProcess.StructureKind),
+        Version("sequence-version", typeof(SequenceActivity), SequenceActivity.StructureKind),
+        Version("flowchart-version", typeof(Elsa.Activities.Flowchart.Activities.Flowchart), Elsa.Activities.Flowchart.Activities.Flowchart.StructureKind)];
     private static ActivityDefinitionVersion Version(string id, Type type, string kind) => new("1.0.0", $"definition:{id}")
     {
         Id = id, Definition = new ActivityDefinition { Id = $"definition:{id}", ActivityTypeKey = type.FullName!, Category = "BPMN" },
@@ -184,7 +186,7 @@ public sealed partial class BpmnCompleteSourceCompilationTests
         Assert.True(ActivityStructureDesignFacetReader.TryReadContract(facet, out var contract));
         Assert.Equal(new ActivityStructureContract(kind, "1.0.0"), contract);
         Assert.True(structure.SupportsScopedVariables);
-        Assert.Equal(type == typeof(BpmnProcess) ? "bpmn" : "sequence", structure.Mode);
+        Assert.Equal(type == typeof(BpmnProcess) ? "bpmn" : type == typeof(SequenceActivity) ? "sequence" : "flowchart", structure.Mode);
         Assert.Equal(JsonValueKind.Array, facet.Payload.GetProperty("initialPayload").GetProperty(slot.Property).ValueKind);
         return facet;
     }

@@ -20,6 +20,7 @@ using Elsa.Workflows.Publishing.Core.Services;
 using Elsa.Workflows.Publishing.Services;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Services.Values;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using DesignContract = Elsa.Activities.Design.Core.Models.ActivityContract;
@@ -131,12 +132,73 @@ public sealed partial class BpmnCompleteSourceCompilationTests
     }
 
     [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public async Task Actual_placement_retains_normalized_process_scope_and_native_body_variables_with_authored_children(bool standardScope, bool flowchartBody)
+    {
+        using var fixture = new GraphFixture();
+        var owner = Process(canStart: true, nestedStandardScope: standardScope);
+        var payload = System.Text.Json.Nodes.JsonNode.Parse(owner.Structure!.Payload.GetRawText())!.AsObject();
+        payload["variables"] = JsonSerializer.SerializeToNode(new[]
+        { new VariableDefinition("process-local", "Process local", new("Int32"), null, new ArgumentValue("7", "Literal")) }, Web);
+        var native = payload["activities"]![0]!["structure"]!["payload"]!;
+        native["activities"] = JsonSerializer.SerializeToNode(new[] { Sequence("nested-work") }, Web);
+        if (flowchartBody)
+        {
+            payload["activities"]![0]!["activityVersionId"] = "flowchart-version";
+            payload["activities"]![0]!["structure"]!["kind"] = Elsa.Activities.Flowchart.Activities.Flowchart.StructureKind;
+            native["connections"] = new System.Text.Json.Nodes.JsonArray();
+            native["startNodeId"] = "nested-work";
+        }
+        native["variables"] = JsonSerializer.SerializeToNode(new[]
+        { new VariableDefinition("native-local", "Native local", new("Int32"), null, new ArgumentValue("42", "Literal")) }, Web);
+        owner = owner with { Structure = new(owner.Structure.Kind, owner.Structure.SchemaVersion, JsonSerializer.SerializeToElement(payload, Web)) };
+        var before = owner.Structure.Payload.Clone();
+        var result = await fixture.Compile(owner);
+        Assert.True(result.IsSuccessful, string.Join("; ", result.Diagnostics.Select(diagnostic => diagnostic.Message)));
+        var placed = await fixture.Place(result.Template!);
+        var process = PlacedOccurrence(placed, "process");
+        var work = PlacedOccurrence(placed, "work");
+        var child = PlacedOccurrence(placed, "nested-work");
+        AssertCanonical(process, "process", "process-local", 7);
+        AssertCanonical(work, "work", "native-local", 42);
+        Assert.Equal(child.ExecutableNodeId, flowchartBody ? work.Structure!.Payload.GetProperty("startNodeId").GetString()
+            : Assert.Single(work.Structure!.Payload.GetProperty("activities").EnumerateArray()).GetString());
+        var taskScope = process;
+        if (standardScope)
+        {
+            taskScope = PlacedOccurrence(placed, "scope-sub");
+            AssertCanonical(taskScope, "scope-sub", "header-value", 42);
+            Assert.Equal(taskScope.ExecutableNodeId, ElementChild(process, "Sub"));
+        }
+        Assert.Equal(work.ExecutableNodeId, ElementChild(taskScope, "T"));
+        Assert.True(JsonElement.DeepEquals(before, owner.Structure.Payload));
+
+        void AssertCanonical(ExecutableNode node, string occurrence, string key, int expected)
+        {
+            var overlay = Assert.Single(result.Template!.DirectDependencies, dependency => dependency.OccurrenceId == occurrence).OccurrenceOverlay!;
+            Assert.True(JsonElement.DeepEquals(overlay.Structure!.Payload.GetProperty("variables"), node.Structure!.Payload.GetProperty("variables")));
+            var projector = new RuntimeVariableDeclarationProjector();
+            var declaration = Assert.Single(projector.ProjectDeclarations(node)).Value;
+            Assert.Equal(key, declaration.VariableKey);
+            Assert.Equal("Int32", declaration.Type.Alias);
+            Assert.NotNull(declaration.Policy);
+            Assert.Equal(expected, projector.ProjectInitialValues(node)[key].InlineValue!.Value.GetInt32());
+        }
+
+        static string? ElementChild(ExecutableNode node, string id) => node.Structure!.Payload.GetProperty("elements").EnumerateArray()
+            .Single(element => element.GetProperty("elementId").GetString() == id).GetProperty("childNodeId").GetString();
+    }
+
+    [Theory]
     [InlineData(false)]
     [InlineData(true)]
     public async Task Actual_template_coordinator_preserves_authored_variable_overlays_outside_translated_subtrees(bool translatedSibling)
     {
         using var fixture = new GraphFixture();
-        var owner = Sequence("legacy");
+        var owner = Sequence("legacy", Sequence("legacy-leaf"));
         var payload = System.Text.Json.Nodes.JsonNode.Parse(owner.Structure!.Payload.GetRawText())!.AsObject();
         payload["variables"] = JsonSerializer.SerializeToNode(new[]
         {
@@ -156,6 +218,11 @@ public sealed partial class BpmnCompleteSourceCompilationTests
         Assert.Equal("legacy-local", variable.GetProperty("referenceKey").GetString());
         Assert.False(variable.TryGetProperty("variableKey", out _));
         Assert.False(variable.TryGetProperty("initialBinding", out _));
+        var placed = await fixture.Place(result.Template);
+        var legacy = PlacedOccurrence(placed, "legacy");
+        var legacyChild = PlacedOccurrence(placed, "legacy-leaf");
+        Assert.True(JsonElement.DeepEquals(variables, legacy.Structure!.Payload.GetProperty("variables")));
+        Assert.Equal(legacyChild.ExecutableNodeId, Assert.Single(legacy.Structure.Payload.GetProperty("activities").EnumerateArray()).GetString());
         if (translatedSibling)
         {
             var process = Assert.Single(result.Template.DirectDependencies, dependency => dependency.OccurrenceId == "process");
@@ -202,10 +269,15 @@ public sealed partial class BpmnCompleteSourceCompilationTests
         Assert.Empty(diagnostic.Metadata);
     }
 
+    private static ExecutableNode PlacedOccurrence(ActivityTemplatePlacement placed, string id) =>
+        Assert.Single(placed.Root.DescendantsAndSelf(), node => JsonSerializer.Deserialize<ActivityInvocationOriginSegment[]>(
+            node.Metadata["activity.invocationOrigin"], Web)!.LastOrDefault(segment => segment.Kind == ActivityInvocationOriginSegmentKind.NestedPlacement)?.Id == id);
+
     private sealed class GraphFixture : IDisposable
     {
         private readonly ServiceProvider _services;
         private readonly ActivityTemplateCompiler _compiler;
+        private readonly ActivityTemplatePlacer _placer;
         private readonly ActivityDefinition _definition = new() { Id = "graph-definition", ActivityTypeKey = "Test.CompleteSource", Category = "BPMN" };
 
         internal GraphFixture(bool graphClaimingProcess = false, bool badDescriptorSchema = false)
@@ -217,12 +289,13 @@ public sealed partial class BpmnCompleteSourceCompilationTests
             services.AddSingleton(TimeProvider.System);
             new ActivitiesBpmnDesignFeature().ConfigureServices(services);
             new ActivitiesSequenceFeature().ConfigureServices(services);
+            new Elsa.Activities.Flowchart.ActivitiesFlowchartFeature().ConfigureServices(services);
             new Elsa.Workflows.Publishing.WorkflowsPublishingFeature().ConfigureServices(services);
             _services = services.BuildServiceProvider();
             var structures = new DefaultActivityStructureService(_services.GetServices<IActivityStructureHandler>());
-            var nodeCompiler = new ExecutableNodeCompiler(structures, registry, new RuntimeInputBindingCompiler(registry),
-                new RuntimeOutputCaptureCompiler(new Elsa.Workflows.Runtime.Services.Values.RuntimeDurableValueStorageDriverRegistry(
-                    [new Elsa.Workflows.Runtime.Services.Values.JsonRuntimeDurableValueStorageDriver()])));
+            var inputs = new RuntimeInputBindingCompiler(registry);
+            var outputs = new RuntimeOutputCaptureCompiler(new RuntimeDurableValueStorageDriverRegistry([new JsonRuntimeDurableValueStorageDriver()]));
+            var nodeCompiler = new ExecutableNodeCompiler(structures, registry, inputs, outputs);
             var rows = Versions();
             var templates = rows.Select(row =>
             {
@@ -252,12 +325,16 @@ public sealed partial class BpmnCompleteSourceCompilationTests
             }).ToArray();
             var provider = new GraphActivityProvider(structures, new ActivityContractAuthoringValidator(new Capabilities()));
             var versions = new FakeActivityVersionStore(rows.ToList());
+            var publicationStore = new Publications(publications);
+            var templateReader = new Templates(templates);
             _compiler = new ActivityTemplateCompiler(
                 new ActivityTemplateProviderCompilerRegistry([provider]), new ActivityTemplateDependencyDiscovererRegistry([provider]),
-                new Publications(publications), versions, new Templates(templates),
+                publicationStore, versions, templateReader,
                 new AcceptAllActivityTemplateAdmissionPolicy(), TimeProvider.System, [provider],
                 TestCompiler.SourceAuthority(versions, structures), structures,
                 _services.GetRequiredService<IExecutableStructureNormalizer>());
+            _placer = new(publicationStore, templateReader, new SourceReferences(publications.Select(Reference).ToArray()),
+                new Sha256ActivityPlacementHasher(), structures, inputs, outputs);
         }
 
         internal ValueTask<ActivityTemplateCompilerResult> Compile(Elsa.Workflows.Design.Core.Models.ActivityNode root)
@@ -270,7 +347,41 @@ public sealed partial class BpmnCompleteSourceCompilationTests
                 new("1", [], [], [new("done", "Done", true)]), manifest);
             return _compiler.CompileAsync(new(_definition, candidate, "graph-version", "1.0.0", 0));
         }
+
+        internal ValueTask<ActivityTemplatePlacement> Place(ExecutableActivityTemplate template)
+        {
+            var publication = new ActivityDefinitionVersionPublication
+            {
+                DefinitionId = _definition.Id, DefinitionVersionId = "graph-version", Version = "1.0.0", ActivityTypeKey = _definition.ActivityTypeKey,
+                TemplateId = template.TemplateId, TemplateHash = template.TemplateHash, SourceReferenceId = "source:graph-version",
+                Contract = new("1", [], [], [new("done", "Done", true)]),
+                Provider = new(GraphActivityProvider.Key, "1", JsonSerializer.SerializeToElement(new { }, Web)),
+                ProviderFingerprint = "graph-fixture", RuntimeRequirements = [], PublishedAt = DateTimeOffset.UnixEpoch,
+                Lifecycle = ActivityDefinitionVersionLifecycle.Active
+            };
+            return _placer.PlaceAsync(new(publication, template, Reference(publication),
+                new([new(ActivityInvocationOriginSegmentKind.WorkflowRoot, "workflow-version")]), publication.ActivityTypeKey,
+                new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, RuntimeOutputCapture>()));
+        }
         public void Dispose() => _services.Dispose();
+    }
+
+    private static WorkflowExecutableSourceReference Reference(ActivityDefinitionVersionPublication publication) => new(
+        publication.SourceReferenceId, publication.TemplateId, "ActivityDefinitionVersion", publication.DefinitionVersionId,
+        publication.Version, publication.DefinitionId, publication.DefinitionVersionId, publication.Version,
+        DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch, WorkflowExecutableReferenceScope.Published, LayoutSidecar: ExecutableLayoutSidecar.Empty);
+
+    private sealed class SourceReferences(WorkflowExecutableSourceReference[] references) : IWorkflowExecutableSourceReferenceReader
+    {
+        public ValueTask<WorkflowExecutableSourceReference?> FindAsync(string id, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(references.SingleOrDefault(reference => reference.SourceReferenceId == id));
+        public ValueTask<RuntimeStorePage<WorkflowExecutableSourceReference>> ListByArtifactPageAsync(WorkflowExecutableSourceReferenceArtifactPageQuery query, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(TestRuntimeStorePages.Page(query, references.Where(reference => reference.ArtifactId == query.ArtifactId), reference => reference.SourceReferenceId, $"source-reference:artifact:{query.ArtifactId}"));
+        public ValueTask<RuntimeStorePage<WorkflowExecutableSourceReference>> ListPageAsync(WorkflowExecutableSourceReferencePageQuery query, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(TestRuntimeStorePages.Page(query, references.Where(reference => query.Scope is null || reference.Scope == query.Scope)
+                .Where(reference => !query.LiveOnly || reference.IsLive(query.Now!.Value)), reference => reference.SourceReferenceId, TestRuntimeStorePages.SourceReferenceQueryBinding(query)));
+        public ValueTask<IReadOnlyCollection<string>> ListUnreferencedArtifactIdsAsync(WorkflowExecutableArtifactCandidateBatch candidates, DateTimeOffset now, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(TestRuntimeStorePages.UnreferencedArtifactIds(candidates, references, now));
     }
 
     private static DesignContract NativeContract(string version) => new("1",

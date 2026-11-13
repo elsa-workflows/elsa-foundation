@@ -84,12 +84,28 @@ internal sealed class SequenceStructureHandler : IActivityStructureHandler
         ActivityNodeStructure structure,
         IReadOnlyDictionary<string, string> authoredToExecutableNodeIds)
     {
-        var executable = structure.Payload.Deserialize<SequenceExecutableStructure>(SerializerOptions)
-                         ?? throw new InvalidOperationException("Sequence executable structure payload is invalid.");
-        var remapped = new SequenceExecutableStructure(
-            executable.Activities.Select(nodeId => Remap(nodeId, authoredToExecutableNodeIds)).ToArray(),
-            executable.Variables);
-        return new ActivityNodeStructure(Kind, SchemaVersion, JsonSerializer.SerializeToElement(remapped, SerializerOptions));
+        if (structure.Payload.ValueKind != JsonValueKind.Object)
+            throw new InvalidOperationException("Sequence executable structure payload is invalid.");
+        // Placement owns child identities only. Variables may already be canonical runtime
+        // declarations, and neither those declarations nor opaque fields may be retyped here.
+        var fields = structure.Payload.EnumerateObject().ToDictionary(property => property.Name, property => property.Value.Clone(), StringComparer.Ordinal);
+        var activitiesKey = Key("activities");
+        if (activitiesKey is not null && fields[activitiesKey].ValueKind != JsonValueKind.Null)
+        {
+            var activities = fields[activitiesKey];
+            if (activities.ValueKind != JsonValueKind.Array)
+                throw new InvalidOperationException("Sequence executable activities must be an array.");
+            fields[activitiesKey] = JsonSerializer.SerializeToElement(activities.EnumerateArray().Select(activity =>
+                activity.ValueKind == JsonValueKind.String
+                    ? Remap(activity.GetString()!, authoredToExecutableNodeIds)
+                    : throw new InvalidOperationException("Sequence executable child identities must be strings.")).ToArray(), SerializerOptions);
+        }
+        var variablesKey = Key("variables");
+        if (variablesKey is not null && fields[variablesKey].ValueKind is not (JsonValueKind.Array or JsonValueKind.Null))
+            throw new InvalidOperationException("Sequence executable variables must be an array.");
+        return new ActivityNodeStructure(Kind, SchemaVersion, JsonSerializer.SerializeToElement(fields, SerializerOptions));
+
+        string? Key(string name) => fields.Keys.SingleOrDefault(key => StringComparer.OrdinalIgnoreCase.Equals(key, name));
     }
 
     public IReadOnlyCollection<VariableDefinition> ProjectScopedVariables(ActivityNode activity) =>
