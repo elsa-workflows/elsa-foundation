@@ -15,7 +15,7 @@ public sealed class PublishStimulusHistoryOwnerInputTests
 {
     private static readonly DateTimeOffset At = DateTimeOffset.UnixEpoch.AddDays(1);
     private static readonly PersistenceScope Scope = new("tenant");
-    private static readonly RuntimeHistoryCapturePolicy Policy = new("runtime-history-v3", 3, true, ["StimulusPublicationCommitted"]);
+    private static readonly RuntimeHistoryCapturePolicy Policy = new("runtime-history-v3", 3, true, ["StimulusPublicationCommitted", "StimulusRoutingAttemptObserved", "StimulusRoutingDispositionObserved"]);
     private static readonly RuntimeHistoryCausation Incoming = new("receipt", "publisher", "incoming", "command", "work");
 
     [Theory]
@@ -63,11 +63,17 @@ public sealed class PublishStimulusHistoryOwnerInputTests
     [InlineData("legacy")]
     [InlineData("older")]
     [InlineData("core-only")]
+    [InlineData("source-only")]
+    [InlineData("missing-attempt")]
+    [InlineData("missing-disposition")]
     public async Task Original_source_absence_and_older_pinned_vocabularies_preserve_native_input_identity(string profile)
     {
         var policy = profile switch
         {
             "older" => new RuntimeHistoryCapturePolicy("runtime-history-v2", 2, true, ["StimulusPublicationCommitted"]),
+            "source-only" => new RuntimeHistoryCapturePolicy("runtime-history-v3", 3, true, ["StimulusPublicationCommitted"]),
+            "missing-attempt" => new RuntimeHistoryCapturePolicy("runtime-history-v3", 3, true, ["StimulusPublicationCommitted", "StimulusRoutingDispositionObserved"]),
+            "missing-disposition" => new RuntimeHistoryCapturePolicy("runtime-history-v3", 3, true, ["StimulusPublicationCommitted", "StimulusRoutingAttemptObserved"]),
             "core-only" => new RuntimeHistoryCapturePolicy("runtime-history-v3", 3, true, ["ActivityCompleted"]),
             _ => null
         };
@@ -78,6 +84,29 @@ public sealed class PublishStimulusHistoryOwnerInputTests
         Assert.Equal(RuntimeCheckpointCommitFingerprint.Compute(original), RuntimeCheckpointCommitFingerprint.Compute(enriched));
         Assert.Null(Assert.Single(enriched.PostCommitIntents).HistoryCausation);
         Assert.Null(enriched.HistorySourceFacts);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Synthetic_flush_and_previously_captured_inputs_preserve_original_source_without_reentry(bool captured)
+    {
+        using var f = new Fixture(Policy);
+        var original = await f.EnrichAsync(Commit(true));
+        var retained = captured
+            ? original with { HistoryBatches = [new(Policy, "checkpoint", At, false, [])] }
+            : original with
+            {
+                CommitId = "flush-commit",
+                Checkpoint = new("flush-checkpoint", "CoalescedSegmentFlush", "publisher", At.AddMinutes(1), [],
+                    new Dictionary<string, string> { [RuntimeMetadataKeys.CoalescedFlush] = "true" })
+            };
+        var calls = f.Source.Calls;
+        Assert.Same(retained, await f.EnrichAsync(retained));
+        Assert.Equal(calls, f.Source.Calls);
+        Assert.Equal(Assert.Single(original.PostCommitIntents).HistoryCausation, Assert.Single(retained.PostCommitIntents).HistoryCausation);
+        Assert.Equal(Assert.Single(original.StateChanges.PostCommitOutbox).State, Assert.Single(retained.StateChanges.PostCommitOutbox).State);
+        Assert.Equal(RuntimeCheckpointCommitFingerprint.Compute(retained), RuntimeCheckpointCommitFingerprint.Compute(await f.EnrichAsync(retained)));
     }
 
     [Fact]

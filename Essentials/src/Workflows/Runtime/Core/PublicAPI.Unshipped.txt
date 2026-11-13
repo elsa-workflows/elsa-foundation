@@ -6914,6 +6914,7 @@ const Elsa.Workflows.Runtime.Core.Constants.RuntimeCheckpointNames.WorkflowStart
 const Elsa.Workflows.Runtime.Core.Constants.RuntimeCheckpointNames.WorkflowSuspended = "WorkflowSuspended" -> string!
 const Elsa.Workflows.Runtime.Core.Constants.RuntimeDelayedScheduleFaultCodes.TooFar = "runtime.delayed-schedule.too-far" -> string!
 const Elsa.Workflows.Runtime.Core.Constants.RuntimeDelayedScheduleFaultCodes.Unavailable = "runtime.delayed-schedule.unavailable" -> string!
+const Elsa.Workflows.Runtime.Core.Constants.RuntimeMetadataKeys.CoalescedFlush = "runtime.coalescing.flush" -> string!
 const Elsa.Workflows.Runtime.Core.Constants.RuntimeMetadataKeys.AcceptsRescheduledFaultedChild = "runtime.acceptsRescheduledFaultedChild" -> string!
 const Elsa.Workflows.Runtime.Core.Constants.RuntimeMetadataKeys.ActivityActivationCompletedWorkItemId = "runtime.activityActivationCompletedWorkItemId" -> string!
 const Elsa.Workflows.Runtime.Core.Constants.RuntimeMetadataKeys.ActivityAttemptActivationClaim = "runtime.activityAttemptActivationClaim" -> string!
