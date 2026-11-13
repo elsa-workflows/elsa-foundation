@@ -226,7 +226,7 @@ public sealed class RuntimeBoundedSourceLeaseTests
         }
         finally
         {
-            SqliteConnection.ClearAllPools(); File.Delete(path); File.Delete(path + "-wal"); File.Delete(path + "-shm");
+            File.Delete(path); File.Delete(path + "-wal"); File.Delete(path + "-shm");
         }
     }
 
@@ -299,6 +299,6 @@ public sealed class RuntimeBoundedSourceLeaseTests
             owner.Templates = new(owner.Context, owner.Access, new Cursor()); return owner;
         }
         public async ValueTask DisposeAsync()
-        { await Context.DisposeAsync(); SqliteConnection.ClearAllPools(); File.Delete(_path); File.Delete(_path + "-wal"); File.Delete(_path + "-shm"); }
+        { await Context.DisposeAsync(); File.Delete(_path); File.Delete(_path + "-wal"); File.Delete(_path + "-shm"); }
     }
 }
