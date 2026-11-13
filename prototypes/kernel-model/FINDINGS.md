@@ -1296,6 +1296,12 @@ cost runs ran again against main at `acda0dd642` (the SQL Server fence default) 
 The only other difference is the order tags of one concurrent fence case (`[commit first, take first]`), which vary
 from run to run.
 
+**At the final state.** The SQLite gates ran again at `e1cdc8a6ea` (R1, R4, R14 and the cancellation of a balancing
+round and a release, with main merged in) against main at `6509a09a32` (the graph engine): the five simulation runs
+(0 failed; 0, 12 and 14 parked; 386,774 native instances matched, 850 reruns, all told), the mutations seed for seed,
+store conformance in memory and on SQLite in both fence modes, native smoke and cost, and EF cost in both fences give
+identical outputs, but for those order tags.
+
 ### Not done
 
 The runtime suite on PostgreSQL, SQL Server, MySQL and MongoDB (it takes any store provider; it ran on the in-memory

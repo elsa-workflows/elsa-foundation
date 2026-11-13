@@ -7,7 +7,8 @@ changed no behaviour: every gate gives the numbers it gave before (FINDINGS sect
 invariants G1 to G5 to the simulation; it changes no kernel behaviour and no round trip. Round 4's runtimes (FINDINGS
 section 27) add the built-in runtime on a clock (`RuntimeNode`), the Orleans adapter and the runtime conformance suite,
 and change layer 2 where the seam needed it: a pass renews an idle lease (R1), a new activation is woken (R4), and a
-job's body may run off the runtime's scheduler (R14); no gate's numbers moved. The source of design intent is
+job's body may run off the runtime's scheduler (R14); every gate gives main's numbers at the stack's final state
+(FINDINGS section 27). The source of design intent is
 draft 5 of the kernel sketch (three layers, partitions only, deployment profiles, persistence as an abstraction,
 synchronous HTTP, trade-offs). This text says what the code is; where the code and draft 5 differ, the section "Where
 the code and draft 5 differ" says which and why. What was found, with the seeds and traces, is in
