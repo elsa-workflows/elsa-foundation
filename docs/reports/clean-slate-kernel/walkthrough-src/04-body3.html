@@ -46,7 +46,7 @@
       <tr><td>PostgreSQL</td><td class="n">3 (2)</td><td>Round trips; in brackets the fence in the batch.</td></tr>
       <tr><td>SQL Server</td><td class="n">4 (3)</td><td>Needs read-committed snapshot isolation.</td></tr>
       <tr><td>MySQL</td><td class="n">7 (6)</td><td>Oracle's EF provider; upserts and <code>INSERT IGNORE</code>.</td></tr>
-      <tr><td>MongoDB 8</td><td class="n">3 (2)</td><td>Needs a replica set for transactions; the owner assigns the order key.</td></tr>
+      <tr><td>MongoDB 8</td><td class="n">3 (2)</td><td>Needs a replica set for transactions; the store assigns the order key.</td></tr>
       <tr><td>SQLite</td><td class="n">5</td><td>Calls into the engine, where EF sends one command per row.</td></tr>
     </tbody>
   </table></div>
@@ -74,20 +74,7 @@
     <div class="card"><h4>13 · Events meet</h4><p>An event and a wait for its key, both committed in the window, meet exactly once.</p></div>
     <div class="card"><h4>14 · One bad instance</h4><p>A failing instance is parked and its partition goes on; a message is parked for killing processes only after the threshold.</p></div>
   </div>
-  <div class="tablewrap"><table>
-    <thead><tr><th>Gate</th><th>Result</th><th>Checked by</th></tr></thead>
-    <tbody>
-      <tr><td>Simulation after the merge: 200,000 runs × 300 actions</td><td>0 failed, 0 innocent instances parked</td><td>Re-run on 12 November</td></tr>
-      <tr><td>Simulation: 20,000 runs × 1,000 actions</td><td>0 failed; 12 innocent instances parked</td><td>Re-run on 12 November</td></tr>
-      <tr><td>The same with native instances in the mix</td><td>0 failed; 15 innocent instances parked</td><td>Re-run on 12 November</td></tr>
-      <tr><td>Mutation check: the kernel broken one rule at a time</td><td>37 single breakages, 35 caught alone; the other two caught in the combined runs with the rule that covers each. Native model: 5 of 5</td><td>Re-run on 12 November</td></tr>
-      <tr><td>Store conformance, 57 semantic cases: in memory and SQLite (either fence)</td><td>In memory 56 pass, 1 skipped. SQLite 54 pass, 1 skipped, 2 reference cases differ where the contract is silent</td><td>Re-run on 12 November</td></tr>
-      <tr><td>Store conformance: PostgreSQL, SQL Server, MySQL, MongoDB, either fence</td><td>PostgreSQL 54 pass, 3 differ; SQL Server and MySQL 53 pass, 3 differ, 1 skipped; MongoDB 57 pass</td><td>Merge run; not re-run</td></tr>
-      <tr><td>Stress: 40 s, 5,000 messages, killed connections, stalls</td><td>Every property holds on all five engines; 0 deadlocks on PostgreSQL, SQL Server (checked fence) and MySQL. SQL Server with the fence in the batch: 127 deadlocks on takes in one run on the engines branch (ENGINES.md E9; one on MySQL), safety held; not re-run after the merge</td><td>Merge run; not re-run</td></tr>
-      <tr><td>Stress with the fence broken on purpose</td><td>Violations on every engine: PostgreSQL 228, SQL Server 26, MySQL 611, SQLite 238, MongoDB 390</td><td>Merge run; not re-run</td></tr>
-    </tbody>
-  </table></div>
-  <p class="note">The last row shows the test can fail: with the fence switched off, every engine produces violations.</p>
+  <p>The simulation passes at 200,000 runs of 300 actions and 20,000 of 1,000, also with native instances in the mix; mutation checks break the kernel one rule at a time and each is caught; the store conformance suite (57 cases) runs on the in-memory store, SQLite, PostgreSQL, SQL Server, MySQL and MongoDB; a stress test with killed connections holds on all five engines and fails on every one with the fence broken on purpose. The figures and seeds are in the prototype's FINDINGS.md (sections 22 to 24); the engine findings, among them E9 (SQL Server deadlocks with the fence in the batch), in ENGINES.md.</p>
 </section>
 
 <!-- 15 ─────────────────────────────────────────── -->
@@ -135,15 +122,15 @@
   <div class="two">
     <div class="card"><h4>Not built yet</h4>
       <ul>
-        <li>The three layers as separate code and the <code>IActorRuntime</code> seam</li>
         <li>The Orleans reference adapter and the runtime conformance suite</li>
         <li>Deployment profiles as code; inline execution on every profile</li>
         <li>The graph engine extracted from the Flowchart; spikes for BPMN on Bpmn.Semantics, StateMachine, agents, standalone jobs (Elsa.Jobs as a job actor type, with the worker protocol) and ETL's fan-out pattern</li>
         <li>Short timers and jobs of an Ephemeral instance kept in memory; the stress test with native instances; a three-node MongoDB replica set</li>
-        <li>Streaming HTTP responses; a route mapping a client's disconnect to a cancel</li>
+        <li>Streaming HTTP responses; a route mapping a client's disconnect to a cancel; the owner's signal to the receiving node</li>
+        <li>SQL Server's checked fence as its default</li>
       </ul></div>
     <div class="card"><h4>Decided 12 November</h4>
-      <p class="note">Built in the prototype: the fence in the batch, the event tables and job poison counting. Not built yet: the wake signal (round 4 adds it), the Orleans adapter, short waits in memory, reply deadlines, the recreate rule, set-based projector rounds, parking a poisoned job, values by reference and the viewer's tail read.</p>
+      <p class="note">Built in the prototype: the fence in the batch, the event tables and job poison counting. Partly: the wake signal (an in-process implementation, round 4). Not built yet: the Orleans adapter, short waits in memory, reply deadlines, the recreate rule, set-based projector rounds, parking a poisoned job, values by reference and the viewer's tail read.</p>
       <ul>
         <li>Commit fence in the batch by default (2 round trips on PostgreSQL); fence first stays an option</li>
         <li>A pluggable wake signal between nodes; polling remains the guarantee</li>
@@ -156,6 +143,7 @@
         <li>Large values stored by reference; segments only if measurements need them</li>
         <li>The viewer reads projected rows plus the journal tail, so it is always current</li>
         <li>Orleans hosts partitions as grains; no grain per instance, no sweep</li>
+              <li>13 November: SQL Server defaults to the fence as its own statement (E9); the architecture section goes in <code>docs/architecture/</code>, published at the switch</li>
       </ul></div>
     <div class="card"><h4>To answer in the design proposal</h4>
       <ul>
@@ -171,7 +159,6 @@
       <ul>
         <li>What the store contract says about subscribing twice and removing what is absent</li>
         <li>Tenant and trace headers; <code>Describe</code> for lists</li>
-        <li>SQL Server's default fence: the fence in the batch deadlocks takes with stale commits there (E9); the checked fence is the suggested fix</li>
         <li>StateMachine as a native composite: recommended, decided by #3815's design milestone</li>
         <li>The default join for a Flowchart node with several inbound connections</li>
         <li>BPMN's scope for its first release</li>
@@ -200,7 +187,7 @@
       </ul></div>
   </div>
   <p class="note">Standalone jobs (Elsa.Jobs on the kernel) are in neither column: their release is decided in the design proposal.</p>
-  <p>Next, before the design proposal: finish the three-layer restructuring; build the card decisions and the Orleans adapter with a runtime conformance suite; extract the graph engine; run the BPMN, StateMachine, agent, standalone-jobs (with the worker protocol) and ETL fan-out spikes; measure write volume. Then the design proposal (a new ADR, a program plan and a list of ADRs to retire), then the Fable review. No product code until the design is approved.</p>
+  <p>Done in round 4 stage A: the three layers and the renames. Next, before the design proposal: build the card decisions with SQL Server's checked fence and the Orleans adapter with a runtime conformance suite; extract the graph engine; run the BPMN, StateMachine, agent, standalone-jobs (with the worker protocol) and ETL fan-out spikes; measure write volume. Then the design proposal (a new ADR, a program plan and a list of ADRs to retire), then the Fable review. No product code until the design is approved.</p>
 </section>
 </main>
 </div>
