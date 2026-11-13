@@ -67,7 +67,7 @@ public sealed class RuntimeHistoryApiTests
     {
         await using var host = await Host.StartAsync();
         host.Authenticate();
-        host.History.Page = new(Head(), [], 100, 40, 20, "next-window", "catch-up")
+        host.History.Page = new(Head() with { LastSequence = 100 }, [], 100, 40, 20, "next-window", "catch-up")
             { ScopeComplete = false, ScopeLimitation = "Ancestry incomplete." };
         using var response = await host.Client.GetAsync(Path + "?limit=20&cursor=original&activityExecutionId=activity&includeDescendants=true&bookmarkId=bookmark&category=BookmarkLifecycle&name=BookmarkConsumed&search=needle");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -163,6 +163,37 @@ public sealed class RuntimeHistoryApiTests
         host.Authenticate();
         host.History.Failure = new RuntimeHistoryIntegrityException("run", "provider-secret");
         using var response = await host.Client.GetAsync(Path + suffix);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal("invalid", json.RootElement.GetProperty("coverage").GetProperty("state").GetString());
+        Assert.Equal(0, json.RootElement.GetProperty("items").GetArrayLength());
+    }
+
+    [Theory]
+    [InlineData("event-after-head")]
+    [InlineData("event-before-retained")]
+    [InlineData("event-purged")]
+    [InlineData("event-reversed")]
+    [InlineData("bookmark-after-head")]
+    [InlineData("bookmark-no-first-position")]
+    public async Task Page_and_inventory_positions_must_agree_with_their_committed_snapshot(string scenario)
+    {
+        await using var host = await Host.StartAsync();
+        host.Authenticate();
+        var head = scenario switch
+        {
+            "event-after-head" => Head() with { LastSequence = 0 },
+            "event-before-retained" => Head() with { FirstSequence = 2, LastSequence = 2 },
+            "event-purged" => Head() with { FirstSequence = 2, PurgedThroughSequence = 1 },
+            "event-reversed" => Head() with { LastSequence = 2 },
+            _ => Head()
+        };
+        var events = new List<RuntimeHistoryEvent> { host.History.Event! };
+        if (scenario == "event-reversed") events.Insert(0, new("event-2", "run", 2, RuntimeHistoryEventCategory.WorkflowLifecycle, "WorkflowStarted", Now));
+        host.History.Page = new(head, events, head.LastSequence, head.LastSequence, events.Count, null, "catch-up");
+        host.History.BookmarkPage = new(head, [host.History.Bookmark! with
+            { LastSequence = scenario == "bookmark-after-head" ? 2 : 1, FirstRecordedSequence = scenario == "bookmark-no-first-position" ? 0 : 1 }], null);
+        using var response = await host.Client.GetAsync(Path + (scenario.StartsWith("bookmark", StringComparison.Ordinal) ? "/bookmarks" : ""));
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         Assert.Equal("invalid", json.RootElement.GetProperty("coverage").GetProperty("state").GetString());
@@ -423,13 +454,14 @@ public sealed class RuntimeHistoryApiTests
         public RuntimeHistoryQuery? Query { get; private set; }
         public RuntimeHistoryBookmarkQuery? BookmarkQuery { get; private set; }
         public RuntimeHistoryPage Page { get; set; } = new(RuntimeHistoryApiTests.Head(), [new("event", "run", 1, RuntimeHistoryEventCategory.WorkflowLifecycle, "WorkflowStarted", Now)], 1, 1, 1, null, "catch-up");
+        public RuntimeHistoryBookmarkPage? BookmarkPage { get; set; }
         public Exception? Failure { get; set; }
         protected void Read(CancellationToken token) { token.ThrowIfCancellationRequested(); Reads++; if (Failure is { } error) throw error; }
         public ValueTask<RuntimeHistoryHead?> FindHeadAsync(string run, CancellationToken token = default) { IndependentExactReads++; throw new InvalidOperationException("Independent read forbidden."); }
         public ValueTask<RuntimeHistoryEvent?> FindEventAsync(string run, string id, CancellationToken token = default) { IndependentExactReads++; throw new InvalidOperationException("Independent read forbidden."); }
         public ValueTask<RuntimeHistoryBookmark?> FindBookmarkAsync(string run, string id, CancellationToken token = default) { IndependentExactReads++; throw new InvalidOperationException("Independent read forbidden."); }
         public ValueTask<RuntimeHistoryPage> ReadPageAsync(RuntimeHistoryQuery query, CancellationToken token = default) { Read(token); Query = query; return ValueTask.FromResult(Page); }
-        public ValueTask<RuntimeHistoryBookmarkPage> ListBookmarksAsync(RuntimeHistoryBookmarkQuery query, CancellationToken token = default) { Read(token); BookmarkQuery = query; return ValueTask.FromResult(new RuntimeHistoryBookmarkPage(Head, [], null)); }
+        public ValueTask<RuntimeHistoryBookmarkPage> ListBookmarksAsync(RuntimeHistoryBookmarkQuery query, CancellationToken token = default) { Read(token); BookmarkQuery = query; return ValueTask.FromResult(BookmarkPage ?? new RuntimeHistoryBookmarkPage(Head, [], null)); }
     }
 
     private sealed class Projection : BaseProjection, IRuntimeHistoryDetailsStore

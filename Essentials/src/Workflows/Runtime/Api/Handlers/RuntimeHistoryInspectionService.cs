@@ -31,7 +31,18 @@ public sealed class RuntimeHistoryInspectionService(IWorkflowExecutionStateStore
         try
         {
             var page = await history.ReadPageAsync(query, token);
-            foreach (var item in page.Items) EnsureEventOwner(workflow.WorkflowExecutionId, item);
+            if (page.Items.Count > query.Limit || page.UpperSequence < 0 || page.UpperSequence > (page.Head?.LastSequence ?? 0) ||
+                page.ScannedThroughSequence < 0 || page.ScannedThroughSequence > page.UpperSequence || page.ScannedCount < page.Items.Count)
+                throw new RuntimeHistoryIntegrityException(workflow.WorkflowExecutionId, "event page disagrees with its committed window");
+            long previous = 0;
+            foreach (var item in page.Items)
+            {
+                EnsureEventOwner(workflow.WorkflowExecutionId, item);
+                EnsureEventPosition(item, page.Head);
+                if (item.Sequence <= previous || item.Sequence > page.ScannedThroughSequence)
+                    throw new RuntimeHistoryIntegrityException(workflow.WorkflowExecutionId, "event page positions disagree with their scanned window");
+                previous = item.Sequence;
+            }
             return new(await CoverageAsync(workflow, page.Head, token), page.Items.Select(RuntimeHistoryEventView.From).ToArray(),
                 page.UpperSequence, page.ScannedThroughSequence, page.ScannedCount, page.NextContinuationToken,
                 page.CatchUpToken, page.ScopeComplete, page.ScopeLimitation, time.GetUtcNow());
@@ -50,9 +61,9 @@ public sealed class RuntimeHistoryInspectionService(IWorkflowExecutionStateStore
         var (head, item) = await details.FindEventDetailsAsync(request.WorkflowExecutionId, request.HistoryEventId, token);
         if (item is null) throw new RuntimeResourceMissingSignal();
         EnsureEventOwner(workflow.WorkflowExecutionId, item);
-        if (item.HistoryEventId != request.HistoryEventId || head is null || item.Sequence <= 0 ||
-            item.Sequence < head.FirstSequence || item.Sequence <= head.PurgedThroughSequence || item.Sequence > head.LastSequence)
+        if (item.HistoryEventId != request.HistoryEventId)
             throw new RuntimeHistoryIntegrityException(workflow.WorkflowExecutionId, "event detail disagrees with the requested snapshot");
+        EnsureEventPosition(item, head);
         return new(await CoverageAsync(workflow, head, token), RuntimeHistoryEventView.From(item), time.GetUtcNow());
     }
 
@@ -68,7 +79,13 @@ public sealed class RuntimeHistoryInspectionService(IWorkflowExecutionStateStore
         {
             var page = await history.ListBookmarksAsync(query, token);
             var items = new List<RuntimeHistoryBookmarkView>(page.Items.Count);
-            foreach (var item in page.Items) items.Add(await BookmarkAsync(workflow, item, token));
+            if (page.Items.Count > query.Limit)
+                throw new RuntimeHistoryIntegrityException(workflow.WorkflowExecutionId, "bookmark inventory exceeds its bounded window");
+            foreach (var item in page.Items)
+            {
+                EnsureBookmarkPosition(item, page.Head);
+                items.Add(await BookmarkAsync(workflow, item, token));
+            }
             return new(await CoverageAsync(workflow, page.Head, token), items, page.NextContinuationToken, page.TotalCount,
                 page.ActiveCount, page.ScopeComplete, page.ScopeLimitation, time.GetUtcNow());
         }
@@ -85,9 +102,9 @@ public sealed class RuntimeHistoryInspectionService(IWorkflowExecutionStateStore
         if (history is not IRuntimeHistoryDetailsStore details) throw new RuntimeHistoryUnsupportedSignal();
         var (head, item) = await details.FindBookmarkDetailsAsync(request.WorkflowExecutionId, request.BookmarkId, token);
         if (item is null) throw new RuntimeResourceMissingSignal();
-        if (item.Bookmark.Identity.BookmarkId != request.BookmarkId || head is null ||
-            item.FirstRecordedSequence <= 0 || item.LastSequence < item.FirstRecordedSequence || item.LastSequence > head.LastSequence)
+        if (item.Bookmark.Identity.BookmarkId != request.BookmarkId)
             throw new RuntimeHistoryIntegrityException(workflow.WorkflowExecutionId, "bookmark detail disagrees with the requested snapshot");
+        EnsureBookmarkPosition(item, head);
         return new(await CoverageAsync(workflow, head, token), await BookmarkAsync(workflow, item, token), time.GetUtcNow());
     }
 
@@ -214,6 +231,19 @@ public sealed class RuntimeHistoryInspectionService(IWorkflowExecutionStateStore
     {
         if (item.WorkflowExecutionId != run)
             throw new RuntimeHistoryIntegrityException(run, "event belongs to a different run");
+    }
+
+    private static void EnsureEventPosition(RuntimeHistoryEvent item, RuntimeHistoryHead? head)
+    {
+        if (head is null || item.Sequence <= 0 || item.Sequence < head.FirstSequence ||
+            item.Sequence <= head.PurgedThroughSequence || item.Sequence > head.LastSequence)
+            throw new RuntimeHistoryIntegrityException(item.WorkflowExecutionId, "event has no acknowledged retained position");
+    }
+
+    private static void EnsureBookmarkPosition(RuntimeHistoryBookmark item, RuntimeHistoryHead? head)
+    {
+        if (head is null || item.FirstRecordedSequence <= 0 || item.LastSequence < item.FirstRecordedSequence || item.LastSequence > head.LastSequence)
+            throw new RuntimeHistoryIntegrityException(item.Bookmark.Identity.WorkflowExecutionId, "bookmark has no acknowledged lifecycle position");
     }
 
     private RuntimeHistoryCoverageView Coverage(WorkflowExecutionState workflow, RuntimeHistoryHead? head)
