@@ -1333,6 +1333,9 @@ findings. No built-in actor/transport is qualified for selected execution by thi
 `WorkflowTestEntryAdmission` checks exact pin/node, TestRun kind, finite open scope, tenant, partition
 and complete authority; parent/trigger/stimulus/dependency/model-work starts and nested dispatch refuse.
 Preparation freezes setup and rechecks descriptor, providers, scope lifecycle and expiry after materialization.
+The resolver binds the current caller in this read-only path; future queued starts must pass independently
+resolved caller scope and authority to admission, rather than echoing the descriptor's own facts. Malformed
+returned seed shapes are setup refusals; exceptions thrown by providers remain infrastructure failures.
 These are preflight reads, not the scope store's atomic root-start admission transaction. Queued selected
 start/interpreter wiring, lexical consumption and newer predecessor-reader fences remain follow-up work;
 no public start, runner, or durable command format is activated here.

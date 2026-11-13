@@ -39,6 +39,7 @@ internal sealed class RuntimeTestContextPreparer(WorkflowTestEntryAdmission admi
             if (resolved is null || resolved.ContextId != entry.ContextId || resolved.ContextFingerprint != entry.ContextFingerprint)
                 throw new RuntimeTestContextUnavailableException("runtime.test-context.seed-changed",
                     "The exact authorized context seed is unavailable or has changed.");
+            ValidateSeedShape(resolved);
             var seed = resolved with
             {
                 Frames = Array.AsReadOnly(resolved.Frames.Select(x => x with
@@ -86,6 +87,23 @@ internal sealed class RuntimeTestContextPreparer(WorkflowTestEntryAdmission admi
 
         ValueTask ValidateAsync() => admission.ValidateAsync(entry, executable, WorkflowRunKind.TestRun, entry.Scope,
             entry.Authority, entry.Scope.TenantId, entry.Scope.Partition, null, null, null, 0, false, cancellationToken);
+    }
+
+    private static void ValidateSeedShape(RuntimeTestContextSeed seed)
+    {
+        // Diagnose returned setup shape explicitly; exceptions thrown by providers remain infrastructure failures.
+        if (seed.Frames is null || seed.Results is null ||
+            seed.Frames.Any(frame => frame is null || string.IsNullOrWhiteSpace(frame.ScopeId) || !Enum.IsDefined(frame.Kind) ||
+                !ValuesPresent(frame.Values) || frame.Inputs is not null && !ValuesPresent(frame.Inputs) ||
+                frame.VariableNames?.Any(x => string.IsNullOrWhiteSpace(x.Key) || x.Value is null) == true) ||
+            seed.Results.Any(result => result is null || string.IsNullOrWhiteSpace(result.ProducerNodeId) ||
+                string.IsNullOrWhiteSpace(result.ProducerScopeId) || result.Result is null) ||
+            seed.RootVariables is not null && !ValuesPresent(seed.RootVariables))
+            throw new RuntimeTestContextUnavailableException("runtime.test-context.seed-shape-unavailable",
+                "The authorized context seed does not contain a complete setup shape.");
+
+        static bool ValuesPresent(IReadOnlyDictionary<string, ValueEnvelope>? values) =>
+            values is not null && values.All(x => !string.IsNullOrWhiteSpace(x.Key) && x.Value is not null);
     }
 
     private static IReadOnlyDictionary<string, ValueEnvelope> Snapshot(IReadOnlyDictionary<string, ValueEnvelope> values) =>

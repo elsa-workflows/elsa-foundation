@@ -287,6 +287,24 @@ public sealed class RuntimeTestEntryAdmissionTests
         Assert.Same(Physical<IRuntimePostCommitOutboxStore>(actual), owners.Tuple.Outbox);
     }
 
+    [Theory]
+    [InlineData("frames-null")]
+    [InlineData("results-null")]
+    [InlineData("frame-null")]
+    [InlineData("fixture-null")]
+    [InlineData("frame-values-null")]
+    [InlineData("root-value-null")]
+    public async Task Malformed_returned_seed_shape_is_unavailable_setup(string shape)
+    {
+        var owners = new Owners { SeedShape = shape };
+        await using var harness = Build(owners);
+        await Open(harness, owners);
+        var result = await Prepare(harness, owners);
+        Assert.False(result.IsAvailable);
+        Assert.Equal(RuntimeTestContextFindingKind.Unavailable, Assert.Single(result.Findings).Kind);
+        Assert.Null(await harness.Services.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync("prepared"));
+    }
+
     private static WorkflowExecutionHarness Build(Owners owners, Action<IServiceCollection>? extra = null) =>
         WorkflowExecutionHarness.Create().ConfigureServices(services =>
         {
@@ -331,6 +349,7 @@ public sealed class RuntimeTestEntryAdmissionTests
         internal bool DescriptorChanged, SeedChanged, RevokeAfterFirstRead, DescriptorAbsent, SeedAbsent, InvalidSetup;
         internal bool CanPersist = true, CanRoute = true;
         internal string? FailAt;
+        internal string? SeedShape;
         internal Func<ValueTask>? BeforeSeed;
         internal Func<RuntimeTestPersistenceBoundaryContext, bool>? PersistencePredicate;
 
@@ -351,8 +370,19 @@ public sealed class RuntimeTestEntryAdmissionTests
             SeedReads++; Fail("seed");
             Assert.Same(Entry, entry); Assert.Same(Executable, executable); Assert.Equal("prepared", workflowExecutionId);
             if (BeforeSeed is not null) await BeforeSeed();
-            return SeedAbsent ? null : new(Entry.ContextId, SeedChanged ? "changed" : Entry.ContextFingerprint, [],
+            if (SeedAbsent) return null;
+            var seed = new RuntimeTestContextSeed(Entry.ContextId, SeedChanged ? "changed" : Entry.ContextFingerprint, [],
                 InvalidSetup ? [new("missing-producer", "scope", ValueEnvelope.Null(new("Int32"), ValueProtectionPolicy.InstanceInline))] : []);
+            return SeedShape switch
+            {
+                "frames-null" => seed with { Frames = null! },
+                "results-null" => seed with { Results = null! },
+                "frame-null" => seed with { Frames = [null!] },
+                "fixture-null" => seed with { Results = [null!] },
+                "frame-values-null" => seed with { Frames = [new("scope", VariableFrameKind.Container, null!)] },
+                "root-value-null" => seed with { RootVariables = new Dictionary<string, ValueEnvelope> { ["amount"] = null! } },
+                _ => seed
+            };
         }
 
         public bool CanPersistTestEntry(RuntimeTestPersistenceBoundaryContext context)
