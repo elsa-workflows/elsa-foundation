@@ -81,7 +81,7 @@ internal sealed class EfStandaloneTriggerStore(RuntimeDbContext context, IPersis
             row.TenantKey == tenantKey && row.TenantHash == tenantHash && row.DesiredState != (int)TriggerDesiredState.Deleted);
         if (query.After is not null) { var after = Order(query.After); rows = rows.Where(row => row.TriggerOrderKey.CompareTo(after) > 0); }
         if (!string.IsNullOrWhiteSpace(query.Search)) { var search = query.Search.ToUpperInvariant(); rows = rows.Where(row => row.SearchName.Contains(search)); }
-        if (query.TypeKey is not null) { var type = Encode(query.TypeKey); rows = rows.Where(row => row.TypeKey == type); }
+        if (query.TypeKey is not null) { var type = Encode(query.TypeKey); var hash = Hash(query.TypeKey); rows = rows.Where(row => row.TypeKey == type && row.TypeHash == hash); }
         if (query.DesiredState is { } desired) rows = rows.Where(row => row.DesiredState == (int)desired);
         var page = await rows.OrderBy(row => row.TriggerOrderKey).Take(query.Limit + 1).ToArrayAsync(cancellationToken);
         var values = page.Select(row => ReadResource(row, scope)).ToArray();
@@ -104,7 +104,7 @@ internal sealed class EfStandaloneTriggerStore(RuntimeDbContext context, IPersis
             row.TenantKey == tenantKey && row.TenantHash == tenantHash && !row.IsDeleted && activeResources.Contains(row.TriggerRowId));
         if (query.TriggerId is { } trigger) { var triggerId = ResourceId(scope, trigger); rows = rows.Where(row => row.TriggerRowId == triggerId); }
         else { var definition = Encode(query.DefinitionId!); var hash = Hash(query.DefinitionId!); rows = rows.Where(row => row.DefinitionKey == definition && row.DefinitionHash == hash); }
-        if (query.SlotName is not null) { var slot = Encode(query.SlotName); rows = rows.Where(row => row.SlotKey == slot); }
+        if (query.SlotName is not null) { var slot = Encode(query.SlotName); var hash = Hash(query.SlotName); rows = rows.Where(row => row.SlotKey == slot && row.SlotHash == hash); }
         if (query.After is not null) { var after = Order(query.After); rows = rows.Where(row => row.SubscriptionOrderKey.CompareTo(after) > 0); }
         var page = await rows.OrderBy(row => row.SubscriptionOrderKey).Take(query.Limit + 1).ToArrayAsync(cancellationToken);
         var values = page.Select(row => ReadSubscription(row, scope).Subscription).ToArray();
@@ -255,7 +255,7 @@ internal sealed class EfStandaloneTriggerStore(RuntimeDbContext context, IPersis
     {
         Id = ResourceId(scope, trigger.Id), ScopeKey = Encode(scope.Persistence.Value), ScopeHash = Hash(scope.Persistence.Value),
         TenantKey = Encode(TenantTag(scope)), TenantHash = Hash(TenantTag(scope)), TriggerKey = Encode(trigger.Id), TriggerOrderKey = Order(trigger.Id),
-        TypeKey = Encode(trigger.TypeKey), SearchName = trigger.Name.ToUpperInvariant(), DesiredState = (int)trigger.DesiredState,
+        TypeKey = Encode(trigger.TypeKey), TypeHash = Hash(trigger.TypeKey), SearchName = trigger.Name.ToUpperInvariant(), DesiredState = (int)trigger.DesiredState,
         Revision = trigger.Revision, ContentJson = JsonSerializer.Serialize(trigger, JsonOptions)
     };
 
@@ -267,7 +267,7 @@ internal sealed class EfStandaloneTriggerStore(RuntimeDbContext context, IPersis
         var expected = ResourceRow(scope, value);
         if (value.TenantId != scope.TenantId || row.Id != expected.Id || row.ScopeKey != expected.ScopeKey || row.ScopeHash != expected.ScopeHash ||
             row.TenantKey != expected.TenantKey || row.TenantHash != expected.TenantHash || row.TriggerKey != expected.TriggerKey ||
-            row.TriggerOrderKey != expected.TriggerOrderKey || row.TypeKey != expected.TypeKey || row.SearchName != expected.SearchName ||
+            row.TriggerOrderKey != expected.TriggerOrderKey || row.TypeKey != expected.TypeKey || row.TypeHash != expected.TypeHash || row.SearchName != expected.SearchName ||
             row.DesiredState != expected.DesiredState || row.Revision != expected.Revision)
             throw new InvalidDataException("The trigger's stored identity or projection differs.");
         return value;
@@ -278,7 +278,7 @@ internal sealed class EfStandaloneTriggerStore(RuntimeDbContext context, IPersis
         Id = SubscriptionId(scope, subscription.Id), ScopeKey = Encode(scope.Persistence.Value), ScopeHash = Hash(scope.Persistence.Value),
         TenantKey = Encode(TenantTag(scope)), TenantHash = Hash(TenantTag(scope)), TriggerRowId = ResourceId(scope, subscription.TriggerId),
         SubscriptionKey = Encode(subscription.Id), SubscriptionOrderKey = Order(subscription.Id), DefinitionHash = Hash(subscription.DefinitionId),
-        DefinitionKey = Encode(subscription.DefinitionId), SlotKey = Encode(subscription.SlotName), Revision = subscription.Revision,
+        DefinitionKey = Encode(subscription.DefinitionId), SlotKey = Encode(subscription.SlotName), SlotHash = Hash(subscription.SlotName), Revision = subscription.Revision,
         IsDeleted = isDeleted, ContentJson = JsonSerializer.Serialize(new SubscriptionJournal(subscription, isDeleted), JsonOptions)
     };
 
@@ -292,7 +292,7 @@ internal sealed class EfStandaloneTriggerStore(RuntimeDbContext context, IPersis
         if (row.Id != expected.Id || row.ScopeKey != expected.ScopeKey || row.ScopeHash != expected.ScopeHash ||
             row.TenantKey != expected.TenantKey || row.TenantHash != expected.TenantHash || row.TriggerRowId != expected.TriggerRowId ||
             row.SubscriptionKey != expected.SubscriptionKey || row.SubscriptionOrderKey != expected.SubscriptionOrderKey ||
-            row.DefinitionHash != expected.DefinitionHash || row.DefinitionKey != expected.DefinitionKey || row.SlotKey != expected.SlotKey ||
+            row.DefinitionHash != expected.DefinitionHash || row.DefinitionKey != expected.DefinitionKey || row.SlotKey != expected.SlotKey || row.SlotHash != expected.SlotHash ||
             row.IsDeleted != expected.IsDeleted || row.Revision != expected.Revision)
             throw new InvalidDataException("The association's stored identity or projection differs.");
         return value;

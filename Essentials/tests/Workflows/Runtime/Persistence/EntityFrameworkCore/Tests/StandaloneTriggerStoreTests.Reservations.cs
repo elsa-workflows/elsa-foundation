@@ -83,6 +83,39 @@ public sealed partial class StandaloneTriggerStoreTests
         Assert.Equal("route", reservation.Fields!["identity"]);
     }
 
+    [Fact]
+    public async Task Exact_type_and_slot_filters_preserve_page_boundaries_under_case_insensitive_database_collation()
+    {
+        await using var database = await Database.CreateAsync(new CaseInsensitiveProjectionColumns());
+        await using var fixture = database.Open();
+        await fixture.Store.WriteAsync(Scope, Write(Resource("0-near", typeKey: "AG"), [], "near", "near"));
+        await fixture.Store.WriteAsync(Scope, Write(Resource("1-exact", typeKey: "Aa"), [], "exact", "exact"));
+        await fixture.Store.WriteAsync(Scope, Write(Resource("slots"),
+            [Subscription("0-near", "slots", slot: "AG"), Subscription("1-exact", "slots", slot: "Aa")], "slots", "slots"));
+        // Prove this physical database actually treats the distinct projections as equal.
+        var projection = EfRuntimeOperationalStoreSupport.Encode("Aa");
+        Assert.Equal(2, await fixture.Context.StandaloneTriggers.CountAsync(row => row.TypeKey == projection));
+        Assert.Equal(2, await fixture.Context.TriggerSubscriptions.CountAsync(row => row.SlotKey == projection));
+        var resources = await fixture.Store.ListAsync(Scope, new(1, TypeKey: "Aa"));
+        Assert.Equal("1-exact", Assert.Single(resources.Items).Id);
+        Assert.Null(resources.Next);
+        var subscriptions = await fixture.Store.ListSubscriptionsAsync(Scope, new(DefinitionId: "definition", SlotName: "Aa", Limit: 1));
+        Assert.Equal("1-exact", Assert.Single(subscriptions.Items).Id);
+        Assert.Null(subscriptions.Next);
+    }
+
+    private sealed class CaseInsensitiveProjectionColumns : DbCommandInterceptor
+    {
+        public override ValueTask<InterceptionResult<int>> NonQueryExecutingAsync(DbCommand command,
+            CommandEventData eventData, InterceptionResult<int> result, CancellationToken cancellationToken = default)
+        {
+            command.CommandText = command.CommandText
+                .Replace("\"TypeKey\" TEXT NOT NULL", "\"TypeKey\" TEXT COLLATE NOCASE NOT NULL", StringComparison.Ordinal)
+                .Replace("\"SlotKey\" TEXT NOT NULL", "\"SlotKey\" TEXT COLLATE NOCASE NOT NULL", StringComparison.Ordinal);
+            return ValueTask.FromResult(result);
+        }
+    }
+
     private sealed class FailingRead(bool wrapped) : DbCommandInterceptor
     {
         internal Exception Cause { get; } = wrapped

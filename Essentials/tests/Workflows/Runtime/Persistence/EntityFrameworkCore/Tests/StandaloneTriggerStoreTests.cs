@@ -288,6 +288,8 @@ public sealed partial class StandaloneTriggerStoreTests
     [InlineData("resource")]
     [InlineData("subscription")]
     [InlineData("receipt")]
+    [InlineData("type-hash")]
+    [InlineData("slot-hash")]
     public async Task Corrupt_projections_refuse_instead_of_returning_detached_content(string family)
     {
         await using var database = await Database.CreateAsync();
@@ -296,6 +298,8 @@ public sealed partial class StandaloneTriggerStoreTests
         switch (family)
         {
             case "resource": await fixture.Context.StandaloneTriggers.ExecuteUpdateAsync(set => set.SetProperty(row => row.SearchName, "CORRUPT")); break;
+            case "type-hash": await fixture.Context.StandaloneTriggers.ExecuteUpdateAsync(set => set.SetProperty(row => row.TypeHash, "CORRUPT")); break;
+            case "slot-hash": await fixture.Context.TriggerSubscriptions.ExecuteUpdateAsync(set => set.SetProperty(row => row.SlotHash, "CORRUPT")); break;
             case "subscription": await fixture.Context.TriggerSubscriptions.ExecuteUpdateAsync(set => set.SetProperty(row => row.DefinitionKey, "CORRUPT")); break;
             case "receipt": await fixture.Context.TriggerMutations.ExecuteUpdateAsync(set => set.SetProperty(row => row.TriggerRowId, "CORRUPT")); break;
         }
@@ -349,22 +353,22 @@ public sealed partial class StandaloneTriggerStoreTests
 
     private static async Task ReadAsync(IStandaloneTriggerStore store, string family)
     {
-        if (family == "resource") await store.FindAsync(Scope, "http");
-        else if (family == "subscription") await store.FindSubscriptionAsync(Scope, "subscription");
+        if (family is "resource" or "type-hash") await store.FindAsync(Scope, "http");
+        else if (family is "subscription" or "slot-hash") await store.FindSubscriptionAsync(Scope, "subscription");
         else await store.FindMutationAsync(Scope, "operator", "request");
     }
 
     private static StandaloneTrigger Resource(string id, long revision = 1, string name = "HTTP endpoint",
-        TriggerDesiredState state = TriggerDesiredState.Paused, string? tenant = "tenant-a", string creator = "source-publisher") =>
-        new(id, name, TypeKey, 1, JsonSerializer.SerializeToElement(new { path = "/orders", method = "POST" }),
+        TriggerDesiredState state = TriggerDesiredState.Paused, string? tenant = "tenant-a", string creator = "source-publisher", string typeKey = TypeKey) =>
+        new(id, name, typeKey, 1, JsonSerializer.SerializeToElement(new { path = "/orders", method = "POST" }),
             revision, revision, revision, state, new(TriggerManagementKind.Provider, "provider/http.json", true),
             Now, Now.AddMinutes(revision - 1), creator, "Source-owned endpoint", hasActivated: true, tenantId: tenant);
 
-    private static TriggerSubscription Subscription(string id, string trigger, string definition = "definition", string sourceType = TypeKey) =>
-        new(id, trigger, definition, "Published", "workflow", 1, 1, true,
+    private static TriggerSubscription Subscription(string id, string trigger, string definition = "definition", string sourceType = TypeKey, string slot = "Published") =>
+        new(id, trigger, definition, slot, "workflow", 1, 1, true,
             [new("OrderId", new TriggerSourceBinding(["request", "id"])), new("Optional", new TriggerLiteralBinding(JsonSerializer.SerializeToElement<object?>(null)))],
             new(TriggerManagementKind.Provider, "provider/http.json", true),
-            new("grant-" + id, trigger, id, definition, "Published", "workflow", sourceType, 1, TriggerGrantStatus.Granted, "retired-author", Now));
+            new("grant-" + id, trigger, id, definition, slot, "workflow", sourceType, 1, TriggerGrantStatus.Granted, "retired-author", Now));
 
     private static TriggerStoreWrite Write(StandaloneTrigger resource, IReadOnlyList<TriggerSubscription> subscriptions,
         string request = "request", string fingerprint = "request-fingerprint", long? expected = null, string actor = "operator") =>
@@ -381,10 +385,10 @@ public sealed partial class StandaloneTriggerStoreTests
         private DbContextOptions<RuntimeSqliteDbContext> Options => new DbContextOptionsBuilder<RuntimeSqliteDbContext>()
             .UseSqlite(new SqliteConnectionStringBuilder { DataSource = _path, Pooling = false, DefaultTimeout = 10 }.ToString()).Options;
 
-        public static async Task<Database> CreateAsync()
+        public static async Task<Database> CreateAsync(params IInterceptor[] interceptors)
         {
             var database = new Database();
-            await using var context = new RuntimeSqliteDbContext(database.Options);
+            await using var context = new RuntimeSqliteDbContext(new DbContextOptionsBuilder<RuntimeSqliteDbContext>(database.Options).AddInterceptors(interceptors).Options);
             await context.Database.EnsureCreatedAsync();
             return database;
         }

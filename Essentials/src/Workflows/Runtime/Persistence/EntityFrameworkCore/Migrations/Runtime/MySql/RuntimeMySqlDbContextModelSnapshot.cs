@@ -1947,6 +1947,11 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                         .HasMaxLength(516)
                         .HasColumnType("varchar(516)");
 
+                    b.Property<string>("TypeHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("varchar(64)");
+
                     b.Property<string>("TypeKey")
                         .IsRequired()
                         .HasColumnType("longtext");
@@ -2044,6 +2049,11 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                     b.Property<string>("ScopeKey")
                         .IsRequired()
                         .HasColumnType("longtext");
+
+                    b.Property<string>("SlotHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("varchar(64)");
 
                     b.Property<string>("SlotKey")
                         .IsRequired()

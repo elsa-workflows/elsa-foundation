@@ -10,6 +10,7 @@ internal sealed class StandaloneTriggerEntity
     public string TriggerKey { get; set; } = null!;
     public string TriggerOrderKey { get; set; } = null!;
     public string TypeKey { get; set; } = null!;
+    public string TypeHash { get; set; } = null!;
     public string SearchName { get; set; } = null!;
     public int DesiredState { get; set; }
     public long Revision { get; set; }
@@ -30,6 +31,7 @@ internal sealed class TriggerSubscriptionEntity
     public string DefinitionHash { get; set; } = null!;
     public string DefinitionKey { get; set; } = null!;
     public string SlotKey { get; set; } = null!;
+    public string SlotHash { get; set; } = null!;
     public long Revision { get; set; }
     public bool IsDeleted { get; set; }
     public string ContentJson { get; set; } = null!;
