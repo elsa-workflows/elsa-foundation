@@ -188,3 +188,23 @@ the typed unavailable signal; disposal failure follows the ordinary fault path w
 ### Collection child-slot input metadata *(Core — `Elsa.Activities.Runtime.Core`)*
 
 `ActivityChildSlotAttribute.ItemIdProperty` optionally names a stable collection-item identity and `ConditionProperty` names its structure-owned argument. CLR reconciliation carries both into optional `ActivityChildSlotDesignDescriptor` members. Studio uses stable identities for case rows, expression documents and child navigation while retaining the current index for immutable mutations. Omitted metadata preserves legacy slot behavior. Structure inputs activate through [`IRuntimeStructureInputConsumer`](../../../Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md#iruntimestructureinputconsumer-core--elsaworkflowsruntimecore), rather than CLR input properties.
+
+## Atomic saved-resume admission loss (#3849, S10i)
+
+The same private observation owner records `DeliveryUnmatched` with closed reason
+`receiver-admission-superseded` when the actual native consumption checkpoint throws
+`BookmarkResumeSupersededException` after the preliminary saved-recipient check. The handler retains
+that check's native workflow/capture choice and explicit access context through the claim attempt;
+observation preflight revalidates the original policy and selected pair, and access drift refuses acknowledgement.
+The event describes only the atomic rejection at its observed time. It infers no winner, expiry, consumption
+or callback. The rejected checkpoint contributes no committed history facts. Required recording failure
+leaves work owed; actual re-entry can instead observe a now-missing/ineligible wait under S10h.
+
+Fifteen controls are written, all NOT RUN:10 removal/replacement/expiry/terminal workflow/terminal activity
+races across original capture choices;1 unchanged positive;3 recording acknowledgement/defer/re-entry
+rows;1 direct actual-handler access drift. A test-only consumption wrapper injects the native state change
+immediately before delegating to the actual service/committer/coherent memory stores and authoritative
+predicate; it does not fabricate the superseded exception or mutate validation-event handlers. The prior35
+native delivery/publication/receiver controls remain affected and NOT RUN. No public API/schema/reference/
+dependency/friend/module/host is added. Other receiver no-op branches, complete authored/multiple-recipient,
+production authority, physical provider/restart and composed UX qualification remain open.

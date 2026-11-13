@@ -1341,3 +1341,14 @@ All10 new and5 affected prior controls are NOT RUN. Publisher/target/private sta
 Activities Runtime's actual resume handler now owns an existing `DeliveryUnmatched` observation when exact saved-recipient admission fails at the receiver. It points back to the queued receipt/original cause, includes exact activity/bookmark/command/work association and a closed receiver missing/expired/ineligible reason, and precedes acknowledgement. Its private owner uses Core's existing observation port and validates the actual native policy/capture/provider pairing and stable scope; no diagnostic data authorizes consumption. Required record failure keeps native work owed; hard malformed data and requested cancellation retain their classifications. Prior vocabularies/uncaptured targets are not widened. Each actual invocation has a separate observation identity; an ambiguous write and actual re-entry can produce separate observations without another business occurrence. No payload or exception text is included. See the [owning catalog](../../../Activities/Runtime/Elsa.Activities.Runtime/EXTENSION_POINTS.md#saved-resume-receiver-observation-owner-3849-s10h).
 
 All20 new and15 affected component controls are NOT RUN. Expiry attribution requires the saved generation/fields, and only an unavailable matching requested cancellation is restored from its retained cause chain; hard/unrelated failures keep their classification. No new public API/schema/dependency/friend/module/host is added, and only exact saved-admission mismatch is covered; other no-op/claim-race and full authored/native/provider/restart/authority/UX/parent qualification remain open.
+
+### Atomic saved-resume admission loss (#3849, S10i)
+
+Activities Runtime uses the existing Core observation port after the actual native consumption checkpoint
+rejects the saved recipient between preliminary eligibility and atomic admission. `DeliveryUnmatched` with
+`receiver-admission-superseded` is an observed rejection, not a consumption, callback or claim winner.
+The original native policy and explicit access context survive the claim attempt; the same private owner
+revalidates pairing/access and preserves Required write failure as owed work. Actual re-entry can record a
+different now-current receiver decision. See the [owning catalog](../../../Activities/Runtime/Elsa.Activities.Runtime/EXTENSION_POINTS.md#atomic-saved-resume-admission-loss-3849-s10i).
+All15 new and35 affected component controls are NOT RUN. No new public contract/schema/dependency/friend/
+module/host is added; other receiver branches, authored journeys, durable provider and UX acceptance remain open.

@@ -19,7 +19,7 @@ internal static class ActivityResumeHistoryObservations
         if (execution.HistoryCapturePolicy is not { } original || !original.SupportedKinds.Contains("DeliveryUnmatched", StringComparer.Ordinal)) return;
         try
         {
-            if (reason is not ("receiver-bookmark-missing" or "receiver-bookmark-expired" or "receiver-wait-no-longer-eligible"))
+            if (reason is not ("receiver-bookmark-missing" or "receiver-bookmark-expired" or "receiver-wait-no-longer-eligible" or "receiver-admission-superseded"))
                 throw new ArgumentOutOfRangeException(nameof(reason));
             var access = services.GetService<IPersistenceAccessContextAccessor>() ?? throw Unavailable();
             void EnsureCurrent()
