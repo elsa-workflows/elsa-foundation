@@ -18,6 +18,17 @@ public interface IRuntimeHistoryStore
     ValueTask<RuntimeHistoryBookmark?> FindBookmarkAsync(string workflowExecutionId, string bookmarkId, CancellationToken cancellationToken = default);
 }
 
+/// <summary>Exact target and coverage head from one committed provider snapshot. This adds no execution authority.</summary>
+public interface IRuntimeHistoryDetailsStore : IRuntimeHistoryStore
+{
+    /// <exception cref="RuntimeHistoryUnavailableException">A normalized provider failure preserves its cause and read context.</exception>
+    ValueTask<(RuntimeHistoryHead? Head, RuntimeHistoryEvent? Event)> FindEventDetailsAsync(
+        string workflowExecutionId, string historyEventId, CancellationToken cancellationToken = default);
+    /// <exception cref="RuntimeHistoryUnavailableException">A normalized provider failure preserves its cause and read context.</exception>
+    ValueTask<(RuntimeHistoryHead? Head, RuntimeHistoryBookmark? Bookmark)> FindBookmarkDetailsAsync(
+        string workflowExecutionId, string bookmarkId, CancellationToken cancellationToken = default);
+}
+
 /// <summary>Records delivery observations at their own durable authority, without asserting execution effects.</summary>
 public interface IRuntimeHistoryObservationWriter
 {
