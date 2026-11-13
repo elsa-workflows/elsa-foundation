@@ -1020,7 +1020,8 @@ which reset the partition). The EF store now:
 - when the batch fails with a count that does not match on a subscription, or with a definite error while it
   subscribes something and the fence still holds, rolls back and sends the batch once more with its waits as
   statements of their own after the `SaveChanges`: `INSERT ... ON CONFLICT DO NOTHING` (PostgreSQL, SQLite), `INSERT
-  ... WHERE NOT EXISTS` (SQL Server), `INSERT IGNORE` (MySQL), and a plain `DELETE` by key. Only the partition's
+  ... WHERE NOT EXISTS` (SQL Server), `INSERT ... ON DUPLICATE KEY UPDATE` (MySQL: `INSERT IGNORE` would also turn a value too long
+  into a warning and cut it), and a plain `DELETE` by key. Only the partition's
   owner writes its instances' waits, under the fence, so nothing races the check.
 
 The common path costs nothing more: the waits are still in the one batch. The second attempt costs a commit's round
