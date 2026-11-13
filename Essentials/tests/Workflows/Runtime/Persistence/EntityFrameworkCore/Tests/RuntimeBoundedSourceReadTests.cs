@@ -206,6 +206,6 @@ public sealed class RuntimeBoundedSourceReadTests
             owner.Templates = new(owner.Context, owner.Access, new Cursor()); return owner;
         }
         public async ValueTask DisposeAsync()
-        { await Context.DisposeAsync(); SqliteConnection.ClearAllPools(); File.Delete(_path); File.Delete(_path + "-wal"); File.Delete(_path + "-shm"); }
+        { await Context.DisposeAsync(); File.Delete(_path); File.Delete(_path + "-wal"); File.Delete(_path + "-shm"); }
     }
 }
