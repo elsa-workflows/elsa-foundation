@@ -1,4 +1,4 @@
-import { StudioPageHeader } from "@elsa-workflows/studio-ui";
+import { StudioPageHeader, StudioField } from "@elsa-workflows/studio-ui";
 import React, { useEffect, useMemo, useState } from "react";
 import type { ElsaStudioModuleApi, StudioRouteComponentProps } from "@elsa-workflows/studio-sdk";
 import "./styles.css";
@@ -503,15 +503,15 @@ function TraceToolbar({ state }: { state: OTelState }) {
       <input aria-label="Filter by trace ID" placeholder="Trace ID" value={state.filters.traceId} onChange={event => state.setFilters({ ...state.filters, traceId: event.target.value })} />
       <input aria-label="Filter by service" placeholder="Service" value={state.filters.serviceName} onChange={event => state.setFilters({ ...state.filters, serviceName: event.target.value })} />
       <input aria-label="Filter by trace name or ID" placeholder="Trace name or ID" value={state.filters.search} onChange={event => state.setFilters({ ...state.filters, search: event.target.value })} />
-      <select aria-label="Filter by trace status" value={state.filters.status} onChange={event => state.setFilters({ ...state.filters, status: event.target.value as OTelFilters["status"] })}>
+      <StudioField label="Filter by trace status"><select aria-label="Filter by trace status" value={state.filters.status} onChange={event => state.setFilters({ ...state.filters, status: event.target.value as OTelFilters["status"] })}>
         <option value="">All statuses</option>
         <option value="Ok">Ok</option>
         <option value="Error">Error</option>
         <option value="Unset">Unset</option>
-      </select>
-      <select aria-label="Trace result limit" value={state.filters.take} onChange={event => state.setFilters({ ...state.filters, take: Number(event.target.value) })}>
+      </select></StudioField>
+      <StudioField label="Trace result limit"><select aria-label="Trace result limit" value={state.filters.take} onChange={event => state.setFilters({ ...state.filters, take: Number(event.target.value) })}>
         {[50, 100, 250, 500].map(take => <option value={take} key={take}>{take}</option>)}
-      </select>
+      </select></StudioField>
       <button type="button" onClick={state.resetFilters}>Reset</button>
     </div>
   );

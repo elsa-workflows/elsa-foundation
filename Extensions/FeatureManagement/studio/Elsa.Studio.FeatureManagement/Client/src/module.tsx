@@ -1721,10 +1721,11 @@ function FeatureSettingsDialog({
                 <h5>{group.label}</h5>
                 <div>
                   {group.settings.map(setting => {
-                    const Editor = selectSettingEditor(moduleApi, setting).component;
+                    const editor = selectSettingEditor(moduleApi, setting);
+                    const Editor = editor.component;
 
                     return (
-                      <SettingField key={setting.name} setting={setting}>
+                      <SettingField key={setting.name} setting={setting} presentsField={editor.presentsField}>
                         <Editor
                           setting={setting}
                           value={values[setting.name]}
@@ -1753,7 +1754,8 @@ function FeatureSettingsDialog({
   );
 }
 
-function SettingField({ setting, children }: { setting: StudioSettingDescriptor; children: React.ReactNode }) {
+function SettingField({ setting, children, presentsField }: { setting: StudioSettingDescriptor; children: React.ReactNode; presentsField?: boolean }) {
+  if (presentsField) return <div className="feature-management-setting outlined">{children}<code>{setting.name}</code></div>;
   const booleanSetting = isBooleanSetting(setting);
 
   return (

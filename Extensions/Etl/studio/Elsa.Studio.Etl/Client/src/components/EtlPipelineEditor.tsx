@@ -1,3 +1,4 @@
+import { StudioField } from "@elsa-workflows/studio-ui";
 import React, { useId } from "react";
 import type { EtlBindingSummary, EtlDiagnostic, EtlPipeline } from "../etlTypes";
 import { FilterEditor } from "./FilterEditor";
@@ -110,8 +111,8 @@ function FieldChoice({ label, value, fields, otherFields, counterpart, disabled,
   const validKeyPair = !!selected && !!matchingField && selected.required && matchingField.required && selected.type === matchingField.type;
   const helpId = `${id}-help`;
   return (
-    <div className="etl-editor-field">
-      <label htmlFor={id}>{label}</label>
+    <div className="etl-editor-field"><StudioField controlId={id} label={<>{label}</>}>
+
       <select id={id} value={value} disabled={disabled} aria-describedby={helpId} aria-invalid={value !== "" && !validKeyPair} onChange={event => onChange(event.currentTarget.value)}>
         <option value="">Choose a required field</option>
         {value && !selected ? <option value={value}>{value} (unavailable)</option> : null}
@@ -123,6 +124,6 @@ function FieldChoice({ label, value, fields, otherFields, counterpart, disabled,
       <small id={helpId}>{validKeyPair
         ? `Key type: ${selected.type}. Both key fields are required.`
         : "Choose required source and lookup key fields with the same type."}</small>
-    </div>
+    </StudioField></div>
   );
 }
