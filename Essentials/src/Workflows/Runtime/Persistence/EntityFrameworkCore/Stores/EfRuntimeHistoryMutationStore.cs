@@ -59,7 +59,7 @@ internal sealed class EfRuntimeHistoryMutationStore(RuntimeDbContext context, IP
             throw new InvalidOperationException("History mutations require the same owning reader and a clean relational context without an existing transaction.");
         void Recheck()
         {
-            if (!ReferenceEquals(access.Current, captured)) throw new InvalidOperationException("Persistence access changed during the history mutation.");
+            if (access.Current != captured) throw new InvalidOperationException("Persistence access changed during the history mutation.");
             _ = captured.RequireScope(); token.ThrowIfCancellationRequested();
         }
         Recheck();

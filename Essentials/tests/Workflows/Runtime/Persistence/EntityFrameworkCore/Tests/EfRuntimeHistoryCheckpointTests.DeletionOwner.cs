@@ -1,4 +1,5 @@
 using System.Data.Common;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Exceptions;
@@ -112,6 +113,21 @@ public sealed partial class EfRuntimeHistoryCheckpointTests
         Assert.True(await executions.DeleteAsync(Run)); Assert.Null(await executions.FindAsync(Run));
     }
 
+    [Theory]
+    [InlineData(false)] [InlineData(true)]
+    public async Task Both_native_deletion_entry_points_accept_equivalent_immutable_access_values(bool terminal)
+    {
+        await using var db = await CapturedDeletionDatabase(); await using var context = db.Open(); var access = new EquivalentDeletionAccess();
+        Assert.NotSame(access.Current, access.Current); Assert.Equal(access.Current, access.Current);
+        var executions = new EfWorkflowExecutionStateStore(context, access, MutationCodec);
+        if (terminal) Assert.Equal(WorkflowExecutionDeletionResult.Deleted, await executions.TryDeleteTerminalAsync((await executions.ReadDeletionCandidateAsync(Run))!));
+        else Assert.True(await executions.DeleteAsync(Run));
+        Assert.Null(await executions.FindAsync(Run)); await AssertDeletedHistory(context);
+    }
+
+    private sealed class EquivalentDeletionAccess : IPersistenceAccessContextAccessor
+    { public PersistenceAccessContext Current => PersistenceAccessContext.Scoped(new(Scope)); }
+
     private static async Task<Database> CapturedDeletionDatabase()
     {
         var db = await Database.CreateAsync(status: WorkflowExecutionStatus.Completed);
@@ -141,7 +157,7 @@ public sealed partial class EfRuntimeHistoryCheckpointTests
         public override ValueTask<int> NonQueryExecutedAsync(DbCommand command, CommandExecutedEventData eventData, int result, CancellationToken cancellationToken = default)
         {
             if (command.CommandText.Contains("DELETE FROM", StringComparison.OrdinalIgnoreCase) && command.CommandText.Contains("elsa_runtime_history_", StringComparison.Ordinal))
-                access.Current = PersistenceAccessContext.Scoped(new(Scope));
+                access.Current = PersistenceAccessContext.Scoped(new("other"));
             return ValueTask.FromResult(result);
         }
     }

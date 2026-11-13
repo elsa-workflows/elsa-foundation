@@ -405,7 +405,7 @@ public sealed class EfWorkflowExecutionStateStore(
         var deletionAccess = accessContextAccessor.Current;
         void EnsureDeletionAccess()
         {
-            if (!ReferenceEquals(accessContextAccessor.Current, deletionAccess) || deletionAccess.RequireScope().Value != scope)
+            if (accessContextAccessor.Current != deletionAccess || deletionAccess.RequireScope().Value != scope)
                 throw new InvalidOperationException("Persistence access changed during execution deletion.");
         }
         for (var attempt = 0; attempt < 3; attempt++)
