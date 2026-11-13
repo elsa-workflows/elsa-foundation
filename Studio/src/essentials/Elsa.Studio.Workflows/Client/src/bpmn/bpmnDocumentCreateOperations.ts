@@ -253,6 +253,13 @@ export interface BpmnCreateConnectionIntent {
   name?: string;
 }
 export function planBpmnCreateConnection(owner: ActivityNode, scope: BpmnScopeAddress, intent: BpmnCreateConnectionIntent): BpmnDocumentOperationPlan {
+  const plan = prepareBpmnConnectionSyntax(owner, scope, intent);
+  if (intent.kind === "sequenceFlow") verifyBpmnEventContexts(readBpmnDocument(owner), readBpmnDocument(applyBpmnDocumentTransaction(owner, plan.transaction)), [intent.sourceId, intent.targetId]);
+  return plan;
+}
+
+/** Shared syntax planning; creation/reconnection each validate their actual complete transaction. */
+export function prepareBpmnConnectionSyntax(owner: ActivityNode, scope: BpmnScopeAddress, intent: BpmnCreateConnectionIntent): BpmnDocumentOperationPlan {
   const context = bpmnOperationContext(owner, scope), policy = assessBpmnDocumentConnection(context.parsed, intent.kind, intent.sourceId, intent.targetId);
   if (!policy.allowed) refuseBpmnOperation(policy.reason);
   if (intent.points.length < 2 || intent.points.some(point => !Number.isFinite(point.x) || !Number.isFinite(point.y))) refuseBpmnOperation("a connection needs at least two finite source waypoints");
@@ -307,6 +314,5 @@ export function planBpmnCreateConnection(owner: ActivityNode, scope: BpmnScopeAd
   const edge = bpmnFragment(context, "BPMNEdge", { id: diId, bpmnElement: elementId }, ns.diagram);
   for (const point of intent.points) edge.append(bpmnFragment(context, "waypoint", { x: String(point.x), y: String(point.y) }, ns.coordinates));
   commands.push(insertBpmnFragment(context, context.plane, edge));
-  if (type === "sequenceFlow") verifyBpmnEventContexts(context.parsed, readBpmnDocument(applyBpmnDocumentTransaction(owner, { commands })), [intent.sourceId, intent.targetId]);
   return { transaction: { commands }, selection: { elementId, diId } };
 }

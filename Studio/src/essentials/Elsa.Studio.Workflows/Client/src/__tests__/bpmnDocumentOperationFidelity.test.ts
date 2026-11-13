@@ -78,6 +78,56 @@ describe("complete operation identity and property fidelity", () => {
     expect(() => planBpmnCreateShape(owner, operationScope, { toolId: "boundaryEvent-timer", attachedToElementId: "B", position: { x: 400, y: 180 } })).not.toThrow();
   });
 
+  it.each([false, true])("retains unfinished boundary topology during a same-endpoint reconnect (idless=%s)", idless => {
+    const owner = receiveBoundary(idless);
+    owner.structure!.payload.documentXml = (owner.structure!.payload.documentXml as string)
+      .replace('<b:exclusiveGateway id="G"/>', '<b:eventBasedGateway id="G"/>').replace('sourceRef="A" targetRef="B"', 'sourceRef="G" targetRef="B"');
+    const before = structuredClone(owner), points = [{ x: 575, y: 170 }, { x: 450, y: 170 }];
+    const plan = planBpmnReconnect(owner, operationScope, { elementId: "F", diId: "FDI", kind: "sequenceFlow", sourceId: "G", targetId: "B", name: "Retained route", points });
+    const next = readBpmnDocument(applyBpmnDocumentTransaction(owner, plan.transaction));
+    expect(next.byId.get("F")!.getAttribute("name")).toBe("Retained route");
+    expect([...next.byId.values()].filter(element => element.localName === "sequenceFlow")).toHaveLength(1);
+    expect([...next.byId.get("FDI")!.children].map(element => ({ x: Number(element.getAttribute("x")), y: Number(element.getAttribute("y")) }))).toEqual(points);
+    expect(next.payload.activities).toEqual(owner.structure!.payload.activities);
+    expect(owner).toEqual(before);
+  });
+
+  it.each([false, true])("retains an unfinished relationship during neutral containment (lane=%s)", lane => {
+    const owner = operationOwner();
+    owner.structure!.payload.documentXml = (owner.structure!.payload.documentXml as string)
+      .replace('<b:sequenceFlow id="F" sourceRef="A"', '<b:endEvent id="End"/><b:sequenceFlow id="F" sourceRef="End"');
+    if (lane) owner.structure!.payload.documentXml = (owner.structure!.payload.documentXml as string)
+      .replace('<b:task id="A"', '<b:laneSet id="Lanes"><b:lane id="L1"><b:flowNodeRef>B</b:flowNodeRef></b:lane><b:lane id="L2"/></b:laneSet><b:task id="A"')
+      .replace('<bd:BPMNShape id="ADI"', '<bd:BPMNShape id="L1DI" bpmnElement="L1"><dc:Bounds x="0" y="0" width="1000" height="220"/></bd:BPMNShape><bd:BPMNShape id="L2DI" bpmnElement="L2"><dc:Bounds x="0" y="220" width="1000" height="400"/></bd:BPMNShape><bd:BPMNShape id="ADI"');
+    const before = structuredClone(owner), prepared = prepareBpmnReparent(owner, operationScope, { elementIds: ["B"], parentElementId: "P", ...(lane ? { laneId: "L2" } : {}) });
+    if (prepared.kind !== "ready") throw new Error("Neutral containment needs no native ownership decision");
+    const nextOwner = applyBpmnDocumentTransaction(owner, prepared.plan.transaction), next = readBpmnDocument(nextOwner);
+    expect(next.byId.get("F")!.getAttribute("sourceRef")).toBe("End");
+    if (lane) expect(next.byId.get("L2")!.getElementsByTagNameNS(ns.model, "flowNodeRef")[0].textContent).toBe("B");
+    else expect(nextOwner).toBe(owner);
+    expect(owner).toEqual(before);
+  });
+
+  it("does not interpret an opaque flow-like payload when replacing its enclosing task", () => {
+    const owner = operationOwner();
+    const opaque = '<v:exact qname="q:A"><b:sequenceFlow id="OpaqueFlow" sourceRef="A" targetRef="VendorLiteral"/></v:exact>';
+    owner.structure!.payload.documentXml = (owner.structure!.payload.documentXml as string).replace('<v:exact qname="q:A"/>', opaque);
+    const before = structuredClone(owner), next = readBpmnDocument(applyBpmnDocumentTransaction(owner, planBpmnReplace(owner, operationScope, { elementId: "A", diId: "ADI" }, "serviceTask").transaction));
+    expect(next.byId.get("A")!.localName).toBe("serviceTask");
+    expect(next.document.getElementsByTagNameNS("urn:vendor", "exact")[0].getElementsByTagNameNS(ns.model, "sequenceFlow")[0].getAttribute("targetRef")).toBe("VendorLiteral");
+    expect(next.payload.bindings).toEqual(owner.structure!.payload.bindings);
+    expect(owner).toEqual(before);
+  });
+
+  it("retains an unchanged unfinished data association during a no-op containment request", () => {
+    const owner = operationOwner();
+    owner.structure!.payload.documentXml = (owner.structure!.payload.documentXml as string).replace('<b:outgoing>q:F</b:outgoing>',
+      '<b:outgoing>q:F</b:outgoing><b:dataOutputAssociation id="UnfinishedData"><b:sourceRef>Data</b:sourceRef><b:targetRef>Child</b:targetRef></b:dataOutputAssociation>');
+    const prepared = prepareBpmnReparent(owner, operationScope, { elementIds: ["A"], parentElementId: "P" });
+    if (prepared.kind !== "ready") throw new Error("An unchanged native owner needs no ownership decision");
+    expect(applyBpmnDocumentTransaction(owner, prepared.plan.transaction)).toBe(owner);
+  });
+
   it("allocates first-label paint against the generated label's actual context", () => {
     const owner = operationOwner();
     owner.structure!.payload.documentXml = (owner.structure!.payload.documentXml as string)

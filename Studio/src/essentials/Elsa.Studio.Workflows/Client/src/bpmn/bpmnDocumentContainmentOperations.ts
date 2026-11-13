@@ -120,15 +120,22 @@ export function prepareBpmnReparent(owner: ActivityNode, scope: BpmnScopeAddress
   // Native configuration is omitted only from this transient syntax assessment, never from the returned plan.
   const syntax = readBpmnDocument(applyBpmnDocumentTransaction(owner, { commands, configuration: { activities: [], bindings: [], scopeHeaders: [] } }));
   verifyBpmnEventContexts(context.parsed, syntax, [...roots].map(bpmnIdentity));
+  const unchangedContext = (element: Element) => {
+    const previous = context.parsed.byId.get(bpmnIdentity(element));
+    const signature = (value: Element) => [bpmnFlowScope(value)?.getAttribute("id"), bpmnOwningProcess(value)?.getAttribute("id")];
+    return !!previous && JSON.stringify(signature(previous)) === JSON.stringify(signature(element));
+  };
   for (const edge of syntax.byId.values()) if (isBpmnOwnedSyntax(edge) && ["sequenceFlow", "messageFlow"].includes(edge.localName)) {
     const source = resolveBpmnDocumentReference(syntax, edge, edge.getAttribute("sourceRef")), destination = resolveBpmnDocumentReference(syntax, edge, edge.getAttribute("targetRef"));
     if (!source || !destination || !inside(context.parsed.byId.get(bpmnIdentity(source))!) && !inside(context.parsed.byId.get(bpmnIdentity(destination))!)) continue;
+    if (unchangedContext(source) && unchangedContext(destination)) continue;
     const policy = assessBpmnDocumentConnection(syntax, edge.localName as "sequenceFlow" | "messageFlow", bpmnIdentity(source), bpmnIdentity(destination));
     if (!policy.allowed) refuseBpmnOperation(`containment changes an incident relationship: ${policy.reason}`);
   }
   for (const edge of syntax.byId.values()) if (isBpmnOwnedSyntax(edge) && ["dataInputAssociation", "dataOutputAssociation"].includes(edge.localName)) {
     const references = [edge.parentElement!, ...[...bpmnChildren(edge, "sourceRef"), ...bpmnChildren(edge, "targetRef")]
       .map(reference => resolveBpmnDocumentReference(syntax, reference, reference.textContent)).filter((element): element is Element => !!element)];
+    if (references.every(unchangedContext)) continue;
     if (references.some(element => inside(context.parsed.byId.get(bpmnIdentity(element))!))
       && new Set(references.map(bpmnFlowScope)).size > 1) refuseBpmnOperation("an incident data association needs an explicit scope mapping");
   }
