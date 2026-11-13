@@ -681,6 +681,11 @@ public sealed class Worker : IScopeActivation, ITurnServices
         slot.State = unit.Row is { Status: InstanceStatus.Running } ? unit.State : null;
         slot.Busy = false;
         if (!Has(Flaw.EmitBeforeCommit)) Release(unit);
+        for (var i = 0; i < unit.Replied.Count; i++)
+        {
+            var reply = unit.Replied[i];
+            Send(reply.To, $"{unit.Instance}#{unit.Revision}.reply:{i}", reply.Channel, reply.Item);
+        }
         if (slot.Row is null && slot.Inbox.Count == 0) _slots.Remove(unit.Instance);
         Evict();
     }
@@ -709,7 +714,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
     {
         if (unit.Slot is not { } slot) return;
         foreach (var item in unit.Consumed)
-            if (item.Message.ReplyTo is { } to) slot.Replies.Add(to);
+            if (item.Message.ReplyTo is { } to && !unit.Replied.Any(r => r.Message == item.Message.Id)) slot.Replies.Add(to);
         var callers = slot.Replies.Where(to => Has(Flaw.EmitBeforeCommit) || ReplyTo.Parse(to).BeforeCommit == early).ToList();
         for (var i = 0; i < unit.Emitted.Count; i++)
             foreach (var to in callers) Send(to, $"{unit.Instance}#{unit.Revision}.{i}", unit.Emitted[i].Channel, unit.Emitted[i].Item);
