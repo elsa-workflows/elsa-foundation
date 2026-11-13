@@ -10,18 +10,39 @@ using Elsa.Workflows.Runtime.Services.Bookmarks;
 using Elsa.Workflows.Runtime.Services.ActivityExecutions;
 using Elsa.Workflows.Runtime.Services.Executables;
 using Elsa.Workflows.Runtime.Services.Coalescing;
+using Elsa.Workflows.Runtime.Core.StandaloneTriggers;
+using Elsa.Workflows.Runtime.Services.Triggers;
 
 namespace Elsa.Workflows.Runtime.Services.Checkpoints;
 
 /// <summary>Application-wide state shared by scoped in-memory checkpoint-store adapters.</summary>
 public sealed class InMemoryRuntimeCheckpointStoreState
 {
+    internal Dictionary<string, RuntimeIngressReservation> IngressReservations { get; } = new(StringComparer.Ordinal);
     private readonly AsyncLocal<int> _writeGateDepth = new();
+    private readonly AsyncLocal<WorkflowExecutionState?> _ingressCheckpointWrite = new();
+
+    internal IDisposable AuthorizeIngressCheckpointWrite(WorkflowExecutionState state)
+    {
+        if (_writeGateDepth.Value <= 0) throw new InvalidOperationException("Ingress checkpoint authority requires this operation's native write gate.");
+        var prior = _ingressCheckpointWrite.Value;
+        _ingressCheckpointWrite.Value = state;
+        return new IngressCheckpointWriteScope(this, prior);
+    }
+    internal bool CanWriteIngressCheckpoint(WorkflowExecutionState state) =>
+        _writeGateDepth.Value > 0 && ReferenceEquals(_ingressCheckpointWrite.Value, state);
+    private sealed class IngressCheckpointWriteScope(InMemoryRuntimeCheckpointStoreState state, WorkflowExecutionState? prior) : IDisposable
+    {
+        public void Dispose() => state._ingressCheckpointWrite.Value = prior;
+    }
 
     internal object SyncRoot { get; } = new();
     internal SemaphoreSlim WriteGate { get; } = new(1, 1);
     internal Dictionary<string, RuntimeCheckpointCommitRecord> Commits { get; } = new(StringComparer.Ordinal);
     internal Dictionary<string, RuntimePostCommitOutboxItem> OutboxItems { get; } = new(StringComparer.Ordinal);
+    internal Dictionary<(string Scope, string? Tenant, string Id), TriggerAggregate> StandaloneTriggers { get; } = [];
+    internal Dictionary<(string Scope, string? Tenant, string Actor, string Request), TriggerMutationReceipt> TriggerMutations { get; } = [];
+    internal Dictionary<(string Scope, string? Tenant, string Id), string> TriggerSubscriptionOwners { get; } = [];
     internal Dictionary<string, WorkflowDispatchRecord> WorkflowDispatches { get; } = new(StringComparer.Ordinal);
     internal Dictionary<string, WorkflowTestScopeRecord> WorkflowTestScopes { get; } = new(StringComparer.Ordinal);
     internal Dictionary<(string Scope, string WorkflowExecutionId, string WorkId), BackgroundActivityWorkItem> BackgroundActivityWorkItems { get; } = [];
@@ -48,7 +69,7 @@ public sealed class InMemoryRuntimeCheckpointStoreState
     }
 }
 
-public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCommitStore, IRuntimePostCommitOutboxStore, IPostCommitOutboxLookupStore, IRuntimePostCommitOutboxClaimStore, IRuntimePostCommitOutboxClaimCompletionStore, IStimulusDeliveryStore
+public sealed partial class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCommitStore, IRuntimePostCommitOutboxStore, IPostCommitOutboxLookupStore, IRuntimePostCommitOutboxClaimStore, IRuntimePostCommitOutboxClaimCompletionStore, IStimulusDeliveryStore
 {
     private readonly InMemoryRuntimeCheckpointStoreState _state;
     internal InMemoryRuntimeCheckpointStoreState State => _state;
@@ -192,7 +213,10 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         return await _state.ExecuteWriteGateAsync(async ct =>
         {
             foreach (var change in commit.StateChanges.PostCommitOutbox)
+            {
+                RefuseUncheckedSubscriptionAdmission(change.State);
                 EnsureOutboxSourceScope(change.State);
+            }
             var fingerprint = RuntimeCheckpointCommitFingerprint.Compute(commit);
             lock (_state.SyncRoot)
             {
@@ -241,8 +265,8 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
 
     private async ValueTask ValidateExactBookmarkResumeAsync(RuntimeCheckpointCommit commit, CancellationToken cancellationToken)
     {
-        if (commit.ExpectedBookmarkResume is not { } expected) return;
         commit.EnsureExactBookmarkResumeShape();
+        if (commit.ExpectedBookmarkResume is not { } expected) return;
         if (!((IRuntimeCheckpointCommitStore)this).SupportsExactBookmarkResume)
             throw new NotSupportedException("Exact bookmark resume requires one coherent native checkpoint/execution/activity/bookmark boundary.");
         var access = _persistenceAccessContextAccessor?.Current ?? throw new NotSupportedException("Exact bookmark resume requires explicit persistence access.");
@@ -253,7 +277,8 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         var activity = await _activityExecutionStateStore!.FindAsync(expected.WorkflowExecutionId, expected.ActivityExecutionId, cancellationToken);
         if (execution is null || activity is null)
             throw new RuntimeSchedulerWorkUnavailableException("runtime.bookmark.owner-unavailable", "The saved wait's owning execution is unavailable.");
-        access.EnsureTenantScope(execution.TenantId);
+        if (commit.IngressWaitOrigin is null) access.EnsureTenantScope(execution.TenantId);
+        else ValidateIngressWaitCheckpoint(commit, scope);
         if (!expected.MatchesAdmission(observed, execution, activity, scope, _timeProvider.GetUtcNow()))
             throw new BookmarkResumeSupersededException(expected.WorkflowExecutionId, expected.BookmarkId);
         if (execution!.TestScope is { } testScope)
@@ -276,6 +301,7 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         RuntimeCheckpointPersistenceDecision decision,
         CancellationToken cancellationToken)
     {
+        await ValidateIngressExecutionAsync(commit, cancellationToken);
         await ValidateExactBookmarkResumeAsync(commit, cancellationToken);
         await EnsureExpectedFenceAsync(commit, cancellationToken);
         await EnsureBackgroundActivityAdmissionsAreFencedAndLiveAsync(commit, cancellationToken);
@@ -534,7 +560,7 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         lock (_state.SyncRoot)
         {
             var items = _state.OutboxItems.Values
-                .Where(item => IsDeliverable(item, query))
+                .Where(item => IsInCurrentOutboxScope(item) && IsDeliverable(item, query))
                 .OrderBy(item => item.AvailableAt ?? DateTimeOffset.MinValue)
                 .ThenBy(item => item.RecordedAt)
                 .ThenBy(item => item.OutboxItemId, StringComparer.Ordinal)
@@ -547,12 +573,14 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
 
     public async ValueTask<RuntimePostCommitOutboxItem?> FindDurableAsync(string outboxItemId, CancellationToken cancellationToken = default)
     {
+        if (System.Transactions.Transaction.Current is not null)
+            throw new InvalidOperationException("A durable source cannot be authorized inside a caller-owned transaction.");
         var item = await FindAsync(outboxItemId, cancellationToken);
         if (item is null) return null;
         var access = _persistenceAccessContextAccessor?.Current ??
             throw new InvalidOperationException("A durable source read requires explicit persistence access.");
         var scope = access.RequireScope();
-        if (item.StimulusDeliverySourceScope != scope)
+        if (item.SourceScope != scope)
             throw new InvalidDataException("The in-memory source has no matching committed scope witness.");
         return item;
     }
@@ -572,12 +600,12 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
             throw new InvalidOperationException("A durable source cannot be authorized inside a caller-owned transaction.");
         lock (_state.SyncRoot)
         {
-            foreach (var item in _state.OutboxItems.Values.Where(item => item.Intent.WorkflowExecutionId == workflowExecutionId &&
-                !excludedKinds.Contains(item.Intent.Kind) && item.Status != RuntimePostCommitOutboxStatus.Delivered))
+            foreach (var item in _state.OutboxItems.Values.Where(item => item.WorkflowExecutionId == workflowExecutionId &&
+                !excludedKinds.Contains(item.DeliveryKind) && item.Status != RuntimePostCommitOutboxStatus.Delivered))
             {
-                if (item.StimulusDeliverySourceScope is null)
+                if (item.SourceScope is null)
                     throw new InvalidDataException("The in-memory source has no committed scope witness.");
-                if (item.StimulusDeliverySourceScope == scope) return ValueTask.FromResult<RuntimePostCommitOutboxItem?>(item);
+                if (item.SourceScope == scope) return ValueTask.FromResult<RuntimePostCommitOutboxItem?>(item);
             }
             return ValueTask.FromResult<RuntimePostCommitOutboxItem?>(null);
         }
@@ -593,7 +621,7 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
             foreach (var source in _state.OutboxItems.Values)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                if (source.StimulusDeliveryProtocolVersion is not null || source.StimulusDeliverySourceScope is not null || source.RecipientSnapshot is not null)
+                if (source.StimulusDeliveryProtocolVersion is not null || source.SourceScope is not null || source.RecipientSnapshot is not null || source.SubscriptionDeliveryProtocolVersion is not null || source.SubscriptionDelivery is not null)
                     throw new StimulusDeliveryRetentionException(null, new InvalidOperationException("Ordinary collection cannot serve saved stimulus protocol data."));
             }
         return ValueTask.CompletedTask;
@@ -652,12 +680,35 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
             var roots = new HashSet<string>(StringComparer.Ordinal);
             foreach (var source in sources)
             {
+                if (source.SubscriptionDelivery is { } subscriptions)
+                {
+                    if (source.SourceScope is null) throw new InvalidDataException("A subscription cohort has no committed scope.");
+                    if (allMaterialScopes || source.SourceScope == scope)
+                    {
+                        foreach (var recipient in subscriptions.Recipients)
+                        {
+                            var progress = subscriptions.Progress.Single(item => item.RecipientId == recipient.RecipientId);
+                            if (progress.Phase == RuntimeRecipientPhase.CancelledBeforeDispatch) continue;
+                            var executions = allMaterialScopes ? _retentionExecutions : _workflowExecutionStateStore;
+                            if (source.Status != RuntimePostCommitOutboxStatus.Delivered || executions is null ||
+                                !await executions.IsDeletionTombstonedAsync(recipient.StartIdentity.WorkflowExecutionId, cancellationToken))
+                                roots.Add(recipient.Material.ArtifactId);
+                        }
+                        foreach (var wait in subscriptions.WaitDelivery?.Recipients ?? [])
+                        {
+                            var executions = allMaterialScopes ? _retentionExecutions : _workflowExecutionStateStore;
+                            if (source.Status != RuntimePostCommitOutboxStatus.Delivered || executions is null ||
+                                !await executions.IsDeletionTombstonedAsync(wait.Identity.WorkflowExecutionId, cancellationToken))
+                                roots.Add(wait.Expected.RegistrationCapture!.Executable.ArtifactId);
+                        }
+                    }
+                }
                 if (source.RecipientSnapshot is not { } cohort) continue;
                 if (source.StimulusDeliverySourceScope is null) throw new InvalidDataException("A retained cohort has no committed scope.");
                 if (!allMaterialScopes && source.StimulusDeliverySourceScope != scope) continue;
                 foreach (var start in cohort.Starts)
                 {
-                    var key = source.Intent.IdempotencyKey ?? throw new InvalidDataException("A saved start cohort has no deterministic source key.");
+                    var key = source.RequireWorkflowIntent().IdempotencyKey ?? throw new InvalidDataException("A saved start cohort has no deterministic source key.");
                     var target = KeyedWorkflowStartIdentity.For(key, start.Executable.ArtifactId).WorkflowExecutionId;
                     var executions = allMaterialScopes ? _retentionExecutions : _workflowExecutionStateStore;
                     if (source.Status != RuntimePostCommitOutboxStatus.Delivered || executions is null ||
@@ -672,8 +723,9 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         { throw new StimulusDeliveryRetentionException(retentionScope, exception); }
     }
 
-    public async ValueTask<StimulusDeliverySnapshot> InstallAsync(PostCommitDeliveryContext source,
-        StimulusDeliverySnapshot candidate, CancellationToken cancellationToken = default)
+    private async ValueTask<StimulusDeliverySnapshot> InstallCohortAsync(PostCommitDeliveryContext source,
+        StimulusDeliverySnapshot candidate, RuntimeWorkflowSubscriptionCandidate? subscriptions,
+        InMemoryWorkflowActivationAuthority? subscriptionSlots, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(source); ArgumentNullException.ThrowIfNull(candidate);
         if (!candidate.MatchesSource(source)) throw new ArgumentException("The proposed cohort does not match its source.", nameof(candidate));
@@ -690,31 +742,34 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
                 throw new NotSupportedException("Verified cohort installation requires coherent native material, execution, ownership and root-lease stores.");
             var publisher = await _retentionExecutions.FindAsync(source.Intent.WorkflowExecutionId, cancellationToken) ??
                 throw new InvalidDataException("The authoritative publisher is missing.");
-            access.EnsureTenantScope(publisher.TenantId);
+            if (subscriptions is null) access.EnsureTenantScope(publisher.TenantId);
             lock (_state.SyncRoot)
             {
                 var current = Source();
+                _ = RuntimeWorkflowSubscriptionValidation.Existing(current, subscriptions);
                 _ = current.InstallRecipientSnapshot(source, candidate, publisher, scope, _timeProvider.GetUtcNow());
                 if (current.RecipientSnapshot is { } winner) return Verified(winner);
             }
             if (candidate.SelectedAt < source.Intent.RecordedAt || candidate.SelectedAt > _timeProvider.GetUtcNow())
                 throw new InvalidDataException("The recipient selection timestamp is outside this source delivery.");
-            var dependencies = candidate.GetExecutionDependencies(source.Intent);
-            var roots = candidate.Starts.Select(start => start.Executable).Append(publisher.PinnedExecutable).ToArray();
+            var dependencies = candidate.GetExecutionDependencies(source.Intent).Concat(subscriptions?.Delivery.Recipients.Select(recipient => recipient.StartIdentity.WorkflowExecutionId) ?? []).Distinct(StringComparer.Ordinal).ToArray();
+            var roots = candidate.Starts.Select(start => start.Executable).Concat(subscriptions?.Delivery.Recipients.Select(recipient => recipient.Material) ?? []).Append(publisher.PinnedExecutable).Distinct().ToArray();
             StimulusDeliverySnapshot? result = null;
             await _rootWriteLeaseManager.ExecuteFencedAsync(roots, "stimulus:" + source.SourceOutboxItemId + ":" + Guid.NewGuid().ToString("N"), async (grants, token) =>
             {
-                await _retentionSources.ValidateCapturedInScopeAsync(candidate.Starts, scope, token);
+                if (subscriptions is null) await _retentionSources.ValidateCapturedInScopeAsync(candidate.Starts, scope, token);
+                else await _retentionSources.ValidateCapturedInTenantAsync(candidate.Starts, scope, publisher.TenantId, token);
                 result = await _state.ExecuteWriteGateAsync(async gateToken =>
                 {
                     var currentPublisher = await _retentionExecutions.FindAsync(source.Intent.WorkflowExecutionId, gateToken) ??
                         throw new InvalidDataException("The authoritative publisher was removed.");
                     if (!WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(currentPublisher.PinnedExecutable, publisher.PinnedExecutable))
                         throw new InvalidDataException("The publisher executable changed before cohort acceptance.");
-                    access.EnsureTenantScope(currentPublisher.TenantId);
+                    if (subscriptions is null) access.EnsureTenantScope(currentPublisher.TenantId);
                     lock (_state.SyncRoot)
                     {
                         var current = Source();
+                        _ = RuntimeWorkflowSubscriptionValidation.Existing(current, subscriptions);
                         _ = current.InstallRecipientSnapshot(source, candidate, currentPublisher, scope, _timeProvider.GetUtcNow());
                         if (current.RecipientSnapshot is { } winner) return Verified(winner);
                     }
@@ -723,23 +778,39 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
                         foreach (var id in dependencies)
                             if (await _retentionExecutions.IsDeletionTombstonedAsync(id, ownershipToken))
                                 throw new InvalidDataException("A saved cohort execution dependency was retired before acceptance.");
-                        return _retentionMaterial.ExecuteUnderRootWriteLeases(grants, _timeProvider, () => nativeReferences.ExecuteUnderReferenceGate(currentReferences =>
+                        if (subscriptions is not null)
+                            foreach (var recipient in subscriptions.Delivery.Recipients)
+                                if (await _retentionExecutions.FindAsync(recipient.StartIdentity.WorkflowExecutionId, ownershipToken) is not null)
+                                    throw new InvalidDataException("An independent recipient identity was already used before combined acceptance.");
+                        return _retentionMaterial.ExecuteUnderRootWriteLeases(grants, _timeProvider, () => nativeReferences.ExecuteUnderReferenceGate(currentReferences => WithSubscriptionSlots(subscriptionSlots, () =>
                         {
                             ownershipToken.ThrowIfCancellationRequested();
                             WorkflowExecutableStartSourceResolver.ValidateCapturedUnderReferenceGate(candidate.Starts,
-                                currentReferences.Values.ToArray(), scope, _timeProvider.GetUtcNow());
+                                currentReferences.Values.ToArray(), scope, _timeProvider.GetUtcNow(), subscriptions is not null, currentPublisher.TenantId);
                             lock (_state.SyncRoot)
                             {
                                 var current = Source();
+                                _ = RuntimeWorkflowSubscriptionValidation.Existing(current, subscriptions);
+                                if (subscriptions is not null)
+                                    ValidateWorkflowSubscriptions(subscriptions, subscriptionSlots!, currentPublisher, currentReferences, ownershipToken);
                                 var accepted = new StimulusDeliverySnapshot(candidate.Version, candidate.SourceOutboxItemId,
                                     candidate.IntentFingerprint, candidate.Scope, candidate.SelectedAt, candidate.StimulusType,
                                     candidate.StimulusHash, candidate.Starts, candidate.Resumes, StimulusDeliverySnapshot.CurrentRetentionAcceptanceVersion);
                                 var installed = current.InstallRecipientSnapshot(source, accepted, currentPublisher, scope, _timeProvider.GetUtcNow());
+                                if (subscriptions is not null && current.SubscriptionDelivery is null)
+                                    installed = installed.WithSubscriptionDelivery(subscriptions.Delivery);
                                 var winner = Verified(installed.RecipientSnapshot!);
-                                _state.OutboxItems[source.SourceOutboxItemId] = installed;
-                                return winner;
+                                return _retentionMaterial.ExecuteUnderRootWriteLeases(grants, _timeProvider, () =>
+                                {
+                                    if (subscriptions is not null && subscriptions.Triggers.SelectMany(trigger => trigger.Targets).Any(target =>
+                                        subscriptions.Delivery.Recipients.Any(recipient => recipient.SubscriptionId == target.SubscriptionId) &&
+                                        target.SourceReference?.IsLive(_timeProvider.GetUtcNow()) != true))
+                                        throw new InvalidDataException("An independent publication expired before combined source acceptance.");
+                                    _state.OutboxItems[source.SourceOutboxItemId] = installed;
+                                    return winner;
+                                }, ownershipToken);
                             }
-                        }), ownershipToken);
+                        })), ownershipToken);
                     }, gateToken);
                 }, token);
             }, cancellationToken);
@@ -775,12 +846,14 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
                 RuntimePostCommitOutboxItem initial;
                 lock (_state.SyncRoot)
                     initial = _state.OutboxItems.GetValueOrDefault(source.SourceOutboxItemId) ?? throw new InvalidDataException("The exact stimulus source is missing.");
-                var publisher = await _retentionExecutions.FindAsync(initial.Intent.WorkflowExecutionId, ct)
+                var publisher = await _retentionExecutions.FindAsync(initial.RequireWorkflowIntent().WorkflowExecutionId, ct)
                     ?? throw new InvalidDataException("The authoritative stimulus publisher is missing.");
-                access.EnsureTenantScope(publisher.TenantId);
+                if (initial.SubscriptionDeliveryProtocolVersion is null) access.EnsureTenantScope(publisher.TenantId);
                 lock (_state.SyncRoot)
                 {
                     var current = _state.OutboxItems.GetValueOrDefault(source.SourceOutboxItemId) ?? throw new InvalidDataException("The stimulus source was removed.");
+                    if (current.SubscriptionDeliveryProtocolVersion is not null && (current.RecipientSnapshot is not null || current.SubscriptionDelivery is not null))
+                        RuntimeIngressAdmissionValidation.CheckSource(current, new(scope, publisher.TenantId));
                     return current.OpenStimulusDeliverySource(source, publisher, scope, _timeProvider.GetUtcNow());
                 }
             }, cancellationToken);
@@ -806,12 +879,14 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
                 lock (_state.SyncRoot)
                     initial = _state.OutboxItems.GetValueOrDefault(authority.SourceOutboxItemId) ?? throw new InvalidDataException("The exact saved-start source is missing.");
                 var publisherStore = (IWorkflowExecutionStateStore?)_retentionExecutions ?? _workflowExecutionStateStore;
-                var publisher = publisherStore is null ? null : await publisherStore.FindAsync(initial.Intent.WorkflowExecutionId, ct);
+                var publisher = publisherStore is null ? null : await publisherStore.FindAsync(initial.RequireWorkflowIntent().WorkflowExecutionId, ct);
                 if (publisher is null) throw new InvalidDataException("The authoritative saved-start publisher is missing.");
-                access.EnsureTenantScope(publisher.TenantId);
+                if (initial.SubscriptionDeliveryProtocolVersion is null) access.EnsureTenantScope(publisher.TenantId);
                 lock (_state.SyncRoot)
                 {
                     var current = _state.OutboxItems.GetValueOrDefault(authority.SourceOutboxItemId) ?? throw new InvalidDataException("The saved-start source was removed.");
+                    if (current.SubscriptionDeliveryProtocolVersion is not null)
+                        RuntimeIngressAdmissionValidation.CheckSource(current, new(scope, publisher.TenantId));
                     return current.OpenSavedStartSource(authority, publisher, scope, _timeProvider.GetUtcNow());
                 }
             }, cancellationToken);
@@ -833,7 +908,7 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         lock (_state.SyncRoot)
         {
             return new ValueTask<RuntimePostCommitOutboxItem?>(
-                _state.OutboxItems.TryGetValue(outboxItemId, out var item) ? item : null);
+                _state.OutboxItems.TryGetValue(outboxItemId, out var item) && IsInCurrentOutboxScope(item) ? item : null);
         }
     }
 
@@ -846,6 +921,10 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         {
             if (!_state.OutboxItems.TryGetValue(result.OutboxItemId, out var existing))
                 throw new InvalidOperationException($"Post-commit outbox item '{result.OutboxItemId}' was not found.");
+
+            if (!IsInCurrentOutboxScope(existing)) throw new InvalidOperationException("The outbox item is not available in this scope.");
+            if (existing.SourceKind == RuntimeDeliverySourceKind.StandaloneIngress || existing.SubscriptionDeliveryProtocolVersion is not null)
+                throw new NotSupportedException("Subscription responsibility requires fenced source-aware completion.");
 
             // Same ownership test the durable store applies, so both stores answer a contended claim-less recording
             // identically: write nothing and report the loss. The fencing token is checked before terminal state because
@@ -879,7 +958,10 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
                 deliveryVisibleAfter: null,
                 stimulusDeliveryProtocolVersion: existing.StimulusDeliveryProtocolVersion,
                 stimulusDeliverySourceScope: existing.StimulusDeliverySourceScope,
-                recipientSnapshot: existing.RecipientSnapshot);
+                recipientSnapshot: existing.RecipientSnapshot,
+                standaloneIngress: existing.StandaloneIngress,
+                subscriptionDeliveryProtocolVersion: existing.SubscriptionDeliveryProtocolVersion,
+                subscriptionDelivery: existing.SubscriptionDelivery);
         }
 
         return new ValueTask<RuntimePostCommitOutboxClaimCompletionOutcome>(
@@ -896,7 +978,7 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         lock (_state.SyncRoot)
         {
             var claimable = _state.OutboxItems.Values
-                .Where(item => RuntimePostCommitOutboxClaimTransitions.CanClaim(item, request))
+                .Where(item => IsInCurrentOutboxScope(item) && RuntimePostCommitOutboxClaimTransitions.CanClaim(item, request))
                 .OrderBy(RuntimePostCommitOutboxClaimTransitions.ClaimableAt)
                 .ThenBy(item => item.RecordedAt)
                 .ThenBy(item => item.OutboxItemId, StringComparer.Ordinal)
@@ -927,6 +1009,7 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         {
             if (!_state.OutboxItems.TryGetValue(claim.OutboxItemId, out var existing))
                 return new ValueTask<RuntimePostCommitOutboxClaim?>((RuntimePostCommitOutboxClaim?)null);
+            if (!IsInCurrentOutboxScope(existing)) return new ValueTask<RuntimePostCommitOutboxClaim?>((RuntimePostCommitOutboxClaim?)null);
 
             var renewed = RuntimePostCommitOutboxClaimTransitions.Renew(existing, claim, now, visibilityTimeout);
             if (renewed is not null)
@@ -946,7 +1029,7 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         {
             // A delivered item is never claimable again, so it sorts after every unsettled one.
             return new ValueTask<IReadOnlyCollection<RuntimePostCommitOutboxItem>>(_state.OutboxItems.Values
-                .Where(query.Matches)
+                .Where(item => IsInCurrentOutboxScope(item) && query.Matches(item))
                 .OrderBy(item => item.Status == RuntimePostCommitOutboxStatus.Delivered
                     ? DateTimeOffset.MaxValue
                     : RuntimePostCommitOutboxClaimTransitions.ClaimableAt(item))
@@ -970,6 +1053,7 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         {
             if (!_state.OutboxItems.TryGetValue(claim.OutboxItemId, out var existing))
                 throw new InvalidOperationException($"Post-commit outbox item '{claim.OutboxItemId}' was not found.");
+            if (!IsInCurrentOutboxScope(existing)) throw new InvalidOperationException("The outbox item is not available in this scope.");
 
             _state.OutboxItems[claim.OutboxItemId] = RuntimePostCommitOutboxClaimTransitions.Complete(existing, claim, result);
         }
@@ -997,6 +1081,7 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
             {
                 if (!_state.OutboxItems.TryGetValue(completion.Claim.OutboxItemId, out var existingOutbox))
                     throw new InvalidOperationException($"Post-commit outbox item '{completion.Claim.OutboxItemId}' was not found.");
+                if (!IsInCurrentOutboxScope(existingOutbox)) throw new InvalidOperationException("The outbox item is not available in this scope.");
                 WorkflowDispatchRecord? existingDispatch = null;
                 if (completion.WorkflowDispatch is { } dispatch &&
                     !_state.WorkflowDispatches.TryGetValue(dispatch.DispatchId, out existingDispatch))
@@ -1061,6 +1146,16 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         if (_workflowExecutionStateStore is null || stateChange is null)
             return;
 
+        if (stateChange.State.IngressOrigin is not null || stateChange.State.ModelWorkOrigin?.IngressOrigin is not null)
+        {
+            var physical = ExactResumeExecutions;
+            if (physical is null || !ReferenceEquals(physical.CheckpointState, _state))
+                throw new NotSupportedException("Ingress workflow checkpoints require the actual selected native execution writer.");
+            using var authority = _state.AuthorizeIngressCheckpointWrite(stateChange.State);
+            await physical.SaveAsync(stateChange.State, cancellationToken);
+            return;
+        }
+
         await _workflowExecutionStateStore.SaveAsync(stateChange.State, cancellationToken);
     }
 
@@ -1078,6 +1173,7 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         {
             foreach (var item in items)
             {
+                RefuseUncheckedSubscriptionAdmission(item);
                 EnsureOutboxSourceScope(item);
                 if (!_state.OutboxItems.ContainsKey(item.OutboxItemId) && item.RecipientSnapshot?.RetentionAcceptanceVersion is not null)
                     throw new InvalidOperationException("A pending checkpoint cannot mint verified cohort acceptance.");
@@ -1089,15 +1185,22 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
 
     private void EnsureOutboxSourceScope(RuntimePostCommitOutboxItem item)
     {
-        if (item.StimulusDeliverySourceScope is not { } sourceScope) return;
+        if (item.SourceScope is not { } sourceScope) return;
         var access = _persistenceAccessContextAccessor?.Current ??
             throw new InvalidOperationException("A declared recipient source requires explicit persistence access at commit.");
         _ = access.RequireScope();
         access.EnsureScope(sourceScope);
     }
 
+    private static void RefuseUncheckedSubscriptionAdmission(RuntimePostCommitOutboxItem item)
+    {
+        if (item.SourceKind == RuntimeDeliverySourceKind.StandaloneIngress || item.SubscriptionDelivery is not null)
+            throw new NotSupportedException("A generic pending/checkpoint writer cannot accept standalone sources or captured subscription responsibility.");
+    }
+
     private void SavePendingOutboxItem(RuntimePostCommitOutboxItem item)
     {
+        RefuseUncheckedSubscriptionAdmission(item);
         EnsureOutboxSourceScope(item);
         if (item.Status != RuntimePostCommitOutboxStatus.Pending)
             throw new InvalidOperationException("Only pending post-commit outbox items can be saved as pending.");
@@ -1406,12 +1509,20 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
                 request);
     }
 
+    private bool IsInCurrentOutboxScope(RuntimePostCommitOutboxItem item)
+    {
+        if (item.SourceScope is not { } scope) return true; // Historical unscoped workflow behavior is unchanged.
+        var access = _persistenceAccessContextAccessor?.Current ??
+            throw new NotSupportedException("Source-aware outbox queries require explicit persistence access.");
+        return access.RequireScope() == scope;
+    }
+
     private static bool IsDeliverable(RuntimePostCommitOutboxItem item, RuntimePostCommitOutboxQuery query)
     {
-        if (query.WorkflowExecutionId is not null && !StringComparer.Ordinal.Equals(item.Intent.WorkflowExecutionId, query.WorkflowExecutionId))
+        if (query.WorkflowExecutionId is not null && !StringComparer.Ordinal.Equals(item.WorkflowExecutionId, query.WorkflowExecutionId))
             return false;
 
-        if (query.IntentKind is not null && !StringComparer.Ordinal.Equals(item.Intent.Kind, query.IntentKind))
+        if (query.IntentKind is not null && !StringComparer.Ordinal.Equals(item.DeliveryKind, query.IntentKind))
             return false;
 
         if (item.AvailableAt is { } availableAt && availableAt > query.Now)

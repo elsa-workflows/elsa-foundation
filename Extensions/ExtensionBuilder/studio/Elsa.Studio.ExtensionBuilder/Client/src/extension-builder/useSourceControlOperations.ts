@@ -39,7 +39,7 @@ export function useSourceControlOperations(core: BuilderCore, data: BuilderData)
 
   async function handleSelectSourceDiff(path: string, staged: boolean) {
     if (!core.selectedWorkspace) return;
-    const diff = await runOperation("source", () => getSourceControlDiff(context, core.selectedWorkspace!.id, path, staged), `Loaded diff for ${path}.`);
+    const diff = await runOperation("source", () => getSourceControlDiff(context, core.selectedWorkspace!.id, path, staged), "");
     if (diff && core.selectedIds.current.workspaceId === core.selectedWorkspace.id) {
       core.setSourceControlDiff(diff);
       core.setActiveInspectorTab("source");
@@ -81,14 +81,16 @@ export function useSourceControlOperations(core: BuilderCore, data: BuilderData)
   async function handlePushRepository() {
     if (!core.selectedWorkspace) return;
     const workspaceId = core.selectedWorkspace.id;
-    const result = await runOperation("source", () => pushRepository(context, workspaceId), "Pushed committed changes.");
+    const result = await runOperation("source", () => pushRepository(context, workspaceId), result => result.state === "Completed" ? "Pushed committed changes." : "");
+    if (result?.state !== "Completed" && result) tracker.setError(result.message);
     if (result) await applyStatus(workspaceId, result.status);
   }
 
   async function handlePullRepository() {
     if (!core.selectedWorkspace) return;
     const workspaceId = core.selectedWorkspace.id;
-    const result = await runOperation("source", () => pullRepository(context, workspaceId), "Pulled remote changes.");
+    const result = await runOperation("source", () => pullRepository(context, workspaceId), result => result.state === "Completed" ? "Pulled remote changes." : "");
+    if (result?.state !== "Completed" && result) tracker.setError(result.message);
     if (result) await applyStatus(workspaceId, result.status, true);
   }
 

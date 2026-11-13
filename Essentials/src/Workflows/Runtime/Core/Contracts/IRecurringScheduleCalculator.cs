@@ -29,4 +29,9 @@ public interface IRecurringScheduleCalculator
     /// </summary>
     /// <exception cref="FormatException">The expression is not a valid interval or cron string.</exception>
     DateTimeOffset? ComputeNext(RecurringScheduleKind kind, string expression, DateTimeOffset after);
+
+    /// <summary>Uses the selected resource timezone while retaining the existing UTC-only overload unchanged.</summary>
+    DateTimeOffset? ComputeNext(RecurringScheduleKind kind, string expression, DateTimeOffset after, string timeZoneId) =>
+        timeZoneId == "UTC" ? ComputeNext(kind, expression, after)
+            : throw new NotSupportedException("This recurring calculator does not support resource timezones.");
 }

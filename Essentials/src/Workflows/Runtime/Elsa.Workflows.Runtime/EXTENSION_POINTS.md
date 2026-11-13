@@ -1245,3 +1245,107 @@ The human-work model and public contracts live in `Runtime.Core/UserTasks`. The 
 
 
 User Task inbox cursors use `UserTaskOptions.CursorEncryptionKey` (Base64, 32 bytes shared by API replicas), falling back to a domain-separated configured `RuntimeRecoveryContinuationOptions.SigningKey`. Only development composition may use ephemeral keys. Key rotation expires existing pages; task state and accepted responses are independent of the cursor key.
+
+### `IStandaloneTriggerTypeSource` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Metadata contribution, collected by one Sequential startup fan-in.
+- **Signature:** `IEnumerable<TriggerTypeDescriptor> GetTypes()` returns type keys, supported format, fields and source metadata; it grants no invocation authority.
+- **Registration:** register implementations as `IStandaloneTriggerTypeSource` with normal DI, add the matching scoped validator, then call `TriggerAuthoringRegistration.AddServices(services)`.
+- **Aggregation/override:** `CollectTriggerTypes` consumes every source and detaches JSON defaults and nested collections before advancing its iterator. `TriggerTypeCatalog` freezes a second owned snapshot by exact ordinal type key. Duplicate owners refuse initialization; replace/remove a source explicitly rather than relying on registration order.
+- **Default implementation:** no source type is installed by this authoring slice.
+
+### `ITriggerConfigurationValidator` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Scoped contribution, one exact owner per installed type key.
+- **Signature:** `TypeKey`; `ValidateAsync(schemaVersion, configuration, cancellationToken)` returns safe `TriggerFinding` records without source execution.
+- **Registration:** `services.AddScoped<ITriggerConfigurationValidator, MyValidator>()` alongside the source descriptor. Initialization refuses missing/duplicate owners and validators without a descriptor.
+- **Aggregation/override:** `ValidateTriggerConfiguration` invokes the selected type's one owner. Replace that owner explicitly; it must reject unknown formats and report findings without echoing secret values.
+- **Default implementation:** none. A metadata source alone cannot pass initialization without its validator.
+
+### `IStandaloneTriggerTypeCatalog` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Replacement authoring-read contract, independently composed from runtime sources.
+- **Signature:** `List()` and `Find(typeKey)` expose the frozen installed descriptor set. Reading the default catalog before initialization fails visibly.
+- **Registration/default:** `TriggerAuthoringRegistration.AddServices` uses `TryAddSingleton` for the internal `TriggerTypeCatalog` and its contract alias. Normal DI replacement supplies a custom catalog and owns its read/initialization policy; adding a competing default is not an ordering mechanism.
+- **Usage:** consumer metadata remains advisory. Neither catalog access nor a custom catalog installs persistence, source intake or target-start authority.
+
+### `StandaloneTriggerTypesInitializing` and `StandaloneTriggerConfigurationValidating` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Sequential authoring fan-in events through the normal `IInlineEventPublisher`.
+- **Signature:** initialization carries a `Types` collection; configuration validation carries `TypeKey`, `SchemaVersion`, a cloned JSON `Configuration` and a `Findings` collection.
+- **Publication sites:** `InitializeTriggerTypes.ExecuteAsync` publishes initialization. Configuration validation has no production publisher in this precursor; its focused composition test publishes it directly. The later management slice will own its normal publication site.
+- **Handlers:** `CollectTriggerTypes` is the registered initialization aggregator; `ValidateTriggerConfiguration` is the registered scoped validation aggregator. Both are registered by `TriggerAuthoringRegistration.AddServices` with `TryAddEnumerable`.
+- **Contribution/override:** modules contribute through the source/validator contracts above; do not duplicate the aggregating handlers. Event metadata and findings do not authorize an execution or mutate a trigger resource.
+
+### `InitializeTriggerTypes` *(Runtime startup task)*
+- **Kind:** Scoped `IStartupTask`, registered once by `TriggerAuthoringRegistration.AddServices`.
+- **Signature:** `ExecuteAsync(cancellationToken)` publishes the initialization event, verifies exact source/validator ownership, then freezes the default catalog.
+- **Ownership/override:** Runtime owns this authoring-only initialization. A module adds descriptors/validators rather than replacing the task. Repeated `AddServices` calls do not duplicate it or its handlers; no delivery pump or workflow runtime is installed.
+
+### `IStandaloneTriggerTargetDiscovery` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Authorized authoring query replacement, independent of runtime preparation/dispatch.
+- **Signature:** `ListAsync(TriggerScope, TriggerTargetQuery, ...)` and `DescribeAsync(TriggerScope, definitionId, slotName, ...)` return detached logical target/input descriptions.
+- **Registration/default/override:** no provider is installed by this slice. Later target composition supplies one scoped implementation using normal DI replacement. An absent provider remains unavailable; metadata cannot become saved start authority.
+
+### `IStandaloneTriggerStore` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Scoped provider replacement for revisioned resources, canonical associations and mutation receipts.
+- **Signature:** scoped find/list resource and association reads, mutation-receipt lookup, and `WriteAsync(TriggerScope, TriggerStoreWrite, ...)`. A resource-owned grant binds its exact resource/association/target tuple; actor identity is audit attribution.
+- **Registration/default/override:** no provider is installed by this contract slice. A later coherent provider must own atomic revision/idempotency comparison and physical scope/tenant checks; it is not selected through descriptor discovery or registration order.
+
+### `ITriggerInputMapper` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Scoped replacement using the ordinary declared workflow-input validator.
+- **Signature:** `ValidateMappings(contract, mappings)` performs preflight without evaluation; `MapAsync(contract, mappings, detachedSource, ...)` returns validated normalized values/findings.
+- **Implementation/registration:** Runtime's internal `TriggerInputMapper` supports literal/source selectors and installed binding-pure expressions. This authoring helper does not register a mapper automatically; later runtime composition selects it, or a host replaces the scoped contract through normal DI.
+- **Usage/override:** preserve missing versus explicit null, exact numeric values, declared destinations and safe failures. Unknown languages/profiles, unavailable evaluators and incompatible values refuse before admission. Only detached declared parameters reach expressions, and evaluator exception text is not disclosed. Mapping installs no trigger or delivery pump.
+
+## Standalone delivery protocol contracts
+
+This contract precursor adds no source pump, physical ingress provider or target adapter. The ordinary Runtime defaults continue to advertise workflow-checkpoint delivery only. The new formats are not authorization by themselves: a selected physical provider must compare actual source/selection/seal facts before effects. [Spec 1217](../../../../../specs/1217-standalone-triggers/plan.md) owns the acceptance requirements.
+
+All interfaces below live in `Elsa.Workflows.Runtime.Core`. Unless registration is stated explicitly, this slice registers no implementation. Replace a single-owner port explicitly through scoped DI; do not depend on the order of competing registrations. Contributions are scoped unless described as metadata, and their eventual selecting consumer must reject duplicate matching owners before effects.
+
+| Port | Kind and signatures | Composition and obligations |
+|---|---|---|
+| `IRuntimeDeliverySourceExecutor` | Scoped contribution; `HandleAsync(RuntimeDeliverySourceContext,ct)`. | Register with `AddRuntimeDeliverySourceExecutor<T>(kind,retryPolicy)`. This uses the existing exact-kind post-commit contribution registry, declares `StandaloneIngress` and subscription protocol 1, and rejects conflicting owners/protocol/policy. It does not install a second dispatcher. The existing dispatcher selects the matching source executor only for the actual contributed kind/source/protocol tuple. |
+| `IRuntimeIngressDeliveryStore` | Physical-provider replacement; capability properties; `ListDeliveriesAsync`, `FindDeliveryAsync`, `ControlAsync`, `FindAcceptedAsync`, `AdmitAsync`, `InstallWorkflowCohortAsync`, `ReadSourceAsync`, `CommitDispatchAsync`, `RecordReceiptAsync`, both `ReadCommittedRecipientAsync` overloads, `RecordRecipientFailureAsync`, `CommitWaitDispatchAsync`, `RecordWaitReceiptAsync`, `ReadCommittedWaitAsync`, `RecordWaitFailureAsync`, `CancelPendingAsync`. Each operation takes its typed Core request/source/authority plus cancellation. | All capability defaults are false and all operation defaults throw unsupported. No implementation is installed here. Admission requires one coherent resource/grant/slot/source/material/outbox boundary. Claim-bound mutations fence the actual current claim; committed authority reads preserve sealed responsibility after claim expiry. |
+| `IRuntimeIngressWaitTarget` | Scoped target replacement; `PrepareDispatchAsync(source,recipient,ct)`, `ReconcileAsync(source,recipient,seal,ct)`, `DispatchAsync(source,recipient,seal,ct)`. | No default implementation. The adapter prepares without effects, reconciles physical deterministic target evidence and enqueues only after a physical source seal exists. |
+| `IStandaloneTriggerIngress<TSource>` / `IStandaloneTriggerIngressFactory` | Producer-bound replacement and scoped factory; `AdmitAsync(signal,ct)` / `Create<TSource>()`. | `AddStandaloneTriggerIngress<TSource>(descriptor)` installs the producer descriptor/capability and scoped typed port factory. A concrete factory must be supplied by the later runtime feature. A signal contains detached payload/schema/metadata, not tenant/grant/target authority. Returned acknowledgements contain accepted association IDs and safe refusal codes, never seals. |
+| `IStandaloneTriggerSourceContext<TSource>` | Scoped source-module replacement; `GetAsync(ct)`, `SupportsResourceAuthorization`, `AuthorizeAsync(trigger,signal,ct)`. | The capability defaults false and authorization defaults false. Exactly one trusted context is required for advertised resource authorization; source registration detects conflicting descriptors and source-family owners. Trusted context comes from the server's source boundary, never the submitted payload. |
+| `ITriggerManagementCommitter` | Scoped replacement; `SupportsActivatedResources`, `CanActivateType(typeKey,schemaVersion)`, `CanStopType(typeKey,schemaVersion)`, `CommitAsync(scope,write,ct)`. | No installed committer; capability defaults false. A later implementation must protect resource/projection observations and the idempotent mutation receipt through the physical commit. Authoring metadata is insufficient activation authority. |
+| `ITriggerSourceResourceCommitStore` | Physical-provider replacement; `SupportsActivatedResources`, `CommitAsync(scope,write,reservations,ct)`. | No default implementation; capability defaults false. Commit the complete source-projection plan and resource mutation together. |
+| `IRuntimeIngressReservationReader` | Scoped physical-reader replacement; `SupportsReservations`, `FindAsync(scope,type,hash,ct)`, `ListAsync(scope,query,ct)`, `ListInScopeAsync(persistenceScope,query,ct)`. | No default implementation. Capability defaults false; scope-wide projection defaults unsupported. Tenant remains an explicit owner fact and is never inferred from persistence scope. |
+| `ITriggerReservationPlanner` | Scoped source-module contribution; `TypeKey`, `PlanAsync(scope,current,proposed,ct)`. | No default contribution. Prepare exclusive source reservations without mutating stores. The selected committer applies them atomically; eventual selection requires one owner for a type. |
+| `IRuntimeIngressTransportObserver` | Physical-provider replacement; `SupportsObservations`, `RecordAsync(scope,observation,ct)`. | Default capability false and operation unsupported. Transport exchange facts remain separate from source acceptance and workflow execution; they cannot create a target receipt. |
+| `ITriggerTargetModelSource` | Metadata contribution; `GetModels()`. | No installed model metadata. Descriptors advertise model/protocol/profile/response support; they grant no runtime invocation authority. |
+| `IStandaloneTriggerRuntimeTarget` | Scoped model-adapter contribution; `ModelKey`, `Supports(native,model)`, `PrepareDispatchAsync(source,recipient,ct)`, `ReconcileAsync(source,recipient,seal,ct)`, `DispatchAsync(source,recipient,seal,ct)`. | No installed adapter. Preparation is side-effect free; reconciliation requires actual deterministic target evidence. The provider commits an immutable source seal before enqueue. |
+| `IStandaloneSchedulePlanner` | Scoped source-module contribution; `Supports(typeKey)`, `Plan(scope,previous,write,current,now)`. | No default planner. Returns preserve/replace/deactivate/remove; the provider must apply the plan with the resource mutation. |
+| `IStandaloneScheduleSource` | Scoped source-module contribution; `Supports(typeKey,family)`, `AdmitAsync(scope,claim,ct)`. | No default source. The existing recurring pump will supply an actual resource-owned occurrence claim. A prepared descriptor alone cannot settle its cursor. |
+| `IAuthoredModelAdmission` | Scoped physical-admission replacement; `AdmitAsync(AuthoredModelAdmissionRequest,ct)`. | Default operation refuses and preserves cancellation. No provider is installed. Support requires a protected actual queue/slot/source/material boundary; ordinary queue support alone is insufficient. |
+
+The existing `IRuntimePostCommitIntentDispatcher` and `IRuntimePostCommitOutboxProcessor` gain source-kind and exact subscription-protocol discovery with conservative defaults. The dispatcher gains a source-context overload that refuses by default. The additive `AddRuntimePostCommitIntentHandler<T>` overload declares both ordinary and subscription protocols on one workflow source, retaining previous overloads. `RuntimePostCommitIntentHandlerContribution` validates the source/handler/protocol tuple before registration.
+
+`IStimulusDeliveryIntentAdapter` gains optional workflow-cohort preparation with no default candidate. `IWorkflowActivationCoordinator` gains material activation/deactivation overloads that refuse by default. `IRecurringScheduleCalculator` gains `ComputeNext(kind,expression,after,timeZoneId)`: its default delegates UTC to the existing overload and refuses other timezones. `IRecurringTriggerScheduleStore` gains unsupported-by-default `ObserveAsync` and `ExhaustClaimAsync`; `ReleaseClaimWithFailureAsync` delegates to the existing fenced release when a provider cannot preserve a typed failure reason. Existing implementations therefore do not silently acquire these capabilities. These are additive Core contracts; later owning slices install and qualify their implementations.
+
+Wire models preserve existing constructors and omit absent additive source/recipient/origin fields. `RuntimePostCommitOutboxItem` represents a standalone source without inventing a workflow intent, and `RequireWorkflowIntent()` refuses that arm. Accepted recipient selection is fingerprinted and cannot be replaced during progress updates. Pending cancellation and dispatch commitment have an irreversible winner; physical stores remain responsible for the atomic compare-and-set. Material captures, normalized JSON inputs, source payloads and command seals are detached before borrowed documents can disappear.
+
+
+### Ordinary outbox source dispatch
+
+`RuntimePostCommitIntentDispatcher` now routes `RuntimeDeliverySourceContext` through the existing exact-kind registry to `IRuntimeDeliverySourceExecutor`. A workflow source cannot impersonate a standalone source owner. Source-kind support alone is insufficient subscription readiness: the actual contribution must declare protocol 1 and durable source delivery. Legacy intent-only dispatch retains its existing path and semantics.
+
+`RuntimePostCommitOutboxProcessor` uses the same claim/renew/complete/retry loop for actual standalone sources. Its source capability requires a real claim store, source lookup, scoped persistence access and a matching dispatcher; it rereads physical state before dispatch and acknowledgement. Protocol-bearing sources require the actual contribution/source/kind/protocol tuple before any handler effect, including direct context-dispatch paths; a legacy handler cannot partially dispatch a newer workflow cohort. Returning from an executor without settled saved recipients leaves work owed. Legacy or claim-free compositions refuse the new source arm before executor effects. Logging, query filters and failure handling use source-neutral projections rather than assuming a workflow publisher. The initial standalone resource/admission provider is still absent in this slice.
+
+`RuntimeCoalescingSession` refuses subscription declarations and source/recipient protocol state before mutating the workflow overlay. Physical source acceptance cannot be synthesized by a deferred workflow checkpoint. Existing buffered workflow intents retain their old behavior. These changes do not install a new queue, recurring task, source listener or standalone trigger feature.
+
+
+### Native trigger resource storage
+
+The internal `InMemoryStandaloneTriggerStore` now implements `IStandaloneTriggerStore` against the existing `InMemoryRuntimeCheckpointStoreState`. It is a scoped facade over that singleton family's dictionaries, SyncRoot and async write gate; it introduces no independently owned state or lock. The standalone feature will select it together with the coherent ingress provider in a later slice. This precursor does not add a default registration or activate resources/listeners.
+
+`FindAsync` and bounded resource/association pages retain explicit persistence scope and nullable tenant facts. Trigger and reverse workflow views read the same association objects. `WriteAsync` commits one revisioned aggregate, persistent-in-process association ownership and its actor/request mutation receipt under the shared gate. Identical authorized retries find the prior receipt before CAS; changed fingerprints conflict. Removed association identities and deleted resources retain tombstones, so reuse cannot revive old authority. Invalid updates preserve the previous aggregate and receipt set. JSON/configuration/mapping/grant values use the detached Core models; stored association collections are owned read-only snapshots.
+
+Native storage is process-local. The tests reconstruct facades over the same state to prove shared ownership, not durable restart. EF/durable providers, management authorization, protected source projections and physical admission remain separate owning slices. Raw resource writes alone are not evidence of live source activation.
+
+### Accepted ingress authority across native targets
+
+The internal `TriggerTargetResolver` reads the current serving slot, exact live source and supported material input contract without dispatching work. It publishes the Sequential `TriggerTargetModelsDiscovering` event, whose single aggregator `CollectTriggerTargetModels` owns the intra-domain `ITriggerTargetModelSource` fan-in and snapshots model profiles before their producer resumes. The native contributor is `NativeTriggerTargetModelSource`; composition is deferred to the coherent provider slice. Admission and subscription helpers validate scope, current grants, input mapping and immutable recipient selection; no provider is registered by these helpers.
+
+`NativeStandaloneTriggerRuntimeTarget` and `NativeIngressWaitTarget` prepare deterministic commands and require the actual committed source/recipient seal before dispatch. Reconciliation recognizes exact physical scheduler commands, the deterministic initial checkpoint, committed execution state or affirmative wait retirement; an actor result or missing row is insufficient. Existing start, actor, resume and checkpoint boundaries retain accepted origin and pinned material. The native state store permits initial ingress state only inside its conditional checkpoint writer, and verifies continuation identity afterward. Ordinary resume commands without a nonnull ingress marker keep their existing payload owner.
+
+This precursor adds no source listener, provider registration or new pump. Physical intake, coherent provider selection, serving-slot activation and end-to-end source qualification follow in spec 1217.
