@@ -405,7 +405,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
     private bool Unmarked(Delivery item) => item.Durable && !item.Marked && !item.Taken && (!item.Suspect || (!item.Shelved && Shelf(item)));
 
     /// <summary>
-    /// Finding F12: a suspect whose instance is suspended cannot be tried, and while its row says unseen it fills a place
+    /// Finding F12: an authored suspect whose instance is suspended cannot be tried, and while its row says unseen it fills a place
     /// in every poll; a poll limit of them hides the resume behind them. So it is shelved: its row is marked seen at this
     /// epoch, which moves the polls on, but it is neither on trial nor cleared to run. The next owner still suspects it.
     /// </summary>
@@ -443,7 +443,8 @@ public sealed class Worker : IScopeActivation, ITurnServices
 
     /// <summary>
     /// A trial holds up the process until its members are consumed, so a suspect is tried only when its turn can run at
-    /// once: its instance is loaded, has nothing in flight, is not suspended, and no kernel message waits ahead of it.
+    /// once: its instance is loaded, has nothing in flight, and no kernel message waits ahead of it. Withheld authored
+    /// work cannot run; an identity refusal can, through the same trial and fenced consumption boundary.
     /// </summary>
     private bool CanTry(Delivery suspect) =>
         _slots.TryGetValue(suspect.Message.Target.Id, out var slot) && (slot.Loaded || Has(Flaw.TrialBeforeLoad))
