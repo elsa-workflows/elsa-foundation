@@ -21,7 +21,7 @@ public sealed class FlowchartOptions
     public string JoinPolicyKind { get; set; } = FlowchartPolicyKinds.DeadPathJoin;
 
     /// <summary>
-    /// Not main's: deliberate defects, one per graph invariant of the kernel prototype's simulation (G1-G5), so that
+    /// Not main's: deliberate defects, the four of the design sketch's plan, for the graph invariants G1, G2, G3 and G5 of the kernel prototype's simulation, so that
     /// its mutation check can show each is caught. <see cref="FlowchartFlaws.None"/> in every real use.
     /// </summary>
     public FlowchartFlaws Flaws { get; set; }

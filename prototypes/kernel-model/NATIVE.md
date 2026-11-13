@@ -276,8 +276,9 @@ The checks bite (run: `--native-mutations`, each flaw alone, first failing seed)
 | `DeadPathRunsNode` (round 4) | An all-dead node is run instead of passing the deadness on | G1, seed 2: `a dead path ran node race of graph (round -)` |
 | `CancelLeavesPaths` (round 4) | A first-wins race completes without cancelling its losers | G5, seed 2: `path path:280 at r1 of graph lives on in the race scope scope:275, which is over` |
 
-The four graph flaws are the engine's (`FlowchartOptions.Flaws`, marked MUTATION in `models/Graph`); the mutation
-check fails one that another check catches first. The round-4 seeds are those of the mix with `n-graph` in it, which
+The four graph flaws are the engine's (`FlowchartOptions.Flaws`, marked MUTATION in `models/Graph`), the four the
+design sketch's plan names; the mutation check fails one that another check catches first. G4 has no mutation of its
+own: no flaw of the plan aims at it, so that it bites is not shown. The round-4 seeds are those of the mix with `n-graph` in it, which
 moves every seed; the five older flaws' first seeds and messages above are round 4's (`InFlightInMemory` is now caught first by N5, not N1).
 
 Found while building the checks (run): one seed of 1,000 actions failed my own event check because a parked

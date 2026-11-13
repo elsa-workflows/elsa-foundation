@@ -27,7 +27,7 @@ public enum NativeFlaw
     ResumeAnyChild = 1 << 2,    // a child-finished resumes every child wait, not the one for that child
     NoAttemptCommit = 1 << 3,   // Durable: an External activity runs without its attempt committed first
     ScopeInMemory = 1 << 4,     // an iteration scope is kept in memory only
-    // The graph engine's flaws (FlowchartFlaws), one per graph invariant G1-G5 (NATIVE.md, section 6):
+    // The graph engine's flaws (FlowchartFlaws), the sketch's four, for G1, G2, G3 and G5 (NATIVE.md, section 6):
     NoDeadPaths = 1 << 5,       // an untaken connection emits no dead arrival
     NoRoundReset = 1 << 6,      // a loop-closing connection opens no new round
     DeadPathRunsNode = 1 << 7,  // a node whose every inbound arrived dead is run
