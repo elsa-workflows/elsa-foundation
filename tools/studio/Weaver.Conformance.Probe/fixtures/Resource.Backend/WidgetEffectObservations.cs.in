@@ -52,7 +52,7 @@ internal sealed class WidgetRunJournal(WidgetEffectsSettings settings)
                 file.Flush(true);
                 return recorded;
             }
-            catch (Exception error) when (error is IOException or UnauthorizedAccessException or JsonException)
+            catch (Exception error) when (error is IOException or InvalidDataException or UnauthorizedAccessException or JsonException)
             { throw new WidgetFixtureException("The widget check ran but its observation could not be retained.", error); }
         }
     }
@@ -69,7 +69,7 @@ internal sealed class WidgetRunJournal(WidgetEffectsSettings settings)
                 using var file = new FileStream(settings.ObservationFile, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
                 return Owned(Read(file), key);
             }
-            catch (Exception error) when (error is IOException or UnauthorizedAccessException or JsonException)
+            catch (Exception error) when (error is IOException or InvalidDataException or UnauthorizedAccessException or JsonException)
             { throw new WidgetFixtureException("Widget check observations are unavailable.", error); }
         }
     }
@@ -134,7 +134,7 @@ internal sealed class WidgetFaultControl(WidgetEffectsSettings settings)
                 throw new InvalidDataException("Invalid widget fault control.");
             return kind.GetString() == channel ? new(channel, code.GetString()!, message.GetString()!, unavailable.GetBoolean()) : null;
         }
-        catch (Exception error) when (error is IOException or UnauthorizedAccessException or JsonException)
+        catch (Exception error) when (error is IOException or InvalidDataException or UnauthorizedAccessException or JsonException)
         { throw new WidgetFixtureException("The widget fault control is unavailable.", error); }
     }
 }
