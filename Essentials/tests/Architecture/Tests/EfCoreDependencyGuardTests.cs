@@ -129,6 +129,10 @@ public sealed class EfCoreDependencyGuardTests
         AssertReviewedModuleClosure(Spec1179ConnectionsEf.ExpectedEfPackagesByProject, "Connections metadata (#3578)");
 
     [Fact]
+    public void Every_admitted_release_archive_project_resolves_only_its_reviewed_EF_closure() =>
+        AssertReviewedModuleClosure(Spec1225ReleaseArchiveEf.ExpectedEfPackagesByProject, "SQLite workflow release archive (#3590, #4379)");
+
+    [Fact]
     public void Every_admitted_saved_Dashboard_project_resolves_only_its_reviewed_EF_closure() =>
         AssertReviewedModuleClosure(Spec1217DashboardEf.ExpectedEfPackagesByProject, "saved Dashboard definitions (#3604)");
 
@@ -727,6 +731,7 @@ public sealed class EfCoreDependencyGuardTests
                     Adr0073RepositoryFirstEf.IsProjectPath(relativePath) ||
                     Spec1179ConnectionsEf.IsProjectPath(relativePath) ||
                     Spec1217DashboardEf.IsProjectPath(relativePath) ||
+                    Spec1225ReleaseArchiveEf.IsProjectPath(relativePath) ||
                     Spec1179AgentEf.IsProjectPath(relativePath) ||
                     Spec1189WeaverEf.IsProjectPath(relativePath) ||
                     Adr0073StructuredLogsEf.IsProjectPath(relativePath) ||
@@ -1298,6 +1303,37 @@ public sealed class EfCoreDependencyGuardTests
             "Microsoft.EntityFrameworkCore.Analyzers",
             "Microsoft.EntityFrameworkCore.Relational"
         ];
+    }
+
+    /// <summary>
+    /// Spec1225 T009 / #3590 archive subset, delivered by reviewed #4379. One SQLite archive adapter;
+    /// consumer contexts own the engine. No other Publishing path or provider is admitted by this record.
+    /// </summary>
+    internal static class Spec1225ReleaseArchiveEf
+    {
+        private const string Source = "Essentials/src/Workflows/Publishing/Releases/Persistence/";
+        private const string Tests = "Essentials/tests/Workflows/Publishing/Releases/Persistence/EntityFrameworkCore/";
+        private static string[] CorePackages() =>
+        [
+            "Microsoft.EntityFrameworkCore",
+            "Microsoft.EntityFrameworkCore.Abstractions",
+            "Microsoft.EntityFrameworkCore.Analyzers",
+            "Microsoft.EntityFrameworkCore.Relational"
+        ];
+
+        private static string[] ConsumerPackages() =>
+        [.. CorePackages(), "Microsoft.EntityFrameworkCore.Sqlite", "Microsoft.EntityFrameworkCore.Sqlite.Core"];
+
+        public static readonly IReadOnlyDictionary<string, string[]> ExpectedEfPackagesByProject =
+            new Dictionary<string, string[]>(StringComparer.Ordinal)
+            {
+                [Source + "Core/Elsa.Workflows.Publishing.Releases.Persistence.Core.csproj"] = [],
+                [Source + "EntityFrameworkCore/Elsa.Workflows.Publishing.Releases.Persistence.EntityFrameworkCore.csproj"] = CorePackages(),
+                [Tests + "Tests/Elsa.Workflows.Publishing.Releases.Persistence.EntityFrameworkCore.Tests.csproj"] = ConsumerPackages(),
+                [Tests + "RestartProbe/Elsa.Workflows.Publishing.Releases.Persistence.EntityFrameworkCore.RestartProbe.csproj"] = ConsumerPackages()
+            };
+
+        public static bool IsProjectPath(string relativePath) => ExpectedEfPackagesByProject.ContainsKey(relativePath);
     }
 
     /// <summary>Exact Decisions provider/test/tooling EF closure admitted with ADR0095.</summary>
