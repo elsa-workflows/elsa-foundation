@@ -108,6 +108,7 @@ public sealed class PartitionRuntime(string node, IMembership membership, int pa
         var held = scopes.Count(s => Owns(s) || Activating(s));
         foreach (var surplus in scopes.Where(Owns).Reverse().Take(held - share).ToList())
         {
+            cancellationToken.ThrowIfCancellationRequested();     // a process that goes away mid-round gives nothing more up
             await DeactivateAsync(surplus, cancellationToken);
             held--;
         }
