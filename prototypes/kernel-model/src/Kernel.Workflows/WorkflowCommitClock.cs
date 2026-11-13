@@ -1,3 +1,5 @@
+using Kernel.Durable;
+
 namespace Kernel.Workflows;
 
 /// <summary>The workflow owner captures terminality independently of an execution model's private state.</summary>

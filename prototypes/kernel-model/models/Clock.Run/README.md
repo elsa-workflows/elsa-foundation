@@ -14,7 +14,9 @@ The actor row optionally carries immutable clock facts. The store stamps request
 atomic apply point; the successful worker cache uses that same attested time. Same-turn requests share one fact.
 Resolving an absent fact creates nothing; models can release only model-owned facts. Workflow terminality has
 one separate owner fact, including an older model terminating opaque future private state with only the earlier
-clock opt-in. Repeated terminal controls preserve it. Scope/version identity is not solved by a clock reference.
+clock opt-in. Repeated terminal controls preserve it. Fenced direct-protocol batches must also refuse forged timestamps, altered retained facts and release of the
+workflow-owned terminal fact. Model-facing lookup is asserted after lost acknowledgement and cold takeover.
+Scope/version identity is not solved by a clock reference.
 
 Existing EF/Mongo implementations advertise no clock support and explicitly refuse clock-bearing writes before
 using codecs that would omit the new field. Their clock/storage/migration qualification remains open. Forwarding
@@ -30,7 +32,7 @@ dotnet prototypes/kernel-model/models/Clock.Run/bin/Release/net10.0/Kernel.Clock
 
 Bound each runner to60s; no retry, service, host, provider, Docker, cloud or old Azure job is implied. Isolated
 source mutations must demonstrate named failures for pre-commit stamping, dropped persisted facts, restamping
-and accepting an unsupported write. Preserve actual hashes, inventories, exits and failed/unrun stages.
+accepting an unsupported write, trusting forged/changed facts and failing model-facing resolution. Preserve actual hashes, inventories, exits and failed/unrun stages.
 
 This first cut does not yet qualify native terminal receipts, the retained T4 failure, metadata lookup against
 failed-start JSONnull, actual provider clocks, parent-notice counts, full statecharts, Studio or M0 adoption.
