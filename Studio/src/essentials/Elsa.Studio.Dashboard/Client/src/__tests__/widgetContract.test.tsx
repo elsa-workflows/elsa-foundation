@@ -29,9 +29,11 @@ describe("dashboard widget contract", () => {
   it("registers Home routes and core widgets through registerHomeWidget", () => {
     const api = stubApi();
     register(api);
-    expect(api.navigation.list().map(item => item.path)).toEqual(["/dashboard"]);
-    expect(api.navigation.list().map(item => item.label)).toEqual(["Home"]);
-    expect(api.routes.list().map(item => item.path)).toEqual(["/", "/dashboard", "/overview"]);
+    expect(api.navigation.list().map(item => item.path)).toEqual(["/dashboard", "/dashboards", "/questions"]);
+    expect(api.navigation.list().map(item => item.label)).toEqual(["Home", "Dashboards", "Questions"]);
+    expect(api.routes.list().map(item => item.path)).toEqual(["/", "/dashboard", "/overview", "/dashboards", "/dashboards/new", "/dashboards/:resourceId", "/questions", "/questions/new", "/questions/:resourceId"]);
+    expect(api.routes.list().filter(item => item.id.startsWith("saved-")).every(item =>
+      item.requiresBackend?.some(requirement => requirement.id === "elsa.api.studio-dashboard" && requirement.contractVersion === "1"))).toBe(true);
     expect(api.homeWidgets.list().map(item => item.id)).toEqual([
       homeWidgetIds.getStarted,
       homeWidgetIds.quickActions,

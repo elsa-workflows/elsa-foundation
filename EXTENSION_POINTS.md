@@ -266,3 +266,5 @@ not automatic constitution violations.
 - [Workflow inspection authorization](Essentials/src/Workflows/Runtime/Inspection/Core/EXTENSION_POINTS.md)
 
 - [Workflow Dashboard source](Essentials/src/Workflows/Dashboard/Queries/EXTENSION_POINTS.md)
+
+- [Studio Dashboard routes and Weaver contributions](Studio/src/essentials/Elsa.Studio.Dashboard/EXTENSION_POINTS.md)
