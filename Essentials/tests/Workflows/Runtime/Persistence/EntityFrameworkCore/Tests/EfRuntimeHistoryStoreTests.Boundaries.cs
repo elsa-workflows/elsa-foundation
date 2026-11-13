@@ -29,10 +29,10 @@ public sealed partial class EfRuntimeHistoryStoreTests
     [Theory]
     [InlineData("head")] [InlineData("page")] [InlineData("event")] [InlineData("event-details")]
     [InlineData("bookmark")] [InlineData("bookmark-details")] [InlineData("bookmarks")] [InlineData("occurrences")]
-    public async Task Missing_or_unavailable_results_also_retire_when_the_access_snapshot_is_replaced(string operation)
+    public async Task Missing_or_unavailable_results_also_retire_when_actual_access_policy_changes(string operation)
     {
         await using var db = await Database.Create(); // Native run exists but no history head yet.
-        var hook = new AfterHead(() => db.Access.Current = PersistenceAccessContext.Scoped(new("scope")));
+        var hook = new AfterHead(() => db.Access.Current = PersistenceAccessContext.PrivilegedScoped(new("scope"), new("access-retired")));
         await using var context = db.Open(hook);
         await Assert.ThrowsAsync<InvalidOperationException>(() => Invoke(db.Store(context), operation));
         Assert.True(hook.Fired);
