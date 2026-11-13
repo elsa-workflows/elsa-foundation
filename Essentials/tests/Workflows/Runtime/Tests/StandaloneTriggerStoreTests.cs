@@ -106,6 +106,7 @@ public sealed class StandaloneTriggerStoreTests
 
     [Theory]
     [InlineData("stale")]
+    [InlineData("revision")]
     [InlineData("foreign-association")]
     [InlineData("duplicate-id")]
     [InlineData("duplicate-target")]
@@ -124,7 +125,8 @@ public sealed class StandaloneTriggerStoreTests
         long expected = 1;
         switch (invalid)
         {
-            case "stale": expected = 0; break;
+            case "stale": expected = 0; replacement = Resource("http", revision: 1, name: "Replacement"); break;
+            case "revision": replacement = Resource("http", revision: 3, name: "Replacement"); break;
             case "foreign-association": subscriptions = [Subscription("replacement", "another-trigger")]; break;
             case "duplicate-id": subscriptions = [Subscription("duplicate", "http"), Subscription("duplicate", "http", "other")]; break;
             case "duplicate-target": subscriptions = [Subscription("one", "http"), Subscription("two", "http")]; break;
