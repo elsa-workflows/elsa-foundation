@@ -1306,8 +1306,8 @@ with the graph engine (section 26), so they differ from the table above:
 | `$SIM --seeds 200000` | 0 failed; 0 parked |
 | `$SIM --seeds 20000 --actions 1000` | 0 failed; 12 innocent parked |
 | `$SIM --native --seeds 20000 --actions 1000` | 0 failed; 14 parked; 386,774 matched; 850 reruns, all told |
-| `$SIM --mutations --seeds 20000`, `--native-mutations --seeds 20000` | The same table, seed for seed (8 native flaws, all caught) |
-| Store conformance in memory; EF on SQLite and PostgreSQL, both fences | 56 passed; 54 passed; 54 passed |
+| `$SIM --mutations --seeds 20000`, `--native-mutations --seeds 20000` | The same table, seed for seed (9 of 9 native flaws caught) |
+| Store conformance in memory; EF on SQLite and PostgreSQL, both fences | 56 passed; 54 passed; 54 passed; 0 required failed in each |
 | Native `smoke`, `cost sqlite`, `cost postgres` | All passed; the same rows |
 | EF `cost` on SQLite and PostgreSQL (`proxy=1`), both fences | The same commands, commits, counted and sent round trips |
 | `dotnet test models/Graph.Tests` | 41 passed |
