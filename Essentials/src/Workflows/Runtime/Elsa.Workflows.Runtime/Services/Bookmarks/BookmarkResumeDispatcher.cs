@@ -141,7 +141,7 @@ public sealed class BookmarkResumeDispatcher : IBookmarkResumeDispatcher
             receiptId = Guid.NewGuid().ToString("N");
             var logicalDelivery = source?.SourceOutboxItemId ?? (request.IdempotencyKey is { } key
                 ? RuntimeHistoryIdentity.CreateBinding([request.WorkflowExecutionId, key]) : receiptId);
-            cause = source is null ? request.HistoryCausation ?? new RuntimeHistoryCausation() :
+            cause = source is null ? request.HistoryCausation ?? new RuntimeHistoryCausation() : source.Intent.HistoryCausation ??
                 new RuntimeHistoryCausation(WorkflowExecutionId: source.Intent.WorkflowExecutionId, DeliveryId: source.SourceOutboxItemId);
             cause = cause with { DeliveryId = cause.DeliveryId ?? logicalDelivery };
             var receipt = RuntimeHistoryDeliveryObservations.Create(policy, request.WorkflowExecutionId, receiptId, "DeliveryReceived", receivedAt,

@@ -181,7 +181,7 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
         // A keyed start that already ran is answered before anything else is resolved: the existing execution is the
         // answer even if the workflow has since been unpublished, so a redelivery converges instead of failing (#2195).
         var keyed = KeyedWorkflowStartIdentity.TryGet(request);
-        if (keyed is not null && await FindKeyedStartAsync(request, keyed, cancellationToken, saved) is { } duplicate)
+        if (keyed is not null && await FindKeyedStartAsync(request, keyed, cancellationToken, saved?.Recipient) is { } duplicate)
         {
             if (saved is not null) _ = await ReadStimulusStartAsync(request, requiredScope, cancellationToken);
             return duplicate;
@@ -191,7 +191,7 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
             ?? throw new WorkflowExecutableNotFoundException(request.ArtifactId);
 
         var resolved = saved is not null
-            ? ResolveStimulusExecutable(saved, executable)
+            ? ResolveStimulusExecutable(saved.Recipient, executable)
             : request.StartAuthority?.Kind == WorkflowExecutableStartAuthorityKind.ModelWork
             ? await ResolveModelWorkAsync(request, executable, cancellationToken)
             : request.StartAuthority?.Kind == WorkflowExecutableStartAuthorityKind.RetainedDependency
@@ -227,7 +227,8 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
             requiredScope,
             _persistenceModeResolver?.Resolve(executable),
             dispatchOptions,
-            cancellationToken);
+            cancellationToken,
+            saved?.HistoryCausation);
     }
 
     private async ValueTask<WorkflowExecutionStartDispatchResult?> FindKeyedStartAsync(
@@ -273,7 +274,7 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
         return DuplicateStartResult(existing, keyed.EnvelopeId, existing.PinnedExecutable, existing.PinnedSource);
     }
 
-    private async ValueTask<StimulusStartRecipient> ReadStimulusStartAsync(WorkflowExecutionStartDispatchRequest request,
+    private async ValueTask<SavedStimulusStart> ReadStimulusStartAsync(WorkflowExecutionStartDispatchRequest request,
         WorkflowExecutableReferenceScope requiredScope, CancellationToken cancellationToken)
     {
         if (_stimulusDeliveryStore is null)
@@ -309,8 +310,10 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
             request.Variables.Count != 0 || request.Inputs.Count != 0 ||
             !WorkflowExecutionAuthoritySnapshot.Matches(request.Authority, request.RequestedBy, request.RequestedBy))
             throw AuthorityRejected("stimulus-delivery-context-mismatch", "The saved start cannot override its ordinary root scope or authority.");
-        return recipient;
+        return new(recipient, source.Intent.HistoryCausation);
     }
+
+    private sealed record SavedStimulusStart(StimulusStartRecipient Recipient, RuntimeHistoryCausation? HistoryCausation);
 
     private static bool SameStimulusInput(JsonElement? supplied, JsonElement? canonical) =>
         supplied.HasValue == canonical.HasValue && (!supplied.HasValue ||
@@ -495,7 +498,8 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
         WorkflowExecutableReferenceScope requiredScope,
         PersistenceMode? persistenceMode,
         WorkflowExecutionCommandDispatchOptions? dispatchOptions,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        RuntimeHistoryCausation? historyCausation = null)
     {
         var workflowExecutionId = request.WorkflowExecutionId ?? _idGenerator.NewWorkflowExecutionId();
         var requestedAt = _timeProvider.GetUtcNow();
@@ -521,11 +525,12 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
             testScope: request.TestScope,
             triggerMetadata: request.TriggerMetadata)
         {
+            HistoryCausation = historyCausation,
             HistoryCapturePolicy = history.Item1,
             HistoryCaptureEnabledAtAdmission = history.Item2
         });
         if (request.StartAuthority?.Kind == WorkflowExecutableStartAuthorityKind.StimulusDelivery)
-            ValidateSavedCommandRoundTrip(request, pinnedIdentity, pinnedSource, partition, payload);
+            ValidateSavedCommandRoundTrip(request, pinnedIdentity, pinnedSource, partition, payload, historyCausation);
 
         // A retained dispatch and a keyed start both name their command and envelope deterministically, so a repeated
         // delivery enqueues the same start work item and the queue keeps the first.
@@ -574,14 +579,15 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
     }
 
     private static void ValidateSavedCommandRoundTrip(WorkflowExecutionStartDispatchRequest request,
-        WorkflowExecutableIdentity identity, WorkflowExecutableSourceProvenance? source, WorkflowExecutionPartition partition, JsonElement payload)
+        WorkflowExecutableIdentity identity, WorkflowExecutableSourceProvenance? source, WorkflowExecutionPartition partition, JsonElement payload,
+        RuntimeHistoryCausation? historyCausation)
     {
         // Ordinary command wire is unchanged. Invalid UTF-16 in an internal capture must not silently
         // become a different binding/provenance when System.Text.Json replaces an unpaired surrogate.
         var restored = payload.Deserialize<WorkflowExecutionStartCommandPayload>()!;
         var expected = request.StartAuthority!.StimulusDelivery!;
         var actual = restored.StartAuthority?.StimulusDelivery;
-        if (!WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(restored.PinnedExecutable, identity) ||
+        if (restored.HistoryCausation != historyCausation || !WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(restored.PinnedExecutable, identity) ||
             restored.PinnedSource != source || restored.TriggerNodeId != request.TriggerNodeId ||
             !WorkflowExecutionAuthoritySnapshot.MetadataEquals(restored.TriggerMetadata, request.TriggerMetadata) ||
             restored.TenantId != request.TenantId || restored.Partition != partition ||

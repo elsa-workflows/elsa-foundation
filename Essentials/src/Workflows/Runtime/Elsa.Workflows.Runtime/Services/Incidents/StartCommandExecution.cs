@@ -12,6 +12,21 @@ namespace Elsa.Workflows.Runtime.Services.Incidents;
 /// </summary>
 internal static class StartCommandExecution
 {
+    /// <summary>Optional origin of an already eligible first-fault start; unreadable diagnostics cannot replace the primary failure.</summary>
+    internal static RuntimeHistoryCausation? ReadHistoryCausation(WorkflowExecutionCommandEnvelope? envelope, string workflowExecutionId)
+    {
+        if (envelope?.Command is not { Kind: WorkflowExecutionCommandKind.Start, Payload: { } element } || envelope.WorkflowExecutionId != workflowExecutionId)
+            return null;
+        try
+        {
+            var cause = element.Deserialize<WorkflowExecutionStartCommandPayload>()?.HistoryCausation;
+            return cause is not null && new[] { cause.HistoryEventId, cause.WorkflowExecutionId, cause.DeliveryId, cause.CommandId, cause.SchedulerWorkItemId }
+                .Any(value => value is not null && (string.IsNullOrWhiteSpace(value) || value.Length > 1024)) ? null : cause;
+        }
+        catch (Exception failure) when (failure is not (OperationCanceledException or OutOfMemoryException or StackOverflowException or AccessViolationException))
+        { return null; }
+    }
+
     /// <summary>
     /// The execution <paramref name="envelope"/>'s start command carries, as <see cref="WorkflowExecutionStatus.Running"/> at
     /// <paramref name="occurredAt"/>, or <see langword="null"/> when the envelope is not this execution's start.

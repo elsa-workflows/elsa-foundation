@@ -167,7 +167,7 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
                 WorkflowExecutionId: workItem.WorkflowExecutionId,
                 OccurredAt: occurredAt,
                 ActivityExecutionIds: payload.ActivityExecutionIds,
-                Metadata: checkpointMetadata),
+                Metadata: checkpointMetadata) { HistoryCausation = payload.HistoryCausation },
             StateChanges: new RuntimeCheckpointStateChangeSet(
                 workflowExecution: BuildWorkflowExecutionStateChange(workItem, payload, occurredAt, priorWorkflowState, executable, persistenceMode),
                 scheduler: null,

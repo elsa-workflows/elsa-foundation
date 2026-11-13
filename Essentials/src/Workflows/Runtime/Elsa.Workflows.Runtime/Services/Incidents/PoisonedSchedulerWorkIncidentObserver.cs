@@ -339,7 +339,8 @@ public sealed class PoisonedSchedulerWorkIncidentObserver : IWorkflowSchedulerDr
                 OccurredAt: occurredAt,
                 ActivityExecutionIds: checkpointActivityExecutionIds,
                 Metadata: metadata)
-            { HistoryStartsAtAdmission = unstartedExecution?.HistoryCaptureEnabledAtAdmission == true && RuntimeHistorySourceFacts.IsFinalProfile(unstartedExecution.HistoryCapturePolicy) ? true : null },
+            { HistoryCausation = unstartedExecution is null ? null : StartCommandExecution.ReadHistoryCausation(envelope, workflowExecutionId),
+              HistoryStartsAtAdmission = unstartedExecution?.HistoryCaptureEnabledAtAdmission == true && RuntimeHistorySourceFacts.IsFinalProfile(unstartedExecution.HistoryCapturePolicy) ? true : null },
             StateChanges: new RuntimeCheckpointStateChangeSet(
                 workflowExecution: unstartedExecution is null
                     ? null

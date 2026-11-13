@@ -339,6 +339,7 @@ public sealed class WorkflowStartSchedulerWorkHandler : IWorkflowSchedulerWorkHa
             dispatchNestingDepth: startPayload.DispatchNestingDepth,
             testScope: startPayload.TestScope)
         {
+            HistoryCausation = startPayload.HistoryCausation,
             ModelWorkOrigin = startPayload.StartAuthority?.ModelWork,
             HistoryCapturePolicy = startPayload.HistoryCapturePolicy,
             HistoryCaptureEnabledAtAdmission = startPayload.HistoryCaptureEnabledAtAdmission

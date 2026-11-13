@@ -126,11 +126,51 @@ public sealed class RuntimeHistoryFirstFaultTests
         Assert.Null(await f.Reader.FindHeadAsync("run"));
     }
 
+    [Theory]
+    [InlineData(false)] [InlineData(true)]
+    public async Task First_fault_owners_keep_known_start_origin_without_inventing_a_workflow_started_transition(bool poison)
+    {
+        using var f = new Fixture();
+        var origin = new RuntimeHistoryCausation("publication-event", "publisher", "source:send", "publisher-command", "publisher-work");
+        var envelope = Envelope(f.Policy, true, historyCausation: origin);
+        if (poison)
+        {
+            var store = f.Services.GetRequiredService<IWorkflowSchedulerPoisonStore>();
+            await store.RecordAsync(new RuntimeSchedulerPoisonRecord("run", "work", WorkflowExecutionCommandKind.RunSchedulerWork, "handler",
+                new RuntimeFaultInfo("System.InvalidOperationException", "controlled poison"), 1, RuntimeSchedulerPoisonDisposition.Poisoned, At, At, null));
+            var observer = new PoisonedSchedulerWorkIncidentObserver(store, f.Services.GetRequiredService<IIncidentStateStore>(),
+                f.Services.GetRequiredService<RuntimeCheckpointCommitter>(), f.Clock, activityExecutionStateStore: null, inspectionAccumulator: null,
+                activityExecutionInspectionStore: null, workflowExecutionStateStore: f.Executions, workflowDispatchStore: null);
+            await observer.OnDrainedAsync(envelope, new("run", At, At,
+                [new("work", "run", WorkflowExecutionCommandKind.RunSchedulerWork, RuntimeSchedulerWorkItemResultStatus.Faulted, "handler", At, At, "controlled poison")]));
+        }
+        else await f.Faulter.FaultIfCheckpointRuleViolatedAsync("run", null, new RuntimeCheckpointCommitValidationException("controlled refusal"), envelope);
+        var commit = Assert.Single(f.Writer.ListCommits()).Commit;
+        Assert.Equal(origin, commit.Checkpoint.HistoryCausation); Assert.True(commit.Checkpoint.HistoryStartsAtAdmission);
+        var page = await f.Reader.ReadPageAsync(new("run"));
+        Assert.Equal(origin, Assert.Single(page.Items, e => e.Name == "WorkflowFaulted").Causation);
+        Assert.DoesNotContain(page.Items, e => e.Name is "WorkflowStarted" or "ActivityStarted");
+    }
+
+    [Theory]
+    [InlineData(false)] [InlineData(true)]
+    public async Task Malformed_optional_start_diagnostics_cannot_replace_the_eligible_primary_fault(bool oversized)
+    {
+        using var f = new Fixture();
+        var cause = new RuntimeHistoryCausation(CommandId: oversized ? new string('x', 1025) : " ");
+        await f.Faulter.FaultIfCheckpointRuleViolatedAsync("run", null, new RuntimeCheckpointCommitValidationException("controlled primary"),
+            Envelope(f.Policy, true, historyCausation: cause));
+        var commit = Assert.Single(f.Writer.ListCommits()).Commit;
+        Assert.Null(commit.Checkpoint.HistoryCausation);
+        Assert.Equal(WorkflowExecutionStatus.Faulted, (await f.Executions.FindAsync("run"))!.Status);
+        Assert.Single((await f.Reader.ReadPageAsync(new("run"))).Items, e => e.Name == "WorkflowFaulted");
+    }
+
     private static WorkflowExecutionCommandEnvelope Envelope(RuntimeHistoryCapturePolicy? policy, bool? enabled,
-        string? parent = null, string execution = "run", bool malformed = false)
+        string? parent = null, string execution = "run", bool malformed = false, RuntimeHistoryCausation? historyCausation = null)
     {
         var payload = new WorkflowExecutionStartCommandPayload(Executable, Executable.ArtifactId, null, null, null, null,
-            parentWorkflowExecutionId: parent) { HistoryCapturePolicy = policy, HistoryCaptureEnabledAtAdmission = enabled };
+            parentWorkflowExecutionId: parent) { HistoryCausation = historyCausation, HistoryCapturePolicy = policy, HistoryCaptureEnabledAtAdmission = enabled };
         var command = new WorkflowExecutionCommand("command", execution, WorkflowExecutionCommandKind.Start, At,
             malformed ? JsonSerializer.SerializeToElement("unreadable") : JsonSerializer.SerializeToElement(payload), new Dictionary<string, string>());
         return new("envelope", execution, command, "idempotency", WorkflowExecutionCommandDeliveryMode.AtLeastOnce, At);
