@@ -4,6 +4,40 @@ import { planBpmnDocumentMove, planBpmnDocumentResize, projectBpmnDocumentCanvas
 import { documentCanvasOwner, documentCanvasScope } from "./bpmnDocumentCanvasFixture";
 
 function canvas() { return projectBpmnDocumentCanvas(documentCanvasOwner(), documentCanvasScope); }
+
+describe("retained unresolved routes and XML lexical flags", () => {
+  it("fences a host move when its missing boundary shape still owns a retained route", () => {
+    const owner = documentCanvasOwner(xml => xml.replace(/<bpmndi:BPMNShape id="BDI"[\s\S]*?<\/bpmndi:BPMNShape>/, "")
+      .replace('<bpmn:userTask id="O"/>', '<bpmn:userTask id="O"/><bpmn:sequenceFlow id="BF" sourceRef="B" targetRef="O"/>')
+      .replace('</bpmndi:BPMNPlane>', '<bpmndi:BPMNEdge id="BFDI" bpmnElement="BF"><di:waypoint x="200" y="180"/><di:waypoint x="600" y="440"/></bpmndi:BPMNEdge></bpmndi:BPMNPlane>'));
+    const before = JSON.stringify(owner), view = projectBpmnDocumentCanvas(owner, documentCanvasScope);
+    expect(view.unresolvedEdgeIds).toContain("BFDI");
+    const host = view.nodes.find(node => node.id === "TDI")!;
+    expect(() => planBpmnDocumentMove(view, new Map([[host.id, { x: host.position.x + 20, y: host.position.y }]]))).toThrow("missing endpoint DI");
+    expect(JSON.stringify(owner)).toBe(before);
+  });
+
+  it.each(["SubDI", "LaneADI", "PoolDI"])("fences enclosing %s moves when inner endpoint shapes are absent", id => {
+    const owner = documentCanvasOwner(xml => xml.replace(/<bpmndi:BPMNShape id="(?:IDI|IEDI)"[\s\S]*?<\/bpmndi:BPMNShape>/g, ""));
+    const before = JSON.stringify(owner), view = projectBpmnDocumentCanvas(owner, documentCanvasScope);
+    expect(view.unresolvedEdgeIds).toContain("IFDI");
+    const node = view.nodes.find(node => node.id === id)!;
+    expect(() => planBpmnDocumentMove(view, new Map([[id, { x: node.position.x + 20, y: node.position.y }]]))).toThrow("missing endpoint DI");
+    expect(planBpmnDocumentMove(view, new Map([[id, node.position]]))).toEqual([]);
+    const unrelated = view.nodes.find(node => node.id === "Pool2DI")!;
+    expect(() => planBpmnDocumentMove(view, new Map([[unrelated.id, { x: unrelated.position.x + 20, y: unrelated.position.y }]]))).not.toThrow();
+    expect(JSON.stringify(owner)).toBe(before);
+  });
+
+  it("reads whitespace-collapsed DI flags without hiding an expanded scope or rewriting source", () => {
+    const owner = documentCanvasOwner(xml => xml.replaceAll('isExpanded="true"', 'isExpanded=" true "')
+      .replace('isHorizontal="true"', 'isHorizontal=" 1 " isMarkerVisible=" false "'));
+    const before = JSON.stringify(owner), view = projectBpmnDocumentCanvas(owner, documentCanvasScope);
+    expect(view.scene.shapes.find(shape => shape.shapeId === "PoolDI")).toMatchObject({ isExpanded: true, isHorizontal: true, isMarkerVisible: false });
+    expect(view.nodes.find(node => node.id === "IDI")!.hidden).toBe(false);
+    expect(JSON.stringify(owner)).toBe(before);
+  });
+});
 function sourceElement(owner: ReturnType<typeof documentCanvasOwner>, id: string) { return readBpmnDocument(owner).byId.get(id)!; }
 function laneDependencyOwner(edit: (document: Document, byId: (id: string) => Element) => void) {
   return documentCanvasOwner(xml => {
