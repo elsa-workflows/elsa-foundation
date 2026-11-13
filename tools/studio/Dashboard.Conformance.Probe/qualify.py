@@ -210,10 +210,12 @@ class Probe:
         solution = ET.Element("Solution")
         for project in selected: ET.SubElement(solution, "Project", Path=project.relative_to(REPO).as_posix())
         ET.ElementTree(solution).write(producer / "Dashboard.Candidates.slnx", encoding="unicode")
-        properties = ["-p:Version=" + self.version, "-p:SourceRevisionId=" + self.source]
+        # Example projects stay outside publishing. The owned producer opts in for
+        # both build and pack so their version stamps describe the same inputs.
+        properties = ["-p:IsPackable=true", "-p:Version=" + self.version, "-p:SourceRevisionId=" + self.source]
         self.run("producer-build", [self.dotnet, "build", "Dashboard.Candidates.slnx", "-c", "Release", *properties], producer)
         for index, project in enumerate(selected):
-            self.run("producer-pack-" + str(index), [self.dotnet, "pack", str(project.relative_to(REPO)), "-c", "Release", "--no-build", "-p:IsPackable=true", *properties,
+            self.run("producer-pack-" + str(index), [self.dotnet, "pack", str(project.relative_to(REPO)), "-c", "Release", "--no-build", *properties,
                      "-o", str(self.feed)], producer)
         for archive in self.feed.glob("*.nupkg"):
             package, version = identity(archive)
