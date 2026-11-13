@@ -94,9 +94,9 @@ passes):
 | Exclusive | `b-exclusive`: `amount > 100`, else the default | the host's condition picks the flow |
 | Inclusive | `b-inclusive`: `express`, `insured`, else the default; inclusive join | one, two or the default flow; the join fires once on what was taken |
 | A service task as a job | every task above | `StartJob`, `job-finished` |
-| Interrupting boundary timer | `b-boundary`: a 300 ms timer on a service task | the timer first: the job is cancelled, the timeout path runs, the job's late result changes nothing; the job first: the timer is recalled |
+| Interrupting boundary timer | `b-boundary`: a timer on a service task (300 ms; 1 s in the smoke and cost runs, so a job that should win does not lose on a loaded machine) | the timer first: the job is cancelled, the timeout path runs, the job's late result changes nothing; the job first: the timer is recalled |
 | A message before its catch | `b-early`: a service task, then a catch on `order` | published before the instance starts, the catch still gets it (kept event) |
-| Call activity | `b-call`: a child `b-child` with a service task, and a 300 ms boundary timer on the call | the child's variables come back; the timer first: the child is terminated, its job cancelled |
+| Call activity | `b-call`: a child `b-child` with a service task, and a boundary timer on the call | the child's variables come back; the timer first: the child is terminated, its job cancelled |
 | Loop | `b-loop`: exclusive merge, fork, two service tasks, join, `count < 3` back | three rounds; the join fires once per round, each arrival once |
 
 The model's own smoke cases (`models/Bpmn.Run/Smoke.cs`, each found by review): a message catch in a loop takes one
@@ -110,21 +110,21 @@ Run (`cost sqlite`, `cost postgres` against `postgres:17`), counted as NATIVE.md
 trips are command executions plus COMMITs (Npgsql sends BEGIN with the first command); SQLite counts are calls into
 the engine (BEGIN, each command, COMMIT), with the commands alone in brackets. Each case runs once, started on its
 owner and handed over in memory; jobs run in the owner's process; what comes from outside (a published message) is
-counted, with the poll that finds it. One commit is one transaction; SQLite gives the same counts with the fence in
+counted, with the poll that finds it. The boundary timers are 1 s here. One commit is one transaction; SQLite gives the same counts with the fence in
 the batch or on its own.
 
 | Case | Commits | PostgreSQL round trips, fence on its own / in the batch | SQLite calls (commands) | State bytes per commit (max) |
 |---|---:|---:|---:|---:|
-| Parallel: fork, two jobs, join | 2 | 6 / 4 | 15 (11) | 655 (1,044) |
-| Exclusive: a condition, one job | 2 | 6 / 4 | 13 (9) | 471 (666) |
-| Inclusive: two of three flows, two jobs, join | 2 | 6 / 4 | 15 (11) | 729 (1,138) |
-| Boundary timer, the job finishes first | 2 | 6 / 4 | 15 (11) | 683 (1,099) |
-| Boundary timer fires first and cancels the job | 3 | 9 / 6 | 23 (17) | 681 (1,099) |
-| Message published before its catch (kept event), the publish included | 5 | 20 / 15 | 36 (26) | 564 (706) |
-| Message published after the catch subscribed, the publish included | 5 | 20 / 15 | 36 (26) | 564 (706) |
-| Call activity: a child with one job | 4 | 12 / 8 | 31 (23) | 600 (1,140) |
-| Call activity: the boundary timer terminates the child | 5 | 16 / 11 | 38 (28) | 692 (1,140) |
-| Loop: three rounds of fork, two jobs, join | 4 | 12 / 8 | 35 (27) | 888 (1,097) |
+| Parallel: fork, two jobs, join | 2 | 6 / 4 | 15 (11) | 667 (1,053) |
+| Exclusive: two conditions, one job | 2 | 6 / 4 | 13 (9) | 483 (675) |
+| Inclusive: two of three flows, two jobs, join | 2 | 6 / 4 | 15 (11) | 752 (1,147) |
+| Boundary timer, the job finishes first | 2 | 6 / 4 | 15 (11) | 697 (1,108) |
+| Boundary timer fires first and cancels the job | 3 | 9 / 6 | 23 (17) | 694 (1,108) |
+| Message published before its catch (kept event), the publish included | 5 | 20 / 15 | 36 (26) | 582 (725) |
+| Message published after the catch subscribed, the publish included | 5 | 20 / 15 | 36 (26) | 582 (725) |
+| Call activity: a child with one job | 4 | 12 / 8 | 31 (23) | 615 (1,149) |
+| Call activity: the boundary timer terminates the child | 5 | 16 / 11 | 38 (28) | 701 (1,149) |
+| Loop: three rounds of fork, two jobs, join | 4 | 12 / 8 | 35 (27) | 908 (1,117) |
 
 Where the commits go (run, from the traced commands):
 
@@ -143,12 +143,50 @@ Where the commits go (run, from the traced commands):
   table, inserts the delivery and commits only to consume its ticket (friction F-N8); the commit that marks the polled
   delivery seen (finding F3); the turn that ends. The owner needs a poll for a delivery its own meet inserted
   (friction F-B2). The publish is two commands (insert the event, read the subscriptions).
-- **State.** 470 to 890 bytes per commit, 1,140 at most here: the interpreter's token state (its record shape with
+- **State.** 480 to 910 bytes per commit, 1,150 at most here: the interpreter's token state (its record shape with
   every field named), the variables, and about 100 bytes per unit in flight in the ledger. The diagnostics are not
   kept; the interpreter would keep up to 200 of them.
 
 Today's Elsa has no BPMN runtime to compare with. The nearest native row (NATIVE.md section 5: fork-join-resume,
 Balanced, 15 / 11 round trips, 4 commits) waits for events, not jobs.
+
+## 5. The simulation
+
+BPMN instances join the mix with `--bpmn` (40 % of outside actions): the seven processes of section 3 and `b-fault`
+(a fork whose one branch fails with no boundary), with random inputs, started from outside (retried) or handed to an
+owner in memory; messages for `b-early`'s catch, now and then twice, before or while it waits; terminates from outside,
+to root instances. The kernel's faults are the simulation's, unchanged (crashes, takeovers, lost answers, zombies,
+pauses, clock jumps, suspend and resume). Jobs complete when the simulation says, so boundary timers race them on the
+simulation's clock and both orders occur.
+
+The design record's G1 to G5 are written for graph paths; for tokens they read as below, checked against the committed
+rows after every action and at the end (`sim/BpmnSim.cs`):
+
+| Check | The design record's words | How |
+|---|---|---|
+| G1 | Path conservation: every path created is completed, discarded as dead, or still live | Token conservation: the interpreter's work in flight (`ActiveWork`), the host's ledger and the kernel's work (row jobs, pending timer messages, subscriptions, child rows or their starts) are one set, both ways |
+| G2 | A join fires at most once per round | No arrival token is consumed by two firings, no firing is journalled twice; at the end the joins fired equal a run without faults (the loop's join three times) |
+| G3 | An All join fires once every inbound flow of its round has arrived | A parallel join fires on exactly one arrival per inbound flow; an inclusive join on distinct inbound flows |
+| G4 | A graph completes exactly when it has no live path | A Finished row has no live token, no ledger entry and no interpreter work; at idle every instance started has ended as it should (Finished; Faulted for `b-fault`; Cancelled if terminated) |
+| G5 | No path outlives its cancelled scope | No cancelled token keeps a stopped handle; a row the model ended keeps no job, subscription or timer; a terminated row keeps no job or subscription; a cancelled child was stopped by its parent's call or its parent was terminated |
+| G6 | (added) | A finished root's variables equal a run alone without faults (the timer-first run when a boundary timer won) |
+
+An instance whose job the kernel parked (on trial when too many owners were lost, FINDINGS section 7, rule 3) faults
+with that job's error: the kernel's doing, so I14 counts it as an innocent bystander, and G1, G4 and G5 still check how
+the host ended it (found by `--bpmn --native`, seed 6706 of 1,000 actions).
+
+Results (run, at the final head):
+
+GATES_TABLE
+
+The host broken on purpose (`--bpmn-mutations --seeds 20000`, each flaw alone; a catch by another check than the one
+named counts as a miss):
+
+MUTATIONS_TABLE
+
+No host flaw makes a join fire twice (G2) or on the wrong flows (G3) without breaking the interpreter, which the spike
+runs unchanged; those two checks guard the interpreter and the journal. Without `--bpmn` the simulation's output is
+identical to main's, times aside, at both sizes, with `--native`, and in both mutation runs (run: `diff` of the logs).
 
 ## 6. The execution-model contract
 
@@ -178,8 +216,9 @@ Frictions, none of them a contract change; whether any becomes one is the owner'
 - **F-B5. A terminate from outside leaves the model's state as it was.** The workflow instance handles
   `kernel.terminate` without the model: the jobs are cancelled, the waits deleted, the children terminated, and the row
   is Cancelled, but its state still shows tokens waiting at their tasks and units in the ledger, and a pending timer's
-  message still arrives and is dropped (one poll and one commit, as F-N4 counted for native). A viewer reading the
-  tokens would show a cancelled instance as waiting. Traced; the simulation's G5 checks what the kernel cancels.
+  message still arrives and is dropped (a poll and a commit, as F-N4 reasoned for native). A viewer reading the
+  tokens would show a cancelled instance as waiting. Traced; the cost is reasoned; the simulation's G5 checks what the
+  kernel cancels.
 - **F-B6. Signals to the parent are the model's own messages.** An escalation from a called child goes to the parent
   as `bpmn.signal`; the kernel has no notion of a child signalling its parent without ending. It needs none: a model
   message from child to parent keeps the order with the child's `child-finished` (one sender, one target). Run.
@@ -230,3 +269,17 @@ Recommendation: record the engines as siblings in idea, not in rules; keep the t
 copies that point at each other, as `FlowchartGraph` already does; if anything is shared, make it a set of
 conformance scenarios both engines run (an inclusive join in a loop, surplus arrivals), which shares no code.
 Confidence: high that no worthwhile shared runtime core exists.
+
+## 8. Not done
+
+- Reading BPMN XML: the processes are built in code with the library's builder; `Bpmn.Interchange` is not used.
+- FEEL: conditions are the host's tiny language. Elsa needs an expression story for BPMN either way.
+- Multi-instance, compensation, transactions, event subprocesses, the event-based gateway, signal and message start
+  events, timer start events: the interpreter covers them, the spike does not (a reviewer ran an event-based gateway
+  both ways on this host, and it worked; not in the mix). Escalation from a root is the interpreter's no-op.
+- A job's BPMN error code: a service that fails names no code, so only catch-all error boundaries catch it.
+- MongoDB, SQL Server and MySQL; the concurrent stress test with BPMN instances; the memory measurement.
+- What the viewer shows of a BPMN instance (its tokens, from the journal's `j` entries and the state), and the state
+  of an instance terminated from outside (F-B5).
+- Migrating running instances to another definition version (the design record's open question 1).
+- Trimming the set of taken events (F-B1), and the upstream issue for the inclusive join of section 7.

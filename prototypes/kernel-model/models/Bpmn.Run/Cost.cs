@@ -26,7 +26,7 @@ public static class Cost
         await ef.CreateAsync(1);
         var store = new Sizing(ef);
         var held = new ConcurrentDictionary<string, TaskCompletionSource>(StringComparer.Ordinal);
-        var owner = new Owner("A", 0, store, BpmnCases.Registry(), options: new BpmnOptions
+        var owner = new Owner("A", 0, store, BpmnCases.Registry(deadline: 1000), options: new BpmnOptions
         {
             // A held service waits until the measurement releases it, or its job is cancelled.
             Gate = async (job, cancel) =>
