@@ -138,6 +138,7 @@ export function buildExecutableActivityGraph(
       ).map(input => ({ referenceKey: input.inputKey, value: { expressionType: input.expressionType ?? "Literal", value: input.value } })),
       outputs: [],
       executableOutcomes: node.outcomes,
+      executableAllowsMultipleOutcomes: node.allowsMultipleOutcomes === true,
       structure: synthesizeStructure(node, catalogItem, adapt, nodeIdsByExecutableId)
     };
   };

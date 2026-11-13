@@ -1293,6 +1293,8 @@ function readValueOutcomePorts(activity: ActivityNode, catalog?: ActivityCatalog
  * from its structure payload (Switch keeps its mode there).
  */
 export function allowsMultipleOutcomes(activity: ActivityNode, catalogItem?: ActivityCatalogItem): boolean {
+  // Executable inspection supplies the pinned flag; never recompute it from today's catalog.
+  if (Array.isArray(activity.executableOutcomes)) return activity.executableAllowsMultipleOutcomes === true;
   const rule = readOutcomesFacet(catalogItem)?.multipleOutcomes;
   if (!isRecord(rule)) return false;
   if (rule.kind === "always") return true;

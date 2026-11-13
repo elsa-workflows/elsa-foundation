@@ -87,7 +87,10 @@ public sealed record WorkflowExecutableNodeView(
     IReadOnlyCollection<WorkflowExecutableConnectionView> Connections,
     IReadOnlyCollection<WorkflowExecutableOutputCaptureView>? OutputCaptures = null,
     WorkflowExecutableBpmnStructureView? BpmnStructure = null,
-    IReadOnlyCollection<string>? Outcomes = null);
+    IReadOnlyCollection<string>? Outcomes = null,
+    // Pinned with Outcomes: whether one completion may select several (spec 1208 FR-014); the node is then an
+    // inclusive fork. Omitted (null) when the node allows one.
+    bool? AllowsMultipleOutcomes = null);
 
 /// <summary>Allowlisted semantic projection for supported persisted BPMN executable structures.</summary>
 public sealed record WorkflowExecutableBpmnStructureView(

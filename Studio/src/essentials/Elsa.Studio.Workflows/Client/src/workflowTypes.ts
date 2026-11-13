@@ -767,6 +767,8 @@ export interface WorkflowExecutableNode {
   outputCaptures?: WorkflowExecutableOutputCapture[] | null;
   /** Outcomes pinned in the executable, independent of the current authoring catalog. */
   outcomes?: string[] | null;
+  /** Pinned with the outcomes: one completion may select several (spec 1208 FR-014). */
+  allowsMultipleOutcomes?: boolean | null;
   bpmnStructure?: WorkflowExecutableBpmnStructure | null;
 }
 
