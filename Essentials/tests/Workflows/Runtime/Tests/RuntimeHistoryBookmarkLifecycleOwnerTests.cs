@@ -87,7 +87,7 @@ public sealed class RuntimeHistoryBookmarkLifecycleOwnerTests
         var claimed = (await f.Activities.FindAsync("run", "activity"))!;
         var attempt = Assert.Single(claimed.Attempts!);
         var ended = new ActivityAttempt(attempt.AttemptId, "activity", attempt.Ordinal, attempt.Reason, attempt.StartedAt,
-            f.Clock.GetUtcNow(), transitionKind: ActivityTransitionKind.Suspend);
+            f.Clock.GetUtcNow(), transitionKind: Elsa.Workflows.Runtime.Core.Models.ActivityTransitionKind.Suspend);
         var suspended = claimed with { Status = ActivityExecutionStatus.Suspended, BookmarkIds = [], Attempts = [ended],
             Metadata = new Dictionary<string, string>() };
         var create = f.CreateWork("second");
@@ -202,7 +202,7 @@ public sealed class RuntimeHistoryBookmarkLifecycleOwnerTests
         using var f = await Fixture.CreateAsync();
         var state = Activity() with
         {
-            PrivateState = new("activity", 1, ValueEnvelope.Inline(new("test/state", 1), JsonSerializer.SerializeToElement("private"),
+            PrivateState = new("activity", 1, ValueEnvelope.Inline(new("test/state"), JsonSerializer.SerializeToElement("private"),
                 ValueProtectionPolicy.InstanceInline), "initial-attempt", At),
             TriggerRegistrations = [Registration("first"), Registration("delayed")]
         };
@@ -218,7 +218,7 @@ public sealed class RuntimeHistoryBookmarkLifecycleOwnerTests
         Assert.Equal(ActivityExecutionStatus.Running, (await f.Activities.FindAsync("run", "activity"))!.Status);
     }
 
-    private static ActivityTriggerRegistration Registration(string id) => new(id, "activity", "resume", new("test/task", 1),
+    private static ActivityTriggerRegistration Registration(string id) => new(id, "activity", "resume", new("test/task"),
         "task", "hash", ActivityTriggerDeduplicationPolicy.Once);
 
     private static ActivityExecutionState Activity() => new(new("activity", "run", "node", "authored", "test/activity", "1"),
