@@ -30,6 +30,7 @@ afterEach(async () => {
   for (const name of ["data-theme", "data-theme-mode", "data-theme-appearance", "data-theme-layout", "data-nav-mode", "data-sidebar-color"]) document.documentElement.removeAttribute(name);
 });
 
+const notifications = { notify: vi.fn((_input: { level: string; title: string; message?: string }) => ({ id: "test", update() {}, dismiss() {} })), track: <T,>(work: Promise<T>) => work };
 describe("theme management with an empty selectable default", () => {
   it("links theme views and modes while preserving an unsaved name", async () => {
     const custom = { ...cloneThemeDefinition(builtInThemeDefinitions[0]), id: "managed-theme", name: "Managed Theme", source: "custom", enabled: true, published: true };
@@ -93,7 +94,7 @@ describe("theme management with an empty selectable default", () => {
     const wire = () => ({ themes, themesMode: "DirectoryOnly", directoryThemeIds: [], defaultThemeId: "", assets: [] });
     const remove = vi.fn(async () => { themes = []; return wire(); });
     const context = { http: { getJson: async () => wire(), deleteJson: remove } } as unknown as StudioEndpointContext;
-    const api = { host: context, dialogs: { confirm: async () => true } } as unknown as ElsaStudioModuleApi;
+    const api = { host: context, notifications, dialogs: { confirm: async () => true } } as unknown as ElsaStudioModuleApi;
     await update(() => root.render(<ThemeProvider storeContext={context}><ThemeBuilderPage api={api} /></ThemeProvider>));
     const customButton = Array.from(container.querySelectorAll<HTMLButtonElement>(".theme-builder-list button")).find(button => button.textContent?.includes("Managed Theme"));
     expect(customButton).toBeTruthy();
@@ -107,13 +108,14 @@ describe("theme management with an empty selectable default", () => {
     expect(container.querySelector(".theme-builder-detail h3")?.textContent).toBe("Linen");
     expect(container.querySelectorAll(".theme-builder-list button.active")).toHaveLength(1);
     expect(container.textContent).not.toContain("Loading Theme Store definitions.");
-    expect(container.textContent).toContain("Theme deleted.");
+    expect(notifications.notify).toHaveBeenCalledWith({ level: "success", title: "Theme deleted." });
+    expect(container.textContent).not.toContain("Theme deleted.");
   });
 
   it("reports an unsaved custom theme to workspace probes and closes but not to ordinary navigation", async () => {
     const custom = { ...cloneThemeDefinition(builtInThemeDefinitions[0]), id: "managed-theme", name: "Managed Theme", source: "custom", enabled: true, published: true };
     const context = { http: { getJson: async () => ({ themes: [custom], themesMode: "DirectoryOnly", directoryThemeIds: [], defaultThemeId: "", assets: [] }) } } as unknown as StudioEndpointContext;
-    const api = { host: context, dialogs: { confirm: async () => true } } as unknown as ElsaStudioModuleApi;
+    const api = { host: context, notifications, dialogs: { confirm: async () => true } } as unknown as ElsaStudioModuleApi;
     await update(() => root.render(<ThemeProvider storeContext={context}><ThemeBuilderPage api={api} /></ThemeProvider>));
     const customButton = Array.from(container.querySelectorAll<HTMLButtonElement>(".theme-builder-list button")).find(button => button.textContent?.includes("Managed Theme"));
     await update(() => customButton!.click());
@@ -133,7 +135,7 @@ describe("theme management with an empty selectable default", () => {
     let release = () => {};
     const putJson = vi.fn((_url: string, theme: unknown) => new Promise(resolve => { release = () => resolve({ ...wire, themes: [theme] }); }));
     const context = { http: { getJson: async () => wire, putJson } } as unknown as StudioEndpointContext;
-    const api = { host: context, dialogs: { confirm: async () => true } } as unknown as ElsaStudioModuleApi;
+    const api = { host: context, notifications, dialogs: { confirm: async () => true } } as unknown as ElsaStudioModuleApi;
     await update(() => root.render(<ThemeProvider storeContext={context}><ThemeBuilderPage api={api} /></ThemeProvider>));
     const duplicate = Array.from(container.querySelectorAll<HTMLButtonElement>(".theme-builder-actions button")).find(button => button.textContent?.trim() === "Duplicate")!;
     await update(() => duplicate.click());
@@ -142,7 +144,7 @@ describe("theme management with an empty selectable default", () => {
     expect(requestStudioNavigation("/theme-builder", "/", "close")).toBe(false);
 
     await update(() => release());
-    expect(container.textContent).toContain("Theme duplicated");
+    expect(notifications.notify).toHaveBeenCalledWith(expect.objectContaining({ level: "success", title: expect.stringContaining("Theme duplicated") }));
     expect(requestStudioNavigation("/theme-builder", "/theme-builder", "probe")).toBe(true);
   });
 
@@ -178,7 +180,7 @@ describe("theme management with an empty selectable default", () => {
     let calls = 0;
     const custom = { ...cloneThemeDefinition(builtInThemeDefinitions[0]), id: "managed-theme", name: "Managed Theme", source: "custom", enabled: true, published: true };
     const context = { http: { getJson: async () => { calls += 1; if (calls === 1) throw new Error("Theme Store unavailable"); return { themes: [custom], themesMode: "DirectoryOnly", directoryThemeIds: [], defaultThemeId: "", assets: [] }; } } } as unknown as StudioEndpointContext;
-    const api = { host: context, dialogs: { confirm: async () => true } } as unknown as ElsaStudioModuleApi;
+    const api = { host: context, notifications, dialogs: { confirm: async () => true } } as unknown as ElsaStudioModuleApi;
     const page = (mode: "visible" | "hidden") => <ThemeProvider storeContext={context}><React.Activity mode={mode}><ThemeBuilderPage api={api} /></React.Activity></ThemeProvider>;
     await update(() => root.render(page("visible")));
     const failedLoads = calls;

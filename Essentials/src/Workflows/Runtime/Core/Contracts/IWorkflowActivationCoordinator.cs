@@ -20,6 +20,23 @@ public interface IWorkflowActivationCoordinator
         CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Activates exact stored native/model material through the same slot and serving-projection switch.
+    /// Legacy coordinators refuse instead of treating model material as a native workflow.
+    /// </summary>
+    ValueTask<WorkflowActivationResult> ActivateMaterialAsync(
+        WorkflowMaterialActivationCommand command,
+        CancellationToken cancellationToken = default) =>
+        cancellationToken.IsCancellationRequested ? ValueTask.FromCanceled<WorkflowActivationResult>(cancellationToken) :
+            ValueTask.FromException<WorkflowActivationResult>(new NotSupportedException("This activation coordinator does not support material-neutral activation."));
+
+    /// <summary>Retracts a logical definition's native/model slot through the ordinary protected transition.</summary>
+    ValueTask<WorkflowActivationResult> DeactivateMaterialAsync(
+        WorkflowMaterialDeactivationCommand command,
+        CancellationToken cancellationToken = default) =>
+        cancellationToken.IsCancellationRequested ? ValueTask.FromCanceled<WorkflowActivationResult>(cancellationToken) :
+            ValueTask.FromException<WorkflowActivationResult>(new NotSupportedException("This activation coordinator does not support material-neutral deactivation."));
+
+    /// <summary>
     /// Makes sure the activation the slot names serves, and writes nothing when it does. A slot a version before #2230 left
     /// on its way to serving is repaired (<see cref="IWorkflowActivationSwitch.TryRepairAsync"/>) and the trigger
     /// observers are told, as of an activation, without failing on them. Any other slot whose activation does not serve is

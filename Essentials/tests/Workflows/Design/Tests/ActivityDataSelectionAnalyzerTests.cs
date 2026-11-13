@@ -474,14 +474,18 @@ public sealed partial class ActivityDataSelectionAnalyzerTests
     public async Task Focused_literal_member_names_are_not_split_and_the_response_has_one_global_budget()
     {
         var shape = new TestShapeSource();
-        using var provider = Provider(services => services.AddSingleton<IActivitySerializedShapeSource>(shape));
+        using var provider = Provider(services =>
+        {
+            MemberReadsOn(services);
+            services.AddSingleton<IActivitySerializedShapeSource>(shape);
+        });
         var document = Document(Sequence(Node("producer"), Node("consumer"))) with { Inputs = [Definition("first"), Definition("second")] };
         var query = new ActivityDataSelectionQuery { ShapeLimits = new(4, 3) };
         var result = await Analyzer(provider).AnalyzeAsync(document, new("consumer", "CustomerId"), query);
         Assert.Equal(3, result.Sources.Sum(source => Count(source.Shape)));
         Assert.Contains(result.Sources, source => source.Shape.State == ActivitySerializedShapeState.Truncated);
         var focused = await Analyzer(provider).AnalyzeAsync(document, new("consumer", "CustomerId"), new() {
-            Source = Result("producer"), MemberPath = ["a.b", ""], ShapeLimits = new(2, 2)
+            Source = ScopeFree("producer"), MemberPath = ["a.b", ""], ShapeLimits = new(2, 2)
         });
         Assert.Empty(focused.Findings);
         Assert.Equal(new[] { "a.b", "" }, shape.LastPath);

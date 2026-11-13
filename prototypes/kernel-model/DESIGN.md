@@ -162,7 +162,7 @@ run background jobs, read kept events, publish) is a message in that commit. A n
 ## Persistence
 
 The kernel depends on one storage contract, `IKernelStore` (`src/Kernel.Durable/Store.cs`), stated by what each operation
-guarantees. A provider is correct when it passes the **store conformance suite** (`conformance/`): 58 semantic cases (57 before round 4),
+guarantees. A provider is correct when it passes the **store conformance suite** (`conformance/`): 59 semantic cases (57 before round 4),
 a concurrent stress test with injected connection failures and the provider's own connection killer, and the cost runs.
 
 | Operation | Guarantee |
@@ -261,9 +261,13 @@ terminate (every wait of the instance) and a delete (its journal rows); then COM
 - **Redelivery:** `ITurn.Redelivered(message)` is true when its polled row already carried a seen or trial marker.
   This is an observed-history hint: false does not prove that another owner did not execute it (F-N6, #4362).
 - **Poison:** suspects (rows another owner had) are tried apart, alone in the process (F2, F11), one at a time or in
-  halving groups; a take that finds a death adds one attempt to what was on trial; at the threshold the message is
-  parked with its instance. A trial starts only when its turn can run at once (F13); a suspect of a withheld instance
+  halving groups; a take that finds a death adds one attempt to what was on trial; at the threshold the instance is
+  parked and the deliveries consumed. A trial starts only when its turn can run at once (F13); a suspect of a withheld instance
   is shelved (F12). A turn that throws parks its instance at once.
+- **Park (owner decision, 13 November):** its fenced commit faults the instance, consumes its deliveries and removes
+  every active subscription, while retaining the last committed state, fault details and configured history. The
+  parent still receives the faulted-child notice. Later arrivals are dropped. Suspension preserves subscriptions;
+  a future explicit recovery operation must restore waits, with kept-event semantics needed for events in the gap.
 - **Hold:** a turn hands a message back; it keeps its place and comes with the next turn.
 - **Edge cases:** a message to a missing target without a start spec is dropped and journalled; to an ended instance,
   consumed and dropped.
@@ -422,8 +426,9 @@ Native workflows on PostgreSQL (NATIVE.md's runs, merged kernel): Balanced write
 Ephemeral 0, Balanced 3 / 2; fork-join with a direct resume 11 / 8 (15 / 11 on the native branch: no meet ticket);
 resume at an HttpEndpoint, both requests, 12 / 9 (16 / 12).
 
-- The model's activities do nothing and its history is one journal row per commit. A projector round costs one
-  statement per instance in its page (17 round trips for about a dozen instances); not optimized.
+- The model's activities do nothing and its history is one journal row per commit. A projector round is set-based
+  (decision 8, FINDINGS 25.7): 3 round trips on PostgreSQL (17 before, one statement per instance), 7 engine calls on
+  SQLite (18); SQL Server and MySQL still write one statement per view.
 - MySQL's driver sends four more round trips per transaction than PostgreSQL's (E10).
 
 ## Trade-offs
@@ -486,10 +491,11 @@ numbers; round 4's graph engine (section 26) ran again what it touched, with its
   graph check (FINDINGS section 26). G4 has no mutation of its own: that it bites is not shown.
 - **Graph engine:** main's Flowchart conformance corpus and join tests pass against the extracted engine (41), with
   main's two determinism byte-locks byte-identical.
-- **Store conformance suite:** 58 cases since round 4, 56 of them required (57 and 53 before); the required cases pass
+- **Store conformance suite:** 59 cases since round 4, 57 of them required (57 and 53 before); the required cases pass
   on in-memory, SQLite, PostgreSQL, SQL Server, MySQL and MongoDB, with either fence, a case skipped where a store
   cannot refuse a row; the reference cases differ where the contract is silent (F8). Round 4 made the two
-  subscription cases of M6 required (idempotent), and every store passes them (FINDINGS 25.2).
+  subscription cases of M6 required (idempotent), and every store passes them (FINDINGS 25.2). The projector chunk
+  case is recorded in FINDINGS 25.7; its original per-engine results predate the subscription change.
 - **Stress:** 40 s and 5,000 outside messages with killed sessions, stalls and takeovers, including round 3's commands
   and starts on events: every property holds on PostgreSQL, SQL Server (RCSI, checked fence), MySQL, MongoDB and
   SQLite. With the fence broken on purpose every engine fails (26 to 611 violations).

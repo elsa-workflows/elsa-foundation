@@ -1,0 +1,4 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><RootNamespace>Kernel.Etl</RootNamespace></PropertyGroup>
+  <ItemGroup><ProjectReference Include="../../src/Kernel.Workflows/Kernel.Workflows.csproj" /></ItemGroup>
+</Project>
