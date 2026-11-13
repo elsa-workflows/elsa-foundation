@@ -1,3 +1,4 @@
+import { StudioField } from "@elsa-workflows/studio-ui";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   StudioHttpError,
@@ -171,10 +172,10 @@ export function ActivityDefinitionForkDialog({
         <div><dt>Source provider</dt><dd><code>{recommendation.providerKey}</code> · schema {recommendation.providerSchemaVersion}</dd></div>
       </dl>
       <p className="ad-dialog-note">Forking always starts from the one recommended active version. Studio does not offer an explicit version override.</p>
-      <label className="ad-dialog-field"><span>Category</span><input value={category} maxLength={200} onChange={event => setCategory(event.target.value)} /></label>
-      <label className="ad-dialog-field"><span>Display name</span><input value={displayName} maxLength={200} onChange={event => setDisplayName(event.target.value)} /></label>
-      <label className="ad-dialog-field"><span>Description <small>Optional</small></span><textarea value={description} maxLength={2000} onChange={event => setDescription(event.target.value)} /></label>
-      <label className="ad-dialog-field"><span>Design-owned provider</span><select value={target} onChange={event => setTarget(event.target.value)}><option value="" disabled>Select a supported provider</option>{choices.map(item => <option key={choiceValue(item)} value={choiceValue(item)}>{item.capability.displayName} · schema {item.schemaVersion}</option>)}</select></label>
+      <StudioField className="ad-dialog-field" label={<><span>Category</span></>}><input value={category} maxLength={200} onChange={event => setCategory(event.target.value)} /></StudioField>
+      <StudioField className="ad-dialog-field" label={<><span>Display name</span></>}><input value={displayName} maxLength={200} onChange={event => setDisplayName(event.target.value)} /></StudioField>
+      <StudioField className="ad-dialog-field" label={<><span>Description </span></>}><textarea value={description} maxLength={2000} onChange={event => setDescription(event.target.value)} /><small>Optional</small></StudioField>
+      <StudioField className="ad-dialog-field" label={<><span>Design-owned provider</span></>}><select value={target} onChange={event => setTarget(event.target.value)}><option value="" disabled>Select a supported provider</option>{choices.map(item => <option key={choiceValue(item)} value={choiceValue(item)}>{item.capability.displayName} · schema {item.schemaVersion}</option>)}</select></StudioField>
       {capabilitiesQuery.isPending ? <div className="ad-inline-status" role="status">Loading supported provider conversions…</div> : null}
       {capabilitiesQuery.isError || choices.length === 0 ? <div className="ad-inline-error" role="alert">No authorable provider conversion is advertised for the recommended source schema. Nothing can be forked.</div> : null}
       {choice && !choice.contribution ? <div className="ad-inline-error" role="alert">The exact Studio editor for this target provider schema is unavailable. Forking is disabled.</div> : null}

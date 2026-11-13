@@ -26,7 +26,7 @@ describe("Decisions workspace tab titles", () => {
     api.backend.http.postJson.mockResolvedValue({ ...asset, name: "Purchase approval" } as never);
     await vi.waitFor(() => expect(host.querySelector('input[aria-label="Input 1 name"]')).not.toBeNull());
     expect(setTitle).toHaveBeenLastCalledWith({ title: "New decision", detail: undefined });
-    const name = Array.from(host.querySelectorAll<HTMLInputElement>("input")).find(input => input.parentElement?.textContent === "Name")!;
+    const name = Array.from(host.querySelectorAll<HTMLInputElement>("input")).find(input => input.labels?.[0]?.textContent === "Name")!;
     type(name, "Purchase approval"); expect(setTitle).toHaveBeenLastCalledWith({ title: "New decision", detail: undefined });
     click(button(host, "Save decision"));
     await vi.waitFor(() => expect(navigate).toHaveBeenCalledWith("/decisions?decision=approval"));
@@ -38,7 +38,7 @@ describe("Decisions workspace tab titles", () => {
     const { host, setTitle } = mountInTab({ api: stubApi(), assetId: asset.id });
     await vi.waitFor(() => expect(setTitle).toHaveBeenLastCalledWith({ title: "Approval", detail: "Draft" }));
     expect(setTitle).not.toHaveBeenCalledWith(expect.objectContaining({ title: "Decisions" }));
-    const name = Array.from(host.querySelectorAll<HTMLInputElement>("input")).find(input => input.parentElement?.textContent === "Name")!;
+    const name = Array.from(host.querySelectorAll<HTMLInputElement>("input")).find(input => input.labels?.[0]?.textContent === "Name")!;
     type(name, "Renamed approval"); expect(setTitle).toHaveBeenLastCalledWith({ title: "Approval", detail: "Draft" });
   });
   it("leaves the tab unnamed while a decision opened from the list in the same tab is still loading", async () => {

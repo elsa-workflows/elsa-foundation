@@ -84,46 +84,46 @@
       },
       "Nuplane": {
         "type": "Direct",
-        "requested": "[0.0.12, )",
-        "resolved": "0.0.12",
-        "contentHash": "NEwfkfvss8zB0yiNM9yITjdw0p7xACYe9LdAImAN5EJLqZ0oHgXj8GNzY1K+4HXZMwRi4LcgIidbDpvjYJExdg==",
+        "requested": "[0.0.13, )",
+        "resolved": "0.0.13",
+        "contentHash": "G8tJJPIyNYTI+RUUtzN8zT3KAysJU3LAf61Og6W0xjTRt/2Til9cWDRRNCCKzq+/NF59h8zaOkVkyTfmPvuIqQ==",
         "dependencies": {
           "Microsoft.Extensions.Resilience": "10.1.0",
           "NuGet.Frameworks": "6.13.1",
           "NuGet.Protocol": "6.13.1",
           "NuGet.Resolver": "6.13.1",
           "NuGet.Versioning": "6.13.1",
-          "Nuplane.Abstractions": "0.0.12",
+          "Nuplane.Abstractions": "0.0.13",
           "Polly.Extensions": "8.6.5"
         }
       },
       "Nuplane.Admin": {
         "type": "Direct",
-        "requested": "[0.0.12, )",
-        "resolved": "0.0.12",
-        "contentHash": "Bqgq7FqqvfQpGRX53ihyU5lQxnRm9uIGvFHG5y6AS8Kx0+stsSccqYEskHaaNTS+DBC3LvN1DlGtAfLtBWfsqQ==",
+        "requested": "[0.0.13, )",
+        "resolved": "0.0.13",
+        "contentHash": "mP+/UQ9+/ycLZ4uWEteJWK5u/3Vf6gDaVZlYu1260C21wMe1Jx0toqxgCni73UZgijn33xqN+5qjJ7bPqMiY8w==",
         "dependencies": {
-          "Nuplane": "0.0.12"
+          "Nuplane": "0.0.13"
         }
       },
       "Nuplane.Loading": {
         "type": "Direct",
-        "requested": "[0.0.12, )",
-        "resolved": "0.0.12",
-        "contentHash": "yZIC1sixa81ndOM+UCeMoypdAGgv0WWNJ7iK7azuFdWwlyePN/MzdGPghWqHiTOecIkouQL39uqTycOtU+9C5g==",
+        "requested": "[0.0.13, )",
+        "resolved": "0.0.13",
+        "contentHash": "bR3r96hHBBc4HN1MXw7GJOCu+XIaK+jKeiSJoA9enw4PGF/TA7LNNvbVEok2xcy9HUukKVbatpta86sw+TWBxg==",
         "dependencies": {
-          "Nuplane": "0.0.12",
-          "Nuplane.Abstractions": "0.0.12",
-          "Nuplane.Loading.Abstractions": "0.0.12"
+          "Nuplane": "0.0.13",
+          "Nuplane.Abstractions": "0.0.13",
+          "Nuplane.Loading.Abstractions": "0.0.13"
         }
       },
       "Nuplane.Sources.Directory": {
         "type": "Direct",
-        "requested": "[0.0.12, )",
-        "resolved": "0.0.12",
-        "contentHash": "GQaVIxnp6PsouCqx597KWu12gZVNozDgJT6RdxleG6OV2ad31IKV5pA9LFGthWYXiCtjFiEKSXbYbs9HcnH7hw==",
+        "requested": "[0.0.13, )",
+        "resolved": "0.0.13",
+        "contentHash": "rcrDjEkhEQafWSWnjLKkd/iavTdr2PJ7XY1AXecYNfSFiCYXs8ncEOAXLjTzXGm6D2hKvaGn45gvGjAJdQONbA==",
         "dependencies": {
-          "Nuplane": "0.0.12"
+          "Nuplane": "0.0.13"
         }
       },
       "BouncyCastle.Cryptography": {
@@ -401,8 +401,8 @@
       },
       "Nuplane.Abstractions": {
         "type": "Transitive",
-        "resolved": "0.0.12",
-        "contentHash": "8D2uJaKL1v+0GPt38HafW7+JVvvb8gyb8TNBFPcU6k45u+i5X61hWNWuUs0ROCgBAfDy0Gsr0tm8uq+hQH0t5A=="
+        "resolved": "0.0.13",
+        "contentHash": "3QaKweEyDncmytmpGKT9I0zYtpRg2ZSgzzU092yo/iVeon3d7q9LBW7J79yB7kDzQMxEriP8pl1VfrmkezQxTw=="
       },
       "Polly.Core": {
         "type": "Transitive",
@@ -532,7 +532,7 @@
           "Elsa.Cluster.Core": "[4.0.0-dev, )",
           "Elsa.Cluster.InProcess": "[4.0.0-dev, )",
           "Elsa.Persistence.Schema": "[4.0.0-dev, )",
-          "Nuplane.Loading.Abstractions": "[0.0.12, )"
+          "Nuplane.Loading.Abstractions": "[0.0.13, )"
         }
       },
       "elsa.events.core": {
@@ -705,11 +705,11 @@
       },
       "Nuplane.Loading.Abstractions": {
         "type": "CentralTransitive",
-        "requested": "[0.0.12, )",
-        "resolved": "0.0.12",
-        "contentHash": "uCLhTsG1kPWU5fNJBEstCJuT9D0p2r0oKaFGJpauvvrmtMBeIsvE7ATqdJZONpOLOANOJ14qqRIwDqmd+cSKog==",
+        "requested": "[0.0.13, )",
+        "resolved": "0.0.13",
+        "contentHash": "HC2V7HnZXL6p2SHkn7ronHT8qZhgiW9HTkULJ+Y8TfCZjdev9aD43ST44Gws7Dh2/sG5SVCiilOJx+LtR6ZGRw==",
         "dependencies": {
-          "Nuplane.Abstractions": "0.0.12"
+          "Nuplane.Abstractions": "0.0.13"
         }
       },
       "SQLitePCLRaw.bundle_e_sqlite3": {
