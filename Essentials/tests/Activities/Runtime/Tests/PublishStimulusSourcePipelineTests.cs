@@ -72,6 +72,18 @@ public sealed class PublishStimulusSourcePipelineTests
         Assert.Equal(pending.Intent.HistoryCausation, (await harness.Store.FindDurableAsync(pending.OutboxItemId))!.Intent.HistoryCausation);
     }
 
+    [Fact]
+    public async Task Saved_resume_refuses_an_origin_that_its_existing_command_wire_cannot_preserve()
+    {
+        await using var harness = new Harness(); await harness.SeedMaterial(); await harness.Wait("existing", "wait");
+        var pending = await harness.Commit(historyOrigin: true, opaqueOrigin: true);
+        var source = new PostCommitDeliveryContext(Assert.Single(await harness.Store.ClaimAsync(new("owner", Now, TimeSpan.FromMinutes(1), 1))), Scope);
+        var refusal = await Assert.ThrowsAsync<StimulusDeliveryBoundaryException>(() => harness.Router.RouteSourceAsync(source).AsTask());
+        Assert.False(refusal.IsUnavailable); Assert.Empty(harness.Actors.Attempts); Assert.Empty(harness.Actors.Accepted);
+        Assert.Equal(pending.Intent.HistoryCausation, (await harness.Store.FindDurableAsync(pending.OutboxItemId))!.Intent.HistoryCausation);
+        Assert.NotNull(await harness.Bookmarks.FindAsync("existing", "wait"));
+    }
+
     [Theory]
     [InlineData(false, false)] [InlineData(false, true)]
     [InlineData(true, false)] [InlineData(true, true)]

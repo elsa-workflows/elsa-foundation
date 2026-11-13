@@ -133,18 +133,7 @@ public sealed class RuntimeHistoryFirstFaultTests
         using var f = new Fixture();
         var origin = new RuntimeHistoryCausation("publication-event", "publisher", "source:send", "publisher-command", "publisher-work");
         var envelope = Envelope(f.Policy, true, historyCausation: origin);
-        if (poison)
-        {
-            var store = f.Services.GetRequiredService<IWorkflowSchedulerPoisonStore>();
-            await store.RecordAsync(new RuntimeSchedulerPoisonRecord("run", "work", WorkflowExecutionCommandKind.RunSchedulerWork, "handler",
-                new RuntimeFaultInfo("System.InvalidOperationException", "controlled poison"), 1, RuntimeSchedulerPoisonDisposition.Poisoned, At, At, null));
-            var observer = new PoisonedSchedulerWorkIncidentObserver(store, f.Services.GetRequiredService<IIncidentStateStore>(),
-                f.Services.GetRequiredService<RuntimeCheckpointCommitter>(), f.Clock, activityExecutionStateStore: null, inspectionAccumulator: null,
-                activityExecutionInspectionStore: null, workflowExecutionStateStore: f.Executions, workflowDispatchStore: null);
-            await observer.OnDrainedAsync(envelope, new("run", At, At,
-                [new("work", "run", WorkflowExecutionCommandKind.RunSchedulerWork, RuntimeSchedulerWorkItemResultStatus.Faulted, "handler", At, At, "controlled poison")]));
-        }
-        else await f.Faulter.FaultIfCheckpointRuleViolatedAsync("run", null, new RuntimeCheckpointCommitValidationException("controlled refusal"), envelope);
+        await f.FaultAsync(envelope, poison);
         var commit = Assert.Single(f.Writer.ListCommits()).Commit;
         Assert.Equal(origin, commit.Checkpoint.HistoryCausation); Assert.True(commit.Checkpoint.HistoryStartsAtAdmission);
         var page = await f.Reader.ReadPageAsync(new("run"));
@@ -166,13 +155,54 @@ public sealed class RuntimeHistoryFirstFaultTests
         Assert.Single((await f.Reader.ReadPageAsync(new("run"))).Items, e => e.Name == "WorkflowFaulted");
     }
 
+    [Theory]
+    [InlineData(false, "42")] [InlineData(true, "42")]
+    [InlineData(false, "\"unreadable\"")] [InlineData(true, "\"unreadable\"")]
+    [InlineData(false, "[]")] [InlineData(true, "[]")]
+    [InlineData(false, "{\"CommandId\":42}")] [InlineData(true, "{\"CommandId\":42}")]
+    [InlineData(false, "{\"HistoryEventId\":[]}")] [InlineData(true, "{\"HistoryEventId\":[]}")]
+    [InlineData(false, "{\"SchedulerWorkItemId\":{}}")] [InlineData(true, "{\"SchedulerWorkItemId\":{}}")]
+    public async Task Wrong_shaped_optional_cause_cannot_suppress_either_eligible_first_fault_owner(bool poison, string rawCause)
+    {
+        using var f = new Fixture();
+        await f.FaultAsync(Envelope(f.Policy, true, rawCause: rawCause), poison);
+        var commit = Assert.Single(f.Writer.ListCommits()).Commit;
+        Assert.Null(commit.Checkpoint.HistoryCausation); Assert.True(commit.Checkpoint.HistoryStartsAtAdmission);
+        Assert.Equal(WorkflowExecutionStatus.Faulted, (await f.Executions.FindAsync("run"))!.Status);
+        var page = await f.Reader.ReadPageAsync(new("run"));
+        Assert.Equal(new[] { "WorkflowFaulted", "IncidentRecorded" }, page.Items.Select(item => item.Name));
+        var cause = Assert.Single(page.Items, item => item.Name == "WorkflowFaulted").Causation;
+        Assert.Null(cause?.HistoryEventId); Assert.Null(cause?.WorkflowExecutionId); Assert.Null(cause?.DeliveryId);
+        Assert.DoesNotContain(page.Items, item => item.Name is "WorkflowStarted" or "ActivityStarted");
+    }
+
+    [Theory]
+    [InlineData("PinnedExecutable")] [InlineData("Authority")] [InlineData("HistoryCapturePolicy")]
+    public void Ignoring_optional_diagnostics_does_not_make_malformed_native_start_fields_eligible(string nativeField)
+    {
+        using var f = new Fixture();
+        Exception? unreadable = null;
+        var envelope = Envelope(f.Policy, true, rawCause: "42", malformedNativeField: nativeField);
+        Assert.Null(StartCommandExecution.Read(envelope, "run", At, failure => unreadable = failure));
+        Assert.NotNull(unreadable);
+    }
+
     private static WorkflowExecutionCommandEnvelope Envelope(RuntimeHistoryCapturePolicy? policy, bool? enabled,
-        string? parent = null, string execution = "run", bool malformed = false, RuntimeHistoryCausation? historyCausation = null)
+        string? parent = null, string execution = "run", bool malformed = false, RuntimeHistoryCausation? historyCausation = null,
+        string? rawCause = null, string? malformedNativeField = null)
     {
         var payload = new WorkflowExecutionStartCommandPayload(Executable, Executable.ArtifactId, null, null, null, null,
             parentWorkflowExecutionId: parent) { HistoryCausation = historyCausation, HistoryCapturePolicy = policy, HistoryCaptureEnabledAtAdmission = enabled };
-        var command = new WorkflowExecutionCommand("command", execution, WorkflowExecutionCommandKind.Start, At,
-            malformed ? JsonSerializer.SerializeToElement("unreadable") : JsonSerializer.SerializeToElement(payload), new Dictionary<string, string>());
+        var element = malformed ? JsonSerializer.SerializeToElement("unreadable") : JsonSerializer.SerializeToElement(payload);
+        if (rawCause is not null)
+        {
+            var properties = element.EnumerateObject().ToDictionary(property => property.Name, property => property.Value.Clone());
+            using var raw = JsonDocument.Parse(rawCause);
+            properties[nameof(WorkflowExecutionStartCommandPayload.HistoryCausation)] = raw.RootElement.Clone();
+            if (malformedNativeField is not null) properties[malformedNativeField] = JsonSerializer.SerializeToElement(42);
+            element = JsonSerializer.SerializeToElement(properties);
+        }
+        var command = new WorkflowExecutionCommand("command", execution, WorkflowExecutionCommandKind.Start, At, element, new Dictionary<string, string>());
         return new("envelope", execution, command, "idempotency", WorkflowExecutionCommandDeliveryMode.AtLeastOnce, At);
     }
     private sealed class Fixture : IDisposable
@@ -186,6 +216,22 @@ public sealed class RuntimeHistoryFirstFaultTests
         internal IRuntimeHistoryStore Reader => Services.GetRequiredService<IRuntimeHistoryStore>();
         internal IWorkflowExecutionStateStore Executions => Services.GetRequiredService<IWorkflowExecutionStateStore>();
         internal CheckpointRuleViolationWorkflowFaulter Faulter { get; }
+        internal async Task FaultAsync(WorkflowExecutionCommandEnvelope envelope, bool poison)
+        {
+            if (!poison)
+            {
+                await Faulter.FaultIfCheckpointRuleViolatedAsync("run", null, new RuntimeCheckpointCommitValidationException("controlled refusal"), envelope);
+                return;
+            }
+            var store = Services.GetRequiredService<IWorkflowSchedulerPoisonStore>();
+            await store.RecordAsync(new RuntimeSchedulerPoisonRecord("run", "work", WorkflowExecutionCommandKind.RunSchedulerWork, "handler",
+                new RuntimeFaultInfo("System.InvalidOperationException", "controlled poison"), 1, RuntimeSchedulerPoisonDisposition.Poisoned, At, At, null));
+            var observer = new PoisonedSchedulerWorkIncidentObserver(store, Services.GetRequiredService<IIncidentStateStore>(),
+                Services.GetRequiredService<RuntimeCheckpointCommitter>(), Clock, activityExecutionStateStore: null, inspectionAccumulator: null,
+                activityExecutionInspectionStore: null, workflowExecutionStateStore: Executions, workflowDispatchStore: null);
+            await observer.OnDrainedAsync(envelope, new("run", At, At,
+                [new("work", "run", WorkflowExecutionCommandKind.RunSchedulerWork, RuntimeSchedulerWorkItemResultStatus.Faulted, "handler", At, At, "controlled poison")]));
+        }
         internal Fixture()
         {
             var services = new ServiceCollection();
