@@ -395,13 +395,21 @@ export async function liveAcmeDashboardJourney(page: Page, info: TestInfo, captu
       }
       return oracle;
     });
-    await monitor.native("native-current-field-revocation", async () => {
+    await monitor.native("native-reauthenticated-field-revocation", async () => {
       await grantProfile(backend, "dashboard-live-no-category");
-      const response = reader.waitForResponse(item => item.request().method() === "POST" && item.url().endsWith(`/questions/${saved!.id}/execute`));
-      await reader.getByRole("button", { name: "Refresh results", exact: true }).click();
-      expect((await response).ok(), "Revoking the required business field must refuse current execution").toBe(false);
+      // Native IAM grants are carried by a signed principal. As in the native journey,
+      // observe changed grants through a new normal authenticated reader session.
+      await readerContext!.clearCookies(); await signInDashboardReader(reader, info);
+      await reader.goto(`/questions/${saved!.id}`);
+      await expect(reader.getByText(/^Parts of this definition are withheld under your current access\./)).toBeVisible();
+      await expect(reader.locator(".named-query-controls")).toHaveCount(0);
+      const exchange = await reader.request.get(`${backend.base}/_elsa/identity/token`); expect(exchange.ok()).toBe(true);
+      const { accessToken } = await exchange.json() as { accessToken: string }; expect(typeof accessToken).toBe("string");
+      const denied = await reader.request.post(`${backend.base}/_elsa/studio/questions/${saved!.id}/execute`, { data: {}, headers: { ...tag(saved!.revision), Authorization: `Bearer ${accessToken}` } });
+      expect(denied.status(), "The newly authenticated principal lacks the required business field").toBe(403);
       await expect(reader.getByRole("region", { name: "Exact result values", exact: true })).toHaveCount(0);
       await capture(reader, info, "live-reader-no-category");
+      await attachDashboardJson(info, "live-authority.json", { readerReauthenticated: true, executeStatus: denied.status(), scope: "current grants in a new normal Identity principal; outstanding token invalidation is not qualified" });
       await grantProfile(backend, "dashboard-live-reader");
     });
     await savedAppearances(page, info, capture, backend, monitor, saved);
