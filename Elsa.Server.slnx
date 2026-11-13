@@ -38,8 +38,10 @@
     <Project Path="Extensions/Weaver/src/Workflows/Elsa.Weaver.Workflows/Elsa.Weaver.Workflows.csproj" />
     <Project Path="Extensions/Weaver/src/Workflows/Runtime/Elsa.Weaver.Workflows.Runtime.csproj" />
   </Folder>
-  <Folder Name="/Extensions/Weaver/tests/">
+  <Folder Name="/Extensions/Weaver/tests/Dashboard/">
     <Project Path="Extensions/Weaver/tests/Dashboard/Tests/Elsa.Weaver.Dashboard.Tests.csproj" />
+  </Folder>
+  <Folder Name="/Extensions/Weaver/tests/">
     <Project Path="Extensions/Weaver/tests/Tests/Elsa.Weaver.Tests.csproj" />
   </Folder>
   <Folder Name="/Extensions/Weaver/tests/Persistence/">
