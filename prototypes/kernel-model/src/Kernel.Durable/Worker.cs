@@ -590,17 +590,14 @@ public sealed class Worker : IScopeActivation, ITurnServices
 
     private void StartJob(Delivery ticket)
     {
-        Slot? creationSlot = null;
-        if (ticket.Message.TargetCreation is not null)
+        if (!_slots.TryGetValue(ticket.Message.Target.Id, out var loadedSlot) || !loadedSlot.Loaded) return;
+        if (loadedSlot.Row is null || CreationProtocol.TargetError(loadedSlot.Row, ticket.Message) is not null)
         {
-            if (!_slots.TryGetValue(ticket.Message.Target.Id, out creationSlot) || !creationSlot.Loaded) return;
-            if (CreationProtocol.TargetError(creationSlot.Row, ticket.Message) is not null)
-            {
-                ticket.Cancel?.Cancel();
-                ticket.Ticket = false; ticket.Key = null;
-                return; // the normal fenced dispatch consumes/refuses this stale target
-            }
+            ticket.Cancel?.Cancel();
+            ticket.Ticket = false; ticket.Key = null;
+            return; // the normal fenced dispatch consumes/refuses this stale target
         }
+        Slot? creationSlot = ticket.Message.TargetCreation is not null ? loadedSlot : null;
         // Callers finish their current collection operation before standing down, so a refused ticket is never stranded.
         if (!CanStartWork || ticket.Cancel is not null || ticket.Taken || Awaits(ticket) || Blocked || (_trial.Count > 0 && !_trial.Contains(ticket))) return;
         ticket.Cancel = new CancellationTokenSource();
