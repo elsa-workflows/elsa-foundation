@@ -84,6 +84,26 @@
         "requested": "[10.0.12, )",
         "resolved": "10.0.12",
         "contentHash": "dYfCLR52UA+3DL7C4I/pvSaRPkNqxrUAQmbFL2u0zvYKKzqgrFCJl08Df+F1aYc8leu9JvpC9bsURUdpExcBXQ=="
+      },
+      "elsa.pipelines.core": {
+        "type": "Project",
+        "dependencies": {
+          "Microsoft.Extensions.DependencyInjection.Abstractions": "[10.0.12, )"
+        }
+      },
+      "elsa.events.core": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Pipelines.Core": "[4.0.0-dev, )",
+          "Microsoft.Extensions.DependencyInjection.Abstractions": "[10.0.12, )"
+        }
+      },
+      "elsa.workflows.publishing.releases.capture.core": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Events.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Publishing.Releases.Core": "[4.0.0-dev, )"
+        }
       }
     }
   }

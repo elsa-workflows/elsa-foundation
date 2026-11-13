@@ -1,6 +1,9 @@
 using System.Collections;
 using Elsa.Persistence.Core;
+using Elsa.Events;
+using Elsa.Events.Core.Contracts;
 using Elsa.Workflows.Publishing.Releases.Core;
+using Elsa.Workflows.Publishing.Releases.Capture.Core;
 using Elsa.Workflows.Publishing.Releases.Persistence.Core;
 using Elsa.Workflows.Publishing.Releases.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Publishing.Releases.Persistence.EntityFrameworkCore.Tests;
@@ -156,7 +159,7 @@ public sealed class ReleaseCaptureContributorTests
             "empty-enumeration" => [new Contributor("module", _ => [], new WrongCountClaims())],
             _ => Enumerable.Range(0, 33).Select(index => (IReleaseSourceMemberContributor)new Contributor("module-" + index, _ => [])).ToArray()
         };
-        Assert.Throws<InvalidOperationException>(() => new ReleaseCaptureContributors(values));
+        Assert.Throws<InvalidOperationException>(() => new CaptureReleaseSourceMembers(values));
     }
 
     [Theory]
@@ -195,6 +198,36 @@ public sealed class ReleaseCaptureContributorTests
         {
             release.TrySetResult();
             if (callback is not null) { try { await callback; } catch { } }
+            try { await operation; } catch { }
+        }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Concurrent_duplicate_callback_cannot_replace_the_inflight_unknown_commit(bool detached)
+    {
+        var release = Signal(); var duplicated = Signal(); var actual = new ReleaseArchiveCommitOutcomeUnknownException(new IOException("controlled unknown commit"));
+        Task? first = null; var commits = 0;
+        var operation = RetainedCaptureCallback.ExecuteAsync<object>(async (capture, token) =>
+        {
+            first = capture(new object(), token).AsTask();
+            var duplicate = await Assert.ThrowsAsync<ReleaseCaptureException>(() => capture(new object(), token).AsTask());
+            Assert.Equal("capture_source_callback_invalid", duplicate.Code); duplicated.SetResult();
+            if (!detached) { try { await first; } catch (ReleaseArchiveCommitOutcomeUnknownException) { } }
+        }, async (_, _) => { commits++; await release.Task; throw actual; }, default).AsTask();
+        try
+        {
+            await duplicated.Task;
+            Assert.False(operation.IsCompleted); Assert.Equal(1, commits);
+            release.SetResult();
+            Assert.Same(actual, await Assert.ThrowsAsync<ReleaseArchiveCommitOutcomeUnknownException>(() => operation));
+            Assert.Equal(1, commits);
+        }
+        finally
+        {
+            release.TrySetResult();
+            if (first is not null) { try { await first; } catch { } }
             try { await operation; } catch { }
         }
     }
@@ -286,6 +319,8 @@ public sealed class ReleaseCaptureContributorTests
         {
             Directory.CreateDirectory(_directory); var services = new ServiceCollection();
             new WorkflowReleaseTransportFeature().ConfigureServices(services); new WorkflowReleaseVerificationFeature().ConfigureServices(services);
+            new EventsFeature().ConfigureServices(services); new WorkflowReleaseCaptureFeature().ConfigureServices(services);
+            services.AddScoped<IEnumerable<IReleaseSourceMemberContributor>>(_ => Contributors);
             services.AddSingleton<IReleaseArtifactSemanticVerifier>(Verifier);
             services.AddSingleton<IPersistenceAccessContextAccessor>(new MutableAccess(PersistenceAccessContext.Scoped(new PersistenceScope(ArchiveFixture.DefaultScope.Partition))));
             services.AddDbContext<ConsumerContext>(options => options.UseSqlite("Data Source=" + Path.Combine(_directory, "archive.db") + ";Pooling=False"));
@@ -294,7 +329,7 @@ public sealed class ReleaseCaptureContributorTests
             Writer = new(Scope.ServiceProvider.GetRequiredService<IReleaseArchiveWriter>(), () => Source.Held && Contributors.SelectMany(value => value.Frames).All(frame => frame.Held));
         }
         public ReleaseCaptureService Service() => new(Scope.ServiceProvider.GetRequiredService<IReleaseBundleBuilder>(), Scope.ServiceProvider.GetRequiredService<IReleaseBundleCodec>(),
-            Writer, Scope.ServiceProvider.GetRequiredService<IReleaseArchiveStoreCapabilities>(), [Source], Contributors);
+            Writer, Scope.ServiceProvider.GetRequiredService<IReleaseArchiveStoreCapabilities>(), [Source], Scope.ServiceProvider.GetRequiredService<IInlineEventPublisher>());
         public static async Task<Fixture> CreateAsync()
         {
             var fixture = new Fixture(); try { await fixture.Scope.ServiceProvider.GetRequiredService<ConsumerContext>().Database.EnsureCreatedAsync(); return fixture; }

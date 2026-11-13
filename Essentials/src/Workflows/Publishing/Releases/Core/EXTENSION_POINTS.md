@@ -7,4 +7,4 @@ The authoritative default, exact-key strategy and replacement obligations are in
 
 `IReleaseBundleBuilder` constructs a manifest from actual owner facts; it grants no durable creation or target authority.
 `IReleaseCaptureService`, exact-kind `IReleaseCaptureSource` strategies and `IReleaseSourceMemberContributor` fan-in are described by the optional
-[source capture catalog](../Capture/EXTENSION_POINTS.md). Their presence in Core installs no source adapter or persistence.
+[source capture catalog](../Capture/EXTENSION_POINTS.md). Those contracts live in the optional Capture.Core package; the lightweight target Core keeps no source or Events dependency.

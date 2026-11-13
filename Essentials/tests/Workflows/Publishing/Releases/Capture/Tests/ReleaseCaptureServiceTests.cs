@@ -1,5 +1,8 @@
 using Elsa.Persistence.Core;
+using Elsa.Events;
+using Elsa.Events.Core.Contracts;
 using Elsa.Workflows.Publishing.Releases.Core;
+using Elsa.Workflows.Publishing.Releases.Capture.Core;
 using Elsa.Workflows.Publishing.Releases.Persistence.Core;
 using Elsa.Workflows.Publishing.Releases.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Publishing.Releases.Persistence.EntityFrameworkCore.Tests;
@@ -177,6 +180,37 @@ public sealed class ReleaseCaptureServiceTests
         Assert.False(fixture.Source.Held); Assert.False(second.Held);
     }
 
+    [Fact]
+    public async Task Composed_event_middleware_observes_retention_through_the_actual_archive_commit()
+    {
+        using var fixture = await CaptureFixture.CreateAsync(); var observed = new List<string>();
+        fixture.Provider.GetRequiredService<IEventPipeline>().Setup(pipeline => pipeline.Use(next => async context =>
+        {
+            Assert.IsType<ReleaseSourceMembersCapturing>(context.Event); Assert.True(fixture.Source.Held);
+            observed.Add("before"); await next(context);
+            Assert.True(fixture.Source.Held); Assert.Equal(1, fixture.Writer.Calls); Assert.True(fixture.Writer.CommittedWhileHeld);
+            observed.Add("after");
+        }));
+        Assert.Equal(ReleaseCaptureOutcome.Created, (await fixture.Service.CreateAsync("event-pipeline", Selection())).Outcome);
+        Assert.Equal(["before", "after"], observed); Assert.False(fixture.Source.Held);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Event_short_circuit_or_middleware_failure_cannot_acknowledge_capture(bool throwing)
+    {
+        using var fixture = await CaptureFixture.CreateAsync(); var actual = new IOException("controlled middleware failure");
+        fixture.Provider.GetRequiredService<IEventPipeline>().Setup(pipeline => pipeline.Use(next => context =>
+            throwing ? ValueTask.FromException(actual) : ValueTask.CompletedTask));
+        if (throwing)
+            Assert.Same(actual, await Assert.ThrowsAsync<IOException>(() => fixture.Service.CreateAsync("blocked-event", Selection()).AsTask()));
+        else
+            Assert.Equal("capture_source_callback_invalid", (await Assert.ThrowsAsync<ReleaseCaptureException>(() => fixture.Service.CreateAsync("blocked-event", Selection()).AsTask())).Code);
+        Assert.Equal(0, fixture.Writer.Calls); Assert.False(fixture.Source.Held);
+        Assert.Null(await fixture.Scope.ServiceProvider.GetRequiredService<IReleaseArchiveReader>().FindAsync("blocked-event"));
+    }
+
     private static ReleaseCaptureSelection[] Selection() => [new("controlled-exact", "exact", new("semver", "1.0.0", null), ReleaseRootAction.ActivateServing)];
 
     private sealed class CaptureFixture : IDisposable
@@ -195,6 +229,7 @@ public sealed class ReleaseCaptureServiceTests
             Source = new(TransportFixture);
             var services = new ServiceCollection(); new WorkflowReleaseTransportFeature().ConfigureServices(services);
             new WorkflowReleaseVerificationFeature().ConfigureServices(services);
+            new EventsFeature().ConfigureServices(services); new WorkflowReleaseCaptureFeature().ConfigureServices(services);
             services.AddSingleton<IReleaseArtifactSemanticVerifier>(Verifier);
             services.AddSingleton<IPersistenceAccessContextAccessor>(new MutableAccess(PersistenceAccessContext.Scoped(new PersistenceScope(ArchiveFixture.DefaultScope.Partition))));
             services.AddDbContext<ConsumerContext>(options => options.UseSqlite("Data Source=" + Path.Combine(_directory, "archive.db") + ";Pooling=False"));
@@ -206,7 +241,7 @@ public sealed class ReleaseCaptureServiceTests
         public ReleaseCaptureService Compose(IReleaseBundleBuilder? selectedBuilder = null, IReleaseArchiveStoreCapabilities? capabilities = null,
             IEnumerable<IReleaseCaptureSource>? sources = null) =>
             new(selectedBuilder ?? Scope.ServiceProvider.GetRequiredService<IReleaseBundleBuilder>(), Scope.ServiceProvider.GetRequiredService<IReleaseBundleCodec>(), Writer,
-                capabilities ?? Scope.ServiceProvider.GetRequiredService<IReleaseArchiveStoreCapabilities>(), sources ?? [Source]);
+                capabilities ?? Scope.ServiceProvider.GetRequiredService<IReleaseArchiveStoreCapabilities>(), sources ?? [Source], Scope.ServiceProvider.GetRequiredService<IInlineEventPublisher>());
         public static async Task<CaptureFixture> CreateAsync()
         {
             var fixture = new CaptureFixture();

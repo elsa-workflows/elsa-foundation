@@ -1,16 +1,18 @@
 using System.Text;
+using Elsa.Events.Core.Contracts;
 using Elsa.Workflows.Publishing.Releases.Core;
+using Elsa.Workflows.Publishing.Releases.Capture.Core;
 
 namespace Elsa.Workflows.Publishing.Releases.Capture;
 
 /// <summary>Source-only member expansion. All immutable graph facts still belong to the final owner verification.</summary>
-internal sealed class ReleaseCaptureContributors
+internal sealed class CaptureReleaseSourceMembers : IEventHandler<ReleaseSourceMembersCapturing>
 {
     private const int MaximumContributors = 32;
     private sealed record Registration(IReleaseSourceMemberContributor Contributor, ReleaseSemanticAdapterIdentity Identity, HashSet<ReleaseCodecKey> Codecs);
     private readonly Registration[] _registrations;
 
-    internal ReleaseCaptureContributors(IEnumerable<IReleaseSourceMemberContributor> contributors)
+    public CaptureReleaseSourceMembers(IEnumerable<IReleaseSourceMemberContributor> contributors)
     {
         var registrations = new List<Registration>(); var identities = new HashSet<ReleaseSemanticAdapterIdentity>();
         foreach (var contributor in contributors)
@@ -29,7 +31,10 @@ internal sealed class ReleaseCaptureContributors
         _registrations = registrations.OrderBy(value => value.Identity.Name, StringComparer.Ordinal).ThenBy(value => value.Identity.Version, StringComparer.Ordinal).ToArray();
     }
 
-    internal async ValueTask ExecuteAsync(IReadOnlyList<ReleaseSourceCapture> roots, ReleaseSemanticVerificationOptions options,
+    public Task Handle(ReleaseSourceMembersCapturing @event, CancellationToken cancellationToken) =>
+        ExecuteAsync(@event.Roots, @event.Options, @event.CompleteAsync, cancellationToken).AsTask();
+
+    private async ValueTask ExecuteAsync(IReadOnlyList<ReleaseSourceCapture> roots, ReleaseSemanticVerificationOptions options,
         Func<IReleaseContentReader, CancellationToken, ValueTask> complete, CancellationToken token)
     {
         var captures = roots.ToList(); var limits = options.TransportLimits ?? new();

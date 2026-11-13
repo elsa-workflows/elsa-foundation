@@ -2,10 +2,10 @@
 
 ## IReleaseCaptureService
 
-- **Contract:** `Elsa.Workflows.Publishing.Releases.Core.IReleaseCaptureService`.
+- **Contract:** `Elsa.Workflows.Publishing.Releases.Capture.Core.IReleaseCaptureService`.
 - **Layer:** Core contract; optional Publishing capture orchestration.
 - **Signature:** `CreateAsync(captureId, selections, options, cancellationToken)` returns `ValueTask<ReleaseCaptureReceipt>`;
-  exact types/defaults are in [the contracts](../Core/ReleaseSourceCaptureContracts.cs).
+  exact types/defaults are in [the contracts](Core/ReleaseSourceCaptureContracts.cs).
 - **Override when:** Replacing orchestration while retaining complete source lifetimes, independent verification and confirmed durable acknowledgement.
 - **Dependent callers:** Source creation hosts and capture tests; source API/Studio integration is a later slice.
 - **Kind:** Replacement; exactly one selected implementation per shell.
@@ -20,10 +20,10 @@
 
 ## IReleaseCaptureSource
 
-- **Contract:** `Elsa.Workflows.Publishing.Releases.Core.IReleaseCaptureSource`.
+- **Contract:** `Elsa.Workflows.Publishing.Releases.Capture.Core.IReleaseCaptureSource`.
 - **Layer:** Core strategy contract; implementation belongs to the source owner bridge.
 - **Signature:** `ExecuteAsync(selections, limits, capture, cancellationToken)` returns `ValueTask`; the callback receives
-  `ReleaseSourceCapture` and its lifetime token. Exact types are in [the contracts](../Core/ReleaseSourceCaptureContracts.cs).
+  `ReleaseSourceCapture` and its lifetime token. Exact types are in [the contracts](Core/ReleaseSourceCaptureContracts.cs).
 - **Implement when:** Exporting an exact supported owner selection under its actual retention and authorization boundary.
 - **Dependent caller:** `ReleaseCaptureService` after exact selection-kind dispatch.
 - **Kind:** Exact selection-kind strategy; duplicate/invalid claims fail when the capture service resolves.
@@ -41,12 +41,12 @@
 
 ## IReleaseSourceMemberContributor
 
-- **Contract:** `Elsa.Workflows.Publishing.Releases.Core.IReleaseSourceMemberContributor`.
+- **Contract:** `Elsa.Workflows.Publishing.Releases.Capture.Core.IReleaseSourceMemberContributor`.
 - **Layer:** Core fan-in contract; implementations belong to the referenced member owners.
 - **Signature:** `ExecuteAsync(containers, captured, limits, capture, cancellationToken)` returns `ValueTask`; the callback
-  receives an `IReleaseContentReader` and lifetime token. Exact types are in [the contracts](../Core/ReleaseSourceCaptureContracts.cs).
+  receives an `IReleaseContentReader` and lifetime token. Exact types are in [the contracts](Core/ReleaseSourceCaptureContracts.cs).
 - **Implement when:** Supplying exact additional members referenced by a supported captured container.
-- **Dependent caller:** `ReleaseCaptureContributors` within the retained capture service.
+- **Dependent caller:** `CaptureReleaseSourceMembers` within the retained capture service.
 - **Kind/lifetime:** Scoped fan-in, keyed by unique adapter identity. Several contributors may inspect the same
   container codec. This feature installs none; module owners register their own contributions.
 - **Purpose:** Expand exact retained containers into members without selecting roots or declaring graph facts.
@@ -64,5 +64,18 @@ root and inspection budgets apply across all contributions, including repeated d
 agree on their full descriptor, owner version and original bytes. Every required member is supplied before verification;
 there is no source/target fallback while building the manifest.
 
-There are no events, startup tasks or recurring tasks. A complete archived transport remains independently re-verifiable;
+## ReleaseSourceMembersCapturing
+
+- **Contract/layer:** Sealed `IEvent` in the optional Capture.Core package, [payload](Core/ReleaseSourceMembersCapturing.cs).
+- **Publisher:** `ReleaseCaptureService` through `IInlineEventPublisher`; sequential, awaited, default ThrowImmediately.
+- **Aggregation:** One scoped action-named `CaptureReleaseSourceMembers` handler resolves all scoped
+  `IReleaseSourceMemberContributor` registrations and holds their callbacks through `CompleteAsync`.
+- **Registration:** `WorkflowReleaseCaptureFeature` uses canonical idempotent `TryAddEventHandler`; hosts select
+  Events and can add independent audit handlers or normal pipeline middleware without replacing aggregation.
+- **Payload/observation:** Get-only retained roots and limits; rich completion context is an exactly-once awaited
+  callback. Missing, repeated or detached completion refuses acknowledgement. Original callback failures, including
+  unknown archive commits, take precedence over protocol or source failures. A later audit/middleware failure may
+  leave a complete archive; reconcile the same capture ID rather than assuming absence or retrying business work.
+
+There are no startup tasks or recurring tasks. A complete archived transport remains independently re-verifiable;
 archive persistence itself does not assert semantic validity, origin authenticity, target readiness or serving authority.

@@ -1,5 +1,6 @@
 using System.Runtime.ExceptionServices;
 using Elsa.Workflows.Publishing.Releases.Core;
+using Elsa.Workflows.Publishing.Releases.Capture.Core;
 
 namespace Elsa.Workflows.Publishing.Releases.Capture;
 
@@ -9,7 +10,7 @@ internal static class RetainedCaptureCallback
     internal static async ValueTask ExecuteAsync<T>(Func<Func<T, CancellationToken, ValueTask>, CancellationToken, ValueTask> execute,
         Func<T, CancellationToken, ValueTask> capture, CancellationToken token) where T : class
     {
-        var calls = 0; var completed = 0; var returned = 0; ExceptionDispatchInfo? failure = null;
+        var calls = 0; var completed = 0; var returned = 0; ExceptionDispatchInfo? callbackFailure = null; ExceptionDispatchInfo? protocolFailure = null;
         Task? pending = null; ExceptionDispatchInfo? sourceFailure = null;
         var gate = new object(); var pendingAtReturn = false;
         using var lifetime = new CancellationTokenSource();
@@ -22,7 +23,7 @@ internal static class RetainedCaptureCallback
                     if (Interlocked.Increment(ref calls) != 1 || Volatile.Read(ref returned) != 0 || value is null)
                     {
                         var exception = new ReleaseCaptureException("capture_source_callback_invalid");
-                        Interlocked.CompareExchange(ref failure, ExceptionDispatchInfo.Capture(exception), null);
+                        Interlocked.CompareExchange(ref protocolFailure, ExceptionDispatchInfo.Capture(exception), null);
                         return ValueTask.FromException(exception);
                     }
                     pending = InvokeAsync(value, sourceToken);
@@ -46,9 +47,10 @@ internal static class RetainedCaptureCallback
         if (pending is not null)
             try { await pending; }
             catch { /* InvokeAsync retained the original callback failure, including unknown archive commits. */ }
-        if (pendingAtReturn && failure?.SourceException is OperationCanceledException && !token.IsCancellationRequested)
+        if (pendingAtReturn && callbackFailure?.SourceException is OperationCanceledException && !token.IsCancellationRequested)
             throw new ReleaseCaptureException("capture_source_callback_invalid");
-        failure?.Throw();
+        callbackFailure?.Throw();
+        protocolFailure?.Throw();
         sourceFailure?.Throw();
         if (pendingAtReturn || Volatile.Read(ref calls) != 1 || Volatile.Read(ref completed) != 1)
             throw new ReleaseCaptureException("capture_source_callback_invalid");
@@ -64,7 +66,7 @@ internal static class RetainedCaptureCallback
             }
             catch (Exception exception)
             {
-                Interlocked.CompareExchange(ref failure, ExceptionDispatchInfo.Capture(exception), null);
+                Interlocked.CompareExchange(ref callbackFailure, ExceptionDispatchInfo.Capture(exception), null);
                 throw;
             }
         }

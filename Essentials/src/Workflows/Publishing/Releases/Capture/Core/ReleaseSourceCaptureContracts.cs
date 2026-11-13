@@ -1,4 +1,6 @@
-namespace Elsa.Workflows.Publishing.Releases.Core;
+using Elsa.Workflows.Publishing.Releases.Core;
+
+namespace Elsa.Workflows.Publishing.Releases.Capture.Core;
 
 /// <summary>An exact owner selector. Kind determines identity/version interpretation; no latest/draft selection is implied.</summary>
 public sealed class ReleaseCaptureSelection(string kind, string identity, ReleaseOwnerVersion? version, ReleaseRootAction action)

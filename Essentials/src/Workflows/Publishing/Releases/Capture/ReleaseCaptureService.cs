@@ -1,15 +1,16 @@
 using System.Text;
+using Elsa.Events.Core.Contracts;
 using Elsa.Workflows.Publishing.Releases.Core;
+using Elsa.Workflows.Publishing.Releases.Capture.Core;
 using Elsa.Workflows.Publishing.Releases.Persistence.Core;
 
 namespace Elsa.Workflows.Publishing.Releases.Capture;
 
 internal sealed class ReleaseCaptureService(IReleaseBundleBuilder builder, IReleaseBundleCodec codec, IReleaseArchiveWriter archives,
     IReleaseArchiveStoreCapabilities archiveCapabilities, IEnumerable<IReleaseCaptureSource> sources,
-    IEnumerable<IReleaseSourceMemberContributor>? contributors = null) : IReleaseCaptureService
+    IInlineEventPublisher events) : IReleaseCaptureService
 {
     private const int MaximumSources = 32;
-    private readonly ReleaseCaptureContributors _contributors = new(contributors ?? []);
     private readonly IReadOnlyDictionary<string, IReleaseCaptureSource> _sources = Registry(sources);
 
     public async ValueTask<ReleaseCaptureReceipt> CreateAsync(string captureId, IReadOnlyList<ReleaseCaptureSelection> selections,
@@ -49,7 +50,9 @@ internal sealed class ReleaseCaptureService(IReleaseBundleBuilder builder, IRele
             token.ThrowIfCancellationRequested();
             if (index == ordered.Length)
             {
-                await _contributors.ExecuteAsync(captures, settings, async (content, captureToken) =>
+                await RetainedCaptureCallback.ExecuteAsync<IReleaseContentReader>(
+                    (complete, cancellation) => new ValueTask(events.Publish(new ReleaseSourceMembersCapturing(captures, settings, complete), cancellation)),
+                    async (content, captureToken) =>
                 {
                     var roots = captures.SelectMany(capture => capture.Roots).ToArray();
                     var built = await builder.BuildAsync(content, roots, settings, captureToken);

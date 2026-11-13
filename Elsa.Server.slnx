@@ -475,6 +475,7 @@
     <Project Path="Essentials/src/Workflows/Publishing/Persistence/EntityFrameworkCore/Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.csproj" />
   </Folder>
   <Folder Name="/Essentials/src/Workflows/Publishing/Releases/">
+    <Project Path="Essentials/src/Workflows/Publishing/Releases/Capture/Core/Elsa.Workflows.Publishing.Releases.Capture.Core.csproj" />
     <Project Path="Essentials/src/Workflows/Publishing/Releases/Capture/Elsa.Workflows.Publishing.Releases.Capture.csproj" />
     <Project Path="Essentials/src/Workflows/Publishing/Releases/Core/Elsa.Workflows.Publishing.Releases.Core.csproj" />
     <Project Path="Essentials/src/Workflows/Publishing/Releases/Elsa.Workflows.Publishing.Releases/Elsa.Workflows.Publishing.Releases.csproj" />

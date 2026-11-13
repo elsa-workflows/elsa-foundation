@@ -10,6 +10,7 @@
     <ProjectReference Include="../../../../../../src/Workflows/Publishing/Releases/Capture/Elsa.Workflows.Publishing.Releases.Capture.csproj" />
     <ProjectReference Include="../../../../../../src/Workflows/Publishing/Releases/Elsa.Workflows.Publishing.Releases/Elsa.Workflows.Publishing.Releases.csproj" />
     <ProjectReference Include="../../../../../../src/Workflows/Publishing/Releases/Persistence/EntityFrameworkCore/Elsa.Workflows.Publishing.Releases.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="../../../../../../src/Events/Elsa.Events/Elsa.Events.csproj" />
     <Compile Include="../../Persistence/EntityFrameworkCore/ArchiveFixture.cs" Link="ArchiveFixture.cs" />
   </ItemGroup>
 </Project>
