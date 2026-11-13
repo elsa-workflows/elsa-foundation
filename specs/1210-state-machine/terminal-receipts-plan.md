@@ -54,15 +54,19 @@ rewriting it through an older shape, and keep deletion protected until a compati
 
 ## Explicit promise and cleanup
 
-The fixture registers a positive receipt window along with capacity/receipt bounds at normal invocation entry.
-It is captured policy, not caller input or a binding re-evaluated on query. New accepted receipts record a
-versioned digest, decision-time clock value and an explicit absolute valid-until value from the kernel's trusted
-clock. The reply reports that deadline and committed identity. Queries/retries cannot extend or shorten it.
-The policy is an absolute deadline anchored to the admission decision, not a promised full interval after the
-caller finally receives its reply; delayed commit/lost reply cases must make that distinction observable.
+Capture positive retention duration R and capacity/receipt bounds at normal invocation entry/admission; they
+are not caller input or bindings re-evaluated on query. Preserve A1's [retention anchor](m0-admission-recovery-contract.md):
+R starts at **committed final disposition**, not admission. Pending/selected inputs have no terminal expiry yet.
+When disposition commits, retain its authoritative finalization timestamp and the captured R, with an immutable
+valid-until value derived from that anchor. Queries/retries report that committed deadline without restamping it.
+An input blocked longer than R must still receive its full terminal lookup window when it finally settles.
+
+Use the actual runtime finalization/clock owner. If forced termination, state-version fallback or an uncertain
+commit cannot provide the same authoritative anchor, identify and qualify the smallest shared change; never
+substitute admission time, first-query time or an unrelated wall clock to make the fixture pass.
 
 Never evict an unexpired accepted receipt to make room. Pending/selected IDs remain protected from reuse while
-their evaluation is unsettled, even if their original receipt deadline passes. Once final and expired, metadata
+their evaluation is unsettled, regardless of elapsed time. Once final and expired, metadata
 cleanup may release that receipt budget; it cannot reset an invocation's order counter or rearm ended work.
 Define the boundary explicitly: `now >= validUntil` is expired. An expired closed occurrence cannot become live.
 
@@ -99,7 +103,7 @@ frame and two workflow actors with equal local frame names. Preserve normal scop
 | Cancel queued/selected work | Not-processed and interrupted remain distinct; query/retry after termination returns the original identities and deadline. |
 | Definition unavailable / factory canary | Terminal query and retained duplicate/conflict succeed without constructing authored work or evaluating bindings. |
 | Last slot and retained budget | Completed-but-unexpired receipts still occupy their budget; duplicates/conflicts resolve before capacity checks. Expired final data can free budget. |
-| Deadline and policy change | Before/equal/after deadline, clock skew, changed authored policy and reload do not reinterpret an accepted promise. |
+| Deadline and policy change | Keep an input pending longer than R, then finalize and retain it for the full R. Before/equal/after the final deadline, clock skew, changed authored policy and reload do not reinterpret that promise. |
 | Normal deletion | Refuse before the latest promise, retain state, permit after expiry, and never fabricate an accepted receipt after deletion. |
 | Older model / stale writer | Refuse deletion when the model cannot interpret the state; execute an actually staged old-owner delete after takeover and prove its fence refuses. |
 | Commit uncertainty | Cut completion, cancellation and receipt-query commit before apply and after apply/lost acknowledgement; retry/query resolves committed facts without duplicate parent continuation. |
