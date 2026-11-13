@@ -1,7 +1,12 @@
 import { getViewportForBounds, type Node } from "@xyflow/react";
 import { describe, expect, it } from "vitest";
 import { getReadableFitViewport, pickReadOnlyFocusNode, READ_ONLY_READABLE_ZOOM, readableMinimapEdgeMargin } from "../workflow-editor/readableFitViewport";
-import { readOnlyMinimapFitViewOptions } from "../workflow-editor/readOnlyMinimap";
+import {
+  READ_ONLY_MINIMAP_OUTER_HEIGHT,
+  READ_ONLY_MINIMAP_OUTER_WIDTH,
+  READ_ONLY_MINIMAP_PANEL_OFFSET,
+  readOnlyMinimapFitViewOptions
+} from "../workflow-editor/readOnlyMinimap";
 
 const padding = { top: "24px", right: "112px", bottom: "32px", left: "32px" } as const;
 // A User Task (Approve/Reject/Unmatched) followed by Set Output, as the composed journey lays it out.
@@ -58,8 +63,9 @@ describe("getReadableFitViewport", () => {
     const width = 360, height = 245;
     const input = { graph: graph3, focus: first, width, height, padding: readOnlyMinimapFitViewOptions.padding,
       minZoom: 0.1, maxZoom: 2, readableZoom: 1 };
-    // The 120x80 MiniMap (1px border) sits 15px from the bottom-right corner.
-    const minimapLeft = width - 15 - 122, minimapTop = height - 15 - 82;
+    // The MiniMap's rendered box sits its panel offset from the bottom-right corner.
+    const minimapLeft = width - READ_ONLY_MINIMAP_PANEL_OFFSET - READ_ONLY_MINIMAP_OUTER_WIDTH;
+    const minimapTop = height - READ_ONLY_MINIMAP_PANEL_OFFSET - READ_ONLY_MINIMAP_OUTER_HEIGHT;
     const underMinimap = (view: { x: number; y: number }) =>
       first.x + first.width + 90 + view.x > minimapLeft && first.y + first.height + view.y > minimapTop;
     expect(underMinimap(getReadableFitViewport(input))).toBe(true);
