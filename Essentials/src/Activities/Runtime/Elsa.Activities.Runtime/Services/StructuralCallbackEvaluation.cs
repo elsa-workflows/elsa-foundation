@@ -371,6 +371,8 @@ internal static class StructuralCallbackEvaluation
         IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot> containerVariableSnapshots;
         IReadOnlyCollection<RuntimeStateChange<DurableValueState>> completionDurableValueChanges;
         RuntimeStateChange<WorkflowExecutionState>? completionWorkflowVariableWriteBack = null;
+        IReadOnlyList<VariableWriteRecord>? writesBeforeCapture = null;
+        var captureRecordsAdded = false;
         try
         {
             var completedAt = timeProvider.GetUtcNow();
@@ -412,6 +414,8 @@ internal static class StructuralCallbackEvaluation
             if (captureCommit.LostUpdateFault is { } lostUpdate)
                 throw new VariableLostUpdateException(lostUpdate);
             completionWorkflowVariableWriteBack = captureCommit.Change;
+            writesBeforeCapture = currentParentState.VariableWrites;
+            captureRecordsAdded = true;
             currentParentState = currentParentState.WithVariableWrites(captureCommit.Records);
             var completedAttempt = new ActivityAttempt(
                 openAttempt.AttemptId, openAttempt.InvocationId, openAttempt.Ordinal, openAttempt.Reason,
@@ -455,7 +459,10 @@ internal static class StructuralCallbackEvaluation
             await RecordParentFaultAsync(
                 activityFaultIncidentRecorder, activityExecutionStateStore, checkpointCommitter, faultMasking, timeProvider,
                 workItem, payload, definition,
-                lostUpdate is null ? currentParentState : currentParentState.WithVariableWrites([lostUpdate.Record]),
+                lostUpdate is not null
+                    ? currentParentState.WithVariableWrites([lostUpdate.Record])
+                    // A later failure drops the capture write-back, so the records of captures that never applied go too.
+                    : captureRecordsAdded ? currentParentState with { VariableWrites = writesBeforeCapture } : currentParentState,
                 exception, lostUpdate is null ? definition.FaultSubStatus : VariableLostUpdateException.SubStatus, valueSnapshots, cancellationToken);
             return;
         }

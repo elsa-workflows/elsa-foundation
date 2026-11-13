@@ -653,6 +653,8 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
         IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot> containerVariableSnapshots;
         IReadOnlyCollection<RuntimeStateChange<DurableValueState>> completionDurableValueChanges;
         RuntimeStateChange<WorkflowExecutionState>? completionWorkflowVariableWriteBack = null;
+        IReadOnlyList<VariableWriteRecord>? writesBeforeCapture = null;
+        var captureRecordsAdded = false;
         try
         {
             var completedAt = TimeProvider.GetUtcNow();
@@ -705,6 +707,8 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
             if (captureCommit.LostUpdateFault is { } lostUpdate)
                 throw new VariableLostUpdateException(lostUpdate);
             completionWorkflowVariableWriteBack = captureCommit.Change;
+            writesBeforeCapture = currentParentState.VariableWrites;
+            captureRecordsAdded = true;
             currentParentState = currentParentState.WithVariableWrites(captureCommit.Records);
             var completedAttempt = new ActivityAttempt(
                 openAttempt.AttemptId,
@@ -786,7 +790,10 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
                 workItem,
                 payload,
                 // A Fault-mode lost update on a composite's capture keeps its own sub-status and its refused write (spec 1221).
-                exception is VariableLostUpdateException lostUpdate ? currentParentState.WithVariableWrites([lostUpdate.Record]) : currentParentState,
+                exception is VariableLostUpdateException lostUpdate
+                    ? currentParentState.WithVariableWrites([lostUpdate.Record])
+                    // A later failure drops the capture write-back, so the records of captures that never applied go too.
+                    : captureRecordsAdded ? currentParentState with { VariableWrites = writesBeforeCapture } : currentParentState,
                 exception,
                 exception is VariableLostUpdateException ? VariableLostUpdateException.SubStatus : "ParentCompletionFaulted",
                 valueSnapshots,

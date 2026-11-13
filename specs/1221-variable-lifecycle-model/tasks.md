@@ -40,7 +40,7 @@ carries logic) at the application cadence (§2.21.2). No new CI tier (existing F
   built yet.
 - **T038 (partly):** measured; storage chosen (records ride the writer's checkpoint, no extra rows); an SC-005 budget is
   proposed in #4316 for the coordinator to settle on #3411.
-- **T009:** no document version is bumped. The new members are additive and omitted while empty, so an older frame or
+- **T009 (partly):** no document version is bumped. The new members are additive and omitted while empty, so an older frame or
   snapshot reads back at version 0 with no base, which a test covers.
 - **T039:** partly done (capture, `Fault` and buffered-segment records are covered); intrinsic and background-result
   records, and restoring an overwritten value, come with US2/US5.
@@ -61,7 +61,7 @@ carries logic) at the application cadence (§2.21.2). No new CI tier (existing F
 - [x] T006 Add the digest computation over ADR 0091 canonical form (one per applied write) in `Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Values/VariableFrameFactory.cs`.
 - [x] T007 Implement `VariableCommitRule` (blind / current / returned-value / lost-update) in `Essentials/src/Workflows/Runtime/Core/` per contracts/commit-rule.md.
 - [x] T008 [P] Behaviour tests for `VariableCommitRule`: blind applies; base==current applies; `0→1→0` applies + records mismatch; stale+changed is a lost update; unchanged value writes nothing but two 0→1 writers do not hide the second. In `.../Tests/VariableLifecycle/CommitRuleTests.cs`.
-- [x] T009 Document/schema version increment + upcast for `VariableFrameState` and `WriteHistoryRecord` (missing version → 0 / no base); test old-record read-back.
+- [ ] T009 Document/schema version increment + upcast for `VariableFrameState` and `WriteHistoryRecord` (missing version → 0 / no base); test old-record read-back.
 
 **Checkpoint**: data model and commit rule exist and are unit-tested; no write site uses them yet.
 
