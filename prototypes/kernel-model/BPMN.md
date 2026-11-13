@@ -185,7 +185,7 @@ Results (run, at the final head):
 | `--bpmn`, 1,000 actions | 20,000 | 0 failed; 450,431 matched; 9 innocent instances parked at the threshold (the kernel's rule 3; the checks skip them) |
 | `--bpmn --native`, 1,000 actions | 20,000 | 0 failed; 273,118 BPMN and 410,025 native instances matched; 12 parked; one BPMN job parked by the kernel |
 
-Messages for a catch were published before it subscribed 142,035 times in the first run and to a waiting catch
+Messages for a catch were published before it subscribed 559,386 times in the first run and to a waiting catch
 12,602 times. The bystander rule ran once (seed 6706 of the run with native): its job-error branch is run, its caller
 branch and the recognition of a kernel-parked row by its fault text are traced.
 
