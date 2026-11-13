@@ -183,10 +183,39 @@ public sealed partial class World
             }
             var keys = s.Live.Values.Where(w => w.Kind == WorkKinds.Job).Select(w => w.Key).ToHashSet(StringComparer.Ordinal);
             if (jobs.FirstOrDefault(k => !keys.Contains(k)) is { } job) return $"G1 {row.Id}: job {job} runs and the ledger has no unit for it";
-            if (subscriptions[row.Id].FirstOrDefault(x => !s.Live.TryGetValue(x.Wait, out var w) || w.Kind != WorkKinds.Message) is { } sub) return $"G1 {row.Id}: subscription {sub.Key}/{sub.Wait} and the ledger has no catch for it";
+            if (subscriptions[row.Id].FirstOrDefault(x => !s.Live.TryGetValue(x.Wait, out var w) || w.Kind != WorkKinds.Message || x.Key != w.Key) is { } sub) return $"G1 {row.Id}: subscription {sub.Key}/{sub.Wait} and the ledger has no catch for it";
             if (timers[row.Id].FirstOrDefault(t => !s.Live.Values.Any(w => w.Kind == WorkKinds.Timer && w.Key == t)) is { } timer) return $"G1 {row.Id}: timer {timer} is pending and the ledger has no unit for it";
         }
         return null;
+    }
+
+    /// <summary>A real generated waiting catch, plus a stale subscription sharing its handle.</summary>
+    public static int CheckBpmnSubscriptionKeys()
+    {
+        for (var seed = 1; seed <= 64; seed++)
+        {
+            var world = new World(new Config(3, 3, Flaw.None, Bpmn: true));
+            var generator = new Generator(seed, world);
+            for (var step = 0; step < 1000; step++)
+            {
+                world.Apply(generator.Next());
+                if (world.BpmnCheck() is not null) break;
+                var correct = world.Store.Subscriptions.FirstOrDefault(s =>
+                    world.Store.Instances.GetValueOrDefault(s.Instance) is { Model: BpmnModel.ModelKey, Status: InstanceStatus.Running });
+                if (correct is null) continue;
+                var stale = correct with { Key = correct.Key + ":stale" };
+                world.Store.Subscriptions.Add(stale);
+                var error = world.BpmnCheck();
+                world.Store.Subscriptions.Remove(stale);
+                var caught = error is not null && error.StartsWith("G1 ", StringComparison.Ordinal)
+                    && error.Contains(stale.Key, StringComparison.Ordinal);
+                var restored = world.BpmnCheck() is null;
+                Console.WriteLine($"BPMN subscription key oracle: seed {seed}, step {step}, wrong key caught={caught}, correct subscription restored={restored}: {error}");
+                return caught && restored ? 0 : 1;
+            }
+        }
+        Console.Error.WriteLine("BPMN subscription key oracle never reached a waiting catch");
+        return 1;
     }
 
     // ---- the end -------------------------------------------------------------------------------------------------------

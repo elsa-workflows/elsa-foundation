@@ -16,6 +16,7 @@ NativeSwitch.On = args.Contains("--native");
 NativeSwitch.Flaws = (Arg("--native-flaw") ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries).Aggregate(Kernel.Native.NativeFlaw.None, (all, name) => all | Enum.Parse<Kernel.Native.NativeFlaw>(name, true));
 BpmnSwitch.On = args.Contains("--bpmn");
 BpmnSwitch.Flaws = (Arg("--bpmn-flaw") ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries).Aggregate(Kernel.Bpmn.BpmnFlaw.None, (all, name) => all | Enum.Parse<Kernel.Bpmn.BpmnFlaw>(name, true));
+if (args.Contains("--bpmn-subscription-check")) return World.CheckBpmnSubscriptionKeys();
 if (args.Contains("--native-mutations")) return NativeMutations(int.Parse(Arg("--seeds") ?? "2000"));
 if (args.Contains("--bpmn-mutations")) return BpmnMutations(int.Parse(Arg("--seeds") ?? "2000"));
 if (args.Contains("--mutations")) return Mutations(int.Parse(Arg("--seeds") ?? "2000"));
