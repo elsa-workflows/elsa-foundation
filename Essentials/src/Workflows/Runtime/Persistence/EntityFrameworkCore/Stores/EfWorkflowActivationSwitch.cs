@@ -26,7 +26,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 /// <c>AddRuntimeEntityFrameworkCore</c> registers together, and refuses any other: nothing else could commit with them.
 /// </para>
 /// </remarks>
-public sealed class EfWorkflowActivationSwitch : IWorkflowActivationSwitch
+public sealed partial class EfWorkflowActivationSwitch : IWorkflowActivationSwitch
 {
     private static readonly EfWriteRetry Commits = new(
         MaximumAttempts,
@@ -73,6 +73,7 @@ public sealed class EfWorkflowActivationSwitch : IWorkflowActivationSwitch
                 await _references.StageMoveAsync(WorkflowActivationReferenceIdentity.Create(request.ActivationId), current => ResumeFailed(current, request.ActivationId), cancellationToken);
                 if (replaced is not null)
                     await _references.StageMoveAsync(WorkflowActivationReferenceIdentity.Create(replaced), current => RetireReplaced(current, request.UpdatedAt), cancellationToken);
+                await StageReservationsAsync(transition.Slot, cancellationToken);
                 return Step.Commit(transition);
             },
             cancellationToken);
@@ -104,6 +105,7 @@ public sealed class EfWorkflowActivationSwitch : IWorkflowActivationSwitch
                 if (replaced is not null)
                     await _references.StageMoveAsync(WorkflowActivationReferenceIdentity.Create(replaced), current => RestoreReplaced(current, replaced), cancellationToken);
                 await _references.StageMoveAsync(revert.Reference.SourceReferenceId, current => RetireFailed(current, revert.Reference, _timeProvider.GetUtcNow()), cancellationToken);
+                await StageReservationsAsync(reverted.Slot, cancellationToken);
                 return Step.Commit(true);
             },
             cancellationToken);
@@ -127,6 +129,7 @@ public sealed class EfWorkflowActivationSwitch : IWorkflowActivationSwitch
                 foreach (var activationId in serving.OfType<string>().Distinct(StringComparer.Ordinal))
                     if (await StageDeletionAsync(scope, activationId, unlessServing: false, cancellationToken) == ProjectionStaging.Moved)
                         return Step.Moved<WorkflowActivationTransition>();
+                await StageReservationsAsync(transition.Slot, cancellationToken);
                 return Step.Commit(transition);
             },
             cancellationToken);
@@ -177,6 +180,7 @@ public sealed class EfWorkflowActivationSwitch : IWorkflowActivationSwitch
                 await _references.StageMoveAsync(plan.ReferenceId, plan.ResumeOwn, cancellationToken);
                 foreach (var (referenceId, retire) in plan.Retirements(_timeProvider.GetUtcNow()))
                     await _references.StageMoveAsync(referenceId, retire, cancellationToken);
+                await StageReservationsAsync(slot, cancellationToken);
                 return Step.Commit(true);
             },
             cancellationToken);

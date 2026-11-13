@@ -140,3 +140,15 @@ internal sealed class EfIngressReservationStore(RuntimeDbContext context, IPersi
     }
 }
 
+internal sealed partial class EfRuntimeIngressDeliveryStore
+{
+    partial void GetReservationAdmissionFence(RuntimeIngressAdmissionRequest request, ref Func<CancellationToken, ValueTask>? fence)
+    {
+        var expected = request.Reservation ?? throw new InvalidDataException("A routed source has no reservation.");
+        fence = async token =>
+        {
+            RuntimeIngressReservationRules.CheckAdmission(request, expected);
+            await new EfIngressReservationStore(context, access).FenceAsync(expected, token);
+        };
+    }
+}
