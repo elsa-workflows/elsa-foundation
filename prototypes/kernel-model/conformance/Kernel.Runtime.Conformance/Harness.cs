@@ -80,7 +80,7 @@ public sealed class Harness : IAsyncDisposable
             JobScheduler = TaskScheduler.Default,      // a job's body off the runtime's scheduler, whatever the runtime
         };
         // No trial gate shared by the node's workers: a runtime may run the passes of a node's scopes at the same time,
-        // and the gate is not safe for that (FINDINGS section 25).
+        // and the gate is not safe for that (FINDINGS, "The runtime conformance suite and the Orleans adapter", R6).
         var workers = Enumerable.Range(0, Partitions).Select(p => new Worker(name, p, store, new WorkflowInstance(Stress.Models()), options));
         return new NodeServices(Watcher.Wrap(name, new DurableHost(workers)), store);
     }
