@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Persistence.Schema;
 using Elsa.Workflows.Runtime.Core.Exceptions;
@@ -78,6 +79,59 @@ public sealed class RuntimeHistoryProjectionMappingTests
         var mapping = new Mapping(EfSchemaChain.For(declaration));
         var row = mapping.Row(Scope, Head); row.SchemaVersion = "0.9.0"; row.ContentJson = "old-format";
         Assert.Equal(2, mapping.Read(row, Scope, Run).LastSequence);
+    }
+
+    [Theory]
+    [InlineData(0, "bad")] [InlineData(0, "AQ==")]
+    [InlineData(1, "bad")] [InlineData(1, "AQ==")]
+    [InlineData(2, "bad")] [InlineData(2, "AQ==")]
+    [InlineData(3, "bad")] [InlineData(3, "AQ==")]
+    [InlineData(4, "bad")] [InlineData(4, "AQ==")]
+    [InlineData(5, "bad")] [InlineData(5, "AQ==")]
+    [InlineData(6, "bad")] [InlineData(6, "AQ==")]
+    [InlineData(7, "bad")] [InlineData(7, "AQ==")]
+    public void Malformed_encoded_keys_and_content_preserve_domain_integrity_and_the_decoder_cause(int target, string malformed)
+    {
+        var mapping = Create();
+        object Read()
+        {
+            switch (target)
+            {
+                case 0:
+                    var receipt = mapping.Row(Scope, Observation(), Fingerprint); receipt.HistoryEventId = malformed;
+                    return mapping.ReadReceipt(receipt, Scope, Run, Head);
+                case 1:
+                    var observation = mapping.Row(Scope, Observation(), Fingerprint); observation.HistoryEventId = malformed;
+                    return mapping.Read(observation, Scope, Run, Head);
+                case 2:
+                    var bookmark = mapping.Row(Scope, Bookmark()); bookmark.BookmarkId = malformed;
+                    return mapping.Read(bookmark, Scope, Run, Head);
+                case 3:
+                    var contentEvent = mapping.Row(Scope, Observation(), Fingerprint);
+                    contentEvent.ContentJson = CorruptString(contentEvent.ContentJson, malformed, "historyEventId");
+                    return mapping.Read(contentEvent, Scope, Run, Head);
+                case 4:
+                    var head = mapping.Row(Scope, Head); head.ContentJson = CorruptString(head.ContentJson, malformed, "workflowExecutionId");
+                    return mapping.Read(head, Scope, Run);
+                case 5:
+                    var contentBookmark = mapping.Row(Scope, Bookmark());
+                    contentBookmark.ContentJson = CorruptString(contentBookmark.ContentJson, malformed, "bookmark", "identity", "bookmarkId");
+                    return mapping.Read(contentBookmark, Scope, Run, Head);
+                case 6:
+                    var parent = mapping.Row(Scope, Run, new Mapping.ActivityParent("activity", null));
+                    parent.ContentJson = CorruptString(parent.ContentJson, malformed, "activityExecutionId");
+                    return mapping.Read(parent, Scope, Run, "activity");
+                default:
+                    var counts = mapping.Row(Scope, Run, new Mapping.BookmarkCount(null, 1, 0));
+                    counts.ContentJson = CorruptString(counts.ContentJson, malformed, "activityExecutionId");
+                    return mapping.Read(counts, Scope, Run, (string?)null);
+            }
+        }
+        var failure = Assert.Throws<RuntimeHistoryIntegrityException>(() => Read());
+        Assert.Contains(Run, failure.Message, StringComparison.Ordinal);
+        Exception cause = failure;
+        while (cause.InnerException is { } inner) cause = inner;
+        Assert.IsType<FormatException>(cause); // Invalid Base64 and incomplete UTF-16 both retain their actual cause.
     }
 
     [Theory]
@@ -189,6 +243,15 @@ public sealed class RuntimeHistoryProjectionMappingTests
 
     private static RuntimeHistoryBookmark Bookmark() => new(new(new("bookmark", Run, "activity-\uD800", "resume"), "signal", "hash", Now, Now.AddHours(1)),
         "node", RuntimeHistoryBookmarkStatus.Consumed, "created", "ended", "ended", 2, 1, Now.AddMinutes(1), "selected", "bookmark", RuntimeHistoryCreationEvidence.CreationEvent);
+
+    private static string CorruptString(string content, string malformed, params string[] path)
+    {
+        var root = JsonNode.Parse(content)!;
+        var owner = root;
+        foreach (var segment in path[..^1]) owner = owner[segment]!;
+        owner[path[^1]] = malformed;
+        return root.ToJsonString();
+    }
 
     private static EfSchemaFamilyDescriptor Declaration() => new("RuntimeHistory", "Workflows.Runtime", "1.0.0", typeof(RuntimeHistoryProjectionMappingTests).Assembly)
     {

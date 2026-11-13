@@ -179,7 +179,7 @@ internal sealed class EfRuntimeHistoryProjectionMapping(EfSchemaChain chain)
     private static T Checked<T>(string run, Func<T> read)
     {
         try { return read(); }
-        catch (Exception exception) when (exception is JsonException or InvalidDataException or ArgumentException or NotSupportedException or OverflowException)
+        catch (Exception exception) when (exception is JsonException or InvalidDataException or ArgumentException or InvalidOperationException or NotSupportedException or OverflowException)
         { throw new RuntimeHistoryIntegrityException(run, "a retained history projection cannot be interpreted safely", exception); }
     }
 
