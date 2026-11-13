@@ -11,7 +11,7 @@ internal static class EfTriggerBoundary
     internal static async ValueTask<T> RunAsync<T>(Func<ValueTask<T>> operation, string? scope, string? identity)
     {
         try { return await operation(); }
-        catch (Exception exception) when (exception is IOException or JsonException or DbException or DbUpdateException)
+        catch (Exception exception) when (exception is InvalidDataException or IOException or JsonException or DbException or DbUpdateException)
         {
             var corrupt = exception is InvalidDataException or JsonException;
             throw new TriggerOperationException(corrupt ? "conflict" : "unavailable",
