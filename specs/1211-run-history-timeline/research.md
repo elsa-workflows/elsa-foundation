@@ -600,6 +600,8 @@ H source R2's own combined fence/no-batch fixes are inherited atfa916; their17 c
 
 ## R57 — Independent mutations acknowledge only durable observations and retained purge boundaries
 
+The broader K4f5 actual EF run exposed the same immutable-value compatibility issue in the newly added deletion guard. This owner now compares captured access values rather than result object identity; actual scope/policy changes still refuse. Two new observation/retention controls return a fresh equivalent value per Current call and use the actual selected reader. New total29 cases need exact rerun. Prior exact8dfe class88/27 passed, preserving both earlier before-tests failures; those proofs do not qualify this new head.
+
 Actual b029 qualification also failed BEFORE tests: the new coverage fixture read LastPhysicalCommitId/LastCommittedAt as entity scalars, though they belong to encoded checked head content. The owning fixture now reads the retained head through its actual checked mapping; no schema/model/production guard changed. All27 mutation-owner cases remain NOT RUN until actual corrected execution. R2 source lenses were clean within their source-only scope; the new exact correction requires its next cumulative review.
 
 S11j adds an internal transaction-owning implementation of the existing observation/retention ports. It requires the actual reader/context/access/chain, an ordinary immutable scope and a clean relational context without caller, ambient or enlisted transactions. One owned Serializable transaction joins native locking, private staging, final SaveChanges and commit; failed attempts roll back, dispose and clear tracked work before any acknowledgement lookup. This does not install a provider or advertise native capture.
