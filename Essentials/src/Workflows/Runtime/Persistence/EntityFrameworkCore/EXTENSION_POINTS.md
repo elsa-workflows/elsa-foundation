@@ -67,6 +67,13 @@ inspection or prefix purge. Both reject pending history tracker changes and rech
 access before returning; neither commits, acknowledges, authorizes a retention policy or registers a port.
 The normal native deletion and independent retention owner still need their production binding.
 
+Prefix retention requires ReadCommitted or Serializable isolation: an earlier InnoDB repeatable-read
+view may outlive the current native write lock, and a no-op request would otherwise return an old
+boundary without a CAS. The independent owner must choose an admitted isolation explicitly. Full
+set-based deletion retains its caller's existing native deletion transaction; this read-view restriction
+belongs to prefix boundary reporting. The actual MySQL regression establishes the older read view,
+commits retirement from another context, and requires explicit refusal rather than a stale result.
+
 The schema-binding unit registers all eight shapes in `RuntimeDbContext`, the one assembly-declared
 `RuntimeHistory` family at1.0.0 and its eight whole ContentJson columns. All four provider models retain
 bounded indexed hashes/keys and map complete unbounded identities/content to their large text type.
