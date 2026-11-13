@@ -38,8 +38,9 @@ public interface IScopeActivation : IAsyncDisposable
 
     /// <summary>
     /// One pass: the turns that are due, committed in batches. Returns when to call again: at once (zero) while there is
-    /// work, after a delay for the next timer it holds, or null to wait for a wake-up or the poll interval. A cancelled
-    /// token stops the pass at a turn boundary, before its commit: a process that goes away.
+    /// work, or after a delay for the next timer it holds or the next renewal of its lease, which layer 2 makes itself;
+    /// null once it no longer holds the scope. A runtime that calls again when asked keeps an idle scope's lease. A
+    /// cancelled token stops the pass at a turn boundary, before its commit: a process that goes away.
     /// </summary>
     ValueTask<TimeSpan?> RunAsync(CancellationToken cancellationToken = default);
 }
