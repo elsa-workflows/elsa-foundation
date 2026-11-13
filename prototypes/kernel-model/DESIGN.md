@@ -89,8 +89,10 @@ public interface IWakeSignal                       // layer 1, pluggable; not du
   leave one writer, because the fence lets one of them commit.
 - **One pass at a time per scope.** `PartitionRuntime.PassAsync` calls `RunAsync` and never two at once for a scope.
   A pass reads the inbox if it was woken, loads what is missing, reads kept events, runs every turn that is ready in id
-  order and flushes. It returns zero while there is work, the time to the next timer it holds, or null. A cancelled
-  token stops it at a turn boundary, before its commit: a process that goes away.
+  order and flushes; if no commit renewed the lease for a third of it, it beats (an empty fenced commit). It returns
+  zero while there is work, otherwise the sooner of the next timer it holds and the next beat (never zero), and null
+  once the scope is not held: a runtime that calls again when asked keeps an idle scope's lease. A cancelled token
+  stops it at a turn boundary, before its commit: a process that goes away.
 - **The wake signal is a hint; polling is the guarantee.** `WakeAsync` sends over the signal; a runtime that hears it
   for a scope it holds calls `WokenAsync`, and the next pass polls. A lost hint costs latency until the host's poll
   interval, when the host calls `WokenAsync(null)`. The built-in signal is a call within one process.
