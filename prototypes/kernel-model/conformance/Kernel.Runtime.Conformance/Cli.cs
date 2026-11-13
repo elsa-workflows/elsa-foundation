@@ -19,9 +19,10 @@ public static class Cli
                 return outcomes.Any(o => !o.Passed && o.Case.Level == Level.Required) ? 1 : 0;
             case ["semantic-broken", .. var rest]:
                 var broken = await Cases.RunAsync(runtime, store, brokenFence: true, filter: c => c.Fence && (Filter(rest)?.Invoke(c) ?? true));
-                var caught = broken.Count(o => !o.Passed);
-                Console.WriteLine($"fence broken on purpose: {caught} of {broken.Count} fence cases failed, as they must");
-                return caught == broken.Count ? 0 : 1;
+                // Each fence case must fail on what the fence guards: a precondition that did not hold, or a timeout, is no catch.
+                var caught = broken.Count(o => o.Caught);
+                Console.WriteLine($"fence broken on purpose: {caught} of {broken.Count} fence cases failed on the fence, as they must");
+                return broken.Count > 0 && caught == broken.Count ? 0 : 1;
             case ["stress" or "stress-broken", .. var rest]:
                 var options = new RuntimeStressOptions { BrokenFence = args[0] == "stress-broken" };
                 if (rest.Length > 0) options = options with { Seconds = int.Parse(rest[0], CultureInfo.InvariantCulture) };
@@ -29,7 +30,9 @@ public static class Cli
                 Console.WriteLine($"{runtime.Name} on {store.Name}: stress {options.Seconds} s, {options.Messages} messages, {options.NodesPerSide} nodes on each of two sides, " +
                     $"lease {options.Lease.TotalMilliseconds} ms, fault rate {options.FaultRate}{(options.BrokenFence ? ", FENCE BROKEN ON PURPOSE" : "")}");
                 var result = await RuntimeStress.RunAsync(runtime, store, options);
-                return options.BrokenFence ? result == 0 ? 1 : 0 : result;
+                // A run that never held two activations at once, or whose fence never refused one, tested nothing.
+                if (!result.Exercised) return 1;
+                return options.BrokenFence ? result.Broken > 0 ? 0 : 1 : result.Violations == 0 ? 0 : 1;
             default:
                 Console.Error.WriteLine("semantic [filter] | semantic-broken [filter] | stress [seconds] [messages] | stress-broken [seconds] [messages]");
                 return 2;
