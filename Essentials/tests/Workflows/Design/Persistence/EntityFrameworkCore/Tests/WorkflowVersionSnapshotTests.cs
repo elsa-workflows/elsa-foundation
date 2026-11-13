@@ -63,6 +63,7 @@ public sealed class WorkflowVersionSnapshotTests
 
     [Theory]
     [InlineData("invalid-utf8", "workflow_version_snapshot_invalid", false)]
+    [InlineData("oversized-invalid-utf8", "workflow_version_snapshot_byte_limit", false)]
     [InlineData("blob", "workflow_version_snapshot_byte_limit", false)]
     [InlineData("schema", "workflow_version_snapshot_schema_unsupported", true)]
     public async Task Actual_raw_type_UTF8_and_schema_are_qualified_before_returning_source(string change, string code, bool unsupported)
@@ -79,12 +80,13 @@ public sealed class WorkflowVersionSnapshotTests
             var sql = change switch
             {
                 "invalid-utf8" => "UPDATE elsa_workflow_definition_versions SET StateSource=CAST(X'FF' AS TEXT)",
+                "oversized-invalid-utf8" => "UPDATE elsa_workflow_definition_versions SET StateSource=CAST(X'FF'||zeroblob(8192) AS TEXT)",
                 "blob" => "UPDATE elsa_workflow_definition_versions SET StateSource=X'7B7D'",
                 _ => "UPDATE elsa_workflow_definition_versions SET SchemaVersion='future'"
             };
             await context.Database.ExecuteSqlRawAsync(sql);
             var error = await Assert.ThrowsAsync<WorkflowVersionSnapshotException>(() => scope.ServiceProvider.GetRequiredService<IWorkflowVersionSnapshotReader>()
-                .FindAsync("version", "partition", new()).AsTask());
+                .FindAsync("version", "partition", new() { MaxSourceBytes = 4096 }).AsTask());
             Assert.Equal(code, error.Code); Assert.Equal(unsupported, error.Unsupported);
         }
         finally { File.Delete(path); File.Delete(path + "-wal"); File.Delete(path + "-shm"); }

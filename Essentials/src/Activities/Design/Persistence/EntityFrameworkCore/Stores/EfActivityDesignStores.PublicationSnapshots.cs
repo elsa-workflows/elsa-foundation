@@ -29,7 +29,6 @@ public sealed partial class EfActivityDesignStores : IActivityPublicationSnapsho
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(versionId); ArgumentException.ThrowIfNullOrWhiteSpace(expectedPartition); ArgumentNullException.ThrowIfNull(limits); limits.Validate();
         cancellationToken.ThrowIfCancellationRequested();
-        if (SnapshotUtf8.GetByteCount(versionId) > limits.MaxIdentityBytes) throw SnapshotRefused("activity_publication_identity_limit");
         if (db.Database.ProviderName != EfProviderNames.Sqlite || db.Database.CurrentTransaction is not null ||
             db.Database.GetEnlistedTransaction() is not null || System.Transactions.Transaction.Current is not null || db.ChangeTracker.HasChanges() || access is null)
             throw SnapshotRefused("activity_publication_snapshot_profile_unsupported", true);
@@ -40,6 +39,7 @@ public sealed partial class EfActivityDesignStores : IActivityPublicationSnapsho
         var opened = false;
         try
         {
+            if (SnapshotUtf8.GetByteCount(versionId) > limits.MaxIdentityBytes) throw SnapshotRefused("activity_publication_identity_limit");
             await db.Database.OpenConnectionAsync(cancellationToken); opened = true;
             await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
             var connection = db.Database.GetDbConnection(); var physical = transaction.GetDbTransaction();

@@ -130,6 +130,16 @@ public sealed class ActivityPublicationSnapshotTests
         else Assert.Null(actual);
     }
 
+    [Fact]
+    public async Task An_invalid_Unicode_selector_gets_a_coded_owner_refusal_before_any_query()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:;Pooling=False"); await connection.OpenAsync();
+        await using var context = new ActivitiesDesignSqliteDbContext(new DbContextOptionsBuilder<ActivitiesDesignSqliteDbContext>().UseSqlite(connection).Options);
+        var error = await Assert.ThrowsAsync<ActivityPublicationSnapshotException>(() => ((IActivityPublicationSnapshotReader)new EfActivityDesignStores(context, new Accessor()))
+            .FindAsync("\uD800", "partition", new()).AsTask());
+        Assert.Equal("activity_publication_snapshot_invalid", error.Code);
+    }
+
     private static ActivityDefinitionVersionPublication Publication() => new()
     {
         Id = "publication", DefinitionId = "activity-definition", DefinitionVersionId = "activity-version", Version = "1.0.0", ActivityTypeKey = "fixture.Activity",
