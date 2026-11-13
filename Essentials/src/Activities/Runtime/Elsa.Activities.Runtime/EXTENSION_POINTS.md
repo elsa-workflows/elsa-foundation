@@ -4,6 +4,26 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Activities.Runtim
 
 > Carries **no** `Elsa.*.Design.*` dependency (Elsa §E2.2). Runtime invocation consumes only the compiled `ActivityContract` and canonical bindings.
 
+## Saved-resume receiver observation owner (#3849, S10h)
+
+The existing `WorkflowResumeBookmarkSchedulerWorkHandler` invokes private `ActivityResumeHistoryObservations`
+when exact saved-recipient admission no longer matches. Through Core's existing `IRuntimeHistoryObservationWriter`,
+it records `DeliveryUnmatched` before acknowledgement, with a closed receiver missing/expired/ineligible reason.
+Actual pinned policy, selected source/capture/native checkpoint/observation pairing and unchanged scope are required;
+history grants no wait/claim authority. Required observation failure defers the native work, malformed history stays
+hard, and requested cancellation propagates. Earlier profiles without this kind and originally uncaptured runs keep
+their choices. Event time is the actual eligibility decision; another real invocation after an uncertain write has
+its own observation identity, without another business occurrence. No payload/exception message is persisted.
+
+Twenty controls are written and NOT RUN:6 removed/replaced/expired versus capture choices;3 pre-write/ambiguous-write/
+false-ack native defer/re-entry cases; older vocabulary; missing Required source owner; requested cancellation; direct
+actual-handler scope drift; malformed data with nested IO;2 expired-replacement generation/owner cases;
+wrapped requested cancellation;2 unrelated/unrequested cancellation cases;hard-cause cancellation precedence. The prior15 native delivery/publication cases are affected
+and NOT RUN. Supplied publisher/target/private state/schema and a controlled callback remain component inputs;
+no authored run, production authority, multiple recipients, physical provider/restart or composed UX is qualified.
+Only the exact saved-recipient admission-mismatch branch is covered here; other receiver no-op and claim-race
+diagnostics remain separate work. No new API/type contract, dependency, test friendship or public module is added.
+
 ---
 
 ## Implementable contributor interfaces

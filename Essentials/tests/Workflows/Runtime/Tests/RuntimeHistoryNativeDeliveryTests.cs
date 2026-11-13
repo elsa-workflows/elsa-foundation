@@ -145,7 +145,9 @@ public sealed partial class RuntimeHistoryNativeDeliveryTests
         internal IBookmarkStateStore Bookmarks { get; }
         internal IWorkflowSchedulerWorkQueue Queue { get; }
         internal InMemoryWorkflowSchedulerPoisonStore Poison { get; }
-        internal static async Task<Fixture> CreateAsync(string outcome, bool publication = false, bool captured = true)
+        internal static async Task<Fixture> CreateAsync(string outcome, bool publication = false, bool captured = true,
+            Action<IServiceCollection>? configure = null, DateTimeOffset? expiresAt = null,
+            Func<RuntimeHistoryCapturePolicy, RuntimeHistoryCapturePolicy>? transformPolicy = null)
         {
             var clock = new FakeTimeProvider(At); var activator = new Activator(outcome);
             var services = new ServiceCollection(); services.AddLogging();
@@ -162,12 +164,14 @@ public sealed partial class RuntimeHistoryNativeDeliveryTests
             services.AddSingleton(new RuntimeHistorySourceSupport([
                 RuntimeHistorySourceFactKind.ActivityContinuationStarted, RuntimeHistorySourceFactKind.ActivityContinuationReturned,
                 RuntimeHistorySourceFactKind.ActivityContinuationCompleted, RuntimeHistorySourceFactKind.ActivityContinuationFaulted]));
+            configure?.Invoke(services);
             var provider = services.BuildServiceProvider(validateScopes: true); var scope = provider.CreateScope();
             var f = new Fixture(provider, scope, clock, activator); var sp = scope.ServiceProvider;
             var executions = sp.GetRequiredService<IWorkflowExecutionStateStore>(); var activities = sp.GetRequiredService<IActivityExecutionStateStore>();
             var writer = sp.GetRequiredService<IRuntimeCheckpointCommitStore>();
             Assert.True(writer.CanCommitExactBookmarkResume(f.Bookmarks, executions, activities));
             var policy = RuntimeHistoryRegistration.ResolvePolicy(sp, Run)!;
+            policy = transformPolicy?.Invoke(policy) ?? policy;
             var stimulusType = publication ? PublicationStimulusType : "approval";
             var stimulusHash = publication ? PublicationStimulusHash : "hash";
             await executions.SaveAsync(new(Run, Pin, WorkflowExecutionStatus.Running, null, At, At, At, null, null, null, "native-history", new Dictionary<string, string>())
@@ -196,7 +200,7 @@ public sealed partial class RuntimeHistoryNativeDeliveryTests
                     stimulusType, stimulusHash, ActivityTriggerDeduplicationPolicy.IdempotencyKey)], TriggerDeliveries = []
             };
             await activities.SaveAsync(state);
-            var payload = new RuntimeCreateBookmarkCommandPayload(Pin, Wait, ActivityId, Node, Resume, stimulusType, stimulusHash, null, null,
+            var payload = new RuntimeCreateBookmarkCommandPayload(Pin, Wait, ActivityId, Node, Resume, stimulusType, stimulusHash, null, expiresAt,
                 RuntimeCreateBookmarkCommandPayload.ActivitySuspendedReason);
             var work = new RuntimeSchedulerWorkItem("create", Run, "create-command", WorkflowExecutionCommandKind.CreateBookmark,
                 "create-envelope", "create-key", At, At, payload: JsonSerializer.SerializeToElement(payload));
@@ -212,11 +216,11 @@ public sealed partial class RuntimeHistoryNativeDeliveryTests
             return new(Run, "approval", "hash", JsonSerializer.SerializeToElement(new Approval(true)), "native-history-delivery",
                 payloadType: Descriptor<Approval>(), providerId: "approval-provider") { ExpectedRecipient = expected };
         }
-        internal ValueTask<RuntimeSchedulerDrainResult> DrainAsync() => new WorkflowSchedulerDrainer(Queue,
+        internal ValueTask<RuntimeSchedulerDrainResult> DrainAsync(CancellationToken cancellationToken = default) => new WorkflowSchedulerDrainer(Queue,
             [new WorkflowResumeBookmarkSchedulerWorkHandler(provider.GetRequiredService<IServiceScopeFactory>(), clock)],
             scope.ServiceProvider.GetRequiredService<IWorkflowExecutionStateStore>(), Poison,
             new WorkflowSchedulerPauseGate(new RuntimePauseDecisionProvider(new InMemoryWorkflowHoldStateStore()), clock), clock,
-            claimOptions: new RuntimeSchedulerWorkClaimOptions { UnavailableRetryDelay = TimeSpan.FromSeconds(5) }).DrainAsync(new(Run, maxWorkItems: 1));
+            claimOptions: new RuntimeSchedulerWorkClaimOptions { UnavailableRetryDelay = TimeSpan.FromSeconds(5) }).DrainAsync(new(Run, maxWorkItems: 1), cancellationToken);
         public void Dispose() { scope.Dispose(); provider.Dispose(); }
     }
 }
