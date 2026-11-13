@@ -1,6 +1,6 @@
 # Dashboard data model
 
-**Status:** Data-model requirements for the implementation under review in #3913. Resource schema and runtime behavior are implemented; final qualification, review, merge and resulting-main acceptance remain open.
+**Status:** Data-model requirements for the implementation delivered through the [reviewable slice stack](delivery-slices.md). Resource schema and runtime behavior are implemented; final qualification, review, merge and resulting-main acceptance remain open.
 
 | Entity | Essential fields | Invariants |
 |---|---|---|

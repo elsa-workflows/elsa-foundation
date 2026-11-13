@@ -1,0 +1,126 @@
+# Dashboard delivery evidence — 13 November 2026
+
+Status: the native, Home, comparison, weekly Workflow/Acme authoring and same-store real host-restart witnesses passed at their recorded sources. Independent visual review accepted the consequential weekly query refinement and full saved-question/dashboard flow. The native module-repair/edge-state and unsupported-question witnesses now also pass, including normal host exits, with independent visual/semantic acceptance. Their retained PNG/ARIA and safe receipts are included below. Six downloadable safe traces passed independent credential scans and actual TraceViewer inspection. The clean qualification stack is merging with normal security checks passing. Local keyboard/editor/Home proof now passes; resulting-main verification and final delivery publication remain open.
+
+The screenshots below are unmodified originals from owned, disposable composed hosts using synthetic qualification data. An independent acceptance subagent actually opened all 190 retained originals. [The manifest](screenshots.json) records their exact tested source, original run filename and SHA-256. These retained files provide downloadable evidence while Actions is delayed. Raw traces, browser storage, fixture tokens and backend/provider logs stay private. Matching scanned ARIA snapshots are downloadable in [aria.zip](aria.zip), with original source/path/hash links in [the ARIA index](aria.json).
+
+| Witness | Tested source | Result |
+| --- | --- | --- |
+| Existing Home widgets/layout/defaults | `6f7db4b23dd22891edb2523eb08b0912ead90ad5` | 4/4 browser profiles, 59/59 field gallery; 20 actual PNGs independently inspected |
+| Actual Copilot authoring over Weaver | `c56b64e365bffc775ba2034655f290f985a1c2cc` | 2/2 real Workflow/Acme journeys; 20 actual PNGs independently inspected |
+| Native Dashboard questions/sharing | `9d65c70a3a1095a29462f81cbdf97bc22762c373` | 4/4 browser profiles, 59/59 field gallery; 30 actual PNGs independently inspected |
+| Native saved-period comparison | `9d65c70a3a1095a29462f81cbdf97bc22762c373` | 4/4 browser profiles, 59/59 field gallery; 24 actual PNGs independently inspected |
+| Weekly query refinement, arranged dashboard and actual host restart | `2161b81b9267fb3b5c9af9966e6b65ef02b0f1bd` | 2/2 real provider journeys +1/1 provider-disabled host restart; 30 actual PNGs independently inspected |
+| Independent local package contribution | `11c48db71b17972771507f5f1b4da2238975a0e0` | 20 archives, 19/19 native cases, offline package-only restore, no frontend calls |
+
+[Comparison receipt](comparison-receipt.json), [Native receipt](native-receipt.json), [Home receipt](home-receipt.json), [live receipt](live-receipt.json), [allowlisted package receipt](package-witness.json), [weekly/refinement/restart receipt](weekly-restart-receipt.json).
+
+The historical weekly witness uses the existing GitHub Copilot SDK adapter (SDK 1.0.4, explicitly selected `gpt-6.1-sol`); the current full keyboard witness separately qualifies `gpt-5.6-sol` through model-agnostic Weaver Dashboard authoring. Actual SDK sends are Workflow 0→2→3→3 and Acme 3→5→6→6. All native phases have zero additional sends; privacy-failure counters remain zero. Acme independently recomputes reader Retail 60000 versus owner 120000, with Enterprise 300000 unchanged. After permission removal and ordinary sign-in, the new reader principal receives 403 and no query/result disclosure. This does not qualify invalidation of outstanding signed tokens.
+
+Each witness is tied to the exact tested source shown above. Later changes include a typed authoring grammar, complete reader tracing and an authorized replacement-preview repair. Their own tests and actual journeys are recorded separately; earlier source proofs are not relabeled as later-head qualification.
+
+The weekly witness changes actual grouping and filters: an included-run definition result of62.5/50/+12.5 becomes a current-folder, excluded-Test result of75/25/+50, then80/25/+55 after a real new faulted run. It saves the same question, arranges two tiles, shares and drills it, stops both hosts normally and restarts against the same stores with Copilot disabled. Saved revisions, definitions, tile IDs/order/sizes survive, and native refresh/drill adds zero SDK sends. The fixture controls only real workflow-start timestamps; it makes no historical execution-duration claim.
+
+## Independently inspected originals
+
+### home-desktop-light
+
+[home-widgets](screenshots/home-desktop-light--home-widgets.png) | [home-module-settings-reopened](screenshots/home-desktop-light--home-module-settings-reopened.png) | [home-server-default](screenshots/home-desktop-light--home-server-default.png) | [home-module-portfolio](screenshots/home-desktop-light--home-module-portfolio.png) | [home-populated-appearance-1](screenshots/home-desktop-light--home-populated-appearance-1.png) | [home-populated-appearance-2](screenshots/home-desktop-light--home-populated-appearance-2.png)
+
+### home-desktop-dark
+
+[home-layout-reopened](screenshots/home-desktop-dark--home-layout-reopened.png) | [home-module-picker-1](screenshots/home-desktop-dark--home-module-picker-1.png) | [home-populated-appearance-1](screenshots/home-desktop-dark--home-populated-appearance-1.png) | [home-populated-appearance-2](screenshots/home-desktop-dark--home-populated-appearance-2.png)
+
+### home-narrow-light
+
+[home-widgets](screenshots/home-narrow-light--home-widgets.png) | [home-widget-picker](screenshots/home-narrow-light--home-widget-picker.png) | [home-module-portfolio](screenshots/home-narrow-light--home-module-portfolio.png) | [home-populated-appearance-1](screenshots/home-narrow-light--home-populated-appearance-1.png) | [home-populated-appearance-2](screenshots/home-narrow-light--home-populated-appearance-2.png)
+
+### home-narrow-dark
+
+[home-layout-reopened](screenshots/home-narrow-dark--home-layout-reopened.png) | [home-module-settings-reopened](screenshots/home-narrow-dark--home-module-settings-reopened.png) | [home-module-run-health](screenshots/home-narrow-dark--home-module-run-health.png) | [home-populated-appearance-1](screenshots/home-narrow-dark--home-populated-appearance-1.png) | [home-populated-appearance-2](screenshots/home-narrow-dark--home-populated-appearance-2.png)
+
+### live-workflow
+
+[live-clarification](screenshots/live-workflow--live-clarification.png) | [live-proposal-preview-values](screenshots/live-workflow--live-proposal-preview-values.png) | [live-refined-preview-chart](screenshots/live-workflow--live-refined-preview-chart.png) | [live-saved-light-desktop-values](screenshots/live-workflow--live-saved-light-desktop-values.png) | [live-saved-dark-desktop-values](screenshots/live-workflow--live-saved-dark-desktop-values.png) | [live-saved-light-narrow-values](screenshots/live-workflow--live-saved-light-narrow-values.png) | [live-saved-dark-narrow-values-end](screenshots/live-workflow--live-saved-dark-narrow-values-end.png) | [live-refreshed](screenshots/live-workflow--live-refreshed.png) | [live-drill](screenshots/live-workflow--live-drill.png)
+
+### live-acme
+
+[live-clarification](screenshots/live-acme--live-clarification.png) | [live-proposal-preview-values](screenshots/live-acme--live-proposal-preview-values.png) | [live-refined-preview-values](screenshots/live-acme--live-refined-preview-values.png) | [live-saved-light-desktop-values](screenshots/live-acme--live-saved-light-desktop-values.png) | [live-saved-dark-desktop-values](screenshots/live-acme--live-saved-dark-desktop-values.png) | [live-saved-light-narrow-values](screenshots/live-acme--live-saved-light-narrow-values.png) | [live-saved-dark-narrow-values-end](screenshots/live-acme--live-saved-dark-narrow-values-end.png) | [live-shared-reader-values](screenshots/live-acme--live-shared-reader-values.png) | [live-reader-no-category](screenshots/live-acme--live-reader-no-category.png) | [live-applied-draft](screenshots/live-acme--live-applied-draft.png) | [live-share](screenshots/live-acme--live-share.png)
+
+### native-desktop-light
+
+[questions-collection-appearance-1](screenshots/native-desktop-light--questions-collection-appearance-1.png) | [dashboards-collection-appearance-1](screenshots/native-desktop-light--dashboards-collection-appearance-1.png) | [question-share](screenshots/native-desktop-light--question-share.png) | [dashboard-share-dependency-review](screenshots/native-desktop-light--dashboard-share-dependency-review.png) | [question-preview-exact-values](screenshots/native-desktop-light--question-preview-exact-values.png) | [dashboard-multi-tile](screenshots/native-desktop-light--dashboard-multi-tile.png) | [question-history](screenshots/native-desktop-light--question-history.png)
+
+### native-desktop-dark
+
+[questions-collection-appearance-1](screenshots/native-desktop-dark--questions-collection-appearance-1.png) | [dashboards-collection-appearance-1](screenshots/native-desktop-dark--dashboards-collection-appearance-1.png) | [question-share](screenshots/native-desktop-dark--question-share.png) | [dashboard-share-dependency-review](screenshots/native-desktop-dark--dashboard-share-dependency-review.png) | [dashboard-list-values](screenshots/native-desktop-dark--dashboard-list-values.png) | [dashboard-metric-values](screenshots/native-desktop-dark--dashboard-metric-values.png) | [question-conflict-recovered](screenshots/native-desktop-dark--question-conflict-recovered.png)
+
+### native-narrow-light
+
+[questions-collection-appearance-1](screenshots/native-narrow-light--questions-collection-appearance-1.png) | [dashboards-collection-appearance-1](screenshots/native-narrow-light--dashboards-collection-appearance-1.png) | [question-share](screenshots/native-narrow-light--question-share.png) | [dashboard-share-dependency-review](screenshots/native-narrow-light--dashboard-share-dependency-review.png) | [question-preview-exact-values-end](screenshots/native-narrow-light--question-preview-exact-values-end.png) | [dashboard-and-dependency-dialogs-appearance-2-copy-review](screenshots/native-narrow-light--dashboard-and-dependency-dialogs-appearance-2-copy-review.png) | [dashboard-unavailable-tiles](screenshots/native-narrow-light--dashboard-unavailable-tiles.png) | [question-preview-exact-values](screenshots/native-narrow-light--question-preview-exact-values.png)
+
+### native-narrow-dark
+
+[questions-collection-appearance-1](screenshots/native-narrow-dark--questions-collection-appearance-1.png) | [dashboards-collection-appearance-1](screenshots/native-narrow-dark--dashboards-collection-appearance-1.png) | [question-share](screenshots/native-narrow-dark--question-share.png) | [dashboard-share-dependency-review](screenshots/native-narrow-dark--dashboard-share-dependency-review.png) | [dashboard-and-dependency-dialogs-appearance-2-tile-3-series-1](screenshots/native-narrow-dark--dashboard-and-dependency-dialogs-appearance-2-tile-3-series-1.png) | [question-access-lost](screenshots/native-narrow-dark--question-access-lost.png) | [dashboard-copy-independent-question](screenshots/native-narrow-dark--dashboard-copy-independent-question.png) | [dashboard-and-dependency-dialogs-appearance-2-tile-3-exact-values-end](screenshots/native-narrow-dark--dashboard-and-dependency-dialogs-appearance-2-tile-3-exact-values-end.png)
+
+### comparison-desktop-light
+
+[comparison-excluded-empty](screenshots/comparison-desktop-light--comparison-excluded-empty.png) | [comparison-included-periods](screenshots/comparison-desktop-light--comparison-included-periods.png) | [comparison-included-values](screenshots/comparison-desktop-light--comparison-included-values.png) | [comparison-reopened-values](screenshots/comparison-desktop-light--comparison-reopened-values.png) | [comparison-current-drill](screenshots/comparison-desktop-light--comparison-current-drill.png)
+
+### comparison-desktop-dark
+
+[comparison-excluded-empty](screenshots/comparison-desktop-dark--comparison-excluded-empty.png) | [comparison-included-periods](screenshots/comparison-desktop-dark--comparison-included-periods.png) | [comparison-included-values](screenshots/comparison-desktop-dark--comparison-included-values.png) | [comparison-reopened-values](screenshots/comparison-desktop-dark--comparison-reopened-values.png) | [comparison-current-drill](screenshots/comparison-desktop-dark--comparison-current-drill.png)
+
+### comparison-narrow-light
+
+[comparison-excluded-empty](screenshots/comparison-narrow-light--comparison-excluded-empty.png) | [comparison-included-periods](screenshots/comparison-narrow-light--comparison-included-periods.png) | [comparison-included-values](screenshots/comparison-narrow-light--comparison-included-values.png) | [comparison-reopened-values](screenshots/comparison-narrow-light--comparison-reopened-values.png) | [comparison-current-drill](screenshots/comparison-narrow-light--comparison-current-drill.png) | [comparison-included-values-end](screenshots/comparison-narrow-light--comparison-included-values-end.png) | [comparison-reopened-values-end](screenshots/comparison-narrow-light--comparison-reopened-values-end.png)
+
+### comparison-narrow-dark
+
+[comparison-excluded-empty](screenshots/comparison-narrow-dark--comparison-excluded-empty.png) | [comparison-included-periods](screenshots/comparison-narrow-dark--comparison-included-periods.png) | [comparison-included-values](screenshots/comparison-narrow-dark--comparison-included-values.png) | [comparison-reopened-values](screenshots/comparison-narrow-dark--comparison-reopened-values.png) | [comparison-current-drill](screenshots/comparison-narrow-dark--comparison-current-drill.png) | [comparison-included-values-end](screenshots/comparison-narrow-dark--comparison-included-values-end.png) | [comparison-reopened-values-end](screenshots/comparison-narrow-dark--comparison-reopened-values-end.png)
+
+### Weekly refinement and real restart originals
+
+**weekly-workflow**: [live-clarification](screenshots/weekly-workflow--live-clarification.png) | [live-proposal-preview-values](screenshots/weekly-workflow--live-proposal-preview-values.png) | [live-refined-proposal](screenshots/weekly-workflow--live-refined-proposal.png) | [live-refined-preview-chart](screenshots/weekly-workflow--live-refined-preview-chart.png) | [live-refined-preview-values-end](screenshots/weekly-workflow--live-refined-preview-values-end.png) | [live-question-share](screenshots/weekly-workflow--live-question-share.png) | [live-dashboard-arranged](screenshots/weekly-workflow--live-dashboard-arranged.png) | [live-dashboard-share](screenshots/weekly-workflow--live-dashboard-share.png) | [live-dashboard-reader](screenshots/weekly-workflow--live-dashboard-reader.png) | [live-dashboard-reader-drill](screenshots/weekly-workflow--live-dashboard-reader-drill.png) | [live-drill](screenshots/weekly-workflow--live-drill.png) | [live-saved-light-narrow-values-end](screenshots/weekly-workflow--live-saved-light-narrow-values-end.png) | [live-saved-dark-desktop-values](screenshots/weekly-workflow--live-saved-dark-desktop-values.png) | [live-saved-dark-narrow-values-end](screenshots/weekly-workflow--live-saved-dark-narrow-values-end.png) | [live-saved-light-desktop-values](screenshots/weekly-workflow--live-saved-light-desktop-values.png)
+
+**weekly-restart**: [restart-dashboard-owner](screenshots/weekly-restart--restart-dashboard-owner.png) | [restart-question-periods](screenshots/weekly-restart--restart-question-periods.png) | [restart-question-values](screenshots/weekly-restart--restart-question-values.png) | [restart-owner-drill](screenshots/weekly-restart--restart-owner-drill.png) | [restart-dashboard-reader](screenshots/weekly-restart--restart-dashboard-reader.png) | [restart-reader-drill](screenshots/weekly-restart--restart-reader-drill.png)
+
+**weekly-acme**: [live-clarification](screenshots/weekly-acme--live-clarification.png) | [live-proposal-preview-values](screenshots/weekly-acme--live-proposal-preview-values.png) | [live-refined-preview-values](screenshots/weekly-acme--live-refined-preview-values.png) | [live-saved-light-narrow-values-end](screenshots/weekly-acme--live-saved-light-narrow-values-end.png) | [live-saved-dark-desktop-values](screenshots/weekly-acme--live-saved-dark-desktop-values.png) | [live-saved-dark-narrow-values-end](screenshots/weekly-acme--live-saved-dark-narrow-values-end.png) | [live-shared-reader-values](screenshots/weekly-acme--live-shared-reader-values.png) | [live-reader-no-category](screenshots/weekly-acme--live-reader-no-category.png) | [live-saved-light-desktop-values](screenshots/weekly-acme--live-saved-light-desktop-values.png)
+
+## Failed and superseded evidence
+
+Earlier comparison assertions expected `current.total` although native output uses `total`; the corrected whole journey passed all four profiles. Earlier comparison screenshots put numeric rows below a scrolling viewport; current aligned captures are separately requalified. A first resumed Acme live run reused an old signed principal after changing IAM grants; the corrected flow signs in again and requires a direct native 403. These earlier failures remain failures.
+
+A Home attempt stopped during field-gallery setup because port 4197 was occupied and ran no Home journey. The runner now allocates a port and records its URL only when the selected frontend confirms it. Existing listeners are never reused. The current whole Home run passes.
+
+The package witness initially used unsupported Python 3.9 (documented minimum 3.12), then the pack-only opt-in correctly failed the version-stamp guard. Matching explicit build/pack inputs pass with Python 3.14. Architecture subsequently rejected published-package API tracking on the nonpackable examples; removing that metadata and its own analyzer locks leaves the original guard unchanged and the whole suite passes 621/621.
+
+## Delivery authorization and limits
+
+The owner explicitly authorized resumption, additional review rounds within reason, and personal-account admin self-merge when CI is absent or too slow. Each merge records the exact reviewed head, CI state and use of that exception. Pending, cancelled, superseded and skipped Actions checks are not represented as passed. No release, deployment or remote package publication is part of this delivery. Acme examples are excluded from normal publishing; only the owned local witness opts into packing.
+
+## Native edges and unsupported question
+
+[Native-edge receipt](native-edges-receipt.json) records actual module removal, explicit replacement save/reopen/history, null/no-denominator/no-values, stale provenance, empty baseline with unknown coverage, offline failure/retry and actual 422 bounded-cost rejection/retry. All 28 originals were independently opened. [Unsupported-question receipt](unsupported-receipt.json) records the actual explanation and four independently inspected originals, with no substituted query, native execution or saved write. The unsupported witness explicitly selects `gpt-5.6-sol`, which current SDK discovery listed; the earlier weekly `gpt-6.1-sol` witness retains its historical model identity. Both exact-source runs passed with normal host exits of zero.
+
+## Downloadable safe traces
+
+[Trace index](safe-traces/index.json) identifies the actual source, exact archive/exporter hashes, retained contexts/actions/snapshots and explicit omissions. Six archives passed independent raw-to-safe scans against 6,248 credential forms with zero matches. Each was opened in actual local TraceViewer and its styled populated After DOM independently inspected with zero page errors. These browser traces omit sensitive network content, authentication screenshots, embedded source and runner traces; they do not claim a complete network recording.
+
+[Native](safe-traces/native-desktop-light.zip) · [Home](safe-traces/home-desktop-light.zip) · [Comparison](safe-traces/comparison-desktop-light.zip) · [Weekly Workflow](safe-traces/weekly-workflow.zip) · [Weekly Acme](safe-traces/weekly-acme.zip) · [Actual restart](safe-traces/weekly-restart.zip). Matching ARIA originals are in [aria.zip](aria.zip).
+
+## Actual full keyboard authoring and editor/Home preservation
+
+[Current keyboard receipt](keyboard-receipt.json) records clean source `bae6d602b71e955fc725ccd1bef81e5bd928ad03`, explicitly selected actual Copilot SDK model `gpt-5.6-sol`, three successful cases and one actual same-store provider-disabled host restart. Independent acceptance opened all34 current originals and checked their ARIA, seven real Tab/Enter proofs with zero pointer events, actual source facts/math, saved revisions and host exits. Editor save/reopen/private-copy visibly retains23 without sharing rights; ordinary Home reorder/save/reopen retains the unavailable contribution settings while known widgets are settled. UX04/09/11 and SC001 pass at this local source; final resulting-main and merge gates remain separate. Earlier R1/R2 build-cleanup failures and R3 observer-concurrency failure remain failed. R4 protocol passed, but its loading Home captures remained visually incomplete and are superseded by these R5 captures.
+
+**keyboard-access**: [editor-authorized-save-reopened](screenshots/keyboard-access--editor-authorized-save-reopened.png) | [editor-private-copy-without-sharing-rights](screenshots/keyboard-access--editor-private-copy-without-sharing-rights.png) | [home-missing-contribution-known-widgets-retained](screenshots/keyboard-access--home-missing-contribution-known-widgets-retained.png) | [home-missing-contribution-preserved-after-save-reopen](screenshots/keyboard-access--home-missing-contribution-preserved-after-save-reopen.png)
+
+**keyboard-workflow**: [live-clarification](screenshots/keyboard-workflow--live-clarification.png) | [live-proposal-preview-values](screenshots/keyboard-workflow--live-proposal-preview-values.png) | [live-refined-proposal](screenshots/keyboard-workflow--live-refined-proposal.png) | [live-refined-preview-chart](screenshots/keyboard-workflow--live-refined-preview-chart.png) | [live-refined-preview-values-end](screenshots/keyboard-workflow--live-refined-preview-values-end.png) | [live-question-share](screenshots/keyboard-workflow--live-question-share.png) | [live-dashboard-arranged](screenshots/keyboard-workflow--live-dashboard-arranged.png) | [live-dashboard-share](screenshots/keyboard-workflow--live-dashboard-share.png) | [live-dashboard-reader](screenshots/keyboard-workflow--live-dashboard-reader.png) | [live-dashboard-reader-drill](screenshots/keyboard-workflow--live-dashboard-reader-drill.png) | [live-drill](screenshots/keyboard-workflow--live-drill.png) | [live-saved-light-narrow-values-end](screenshots/keyboard-workflow--live-saved-light-narrow-values-end.png) | [live-saved-dark-desktop-values](screenshots/keyboard-workflow--live-saved-dark-desktop-values.png) | [live-saved-dark-narrow-values-end](screenshots/keyboard-workflow--live-saved-dark-narrow-values-end.png) | [live-saved-light-desktop-values](screenshots/keyboard-workflow--live-saved-light-desktop-values.png)
+
+**keyboard-restart**: [restart-dashboard-owner](screenshots/keyboard-restart--restart-dashboard-owner.png) | [restart-question-periods](screenshots/keyboard-restart--restart-question-periods.png) | [restart-question-values](screenshots/keyboard-restart--restart-question-values.png) | [restart-owner-drill](screenshots/keyboard-restart--restart-owner-drill.png) | [restart-dashboard-reader](screenshots/keyboard-restart--restart-dashboard-reader.png) | [restart-reader-drill](screenshots/keyboard-restart--restart-reader-drill.png)
+
+**keyboard-acme**: [live-clarification](screenshots/keyboard-acme--live-clarification.png) | [live-proposal-preview-values](screenshots/keyboard-acme--live-proposal-preview-values.png) | [live-refined-preview-values](screenshots/keyboard-acme--live-refined-preview-values.png) | [live-saved-light-narrow-values-end](screenshots/keyboard-acme--live-saved-light-narrow-values-end.png) | [live-saved-dark-desktop-values](screenshots/keyboard-acme--live-saved-dark-desktop-values.png) | [live-saved-dark-narrow-values-end](screenshots/keyboard-acme--live-saved-dark-narrow-values-end.png) | [live-shared-reader-values](screenshots/keyboard-acme--live-shared-reader-values.png) | [live-reader-no-category](screenshots/keyboard-acme--live-reader-no-category.png) | [live-saved-light-desktop-values](screenshots/keyboard-acme--live-saved-light-desktop-values.png)
+
+The four current R5 safe archives separately pass scans against2,968 private credential forms with zero matches. Their actual local TraceViewer inspection also passed independently, including focused editor23/settled Home and owner/reader authoring/restart states with zero page errors. The earlier six archive scans remain recorded against6,248 forms; counts are not a statement of unique credentials or physical model HTTP requests.
+
+[Current keyboard Workflow trace](safe-traces/keyboard-workflow.zip) · [Acme trace](safe-traces/keyboard-acme.zip) · [Editor/Home trace](safe-traces/keyboard-access.zip) · [Provider-disabled restart trace](safe-traces/keyboard-restart.zip). All ten archives now have independently accepted privacy/provenance and actual TraceViewer receipts.
