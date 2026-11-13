@@ -5,9 +5,27 @@ using Kernel.Runtime;
 using Kernel.Sim;
 using Kernel.Sim.Native;
 
+if (args.SequenceEqual(["--terminal-query-boundary"]))
+{
+    new TerminalWire(Modes.Balanced, false).QueryReplyBoundary();
+    return;
+}
+
+if (args.SequenceEqual(["--terminal-adverse"]) || args.SequenceEqual(["--list-terminal-adverse"]))
+{
+    TerminalAdverse.Run(args[0] == "--list-terminal-adverse");
+    return;
+}
+
 if (args.SequenceEqual(["--recreate"]))
 {
     InvocationRecreation.Run();
+    return;
+}
+
+if (args.SequenceEqual(["--terminal"]) || args.SequenceEqual(["--list-terminal"]))
+{
+    TerminalReceipts.Run(args[0] == "--list-terminal");
     return;
 }
 
@@ -267,7 +285,7 @@ public sealed class ProbeReceiver : CompositeActivity, ISignalledComposite
     }
     protected override void Execute(CompositeContext context)
     {
-        context.RegisterInputInbox(2, 4);
+        context.RegisterInputInbox(2, 4, TimeSpan.FromMinutes(1));
         context.SetState(new ProbeState("Waiting"));
         context.Schedule(context.Children.Single(c => c.Id == "phase"));
     }

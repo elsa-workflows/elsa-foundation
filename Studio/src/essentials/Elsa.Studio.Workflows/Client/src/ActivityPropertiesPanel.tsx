@@ -84,7 +84,8 @@ import {
   offersActivityData,
   type ActivityDataSelectionHost
 } from "./activityDataSelection";
-import { ActivityDataSelectionProvider, ChooseDataButton, focusBeside, useActivityDataSelectionAvailable } from "./ActivityDataChooser";
+import { ActivityDataBindingChangeProvider, ActivityDataSelectionProvider, ChooseDataButton, focusBeside, useActivityDataSelectionAvailable } from "./ActivityDataChooser";
+import { activityDataMemberDescriptors } from "./activityDataPickerModel";
 import { ActivityOutputIcon } from "./activityOutputIcon";
 
 const inlineTextEditorIds = new Set([
@@ -605,15 +606,17 @@ function PropertyRow({
   const wrapped = input.isWrapped !== false ? readWrappedInput(activity, input) : null;
   const syntax = wrapped?.expression.type ?? (secretOnly ? secretSyntax : "Literal");
   const dataSelectionAvailable = useActivityDataSelectionAvailable();
-  const offersChooseData = dataSelectionAvailable && wrapped != null && syntax !== activityResultSyntax &&
+  const dataReferenceDescriptor = [activityResultExpressionDescriptor, ...activityDataMemberDescriptors,
+    { type: "WorkflowRequest", displayName: "Request input", editingMode: "reference" as const }].find(descriptor => descriptor.type === syntax);
+  const offersChooseData = dataSelectionAvailable && wrapped != null && !dataReferenceDescriptor &&
     offersActivityData(input, readOnly, editor?.id);
   // A stored activity output is a reference the server's expression catalog does not list. Naming it lets the syntax
   // picker show the current mode and keep the way back to a fixed value or an expression. Where Choose data is
   // offered, the picker also lists "Activity output…", which opens the chooser without switching anything yet.
   const listsActivityOutput = expressionDescriptors.some(descriptor => descriptor.type === activityResultSyntax);
   // Listed first (it sorts first by name too), so the entry is visible without scrolling the picker.
-  const rowDescriptors = syntax === activityResultSyntax && !listsActivityOutput
-    ? [activityResultExpressionDescriptor, ...expressionDescriptors]
+  const rowDescriptors = dataReferenceDescriptor && !expressionDescriptors.some(descriptor => descriptor.type === syntax)
+    ? [dataReferenceDescriptor, ...expressionDescriptors]
     : offersChooseData && !listsActivityOutput
       ? [chooseActivityOutputDescriptor, ...expressionDescriptors]
       : expressionDescriptors;
@@ -877,13 +880,14 @@ function PropertyRow({
       return;
     }
     const clearsReference = nextValue === null &&
-      (currentWrapped?.expression.type === "Connection" || currentWrapped?.expression.type === activityResultSyntax);
+      (currentWrapped?.expression.type === "Connection" || currentWrapped?.expression.type === activityResultSyntax ||
+        currentWrapped?.expression.type === "WorkflowRequest" || activityDataMemberDescriptors.some(descriptor => descriptor.type === currentWrapped?.expression.type));
     if (clearsReference) {
       // Clearing a reference unbinds the input, so it is untouched again rather than holding an empty reference.
       const unbound = { ...current.activity };
       delete unbound[getInputPropertyName(current.input)];
       current.onChange(unbound, current.input);
-      if (currentWrapped?.expression.type === activityResultSyntax) focusAfterClear.current = true;
+      if (currentWrapped?.expression.type !== "Connection") focusAfterClear.current = true;
       return;
     }
     const portableDefinition = currentWrapped
@@ -988,13 +992,17 @@ function PropertyRow({
   // Stores the server's binding unchanged as one edit. Replacing authored content asks first, as any lossy
   // syntax switch does; an untouched input has nothing to lose.
   const chooseData = (binding: ActivityDataBinding) => {
-    if (!wrapped) return;
+    if (!wrapped || latestProperty.current.editorDisabled || latestProperty.current.activity.nodeId !== activity.nodeId) return;
     const descriptor = binding.expressionType === activityResultSyntax
       ? expressionDescriptors.find(candidate => candidate.type === activityResultSyntax) ?? activityResultExpressionDescriptor
-      : expressionDescriptors.find(candidate => candidate.type === binding.expressionType);
+      : expressionDescriptors.find(candidate => candidate.type === binding.expressionType)
+        ?? activityDataMemberDescriptors.find(candidate => candidate.type === binding.expressionType)
+        ?? (binding.expressionType === "WorkflowRequest" ? { type: "WorkflowRequest", displayName: "Request input", editingMode: "reference" as const } : undefined);
     if (!descriptor) return;
     const untouched = !Object.prototype.hasOwnProperty.call(latestProperty.current.activity, getInputPropertyName(input));
-    const replacesValue = !untouched && planInputSyntaxTransition(
+    const dataKinds = [activityResultSyntax, "Variable", "Input", "WorkflowRequest", ...activityDataMemberDescriptors.map(descriptor => descriptor.type)];
+    const replacesReference = editingMode === "reference" && descriptor.editingMode === "reference" && dataKinds.includes(syntax) && dataKinds.includes(binding.expressionType);
+    const replacesValue = !untouched && !replacesReference && planInputSyntaxTransition(
       input,
       editingMode ?? "structured",
       descriptor.editingMode,
@@ -1067,7 +1075,7 @@ function PropertyRow({
     />
   ) : null;
   const contributedExpressionEditor = InlineExpressionEditorComponent && inlineExpressionContext ? (
-    <InlineExpressionEditorComponent
+    <ActivityDataBindingChangeProvider onSelect={chooseData}><InlineExpressionEditorComponent
       descriptor={effectiveInput}
       syntax={syntax}
       value={editorValue}
@@ -1080,7 +1088,7 @@ function PropertyRow({
       }}
       onChange={setRaw}
       onValidationChange={hasError => reportEditorValidation("expression", hasError)}
-    />
+    /></ActivityDataBindingChangeProvider>
   ) : null;
   // A secret-only input never falls back to a text or literal editor: without a secret picker it shows the
   // same unavailable state any syntax without an editor shows.
@@ -2032,7 +2040,7 @@ function syntaxIconFor(descriptor: StudioExpressionDescriptor | undefined): Luci
   if (syntax.includes("secret")) return KeyRound;
   if (syntax === "connection") return Cable;
   // The same icon as the Choose data action and the stored reference, not the generic reference (Connection) icon.
-  if (syntax === activityResultSyntax.toLowerCase()) return ActivityOutputIcon;
+  if (syntax === activityResultSyntax.toLowerCase() || activityDataMemberDescriptors.some(descriptor => descriptor.type.toLowerCase() === syntax)) return ActivityOutputIcon;
   if (["input", "variable", "object", "json"].includes(syntax) || descriptor?.editingMode === "structured") return Braces;
   if (descriptor?.editingMode === "reference") return Cable;
   if (descriptor?.editingMode === "literal") return Type;

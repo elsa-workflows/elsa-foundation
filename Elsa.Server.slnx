@@ -861,6 +861,9 @@
     <Project Path="Essentials/tests/Workflows/Publishing/Api/Tests/Elsa.Workflows.Publishing.Api.Tests.csproj" />
   </Folder>
   <Folder Name="/Essentials/tests/Workflows/Publishing/Persistence/" />
+  <Folder Name="/Essentials/tests/Workflows/Runtime/Fixtures/StandaloneTriggerConsumer/">
+    <Project Path="Essentials/tests/Workflows/Runtime/Fixtures/StandaloneTriggerConsumer/IndependentTriggers.Consumer.csproj" />
+  </Folder>
   <Folder Name="/Essentials/tests/Workflows/Runtime/">
     <Project Path="Essentials/tests/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj" />
   </Folder>

@@ -66,6 +66,16 @@
       count.textContent = "Step " + (i + 1) + " of " + items.length;
       prev.disabled = i === 0;
       next.disabled = i === items.length - 1;
+      // Keep the current action visible in a narrow diagram without moving the page vertically.
+      if (root.hasAttribute("data-follow-step")) {
+        const frame = svg.closest(".fig");
+        const focus = parts.find(p => p.dataset.k === [...on].at(-1));
+        if (focus && frame.scrollWidth > frame.clientWidth) {
+          const action = focus.getBoundingClientRect();
+          const viewport = frame.getBoundingClientRect();
+          frame.scrollLeft += action.left - viewport.left - (frame.clientWidth - action.width) / 2;
+        }
+      }
     };
     prev.addEventListener("click", () => { if (i > 0) { i--; render(); } });
     next.addEventListener("click", () => { if (i < items.length - 1) { i++; render(); } });
