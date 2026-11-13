@@ -116,7 +116,7 @@ function requiredText(value: unknown, name: string): string {
   return value;
 }
 function is(element: Element, namespaceURI: string, localName: string) {
-  return element.namespaceURI === namespaceURI && element.localName === localName;
+  return (element.namespaceURI ?? "") === namespaceURI && element.localName === localName;
 }
 function children(element: Element, namespaceURI: string, localName: string): Element[] {
   return [...element.children].filter(child => is(child, namespaceURI, localName));
@@ -528,7 +528,10 @@ function applyCommand(parsed: ParsedBpmnDocument, command: BpmnDocumentCommand) 
     case "remove": {
       const target = resolve(parsed, command.target);
       if (target === parsed.process || target === parsed.document.documentElement) fail("selected process cannot be removed");
-      const containedIds = new Set([target, ...target.getElementsByTagName("*")].map(element => element.getAttribute("id")).filter(Boolean));
+      const containedIds = new Set([target, ...target.getElementsByTagName("*")].flatMap(element => {
+        const id = element.getAttribute("id");
+        return id && parsed.byId.get(id) === element ? [id] : [];
+      }));
       if (parsed.payload.bindings.some(binding => containedIds.has(binding.elementId)))
         fail("deletion needs an explicit native-binding transformation");
       target.remove();
