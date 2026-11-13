@@ -2877,7 +2877,7 @@ function controlByLabel<T extends HTMLInputElement | HTMLSelectElement | HTMLTex
   const label = [...container.querySelectorAll("label")].find(candidate =>
     [...candidate.querySelectorAll(":scope > span")].some(span => span.textContent?.trim() === text)
   );
-  const control = label?.querySelector("input, select, textarea");
+  const control = label?.control;
   if (!control) throw new Error(`Control labelled '${text}' not found.`);
   return control as T;
 }
