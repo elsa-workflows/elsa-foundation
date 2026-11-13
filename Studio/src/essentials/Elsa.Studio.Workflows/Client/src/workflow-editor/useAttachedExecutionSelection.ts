@@ -32,6 +32,7 @@ export function useAttachedExecutionSelection({ context, attachmentId, workflowE
     labelFor(execution: ActivityExecutionStateSummary): string;
   } | null>(null);
   const request = useRef<AbortController | null>(null);
+  const focusReadyRequest = useRef<AbortController | null>(null);
   const retrySelection = useRef<(() => Promise<boolean>) | null>(null);
   const visibleNodeKey = JSON.stringify(visibleNodeIds);
   const latestObservationRevision = useRef(observationRevision); latestObservationRevision.current = observationRevision;
@@ -67,6 +68,7 @@ export function useAttachedExecutionSelection({ context, attachmentId, workflowE
     setState(value => value?.key === key && value.nodeId === nodeId
       ? { ...value, loading: true, error: "" }
       : { key, nodeId, execution: null, scopes: [], loading: true, error: "" });
+    let committed = false;
     try {
       if (!await supportsActivityExecutionBrowsing(context)) throw new Error("Execution browsing is unavailable on this host.");
       if (!isCurrent() || controller.signal.aborted) return false;
@@ -81,7 +83,9 @@ export function useAttachedExecutionSelection({ context, attachmentId, workflowE
         canvasOwnerId, JSON.parse(visibleNodeKey ?? "null") ?? undefined, activityCatalog);
       if (!isCurrent() || controller.signal.aborted) return false;
       retrySelection.current = null;
+      focusReadyRequest.current = controller;
       setState({ key, nodeId, execution, scopes: result.scopes, prepared: { ...prepared, observationRevision: preparedRevision }, loading: false, error: "" });
+      committed = true;
       return true;
     } catch (error) {
       if (!isCurrent() || controller.signal.aborted) return false;
@@ -91,6 +95,8 @@ export function useAttachedExecutionSelection({ context, attachmentId, workflowE
       setState(value => ({ ...(value?.key === key && value.nodeId === nodeId && !denied ? value : { key, nodeId, execution: null, scopes: [] }), loading: false,
         error: error instanceof Error ? error.message : "Execution context could not be resolved. Retry the selection." }));
       return false;
+    } finally {
+      if (!committed) controller.abort();
     }
   }, [activityCatalog, canvasOwnerId, context, key, nodeId, visibleNodeKey, workflowExecutionId]);
   useEffect(() => {
@@ -107,6 +113,12 @@ export function useAttachedExecutionSelection({ context, attachmentId, workflowE
     loading: current?.loading ?? false,
     error: current?.error ?? "",
     choose,
+    captureFocusOperation: () => {
+      const controller = request.current;
+      return { token: controller, signal: controller?.signal,
+        isReady: () => request.current === controller && focusReadyRequest.current === controller,
+        isCurrent: () => active.current && currentKey.current === key && currentNode.current === nodeId && request.current === controller };
+    },
     retry: () => retrySelection.current?.(),
     canRetry: Boolean(current?.error && retrySelection.current),
     queue: (execution: ActivityExecutionStateSummary, graph: ExecutableActivityGraph,
