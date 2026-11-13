@@ -134,3 +134,130 @@ test("Feature Management keeps Clear under the native pointer after selection", 
     }
   }
 });
+
+
+for (const mode of ["light", "dark"] as const) {
+  test(`Feature categories fit the host scrollport and resized bottom panel (${mode})`, async ({ page }, testInfo) => {
+    await page.addInitScript(mode => {
+      localStorage.setItem("elsa-studio-theme", "classic");
+      localStorage.setItem("elsa-studio-workspace-style", "minimal");
+      localStorage.setItem("elsa-studio-theme-mode", mode);
+    }, mode);
+    await page.setViewportSize({ width: 1920, height: 1000 });
+    await page.goto("/feature-management.html?categoryRail=1&hostScrollport=1");
+    const rail = page.getByRole("region", { name: "Categories", exact: true });
+    const choices = rail.getByRole("group", { name: "Feature categories", exact: true }).getByRole("button");
+    await expect(choices).toHaveCount(26);
+    for (const bottom of [36, 296]) {
+      await page.getByTestId("feature-scrollport").evaluate((element, value) => { element.style.bottom = `${value}px`; }, bottom);
+      await choices.first().focus();
+      for (let index = 1; index < await choices.count(); index++) await page.keyboard.press("Tab");
+      await expect(choices.last()).toBeFocused();
+      await expect(choices.last()).toBeInViewport({ ratio: 1 });
+      const geometry = await choices.last().evaluate(button => {
+        const last = button.getBoundingClientRect();
+        const scrollport = document.querySelector<HTMLElement>('[data-testid="feature-scrollport"]')!;
+        const bounds = scrollport.getBoundingClientRect();
+        return { contained: last.top >= bounds.top && last.bottom <= bounds.bottom, height: bounds.height };
+      });
+      expect(geometry.contained).toBe(true);
+      const screenshot = testInfo.outputPath(`categories-shell-${mode}-${bottom}.png`);
+      await page.screenshot({ path: screenshot });
+      await testInfo.attach(`categories-shell-${mode}-${bottom}`, { path: screenshot, contentType: "image/png" });
+    }
+  });
+
+  test(`Feature categories stay discoverable and contained with long labels and many choices (${mode})`, async ({ page }, testInfo) => {
+    await page.addInitScript(mode => {
+      localStorage.setItem("elsa-studio-theme", "classic");
+      localStorage.setItem("elsa-studio-workspace-style", "minimal");
+      localStorage.setItem("elsa-studio-theme-mode", mode);
+    }, mode);
+    for (const viewport of cases) {
+      await test.step(`${mode}: ${viewport.name}`, async () => {
+        await page.setViewportSize({ width: viewport.viewportWidth, height: 1000 });
+        const params = new URLSearchParams({ categoryRail: "1" });
+        if (viewport.moduleWidth) params.set("moduleWidth", String(viewport.moduleWidth));
+        await page.goto(`/feature-management.html?${params}`);
+        await expect(page.locator("html")).toHaveAttribute("data-theme-mode", mode);
+        const rail = page.getByRole("region", { name: "Categories", exact: true });
+        const choices = rail.getByRole("group", { name: "Feature categories", exact: true });
+        await expect(choices.getByRole("button")).toHaveCount(26);
+        const longCategory = choices.getByRole("button", { name: /^ExtremelyLongUnbrokenCategoryName/ });
+        await longCategory.focus();
+        await longCategory.press("Enter");
+        await expect(longCategory).toHaveAttribute("aria-pressed", "true");
+        await expect(page.locator(".feature-management-card")).toHaveCount(1);
+        const search = rail.getByRole("searchbox", { name: "Search categories", exact: true });
+        await search.fill("no-category");
+        await rail.getByRole("button", { name: "Clear category search", exact: true }).press("Enter");
+        await expect(search).toBeFocused();
+        await expect(longCategory).toHaveAttribute("aria-pressed", "true");
+        const lastChoice = choices.getByRole("button").last();
+        await lastChoice.focus();
+        await expect(lastChoice).toBeInViewport();
+        await choices.getByRole("button", { name: /^All categories/ }).press("Space");
+        await expect(page.locator(".feature-management-card")).toHaveCount(114);
+        const geometry = await rail.evaluate(element => {
+          const rect = element.getBoundingClientRect();
+          const list = element.parentElement!.querySelector(".feature-management-list-column")!.getBoundingClientRect();
+          const categoryButtons = Array.from(element.querySelectorAll<HTMLButtonElement>(".feature-management-category-options > button"));
+          const labelsFit = () => categoryButtons.every(button => {
+            const box = button.getBoundingClientRect();
+            return Array.from(button.querySelectorAll("span")).every(label => {
+              const text = label.getBoundingClientRect();
+              return text.top >= box.top - 1 && text.bottom <= box.bottom + 1;
+            });
+          });
+          // Prove this guard rejects clipped text without assuming that a flex-shrink
+          // change alone produces clipping. Restore styles and scrolling before captures.
+          let clippedLabelsContained: boolean | null = null;
+          if (element.parentElement!.getBoundingClientRect().width >= 960) {
+            const button = categoryButtons[0];
+            if (!button) throw new Error("The category containment guard needs a category button.");
+            const previousStyle = button.getAttribute("style");
+            const options = button.parentElement!;
+            const previousScrollTop = options.scrollTop;
+            try {
+              button.style.height = "1px";
+              button.style.minHeight = "0";
+              button.style.paddingBlock = "0";
+              button.style.overflow = "hidden";
+              clippedLabelsContained = labelsFit();
+            } finally {
+              if (previousStyle === null) button.removeAttribute("style");
+              else button.setAttribute("style", previousStyle);
+              options.scrollTop = previousScrollTop;
+            }
+          }
+          const labelsContained = labelsFit();
+          return {
+            width: element.parentElement!.getBoundingClientRect().width,
+            beside: rect.right <= list.left,
+            above: rect.bottom <= list.top,
+            labelsContained,
+            clippedLabelsContained,
+            controlsFit: Array.from(element.querySelectorAll("button,input")).every(control => {
+              const box = control.getBoundingClientRect();
+              return box.left >= rect.left && box.right <= rect.right + 1 && control.scrollWidth <= control.clientWidth;
+            }),
+            overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth
+          };
+        });
+        expect(geometry.controlsFit).toBe(true);
+        expect(geometry.labelsContained).toBe(true);
+        if (geometry.width >= 960) expect(geometry.clippedLabelsContained).toBe(false);
+        expect(geometry.overflow).toBeLessThanOrEqual(1);
+        expect(geometry.width >= 960 ? geometry.beside : geometry.above).toBe(true);
+        await longCategory.scrollIntoViewIfNeeded();
+        await search.focus();
+        const captureName = `categories-${mode}-${viewport.viewportWidth}-${viewport.moduleWidth ?? "full"}`;
+        const screenshot = testInfo.outputPath(`${captureName}.png`);
+        await page.screenshot({ path: screenshot });
+        await testInfo.attach(captureName, {
+          path: screenshot, contentType: "image/png"
+        });
+      });
+    }
+  });
+}

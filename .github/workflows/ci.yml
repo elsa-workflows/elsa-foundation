@@ -1143,6 +1143,17 @@ jobs:
         run: pnpm test:browser --shard=${{ matrix.shard }}/2
         working-directory: Studio
 
+      # Keep the category rail's small fixture image set available for independent UX
+      # review on green runs; the composed host has separate real-catalogue evidence.
+      - name: Retain category layout screenshots
+        if: ${{ !cancelled() && steps.browser-tests.outcome == 'success' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: feature-category-layout-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.shard }}
+          path: Studio/test-results/feature-management-layout-*/categories-*.png
+          if-no-files-found: ignore
+          retention-days: 14
+
       # Playwright retains a trace and error context only for failed cases; specs also write their own screenshots there.
       # Without this step the job discards the folder. Scoped to the test step so setup failures upload nothing, and
       # including the cancelled outcome so a shard that hits the 45-minute job timeout still surfaces what failed first.

@@ -5,11 +5,11 @@ import { ThemeProvider } from "../../src/essentials/Elsa.Studio.Hosting/Client/s
 import { FeatureManagementPage, register } from "../../../Extensions/FeatureManagement/studio/Elsa.Studio.FeatureManagement/Client/src/module";
 import "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/styles.css";
 
-function createFeature(id: string, enabled = false) {
+function createFeature(id: string, enabled = false, categories = ["Fixture"]) {
   return {
     id,
     displayName: id,
-    categories: ["Fixture"],
+    categories,
     sourceKind: "runtime",
     packageId: "Fixture.Features",
     packageVersion: "1.0.0",
@@ -39,9 +39,14 @@ const studioCatalog = {
   revision: "studio-layout-fixture",
   features: [createFeature("StudioFeatureA"), createFeature("StudioFeatureB")]
 };
+const railFixture = new URLSearchParams(window.location.search).has("categoryRail");
 const serverCatalog = {
   revision: "server-layout-fixture",
-  features: Array.from({ length: 114 }, (_, index) => createFeature(`ServerFeature${String(index + 1).padStart(3, "0")}`))
+  features: Array.from({ length: 114 }, (_, index) => createFeature(
+    `ServerFeature${String(index + 1).padStart(3, "0")}`,
+    false,
+    railFixture ? [index === 0 ? "ExtremelyLongUnbrokenCategoryNameForContainmentAndWrapping" : `Group ${index % 24}`] : ["Fixture"]
+  ))
 };
 
 const api = {
@@ -71,11 +76,17 @@ const moduleWidth = Number(new URLSearchParams(window.location.search).get("modu
 if (Number.isFinite(moduleWidth) && moduleWidth > 0) {
   rootElement.style.width = `${moduleWidth}px`;
 }
+const hostScrollport = new URLSearchParams(window.location.search).has("hostScrollport");
+const featurePage = hostScrollport ? (
+  <main className="content" data-testid="feature-scrollport" style={{ position: "fixed", top: 92, bottom: 36, left: 216, right: 0 }}>
+    <div style={{ marginLeft: 216 }}><FeatureManagementPage /></div>
+  </main>
+) : <FeatureManagementPage />;
 
 createRoot(rootElement).render(
   <ThemeProvider>
     <AnonymousAuthProvider>
-      <FeatureManagementPage />
+      {featurePage}
     </AnonymousAuthProvider>
   </ThemeProvider>
 );

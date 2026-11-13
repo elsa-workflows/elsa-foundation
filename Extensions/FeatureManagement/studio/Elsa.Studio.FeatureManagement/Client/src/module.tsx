@@ -1,5 +1,5 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown, FlaskConical, Package, Settings2, ShieldAlert, RefreshCcw } from "lucide-react";
+import { FlaskConical, Package, Settings2, ShieldAlert, RefreshCcw } from "lucide-react";
 import {
   defaultStudioHostId,
   useAuthSession,
@@ -20,7 +20,7 @@ import { registerBuiltInSettingEditors,
   StudioAlert,
   StudioTabs,
   StudioToolbar,
-  StudioToolbarGroup, StudioPageHeader, StudioButton } from "@elsa-workflows/studio-ui";
+  StudioToolbarGroup, StudioPageHeader, StudioButton, StudioSearchInput } from "@elsa-workflows/studio-ui";
 import "./styles.css";
 
 interface FeatureCatalogResponse {
@@ -131,6 +131,7 @@ interface FeatureHostState {
   selectedId: string;
   checkedFeatureIds: Set<string>;
   selectedCategory: string;
+  categoryQuery: string;
   filterText: string;
   loading: boolean;
   applying: boolean;
@@ -404,6 +405,7 @@ function createInitialHostState(): FeatureHostState {
     selectedId: "",
     checkedFeatureIds: new Set(),
     selectedCategory: AllCategoriesId,
+    categoryQuery: "",
     filterText: "",
     loading: true,
     applying: false,
@@ -490,7 +492,7 @@ export function FeatureManagementPage() {
 
   const activeHost = hosts.find(host => host.id === activeHostId) ?? hosts[0];
   const hostState = hostStates[activeHost.id];
-  const { catalog, draft, selectedId, checkedFeatureIds, selectedCategory, filterText, loading, applying, status, error, enabledRoots, stateCauses } = hostState;
+  const { catalog, draft, selectedId, checkedFeatureIds, selectedCategory, categoryQuery, filterText, loading, applying, status, error, enabledRoots, stateCauses } = hostState;
   const completionMessage = featureCompletion?.hostId === activeHost.id && featureCompletion.targetKey === activeHost.key ? featureCompletion.message : status;
 
   // Load once. A background workspace tab mounts its effects again when it returns, and a refresh
@@ -842,6 +844,13 @@ export function FeatureManagementPage() {
         </div>
       ) : null}
       <div className="feature-management-layout">
+        <CategoryRail
+          categories={categories}
+          selectedCategory={selectedCategory}
+          query={categoryQuery}
+          onQueryChange={query => updateHostState(activeHost.id, state => ({ ...state, categoryQuery: query }))}
+          onSelect={category => updateHostState(activeHost.id, state => ({ ...state, selectedCategory: category }))}
+        />
         <div className="feature-management-list-column">
           <div className="feature-management-list-toolbar">
             <input
@@ -850,11 +859,6 @@ export function FeatureManagementPage() {
               placeholder="Filter by name, package, setting..."
               value={filterText}
               onChange={event => updateHostState(activeHost.id, state => ({ ...state, filterText: event.target.value }))}
-            />
-            <CategorySelect
-              categories={categories}
-              selectedCategory={selectedCategory}
-              onSelect={category => updateHostState(activeHost.id, state => ({ ...state, selectedCategory: category }))}
             />
           </div>
 
@@ -1295,113 +1299,90 @@ function BulkFeatureActions({
   );
 }
 
-/**
- * Searchable category picker embedded in the feature list toolbar. Replaces the former
- * dedicated categories column: after picking a category the full-width list and inspector
- * get the reclaimed space, while the popover keeps every category (with counts) one click
- * away and filterable by text.
- */
-function CategorySelect({
+/** Visible category navigation; search changes choices, never the selected feature state. */
+function CategoryRail({
   categories,
   selectedCategory,
+  query,
+  onQueryChange,
   onSelect
 }: {
   categories: CategoryFilterItem[];
   selectedCategory: string;
+  query: string;
+  onQueryChange(query: string): void;
   onSelect(categoryId: string): void;
 }) {
-  const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState("");
-  const containerRef = useRef<HTMLDivElement>(null);
-  const searchRef = useRef<HTMLInputElement>(null);
-  const selected = categories.find(category => category.id === selectedCategory) ?? categories[0];
+  const railRef = useRef<HTMLElement>(null);
+  // Viewport units include the host's chrome; measure its scrollport so panels cannot hide categories.
+  useLayoutEffect(() => {
+    const rail = railRef.current;
+    if (!rail) return;
+    let scrollport = rail.parentElement;
+    while (scrollport && !/(auto|scroll|hidden)/.test(getComputedStyle(scrollport).overflowY)) {
+      scrollport = scrollport.parentElement;
+    }
+    const updateHeight = () => {
+      const style = scrollport ? getComputedStyle(scrollport) : null;
+      const padding = (Number.parseFloat(style?.paddingTop ?? "0") || 0)
+        + (Number.parseFloat(style?.paddingBottom ?? "0") || 0);
+      const inset = Number.parseFloat(getComputedStyle(rail).top) || 0;
+      const height = (scrollport?.clientHeight ?? window.innerHeight) - padding - inset;
+      rail.style.setProperty("--fm-category-max-height", `${Math.max(0, height)}px`);
+    };
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(updateHeight);
+    if (scrollport) observer?.observe(scrollport);
+    window.addEventListener("resize", updateHeight);
+    updateHeight();
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener("resize", updateHeight);
+    };
+  }, []);
   const normalizedQuery = query.trim().toLowerCase();
-  const visibleCategories = normalizedQuery
-    ? categories.filter(category => category.label.toLowerCase().includes(normalizedQuery))
-    : categories;
+  const visibleCategories = categories.filter(category => category.id !== AllCategoriesId
+    && category.label.toLowerCase().includes(normalizedQuery));
+  const allCategories = categories.find(category => category.id === AllCategoriesId);
 
-  useEffect(() => {
-    if (!open) {
-      return;
-    }
-
-    function onPointerDown(event: PointerEvent) {
-      if (containerRef.current && event.target instanceof Node && !containerRef.current.contains(event.target)) {
-        setOpen(false);
-        setQuery("");
-      }
-    }
-
-    document.addEventListener("pointerdown", onPointerDown);
-    return () => document.removeEventListener("pointerdown", onPointerDown);
-  }, [open]);
-
-  useEffect(() => {
-    if (open) {
-      searchRef.current?.focus();
-    }
-  }, [open]);
-
-  function close() {
-    setOpen(false);
-    setQuery("");
+  function categoryButton(category: CategoryFilterItem) {
+    return (
+      <StudioButton
+        key={category.id}
+        variant="ghost"
+        aria-pressed={category.id === selectedCategory}
+        onClick={() => onSelect(category.id)}
+      >
+        <span>{category.label}</span>
+        <span className="feature-management-category-count">{category.count}</span>
+      </StudioButton>
+    );
   }
 
   return (
-    <div
-      className="feature-management-category-select"
-      ref={containerRef}
-      onKeyDown={event => {
-        if (event.key === "Escape" && open) {
-          event.preventDefault();
-          close();
-        }
-      }}
-    >
-      <button
-        type="button"
-        className="feature-management-category-trigger"
-        aria-label="Filter by category"
-        aria-haspopup="listbox"
-        aria-expanded={open}
-        onClick={() => (open ? close() : setOpen(true))}
-      >
-        <span>{selected?.label ?? "All categories"}</span>
-        <em>{selected?.count ?? 0}</em>
-        <ChevronDown size={14} aria-hidden="true" />
-      </button>
-      {open ? (
-        <div className="feature-management-category-popover">
-          <input
-            ref={searchRef}
-            type="search"
-            aria-label="Search categories"
-            placeholder="Search categories"
-            value={query}
-            onChange={event => setQuery(event.target.value)}
-          />
-          <div className="feature-management-category-options" role="listbox" aria-label="Feature categories">
-            {visibleCategories.length === 0 ? <p className="feature-management-muted">No categories match.</p> : null}
-            {visibleCategories.map(category => (
-              <button
-                key={category.id}
-                type="button"
-                role="option"
-                aria-selected={category.id === selectedCategory}
-                className={category.id === selectedCategory ? "active" : ""}
-                onClick={() => {
-                  onSelect(category.id);
-                  close();
-                }}
-              >
-                <span>{category.label}</span>
-                <em>{category.count}</em>
-              </button>
-            ))}
-          </div>
+    <section ref={railRef} className="feature-management-category-rail" aria-label="Categories">
+      <h2>Categories</h2>
+      <StudioSearchInput
+        aria-label="Search categories"
+        placeholder="Search categories"
+        value={query}
+        onChange={event => onQueryChange(event.currentTarget.value)}
+      />
+      <div className="feature-management-category-choices" role="group" aria-label="Feature categories">
+        {allCategories ? categoryButton(allCategories) : null}
+        <div className="feature-management-category-options">
+          {visibleCategories.map(categoryButton)}
+          {normalizedQuery && visibleCategories.length === 0 ? (
+            <div className="feature-management-category-empty">
+              <p>No categories match.</p>
+              <StudioButton size="sm" onClick={() => {
+                onQueryChange("");
+                railRef.current?.querySelector<HTMLInputElement>("input")?.focus();
+              }}>Clear category search</StudioButton>
+            </div>
+          ) : null}
         </div>
-      ) : null}
-    </div>
+      </div>
+    </section>
   );
 }
 
