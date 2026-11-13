@@ -974,7 +974,7 @@ cyclic, fault and loop-iteration join tests, with main's execution-id pools: 41 
 byte-locks pass with main's golden strings, so for those runs the extracted engine makes the same state mutations as
 main's, in the same order. That is the evidence that "extract, don't invent" held.
 
-### The hang, shown, then gone
+### The missed join, shown, then gone
 
 NATIVE.md reasoned that the native Flowchart never fires an All join after a decision. Run first (smoke,
 `smoke-decision-join`): the join and the node after it never ran, and the Flowchart completed without them (`left no
@@ -998,7 +998,8 @@ path the engine cancelled. What changed for authors, and why:
 **Cost.** Round trips are unchanged: every row of `cost sqlite` equals main's, and a new Flowchart row (three Event
 branches, an All join, three direct resumes) has the old native Flowchart's counts (29 / 29 / 85 SQLite engine
 calls in Ephemeral, Balanced and Durable). The state is larger: 1,233 bytes per commit in Balanced (at most 2,135)
-against 584 (836). That is main's state shape (paths, scopes and arrivals with their ids) after leaving out
+against 584 (836) for the old native Flowchart, measured with the same row on #4330's head before the port (#4333's
+description has both). That is main's state shape (paths, scopes and arrivals with their ids) after leaving out
 diagnostics and defaults; reshaping it means changing main's model, which this round did not do.
 
 ### G1 to G5 in the simulation
@@ -1013,7 +1014,8 @@ first-wins race between an Event and a Delay, and an All join after a decision.
 
 The four mutations of the plan, as engine flaws (`FlowchartOptions.Flaws`), are each caught by their own check at seed
 2, and the mutation check now fails a graph flaw that another check catches first: `NoDeadPaths` by G3,
-`NoRoundReset` by G2, `DeadPathRunsNode` by G1, `CancelLeavesPaths` by G5.
+`NoRoundReset` by G2, `DeadPathRunsNode` by G1, `CancelLeavesPaths` by G5. G4 has no mutation of its own (none of the
+plan's aims at it), so that it bites is not shown.
 
 | Run (20,000 seeds unless said) | Main | Round 4, graph engine |
 |---|---|---|

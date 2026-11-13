@@ -362,7 +362,7 @@ a position that is missing below the partition's position: it was deleted, not w
 kept events: an event and a wait both committed within the window are delivered once; for the others, an event
 published after the wait committed is delivered once); 14 one bad instance; 15 callers; 16 suspended; 17 termination;
 18 state versions; 19 rebind; 20 event starts; 21 memory bound; 22 delete; 23 fair share. With native instances in the
-mix: N1 an activity completes once, N2 a join fires once, N3 a child starts once and resumes once, N4 a Durable
+mix: N1 an activity completes once, N2 a join fires once (a Flowchart join once per scheduling id; G2 holds it to once per round), N3 a child starts once and resumes once, N4 a Durable
 External effect runs only under a committed attempt, N5 final variables equal a run without faults, and N6 (merge) an
 External effect that runs again is told that its turn may have run before. The graph invariants of the sketch (round 4):
 G1 path conservation, G2 a join fires at most once per round, G3 an All join fires once every inbound of its round has
@@ -444,13 +444,15 @@ marked.
 ## What the tests did and did not show
 
 Run on the merged kernel (FINDINGS section 23) and again on the layered kernel of stage A (section 24), with the same
-numbers.
+numbers; round 4's graph engine (section 26) ran again what it touched, with its own numbers below.
 
 - **Simulation:** 200,000 runs of 300 actions and 20,000 of 1,000 pass, without and with native instances; 12 and 15
-  innocent messages parked at the threshold in the 1,000-action runs, which invariant 14 allows.
+  innocent messages parked at the threshold in the 1,000-action runs, which invariant 14 allows (stage A's numbers).
+  Round 4, with `n-graph` in the native mix and the graph checks on: 20,000 runs of 300 actions and 20,000 of 1,000
+  pass with native instances, 14 parked in the 1,000-action runs; 20,000 of 300 without.
 - **Mutation check:** 39 mutations at 20,000 runs (37 kernel flaws alone and two in combination): all caught but the two that another rule covers, at the first
   failing seeds round 3 recorded; the five native flaws are caught too, and round 4's four graph flaws, each by its own
-  graph check (FINDINGS section 26).
+  graph check (FINDINGS section 26). G4 has no mutation of its own: that it bites is not shown.
 - **Graph engine:** main's Flowchart conformance corpus and join tests pass against the extracted engine (41), with
   main's two determinism byte-locks byte-identical.
 - **Store conformance suite:** 57 semantic cases pass (required) on in-memory, SQLite, PostgreSQL, SQL Server, MySQL
