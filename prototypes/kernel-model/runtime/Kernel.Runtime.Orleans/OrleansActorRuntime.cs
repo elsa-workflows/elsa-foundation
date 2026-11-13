@@ -31,7 +31,7 @@ public sealed record OrleansRuntimeOptions
 public sealed class OrleansActorRuntime(IGrainFactory grains, OrleansRuntimeOptions options) : IActorRuntime
 {
     private readonly TaskCompletionSource<IScopeHost> _host = new(TaskCreationOptions.RunContinuationsAsynchronously);
-    private readonly CancellationTokenSource _stopping = new();
+    private readonly CancellationTokenSource _stopping = new(), _crashing = new();
 
     public OrleansRuntimeOptions Options => options;
 
@@ -40,8 +40,11 @@ public sealed class OrleansActorRuntime(IGrainFactory grains, OrleansRuntimeOpti
 
     internal Task Started => _host.Task;
 
-    /// <summary>Cancelled when the silo stops: a pass under way stops at a turn boundary, before its commit.</summary>
+    /// <summary>Cancelled when the silo stops: the keeper stops calling, and a grain arms no further pass.</summary>
     internal CancellationToken Stopping => _stopping.Token;
+
+    /// <summary>Cancelled only by <see cref="Crash"/>: a pass under way stops at a turn boundary, before its commit.</summary>
+    internal CancellationToken Crashing => _crashing.Token;
 
     public int ScopeOf(InstanceRef actor) => actor.Partition;
 
@@ -55,13 +58,20 @@ public sealed class OrleansActorRuntime(IGrainFactory grains, OrleansRuntimeOpti
         await grains.GetGrain<IPartitionGrain>(ScopeOf(actor)).WakeAsync(actor.Id);
 
     /// <summary>
-    /// Stops the passes of this silo's grains. Called before the silo stops: a graceful stop then deactivates the grains,
-    /// which give their scopes up; a crash gives nothing up.
+    /// Called before the silo stops gracefully: no further pass is armed, and the pass under way ends as it would (its
+    /// commit lands or is refused). Orleans then deactivates the grains, which give their scopes up.
     /// </summary>
     public ValueTask StopAsync(CancellationToken cancellationToken = default)
     {
         _stopping.Cancel();
         return ValueTask.CompletedTask;
+    }
+
+    /// <summary>For a test of a crash, before the silo is killed: the passes under way stop at a turn boundary, and nothing is given up.</summary>
+    public void Crash()
+    {
+        _crashing.Cancel();
+        _stopping.Cancel();
     }
 }
 

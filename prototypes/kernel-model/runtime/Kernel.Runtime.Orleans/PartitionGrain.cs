@@ -53,17 +53,18 @@ public sealed class PartitionGrain(OrleansActorRuntime runtime) : Grain, IPartit
 
     public async Task WakeAsync(string actor)
     {
-        if (_activation is { Active: true } activation) await activation.WokenAsync(new InstanceRef(actor), runtime.Stopping);
+        if (_activation is { Active: true } activation) await activation.WokenAsync(new InstanceRef(actor), runtime.Crashing);
         Arm(TimeSpan.Zero);
     }
 
     private async Task TickAsync(CancellationToken cancellationToken)
     {
+        if (runtime.Stopping.IsCancellationRequested) return;     // the silo is on its way out: no further pass
         var next = Options.RetryEvery;
-        try { next = await PassAsync(runtime.Stopping); }
-        catch (OperationCanceledException) when (runtime.Stopping.IsCancellationRequested) { return; }
+        try { next = await PassAsync(runtime.Crashing); }
+        catch (OperationCanceledException) when (runtime.Crashing.IsCancellationRequested) { return; }
         catch (Exception) { /* layer 2 catches what its store throws; anything else waits for the next try */ }
-        Arm(next);
+        if (!runtime.Stopping.IsCancellationRequested) Arm(next);
     }
 
     /// <summary>Activate the scope if this grain does not hold it, wake it at the poll interval, run one pass. Returns when to tick again.</summary>
