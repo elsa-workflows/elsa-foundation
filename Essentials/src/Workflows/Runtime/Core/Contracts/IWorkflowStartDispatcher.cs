@@ -8,6 +8,7 @@ namespace Elsa.Workflows.Runtime.Core.Contracts;
 public interface IWorkflowStartDispatcher
 {
     /// <summary>Qualifies saved-source causal transport against the selected history pair; does not invent a target receipt.</summary>
+    /// <exception cref="Elsa.Workflows.Runtime.Core.Exceptions.RuntimePostCommitSourceBoundaryException">Selected provider qualification failed; preserves kind, cause and unavailable classification.</exception>
     bool CanPreserveHistoryCausation(string intentKind, IRuntimeHistoryObservationWriter writer, IRuntimeHistoryStore reader) => false;
 
     /// <summary>Qualify the actual source/material/execution services for saved stimulus starts; legacy dispatchers refuse.</summary>

@@ -4,6 +4,7 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.Executables;
+using Elsa.Workflows.Runtime.Services.History;
 using Elsa.Workflows.Runtime.Services.Triggers;
 
 namespace Elsa.Workflows.Runtime.Services.Executions;
@@ -14,9 +15,18 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
     internal Func<string, (RuntimeHistoryCapturePolicy? Policy, bool? Enabled)>? HistoryAdmission { get; init; }
     internal Func<(IRuntimeHistoryObservationWriter? Writer, IRuntimeHistoryStore? Reader)>? HistoryProvidersResolver { get; init; }
 
-    bool IWorkflowStartDispatcher.CanPreserveHistoryCausation(string intentKind, IRuntimeHistoryObservationWriter writer, IRuntimeHistoryStore reader) =>
-        HistoryAdmission is not null && _stimulusRequests.Owns(intentKind) && HistoryProvidersResolver?.Invoke() is { } selected &&
-        ReferenceEquals(writer, selected.Writer) && ReferenceEquals(reader, selected.Reader) && writer.CanRecordHistory(reader);
+    bool IWorkflowStartDispatcher.CanPreserveHistoryCausation(string intentKind, IRuntimeHistoryObservationWriter writer, IRuntimeHistoryStore reader)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(intentKind); ArgumentNullException.ThrowIfNull(writer); ArgumentNullException.ThrowIfNull(reader);
+        try
+        {
+            return HistoryAdmission is not null && _stimulusRequests.Owns(intentKind) && HistoryProvidersResolver?.Invoke() is { } selected &&
+                ReferenceEquals(writer, selected.Writer) && ReferenceEquals(reader, selected.Reader) && writer.CanRecordHistory(reader);
+        }
+        catch (RuntimePostCommitSourceBoundaryException) { throw; }
+        catch (Exception failure)
+        { throw new RuntimePostCommitSourceBoundaryException(null, intentKind, failure, RuntimeHistoryReadFailures.IsUnavailable(failure)); }
+    }
 
     bool IWorkflowStartDispatcher.CanDispatchSavedStimulus(IStimulusDeliveryStore sources, IWorkflowExecutableStore material,
         IWorkflowExecutionStateStore executions) => _stimulusRequests.IsConfigured && ReferenceEquals(sources, _stimulusDeliveryStore) &&

@@ -8,6 +8,7 @@ using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Contracts;
 using Elsa.Workflows.Runtime.Extensions;
 using Elsa.Workflows.Runtime.Services.Bookmarks;
 using Elsa.Workflows.Runtime.Services.Checkpoints;
@@ -121,6 +122,81 @@ public sealed class RuntimeHistoryPublicationProfileTests
         Assert.Equal(0, f.Actors.Calls);
     }
 
+    [Theory]
+    [InlineData(1)] [InlineData(2)] [InlineData(3)] [InlineData(4)] [InlineData(5)] [InlineData(6)]
+    public async Task Every_nonempty_partial_publication_vocabulary_refuses_required_capture_before_persistence(int mask)
+    {
+        using var f = new Fixture();
+        var current = RuntimeHistoryRegistration.ResolvePolicy(f.Services, "publisher")!;
+        var partial = new RuntimeHistoryCapturePolicy(current.PolicyId, current.Version, true,
+            current.SupportedKinds.Except(PublicationKinds, StringComparer.Ordinal).Concat(PublicationKinds.Where((_, index) => (mask & (1 << index)) != 0)).ToArray());
+        Assert.False(f.Services.GetServices<IRuntimeCheckpointCommitEnricher>().OfType<RuntimeHistoryCapture>().Single().CanCapture(partial));
+        await f.SeedAsync(partial);
+        var refusal = await Assert.ThrowsAsync<RuntimeSchedulerWorkUnavailableException>(() => f.PublishAsync());
+        Assert.Equal("runtime.history.capture-unavailable", refusal.Code);
+        Assert.Empty(f.Writer.ListCommits()); Assert.Null(await f.Writer.FindDurableAsync(f.LastSourceId!)); Assert.Equal(0, f.Actors.Calls);
+    }
+
+    [Theory]
+    [InlineData("logical")] [InlineData("raw")] [InlineData("remove-fact")]
+    public async Task A_later_contributor_cannot_accept_publication_without_its_exact_required_fact_and_origin(string mode)
+    {
+        using var f = new Fixture(change: services => services.AddScoped<IRuntimeCheckpointCommitEnricher>(sp =>
+            new LatePublication(mode, false, sp.GetServices<RuntimePostCommitIntentHandlerContribution>().ToArray())));
+        await f.SeedAsync(RuntimeHistoryRegistration.ResolvePolicy(f.Services, "publisher")!);
+        var refusal = await Assert.ThrowsAsync<RuntimeCheckpointCommitValidationException>(() => f.PublishAsync());
+        Assert.Contains("required logical history", refusal.Message);
+        Assert.Empty(f.Writer.ListCommits()); Assert.Null(await f.Writer.FindDurableAsync(f.LastSourceId!)); Assert.Equal(0, f.Actors.Calls);
+    }
+
+    [Fact]
+    public async Task A_real_quiescence_flush_keeps_the_original_publication_group_and_raw_source()
+    {
+        using var f = new Fixture(decorated: true);
+        await f.SeedAsync(RuntimeHistoryRegistration.ResolvePolicy(f.Services, "publisher")!);
+        await using var drain = f.Services.GetRequiredService<IRuntimeCoalescingDrainScopeFactory>().Begin("publisher", new(PersistenceMode.Balanced, RunHasRecord: true));
+        var pending = await f.PublishAsync();
+        Assert.Null(await f.Writer.FindDurableAsync(pending.OutboxItemId));
+        await drain.FlushAtQuiescenceAsync();
+        var saved = (await f.Writer.FindDurableAsync(pending.OutboxItemId))!;
+        Assert.Equal(pending.Intent.HistoryCausation, saved.Intent.HistoryCausation);
+        var published = Assert.Single((await f.Reader.ReadPageAsync(new("publisher"))).Items, item => item.Name == "StimulusPublicationCommitted");
+        Assert.Equal(published.HistoryEventId, saved.Intent.HistoryCausation!.HistoryEventId);
+        Assert.Single(f.Writer.ListCommits()); Assert.Equal(0, f.Actors.Calls);
+    }
+
+    [Theory]
+    [InlineData("logical")] [InlineData("raw")]
+    public async Task A_physical_flush_cannot_introduce_a_new_publication_outside_its_captured_logical_groups(string mode)
+    {
+        using var f = new Fixture(decorated: true, change: services => services.AddScoped<IRuntimeCheckpointCommitEnricher>(sp =>
+            new LatePublication(mode, true, sp.GetServices<RuntimePostCommitIntentHandlerContribution>().ToArray())));
+        await f.SeedAsync(RuntimeHistoryRegistration.ResolvePolicy(f.Services, "publisher")!);
+        await using var drain = f.Services.GetRequiredService<IRuntimeCoalescingDrainScopeFactory>().Begin("publisher", new(PersistenceMode.Balanced, RunHasRecord: true));
+        var pending = await f.PublishAsync();
+        var refusal = await Assert.ThrowsAsync<RuntimeCheckpointCommitValidationException>(() => drain.FlushAtQuiescenceAsync().AsTask());
+        Assert.Contains("required logical history", refusal.Message);
+        Assert.Empty(f.Writer.ListCommits()); Assert.Null(await f.Writer.FindDurableAsync(pending.OutboxItemId)); Assert.Equal(0, f.Actors.Calls);
+    }
+
+    [Theory]
+    [InlineData(false, "io")] [InlineData(true, "io")] [InlineData(false, "malformed-io")] [InlineData(true, "malformed-io")]
+    [InlineData(false, "argument")] [InlineData(true, "argument")] [InlineData(false, "cancelled")] [InlineData(true, "cancelled")]
+    public void Direct_public_qualification_normalizes_provider_failure_without_losing_kind_or_cause(bool router, string failureKind)
+    {
+        Exception cause = failureKind switch
+        { "io" => new IOException("provider"), "malformed-io" => new InvalidDataException("malformed", new IOException("nested provider")), "argument" => new ArgumentException("invalid"), _ => new OperationCanceledException("cancelled") };
+        var writer = new FailingWriter(cause);
+        using var f = new Fixture(change: services => services.AddSingleton<IRuntimeHistoryObservationWriter>(writer));
+        var failure = Assert.Throws<RuntimePostCommitSourceBoundaryException>(() =>
+        {
+            if (router) f.Services.GetRequiredService<IStimulusRouter>().CanRecordHistory(Kind, writer, f.Reader);
+            else f.Services.GetRequiredService<IWorkflowStartDispatcher>().CanPreserveHistoryCausation(Kind, writer, f.Reader);
+        });
+        Assert.Same(cause, failure.InnerException); Assert.Equal(Kind, failure.IntentKind); Assert.Null(failure.SourceOutboxItemId);
+        Assert.Equal(failureKind is "io" or "cancelled", failure.IsUnavailable); Assert.Empty(f.Writer.ListCommits()); Assert.Equal(0, f.Actors.Calls);
+    }
+
     [Fact]
     public void Actual_router_and_start_transport_require_the_selected_pair_and_owning_adapter_without_activation_or_writes()
     {
@@ -187,7 +263,7 @@ public sealed class RuntimeHistoryPublicationProfileTests
             LastSourceId = RuntimePostCommitOutboxItems.OutboxItemId(commit.CommitId, intent);
             var result = await Services.GetRequiredService<RuntimeCheckpointCommitter>().CommitAsync(commit);
             Assert.True(result.Succeeded);
-            return (await Writer.FindDurableAsync(LastSourceId))!;
+            return (await Services.GetRequiredService<IPostCommitOutboxLookupStore>().FindAsync(LastSourceId))!;
         }
         public void Dispose() { _scope.Dispose(); _provider.Dispose(); }
     }
@@ -207,6 +283,27 @@ public sealed class RuntimeHistoryPublicationProfileTests
     {
         public ValueTask<PostCommitDeliveryContext> ReadSourceAsync(PostCommitDeliveryContext source, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public ValueTask<StimulusDeliverySnapshot> InstallAsync(PostCommitDeliveryContext source, StimulusDeliverySnapshot candidate, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    }
+    private sealed class FailingWriter(Exception failure) : IRuntimeHistoryObservationWriter
+    {
+        public bool CanRecordHistory(IRuntimeHistoryStore selectedStore) => throw failure;
+        public ValueTask<RuntimeHistoryObservationResult> RecordAsync(RuntimeHistoryObservation observation, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    }
+    private sealed class LatePublication(string mode, bool onlyFlush, IReadOnlyCollection<RuntimePostCommitIntentHandlerContribution> contributions) : IRuntimeCheckpointCommitEnricher
+    {
+        public int Order => 1950;
+        public ValueTask<RuntimeCheckpointCommit> EnrichAsync(RuntimeCheckpointCommit commit, CancellationToken cancellationToken = default)
+        {
+            if (commit.Checkpoint.Metadata.ContainsKey(RuntimeMetadataKeys.CoalescedFlush) != onlyFlush) return ValueTask.FromResult(commit);
+            if (mode == "remove-fact") return ValueTask.FromResult(commit with { HistorySourceFacts = [] });
+            var original = commit.PostCommitIntents.Concat(commit.StateChanges.PostCommitOutbox.Select(change => change.State.Intent)).First(intent => intent.Kind == Kind);
+            var late = new RuntimePostCommitIntent("late", commit.WorkflowExecutionId, Kind, At, "activity", "late-key", original.Payload);
+            if (mode == "logical") return ValueTask.FromResult(commit with { PostCommitIntents = commit.PostCommitIntents.Append(late).ToArray() });
+            var pending = commit.PostCommitIntents.Append(late).Select(intent => RuntimePostCommitOutboxItems.CreatePending(commit, intent, contributions, Scope));
+            var changes = commit.StateChanges.PostCommitOutbox.Concat(pending.Select(item =>
+                new RuntimeStateChange<RuntimePostCommitOutboxItem>(item.OutboxItemId, RuntimeStateChangeOperation.Upsert, item, new Dictionary<string, string>()))).ToArray();
+            return ValueTask.FromResult(commit with { PostCommitIntents = [], StateChanges = commit.StateChanges.WithPostCommitOutbox(changes) });
+        }
     }
     private sealed class LegacyStart : IWorkflowStartDispatcher
     {

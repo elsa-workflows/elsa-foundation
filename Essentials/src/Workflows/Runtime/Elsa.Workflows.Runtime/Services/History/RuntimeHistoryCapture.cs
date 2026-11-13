@@ -22,6 +22,8 @@ internal sealed class RuntimeHistoryCapture(IWorkflowExecutionStateStore executi
     ];
 
     internal static readonly string[] Version2Kinds = ["BookmarkSuperseded", "DurableStateRecorded", "DurableStateRemoved"];
+    private static readonly string[] PublicationKinds = RuntimeHistorySourceFacts.PublicationObservationKinds
+        .Prepend(nameof(RuntimeHistorySourceFactKind.StimulusPublicationCommitted)).ToArray();
 
     public int Order => 2000;
 
@@ -29,6 +31,8 @@ internal sealed class RuntimeHistoryCapture(IWorkflowExecutionStateStore executi
     {
         ArgumentNullException.ThrowIfNull(policy);
         if (!RuntimeHistorySourceFacts.IsFinalProfile(policy) || !sourceAvailability.SourceInputs()) return false;
+        if (policy.SupportedKinds.Intersect(PublicationKinds, StringComparer.Ordinal).Any() &&
+            !PublicationKinds.All(kind => policy.SupportedKinds.Contains(kind, StringComparer.Ordinal))) return false;
         if (policy.SupportedKinds.Contains("ValueCaptured", StringComparer.Ordinal) && !sourceAvailability.Values()) return false;
         if (policy.SupportedKinds.Any(kind => kind is "BookmarkRemoved" or "BookmarkSuperseded") && !sourceAvailability.CleanupInputs()) return false;
         var available = Kinds.Concat(Version2Kinds).ToHashSet(StringComparer.Ordinal);
