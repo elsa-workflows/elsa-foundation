@@ -415,7 +415,8 @@ public sealed partial class EfRuntimePostCommitOutboxStore : IRuntimePostCommitO
                     item.Id == EfWorkflowExecutionStateStore.CreateId(scope.Value, source.Intent.WorkflowExecutionId), token) ??
                     throw new InvalidDataException("The authoritative publisher is missing.");
                 var publisher = EfWorkflowExecutionStateStore.ReadChecked(publisherRow, scope.Value, source.Intent.WorkflowExecutionId);
-                if (ReadChecked(row, scope.Value, source.SourceOutboxItemId).SubscriptionDeliveryProtocolVersion is null)
+                if (ReadChecked(row, scope.Value, source.SourceOutboxItemId).SubscriptionDeliveryProtocolVersion is null &&
+                    !EfWorkflowExecutionStateStore.HasBoundIngressScope(publisher, scope.Value))
                     access.EnsureTenantScope(publisher.TenantId);
                 row = await LoadAsync(scope.Value, source.SourceOutboxItemId, tracking: false, token) ??
                     throw new InvalidDataException("The recipient source was removed during publisher validation.");
@@ -472,7 +473,8 @@ public sealed partial class EfRuntimePostCommitOutboxStore : IRuntimePostCommitO
                 candidate => candidate.Id == EfWorkflowExecutionStateStore.CreateId(scope.Value, current.RequireWorkflowIntent().WorkflowExecutionId), cancellationToken)
                 ?? throw new InvalidDataException("The authoritative stimulus publisher is missing.");
             var publisher = EfWorkflowExecutionStateStore.ReadChecked(publisherRow, scope.Value, current.RequireWorkflowIntent().WorkflowExecutionId);
-            if (current.SubscriptionDeliveryProtocolVersion is null) access.EnsureTenantScope(publisher.TenantId);
+            if (current.SubscriptionDeliveryProtocolVersion is null && !EfWorkflowExecutionStateStore.HasBoundIngressScope(publisher, scope.Value))
+                access.EnsureTenantScope(publisher.TenantId);
             row = await LoadAsync(scope.Value, source.SourceOutboxItemId, tracking: false, cancellationToken)
                 ?? throw new InvalidDataException("The stimulus source was removed during publisher validation.");
             current = ReadChecked(row, scope.Value, source.SourceOutboxItemId);
@@ -506,7 +508,8 @@ public sealed partial class EfRuntimePostCommitOutboxStore : IRuntimePostCommitO
                 candidate => candidate.Id == EfWorkflowExecutionStateStore.CreateId(scope.Value, current.RequireWorkflowIntent().WorkflowExecutionId), cancellationToken)
                 ?? throw new InvalidDataException("The authoritative saved-start publisher is missing.");
             var publisher = EfWorkflowExecutionStateStore.ReadChecked(publisherRow, scope.Value, current.RequireWorkflowIntent().WorkflowExecutionId);
-            if (current.SubscriptionDeliveryProtocolVersion is null) access.EnsureTenantScope(publisher.TenantId);
+            if (current.SubscriptionDeliveryProtocolVersion is null && !EfWorkflowExecutionStateStore.HasBoundIngressScope(publisher, scope.Value))
+                access.EnsureTenantScope(publisher.TenantId);
             // Publisher lookup awaited a separate read. Do not authorize the earlier claim snapshot if a peer
             // completed/reclaimed the source meanwhile, even when its old visibility deadline is still future.
             row = await LoadAsync(scope.Value, authority.SourceOutboxItemId, tracking: false, cancellationToken)

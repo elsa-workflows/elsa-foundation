@@ -113,6 +113,24 @@ public sealed class EfAuthoredModelAdmissionTests
         Assert.Empty((await host.Queue.ListAsync(new(request.WorkflowExecutionId))).Items);
     }
 
+    [Fact]
+    public async Task Malformed_authored_provenance_retains_its_decoding_cause_without_accepting_work()
+    {
+        await using var host = await Harness.OpenAsync();
+        var valid = await host.PublishAsync();
+        var command = valid.Command;
+        var payload = JsonSerializer.SerializeToElement(new { authored = "invalid-provenance", sourceReferenceId = valid.Source.SourceReferenceId });
+        var corrupt = valid with { Command = new(command.Executable, command.MaterialIncarnationId, command.InputId,
+            command.InputKind, payload, command.Authority, command.TenantId) };
+        var failure = await Assert.ThrowsAsync<RuntimeSchedulerWorkUnavailableException>(() => host.AdmitAsync(corrupt));
+        Assert.Equal("runtime.model.authored-admission-unavailable", failure.Code);
+        Assert.IsType<JsonException>(failure.InnerException);
+        Assert.Contains(valid.WorkflowExecutionId, failure.SafeSummary);
+        Assert.Empty((await host.Queue.ListAsync(new(valid.WorkflowExecutionId))).Items);
+        Assert.Null(await host.Models.FindAsync(valid.WorkflowExecutionId));
+        Assert.Equal(WorkflowExecutionCommandDispatchStatus.Accepted, (await host.AdmitAsync(valid)).Status);
+    }
+
     private sealed class Harness : IAsyncDisposable
     {
         private readonly TemporarySqliteDatabase database;

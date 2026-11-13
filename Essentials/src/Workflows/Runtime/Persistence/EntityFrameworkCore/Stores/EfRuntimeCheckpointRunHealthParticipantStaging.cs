@@ -231,7 +231,8 @@ internal static class EfRuntimeCheckpointRunHealthParticipantStaging
         if (!StringComparer.Ordinal.Equals(change.StateId, change.State.WorkflowExecutionId) ||
             !StringComparer.Ordinal.Equals(change.StateId, workflowExecutionId))
             throw new InvalidOperationException("Workflow execution state change identity does not belong to the checkpoint workflow.");
-        if (change.State.TenantId is not null && !StringComparer.Ordinal.Equals(change.State.TenantId, scope))
+        if (change.State.TenantId is not null && !StringComparer.Ordinal.Equals(change.State.TenantId, scope) &&
+            !EfWorkflowExecutionStateStore.HasBoundIngressScope(change.State, scope))
             throw new InvalidOperationException("The workflow execution tenant does not belong to the persistence scope.");
     }
 

@@ -852,7 +852,7 @@ public sealed class EfWorkflowExecutionStateStore(
 
     // A stored typed origin is a read projection, never fresh admission authority. Both initial writers
     // require the actual source/model proof in the same transaction; direct Save permits only exact continuations.
-    private static bool HasBoundIngressScope(WorkflowExecutionState state, string scope)
+    internal static bool HasBoundIngressScope(WorkflowExecutionState state, string scope)
     {
         if (state.Partition?.Value != scope || state.RunKind != WorkflowRunKind.PublishedRun || state.TestScope is not null ||
             state.ParentWorkflowExecutionId is not null || state.Authority is null) return false;

@@ -146,7 +146,8 @@ public sealed partial class EfSchedulerWorkQueueStore(
             select new { Root = root, Ownership = ownership })
             .SingleAsync(cancellationToken);
         var state = EfWorkflowExecutionStateStore.ReadChecked(execution.Root, scope, workflowExecutionId);
-        accessContextAccessor.Current.EnsureTenantScope(state.TenantId);
+        if (!EfWorkflowExecutionStateStore.HasBoundIngressScope(state, scope))
+            accessContextAccessor.Current.EnsureTenantScope(state.TenantId);
         return EfExecutionLivenessStateStore.IsWorkflowExecutionDeletionTombstone(
             execution.Ownership,
             scope,

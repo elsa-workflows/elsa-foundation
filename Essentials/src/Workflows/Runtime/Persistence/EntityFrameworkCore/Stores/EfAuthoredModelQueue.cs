@@ -14,7 +14,7 @@ using Microsoft.EntityFrameworkCore.Storage;
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 
 /// <summary>One physical slot/source/material/ordinary-queue admission over the selected EF runtime stores.</summary>
-public sealed class EfAuthoredModelQueue : IAuthoredModelQueue
+internal sealed class EfAuthoredModelQueue : IAuthoredModelQueue
 {
     private static readonly JsonSerializerOptions Web = new(JsonSerializerDefaults.Web);
     private static readonly EfWriteRetry Writes = new(EfWriteRetry.DefaultMaxAttempts,
@@ -45,8 +45,20 @@ public sealed class EfAuthoredModelQueue : IAuthoredModelQueue
             !ReferenceEquals(context, slots.Context) || !models.Uses(context, access)) throw Unsupported();
     }
 
+    /// <exception cref="RuntimeSchedulerWorkUnavailableException">A physical dependency or retained command cannot be read; the original cause is retained.</exception>
     public async ValueTask<WorkflowExecutionCommandDispatchResult> AdmitAsync(AuthoredModelAdmissionRequest request,
         RuntimeSchedulerWorkItem work, IReadOnlyList<WorkflowExecutableRootWriteLease> grants, CancellationToken cancellationToken = default)
+    {
+        try { return await AdmitCoreAsync(request, work, grants, cancellationToken); }
+        catch (Exception exception) when (exception is InvalidDataException or IOException or JsonException || EfRelationalExceptionClassifier.IsProviderFailure(exception))
+        {
+            throw new RuntimeSchedulerWorkUnavailableException("runtime.model.authored-admission-unavailable",
+                $"Protected authored model admission for '{request?.WorkflowExecutionId}' could not commit.", exception);
+        }
+    }
+
+    private async ValueTask<WorkflowExecutionCommandDispatchResult> AdmitCoreAsync(AuthoredModelAdmissionRequest request,
+        RuntimeSchedulerWorkItem work, IReadOnlyList<WorkflowExecutableRootWriteLease> grants, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request); ArgumentNullException.ThrowIfNull(work); ArgumentNullException.ThrowIfNull(grants);
         Validate(request, work);
