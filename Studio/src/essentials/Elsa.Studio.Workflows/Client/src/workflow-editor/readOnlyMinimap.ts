@@ -7,10 +7,16 @@ export const READ_ONLY_MINIMAP_MAX_HIDDEN_NODES = 2;
 export const READ_ONLY_MINIMAP_WIDTH = 120;
 export const READ_ONLY_MINIMAP_HEIGHT = 80;
 
-/** xyflow floats every panel (controls, MiniMap) 15px in from the pane's edge: `.react-flow__panel { margin: 15px }`. */
-export const READ_ONLY_PANEL_MARGIN = 15;
-/** Room kept between a fitted node and a floating panel. */
-export const READ_ONLY_PANEL_GAP = 8;
+/** Border width from `.wf-instance-canvas .react-flow__minimap` in `styles.css`; keep the two in step. */
+export const READ_ONLY_MINIMAP_BORDER = 1;
+/** Rendered MiniMap box: the content size plus the border on both sides. */
+export const READ_ONLY_MINIMAP_OUTER_WIDTH = READ_ONLY_MINIMAP_WIDTH + 2 * READ_ONLY_MINIMAP_BORDER;
+export const READ_ONLY_MINIMAP_OUTER_HEIGHT = READ_ONLY_MINIMAP_HEIGHT + 2 * READ_ONLY_MINIMAP_BORDER;
+
+/** xyflow's `.react-flow__panel` margin: every floating panel (the MiniMap and the zoom controls) sits this far in from the pane's edge. */
+export const READ_ONLY_PANEL_OFFSET = 15;
+/** Gap a fitted or readable view keeps between the graph and a floating panel. */
+export const READ_ONLY_PANEL_CLEARANCE = 8;
 /** One xyflow control button is 26px square; Studio's global `box-sizing: border-box` reset keeps its 1px border inside. */
 export const READ_ONLY_CONTROLS_BUTTON_SIZE = 26;
 
@@ -22,14 +28,11 @@ export const READ_ONLY_CONTROLS_BUTTON_SIZE = 26;
  */
 export const READ_ONLY_CONTROLS_ORIENTATION = "horizontal" as const;
 
-/** Bottom inset that keeps fitted nodes clear of the controls row. */
-export const READ_ONLY_CONTROLS_CLEARANCE = READ_ONLY_PANEL_MARGIN + READ_ONLY_CONTROLS_BUTTON_SIZE + READ_ONLY_PANEL_GAP;
-/**
- * Right and bottom insets that keep fitted nodes clear of the 120×80 MiniMap. The extra 2px allows for a
- * border outside that box; with the border-box reset the border is inside it, so the real gap is about 10px.
- */
-export const READ_ONLY_MINIMAP_CLEARANCE_RIGHT = READ_ONLY_PANEL_MARGIN + READ_ONLY_MINIMAP_WIDTH + 2 + READ_ONLY_PANEL_GAP;
-export const READ_ONLY_MINIMAP_CLEARANCE_BOTTOM = READ_ONLY_PANEL_MARGIN + READ_ONLY_MINIMAP_HEIGHT + 2 + READ_ONLY_PANEL_GAP;
+/** Bottom inset that keeps fitted nodes clear of the controls row: its offset, one button and the clearance gap. */
+export const READ_ONLY_CONTROLS_INSET = READ_ONLY_PANEL_OFFSET + READ_ONLY_CONTROLS_BUTTON_SIZE + READ_ONLY_PANEL_CLEARANCE;
+/** Right and bottom insets that keep fitted nodes clear of the MiniMap: its rendered box, its offset and the clearance gap. */
+export const READ_ONLY_MINIMAP_INSET_RIGHT = READ_ONLY_MINIMAP_OUTER_WIDTH + READ_ONLY_PANEL_OFFSET + READ_ONLY_PANEL_CLEARANCE;
+export const READ_ONLY_MINIMAP_INSET_BOTTOM = READ_ONLY_MINIMAP_OUTER_HEIGHT + READ_ONLY_PANEL_OFFSET + READ_ONLY_PANEL_CLEARANCE;
 
 /** Token fills so node rects and the viewport mask stay visible on porcelain and minimal-dark. */
 export const readOnlyMinimapNodeColor = "var(--studio-text)";
@@ -44,7 +47,7 @@ export const readOnlyMinimapMaskStrokeColor = "var(--studio-text)";
  * The other sides stay fractions so a phone-width overview keeps its width.
  */
 export const readOnlyMinimapFitViewOptions: FitViewOptions = {
-  padding: { top: 0.12, right: 0.24, bottom: `${READ_ONLY_MINIMAP_CLEARANCE_BOTTOM}px`, left: 0.12 }
+  padding: { top: 0.12, right: 0.24, bottom: `${READ_ONLY_MINIMAP_INSET_BOTTOM}px`, left: 0.12 }
 };
 
 export function shouldShowReadOnlyMiniMap(nodeCount: number): boolean {
@@ -54,7 +57,7 @@ export function shouldShowReadOnlyMiniMap(nodeCount: number): boolean {
 // Sparse graphs have no MiniMap, but their port labels extend beyond measured node boxes, and the
 // bottom inset keeps them above the controls row.
 const readOnlyOutcomeFitViewOptions: FitViewOptions = {
-  padding: { top: "24px", right: "112px", bottom: `${READ_ONLY_CONTROLS_CLEARANCE}px`, left: "32px" }
+  padding: { top: "24px", right: "112px", bottom: `${READ_ONLY_CONTROLS_INSET}px`, left: "32px" }
 };
 
 /** `miniMap` says whether the canvas shows the read-only MiniMap; canvases that never render one pass false. */
