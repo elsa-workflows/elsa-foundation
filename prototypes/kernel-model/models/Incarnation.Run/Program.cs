@@ -14,6 +14,7 @@ var refusalNames = (from mode in new[] { Modes.Balanced, Modes.Durable } from mi
 if (args.SequenceEqual(["--refusal-takeover"])) { foreach (var (mode, missing, control) in refusalNames) new CreationWitness(mode, false).RefusalTakeover(missing, control); return; }
 if (args.SequenceEqual(["--held-singleton"])) { foreach (var mode in new[] { Modes.Balanced, Modes.Durable }) new CreationWitness(mode, false).HeldSingleton(); return; }
 if (args.SequenceEqual(["--native-child-cancel"])) { foreach (var mode in new[] { Modes.Balanced, Modes.Durable }) new CreationWitness(mode, false).NativeChildCancel(); return; }
+if (args.SequenceEqual(["--recreation-park"])) { foreach (var mode in new[] { Modes.Balanced, Modes.Durable }) foreach (var failure in new[] { "refused", "poison" }) new CreationWitness(mode, false).RecreationPark(failure); return; }
 if (args.SequenceEqual(["--transport-races"]))
 { foreach (var (mode, kind) in transportNames) new CreationWitness(mode, false).TransportRace(kind); await JobCreationRace.Run(); return; }
 if (args.SequenceEqual(["--parent-race"]))
@@ -29,6 +30,7 @@ if (args.SequenceEqual(["--list"]))
     foreach (var name in transportNames) Console.WriteLine("creation:transport-race," + name);
     foreach (var name in refusalNames) Console.WriteLine("creation:refusal-takeover," + name);
     foreach (var mode in new[] { Modes.Balanced, Modes.Durable }) { Console.WriteLine("creation:held-singleton," + mode); Console.WriteLine("creation:native-child-cancel," + mode); }
+    foreach (var mode in new[] { Modes.Balanced, Modes.Durable }) foreach (var failure in new[] { "refused", "poison" }) Console.WriteLine($"creation:recreation-park,{mode},failure={failure}");
     Console.WriteLine("creation:job-generation-race");
     foreach (var name in BoundaryCases.Names) Console.WriteLine("creation:" + name);
     foreach (var mode in new[] { Modes.Balanced, Modes.Durable }) Console.WriteLine("creation:visit-isolation," + mode);
@@ -41,11 +43,12 @@ foreach (var (mode, cut) in parentNames) new CreationWitness(mode, false).Parent
 foreach (var (mode, kind) in transportNames) new CreationWitness(mode, false).TransportRace(kind);
 foreach (var (mode, missing, control) in refusalNames) new CreationWitness(mode, false).RefusalTakeover(missing, control);
 foreach (var mode in new[] { Modes.Balanced, Modes.Durable }) { new CreationWitness(mode, false).HeldSingleton(); new CreationWitness(mode, false).NativeChildCancel(); }
+foreach (var mode in new[] { Modes.Balanced, Modes.Durable }) foreach (var failure in new[] { "refused", "poison" }) new CreationWitness(mode, false).RecreationPark(failure);
 await JobCreationRace.Run();
 await BoundaryCases.Run();
 foreach (var mode in new[] { Modes.Balanced, Modes.Durable }) new CreationWitness(mode, false).VisitIsolation();
 foreach (var qualified in new[] { false, true }) foreach (var caughtUp in new[] { false, true }) await JobAcknowledgement.Run(qualified, caughtUp);
-Console.WriteLine("47/47 creation schedules/reader boundaries passed. Isolated mutations and provider/binary qualification remain separate.");
+Console.WriteLine("51/51 creation schedules/reader boundaries passed. Isolated mutations and provider/binary qualification remain separate.");
 
 sealed partial class CreationWitness(string mode, bool nested)
 {
