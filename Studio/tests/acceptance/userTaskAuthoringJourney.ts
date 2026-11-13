@@ -255,7 +255,7 @@ export async function userTaskAuthoringJourney(page: Page, info: TestInfo, captu
       const box = await outcomeLabels.filter({ hasText: new RegExp(`^${label}$`) }).boundingBox();
       const pane = await runCanvas.locator(".react-flow__pane").boundingBox();
       // The zoom controls and MiniMap float over the pane, so a label under one of them is not readable.
-      const panels = await Promise.all((await runCanvas.locator(".react-flow__panel:visible").all()).map(panel => panel.boundingBox()));
+      const panels = await Promise.all((await runCanvas.locator(".react-flow__controls:visible, .react-flow__minimap:visible").all()).map(panel => panel.boundingBox()));
       const underPanel = panels.some(panel => box && panel && box.x < panel.x + panel.width && box.x + box.width > panel.x
         && box.y < panel.y + panel.height && box.y + box.height > panel.y);
       return Boolean(box && pane && !underPanel && box.x >= pane.x && box.x + box.width <= pane.x + pane.width
