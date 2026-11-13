@@ -74,6 +74,7 @@ committed. A transition's label summarizes its rule; coordinates and edge routin
 
 | Choice | Author-visible behavior |
 |---|---|
+| Machine-addressed business event | Match an input durably admitted to this exact invocation, with its bounded capacity, receipt and evaluation-order contract. Label this separately from an ordinary Event activity wait; choosing one cannot silently change the other's delivery guarantees. |
 | Ordinary activity/composite trigger | Open its ordinary activity editor. Event waits and timers are easy palette choices, with general composition still available (OD13). |
 | Automatic | No trigger activity; condition-based progress precedes queued business events (OD18–OD19). |
 | State completion | Offered for its owning compound/parallel visit, once per visit, after required final entry work (OD30–OD32, OD48). |
@@ -150,6 +151,7 @@ outline/inspector operations must expose the same valid choices even where canva
 | Nested lifecycle | A Flowchart validates input, runs the same machine and branches on declared normal outcomes. Open nested ordinary work and return with chart context retained. Reusable definition ownership/publication/permissions remain normal. |
 | Parallel review | Editorial and Legal react compatibly to one logical input; show both regional actions and phase barriers. An explicit containing exit cancels remaining work; conflict order stays stable after moving shapes and reload. |
 | Recovery and queued input | Wait/fail a phase, accept later events up to capacity, inspect exact receipts, restart the real runtime, recover through its ordinary tools and observe preserved successful work plus ordered evaluation. |
+| Two event-input paths | Author a machine-addressed event rule and an ordinary Event activity trigger with the same sample name. During pending Action work, distinguish a retained invocation admission receipt from an ordinary wait delivery; the latter must not be presented as an acknowledged business admission. Inspect the correct input/occurrence evidence after resuming. |
 | Invalid and read-only | Repair missing initial states, duplicate order and invalid destinations; no content disappears. Prove all mutation paths refuse edits in published/source-owned/read-only contexts and keyboard focus remains usable. |
 | Inspection during change | Change/publish a newer definition while inspecting an older execution. Keep its exact graph/IDs and stable content while loading; expose projection lag, absent retained evidence, denied access and unavailable activities explicitly. |
 | Native compensation composition | Author the separately qualified OD47 topology using existing compensation activities, then run/restart and inspect its real journal/recovery boundary. No Saga type, new compensation authority or cancellation-as-undo claim. |
