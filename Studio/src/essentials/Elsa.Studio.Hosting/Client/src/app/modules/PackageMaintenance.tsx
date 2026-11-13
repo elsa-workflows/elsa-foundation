@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import type { ElsaStudioModuleApi } from "../../sdk";
-import { StudioAlert } from "../ui";
+import { StudioAlert, StudioField } from "../ui";
 import { getErrorMessage, type HostModel, type ModuleManagementRegistryResponse } from "./moduleManagementApi";
 
 interface MaintenanceDiagnostic { code: string; message: string }
@@ -93,10 +93,7 @@ export function PackageMaintenance({ api, host, registry, disabled }: {
   }
 
   return <div className="modules-form" aria-label={`${host.label} package maintenance`}>
-    <label>
-      <span>Package-store label</span>
-      <input value={rootLabel} disabled={!available || pending} onChange={event => { setRootLabel(event.target.value); setResult(null); setError(null); }} />
-    </label>
+    <StudioField label={<><span>Package-store label</span></>}><input value={rootLabel} disabled={!available || pending} onChange={event => { setRootLabel(event.target.value); setResult(null); setError(null); }} /></StudioField>
     <button type="button" className="studio-button" disabled={!available || pending || !rootLabel.trim()} onClick={() => void request(false)}>
       Preview cleanup
     </button>
