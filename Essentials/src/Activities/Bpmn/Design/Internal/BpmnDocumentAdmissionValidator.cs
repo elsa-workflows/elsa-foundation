@@ -8,7 +8,7 @@ using Elsa.Workflows.Design.Validations.Core.Models;
 
 namespace Elsa.Activities.Bpmn.Internal;
 
-/// <summary>Retention is available before complete-source execution is qualified.</summary>
+/// <summary>Content-derived execution findings leave unsupported complete-source drafts saveable.</summary>
 internal sealed class BpmnDocumentAdmissionValidator(IEnumerable<IActivityStructureHandler> handlers,
     IEnumerable<IBpmnDocumentDirectAdmission>? directAdmissions = null) : IDraftValidator
 {
@@ -19,7 +19,7 @@ internal sealed class BpmnDocumentAdmissionValidator(IEnumerable<IActivityStruct
     {
         cancellationToken.ThrowIfCancellationRequested();
         // Whole physical content can qualify for the separately composed direct publisher.
-        // This receipt neither opens native compilation nor replaces any other validator.
+        // This content assessment leaves native compilation and other validators independent.
         if (draft.State.RootActivity?.Structure is { Kind: BpmnActivityIdentities.StructureKind, SchemaVersion: BpmnAuthoredDocument.SchemaVersion } &&
             _directAdmissions.Any(admission => admission.CanPromote(draft.State)))
             return ValueTask.FromResult<IEnumerable<ValidationError>>([]);
@@ -32,8 +32,8 @@ internal sealed class BpmnDocumentAdmissionValidator(IEnumerable<IActivityStruct
             if (activity.Structure is { Kind: BpmnActivityIdentities.StructureKind, SchemaVersion: BpmnAuthoredDocument.SchemaVersion })
             {
                 var document = BpmnDocumentStructureHandler.Read(activity);
-                errors.Add(new ValidationError(activity.NodeId, "Bpmn/ExecutionCapability",
-                    "Complete-document BPMN execution is not qualified. The complete authored source remains saveable; publication and Test Drive stay closed."));
+                errors.AddRange(BpmnDocumentAdmission.Assess(activity).Select(diagnostic => new ValidationError(activity.NodeId,
+                    "Bpmn/ExecutionCapability", $"{diagnostic.Code} at {diagnostic.SourcePath}: {diagnostic.Message}")));
                 foreach (var child in document.Activities) pending.Push(child);
             }
             else foreach (var child in _structures.ProjectChildren(activity).SelectMany(slot => slot.Activities)) pending.Push(child);

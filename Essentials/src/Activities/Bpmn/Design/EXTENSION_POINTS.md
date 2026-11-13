@@ -27,10 +27,11 @@
   scope-addressed query projections; replacement folds only owned native configuration back into the physical source.
 - The source validator rejects physically authored derived views and validates complete-document ownership
   before generic traversal. Opaque literal JSON is not treated as activity source. The admission validator
-  reports execution-closed errors without preventing draft retention through ordinary create/update commands.
+  reports content-derived execution errors without preventing draft retention through ordinary create/update commands.
 - Exact kind/schema matching exposes the document retention payload; the scope-view handler has no authorable
-  payload type. Both handlers retain Unknown child-result facts and refuse executable compilation. Schema 1's
-  result-order proof is not reused, and no Publishing or Graph admission authority is replaced.
+  payload type. Context-free compilation remains closed. Explicit-context compilation admits complete source before lowering
+  and requires exact resolved native roles. Raw-source chain facts remain conservative outside the proven subset;
+  schema 1 is unchanged and no shared Publishing/Graph admission authority is replaced.
 
 ## Optional complete-source Direct assessment
 
@@ -53,3 +54,11 @@
   runtime readers share the private Core codec and frozen key. The runtime hosting feature supplies no publisher contribution.
 
 See [authoring migration](README.md) and the [runtime responsibilities](../Elsa.Activities.Bpmn/EXTENSION_POINTS.md).
+
+## Complete-source compilation verification
+
+- `BpmnDocumentCompilationSource` is a scoped `IExecutableCompilationSource` contribution registered by
+  `ActivitiesBpmnDesignFeature`. It checks exact process/Decision roles and the complete admitted scope
+  semantics against the final executable using exactly one canonical `IExecutableStructureNormalizer`.
+- A provider label, source marker or reusable boundary cannot authorize a native process role. Physical
+  source ownership, exact invocation/header configuration and inline placement are checked before reduction.

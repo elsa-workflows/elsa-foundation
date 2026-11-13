@@ -19,6 +19,7 @@ compilation enrichment is the documented **contributor** (fan-in) exception.
 | Contract | Built-in default | Replace when |
 |---|---|---|
 | `IActivityTemplateCompiler` *(Publishing Core)* | `ActivityTemplateCompiler` (scoped) | Candidate dependency resolution, provider compilation or template admission differs. |
+| `IExecutableStructureNormalizer` *(Publishing Core)* | `ExecutableStructureNormalizer` (scoped) | Canonical semantic variable/default conversion differs; preserve target kind/schema and complete variable semantics. |
 | `IActivityPublicationCandidateEvaluator` *(Publishing Core)* | `ActivityPublicationCandidateEvaluator` (scoped) | One publication verdict combines validated candidate content, compiler diagnostics and selected capability readiness. |
 | `IActivityPublicationReadiness` *(Publishing Core)* | `ActivityPublicationReadiness` (scoped) | Runtime/storage availability or its stable review fingerprint differs. |
 | `IActivityCatalogProjection` *(Publishing Core)* | `ActivityCatalogProjection` (scoped) | Derived read-only activity descriptors/publication metadata need a different projection. |
@@ -261,3 +262,24 @@ contributors remain supported. The agent registrations are documented in their
 ### Structure-owned occurrence inputs
 
 `ActivityTemplateOccurrenceCompilation.StructureInputs` optionally carries the owning Design handler's input projection from a graph provider to the publishing coordinator. Providers emit effective ordinary/projected argument states and validate their references against that same view. `ActivityTemplateCompiler` lowers declarations/policies against the exact source template into optional `ExecutableActivityTemplateOccurrenceOverlay.InputContracts`; no Design types enter Runtime artifacts. Placement compiles and stamps these same contracts, then applies the existing closed-scope variable/result remapping. Null is omitted for ordinary occurrences, preserving their serialized shape and template hashes. Switch condition overlays also retain their authored case outcomes on the placed contract.
+
+### Contextual authored-structure translation
+
+Workflow and activity-template coordinators capture exact resolved native/template-root facts before
+placement can relabel a boundary. Graph passes them and captured projections through the Design-owned
+context overload; authored source cannot provide these facts. Declared runtime structure matching checks
+the compiled target while retaining the actual authored identity for translation tracking.
+
+`ActivityTemplateCompiler` retains its 7/9/10-argument binary constructors and mandatory shared source
+admission; the legacy seven-argument path still fails closed without that authority. Its additional optional
+normalizer dependency is required when translating authored structures. Only translated occurrences and
+their authored descendants are normalized; unrelated legacy overlays retain their prior representation.
+Typed canonical variable initial bindings follow placement alongside input bindings; opaque metadata and
+authored variable arrays are not rewritten. Malformed canonical JSON is wrapped in Publishing Core
+`WorkflowExecutableCompilationException` with its parser cause and node identity.
+
+`BpmnDocumentCompilationSource` (`Elsa.Activities.Bpmn.Design`, cross-domain, scoped) participates in
+`IExecutableCompilationSource` fan-in. It verifies the complete admitted native scope payload through the
+same canonical normalizer and refuses missing/ambiguous normalization, forged physical views or substituted
+native roles. The existing shared data-selection guards, member reads, Input lowering and immutable pins
+remain independent mandatory gates. Bounded lowering does not advertise universal BPMN execution support.

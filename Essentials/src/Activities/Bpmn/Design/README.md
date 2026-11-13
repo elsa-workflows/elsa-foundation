@@ -48,22 +48,31 @@ Malformed JSON and XML at these parser boundaries throw the existing BPMN Core
 and the owning node/process or view/scope identifiers. This changes neither schema-1 handling nor
 explicit structural rejections; unsupported but well-formed XML remains retained.
 
-The structure listing exposes the exact schema 2 retention payload; transient scope views expose no
-authoring payload schema. These handlers provide no execution or result-order capability. Their
-child-result facts remain Unknown, including linear-looking XML; schema 1's separately proven
-`BpmnLinearChildResultAnalysis` remains unchanged. Projected Decision outcome names describe authored
-routing only and do not certify result availability or execution support.
+The structure listing exposes retention, independently of execution support. Complete-source compilation
+requires the explicit server-resolved `ActivityStructureCompilationContext`; the original one-argument
+source/scope entrypoints remain closed. Exact native process/Decision runtime types, consumer/descriptor
+schemas and declared target structures are captured before reusable placement changes boundary labels.
+The owning handler admits the complete raw document before lowering to runtime schema 1. Unsupported
+semantics remain authored and return content-derived `Bpmn/ExecutionCapability` diagnostics.
 
-The ordinary inline draft-validation gate checks physical activity positions and follows actual native
-slots rather than scanning arbitrary JSON strings. A valid derived view cannot be submitted as a root
-or child source. Complete documents remain saveable through ordinary create/update commands while
-`Bpmn/ExecutionCapability` reports that execution is not qualified. Schema 2 and scope-view compilation
-throw on every route in this slice; no contextual lowerer, Graph compiler or publishing override is added.
+The bounded profile covers ordinary events/tasks, configured standard scopes, native bodies, gateways
+and outcome/default routing. Loops, listeners, collaboration, independent-process execution and unknown
+semantic extensions remain refused. This is not full-toolbox execution qualification. Child-result facts
+are proved only for an admitted single unconditional ordinary-task chain of inline native leaves in its
+actual source scope, using sequence flows rather than array order. Raw event/loop/unknown semantics,
+non-leaf work and unqualified bindings remain Unknown; outer scopes must provide their own occurrence
+proof. Schema 1's separately proven analyzer remains unchanged.
+
+The ordinary inline validation gate still rejects physically authored derived views and preserves unsupported
+drafts. Workflow and Graph compilers keep shared data-selection admission, member/Input lowering and exact
+immutable dependencies. The canonical normalizer converts variable frames only inside a translated source
+subtree; legacy-only overlays and siblings keep their prior representation. Placement remaps typed input
+and canonical variable-initial bindings, preserving opaque data and leaving authored variable arrays alone.
+The post-compilation contribution verifies the complete admitted scope payload through the same normalizer.
 Raw persistence paths that bypass the owning validation gate are not authorized by this contribution.
 
-This is the backend retention slice of [spec 1224](../../../../../specs/1224-optional-bpmn-js-editor/delivery-slices.md).
-Complete-source interchange/capability negotiation, semantic execution admission, lowering and actual
-editor activation belong to later slices. Public XML is not the internal editor switch transport.
+This is the backend retention/lowering path of [spec 1224](../../../../../specs/1224-optional-bpmn-js-editor/delivery-slices.md).
+Broader semantic execution admission and actual editor activation belong to later slices. Public XML is not the internal editor switch transport.
 Whole-document clone/upgrade and identity transforms must inventory every configured process or refuse
 before mutation: selected-process traversal is incomplete, and a stateless handler cannot infer a previous
 root identity. Ownership addition/removal requires an explicit atomic document edit.
