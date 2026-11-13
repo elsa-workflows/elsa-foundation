@@ -16,7 +16,10 @@ public interface IActorRuntime
     ValueTask StopAsync(CancellationToken cancellationToken = default);
 }
 
-/// <summary>Implemented by layer 2: activating a scope takes its fence, or declines.</summary>
+/// <summary>
+/// Implemented by layer 2: activating a scope takes its fence, or declines. A new activation starts from empty memory,
+/// so the runtime wakes it (<see cref="IScopeActivation.WokenAsync"/> with null) before its first pass.
+/// </summary>
 public interface IScopeHost
 {
     ValueTask<IScopeActivation?> ActivateAsync(int scope, CancellationToken cancellationToken = default);

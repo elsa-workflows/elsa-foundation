@@ -64,7 +64,10 @@ public sealed class PartitionRuntime(string node, IMembership membership, int pa
 
     public IScopeActivation? Activation(int scope) => _active[scope] is { Active: true } activation ? activation : null;
 
-    /// <summary>Ask layer 2 for the scope: it takes the fence, or declines. A scope already held is taken again, from empty memory.</summary>
+    /// <summary>
+    /// Ask layer 2 for the scope: it takes the fence, or declines. A scope already held is taken again, from empty memory,
+    /// so the new activation is woken: its first pass reads the inbox.
+    /// </summary>
     public async Task<IScopeActivation?> ActivateAsync(int scope, CancellationToken cancellationToken = default)
     {
         if (_activating[scope]) return null;
@@ -72,7 +75,9 @@ public sealed class PartitionRuntime(string node, IMembership membership, int pa
         IScopeActivation? activation;
         try { activation = await (_host ?? throw new InvalidOperationException("The runtime has not started.")).ActivateAsync(scope, cancellationToken); }
         finally { _activating[scope] = false; }
-        if (activation is not null) _active[scope] = activation;
+        if (activation is null) return null;
+        _active[scope] = activation;
+        await activation.WokenAsync(null, cancellationToken);     // a take starts from empty memory: the first pass reads the inbox
         return activation;
     }
 
