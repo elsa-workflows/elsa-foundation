@@ -75,6 +75,8 @@ adornment area. This keeps them beside the value when captions wrap or validatio
 Editor-owned trailing actions are retained; the supplied actions do not propagate into nested
 fields or popovers. Collection editors and contributors without field ownership retain their
 existing host action placement.
+Registered host editors also import their field from `@elsa-workflows/studio-ui`, externalized
+through the host import map, so host and module editors share the same action context at runtime.
 
 Do not override field borders with module card styles. The Outlined width and gap roles are
 `--studio-outlined-field-width` and `--studio-outlined-field-gap`; colour, radius and typography
