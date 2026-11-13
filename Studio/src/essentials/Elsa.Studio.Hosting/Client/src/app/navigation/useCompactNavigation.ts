@@ -8,8 +8,25 @@ export function useCompactNavigation() {
   const navigationElement = useRef<HTMLElement | null>(null);
   const navigationRef = useCallback((element: HTMLElement | null) => { navigationElement.current = element; }, []);
   const selectRef = useRef<HTMLSelectElement>(null);
-  const contentRef = useRef<HTMLDivElement>(null);
+  const [contentElement, setContentElement] = useState<HTMLDivElement | null>(null);
   const restoreFocus = useRef(false);
+  const revealFocusedContent = useCallback(() => {
+    const focused = document.activeElement;
+    if (focused instanceof HTMLElement && contentElement?.contains(focused) && focused.getClientRects().length) {
+      focused.scrollIntoView?.({ block: "nearest", inline: "nearest" });
+    }
+  }, [contentElement]);
+
+  useEffect(() => {
+    if (!contentElement) return;
+    const observer = typeof ResizeObserver === "function" ? new ResizeObserver(revealFocusedContent) : null;
+    observer?.observe(contentElement);
+    window.addEventListener("resize", revealFocusedContent);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener("resize", revealFocusedContent);
+    };
+  }, [contentElement, revealFocusedContent]);
 
   useEffect(() => {
     if (typeof window.matchMedia !== "function") return;
@@ -27,10 +44,7 @@ export function useCompactNavigation() {
 
   useLayoutEffect(() => {
     if (!restoreFocus.current) {
-      const focused = document.activeElement;
-      if (focused instanceof HTMLElement && contentRef.current?.contains(focused)) {
-        focused.scrollIntoView?.({ block: "nearest", inline: "nearest" });
-      }
+      revealFocusedContent();
       return;
     }
     restoreFocus.current = false;
@@ -40,7 +54,7 @@ export function useCompactNavigation() {
       (navigation?.querySelector<HTMLElement>('[aria-current="page"], button.active')
         ?? navigation?.querySelector<HTMLElement>('a[href], button:not(:disabled)'))?.focus();
     }
-  }, [compact]);
+  }, [compact, revealFocusedContent]);
 
-  return { compact, navigationRef, selectRef, contentRef };
+  return { compact, navigationRef, selectRef, contentRef: setContentElement };
 }
