@@ -332,7 +332,7 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
             if (writer is null || reader is null || !writer.CanRecordHistory(reader) || !_intentDispatcher.CanRecordHistory(item.Intent.Kind, writer, reader))
                 throw new NotSupportedException("The selected dispatcher cannot preserve the committed source's history responsibility.");
         }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+        catch (OperationCanceledException failure) when (cancellationToken.IsCancellationRequested && failure.CancellationToken == cancellationToken) { throw; }
         catch (RuntimePostCommitSourceBoundaryException failure)
         {
             if (cancellationToken.IsCancellationRequested && failure.IsUnavailable)

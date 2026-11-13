@@ -103,7 +103,7 @@ public sealed class RuntimePostCommitIntentDispatcher : IRuntimePostCommitIntent
                 throw new NotSupportedException("The selected source owner cannot preserve its retained history responsibility.");
             return owner;
         }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+        catch (OperationCanceledException failure) when (cancellationToken.IsCancellationRequested && failure.CancellationToken == cancellationToken) { throw; }
         catch (RuntimePostCommitSourceBoundaryException) { throw; }
         catch (Exception failure)
         {

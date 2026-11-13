@@ -267,6 +267,39 @@ public sealed partial class RuntimePostCommitDurableSourceTests
         Assert.Empty(services.GetRequiredService<HistoryOwner>().Contexts); Assert.Empty(services.GetRequiredService<HistoryOwner>().Intents);
     }
 
+    [Theory]
+    [InlineData(false, true, true)] [InlineData(false, false, true)] [InlineData(false, true, false)]
+    [InlineData(true, true, true)] [InlineData(true, false, true)] [InlineData(true, true, false)]
+    public async Task Direct_writer_qualification_uses_the_same_matching_cancellation_rule_at_both_boundaries(bool processorBoundary, bool requested, bool sameToken)
+    {
+        using var provider = HistoryServices().BuildServiceProvider(); using var scope = provider.CreateScope();
+        using var caller = new CancellationTokenSource(); using var unrelated = new CancellationTokenSource();
+        var original = new OperationCanceledException("controlled writer qualification", null, sameToken ? caller.Token : unrelated.Token);
+        var services = scope.ServiceProvider; var store = services.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>();
+        var writer = services.GetRequiredService<HistoryWriter>(); writer.BeforeQualification = () => { if (requested) caller.Cancel(); };
+        writer.Failure = original;
+        var source = new PostCommitDeliveryContext(RuntimePostCommitOutboxClaimTransitions.Claim(HistoryItem(), new("owner", Now, TimeSpan.FromMinutes(1), 1)), Scope);
+        if (processorBoundary) await store.AddPendingForTestingAsync(HistoryItem());
+        async Task Run()
+        {
+            if (processorBoundary) await services.GetRequiredService<IRuntimePostCommitOutboxProcessor>().ProcessAsync(new(10), caller.Token);
+            else await services.GetRequiredService<IRuntimePostCommitIntentDispatcher>().DispatchAsync(source, caller.Token);
+        }
+        if (requested && sameToken) Assert.Same(original, await Assert.ThrowsAsync<OperationCanceledException>(Run));
+        else
+        {
+            var failure = await Assert.ThrowsAsync<RuntimePostCommitSourceBoundaryException>(Run);
+            Assert.True(failure.IsUnavailable); Assert.Same(original, failure.InnerException);
+        }
+        if (processorBoundary)
+        {
+            var retained = (await store.FindDurableAsync("source:send"))!;
+            Assert.Equal(RuntimePostCommitOutboxStatus.Delivering, retained.Status); Assert.Equal(0, retained.DeliveryAttemptCount);
+            Assert.Null(retained.DeliveredAt);
+        }
+        Assert.Empty(services.GetRequiredService<HistoryOwner>().Contexts); Assert.Empty(services.GetRequiredService<HistoryOwner>().Intents);
+    }
+
     [Fact]
     public async Task Requested_cancellation_propagates_before_origin_qualification_or_delivery()
     {
@@ -321,9 +354,9 @@ public sealed partial class RuntimePostCommitDurableSourceTests
     { public bool CanRecordHistory(string intentKind, IRuntimeHistoryObservationWriter writer, IRuntimeHistoryStore reader) => supported; }
     private sealed class HistoryWriter(HistoryReader reader) : IRuntimeHistoryObservationWriter
     {
-        internal bool Paired = true; internal Exception? Failure; internal int Writes;
+        internal bool Paired = true; internal Exception? Failure; internal int Writes; internal Action? BeforeQualification;
         public bool CanRecordHistory(IRuntimeHistoryStore selectedStore)
-        { if (Failure is { } failure) throw failure; return Paired && ReferenceEquals(selectedStore, reader); }
+        { BeforeQualification?.Invoke(); if (Failure is { } failure) throw failure; return Paired && ReferenceEquals(selectedStore, reader); }
         public ValueTask<RuntimeHistoryObservationResult> RecordAsync(RuntimeHistoryObservation observation, CancellationToken cancellationToken = default)
         { Writes++; throw new InvalidOperationException("Qualification must not manufacture observations."); }
     }
