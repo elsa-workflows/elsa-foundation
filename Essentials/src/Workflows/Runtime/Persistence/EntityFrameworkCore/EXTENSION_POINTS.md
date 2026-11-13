@@ -23,7 +23,17 @@ filter projections, committed positions and receipt/purge acknowledgement are ch
 Unknown event vocabulary remains recorded; protected payloads and unsafe metadata are refused. Purged
 creation links do not upgrade unknown creation evidence. Counts distinguish run and exact activity owners.
 
-The isolated `RuntimeHistoryProjectionSchemaTests` and `RuntimeHistoryProjectionMappingTests` cover the
-model and checked projection boundary without changing normal Runtime migration targets. Native participants,
-actual declared-family binding, scoped readers, observation append, occurrence projection, generated migrations
-and production qualification remain open.
+`EfRuntimeHistoryCheckpoint` is the private staging seam under construction. It retains the checked native
+admission choice, validates ordered logical receipts and cleanup sources, reserves the history head by revision
+and stages event/bookmark/count/ancestry rows inside the caller's existing transaction. A first-head reservation
+may save inside that same transaction; the caller still owns rollback/tracker restoration, final participant save
+and marker-last commit. It returns only newly positioned events for the later derived occurrence participant.
+Its head reservation is shared internally with forthcoming observation append; it owns no separate commit.
+Missing Required contributions remain owed; missing Optional contributions produce a retained gap. The eventual
+native writer must invoke that check for missing contributions too. This seam is not yet called by the production
+writer and does not qualify any selected reader, deletion family or capture profile.
+
+The isolated schema/mapping/checkpoint tests cover private projections and relational staging without changing
+normal Runtime migration targets. Actual native entry-point/marker integration and family binding, scoped readers,
+observation append, occurrence projection, retention/deletion, generated migrations and production qualification
+remain open.
