@@ -7,9 +7,12 @@ namespace Kernel.Bpmn;
 public static class BpmnKinds
 {
     public const string Timer = "bpmn.timer";     // a timer's wait is over
+    public const string Signal = "bpmn.signal";   // a called child signals its call activity (an escalation)
 }
 
 public sealed record TimerDue(string Handle);
+
+public sealed record ScopeSignal(string Child, string Code, string? Payload);
 
 /// <summary>The start spec's input: variables over the process's own.</summary>
 public sealed record BpmnStart(JsonObject? Variables = null);
@@ -44,6 +47,9 @@ public sealed class BpmnState
     /// that comes round again must skip it. It grows by one id per message taken (BPMN.md: friction F-B1).
     /// </summary>
     public HashSet<string> Taken { get; set; } = new(StringComparer.Ordinal);
+
+    /// <summary>The variables set since the start: what a called child gives back, so it does not overwrite its parent's with stale copies.</summary>
+    public HashSet<string> Set { get; set; } = new(StringComparer.Ordinal);
 }
 
 public sealed class BpmnOptions

@@ -19,7 +19,7 @@ public sealed record TimerWork(int Milliseconds) : Work;
 /// <summary>A message catch: a wait for the event <c>msg:{Name}:{correlation}</c> that also gets kept events.</summary>
 public sealed record MessageWork(string Name, string Correlation) : Work;
 
-/// <summary>A call activity: a child instance of the called process; its variables come back as the output.</summary>
+/// <summary>A call activity: a child instance of the called process, given the caller's variables; the variables it sets come back.</summary>
 public sealed record CallWork(string Process) : Work;
 
 /// <summary>What a service gives back: variables to set, and outcome names for flows conditioned on outcomes.</summary>
