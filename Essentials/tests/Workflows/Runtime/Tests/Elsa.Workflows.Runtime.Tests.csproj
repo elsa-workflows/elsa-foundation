@@ -15,6 +15,8 @@
   <ItemGroup>
     <!-- Native history stories use public activity callbacks while internal history stays in its own test assembly. -->
     <ProjectReference Include="..\..\..\..\src\Activities\Runtime\Elsa.Activities.Runtime\Elsa.Activities.Runtime.csproj" />
+    <!-- Qualifies the public publication feature with internal native history; no cross-domain test friendship. -->
+    <ProjectReference Include="..\..\..\..\src\Activities\Primitives\Elsa.Activities.Primitives.csproj" />
     <ProjectReference Include="..\..\..\..\src\Workflows\Runtime\Core\Elsa.Workflows.Runtime.Core.csproj" />
     <ProjectReference Include="..\..\..\..\src\Workflows\Runtime\Api\Elsa.Workflows.Runtime.Api.csproj" />
     <ProjectReference Include="..\..\..\..\src\Workflows\Runtime\Resumption\Elsa.Workflows.Runtime.Resumption.csproj" />

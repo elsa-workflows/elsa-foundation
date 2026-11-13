@@ -16,6 +16,9 @@ public sealed class RuntimeCheckpointCommitter
     internal Func<IRuntimeHistoryStore?>? HistoryStoreResolver { get; init; }
     internal Func<IRuntimeHistorySourceExtension?>? HistorySourceResolver { get; init; }
 
+    internal bool CanSupplyHistorySource(string intentKind, IRuntimeHistorySourceExtension source) =>
+        ReferenceEquals(source, HistorySourceResolver?.Invoke()) && _enrichers.Any(owner => owner.CanSupplyHistorySource(intentKind, source));
+
     /// <summary>Preserves actual owner facts before capture/coalescing. Without the optional source module,
     /// returns the same commit and never invokes the factory.</summary>
     public ValueTask<RuntimeCheckpointCommit> AddHistorySourceFactsAsync(RuntimeCheckpointCommit commit,
@@ -110,9 +113,21 @@ public sealed class RuntimeCheckpointCommitter
     {
         ArgumentNullException.ThrowIfNull(commit);
 
+        // A physical flush already owns these immutable logical sources. Later contributors cannot mint,
+        // rewrite or omit one while retaining the original captured groups. Native source rows remain authority.
+        var originalFlushSources = commit.Checkpoint.Metadata.ContainsKey(RuntimeMetadataKeys.CoalescedFlush) ? HistorySources(commit) : null;
         foreach (var enricher in _enrichers)
             commit = await enricher.EnrichAsync(commit, cancellationToken);
 
+        if (originalFlushSources is not null)
+        {
+            var finalSources = HistorySources(commit);
+            var byId = new Dictionary<string, RuntimePostCommitOutboxItem>(StringComparer.Ordinal);
+            if (commit.PostCommitIntents.Any(intent => intent.HistoryCausation is not null) || finalSources.Length != originalFlushSources.Length ||
+                finalSources.Any(final => !byId.TryAdd(final.StateId, final.State)) ||
+                originalFlushSources.Any(original => !byId.TryGetValue(original.StateId, out var final) || !final.IsEquivalentTo(original.State)))
+                throw new RuntimeCheckpointCommitValidationException("Physical flush changed its original logical history sources.");
+        }
         foreach (var enricher in _enrichers)
             await enricher.ValidateFinalAsync(commit, cancellationToken);
 
@@ -311,6 +326,10 @@ public sealed class RuntimeCheckpointCommitter
         _consumedWorkClaimAccessor is { } accessor && consumedWorkItems.FirstOrDefault() is { } consumed
             ? accessor.BeginConsumeAttempt(consumed.WorkItemId)
             : null;
+
+    private static RuntimeStateChange<RuntimePostCommitOutboxItem>[] HistorySources(RuntimeCheckpointCommit commit) =>
+        commit.StateChanges.PostCommitOutbox.Where(change => change.Operation == RuntimeStateChangeOperation.Upsert &&
+            change.State?.Intent.HistoryCausation is not null).ToArray();
 
     private PersistenceScope? RequiredSourceScope(RuntimeCheckpointCommit commit)
     {

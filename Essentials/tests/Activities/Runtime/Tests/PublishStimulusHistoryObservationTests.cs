@@ -306,6 +306,9 @@ public sealed class PublishStimulusHistoryObservationTests
     }
     private sealed class Router : IStimulusRouter
     {
+        // Explicit controlled transport support; these owner tests do not qualify a native router/recipient chain.
+        public bool CanRecordHistory(string intentKind, IRuntimeHistoryObservationWriter writer, IRuntimeHistoryStore reader) =>
+            intentKind == PublishStimulusConstants.PublishStimulusIntentKind && writer.CanRecordHistory(reader);
         internal int Calls; internal Exception? Failure; internal Action? Before; internal StimulusRoutingResult Result = new([], []);
         public ValueTask<StimulusRoutingResult> RouteSourceAsync(PostCommitDeliveryContext source, CancellationToken cancellationToken = default)
         { Calls++; Before?.Invoke(); if (Failure is { } failure) throw failure; return ValueTask.FromResult(Result); }
