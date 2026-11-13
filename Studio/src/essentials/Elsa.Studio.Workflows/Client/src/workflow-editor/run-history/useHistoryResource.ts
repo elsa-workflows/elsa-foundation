@@ -52,9 +52,10 @@ export function useHistoryResource<T>(context: StudioEndpointContext, identity: 
       } catch (error) {
         if (!current()) return;
         const status = typeof error === "object" && error !== null && "status" in error ? Number(error.status) : 0;
-        stop = status === 401 || status === 403 || status === 404 || status === 409 || status === 501 || error instanceof RuntimeHistoryIdentityError
+        stop = status === 400 || status === 401 || status === 403 || status === 404 || status === 409 || status === 501 || error instanceof RuntimeHistoryIdentityError
           || error instanceof ApiCapabilityUnavailableError || error instanceof ApiCapabilityVersionMismatchError;
-        const message = status === 401 || status === 403 ? "History is unavailable with your current access."
+        const message = status === 400 ? "This history query or continuation is invalid. Refresh this view to recover."
+          : status === 401 || status === 403 ? "History is unavailable with your current access."
           : status === 404 ? "This recorded target is unavailable or no longer retained."
             : status === 409 ? "This recorded target has inconsistent history. Refresh after the history is repaired."
             : status === 501 ? "This history view is unsupported by the current host."

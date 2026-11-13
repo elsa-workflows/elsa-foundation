@@ -1,6 +1,6 @@
 import { StudioPageHeader } from "@elsa-workflows/studio-ui";
 import React, { lazy, useCallback, useEffect, useRef, useState } from "react";
-import { useStudioRouteLocation, useStudioWorkspaceTitle } from "@elsa-workflows/studio-sdk";
+import { useStudioRouteLocation, useStudioWorkspaceTab, useStudioWorkspaceTitle } from "@elsa-workflows/studio-sdk";
 import type { StudioBackendSession, StudioContributionAvailability, StudioActivityPropertyEditorContribution, StudioWeaverRegistry, StudioEndpointContext, StudioExpressionEditorContribution, StudioExpressionToolingClient, StudioWorkflowDesignerPanelContribution, StudioWorkflowRunInputEditorContribution, StudioTestStimulusEditorContribution, StudioWorkflowRunRelatedLinkContribution } from "@elsa-workflows/studio-sdk";
 import type { WorkflowWeaverController } from "../workflowWeaver";
 import { WorkflowLazyBoundary } from "../WorkflowLazyBoundary";
@@ -153,17 +153,23 @@ export function WorkflowInstanceDetailsPage({ context, ai, weaver, expressionEdi
   const routeLocation = useStudioRouteLocation();
   const workflowExecutionId = readWorkflowExecutionIdFromUrl(routeLocation.pathname);
   const searchParams = routeLocation.searchParams;
-  // The run view rewrites the selection in the URL as the operator moves around (spec 260 FR-423); read it once per run
-  // so a later render never reloads the run for a selection the view itself wrote. Keep the list destination from that
-  // same initial URL because the detail view may replace its query while the operator moves between activities.
-  const initialSelection = useRef<{ workflowExecutionId: string; activityExecutionId: string | null; returnTo: string | null; historySearch: string } | null>(null);
-  if (initialSelection.current?.workflowExecutionId !== workflowExecutionId) {
+  const workspaceTab = useStudioWorkspaceTab();
+  // The host tab location changes for real navigation, while local selection synchronization only
+  // replaces the address bar. Apply new same-run intents without replaying our own URL writes.
+  const routeIntent = workspaceTab?.location ?? `${routeLocation.pathname}${routeLocation.search}`;
+  const initialSelection = useRef<{ workflowExecutionId: string; routeIntent: string; activityExecutionId: string | null; returnTo: string | null; historySearch: string } | null>(null);
+  if (initialSelection.current?.workflowExecutionId !== workflowExecutionId || workspaceTab && initialSelection.current.routeIntent !== routeIntent) {
     initialSelection.current = {
       workflowExecutionId,
+      routeIntent,
       activityExecutionId: readRunSelection(routeLocation.search),
       returnTo: searchParams.get("returnTo"),
       historySearch: routeLocation.search
     };
+  } else if (initialSelection.current.routeIntent !== routeIntent) {
+    // Older hosts expose only the address bar. Preserve the established per-run activity/return
+    // context when local selection writes it, while still forwarding new history targets.
+    initialSelection.current = { ...initialSelection.current, routeIntent, historySearch: routeLocation.search };
   }
   const initialActivityExecutionId = initialSelection.current.activityExecutionId;
   const initialReturnTo = initialSelection.current.returnTo;

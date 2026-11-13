@@ -32,6 +32,15 @@ export function RunHistoryTimeline({ context, workflowExecutionId, filters, onFi
   useEffect(() => { setSearch(filters.search); }, [filters.search]);
   useEffect(() => { if (followEnd && pending) showNew(); }, [followEnd, showNew, pending]);
   useEffect(() => { if (followEnd && enabled) end.current?.scrollIntoView({ block: "nearest" }); }, [enabled, followEnd, items.length]);
+  const revealNew = () => {
+    history.showNew();
+    requestAnimationFrame(() => {
+      const rows = end.current?.parentElement?.querySelectorAll<HTMLButtonElement>(".wf-history-event");
+      // One deliberate reveal, independent of the persistent Follow latest preference.
+      rows?.[rows.length - 1]?.focus();
+      end.current?.scrollIntoView({ block: "nearest" });
+    });
+  };
   const change = (value: Partial<RunHistoryFilters>) => { setFollowEnd(false); onFiltersChange({ ...filters, ...value }); };
   return <section className="wf-run-history" aria-label="Run timeline" aria-busy={history.loading}>
     <header className="wf-history-heading"><div><h3><ListTree size={18} aria-hidden="true" /> Timeline</h3><p>Recorded order · {historyZone()}</p></div>
@@ -62,7 +71,7 @@ export function RunHistoryTimeline({ context, workflowExecutionId, filters, onFi
     {window ? <>
       <HistoryCoverage coverage={window.page.coverage} readAt={window.page.readAt} scopeComplete={window.page.scopeComplete} scopeLimitation={window.page.scopeLimitation} />
       <p className="wf-history-count" title={`Snapshot through #${window.snapshotUpperSequence}; searched through #${window.snapshotScannedThroughSequence}`}>{visible.length} shown · {items.length} loaded · {window.scannedCount} snapshot records searched{window.next ? " · more history not loaded" : ""}</p>
-      {pending ? <div className="wf-history-new" role="status"><StudioButton type="button" onClick={() => { history.showNew(); setFollowEnd(true); }}>{pending} new recorded events · Show</StudioButton>{history.bufferLimited ? <span>Load these events to continue live catch-up.</span> : null}</div> : null}
+      {pending ? <div className="wf-history-new" role="status"><StudioButton type="button" onClick={revealNew}>{pending} new recorded events · Show</StudioButton>{history.bufferLimited ? <span>Load these events to continue live catch-up.</span> : null}</div> : null}
       <div className="wf-history-list-region" onScroll={event => { const element = event.currentTarget; if (followEnd && element.scrollHeight - element.scrollTop - element.clientHeight > 40) setFollowEnd(false); }}>
         {visible.length ? <HistoryEventList unloadedAfterSequence={window.next ? window.snapshotUpperSequence : undefined} items={visible} selectedEventId={selectedEventId} labelForEvent={labelForEvent} onSelect={event => { setFollowEnd(false); onSelectEvent(event); }} />
           : <p className="wf-history-empty">{filters.search || filters.category || filters.name ? "No matching events in this searched range." : filters.detail === "highlights" && items.length ? "No highlight events in this loaded range. Choose All events to inspect its recorded detail." : "No recorded events in this range."}</p>}

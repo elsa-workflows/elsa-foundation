@@ -339,3 +339,53 @@ it("retains individually observed bookmark pages during a bounded first-page ref
   await vi.waitFor(() => expect(container.textContent).not.toContain("older-loaded-page"));
   expect(container.textContent).toContain("Consumed"); expect(container.textContent).toContain("loaded handles retain their individual observation times");
 });
+
+it("keeps503 bookmark observations but stops a rejected continuation until explicit first-page refresh", async () => {
+  vi.useFakeTimers();
+  try {
+    const second = historyBookmark({ bookmark: { ...historyBookmark().bookmark,
+      identity: { ...historyBookmark().bookmark.identity, bookmarkId: "second-page-handle" } }, firstRecordedSequence: 2 });
+    api.listWorkflowHistoryBookmarks.mockResolvedValueOnce(bookmarkPage({ nextContinuationToken: "second" }))
+      .mockResolvedValueOnce(bookmarkPage({ items: [second] }))
+      .mockRejectedValueOnce(Object.assign(new Error("temporary"), { status: 503 }))
+      .mockRejectedValueOnce(Object.assign(new Error("cursor changed"), { status: 400 }))
+      .mockResolvedValue(bookmarkPage({ items: [historyBookmark({ status: "Consumed", eligibility: "not-active" })] }));
+    render(<ActivityBookmarkHistory context={context} workflowExecutionId="run" activityExecutionId="activity-1" onSelect={vi.fn()} />);
+    await vi.waitFor(() => expect(container.textContent).toContain("Load more bookmarks")); click("Load more bookmarks");
+    await vi.waitFor(() => expect(container.textContent).toContain("second-page-handle"));
+    await vi.advanceTimersByTimeAsync(5000);
+    await vi.waitFor(() => expect(container.textContent).toContain("temporary"));
+    expect(container.textContent).toContain("second-page-handle");
+    await vi.advanceTimersByTimeAsync(5000);
+    await vi.waitFor(() => expect(container.textContent).toContain("continuation is invalid"));
+    expect(container.textContent).not.toContain("second-page-handle");
+    await vi.advanceTimersByTimeAsync(10000); expect(api.listWorkflowHistoryBookmarks).toHaveBeenCalledTimes(4);
+    click("Refresh bookmarks"); await vi.waitFor(() => expect(container.textContent).toContain("Consumed"));
+    expect(api.listWorkflowHistoryBookmarks.mock.calls[4][2].continuationToken).toBeNull();
+  } finally { vi.useRealTimers(); }
+});
+
+it("shows one pending batch without enabling continuous Follow latest or moving for the next arrival", async () => {
+  vi.useFakeTimers();
+  try {
+    api.getWorkflowHistoryPage.mockResolvedValueOnce(historyPage())
+      .mockResolvedValueOnce(historyPage([historyEvent(4)], { upperSequence: 4, scannedThroughSequence: 4, catchUpToken: "after-4" }))
+      .mockResolvedValueOnce(historyPage([], { upperSequence: 4, scannedThroughSequence: 4, catchUpToken: "after-4" }))
+      .mockResolvedValueOnce(historyPage([historyEvent(5)], { upperSequence: 5, scannedThroughSequence: 5, catchUpToken: "after-5" }))
+      .mockResolvedValue(historyPage([]));
+    render(<RunHistoryTimeline context={context} workflowExecutionId="run" filters={defaultHistoryFilters} onFiltersChange={vi.fn()} onSelectEvent={vi.fn()} />);
+    await vi.waitFor(() => expect(container.querySelector("[data-history-event-id='event-1']")).toBeTruthy());
+    await vi.advanceTimersByTimeAsync(2000);
+    await vi.waitFor(() => expect(container.textContent).toContain("1 new recorded events · Show"));
+    click("1 new recorded events · Show");
+    await vi.advanceTimersByTimeAsync(20);
+    await vi.waitFor(() => expect(container.querySelector("[data-history-event-id='event-4']")).toBeTruthy());
+    expect([...container.querySelectorAll("button")].find(item => item.textContent === "Follow latest")?.getAttribute("aria-pressed")).toBe("false");
+    await vi.waitFor(() => expect(api.getWorkflowHistoryPage).toHaveBeenCalledTimes(3));
+    scrollIntoView.mockClear();
+    await vi.advanceTimersByTimeAsync(2000);
+    await vi.waitFor(() => expect(container.textContent).toContain("1 new recorded events · Show"));
+    expect(container.querySelector("[data-history-event-id='event-5']")).toBeNull();
+    expect(scrollIntoView).not.toHaveBeenCalled();
+  } finally { vi.useRealTimers(); }
+});

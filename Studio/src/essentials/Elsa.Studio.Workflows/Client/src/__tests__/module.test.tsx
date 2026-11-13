@@ -17,6 +17,7 @@ import { setDialogs } from "../workflow-editor/dialogs";
 import { WorkflowFolderNavigation, type WorkflowFolderSelection } from "../workflow-editor/WorkflowFolderNavigation";
 import { createActivityDefinitionRecoveryStore } from "../activityDefinitionRecovery";
 import { capabilityDocument, definition, renderRegisteredRoute, response, runJavaScriptTypeKey, testApi } from "./routeRenderingHelpers";
+import { historyBookmark, historyCoverage, historyEvent, historyPage } from "./runtimeHistoryFixtures";
 
 // Per-test teardown lives in the shared afterEach in routeRenderingHelpers.tsx.
 
@@ -3631,6 +3632,55 @@ describe("workflows module", () => {
     }));
     await unmount();
     expect(await runContext()).toEqual([]);
+  });
+
+  it("applies a second event and bookmark route intent to the mounted run without reloading run evidence", async () => {
+    const capabilities = capabilityDocument();
+    capabilities.capabilities.find(item => item.id === "elsa.api.runtime")!.links.push(
+      { rel: "workflow-history-page", href: "runtime/workflows/instances/{workflowExecutionId}/history", templated: true },
+      { rel: "workflow-history-event", href: "runtime/workflows/instances/{workflowExecutionId}/history/events/{historyEventId}", templated: true },
+      { rel: "workflow-history-bookmark", href: "runtime/workflows/instances/{workflowExecutionId}/history/bookmarks/{bookmarkId}", templated: true }
+    );
+    const runPath = "https://server.example/runtime/workflows/instances/wfexec-1";
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.startsWith(`${runPath}/history/events/`)) {
+        const id = url.split("/").at(-1)!;
+        return response({ coverage: historyCoverage, event: historyEvent(id === "route-event-A" ? 1 : 2,
+          { workflowExecutionId: "wfexec-1", historyEventId: id, activityExecutionId: "activity-execution-1" }), readAt: "2026-11-05T09:02:00Z" });
+      }
+      if (url === `${runPath}/history/bookmarks/route-bookmark-C`) {
+        const bookmark = historyBookmark();
+        return response({ coverage: historyCoverage, bookmark: { ...bookmark, bookmark: { ...bookmark.bookmark,
+          identity: { ...bookmark.bookmark.identity, workflowExecutionId: "wfexec-1", activityExecutionId: "activity-execution-1", bookmarkId: "route-bookmark-C" } } },
+          readAt: "2026-11-05T09:02:00Z" });
+      }
+      if (url.startsWith(`${runPath}/history?`)) return response(historyPage([]));
+      if (url === runPath) return response(workflowInstanceDetails());
+      if (url.startsWith("https://server.example/runtime/workflows/executables/artifact-1")) return response(executableDetail());
+      if (url.startsWith("https://server.example/design/activities/catalog")) return response({ activities: [] });
+      if (url.startsWith("https://server.example/design/workflows/definitions")) return response({ items: [] });
+      return response(null, 404);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { container, rerender, unmount } = await renderRegisteredRoute(
+      "/workflows/instances/wfexec-1?historyEvent=route-event-A&returnTo=%2Fworkflows%2Finstances", undefined, false, capabilities);
+    await waitForText(container, "route-event-A");
+    expect(fetchMock.mock.calls.filter(([url]) => url === runPath)).toHaveLength(1);
+    window.history.pushState({}, "", "/workflows/instances/wfexec-1?historyEvent=route-event-B&historySearch=second&returnTo=%2Fworkflows%2Finstances%3Fstatus%3DCompleted");
+    rerender();
+    await vi.waitFor(() => expect(container.querySelector('[aria-label="History event details"]')?.textContent).toContain("route-event-B"));
+    expect(fetchMock).toHaveBeenCalledWith(`${runPath}/history/events/route-event-B`, expect.any(Object));
+    expect(container.querySelector<HTMLInputElement>('[aria-label="Search recorded events"]')?.value).toBe("second");
+    expect(new URLSearchParams(window.location.search).get("returnTo")).toBe("/workflows/instances?status=Completed");
+    window.history.pushState({}, "", "/workflows/instances/wfexec-1?bookmark=route-bookmark-C&view=diagram&returnTo=%2Fworkflows%2Finstances%3Fstatus%3DCompleted");
+    rerender();
+    await vi.waitFor(() => expect(container.querySelector('[aria-label="Bookmark lifecycle"]')?.textContent).toContain("route-bookmark-C"));
+    expect(fetchMock).toHaveBeenCalledWith(`${runPath}/history/bookmarks/route-bookmark-C`, expect.any(Object));
+    expect(buttonByText(container, "Diagram")?.getAttribute("aria-pressed")).toBe("true");
+    expect(new URLSearchParams(window.location.search).get("returnTo")).toBe("/workflows/instances?status=Completed");
+    expect(fetchMock.mock.calls.filter(([url]) => url === runPath)).toHaveLength(1);
+    await unmount();
   });
 
   it("renders direct workflow instance details from the pinned Runtime executable", async () => {
