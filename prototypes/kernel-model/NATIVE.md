@@ -103,7 +103,9 @@ Persistence modes are commit boundaries:
 - **Ephemeral:** `StartSpec.Ephemeral`; the kernel writes nothing when the instance ends in its first turn and sent
   nothing. Otherwise it commits like Balanced.
 
-Journal entries are short strings: `c:frame:node` (completed), `j:...` (a join fired), `a:frame:n` (attempt),
+Journal entries are short strings: `c:frame:node` (completed), `j:...` (a join fired: `j:frame` for a Parallel,
+`j:frame:node:round:by` for a Flowchart, where the round is the engine's iteration key and `by` the scheduling id the
+engine gives the firing), `a:frame:n` (attempt),
 `s:` and `d:` (a child started, waited for or detached), `r:` (a child wait resumed), `f:`, `x:` (faulted, cancelled).
 The simulation's checks read them.
 
@@ -208,7 +210,7 @@ commit for the toy), so those columns are not shown.
 ## 6. The simulation
 
 Native instances join the mix (40% of the outside actions when `--native` is on): sequences with an External
-activity, a three-way join over event waits, a two-of-three threshold join, a flowchart All join over two waits,
+activity, a three-way join over event waits, a two-of-three threshold join, a flowchart parallel join over two waits,
 two waited children in a Parallel plus a detached one, a ForEach with a Delay in the body, a While and a background job,
 and publishers that publish to other instances' waits. Starts come from outside (retried) or are handed to an owner
 in memory; events come by publish (before or after the wait), by direct resume, or from the publishers; some
@@ -219,7 +221,7 @@ Checks:
 | Check | The brief's words | How |
 |---|---|---|
 | N1 | Every activity that completed in committed state completed exactly once | No frame id appears twice in `c:` entries of the committed journal (every action); at the end the multiset of completed activity types equals a run without faults |
-| N2 | A join fires once | No `j:` entry twice (Parallel join, flowchart join node) |
+| N2 | A join fires once | No `j:` entry twice. A Parallel joins once; a Flowchart join fires at most once per scheduling id in a round, so a join behind a merge may fire once per token (narrowed in round 4; the graph check G2 holds a join to once per round) |
 | N3 | A child is started once and its parent resumes once | A child id is started by one frame, a frame starts one child, a child wait is resumed only by its own child and once; at the end every waited child of a finished parent resumed it exactly once |
 | N4 | A non-replay-safe activity's attempt is committed before it runs in Durable mode | When an External effect happens, the committed journal holds its attempt |
 | N5 | Final variables and outputs match a run without faults | Every finished native instance (children too) has the variables of the same definition and input run alone, without faults; everything started from outside finished or was cancelled by request |
