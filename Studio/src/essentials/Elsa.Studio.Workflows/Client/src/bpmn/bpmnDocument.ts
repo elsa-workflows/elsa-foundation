@@ -1,6 +1,7 @@
 import type { ActivityNode, VariableDefinition } from "../workflowTypes";
 import { getChildSlots } from "../workflowAdapter";
 import { bpmnStructureKind } from "./bpmnTypes";
+import { serializeBpmnXml } from "./bpmnDocumentXml";
 
 /** Complete-source authoring contract. No persisted flat graph or second diagram store. */
 export const bpmnDocumentSchemaVersion = "2.0.0";
@@ -343,7 +344,7 @@ function rejectOpaqueQNameResolution(target: Element, prefix: string) {
     if (values.some(value => value.includes(`${prefix}:`))) fail("namespace declaration would resolve retained opaque QName content");
   }
 }
-function preserveNamespaceContext(element: Element, destination: Element) {
+function preserveNamespaceContext(element: Element, destination: Element, preserveInheritedXml = true) {
   // Destination-only prefixes cannot be undeclared in XML 1.0. Refuse a move that would give
   // retained opaque content a new meaning, just as explicit namespace introduction does.
   const destinationPrefixes = new Set<string>();
@@ -355,7 +356,7 @@ function preserveNamespaceContext(element: Element, destination: Element) {
   }
   for (const prefix of destinationPrefixes)
     if (destination.lookupNamespaceURI(prefix) && !element.lookupNamespaceURI(prefix)) rejectOpaqueQNameResolution(element, prefix);
-  preserveXmlContext(element, destination);
+  if (preserveInheritedXml) preserveXmlContext(element, destination);
   const declarations = new Map<string, string>();
   for (let current: Element | null = element; current; current = current.parentElement) {
     for (const attribute of [...current.attributes]) {
@@ -518,6 +519,8 @@ function applyCommand(parsed: ParsedBpmnDocument, command: BpmnDocumentCommand) 
       const fragment = parseXml(command.xml).documentElement;
       const before = command.kind === "insert" && command.before ? resolve(parsed, command.before) : null;
       if (before && before.parentElement !== target) fail("insertion anchor must be a direct child of its parent");
+      // Imported fragments retain their namespace context, while new content inherits XML base/lang.
+      preserveNamespaceContext(fragment, target, false);
       target.insertBefore(parsed.document.importNode(fragment, true), before);
       return;
     }
@@ -687,14 +690,14 @@ export function applyBpmnDocumentTransaction(owner: ActivityNode, transaction: B
   // intermediate arrays are not projected or persisted; only the final source is admitted below.
   parsed = { ...parsed, payload: { ...parsed.payload, ...configuration } };
   const originalIds = parsed.byId;
-  const before = new XMLSerializer().serializeToString(parsed.document);
+  const before = serializeBpmnXml(parsed.document);
   for (const command of commands) {
     applyCommand(parsed, command);
     // Refresh identity lookups between operations, catching collisions before committing anything.
     parsed = { ...parsed, byId: indexDocument(parsed.document) };
   }
   rejectRemovedReferences(originalIds, parsed.byId, parsed.document);
-  const documentXml = new XMLSerializer().serializeToString(parsed.document);
+  const documentXml = serializeBpmnXml(parsed.document);
   if (documentXml === before && !configurationChanged) return owner;
   const next = { ...owner, structure: { ...owner.structure!, payload: { ...owner.structure!.payload, ...configuration,
     documentXml: documentXml === before ? parsed.payload.documentXml : documentXml } } };
