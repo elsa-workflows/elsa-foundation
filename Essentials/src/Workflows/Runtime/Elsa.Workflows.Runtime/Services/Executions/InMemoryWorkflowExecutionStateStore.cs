@@ -7,6 +7,7 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Models.Alterations;
 using Elsa.Workflows.Runtime.Services.Checkpoints;
+using Elsa.Workflows.Runtime.Services.Triggers;
 
 namespace Elsa.Workflows.Runtime.Services.Executions;
 
@@ -47,6 +48,12 @@ public sealed class InMemoryWorkflowExecutionStateStore : InMemoryKeyedStateStor
 
         return await _checkpointState.ExecuteWriteGateAsync(async token =>
         {
+            var prior = Find(state.WorkflowExecutionId);
+            if (prior?.IngressOrigin is not null || prior?.ModelWorkOrigin?.IngressOrigin is not null)
+                NativeIngressCheckpointAuthority.ValidateContinuation(state, prior);
+            else if ((state.IngressOrigin is not null || state.ModelWorkOrigin?.IngressOrigin is not null) &&
+                     !_checkpointState.CanWriteIngressCheckpoint(state))
+                throw new NotSupportedException("Ingress workflows require initial admission through their actual conditional native checkpoint.");
             if (_executionLivenessStateStore is not InMemoryExecutionLivenessStateStore livenessStore)
                 return Save(state.WorkflowExecutionId, state);
 
@@ -224,9 +231,10 @@ public sealed class InMemoryWorkflowExecutionStateStore : InMemoryKeyedStateStor
             if (child is null ? (link.Status != WorkflowDispatchStatus.DispatchFailed && !WorkflowDispatchLifecycle.WasCancelledBeforeAdmission(link)) : !child.Status.IsTerminal())
                 return true;
             lock (_checkpointState.SyncRoot)
-                if (_checkpointState.OutboxItems.Values.Any(item => item.Status != RuntimePostCommitOutboxStatus.Delivered &&
-                    (item.Intent.WorkflowExecutionId == link.ChildWorkflowExecutionId ||
-                     item.Intent.Metadata.TryGetValue(RuntimeMetadataKeys.DispatchId, out var id) && id == link.DispatchId)))
+                if (_checkpointState.OutboxItems.Values.Any(item => item.Intent is { } intent &&
+                    item.Status != RuntimePostCommitOutboxStatus.Delivered &&
+                    (intent.WorkflowExecutionId == link.ChildWorkflowExecutionId ||
+                     intent.Metadata.TryGetValue(RuntimeMetadataKeys.DispatchId, out var id) && id == link.DispatchId)))
                     return true;
         }
         return false;
