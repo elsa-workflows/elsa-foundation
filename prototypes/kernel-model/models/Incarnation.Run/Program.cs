@@ -34,7 +34,7 @@ if (args.SequenceEqual(["--list"]))
     foreach (var mode in new[] { Modes.Balanced, Modes.Durable }) { Console.WriteLine("creation:held-singleton," + mode); Console.WriteLine("creation:native-child-cancel," + mode); }
     foreach (var mode in new[] { Modes.Balanced, Modes.Durable }) foreach (var failure in new[] { "refused", "poison" }) Console.WriteLine($"creation:recreation-park,{mode},failure={failure}");
     foreach (var mode in new[] { Modes.Balanced, Modes.Durable }) Console.WriteLine("creation:mixed-oracle," + mode);
-    foreach (var recreate in new[] { false, true }) foreach (var refuse in new[] { true, false }) Console.WriteLine($"creation:held-start,recreate={recreate},refuse={refuse}");
+    foreach (var recreate in new[] { false, true }) foreach (var pinned in new[] { true, false }) foreach (var refuse in new[] { true, false }) Console.WriteLine($"creation:held-start,recreate={recreate},pinned={pinned},refuse={refuse}");
     Console.WriteLine("creation:job-generation-race");
     foreach (var name in BoundaryCases.Names) Console.WriteLine("creation:" + name);
     foreach (var mode in new[] { Modes.Balanced, Modes.Durable }) Console.WriteLine("creation:visit-isolation," + mode);
@@ -54,7 +54,7 @@ await BoundaryCases.HeldStarts();
 foreach (var mode in new[] { Modes.Balanced, Modes.Durable }) new CreationWitness(mode, false).MixedOracle();
 foreach (var mode in new[] { Modes.Balanced, Modes.Durable }) new CreationWitness(mode, false).VisitIsolation();
 foreach (var qualified in new[] { false, true }) foreach (var caughtUp in new[] { false, true }) await JobAcknowledgement.Run(qualified, caughtUp);
-Console.WriteLine("57/57 creation schedules/reader boundaries passed. Isolated mutations and provider/binary qualification remain separate.");
+Console.WriteLine("61/61 creation schedules/reader boundaries passed. Isolated mutations and provider/binary qualification remain separate.");
 
 sealed partial class CreationWitness(string mode, bool nested)
 {
