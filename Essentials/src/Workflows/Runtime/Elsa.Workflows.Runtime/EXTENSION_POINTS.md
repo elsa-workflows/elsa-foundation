@@ -1265,3 +1265,7 @@ User Task inbox cursors use `UserTaskOptions.CursorEncryptionKey` (Base64, 32 by
 ### Retained history callback preflight (#3849, S04e)
 
 `IRuntimeHistoryCaptureSupport` qualifies a retained policy on the actual checkpoint enricher, independently of host new-admission settings. Activities Runtime checks it with the optional native source and selected atomic reader/writer before callback or activation effects, including background admission and active typed resume. Missing Required capture defers work instead of acknowledging an unrecorded callback. Legacy paths resolve no diagnostic reader. No capture implementation or history registration is installed by this supporting boundary.
+
+### Native callback outcome inputs (#3849, S04f)
+
+Activities Runtime records actual callback entry, return and outcome in the existing logical checkpoint, preserving exact attempt/work and optional delivery/event causation. Throws do not invent a successful return. Structural continuation source factories are lazy and survive native state/control clones; bookmark outcome requests defensively copy their fact inputs. Fault, cancellation and bookmark outcome services preserve those supplied observations through the optional source handoff. They do not reconstruct events from newer inspection state or introduce another checkpoint. These are owner inputs awaiting real capture/provider qualification, not enabled production recording.

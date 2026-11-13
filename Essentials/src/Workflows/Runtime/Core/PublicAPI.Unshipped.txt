@@ -10827,3 +10827,14 @@ Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFact.OccurredAtKnown.get 
 Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFact.OccurredAtKnown.init -> void
 Elsa.Workflows.Runtime.Core.Contracts.IRuntimeHistoryCaptureSupport
 Elsa.Workflows.Runtime.Core.Contracts.IRuntimeHistoryCaptureSupport.CanCapture(Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryCapturePolicy! policy) -> bool
+Elsa.Workflows.Runtime.Core.Models.RuntimeStructuralContinuation.HistorySourceFacts.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFact!>?
+Elsa.Workflows.Runtime.Core.Models.BookmarkConsumptionCheckpointRequest.HistorySourceFacts.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFact!>?
+Elsa.Workflows.Runtime.Core.Models.BookmarkConsumptionCheckpointRequest.HistorySourceFacts.init -> void
+Elsa.Workflows.Runtime.Core.Models.RuntimeResumeBookmarkCommandPayload.HistoryCausation.get -> Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryCausation?
+Elsa.Workflows.Runtime.Core.Models.RuntimeResumeBookmarkCommandPayload.HistoryCausation.init -> void
+Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpoint.HistoryCausation.get -> Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryCausation?
+Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpoint.HistoryCausation.init -> void
+Elsa.Workflows.Runtime.Core.Models.RuntimeStructuralContinuation.WithHistorySourceFacts(System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFact!>! facts) -> Elsa.Workflows.Runtime.Core.Models.RuntimeStructuralContinuation!
+Elsa.Workflows.Runtime.Core.Models.RuntimeStructuralContinuation.WithHistorySourceFacts(System.Func<System.DateTimeOffset, System.Collections.Generic.IEnumerable<Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFact!>!>! facts) -> Elsa.Workflows.Runtime.Core.Models.RuntimeStructuralContinuation!
+Elsa.Workflows.Runtime.Core.Models.RuntimeStructuralContinuation.MaterializeHistorySourceFacts(System.DateTimeOffset observedAt) -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFact!>!
+Elsa.Workflows.Runtime.Core.Models.BookmarkConsumptionCheckpointRequest.WithHistorySourceFacts(System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFact!>? facts) -> Elsa.Workflows.Runtime.Core.Models.BookmarkConsumptionCheckpointRequest!

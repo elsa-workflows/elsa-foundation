@@ -165,9 +165,8 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
         if (completedChildState.Status == ActivityExecutionStatus.Cancelled)
             return;
 
-        await ActivityHistoryPreflight.ReadPolicyAndValidateAsync(serviceProvider, workItem.WorkflowExecutionId, cancellationToken);
-
         var durableValueStateStore = serviceProvider.GetRequiredService<IDurableValueStateStore>();
+        var history = await ActivityHistory.CreateAsync(serviceProvider, workItem, parentState, TimeProvider, cancellationToken);
         var idGenerator = serviceProvider.GetRequiredService<IRuntimeExecutionIdGenerator>();
         var checkpointCommitter = serviceProvider.GetService<RuntimeCheckpointCommitter>();
         var inspectionAccumulator = serviceProvider.GetService<IRuntimeActivityExecutionInspectionAccumulator>();
@@ -312,11 +311,12 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
                     variableScope: null,
                     liveChildActivities: liveChildActivities,
                     scopedVariableEnvelopes: scopedVariableEnvelopes);
+                history?.SetAttempt(context.AttemptId);
 
                 if (childFaulted && isDescendantFaultEvaluation)
                 {
                     var descendantFault = completedChildState.Fault;
-                    continuation = await ((IRuntimeActivityDescendantFaultHandler)parentActivity).OnDescendantFaultedAsync(new ActivityDescendantFaultedContext(
+                    continuation = await ActivityHistory.ObserveAsync(history, () => ((IRuntimeActivityDescendantFaultHandler)parentActivity).OnDescendantFaultedAsync(new ActivityDescendantFaultedContext(
                         context,
                         completedChildActivityExecutionId,
                         completedChildState.Execution.ExecutableNodeId,
@@ -326,14 +326,14 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
                         completedChildState.IterationId,
                         descendantFault?.Code,
                         descendantFault?.Metadata.GetValueOrDefault(ActivityFault.CategoryMetadataKey),
-                        viaChildState!.Provenance.Metadata));
+                        viaChildState!.Provenance.Metadata)), result => result?.Kind.ToString() ?? "Unknown");
                 }
                 else if (childFaulted)
                 {
                     if (isParentOutcomeEvaluation && parentActivity is IRuntimeActivityChildOutcomeHandler outcomeHandler)
                     {
                         var outcome = payload.ParentOutcome!;
-                        continuation = await outcomeHandler.OnChildOutcomeAsync(new ActivityChildOutcomeContext(
+                        continuation = await ActivityHistory.ObserveAsync(history, () => outcomeHandler.OnChildOutcomeAsync(new ActivityChildOutcomeContext(
                             context,
                             completedChildActivityExecutionId,
                             completedChildState.Execution.ExecutableNodeId,
@@ -341,7 +341,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
                             outcome.Fault,
                             outcome.IncidentId,
                             outcome.Notifications,
-                            completedChildState.Provenance.Metadata));
+                            completedChildState.Provenance.Metadata)), result => result?.Kind.ToString() ?? "Unknown");
                     }
                     else if (isParentOutcomeEvaluation && parentActivity is IRuntimeActivityChildNotificationHandler)
                     {
@@ -364,7 +364,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
                             childFault?.Metadata.GetValueOrDefault(ActivityFault.CategoryMetadataKey),
                             completedChildState.Provenance.Metadata);
 
-                        continuation = await ((IRuntimeActivityChildFaultHandler)parentActivity).OnChildFaultedAsync(childFaultedContext);
+                        continuation = await ActivityHistory.ObserveAsync(history, () => ((IRuntimeActivityChildFaultHandler)parentActivity).OnChildFaultedAsync(childFaultedContext), result => result?.Kind.ToString() ?? "Unknown");
                     }
                 }
                 else
@@ -377,7 +377,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
                         completedChildState.IterationId,
                         completedChildState.Provenance.Metadata);
 
-                    continuation = await ((IRuntimeActivityChildCompletionHandler)parentActivity).OnChildCompletedAsync(childCompletedContext);
+                    continuation = await ActivityHistory.ObserveAsync(history, () => ((IRuntimeActivityChildCompletionHandler)parentActivity).OnChildCompletedAsync(childCompletedContext), result => result?.Kind.ToString() ?? "Unknown");
                 }
 
                 var scheduledChildren = context.GetChildActivityScheduleRequests();
@@ -517,7 +517,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
                 fault,
                 subStatus,
                 valueSnapshots,
-                cancellationToken);
+                cancellationToken, historyFacts: history?.Materialize());
             return;
         }
 
@@ -536,7 +536,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
                 activationDisposalException,
                 "ActivityDisposalFailed",
                 valueSnapshots,
-                cancellationToken);
+                cancellationToken, historyFacts: history?.Materialize());
             return;
         }
 
@@ -547,7 +547,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
                 inspectionAccumulator,
                 idGenerator,
                 TimeProvider,
-                NewCommitSource(workItem, payload, "ChildActivityScheduling"),
+                (NewCommitSource(workItem, payload, "ChildActivityScheduling") with { HistorySourceFacts = history?.Materialize(continuation) }),
                 callbackBypassParentState,
                 [MarkFaultProcessed(completedChildState, workItem, isDescendantFaultEvaluation)],
                 [],
@@ -574,6 +574,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
 
         if (resolvedContinuation.Kind == RuntimeStructuralContinuationKind.Fault)
         {
+            history?.Outcome(RuntimeHistorySourceFactKind.ActivityContinuationFaulted);
             if (checkpointCommitter is null)
                 throw new InvalidOperationException("A checkpoint committer is required to persist a structural activity fault.");
 
@@ -590,7 +591,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
                 faultedParentState,
                 exception,
                 "ActivityReturnedFault",
-                valueSnapshots);
+                valueSnapshots) with { HistorySourceFacts = history?.Materialize(continuation) };
             var incidentId = ActivityFaultIncidentRecorder.IncidentId(workItem.WorkItemId, payload.ActivityExecutionId, "ActivityReturnedFault");
             var parentEvaluation = await ChildFaultParentEvaluation.TryBuildAsync(
                 activityExecutionStateStore,
@@ -612,6 +613,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
 
         if (resolvedContinuation.Kind == RuntimeStructuralContinuationKind.Cancel)
         {
+            history?.Outcome(RuntimeHistorySourceFactKind.ActivityContinuationCancelled);
             if (checkpointCommitter is null)
                 throw new InvalidOperationException("A checkpoint committer is required to persist a structural activity cancellation.");
 
@@ -623,13 +625,14 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
                 currentParentState,
                 resolvedContinuation.CancellationReason!,
                 valueSnapshots,
-                cancellationToken: cancellationToken);
+                cancellationToken: cancellationToken, historySourceFacts: history?.Materialize(continuation));
             return;
         }
 
         var childScheduleRequests = resolvedContext.GetChildActivityScheduleRequests();
         if (resolvedContinuation.IsDeferred)
         {
+            history?.Outcome(RuntimeHistorySourceFactKind.ActivityContinuationSuspended);
             currentParentState = ActivityAttemptActivationClaimer.EndOpenAttempt(
                 currentParentState,
                 Elsa.Workflows.Runtime.Core.Models.ActivityTransitionKind.Suspend,
@@ -639,7 +642,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
                 inspectionAccumulator,
                 idGenerator,
                 TimeProvider,
-                NewCommitSource(workItem, payload, "ChildActivityScheduling"),
+                (NewCommitSource(workItem, payload, "ChildActivityScheduling") with { HistorySourceFacts = history?.Materialize(continuation) }),
                 currentParentState,
                 [MarkFaultProcessed(completedChildState, workItem, isDescendantFaultEvaluation)],
                 childScheduleRequests,
@@ -783,15 +786,16 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
                 exception,
                 "ParentCompletionFaulted",
                 valueSnapshots,
-                cancellationToken);
+                cancellationToken, historyFacts: history?.Materialize());
             return;
         }
 
         if (checkpointCommitter is null)
             throw new InvalidOperationException("A checkpoint committer is required to atomically persist structural activity completion.");
 
+        history?.Outcome(RuntimeHistorySourceFactKind.ActivityContinuationCompleted, SchedulerWorkHandlerHelpers.ReadCompletionOutcomeNames(completedParentState, skippedSubStatus: null).ToArray());
         var completedValueSnapshots = valueSnapshots.Concat(containerVariableSnapshots).ToArray();
-        var completionCommitSource = NewCommitSource(workItem, payload, payload.Reason);
+        var completionCommitSource = (NewCommitSource(workItem, payload, payload.Reason) with { HistorySourceFacts = history?.Materialize(continuation) });
         IReadOnlyCollection<RuntimeStateChange<ActivityExecutionState>> processedOutcomeChanges = isParentOutcomeEvaluation
             ? [new RuntimeStateChange<ActivityExecutionState>(
                 StateId: completedChildState.Execution.ActivityExecutionId,
@@ -1000,7 +1004,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
         Exception exception,
         string subStatus,
         IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot> valueSnapshots,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken, IReadOnlyList<RuntimeHistorySourceFact>? historyFacts = null)
     {
         var latestFaultedParentState = await activityExecutionStateStore.FindAsync(
                                            workItem.WorkflowExecutionId,
@@ -1017,7 +1021,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
             latestFaultedParentState,
             faultMasking.Mask(exception),
             subStatus,
-            valueSnapshots);
+            valueSnapshots) with { HistorySourceFacts = historyFacts };
 
         // The faulting node is the parent composite. Ride a child-fault evaluation for its own parent on the
         // incident checkpoint so a grandparent join resolves instead of waiting forever. A root has no such work.

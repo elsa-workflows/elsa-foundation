@@ -77,7 +77,7 @@ public sealed class ActivityFaultIncidentRecorder
                 WorkflowExecutionId: request.WorkItem.WorkflowExecutionId,
                 OccurredAt: occurredAt,
                 ActivityExecutionIds: [request.ActivityExecutionId],
-                Metadata: metadata),
+                Metadata: metadata) { HistoryCausation = request.HistorySourceFacts?.FirstOrDefault()?.Causation },
             StateChanges: new RuntimeCheckpointStateChangeSet(
                 workflowExecution: null,
                 scheduler: null,
@@ -112,10 +112,10 @@ public sealed class ActivityFaultIncidentRecorder
                     ]),
             PostCommitIntents: activationFailure is null ? NewPostCommitIntents(request, occurredAt) : [],
             Metadata: metadata);
-
         commit = await request.CheckpointCommitter.AddHistorySourceFactsAsync(commit,
-            () => [RuntimeHistoryIncidentFacts.Created(incident,
-                new(CommandId: request.WorkItem.CommandId, SchedulerWorkItemId: request.WorkItem.WorkItemId))], cancellationToken);
+            () => (request.HistorySourceFacts ?? []).Append(RuntimeHistoryIncidentFacts.Created(incident,
+                new(CommandId: request.WorkItem.CommandId, SchedulerWorkItemId: request.WorkItem.WorkItemId))), cancellationToken);
+
         await request.CheckpointCommitter.CommitAsync(request.ChildControlContribution?.Apply(commit) ?? commit, cancellationToken);
     }
 
@@ -353,6 +353,7 @@ public sealed record ActivityFaultIncidentRecordRequest(
     IReadOnlyCollection<RuntimeSchedulerWorkItem>? PostCommitSchedulerWorkItemsOrNull = null)
 {
     internal StructuralChildControlContribution? ChildControlContribution { get; init; }
+    public IReadOnlyList<RuntimeHistorySourceFact>? HistorySourceFacts { get; init; }
 
     /// <summary>Scheduler work items to enqueue as post-commit intents on the incident checkpoint (never null).</summary>
     public IReadOnlyCollection<RuntimeSchedulerWorkItem> PostCommitSchedulerWorkItems => PostCommitSchedulerWorkItemsOrNull ?? [];
