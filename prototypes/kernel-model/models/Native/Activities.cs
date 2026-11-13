@@ -267,7 +267,10 @@ public sealed class Flowchart : CompositeActivity
             // A join fires once per scheduling id the engine gives the firing (the releasing completion, or the producer
             // of the first live arrival when a waiting join is released) in its round: behind a merge it may fire once
             // per token, so the round alone is not unique. A merge continues on every arrival and records no join.
-            if (scheduled.SchedulingCause == "join" && context.Node.Gateways.GetValueOrDefault(scheduled.NodeId) != Gateway.Merge)
+            // A join is a node with several inbound connections, whatever the engine calls the firing (one released by
+            // the graph going quiet consumes a single arrival and is a "continuation").
+            if (scheduled.SchedulingCause is "join" or "continuation" && context.Node.Gateways.GetValueOrDefault(scheduled.NodeId) != Gateway.Merge
+                && context.Node.Connections.Where(c => c.Target == scheduled.NodeId).Select(c => c.Source).Distinct().Count() > 1)
                 context.RecordJoin($"{scheduled.NodeId}:{scheduled.IterationKey ?? "-"}:{scheduled.SchedulingActivityExecutionId}");
             context.Schedule(context.Children.First(c => c.Id == scheduled.NodeId), Encode(scheduled.ExecutionPathId, scheduled.ExecutionScopeId));
         }

@@ -73,7 +73,7 @@ What changed, and why:
 | A stateful activity's inputs are evaluated again on resume, not taken from a pinned snapshot | No snapshot to store. The activities that wait keep what they need in their state |
 | Sequence is stateless: the next child follows from the position of the one that completed | Smaller state |
 | `If` children fill named slots (Then, Else); its outcome is True or False either way | The same activity works inside a flowchart |
-| The Flowchart runs on the graph engine (`models/Graph`, main's Flowchart engine): paths, arrivals, dead paths. A node with several inbound connections is a join decided by the dead-path join (main's default); gateways (`Gateway`) are explicit; a first-wins loser is cancelled. A run starts at one node, main's: the pending start trigger when it is a child of the Flowchart, else the start node (the first child without inbound connections); other unconnected children do not start, and a trigger below one of them is not reached (main refuses that placement when a workflow is published; the prototype has no publish step) | Before, without dead paths, an All join after a decision never fired and the flowchart completed without it (run: `smoke`, "an All join after a decision", then 'left no no', now 'left yes yes') |
+| The Flowchart runs on the graph engine (`models/Graph`, main's Flowchart engine): paths, arrivals, dead paths. A node with several inbound connections is a join decided by the dead-path join (main's default); gateways (`Gateway`) are explicit; a first-wins loser is cancelled. A run starts at one node, main's: the pending start trigger when it is a child of the Flowchart, else the start node (the first child without inbound connections); other unconnected children do not start, and a trigger below one of them is not reached (main refuses that placement when a workflow is published; the prototype has no publish step). Unlike main, the trigger counts only while it is undelivered (a Flowchart run again by a loop starts at the start node), and no node carries main's trigger flag, so loop-closing connections are classified from the start node only | Before, without dead paths, an All join after a decision never fired and the flowchart completed without it (run: `smoke`, "an All join after a decision", then 'left no no', now 'left yes yes') |
 | No DI, no services in activities. The host gates Background work and performs External effects | Enough for the spike; the activity map's DI would come back unchanged |
 | A tiny expression language (`Expression.cs`), compiled to closures once per text | Instead of JavaScript |
 | `Cancel` maps to completion with outcome Cancelled | There is no cancel callback on composites yet |
@@ -185,6 +185,7 @@ SQLite, engine calls (commands):
 | writeline-sequence, 5 / 10 / 20 / 40 | Durable | 146 / 221 / 371 / 671 | 45 (33) / 85 (63) / 165 (123) / 325 (243) |
 | fork-join-resume, direct resume | Balanced | 131 | 26 (18) |
 | fork-join-resume, direct resume | Durable | 194 | 42 (30) |
+| flowchart, three event branches, an All join, three direct resumes | Ephemeral / Balanced / Durable | | 29 (23) / 29 (23) / 85 (65): the same as the old native Flowchart (round 4) |
 | http-reference | Ephemeral / Balanced / Durable | 83 / 83 / 149 | 0 / 5 (3) / 29 (21) |
 
 Where the commits of fork-join-resume go (run, from the traced commands): the start (row, subscription, meet ticket),
@@ -221,7 +222,7 @@ Checks:
 | Check | The brief's words | How |
 |---|---|---|
 | N1 | Every activity that completed in committed state completed exactly once | No frame id appears twice in `c:` entries of the committed journal (every action); at the end the multiset of completed activity types equals a run without faults |
-| N2 | A join fires once | No `j:` entry twice. A Parallel joins once; a Flowchart join fires at most once per scheduling id in a round, so a join behind a merge may fire once per token (narrowed in round 4; the graph check G2 holds a join to once per round) |
+| N2 | A join fires once | No `j:` entry twice. A Parallel joins once; a Flowchart join fires at most once per scheduling id in a round, so a join behind a merge may fire once per token (narrowed in round 4; the design sketch's G2, a join fires at most once per round, is checked separately) |
 | N3 | A child is started once and its parent resumes once | A child id is started by one frame, a frame starts one child, a child wait is resumed only by its own child and once; at the end every waited child of a finished parent resumed it exactly once |
 | N4 | A non-replay-safe activity's attempt is committed before it runs in Durable mode | When an External effect happens, the committed journal holds its attempt |
 | N5 | Final variables and outputs match a run without faults | Every finished native instance (children too) has the variables of the same definition and input run alone, without faults; everything started from outside finished or was cancelled by request |
