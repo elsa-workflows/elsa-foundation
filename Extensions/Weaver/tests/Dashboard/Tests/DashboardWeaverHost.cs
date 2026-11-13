@@ -139,6 +139,7 @@ internal sealed class FixtureSource : IDashboardDatasetExtension, IDashboardQuer
 {
     internal const string RowCanary = "protected-row-7d820b";
     internal const string ValueCanary = "93746.28";
+    internal bool TrendGrammar { get; set; }
     internal bool Hidden { get; set; }
     internal bool AmountWithdrawn { get; set; }
     internal bool ThrowOnDiscovery { get; set; }
@@ -157,7 +158,9 @@ internal sealed class FixtureSource : IDashboardDatasetExtension, IDashboardQuer
             {
                 Id = owner.DatasetId, OwnerModuleId = "Fixture", SchemaRevision = "1", Title = Title,
                 Description = "Authorized source with intentionally unknown coverage.",
-                Fields = AmountWithdrawn ? [new("id", "Record", "string", ["eq"], Sortable: true)] :
+                Metrics = TrendGrammar ? [new("fixture.rate", "started-current-status-v1", "Rate", "percent", "Fixture rate", Comparable: true)] : [],
+                Time = TrendGrammar ? new(["startedAt"], ["calendarWeekToDate"], [], ["previousCalendarWeekSameElapsed"]) : null,
+                Fields = TrendGrammar ? [new("id", "Record", "string", ["in"], Groupable: true), new("startedAt", "Started", "instant", [])] : AmountWithdrawn ? [new("id", "Record", "string", ["eq"], Sortable: true)] :
                     [new("id", "Record", "string", ["eq"], Sortable: true), new("amount", "Amount", "decimal", ["eq", "gte"], Sortable: true)]
             });
         return ValueTask.CompletedTask;
