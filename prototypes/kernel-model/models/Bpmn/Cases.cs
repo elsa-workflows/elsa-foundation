@@ -14,8 +14,10 @@ public static class BpmnCases
     public const int Rounds = 3;          // the loop's rounds
 
     /// <param name="deadline">The boundary timers: on a real clock, a longer one keeps a race the job should win from going to the timer under load.</param>
-    public static ProcessRegistry Registry(int deadline = Deadline)
+    /// <param name="serviceCompleted">Observes results of the slow and child services for cancellation witnesses.</param>
+    public static ProcessRegistry Registry(int deadline = Deadline, Action<string>? serviceCompleted = null)
     {
+        ServiceResult Completed(string name, ServiceResult result) { serviceCompleted?.Invoke(name); return result; }
         var registry = new ProcessRegistry();
         foreach (var process in Processes(deadline)) registry.Add(process);
         return registry
@@ -27,10 +29,10 @@ public static class BpmnCases
             .Service("express", _ => Set(("express-done", true)))
             .Service("insured", _ => Set(("insured-done", true)))
             .Service("standard", _ => Set(("standard-done", true)))
-            .Service("slow", _ => Set(("slow-done", true)))
+            .Service("slow", _ => Completed("slow", Set(("slow-done", true))))
             .Service("escalate", _ => Set(("escalated", true)))
             .Service("prepare", v => Set(("prepared", v["order"]?.DeepClone())))
-            .Service("child", v => Set(("child-out", $"child of {v["order"]}")))
+            .Service("child", v => Completed("child", Set(("child-out", $"child of {v["order"]}"))))
             .Service("count", v => Set(("count", (v["count"]?.GetValue<int>() ?? 0) + 1)))
             .Service("note", v => Set(("notes", (v["notes"]?.GetValue<int>() ?? 0) + 1)));
     }

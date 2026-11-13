@@ -29,7 +29,7 @@ public static class CaseSmoke
         public readonly ConcurrentDictionary<string, TaskCompletionSource> Held = new(StringComparer.Ordinal);
         public readonly HashSet<string> Services = new(StringComparer.Ordinal);
         public readonly ConcurrentDictionary<string, bool> Cancelled = new(StringComparer.Ordinal);    // the service's job was told to stop
-        public readonly ConcurrentDictionary<string, bool> Ran = new(StringComparer.Ordinal);          // and ran to its result anyway
+        public readonly ConcurrentDictionary<string, int> Results = new(StringComparer.Ordinal);       // the registered service produced its result
 
         private TaskCompletionSource Of(string service) => Held.GetOrAdd(service, _ => new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously));
 
@@ -40,7 +40,6 @@ public static class CaseSmoke
             using var _ = cancel.Register(() => Cancelled[service] = true);
             Interlocked.Increment(ref PendingReturns);
             await Of(service).Task;
-            if (Cancelled.ContainsKey(service)) Ran[service] = true;
             Returning.GetOrAdd(service, _ => new(TaskCreationOptions.RunContinuationsAsynchronously)).TrySetResult();
             await ReturnPermit.GetOrAdd(service, _ => new(TaskCreationOptions.RunContinuationsAsynchronously)).Task;
             Interlocked.Decrement(ref PendingReturns);
@@ -55,7 +54,7 @@ public static class CaseSmoke
             Services.Clear();
             Held.Clear();
             Cancelled.Clear();
-            Ran.Clear();
+            Results.Clear();
             Returning.Clear();
             ReturnPermit.Clear();
         }
@@ -78,7 +77,8 @@ public static class CaseSmoke
         long now = 1000;
         var store = new InMemoryStore(1, () => now);
         var observed = new CaseStore(store);
-        var owner = new Owner("n1", 0, observed, BpmnCases.Registry(Deadline), monotonic: () => now, options: new BpmnOptions { Gate = gates.Gate });
+        var registry = BpmnCases.Registry(Deadline, service => gates.Results.AddOrUpdate(service, 1, (_, count) => count + 1));
+        var owner = new Owner("n1", 0, observed, registry, monotonic: () => now, options: new BpmnOptions { Gate = gates.Gate });
         await owner.StartAsync();
 
         async Task<(BpmnState State, List<string> Journal, InstanceRef Id)> Run(string process, JsonObject? variables = null, Func<InstanceRef, Task>? meanwhile = null)
@@ -108,13 +108,14 @@ public static class CaseSmoke
         }
         async Task FinishLateJob(string service, Task driver)
         {
+            var results = gates.Results.GetValueOrDefault(service);
             gates.Release(service);
             await gates.ReadyToReturn(service).WaitAsync(TimeSpan.FromSeconds(10));
             Check(!driver.IsCompleted, "the actual worker driver is pending while the cancelled body withholds its return");
             gates.AllowReturn(service);
             await driver.WaitAsync(TimeSpan.FromSeconds(10));
             await owner.PumpAsync(() => true);
-            Check(gates.Ran.ContainsKey(service), "the cancelled job body reached its late return");
+            Check(gates.Results.GetValueOrDefault(service) == results + 1, "the cancelled service actually produced its late result");
         }
 
         Console.WriteLine("parallel: a fork into two service tasks (jobs) and a join");
