@@ -72,6 +72,15 @@ public sealed record ActivityInputSnapshot
     public string BindingFingerprint { get; }
     public IReadOnlyDictionary<string, ValueEnvelope> Values { get; }
     public DateTimeOffset MaterializedAt { get; }
+
+    /// <summary>
+    /// The variables this materialization actually read, each with the version seen (spec 1221 FR-002), committed with
+    /// the snapshot and carried to background admission. The invocation's capture writes are judged against it. Null
+    /// for a snapshot that read no variable and for snapshots stored before read sets existed; a write then has no base
+    /// and is blind.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public VariableInputReadSet? InputReadSet { get; init; }
 }
 
 /// <summary>

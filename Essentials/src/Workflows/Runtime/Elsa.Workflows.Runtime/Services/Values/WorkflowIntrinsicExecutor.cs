@@ -124,7 +124,13 @@ public sealed class WorkflowIntrinsicExecutor(
             validateAssignmentPayload: true);
         ValidateAssignment(frameOwner.Frame, target.VariableKey, valueBinding, value, node.ExecutableNodeId);
 
-        var changedFrame = frameOwner.Frame.Set(target.VariableKey, value, frameOwner.Frame.Revision);
+        // Spec 1221: the intrinsic reads its value and commits the write in this one dispatch, so nothing can move the
+        // variable in between. Its write is committed as a blind write (D-8) and recorded in the write history.
+        var writer = new VariableWriter(VariableWriteSource.Intrinsic, node.ExecutableNodeId, intrinsicState.InvocationId);
+        var write = frameOwner.Frame.Commit(target.VariableKey, value, frameOwner.Frame.Revision, writeBase: null, Elsa.Primitives.Models.LostUpdateMode.Default, writer);
+        var changedFrame = write.Frame;
+        intrinsicState = intrinsicState.WithVariableWrites(
+            [VariableWriteRecord.From(frameOwner.Frame, write, target.VariableKey, writer, timeProvider.GetUtcNow())]);
         WorkflowExecutionState? changedWorkflow = null;
         ActivityExecutionState? changedActivityOwner = null;
         if (frameOwner.WorkflowOwned)

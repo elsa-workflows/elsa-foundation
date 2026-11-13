@@ -394,17 +394,25 @@ internal static class StructuralCallbackEvaluation
                 .ToArray();
             // A workflow-variable output capture writes the canonical root frame in the SAME commit as the
             // completion (#972), mirroring how the Set intrinsic commits its changed frame.
-            completionWorkflowVariableWriteBack = await RuntimeWorkflowVariableCaptureWriteBack.BuildStateChangeAsync(
+            // Judged under the spec 1221 commit rule against the composite's input read set; the history rides along.
+            var captureCommit = await RuntimeWorkflowVariableCaptureWriteBack.CommitCapturesAsync(
                 serviceProvider.GetRequiredService<IWorkflowExecutionStateStore>(),
                 workItem.WorkflowExecutionId,
-                parentExecutableNode.ExecutableNodeId,
+                parentExecutableNode,
+                currentParentState,
                 captureProjection.WorkflowVariableWrites,
                 new Dictionary<string, string>(StringComparer.Ordinal)
                 {
                     [RuntimeMetadataKeys.SchedulerWorkItemId] = workItem.WorkItemId,
                     [RuntimeMetadataKeys.CheckpointReason] = payload.Reason
                 },
+                VariableWriteSource.Capture,
+                completedAt,
                 cancellationToken);
+            if (captureCommit.LostUpdateFault is { } lostUpdate)
+                throw new VariableLostUpdateException(lostUpdate);
+            completionWorkflowVariableWriteBack = captureCommit.Change;
+            currentParentState = currentParentState.WithVariableWrites(captureCommit.Records);
             var completedAttempt = new ActivityAttempt(
                 openAttempt.AttemptId, openAttempt.InvocationId, openAttempt.Ordinal, openAttempt.Reason,
                 openAttempt.StartedAt, completedAt, openAttempt.TriggerDeliveryId,

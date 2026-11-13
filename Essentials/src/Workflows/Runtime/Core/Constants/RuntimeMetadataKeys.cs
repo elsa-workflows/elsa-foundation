@@ -68,6 +68,13 @@ public static class RuntimeMetadataKeys
     public const string StructuralFaultHandlingChild = "child";
     public const string StructuralFaultHandlingDescendant = "descendant";
     /// <summary>
+    /// The node's lost-update mode (spec 1221 FR-012), pinned by the publish compiler from the activity type's
+    /// declaration or the node's own setting: <see cref="LostUpdateModeFault"/> for strict read-modify-write. Absent
+    /// for the default mode (last write wins with a lost-update warning).
+    /// </summary>
+    public const string LostUpdateMode = "runtime.lostUpdateMode";
+    public const string LostUpdateModeFault = "fault";
+    /// <summary>
     /// Executable-node capability compiled from the node's activity type when it implements
     /// <c>IRuntimeAcceptsRescheduledFaultedChild</c>; value <c>true</c>, absent for every other node (#3135).
     /// </summary>

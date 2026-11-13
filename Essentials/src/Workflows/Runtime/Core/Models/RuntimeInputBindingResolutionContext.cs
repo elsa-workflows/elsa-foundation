@@ -13,7 +13,8 @@ public sealed class RuntimeInputBindingResolutionContext
         IReadOnlyDictionary<string, ValueEnvelope>? workflowInputEnvelopes = null,
         IReadOnlyDictionary<RuntimeVariableValueAddress, ValueEnvelope>? variableEnvelopes = null,
         IReadOnlyDictionary<string, ValueEnvelope>? visibleVariablesByName = null,
-        string? correlationId = null)
+        string? correlationId = null,
+        RuntimeVariableReadRecorder? variableReadRecorder = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
         ArgumentException.ThrowIfNullOrWhiteSpace(activityExecutionId);
@@ -27,7 +28,14 @@ public sealed class RuntimeInputBindingResolutionContext
         VariableEnvelopes = SnapshotEnvelopes(variableEnvelopes);
         VisibleVariablesByName = SnapshotEnvelopes(visibleVariablesByName);
         CorrelationId = correlationId;
+        VariableReadRecorder = variableReadRecorder;
     }
+
+    /// <summary>
+    /// Where the instrumented variable reads of this resolution are recorded (spec 1221 input read set). Null when the
+    /// producer does not track reads.
+    /// </summary>
+    public RuntimeVariableReadRecorder? VariableReadRecorder { get; }
 
     public string WorkflowExecutionId { get; }
     public string ActivityExecutionId { get; }

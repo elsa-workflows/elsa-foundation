@@ -103,6 +103,22 @@ public sealed record ActivityExecutionState(
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public RuntimeChildControlInbox? ChildControlInbox { get; init; }
 
+    /// <summary>
+    /// The write history of this invocation's variable writes (spec 1221 FR-024): one record per applied write and per
+    /// lost update, committed with the write. Absent when the invocation wrote no variable and on legacy invocations.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<VariableWriteRecord>? VariableWrites { get; init; }
+
+    /// <summary>Appends write-history records to this invocation.</summary>
+    public ActivityExecutionState WithVariableWrites(IReadOnlyCollection<VariableWriteRecord> records)
+    {
+        ArgumentNullException.ThrowIfNull(records);
+        return records.Count == 0
+            ? this
+            : this with { VariableWrites = [.. VariableWrites ?? [], .. records] };
+    }
+
     public void EnsureValueFlowCompatible()
     {
         if (DocumentVersion != ActivityExecutionValueFlowDocumentVersions.Current)

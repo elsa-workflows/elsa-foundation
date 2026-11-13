@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 
@@ -59,15 +60,78 @@ public static class RuntimeWorkflowVariableCaptureWriteBack
             Metadata: RuntimeModelMetadata.Snapshot(metadata));
     }
 
+    /// <summary>
+    /// Commits an invocation's workflow-variable captures under the commit rule (spec 1221 FR-005, FR-009): each capture
+    /// is judged against the base the invocation's input read set holds for that variable (none → a blind write), in the
+    /// node's lost-update mode. Returns the checkpoint state change, one write-history record per capture, and the
+    /// <c>Fault</c> lost update that refuses the completion, if any. When a capture faults, no capture applies.
+    /// </summary>
+    public static async ValueTask<RuntimeWorkflowVariableCaptureCommit> CommitCapturesAsync(
+        IWorkflowExecutionStateStore workflowExecutionStateStore,
+        string workflowExecutionId,
+        ExecutableNode executableNode,
+        ActivityExecutionState invocation,
+        IReadOnlyDictionary<string, RuntimeDurableValueEncoding> writes,
+        IReadOnlyDictionary<string, string> metadata,
+        VariableWriteSource source,
+        DateTimeOffset occurredAt,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(workflowExecutionStateStore);
+        ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
+        ArgumentNullException.ThrowIfNull(executableNode);
+        ArgumentNullException.ThrowIfNull(invocation);
+        ArgumentNullException.ThrowIfNull(writes);
+
+        if (writes.Count == 0)
+            return RuntimeWorkflowVariableCaptureCommit.None;
+
+        var workflowState = await workflowExecutionStateStore.FindAsync(workflowExecutionId, cancellationToken)
+            ?? throw new InvalidOperationException(
+                $"Output capture on executable node '{executableNode.ExecutableNodeId}' targets a workflow variable, but workflow execution '{workflowExecutionId}' has no durable state.");
+        var writer = new VariableWriter(source, executableNode.ExecutableNodeId, invocation.InvocationId, invocation.Attempts?.LastOrDefault()?.AttemptId);
+        var result = Apply(
+            workflowState,
+            executableNode.ExecutableNodeId,
+            writes,
+            invocation.InputSnapshot?.InputReadSet,
+            LostUpdateModes.Of(executableNode),
+            writer,
+            occurredAt);
+        if (result.LostUpdateFault is not null)
+            return result with { Change = null };
+
+        return result with
+        {
+            Change = new RuntimeStateChange<WorkflowExecutionState>(
+                StateId: workflowExecutionId,
+                Operation: RuntimeStateChangeOperation.Upsert,
+                State: result.State!,
+                Metadata: RuntimeModelMetadata.Snapshot(metadata))
+        };
+    }
+
+    /// <summary>Applies captures as blind writes (no base, no history), the form callers without an invocation use.</summary>
     public static WorkflowExecutionState Apply(
         WorkflowExecutionState workflowState,
         string executableNodeId,
-        IReadOnlyDictionary<string, RuntimeDurableValueEncoding> writes)
+        IReadOnlyDictionary<string, RuntimeDurableValueEncoding> writes) =>
+        Apply(workflowState, executableNodeId, writes, readSet: null, LostUpdateMode.Default, writer: null, DateTimeOffset.MinValue).State!;
+
+    private static RuntimeWorkflowVariableCaptureCommit Apply(
+        WorkflowExecutionState workflowState,
+        string executableNodeId,
+        IReadOnlyDictionary<string, RuntimeDurableValueEncoding> writes,
+        VariableInputReadSet? readSet,
+        LostUpdateMode mode,
+        VariableWriter? writer,
+        DateTimeOffset occurredAt)
     {
         ArgumentNullException.ThrowIfNull(workflowState);
         ArgumentException.ThrowIfNullOrWhiteSpace(executableNodeId);
         ArgumentNullException.ThrowIfNull(writes);
 
+        var records = new List<VariableWriteRecord>();
         var frame = workflowState.RootVariableFrame
             ?? throw new InvalidOperationException(
                 $"Output capture on executable node '{executableNodeId}' targets a workflow variable, but workflow execution '{workflowState.WorkflowExecutionId}' has no canonical root variable frame.");
@@ -102,9 +166,32 @@ public static class RuntimeWorkflowVariableCaptureWriteBack
                     ValueEnvelope.Inline(declared.Type, inline, declared.Policy),
                 _ => ValueEnvelope.Null(declared.Type, declared.Policy)
             };
-            frame = frame.Set(variableKey, envelope, frame.Revision);
+            var write = frame.Commit(variableKey, envelope, frame.Revision, readSet?.BaseFor(frame.ScopeId, variableKey), mode, writer);
+            if (writer is not null)
+            {
+                var record = VariableWriteRecord.From(frame, write, variableKey, writer, occurredAt);
+                if (write.Decision.Outcome == VariableCommitOutcome.LostUpdateFault)
+                    return new RuntimeWorkflowVariableCaptureCommit(null, null, [.. records, record with { RejectedValue = envelope }], record with { RejectedValue = envelope });
+                records.Add(record);
+            }
+
+            frame = write.Frame;
         }
 
-        return workflowState with { RootVariableFrame = frame };
+        return new RuntimeWorkflowVariableCaptureCommit(null, workflowState with { RootVariableFrame = frame }, records, null);
     }
+}
+
+/// <summary>
+/// The outcome of committing an invocation's workflow-variable captures: the checkpoint state change (null when nothing
+/// is written or a capture faulted), the write-history records, and the <c>Fault</c> lost update that refused the
+/// completion.
+/// </summary>
+public sealed record RuntimeWorkflowVariableCaptureCommit(
+    RuntimeStateChange<WorkflowExecutionState>? Change,
+    WorkflowExecutionState? State,
+    IReadOnlyList<VariableWriteRecord> Records,
+    VariableWriteRecord? LostUpdateFault)
+{
+    public static RuntimeWorkflowVariableCaptureCommit None { get; } = new(null, null, [], null);
 }

@@ -9,6 +9,7 @@ using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.Values;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using ParallelActivity = Elsa.Activities.Parallel.Activities.Parallel;
 
@@ -29,6 +30,16 @@ internal static class VariableLifecycleTestGraph
             .WithFeature(services => new ActivitiesControlFlowFeature().ConfigureServices(services))
             .Build(activityExecutionIds);
 
+    /// <summary>
+    /// A harness whose inline leaves run the discrete Schedule → Start → Invoke chain (fusion off), so two parallel
+    /// leaves both read before either commits: the stale-base case a background step or a deactivated drain meets.
+    /// </summary>
+    public static WorkflowExecutionHarness NewStaleBaseHarness(params string[] activityExecutionIds) =>
+        WorkflowExecutionHarness.Create()
+            .WithFeature(services => new ActivitiesControlFlowFeature().ConfigureServices(services))
+            .ConfigureServices(services => services.AddSingleton(new RuntimeReplaySafeFusionOptions { Enabled = false }))
+            .Build(activityExecutionIds);
+
     public static RuntimeVariableDeclaration CountDeclaration(int initial = 0) =>
         new(
             CountKey,
@@ -43,10 +54,10 @@ internal static class VariableLifecycleTestGraph
                 literal: ValueEnvelope.Inline(Int32Type, JsonSerializer.SerializeToElement(initial), ValueProtectionPolicy.InstanceInline)));
 
     /// <summary>A Parallel of two increment leaves of the given CLR type.</summary>
-    public static WorkflowExecutable ParallelIncrements(Type incrementActivity)
+    public static WorkflowExecutable ParallelIncrements(Type incrementActivity, LostUpdateMode mode = LostUpdateMode.Default)
     {
-        var left = Increment("node-left", incrementActivity);
-        var right = Increment("node-right", incrementActivity);
+        var left = Increment("node-left", incrementActivity, mode);
+        var right = Increment("node-right", incrementActivity, mode);
         var root = new ExecutableNode(
             executableNodeId: "node-parallel",
             authoredActivityId: "authored-node-parallel",
@@ -77,7 +88,7 @@ internal static class VariableLifecycleTestGraph
     }
 
     /// <summary>One increment leaf: input <c>Count</c> reads <c>count</c>; the result is captured into <c>count</c>.</summary>
-    public static ExecutableNode Increment(string nodeId, Type incrementActivity)
+    public static ExecutableNode Increment(string nodeId, Type incrementActivity, LostUpdateMode mode = LostUpdateMode.Default, bool readsCount = true)
     {
         var contract = ClrActivityContractTestBuilder.BuildContract(incrementActivity);
         var projection = Assert.Single(contract.Result.Projections).Key;
@@ -107,11 +118,19 @@ internal static class VariableLifecycleTestGraph
             activityTypeVersion: "1.0.0",
             descriptorType: WellKnownRuntimeActivityConsumers.ClrActivity,
             descriptorPayload: contract.DescriptorPayload,
-            inputBindings: new Dictionary<string, RuntimeInputBinding> { [read.InputKey] = read },
-            metadata: new Dictionary<string, string>(),
+            inputBindings: readsCount
+                ? new Dictionary<string, RuntimeInputBinding> { [read.InputKey] = read }
+                : new Dictionary<string, RuntimeInputBinding> { [read.InputKey] = Literal(read.InputKey, 41) },
+            metadata: mode == LostUpdateMode.Fault
+                ? new Dictionary<string, string> { [RuntimeMetadataKeys.LostUpdateMode] = RuntimeMetadataKeys.LostUpdateModeFault }
+                : new Dictionary<string, string>(),
             activityContract: contract,
             outputCaptures: new Dictionary<string, RuntimeOutputCapture> { [projection] = capture });
     }
+
+    private static RuntimeInputBinding Literal(string inputKey, int value) =>
+        new(inputKey, Int32Type, ValueProtectionPolicy.InstanceInline, RuntimeInputBindingSource.Literal,
+            literal: ValueEnvelope.Inline(Int32Type, JsonSerializer.SerializeToElement(value), ValueProtectionPolicy.InstanceInline));
 
     public static int ReadCount(WorkflowExecutionRun run) =>
         run.WorkflowState!.RootVariableFrame!.Values[CountKey].InlineValue!.Value.GetInt32();
