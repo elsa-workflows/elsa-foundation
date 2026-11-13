@@ -32,6 +32,8 @@ internal sealed class BpmnTurn(BpmnModel model, ITurn turn)
         }
         switch (_last)
         {
+            case BpmnContinuation.Complete when Has(BpmnFlaw.NeverEnd):
+                break;
             case BpmnContinuation.Complete complete:
                 turn.Record($"end {complete.Outcome}");
                 turn.SetStatus(InstanceStatus.Finished, complete.Outcome, new JsonObject(_s.Variables.Where(v => _s.Set.Contains(v.Key)).Select(v => KeyValuePair.Create(v.Key, v.Value?.DeepClone()))));
@@ -99,7 +101,7 @@ internal sealed class BpmnTurn(BpmnModel model, ITurn turn)
                 if (_s.Live.FirstOrDefault(w => w.Value is { Kind: WorkKinds.Call } && w.Value.Key == finished.Child).Key is not { } handle) break;     // a child it stopped
                 turn.Record($"r {handle} {finished.Child}");
                 var output = Object(finished.Output);
-                if (finished.Status == InstanceStatus.Finished) Merge(output);
+                if (finished.Status == InstanceStatus.Finished && !Has(BpmnFlaw.LoseChildOutput)) Merge(output);
                 Completed(handle, finished.Status switch
                 {
                     InstanceStatus.Finished => [],
@@ -160,6 +162,11 @@ internal sealed class BpmnTurn(BpmnModel model, ITurn turn)
         // Diagnostics are the interpreter's record of what it decided. The row does not keep them (the interpreter never
         // reads them back); the journal keeps the joins that fired, and the rest are dropped.
         _s.Tokens = evaluation.State.Prune() with { Diagnostics = [] };
+        if (Has(BpmnFlaw.ResurrectArrivals))
+        {
+            var kept = _s.Tokens.Tokens.Select(t => t.TokenId).ToHashSet(StringComparer.Ordinal);
+            _s.Tokens = _s.Tokens with { Tokens = [.. _s.Tokens.Tokens, .. before.Tokens.Where(t => t.Status == BpmnTokenStatus.WaitingAtJoin && !kept.Contains(t.TokenId))] };
+        }
         foreach (var command in evaluation.Commands)
             switch (command)
             {

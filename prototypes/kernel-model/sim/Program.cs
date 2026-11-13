@@ -201,9 +201,11 @@ int BpmnMutations(int seeds)
             });
             if (!found.IsEmpty) caught = found.MinBy(f => f.Seed);
         }
-        if (caught is null) missed++;
+        var expected = BpmnSwitch.Catches[mutation];
+        var right = caught is { } hit && expected.Contains(hit.Violation.Split(' ')[0]);
+        if (!right) missed++;
         Console.WriteLine(caught is { } c
-            ? $"{mutation}: CAUGHT at seed {c.Seed} after {acts} actions, {clock.ElapsedMilliseconds} ms: {c.Violation}"
+            ? $"{mutation}: CAUGHT by {c.Violation.Split(' ')[0]}{(right ? "" : $", NOT BY {string.Join(" or ", expected)}")} at seed {c.Seed} after {acts} actions, {clock.ElapsedMilliseconds} ms: {c.Violation}"
             : $"{mutation}: NOT CAUGHT in {seeds} seeds ({acts} actions, {clock.ElapsedMilliseconds} ms)");
     }
     return missed;

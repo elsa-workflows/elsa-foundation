@@ -18,6 +18,7 @@ public sealed class BpmnOracle(int partitions)
     public readonly Dictionary<string, HashSet<string>> Merged = new(StringComparer.Ordinal);     // instance -> tokens a join made
     public readonly Dictionary<string, List<string>> Joins = new(StringComparer.Ordinal);         // instance -> the joins that fired, in order
     public readonly Dictionary<string, HashSet<string>> Stopped = new(StringComparer.Ordinal);    // instance -> elements whose work it stopped
+    public readonly HashSet<string> JobParked = new(StringComparer.Ordinal);                         // ended by a job the kernel parked: the host's end is still checked
 }
 
 public sealed partial class World
@@ -53,11 +54,14 @@ public sealed partial class World
         }
         if (roll < 88 && Bpmn.Orders.Count > 0)     // a message for an order: before or after its catch subscribes, now and then twice
         {
-            var key = BpmnModel.MessageKey("paid", Bpmn.Orders[r.Next(Bpmn.Orders.Count)]);
+            // Half the time to a catch that waits now, if one does: otherwise most messages come before their catch.
+            var waiting = Store.Subscriptions.Where(s => s.Key.StartsWith("msg:paid:", StringComparison.Ordinal)).Select(s => s.Key).Order(StringComparer.Ordinal).ToList();
+            var key = waiting.Count > 0 && r.Next(2) == 0 ? waiting[r.Next(waiting.Count)] : BpmnModel.MessageKey("paid", Bpmn.Orders[r.Next(Bpmn.Orders.Count)]);
             Count(Store.Subscriptions.Any(s => s.Key == key) ? "bpmn message published to a waiting catch" : "bpmn message published before its catch");
             return new Act("publish", B: n, S: key);
         }
-        var running = Store.Instances.Values.Where(i => i.Model == BpmnModel.ModelKey && i.Status == InstanceStatus.Running).Select(i => i.Id).Order(StringComparer.Ordinal).ToList();
+        // Roots only: a terminated child fails its parent's call, which then faults by BPMN's rules.
+        var running = Store.Instances.Values.Where(i => i.Model == BpmnModel.ModelKey && i.Status == InstanceStatus.Running && i.Parent is null).Select(i => i.Id).Order(StringComparer.Ordinal).ToList();
         if (running.Count == 0) return new Act("tick", r.Next(50));
         return new Act("add", M: new Message($"x{n}", new InstanceRef(running[r.Next(running.Count)]), Kinds.Terminate, KeepUntil: keep));
     }
@@ -67,7 +71,8 @@ public sealed partial class World
     {
         if (m is { Kind: Kinds.Start, Start: { Model: BpmnModel.ModelKey } spec } && !Bpmn.Started.ContainsKey(m.Target.Id))
             Bpmn.Started[m.Target.Id] = (spec.Definition, Json.Read<BpmnStart>(spec.Input!).Variables ?? [], posted);
-        if (m.Kind == Kinds.Terminate && Store.Instances.GetValueOrDefault(m.Target.Id)?.Model == BpmnModel.ModelKey) Bpmn.Terminated.Add(m.Target.Id);
+        // By its target, not its row: a shrunk replay may apply a terminate before the start has made the row.
+        if (m.Kind == Kinds.Terminate && (Bpmn.Started.ContainsKey(m.Target.Id) || Store.Instances.GetValueOrDefault(m.Target.Id)?.Model == BpmnModel.ModelKey)) Bpmn.Terminated.Add(m.Target.Id);
     }
 
     // ---- reading the journal: G2, G3 -----------------------------------------------------------------------------------
@@ -93,6 +98,7 @@ public sealed partial class World
         if ((parts[0] == "e" && entry.Contains(" was on trial when ", StringComparison.Ordinal)) || (parts[0] == "r" && Parked.Contains(parts[2])))
         {
             if (Parked.Add(id)) Interlocked.Increment(ref Bystanders);
+            Bpmn.JobParked.Add(id);
             Oracle.Fragiles[id] = true;     // so I14 counts its fault as the kernel's
             Count(parts[0] == "e" ? "bpmn job parked by the kernel" : "bpmn call failed by a parked child");
         }
@@ -127,11 +133,14 @@ public sealed partial class World
         var timers = Store.Messages.Values.Where(m => !m.Done && m.Message.Kind == BpmnKinds.Timer).ToLookup(m => m.Message.Target.Id, m => m.Message.Id);
         foreach (var row in Store.Instances.Values)
         {
-            if (row.Model != BpmnModel.ModelKey || Parked.Contains(row.Id) || State<BpmnState>(row.Id) is not { } s) continue;
+            if (row is { Definition: "b-fault", Status: InstanceStatus.Faulted }) Oracle.Fragiles[row.Id] = true;     // it must fault: I14 then expects it to
+            // A row the kernel parked is the kernel's (I14). One whose job the kernel parked was ended by the host: still checked.
+            if (row.Model != BpmnModel.ModelKey || (Parked.Contains(row.Id) && !Bpmn.JobParked.Contains(row.Id)) || State<BpmnState>(row.Id) is not { } s) continue;
             var jobs = row.Jobs is { } j ? Json.Read<List<string>>(j) : [];
             if (row.Status == InstanceStatus.Cancelled)
             {
-                // Terminated by the kernel: it cancelled the jobs and deleted the waits; the state stays as it was.
+                // Terminated by the kernel: it cancelled the jobs and deleted the waits; the state stays as it was, and a timer
+                // still pending arrives and is dropped (BPMN.md, F-B5), so timers are not checked here.
                 if (jobs.Count > 0 || subscriptions[row.Id].Any()) return $"G5 {row.Id} was terminated and keeps jobs [{string.Join(", ", jobs)}] or subscriptions";
                 continue;
             }
@@ -192,7 +201,8 @@ public sealed partial class World
             var row = Store.Instances.GetValueOrDefault(id);
             if (row is null && !posted) return $"G4 BPMN instance {id} ({process}) was started from outside and has no row";
             if (row is null || Parked.Contains(id)) continue;
-            if (row.Status == InstanceStatus.Cancelled ? !Bpmn.Terminated.Contains(id) : row.Status != InstanceStatus.Finished) return $"G4 BPMN instance {id} ({process}) ended as {row.Status}";
+            var ending = process == "b-fault" ? InstanceStatus.Faulted : InstanceStatus.Finished;
+            if (row.Status == InstanceStatus.Cancelled ? !Bpmn.Terminated.Contains(id) : row.Status != ending) return $"G4 BPMN instance {id} ({process}) ended as {row.Status}";
         }
         foreach (var row in Store.Instances.Values.Where(r => r.Model == BpmnModel.ModelKey && !Parked.Contains(r.Id)))
         {
@@ -227,13 +237,26 @@ public static class BpmnSwitch
 {
     public static bool On;
     public static BpmnFlaw Flaws;
+
+    /// <summary>
+    /// The check that must catch each flaw: the first word of the violation. ReuseHandles is the kernel's (two units, one job
+    /// id). ResurrectArrivals leaves arrivals at a join that can never fire again (a loop's next round has another iteration
+    /// key), so G4 sees a finished instance with live tokens; no host flaw here makes a join fire twice (G2) or on the wrong
+    /// flows (G3) without breaking the interpreter, which this spike does not mutate.
+    /// </summary>
+    public static readonly Dictionary<BpmnFlaw, string[]> Catches = new()
+    {
+        [BpmnFlaw.KeepStoppedWork] = ["G1", "G5"], [BpmnFlaw.NoLateReport] = ["G5"], [BpmnFlaw.KeepSubscription] = ["G1", "G5"],
+        [BpmnFlaw.StaleTokens] = ["G1"], [BpmnFlaw.ReuseHandles] = ["I9", "G1"], [BpmnFlaw.ResurrectArrivals] = ["G4", "G2"],
+        [BpmnFlaw.NeverEnd] = ["G4"], [BpmnFlaw.LoseChildOutput] = ["G6"],
+    };
 }
 
 /// <summary>The spike's cases as the simulation starts them (BPMN.md, section 5).</summary>
 public static class BpmnMix
 {
     public static readonly ProcessRegistry Registry = BpmnCases.Registry();
-    public static readonly string[] Processes = ["b-parallel", "b-exclusive", "b-inclusive", "b-boundary", "b-early", "b-call", "b-loop"];
+    public static readonly string[] Processes = ["b-parallel", "b-exclusive", "b-inclusive", "b-boundary", "b-early", "b-call", "b-loop", "b-fault"];
 
     public static JsonObject Input(string process, string key, Random r) => process switch
     {

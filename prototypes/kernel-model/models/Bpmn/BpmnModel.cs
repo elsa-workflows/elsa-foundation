@@ -52,7 +52,7 @@ public sealed class BpmnState
     public HashSet<string> Set { get; set; } = new(StringComparer.Ordinal);
 }
 
-/// <summary>Deliberate defects of the host, one per check of the simulation (BPMN.md, section 5).</summary>
+/// <summary>Deliberate defects of the host; the simulation's --bpmn-mutations names the check that must catch each (BPMN.md, section 5).</summary>
 [Flags]
 public enum BpmnFlaw
 {
@@ -62,6 +62,9 @@ public enum BpmnFlaw
     KeepSubscription = 1 << 2,  // a message catch that fired keeps its subscription
     StaleTokens = 1 << 3,       // every message of a turn is evaluated against the token state the turn started with
     ReuseHandles = 1 << 4,      // a handle is numbered by the ledger's size, so a new unit can take a live unit's handle
+    ResurrectArrivals = 1 << 5, // the stored state keeps the arrivals a join consumed, as a careless merge of old and new tokens would
+    NeverEnd = 1 << 6,          // the host misses the interpreter's Complete and leaves the instance running
+    LoseChildOutput = 1 << 7,   // a call activity completes, the variables its child set do not reach the state
 }
 
 public sealed class BpmnOptions
