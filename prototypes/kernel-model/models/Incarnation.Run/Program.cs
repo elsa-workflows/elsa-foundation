@@ -7,13 +7,17 @@ using Kernel.Sim.Native;
 var names = (from mode in new[] { Modes.Balanced, Modes.Durable } from nested in new[] { false, true }
     from cut in new[] { "recreation", "before-apply", "lost-ack" } select (mode, nested, cut)).ToArray();
 if (args.SequenceEqual(["--job-ack"]))
-{ await JobAcknowledgement.Run(false); await JobAcknowledgement.Run(true); return; }
+{ foreach (var qualified in new[] { false, true }) foreach (var caughtUp in new[] { false, true }) await JobAcknowledgement.Run(qualified, caughtUp); return; }
 if (args.SequenceEqual(["--list"]))
-{ foreach (var name in names) Console.WriteLine("creation:" + name); Console.WriteLine("creation:job-ack,legacy"); Console.WriteLine("creation:job-ack,qualified"); return; }
+{
+    foreach (var name in names) Console.WriteLine("creation:" + name);
+    foreach (var qualified in new[] { false, true }) foreach (var caughtUp in new[] { false, true }) Console.WriteLine($"creation:job-ack,qualified={qualified},caughtUp={caughtUp}");
+    return;
+}
 if (args.Length != 0) throw new ArgumentException("Only --list is supported.");
 foreach (var (mode, nested, cut) in names) new CreationWitness(mode, nested).Run(cut);
-await JobAcknowledgement.Run(false); await JobAcknowledgement.Run(true);
-Console.WriteLine("14/14 initial creation schedules passed. Remaining shared propagation/adverse controls are NOT qualified by this initial runner.");
+foreach (var qualified in new[] { false, true }) foreach (var caughtUp in new[] { false, true }) await JobAcknowledgement.Run(qualified, caughtUp);
+Console.WriteLine("16/16 initial creation schedules passed. Remaining shared propagation/adverse controls are NOT qualified by this initial runner.");
 
 sealed class CreationWitness(string mode, bool nested)
 {
