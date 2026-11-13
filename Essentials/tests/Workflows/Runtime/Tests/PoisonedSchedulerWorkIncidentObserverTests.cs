@@ -860,7 +860,9 @@ public sealed class PoisonedSchedulerWorkIncidentObserverTests
                 // observer's own dedupe lookup (against IncidentStore) still succeeds.
                 incidentStateStore: commitIncidentStore ?? IncidentStore,
                 activityExecutionInspectionWriter: InspectionStore,
-                rootWriteLeaseManager: PassThroughWorkflowExecutableRootWriteLeaseManager.Instance);
+                rootWriteLeaseManager: PassThroughWorkflowExecutableRootWriteLeaseManager.Instance,
+                state: WorkflowStore.CheckpointState,
+                persistenceAccessContextAccessor: new RuntimeHistoryTestAccess());
             CheckpointCommitter = new RuntimeCheckpointCommitter(new ImmediateRuntimeCheckpointPersistencePolicy(), CommitStore, new AsyncLocalRuntimeExecutionOwnershipContextAccessor(), [], [])
             {
                 HistorySourceResolver = () => historySources ? new DefaultRuntimeHistorySourceExtension(WorkflowStore) : null
