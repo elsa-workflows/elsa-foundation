@@ -74,7 +74,7 @@
     <div class="card"><h4>13 · Events meet</h4><p>An event and a wait for its key, both committed in the window, meet exactly once.</p></div>
     <div class="card"><h4>14 · One bad instance</h4><p>A failing instance is parked and its partition goes on; a message is parked for killing processes only after the threshold.</p></div>
   </div>
-  <p>The simulation passes at 200,000 runs of 300 actions and 20,000 of 1,000, also with native instances in the mix; mutation checks break the kernel one rule at a time and each is caught; the store conformance suite (57 cases) runs on the in-memory store, SQLite, PostgreSQL, SQL Server, MySQL and MongoDB; a stress test with killed connections holds on all five engines and fails on every one with the fence broken on purpose. The figures and seeds are in the prototype's FINDINGS.md (sections 22 to 24); the engine findings, among them E9 (SQL Server deadlocks with the fence in the batch), in ENGINES.md.</p>
+  <p>The simulation passes at 200,000 runs of 300 actions and 20,000 of 1,000, also with native instances in the mix; mutation checks break the kernel one rule at a time and each is caught, except two rules that another rule covers, which are caught when that rule is broken too; the store conformance suite (57 cases) runs on the in-memory store, SQLite, PostgreSQL, SQL Server, MySQL and MongoDB; a stress test with killed connections holds on all five engines and fails on every one with the fence broken on purpose. The figures and seeds are in the prototype's FINDINGS.md (sections 22 to 24); the engine findings, among them E9 (SQL Server deadlocks with the fence in the batch), in ENGINES.md.</p>
 </section>
 
 <!-- 15 ─────────────────────────────────────────── -->

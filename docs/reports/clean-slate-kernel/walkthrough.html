@@ -336,8 +336,8 @@ ol.stmts code { font-size: 12.5px; }
         <text class="tt" x="756" y="230">EF Core</text>
         <text class="ts" x="756" y="248">PostgreSQL · SQL Server</text>
         <text class="ts" x="756" y="265">MySQL · SQLite</text>
-        <text class="tt" x="756" y="290">MongoDB 8</text>
-        <text class="ts" x="756" y="312">a replicated log, later</text>
+        <text class="tt" x="756" y="290">MongoDB 8 (replica set)</text>
+        <text class="ts" x="756" y="312">Later: a replicated log store</text>
       </g>
       <text class="ts" x="840" y="350" text-anchor="middle">correct = passes the store suite</text>
       <!-- layer 1 -->
@@ -351,7 +351,7 @@ ol.stmts code { font-size: 12.5px; }
       <text class="ts" x="840" y="422" text-anchor="middle">runtime conformance suite (planned)</text>
     </svg>
     </div>
-    <figcaption>Every guarantee lives in layer 2. Layer 1 only says where an actor runs and wakes it up; layer 3 only says what an actor does with its messages. The two seams and the storage contract are the only ways in. Built in the prototype: the built-in partition runtime, the durable layer and the native model, with the workflow instance's features still inside the durable layer; the other runtimes, models and actor types shown are planned or samples.</figcaption>
+    <figcaption>Every guarantee lives in layer 2. Layer 1 only says where an actor runs and wakes it up; layer 3 only says what an actor does with its messages. The two seams and the storage contract are the only ways in. Built in the prototype: the built-in partition runtime, the durable layer, the workflow instance and the native model, with a few of the workflow instance's types and columns still in layer 2 (DESIGN.md lists these seam leaks); the other runtimes, models and actor types shown are planned or samples.</figcaption>
   </figure>
   <div class="grid">
     <div class="card l1" data-pick-card="l1"><h4>1 · Actor runtime</h4>
@@ -504,7 +504,7 @@ ol.stmts code { font-size: 12.5px; }
       <text class="ts" x="740" y="354">per-run lease, commit marker.</text>
     </svg>
     </div>
-    <figcaption>Arrows point from a row to the row it refers to. The partition row is the hottest row in the system: every commit of the partition updates it, which is what makes it the fence. This is the proposed shape; where the prototype's schema still differs, its DESIGN.md says so.</figcaption>
+    <figcaption>Arrows point from a row to the row it refers to. The partition row is the hottest row in the system: every commit of the partition updates it, which is what makes it the fence. This is the proposed shape; its DESIGN.md gives the prototype's schema in "Data".</figcaption>
   </figure>
   <div class="grid">
     <div class="card st" data-pick-card="partition"><h4>partition</h4><div class="mono">id, owner, epoch, lease_until, position</div><p>The fence. <code>epoch</code> changes only on a take; <code>position</code> counts journal rows. Times are in milliseconds; under the default fence <code>lease_until</code> is written from the owner's clock and compared with database time at a take.</p></div>
@@ -562,7 +562,7 @@ ol.stmts code { font-size: 12.5px; }
     <li data-on="e-poll poll t-msg"><b>Poll.</b><p>A plain read: rows of the partition not seen at this epoch, not done, due within the horizon, in <code>seq</code> order. No locks and no watermark, so a row whose insert commits late is found next time.</p></li>
     <li data-on="commit e-commit t-part t-msg"><b>Mark it seen.</b><p>A message that came by poll is not acted on until a fenced commit marks it <code>seen = 8</code>. If this node dies, the next owner knows exactly which messages it was holding. Messages sent inside a partition are written as seen and skip this.</p></li>
     <li data-on="e-step inst"><b>Run the turn.</b><p>The execution model gets the state from memory and the inbox in order. It changes state, sends, subscribes, starts jobs, records journal entries and emits live output. Nothing is read from the database.</p></li>
-    <li data-on="e-tocommit commit e-commit t-part t-msg t-inst t-jour"><b>Commit.</b><p>The committer takes every finished turn of the partition: fence, instance rows, consumed messages deleted, sent messages inserted, journal rows. One transaction, 2 to 3 round trips on PostgreSQL for up to 100 instances (the batch is capped); SQLite's calls grow with the rows.</p></li>
+    <li data-on="e-tocommit commit e-commit t-part t-msg t-inst t-jour"><b>Commit.</b><p>The committer takes every finished turn of the partition: fence, instance rows, consumed messages deleted, sent messages inserted, journal rows. One transaction, 2 to 3 round trips on PostgreSQL, measured at 100 instances; rows per flush are capped (500 by default in the prototype); SQLite's calls grow with the rows.</p></li>
     <li data-on="e-hand hand e-emit emit e-reply caller"><b>Hand over and release.</b><p>Only after the commit lands: a message to an instance in the same partition goes over in memory, and a held HTTP response is released to the caller. A caller never sees a response for work that was then lost.</p></li>
     <li data-on="e-proj proj t-jour"><b>Project.</b><p>Later, the projector reads journal rows in position order per partition and writes the viewer's tables. The hot path never waits for it. The run view stays current by reading the journal tail past the projector (decided, not built); lists over projected rows lag it slightly.</p></li>
   </ol>
@@ -683,7 +683,7 @@ ol.stmts code { font-size: 12.5px; }
     ValueTask&lt;object?&gt; ExecuteJobAsync(IJob job, CancellationToken ct);
     InstanceSummary Describe(object state);
 }</code></pre>
-  <p class="note">The proposed contract. The prototype already uses turn, job and pass; where its signatures still differ, its DESIGN.md says so.</p>
+  <p class="note">The proposed contract. The prototype already uses turn, job and pass; where its signatures still differ, its DESIGN.md lists most of them.</p>
   <pre><code><span class="k">public interface</span> ITurn
 {
     InstanceInfo Instance { get; }
@@ -709,6 +709,7 @@ ol.stmts code { font-size: 12.5px; }
     <figcaption>With a wait in the middle, Balanced also commits once at the wait. After a crash, Balanced runs again the activities since its last commit: activity code runs at least once, its effect on the workflow's state exactly once.</figcaption>
   </figure>
   <h3>How the known models sit on the contract</h3>
+  <p class="note">Only Native is built, as a spike; the others are the planned fit.</p>
   <div class="grid">
     <div class="card l3"><h4>Native (Elsa)</h4><p>State is the live activity frames, variables and scheduled work. Slow activities are jobs. Each container brings its own semantics (below). Built as a spike; it passes its own simulation checks.</p></div>
     <div class="card l3"><h4>BPMN</h4><p>Hosted on <a href="https://github.com/valence-works/bpmn">Bpmn.Semantics</a>, a pure interpreter: definition, token state and one event in; next state and commands out. A turn feeds it the message; its commands become jobs, timers, subscriptions and sends. State is tokens and scopes. A task is a job, so an interrupting boundary event can cancel it. A call activity is a start. A message that arrives early waits in <code>event</code>.</p></div>
@@ -938,7 +939,7 @@ ol.stmts code { font-size: 12.5px; }
     <div class="card"><h4>13 · Events meet</h4><p>An event and a wait for its key, both committed in the window, meet exactly once.</p></div>
     <div class="card"><h4>14 · One bad instance</h4><p>A failing instance is parked and its partition goes on; a message is parked for killing processes only after the threshold.</p></div>
   </div>
-  <p>The simulation passes at 200,000 runs of 300 actions and 20,000 of 1,000, also with native instances in the mix; mutation checks break the kernel one rule at a time and each is caught; the store conformance suite (57 cases) runs on the in-memory store, SQLite, PostgreSQL, SQL Server, MySQL and MongoDB; a stress test with killed connections holds on all five engines and fails on every one with the fence broken on purpose. The figures and seeds are in the prototype's FINDINGS.md (sections 22 to 24); the engine findings, among them E9 (SQL Server deadlocks with the fence in the batch), in ENGINES.md.</p>
+  <p>The simulation passes at 200,000 runs of 300 actions and 20,000 of 1,000, also with native instances in the mix; mutation checks break the kernel one rule at a time and each is caught, except two rules that another rule covers, which are caught when that rule is broken too; the store conformance suite (57 cases) runs on the in-memory store, SQLite, PostgreSQL, SQL Server, MySQL and MongoDB; a stress test with killed connections holds on all five engines and fails on every one with the fence broken on purpose. The figures and seeds are in the prototype's FINDINGS.md (sections 22 to 24); the engine findings, among them E9 (SQL Server deadlocks with the fence in the batch), in ENGINES.md.</p>
 </section>
 
 <!-- 15 ─────────────────────────────────────────── -->

@@ -109,8 +109,8 @@
         <text class="tt" x="756" y="230">EF Core</text>
         <text class="ts" x="756" y="248">PostgreSQL · SQL Server</text>
         <text class="ts" x="756" y="265">MySQL · SQLite</text>
-        <text class="tt" x="756" y="290">MongoDB 8</text>
-        <text class="ts" x="756" y="312">a replicated log, later</text>
+        <text class="tt" x="756" y="290">MongoDB 8 (replica set)</text>
+        <text class="ts" x="756" y="312">Later: a replicated log store</text>
       </g>
       <text class="ts" x="840" y="350" text-anchor="middle">correct = passes the store suite</text>
       <!-- layer 1 -->
@@ -124,7 +124,7 @@
       <text class="ts" x="840" y="422" text-anchor="middle">runtime conformance suite (planned)</text>
     </svg>
     </div>
-    <figcaption>Every guarantee lives in layer 2. Layer 1 only says where an actor runs and wakes it up; layer 3 only says what an actor does with its messages. The two seams and the storage contract are the only ways in. Built in the prototype: the built-in partition runtime, the durable layer and the native model, with the workflow instance's features still inside the durable layer; the other runtimes, models and actor types shown are planned or samples.</figcaption>
+    <figcaption>Every guarantee lives in layer 2. Layer 1 only says where an actor runs and wakes it up; layer 3 only says what an actor does with its messages. The two seams and the storage contract are the only ways in. Built in the prototype: the built-in partition runtime, the durable layer, the workflow instance and the native model, with a few of the workflow instance's types and columns still in layer 2 (DESIGN.md lists these seam leaks); the other runtimes, models and actor types shown are planned or samples.</figcaption>
   </figure>
   <div class="grid">
     <div class="card l1" data-pick-card="l1"><h4>1 · Actor runtime</h4>
@@ -277,7 +277,7 @@
       <text class="ts" x="740" y="354">per-run lease, commit marker.</text>
     </svg>
     </div>
-    <figcaption>Arrows point from a row to the row it refers to. The partition row is the hottest row in the system: every commit of the partition updates it, which is what makes it the fence. This is the proposed shape; where the prototype's schema still differs, its DESIGN.md says so.</figcaption>
+    <figcaption>Arrows point from a row to the row it refers to. The partition row is the hottest row in the system: every commit of the partition updates it, which is what makes it the fence. This is the proposed shape; its DESIGN.md gives the prototype's schema in "Data".</figcaption>
   </figure>
   <div class="grid">
     <div class="card st" data-pick-card="partition"><h4>partition</h4><div class="mono">id, owner, epoch, lease_until, position</div><p>The fence. <code>epoch</code> changes only on a take; <code>position</code> counts journal rows. Times are in milliseconds; under the default fence <code>lease_until</code> is written from the owner's clock and compared with database time at a take.</p></div>
@@ -335,7 +335,7 @@
     <li data-on="e-poll poll t-msg"><b>Poll.</b><p>A plain read: rows of the partition not seen at this epoch, not done, due within the horizon, in <code>seq</code> order. No locks and no watermark, so a row whose insert commits late is found next time.</p></li>
     <li data-on="commit e-commit t-part t-msg"><b>Mark it seen.</b><p>A message that came by poll is not acted on until a fenced commit marks it <code>seen = 8</code>. If this node dies, the next owner knows exactly which messages it was holding. Messages sent inside a partition are written as seen and skip this.</p></li>
     <li data-on="e-step inst"><b>Run the turn.</b><p>The execution model gets the state from memory and the inbox in order. It changes state, sends, subscribes, starts jobs, records journal entries and emits live output. Nothing is read from the database.</p></li>
-    <li data-on="e-tocommit commit e-commit t-part t-msg t-inst t-jour"><b>Commit.</b><p>The committer takes every finished turn of the partition: fence, instance rows, consumed messages deleted, sent messages inserted, journal rows. One transaction, 2 to 3 round trips on PostgreSQL for up to 100 instances (the batch is capped); SQLite's calls grow with the rows.</p></li>
+    <li data-on="e-tocommit commit e-commit t-part t-msg t-inst t-jour"><b>Commit.</b><p>The committer takes every finished turn of the partition: fence, instance rows, consumed messages deleted, sent messages inserted, journal rows. One transaction, 2 to 3 round trips on PostgreSQL, measured at 100 instances; rows per flush are capped (500 by default in the prototype); SQLite's calls grow with the rows.</p></li>
     <li data-on="e-hand hand e-emit emit e-reply caller"><b>Hand over and release.</b><p>Only after the commit lands: a message to an instance in the same partition goes over in memory, and a held HTTP response is released to the caller. A caller never sees a response for work that was then lost.</p></li>
     <li data-on="e-proj proj t-jour"><b>Project.</b><p>Later, the projector reads journal rows in position order per partition and writes the viewer's tables. The hot path never waits for it. The run view stays current by reading the journal tail past the projector (decided, not built); lists over projected rows lag it slightly.</p></li>
   </ol>

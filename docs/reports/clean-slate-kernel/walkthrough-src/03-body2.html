@@ -79,7 +79,7 @@
     ValueTask&lt;object?&gt; ExecuteJobAsync(IJob job, CancellationToken ct);
     InstanceSummary Describe(object state);
 }</code></pre>
-  <p class="note">The proposed contract. The prototype already uses turn, job and pass; where its signatures still differ, its DESIGN.md says so.</p>
+  <p class="note">The proposed contract. The prototype already uses turn, job and pass; where its signatures still differ, its DESIGN.md lists most of them.</p>
   <pre><code><span class="k">public interface</span> ITurn
 {
     InstanceInfo Instance { get; }
@@ -105,6 +105,7 @@
     <figcaption>With a wait in the middle, Balanced also commits once at the wait. After a crash, Balanced runs again the activities since its last commit: activity code runs at least once, its effect on the workflow's state exactly once.</figcaption>
   </figure>
   <h3>How the known models sit on the contract</h3>
+  <p class="note">Only Native is built, as a spike; the others are the planned fit.</p>
   <div class="grid">
     <div class="card l3"><h4>Native (Elsa)</h4><p>State is the live activity frames, variables and scheduled work. Slow activities are jobs. Each container brings its own semantics (below). Built as a spike; it passes its own simulation checks.</p></div>
     <div class="card l3"><h4>BPMN</h4><p>Hosted on <a href="https://github.com/valence-works/bpmn">Bpmn.Semantics</a>, a pure interpreter: definition, token state and one event in; next state and commands out. A turn feeds it the message; its commands become jobs, timers, subscriptions and sends. State is tokens and scopes. A task is a job, so an interrupting boundary event can cancel it. A call activity is a start. A message that arrives early waits in <code>event</code>.</p></div>
