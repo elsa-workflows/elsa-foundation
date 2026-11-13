@@ -31,6 +31,7 @@ internal static class TerminalReceipts
     private static void RunCase(string mode, bool nested, string ending, AdmissionFlaw defect = AdmissionFlaw.None)
     {
         TerminalReceiver.Forbidden = false;
+        TerminalReceiver.Closed = false;
         var world = new World(new Config(1, 1, Flaw.None, Native: true, AdmissionFlaws: defect)) { Auto = true };
         var actor = world.Of(0, 0);
         var target = InstanceRef.In(0, "terminal");
@@ -70,7 +71,7 @@ internal static class TerminalReceipts
                 if (actor.Worker.NeedsFlush)
                 {
                     // Let finalization sit staged for longer than R. The full window starts at durable disposition.
-                    if (delayFinalCommit) { Apply(new("tick", 2000)); delayFinalCommit = false; }
+                    if (delayFinalCommit && (ending != "completed" || TerminalReceiver.Closed)) { Apply(new("tick", 2000)); delayFinalCommit = false; }
                     Apply(new("flush", actor.Id));
                 }
                 if (actor.Worker.NeedsMeet) Apply(new("meet", actor.Id));
@@ -133,7 +134,7 @@ internal static class TerminalReceipts
 
 public sealed class TerminalReceiver : CompositeActivity
 {
-    public static bool Forbidden;
+    public static bool Forbidden, Closed;
     [Input] public bool SelectOnly { get; set; }
     public TerminalReceiver()
     { if (Forbidden) throw new InvalidOperationException("T1: metadata constructed authored receiver"); }
@@ -146,6 +147,6 @@ public sealed class TerminalReceiver : CompositeActivity
     {
         var input = context.SelectInput()!;
         if (SelectOnly) context.Schedule(context.Children.Single(c => c.Id == "waiting"));
-        else { context.FinishInput(input.Id, "handled"); context.Complete(); }
+        else { context.FinishInput(input.Id, "handled"); context.Complete(); Closed = true; }
     }
 }
