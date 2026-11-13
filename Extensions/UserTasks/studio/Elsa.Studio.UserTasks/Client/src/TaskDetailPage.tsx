@@ -4,7 +4,7 @@ import { ArrowLeft, RefreshCw } from "lucide-react";
 import { StudioAlert, StudioButton, StudioPage, StudioPageHeader, StudioResultState } from "@elsa-workflows/studio-ui";
 import { actor, read, mutate, message, statusOf, type TaskActor, type TaskItem } from "./taskApi";
 import { TaskStatus } from "./TaskStatus";
-import { useTaskPeople } from "./taskPeople";
+import { taskPerson } from "./taskPeople";
 import { readTaskBrowseLocation, taskCollectionPath } from "./taskNavigation";
 
 const responsePendingNotice = "Your response is recorded. The workflow will continue when delivery completes. You can leave this page.";
@@ -42,7 +42,6 @@ export function TaskDetail({ api, id, identity, onClose, accessNotice }: { api: 
   const [targetKind, setTargetKind] = useState("user"); const [target, setTarget] = useState("");
   const content = useRef<HTMLDivElement>(null); const focused = useRef<string | null>(null);
   useStudioWorkspaceTitle(task?.title, "User task");
-  const person = useTaskPeople(api, identity);
   useEffect(() => {
     if (!task?.id || focused.current === task.id) return;
     const heading = content.current?.querySelector("h1");
@@ -149,6 +148,6 @@ export function TaskDetail({ api, id, identity, onClose, accessNotice }: { api: 
       <label>Assign to <select value={targetKind} onChange={event => setTargetKind(event.target.value)}><option value="user">User</option><option value="group">Group</option></select></label>
       <label>{targetKind === "user" ? "User ID" : "Group ID"}<input value={target} onChange={event => setTarget(event.target.value)} /></label>
       <StudioButton disabled={!target.trim()} onClick={() => void act("reassign")}>Reassign</StudioButton></fieldset> : null}
-    <details><summary>History</summary><ol>{task.history.map((entry, index) => <li key={`${entry.at}-${index}`}>{entry.operation}{entry.action ? ` · ${entry.action}` : ""} · {person(entry.actorId)} · <time dateTime={entry.at}>{new Date(entry.at).toLocaleString()}</time></li>)}</ol></details>
+    <details><summary>History</summary><ol>{task.history.map((entry, index) => <li key={`${entry.at}-${index}`}>{entry.operation}{entry.action ? ` · ${entry.action}` : ""} · {taskPerson(identity, entry.actorId, entry.actorName)} · <time dateTime={entry.at}>{new Date(entry.at).toLocaleString()}</time></li>)}</ol></details>
   </>);
 }
