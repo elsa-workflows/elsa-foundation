@@ -359,7 +359,7 @@ function readRequestedResult(
   return result;
 }
 
-function matchesMemberOffer(source: ActivityDataBinding, path: readonly string[], offer: ActivityDataBinding): boolean {
+export function matchesMemberOffer(source: ActivityDataBinding, path: readonly string[], offer: ActivityDataBinding): boolean {
   const value = asRecord(offer.value);
   const original = asRecord(source.value);
   if (!value || !original || !Array.isArray(value.memberPath) || value.memberPath.length !== path.length ||
