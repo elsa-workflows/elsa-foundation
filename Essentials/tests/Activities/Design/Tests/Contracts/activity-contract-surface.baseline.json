@@ -823,6 +823,7 @@
         ],
         "dynamic": {
           "kind": "valuePerItem",
+          "selectsOnEveryCompletion": true,
           "source": "ExpectedStatusCodes",
           "unmatched": "Unmatched status code"
         }
@@ -1188,6 +1189,7 @@
         "ports": [],
         "dynamic": {
           "kind": "valuePerItem",
+          "selectsOnEveryCompletion": true,
           "source": "Actions",
           "unmatched": "Unmatched"
         }
@@ -1672,8 +1674,8 @@
         "ports": [],
         "dynamic": {
           "kind": "valuePerItem",
-          "source": "possibleOutcomes",
-          "unmatched": "Unmatched"
+          "selectsOnEveryCompletion": false,
+          "source": "possibleOutcomes"
         }
       },
       "structure": null

@@ -270,16 +270,18 @@ public sealed class GraphActivity(
                 result.Add(output.ReferenceKey, captured.Value);
         }
 
-        // A Complete exit selects its outcome even when the body has no outcome mappings.
-        var outcomeName = _selectedOutcomeName is not null && Descriptor.CompleteOutcomes.Count != 0
-            ? _selectedOutcomeName
+        // A Complete exit selects its outcome even when the body has no outcome mappings. Without mappings and without a
+        // Complete exit the boundary chose no branch: an unspecified selection, the same one its structural continuation
+        // carries (spec 1208 FR-003).
+        var selection = _selectedOutcomeName is not null && Descriptor.CompleteOutcomes.Count != 0
+            ? OutcomeSelection.Named(_selectedOutcomeName)
             : Descriptor.OutcomeMappings.Count == 0
-            ? ActivityOutcomes.Done
-            : _selectedOutcomeName ?? throw new InvalidOperationException(
-                "A graph boundary with explicit outcome mappings cannot checkpoint completion before selecting an outcome.");
+            ? OutcomeSelection.Unspecified
+            : OutcomeSelection.Named(_selectedOutcomeName ?? throw new InvalidOperationException(
+                "A graph boundary with explicit outcome mappings cannot checkpoint completion before selecting an outcome."));
         return new RuntimeActivityCompletionCheckpointPreparation(
             ToChanges(capturedOutputs),
-            ActivityTransition.Complete<IReadOnlyDictionary<string, object?>>(result, outcomeName));
+            ActivityTransition.Complete<IReadOnlyDictionary<string, object?>>(result, selection));
     }
 
     private GraphActivityTypedExpressionEvaluator NewEvaluator(GraphActivityScope scope) =>

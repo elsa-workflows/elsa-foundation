@@ -109,6 +109,7 @@ public sealed class ClrAssemblyScannerTests
     {
         { typeof(TriggerFixtureActivity), "10C41B96E22D85F9A598D30A6AE51D2FAA0F4EF5AA9909D23932EBC3CD00D80E" },
         // Approved UX wording change: Start new workflows plus its help text.
+        // Spec 1208 FR-012a: SendHttpRequest's dynamic outcomes record that every completion selects one.
         { typeof(HttpEndpoint), "9E51C9A62A34D0953536D79C15C947C7E3CDDE704B3595DC7CCB7812E4AE0EB9" }
     };
 
@@ -842,10 +843,11 @@ public sealed class ClrAssemblyScannerTests
         // their snapshots with their owning changes. Icon facets are present
         // on the descriptors but excluded from descriptor hashes.
         // Approved UX wording change: Start new workflows plus its help text.
+        // Spec 1208 FR-012a: SendHttpRequest's dynamic outcomes record that every completion selects one.
         { typeof(HttpEndpoint), "9E51C9A62A34D0953536D79C15C947C7E3CDDE704B3595DC7CCB7812E4AE0EB9" },
         { typeof(WriteLine), "618BB61870A3FADC2551123EA520F7F5852CB0D00CD4AE5E6DB8A80D7677EF2C" },
         { typeof(ParallelActivity), "A466AC1D4873108D85B6BA08D2058ACD9FD51A60571E8BA043043A17B20CCC82" },
-        { typeof(SendHttpRequest), "833CA49E624946FFF5E504A53B84354334501EE7E45F20505C34B48525B376A5" }
+        { typeof(SendHttpRequest), "DA2CB2C41FBEAFD5CAF24C71595147064A429258E9C1679BEAF3F173BED514FA" }
     };
 
     [Theory]

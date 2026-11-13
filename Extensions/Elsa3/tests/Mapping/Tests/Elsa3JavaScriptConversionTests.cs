@@ -114,8 +114,8 @@ public sealed class Elsa3JavaScriptConversionTests
         Assert.DoesNotContain(node.Inputs, input => input.ReferenceKey == "arguments");
     }
 
+    // setOutcome in a script now converts (spec 1208 FR-027); see Elsa3JavaScriptHostFunctionTests.
     [Theory]
-    [InlineData("setOutcome('Done')")]
     [InlineData("getOrderId() + 1")]
     public async Task A_script_calling_an_elsa3_host_function_is_refused(string body)
     {

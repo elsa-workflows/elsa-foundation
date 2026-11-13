@@ -147,6 +147,11 @@ A catalog target takes its highest valid-SemVer version; the Elsa 3 integer vers
     `Switch` completes with `Done`; Elsa 4's completes with `True`/`False` or a case match, so one connection becomes
     one per Elsa 4 outcome), or kept when the Elsa 4 activity emits it. Target ports and vertices have no behaviour and
     are dropped.
+  - A RunJavaScript `Done` connection stays on `Done`, with or without possible outcomes (spec 1208, #3295).
+    A SendHttpRequest with expected status codes has no `Done` in Elsa 4, so its `Done` connection becomes one per
+    code and one for the unmatched status code: Elsa 3 fired `Done` with every response, but not on "Failed to
+    connect" or "Timeout". `ELS3-BEHAVIOUR-HTTP-OUTCOME-SINGLE` warns only that, without expected codes, a non-2xx
+    response goes to `Failed`.
   - `startNodeId` is always set: a `Start` activity's target, else the first start-capable child, else the first child
     with no inbound connection, else the first child.
   - `FlowFork`, `FlowJoin` and `Start` leave no node: a fork becomes several connections on one port (fan-out), a join
@@ -205,6 +210,7 @@ refusal says what to change in the Elsa 3 workflow so that it converts. Specs 23
 | A statement-form expression | A function that returns its last expression |
 | A RunJavaScript body | Reads go through the `arguments` input, and the completion value becomes a `return`. A body whose last line is a `//` comment ends with a newline, so the comment cannot break Elsa 4's script wrapper (#3171) |
 | An expression whose value is `undefined` (a missing property, a function that returns nothing) | `null`, as in Elsa 3: every value that leaves a bound expression ends in `?? null`, which leaves `0`, `""` and `false` alone. A RunJavaScript body needs nothing, because Elsa 4 already turns its `undefined` into `null` |
+| `setOutcome(…)`, `setOutcomes(…)` in a RunJavaScript body | The body returns `complete(<value>, <pending selection>)` (spec 1208). Each call replaces the pending selection, and a body that sets nothing completes with `Done`. Literal names join the possible outcomes. A computed name, when the activity lists possible outcomes, selects any name outside them as a converter-declared outcome "Unlisted outcome" with no connection, so that path ends as in Elsa 3 (info `ELS3-SCRIPT-OUTCOME-CATCHALL`) |
 
 ### What is refused, and what to change in Elsa 3
 
@@ -212,7 +218,9 @@ refusal says what to change in the Elsa 3 workflow so that it converts. Specs 23
 |---|---|---|
 | `newGuid()`, `newGuidString()`, `newShortGuid()`, `Guid`, `Math.random()` | `VF-IMP-005` | Use `getWorkflowInstanceId()` when one unique value per run is enough; otherwise pass the value in as a workflow input |
 | `new Date()`, `Date.now()`, `DateTime`, any use of `Date` | `VF-IMP-005` | Replace a wait loop with a Delay activity. Pass the current time or date values in as workflow inputs |
-| `setOutcome(…)`, `setOutcomes(…)` | `VF-IMP-005` | Route with a Decision or Switch activity whose conditions carry the script's logic |
+| `setOutcome(…)`, `setOutcomes(…)` in an input expression | `VF-IMP-005` | Move the call into a RunJavaScript, or route with a Decision or Switch activity. Only a RunJavaScript script selects outcomes in Elsa 4 |
+| `setOutcome(…)`, `setOutcomes(…)` with a computed name in a RunJavaScript whose possible outcomes are empty | `VF-IMP-005` | List every outcome the script can set in the activity's possible outcomes |
+| A RunJavaScript body that calls `setOutcome` and declares its own `complete` | `VF-IMP-005` | Rename the script's `complete`. Elsa 4 reserves it for the returned completion form |
 | `toJson(x)` | `VF-IMP-005` | Use `JSON.stringify(x)`, or `JSON.parse(JSON.stringify(x))` to copy a value. Elsa 3's `toJson` escaped HTML characters and kept .NET casing |
 | `parseGuid(s)` | `VF-IMP-005` | Keep the GUID as a string |
 | Byte, stream and Base64 helpers | `VF-IMP-005` | Move the conversion into an activity |

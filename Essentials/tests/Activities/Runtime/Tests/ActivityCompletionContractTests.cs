@@ -79,8 +79,10 @@ public sealed class ActivityCompletionContractTests
     public void Undeclared_outcome_and_nonpersistable_result_are_rejected()
     {
         var projector = new ActivityCompletionProjector();
-        Assert.Throws<InvalidOperationException>(() => projector.Project(
+        // Spec 1208 FR-016: an undeclared outcome faults with the dedicated VF-ACT-006 outcome-selection exception.
+        var outcomeFault = Assert.Throws<ActivityOutcomeSelectionException>(() => projector.Project(
             "invocation-1", Attempt(), Contract(), ActivityTransition.Complete(new ChargeResult("r", true), "Unknown"), DateTimeOffset.UtcNow));
+        Assert.Equal("VF-ACT-006", outcomeFault.FailureCode);
         Assert.Throws<InvalidOperationException>(() => projector.Project(
             "invocation-1", Attempt(), Contract(
                 resultPolicy: ActivityValuePolicy.Default with { IsPersistable = false },

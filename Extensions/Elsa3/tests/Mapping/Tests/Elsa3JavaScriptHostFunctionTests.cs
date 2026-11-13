@@ -191,10 +191,31 @@ public sealed class Elsa3JavaScriptHostFunctionTests
         Assert.Contains(guidance, diagnostic.Guidance, StringComparison.Ordinal);
     }
 
+    // Spec 1208 FR-027: a RunJavaScript script's setOutcome / setOutcomes converts to the returned completion form.
     [Theory]
     [InlineData("setOutcome('Approved')")]
     [InlineData("setOutcomes(['Approved', 'Logged'])")]
-    public async Task A_script_setting_an_outcome_refuses_the_whole_definition(string script)
+    public async Task A_script_setting_a_literal_outcome_converts_to_the_returned_completion_form(string script)
+    {
+        var root = Sequence("root",
+            Activity("before", "Elsa.WriteLine", ("text", Literal("a"))),
+            Activity("node", "Elsa.RunJavaScript", ("script", Literal(script))));
+
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), ConversionServices.Definition(root));
+
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
+        Assert.DoesNotContain(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.ForbiddenCapability);
+        var converted = Text(Input(Node(result.Value!.State, "node"), "script"));
+        Assert.Contains("complete(", converted, StringComparison.Ordinal);
+        Assert.DoesNotContain("setOutcome(", converted, StringComparison.Ordinal);
+        Assert.DoesNotContain("setOutcomes(", converted, StringComparison.Ordinal);
+    }
+
+    // Spec 1208 FR-027, Q7: a computed name is refused when the activity lists no possible outcomes.
+    [Theory]
+    [InlineData("var name = 'Appro' + 'ved'; setOutcome(name)")]
+    [InlineData("var names = ['Approved']; setOutcomes(names)")]
+    public async Task A_script_setting_a_computed_outcome_without_possible_outcomes_refuses_the_whole_definition(string script)
     {
         var root = Sequence("root",
             Activity("before", "Elsa.WriteLine", ("text", Literal("a"))),
@@ -205,7 +226,21 @@ public sealed class Elsa3JavaScriptHostFunctionTests
         Assert.False(result.Succeeded);
         Assert.Null(result.Value);
         var diagnostic = Assert.Single(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.ForbiddenCapability);
-        Assert.Contains("Decision or Switch", diagnostic.Guidance, StringComparison.Ordinal);
+        Assert.Contains("computed name", diagnostic.Message, StringComparison.Ordinal);
+        Assert.Contains("Possible Outcomes", diagnostic.Guidance, StringComparison.Ordinal);
+    }
+
+    // Spec 1208 FR-027: outside a RunJavaScript script (an input expression) setOutcome stays refused.
+    [Theory]
+    [InlineData("setOutcome('Approved')", "setOutcome")]
+    [InlineData("setOutcomes(['Approved', 'Logged'])", "setOutcomes")]
+    public async Task An_input_expression_setting_an_outcome_is_refused(string expression, string named)
+    {
+        var result = await ConvertTextAsync(expression);
+
+        Assert.False(result.Succeeded);
+        var diagnostic = Assert.Single(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.ForbiddenCapability);
+        Assert.Contains($"'{named}'", diagnostic.Message, StringComparison.Ordinal);
     }
 
     [Fact]
