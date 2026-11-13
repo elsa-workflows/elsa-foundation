@@ -44,3 +44,11 @@ Shipped implementations are `PortableJavaScriptExpressionHandler` and
 - Liquid binding boundary: [`Elsa.Expressions.Liquid/EXTENSION_POINTS.md`](../Liquid/EXTENSION_POINTS.md).
 - JS rendering declaration contributors: [`Elsa.Expressions.JavaScript.Rendering/EXTENSION_POINTS.md`](../JavaScript/Rendering/Elsa.Expressions.JavaScript.Rendering/EXTENSION_POINTS.md).
 - Repo-wide index: [`../../EXTENSION_POINTS.md`](../../../../EXTENSION_POINTS.md).
+
+### Read-only evaluator routing qualification
+
+`IPortableExpressionCapabilities` (Expressions Core) is an optional query on the actual selected
+`IPortableExpressionEvaluator` instance. `CanEvaluate` checks routing for a captured definition
+without evaluating source or performing I/O. A separately registered capability service cannot
+qualify another evaluator. Runtime context materialization uses this query conservatively; missing
+capability is unavailable, and this contract alone does not qualify any language implementation.
