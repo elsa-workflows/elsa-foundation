@@ -68,7 +68,7 @@ export function ResultView({ result, visualization, stale = false, outdated = fa
   return <section className="named-result" aria-label={visualization.label || "Question results"}>
     <div className="named-result-provenance"><p>{result.interpretation || "Results of the validated question."}</p>
       {stale ? <p role="status"><strong>Stale result.</strong> The last refresh failed; these are the last successful values.</p> : null}
-      {outdated ? <p role="status"><strong>Definition changed.</strong> Preview or refresh to answer the current definition.</p> : null}
+      {outdated ? <p role="status"><strong>Stale result. Definition changed.</strong> These values answer the previous definition. Preview or refresh to answer the current definition.</p> : null}
       <p><strong>Coverage: {result.coverage?.status ?? "unknown"}.</strong> {result.coverage?.description ?? "Collection and retention completeness has not been established."}</p>
       {result.generatedAt ? <p>Last successful refresh: <time dateTime={result.generatedAt}>{new Date(result.generatedAt).toLocaleString()}</time></p> : null}
       {result.periods?.map(period => <p key={period.role}>{period.role}: <time dateTime={period.from}>{period.from}</time> to <time dateTime={period.to}>{period.to}</time> ({period.timeZone}; end exclusive)</p>)}
