@@ -20,7 +20,7 @@ import zipfile
 ROOT = Path(__file__).resolve().parents[2]
 PROJECTS = {'desktop-light', 'desktop-dark', 'narrow-light', 'narrow-dark'}
 CAPTURES = {
-    'saved dashboard period comparison and membership': ['reference', 'comparison-excluded', 'comparison-included', 'comparison-saved-reopened', 'comparison-current-drill'],
+    'saved dashboard period comparison and membership': ['reference', 'comparison-excluded', 'comparison-excluded-empty', 'comparison-included', 'comparison-included-periods', 'comparison-included-values', 'comparison-included-values-end', 'comparison-saved-reopened', 'comparison-reopened-periods', 'comparison-reopened-values', 'comparison-reopened-values-end', 'comparison-current-drill'],
     'structured logs table accessibility': ['reference', 'logs-page', 'logs-selected', 'logs-empty', 'logs-dock'],
     'tabbed Secrets authoring and metadata': ['reference', 'secret-section', 'first-invalid-field', 'storage-section', 'details-section', 'persisted-list', 'persisted-metadata', 'metadata-390', 'storage-390', 'configuration-reference', 'configuration-metadata'],
     'business decisions authoring and explanations': ['reference', 'decisions-list', 'decisions-search', 'decision-create', 'decision-table', 'decision-case-editor', 'decision-case-expectation', 'decision-cases', 'decision-regression', 'decision-published', 'decision-explanation', 'decision-clone', 'decision-conflict', 'decision-history', 'decisions-no-matches', 'decision-imported', 'decision-table-320', 'decision-table-320-scrolled', 'decision-picker', 'decision-picker-new-tab', 'decision-picker-saved-tab', 'decision-picker-selected-toast', 'decision-picker-returned'],

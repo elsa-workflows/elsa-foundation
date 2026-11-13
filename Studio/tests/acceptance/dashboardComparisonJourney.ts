@@ -1,4 +1,4 @@
-import { expect, type Page, type TestInfo } from "@playwright/test";
+import { expect, type Locator, type Page, type TestInfo } from "@playwright/test";
 import type { QuestionDefinition, QueryResult } from "../../src/essentials/Elsa.Studio.Dashboard/Client/src/native/types";
 import { attachDashboardJson, canonicalDashboardDefinition, dashboardBackend, observeNativeWeaverBoundary, registerDashboardCleanup, seedDashboardRuns, tag, type Capture, type Resource } from "./dashboardJourneySupport";
 
@@ -16,6 +16,23 @@ export async function dashboardComparisonJourney(page: Page, info: TestInfo, cap
       }
     } finally { await backend.api(`/design/workflows/definitions/${seeded.definitionId}`, "DELETE"); }
   });
+  const captureTarget = async (name: string, target: Locator) => {
+    await target.evaluate(element => element.scrollIntoView({ block: "end", inline: "nearest", behavior: "instant" }));
+    await expect(target).toBeInViewport();
+    await capture(page, info, name);
+  };
+  const captureValues = async (name: string) => {
+    const result = page.locator(".named-preview > .named-result");
+    await captureTarget(`${name}-periods`, result.locator(".named-result-provenance > p").last());
+    const values = result.getByRole("region", { name: "Exact result values", exact: true });
+    await values.evaluate(element => { element.scrollLeft = 0; });
+    await captureTarget(`${name}-values`, values);
+    await expect(values.getByRole("cell", { name: "4", exact: true })).toBeInViewport();
+    await values.evaluate(element => { element.scrollLeft = element.scrollWidth; });
+    await expect(values.getByRole("cell", { name: "1", exact: true })).toBeInViewport();
+    await capture(page, info, `${name}-values-end`);
+    await values.evaluate(element => { element.scrollLeft = 0; });
+  };
   try {
     const read = async (id: string) => {
       const { instance } = await backend.api<{ instance: { status: string; startedAt: string } }>(`/runtime/workflows/instances/${id}`);
@@ -75,6 +92,7 @@ export async function dashboardComparisonJourney(page: Page, info: TestInfo, cap
     };
     const excluded = await preview(); expect(excluded.result.rows).toEqual([]);
     await capture(page, info, "comparison-excluded");
+    await captureTarget("comparison-excluded-empty", page.getByRole("status").filter({ hasText: "No authorized records matched this question" }));
     await having.getByLabel("Comparison value", { exact: true }).fill("0");
     const included = await preview();
     const check = (result: QueryResult) => {
@@ -83,6 +101,7 @@ export async function dashboardComparisonJourney(page: Page, info: TestInfo, cap
     };
     check(included.result);
     await capture(page, info, "comparison-included");
+    await captureValues("comparison-included");
     const saving = page.waitForResponse(response => response.request().method() === "POST" && response.url().endsWith("/_elsa/studio/questions"));
     await page.getByRole("button", { name: "Save question", exact: true }).click();
     const savedResponse = await saving; expect(savedResponse.ok()).toBe(true); saved = await savedResponse.json() as Resource;
@@ -93,6 +112,7 @@ export async function dashboardComparisonJourney(page: Page, info: TestInfo, cap
     await page.getByRole("button", { name: "Refresh results", exact: true }).click();
     const refreshed = await refresh; expect(refreshed.ok()).toBe(true); check(await refreshed.json() as QueryResult);
     await capture(page, info, "comparison-saved-reopened");
+    await captureValues("comparison-reopened");
     await page.getByRole("button", { name: "View matching records for result 1", exact: true }).click();
     const drill = page.getByRole("dialog", { name: "Matching source records", exact: true });
     for (const row of expectedCurrent) await expect(drill.getByRole("cell", { name: row.id, exact: true })).toBeVisible();
