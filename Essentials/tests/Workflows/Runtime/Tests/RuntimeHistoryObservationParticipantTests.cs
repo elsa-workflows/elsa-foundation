@@ -23,6 +23,37 @@ public sealed class RuntimeHistoryObservationParticipantTests
         ["Transition", "ActivityCompleted", "DeliveryReceived", "DeliveryFaulted"]);
     private static readonly RuntimeCheckpointPersistenceDecision Immediate = new(RuntimeCheckpointPersistenceMode.Immediate);
 
+    [Theory]
+    [InlineData(false)] [InlineData(true)]
+    public async Task Supplied_publication_owner_observations_use_native_shared_order_and_replay_without_advancing_checkpoint_coverage(bool disposition)
+    {
+        var policy = new RuntimeHistoryCapturePolicy("runtime-history-v3", 3, true,
+            ["Transition", "StimulusPublicationCommitted", "StimulusRoutingAttemptObserved", "StimulusRoutingDispositionObserved"]);
+        var f = await Fixture.CreateAsync(policy: policy); var before = (await f.Reader.FindHeadAsync("run"))!;
+        var sourceScope = new PersistenceScope("scope-a");
+        var intent = new RuntimePostCommitIntent("send", "run", "test.publication", At, "activity", "key", null)
+            { HistoryCausation = new("publication-event", "run", "source:send", "command", "work") };
+        var pending = new RuntimePostCommitOutboxItem("source:send", intent, RuntimePostCommitOutboxStatus.Pending, At, At,
+            null, 0, null, null, null, null, null, 0, null, null, sourceScope, null);
+        var source = new PostCommitDeliveryContext(RuntimePostCommitOutboxClaimTransitions.Claim(pending, new("owner", At, TimeSpan.FromMinutes(1), 1)), sourceScope);
+        var attempt = RuntimeHistorySourceFacts.PublicationObservation(policy, source, "receipt", "StimulusRoutingAttemptObserved", At, "handler-invocation-observed");
+        var first = await f.Writer.RecordAsync(attempt); Assert.True(first.Recorded);
+        var replay = await f.Writer.RecordAsync(attempt); Assert.Equal(first.Event!.Sequence, replay.Event!.Sequence);
+        if (disposition)
+        {
+            var completed = RuntimeHistorySourceFacts.PublicationObservation(policy, source, "receipt", "StimulusRoutingDispositionObserved", At.AddSeconds(1), "saved-cohort-routing-acknowledged-observed");
+            var result = await f.Writer.RecordAsync(completed); Assert.True(result.Recorded);
+            Assert.Equal(first.Event.HistoryEventId, result.Event!.Causation!.HistoryEventId);
+            Assert.Equal(first.Event.Sequence + 1, result.Event.Sequence);
+        }
+        var after = (await f.Reader.FindHeadAsync("run"))!;
+        Assert.Equal(before.LastSequence + (disposition ? 2 : 1), after.LastSequence);
+        Assert.Equal(before.LastPhysicalCommitId, after.LastPhysicalCommitId); Assert.Equal(before.LastCommittedAt, after.LastCommittedAt);
+        Assert.Equal(before.CapturedFromStart, after.CapturedFromStart); Assert.Single(f.Store.ListCommits());
+        Assert.Equal(disposition ? 3 : 2, (await f.Reader.ReadPageAsync(new("run"))).Items.Count);
+        // Source/claim and seed group are supplied; this is the actual memory observer, not publication delivery/capture proof.
+    }
+
     [Fact]
     public async Task Observation_advances_shared_order_without_advancing_the_last_covered_native_checkpoint()
     {
@@ -418,10 +449,10 @@ public sealed class RuntimeHistoryObservationParticipantTests
     private static RuntimeHistoryEvent Event(string id = "observation", bool? known = null, IReadOnlyDictionary<string, string>? metadata = null, string? bookmark = null) =>
         new(id, "run", 0, RuntimeHistoryEventCategory.DeliveryObservation, "DeliveryReceived", At, metadata: metadata)
         { Authority = RuntimeHistoryAuthority.DeliveryObservation, Causation = new(DeliveryId: "delivery"), OccurredAtKnown = known, BookmarkId = bookmark };
-    private static RuntimeCheckpointCommit Commit(string id, bool starts = false) => new(id,
+    private static RuntimeCheckpointCommit Commit(string id, bool starts = false, RuntimeHistoryCapturePolicy? policy = null) => new(id,
         new("checkpoint-" + id, "test", "run", At, [], new Dictionary<string, string>()),
         new(null, null, [], [], [], [], []), [], new Dictionary<string, string>())
-        { HistoryBatches = [new(Policy, id, At, starts, [new(new RuntimeHistoryEvent("event-" + id, "run", 0,
+        { HistoryBatches = [new(policy ?? Policy, id, At, starts, [new(new RuntimeHistoryEvent("event-" + id, "run", 0,
             RuntimeHistoryEventCategory.ActivityLifecycle, "Transition", At, checkpointId: id)
             { Authority = RuntimeHistoryAuthority.CommittedTransition }, 0)])] };
     private static HmacRuntimeRecoveryContinuationCodec Codec() => new(Options.Create(new RuntimeRecoveryContinuationOptions
@@ -450,13 +481,13 @@ public sealed class RuntimeHistoryObservationParticipantTests
             Reader = new(State, Access, Codec());
             Writer = new(State, Access, Executions, Clock);
         }
-        internal static async Task<Fixture> CreateAsync(bool seedHead = true)
+        internal static async Task<Fixture> CreateAsync(bool seedHead = true, RuntimeHistoryCapturePolicy? policy = null)
         {
             var f = new Fixture();
             await f.Executions.SaveAsync(new("run", new("artifact", "definition", "version", "1", "hash"), WorkflowExecutionStatus.Running,
                 null, At, At, At, null, null, null, null, new Dictionary<string, string>())
-                { HistoryCapturePolicy = Policy, HistoryCaptureEnabledAtAdmission = true });
-            if (seedHead) await f.Store.CommitAsync(Commit("seed", starts: true), Immediate);
+                { HistoryCapturePolicy = policy ?? Policy, HistoryCaptureEnabledAtAdmission = true });
+            if (seedHead) await f.Store.CommitAsync(Commit("seed", starts: true, policy: policy), Immediate);
             return f;
         }
     }

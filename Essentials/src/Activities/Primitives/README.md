@@ -58,3 +58,13 @@ projection only when the original final profile promises `StimulusPublicationCom
 their original unstamped replay identity. This contribution does not advertise recording support or enable
 a production history module; actual capture/provider/handler qualification follows separately. See the
 [Runtime extension catalog](../../Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md) for the shared source boundary.
+
+The same feature constructs its scoped `PublishStimulusExecutor` with the actual selected source, native
+owner, observation pair and clock. Its existing durable-handler port qualifies that actual chain; the
+original one-argument constructor remains available and does not qualify stamped history. For a stamped
+source the handler revalidates the canonical physical source and original native policy before recording
+its attempt. A separate closed disposition reports the actual routing return/failure/capacity shed, without
+claiming a recipient executed. Ambiguous observation writes retry the same immutable event once, never
+the routing effect. Primary and observation failures retain both causes; unchanged unstamped delivery
+uses the existing path. Native source/profile admission qualification and the public history module still
+follow; this handler support does not add a default supported source kind.

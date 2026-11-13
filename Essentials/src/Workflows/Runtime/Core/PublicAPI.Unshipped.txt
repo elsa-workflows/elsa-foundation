@@ -10863,3 +10863,5 @@ Elsa.Workflows.Runtime.Core.Contracts.IRuntimeHistoryDetailsStore.FindBookmarkDe
 
 Elsa.Workflows.Runtime.Core.Contracts.IRuntimePostCommitDurableSourceIntentHandler.CanRecordHistory(Elsa.Workflows.Runtime.Core.Contracts.IRuntimeHistoryObservationWriter! writer, Elsa.Workflows.Runtime.Core.Contracts.IRuntimeHistoryStore! reader) -> bool
 Elsa.Workflows.Runtime.Core.Contracts.IRuntimePostCommitIntentDispatcher.CanRecordHistory(string! intentKind, Elsa.Workflows.Runtime.Core.Contracts.IRuntimeHistoryObservationWriter! writer, Elsa.Workflows.Runtime.Core.Contracts.IRuntimeHistoryStore! reader) -> bool
+
+static Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFacts.PublicationObservation(Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryCapturePolicy! policy, Elsa.Workflows.Runtime.Core.Models.PostCommitDeliveryContext! source, string! receiptId, string! name, System.DateTimeOffset occurredAt, string! reasonCode) -> Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryObservation!
