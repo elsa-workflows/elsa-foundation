@@ -151,7 +151,8 @@ sealed class PgWrites(string connection)
     {
         if (Bytes(to.Lsn) <= Bytes(from.Lsn)) return ([], []);       // nothing written: pg_walinspect would find no record
         await using var c = await OpenAsync();
-        // A record is counted once, on the relation of its first block; a record that names no block (a commit, say) is in no table.
+        // A record is counted once, on the relation of its first block, and so are its full-page images; a record that names
+        // no block (a commit, say) is in no table. A sequence counts with the table that owns it (Messages' seq).
         const string blocks = """
             WITH aborted AS (
               SELECT DISTINCT xid FROM pg_get_wal_records_info($1::pg_lsn, $2::pg_lsn) WHERE resource_manager = 'Transaction' AND record_type LIKE 'ABORT%'
@@ -165,16 +166,18 @@ sealed class PgWrites(string connection)
               SELECT c.relfilenode AS f,
                      CASE c.relkind WHEN 'r' THEN c.relname
                                     WHEN 't' THEN (SELECT o.relname FROM pg_class o WHERE o.reltoastrelid = c.oid)
-                                    ELSE COALESCE((SELECT o.relname FROM pg_index x JOIN pg_class o ON o.reltoastrelid = x.indrelid WHERE x.indexrelid = c.oid),
-                                                  (SELECT t.relname FROM pg_index x JOIN pg_class t ON t.oid = x.indrelid WHERE x.indexrelid = c.oid)) END AS tbl,
-                     CASE c.relkind WHEN 'r' THEN 'heap' WHEN 't' THEN 'toast'
-                                    ELSE CASE WHEN EXISTS (SELECT 1 FROM pg_index x JOIN pg_class o ON o.reltoastrelid = x.indrelid WHERE x.indexrelid = c.oid) THEN 'toast' ELSE 'index' END END AS part
+                                    WHEN 'i' THEN COALESCE((SELECT o.relname FROM pg_index x JOIN pg_class o ON o.reltoastrelid = x.indrelid WHERE x.indexrelid = c.oid),
+                                                           (SELECT t.relname FROM pg_index x JOIN pg_class t ON t.oid = x.indrelid WHERE x.indexrelid = c.oid))
+                                    WHEN 'S' THEN COALESCE((SELECT t.relname FROM pg_depend d JOIN pg_class t ON t.oid = d.refobjid
+                                                            WHERE d.classid = 'pg_class'::regclass AND d.objid = c.oid AND d.refclassid = 'pg_class'::regclass LIMIT 1), c.relname) END AS tbl,
+                     CASE c.relkind WHEN 'r' THEN 'heap' WHEN 't' THEN 'toast' WHEN 'S' THEN 'seq'
+                                    WHEN 'i' THEN CASE WHEN EXISTS (SELECT 1 FROM pg_index x JOIN pg_class o ON o.reltoastrelid = x.indrelid WHERE x.indexrelid = c.oid) THEN 'toast' ELSE 'index' END END AS part
               FROM pg_class c WHERE c.relfilenode <> 0
             )
             """;
         var parts = await RowsAsync(c, blocks + """
             SELECT COALESCE(n.tbl, '(catalog)'), COALESCE(n.part, ''), count(*) FILTER (WHERE b.first AND NOT b.ab), COALESCE(sum(b.record_length) FILTER (WHERE b.first AND NOT b.ab), 0),
-                   COALESCE(sum(b.block_fpi_length) FILTER (WHERE NOT b.ab), 0), COALESCE(sum(b.record_length) FILTER (WHERE b.first AND b.ab), 0)
+                   COALESCE(sum(b.block_fpi_length) FILTER (WHERE b.first AND NOT b.ab), 0), COALESCE(sum(b.record_length) FILTER (WHERE b.first AND b.ab), 0)
             FROM b LEFT JOIN names n ON n.f = b.relfilenode GROUP BY 1, 2 ORDER BY 1, 2
             """, from.Lsn, to.Lsn);
         var kinds = await RowsAsync(c, blocks + """
@@ -252,13 +255,13 @@ sealed class PgWrites(string connection)
         {
             var peaks = Tables.Where(end.Tables.ContainsKey).Select(n => (n, peak: _timeline.Max(s => s.Tables.GetValueOrDefault(n)?.Dead ?? 0))).Where(p => p.peak > 0);
             Console.WriteLine("  dead tuples, peak during the run: " + string.Join(", ", peaks.Select(p => $"{p.n} {p.peak:N0}")));
-            Console.WriteLine($"  timeline (s: dead Instances/Messages/Journal/Partitions, autovacuums of Instances/Messages, heap+index+toast of Instances/Messages in kB):");
+            Console.WriteLine($"  timeline (s from the first snapshot: dead Instances/Messages/Journal/Partitions, autovacuums of Instances/Messages, heap+index+toast of Instances/Messages in kB):");
             foreach (var s in _timeline.Where((_, i) => i % 5 == 0).Append(_timeline[^1]))
             {
                 Table T(string n) => s.Tables.GetValueOrDefault(n) ?? new Table(n, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
                 long Kb(Table t) => (t.Heap + t.Index + t.Toast) / 1024;
                 var (i, m) = (T("Instances"), T("Messages"));
-                Console.WriteLine($"    {s.At.TotalSeconds,5:F0}: {i.Dead,7:N0} {m.Dead,7:N0} {T("Journal").Dead,6:N0} {T("Partitions").Dead,6:N0} | {i.AutoVacuums - (before.Tables.GetValueOrDefault("Instances")?.AutoVacuums ?? 0),3} {m.AutoVacuums - (before.Tables.GetValueOrDefault("Messages")?.AutoVacuums ?? 0),3} | {Kb(i),8:N0} {Kb(m),8:N0}");
+                Console.WriteLine($"    {(s.At - before.At).TotalSeconds,5:F0}: {i.Dead,7:N0} {m.Dead,7:N0} {T("Journal").Dead,6:N0} {T("Partitions").Dead,6:N0} | {i.AutoVacuums - (before.Tables.GetValueOrDefault("Instances")?.AutoVacuums ?? 0),3} {m.AutoVacuums - (before.Tables.GetValueOrDefault("Messages")?.AutoVacuums ?? 0),3} | {Kb(i),8:N0} {Kb(m),8:N0}");
             }
         }
     }

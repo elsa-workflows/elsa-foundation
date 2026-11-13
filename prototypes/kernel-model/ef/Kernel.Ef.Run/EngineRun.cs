@@ -114,7 +114,7 @@ static class EngineRun
         var writes = target.Writes;
         var (before, sampled) = writes is null ? (null, false) : (await writes.TakeAsync(), true);
         var sampler = writes?.SampleAsync(TimeSpan.FromSeconds(1), () => !sampled) ?? Task.CompletedTask;
-        if (writes is not null) Console.WriteLine("writes: " + await writes.DescribeAsync() + (target.Shaper is { } shaper ? $"; history {target.Get("history", "as the models say")}, pad {target.Int("pad", 0)} bytes" : ""));
+        if (writes is not null) Console.WriteLine("writes: " + await writes.DescribeAsync() + (target.Shaper is not null ? $"; history {target.Get("history", "as the models say")}, pad {target.Int("pad", 0)} bytes" : ""));
         var chaos = Task.Run(async () =>
         {
             var random = new Random(7);
@@ -342,7 +342,10 @@ static class EngineRun
         Console.WriteLine($"{"run",-58} {"commands",8} {"begin",6} {"commit",6} {"opens",6} {"saves",6} {"counted",8} {"sent",6} {"server",8} {"tcp",6}");
         async Task Row(string name, Func<Task> body, Func<Task>? before = null)
         {
+            // With writes=1 the setup's WAL is measured too: for the rows whose setup only adds outside messages, it is their inserts.
+            var setupFrom = target.Writes is { } ws && before is not null ? await ws.TakeAsync() : null;
             if (before is not null) await before();
+            var setupLine = setupFrom is not null ? (await target.Writes!.CostLineAsync(setupFrom, await target.Writes.TakeAsync(), 0)).Replace("    WAL", "    setup WAL") : null;
             counter.Reset();
             (opens.Count, saves.Set, saves.Released, locks.Largest) = (0, 0, 0, "");
             var trips = target.Proxy?.Trips ?? 0;
@@ -359,6 +362,7 @@ static class EngineRun
             Console.WriteLine($"{name,-58} {counter.Commands,8} {counter.Transactions.Begun,6} {counter.Transactions.Ended,6} {opens.Count,6} {saves.Set + saves.Released,6} {counted,8} {sent,6} {(wire < 0 ? "" : wire.ToString()),8} {tcp,6}");
             if (locks.Largest != "") Console.WriteLine("    locks held at the largest commit: " + locks.Largest);
             if (walLine is not null) Console.WriteLine(walLine);
+            if (setupLine is not null) Console.WriteLine(setupLine);
             if (target.Has("wire") && target.Engine == "mysql") Console.WriteLine("    server: " + string.Join(", ", delta.OrderBy(k => k.Key).Select(k => $"{k.Key.Replace("statement/", "")} x{k.n}")));
         }
 
