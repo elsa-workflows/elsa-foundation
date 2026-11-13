@@ -7,6 +7,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 import xml.etree.ElementTree as ET
+import zipfile
 
 spec = importlib.util.spec_from_file_location('live_qualification', Path(__file__).with_name('live_qualify.py'))
 live = importlib.util.module_from_spec(spec)
@@ -131,7 +132,7 @@ class VerdictTests(unittest.TestCase):
         snapshot = lambda sends: {'category': 'actual-sdk-forwarding', 'counts': {'session.send': sends, 'event.Completed': sends,
                                   'tool.return.dashboard_request_clarification': 1 if sends >= 2 else 0,
                                   'tool.return.dashboard_preview_question': sends - 1 if sends >= 2 else 0}, 'privacyFailures': 0}
-        phases = {'initial-native-preview', 'refined-native-preview', 'use-unsaved-draft', 'explicit-save', 'reopen-saved-definition', 'reopened-native-refresh', 'saved-native-appearances', 'native-new-run-and-refresh', 'native-saved-drill', 'native-share', 'native-independent-viewer-refresh', 'native-reauthenticated-field-revocation'}
+        phases = {'initial-native-preview', 'refined-native-preview', 'use-unsaved-draft', 'explicit-save', 'reopen-saved-definition', 'reopened-native-refresh', 'saved-native-appearances', 'native-new-run-and-refresh', 'native-saved-drill', 'native-share', 'native-independent-viewer-refresh', 'native-reauthenticated-field-revocation', 'native-dashboard-arrange', 'native-dashboard-share'}
         return {'turns': {'before': snapshot(0), 'afterClarification': snapshot(2)}, 'refinement': {'before': snapshot(2), 'after': snapshot(3)}, 'after': snapshot(3),
                 'nativePhases': [{'phase': phase, 'before': 2 if phase == 'initial-native-preview' else 3,
                                  'after': 2 if phase == 'initial-native-preview' else 3, 'delta': 0} for phase in phases]}
@@ -142,13 +143,61 @@ class VerdictTests(unittest.TestCase):
         self.root = Path(self.temporary.name)
         self.artifact = self.root / 'proof'
         self.artifact.write_text('proof')
+        self.trace = self.root / 'trace.zip'
+        with zipfile.ZipFile(self.trace, 'w') as archive:
+            for number, role in enumerate(('admin', 'dashboard-reader')):
+                archive.writestr(f'{number}-trace.trace', '\n'.join(json.dumps(value) for value in [
+                    {'type': 'context-options', 'version': 8},
+                    {'type': 'before', 'method': 'fill', 'params': {'selector': 'internal:label=username', 'value': role}},
+                    {'type': 'before', 'method': 'click', 'params': {'selector': 'View matching records for result 1'}},
+                    {'type': 'frame-snapshot'}]))
         self.boundary = self.root / 'boundary.json'
         self.boundary.write_text(json.dumps(self.evidence()))
         self.authority = self.root / 'authority.json'
         self.authority.write_text(json.dumps({'readerReauthenticated': True, 'executeStatus': 403}))
+        self.refinement = self.root / 'refinement.json'
+        self.refinement.write_text(json.dumps({'groupingChanged': True, 'filtersChanged': True, 'actualSdkRefinement': True}))
+        self.retained = self.root / 'retained.json'
+        self.retained.write_text(json.dumps({'questionId': 'question', 'dashboardId': 'dashboard', 'tileIds': ['first', 'second'], 'deferredToOwnedRestart': True}))
         def required(title):
-            return live.JSON_ARTIFACTS | {'trace', 'source'} | ({'live-authority.json'} if title == live.ACME else set()) | {f'{capture}.{suffix}' for capture in live.CAPTURES[title] for suffix in ('png', 'aria.yml')}
-        self.report = {'suites': [{'specs': [{'title': title, 'tests': [{'projectName': 'live-desktop', 'expectedStatus': 'passed', 'status': 'expected', 'results': [{'status': 'passed', 'attachments': [{'name': name, 'path': str(self.boundary if name == 'live-counters.json' else self.authority if name == 'live-authority.json' else self.artifact)} for name in required(title)]}]}]} for title in live.TITLES]}]}
+            return live.JSON_ARTIFACTS | {'trace', 'source'} | ({'live-authority.json'} if title == live.ACME else {'live-query-refinement.json', 'live-retained-definitions.json'}) | {f'{capture}.{suffix}' for capture in live.CAPTURES[title] for suffix in ('png', 'aria.yml')}
+        paths = {'trace': self.trace, 'live-counters.json': self.boundary, 'live-authority.json': self.authority, 'live-query-refinement.json': self.refinement, 'live-retained-definitions.json': self.retained}
+        self.report = {'suites': [{'specs': [{'title': title, 'tests': [{'projectName': 'live-desktop', 'expectedStatus': 'passed', 'status': 'expected', 'results': [{'status': 'passed', 'attachments': [{'name': name, 'path': str(paths.get(name, self.artifact))} for name in required(title)]}]}]} for title in live.TITLES]}]}
+
+    def test_presentation_only_or_unretained_definitions_cannot_qualify(self):
+        self.refinement.write_text(json.dumps({'groupingChanged': False, 'filtersChanged': False, 'actualSdkRefinement': True}))
+        with self.assertRaises(ValueError): live.verdict(self.report, self.root)
+        self.refinement.write_text(json.dumps({'groupingChanged': True, 'filtersChanged': True, 'actualSdkRefinement': True}))
+        self.retained.write_text(json.dumps({'questionId': 'question', 'dashboardId': 'dashboard', 'tileIds': ['duplicate', 'duplicate'], 'deferredToOwnedRestart': True}))
+        with self.assertRaises(ValueError): live.verdict(self.report, self.root)
+
+    def test_reload_recreated_stores_failed_restart_or_provider_send_cannot_qualify(self):
+        proof = self.root / 'restart.json'
+        value = {'providerDisabled': True, 'sameQuestion': True, 'sameDashboard': True, 'sameTileOrderAndSizes': True, 'sdkSendsBefore': 0, 'sdkSendsAfter': 0}
+        proof.write_text(json.dumps(value))
+        required = {'source', 'trace', 'restart-proof.json'} | {f'{name}.{suffix}' for name in live.RESTART_CAPTURES for suffix in ('png', 'aria.yml')}
+        report = {'suites': [{'specs': [{'title': live.RESTART_TITLE, 'tests': [{'projectName': 'live-desktop', 'expectedStatus': 'passed', 'status': 'expected', 'results': [{'status': 'passed', 'attachments': [{'name': name, 'path': str(proof if name == 'restart-proof.json' else self.trace if name == 'trace' else self.artifact)} for name in required]}]}]}]}]}
+        hosts = [{'backendPid': 11, 'studioPid': 12, 'backendExit': 0, 'studioExit': 0}, {'backendPid': 21, 'studioPid': 22, 'backendExit': 0, 'studioExit': 0, 'sameOwnedStores': True}]
+        self.assertEqual(1, live.restart_verdict(report, self.root, 'proof', hosts))
+        for change in ('reload', 'recreated-stores', 'failed-stop', 'provider-send', 'changed-definition', 'missing-execution'):
+            with self.subTest(change=change):
+                altered = copy.deepcopy(hosts); browser = copy.deepcopy(report); evidence = dict(value)
+                if change == 'reload': altered = hosts[:1]
+                if change == 'recreated-stores': altered[1]['sameOwnedStores'] = False
+                if change == 'failed-stop': altered[0]['backendExit'] = -15
+                if change == 'provider-send': evidence['sdkSendsAfter'] = 1
+                if change == 'changed-definition': evidence['sameQuestion'] = False
+                if change == 'missing-execution': browser['suites'][0]['specs'].clear()
+                proof.write_text(json.dumps(evidence))
+                with self.assertRaises(ValueError): live.restart_verdict(browser, self.root, 'proof', altered)
+
+    def test_a_reader_screenshot_without_recorded_actions_or_dom_cannot_qualify(self):
+        with zipfile.ZipFile(self.trace, 'w') as archive:
+            archive.writestr('0-trace.trace', '\n'.join(json.dumps(value) for value in [
+                {'type': 'before', 'method': 'fill', 'params': {'selector': 'internal:label=username', 'value': 'admin'}},
+                {'type': 'before', 'method': 'click', 'params': {'selector': 'View matching records for result 1'}},
+                {'type': 'frame-snapshot'}]))
+        with self.assertRaises(ValueError): live.verdict(self.report, self.root)
 
     def test_missing_fresh_principal_or_denial_cannot_qualify(self):
         for evidence in ({'executeStatus': 403}, {'readerReauthenticated': True, 'executeStatus': 200}):

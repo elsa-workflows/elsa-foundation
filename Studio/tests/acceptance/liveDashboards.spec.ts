@@ -1,6 +1,6 @@
 import { writeFileSync } from "node:fs";
 import { expect, test, type Page, type TestInfo } from "@playwright/test";
-import { liveAcmeDashboardJourney, liveWorkflowDashboardJourney } from "./liveDashboardsJourney";
+import { liveAcmeDashboardJourney, liveWorkflowDashboardJourney, restartWorkflowDashboardJourney } from "./liveDashboardsJourney";
 
 async function capture(page: Page, info: TestInfo, name: string) {
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
@@ -34,5 +34,9 @@ test.beforeEach(async ({ page }, info) => {
 
 test.afterEach(async ({ page }) => { expect(errors.get(page), "Uncaught browser errors").toEqual([]); });
 
-test("live Workflow question clarification refinement and native refresh", async ({ page }, info) => liveWorkflowDashboardJourney(page, info, capture));
-test("live Acme business dimension clarification refinement and viewer results", async ({ page }, info) => liveAcmeDashboardJourney(page, info, capture));
+if (process.env.UX_DASHBOARD_RESTART === "1") {
+  test("live authored dashboard survives real host restart with provider disabled", async ({ page }, info) => restartWorkflowDashboardJourney(page, info, capture));
+} else {
+  test("live Workflow question clarification refinement and native refresh", async ({ page }, info) => liveWorkflowDashboardJourney(page, info, capture));
+  test("live Acme business dimension clarification refinement and viewer results", async ({ page }, info) => liveAcmeDashboardJourney(page, info, capture));
+}

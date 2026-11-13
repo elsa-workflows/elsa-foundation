@@ -20,6 +20,7 @@ import tempfile
 import time
 import urllib.error
 import urllib.request
+import zipfile
 import xml.etree.ElementTree as ET
 from xml.sax.saxutils import escape
 
@@ -35,6 +36,8 @@ COMMON_CAPTURES = ('live-reference', 'live-clarification', 'live-proposal-previe
                    'live-saved-light-desktop', 'live-saved-dark-desktop', 'live-saved-light-narrow', 'live-saved-dark-narrow')
 CAPTURES = {WORKFLOW: (*COMMON_CAPTURES, 'live-drill'),
             ACME: (*COMMON_CAPTURES, 'live-share', 'live-shared-reader', 'live-reader-no-category')}
+CAPTURES[WORKFLOW] += ('live-question-share', 'live-dashboard-arranged', 'live-dashboard-share',
+                       'live-dashboard-reader', 'live-dashboard-reader-drill')
 # Every actual result gets visible periods/values; bar presentations also earn chart evidence.
 for title in TITLES:
     result_captures = [f'{prefix}-{part}' for prefix in ('live-proposal-preview', 'live-refined-preview',
@@ -46,6 +49,10 @@ for title in TITLES:
         result_captures += [f'live-shared-reader-{part}' for part in ('periods', 'chart', 'values', 'values-end')]
     CAPTURES[title] = (*CAPTURES[title], *result_captures)
 JSON_ARTIFACTS = {'live-oracle.json', 'live-counters.json', 'live-readback.json'}
+RESTART_TITLE = 'live authored dashboard survives real host restart with provider disabled'
+RESTART_CAPTURES = ('live-reference', 'restart-dashboard-owner', 'restart-question-periods', 'restart-question-chart',
+                    'restart-question-values', 'restart-question-values-end', 'restart-owner-drill',
+                    'restart-dashboard-reader', 'restart-reader-drill')
 
 
 class LiveUnavailable(RuntimeError):
@@ -104,11 +111,11 @@ def materialize(output):
     project.write_text(reviewed_host_template())
     program = (ROOT / 'Essentials/apps/Elsa.Workbench/Program.cs').read_text()
     hook = 'builder.Services.AddHostedService(services => services.GetRequiredService<DashboardQualificationBootstrap>());'
-    program = replace_once(program, hook, hook + '\nvar liveDashboardCounters = new DashboardLiveCounters();\nbuilder.Services.AddSingleton(liveDashboardCounters);')
+    program = replace_once(program, hook, hook + '\nvar liveDashboardCounters = new DashboardLiveCounters();\nbuilder.Services.AddSingleton(liveDashboardCounters);\nvar dashboardStartClock = new DashboardQualificationStartClock();\nbuilder.Services.AddSingleton(dashboardStartClock);')
     hook = '            typeof(WeaverGitHubCopilotFeature).Assembly,'
     program = replace_once(program, hook, hook + '\n            typeof(Acme.Processing.ProcessingFeature).Assembly,\n            typeof(DashboardLiveQualificationFeature).Assembly,')
     hook = '// CShells host-control remains server-to-server management-key traffic.'
-    program = replace_once(program, hook, 'DashboardLiveQualificationRoutes.Map(app, liveDashboardCounters);\n\n' + hook)
+    program = replace_once(program, hook, 'DashboardLiveQualificationRoutes.Map(app, liveDashboardCounters);\nDashboardQualificationStartClock.Map(app, dashboardStartClock);\n\n' + hook)
     (host / 'Program.cs').write_text(program)
     (host / 'Directory.Build.props').write_text(f'<Project><Import Project="{escape(str(ROOT / "Directory.Build.props"))}" /></Project>\n')
     (host / 'Directory.Packages.props').write_text(f'<Project><Import Project="{escape(str(ROOT / "Directory.Packages.props"))}" /></Project>\n')
@@ -139,6 +146,7 @@ def materialize(output):
         seeded[str(target)] = sha(target)
     inputs = {'hostTemplate': sha(HERE / 'live/Host.csproj.in'),
               'observer': sha(HERE / 'live/DashboardLiveQualification.cs'),
+              'startClock': sha(HERE / 'live/DashboardQualificationStartClock.cs'),
               'nativeProgram': sha(ROOT / 'Essentials/apps/Elsa.Workbench/Program.cs'),
               'generatedProgram': sha(host / 'Program.cs')}
     (output / 'source-inputs.json').write_text(json.dumps(inputs, indent=2) + '\n')
@@ -211,6 +219,7 @@ def profile(settings, shells, studio_url, model, native):
     # The derived observer feature calls the same normal provider registration. Equal options avoid order defaults.
     features['WeaverGitHubCopilot'] = dict(actual)
     features['DashboardLiveQualification'] = dict(actual)
+    features['DashboardQualificationStartClock'] = {}
     features['AcmeProcessing'] = {}
     grants = settings['Qualification']['Principals'][0]['exactDirectPermissions']
     grants.extend(['acme/processing:read', 'acme/processing:create', 'acme/processing/category:read', 'acme/processing-questions:read'])
@@ -263,6 +272,37 @@ def classify_preflight(status, envelope):
             'attempts': 1, 'automaticRetry': False}
 
 
+def trace_context_evidence(path, minimum_contexts=2, owner_drill=False):
+    """PW 1.61.1 globally records manual contexts; verify their actual actions, not configuration alone."""
+    contexts = []
+    with zipfile.ZipFile(path) as archive:
+        for name in archive.namelist():
+            if not name.endswith('.trace') or name == 'test.trace':
+                continue
+            snapshots = 0
+            roles = set()
+            drills = 0
+            for line in archive.read(name).splitlines():
+                row = json.loads(line)
+                snapshots += row.get('type') == 'frame-snapshot'
+                if row.get('type') != 'before':
+                    continue
+                parameters = row.get('params') or {}
+                if row.get('method') == 'fill' and 'username' in parameters.get('selector', '').lower() and parameters.get('value') in {'admin', 'dashboard-reader'}:
+                    roles.add(parameters['value'])
+                if row.get('method') == 'click' and 'View matching records for result 1' in parameters.get('selector', ''):
+                    drills += 1
+            if snapshots:
+                contexts.append({'name': name, 'roles': sorted(roles), 'snapshots': snapshots, 'drills': drills})
+    if len(contexts) < minimum_contexts or not any('admin' in item['roles'] for item in contexts) or not any('dashboard-reader' in item['roles'] and item['drills'] for item in contexts):
+        raise ValueError('Actual owner and independent reader actions, drill and DOM recordings are required')
+    if owner_drill and not any('admin' in item['roles'] and item['drills'] for item in contexts):
+        raise ValueError('The authored Workflow journey must retain its owner drill recording')
+    if minimum_contexts > 1 and not any('dashboard-reader' in item['roles'] and 'admin' not in item['roles'] and item['drills'] for item in contexts):
+        raise ValueError('The independent first-lifetime reader must have its own recorded context')
+    return contexts
+
+
 def verdict(report, output, expected_sha=None):
     rows = []
     def visit(suites):
@@ -277,6 +317,8 @@ def verdict(report, output, expected_sha=None):
         required = JSON_ARTIFACTS | {'trace', 'source'} | {f'{capture}.{suffix}' for capture in CAPTURES[title] for suffix in ('png', 'aria.yml')}
         if title == ACME:
             required.add('live-authority.json')
+        else:
+            required |= {'live-query-refinement.json', 'live-retained-definitions.json'}
         results = test.get('results', [])
         if test.get('projectName') != 'live-desktop' or test.get('expectedStatus') != 'passed' or test.get('status') != 'expected' or len(results) != 1 or results[0].get('status') != 'passed':
             raise ValueError(title + ': missing, skipped, retried or failed live execution')
@@ -291,6 +333,7 @@ def verdict(report, output, expected_sha=None):
                 raise ValueError(title + ': artifact is missing, empty or outside owned evidence')
             if item.get('name') == 'source' and expected_sha is not None and path.read_text().strip() != expected_sha:
                 raise ValueError(title + ': browser source attachment differs from the committed runner revision')
+        trace_context_evidence(next(Path(item['path']) for item in attachments if item.get('name') == 'trace'), owner_drill=title == WORKFLOW)
         boundary = next(Path(item['path']) for item in attachments if item.get('name') == 'live-counters.json')
         evidence = json.loads(boundary.read_text())
         before = evidence.get('turns', {}).get('before', {})
@@ -303,11 +346,19 @@ def verdict(report, output, expected_sha=None):
         authored_sends = delta(refined, before, 'session.send')
         phases = evidence.get('nativePhases') or []
         required_phases = {'initial-native-preview', 'refined-native-preview', 'use-unsaved-draft', 'explicit-save', 'reopen-saved-definition', 'reopened-native-refresh', 'saved-native-appearances'}
-        required_phases |= {'native-new-run-and-refresh', 'native-saved-drill'} if title == WORKFLOW else {'native-share', 'native-independent-viewer-refresh', 'native-reauthenticated-field-revocation'}
+        required_phases |= {'native-new-run-and-refresh', 'native-saved-drill', 'native-share', 'native-dashboard-arrange',
+                            'native-dashboard-share', 'native-independent-viewer-refresh'} if title == WORKFLOW else {'native-share', 'native-independent-viewer-refresh', 'native-reauthenticated-field-revocation'}
         if title == ACME:
             authority = json.loads(next(Path(item['path']) for item in attachments if item.get('name') == 'live-authority.json').read_text())
             if authority.get('readerReauthenticated') is not True or authority.get('executeStatus') != 403:
                 raise ValueError(title + ': current authenticated field-denial evidence is missing')
+        else:
+            refinement = json.loads(next(Path(item['path']) for item in attachments if item.get('name') == 'live-query-refinement.json').read_text())
+            retained = json.loads(next(Path(item['path']) for item in attachments if item.get('name') == 'live-retained-definitions.json').read_text())
+            if not all(refinement.get(key) is True for key in ('groupingChanged', 'filtersChanged', 'actualSdkRefinement')):
+                raise ValueError('Actual model grouping/filter refinement is required; presentation-only changes cannot qualify')
+            if not retained.get('questionId') or not retained.get('dashboardId') or len(set(retained.get('tileIds') or [])) != 2 or retained.get('deferredToOwnedRestart') is not True:
+                raise ValueError('The same live-authored question and arranged dashboard must be retained for restart')
         categories = all(snapshot.get('category') == 'actual-sdk-forwarding' and snapshot.get('privacyFailures') == 0
                          and count(snapshot, 'event.Error') == 0 for snapshot in [before, clarified, refine_before, refined, after])
         authoring = (delta(clarified, before, 'session.send') >= 2 and delta(clarified, before, 'event.Completed') >= 2
@@ -323,6 +374,43 @@ def verdict(report, output, expected_sha=None):
         if not categories or authored_sends < 3 or not authoring or not native_clean:
             raise ValueError(title + ': actual SDK authoring/native/privacy boundary was not observed')
     return len(rows)
+
+
+def restart_verdict(report, output, expected_sha, lifetimes):
+    rows = []
+    def visit(suites):
+        for suite in suites:
+            rows.extend((spec.get('title'), test) for spec in suite.get('specs', []) for test in spec.get('tests', []))
+            visit(suite.get('suites', []))
+    visit(report.get('suites', []))
+    if len(rows) != 1 or rows[0][0] != RESTART_TITLE or report.get('errors'):
+        raise ValueError('The real restarted-host journey must run exactly once')
+    test = rows[0][1]
+    results = test.get('results') or []
+    if test.get('projectName') != 'live-desktop' or test.get('expectedStatus') != 'passed' or test.get('status') != 'expected' or len(results) != 1 or results[0].get('status') != 'passed':
+        raise ValueError('A missing, retried, skipped or failed restart cannot qualify persistence')
+    attachments = results[0].get('attachments') or []
+    required = {'source', 'trace', 'restart-proof.json'} | {f'{name}.{suffix}' for name in RESTART_CAPTURES for suffix in ('png', 'aria.yml')}
+    if not required <= {item.get('name') for item in attachments}:
+        raise ValueError('Restart needs actual UI, trace, source, authority and persistence evidence')
+    paths = {}
+    for item in attachments:
+        if item.get('name') not in required:
+            continue
+        path = Path(item.get('path', '')).resolve()
+        if not path.is_relative_to(output.resolve()) or not path.is_file() or not path.stat().st_size:
+            raise ValueError('A restart artifact is absent, empty or outside owned evidence')
+        paths[item['name']] = path
+    if paths['source'].read_text().strip() != expected_sha:
+        raise ValueError('Restart source differs from the actual committed run')
+    trace_context_evidence(paths['trace'], minimum_contexts=1, owner_drill=True)
+    proof = json.loads(paths['restart-proof.json'].read_text())
+    flags = ('providerDisabled', 'sameQuestion', 'sameDashboard', 'sameTileOrderAndSizes')
+    if not all(proof.get(key) is True for key in flags) or proof.get('sdkSendsBefore') != 0 or proof.get('sdkSendsAfter') != 0:
+        raise ValueError('Restart must preserve the authored definitions and use no provider turns')
+    if len(lifetimes) != 2 or any(item.get('backendExit') != 0 or item.get('studioExit') != 0 for item in lifetimes) or lifetimes[0].get('backendPid') == lifetimes[1].get('backendPid') or lifetimes[0].get('studioPid') == lifetimes[1].get('studioPid') or lifetimes[1].get('sameOwnedStores') is not True:
+        raise ValueError('A reload or recreated store cannot substitute for two stopped owned-host lifetimes')
+    return 1
 
 
 def execute_live(output, options, native, report):
@@ -350,7 +438,13 @@ def execute_live(output, options, native, report):
         env.update(HOME=str(home), DOTNET_CLI_HOME=str(home))
         report.update(stage='provider-preflight', hostProfile='dedicated live source host; normal IAM; actual SDK; owned private stores',
                       sdkBoundary='all forwarded create/resume session.SendAsync calls; physical model HTTP requests are not exposed')
-        with native.host(backend, 'Elsa.Workbench.dll', backend_url, '/__qualification/ready', output / 'backend.log', env):
+        identities = (backend.stat().st_ino, studio.stat().st_ino)
+        studio_env = dict(native.clean_environment(), HOME=str(home), DOTNET_CLI_HOME=str(home), Studio__BackendBaseUrl=backend_url)
+        browser_env = dict(native.clean_environment(), UX_DASHBOARD_LIVE_OWNED='1', UX_ACCEPTANCE_OWNED='1',
+                           ELSA_STUDIO_URL=studio_url, UX_BACKEND_URL=backend_url, ELSA_WORKBENCH_URL=backend_url,
+                           UX_ACCEPTANCE_OUT=str(output), UX_SOURCE_SHA=report['sourceSha'])
+        browser_command = ['pnpm', 'exec', 'playwright', 'test', '--config', 'tests/acceptance/playwright.live-dashboards.config.ts']
+        with native.host(backend, 'Elsa.Workbench.dll', backend_url, '/__qualification/ready', output / 'backend.log', env) as first_backend:
             preflight = live_preflight(backend_url)
             report['preflight'] = preflight
             if not preflight['available']:
@@ -359,15 +453,37 @@ def execute_live(output, options, native, report):
             if options.model not in preflight['declaredModels']:
                 raise ValueError('Requested pinned model is absent from actual provider diagnostics; no turn attempted')
             with native.host(studio, 'Elsa.Studio.Web.dll', studio_url, '/studio-runtime.js', output / 'studio.log',
-                             dict(native.clean_environment(), HOME=str(home), DOTNET_CLI_HOME=str(home), Studio__BackendBaseUrl=backend_url)):
-                browser_env = dict(native.clean_environment(), UX_DASHBOARD_LIVE_OWNED='1', UX_ACCEPTANCE_OWNED='1',
-                                   ELSA_STUDIO_URL=studio_url, UX_BACKEND_URL=backend_url, ELSA_WORKBENCH_URL=backend_url,
-                                   UX_ACCEPTANCE_OUT=str(output), UX_SOURCE_SHA=report['sourceSha'])
+                             studio_env) as first_studio:
                 report['stage'] = 'actual-live-journeys'
-                command(native, ['pnpm', 'exec', 'playwright', 'test', '--config', 'tests/acceptance/playwright.live-dashboards.config.ts'],
-                        output / 'journeys.log', cwd=ROOT / 'Studio', env=browser_env)
+                command(native, browser_command, output / 'journeys.log', cwd=ROOT / 'Studio', env=browser_env)
                 report['executed'] = verdict(json.loads((output / 'playwright.json').read_text()), output, report['sourceSha'])
-                report.update(status='passed', stage='complete', liveQualified=True)
+        lifetimes = [{'phase': 'authoring', 'backendPid': first_backend.pid, 'studioPid': first_studio.pid,
+                      'backendExit': first_backend.poll(), 'studioExit': first_studio.poll()}]
+        report['hostLifetimes'] = lifetimes
+        if lifetimes[0]['backendExit'] != 0 or lifetimes[0]['studioExit'] != 0:
+            raise ValueError('Both first-lifetime hosts must stop normally before restart')
+        if not (output / 'workflow-retained.json').is_file():
+            raise ValueError('No authored definition manifest survived the first host lifetime')
+        # Preserve the original directories and databases. Only disable provider access.
+        # No profile/bootstrap materialization or store recopy occurs at this boundary.
+        restart_shells = json.loads((backend / 'shells.json').read_text())
+        features = restart_shells['CShells']['Shells']['default']['Features']
+        for name in ('WeaverGitHubCopilot', 'DashboardLiveQualification'):
+            features[name]['Enabled'] = False
+        (backend / 'shells.json').write_text(json.dumps(restart_shells))
+        restart_env = dict(env)
+        for name in {MODEL_ENVIRONMENT, options.credential_environment_variable, 'GITHUB_TOKEN', 'GH_TOKEN'}:
+            restart_env.pop(name, None)
+        report['stage'] = 'native-real-host-restart'
+        with native.host(backend, 'Elsa.Workbench.dll', backend_url, '/__qualification/ready', output / 'backend-restart.log', restart_env) as second_backend:
+            with native.host(studio, 'Elsa.Studio.Web.dll', studio_url, '/studio-runtime.js', output / 'studio-restart.log', studio_env) as second_studio:
+                command(native, browser_command, output / 'restart-journey.log', cwd=ROOT / 'Studio',
+                        env=dict(browser_env, UX_DASHBOARD_RESTART='1'))
+        lifetimes.append({'phase': 'provider-disabled-restart', 'backendPid': second_backend.pid, 'studioPid': second_studio.pid,
+                          'backendExit': second_backend.poll(), 'studioExit': second_studio.poll(),
+                          'sameOwnedStores': identities == (backend.stat().st_ino, studio.stat().st_ino)})
+        report['restartExecuted'] = restart_verdict(json.loads((output / 'playwright-restart.json').read_text()), output, report['sourceSha'], lifetimes)
+        report.update(status='passed', stage='complete', liveQualified=True)
 
 
 def run(options):
