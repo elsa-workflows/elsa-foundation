@@ -30,6 +30,10 @@ static class Scenarios
         {
             if (TaskScheduler.Current != ownerScheduler) throw new InvalidOperationException("worker phases must execute on the exclusive owner scheduler");
         }
+        static void RequireJob()
+        {
+            if (TaskScheduler.Current != TaskScheduler.Default) throw new InvalidOperationException("tool bodies must execute on the default job scheduler");
+        }
         long time = 100;
         var store = new InMemoryStore(1, () => time);
         var firstCompletion = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -37,10 +41,12 @@ static class Scenarios
         var lateGuardObserved = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         async ValueTask<object?> Tool(IJob job, CancellationToken token)
         {
+            RequireJob();
             var call = Interlocked.Increment(ref effects); // a non-idempotent outside effect
             if (call == 1)
             {
                 var answer = await firstCompletion.Task; // crash after effect, before ticket becomes a result
+                RequireJob();
                 Volatile.Write(ref oldBodyReturned, 1);
                 return answer;
             }
@@ -49,7 +55,7 @@ static class Scenarios
         var live = new Capture();
         int staleResultTurns = 0;
         Worker Owner(string node) => new(node, 0, store, new WorkflowInstance([new AgentModel(Tool, duplicateResult: args.Contains("--mutate-result"), persistLive: args.Contains("--mutate-live"))]),
-            new WorkerOptions { Monotonic = () =>
+            new WorkerOptions { JobScheduler = TaskScheduler.Default, Monotonic = () =>
             {
                 if (node == "first" && Volatile.Read(ref oldBodyReturned) != 0)
                 {
@@ -113,7 +119,7 @@ static class Scenarios
         // Both decisions arrive before the peer's reply; the first decision is final.
         var decisionStore = new InMemoryStore(1, () => time);
         var decisionWorker = new Worker("decision", 0, decisionStore,
-            new WorkflowInstance([new AgentModel((_, _) => new ValueTask<object?>("facts"))]), new WorkerOptions { Monotonic = () => time });
+            new WorkflowInstance([new AgentModel((_, _) => { RequireJob(); return new ValueTask<object?>("facts"); })]), new WorkerOptions { JobScheduler = TaskScheduler.Default, Monotonic = () => time });
         await new DurableHost([decisionWorker]).ActivateAsync(0);
         await decisionWorker.PollAsync();
         decisionWorker.Post(new Message("decision-start", InstanceRef.In(0, "decision"), Kinds.Start,
@@ -128,23 +134,26 @@ static class Scenarios
               decision.Transcript.Count(x => x.StartsWith("human:")) == 1, "first approval wins over a later denial before peer reply");
 
         // Independent cancellation journey: cancel while the tool is running.
-        var held = new TaskCompletionSource<object?>();
+        var held = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
         var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var signalled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         Task<object?>? completedBody = null;
         var cancelledStore = new InMemoryStore(1, () => time);
         ValueTask<object?> HeldTool(IJob job, CancellationToken token)
         {
+            RequireJob();
             async Task<object?> Body()
             {
                 using var registration = token.Register(() => signalled.TrySetResult());
                 started.TrySetResult();
-                return await held.Task; // deliberately ignores cancellation like a non-cooperative external effect
+                var answer = await held.Task; // deliberately ignores cancellation like a non-cooperative external effect
+                RequireJob();
+                return answer;
             }
             return new ValueTask<object?>(completedBody = Body());
         }
         var cancelWorker = new Worker("cancel", 0, cancelledStore,
-            new WorkflowInstance([new AgentModel(HeldTool)]), new WorkerOptions { Monotonic = () => time });
+            new WorkflowInstance([new AgentModel(HeldTool)]), new WorkerOptions { JobScheduler = TaskScheduler.Default, Monotonic = () => time });
         await new DurableHost([cancelWorker]).ActivateAsync(0);
         await cancelWorker.PollAsync();
         cancelWorker.Post(new Message("s", InstanceRef.In(0, "cancelled"), Kinds.Start, Start: new StartSpec(AgentModel.ModelKey, "coordinator")), fresh: true);
