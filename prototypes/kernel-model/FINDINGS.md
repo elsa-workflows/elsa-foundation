@@ -1146,3 +1146,46 @@ plan's aims at it), so that it bites is not shown.
 - **Not covered by the mix:** merges, inclusive gateways, a race inside a loop, a trigger inside a Flowchart under
   the faults (smoke covers the trigger entry). The BPMN spike (its own session) does not use this engine; comparing
   the two join codes is the sketch's next step.
+
+### 25.8 The viewer's tail read and catch-up on request (decision 11). Run
+
+**What changed.**
+- **The tail read** (`Viewer.ReadAsync`, layer 2). It reads the projector's cursor, then the instance's view, then
+  the instance's journal rows past the cursor, and merges them (`Viewer.Merge`).
+  - A round that commits between the reads leaves rows in both the view and the tail. The merge counts a tail row only
+    past the view's revision. For one instance the revision grows with the journal position, so this is the position
+    test the sketch describes, without a position column on the view.
+  - A delete in the tail removes the view.
+  - Three reads, no write.
+- **A new store read.** `IKernelStore.ReadJournalOfAsync(partition, instance, after)` gives one instance's journal rows
+  past a position. The in-memory, EF and MongoDB stores answer it from their (partition, instance) index. The other
+  implementations (wrappers, the simulation's wire) take the interface's default, which pages through the partition's
+  journal.
+- **Catch-up on request** (`Projector.CatchUpAsync`). It runs a round once any round in flight has ended. A request
+  that comes while one waits gets the same round.
+
+**Not built:** live watching, Studio's push stream of committed entries.
+
+**The checks.**
+- **Three new required cases.**
+  - One instance's rows past a position.
+  - The tail read when a round commits between the cursor read and the rest. Without the merge's rule the instance
+    would show 4 commits instead of 3.
+  - Catch-up requests coalesced, and the projection current afterwards.
+- **Where they pass:** in-memory, SQLite, PostgreSQL, SQL Server, MySQL and MongoDB.
+- **The simulation** (I6 for the viewer). After every action, while the journal has at most 3,000 rows, the tail read
+  of every instance equals what its whole journal says, whatever the projectors have done.
+
+**Gates.**
+
+| Gate | Before (25.7) | After |
+|---|---|---|
+| Semantic suite, in-memory | 57 passed, 1 skipped | 60 passed, 1 skipped |
+| SQLite, PostgreSQL (default fence) | 55 passed, 2 or 3 reference differ | 58 passed, the same reference cases differ |
+| SQL Server, MySQL (default) | 54 passed, 3 reference differ, 1 skipped | 57 passed, the same |
+| MongoDB | 58 passed | 61 passed |
+| `$SIM --seeds 4000` | 0 failed | 0 failed, with the new check |
+| `$SIM --seeds 4000 --flaw ProjectorBlindWrite` | caught | caught, at the same seed (25) |
+
+**Not run:** the full simulation gates, because the kernel's turns, commits and schedules are unchanged. The check
+reads only, and the generator is unchanged. Also not run: the EF cost runs, because the viewer is not in the cost runs.

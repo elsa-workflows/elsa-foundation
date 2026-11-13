@@ -357,6 +357,14 @@ One journal row per commit, in the commit, at the history level (Full, State, Mi
 node expand the journal into view rows in position order, moving their own row only from where they read it, and pass
 a position that is missing below the partition's position: it was deleted, not written late (F15).
 
+**The viewer's read path** (decision 11, FINDINGS 25.8). `Viewer.ReadAsync` shows one run from its view plus its
+journal tail. It reads the projector's cursor first, then the view, then the instance's journal rows past the cursor
+(`IKernelStore.ReadJournalOfAsync`, on the index on (partition, instance)), and merges them in memory. A round that
+commits between the reads is in both; the merge takes a tail row only past the view's revision, which grows with the
+position for one instance. So the view is current, committed history only, three reads, no write and no call to an
+owner. `Projector.CatchUpAsync` runs a round on request; requests while one waits share it. Live watching (a push
+stream) is not built.
+
 ## Invariants (what the simulation checks)
 
 1 one writer; 2 atomic turn; 3 no lost message; 4 once in state; 5 no early or lost timer; 6 journal order; 7 takeover;
