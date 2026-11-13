@@ -2,11 +2,11 @@ import { qualifyStudioBackendPath, isStudioWorkspaceTabClick, openStudioWorkspac
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Inbox, RefreshCw } from "lucide-react";
 import type { ElsaStudioModuleApi } from "@elsa-workflows/studio-sdk";
-import { SkeletonRows, StudioButton, StudioCollectionFooter, StudioCollectionToolbar, StudioPage, StudioPageHeader, StudioResultState, StudioSearchInput, StudioTableContainer } from "@elsa-workflows/studio-ui";
+import { SkeletonRows, StudioButton, StudioCollectionFooter, StudioCollectionToolbar, StudioPage, StudioPageHeader, StudioResultState, StudioSearchInput, StudioTableContainer, StudioField } from "@elsa-workflows/studio-ui";
 import { FormsPage } from "./FormsPage";
 import { actor, list, message, statusOf, type TaskActor, type TaskPage } from "./taskApi";
 import { TaskStatus } from "./TaskStatus";
-import { useTaskPeople } from "./taskPeople";
+import { taskAssignment } from "./taskPeople";
 import { readTaskBrowseLocation, replaceTaskBrowseLocation, taskDetailPath } from "./taskNavigation";
 
 export function TasksPage({ api, navigate }: { api: ElsaStudioModuleApi; navigate?(path: string): void }) {
@@ -15,7 +15,6 @@ export function TasksPage({ api, navigate }: { api: ElsaStudioModuleApi; navigat
   const [identity, setIdentity] = useState<TaskActor>(); const [page, setPage] = useState<TaskPage>();
   const [error, setError] = useState(""); const [loading, setLoading] = useState(true);
   const [, renderLocation] = useState(0); const focusHandled = useRef<string | null>(null);
-  const person = useTaskPeople(api, identity);
   const sequence = useRef(0); const root = useRef<HTMLDivElement>(null);
   useEffect(() => { const update = () => renderLocation(value => value + 1); window.addEventListener("popstate", update); return () => window.removeEventListener("popstate", update); }, []);
   const browse = { view, search, cursor };
@@ -51,8 +50,8 @@ export function TasksPage({ api, navigate }: { api: ElsaStudioModuleApi; navigat
     <div ref={root} className="user-task-content">
     {!denied && <StudioCollectionToolbar>
       <StudioSearchInput className="user-task-search" aria-label="Search tasks" placeholder="Search tasks" value={search} onChange={event => { changeBrowse({ ...browse, search: event.target.value, cursor: null }); }} />
-      <label className="user-task-inbox">Inbox<select value={view} onChange={event => { changeBrowse({ ...browse, view: event.target.value, cursor: null }); }}>
-        <option value="mine">My tasks</option><option value="queue">Group queue</option><option value="history">History</option>{identity?.canManage ? <option value="all">All tasks</option> : null}</select></label>
+      <StudioField className="user-task-inbox" label="Inbox"><select value={view} onChange={event => { changeBrowse({ ...browse, view: event.target.value, cursor: null }); }}>
+        <option value="mine">My tasks</option><option value="queue">Group queue</option><option value="history">History</option>{identity?.canManage ? <option value="all">All tasks</option> : null}</select></StudioField>
       {clearInToolbar && <StudioButton variant="ghost" onClick={() => { changeBrowse({ ...browse, search: "", cursor: null }); }}>Clear search</StudioButton>}
     </StudioCollectionToolbar>}
       <div className="user-task-results" aria-busy={loading}>
@@ -72,7 +71,7 @@ export function TasksPage({ api, navigate }: { api: ElsaStudioModuleApi; navigat
                   replaceTaskBrowseLocation(browse, task.id);
                   if (navigate) { event.preventDefault(); navigate(path); }
                 }}>{task.title}</a></td>
-                <td data-label="Status"><TaskStatus status={task.status} /></td><td data-label="Assignment">{person(task.claimantId ?? task.assigneeId ?? task.groupId) || "Unassigned"}</td>
+                <td data-label="Status"><TaskStatus status={task.status} /></td><td data-label="Assignment">{taskAssignment(identity, task) || "Unassigned"}</td>
               </tr>)}</tbody></table> : null}
         </StudioTableContainer>
         {!loading && !error && !denied && page && <StudioCollectionFooter>

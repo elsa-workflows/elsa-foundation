@@ -13,7 +13,7 @@ import type { PreparedAttachedExecution } from "./prepareAttachedExecution";
 import { runtimeValueContextId } from "./RuntimeValueEvidence";
 import { createCursorHistory, getPreviousCursor, moveCursorHistoryNext, moveCursorHistoryPrevious, reconcileCursorHistory } from "./cursorHistory";
 import { lazy, Suspense, useCallback, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
-import { ReactFlow, Background, Controls, type Edge, type Node, type ReactFlowInstance } from "@xyflow/react";
+import { ReactFlow, Background, type Edge, type Node, type ReactFlowInstance } from "@xyflow/react";
 import { Activity as ActivityIcon, AlertCircle, Boxes, ChevronLeft, ChevronRight, ListTree, Maximize2, Minimize2, SlidersHorizontal, Sparkles, Workflow as WorkflowIcon } from "lucide-react";
 import type { StudioActivityInputDescriptor, StudioWeaverRegistry, StudioBackendSession, StudioEndpointContext, StudioExpressionEditorContribution, StudioWorkflowRunRelatedLinkContribution } from "@elsa-workflows/studio-sdk";
 import { listActivities } from "../api/activityDesign";
@@ -74,10 +74,11 @@ import {
 import { runDetailMinInspectorWidth, useRunDetailLayout, type RunDetailLayoutMode } from "./useRunDetailLayout";
 import { activateWorkflowCanvasNode, decorateWorkflowCanvasElements } from "./workflowAccessibility";
 import { getReadOnlyFitViewOptions } from "./readOnlyMinimap";
+import { ReadOnlyFlowControls } from "./ReadOnlyFlowControls";
 import { FitReadOnlyFlowView, useReadOnlyFlowNodes } from "./useReadOnlyFlowCanvas";
 import { READ_ONLY_READABLE_ZOOM } from "./readableFitViewport";
 import { WorkflowReadOnlyMiniMap } from "./WorkflowReadOnlyMiniMap";
-import { AdvancedSection, CopyableIdentifier, OverflowMenu, StudioPageHeader, StudioButton } from "@elsa-workflows/studio-ui";
+import { AdvancedSection, CopyableIdentifier, OverflowMenu, StudioPageHeader, StudioButton, StudioField } from "@elsa-workflows/studio-ui";
 import { RunWorkflowPicker } from "./RunWorkflowPicker";
 import { WorkflowListIdentifiers } from "./WorkflowListIdentifiers";
 import "./cleanListTables.css";
@@ -429,9 +430,7 @@ export function WorkflowInstances({ context, navigate }: {
         ) : null}
         <AdvancedSection label="More filters" setCount={advancedAppliedCount} defaultOpen={advancedAppliedCount > 0} allowCollapseWhenSet>
           <div className="wf-toolbar wf-run-advanced-selects">
-            <label className="wf-toolbar-field">
-              <span>Status</span>
-              <select aria-label="Workflow run status" value={draftFilters.status} onChange={event => setDraftFilters(current => ({ ...current, status: event.target.value }))}>
+            <StudioField className="wf-toolbar-field" label={<><span>Status</span></>}><select aria-label="Workflow run status" value={draftFilters.status} onChange={event => setDraftFilters(current => ({ ...current, status: event.target.value }))}>
                 <option value="">All statuses</option>
                 <option value="Pending">Pending</option>
                 <option value="Running">Running</option>
@@ -439,27 +438,20 @@ export function WorkflowInstances({ context, navigate }: {
                 <option value="Completed">Completed</option>
                 <option value="Faulted">Faulted</option>
                 <option value="Cancelled">Cancelled</option>
-              </select>
-            </label>
-            <label className="wf-toolbar-field">
-              <span>Kind</span>
-              <select aria-label="Run Kind" value={draftFilters.runKind} onChange={event => setDraftFilters(current => ({ ...current, runKind: event.target.value }))}>
+              </select></StudioField>
+            <StudioField className="wf-toolbar-field" label={<><span>Kind</span></>}><select aria-label="Run Kind" value={draftFilters.runKind} onChange={event => setDraftFilters(current => ({ ...current, runKind: event.target.value }))}>
                 <option value="">All kinds</option>
                 <option value="TestRun">Test Run</option>
                 <option value="PublishedRun">Published Run</option>
                 <option value="BackgroundWeaverRun">Background Weaver Run</option>
                 <option value="Unknown">Unknown / legacy</option>
-              </select>
-            </label>
-            <label className="wf-toolbar-field">
-              <span>Incident health</span>
-              <select aria-label="Workflow run incident health" value={draftFilters.incidentHealth} disabled={!canFilterByHealth && !draftFilters.incidentHealth} onChange={event => setDraftFilters(current => ({ ...current, incidentHealth: event.target.value as RunHistoryFilters["incidentHealth"] }))}>
+              </select></StudioField>
+            <StudioField className="wf-toolbar-field" label={<><span>Incident health</span></>}><select aria-label="Workflow run incident health" value={draftFilters.incidentHealth} disabled={!canFilterByHealth && !draftFilters.incidentHealth} onChange={event => setDraftFilters(current => ({ ...current, incidentHealth: event.target.value as RunHistoryFilters["incidentHealth"] }))}>
                 <option value="">All health states</option>
                 <option value="active" disabled={!canFilterByHealth}>Active incidents</option>
                 <option value="blocking" disabled={!canFilterByHealth}>Needs intervention</option>
                 <option value="none" disabled={!canFilterByHealth}>No active incidents</option>
-              </select>
-            </label>
+              </select></StudioField>
           </div>
           <div className="wf-run-filter-fields">
             <RunFilterInput label="Execution ID" value={draftFilters.workflowExecutionId} onChange={value => setDraftFilters(current => ({ ...current, workflowExecutionId: value }))} />
@@ -608,16 +600,13 @@ export function WorkflowInstances({ context, navigate }: {
           <span className="wf-pagination-summary" aria-live="polite">
             Showing {page.count} of {page.totalCount} matching runs
           </span>
-          <label className="wf-page-size">
-            Rows
-            <select aria-label="Workflow run page size" value={location.pageSize} onChange={event => updateLocation({
+          <StudioField className="wf-page-size" label="Rows"><select aria-label="Workflow run page size" value={location.pageSize} onChange={event => updateLocation({
               filters: location.filters,
               pageSize: Number(event.target.value),
               cursor: null
             }, false)}>
               {runHistoryPageSizes.map(size => <option key={size} value={size}>{size}</option>)}
-            </select>
-          </label>
+            </select></StudioField>
           <div className="wf-page-controls">
             <button type="button" disabled={!previousPage.available} onClick={() => {
               const previous = moveCursorHistoryPrevious(cursorHistory.current, cursorScope, location.cursor, page);
@@ -650,10 +639,7 @@ function RunFilterInput({ label, value, type = "text", onChange }: {
   onChange(value: string): void;
 }) {
   return (
-    <label className="wf-run-filter-field">
-      <span>{label}</span>
-      <input aria-label={`Workflow run ${label.toLowerCase()}`} type={type} value={value} onChange={event => onChange(event.target.value)} />
-    </label>
+    <StudioField className="wf-run-filter-field" label={<><span>{label}</span></>}><input aria-label={`Workflow run ${label.toLowerCase()}`} type={type} value={value} onChange={event => onChange(event.target.value)} /></StudioField>
   );
 }
 
@@ -1445,12 +1431,12 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
     }
   }, [browserContext, context, data?.executableGraph, labelForExecution, rememberExecution, workflowExecutionId]);
 
-  const selectBrowserExecution = (execution: ActivityExecutionStateSummary, updateScope = true, focusCanvas = true) => {
+  const selectBrowserExecution = (execution: ActivityExecutionStateSummary, updateScope = true, focusCanvas = true, inspectorTab: InstanceInspectorTab = "activity") => {
     rememberExecution(execution);
     rememberedExecutions.current.set(JSON.stringify([browserContext, executionScope?.activityExecutionId, execution.executableNodeId]), execution);
     beginEvidenceNavigation();
     setSelectedEvidenceId(execution.activityExecutionId);
-    setActiveInspectorTab("activity");
+    setActiveInspectorTab(inspectorTab);
     const nodeId = findExecutableGraphNodeId(data?.executableGraph, execution) ?? execution.authoredActivityId;
     if (focusCanvas) requestCanvasFocus(nodeId);
     if (updateScope && executionScope?.executableNodeId === execution.executableNodeId && executionScope.activityExecutionId !== execution.activityExecutionId)
@@ -1458,10 +1444,10 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
     openInspector();
   };
 
-  const selectActivityExecution = (activityExecutionId: string) => {
+  const selectActivityExecution = (activityExecutionId: string, inspectorTab: InstanceInspectorTab = "activity") => {
     const known = associationActivities.find(item => item.activityExecutionId === activityExecutionId);
     if (!known) return;
-    selectBrowserExecution(known);
+    selectBrowserExecution(known, true, inspectorTab !== "timeline", inspectorTab);
     focusNodePath(findExecutableGraphNodeId(data?.executableGraph, known) ?? known.authoredActivityId);
     void restoreExecutionContext(known, false);
   };
@@ -2173,7 +2159,7 @@ function ReadOnlyWorkflowFlow({
       <Background />
       <FitReadOnlyFlowView nodeCount={flowNodes.length} focusRequestId={focusRequestId} minReadableZoom={READ_ONLY_READABLE_ZOOM} />
       <WorkflowReadOnlyMiniMap nodeCount={flowNodes.length} />
-      <Controls fitViewOptions={getReadOnlyFitViewOptions(flowNodes.length)} />
+      <ReadOnlyFlowControls nodeCount={flowNodes.length} />
       <RetainFlowViewport />
     </ReactFlow>
   );
@@ -2391,7 +2377,7 @@ function WorkflowInstanceInspector({
   onViewInput(incident: IncidentStateSummary): void;
   onLoadMoreIncidentAssociations(): Promise<void>;
   focusInputKey: string | null;
-  onSelectActivityExecution(activityExecutionId: string): void;
+  onSelectActivityExecution(activityExecutionId: string, inspectorTab?: InstanceInspectorTab): void;
   renderIncidentActions?: OperatorActionsApi["renderIncidentActions"];
   guidanceForIncident?: OperatorActionsApi["guidanceForIncident"];
   onOpenDefinition?(definitionId: string): void;
@@ -2509,7 +2495,7 @@ function WorkflowInstanceInspector({
                     activityCatalog={activityCatalog}
                     executableGraph={executableGraph}
                     selectedEvidenceId={selectedEvidenceId}
-                    onSelectEvidence={openActivityEvidence}
+                    onSelectEvidence={evidenceId => onSelectActivityExecution(evidenceId, "timeline")}
                   />
                 </>
               ) : activeTab === "activity" ? (activityContent ??

@@ -68,6 +68,8 @@ public class WorkflowsRuntimeApiFeature : IWebShellFeature, IPostConfigureShellS
         if (taskAccess.Length != 1) throw new InvalidOperationException("Exactly one user-task eligibility adapter must be selected.");
         if (taskAccess[0].ImplementationType == typeof(Elsa.Workflows.Runtime.UserTasks.UnavailableUserTaskAccess))
             services.Replace(ServiceDescriptor.Scoped<Elsa.Workflows.Runtime.Core.UserTasks.IUserTaskAccess, UserTasks.TaskRequestAccess>());
+        // Task responses name the people and groups they store, for every reader (#4198).
+        services.TryAddScoped<UserTasks.UserTaskPeople>();
         services.AddApiCapabilitySource<UserTasks.UserTaskCapabilitySource>();
 
         services.AddDynamicEndpointApiExplorerRefresh();

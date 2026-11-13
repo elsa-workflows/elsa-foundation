@@ -1,7 +1,7 @@
 import React, { useEffect, useId, useRef, useState, useSyncExternalStore } from "react";
 import { ArrowLeft, ChevronDown, Plus, Server } from "lucide-react";
 import { studioNavigationRequestedEvent, useStudioRouteLocation, type StudioApiCapabilityDocument, type StudioNavigationRequest, type StudioBackendProfile } from "@elsa-workflows/studio-sdk";
-import { AnchoredPopover, StudioButton, StudioAlert, StudioTabs, StudioTabPanel } from "@elsa-workflows/studio-ui";
+import { AnchoredPopover, StudioButton, StudioAlert, StudioTabs, StudioTabPanel, StudioField } from "@elsa-workflows/studio-ui";
 import { BackendConnections, backendConnectionNonce, canonicalBackendUrl, connectionError } from "./connections";
 import "./backends.css";
 
@@ -136,10 +136,10 @@ function BackendForm({connections,profile,navigate}:{connections:BackendConnecti
       const entry:StudioBackendProfile={id:profile?.id ?? `personal-${backendConnectionNonce()}`,name,baseUrl:url,environment,source:"personal",...(authenticationProfile ? {authenticationProfile} : {})};
       void connections.save(entry).then(() => {saved.current=true;navigate(`/settings/backends/${encodeURIComponent(entry.id)}`);}).catch(error => setError(connectionError(error))).finally(() => setSaving(false));
     }}>
-      <label>Name<input required maxLength={80} value={name} onChange={event => setName(event.target.value)} disabled={saving} /></label>
-      <label>Backend API URL<input required type="url" aria-label="Backend API URL" maxLength={2048} value={baseUrl} onChange={event => setBaseUrl(event.target.value)} disabled={saving} /><small>Include the full shell path, when applicable.</small></label>
-      <label>Environment<select value={environment} onChange={event => setEnvironment(event.target.value as StudioBackendProfile["environment"])} disabled={saving}><option>Development</option><option>Test</option><option>Production</option></select></label>
-      {Object.keys(connections.config.backends?.authenticationProfiles ?? {}).length ? <label>Authentication<select value={authenticationProfile} onChange={event => setAuthenticationProfile(event.target.value)} disabled={saving}><option value="">Discover on connection</option>{Object.keys(connections.config.backends?.authenticationProfiles ?? {}).map(id => <option key={id}>{id}</option>)}</select></label> : null}
+      <StudioField label="Name"><input required maxLength={80} value={name} onChange={event => setName(event.target.value)} disabled={saving} /></StudioField>
+      <StudioField label="Backend API URL"><input required type="url" aria-label="Backend API URL" maxLength={2048} value={baseUrl} onChange={event => setBaseUrl(event.target.value)} disabled={saving} /><small>Include the full shell path, when applicable.</small></StudioField>
+      <StudioField label="Environment"><select value={environment} onChange={event => setEnvironment(event.target.value as StudioBackendProfile["environment"])} disabled={saving}><option>Development</option><option>Test</option><option>Production</option></select></StudioField>
+      {Object.keys(connections.config.backends?.authenticationProfiles ?? {}).length ? <StudioField label="Authentication"><select value={authenticationProfile} onChange={event => setAuthenticationProfile(event.target.value)} disabled={saving}><option value="">Discover on connection</option>{Object.keys(connections.config.backends?.authenticationProfiles ?? {}).map(id => <option key={id}>{id}</option>)}</select></StudioField> : null}
       {error ? <StudioAlert tone="danger">{error}</StudioAlert> : null}
       <p className="backend-note">Credentials are requested when you connect and are never saved in this profile.</p>
       <div className="backend-actions"><StudioButton type="submit" variant="primary" disabled={saving}>{saving ? "Saving…" : profile ? "Save changes" : "Create backend"}</StudioButton><StudioButton type="button" onClick={cancel} disabled={saving}>Cancel</StudioButton></div>
