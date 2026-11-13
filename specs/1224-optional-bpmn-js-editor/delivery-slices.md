@@ -40,9 +40,11 @@ The ordered slices below are the refined execution order. Estimates include owni
 | S07 | T010 direct publication: strict complete-source assessment and optional feature-owned promotion contribution | About 1k; whole Interchange and BPMN.Hosting suites. Keep format 1/6 human and format 3 service profiles, immutable pins and permissions; no unsupported mixed human/service profile. |
 | S08 | T011 notation/DI foundation for the complete construct inventory | Up to 3k; events/boundaries/gateways/scopes/data/associations and geometry controls. No generic-task fallback. |
 | S09 | T011 operations: containment, connections, replace/delete and syntax/property editing | Up to 3k; structural, namespace and opaque-content controls; split operation groups if needed. |
-| S10 | T008 native implementation: actual projection, complete command groups and loss-detection reconciliation | 2–3k; pinned-modeler/diff controls. Native serialization never replaces retained canonical XML. |
+| S10a | T008 native workspace prerequisite: pinned toolkit dependencies and CI workspace discovery | Metadata only; keep existing lock records unchanged. No scripts, renderer, registration, RCL or published entry point until the owning source/package slices. |
+| S10b | T008 native implementation: actual projection, complete command groups and loss-detection reconciliation | 2–3k; pinned-modeler/diff controls plus actual owning test/typecheck entry points. Native serialization never replaces retained canonical XML. |
 | S11 | T008 package/lifetime: retained controller, explicit recovery and optional assets/notices | Up to 3k including license text; whole optional tests, types, package/consumer checks and unchanged budgets. Exclude unimported schema 1 prototype code/fixtures. |
 | S12 | T010 transform completion: first-edit migration, complete remapping, clipboard and export fidelity | Up to 3k; opening/no-op bytes, native/listener/header identity and opaque-reference refusal controls. |
+| S12b | T010 native copy/clone ownership: preserve omitted standard/vendor content and disjoint Elsa configuration through the retained native command path | Bounded owning prerequisite before activation; qualified canonical clone/remapping and parent receipts, or retained atomic refusal while preparation is incomplete. Full-copy acceptance remains open until this bridge is qualified. |
 | S13 | T009 Workflow activation: shared surface/inspector, nested editors, lifecycle and history | Up to 3k; actual editor controls, permission/source-owned states and composed persistence. Canonical source, migration, full editing and compatible backend must all be present before switching. |
 | S14 | T009 Activity Graph activation: equivalent scopes, receipts, configuration and lifecycle | Up to 3k; whole owning editor suites and actual Graph persistence/admission with current data-selection guards. |
 | S15 | T012: theme/narrow/keyboard/focus, attribution, network budgets and module guidance | Bounded changes with composed captures and independent inspection; retain current first-view behavior. |
@@ -50,6 +52,10 @@ The ordered slices below are the refined execution order. Estimates include owni
 | S17 | T015–T016: final review, applicable protected merge and resulting-main qualification | Exact-head external receipts plus lifecycle/bookkeeping. Close #3597 only after full acceptance. |
 
 If source dependencies require another small prerequisite, record it here before extracting it. Activation hunks must stay coherent: an intermediate merge may add an inert seam, but must preserve the current editor until the complete replacement path exists. No restricted intermediate user flow is presented as the owner's full-toolbox feature.
+
+The native source slice needs its toolkit installed and discovered by the ordinary recursive CI workspace. S10a therefore records pinned private workspace metadata before S10b introduces its test/typecheck scripts and source. It adds no empty-test success flag, runtime registration, public export or RCL. Existing importer/package/snapshot records stay unchanged.
+
+The native copy inventory also distinguishes namespace provenance from omitted canonical configuration: copying a projected task cannot silently discard retained vendor or Elsa payload. S10b preserves the original and refuses an unqualified copy; S12b supplies the owning clone/remapping and retained admission bridge before either full host is accepted. This refinement removes no clipboard or full-toolbox requirement.
 
 ## Acceptance and maintenance
 
