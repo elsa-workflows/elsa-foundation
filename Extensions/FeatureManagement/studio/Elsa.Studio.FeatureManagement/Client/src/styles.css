@@ -1164,3 +1164,6 @@
     gap: 4px;
   }
 }
+
+/* Outlined editors own their field surface; retain the technical key below it. */
+.feature-management-setting.outlined { background: transparent; padding: 8px 0; }

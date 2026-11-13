@@ -1,3 +1,4 @@
+import { StudioField } from "@elsa-workflows/studio-ui";
 import { useEffect, useState } from "react";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { ApiCapabilityUnavailableError } from "./api/capabilities";
@@ -104,8 +105,8 @@ export function IncidentStrategySection({ strategyOptions, context, onChange }: 
   return (
     <section className="wf-properties-section">
       <h3>Failure handling</h3>
-      <div className="wf-properties-strategy-field">
-        <label htmlFor="wf-incident-strategy">Incident strategy</label>
+      <div className="wf-properties-strategy-field"><StudioField controlId="wf-incident-strategy" label="Incident strategy">
+
         <select
           id="wf-incident-strategy"
           aria-label="Incident strategy"
@@ -144,7 +145,7 @@ export function IncidentStrategySection({ strategyOptions, context, onChange }: 
                   ? "Uses the selected strategy when an activity fails."
                   : "Uses the host's default incident strategy when this workflow is published.")}
         </p>
-      </div>
+      </StudioField></div>
     </section>
   );
 }
