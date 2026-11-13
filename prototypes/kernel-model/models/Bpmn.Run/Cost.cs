@@ -47,9 +47,9 @@ public static class Cost
             var id = InstanceRef.In(0, $"{process}-{++n}");
             counter.Reset();
             store.Reset();
-            if (before is not null) await before(id);     // an outsider's part, counted too
             var trace = Environment.GetEnvironmentVariable("BPMN_TRACE") is { Length: > 0 } t && name.StartsWith(t, StringComparison.Ordinal);
             counter.Trace = trace ? [] : null;
+            if (before is not null) await before(id);     // an outsider's part, counted and traced too
             owner.Worker.Post(new Message($"{id}#start", id, Kinds.Start, Start: BpmnModel.Spec(process, variables)), fresh: true);
             if (meanwhile is not null) await meanwhile(id);
             await owner.PumpAsync(() => owner.Status(id.Id) == InstanceStatus.Finished, keepPolling: false);

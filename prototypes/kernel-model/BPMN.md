@@ -147,7 +147,8 @@ Where the commits go (run, from the traced commands):
   that ends. Published before: the meet finds the event and inserts the delivery itself, and the owner needs a poll to
   find a delivery its own meet inserted (friction F-B2); the publish is two commands (insert the event, read the
   subscriptions, none yet). Published after: the meet finds nothing, and the publish is three commands (insert the
-  event, read the subscriptions, insert the delivery), which the owner finds by its poll. Both total 15 / 10 commands.
+  event, read the subscriptions, insert the delivery), which the owner finds by its poll. Both total 15 commands with the fence on its own and 10 with it
+  in the batch (20 / 15 round trips).
 - **State.** 480 to 910 bytes per commit, 1,150 at most here: the interpreter's token state (its record shape with
   every field named), the variables, and about 100 bytes per unit in flight in the ledger (reasoned, from the shape of
   a ledger entry's JSON). The diagnostics are not
