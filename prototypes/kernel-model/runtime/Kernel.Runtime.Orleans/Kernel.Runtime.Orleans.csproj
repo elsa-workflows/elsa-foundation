@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- The Orleans reference adapter of layer 1: each partition is a grain; Orleans places and activates it, layer 2's fence guards every commit. -->
+  <PropertyGroup>
+    <RootNamespace>Kernel.Runtime.Orleans</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Orleans.Sdk" Version="10.4.2" />
+    <PackageReference Include="Microsoft.Orleans.Runtime" Version="10.4.2" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/Kernel.Runtime/Kernel.Runtime.csproj" />
+  </ItemGroup>
+</Project>
