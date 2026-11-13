@@ -10838,3 +10838,13 @@ Elsa.Workflows.Runtime.Core.Models.RuntimeStructuralContinuation.WithHistorySour
 Elsa.Workflows.Runtime.Core.Models.RuntimeStructuralContinuation.WithHistorySourceFacts(System.Func<System.DateTimeOffset, System.Collections.Generic.IEnumerable<Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFact!>!>! facts) -> Elsa.Workflows.Runtime.Core.Models.RuntimeStructuralContinuation!
 Elsa.Workflows.Runtime.Core.Models.RuntimeStructuralContinuation.MaterializeHistorySourceFacts(System.DateTimeOffset observedAt) -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFact!>!
 Elsa.Workflows.Runtime.Core.Models.BookmarkConsumptionCheckpointRequest.WithHistorySourceFacts(System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFact!>? facts) -> Elsa.Workflows.Runtime.Core.Models.BookmarkConsumptionCheckpointRequest!
+Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceSupport
+Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceSupport.RuntimeHistorySourceSupport(System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFactKind>! kinds, bool timerOwner = false) -> void
+Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceSupport.Kinds.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFactKind>!
+Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceSupport.TimerOwner.get -> bool
+Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceSupport.SourceIntentKind.get -> string?
+static Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceSupport.ForSourceOwner(string! intentKind, System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFactKind>! kinds) -> Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceSupport!
+Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpoint.HistoryStartsAtAdmission.get -> bool?
+Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpoint.HistoryStartsAtAdmission.init -> void
+Elsa.Workflows.Runtime.Core.Models.ActivityScopeCleanupRequest.HistoryBookmarks.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.ActivityExecutionBookmarkSummary!>?
+Elsa.Workflows.Runtime.Core.Models.ActivityScopeCleanupRequest.HistoryBookmarks.init -> void
