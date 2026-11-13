@@ -248,7 +248,6 @@ public sealed class RuntimeHistoryPublicationProfileTests
         {
             var services = new ServiceCollection(); services.AddLogging(); services.AddSingleton<TimeProvider>(new FakeTimeProvider(At));
             services.AddSingleton<IPersistenceAccessContextAccessor, Access>(); services.AddSingleton<IWorkflowExecutionActorProvider>(Actors);
-            services.AddSingleton<IWorkflowExecutableRootWriteLeaseManager>(PassThroughWorkflowExecutableRootWriteLeaseManager.Instance);
             services.AddSingleton<ISchemaDormancyCheck, ControlledSchema>();
             new ActivitiesPrimitivesFeature().ConfigureServices(services); new ActivitiesPrimitivesFeature().ConfigureServices(services);
             services.AddWorkflowRuntime(); services.AddWorkflowStimulusRouter(); if (decorated) services.AddPersistenceModes();

@@ -109,6 +109,7 @@ public class WorkflowsRuntimeApiFeature : IWebShellFeature, IPostConfigureShellS
         services.TryAddScoped<IStimulusDispatchService>(sp => sp.GetRequiredService<StimulusDispatchService>());
         services.TryAddScoped<WorkflowExecutionStartService>();
         services.TryAddScoped<IWorkflowExecutionStartService>(sp => sp.GetRequiredService<WorkflowExecutionStartService>());
+        services.TryAddScoped<RuntimeHistoryOccurrenceAuthorization>();
         services.TryAddScoped<RuntimeHistoryInspectionService>(sp => new(
             sp.GetRequiredService<IWorkflowExecutionStateStore>(),
             sp.GetRequiredService<IActivityInspectionContextAsync>(), sp.GetRequiredService<TimeProvider>(),
@@ -117,6 +118,8 @@ public class WorkflowsRuntimeApiFeature : IWebShellFeature, IPostConfigureShellS
             sp.GetService<IActivityExecutionStateStore>(),
             sp.GetService<ILogger<RuntimeHistoryInspectionService>>())
         {
+            OccurrenceAccessBinding = (workflow, binding, token) =>
+                sp.GetRequiredService<RuntimeHistoryOccurrenceAuthorization>().BindAsync(workflow, binding, token),
             CaptureAvailability = policy =>
             {
                 var reader = sp.GetService<IRuntimeHistoryStore>();

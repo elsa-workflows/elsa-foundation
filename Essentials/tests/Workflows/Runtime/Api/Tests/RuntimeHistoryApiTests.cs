@@ -13,6 +13,7 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.ActivityExecutions;
+using Elsa.Workflows.Runtime.Api.Services;
 using Elsa.Workflows.Runtime.Services.Bookmarks;
 using Elsa.Workflows.Runtime.Services.Executions;
 using Microsoft.AspNetCore.Authentication;
@@ -384,10 +385,14 @@ public sealed partial class RuntimeHistoryApiTests
         if (scenario != "missing") await bookmarks.SaveAsync(scenario == "changed" ? native with { StimulusHash = "changed" } : native);
         var activities = new InMemoryActivityExecutionStateStore();
         var owner = new ActivityExecutionState(new("activity", "run", "node", "authored", "Wait", "1"),
-            scenario == "not-waiting" ? ActivityExecutionStatus.Completed : ActivityExecutionStatus.Suspended,
+            scenario == "superseded" ? ActivityExecutionStatus.Superseded :
+                scenario == "not-waiting" ? ActivityExecutionStatus.Completed : ActivityExecutionStatus.Suspended,
             null, 1, Now, Now, null, null, null, null, null, ActivitySchedulingProvenance.Empty, null,
             scenario == "unowned" ? [] : ["bookmark"], [], 0, 0, new Dictionary<string, string>())
-            { SupersededAt = scenario == "superseded" ? Now : null };
+            {
+                SupersededAt = scenario == "superseded" ? Now : null,
+                SupersededByActivityExecutionId = scenario == "superseded" ? "replacement-activity" : null
+            };
         await activities.SaveAsync(owner);
         var service = new RuntimeHistoryInspectionService(workflows, new Authorization(), new FakeTimeProvider(Now), history, bookmarks, activities);
         var view = await service.FindBookmarkAsync(new("run", "bookmark"));
@@ -543,9 +548,25 @@ public sealed partial class RuntimeHistoryApiTests
         protected override Task<AuthenticateResult> HandleAuthenticateAsync()
         {
             if (!Request.Headers.TryGetValue("X-History-Test", out var permission)) return Task.FromResult(AuthenticateResult.NoResult());
-            return Task.FromResult(AuthenticateResult.Success(new AuthenticationTicket(new ClaimsPrincipal(new ClaimsIdentity(
-                [new Claim(ClaimTypes.NameIdentifier, "operator"), new Claim(IdentityClaimTypes.Normalized, "v1"),
-                 new Claim(IdentityClaimTypes.Permission, permission == "read" ? "workflows/runtime:read" : "workflows/runtime:execute")], Scheme.Name)), Scheme.Name)));
+            var identityKind = Request.Headers["X-History-Identity"].ToString();
+            var claims = new List<Claim>
+            {
+                new(ClaimTypes.NameIdentifier, identityKind == "canonical-alias" ? "token-subject" : "operator"), new(IdentityClaimTypes.TenantId, "tenant-a"),
+                new(IdentityClaimTypes.Permission, HttpContextActivityExecutionInspectionAuthorizationContext.StructurePermission),
+                new(IdentityClaimTypes.Normalized, "v1"),
+                new(IdentityClaimTypes.Permission, permission == "read" ? "workflows/runtime:read" : "workflows/runtime:execute")
+            };
+            if (identityKind is not ("provider-only" or "no-user")) claims.Add(new(IdentityClaimTypes.UserId, "operator"));
+            if (identityKind == "conflicting-user") claims.Add(new(IdentityClaimTypes.UserId, "another-user"));
+            if (identityKind == "conflicting-provider-casing") claims.Add(new(IdentityClaimTypes.SubjectProvider.ToUpperInvariant(), "external-provider"));
+            if (identityKind is "provider-only" or "conflicting-provider") claims.Add(new(IdentityClaimTypes.SubjectProvider, "external-provider"));
+            if (Request.Headers.ContainsKey("X-History-Values"))
+            {
+                claims.Add(new(IdentityClaimTypes.Permission, HttpContextActivityExecutionInspectionAuthorizationContext.SensitiveValuesPermission));
+                claims.Add(new(IdentityClaimTypes.Permission, HttpContextActivityExecutionInspectionAuthorizationContext.ResolveValuePayloadsPermission));
+            }
+            return Task.FromResult(AuthenticateResult.Success(new AuthenticationTicket(
+                new ClaimsPrincipal(new ClaimsIdentity(claims, Scheme.Name)), Scheme.Name)));
         }
     }
 }

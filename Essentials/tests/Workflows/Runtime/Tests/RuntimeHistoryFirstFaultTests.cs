@@ -191,8 +191,9 @@ public sealed class RuntimeHistoryFirstFaultTests
         string? parent = null, string execution = "run", bool malformed = false, RuntimeHistoryCausation? historyCausation = null,
         string? rawCause = null, string? malformedNativeField = null)
     {
-        var payload = new WorkflowExecutionStartCommandPayload(Executable, Executable.ArtifactId, null, null, null, null,
-            parentWorkflowExecutionId: parent) { HistoryCausation = historyCausation, HistoryCapturePolicy = policy, HistoryCaptureEnabledAtAdmission = enabled };
+        var payload = new WorkflowExecutionStartCommandPayload(Executable, Executable.ArtifactId,
+            variables: null, inputs: null, stimulusInput: null, triggerNodeId: null, runKind: WorkflowRunKind.Unknown,
+            pinnedSource: null, parentWorkflowExecutionId: parent, correlationId: null, tenantId: null, partition: null, authority: null) { HistoryCausation = historyCausation, HistoryCapturePolicy = policy, HistoryCaptureEnabledAtAdmission = enabled };
         var element = malformed ? JsonSerializer.SerializeToElement("unreadable") : JsonSerializer.SerializeToElement(payload);
         if (rawCause is not null)
         {

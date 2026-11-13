@@ -57,7 +57,9 @@ public sealed class RuntimeHistoryStartCausationTests
             new Dictionary<string, WorkflowExecutableResumeTarget>(), At, new Dictionary<string, string>(), IncidentStrategyBuiltIns.FaultReference));
         var policy = captured ? RuntimeHistoryRegistration.ResolvePolicy(services, "run") : null;
         var expected = supplied ? Origin : null;
-        var payload = new WorkflowExecutionStartCommandPayload(Pin, Pin.ArtifactId, tenantId: "scope")
+        var payload = new WorkflowExecutionStartCommandPayload(Pin, Pin.ArtifactId,
+            variables: null, inputs: null, stimulusInput: null, triggerNodeId: null, runKind: WorkflowRunKind.Unknown,
+            pinnedSource: null, parentWorkflowExecutionId: null, correlationId: null, tenantId: "scope", partition: null, authority: null)
             { HistoryCausation = expected, HistoryCapturePolicy = policy, HistoryCaptureEnabledAtAdmission = captured };
         var queue = services.GetRequiredService<IWorkflowSchedulerWorkQueue>();
         var states = services.GetRequiredService<IWorkflowExecutionStateStore>();
