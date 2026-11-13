@@ -100,6 +100,7 @@ public sealed class WorkflowRegistry
     private readonly Dictionary<string, Workflow> _workflows = new(StringComparer.Ordinal);
     public WorkflowRegistry Add(Workflow workflow) { _workflows[workflow.Id] = workflow; return this; }
     public Workflow Get(string id) => _workflows.TryGetValue(id, out var w) ? w : throw new InvalidOperationException($"No workflow '{id}'.");
+    public bool Remove(string id) => _workflows.Remove(id);
     public IEnumerable<Workflow> All => _workflows.Values;
 }
 

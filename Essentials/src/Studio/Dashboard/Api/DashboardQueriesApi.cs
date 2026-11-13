@@ -85,11 +85,16 @@ internal static class DashboardQueriesApi
 
     private static Task PreviewSavedDraft(HttpContext http) => Boundary(http, async actor =>
     {
-        var question = await Resources(http).GetAuthorizedQuestionAsync(actor, RequiredRoute(http, "id"), http.RequestAborted);
+        // Bind to current resource authority/revision without disclosing the unavailable original.
+        // An editor can explicitly repair it using another currently authorized source. Read-only
+        // viewers retain the original source-disclosure requirement for bound draft previews.
+        var question = await Resources(http).GetAsync(actor, DashboardResourceKinds.Question, RequiredRoute(http, "id"), http.RequestAborted);
         RequireRevision(http, question.Revision);
+        if (question.Definition is null && !question.Capabilities.CanEdit)
+            throw new DashboardResourceException("denied", "Editing access is required to preview a replacement for an unavailable question.");
         var draft = await Read(http, DashboardQueriesJsonContext.Default.DashboardQueryRequest);
-        // The bound saved-resource authority is re-read even though this preview executes an unsaved
-        // proposal. Source authority is independently re-evaluated by the native query service.
+        // The ordinary native query service independently re-evaluates the replacement's source
+        // authority and grammar; a preview does not apply or save the replacement.
         http.Response.Headers.ETag = Quote(question.Revision);
         await Write(http, await Queries(http).ExecuteAsync(Scope(http, actor), draft, http.RequestAborted));
     });

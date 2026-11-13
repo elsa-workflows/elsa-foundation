@@ -82,9 +82,9 @@ public sealed class InMemoryStore(int partitions, Func<long> clock, Flaw flaws =
                     if (turn.Row is { } row)
                     {
                         if (Refuses?.Invoke(row) == true) throw new StoreException(Failure.Definite, $"the row of {row.Id} was refused");
-                        CommitClockFacts.Validate(row, Instances.GetValueOrDefault(row.Id));
                         var revision = Instances.GetValueOrDefault(row.Id)?.Revision;
                         if (revision != turn.Expected) Diverged($"instance {row.Id} is at revision {revision?.ToString() ?? "none"}, the commit expected {turn.Expected?.ToString() ?? "none"}");
+                        CommitClockFacts.Validate(row, Instances.GetValueOrDefault(row.Id));
                     }
                     foreach (var id in turn.Consumed.Concat(turn.Done).Concat(turn.Held ?? []))
                         if (!Has(Flaw.DeleteWithoutCount) && Messages.GetValueOrDefault(id) is not { Done: false }) Diverged($"consumed message {id} is not there");

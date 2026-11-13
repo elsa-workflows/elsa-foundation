@@ -1,3 +1,6 @@
+import { cleanupDashboardJourney } from "./dashboardJourneySupport";
+import { nativeDashboardsJourney } from "./nativeDashboardsJourney";
+import { dashboardHomeJourney } from "./dashboardHomeJourney";
 import { activityDefinitionTitleJourney } from "./activityDefinitionTitleJourney";
 import { tabbedSecretsJourney } from "./tabbedSecretsJourney";
 import { templateToastJourney } from "./templateToastJourney";
@@ -53,6 +56,8 @@ const createdWorkflows = new WeakMap<Page, CreatedWorkflow[]>();
 const ownedCleanups = new WeakMap<Page, Array<() => Promise<void>>>();
 
 test("user tasks inbox and response", async ({ page }, info) => userTasksJourney(page, info, capture));
+test("native dashboard questions and sharing", async ({ page }, info) => nativeDashboardsJourney(page, info, capture));
+test("existing home widgets and layout defaults", async ({ page }, info) => dashboardHomeJourney(page, info, capture));
 test("user task authoring and workflow result", async ({ page }, info) => {
   const creations: CreatedWorkflow[] = [];
   createdWorkflows.set(page, creations);
@@ -69,7 +74,8 @@ test("structured logs readability and recovery", async ({ page }, info) => struc
 test("phone authoring and settings content priority", async ({ page }, info) => phoneContentJourney(page, info, capture));
 
 test.afterEach(async ({ page, playwright }, info) => {
-  await releaseToastPlacementHolds(page);
+  try { await cleanupDashboardJourney(page); }
+  finally { await releaseToastPlacementHolds(page); }
   const creations = createdWorkflows.get(page) ?? [];
   const failures: Error[] = [];
   const outcomes: Array<{ id: string; url: string; status?: number; error?: string }> = [];
