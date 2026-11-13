@@ -51,3 +51,6 @@ Follow [the delivery order](delivery.md). M0 must resolve complete statechart se
 integration, the Studio contract and the qualified native-compensation topology. Only then can the applicable
 production implementation slices claim that contract. Current-head tests, real durable and Studio journeys,
 independent acceptance, protected merge and resulting-main verification remain required.
+
+The [selection and phase contract](contracts/selection.md) is the next engineering proposal. It separates chart
+rules from storage/actor placement and labels its new choices and remaining qualification; it does not close Q1.
