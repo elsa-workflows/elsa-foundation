@@ -90,7 +90,7 @@ internal sealed class BpmnTurn(BpmnModel model, ITurn turn)
                 if (_s.Live.FirstOrDefault(w => w.Value is { Kind: WorkKinds.Call } && w.Value.Key == signal.Child) is not { Key: { } handle, Value: var work }) break;
                 turn.Record($"s {handle} {signal.Code}");
                 var payload = signal.Payload is null ? (System.Text.Json.JsonElement?)null : System.Text.Json.JsonDocument.Parse(signal.Payload).RootElement.Clone();
-                Apply(BpmnModel.Semantics.OnWorkSignalled(new BpmnWorkSignalledRequest(_process.Graph, _s.Tokens, Snapshot(), work.Binding, handle, signal.Code, payload, work.Iteration) { WorkTokenId = work.Token }));
+                Apply(BpmnModel.Semantics.OnWorkSignalled(new BpmnWorkSignalledRequest(_process.Graph, Tokens, Snapshot(), work.Binding, handle, signal.Code, payload, work.Iteration) { WorkTokenId = work.Token }));
                 break;
             }
             case WorkflowKinds.ChildFinished:
@@ -138,6 +138,7 @@ internal sealed class BpmnTurn(BpmnModel model, ITurn turn)
     private void Faulted(string handle, string error)
     {
         if (Done(handle) is not { } work) return;
+        turn.Record($"e {handle} {error}");
         Apply(BpmnModel.Semantics.OnWorkFaulted(new BpmnWorkFaultedRequest(_process.Graph, Tokens, Snapshot(), work.Binding, handle, error) { FaultedIterationId = work.Iteration, WorkTokenId = work.Token }));
     }
 
