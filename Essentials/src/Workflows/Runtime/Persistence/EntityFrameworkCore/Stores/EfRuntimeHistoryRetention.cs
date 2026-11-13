@@ -100,7 +100,10 @@ internal static class EfRuntimeHistoryRetention
             if (access.Current != snapshot || snapshot.RequireScope().Value != scope)
                 throw new InvalidOperationException("History retention changed persistence access.");
         }
-        EnsureAccess(); return EnsureAccess;
+        EnsureAccess();
+        // Tracking queries identity-resolve clean entities without refreshing them. An older purge
+        // request must return the current database boundary even when it performs no reservation.
+        DetachHistory(context, scope, run); return EnsureAccess;
     }
 
     private static void DetachHistory(RuntimeDbContext context, string scope, string run)
