@@ -8,9 +8,22 @@ using Microsoft.EntityFrameworkCore;
 using System.Text;
 
 var root = Directory.CreateTempSubdirectory("kernel-values-");
+var schedulers = new ConcurrentExclusiveSchedulerPair(TaskScheduler.Default, maxConcurrencyLevel: 1);
+var owner = schedulers.ExclusiveScheduler;
 try
 {
-    await ValueFaults.Run(root.FullName);
+    await Task.Factory.StartNew(RunHarness, CancellationToken.None, TaskCreationOptions.DenyChildAttach, owner).Unwrap();
+}
+finally
+{
+    schedulers.Complete();
+    await schedulers.Completion;
+    root.Delete(recursive: true);
+}
+
+async Task RunHarness()
+{
+    await ValueFaults.Run(root.FullName, owner);
     foreach (var length in new[] { 4096, 102400 })
     {
         foreach (var reference in new[] { false, true })
@@ -20,9 +33,8 @@ try
         }
     }
 }
-finally { root.Delete(recursive: true); }
 
-static async Task Measure(string directory, Source source, bool reference)
+async Task Measure(string directory, Source source, bool reference)
 {
     var dbFile = Path.Combine(directory, "kernel.db");
     var objects = Directory.CreateDirectory(Path.Combine(directory, "values")).FullName;
@@ -37,7 +49,8 @@ static async Task Measure(string directory, Source source, bool reference)
     var values = new DirectoryValues(objects);
     var model = new ValueModel(values, reference);
     const string id = "0/value";
-    Worker Owner(string name, ValueModel current) => new(name, 0, store, new WorkflowInstance([current]));
+    Worker Owner(string name, ValueModel current) => new(name, 0, store, new WorkflowInstance([current]),
+        new WorkerOptions { JobScheduler = TaskScheduler.Default, OnTurn = (_, _, _) => ValueFaults.CheckOwner(owner) });
     var worker = Owner("first", model);
     await new DurableHost([worker]).ActivateAsync(0);
     await worker.PollAsync();

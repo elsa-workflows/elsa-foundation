@@ -5,8 +5,9 @@ using Kernel.Workflows;
 
 internal static class ValueFaults
 {
-    public static async Task Run(string root)
+    public static async Task Run(string root, TaskScheduler owner)
     {
+        CheckOwner(owner);
         var directory = Directory.CreateDirectory(Path.Combine(root, "faults")).FullName;
         var source = new Source(4096, 11);
         var reference = ValueRef.For(source.Bytes());
@@ -16,8 +17,21 @@ internal static class ValueFaults
         var values = new DirectoryValues(directory);
         var blocked = new PausedAck(values);
         var actor = new InstanceRef("0/value");
+        // The former owner's local clock stays suspended while durable time advances and a successor takes the lease.
+        long firstClock = now;
+        bool formerOwnerRanPutResult = false;
         Worker Owner(string name, IValueStore blobs) => new(name, 0, store,
-            new WorkflowInstance([new ValueModel(blobs, true)]), new WorkerOptions { Monotonic = () => now });
+            new WorkflowInstance([new ValueModel(blobs, true)]), new WorkerOptions
+            {
+                Monotonic = () => name == "first" ? firstClock : now,
+                JobScheduler = TaskScheduler.Default,
+                OnTurn = (_, inbox, _) =>
+                {
+                    CheckOwner(owner);
+                    if (name == "first" && inbox.Any(m => m.Kind == Kinds.JobFinished && m.Read<JobFinished>().Key == "put"))
+                        formerOwnerRanPutResult = true;
+                },
+            });
         var worker = Owner("first", blocked);
         await new DurableHost([worker]).ActivateAsync(0);
         await worker.PollAsync();
@@ -35,13 +49,23 @@ internal static class ValueFaults
         worker = Owner("second", replacementValues);
         await new DurableHost([worker]).ActivateAsync(0);
         await Pump(() => State().Reference is not null);
+        var checkpoint = store.Instances[actor.Id];
+        var committed = store.Journal.Values.OrderBy(j => j.Position).ToArray();
+        var position = store.Partitions[0].Position;
+        Require(store.Messages.Count == 0, "replacement consumed the put ticket before the late answer");
         blocked.Release.TrySetResult();
         for (var pass = 0; pass < 1000 && !previous.Ready.Contains(actor.Id) && previous.Owns; pass++)
             await Task.Delay(1);
-        await previous.RunAsync();  // any late speculative result must fail its original epoch fence
+        Require(previous.Owns && previous.Ready.Contains(actor.Id), "former owner never received its late put result");
+        previous.RunTurn(actor.Id);
+        Require(formerOwnerRanPutResult && previous.NeedsFlush, "former owner did not process the actual put result");
+        await previous.FlushAsync();
+        Require(!previous.Owns && store.Partitions[0].Position == position && store.Instances[actor.Id] == checkpoint &&
+            store.Journal.Values.OrderBy(j => j.Position).SequenceEqual(committed) && store.Messages.Count == 0,
+            "former owner's speculative turn changed the selected checkpoint, journal or notices");
         Require(State().Reference == reference && replacementValues.Puts == 1 && Directory.GetFiles(directory).Length == 1 &&
             (await values.ReadAsync(reference, default)).SequenceEqual(source.Bytes()), "idempotent put after lost acknowledgement");
-        Console.WriteLine("Lost put acknowledgement: replacement committed the same reference and exact bytes.");
+        Console.WriteLine("Lost put acknowledgement: replacement committed the same reference and exact bytes; the old put result ran and its stale flush lost ownership.");
 
         async Task Corruption(string label, Action alter)
         {
@@ -86,6 +110,9 @@ internal static class ValueFaults
         }
     }
 
+    internal static void CheckOwner(TaskScheduler owner) =>
+        Require(owner != TaskScheduler.Default && TaskScheduler.Current == owner, "worker turn escaped its exclusive scheduler");
+
     private static void Require(bool value, string label)
     {
         if (!value) throw new Exception(label);
@@ -97,6 +124,7 @@ internal static class ValueFaults
         public TaskCompletionSource Release = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public async Task<ValueRef> PutAsync(byte[] bytes, CancellationToken ct)
         {
+            Require(TaskScheduler.Current == TaskScheduler.Default, "file job did not run off the owner scheduler");
             var saved = await inner.PutAsync(bytes, ct);
             Written.TrySetResult();
             await Release.Task;
