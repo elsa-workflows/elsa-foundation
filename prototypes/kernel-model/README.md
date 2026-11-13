@@ -102,9 +102,9 @@ $MOR "$MO" probe crash|limits
 EFR="dotnet ef/Kernel.Ef.Run/bin/Release/net10.0/Kernel.Ef.Run.dll"
 mkdir -p .out                                                             # the SQLite files live here
 $EFR x stress postgres "$PG;Database=kernel_stress" seconds=40 messages=5000 [fence=checked|batch]
-$EFR x stress sqlserver "$MS;Database=kernel_stress" seconds=40 messages=5000          # RCSI on unless rcsi=0
-$EFR x stress mysql "$MY;database=kernel_stress" seconds=40 messages=5000 [isolation=rc]
-$EFR x stress sqlite "Data Source=.out/stress.db" seconds=40 messages=5000 [wal=0]
+$EFR x stress sqlserver "$MS;Database=kernel_stress" seconds=40 messages=5000 [fence=checked|batch]   # RCSI on unless rcsi=0
+$EFR x stress mysql "$MY;database=kernel_stress" seconds=40 messages=5000 [fence=checked|batch] [isolation=rc]
+$EFR x stress sqlite "Data Source=.out/stress.db" seconds=40 messages=5000 [fence=checked|batch] [wal=0]
 $EFR x stress <engine> "<same>" seconds=15 messages=1500 unfenced=1 fence=checked   # the fence broken on purpose: must fail (recorded with the checked fence; ENGINES.md)
 $EFR x cost <engine> "<connection;Database=kernel_cost>" proxy=1 [fence=checked|batch]       # round trips on the TCP stream
 $EFR x probe|block|definite|deadlock <engine> "<connection>"                         # ENGINES.md

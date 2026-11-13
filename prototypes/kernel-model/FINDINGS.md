@@ -993,5 +993,11 @@ that the default limit ran out. The checked fence is the right default on SQL Se
 the batch), `--checked-fence` and `--fence-in-batch` (54 passed, 2 reference differ, 1 skipped, each), PostgreSQL with
 no flag and `--checked-fence` (54 passed, 3 reference differ), SQL Server with no flag (now checked; 53 passed, 3
 reference differ, 1 skipped). Not run: the simulation (it uses the in-memory store, which has no fence mode), and
-MongoDB (no code of it changed). MySQL's default run is now the fence in the batch, whose semantic suite and stress
-ENGINES.md recorded already (holds, one take deadlock); not re-run here.
+MongoDB (no code of it changed).
+
+**The new defaults of the other stress commands.** SQLite's default stress run is now the fence in the batch, which no
+stress run had covered (ENGINES.md's SQLite rows are all checked). Run here: WAL, one process, 40 s, 5,000 messages:
+holds, 0 deadlocks, 1,143 resets (all fenced), takeovers 572 and 571, settled 218 s after the start. MySQL's default
+is now the fence in the batch, recorded at REPEATABLE READ in ENGINES.md (holds, one take deadlock); with
+`isolation=rc` the fence in the batch has no recorded stress run, and was not run here. README's stress commands now
+show the fence option on every engine.
