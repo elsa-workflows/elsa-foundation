@@ -769,7 +769,7 @@ Branch `agent/claude/kernel-model-merged`: round 3 (`0f09246d32`) as the base, t
 - Frictions of NATIVE.md, each small and on the existing ticket and commit mechanisms (run): F-N3 `Events.Delivered`;
   F-N4 `Send` returns the id and `Recall` deletes a message to self with the commit (native cancels its timers);
   F-N5 `Start(..., detached: true)` (native's DispatchWorkflow); F-N6 `Redelivered` (native journals "may have run";
-  new check N6: in the runs below 3,656 and 972 External effects ran again, every one told); F-N8 a wait carries the
+  the then-current check N6 observed 3,656 and 972 repeated effects, every one told in those runs; that was not a guarantee, see LEASE.md); F-N8 a wait carries the
   meet ticket only when it asks for kept events (fork-join-resume Balanced on PostgreSQL: 15 to 11 round trips).
   Not done: F-N7 (short timers in memory for ephemeral instances: a new mechanism), F-N10 (a publish to a waiter in the
   same partition is not handed over in memory), F-N11 (two places say "ephemeral").

@@ -317,7 +317,8 @@ Frictions, without a change:
 - **F-N6. A model cannot tell a redelivery.** Scenario: N4. In Durable, an External effect whose attempt was
   committed ran again under that same attempt 629 times in 20,000 seeds (476 in 5,000 of 1,000), each time after a
   turn's result was lost. To raise "may have run" as an incident instead, a turn needs to know that its message was
-  held by a lost owner; the kernel knows (`Delivery.Suspect`) and could put it on the message. Run.
+  held by a lost owner; the kernel knows (`Delivery.Suspect`) and could put it on the message. Run. The later decision
+  makes the exposed value an observed-history hint, not proof that an unflagged turn has never run; see [LEASE.md](LEASE.md).
 - **F-N7. Ephemeral is lost at the first wait.** Scenario: HTTP case 3. A 20 ms Delay or a background job before the
   response is a message, so the instance commits twice (4 to 6 round trips) where it would otherwise cost zero. Short
   timers kept in memory for an instance that is not written would keep request-response workflows at zero. Run.

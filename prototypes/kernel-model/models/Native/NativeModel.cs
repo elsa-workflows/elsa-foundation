@@ -287,8 +287,7 @@ internal sealed class Burst(NativeModel model, ITurn turn, CancellationToken can
             case ILeaf leaf:
                 if (node.External)
                 {
-                    // Friction F-N6, fixed in the merge: the kernel says when the turn may have run before, so the
-                    // journal can say "this side effect may have happened already" instead of nobody knowing.
+                    // The observed delivery history can flag a possible earlier turn; a false hint does not rule out a race.
                     var again = turn.Inbox.Any(turn.Redelivered);
                     if (again && Durable) turn.Record($"m:{frame.Id}:{frame.Attempt}");
                     model.Options.OnExternal?.Invoke(turn.Instance.Ref, frame.Id, node.Id, frame.Attempt, again);

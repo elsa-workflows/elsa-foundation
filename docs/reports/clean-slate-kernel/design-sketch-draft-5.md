@@ -258,7 +258,7 @@ public interface ITurn
     void Subscribe(string key, string wait, bool keep = false); // keep: also get events published earlier
     void Unsubscribe(string key, string wait);
     string Publish(string key, string? payload, TimeSpan keep);  // the one way a turn publishes an event
-    bool Redelivered(Message message);                        // the message may have been handled before a crash
+    bool Redelivered(Message message);                        // observed delivery history; false does not prove no earlier execution
     void Record(JournalEntry entry);                          // common envelope plus the model's payload
     void Emit(string channel, object item);                   // live, not durable
     void Rebind(string definition);                           // migrate to another definition version
