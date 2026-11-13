@@ -114,23 +114,23 @@ public sealed partial class RuntimeHistoryNativeDeliveryTests
     {
         // Capture controls diagnostic recording, never the authoritative callback outcome. Re-read both exact
         // native run/activity identities after both drains, so the second outcome cannot overwrite the first.
-        var native = (await f.Services.GetRequiredService<IActivityExecutionStateStore>().FindAsync(run, ActivityId))!;
-        Assert.Equal(run, native.Execution.WorkflowExecutionId); Assert.Equal(ActivityId, native.Execution.ActivityExecutionId);
-        Assert.Equal(faulted ? ActivityExecutionStatus.Faulted : ActivityExecutionStatus.Completed, native.Status);
-        var attempt = Assert.Single(native.Attempts!, item => item.Reason == ActivityAttemptReason.Resume);
+        var nativeActivity = (await f.Services.GetRequiredService<IActivityExecutionStateStore>().FindAsync(run, ActivityId))!;
+        Assert.Equal(run, nativeActivity.Execution.WorkflowExecutionId); Assert.Equal(ActivityId, nativeActivity.Execution.ActivityExecutionId);
+        Assert.Equal(faulted ? ActivityExecutionStatus.Faulted : ActivityExecutionStatus.Completed, nativeActivity.Status);
+        var attempt = Assert.Single(nativeActivity.Attempts!, item => item.Reason == ActivityAttemptReason.Resume);
         Assert.NotNull(attempt.EndedAt);
         Assert.Equal(faulted ? Elsa.Workflows.Runtime.Core.Models.ActivityTransitionKind.Fault : Elsa.Workflows.Runtime.Core.Models.ActivityTransitionKind.Complete, attempt.TransitionKind);
-        var delivery = Assert.Single(native.TriggerDeliveries!, item => item.DeliveryId == attempt.TriggerDeliveryId);
-        Assert.Equal(ActivityTriggerDeliveryStatus.Consumed, delivery.Status); Assert.Empty(native.BookmarkIds);
+        var delivery = Assert.Single(nativeActivity.TriggerDeliveries!, item => item.DeliveryId == attempt.TriggerDeliveryId);
+        Assert.Equal(ActivityTriggerDeliveryStatus.Consumed, delivery.Status); Assert.Empty(nativeActivity.BookmarkIds);
         var incidents = await f.Services.GetRequiredService<IIncidentStateStore>().ListAsync(run);
-        if (faulted) { Assert.Equal("approval.rejected", native.Fault!.Code); Assert.Single(incidents); }
-        else { Assert.Null(native.Fault); Assert.NotNull(native.Completion); Assert.Empty(incidents); }
+        if (faulted) { Assert.Equal("approval.rejected", nativeActivity.Fault!.Code); Assert.Single(incidents); }
+        else { Assert.Null(nativeActivity.Fault); Assert.NotNull(nativeActivity.Completion); Assert.Empty(incidents); }
         var page = await f.History.ReadPageAsync(new(run, limit: 200));
         if (!captured)
         {
             Assert.Null(page.Head); Assert.Empty(page.Items);
-            var native = (await f.Services.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync(run))!;
-            Assert.False(native.HistoryCaptureEnabledAtAdmission); Assert.Null(native.HistoryCapturePolicy); return;
+            var nativeWorkflow = (await f.Services.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync(run))!;
+            Assert.False(nativeWorkflow.HistoryCaptureEnabledAtAdmission); Assert.Null(nativeWorkflow.HistoryCapturePolicy); return;
         }
         Assert.All(page.Items, item => Assert.Equal(run, item.WorkflowExecutionId));
         var consumed = Assert.Single(page.Items, item => item.Name == "BookmarkConsumed");
