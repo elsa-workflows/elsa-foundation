@@ -757,6 +757,27 @@ public static class Semantics
             views = (await c.S.ReadViewsAsync(["0/a", "0/b"])).ToList();
             Context.Equal("0/a:3:3", string.Join(",", views.Select(v => $"{v.Instance}:{v.Revision}:{v.Commits}")), "view rows after a delete");
         }),
+        new("projection: rounds larger than a statement's chunk: 850 views in one, then 600 deletes alone", Level.Required, async c =>
+        {
+            var lease = await c.Take(0);
+            var ids = Enumerable.Range(0, 850).Select(i => $"0/v{i:D3}").ToList();
+            // In commits of 170 and 200: MySQL's provider fails one commit of about 420 or more of these (issue #4358).
+            for (var at = 0; at < 850; at += 170)
+            {
+                var (from, chunk) = (at, ids.Skip(at).Take(170).Select(id => Make.New(id)).ToList());
+                await c.Lands(() => c.Commit(0, lease.Epoch, from, chunk));
+            }
+            Context.That(await c.S.ProjectAsync(0, 0, 850, await c.S.ReadJournalAsync(0, 0, 1000)), "the first round did not move");
+            Context.Equal(850, (await c.S.ReadViewsAsync(ids)).Count(v => v is { Revision: 1, Commits: 1 }), "views after a round of 850 new instances");
+            for (var at = 0; at < 600; at += 200)
+            {
+                var (from, chunk) = (850 + at, ids.Skip(at).Take(200).Select(id => Make.Delete(id, 1)).ToList());
+                await c.Lands(() => c.Commit(0, lease.Epoch, from, chunk));
+            }
+            Context.That(await c.S.ProjectAsync(0, 850, 1450, await c.S.ReadJournalAsync(0, 850, 1000)), "the round of deletes did not move");
+            var left = await c.S.ReadViewsAsync(ids);
+            Context.Equal("250 from 0/v600", $"{left.Count} from {left.Select(v => v.Instance).Order(StringComparer.Ordinal).FirstOrDefault()}", "views after a round of 600 deletes");
+        }),
         new("projection: of many concurrent writes from one position, exactly one moves it", Level.Required, async c =>
         {
             var lease = await c.Take(0);

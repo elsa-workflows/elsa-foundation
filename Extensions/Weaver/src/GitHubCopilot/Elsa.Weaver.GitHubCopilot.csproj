@@ -20,4 +20,6 @@
 		<ProjectReference Include="..\Core\Elsa.Weaver.Core.csproj" />
 	</ItemGroup>
 
+	<ItemGroup><InternalsVisibleTo Include="Elsa.Weaver.Tests" /></ItemGroup>
+
 </Project>
