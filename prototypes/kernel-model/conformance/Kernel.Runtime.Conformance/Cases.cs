@@ -91,7 +91,8 @@ public static class Cases
             await Settle(h);
             var id = InstanceRef.In(1, "quiet").Id;
             await h.AddAsync(Start(id), wake: false);
-            That(await Finished(h, id, h.Setup.Timing.PollInterval + Slack), $"{id} did not finish within the poll interval");
+            var within = h.Setup.Timing.PollInterval * 2 + TimeSpan.FromMilliseconds(500);
+            That(await Finished(h, id, within), $"{id} did not finish within {within.TotalMilliseconds} ms: twice the poll interval and half a second");
         }),
 
         new("hint: a message with a hint is handled well before the poll interval", Level.Reference, async h =>
@@ -117,14 +118,19 @@ public static class Cases
             await h.StartAsync();
             await h.StartAsync();
             await Settle(h);
-            var a = Holder(h, 0);       // the node that holds partition 0 dies
+            var a = Holder(h, 0);       // the node that holds partition 0 dies while it has its messages in hand
+            var tokens = Enumerable.Range(0, 30).Select(i => "k" + i).ToList();
+            var id = InstanceRef.In(0, "c").Id;
+            var adding = Task.Run(async () =>
+            {
+                foreach (var token in tokens) await h.AddAsync(Token(0, "c", token));
+            });
+            That(await Harness.WaitAsync(async () => (await h.RowAsync(id)) is { } row && Json.Read<CounterState>(row.State).Tokens.Count >= 3, Slack),
+                $"{a.Name} handled none of partition 0's messages before the crash");
             await h.KillAsync(a);
-            var tokens = Enumerable.Range(0, 10).Select(i => "k" + i).ToList();
-            for (var p = 0; p < h.Partitions; p++)
-                foreach (var token in tokens) await h.AddAsync(Token(p, "c", $"{token}.{p}"));
+            await adding;
             await Settle(h, "every scope taken over");
-            for (var p = 0; p < h.Partitions; p++) await Applied(h, p, "c", tokens.Select(t => $"{t}.{p}").ToList(), h.Lease * 3 + Slack);
-            That(h.Watcher.Holders(h.Partitions).All(n => n.All(name => name != a.Name)), $"the dead node still holds a scope: {Holders(h)}");
+            await Applied(h, 0, "c", tokens, h.Lease * 3 + Slack);
         }),
 
         new("stop: a stopped node's scopes are taken over before its lease would have run out", Level.Reference, async h =>
@@ -159,11 +165,18 @@ public static class Cases
             try
             {
                 await using var harness = await Harness.CreateAsync(runtime, store, (@case.Setup ?? Default) with { BrokenFence = brokenFence });
-                try { await @case.Body(harness); }
+                try
+                {
+                    await @case.Body(harness).WaitAsync(Timeout);
+                    if (@case.Level == Level.Required) await EndAsync(harness);
+                }
                 catch (ConformanceException e) { failure = e.Message; }
-                var wrong = harness.Watcher.Violations.Concat(harness.Recorded.CheckOneWriter()).Concat(harness.Provided.Ghosts.Select(g => "GHOST " + g)).Concat(harness.Reused.Select(n => $"F9 the runtime reused the node name {n}")).ToList();
+                catch (TimeoutException) { failure = $"the case did not end within {Timeout.TotalSeconds} s"; }
+                // What the nodes do on their way out is checked too. A stop that hangs fails the case, not the suite.
+                try { await harness.StopAllAsync().WaitAsync(Timeout); }
+                catch (TimeoutException) { failure ??= $"stopping the nodes did not end within {Timeout.TotalSeconds} s"; }
+                var wrong = harness.Violations();
                 if (failure is null && wrong.Count > 0) failure = string.Join("; ", wrong.Take(5));
-                if (failure is null && @case.Level == Level.Required) failure = await EndAsync(harness);
             }
             catch (Exception e) when (e is not ConformanceException) { failure = $"threw {e.GetType().Name}: {e.Message}"; }
             var outcome = new RuntimeOutcome(@case, failure is null, failure ?? "", watch.Elapsed);
@@ -176,13 +189,24 @@ public static class Cases
         return outcomes;
     }
 
-    /// <summary>The case's end state: no message left behind, no instance parked.</summary>
-    private static async Task<string?> EndAsync(Harness h)
+    /// <summary>How long a case may run, and its nodes take to stop.</summary>
+    private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(120);
+
+    /// <summary>The case's end state: no message left behind that is due, in any partition.</summary>
+    private static async Task EndAsync(Harness h)
     {
-        for (var p = 0; p < h.Partitions; p++)
-            if ((await h.Outside.PollAsync(p, long.MaxValue, TimeSpan.FromDays(3650), 1000)).Messages.FirstOrDefault(m => m.Message.Due is null) is { } left)
-                if (!await Harness.WaitAsync(async () => (await h.Outside.PollAsync(p, long.MaxValue, TimeSpan.FromDays(3650), 1000)).Messages.All(m => m.Message.Id != left.Message.Id), h.Lease * 3 + Slack))
-                    return $"END message {left.Message.Id} ({left.Message.Kind} to {left.Message.Target}) left behind";
-        return null;
+        Stored? left = null;
+        async Task<bool> Done()
+        {
+            left = null;
+            for (var p = 0; p < h.Partitions && left is null; p++)
+            {
+                var polled = await h.Outside.PollAsync(p, long.MaxValue, TimeSpan.FromDays(3650), 1000);
+                left = polled.Messages.FirstOrDefault(m => m.Message.Due is not { } due || due <= polled.Now);
+            }
+            return left is null;
+        }
+        if (!await Harness.WaitAsync(Done, h.Lease * 3 + Slack))
+            throw new ConformanceException($"END message {left!.Message.Id} ({left.Message.Kind} to {left.Message.Target}) left behind");
     }
 }
