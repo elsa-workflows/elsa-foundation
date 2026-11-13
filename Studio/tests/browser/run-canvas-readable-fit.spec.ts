@@ -37,7 +37,7 @@ for (const viewport of viewports) {
           const box = await label(name).boundingBox();
           const bounds = await pane.boundingBox();
           // The zoom controls and the MiniMap (three nodes here) float over the pane; a label under one is not readable.
-          const panels = await Promise.all((await canvas.locator(".react-flow__panel:visible").all()).map(panel => panel.boundingBox()));
+          const panels = await Promise.all((await canvas.locator(".react-flow__controls:visible, .react-flow__minimap:visible").all()).map(panel => panel.boundingBox()));
           const underPanel = panels.some(panel => box && panel && box.x < panel.x + panel.width && box.x + box.width > panel.x
             && box.y < panel.y + panel.height && box.y + box.height > panel.y);
           return Boolean(box && bounds && !underPanel && box.x >= bounds.x && box.x + box.width <= bounds.x + bounds.width
