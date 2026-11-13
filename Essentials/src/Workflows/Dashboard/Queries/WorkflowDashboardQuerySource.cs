@@ -35,6 +35,8 @@ internal sealed class WorkflowDashboardQuerySource(
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
     private static readonly string[] Equality = ["eq", "ne", "in", "notIn", "contains", "startsWith"];
     private static readonly string[] Ordered = ["eq", "ne", "gt", "gte", "lt", "lte", "in", "notIn", "isNull", "isNotNull"];
+    private static readonly string[] RunKinds = ["publishedRun", "testRun", "backgroundWeaverRun", "unknown"];
+    private static readonly string[] Statuses = Enum.GetNames<WorkflowExecutionStatus>().Select(value => value.ToLowerInvariant()).ToArray();
 
     public IReadOnlyCollection<DashboardDatasetOwner> Ownership => [new(DatasetId, OwnerId)];
 
@@ -49,6 +51,7 @@ internal sealed class WorkflowDashboardQuerySource(
         if (!await CanReadAsync(context.Query.Scope, context.Query.Request.Query, cancellationToken))
             problems.Add(new("DATASET_UNAVAILABLE", "query.dataset", "Workflow question data is unavailable in the current scope."));
         var query = context.Query.Request.Query;
+        ValidateDiscreteFilters(query.Filters, context.Query, problems);
         if (query.Form == "aggregate" && (query.Time?.Field != "startedAt" || context.Query.Periods.Count == 0))
             problems.Add(new("UNSUPPORTED_QUERY", "query.time", "Workflow aggregates require an explicit started-at cohort window."));
         if (query.GroupBy.Contains("startedAt", StringComparer.Ordinal) && (query.Time?.Bucket is null || query.Comparison is not null))
@@ -56,6 +59,21 @@ internal sealed class WorkflowDashboardQuerySource(
         if (query.GroupBy.Any(field => field is "completedAt" or "durationMs"))
             problems.Add(new("UNSUPPORTED_QUERY", "query.groupBy", "This field is not a supported workflow grouping dimension."));
         context.Results.Add(new(problems.Count == 0, problems, Interpretation(context.Query)));
+    }
+
+    private static void ValidateDiscreteFilters(DashboardPredicate? predicate, DashboardQueryContext context, List<DashboardQueryProblem> problems)
+    {
+        if (predicate is null) return;
+        if ((predicate.All ?? predicate.Any) is { } children)
+        {
+            foreach (var child in children) ValidateDiscreteFilters(child, context, problems);
+            return;
+        }
+        var allowed = predicate.Field switch { "runKind" => RunKinds, "status" => Statuses, _ => null };
+        if (allowed is null) return;
+        var values = predicate.Values ?? (predicate.Value is { } value ? [value] : Array.Empty<DashboardValue>());
+        if (values.Any(value => !allowed.Contains(WorkflowQueryValues.Resolve(value, context).Literal, StringComparer.Ordinal)))
+            problems.Add(new("INVALID_VALUE", "query.filters", $"{predicate.Field} values are case-sensitive. Choose one of: {string.Join(", ", allowed)}."));
     }
 
     public async ValueTask ExecuteAsync(DashboardQueryExecuting context, CancellationToken cancellationToken)
@@ -125,9 +143,10 @@ internal sealed class WorkflowDashboardQuerySource(
         {
             new("executionId", "Run", "string", Equality, Sortable: true),
             new("definitionId", "Workflow definition", "string", Equality, Groupable: true, Sortable: true),
-            new("status", "Current status", "string", ["eq", "ne", "in", "notIn"], Groupable: true, Sortable: true),
+            new("status", "Current status", "string", ["eq", "ne", "in", "notIn"], Groupable: true, Sortable: true,
+                Description: "Case-sensitive values: " + string.Join(", ", Statuses) + "."),
             new("runKind", "Run kind", "string", ["eq", "ne", "in", "notIn"], Groupable: true, Sortable: true,
-                Description: "unknown is legacy/unclassified; excluding testRun does not imply published production runs."),
+                Description: "Case-sensitive values: " + string.Join(", ", RunKinds) + ". Published runs use publishedRun. unknown is legacy/unclassified; excluding testRun does not imply published production runs."),
             new("startedAt", "Started at", "instant", Ordered, Nullable: true, Groupable: true, Sortable: true),
             new("completedAt", "Completed at", "instant", Ordered, Nullable: true, Sortable: true),
             new("durationMs", "Elapsed terminal duration", "decimal", Ordered, Nullable: true, Sortable: true, Unit: "milliseconds",

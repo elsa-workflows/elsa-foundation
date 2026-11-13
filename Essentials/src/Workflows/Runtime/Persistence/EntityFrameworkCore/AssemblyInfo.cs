@@ -89,3 +89,10 @@ using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
 [assembly: EfSchemaFamily(UserTasksEfModule.SchemaFamily, "Workflows.Runtime", UserTasksEfModule.SchemaVersion, Entities = [typeof(UserTaskEntity), typeof(UserTaskFormEntity)])]
 [assembly: EfSchemaContent(UserTasksEfModule.SchemaFamily, typeof(UserTaskEntity), nameof(UserTaskEntity.ContentJson))]
 [assembly: EfSchemaContent(UserTasksEfModule.SchemaFamily, typeof(UserTaskFormEntity), nameof(UserTaskFormEntity.ContentJson))]
+
+[assembly: EfSchemaFamily(StandaloneTriggersEfModule.SchemaFamily, "Workflows.Runtime", StandaloneTriggersEfModule.SchemaVersion,
+    Entities = [typeof(StandaloneTriggerEntity), typeof(TriggerSubscriptionEntity), typeof(TriggerMutationEntity), typeof(RuntimeIngressReservationEntity)])]
+[assembly: EfSchemaContent(StandaloneTriggersEfModule.SchemaFamily, typeof(StandaloneTriggerEntity), nameof(StandaloneTriggerEntity.ContentJson))]
+[assembly: EfSchemaContent(StandaloneTriggersEfModule.SchemaFamily, typeof(TriggerSubscriptionEntity), nameof(TriggerSubscriptionEntity.ContentJson))]
+[assembly: EfSchemaContent(StandaloneTriggersEfModule.SchemaFamily, typeof(TriggerMutationEntity), nameof(TriggerMutationEntity.ContentJson))]
+[assembly: EfSchemaContent(StandaloneTriggersEfModule.SchemaFamily, typeof(RuntimeIngressReservationEntity), nameof(RuntimeIngressReservationEntity.ContentJson))]

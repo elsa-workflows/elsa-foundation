@@ -42,15 +42,19 @@ public sealed class RuntimeModelMaterialTests
     }
 
     [Fact]
-    public async Task A_native_only_provider_refuses_new_material_and_preserves_caller_cancellation()
+    public async Task A_native_only_provider_reads_native_material_but_refuses_model_writes_and_preserves_cancellation()
     {
         IWorkflowExecutableStore store = new InMemoryWorkflowExecutableStore();
         using var definition = JsonDocument.Parse("{}");
         Assert.False(store.SupportsModelMaterial);
         await Assert.ThrowsAsync<NotSupportedException>(() => store.SaveModelAsync(NewMaterial(definition.RootElement)).AsTask());
-        await Assert.ThrowsAsync<NotSupportedException>(() => store.FindMaterialAsync(Pin.ArtifactId).AsTask());
+        // Native material reads now expose an actual stored-row incarnation for activation. This
+        // does not enable typed model writes or manufacture native material for a missing/model row.
+        Assert.Null(await store.FindMaterialAsync(Pin.ArtifactId));
         using var cancellation = new CancellationTokenSource(); cancellation.Cancel();
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => store.SaveModelAsync(NewMaterial(definition.RootElement), cancellation.Token).AsTask());
+        var readCancellation = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => store.FindMaterialAsync(Pin.ArtifactId, cancellation.Token).AsTask());
+        Assert.Equal(cancellation.Token, readCancellation.CancellationToken);
         Assert.Null(await store.FindAsync(Pin.ArtifactId));
     }
 

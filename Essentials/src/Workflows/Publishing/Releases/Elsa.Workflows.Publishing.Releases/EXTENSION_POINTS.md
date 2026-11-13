@@ -43,6 +43,29 @@ from an archive store without re-encoding a ZIP. Those bytes remain transport-on
   propagates. A verified result grants no origin confidence, target readiness, catalog write or start authority.
 - **Known implementations:** `ReleaseSemanticVerifier` *(intra-domain — default)*.
 
+## IReleaseBundleBuilder
+
+- **Contract:** `Elsa.Workflows.Publishing.Releases.Core.IReleaseBundleBuilder`.
+- **Layer:** Core contract; scoped construction in the Publishing release engine.
+- **Signature:** `BuildAsync(content, roots, options, cancellationToken)` returns `ValueTask<ReleaseBundleBuildResult>`;
+  exact types/defaults are in [the contract](../Core/ReleaseBundleBuilderContracts.cs).
+- **Override when:** Selecting another builder that preserves frozen input, independently discovered facts and final verification.
+- **Dependent callers:** Retained source capture and explicit host consumers; builder and capture tests.
+- **Kind:** Replacement; exactly one selected builder per shell, registered by `WorkflowReleaseVerificationFeature`.
+- **Default and lifetime:** `ReleaseBundleBuilder`, internal, scoped.
+- **Purpose:** Freeze bounded member bytes, inspect them through the same exact owner registry and actual-fact rules,
+  then construct manifest declarations from those observed edges, resources and prerequisites. Validate root
+  content/action capabilities, complete reachability, cycles and bounds before returning a bundle.
+  The selected `IReleaseSemanticVerifier` then verifies the constructed transport; a replacement verifier's refusal
+  remains authoritative. Both passes enforce `MaxInspectionBytes`, separately from distinct expanded transport bytes.
+- **Failure:** Structural input throws value-free `ReleaseBundleFormatException`; owner refusal returns a result with
+  no bundle and explicit semantic status/diagnostics. Requested cancellation propagates.
+- **Known implementations:** `ReleaseBundleBuilder` *(intra-domain — default)*.
+
+This service does not acquire source retention or read missing members. Source owners must supply a complete retained
+closure and hold their acquisition boundary through durable archive creation. A returned bundle is not a created durable
+release, an authenticated publication or target admission. Attachments/evidence remain separate archive operations.
+
 ## IReleaseArtifactSemanticVerifier and IReleaseOccurrenceInspector
 
 - **Contracts:** `Elsa.Workflows.Publishing.Releases.Core.IReleaseArtifactSemanticVerifier` and
@@ -73,3 +96,8 @@ Both features are public/inheritable with virtual `ConfigureServices` and `PostC
 deliberately; host composition still enforces one selected implementation.
 
 There are no events, startup tasks or recurring tasks. The scoped exact-key registry is the semantic strategy composition seam.
+
+`ReleaseSemanticVerificationOptions.MaxInspectionBytes` bounds both builder inspection and the existing `VerifyAsync`
+path. The default is 256 MiB, charged per member even when members share a blob. Verification refuses with
+`semantic_payload_work_limit_exceeded` when exceeded; hosts admitting larger bundles must explicitly raise the budget
+alongside transport limits. Transport acceptance alone does not waive semantic inspection work limits.
