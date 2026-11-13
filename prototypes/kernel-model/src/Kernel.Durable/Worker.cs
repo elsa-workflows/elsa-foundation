@@ -167,7 +167,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
 
     /// <summary>A job's ticket: derived from instance and key, so a later turn can delete it without holding it.</summary>
     public static string TicketId(string instance, string key, long creation = 0) => creation > 0
-        ? $"{CreationProtocol.Origin(instance, creation)}!{key.Length}_{key}" : $"{instance}!{key}";
+        ? FormattableString.Invariant($"{CreationProtocol.Origin(instance, creation)}!{key.Length}_{key}") : $"{instance}!{key}";
 
     // ---- the seam to layer 1 --------------------------------------------------------------------------------------
 
