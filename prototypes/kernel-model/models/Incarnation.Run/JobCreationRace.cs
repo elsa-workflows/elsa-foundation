@@ -45,31 +45,44 @@ internal static class JobCreationRace
         async Task Add(string id, string kind, long generation, StartSpec? start = null)
         { await store.AddAsync(new Message(id, target, kind, Start: start, TargetCreation: generation)); }
 
-        await Add("job-start-1", Kinds.Start, 1, Start(1));
-        await Pump(() => bodies.Count == 1 && store.Instances.ContainsKey(target.Id));
-        var oldTicket = store.Messages.Values.Single(m => m.Message.Kind == Kinds.Job).Message;
-        var oldDriver = worker.JobCompletion(target.Id, "work", 1) ?? throw new InvalidOperationException("J1: no old driver task");
-        await Add("job-cancel-1", Kinds.Terminate, 1); await Pump(() => store.Instances[target.Id].Status == InstanceStatus.Cancelled);
-        Require(!oldDriver.IsCompleted, "old operation did not remain in flight after cancellation");
-        await Add("job-delete-1", Kinds.Delete, 1); await Pump(() => store.Instances[target.Id].Retired);
-        await Add("job-start-2", Kinds.Start, 2, Start(2)); await Pump(() => bodies.Count == 2 && store.Instances[target.Id].Creation == 2);
-        var newDriver = worker.JobCompletion(target.Id, "work", 2) ?? throw new InvalidOperationException("J1: no new driver task");
-        var replacement = store.Instances[target.Id];
-        oldReturn.TrySetResult("old"); await oldDriver.WaitAsync(TimeSpan.FromSeconds(5));
-        Require(store.Instances[target.Id] == replacement && !newDriver.IsCompleted, "old completed driver changed or completed the replacement");
-
-        foreach (var pinned in new[] { true, false })
+        var drivers = new List<Task>();
+        try
         {
-            var replay = oldTicket with { TargetCreation = pinned ? 1 : null };
-            Require(await store.AddAsync(replay), "old ticket marker still exists; dispatch would not be exercised");
-            await Pump(() => !store.Messages.ContainsKey(replay.Id));
-            Require(bodies.Count == 2 && store.Instances[target.Id] == replacement, "stale/missing-identity job executed against the new creation");
+            await Add("job-start-1", Kinds.Start, 1, Start(1));
+            await Pump(() => bodies.Count == 1 && store.Instances.ContainsKey(target.Id));
+            var oldTicket = store.Messages.Values.Single(m => m.Message.Kind == Kinds.Job).Message;
+            var oldDriver = worker.JobCompletion(target.Id, "work", 1) ?? throw new InvalidOperationException("J1: no old driver task");
+            drivers.Add(oldDriver);
+            await Add("job-cancel-1", Kinds.Terminate, 1); await Pump(() => store.Instances[target.Id].Status == InstanceStatus.Cancelled);
+            Require(!oldDriver.IsCompleted, "old operation did not remain in flight after cancellation");
+            await Add("job-delete-1", Kinds.Delete, 1); await Pump(() => store.Instances[target.Id].Retired);
+            await Add("job-start-2", Kinds.Start, 2, Start(2)); await Pump(() => bodies.Count == 2 && store.Instances[target.Id].Creation == 2);
+            var newDriver = worker.JobCompletion(target.Id, "work", 2) ?? throw new InvalidOperationException("J1: no new driver task");
+            drivers.Add(newDriver);
+            var replacement = store.Instances[target.Id];
+            oldReturn.TrySetResult("old"); await oldDriver.WaitAsync(TimeSpan.FromSeconds(5));
+            Require(store.Instances[target.Id] == replacement && !newDriver.IsCompleted, "old completed driver changed or completed the replacement");
+
+            foreach (var pinned in new[] { true, false })
+            {
+                var replay = oldTicket with { TargetCreation = pinned ? 1 : null };
+                Require(await store.AddAsync(replay), "old ticket marker still exists; dispatch would not be exercised");
+                await Pump(() => bodies.Count > 2 || !store.Messages.ContainsKey(replay.Id));
+                Require(bodies.Count == 2 && store.Instances[target.Id] == replacement, "stale/missing-identity job executed against the new creation");
+            }
+            Require(Worker.TicketId("0/a@1!b", "x", 2) != Worker.TicketId("0/a", "b@2!x", 1), "qualified job IDs alias actor/key punctuation");
+            newReturn.TrySetResult("new"); await newDriver.WaitAsync(TimeSpan.FromSeconds(5));
+            await Pump(() => store.Instances[target.Id].Status == InstanceStatus.Finished);
+            Require(bodies.ToArray().SequenceEqual([1L, 2L]), "job bodies were retargeted or repeated across creations");
+            Console.WriteLine("PASS creation:job-generation-race");
         }
-        Require(Worker.TicketId("0/a@1!b", "x", 2) != Worker.TicketId("0/a", "b@2!x", 1), "qualified job IDs alias actor/key punctuation");
-        newReturn.TrySetResult("new"); await newDriver.WaitAsync(TimeSpan.FromSeconds(5));
-        await Pump(() => store.Instances[target.Id].Status == InstanceStatus.Finished);
-        Require(bodies.ToArray().SequenceEqual([1L, 2L]), "job bodies were retargeted or repeated across creations");
-        Console.WriteLine("PASS creation:job-generation-race");
+        finally
+        {
+            foreach (var generation in new[] { 0L, 1L, 2L })
+                if (worker.JobCompletion(target.Id, "work", generation) is { } driver) drivers.Add(driver);
+            oldReturn.TrySetResult("cleanup"); newReturn.TrySetResult("cleanup");
+            await Task.WhenAll(drivers.Distinct()).WaitAsync(TimeSpan.FromSeconds(5));
+        }
     }
 
     private static void Require(bool ok, string detail)
