@@ -86,7 +86,7 @@ class SafeTraceTests(unittest.TestCase):
         self.assertIn(b'TEMPLATE',result['0-trace.trace'])
 
     def test_drill_tokens_parameter_map_and_jwt_are_redacted(self):
-        records=browser();jwt='.'.join([base64.urlsafe_b64encode(json.dumps(part, separators=(',', ':')).encode()).decode().rstrip('=') for part in ({'alg': 'HS256'}, {'sub': 'synthetic-test-only'})] + ['x' * 43])
+        records=browser();jwt='eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJzZWNyZXQifQ.signature123'
         records[3]['snapshot']['html'].extend([CANARY,jwt])
         result,_=self.export(records,{'resources/private.json':json.dumps({'drill':{'token':CANARY}}).encode()})
         self.assertNotIn(jwt.encode(),result['0-trace.trace'])
