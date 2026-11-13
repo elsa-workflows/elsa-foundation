@@ -58,7 +58,7 @@ reader can project pending dispositions from that original fact. If the fact is 
 slice does not yet qualify actual future native binaries or close the full terminal plan.
 
 The current nineteen schedules do not yet qualify completion/cancellation/query commit uncertainty, actual stale
-delete execution, re-entry, equal frame IDs in different actors, parent-finished notice counts, active receipt budget reuse after expiry or legacy-version fixtures. Shared identity, remaining time/version obligations,
+delete execution, re-entry, equal frame IDs in different actors, active receipt budget reuse after expiry or legacy-version fixtures. Shared identity, remaining time/version obligations,
 transport/value retention roots, provider/process restart, full business-input adapter and Studio remain open.
 No execution result is asserted until the exact-source packet is recorded. No product schema/default is selected.
 
@@ -84,3 +84,6 @@ reader, metadata requests receive a generic ModelMetadataUnavailable result afte
 ordinary late input still drains. The shared clock runner asserts this through a deliberately older model. This
 is a protocol/model-version fixture, not an actual future-native binary rollout qualification. The consuming
 slice also clarifies the exact Committed.Now contract and centralizes the model clock-reference prefix.
+
+Latest-main integration supplies explicit reply deadlines and advances the recreation diagnostic in bounded
+lease-renewed steps. The diagnostic must retain the ordinary worker lease checks and normal deletion path.
