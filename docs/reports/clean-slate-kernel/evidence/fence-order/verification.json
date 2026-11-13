@@ -1,13 +1,15 @@
 {
   "html": {
-    "walkthrough.html": "5c02550e1e8aecc6f28958638a2c25bfecb9e2b4d6c9d06c842f6a9a497ec78a",
+    "walkthrough.html": "0b120bec33f99bd59e863766e65d9b48352f9ddb78f9a833d758f67b55f01c01",
     "kernel-in-motion.html": "f2ee085fe9f9d8a392b1c517962f584041c4bfee3f003ab987696cb1a2bf6785"
   },
   "cases": [
     {
       "width": 390,
       "colorScheme": "light",
-      "order": "batch fence at 6, subscription at 7; checked fence first",
+      "order": "DOM, accessibility and visual order: batch fence at 6, subscription at 7; checked fence first, journal after instance",
+      "componentCapture": "viewport enlarged if needed; sticky rail hidden only for full statement-list image; real walk/motion viewport images retain it",
+      "firstAndLastStatementUnobscured": true,
       "motionCase": "B takes first",
       "back": true,
       "errors": []
@@ -15,7 +17,9 @@
     {
       "width": 390,
       "colorScheme": "dark",
-      "order": "batch fence at 6, subscription at 7; checked fence first",
+      "order": "DOM, accessibility and visual order: batch fence at 6, subscription at 7; checked fence first, journal after instance",
+      "componentCapture": "viewport enlarged if needed; sticky rail hidden only for full statement-list image; real walk/motion viewport images retain it",
+      "firstAndLastStatementUnobscured": true,
       "motionCase": "B takes first",
       "back": true,
       "errors": []
@@ -23,7 +27,9 @@
     {
       "width": 1440,
       "colorScheme": "light",
-      "order": "batch fence at 6, subscription at 7; checked fence first",
+      "order": "DOM, accessibility and visual order: batch fence at 6, subscription at 7; checked fence first, journal after instance",
+      "componentCapture": "viewport enlarged if needed; sticky rail hidden only for full statement-list image; real walk/motion viewport images retain it",
+      "firstAndLastStatementUnobscured": true,
       "motionCase": "B takes first",
       "back": true,
       "errors": []
@@ -31,7 +37,9 @@
     {
       "width": 1440,
       "colorScheme": "dark",
-      "order": "batch fence at 6, subscription at 7; checked fence first",
+      "order": "DOM, accessibility and visual order: batch fence at 6, subscription at 7; checked fence first, journal after instance",
+      "componentCapture": "viewport enlarged if needed; sticky rail hidden only for full statement-list image; real walk/motion viewport images retain it",
+      "firstAndLastStatementUnobscured": true,
       "motionCase": "B takes first",
       "back": true,
       "errors": []
