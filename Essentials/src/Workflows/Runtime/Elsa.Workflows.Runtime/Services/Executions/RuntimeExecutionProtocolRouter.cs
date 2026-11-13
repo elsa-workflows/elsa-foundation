@@ -7,7 +7,7 @@ using Elsa.Workflows.Runtime.Services.Scheduler;
 namespace Elsa.Workflows.Runtime.Services.Executions;
 
 /// <summary>Default native adapter plus the opt-in model path over the existing queue, claims and lease runner.</summary>
-internal sealed class RuntimeExecutionProtocolRouter(RuntimeExecutionProtocolSelector selector,
+internal sealed partial class RuntimeExecutionProtocolRouter(RuntimeExecutionProtocolSelector selector,
     WorkflowSchedulerCommandRouter native, IWorkflowSchedulerWorkQueue queue, IWorkflowSchedulerDrainer drainer,
     IRuntimeExecutionOwnershipService ownership, IRuntimeExecutionOwnershipContextAccessor ownershipContext,
     IPersistenceOperationScopeFactory scopes, TimeProvider timeProvider, IWorkflowExecutableRootWriteLeaseManager materialLeases,
