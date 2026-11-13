@@ -89,13 +89,16 @@ public sealed partial class World
             }
     }
 
+    /// <summary>Parked by the kernel: in the parked set, or its row says so already (the I14 check that adds it runs after these).</summary>
+    private bool KernelParked(string id) => Parked.Contains(id) || Store.Instances.GetValueOrDefault(id)?.Fault?.StartsWith("message ", StringComparison.Ordinal) == true;
+
     private void NoteBpmn(InstanceRow instance, string entry)
     {
         var parts = entry.Split(' ');
         var id = instance.Id;
         // The kernel parks a job that was on trial when too many owners were lost (FINDINGS section 7, rule 3): its result is
         // an error, an uncaught one faults the process, and the fault is the kernel's. So is a caller's whose call failed so.
-        if ((parts[0] == "e" && entry.Contains(" was on trial when ", StringComparison.Ordinal)) || (parts[0] == "r" && Parked.Contains(parts[2])))
+        if ((parts[0] == "e" && entry.Contains(" was on trial when ", StringComparison.Ordinal)) || (parts[0] == "r" && KernelParked(parts[2])))
         {
             if (Parked.Add(id)) Interlocked.Increment(ref Bystanders);
             Bpmn.JobParked.Add(id);
@@ -135,7 +138,13 @@ public sealed partial class World
         {
             if (row is { Definition: "b-fault", Status: InstanceStatus.Faulted }) Oracle.Fragiles[row.Id] = true;     // it must fault: I14 then expects it to
             // A row the kernel parked is the kernel's (I14). One whose job the kernel parked was ended by the host: still checked.
-            if (row.Model != BpmnModel.ModelKey || (Parked.Contains(row.Id) && !Bpmn.JobParked.Contains(row.Id)) || State<BpmnState>(row.Id) is not { } s) continue;
+            if (row.Model != BpmnModel.ModelKey || (KernelParked(row.Id) && !Bpmn.JobParked.Contains(row.Id)) || State<BpmnState>(row.Id) is not { } s) continue;
+            // G1 for a call, from the child's side: a running child of a BPMN instance is its parent's live call, or a terminate is on its way.
+            if (row is { Status: InstanceStatus.Running, Parent: { } up } && Store.Instances.GetValueOrDefault(up) is { Model: BpmnModel.ModelKey } parent
+                && !(KernelParked(up) && !Bpmn.JobParked.Contains(up))
+                && !(parent.Status == InstanceStatus.Running && State<BpmnState>(up) is { } ps && ps.Live.Values.Any(w => w.Kind == WorkKinds.Call && w.Key == row.Id))
+                && !Store.Messages.Values.Any(m => !m.Done && m.Message.Target.Id == row.Id && m.Message.Kind == Kinds.Terminate))
+                return $"G1 child {row.Id} runs and its parent {up} ({parent.Status}) has no call for it, and no terminate is on its way";
             var jobs = row.Jobs is { } j ? Json.Read<List<string>>(j) : [];
             if (row.Status == InstanceStatus.Cancelled)
             {
@@ -200,13 +209,15 @@ public sealed partial class World
         {
             var row = Store.Instances.GetValueOrDefault(id);
             if (row is null && !posted) return $"G4 BPMN instance {id} ({process}) was started from outside and has no row";
-            if (row is null || Parked.Contains(id)) continue;
-            var ending = process == "b-fault" ? InstanceStatus.Faulted : InstanceStatus.Finished;
+            if (row is null || (Parked.Contains(id) && !Bpmn.JobParked.Contains(id))) continue;
+            // A job the kernel parked faults its instance (no process here catches a job's error).
+            var ending = process == "b-fault" || Bpmn.JobParked.Contains(id) ? InstanceStatus.Faulted : InstanceStatus.Finished;
             if (row.Status == InstanceStatus.Cancelled ? !Bpmn.Terminated.Contains(id) : row.Status != ending) return $"G4 BPMN instance {id} ({process}) ended as {row.Status}";
         }
-        foreach (var row in Store.Instances.Values.Where(r => r.Model == BpmnModel.ModelKey && !Parked.Contains(r.Id)))
+        foreach (var row in Store.Instances.Values.Where(r => r.Model == BpmnModel.ModelKey && !(Parked.Contains(r.Id) && !Bpmn.JobParked.Contains(r.Id))))
         {
             if (row.Status == InstanceStatus.Running) return $"G4 BPMN instance {row.Id} ({row.Definition}) still runs at idle";
+            if (Bpmn.JobParked.Contains(row.Id)) continue;      // its variables are a fault's, not a run's
             if (row.Parent is not null && row.Status == InstanceStatus.Cancelled)
             {
                 // G5 for a call activity: its child was terminated because the call was stopped, or its parent was terminated.
@@ -248,7 +259,7 @@ public static class BpmnSwitch
     {
         [BpmnFlaw.KeepStoppedWork] = ["G1", "G5"], [BpmnFlaw.NoLateReport] = ["G5"], [BpmnFlaw.KeepSubscription] = ["G1", "G5"],
         [BpmnFlaw.StaleTokens] = ["G1"], [BpmnFlaw.ReuseHandles] = ["I9", "G1"], [BpmnFlaw.ResurrectArrivals] = ["G4", "G2"],
-        [BpmnFlaw.NeverEnd] = ["G4"], [BpmnFlaw.LoseChildOutput] = ["G6"],
+        [BpmnFlaw.NeverEnd] = ["G4"], [BpmnFlaw.LoseChildOutput] = ["G6"], [BpmnFlaw.KeepChild] = ["G1"],
     };
 }
 
