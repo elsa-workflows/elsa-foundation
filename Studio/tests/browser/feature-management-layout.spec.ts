@@ -137,6 +137,36 @@ test("Feature Management keeps Clear under the native pointer after selection", 
 
 
 for (const mode of ["light", "dark"] as const) {
+  test(`Feature categories fit the host scrollport and resized bottom panel (${mode})`, async ({ page }, testInfo) => {
+    await page.addInitScript(mode => {
+      localStorage.setItem("elsa-studio-theme", "classic");
+      localStorage.setItem("elsa-studio-workspace-style", "minimal");
+      localStorage.setItem("elsa-studio-theme-mode", mode);
+    }, mode);
+    await page.setViewportSize({ width: 1920, height: 1000 });
+    await page.goto("/feature-management.html?categoryRail=1&hostScrollport=1");
+    const rail = page.getByRole("region", { name: "Categories", exact: true });
+    const choices = rail.getByRole("group", { name: "Feature categories", exact: true }).getByRole("button");
+    await expect(choices).toHaveCount(26);
+    for (const bottom of [36, 296]) {
+      await page.getByTestId("feature-scrollport").evaluate((element, value) => { element.style.bottom = `${value}px`; }, bottom);
+      await choices.first().focus();
+      for (let index = 1; index < await choices.count(); index++) await page.keyboard.press("Tab");
+      await expect(choices.last()).toBeFocused();
+      await expect(choices.last()).toBeInViewport({ ratio: 1 });
+      const geometry = await choices.last().evaluate(button => {
+        const last = button.getBoundingClientRect();
+        const scrollport = document.querySelector<HTMLElement>('[data-testid="feature-scrollport"]')!;
+        const bounds = scrollport.getBoundingClientRect();
+        return { contained: last.top >= bounds.top && last.bottom <= bounds.bottom, height: bounds.height };
+      });
+      expect(geometry.contained).toBe(true);
+      const screenshot = testInfo.outputPath(`categories-shell-${mode}-${bottom}.png`);
+      await page.screenshot({ path: screenshot });
+      await testInfo.attach(`categories-shell-${mode}-${bottom}`, { path: screenshot, contentType: "image/png" });
+    }
+  });
+
   test(`Feature categories stay discoverable and contained with long labels and many choices (${mode})`, async ({ page }, testInfo) => {
     await page.addInitScript(mode => {
       localStorage.setItem("elsa-studio-theme", "classic");

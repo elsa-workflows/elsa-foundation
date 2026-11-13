@@ -76,11 +76,17 @@ const moduleWidth = Number(new URLSearchParams(window.location.search).get("modu
 if (Number.isFinite(moduleWidth) && moduleWidth > 0) {
   rootElement.style.width = `${moduleWidth}px`;
 }
+const hostScrollport = new URLSearchParams(window.location.search).has("hostScrollport");
+const featurePage = hostScrollport ? (
+  <main className="content" data-testid="feature-scrollport" style={{ position: "fixed", top: 92, bottom: 36, left: 216, right: 0 }}>
+    <div style={{ marginLeft: 216 }}><FeatureManagementPage /></div>
+  </main>
+) : <FeatureManagementPage />;
 
 createRoot(rootElement).render(
   <ThemeProvider>
     <AnonymousAuthProvider>
-      <FeatureManagementPage />
+      {featurePage}
     </AnonymousAuthProvider>
   </ThemeProvider>
 );

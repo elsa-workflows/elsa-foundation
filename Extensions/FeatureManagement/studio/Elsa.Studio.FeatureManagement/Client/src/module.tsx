@@ -1314,6 +1314,30 @@ function CategoryRail({
   onSelect(categoryId: string): void;
 }) {
   const railRef = useRef<HTMLElement>(null);
+  useLayoutEffect(() => {
+    const rail = railRef.current;
+    if (!rail) return;
+    let scrollport = rail.parentElement;
+    while (scrollport && !/(auto|scroll|hidden)/.test(getComputedStyle(scrollport).overflowY)) {
+      scrollport = scrollport.parentElement;
+    }
+    const updateHeight = () => {
+      const style = scrollport ? getComputedStyle(scrollport) : null;
+      const padding = (Number.parseFloat(style?.paddingTop ?? "0") || 0)
+        + (Number.parseFloat(style?.paddingBottom ?? "0") || 0);
+      const inset = Number.parseFloat(getComputedStyle(rail).top) || 0;
+      const height = (scrollport?.clientHeight ?? window.innerHeight) - padding - inset;
+      rail.style.setProperty("--fm-category-max-height", `${Math.max(0, height)}px`);
+    };
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(updateHeight);
+    if (scrollport) observer?.observe(scrollport);
+    window.addEventListener("resize", updateHeight);
+    updateHeight();
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener("resize", updateHeight);
+    };
+  }, []);
   const normalizedQuery = query.trim().toLowerCase();
   const visibleCategories = categories.filter(category => category.id !== AllCategoriesId
     && category.label.toLowerCase().includes(normalizedQuery));

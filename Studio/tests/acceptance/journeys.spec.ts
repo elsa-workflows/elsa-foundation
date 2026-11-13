@@ -221,7 +221,7 @@ test("feature filtering and settings dialogs", async ({ page }, info) => {
       expect(wide.overflow).toBeLessThanOrEqual(1);
       const finalCategory = categories.getByRole("button").last();
       await finalCategory.focus();
-      await expect(finalCategory).toBeInViewport();
+      await expect(finalCategory).toBeInViewport({ ratio: 1 });
       await capture(page, info, "features-category-rail-wide-end");
     } finally {
       await page.setViewportSize(referenceViewport);

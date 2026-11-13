@@ -120,7 +120,7 @@
   padding: 12px;
   position: sticky;
   top: 12px;
-  max-height: calc(100vh - 112px);
+  max-height: min(calc(100vh - 112px), var(--fm-category-max-height, 100vh));
 }
 
 .feature-management-category-rail h2 {
