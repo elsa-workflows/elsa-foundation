@@ -769,7 +769,7 @@ Branch `agent/claude/kernel-model-merged`: round 3 (`0f09246d32`) as the base, t
 - Frictions of NATIVE.md, each small and on the existing ticket and commit mechanisms (run): F-N3 `Events.Delivered`;
   F-N4 `Send` returns the id and `Recall` deletes a message to self with the commit (native cancels its timers);
   F-N5 `Start(..., detached: true)` (native's DispatchWorkflow); F-N6 `Redelivered` (native journals "may have run";
-  new check N6: in the runs below 3,656 and 972 External effects ran again, every one told); F-N8 a wait carries the
+  the then-current check N6 observed 3,656 and 972 repeated effects, every one told in those runs; that was not a guarantee, see LEASE.md); F-N8 a wait carries the
   meet ticket only when it asks for kept events (fork-join-resume Balanced on PostgreSQL: 15 to 11 round trips).
   Not done: F-N7 (short timers in memory for ephemeral instances: a new mechanism), F-N10 (a publish to a waiter in the
   same partition is not handed over in memory), F-N11 (two places say "ephemeral").
@@ -1049,6 +1049,33 @@ TCP-read column of the PostgreSQL rows of 100 and 1,000 instances moved by up to
 describes. Not run: the simulation (it uses the in-memory store, unchanged) and the stress tests (not run for this
 item; whether their models ever reach the second attempt was not checked).
 
+### 25.9 Park removes active subscriptions (owner decision, 13 November). Run
+
+The owner decided that Park removes active event subscriptions in the same fenced commit that faults a workflow
+instance. Its last committed state, fault details and configured history remain; its parent still receives the
+faulted-child notice. A previously routed delivery can still arrive and is dropped by the faulted instance. A future
+explicit recovery operation must restore waits; events in the gap require kept-event semantics. Suspension retains
+active subscriptions. This does not add a recovery operation or preserve consumed deliveries in a dead-letter queue.
+
+`WorkflowInstance.Park` now sets the existing all-subscriptions removal on its `TurnOutcome`. No new storage operation
+or transaction is introduced. I8 no longer exempts parked instances with active subscriptions: faulted rows must have
+none, while their preserved checkpoint may still describe inactive waits.
+
+`$NAT park` runs the actual worker/store path. On the prior implementation five cases failed at subscription cleanup:
+an exception at Full, State and Minimal history, a definite storage refusal, and a lost owner on trial reaching the
+poison threshold. The suspension control passed. With the change all six pass, also checking retained state and
+configured history, the parent's fault notice, no routing from later publishes, and dropping an already-routed event.
+The native smoke suite passes. A native simulation of 2,000 seeds × 1,000 actions passes: 38,800 completed instances
+match fault-free execution; this sweep parks no innocent instance, so the deterministic trial case supplies that path.
+Provider conformance and cost evidence for the unchanged unsubscribe operation remains separate; no new all-provider
+or round-trip execution result is claimed here.
+
+Independent review found a combined path the initial six cases omitted: a refused Resume parks the previous
+suspended checkpoint. Withholding that faulted row indefinitely prevented already-routed events from reaching the
+drop path. Withholding now applies only to running instances; faulted instances consume late deliveries without
+deserializing their inactive checkpoint. Two additional real-worker cases failed before this correction, including
+an older owner holding a newer-version checkpoint. All eight cases now pass while preserving state and version.
+
 ### 25.7 Set-based projector rounds (decision 8). Run
 
 **What changed.** `EfStore.ProjectAsync` writes a round's view rows set-based. It first works out, in memory, what the
@@ -1088,6 +1115,46 @@ These original gate runs predate the subscription change in section 25.2. Their 
 
 **Not run:** the simulation (it uses the in-memory store, unchanged) and the stress tests (the projector does not run in
 them, section 23).
+
+### 25.3 Reply addresses carry the caller's deadline (decision 6). Run
+
+**What changed.** `ReplyTo.Of(node, request, deadline, beforeCommit)`: the reply address carries an absolute deadline,
+in database milliseconds, computed as request start plus the route's timeout (the native HTTP host passes its request's deadline, 30 s).
+The owner reads it with its own estimate of database time (`Worker.Now`):
+
+- a turn's release adds a caller to its instance only while the caller's deadline has not passed;
+- every send to a caller past its deadline is dropped (`Worker.Send`);
+- after every pass, and before every eviction, the owner forgets expired callers (`Unpin`). A caller pins its
+  instance against eviction while it waits, so an expired one no longer does.
+
+The receiving node already ended the request at its deadline (504); what is new is the owner's side, which before held
+the address until the instance ended, however long that took.
+
+**The check.** The simulation gives one request in four a deadline of 250 ms, shorter than its models' 300 ms timers,
+so callers expire while their instances run on (the others keep 30 s). After every settling pass it checks that no
+owner holds a caller past its deadline (I15). `Flaw.KeepExpiredCallers` (the owner keeps them) is caught at seed 2:
+`I15 actor 14 still holds the reply address node0.2|1040193|q31 past its deadline`.
+
+**Gates** (before: section 24):
+
+| Gate | Before | After |
+|---|---|---|
+| `$SIM --seeds 200000` | 0 failed, 0 parked | 0 failed, 0 parked |
+| `$SIM --seeds 20000 --actions 1000` | 0 failed, 12 innocent parked | 0 failed, 13 innocent parked |
+| `$SIM --native --seeds 20000 --actions 1000` | 0 failed, 15 parked; 409,284 matched; 972 reruns, all told | 0 failed, 15 parked; 408,758 matched; 980 reruns, all told |
+| `$SIM --mutations --seeds 20000` | every flaw as section 24 | every flaw caught as before, two only in combination as before, and `KeepExpiredCallers` at seed 2 |
+| `$SIM --native-mutations --seeds 20000` | 5 of 5 (seeds 1, 6, 1, 12, 1) | the same |
+| `$NAT smoke` | 31 of 31 | 31 of 31 |
+| `$NAT cost sqlite` | every row ok | identical |
+
+The schedules moved: the short deadlines end requests sooner, and the generator picks among open requests (a
+disconnect), so a seed's actions after the first short request differ. That is why the innocent-parked count and the
+native counts moved, and why some first failing seeds of the mutation check moved: `ProjectorBlindWrite` 25 to 38,
+`NoDeadline` 31 to 1, `SuspendDuringTrial` 2,016 to 3,156, `TurnNewerState` 225 to 1,857 (its 1,000-action runs),
+`RunBeforeMark` at seed 1 with another violation (I21 instead of IDLE), and a few action counts at the same seeds.
+Every flaw is still caught within 20,000 seeds.
+
+**Not done:** the owner on another node still cannot tell a waiting node it was lost (504 at the deadline, as before).
 
 ## 26. Round 4: the graph engine. Run
 
@@ -1181,8 +1248,9 @@ plan's aims at it), so that it bites is not shown.
 
 ### Open, and for the owner
 
-- **Should Park remove a parked instance's subscriptions?** The kernel keeps them (a parked instance is faulted, not
-  deleted; recovery might want its waits). The simulation now accepts that; a kernel decision, not made here.
+- **Park subscriptions, resolved 13 November:** this round initially kept them and exempted parked instances in I8.
+  The owner subsequently chose atomic removal of active subscriptions while retaining the checkpoint and fault
+  evidence. Section 25.9 records the new behavior and checks; the old exemption is removed.
 - **Main's engine, possibly:** a decision with both outcomes connected to one node schedules that node on the live
   arrival and then carries the dead arrival from the same source through it as well, which could fire a later join
   twice. Found by reading (a reviewer), not run; it is main's behaviour and no workflow in the mix has that shape. A
@@ -1402,3 +1470,14 @@ with the graph engine (section 26), so they differ from the table above:
 The runtime suite on PostgreSQL, SQL Server, MySQL and MongoDB (it takes any store provider; it ran on the in-memory
 store); a leave in membership (R5); a lock in `TrialGate` (R6); the store contract change for R3; backing off a
 declined activation (R7); a way for layer 2 to ask for a pass (R12); a delay after a failed read (R13).
+
+**Reply-deadline integration correction (25.3).** Every completed owner pass now applies eviction after expiring reply
+addresses, including an otherwise idle pass. With `MaxInstances = 0`, a waiting instance stays pinned before its
+deadline and is evicted at equality; the committed running row and its subscription remain intact. The targeted
+`Native.Run deadlines` witness failed before this correction (address expired but instance remained cached) and
+passed after it. Native smoke and the short simulation are recorded separately in the integration receipt.
+
+The next idle wake also includes the earliest held caller deadline. The witness follows the returned delays (100 ms
+initially, then 1 ms at time 99), rather than forcing an externally scheduled deadline pass; this scheduling control
+failed before the wake calculation changed. Existing Admission.Run callers now supply their request-start clock plus
+30 seconds, and its schedule/control suite is included in the affected-build check.
