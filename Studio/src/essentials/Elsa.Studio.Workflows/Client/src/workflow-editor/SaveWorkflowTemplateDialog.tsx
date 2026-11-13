@@ -1,3 +1,4 @@
+import { StudioField } from "@elsa-workflows/studio-ui";
 import { useRef, useState } from "react";
 import { openStudioWorkspaceTab, qualifyStudioBackendPath, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import type { WorkflowDraft } from "../workflowTypes";
@@ -26,8 +27,8 @@ export function SaveWorkflowTemplateDialog({ context, draft, name: initialName, 
         .catch(error => setError(error instanceof Error ? error.message : String(error))).finally(() => { pending.current = false; setSaving(false); }); }}>
       <h3 id="save-template-title">Save as template</h3>
       <p>Save the current design, including unsaved changes, as an independent template.</p>
-      <label className="wf-form-field">Name<input value={name} onChange={event => setName(event.target.value)} maxLength={2048} required /></label>
-      <label className="wf-form-field">Description<textarea value={text} onChange={event => setText(event.target.value)} maxLength={2048} /></label>
+      <StudioField className="wf-form-field" label="Name"><input value={name} onChange={event => setName(event.target.value)} maxLength={2048} required /></StudioField>
+      <StudioField className="wf-form-field" label="Description"><textarea value={text} onChange={event => setText(event.target.value)} maxLength={2048} /></StudioField>
       {error ? <p role="alert">{error}</p> : null}
       <div className="wf-dialog-actions"><button type="button" disabled={saving} onClick={onClose}>Cancel</button><button type="submit" className="wf-primary-button" disabled={saving || !name.trim()}>{saving ? "Saving…" : "Save template"}</button></div>
     </form>
