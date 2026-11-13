@@ -1,4 +1,4 @@
-import { StudioPageHeader, StudioButton } from "../ui";
+import { StudioPageHeader, StudioButton, StudioField } from "../ui";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Check, Copy, Download, FileUp, ImagePlus, Paintbrush, RefreshCcw, Save, Trash2 } from "lucide-react";
 import { isStudioThemeLayout, studioNavigationRequestedEvent, studioThemeLayouts, type ElsaStudioModuleApi, type StudioNavigationRequest } from "../../sdk";
@@ -383,17 +383,11 @@ export function ThemeBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
           {tab === "tokens" ? (
             <div className="theme-token-editor">
               <div className="theme-token-grid">
-                <label className="theme-token-field">
-                  <span>Default workspace treatment</span>
-                  <select value={draft.workspaceStyle ?? ""} disabled={isReadOnly} onChange={event => patchDraft({ workspaceStyle: isWorkspaceStyle(event.target.value) ? event.target.value : undefined })}>
+                <StudioField className="theme-token-field" label={<><span>Default workspace treatment</span></>}><select value={draft.workspaceStyle ?? ""} disabled={isReadOnly} onChange={event => patchDraft({ workspaceStyle: isWorkspaceStyle(event.target.value) ? event.target.value : undefined })}>
                     <option value="">Original theme treatment</option>
                     {workspaceStyles.map(style => <option key={style.id} value={style.id}>{style.name}</option>)}
-                  </select>
-                  <small>Shared surfaces and controls. Your theme's layout, fonts and radii below remain its defaults; a user's workspace choice can override them.</small>
-                </label>
-                <label className="theme-token-field">
-                  <span>Layout</span>
-                  <select
+                  </select><small>Shared surfaces and controls. Your theme's layout, fonts and radii below remain its defaults; a user's workspace choice can override them.</small></StudioField>
+                <StudioField className="theme-token-field" label={<><span>Layout</span></>}><select
                     value={draft.layout ?? "classic"}
                     disabled={isReadOnly}
                     onChange={event => {
@@ -402,19 +396,12 @@ export function ThemeBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
                     }}
                   >
                     {studioThemeLayouts.map(layout => <option key={layout} value={layout}>{layout}</option>)}
-                  </select>
-                </label>
+                  </select></StudioField>
                 {typographyFields.map(field => (
-                  <label key={field.key} className="theme-token-field">
-                    <span>{field.label}</span>
-                    <input value={draft.typography?.[field.key] ?? ""} placeholder="Studio default" disabled={isReadOnly} onChange={event => patchStyle("typography", field.key, event.target.value)} />
-                  </label>
+                  <StudioField key={field.key} className="theme-token-field" label={<><span>{field.label}</span></>}><input value={draft.typography?.[field.key] ?? ""} placeholder="Studio default" disabled={isReadOnly} onChange={event => patchStyle("typography", field.key, event.target.value)} /></StudioField>
                 ))}
                 {shapeFields.map(field => (
-                  <label key={field.key} className="theme-token-field">
-                    <span>{field.label}</span>
-                    <input value={draft.shape?.[field.key] ?? ""} placeholder="Studio default" disabled={isReadOnly} onChange={event => patchStyle("shape", field.key, event.target.value)} />
-                  </label>
+                  <StudioField key={field.key} className="theme-token-field" label={<><span>{field.label}</span></>}><input value={draft.shape?.[field.key] ?? ""} placeholder="Studio default" disabled={isReadOnly} onChange={event => patchStyle("shape", field.key, event.target.value)} /></StudioField>
                 ))}
               </div>
               <StudioTabs tabs={modeTabs} activeTab={mode} onSelect={id => setMode(id as ThemeMode)} ariaLabel="Theme mode" />
@@ -429,10 +416,7 @@ export function ThemeBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
                   ) : null}
                   <div className="theme-token-grid">
                     {themeTokenNames.map(token => (
-                      <label key={token} className="theme-token-field">
-                        <span>{token}</span>
-                        <input value={String(getThemeModeDefinition(draft, mode)?.[token] ?? "")} disabled={isReadOnly} onChange={event => patchMode(token, event.target.value)} />
-                      </label>
+                      <StudioField key={token} className="theme-token-field" label={<><span>{token}</span></>}><input value={String(getThemeModeDefinition(draft, mode)?.[token] ?? "")} disabled={isReadOnly} onChange={event => patchMode(token, event.target.value)} /></StudioField>
                     ))}
                   </div>
                 </>
@@ -525,14 +509,8 @@ function OverviewEditor({
 
   return (
     <div className="theme-overview-editor">
-      <label>
-        <span>Name</span>
-        <input value={draft.name} disabled={readOnly} onChange={event => onPatch({ name: event.target.value })} />
-      </label>
-      <label>
-        <span>Description</span>
-        <textarea value={draft.description ?? ""} disabled={readOnly} onChange={event => onPatch({ description: event.target.value })} />
-      </label>
+      <StudioField label={<><span>Name</span></>}><input value={draft.name} disabled={readOnly} onChange={event => onPatch({ name: event.target.value })} /></StudioField>
+      <StudioField label={<><span>Description</span></>}><textarea value={draft.description ?? ""} disabled={readOnly} onChange={event => onPatch({ description: event.target.value })} /></StudioField>
       <div className="theme-toggle-row">
         <label><input type="checkbox" checked={draft.published} disabled={readOnly} onChange={event => onPatch({ published: event.target.checked })} /> Published</label>
         <label title={enabledToggleTitle}>
