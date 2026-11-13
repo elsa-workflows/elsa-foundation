@@ -1,6 +1,6 @@
 # Implementation Plan: AI-authored personal and shared dashboards
 
-**13 November delivery:** Source slices and production follow-ups have landed; [delivery slices](delivery-slices.md) and the [evidence ledger](evidence/2026-11-13/README.md) identify exact commits and scoped passes. Final keyboard/editor/Home and resulting-main obligations remain open.
+**13 November delivery:** Source slices and production follow-ups have landed; [delivery slices](delivery-slices.md) and the [evidence ledger](evidence/2026-11-13/README.md) identify exact commits and scoped passes. Final keyboard/editor/Home and resulting-main obligations pass; finishing PR #4444 publishes the independently reviewed evidence and lifecycle closeout.
 
 **Branch**: `agent/codex/3604-ai-dashboards` | **Date**: 2026-11-06 | **Spec**: [spec.md](spec.md)
 
@@ -43,7 +43,7 @@ Read both [framework v6.1.0](../../.specify/memory/constitution-framework.md) an
 
 A necessary seam is being extracted: runtime inspection authorization currently lives in the Runtime API implementation assembly. The new contracts-only `Elsa.Workflows.Runtime.Inspection.Core` contains the unchanged interface, referencing Runtime Core and Identity Core while keeping those dependencies out of baseline Runtime Core. The HTTP implementation remains in Runtime API. Dashboard consumes this seam, with no copied permission rules or Dashboard→Runtime.Api implementation reference. Design's existing `IWorkflowDefinitionAuthorizer` protects current-folder enrichment. Raise any discovered ADR conflict before production changes.
 
-Pre-design result: selected scope fits existing ownership. Post-design result: independent data/authorization, standards and UX-design retests found no remaining concrete native-design blocker after corrections. Native work may proceed; provider configuration is selected; usable live access and final architecture/runtime/UX proof remain open. No constitutional exception or unrecorded owner decision is assumed.
+Pre-design result: selected scope fits existing ownership. Post-design result: independent data/authorization, standards and UX-design retests found no remaining concrete native-design blocker after corrections. At that planning checkpoint native work could proceed while live access and final architecture/runtime/UX proof remained open. Those obligations now pass at the exact-source delivery receipts. No constitutional exception or unrecorded owner decision is assumed.
 
 ## Project Structure
 
@@ -89,7 +89,7 @@ D1–D3 can use native APIs independently of provider implementation after appli
 4. Execute every [UX acceptance](ux-acceptance.md) journey on a committed actual composed host. Retain exact head/source/profile, dirty state, downloadable traces/screenshots and independent inspection.
 5. Record safe live-provider/model/connection metadata and tool/save/refresh call counts; never credentials. Deterministic factories remain protocol evidence only.
 6. Respect shared build slots. Iterate with narrow whole affected projects, then required architecture/map/locked-restore gates for graph changes. A docs-only checkpoint uses existing docs guards and claims no .NET/UI qualification.
-7. Keep failed/skipped/cancelled/not-run/unavailable/incomplete evidence visible. Queued baseline CI is not a pass; exact-head and resulting-main gates remain open.
+7. Keep failed/skipped/cancelled/not-run/unavailable/incomplete evidence visible. Queued baseline CI is not a pass. The delivery ledger records exact-head and resulting-main outcomes, including the owner's explicit delayed-CI merge exception.
 
 ## Open decisions
 

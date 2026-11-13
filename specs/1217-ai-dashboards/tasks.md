@@ -2,7 +2,7 @@
 
 **13 November delivery:** Native contracts, query/resource management, API, Workflow source, Studio, Home preservation, Weaver authoring, Copilot boundary and independent Acme package slices have landed. The typed model-tool grammar and authorized replacement-preview repair have also landed. [Delivery slices](delivery-slices.md) and the [downloadable evidence ledger](evidence/2026-11-13/README.md) retain exact-source receipts.
 
-**Status:** Active final qualification and delivery. Actual selected-provider weekly clarification/query refinement/save, arranged dashboard sharing/drill, same-store provider-disabled host restart, native edge recovery and unsupported-question refusal pass with independent visual/semantic acceptance. Complete keyboard authoring, authorized editor UI save/copy and missing Home contribution preservation now pass at clean R5 sourcebae6d602b7 with independent current visual acceptance. Publication, final clean-stack integration and resulting-main closeout remain open. Pending/cancelled Actions checks are not passed checks.
+**Status:** Implemented; final acceptance and resulting-main qualification pass. Actual selected-provider weekly clarification/query refinement/save, arranged dashboard sharing/drill, same-store provider-disabled host restart, native edge recovery and unsupported-question refusal pass with independent visual/semantic acceptance. Complete keyboard authoring, authorized editor UI save/copy and missing Home contribution preservation now pass at clean R5 sourcebae6d602b7 with independent current visual acceptance. Clean source integration and resulting-main closeout now pass. Final evidence/lifecycle publication is recorded by finishing PR #4444; delayed CI is an explicit owner exception, not a passed check. Pending/cancelled Actions checks are not passed checks.
 
 **Cadence:** ADR 0080 risk-based behavior tests apply. The constitutions do not mandate greenfield TDD; use test-after or test-first where useful, and retain red/green bite-proof for behavior claims before completion. Do not add mirror tests or unrelated runtime runs for this docs checkpoint.
 
@@ -83,11 +83,11 @@
 ## Phase 8 — Documentation, review, merge and resulting main
 
 - [x] T044 Write user/integrator docs for datasets/questions/metrics/sharing/access/coverage/limits/recovery and update owning README/EXTENSION_POINTS.md catalogs.
-- [ ] T045 Run whole affected suites plus required architecture/map checks and locked restore after graph changes; record counts and bite-proof evidence on the PR.
-- [ ] T046 Run committed actual-host journeys and publish current-head downloadable screenshots/traces via the existing UX evidence path; obtain independent UX acceptance.
-- [ ] T047 Complete independent correctness/standards/spec reviews against the exact PR base/head; fix concrete findings in new commits and repeat under the current review rules.
-- [ ] T048 Ensure all acceptance mappings and required checks pass, set spec lifecycle status in the finishing PR, and merge only through the applicable authorized path.
-- [ ] T049 Verify resulting-main CI and feature journeys, reconcile #3604 and specs/1217-ai-dashboards/evidence/; leave any failed/skipped/unavailable/incomplete obligation explicit.
+- [x] T045 Run whole affected suites plus required architecture/map checks and locked restore after graph changes; record counts and bite-proof evidence on the PR.
+- [x] T046 Run committed actual-host journeys and publish current-head downloadable screenshots/traces via the existing UX evidence path; obtain independent UX acceptance.
+- [x] T047 Complete independent correctness/standards/spec reviews against the exact PR base/head; fix concrete findings in new commits and repeat under the current review rules.
+- [x] T048 Ensure all acceptance mappings and required checks pass, set spec lifecycle status in the finishing PR, and merge only through the applicable authorized path.
+- [x] T049 Verify resulting-main CI and feature journeys, reconcile #3604 and specs/1217-ai-dashboards/evidence/; leave any failed/skipped/unavailable/incomplete obligation explicit.
 
 ## Dependencies and parallel opportunities
 

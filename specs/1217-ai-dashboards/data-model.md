@@ -1,6 +1,6 @@
 # Dashboard data model
 
-**Status:** Data-model requirements for the implementation delivered through the [reviewable slice stack](delivery-slices.md). Resource schema and runtime behavior are implemented; final qualification, review, merge and resulting-main acceptance remain open.
+**Status:** Data-model requirements for the implementation delivered through the [reviewable slice stack](delivery-slices.md). Resource schema and runtime behavior are implemented; final qualification, independent review, source merge and resulting-main acceptance pass; see the delivery ledger.
 
 | Entity | Essential fields | Invariants |
 |---|---|---|

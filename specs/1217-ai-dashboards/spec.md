@@ -1,14 +1,14 @@
 # Feature Specification: AI-authored personal and shared dashboards
 
-**Feature Branch**: `agent/codex/3604-ai-dashboards`
+**Feature Branch**: reviewable delivery stack; finishing PR [#4444](https://github.com/elsa-workflows/elsa-foundation/pull/4444)
 
 **Created**: 2026-11-06
 
-**Status**: In progress — owner resumed #3604 on 6 November; one model-agnostic author over Weaver with the existing Copilot SDK adapter and backend options/configuration. No delivery acceptance yet.
+**Status**: Implemented — source slices merged and independently accepted on resulting main `3a90b64b9664146f51b082749914d47c488ecc53`; final evidence/lifecycle records are delivered by PR #4444.
 
 **Input**: [Feature request #3604](https://github.com/elsa-workflows/elsa-foundation/issues/3604), activated by [owner authorization of 6 November 2026](https://github.com/elsa-workflows/elsa-foundation/issues/3604#issuecomment-6671863823).
 
-The owner requests complete delivery through reviewed implementation, real provider and composed Studio qualification, merge and resulting-main verification. Independent specification, data/authorization, standards and UX-design reviews found no remaining native-design blockers after two correction rounds. Native implementation proceeds within that reviewed scope under the owner's delivery authorization; provider selection and configuration approach are now resolved by the owner; configured live access and source-specific provider/native product witnesses now pass. Final keyboard/editor/Home and resulting-main qualification remain open; see the exact-source evidence ledger. Program-goal state: owner-authorized AI dashboards #3604 (registry amendment of 9 November). No parent Initiative was present at intake. Existing [Weaver ownership](../../docs/program-goals/weaver-across-studio.md) is preserved.
+The owner requests complete delivery through reviewed implementation, real provider and composed Studio qualification, merge and resulting-main verification. Independent specification, data/authorization, standards and UX-design reviews found no remaining native-design blockers after two correction rounds. Native implementation proceeds within that reviewed scope under the owner's delivery authorization; provider selection and configuration approach are now resolved by the owner; configured live access and source-specific provider/native product witnesses now pass. Final keyboard/editor/Home and resulting-main qualification pass; see the exact-source [evidence ledger](evidence/2026-11-13/README.md). Actions delays are handled under the owner's explicit merge exception, without claiming unrun checks passed. Program-goal state: owner-authorized AI dashboards #3604 (registry amendment of 9 November). No parent Initiative was present at intake. Existing [Weaver ownership](../../docs/program-goals/weaver-across-studio.md) is preserved.
 
 ## User Scenarios & Testing
 
