@@ -180,6 +180,8 @@ export class HomeLayoutStore {
     }
     this.revision = undefined;
     this.userRevisionKnown = true;
+    // Keep device edits, but a successful deletion retires their old personal precondition.
+    this.saveLocal({ ...this.loadLocal(), revision: undefined });
     return this.load();
   }
 
@@ -206,7 +208,7 @@ export class HomeLayoutStore {
       return normalizeDocument(saved);
     } catch (error) {
       if (hasStatus(error, 409) || hasStatus(error, 412)) throw error;
-      return this.saveLocal(document);
+      return this.saveLocal({ ...document, revision });
     }
   }
 

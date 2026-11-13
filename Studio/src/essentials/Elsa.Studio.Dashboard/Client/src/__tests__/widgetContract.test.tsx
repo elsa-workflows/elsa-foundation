@@ -363,7 +363,8 @@ describe("dashboard widget contract", () => {
     Object.assign(api.backend.http, { getJson, putJson });
     const store = new HomeLayoutStore(api, scope);
     const reset = await store.reset();
-    expect(reset).toMatchObject({ source: "local", revision: "old-user-r4" });
+    expect(reset).toMatchObject({ source: "local", value: device.value });
+    expect(reset.revision).toBeUndefined();
     const saved = await store.save({ ...reset, source: "user" });
     expect(saved).toMatchObject({ source: "user", revision: "user-r5", value: device.value });
   });
@@ -386,6 +387,38 @@ describe("dashboard widget contract", () => {
     expect(await store.load()).toEqual(device);
     const saved = await store.save({ ...device, source: "user" });
     expect(saved).toMatchObject({ source: "user", revision: "user-r1", value });
+  });
+
+  it.each(["default", "user"] as const)("retains only personal revision provenance after offline %s saves and store recreation", async source => {
+    const api = stubApi();
+    const scope = { studioHostId: "recreated-" + source, backendBaseUrl: "backend", subjectId: "alice", tenantId: "tenant" };
+    const initial: HomeLayoutDocument = { source, namespace: "home-layout", schemaVersion: 1, revision: source === "default" ? "admin-r2" : "user-r2", value: { widgets: [] } };
+    const getJson = vi.fn().mockResolvedValueOnce(initial).mockRejectedValue(new Error("Offline"));
+    const putJson = vi.fn().mockRejectedValueOnce(new Error("Offline")).mockImplementation(async (_url: string, body: { value: HomeLayoutDocument["value"] }, options: { headers: Record<string, string> }) => {
+      expect(options.headers[source === "default" ? "If-None-Match" : "If-Match"]).toBe(source === "default" ? "*" : '"user-r2"');
+      return { ...initial, source: "user", revision: "user-r3", value: body.value };
+    });
+    Object.assign(api.backend.http, { getJson, putJson });
+    const first = new HomeLayoutStore(api, scope);
+    const device = await first.save(await first.load());
+    expect(device.revision).toBe(source === "default" ? undefined : "user-r2");
+    const second = new HomeLayoutStore(api, scope);
+    expect(await second.save(await second.load())).toMatchObject({ source: "user", revision: "user-r3" });
+  });
+
+  it("persists reset's known absence across offline store recreation without dropping device values", async () => {
+    const api = stubApi();
+    const scope = { studioHostId: "reset-recreated", backendBaseUrl: "backend", subjectId: "alice", tenantId: "tenant" };
+    const device: HomeLayoutDocument = { source: "local", namespace: "home-layout", schemaVersion: 1, revision: "old-user-r4", value: { widgets: [{ id: "home.recent-runs", size: "full", visible: true }] } };
+    localStorage.setItem(`${homeLayoutLocalStoragePrefix}${encodeURIComponent(JSON.stringify(scope))}`, JSON.stringify(device));
+    Object.assign(api.backend.http, { getJson: vi.fn().mockRejectedValue(new Error("Offline")), putJson: vi.fn(async (_url: string, body: { value: HomeLayoutDocument["value"] }, options: { headers: Record<string, string> }) => {
+      expect(options.headers["If-None-Match"]).toBe("*"); expect(options.headers["If-Match"]).toBeUndefined();
+      return { ...device, source: "user", revision: "user-r5", value: body.value };
+    }) });
+    await new HomeLayoutStore(api, scope).reset();
+    const second = new HomeLayoutStore(api, scope);
+    const saved = await second.save(await second.load());
+    expect(saved).toMatchObject({ source: "user", revision: "user-r5", value: device.value });
   });
 
   it("uses a supplied personal revision when saving through a store that has not loaded", async () => {
