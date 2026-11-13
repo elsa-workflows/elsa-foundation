@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- The runtime conformance suite: the kernel's invariants and a stress test, run through any actor runtime (layer 1). -->
+  <PropertyGroup>
+    <RootNamespace>Kernel.Runtime.Conformance</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Kernel.Store.Conformance/Kernel.Store.Conformance.csproj" />
+    <ProjectReference Include="../../runtime/Kernel.Runtime.Hosting/Kernel.Runtime.Hosting.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Using Include="Kernel.Runtime" />
+    <Using Include="Kernel.Durable" />
+    <Using Include="Kernel.Workflows" />
+    <Using Include="Kernel.Store.Conformance" />
+  </ItemGroup>
+</Project>
