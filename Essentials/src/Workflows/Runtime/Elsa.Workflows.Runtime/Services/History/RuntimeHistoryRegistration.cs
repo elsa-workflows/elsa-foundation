@@ -9,10 +9,11 @@ namespace Elsa.Workflows.Runtime.Services.History;
 /// <summary>Internal composition boundary; the production feature/host is installed after owner/provider qualification.</summary>
 internal static class RuntimeHistoryRegistration
 {
-    private static readonly RuntimeHistorySourceSupport IncidentSources = new([
+    private static readonly RuntimeHistorySourceSupport CoreSources = new([
         RuntimeHistorySourceFactKind.IncidentCreated, RuntimeHistorySourceFactKind.IncidentResolved,
         RuntimeHistorySourceFactKind.IncidentStrategyEvaluated, RuntimeHistorySourceFactKind.IncidentProjectionReconciled,
-        RuntimeHistorySourceFactKind.IncidentSuppressed, RuntimeHistorySourceFactKind.IncidentDecisionApplied]);
+        RuntimeHistorySourceFactKind.IncidentSuppressed, RuntimeHistorySourceFactKind.IncidentDecisionApplied,
+        RuntimeHistorySourceFactKind.ControlApplied]);
 
     internal static void AddServices(IServiceCollection services, RuntimeHistoryOptions? options = null)
     {
@@ -22,7 +23,7 @@ internal static class RuntimeHistoryRegistration
         services.TryAddScoped<IRuntimeHistorySourceExtension, DefaultRuntimeHistorySourceExtension>();
         services.TryAddScoped<RuntimeHistoryCaptureCapabilities>();
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IRuntimeCheckpointCommitEnricher, RuntimeHistoryCapture>());
-        if (!services.Any(descriptor => ReferenceEquals(descriptor.ImplementationInstance, IncidentSources))) services.AddSingleton(IncidentSources);
+        if (!services.Any(descriptor => ReferenceEquals(descriptor.ImplementationInstance, CoreSources))) services.AddSingleton(CoreSources);
     }
 
     internal static (RuntimeHistoryCapturePolicy? Policy, bool? Enabled) ResolveAdmission(IServiceProvider provider, string workflowExecutionId)

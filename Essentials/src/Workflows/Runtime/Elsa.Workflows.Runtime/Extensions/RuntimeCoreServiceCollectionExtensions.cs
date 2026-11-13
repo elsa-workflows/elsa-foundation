@@ -377,7 +377,9 @@ public static class RuntimeCoreServiceCollectionExtensions
                 serviceProvider.GetRequiredService<IIncidentStateStore>(),
                 serviceProvider.GetRequiredService<IWorkflowSchedulerPoisonStore>(),
                 serviceProvider.GetRequiredService<IWorkflowHoldStateStore>()));
-        services.TryAddScoped<IActivityScopeCleanupStore, ActivityScopeCleanupStore>();
+        services.TryAddScoped<IActivityScopeCleanupStore>(provider => provider.GetService<RuntimeHistoryOptions>() is null
+            ? new ActivityScopeCleanupStore(provider.GetRequiredService<IBookmarkStateStore>(), provider.GetRequiredService<IDurableTimerStore>(), provider.GetRequiredService<IWorkflowSchedulerWorkQueue>())
+            : new ActivityScopeCleanupStore(provider.GetRequiredService<IBookmarkStateStore>(), provider.GetRequiredService<IDurableTimerStore>(), provider.GetRequiredService<IWorkflowSchedulerWorkQueue>(), provider.GetRequiredService<IWorkflowExecutionStateStore>()));
         services.TryAddScoped<ActivitySubtreeCancellationPlanner>();
         services.TryAddSingleton<WorkflowDrainOrchestratorOptions>();
         services.TryAddSingleton<DrainControlContext>();

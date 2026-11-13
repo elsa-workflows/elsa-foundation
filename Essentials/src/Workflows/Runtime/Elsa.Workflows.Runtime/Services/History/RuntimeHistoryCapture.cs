@@ -30,6 +30,7 @@ internal sealed class RuntimeHistoryCapture(IWorkflowExecutionStateStore executi
         ArgumentNullException.ThrowIfNull(policy);
         if (!RuntimeHistorySourceFacts.IsFinalProfile(policy) || !sourceAvailability.SourceInputs()) return false;
         if (policy.SupportedKinds.Contains("ValueCaptured", StringComparer.Ordinal) && !sourceAvailability.Values()) return false;
+        if (policy.SupportedKinds.Any(kind => kind is "BookmarkRemoved" or "BookmarkSuperseded") && !sourceAvailability.CleanupInputs()) return false;
         var available = Kinds.Concat(Version2Kinds).ToHashSet(StringComparer.Ordinal);
         // Post-commit, delivery and timer owners are qualified in their later source/writer slices.
         available.UnionWith(sourceSupport.Where(owner => owner.SourceIntentKind is null).SelectMany(owner => owner.Kinds).Select(RuntimeHistorySourceFacts.EventName));
@@ -184,7 +185,8 @@ internal sealed class RuntimeHistoryCapture(IWorkflowExecutionStateStore executi
                 var ownedBookmarks = cleanup.BookmarkIds.ToHashSet(StringComparer.Ordinal);
                 var ownedActivities = cleanup.ActivityExecutionIds.ToHashSet(StringComparer.Ordinal);
                 if (policy.SupportedKinds.Any(kind => kind is "BookmarkRemoved" or "BookmarkSuperseded") &&
-                    ownedBookmarks.Except(explicitBookmarks).Except((cleanup.HistoryBookmarks ?? []).Select(summary => summary.Identity.BookmarkId)).Any())
+                    (ownedBookmarks.Count == 0 && cleanup.HistoryBookmarks is null ||
+                     ownedBookmarks.Except(explicitBookmarks).Except((cleanup.HistoryBookmarks ?? []).Select(summary => summary.Identity.BookmarkId)).Any()))
                     throw new RuntimeSchedulerWorkUnavailableException("runtime.history.capture-unavailable", "The cleanup owner did not supply its exact bookmark inventory.");
                 foreach (var summary in cleanup.HistoryBookmarks ?? [])
                 {

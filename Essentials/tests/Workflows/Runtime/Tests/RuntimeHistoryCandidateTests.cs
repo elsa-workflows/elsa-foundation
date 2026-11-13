@@ -5,6 +5,8 @@ using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.ActivityExecutions;
 using Elsa.Workflows.Runtime.Services.Checkpoints;
+using Elsa.Workflows.Runtime.Services.Bookmarks;
+using Elsa.Workflows.Runtime.Services.Scheduler;
 using Elsa.Workflows.Runtime.Services.Executions;
 using Elsa.Workflows.Runtime.Services.History;
 using Microsoft.Extensions.DependencyInjection;
@@ -185,6 +187,33 @@ public sealed class RuntimeHistoryCandidateTests
         }
     }
 
+    [Fact]
+    public async Task Cleanup_without_bookmarks_still_requires_an_explicit_known_empty_original_inventory()
+    {
+        using var fixture = await Fixture.Create(Policy("BookmarkRemoved"));
+        var raw = Commit("unknown-cleanup", "test") with
+        { StateChanges = new(null, null, [], [], [], [], [], activityScopeCleanups: [new("run", "activity", ["activity"], [], [], [])]) };
+        await Assert.ThrowsAsync<RuntimeSchedulerWorkUnavailableException>(async () => await fixture.Capture.EnrichAsync(raw));
+    }
+
+    [Theory]
+    [InlineData("timers")]
+    [InlineData("work")]
+    public async Task Original_known_empty_cleanup_binds_native_resources_even_without_bookmark_candidates(string resource)
+    {
+        using var fixture = await Fixture.Create(Policy("BookmarkRemoved"));
+        var cleanup = new ActivityScopeCleanupRequest("run", "activity", ["activity"], [], ["timer"], ["work"])
+            { HistoryBookmarks = [] };
+        var raw = Commit("empty-cleanup", "test") with
+        { StateChanges = new(null, null, [], [], [], [], [], activityScopeCleanups: [cleanup]) };
+        var captured = await fixture.Capture.EnrichAsync(raw);
+        Assert.Empty(Assert.Single(captured.HistoryBatches!).Candidates);
+        var altered = resource == "timers" ? cleanup with { TimerIds = ["different"] } : cleanup with { SchedulerWorkItemIds = ["different"] };
+        var changed = captured with { StateChanges = new(null, null, [], [], [], [], [], activityScopeCleanups: [altered]) };
+        Assert.NotEqual(RuntimeCheckpointCommitFingerprint.Compute(captured), RuntimeCheckpointCommitFingerprint.Compute(changed));
+        await Assert.ThrowsAsync<InvalidOperationException>(async () => await fixture.Capture.ValidateFinalAsync(changed));
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -274,6 +303,8 @@ public sealed class RuntimeHistoryCandidateTests
                 new AsyncLocalRuntimeExecutionOwnershipContextAccessor(), [], []) { HistorySourceResolver = () => matchedSource ? source : new DefaultRuntimeHistorySourceExtension(executions) };
             var services = new ServiceCollection();
             services.AddSingleton<IRuntimeHistorySourceExtension>(source);
+            services.AddSingleton<IActivityScopeCleanupStore>(new ActivityScopeCleanupStore(new InMemoryBookmarkStateStore(),
+                new InMemoryDurableTimerStore(), new InMemoryWorkflowSchedulerWorkQueue(), executions));
             services.AddSingleton(committer);
             if (values) services.AddSingleton<IRuntimeActivityExecutionInspectionAccumulator>(new RuntimeActivityExecutionInspectionAccumulator(
                 new InMemoryActivityExecutionInspectionStore(), executions, new RuntimeHistoryOptions()));

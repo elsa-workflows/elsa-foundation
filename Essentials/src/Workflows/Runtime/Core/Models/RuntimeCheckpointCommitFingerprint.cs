@@ -279,6 +279,17 @@ public static class RuntimeCheckpointCommitFingerprint
             element = JsonSerializer.SerializeToElement(new { RuntimeHistoryCausationVersion = 1, Payload = element, Cause = cause }, ExactBookmarkOptions);
         if (commit.HistorySourceFacts is { Count: > 0 } facts)
             element = JsonSerializer.SerializeToElement(new { RuntimeHistorySourceVersion = 1, Payload = element, SourceFacts = facts }, ExactBookmarkOptions);
+        // Preserve legacy cleanup marker bytes. New history-owner input must also bind the exact native
+        // cleanup inventory; older payload branches do not all contain ActivityScopeCleanups.
+        if (commit.StateChanges.ActivityScopeCleanups.Count > 0 &&
+            (commit.HistorySourceFacts is not null || commit.HistoryBatches is { Count: > 0 } ||
+             commit.StateChanges.ActivityScopeCleanups.Any(request => request.HistoryBookmarks is not null)))
+            element = JsonSerializer.SerializeToElement(new
+            {
+                RuntimeHistoryCleanupSourceVersion = 1, Payload = element,
+                Cleanups = commit.StateChanges.ActivityScopeCleanups.OrderBy(request => request.WorkflowExecutionId, StringComparer.Ordinal)
+                    .ThenBy(request => request.ExecutionScopeId, StringComparer.Ordinal).ToArray()
+            }, ExactBookmarkOptions);
         if (commit.HistoryBatches is { Count: > 0 } history)
             element = JsonSerializer.SerializeToElement(new { RuntimeHistoryVersion = 1, Payload = element, HistoryBatches = history }, ExactBookmarkOptions);
         if (commit.ModelState is not null)
