@@ -8,6 +8,9 @@ var names = (from mode in new[] { Modes.Balanced, Modes.Durable } from nested in
     from cut in new[] { "recreation", "before-apply", "lost-ack" } select (mode, nested, cut)).ToArray();
 var parentNames = (from mode in new[] { Modes.Balanced, Modes.Durable }
     from cut in new[] { "pending", "before-apply", "lost-ack" } select (mode, cut)).ToArray();
+var transportNames = (from mode in new[] { Modes.Balanced, Modes.Durable } from kind in new[] { "event", "timer" } select (mode, kind)).ToArray();
+if (args.SequenceEqual(["--transport-races"]))
+{ foreach (var (mode, kind) in transportNames) new CreationWitness(mode, false).TransportRace(kind); await JobCreationRace.Run(); return; }
 if (args.SequenceEqual(["--parent-race"]))
 { foreach (var (mode, cut) in parentNames) new CreationWitness(mode, false).ParentRace(cut); return; }
 if (args.SequenceEqual(["--job-ack"]))
@@ -16,14 +19,18 @@ if (args.SequenceEqual(["--list"]))
 {
     foreach (var name in names) Console.WriteLine("creation:" + name);
     foreach (var name in parentNames) Console.WriteLine("creation:parent-race," + name);
+    foreach (var name in transportNames) Console.WriteLine("creation:transport-race," + name);
+    Console.WriteLine("creation:job-generation-race");
     foreach (var qualified in new[] { false, true }) foreach (var caughtUp in new[] { false, true }) Console.WriteLine($"creation:job-ack,qualified={qualified},caughtUp={caughtUp}");
     return;
 }
 if (args.Length != 0) throw new ArgumentException("Only --list is supported.");
 foreach (var (mode, nested, cut) in names) new CreationWitness(mode, nested).Run(cut);
 foreach (var (mode, cut) in parentNames) new CreationWitness(mode, false).ParentRace(cut);
+foreach (var (mode, kind) in transportNames) new CreationWitness(mode, false).TransportRace(kind);
+await JobCreationRace.Run();
 foreach (var qualified in new[] { false, true }) foreach (var caughtUp in new[] { false, true }) await JobAcknowledgement.Run(qualified, caughtUp);
-Console.WriteLine("22/22 creation schedules passed. Remaining shared propagation/adverse controls are NOT qualified by this runner.");
+Console.WriteLine("27/27 creation schedules passed. Remaining shared propagation/adverse controls are NOT qualified by this runner.");
 
 sealed partial class CreationWitness(string mode, bool nested)
 {
