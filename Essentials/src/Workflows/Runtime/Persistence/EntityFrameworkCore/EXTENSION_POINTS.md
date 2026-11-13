@@ -96,3 +96,11 @@ before accessing any history storage. Required/Optional captured obligations rem
 current module switches. Captured provider failures retain run/operation/cause after native rollback
 and marker reconciliation; failed reconciliation preserves both write and lookup causes. Requested
 cancellation, hard retained integrity, exact admission, model and stale-fence cases retain precedence.
+
+The selected EF read adapter and its deferred SQLite read boundary are integrated from the reviewed
+occurrence/ordinary-reader contributions. The existing public native checkpoint registration selects
+that one scoped reader when no explicit history reader exists, replacing only the owned volatile
+default. Explicit foreign registrations remain untouched. All read facets share the selected instance
+and actual context/access/declared chain. No independent details/occurrence backend or capture feature
+is added. Native SupportsHistory/pairing and independent mutation/deletion admission remain unadvertised
+until their full provider binding qualifies.
