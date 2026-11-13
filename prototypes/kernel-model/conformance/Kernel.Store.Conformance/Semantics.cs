@@ -259,6 +259,48 @@ public static class Semantics
             Context.Equal(new JournalRow(0, 1, "0/i", 1, "[\"j\"]"), journal, "the journal row");
             await c.Lands(() => c.Commit(0, lease.Epoch, 1, [Make.New("0/next")]), "a commit at the moved position");
         }),
+        new("commit: journaled creations survive large batches and roll back together on refusal", Level.Required, async c =>
+        {
+            var lease = await c.Take(0);
+            var outside = c.Provided.NewClient();
+            var from = 0;
+            // Oracle 10.0.12 acknowledged the 125 creations without their journal, and threw at 420 (#4358).
+            foreach (var count in new[] { 125, 420 })
+            {
+                var ids = Enumerable.Range(from, count).Select(i => $"0/v{i:D3}").ToArray();
+                var turns = ids.Select(id => Make.New(id)).ToArray();
+                await c.Lands(() => c.Commit(0, lease.Epoch, from, turns));
+                Context.Equal((long)(from + count), (await outside.ProjectedAsync(0)).Written, "partition position");
+                var rows = await outside.LoadAsync(ids);
+                Context.That(rows.OrderBy(r => r.Id, StringComparer.Ordinal).SequenceEqual(ids.Select(id => Make.Row(id, 1))), "durable instances");
+                var journal = await outside.ReadJournalAsync(0, from, count + 1);
+                var expected = ids.Select((id, i) => new JournalRow(0, from + i + 1, id, 1, "[]"));
+                Context.That(journal.SequenceEqual(expected), $"durable journal rows after {count} creations (read {journal.Count})");
+                from += count;
+            }
+
+            // With a missing message, EF's late delete count rolls back the earlier instance and journal inserts.
+            var idsToCreate = Enumerable.Range(0, 125).Select(i => $"0/mixed{i:D3}").ToArray();
+            var mixed = idsToCreate.Select(id => Make.New(id)).ToArray();
+            mixed[^1] = mixed[^1] with { Consumed = ["input"] };
+            var outcome = await c.Refused(() => c.Commit(0, lease.Epoch, from, mixed));
+            if (c.Provided.MissingConsumeOutcome is { } expectedOutcome)
+                Context.Equal(expectedOutcome, outcome, "missing consume outcome");
+            c.Notes.Add(outcome);
+            Context.Equal((long)from, (await outside.ProjectedAsync(0)).Written, "position after refusal");
+            Context.Equal(0, (await outside.LoadAsync(idsToCreate)).Count, "instances after refusal");
+            Context.Equal(0, (await outside.ReadJournalAsync(0, from, mixed.Length + 1)).Count, "journal rows after refusal");
+
+            // Supply only the missing input, then repeat the identical mixed commit with the original fence.
+            Context.That(await outside.AddAsync(Make.M("input", 0)), "the control input already exists");
+            await c.Lands(() => c.Commit(0, lease.Epoch, from, mixed));
+            Context.Equal((long)(from + mixed.Length), (await outside.ProjectedAsync(0)).Written, "position after retry");
+            var created = await outside.LoadAsync(idsToCreate);
+            Context.That(created.OrderBy(r => r.Id, StringComparer.Ordinal).SequenceEqual(idsToCreate.Select(id => Make.Row(id, 1))), "instances after retry");
+            var durable = await outside.ReadJournalAsync(0, from, mixed.Length + 1);
+            Context.That(durable.SequenceEqual(idsToCreate.Select((id, i) => new JournalRow(0, from + i + 1, id, 1, "[]"))), "journal rows after retry");
+            Context.That(await outside.AddAsync(Make.M("input", 0)), "the successful mixed commit did not remove its input");
+        }),
         new("commit: refused for an old epoch, and writes nothing", Level.Required, async c =>
         {
             await c.S.AddAsync(Make.M("in", 0));
@@ -771,7 +813,7 @@ public static class Semantics
         {
             var lease = await c.Take(0);
             var ids = Enumerable.Range(0, 850).Select(i => $"0/v{i:D3}").ToList();
-            // In commits of 170 and 200: MySQL's provider fails one commit of about 420 or more of these (issue #4358).
+            // Several creation and deletion commits feed a single large projection page.
             for (var at = 0; at < 850; at += 170)
             {
                 var (from, chunk) = (at, ids.Skip(at).Take(170).Select(id => Make.New(id)).ToList());
