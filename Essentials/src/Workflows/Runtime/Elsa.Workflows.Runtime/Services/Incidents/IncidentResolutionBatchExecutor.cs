@@ -174,7 +174,13 @@ public sealed class IncidentResolutionBatchExecutor(
                 operational: [],
                 activityExecutionInspections: []),
             PostCommitIntents: postCommitIntents,
-            Metadata: metadata);
+            Metadata: metadata)
+        {
+            HistorySourceFacts = RuntimeHistorySourceFacts.ForPolicy(workflow.HistoryCapturePolicy,
+                () => stagedIncidents.SelectMany(incident => incident.Status == IncidentStatus.Resolved
+                    ? new[] { RuntimeHistoryIncidentFacts.StrategyEvaluated(incident), RuntimeHistoryIncidentFacts.Resolved(incident) }
+                    : new[] { RuntimeHistoryIncidentFacts.StrategyEvaluated(incident) }))
+        };
 
         await checkpointCommitter.CommitAsync(commit, cancellationToken);
     }

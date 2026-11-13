@@ -23,6 +23,38 @@ public sealed class IncidentResolutionBatchExecutorTests
     private static readonly DateTimeOffset Now = new(2026, 7, 25, 12, 0, 0, TimeSpan.Zero);
 
     [Theory]
+    [InlineData("fault", false)]
+    [InlineData("fault", true)]
+    [InlineData("resolved", false)]
+    [InlineData("resolved", true)]
+    public async Task Actual_strategy_checkpoint_supplies_only_its_applied_decisions_and_replay_adds_nothing(string decision, bool captured)
+    {
+        await using var harness = new Harness(decision == "fault" ? IncidentStrategyBuiltIns.FaultReference : new("Contoso.SafeIntent", "1"));
+        var workflow = (await harness.WorkflowStore.FindAsync(Harness.WorkflowExecutionId))!;
+        // Non-required profile isolates owner-source handoff; this test does not install or prove a physical history writer.
+        await harness.WorkflowStore.SaveAsync(workflow with
+        {
+            HistoryCapturePolicy = captured ? new("runtime-history-v3", 3, false, ["IncidentRecorded"]) : null
+        });
+        var incident = await harness.AddIncidentAsync("incident-history");
+        await harness.ExecuteAsync([incident]);
+        await harness.ExecuteAsync([incident]);
+        var commit = Assert.Single(harness.CommitStore.ListCommits()).Commit;
+        if (!captured) { Assert.Null(commit.HistorySourceFacts); return; }
+        var expected = decision == "resolved"
+            ? new[] { RuntimeHistorySourceFactKind.IncidentStrategyEvaluated, RuntimeHistorySourceFactKind.IncidentResolved }
+            : new[] { RuntimeHistorySourceFactKind.IncidentStrategyEvaluated };
+        Assert.Equal(expected, commit.HistorySourceFacts!.Select(fact => fact.Kind));
+        Assert.All(commit.HistorySourceFacts!, fact =>
+        {
+            Assert.Equal(incident.IncidentId, fact.IncidentId);
+            Assert.Equal(incident.ActivityExecutionId, fact.ActivityExecutionId);
+            Assert.Equal(Now, fact.OccurredAt);
+            Assert.DoesNotContain(incident.Message, fact.ReasonCode ?? "");
+        });
+    }
+
+    [Theory]
     [InlineData(false)]
     [InlineData(true)]
     public async Task Pending_combined_outcome_holds_the_whole_batch_until_the_parent_decision_commits(bool viaDrainObserver)

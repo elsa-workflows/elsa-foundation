@@ -54,6 +54,8 @@ public static class RuntimeHistoryIdentity
         }, ExactOptions);
         if (e.ActivityAncestryKnown is { } known)
             bytes = JsonSerializer.SerializeToUtf8Bytes(new { AncestryVersion = 1, Event = Convert.ToHexStringLower(SHA256.HashData(bytes)), Known = known }, ExactOptions);
+        if (e.OccurredAtKnown is { } timeKnown)
+            bytes = JsonSerializer.SerializeToUtf8Bytes(new { OccurrenceVersion = 1, Event = Convert.ToHexStringLower(SHA256.HashData(bytes)), Known = timeKnown }, ExactOptions);
         return Convert.ToHexStringLower(SHA256.HashData(bytes));
     }
 
@@ -75,7 +77,7 @@ public static class RuntimeHistoryIdentity
         return new(e.HistoryEventId, e.WorkflowExecutionId, sequence, e.Category, e.Name, e.OccurredAt,
             e.ActivityExecutionId, e.ExecutableNodeId, e.CheckpointId, e.IncidentId, e.Payload, e.Metadata)
         {
-            CheckpointOrdinal = checkpointOrdinal ?? e.CheckpointOrdinal,
+            CheckpointOrdinal = checkpointOrdinal ?? e.CheckpointOrdinal, OccurredAtKnown = e.OccurredAtKnown,
             SchemaVersion = e.SchemaVersion, Authority = e.Authority, BookmarkId = e.BookmarkId, AttemptId = e.AttemptId,
             ParentActivityExecutionId = e.ParentActivityExecutionId, ActivityAncestryKnown = e.ActivityAncestryKnown, ExecutionScopeId = e.ExecutionScopeId,
             IterationId = e.IterationId, Causation = e.Causation, PhysicalCommitId = physicalCommitId, RecordedAt = recordedAt
