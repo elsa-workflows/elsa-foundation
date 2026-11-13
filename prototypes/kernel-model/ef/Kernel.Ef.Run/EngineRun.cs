@@ -304,7 +304,7 @@ static class EngineRun
         return wrong.Count == 0 ? 0 : 1;
     }
 
-    /// <summary>Round 3's end state, as the conformance suite's stress test checks it (Stress.RoundThree there).</summary>
+    /// <summary>Round 3's end state, as the conformance suite's stress test checks it (Workload.RoundThree there).</summary>
     private static IEnumerable<string> RoundThree(IReadOnlyDictionary<string, InstanceRow> rows, IReadOnlyList<string> lifecycles, IReadOnlySet<string> deleted, IReadOnlyList<string> onEvents)
     {
         string Name(string id) => id[(id.IndexOf('/') + 1)..];
@@ -331,7 +331,8 @@ static class EngineRun
         await target.ResetAsync(2);
         var tally = target.Writes is null ? null : new Tally(target.Store(create));     // in process: it adds no round trip
         IKernelStore store = tally ?? (IKernelStore)target.Store(create);
-        var owner = new Worker("owner", 0, store, target.Actors(Models()), new WorkerOptions { PollLimit = 5000, MaxBatch = 5000 });
+        // A cost run counts the work, not the lease's upkeep: with an hour's lease no pass renews it inside a row, however slow the engine.
+        var owner = new Worker("owner", 0, store, target.Actors(Models()), new WorkerOptions { PollLimit = 5000, MaxBatch = 5000, Lease = TimeSpan.FromHours(1) });
         await new DurableHost([owner]).ActivateAsync(owner.Partition);
         await owner.PollAsync();
         var n = 0;
