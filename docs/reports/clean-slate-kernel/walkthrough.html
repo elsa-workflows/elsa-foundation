@@ -612,7 +612,7 @@ ol.stmts code { font-size: 12.5px; }
   <h2>Ownership and takeover</h2>
   <p>Leases decide who <i>should</i> write. The fence decides who <i>can</i>. Play through a takeover where the old owner was only paused, the case that breaks most designs.</p>
   <div class="principle" id="fence-rationale"><strong>Why the lease needs a fence.</strong> A paused owner or a slow packet can outlive a lease. The commit atomically checks the partition's epoch and journal position, so a superseded owner's durable writes roll back. After a lost answer, reset and a new take change the epoch; the position chiefly orders the journal. <a href="https://github.com/elsa-workflows/elsa-foundation/blob/main/docs/architecture/ownership-and-fencing.md">Ownership and fencing</a> explains the row lock, conflict retries, round-trip cost and alternatives.</div>
-  <div class="stepper" id="own-stepper">
+  <div class="stepper" id="own-stepper" data-follow-step>
   <figure>
     <div class="fig">
     <svg class="dg" viewBox="0 0 960 310" role="img" aria-label="Node A takes partition 17 at epoch 7 and commits, then pauses; its lease runs out and node B takes it at epoch 8; when A wakes, its commit at epoch 7 matches no row and is rejected.">
@@ -943,7 +943,7 @@ ol.stmts code { font-size: 12.5px; }
     <div class="card"><h4>13 · Events meet</h4><p>An event and a wait for its key, both committed in the window, meet exactly once.</p></div>
     <div class="card"><h4>14 · One bad instance</h4><p>A failing instance is parked and its partition goes on; a message is parked for killing processes only after the threshold.</p></div>
   </div>
-  <p>The simulation passes at 200,000 runs of 300 actions and 20,000 of 1,000, also with native instances in the mix; mutation checks break the kernel one rule at a time and each is caught, except two rules that another rule covers, which are caught when that rule is broken too; the store conformance suite (current counts and qualifications are in the <a href="https://github.com/elsa-workflows/elsa-foundation/blob/main/prototypes/kernel-model/README.md">prototype README</a>) runs on the in-memory store, SQLite, PostgreSQL, SQL Server, MySQL and MongoDB; a stress test with killed connections holds on all five engines and fails on every one with the fence broken on purpose. The figures and seeds are in the prototype's FINDINGS.md (sections 22 to 24); the engine findings, among them E9 (SQL Server deadlocks with the fence in the batch), in ENGINES.md.</p>
+  <p>The simulation passes at 200,000 runs of 300 actions and 20,000 of 1,000, also with native instances in the mix; mutation checks break the kernel one rule at a time and each is caught, except two rules that another rule covers, which are caught when that rule is broken too; the store conformance suite runs on the in-memory store, SQLite, PostgreSQL, SQL Server, MySQL and MongoDB (run commands are in the <a href="https://github.com/elsa-workflows/elsa-foundation/blob/main/prototypes/kernel-model/README.md">prototype README</a>); a stress test with killed connections holds on all five engines and fails on every one with the fence broken on purpose. The figures and seeds are in the prototype's FINDINGS.md (sections 22 to 24); the engine findings, among them E9 (SQL Server deadlocks with the fence in the batch), in ENGINES.md.</p>
 </section>
 
 <!-- 15 ─────────────────────────────────────────── -->
@@ -1128,6 +1128,16 @@ ol.stmts code { font-size: 12.5px; }
       count.textContent = "Step " + (i + 1) + " of " + items.length;
       prev.disabled = i === 0;
       next.disabled = i === items.length - 1;
+      // Keep the current action visible in a narrow diagram without moving the page vertically.
+      if (root.hasAttribute("data-follow-step")) {
+        const frame = svg.closest(".fig");
+        const focus = parts.find(p => p.dataset.k === [...on].at(-1));
+        if (focus && frame.scrollWidth > frame.clientWidth) {
+          const action = focus.getBoundingClientRect();
+          const viewport = frame.getBoundingClientRect();
+          frame.scrollLeft += action.left - viewport.left - (frame.clientWidth - action.width) / 2;
+        }
+      }
     };
     prev.addEventListener("click", () => { if (i > 0) { i--; render(); } });
     next.addEventListener("click", () => { if (i < items.length - 1) { i++; render(); } });

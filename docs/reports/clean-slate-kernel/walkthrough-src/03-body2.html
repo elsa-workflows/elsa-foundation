@@ -5,7 +5,7 @@
   <h2>Ownership and takeover</h2>
   <p>Leases decide who <i>should</i> write. The fence decides who <i>can</i>. Play through a takeover where the old owner was only paused, the case that breaks most designs.</p>
   <div class="principle" id="fence-rationale"><strong>Why the lease needs a fence.</strong> A paused owner or a slow packet can outlive a lease. The commit atomically checks the partition's epoch and journal position, so a superseded owner's durable writes roll back. After a lost answer, reset and a new take change the epoch; the position chiefly orders the journal. <a href="https://github.com/elsa-workflows/elsa-foundation/blob/main/docs/architecture/ownership-and-fencing.md">Ownership and fencing</a> explains the row lock, conflict retries, round-trip cost and alternatives.</div>
-  <div class="stepper" id="own-stepper">
+  <div class="stepper" id="own-stepper" data-follow-step>
   <figure>
     <div class="fig">
     <svg class="dg" viewBox="0 0 960 310" role="img" aria-label="Node A takes partition 17 at epoch 7 and commits, then pauses; its lease runs out and node B takes it at epoch 8; when A wakes, its commit at epoch 7 matches no row and is rejected.">
