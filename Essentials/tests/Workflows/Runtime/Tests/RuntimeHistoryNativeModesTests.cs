@@ -102,14 +102,15 @@ public sealed class RuntimeHistoryNativeModesTests
     public async Task Reconstructed_original_raw_json_replays_once_after_a_later_terminal_checkpoint_and_option_change()
     {
         using var f = new Fixture(recordCompletion: true);
-        var original = WorkflowCommit("original", RuntimeCheckpointNames.WorkflowStarted, f.Policy, WorkflowExecutionStatus.Running, 0);
-        var queuedJson = JsonSerializer.Serialize(original); // Before enrichment; original input is retained independently.
+        var input = new RetainedWorkflowInput("original", RuntimeCheckpointNames.WorkflowStarted, f.Policy, WorkflowExecutionStatus.Running, 0);
+        var original = input.Reconstruct();
+        var queuedJson = JsonSerializer.Serialize(input); // Retained typed source input, before enrichment; not the checkpoint class's wire contract.
         await f.Committer.CommitAsync(original);
         var terminal = WorkflowCommit("terminal", RuntimeCheckpointNames.WorkflowCompleted, f.Policy, WorkflowExecutionStatus.Completed, 1);
         f.Clock.SetUtcNow(terminal.Checkpoint.OccurredAt);
         await f.Committer.CommitAsync(terminal);
         f.Options.Enabled = false;
-        var restored = JsonSerializer.Deserialize<RuntimeCheckpointCommit>(queuedJson)!;
+        var restored = JsonSerializer.Deserialize<RetainedWorkflowInput>(queuedJson)!.Reconstruct();
         await f.Committer.CommitAsync(restored);
         Assert.Equal(2, f.Writer.ListCommits().Count);
         Assert.Equal(2, (await f.Reader.FindHeadAsync("run"))!.LastSequence);
@@ -125,12 +126,13 @@ public sealed class RuntimeHistoryNativeModesTests
     public async Task Legacy_queued_start_remains_uncaptured_after_the_internal_module_is_composed()
     {
         using var f = new Fixture(recordCompletion: true);
-        var legacy = WorkflowCommit("legacy", RuntimeCheckpointNames.WorkflowStarted, null, WorkflowExecutionStatus.Running, 0);
+        var input = new RetainedWorkflowInput("legacy", RuntimeCheckpointNames.WorkflowStarted, null, WorkflowExecutionStatus.Running, 0);
+        var legacy = input.Reconstruct();
         var originalFingerprint = RuntimeCheckpointCommitFingerprint.Compute(legacy);
-        var queuedJson = JsonSerializer.Serialize(legacy);
+        var queuedJson = JsonSerializer.Serialize(input);
         await f.Committer.CommitAsync(legacy);
         f.Options.Enabled = false;
-        await f.Committer.CommitAsync(JsonSerializer.Deserialize<RuntimeCheckpointCommit>(queuedJson)!);
+        await f.Committer.CommitAsync(JsonSerializer.Deserialize<RetainedWorkflowInput>(queuedJson)!.Reconstruct());
         var stored = Assert.Single(f.Writer.ListCommits()).Commit;
         Assert.Null(stored.HistoryBatches);
         Assert.Equal(originalFingerprint, RuntimeCheckpointCommitFingerprint.Compute(stored));
@@ -152,6 +154,12 @@ public sealed class RuntimeHistoryNativeModesTests
         Assert.Empty(f.Writer.ListCommits());
         Assert.Null(await f.Services.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync("run"));
         Assert.Null(await f.Reader.FindHeadAsync("run"));
+    }
+
+    // Test-only retained source shape. The production checkpoint class has no JSON deserialization contract.
+    private sealed record RetainedWorkflowInput(string Id, string Name, RuntimeHistoryCapturePolicy? Policy, WorkflowExecutionStatus Status, int Second)
+    {
+        public RuntimeCheckpointCommit Reconstruct() => WorkflowCommit(Id, Name, Policy, Status, Second);
     }
 
     private static RuntimeCheckpointCommit WorkflowCommit(string id, string name, RuntimeHistoryCapturePolicy? policy, WorkflowExecutionStatus status, int second)
