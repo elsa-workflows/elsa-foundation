@@ -65,7 +65,7 @@ export function transferNativeBlockResults(context: NativeBlockContext, proposed
     if (Array.isArray(value)) { value.forEach((item, index) => inspectScopeReads(item, `${path}[${index}]`)); return; }
     if (!record(value)) return;
     if (typeof value.expressionType === "string") {
-      if (["literal", "object", "default", "secret", "connection", "input", "variable", "variablemember", "activityresult", "activityresultmember", "workflowrequest"].includes(value.expressionType.toLowerCase())) return;
+      if (["literal", "object", "default", "secret", "connection", "input", "inputmember", "variable", "variablemember", "activityresult", "activityresultmember", "workflowrequest", "workflowrequestmember"].includes(value.expressionType.toLowerCase())) return;
       const expression = value.value;
       if (!record(expression) || typeof expression.language !== "string" || typeof expression.source !== "string"
         || !record(expression.resultType) || !record(expression.options) || !record(expression.parameters)

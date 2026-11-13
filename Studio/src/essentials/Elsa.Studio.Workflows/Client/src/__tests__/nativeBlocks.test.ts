@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, expect, it } from "vitest";
 import { createActivityNode, flowchartStructureKind, sequenceStructureKind } from "../workflowAdapter";
 import { applyNativeBlockPlan, planCreateNativeBlock, planExtractNativeBlock, planUngroupNativeBlock, type NativeBlockContext, type NativeBlockPlan } from "../graph-authoring/nativeBlocks";
@@ -102,6 +103,29 @@ describe("pure native block planning", () => {
       { ...edge("b", "c"), source: { nodeId: capture.nodeId }, vertices: [{ x: 80, y: 50, bend: "keep" }] },
       { id: capture.nodeId, source: { nodeId: "b", port: "Done" }, target: { nodeId: capture.nodeId } }
     ]);
+  });
+
+  it.each(["sequence", "flowchart"] as const)("retains typed input and request member reads while transferring a result in %s", kind => {
+    const ctx = kind === "sequence" ? context() : flow();
+    ctx.catalog.push({ ...action, activityVersionId: "elsa.intrinsic.set@1", intrinsic: { kind: "Set", valueInputKey: "value" } });
+    const children = payload(ctx).activities as ActivityNode[];
+    const memberReads = [
+      { referenceKey: "input", value: { expressionType: "InputMember", value: { referenceKey: "order", memberPath: ["customerId"] } } },
+      { referenceKey: "request", value: { expressionType: "WorkflowRequestMember", value: { memberKey: "order", memberPath: ["customerId"] } } }
+    ];
+    children[0].inputs = structuredClone(memberReads);
+    children[2].inputs = structuredClone(memberReads);
+    children[3].inputs = [{ referenceKey: "text", value: { expressionType: "ActivityResult", value: { producerNodeId: "b", projectionKey: "$result" } } }];
+    const before = cloneContext(ctx);
+    const plan = accepted(extract(ctx));
+    expect(ctx).toEqual(before);
+    const grouped = planPayload(plan).activities as ActivityNode[];
+    expect(grouped[0].inputs).toEqual(memberReads);
+    expect((grouped[1].structure!.payload.activities as ActivityNode[]).find(item => item.nodeId === "c")!.inputs).toEqual(memberReads);
+    const inverse = accepted(planUngroupNativeBlock({ ...ctx, document: plan.document }, "new-block"));
+    const restored = inverse.document.rootActivity.structure!.payload.activities as ActivityNode[];
+    for (const id of ["a", "c"]) expect(restored.find(item => item.nodeId === id)!.inputs).toEqual(memberReads);
+    expect(ctx).toEqual(before);
   });
 
   it("rewrites explicit expression parameters without editing expression source or literal payloads", () => {
