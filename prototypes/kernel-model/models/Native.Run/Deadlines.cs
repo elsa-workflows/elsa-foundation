@@ -22,14 +22,17 @@ public static class Deadlines
         var row = store.Instances[id.Id];
         var before = worker.Instances.SingleOrDefault(i => i.Id == id.Id);
         var pinned = before.Row is { Status: InstanceStatus.Running } && worker.Callers.Count() == 1 && worker.Evicted == 0;
+        var firstWake = await worker.RunAsync();
+        var scheduled = firstWake == TimeSpan.FromMilliseconds(100);
         clock = 99;
-        await worker.RunAsync();
+        var lastWake = await worker.RunAsync();
         pinned &= worker.Instances.Any(i => i.Id == id.Id);
-        clock = 100;
+        scheduled &= lastWake == TimeSpan.FromMilliseconds(1);
+        clock += (long)Math.Ceiling(lastWake!.Value.TotalMilliseconds);
         await worker.RunAsync();
         var evicted = !worker.Instances.Any(i => i.Id == id.Id) && worker.Evicted == 1;
         var retained = store.Instances[id.Id] == row && store.Subscriptions.Count == 1;
-        Console.WriteLine($"deadline idle eviction: pinned before={pinned}, evicted at deadline={evicted}, committed wait retained={retained}");
-        return pinned && evicted && retained ? 0 : 1;
+        Console.WriteLine($"deadline idle eviction: pinned before={pinned}, deadline scheduled={scheduled}, evicted at deadline={evicted}, committed wait retained={retained}");
+        return pinned && scheduled && evicted && retained ? 0 : 1;
     }
 }

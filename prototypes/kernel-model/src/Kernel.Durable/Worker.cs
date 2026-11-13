@@ -196,7 +196,8 @@ public sealed class Worker : IScopeActivation, ITurnServices
         if (busy) return TimeSpan.Zero;
         var now = Now;
         var next = _items.Values.Where(i => !i.Taken && i.Message.Due is { } due && due > now).Select(i => i.Message.Due!.Value - now).DefaultIfEmpty(long.MaxValue).Min();
-        return TimeSpan.FromMilliseconds(Math.Max(1, Math.Min(next, RenewBy - DbNow)));     // never zero: zero means there is work
+        var caller = Callers.Select(to => ReplyTo.Parse(to).Deadline - now).DefaultIfEmpty(long.MaxValue).Min();
+        return TimeSpan.FromMilliseconds(Math.Max(1, Math.Min(caller, Math.Min(next, RenewBy - DbNow))));     // never zero: zero means there is work
     }
 
     /// <summary>When the pass beats if nothing commits before: a third of the lease after it was last renewed (the sketch's cadence).</summary>

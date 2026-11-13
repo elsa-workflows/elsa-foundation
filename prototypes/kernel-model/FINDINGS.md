@@ -1448,3 +1448,8 @@ addresses, including an otherwise idle pass. With `MaxInstances = 0`, a waiting 
 deadline and is evicted at equality; the committed running row and its subscription remain intact. The targeted
 `Native.Run deadlines` witness failed before this correction (address expired but instance remained cached) and
 passed after it. Native smoke and the short simulation are recorded separately in the integration receipt.
+
+The next idle wake also includes the earliest held caller deadline. The witness follows the returned delays (100 ms
+initially, then 1 ms at time 99), rather than forcing an externally scheduled deadline pass; this scheduling control
+failed before the wake calculation changed. Existing Admission.Run callers now supply their request-start clock plus
+30 seconds, and its schedule/control suite is included in the affected-build check.
