@@ -10,6 +10,8 @@ Run from the repository root:
 dotnet run --project prototypes/kernel-model/models/Agent.Run/Kernel.Agent.Run.csproj
 ```
 
+The runner executes its Worker phases and continuations on one exclusive owner scheduler while tool bodies run on the default scheduler. It waits for the actual cancelled tool task before allowing the owner continuation to discard its result.
+
 The runner kills the first owner logically by ceasing to pump it and expiring its lease after the checkpoint and an outside tool effect. The replacement repeats that effect and selects one result. Another lease expiry tests that the approval subscription survives a fresh owner; live output is observed on the first owner's transport and is not replayed from storage. The original tool result is released late; the test waits until it is ready on the old owner, observes that turn lose its fence, and compares the entire selected row. A separate journey waits for a held tool to start, observes its cancellation token, removes the ticket, then completes the non-cooperative tool and checks the terminal row and ticket. A queued approval then denial tests first-decision behavior before the peer reply. This is an in-process, deterministic crash simulation; it does not prove a real process kill, a production store, external effects, delivery of live output, or agent-framework interoperability. In particular tool effects require idempotency when repetition matters.
 
 Two deliberately faulty options are negative controls; both commands must exit nonzero:

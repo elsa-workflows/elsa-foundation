@@ -3,7 +3,17 @@ using Kernel.Durable;
 using Kernel.Runtime;
 using Kernel.Workflows;
 
-return await Scenarios.Run(args);
+var owner = new ConcurrentExclusiveSchedulerPair(TaskScheduler.Default, maxConcurrencyLevel: 1);
+try
+{
+    return await Task.Factory.StartNew(() => Scenarios.Run(args, owner.ExclusiveScheduler),
+        CancellationToken.None, TaskCreationOptions.DenyChildAttach, owner.ExclusiveScheduler).Unwrap();
+}
+finally
+{
+    owner.Complete();
+    await owner.Completion;
+}
 
 static class Scenarios
 {
@@ -14,8 +24,12 @@ static class Scenarios
         if (!ok) failures++;
     }
 
-    public static async Task<int> Run(string[] args)
+    public static async Task<int> Run(string[] args, TaskScheduler ownerScheduler)
     {
+        void RequireOwner()
+        {
+            if (TaskScheduler.Current != ownerScheduler) throw new InvalidOperationException("worker phases must execute on the exclusive owner scheduler");
+        }
         long time = 100;
         var store = new InMemoryStore(1, () => time);
         var firstCompletion = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -33,9 +47,11 @@ static class Scenarios
         async Task Start(Worker worker) { await new DurableHost([worker]).ActivateAsync(0); await worker.PollAsync(); }
         async Task Pump(Worker worker, Func<bool> done, bool poll = false)
         {
+            RequireOwner();
             if (poll) await worker.WokenAsync(null);
             for (var i = 0; i < 3000 && !done(); i++)
             {
+                RequireOwner();
                 await worker.RunAsync();
                 if (i % 10 == 0) await worker.WokenAsync(null);
                 await Task.Delay(1);
@@ -97,15 +113,17 @@ static class Scenarios
         var held = new TaskCompletionSource<object?>();
         var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var signalled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var completed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        Task<object?>? completedBody = null;
         var cancelledStore = new InMemoryStore(1, () => time);
-        async ValueTask<object?> HeldTool(IJob job, CancellationToken token)
+        ValueTask<object?> HeldTool(IJob job, CancellationToken token)
         {
-            using var registration = token.Register(() => signalled.TrySetResult());
-            started.TrySetResult();
-            var result = await held.Task; // deliberately ignores cancellation like a non-cooperative external effect
-            completed.TrySetResult();
-            return result;
+            async Task<object?> Body()
+            {
+                using var registration = token.Register(() => signalled.TrySetResult());
+                started.TrySetResult();
+                return await held.Task; // deliberately ignores cancellation like a non-cooperative external effect
+            }
+            return new ValueTask<object?>(completedBody = Body());
         }
         var cancelWorker = new Worker("cancel", 0, cancelledStore,
             new WorkflowInstance([new AgentModel(HeldTool)]), new WorkerOptions { Monotonic = () => time });
@@ -121,7 +139,8 @@ static class Scenarios
         Check(cancelled.Status == InstanceStatus.Cancelled && !cancelledStore.Messages.ContainsKey(Worker.TicketId("0/cancelled", "lookup")),
             "cancellation signalled the running tool and removed its ticket");
         held.SetResult("late");
-        await completed.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        await completedBody!.WaitAsync(TimeSpan.FromSeconds(5));
+        await Task.Yield(); // run the captured owner continuation that discards the cancelled ticket's result
         for (var i = 0; i < 5; i++) { await cancelWorker.WokenAsync(null); await cancelWorker.RunAsync(); }
         Check(cancelledStore.Instances["0/cancelled"] == cancelled && !cancelledStore.Messages.ContainsKey(Worker.TicketId("0/cancelled", "lookup")),
             "non-cooperative tool completed late without changing the terminal row or recreating its ticket");
