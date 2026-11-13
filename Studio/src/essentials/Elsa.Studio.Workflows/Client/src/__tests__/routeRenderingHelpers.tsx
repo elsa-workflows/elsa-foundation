@@ -44,7 +44,8 @@ export async function renderRegisteredRoute(
   configureApi?: (api: ElsaStudioModuleApi) => void,
   followNavigation = false,
   capabilities = capabilityDocument(),
-  historyState: unknown = {}
+  historyState: unknown = {},
+  wrapRoute?: (screen: React.ReactNode) => React.ReactNode
 ) {
   if (typeof ResizeObserver === "undefined") {
     vi.stubGlobal("ResizeObserver", class {
@@ -91,7 +92,8 @@ export async function renderRegisteredRoute(
       window.dispatchEvent(new PopStateEvent("popstate"));
     };
     const Component = route.component;
-    return <Component navigate={navigate} />;
+    const screen = <Component navigate={navigate} />;
+    return wrapRoute ? wrapRoute(screen) : screen;
   }
 
   const rerender = () => flushSync(() => {

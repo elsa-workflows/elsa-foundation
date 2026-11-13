@@ -873,6 +873,9 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
   const [selectedEvidenceId, setSelectedEvidenceId] = useState<string | null>(null);
   const parsedInitialHistory = useMemo(() => initialHistoryLocation ?? readTimelineLocation(initialHistorySearch ?? ""), [initialHistoryLocation, initialHistorySearch]);
   const [historyLocation, setHistoryLocation] = useState<RunTimelineLocation>(parsedInitialHistory);
+  const currentHistoryLocation = useRef(historyLocation); currentHistoryLocation.current = historyLocation;
+  const appliedHistoryIntent = useRef<{ context: string; location: string } | null>(null);
+  const initialHistoryKey = JSON.stringify(parsedInitialHistory);
   const historyBack = useRef<Array<{ location: RunTimelineLocation; evidenceId: string | null; focus: HTMLElement | null }>>([]);
   const [historyOwnerMessage, setHistoryOwnerMessage] = useState("");
   const [focusHistoryInspector, setFocusHistoryInspector] = useState(true);
@@ -901,9 +904,16 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
   });
   const browserContext = observation.identity;
   useEffect(() => {
+    const previous = appliedHistoryIntent.current;
+    if (previous?.context === browserContext && previous.location === initialHistoryKey) return;
+    appliedHistoryIntent.current = { context: browserContext, location: initialHistoryKey };
+    // Retained workspace tabs reconnect effects and remember our local address-bar writes. Neither
+    // is a new investigation: keep the causal Back stack and the user's chosen inspector tab.
+    if (previous?.context === browserContext && JSON.stringify(currentHistoryLocation.current) === initialHistoryKey) return;
     setHistoryLocation(parsedInitialHistory);
     historyBack.current = []; setHistoryOwnerMessage(""); setFocusHistoryInspector(true);
-  }, [browserContext, parsedInitialHistory]);
+    appliedInitialInspectorTab.current = null; // A new exact target must open even after Issues/Details.
+  }, [browserContext, initialHistoryKey, parsedInitialHistory]);
   const [browserEvidence, setBrowserEvidence] = useState<{ context: string; items: ActivityExecutionStateSummary[] }>({ context: browserContext, items: [] });
   const [executionScopes, setExecutionScopes] = useState<{ context: string; items: Array<{ execution: ActivityExecutionStateSummary; label: string }> }>({ context: browserContext, items: [] });
   const [scopeNavigation, setScopeNavigation] = useState<{ context: string; loading: boolean; error: string; retaining?: boolean }>({ context: browserContext, loading: false, error: "" });
