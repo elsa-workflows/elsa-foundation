@@ -173,10 +173,14 @@ export async function userTaskAuthoringJourney(page: Page, info: TestInfo, captu
   await editorViews.getByRole("tab", { name: "Designer", exact: true }).click();
   await expect(page.getByRole("combobox", { name: "Output Name", exact: true })).toHaveAttribute("aria-invalid", "true");
   // aria-invalid is also visible: the field's border takes the danger fill and its message the danger text (#4069).
-  const expectVisiblyInvalid = async () => {
+  const expectVisiblyInvalid = async (state: string) => {
     const message = page.locator(".wf-property-row-error");
+    const outputName = page.getByRole("combobox", { name: "Output Name", exact: true });
+    const caption = page.getByRole("group", { name: "Value property", exact: true }).locator(".wf-property-row-header-meta > span").first();
     await expect(message).toBeVisible();
-    const muted = await page.locator(".wf-property-row-header label").first().evaluate(element => getComputedStyle(element).color);
+    await expect(caption).toBeVisible();
+    // An invalid field's legend is also danger-colored; compare its message with the ordinary type caption.
+    const muted = await caption.evaluate(element => getComputedStyle(element).color);
     const [dangerText, dangerFill] = await message.evaluate(element => {
       const probe = (value: string) => {
         const swatch = document.createElement("span");
@@ -190,9 +194,20 @@ export async function userTaskAuthoringJourney(page: Page, info: TestInfo, captu
     });
     expect(dangerText).not.toBe(muted);
     await expect.poll(() => message.evaluate(element => getComputedStyle(element).color)).toBe(dangerText);
-    await expect.poll(() => page.getByRole("combobox", { name: "Output Name", exact: true }).evaluate(element => getComputedStyle(element).borderTopColor)).toBe(dangerFill);
+    const controlStyle = () => outputName.evaluate(element => {
+      const field = element.closest("fieldset.studio-form-control");
+      if (!(field instanceof HTMLFieldSetElement)) throw new Error("Output Name must use the shared outlined field");
+      const visible = getComputedStyle(field);
+      const native = getComputedStyle(element);
+      return { borderColor: visible.borderTopColor, borderWidth: parseFloat(visible.borderTopWidth),
+        nativeBorderColor: native.borderTopColor, nativeBorderWidth: parseFloat(native.borderTopWidth) };
+    });
+    await expect.poll(async () => (await controlStyle()).borderWidth).toBeGreaterThan(0);
+    await expect.poll(async () => (await controlStyle()).borderColor).toBe(dangerFill);
+    await info.attach(`${state}-invalid-style`, { body: JSON.stringify({ dangerText, dangerFill, muted,
+      legacyHeaderLabels: await page.locator(".wf-property-row-header label").count(), ...await controlStyle() }), contentType: "application/json" });
   };
-  await expectVisiblyInvalid();
+  await expectVisiblyInvalid("renamed-output");
   await captureInspector("renamed-output", page.getByRole("combobox", { name: "Output Name", exact: true }));
   await page.getByRole("combobox", { name: "Output Name", exact: true }).selectOption("RenamedData");
   await editorViews.getByRole("tab", { name: "Outputs", exact: true }).click();
@@ -201,7 +216,7 @@ export async function userTaskAuthoringJourney(page: Page, info: TestInfo, captu
   await expect(page.getByRole("combobox", { name: "Output Name", exact: true })).toBeDisabled();
   await expect(page.getByRole("combobox", { name: "Output Name", exact: true })).toHaveAttribute("aria-invalid", "true");
   await expect(page.getByText(/This output is no longer defined. Add a workflow output in the editor's Outputs tab/)).toBeVisible();
-  await expectVisiblyInvalid();
+  await expectVisiblyInvalid("removed-output");
   await captureInspector("removed-output", page.getByRole("combobox", { name: "Output Name", exact: true }));
   await editorViews.getByRole("tab", { name: "Outputs", exact: true }).click();
   await page.getByRole("button", { name: "Add output", exact: true }).click();
