@@ -1,6 +1,6 @@
-using Elsa.Activities.Flowchart.Models;
+using Kernel.Graph.Models;
 
-namespace Elsa.Activities.Flowchart.Internal;
+namespace Kernel.Graph.Internal;
 
 /// <summary>
 /// Appends audit-only <see cref="FlowchartDiagnosticEvent"/> records to the execution state. Named in #275 as

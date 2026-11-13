@@ -1,11 +1,10 @@
-using Elsa.Activities.Flowchart.Exceptions;
-using Elsa.Activities.Flowchart.Models;
-using Elsa.Workflows.Runtime.Core.Contracts;
-using static Elsa.Activities.Flowchart.Internal.FlowchartScheduler;
-using static Elsa.Activities.Flowchart.Internal.FlowchartScopeResolver;
-using static Elsa.Activities.Flowchart.Internal.FlowchartStateMutator;
+using Kernel.Graph.Exceptions;
+using Kernel.Graph.Models;
+using static Kernel.Graph.Internal.FlowchartScheduler;
+using static Kernel.Graph.Internal.FlowchartScopeResolver;
+using static Kernel.Graph.Internal.FlowchartStateMutator;
 
-namespace Elsa.Activities.Flowchart.Internal;
+namespace Kernel.Graph.Internal;
 
 /// <summary>
 /// Translates a <see cref="FlowchartPolicyDecision"/> into state mutations and scheduling — the
@@ -18,7 +17,7 @@ namespace Elsa.Activities.Flowchart.Internal;
 public sealed class FlowchartPolicyApplier(FlowchartReachabilityAnalyzer reachabilityAnalyzer, FlowchartJoinCoordinator joinCoordinator)
 {
     public FlowchartExecutionState ApplyDecision(
-        IRuntimeActivityExecutionContext context,
+        FlowchartRun context,
         FlowchartExecutionState state,
         FlowchartGraph graph,
         FlowchartPolicyDecision decision,
@@ -92,7 +91,7 @@ public sealed class FlowchartPolicyApplier(FlowchartReachabilityAnalyzer reachab
     }
 
     private FlowchartExecutionState ApplyScheduleNodeCommand(
-        IRuntimeActivityExecutionContext context,
+        FlowchartRun context,
         FlowchartExecutionState state,
         FlowchartGraph graph,
         FlowchartPolicyCommand command,
@@ -121,7 +120,7 @@ public sealed class FlowchartPolicyApplier(FlowchartReachabilityAnalyzer reachab
         if (connection is not null && reachabilityAnalyzer.IsBackwardEdge(graph, connection.Source.NodeId, connection.Target.NodeId))
         {
             var currentScope = state.Scopes.FirstOrDefault(scope => StringComparer.Ordinal.Equals(scope.ExecutionScopeId, currentPath.ExecutionScopeId))
-                ?? throw new InvalidOperationException($"Execution scope '{currentPath.ExecutionScopeId}' not found. ActivityExecutionId='{context.ActivityExecutionState.Execution.ActivityExecutionId}'.");
+                ?? throw new InvalidOperationException($"Execution scope '{currentPath.ExecutionScopeId}' not found. ActivityExecutionId='{context.ContainerExecutionId}'.");
             var loopScope = ResolveTargetScope(reachabilityAnalyzer, state, graph, currentScope, connection);
             if (state.Scopes.All(existing => !StringComparer.Ordinal.Equals(existing.ExecutionScopeId, loopScope.ExecutionScopeId)))
                 state = AddScope(state, loopScope);

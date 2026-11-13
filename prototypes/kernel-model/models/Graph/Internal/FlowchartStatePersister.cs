@@ -1,9 +1,8 @@
 using System.Text.Json;
-using Elsa.Activities.Flowchart.Exceptions;
-using Elsa.Activities.Flowchart.Models;
-using Elsa.Workflows.Runtime.Core.Models;
+using Kernel.Graph.Exceptions;
+using Kernel.Graph.Models;
 
-namespace Elsa.Activities.Flowchart.Internal;
+namespace Kernel.Graph.Internal;
 
 /// <summary>
 /// Loads and stages the <see cref="FlowchartExecutionState"/> blob and owns the #382 prune-on-save
@@ -11,7 +10,7 @@ namespace Elsa.Activities.Flowchart.Internal;
 /// state enums persist as ordinals — the frozen wire surface pinned by the golden fixtures. The persisted
 /// blob is carried as one typed, versioned structural private-state document. The runtime folds that state
 /// into the same checkpoint as the structural continuation and
-/// its child schedule intents; this service never commits state independently.
+/// its child schedule intents; this service never commits state independently. Here the host holds the state.
 /// </summary>
 public sealed class FlowchartStatePersister
 {
@@ -20,8 +19,6 @@ public sealed class FlowchartStatePersister
     /// <summary>Maximum diagnostics retained in the persisted state blob (#382); oldest are dropped first.</summary>
     private const int DiagnosticsCap = 200;
 
-    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
-
     public static FlowchartExecutionState CreateInitialState(string? startNodeId)
     {
         const string rootScopeId = "scope:root";
@@ -29,33 +26,6 @@ public sealed class FlowchartStatePersister
         var rootScope = new ExecutionScope(rootScopeId, ExecutionScopeKind.Root, ownerNodeId: startNodeId);
         var rootPath = new ExecutionPath(rootPathId, rootScopeId, currentNodeId: startNodeId);
         return new FlowchartExecutionState(rootScopeId, [rootScope], [rootPath]);
-    }
-
-    public static FlowchartExecutionState? LoadState(ActivityExecutionState activityExecutionState)
-    {
-        if (activityExecutionState.PrivateState is not { } privateState)
-            return null;
-
-        if (privateState.StateVersion != FlowchartExecutionEngine.StateSchemaVersion ||
-            !StringComparer.Ordinal.Equals(privateState.Value.Type.Alias, FlowchartExecutionEngine.StateTypeAlias) ||
-            privateState.Value.InlineValue is not { } payload)
-        {
-            throw new FlowchartExecutionException("Flowchart private state does not match the required type and schema version.");
-        }
-
-        try
-        {
-            return payload.Deserialize<FlowchartExecutionState>(SerializerOptions)
-                   ?? throw new FlowchartExecutionException("Flowchart private state resolved to null.");
-        }
-        catch (FlowchartExecutionException)
-        {
-            throw;
-        }
-        catch (Exception exception) when (exception is JsonException or NotSupportedException or ArgumentException)
-        {
-            throw new FlowchartExecutionException("Flowchart private state is invalid.", exception);
-        }
     }
 
     /// <summary>
@@ -179,20 +149,19 @@ public sealed class FlowchartStatePersister
         }
     }
 
-    public RuntimeStructuralContinuation StageState(
-        RuntimeStructuralContinuation continuation,
-        FlowchartExecutionState state)
+    /// <summary>
+    /// What main stages as the composite's private state: the state pruned for persistence. Main serializes it into
+    /// the checkpoint and reloads it at the next callback; the host here keeps it as a value (and may serialize it
+    /// with <see cref="SerializerOptions"/>, which persists enums as ordinals, as main does).
+    /// </summary>
+    public FlowchartStep StageState(FlowchartRun run, FlowchartStepKind kind, FlowchartExecutionState state, string? outcome = null, FlowchartFault? fault = null)
     {
-        ArgumentNullException.ThrowIfNull(continuation);
+        ArgumentNullException.ThrowIfNull(run);
         ArgumentNullException.ThrowIfNull(state);
 
-        var value = ValueEnvelope.Inline(
-            new Elsa.Primitives.Models.ValueTypeDescriptor(
-                FlowchartExecutionEngine.StateTypeAlias,
-                schemaVersion: FlowchartExecutionEngine.StateSchemaVersion),
-            JsonSerializer.SerializeToElement(PruneForPersistence(state), SerializerOptions),
-            ValueProtectionPolicy.InstanceInline);
-
-        return continuation.WithState(value, FlowchartExecutionEngine.StateSchemaVersion);
+        return new FlowchartStep(kind, PruneForPersistence(state), run.Scheduled.ToArray(), outcome, fault);
     }
+
+    /// <summary>The serializer main's persister uses: web defaults, enums as ordinals.</summary>
+    public static JsonSerializerOptions SerializerOptions { get; } = new(JsonSerializerDefaults.Web);
 }

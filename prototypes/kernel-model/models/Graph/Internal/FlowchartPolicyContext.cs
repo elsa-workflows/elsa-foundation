@@ -1,7 +1,7 @@
-using Elsa.Activities.Flowchart.Contracts;
-using Elsa.Activities.Flowchart.Models;
+using Kernel.Graph.Contracts;
+using Kernel.Graph.Models;
 
-namespace Elsa.Activities.Flowchart.Internal;
+namespace Kernel.Graph.Internal;
 
 public sealed class FlowchartPolicyContext(
     FlowchartPolicyTrigger trigger,

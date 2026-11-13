@@ -1,3 +1,3 @@
-namespace Elsa.Activities.Flowchart.Internal.Policies;
+namespace Kernel.Graph.Internal.Policies;
 
 public sealed class DecisionFlowchartPolicy() : MatchingOutboundFlowchartPolicyBase(FlowchartPolicyKinds.Decision, "Decision");

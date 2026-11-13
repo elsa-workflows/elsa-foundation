@@ -1,7 +1,6 @@
 using System.Text.Json.Serialization;
-using Elsa.Workflows.Runtime.Core.Constants;
 
-namespace Elsa.Activities.Flowchart.Models;
+namespace Kernel.Graph.Models;
 
 public sealed class FlowchartEndpoint
 {
@@ -21,5 +20,5 @@ public sealed class FlowchartEndpoint
     public string Port { get; }
 
     public static string NormalizePort(string? port) =>
-        string.IsNullOrWhiteSpace(port) ? ActivityOutcomes.Done : port.Trim();
+        string.IsNullOrWhiteSpace(port) ? FlowchartOutcomes.Done : port.Trim();
 }

@@ -1,7 +1,7 @@
-using Elsa.Activities.Flowchart.Contracts;
-using Elsa.Activities.Flowchart.Models;
+using Kernel.Graph.Contracts;
+using Kernel.Graph.Models;
 
-namespace Elsa.Activities.Flowchart.Internal.Policies;
+namespace Kernel.Graph.Internal.Policies;
 
 /// <summary>
 /// The dead-path join semantics: a target waits until <b>every</b> inbound connection has an arrival for its

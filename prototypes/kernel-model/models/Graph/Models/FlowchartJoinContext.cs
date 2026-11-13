@@ -1,4 +1,4 @@
-namespace Elsa.Activities.Flowchart.Models;
+namespace Kernel.Graph.Models;
 
 /// <summary>
 /// Everything a join decision is allowed to look at: the execution state, the target's inbound connections,

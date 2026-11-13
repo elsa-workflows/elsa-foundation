@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace Elsa.Activities.Flowchart.Models;
+namespace Kernel.Graph.Models;
 
 public sealed record ExecutionPath
 {

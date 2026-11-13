@@ -1,12 +1,11 @@
-using Elsa.Activities.Flowchart.Contracts;
-using Elsa.Activities.Flowchart.Exceptions;
-using Elsa.Activities.Flowchart.Internal.Policies;
-using Elsa.Activities.Flowchart.Models;
-using Elsa.Workflows.Runtime.Core.Contracts;
-using static Elsa.Activities.Flowchart.Internal.FlowchartScheduler;
-using static Elsa.Activities.Flowchart.Internal.FlowchartStateMutator;
+using Kernel.Graph.Contracts;
+using Kernel.Graph.Exceptions;
+using Kernel.Graph.Internal.Policies;
+using Kernel.Graph.Models;
+using static Kernel.Graph.Internal.FlowchartScheduler;
+using static Kernel.Graph.Internal.FlowchartStateMutator;
 
-namespace Elsa.Activities.Flowchart.Internal;
+namespace Kernel.Graph.Internal;
 
 /// <summary>
 /// Join and arrival bookkeeping for the Flowchart engine — the <c>FlowchartJoinHandler</c> named in #275.
@@ -30,13 +29,13 @@ public sealed class FlowchartJoinCoordinator(IFlowchartPolicyRegistry policyRegi
         ?? throw new FlowchartExecutionException(
             $"Flowchart join policy '{options.JoinPolicyKind}' is registered but does not implement {nameof(IFlowchartJoinPolicy)}.");
 
-    public FlowchartExecutionState ReleaseReadyWaitingJoins(IRuntimeActivityExecutionContext context, FlowchartExecutionState state, FlowchartGraph graph)
+    public FlowchartExecutionState ReleaseReadyWaitingJoins(FlowchartRun context, FlowchartExecutionState state, FlowchartGraph graph)
     {
         state = ReleaseReadyJoins(context, state, graph);
         return ReleaseStarvedJoins(context, state, graph);
     }
 
-    private FlowchartExecutionState ReleaseReadyJoins(IRuntimeActivityExecutionContext context, FlowchartExecutionState state, FlowchartGraph graph)
+    private FlowchartExecutionState ReleaseReadyJoins(FlowchartRun context, FlowchartExecutionState state, FlowchartGraph graph)
     {
         foreach (var group in WaitingJoinKeys(state))
         {
@@ -73,7 +72,7 @@ public sealed class FlowchartJoinCoordinator(IFlowchartPolicyRegistry policyRegi
     /// pass — releasing schedules a child, which is exactly the evidence that the Flowchart is no longer quiet.
     /// </para>
     /// </summary>
-    private FlowchartExecutionState ReleaseStarvedJoins(IRuntimeActivityExecutionContext context, FlowchartExecutionState state, FlowchartGraph graph)
+    private FlowchartExecutionState ReleaseStarvedJoins(FlowchartRun context, FlowchartExecutionState state, FlowchartGraph graph)
     {
         // Each release completes at least one waiting path, so the number of them at entry bounds the loop.
         var bound = state.ExecutionPaths.Count(path => path.Status == ExecutionPathStatus.Waiting);
@@ -104,7 +103,7 @@ public sealed class FlowchartJoinCoordinator(IFlowchartPolicyRegistry policyRegi
     }
 
     public FlowchartExecutionState FireJoinOrContinuation(
-        IRuntimeActivityExecutionContext context,
+        FlowchartRun context,
         FlowchartExecutionState state,
         FlowchartGraph graph,
         string targetNodeId,
@@ -134,7 +133,7 @@ public sealed class FlowchartJoinCoordinator(IFlowchartPolicyRegistry policyRegi
     /// instead of representing it, which is what keeps the two semantics on one engine.
     /// </summary>
     public FlowchartExecutionState RouteUntakenOutbound(
-        IRuntimeActivityExecutionContext context,
+        FlowchartRun context,
         FlowchartExecutionState state,
         FlowchartGraph graph,
         string sourceNodeId,
@@ -163,7 +162,7 @@ public sealed class FlowchartJoinCoordinator(IFlowchartPolicyRegistry policyRegi
     /// only input a join has.
     /// </summary>
     private FlowchartExecutionState EmitDeadArrival(
-        IRuntimeActivityExecutionContext context,
+        FlowchartRun context,
         FlowchartExecutionState state,
         FlowchartGraph graph,
         FlowchartConnection connection,
@@ -217,7 +216,7 @@ public sealed class FlowchartJoinCoordinator(IFlowchartPolicyRegistry policyRegi
     /// </para>
     /// </summary>
     private FlowchartExecutionState CarryDeadnessThrough(
-        IRuntimeActivityExecutionContext context,
+        FlowchartRun context,
         FlowchartExecutionState state,
         FlowchartGraph graph,
         JoinKey group,
@@ -234,7 +233,7 @@ public sealed class FlowchartJoinCoordinator(IFlowchartPolicyRegistry policyRegi
 
         var producingActivityExecutionId = schedulingActivityExecutionId
                                            ?? arrivals.Select(arrival => arrival.ProducingActivityExecutionId).FirstOrDefault()
-                                           ?? context.ActivityExecutionState.Execution.ActivityExecutionId;
+                                           ?? context.ContainerExecutionId;
 
         foreach (var connection in graph.GetOutboundConnections(group.TargetNodeId))
             state = EmitDeadArrival(context, state, graph, connection, group.ExecutionScopeId, group.IterationKey, producingActivityExecutionId);

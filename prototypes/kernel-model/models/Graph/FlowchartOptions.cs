@@ -1,7 +1,7 @@
-using Elsa.Activities.Flowchart.Contracts;
-using Elsa.Activities.Flowchart.Internal.Policies;
+using Kernel.Graph.Contracts;
+using Kernel.Graph.Internal.Policies;
 
-namespace Elsa.Activities.Flowchart;
+namespace Kernel.Graph;
 
 /// <summary>
 /// Host-level Flowchart engine settings.

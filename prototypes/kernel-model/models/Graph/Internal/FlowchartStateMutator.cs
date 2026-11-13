@@ -1,6 +1,6 @@
-using Elsa.Activities.Flowchart.Models;
+using Kernel.Graph.Models;
 
-namespace Elsa.Activities.Flowchart.Internal;
+namespace Kernel.Graph.Internal;
 
 /// <summary>
 /// The single home for immutable <see cref="FlowchartExecutionState"/> mutations that append or update

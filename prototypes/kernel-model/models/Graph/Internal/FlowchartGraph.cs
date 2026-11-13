@@ -1,16 +1,14 @@
-using System.Text.Json;
-using Elsa.Activities.Flowchart.Exceptions;
-using Elsa.Activities.Flowchart.Models;
-using Elsa.Workflows.Runtime.Core.Constants;
-using Elsa.Workflows.Runtime.Core.Models;
-using FlowchartActivity = Elsa.Activities.Flowchart.Activities.Flowchart;
+using Kernel.Graph.Exceptions;
+using Kernel.Graph.Models;
 
-namespace Elsa.Activities.Flowchart.Internal;
+namespace Kernel.Graph.Internal;
 
 public sealed class FlowchartGraph
 {
-    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
-    private readonly IReadOnlyDictionary<string, ExecutableNode> _nodesById;
+    /// <summary>Main's slot name, kept in the messages so that they read as main's.</summary>
+    private const string ActivitiesSlotName = "Flowchart.Activities";
+
+    private readonly IReadOnlyDictionary<string, FlowchartNode> _nodesById;
     private readonly IReadOnlyCollection<FlowchartConnection> _connections;
     // Publish-time routing indexes. The outcome→successor relation is precomputed at graph
     // materialization so per-completion routing is a dictionary lookup on the source node id rather than a linear
@@ -24,8 +22,8 @@ public sealed class FlowchartGraph
     private readonly IReadOnlySet<(string Source, string Target)> _backwardEdges;
 
     private FlowchartGraph(
-        IReadOnlyList<ExecutableNode> children,
-        IReadOnlyDictionary<string, ExecutableNode> nodesById,
+        IReadOnlyList<FlowchartNode> children,
+        IReadOnlyDictionary<string, FlowchartNode> nodesById,
         IReadOnlyCollection<FlowchartConnection> connections,
         string? startNodeId,
         IReadOnlyDictionary<string, FlowchartNodeMetadata> nodeMetadata,
@@ -65,26 +63,24 @@ public sealed class FlowchartGraph
             StringComparer.Ordinal);
     }
 
-    public IReadOnlyList<ExecutableNode> Children { get; }
+    public IReadOnlyList<FlowchartNode> Children { get; }
     public IReadOnlyCollection<FlowchartConnection> Connections => _connections;
 
-    public static FlowchartGraph From(ExecutableNode executableNode)
+    /// <summary>
+    /// Builds the graph of one container. Main reads the children from the executable node's activities slot and the
+    /// structure from its structure payload; here the host passes both. Validation is main's.
+    /// </summary>
+    public static FlowchartGraph From(IReadOnlyList<FlowchartNode> children, FlowchartStructure? structure)
     {
-        ArgumentNullException.ThrowIfNull(executableNode);
+        ArgumentNullException.ThrowIfNull(children);
 
-        var slot = executableNode.ChildSlots.FirstOrDefault(slot => StringComparer.Ordinal.Equals(slot.Name, FlowchartActivity.ActivitiesSlotName));
-        if (slot is null)
-            return new FlowchartGraph([], new Dictionary<string, ExecutableNode>(StringComparer.Ordinal), [], null, new Dictionary<string, FlowchartNodeMetadata>(), new Dictionary<string, FlowchartConnectionMetadata>());
-
-        var children = slot.Activities.ToArray();
-        var nodesById = children.ToDictionary(child => child.ExecutableNodeId, StringComparer.Ordinal);
-        var structure = ReadStructure(executableNode);
+        var nodesById = children.ToDictionary(child => child.NodeId, StringComparer.Ordinal);
         var connections = structure?.Connections ?? [];
         var startNodeId = NormalizeStartNodeId(structure?.StartNodeId);
 
         ValidateConnections(connections, nodesById);
         if (startNodeId is not null && !nodesById.ContainsKey(startNodeId))
-            throw new FlowchartExecutionException($"Flowchart start node '{startNodeId}' does not exist in child slot '{FlowchartActivity.ActivitiesSlotName}'.");
+            throw new FlowchartExecutionException($"Flowchart start node '{startNodeId}' does not exist in child slot '{ActivitiesSlotName}'.");
 
         return new FlowchartGraph(
             children,
@@ -95,7 +91,7 @@ public sealed class FlowchartGraph
             structure?.ConnectionMetadata ?? new Dictionary<string, FlowchartConnectionMetadata>());
     }
 
-    public ExecutableNode? SelectStartNode()
+    public FlowchartNode? SelectStartNode()
     {
         if (Children.Count == 0)
             return null;
@@ -107,7 +103,7 @@ public sealed class FlowchartGraph
             .Select(connection => connection.Target.NodeId)
             .ToHashSet(StringComparer.Ordinal);
 
-        return Children.FirstOrDefault(child => !nodesWithInbound.Contains(child.ExecutableNodeId)) ?? Children[0];
+        return Children.FirstOrDefault(child => !nodesWithInbound.Contains(child.NodeId)) ?? Children[0];
     }
 
     /// <summary>
@@ -117,7 +113,7 @@ public sealed class FlowchartGraph
     /// begins at the trigger on every pass. This is per run; <see cref="SelectStartNode"/> stays the static
     /// fallback that loop-edge classification uses.
     /// </summary>
-    public ExecutableNode? SelectEntryNode(string? triggerNodeId) =>
+    public FlowchartNode? SelectEntryNode(string? triggerNodeId) =>
         triggerNodeId is not null && _nodesById.TryGetValue(triggerNodeId, out var triggerNode)
             ? triggerNode
             : SelectStartNode();
@@ -132,17 +128,17 @@ public sealed class FlowchartGraph
     /// <item>otherwise the start node, because a deeper trigger is reached through it.</item>
     /// </list>
     /// </summary>
-    public ExecutableNode? SelectTriggerStartChild(string triggerNodeId)
+    public FlowchartNode? SelectTriggerStartChild(string triggerNodeId)
     {
         var startNode = SelectStartNode();
         if (!_nodesById.TryGetValue(triggerNodeId, out var triggerNode))
             return startNode;
 
-        var isStartNode = startNode is not null && StringComparer.Ordinal.Equals(startNode.ExecutableNodeId, triggerNodeId);
+        var isStartNode = startNode is not null && StringComparer.Ordinal.Equals(startNode.NodeId, triggerNodeId);
         return isStartNode || !_inboundByTarget.ContainsKey(triggerNodeId) ? triggerNode : null;
     }
 
-    public IReadOnlyCollection<ExecutableNode> SelectTargets(string completedChildExecutableNodeId, IReadOnlyCollection<string> outcomeNames)
+    public IReadOnlyCollection<FlowchartNode> SelectTargets(string completedChildExecutableNodeId, IReadOnlyCollection<string> outcomeNames)
     {
         var targetIds = SelectOutboundConnections(completedChildExecutableNodeId, outcomeNames)
             .Select(connection => connection.Target.NodeId)
@@ -154,14 +150,14 @@ public sealed class FlowchartGraph
         return targetIds.Select(targetId => _nodesById[targetId]).ToArray();
     }
 
-    public ExecutableNode GetRequiredNode(string executableNodeId)
+    public FlowchartNode GetRequiredNode(string executableNodeId)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(executableNodeId);
 
         if (_nodesById.TryGetValue(executableNodeId, out var node))
             return node;
 
-        throw new FlowchartExecutionException($"Flowchart child executable node '{executableNodeId}' does not exist in child slot '{FlowchartActivity.ActivitiesSlotName}'.");
+        throw new FlowchartExecutionException($"Flowchart child executable node '{executableNodeId}' does not exist in child slot '{ActivitiesSlotName}'.");
     }
 
     /// <summary>
@@ -176,7 +172,7 @@ public sealed class FlowchartGraph
         ArgumentNullException.ThrowIfNull(outcomeNames);
 
         if (!_nodesById.ContainsKey(sourceNodeId))
-            throw new FlowchartExecutionException($"Completed child executable node '{sourceNodeId}' does not exist in child slot '{FlowchartActivity.ActivitiesSlotName}'.");
+            throw new FlowchartExecutionException($"Completed child executable node '{sourceNodeId}' does not exist in child slot '{ActivitiesSlotName}'.");
 
         var outcomes = NormalizeOutcomes(outcomeNames);
         if (!_outboundBySource.TryGetValue(sourceNodeId, out var outbound))
@@ -198,7 +194,7 @@ public sealed class FlowchartGraph
         ArgumentNullException.ThrowIfNull(outcomeNames);
 
         if (!_nodesById.ContainsKey(sourceNodeId))
-            throw new FlowchartExecutionException($"Completed child executable node '{sourceNodeId}' does not exist in child slot '{FlowchartActivity.ActivitiesSlotName}'.");
+            throw new FlowchartExecutionException($"Completed child executable node '{sourceNodeId}' does not exist in child slot '{ActivitiesSlotName}'.");
 
         var outcomes = NormalizeOutcomes(outcomeNames);
         return _connections
@@ -374,8 +370,8 @@ public sealed class FlowchartGraph
         var color = new Dictionary<string, int>(StringComparer.Ordinal);
         var outboundBySource = _connections.ToLookup(connection => connection.Source.NodeId, StringComparer.Ordinal);
 
-        var roots = (SelectStartNode() is { } startNode ? new[] { startNode.ExecutableNodeId } : [])
-            .Concat(Children.Where(IsTriggerNode).Select(child => child.ExecutableNodeId).OrderBy(id => id, StringComparer.Ordinal))
+        var roots = (SelectStartNode() is { } startNode ? new[] { startNode.NodeId } : [])
+            .Concat(Children.Where(IsTriggerNode).Select(child => child.NodeId).OrderBy(id => id, StringComparer.Ordinal))
             .Concat(_nodesById.Keys.OrderBy(id => id, StringComparer.Ordinal))
             .Distinct(StringComparer.Ordinal);
 
@@ -402,35 +398,7 @@ public sealed class FlowchartGraph
         }
     }
 
-    private static FlowchartStructure? ReadStructure(ExecutableNode executableNode)
-    {
-        if (executableNode.Structure is null)
-            return null;
-
-        if (!StringComparer.Ordinal.Equals(executableNode.Structure.Kind, FlowchartActivity.StructureKind))
-            throw new FlowchartExecutionException($"Flowchart executable node '{executableNode.ExecutableNodeId}' has unsupported structure kind '{executableNode.Structure.Kind}'.");
-
-        if (!StringComparer.Ordinal.Equals(executableNode.Structure.SchemaVersion, FlowchartActivity.StructureSchemaVersion))
-            throw new FlowchartExecutionException($"Flowchart executable node '{executableNode.ExecutableNodeId}' has unsupported structure schema version '{executableNode.Structure.SchemaVersion}'.");
-
-        try
-        {
-            return executableNode.Structure.Payload.Deserialize<FlowchartStructure>(SerializerOptions)
-                   ?? throw new FlowchartExecutionException($"Flowchart executable node '{executableNode.ExecutableNodeId}' structure resolved to null.");
-        }
-        catch (FlowchartExecutionException)
-        {
-            throw;
-        }
-        catch (Exception exception) when (exception is JsonException or NotSupportedException or ArgumentException)
-        {
-            throw new FlowchartExecutionException($"Flowchart executable node '{executableNode.ExecutableNodeId}' structure is not a valid Flowchart structure payload.", exception);
-        }
-    }
-
-    private static bool IsTriggerNode(ExecutableNode node) =>
-        node.Metadata.TryGetValue(TriggerNodeMetadata.ExecutionTypeKey, out var executionType) &&
-        StringComparer.Ordinal.Equals(executionType, TriggerNodeMetadata.TriggerExecutionType);
+    private static bool IsTriggerNode(FlowchartNode node) => node.IsTrigger;
 
     internal static string? NormalizeStartNodeId(string? startNodeId)
     {
@@ -442,15 +410,15 @@ public sealed class FlowchartGraph
 
     private static void ValidateConnections(
         IReadOnlyCollection<FlowchartConnection> connections,
-        IReadOnlyDictionary<string, ExecutableNode> nodesById)
+        IReadOnlyDictionary<string, FlowchartNode> nodesById)
     {
         foreach (var connection in connections)
         {
             if (!nodesById.ContainsKey(connection.Source.NodeId))
-                throw new FlowchartExecutionException($"Flowchart connection source node '{connection.Source.NodeId}' does not exist in child slot '{FlowchartActivity.ActivitiesSlotName}'.");
+                throw new FlowchartExecutionException($"Flowchart connection source node '{connection.Source.NodeId}' does not exist in child slot '{ActivitiesSlotName}'.");
 
             if (!nodesById.ContainsKey(connection.Target.NodeId))
-                throw new FlowchartExecutionException($"Flowchart connection target node '{connection.Target.NodeId}' does not exist in child slot '{FlowchartActivity.ActivitiesSlotName}'.");
+                throw new FlowchartExecutionException($"Flowchart connection target node '{connection.Target.NodeId}' does not exist in child slot '{ActivitiesSlotName}'.");
         }
     }
 

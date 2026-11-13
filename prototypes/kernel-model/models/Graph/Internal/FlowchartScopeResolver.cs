@@ -1,8 +1,8 @@
-using Elsa.Activities.Flowchart.Exceptions;
-using Elsa.Activities.Flowchart.Models;
-using static Elsa.Activities.Flowchart.Internal.FlowchartStateMutator;
+using Kernel.Graph.Exceptions;
+using Kernel.Graph.Models;
+using static Kernel.Graph.Internal.FlowchartStateMutator;
 
-namespace Elsa.Activities.Flowchart.Internal;
+namespace Kernel.Graph.Internal;
 
 /// <summary>
 /// Execution-scope resolution and scope-scoped path cancellation for the Flowchart engine: race-continuation

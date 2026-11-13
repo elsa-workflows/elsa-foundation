@@ -1,6 +1,6 @@
-using Elsa.Activities.Flowchart.Exceptions;
+using Kernel.Graph.Exceptions;
 
-namespace Elsa.Activities.Flowchart.Internal;
+namespace Kernel.Graph.Internal;
 
 public sealed class FlowchartReachabilityAnalyzer
 {

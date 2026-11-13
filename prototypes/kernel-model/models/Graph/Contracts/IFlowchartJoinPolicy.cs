@@ -1,6 +1,6 @@
-using Elsa.Activities.Flowchart.Models;
+using Kernel.Graph.Models;
 
-namespace Elsa.Activities.Flowchart.Contracts;
+namespace Kernel.Graph.Contracts;
 
 /// <summary>
 /// Decides Flowchart's <b>implicit</b> joins — the inference that is the whole of Flowchart's difficulty,

@@ -1,4 +1,4 @@
-namespace Elsa.Activities.Flowchart.Internal.Policies;
+namespace Kernel.Graph.Internal.Policies;
 
 public static class FlowchartPolicyKinds
 {

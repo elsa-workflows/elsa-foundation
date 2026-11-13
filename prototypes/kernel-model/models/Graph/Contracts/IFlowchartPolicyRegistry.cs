@@ -1,4 +1,4 @@
-namespace Elsa.Activities.Flowchart.Contracts;
+namespace Kernel.Graph.Contracts;
 
 public interface IFlowchartPolicyRegistry
 {

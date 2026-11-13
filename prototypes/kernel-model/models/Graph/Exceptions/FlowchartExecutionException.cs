@@ -1,4 +1,4 @@
-namespace Elsa.Activities.Flowchart.Exceptions;
+namespace Kernel.Graph.Exceptions;
 
 public sealed class FlowchartExecutionException : Exception
 {

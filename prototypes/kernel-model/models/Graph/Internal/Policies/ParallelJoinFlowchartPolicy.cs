@@ -1,4 +1,4 @@
-namespace Elsa.Activities.Flowchart.Internal.Policies;
+namespace Kernel.Graph.Internal.Policies;
 
 /// <summary>
 /// Parallel join: fires once every inbound branch has arrived (the engine's implicit-join accounting), then
