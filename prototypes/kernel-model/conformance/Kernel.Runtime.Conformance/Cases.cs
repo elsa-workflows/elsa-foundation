@@ -119,6 +119,7 @@ public static class Cases
             await h.StartAsync();
             await Settle(h);
             var a = Holder(h, 0);       // the node that holds partition 0 dies while it has its messages in hand
+            var held = Enumerable.Range(0, h.Partitions).Where(p => h.Watcher.Holders(h.Partitions)[p].Contains(a.Name)).ToList();
             var tokens = Enumerable.Range(0, 30).Select(i => "k" + i).ToList();
             var id = InstanceRef.In(0, "c").Id;
             var adding = Task.Run(async () =>
@@ -128,10 +129,14 @@ public static class Cases
             That(await Harness.WaitAsync(async () => (await h.RowAsync(id)) is { } row && Json.Read<CounterState>(row.State).Tokens.Count >= 3, Slack),
                 $"{a.Name} handled none of partition 0's messages before the crash");
             await h.KillAsync(a);
+            // A crash gives nothing up: right after the kill every scope the node held still has its lease (a take is
+            // refused). The lease is 3 s here, so it cannot have run out yet.
+            foreach (var p in held)
+                That(await h.Outside.TakeAsync(p, "probe", h.Lease) is null, $"the killed node gave partition {p} up: a crash gives nothing up");
             await adding;
             await Settle(h, "every scope taken over");
             await Applied(h, 0, "c", tokens, h.Lease * 3 + Slack);
-        }),
+        }, Default with { Timing = Default.Timing with { Lease = TimeSpan.FromSeconds(3) } }),
 
         new("stop: a stopped node's scopes are taken over before its lease would have run out", Level.Reference, async h =>
         {
