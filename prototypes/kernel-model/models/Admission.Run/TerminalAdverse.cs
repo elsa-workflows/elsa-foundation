@@ -27,10 +27,10 @@ internal static class TerminalAdverse
             count++;
         }
         if (list)
-        { Console.WriteLine("terminal-adverse-control:early-reply"); Console.WriteLine("terminal-adverse-control:stale-delete-fence"); return; }
-        Detect("U2:", () => new TerminalWire(Modes.Balanced, false, Flaw.EmitBeforeCommit).Uncertain("query", true));
+        { Console.WriteLine("terminal-adverse:query-reply-boundary"); Console.WriteLine("terminal-adverse-control:stale-delete-fence"); return; }
+        new TerminalWire(Modes.Balanced, false).QueryReplyBoundary(); count++;
         Detect("Kernel: I1 a commit prepared under epoch ", () => new TerminalWire(Modes.Balanced, false, Flaw.FenceWithoutEpoch).StaleDelete());
-        Console.WriteLine($"{count}/{count} terminal adverse schedules passed;2/2 named controls detected. In-memory wire/reload only.");
+        Console.WriteLine($"{count}/{count} terminal adverse schedules passed;1/1 internal control detected. Targeted-reply source mutation is separate. In-memory wire/reload only.");
     }
 
     private static void Detect(string prefix, Action run)
@@ -181,7 +181,19 @@ internal sealed class TerminalWire(string mode, bool nested, Flaw defect = Flaw.
         Apply(new("exec", old.Id, call)); Apply(new("answer", old.Id, call));
         Require(!old.Worker.Owns && _world.Store.Instances.GetValueOrDefault(_target.Id) == stored && _world.Store.Partitions[0].Position == position,
             "U4", "stale delete changed the ended row or journal position");
-        Drain(); Send(Kinds.Delete); Drain();
+        Drain();
         Require(!_world.Store.Instances.ContainsKey(_target.Id), "U4", "current-owner replay of expired delete did not complete");
+        Send(Kinds.Delete); Drain();
+        Require(!_world.Store.Instances.ContainsKey(_target.Id), "U4", "repeated delete recreated its target");
+    }
+
+    internal void QueryReplyBoundary()
+    {
+        Start(); Send(NativeKinds.Resume, new ResumeStimulus("step")); Drain();
+        _cutArmed = true;
+        Send(ReceiptQuery.Kind, new ReceiptQuery(_frame, "a"), reply: true); Prepare();
+        Apply(new("flush", Actor.Id)); _cutArmed = false; Drain();
+        Require(Replies[^1].Result == "Found", "U2", "committed targeted query response missing");
+        Console.WriteLine("PASS terminal-adverse:query-reply-boundary");
     }
 }

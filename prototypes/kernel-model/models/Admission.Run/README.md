@@ -87,3 +87,23 @@ slice also clarifies the exact Committed.Now contract and centralizes the model 
 
 Latest-main integration supplies explicit reply deadlines and advances the recreation diagnostic in bounded
 lease-renewed steps. The diagnostic must retain the ordinary worker lease checks and normal deletion path.
+
+## Terminal commit uncertainty and stale deletion
+
+`--list-terminal-adverse` inventories 35 positive schedules and one internal fence control.
+`--terminal-adverse` cuts actual completion, queued/selected cancellation and receipt-query commits before
+application or after application with a lost acknowledgement, crossing both modes and root/nested placement.
+It checks committed disposition, unchanged sender identity/order, the full immutable retention window, payload
+cleanup, bounded correlated replies and normal caller continuation after cold owner takeover. It also stages
+an expired-receipt Delete, executes that old commit after takeover, checks rejection without row/journal change,
+and requires the new owner to replay the original delete before testing a fresh idempotent command.
+
+`--terminal-query-boundary` is the positive targeted-reply boundary witness. An isolated source copy must move
+the worker's targeted query replies before commit and fail its exact U2 pre-commit assertion. Ordinary early
+output is a different path and cannot stand in for that mutation. The internal stale-epoch mutation must fail
+the existing kernel I1 epoch-fence invariant. Preserve both detected controls separately from positive runs.
+
+These are in-memory wire cuts and model reload, not process/provider restart or exactly-once external effects.
+Actual future-native binaries, legacy fixtures, re-entry/equal-frame addressing, budget reuse, shared actor
+incarnation and transport/value retention remain unqualified. This witness changes no execution implementation.
+No current-source execution result is asserted here until its packet is recorded on the PR.
