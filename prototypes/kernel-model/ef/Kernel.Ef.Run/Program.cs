@@ -32,7 +32,7 @@ if (args is ["probe", var probe])
     // ordinal has no fixed width (as the kernel wrote them before finding F8). It does not: EF sends them in key order.
     var create = Factory(true, probe);
     await using (var db = create()) await db.Database.EnsureDeletedAsync();
-    var store = new EfStore(create, postgres: true);
+    var store = new EfStore(create, postgres: true, fenceInBatch: false);
     await store.CreateAsync(2);
     var lease = (await store.TakeAsync(0, "probe", TimeSpan.FromSeconds(30)))!;
     var sent = Enumerable.Range(0, 12).Select(i => new Message($"0/a#1.{i}", InstanceRef.In(1, "b"), "add")).ToList();
@@ -76,7 +76,9 @@ static async Task Cost(bool postgres, string connection, bool fenceInBatch)
     await using (var db = create()) await db.Database.EnsureDeletedAsync();
     var store = new EfStore(create, postgres, fenceInBatch);
     await store.CreateAsync(2);
-    var owner = new Worker("owner", 0, store, new WorkflowInstance(Models()));
+    // A cost run counts the work, not the lease's upkeep: with an hour's lease no pass renews it inside a row, however slow the engine.
+    var hour = new WorkerOptions { Lease = TimeSpan.FromHours(1) };
+    var owner = new Worker("owner", 0, store, new WorkflowInstance(Models()), hour);
     await new DurableHost([owner]).ActivateAsync(owner.Partition);
     await owner.PollAsync();    // the owner is caught up: from here it hands over in memory
     var n = 0;
@@ -118,7 +120,7 @@ static async Task Cost(bool postgres, string connection, bool fenceInBatch)
         await Drain(owner, poll: false);
     });
     // Waiting for an event: through the subscription and event tables, and through a correlation instance per key.
-    other = new Worker("other", 1, store, new WorkflowInstance(Models()));
+    other = new Worker("other", 1, store, new WorkflowInstance(Models()), hour);
     await new DurableHost([other]).ActivateAsync(other.Partition);
     await other.PollAsync();
     string Key(int partition) => Enumerable.Range(0, 1000).Select(i => $"k{partition}-{n}-{i}").First(k => Correlation.Of(k, 2).Partition == partition);
@@ -176,7 +178,7 @@ static async Task<int> Stress(string connection, int seconds, int messages, bool
     var create = Factory(true, connection + ";Application Name=kernel-worker;Maximum Pool Size=40");
     var admin = Factory(true, connection + ";Application Name=kernel-admin");
     await using (var db = admin()) await db.Database.EnsureDeletedAsync();
-    var store = new EfStore(create, postgres: true) { Unfenced = unfenced };     // unfenced: the mutation that the test must notice
+    var store = new EfStore(create, postgres: true, fenceInBatch: false) { Unfenced = unfenced };     // unfenced: the mutation that the test must notice
     await new EfStore(admin, postgres: true).CreateAsync(partitions);
 
     var calm = false;
