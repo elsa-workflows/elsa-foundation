@@ -1314,6 +1314,7 @@ function CategoryRail({
   onSelect(categoryId: string): void;
 }) {
   const railRef = useRef<HTMLElement>(null);
+  // Viewport units include the host's chrome; measure its scrollport so panels cannot hide categories.
   useLayoutEffect(() => {
     const rail = railRef.current;
     if (!rail) return;
