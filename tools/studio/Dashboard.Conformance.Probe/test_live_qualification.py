@@ -240,5 +240,38 @@ class VerdictTests(unittest.TestCase):
         with self.assertRaises(ValueError): live.verdict(self.report, self.root, 'different-sha')
 
 
-if __name__ == '__main__':
-    unittest.main()
+
+class NativeEdgeVerdictTests(unittest.TestCase):
+    def test_nonzero_sdk_send_or_unperformed_repair_cannot_qualify_native_edges(self):
+        for mutation in ('sdkSendsAfter','explicitRepairSavedNewRevision','oldHistoryWithheld','boundedCostRetrySucceeded'):
+            with self.subTest(mutation=mutation),tempfile.TemporaryDirectory() as directory:
+                root=Path(directory);report=self.fixture(root)
+                proof_path=root/'native-edge-proof.json';proof=json.loads(proof_path.read_text())
+                proof[mutation]=1 if mutation=='sdkSendsAfter' else False;proof_path.write_text(json.dumps(proof))
+                with self.assertRaises(ValueError):live.native_edge_verdict(report,root,'fixture-sha')
+
+    def test_missing_or_skipped_native_experience_cannot_qualify(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);report=self.fixture(root)
+            (root/'edge-module-history-withheld.aria.yml').unlink()
+            with self.assertRaises(ValueError):live.native_edge_verdict(report,root,'fixture-sha')
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);report=self.fixture(root)
+            report['suites'][0]['specs'][0]['tests'][0]['results'][0]['status']='skipped'
+            with self.assertRaises(ValueError):live.native_edge_verdict(report,root,'fixture-sha')
+
+    def fixture(self,root):
+        proof={key:True for key in ('actualModuleDisabledAndRestored','explicitRepairSavedNewRevision','sameQuestion','oldHistoryWithheld','newHistoryAvailable','noEligibleDenominator','noEligibleValues','priorResultGeneratedAtRetained','boundedCostRetrySucceeded','failedValuesWithheld','transportRetrySucceeded')}
+        proof.update(staleReason='definition changed',emptyBaselineCoverage='unknown',boundedCostError='QUERY_LIMIT',failureKind='owned browser transport offline',sdkSendsBefore=0,sdkSendsAfter=0)
+        attachments=[]
+        for name in {'source','native-edge-proof.json','edge-native-weaver-boundary.json'}|{f'{capture}.{suffix}' for capture in live.EDGE_CAPTURES for suffix in ('png','aria.yml')}:
+            path=root/name;path.write_text('fixture-sha' if name=='source' else json.dumps(proof) if name=='native-edge-proof.json' else '{"genericWeaverMessagePosts":0}' if name=='edge-native-weaver-boundary.json' else 'synthetic refusal control')
+            attachments.append({'name':name,'path':str(path)})
+        path=root/'trace.zip'
+        with zipfile.ZipFile(path,'w') as archive:archive.writestr('0-trace.trace','{"type":"frame-snapshot","snapshot":{"html":"Replace unavailable query"}}\n')
+        attachments.append({'name':'trace','path':str(path)})
+        report={'suites':[{'specs':[{'title':'native Dashboard module repair and edge states','tests':[{'projectName':'live-desktop','expectedStatus':'passed','status':'expected','results':[{'status':'passed','attachments':attachments}]}]}]}]}
+        self.assertEqual(1,live.native_edge_verdict(report,root,'fixture-sha'))
+        return report
+
+if __name__ == '__main__': unittest.main()

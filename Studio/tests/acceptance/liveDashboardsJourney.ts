@@ -43,7 +43,7 @@ function instrumentation(page: Page, backend: Backend) {
 }
 
 /** Capture real values inside Studio/Weaver's scrolling panes, not only the page header. */
-async function captureResultViews(page: Page, info: TestInfo, capture: Capture, name: string, result: Locator) {
+export async function captureResultViews(page: Page, info: TestInfo, capture: Capture, name: string, result: Locator) {
   const target = async (suffix: string, element: Locator) => {
     await element.evaluate(value => value.scrollIntoView({ block: "end", inline: "nearest", behavior: "instant" }));
     await expect(element).toBeInViewport(); await capture(page, info, `${name}-${suffix}`);

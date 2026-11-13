@@ -413,8 +413,49 @@ def restart_verdict(report, output, expected_sha, lifetimes):
     return 1
 
 
+EDGE_CAPTURES = ('live-reference', 'edge-module-history-withheld', 'edge-module-unavailable',
+    'edge-no-denominator-and-values', 'edge-repair-saved-reopened', 'edge-repaired-definition-history',
+    'edge-stale-definition-provenance', 'edge-empty-result', 'edge-empty-baseline-unknown-coverage',
+    'edge-bounded-cost-rejection', 'edge-bounded-cost-retry', 'edge-failed-transport-values-withheld', 'edge-transport-retry')
+
+EDGE_CAPTURES += tuple(f'{name}-{part}' for name in ('edge-no-denominator-and-values','edge-repair-saved-reopened','edge-stale-definition-provenance','edge-empty-baseline-unknown-coverage','edge-transport-retry') for part in ('periods','values','values-end'))
+
+def native_edge_verdict(report, output, expected_sha):
+    rows=[]
+    def visit(suites):
+        for suite in suites:
+            for spec in suite.get('specs',[]):
+                rows.extend((spec.get('title'),test) for test in spec.get('tests',[]))
+            visit(suite.get('suites',[]))
+    visit(report.get('suites',[]))
+    if report.get('errors') or len(rows)!=1 or rows[0][0]!='native Dashboard module repair and edge states':
+        raise ValueError('The actual native edge journey must run exactly once')
+    test=rows[0][1];results=test.get('results',[])
+    if test.get('projectName')!='live-desktop' or test.get('expectedStatus')!='passed' or test.get('status')!='expected' or len(results)!=1 or results[0].get('status')!='passed':
+        raise ValueError('Skipped, retried or failed native edges cannot qualify')
+    required={'source','trace','native-edge-proof.json','edge-native-weaver-boundary.json'} | {f'{capture}.{suffix}' for capture in EDGE_CAPTURES for suffix in ('png','aria.yml')}
+    paths={item.get('name'):Path(item.get('path','')).resolve() for item in results[0].get('attachments',[]) if item.get('name') in required}
+    if set(paths)!=required or any(not path.is_relative_to(output.resolve()) or not path.is_file() or not path.stat().st_size for path in paths.values()):
+        raise ValueError('Native edge experience evidence is missing or outside owned output')
+    if paths['source'].read_text().strip()!=expected_sha:raise ValueError('Native edge source differs from the committed runner')
+    proof=json.loads(paths['native-edge-proof.json'].read_text())
+    for key in ('actualModuleDisabledAndRestored','explicitRepairSavedNewRevision','sameQuestion','oldHistoryWithheld','newHistoryAvailable','noEligibleDenominator','noEligibleValues','priorResultGeneratedAtRetained','boundedCostRetrySucceeded','failedValuesWithheld','transportRetrySucceeded'):
+        if proof.get(key) is not True:raise ValueError('A required native edge outcome was not established')
+    if proof.get('staleReason')!='definition changed' or proof.get('emptyBaselineCoverage')!='unknown' or proof.get('boundedCostError')!='QUERY_LIMIT' or proof.get('failureKind')!='owned browser transport offline':
+        raise ValueError('Native edge semantics must retain their actual source meanings')
+    if proof.get('sdkSendsBefore')!=0 or proof.get('sdkSendsAfter')!=0:raise ValueError('Native edge operations must not send a model turn')
+    if json.loads(paths['edge-native-weaver-boundary.json'].read_text()).get('genericWeaverMessagePosts')!=0:raise ValueError('Native edge operations submitted a Weaver message')
+    # There is one normal owner context in this native-only journey. Check recorded actions/DOM.
+    with zipfile.ZipFile(paths['trace']) as archive:
+        traces=[name for name in archive.namelist() if name.endswith('.trace') and name!='test.trace']
+        if not traces or not any(b'frame-snapshot' in archive.read(name) and b'Replace unavailable query' in archive.read(name) for name in traces):
+            raise ValueError('The actual repair actions and DOM trace are required')
+    return 1
+
+
 def execute_live(output, options, native, report):
-    env = credential_environment(options.mode, options.account_access_restored, options.credential_environment_variable, native)
+    edges = options.mode == 'native-edges'
+    env = native.clean_environment() if edges else credential_environment(options.mode, options.account_access_restored, options.credential_environment_variable, native)
     with tempfile.TemporaryDirectory(prefix='elsa-dashboard-live-state-') as temporary:
         data = Path(temporary)
         backend, studio = data / 'backend', data / 'studio'
@@ -430,6 +471,9 @@ def execute_live(output, options, native, report):
         settings = json.loads((backend / 'appsettings.json').read_text(encoding='utf-8-sig'))
         shells = json.loads((backend / 'shells.json').read_text(encoding='utf-8-sig'))
         profile(settings, shells, studio_url, options.model, native)
+        if edges:
+            for name in ('WeaverGitHubCopilot', 'DashboardLiveQualification'):
+                shells['CShells']['Shells']['default']['Features'][name]['Enabled'] = False
         (backend / 'appsettings.json').write_text(json.dumps(settings))
         (backend / 'shells.json').write_text(json.dumps(shells))
         home = data / 'home'
@@ -445,23 +489,27 @@ def execute_live(output, options, native, report):
                            UX_ACCEPTANCE_OUT=str(output), UX_SOURCE_SHA=report['sourceSha'])
         browser_command = ['pnpm', 'exec', 'playwright', 'test', '--config', 'tests/acceptance/playwright.live-dashboards.config.ts']
         with native.host(backend, 'Elsa.Workbench.dll', backend_url, '/__qualification/ready', output / 'backend.log', env) as first_backend:
-            preflight = live_preflight(backend_url)
-            report['preflight'] = preflight
-            if not preflight['available']:
-                report.update(status='unavailable', stage='provider-preflight', error='Actual provider preflight unavailable; no automatic retry or browser/model turn attempted')
-                raise LiveUnavailable('Actual provider unavailable; no automatic retry')
-            if options.model not in preflight['declaredModels']:
-                raise ValueError('Requested pinned model is absent from actual provider diagnostics; no turn attempted')
+            if not edges:
+                preflight = live_preflight(backend_url)
+                report['preflight'] = preflight
+                if not preflight['available']:
+                    report.update(status='unavailable', stage='provider-preflight', error='Actual provider preflight unavailable; no automatic retry or browser/model turn attempted')
+                    raise LiveUnavailable('Actual provider unavailable; no automatic retry')
+                if options.model not in preflight['declaredModels']:
+                    raise ValueError('Requested pinned model is absent from actual provider diagnostics; no turn attempted')
             with native.host(studio, 'Elsa.Studio.Web.dll', studio_url, '/studio-runtime.js', output / 'studio.log',
                              studio_env) as first_studio:
                 report['stage'] = 'actual-live-journeys'
-                command(native, browser_command, output / 'journeys.log', cwd=ROOT / 'Studio', env=browser_env)
-                report['executed'] = verdict(json.loads((output / 'playwright.json').read_text()), output, report['sourceSha'])
+                command(native, browser_command, output / 'journeys.log', cwd=ROOT / 'Studio', env=dict(browser_env, UX_DASHBOARD_NATIVE_EDGES='1') if edges else browser_env)
+                report['executed'] = native_edge_verdict(json.loads((output / 'playwright.json').read_text()), output, report['sourceSha']) if edges else verdict(json.loads((output / 'playwright.json').read_text()), output, report['sourceSha'])
         lifetimes = [{'phase': 'authoring', 'backendPid': first_backend.pid, 'studioPid': first_studio.pid,
                       'backendExit': first_backend.poll(), 'studioExit': first_studio.poll()}]
         report['hostLifetimes'] = lifetimes
         if lifetimes[0]['backendExit'] != 0 or lifetimes[0]['studioExit'] != 0:
             raise ValueError('Both first-lifetime hosts must stop normally before restart')
+        if edges:
+            report.update(status='passed', stage='complete', nativeEdgesQualified=True, liveQualified=False)
+            return
         if not (output / 'workflow-retained.json').is_file():
             raise ValueError('No authored definition manifest survived the first host lifetime')
         # Preserve the original directories and databases. Only disable provider access.
@@ -501,15 +549,15 @@ def run(options):
               'providerCalls': 'not run', 'visualApproval': 'requires independent current-commit review',
               'startedAt': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}
     try:
-        if options.mode == 'live' and start['dirty']:
+        if options.mode in {'live','native-edges'} and start['dirty']:
             raise ValueError('Actual live qualification requires a clean committed source revision')
         project, hook, seeded = materialize(output)
-        if options.mode in {'build', 'live'}:
+        if options.mode in {'build', 'live', 'native-edges'}:
             report['stage'] = 'isolated-build'
             build(output, project, hook, seeded, native_helpers())
         report.update(status='prepared', stage='not-run', liveQualified=False)
-        if options.mode == 'live':
-            report['providerCalls'] = 'actual preflight requested once; see preflight and SDK counter evidence'
+        if options.mode in {'live','native-edges'}:
+            report['providerCalls'] = 'disabled; native edge SDK counts required zero' if options.mode == 'native-edges' else 'actual preflight requested once; see preflight and SDK counter evidence'
             execute_live(output, options, native_helpers(), report)
         if source_state() != start:
             report.update(liveQualified=False)
@@ -533,7 +581,7 @@ def run(options):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', required=True, type=Path, help='New absolute private owned directory outside source')
-    parser.add_argument('--mode', choices=['prepare', 'build', 'live'], default='prepare')
+    parser.add_argument('--mode', choices=['prepare', 'build', 'live', 'native-edges'], default='prepare')
     parser.add_argument('--model', required=True, help='Explicit pinned model id; never auto')
     parser.add_argument('--account-access-restored', action='store_true', help='Live mode only: owner explicitly confirmed restored account access')
     parser.add_argument('--credential-environment-variable', help='Live mode only: approved environment-variable name; no file or token value')
