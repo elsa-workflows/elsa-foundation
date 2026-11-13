@@ -72,7 +72,7 @@ for (const [names, defaults] of [
   ["extension", { mustUnderstand: false }], ["extensionAttributeDefinition", { isReference: false }],
   ["documentation textAnnotation", { textFormat: "text/plain" }], ["intermediateCatchEvent catchEvent", { parallelMultiple: false }],
   ["startEvent", { parallelMultiple: false, isInterrupting: true }], ["boundaryEvent", { parallelMultiple: false, cancelActivity: true }],
-  ["compensateEventDefinition", { waitForCompletion: true }], ["dataInput dataOutput dataObject itemDefinition", { isCollection: false }],
+  ["compensateEventDefinition", { waitForCompletion: true }], ["dataInput inputDataItem dataOutput outputDataItem dataObject itemDefinition", { isCollection: false }],
   ["dataStore", { isUnlimited: true }], ["participantMultiplicity", { minimum: 0, maximum: 1 }],
   ["choreographyActivity callChoreography subChoreography choreographyTask", { loopType: "None" }],
   ["subProcess transaction", { isForCompensation: false, startQuantity: 1, completionQuantity: 1, triggeredByEvent: false }],
@@ -81,7 +81,39 @@ for (const [names, defaults] of [
   ["adHocSubProcess", { isForCompensation: false, startQuantity: 1, completionQuantity: 1, triggeredByEvent: false, cancelRemainingInstances: true }],
   ["definitions", { expressionLanguage: "http://www.w3.org/1999/XPath", typeLanguage: "http://www.w3.org/2001/XMLSchema" }]
 ] as const) for (const name of names.split(" ")) semanticDefaults.set(name, defaults);
-const booleanAttributes = new Set("isExecutable isClosed isForCompensation isCollection isImmediate isRequired isSequential isInterrupting cancelActivity parallelMultiple instantiate triggeredByEvent testBefore cancelRemainingInstances waitForCompletion isUnlimited mustUnderstand isReference isExpanded isHorizontal isMarkerVisible isBold isItalic isUnderline isStrikeThrough".split(" "));
+const modelNamespace = "http://www.omg.org/spec/BPMN/20100524/MODEL";
+const diagramNamespace = "http://www.omg.org/spec/BPMN/20100524/DI";
+const boundsNamespace = "http://www.omg.org/spec/DD/20100524/DC";
+function nativeModelKind(element: Element): string {
+  const type = element.getAttributeNS("http://www.w3.org/2001/XMLSchema-instance", "type")?.trim();
+  const match = /^(?:([^:]+):)?t([A-Z][A-Za-z0-9]*)$/.exec(type ?? "");
+  return match && element.lookupNamespaceURI(match[1] ?? null) === modelNamespace
+    ? match[2][0].toLowerCase() + match[2].slice(1) : element.localName;
+}
+/** Only declared Boolean fields are converted; identically named opaque fields stay strings. */
+export function nativeBooleanAttribute(element: Element, name: string): boolean {
+  const kind = nativeModelKind(element);
+  if (element.namespaceURI === modelNamespace) return typeof semanticDefaults.get(kind)?.[name] === "boolean"
+    || ["process", "collaboration", "choreography", "globalConversation", "globalChoreographyTask"].includes(kind) && name === "isClosed"
+    || kind === "process" && name === "isExecutable"
+    || kind === "sequenceFlow" && name === "isImmediate"
+    || kind === "resourceParameter" && name === "isRequired";
+  return element.namespaceURI === diagramNamespace && element.localName === "BPMNShape" && ["isExpanded", "isHorizontal", "isMarkerVisible", "isMessageVisible"].includes(name)
+    || element.namespaceURI === boundsNamespace && element.localName === "Font" && ["isBold", "isItalic", "isUnderline", "isStrikeThrough"].includes(name);
+}
+export function nativeBoolean(value: string): boolean | undefined {
+  const collapsed = value.replace(/^[ \t\r\n]+|[ \t\r\n]+$/g, "");
+  return collapsed === "true" || collapsed === "1" ? true : collapsed === "false" || collapsed === "0" ? false : undefined;
+}
+/** Match captured primitive intent against the pinned writer's declared default omission only. */
+export function nativePrimitiveMatches(element: Element, name: string, value: unknown): boolean {
+  const actual = element.getAttribute(name);
+  const fallback = element.namespaceURI === modelNamespace ? semanticDefaults.get(nativeModelKind(element))?.[name] : undefined;
+  if (actual === null) return value == null || fallback !== undefined && fallback === value;
+  if (typeof value === "boolean" && nativeBooleanAttribute(element, name)) return nativeBoolean(actual) === value;
+  if (typeof value === "number" && typeof fallback === "number") return actual.trim() !== "" && Number(actual) === value;
+  return actual === (value == null ? null : String(value));
+}
 const numberAttributes = new Set("x y width height size minimum maximum startQuantity completionQuantity".split(" "));
 
 /** Complete projected content comparison with only declared serializer spelling/default normalizations. */
@@ -98,9 +130,9 @@ export function nativeImportSignature(element: Element, modelNamespace: string):
   const attributes = [...element.attributes].filter(attribute => attribute.namespaceURI !== "http://www.w3.org/2000/xmlns/").flatMap(attribute => {
     let value: string | boolean | number = attribute.value;
     if (!attribute.namespaceURI) {
-      if (booleanAttributes.has(attribute.localName) && ["true", "1", "false", "0"].includes(value)) value = value === "true" || value === "1";
+      if (nativeBooleanAttribute(element, attribute.localName) && nativeBoolean(value) !== undefined) value = nativeBoolean(value)!;
       else if (numberAttributes.has(attribute.localName) && value.trim() && Number.isFinite(Number(value))) value = Number(value);
-      if (element.namespaceURI === modelNamespace && semanticDefaults.get(element.localName)?.[attribute.localName] === value) return [];
+      if (element.namespaceURI === modelNamespace && semanticDefaults.get(nativeModelKind(element))?.[attribute.localName] === value) return [];
     }
     const typedQName = attribute.namespaceURI === "http://www.w3.org/2001/XMLSchema-instance" && attribute.localName === "type";
     const externalQName = element.namespaceURI === modelNamespace && ["calledElement", "structureRef", "implementationRef"].includes(attribute.localName);

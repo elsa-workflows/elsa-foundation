@@ -1,5 +1,5 @@
 import type { ActivityNode, BpmnBounds, BpmnDocumentAuthoring, BpmnPoint, BpmnScopeAddress, BpmnXmlAddress } from "@elsa-workflows/studio-workflows";
-import { nativeChildren, nativeImportSignature, nativeIndex, nativeNumber, nativeRefuse, nativeXml } from "./bpmnDocumentXml";
+import { nativeBoolean, nativeBooleanAttribute, nativeChildren, nativeImportSignature, nativeIndex, nativeNumber, nativeRefuse, nativeXml } from "./bpmnDocumentXml";
 import { normalizeNativeDiIds } from "./bpmnDocumentDiAliases";
 import { captureNativeNamespaceContexts, contextualizeNativeNamespacePair, type NativeNamespaceContext } from "./bpmnDocumentNamespaceContext";
 
@@ -135,6 +135,13 @@ export function projectBpmnNativeDocument(authoring: BpmnDocumentAuthoring, owne
       if (original !== projected) { repairs.push({ address: address(element), original, projected }); element.textContent = projected; }
     }
     for (const attribute of [...element.attributes]) {
+      if (!attribute.namespaceURI && nativeBooleanAttribute(element, attribute.localName)) {
+        const value = nativeBoolean(attribute.value);
+        if (value !== undefined && String(value) !== attribute.value) {
+          repairs.push({ address: address(element), attribute: attribute.localName, original: attribute.value, projected: String(value) });
+          attribute.value = String(value);
+        }
+      }
       if (attribute.namespaceURI && !safeAttributeNamespaces.has(attribute.namespaceURI)) {
         omitted.push(address(element)); element.removeAttributeNode(attribute);
       }

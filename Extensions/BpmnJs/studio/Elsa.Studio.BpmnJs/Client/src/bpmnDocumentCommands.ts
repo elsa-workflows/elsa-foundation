@@ -1,6 +1,7 @@
 import type { BpmnBounds, BpmnDocumentAuthoring, BpmnDocumentCommand, BpmnPoint } from "@elsa-workflows/studio-workflows";
 import type { BpmnNativeBaseline } from "./bpmnDocumentProjection";
 import { nativeChildren, nativeIndex, nativeNumber, nativeRefuse, nativeSignature, nativeXml } from "./bpmnDocumentXml";
+import { guardBpmnNativeCopies } from "./bpmnDocumentCopyGuard";
 import { diffBpmnNativeCommandGroup } from "./bpmnDocumentDiff";
 import { nativeDiAliases, normalizeNativeDiIds } from "./bpmnDocumentDiAliases";
 import { contextualizeNativeNamespacePair, type NativeNamespaceOrigin, type NativeNamespaceSnapshot } from "./bpmnDocumentNamespaceContext";
@@ -167,6 +168,7 @@ export function mapBpmnNativeCommandGroup(authoring: BpmnDocumentAuthoring, base
 export function mapBpmnNativeCommandPlan(authoring: BpmnDocumentAuthoring, baseline: BpmnNativeBaseline, group: NativeCommandGroup, nextXml: string): {
   readonly commands: readonly BpmnDocumentCommand[]; readonly diAliases: ReadonlyMap<string, string>;
 } {
+  guardBpmnNativeCopies(authoring, baseline.projection, group.namespaceOrigins);
   const diAliases = nativeDiAliases(authoring, baseline, group, nextXml);
   const oldAliases = new Map([...baseline.di].map(([id, value]) => [id, value.id]));
   const contextual = contextualizeNativeNamespacePair(authoring, baseline.projection.namespaceContexts,

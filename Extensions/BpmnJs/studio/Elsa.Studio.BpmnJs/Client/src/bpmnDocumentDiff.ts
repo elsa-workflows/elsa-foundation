@@ -1,7 +1,7 @@
 import type { BpmnDocumentAuthoring, BpmnDocumentCommand, BpmnXmlAddress } from "@elsa-workflows/studio-workflows";
 import type { NativeCommandAction, NativeCommandGroup } from "./bpmnDocumentCommands";
 import type { BpmnNativeBaseline } from "./bpmnDocumentProjection";
-import { nativeChildren, nativeImportSignature, nativeIndex, nativeRefuse, nativeSignature, nativeXml } from "./bpmnDocumentXml";
+import { nativeChildren, nativeImportSignature, nativeIndex, nativePrimitiveMatches, nativeRefuse, nativeSignature, nativeXml } from "./bpmnDocumentXml";
 
 const xmlns = "http://www.w3.org/2000/xmlns/";
 const xsi = "http://www.w3.org/2001/XMLSchema-instance";
@@ -123,7 +123,7 @@ export function diffBpmnNativeCommandGroup(authoring: BpmnDocumentAuthoring, bas
     for (const [name, value] of Object.entries(action.properties)) {
       if (value && typeof value === "object" || name === "di") continue;
       const actual = name === "body" ? element.textContent : element.getAttribute(name);
-      if ((element.hasAttribute(name) || action.moddlePath?.length || name === "body") && actual !== (value == null ? null : String(value))) nativeRefuse("modeled property differs from completed command intent");
+      if (!(name === "body" ? actual === (value == null ? null : String(value)) : nativePrimitiveMatches(element, name, value))) nativeRefuse("modeled property differs from completed command intent");
     }
   }
   for (const id of structural) for (const index of [oldIndex, newIndex]) {
@@ -247,9 +247,8 @@ export function diffBpmnNativeCommandGroup(authoring: BpmnDocumentAuthoring, bas
   const commands: BpmnDocumentCommand[] = actions.length ? [...geometry({ id: group.id, trigger: "execute", actions }, authoring.serializeBpmnXml(geometryView))] : [];
   const modeled = actions.length ? geometryView : before;
   const modelIndex = nativeIndex(modeled);
-  const raw = authoring.readBpmnDocument(authoring.applyBpmnDocumentCommands(baseline.projection.owner, commands)).document;
-  // Vendor extension attributes named `id` are not BPMN/DC/DI identities and may repeat one.
-  const rawIndex = new Map([...raw.getElementsByTagName("*")].filter(element => standard.has(element.namespaceURI ?? "") && element.hasAttribute("id")).map(element => [element.getAttribute("id")!, element]));
+  const parsed = authoring.readBpmnDocument(authoring.applyBpmnDocumentCommands(baseline.projection.owner, commands));
+  const raw = parsed.document, rawIndex = parsed.byId;
   const rawFor = new Map<Element, Element>();
   const sourceNode = (element: Element): Element => {
     const known = rawFor.get(element); if (known) return known;

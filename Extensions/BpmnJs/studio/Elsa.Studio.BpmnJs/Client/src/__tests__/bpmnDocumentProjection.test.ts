@@ -142,4 +142,17 @@ describe("unenabled schema2 native source projection", () => {
     const unprefixedRebound = edit(unprefixed, (_document, byId) => byId.get("call")!.setAttributeNS("http://www.w3.org/2000/xmlns/", "xmlns", "urn:another-vendor"));
     expect(() => bindBpmnNativeBaseline(authoring, projection, unprefixedRebound)).toThrow(/normalization ledger/);
   });
+  it.each(["1", " 1 ", " true ", "0", " 0 ", " false "])("normalizes declared XML Boolean '%s' only in the private import", async value => {
+    const source = owner(rawXml.replace('id="work" name="Original"', `id="work" name="Original" isForCompensation="${value}"`)
+      .replace('isMarkerVisible="true"', `isMarkerVisible="${value}"`));
+    const { projection, definitions } = await modeled(source);
+    const expected = value.trim() === "1" || value.trim() === "true";
+    const process = definitions.rootElements.find((element: { id: string }) => element.id === "process");
+    expect(process.flowElements.find((element: { id: string }) => element.id === "work").isForCompensation).toBe(expected);
+    const shape = definitions.diagrams.find((element: { id: string }) => element.id === "main").plane.planeElement.find((element: { id: string }) => element.id === "gateway-di");
+    expect(shape.isMarkerVisible).toBe(expected);
+    expect(projection.sourceXml).toBe(source.structure!.payload.documentXml);
+    expect(projection.repairs).toEqual(expect.arrayContaining([expect.objectContaining({ attribute: "isForCompensation", original: value, projected: String(expected) })]));
+  });
+
 });

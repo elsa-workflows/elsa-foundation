@@ -12,6 +12,7 @@ import BpmnFactory from "bpmn-js/lib/features/modeling/BpmnFactory";
 import ElementFactory from "bpmn-js/lib/features/modeling/ElementFactory";
 import Modeling from "bpmn-js/lib/features/modeling/Modeling";
 import BpmnUpdater from "bpmn-js/lib/features/modeling/BpmnUpdater";
+import UpdateModdlePropertiesHandler from "bpmn-js/lib/features/modeling/cmd/UpdateModdlePropertiesHandler";
 import UpdateLabelHandler from "bpmn-js/lib/features/label-editing/cmd/UpdateLabelHandler";
 import type { Shape } from "bpmn-js/lib/model/Types";
 import { collectBpmnNativeCommandGroups, mapBpmnNativeCommandGroup, type NativeCommandEvents, type NativeCommandGroup } from "../bpmnDocumentCommands";
@@ -103,4 +104,29 @@ describe("pinned native command core", () => {
       expect(h.graphics.update).toHaveBeenCalled();
     } finally { h.detach(); }
   });
+  it("admits the actual sequential-to-parallel menu command when the pinned writer omits false", async () => {
+    const source = owner(rawXml.replace('<bpmn:outgoing>q:flow</bpmn:outgoing>', '<bpmn:outgoing>q:flow</bpmn:outgoing><bpmn:multiInstanceLoopCharacteristics isSequential="true"/>'));
+    const native = await modeled(source), events = new EventBus();
+    const stack = new CommandStack(events, {} as ConstructorParameters<typeof CommandStack>[1]);
+    stack.register("element.updateModdleProperties", new UpdateModdlePropertiesHandler(new ElementRegistry(events)));
+    const process = native.definitions.rootElements.find((element: { id: string }) => element.id === "process");
+    const work = process.flowElements.find((element: { id: string }) => element.id === "work");
+    const target = create("shape", { id: "work", businessObject: work });
+    const groups: NativeCommandGroup[] = [], refuse = vi.fn();
+    const detach = collectBpmnNativeCommandGroups(events as unknown as NativeCommandEvents, group => groups.push(group), refuse);
+    try {
+      stack.execute("element.updateModdleProperties", { element: target, moddleElement: work.loopCharacteristics, properties: { isSequential: false } });
+      expect(refuse).not.toHaveBeenCalled(); expect(groups).toHaveLength(1);
+      expect(groups[0].actions[0]).toMatchObject({ moddleOwnerId: "work", moddlePath: ["loopCharacteristics"], properties: { isSequential: false } });
+      const saved = await native.moddle.toXML(native.definitions);
+      expect(saved.xml).not.toContain("isSequential=");
+      const commands = mapBpmnNativeCommandGroup(authoring, native.baseline, groups[0], saved.xml);
+      const candidate = authoring.readBpmnDocument(authoring.applyBpmnDocumentCommands(source, commands));
+      expect(candidate.byId.get("work")!.getElementsByTagNameNS(authoring.bpmnNamespaces.model, "multiInstanceLoopCharacteristics")[0].hasAttribute("isSequential")).toBe(false);
+      expect(candidate.byId.get("work")!.getAttributeNS("urn:vendor", "flag")).toBe("qualified");
+      const wrong = { ...groups[0], actions: [{ ...groups[0].actions[0], properties: { isSequential: true } }] };
+      expect(() => mapBpmnNativeCommandGroup(authoring, native.baseline, wrong, saved.xml)).toThrow("completed command intent");
+    } finally { detach(); }
+  });
+
 });
