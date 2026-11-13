@@ -52,7 +52,7 @@ accepting the receipt.
 
 ### Candidate publication services
 
-These five contracts are replacements: exactly one implementation per shell. Register before the feature defaults or use `services.Replace(...)`; a startup task rejects missing or duplicate registrations, including a second registration added after defaults, before publication reconcilers run. They are not contribution collections.
+These five candidate services and `IExecutableStructureNormalizer` are replacements: exactly one implementation per shell. Register before the feature defaults or use `services.Replace(...)`; a startup task rejects missing or duplicate registrations, including a second registration added after defaults, before publication reconcilers run. The check counts descriptors without activating scoped services. They are not contribution collections.
 
 The compiler request/result and `ActivityTemplateCandidate` models live in Publishing Core. Draft publication and provider-backed source publication share the evaluator, readiness and catalog projection; draft publication also consumes the release policy. Typed domain source adapters can consume these Core ports without referencing this engine implementation. A provider-backed source publisher may supply an evaluator without the default template compiler.
 
@@ -274,6 +274,9 @@ the compiled target while retaining the actual authored identity for translation
 admission; the legacy seven-argument path still fails closed without that authority. Its additional optional
 normalizer dependency is required when translating authored structures. Only translated occurrences and
 their authored descendants are normalized; unrelated legacy overlays retain their prior representation.
+Ordinary workflow node compilation and BPMN semantic verification consume that same scoped replacement.
+`ExecutableNodeCompiler` retains its existing six-argument binary constructor and standalone canonical
+default; composed hosts inject their registered normalizer rather than constructing a competing default.
 Typed canonical variable initial bindings follow placement alongside input bindings; opaque metadata and
 authored variable arrays are not rewritten. Malformed canonical JSON is wrapped in Publishing Core
 `WorkflowExecutableCompilationException` with its parser cause and node identity.

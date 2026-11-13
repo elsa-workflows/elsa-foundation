@@ -14,7 +14,6 @@ using Elsa.Primitives.Models;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
-using Elsa.Workflows.Design.Core.Services;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Publishing.Core.Contracts;
@@ -105,18 +104,23 @@ public sealed partial class BpmnCompleteSourceCompilationTests
         Assert.Equal(source, owner.Structure.Payload.GetRawText());
     }
 
-    private static async Task<WorkflowExecutable> CompileWorkflow(ActivityNode root, IEnumerable<ActivityDefinitionVersion>? overrideVersions = null)
+    private static async Task<WorkflowExecutable> CompileWorkflow(ActivityNode root, IEnumerable<ActivityDefinitionVersion>? overrideVersions = null,
+        IExecutableStructureNormalizer? normalizer = null)
     {
         var registry = TestWellKnownTypeRegistry.Create();
         registry.RegisterType(typeof(BpmnProcess), TypeAliasConvention.CanonicalAlias(typeof(BpmnProcess)));
         var services = new ServiceCollection();
         services.AddSingleton<IWellKnownTypeRegistry>(registry);
         services.AddSingleton(TimeProvider.System);
+        services.AddSingleton<Elsa.Workflows.Runtime.Core.Contracts.IRuntimeDurableValueStorageDriverRegistry>(
+            new Elsa.Workflows.Runtime.Services.Values.RuntimeDurableValueStorageDriverRegistry([new Elsa.Workflows.Runtime.Services.Values.JsonRuntimeDurableValueStorageDriver()]));
+        if (normalizer is not null) services.AddScoped<IExecutableStructureNormalizer>(_ => normalizer);
         new ActivitiesBpmnDesignFeature().ConfigureServices(services);
         new ActivitiesSequenceFeature().ConfigureServices(services);
         new Elsa.Workflows.Publishing.WorkflowsPublishingFeature().ConfigureServices(services);
-        using var provider = services.BuildServiceProvider();
-        var structures = new DefaultActivityStructureService(provider.GetServices<IActivityStructureHandler>());
+        using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+        using var scope = provider.CreateScope();
+        var structures = scope.ServiceProvider.GetRequiredService<IActivityStructureService>();
         var workflow = new WorkflowDefinitionVersion("definition-1", "1.0.0")
         {
             Id = "version-1", Definition = new WorkflowDefinition { Id = "definition-1", Name = "Complete source" },
@@ -124,7 +128,8 @@ public sealed partial class BpmnCompleteSourceCompilationTests
         };
         var compiler = TestCompiler.Create(new FakeVersionStore(workflow),
             new FakeActivityVersionStore((overrideVersions ?? Versions()).ToList()), structures, registry,
-            metadataEnricher: new ExecutableNodeMetadataEnricher(new CompilationEvents(provider.GetServices<IExecutableCompilationSource>())));
+            metadataEnricher: new ExecutableNodeMetadataEnricher(new CompilationEvents(scope.ServiceProvider.GetServices<IExecutableCompilationSource>())),
+            nodeCompiler: scope.ServiceProvider.GetRequiredService<ExecutableNodeCompiler>());
         var now = new DateTimeOffset(2026, 11, 6, 0, 0, 0, TimeSpan.Zero);
         return await compiler.CompileAsync(new("version-1", WorkflowExecutableReferenceScope.Published, now, now, null, "bpmn-"));
     }
