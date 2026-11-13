@@ -1,7 +1,7 @@
-# External authentication connection catalog
+# External authentication connections and flows
 
 This optional module supplies host-wide deployment connection configuration, a live effective catalog and
-guarded connection lifecycle operations.
+guarded connection lifecycle operations, protected one-time sign-in flow coordination and administrator preview.
 The catalog uses the selected provider-configuration authority only when database management is enabled.
 Deployment-only reads never resolve or query the optional provider database.
 
@@ -24,12 +24,12 @@ unknown users reject by default. See the [core extension contracts](../Core/EXTE
 ## Registration at this stage
 
 The default registration installs the catalog/registry, admission policies, guarded connection writer,
-delegation/readiness/recovery authorities, protected observations, options, time and activation validation. Database management requires a selected revision-aware provider-configuration store
+delegation/readiness/recovery authorities, protected observations, flow coordination, options, time and activation validation. Database management requires a selected revision-aware provider-configuration store
 or an explicit custom catalog. Activation validates registration and deployment policy without querying
 schema tables before the persistence feature's migration phase.
 
-The Core package also defines contracts for protocol flows and durable artifacts. Their default implementations
-and HTTP entry points are staged separately. Missing installed protocols, canonical sessions, durable artifacts
+Managed protocol and durable artifact/session implementations are optional packages; HTTP entry points and
+canonical session enforcement are staged separately. Missing installed protocols, canonical sessions, durable artifacts
 or callback support never count as a usable sign-in/recovery path. Configuration selection is not runtime readiness,
 provider sign-in proof or complete external-authentication delivery.
 
@@ -73,3 +73,20 @@ The [EF persistence package](../Persistence/EntityFrameworkCore/README.md) suppl
 `IAuthenticationArtifactStore` and `IAuthenticationSessionStore` authorities. Installing the stores does not
 switch canonical sign-in, cookies or tokens to durable sessions or install callback routes; those integrations
 follow in their owning slices. Deployment-only catalog composition still avoids the optional database.
+
+## Protected flow coordination
+
+`IExternalAuthenticationFlowService` starts a challenge against the selected live connection. Its server-owned
+state is protected and durably bound to tenant, connection, purpose, browser and, for preview, the initiating
+canonical administrator. It retains the selected record/material, callback, nonce, PKCE verifier, issuer and
+credential binding. A bound callback consumes the state once before redemption and rechecks the live selection
+and return-destination policy. Stale, expired, replayed, wrong-browser or wrong-administrator input supplies no
+new user authority.
+
+Normal completion invokes the admission policy and returns the admitted Elsa user ID and verified provenance.
+It does not itself issue a cookie or token. Preview invokes read-only assessment and stores a bounded protected
+result for the same administrator and browser; consuming the result rechecks authorization and reports changed
+connection material as stale. It creates no user, link or normal session and establishes no recovery evidence.
+Production requires a durable artifact authority; a non-durable replacement is accepted only in Development.
+The controlled OIDC fixture source exercises these boundaries after execution is authorized; it is not evidence
+of a real identity-provider deployment, current cookie/session enforcement or Studio acceptance.
