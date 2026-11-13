@@ -268,3 +268,5 @@ not automatic constitution violations.
 - [Studio Dashboard routes and Weaver contributions](Studio/src/essentials/Elsa.Studio.Dashboard/EXTENSION_POINTS.md)
 
 - [Weaver Dashboard authoring](Extensions/Weaver/src/Dashboard/EXTENSION_POINTS.md)
+
+- [Copilot SDK adapter boundary](Extensions/Weaver/src/GitHubCopilot/EXTENSION_POINTS.md)
