@@ -335,6 +335,10 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
         catch (RuntimePostCommitSourceBoundaryException failure)
         {
+            if (cancellationToken.IsCancellationRequested && failure.IsUnavailable)
+                for (Exception? cause = failure.InnerException; cause is not null; cause = cause.InnerException)
+                    if (cause is OperationCanceledException cancellation && cancellation.CancellationToken == cancellationToken)
+                        ExceptionDispatchInfo.Capture(cancellation).Throw();
             if (failure.SourceOutboxItemId == item.OutboxItemId) throw;
             throw new RuntimePostCommitSourceBoundaryException(item.OutboxItemId, item.Intent.Kind, failure, failure.IsUnavailable);
         }

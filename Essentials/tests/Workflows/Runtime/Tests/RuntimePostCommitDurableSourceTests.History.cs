@@ -238,6 +238,35 @@ public sealed partial class RuntimePostCommitDurableSourceTests
         Assert.Equal(Kind, refusal.IntentKind); Assert.Null(refusal.SourceOutboxItemId);
     }
 
+    [Theory]
+    [InlineData(true, true)] [InlineData(false, true)] [InlineData(true, false)]
+    public async Task Native_qualification_restores_only_the_corresponding_requested_cancellation_without_handoff_or_ack(bool requested, bool sameToken)
+    {
+        using var provider = HistoryServices().BuildServiceProvider(); using var scope = provider.CreateScope();
+        using var caller = new CancellationTokenSource(); using var unrelated = new CancellationTokenSource();
+        var original = new OperationCanceledException("controlled qualification cancellation", null, sameToken ? caller.Token : unrelated.Token);
+        var services = scope.ServiceProvider; var store = services.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>();
+        services.GetRequiredService<HistoryOwner>().BeforeQualification = () =>
+        {
+            if (requested) caller.Cancel();
+            throw original;
+        };
+        await store.AddPendingForTestingAsync(HistoryItem());
+        var processor = services.GetRequiredService<IRuntimePostCommitOutboxProcessor>();
+        if (requested && sameToken)
+            Assert.Same(original, await Assert.ThrowsAsync<OperationCanceledException>(() => processor.ProcessAsync(new(10), caller.Token).AsTask()));
+        else
+        {
+            var failure = await Assert.ThrowsAsync<RuntimePostCommitSourceBoundaryException>(() => processor.ProcessAsync(new(10), caller.Token).AsTask());
+            Assert.True(failure.IsUnavailable);
+            Assert.Same(original, Assert.IsType<RuntimePostCommitSourceBoundaryException>(failure.InnerException).InnerException);
+        }
+        var retained = (await store.FindDurableAsync("source:send"))!;
+        Assert.Equal(RuntimePostCommitOutboxStatus.Delivering, retained.Status); Assert.Equal(0, retained.DeliveryAttemptCount);
+        Assert.Null(retained.DeliveredAt); Assert.Null(retained.LastFailureMessage);
+        Assert.Empty(services.GetRequiredService<HistoryOwner>().Contexts); Assert.Empty(services.GetRequiredService<HistoryOwner>().Intents);
+    }
+
     [Fact]
     public async Task Requested_cancellation_propagates_before_origin_qualification_or_delivery()
     {
@@ -266,6 +295,7 @@ public sealed partial class RuntimePostCommitDurableSourceTests
     private sealed class HistoryOwner
     {
         internal bool Supported = true;
+        internal Action? BeforeQualification;
         internal List<PostCommitDeliveryContext> Contexts { get; } = [];
         internal List<RuntimePostCommitIntent> Intents { get; } = [];
         internal List<Guid> QualifiedInstances { get; } = [];
@@ -275,7 +305,7 @@ public sealed partial class RuntimePostCommitDurableSourceTests
     {
         private readonly Guid identity = Guid.NewGuid();
         public bool CanRecordHistory(IRuntimeHistoryObservationWriter writer, IRuntimeHistoryStore reader)
-        { owner.QualifiedInstances.Add(identity); return owner.Supported; }
+        { owner.QualifiedInstances.Add(identity); owner.BeforeQualification?.Invoke(); return owner.Supported; }
         public ValueTask HandleAsync(PostCommitDeliveryContext source, CancellationToken cancellationToken = default)
         { owner.Contexts.Add(source); owner.InvokedInstances.Add(identity); return ValueTask.CompletedTask; }
         public ValueTask HandleAsync(RuntimePostCommitIntent intent, CancellationToken cancellationToken = default)
