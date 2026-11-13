@@ -10848,3 +10848,4 @@ Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpoint.HistoryStartsAtAdmission.ge
 Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpoint.HistoryStartsAtAdmission.init -> void
 Elsa.Workflows.Runtime.Core.Models.ActivityScopeCleanupRequest.HistoryBookmarks.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.ActivityExecutionBookmarkSummary!>?
 Elsa.Workflows.Runtime.Core.Models.ActivityScopeCleanupRequest.HistoryBookmarks.init -> void
+Elsa.Workflows.Runtime.Core.Contracts.IActivityScopeCleanupStore.SupportsHistoryBookmarks.get -> bool

@@ -1,4 +1,5 @@
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.Values;
 
@@ -57,12 +58,14 @@ public sealed class WorkflowCancellationPlanner(
                 stateChangeMetadata))
             .ToArray();
         var inspectionChanges = new List<RuntimeStateChange<ActivityExecutionInspectionProjection>>(cancelledActivities.Length);
+        var schedulerWorkItemId = stateChangeMetadata.TryGetValue(RuntimeMetadataKeys.SchedulerWorkItemId, out var workId) ? workId : null;
         foreach (var state in cancelledActivities)
         {
-            var inspection = await _inspectionAccumulator.BuildProjectionAsync(
+            var inspection = await _inspectionAccumulator.BuildProjectionWithSourceAsync(
                 state,
                 checkpointId,
                 occurredAt,
+                () => new ActivityValueCaptureOrigin(workflow.WorkflowExecutionId, schedulerWorkItemId, ActivityValueCapturePhase.Unknown),
                 metadata: stateChangeMetadata,
                 cancellationToken: cancellationToken);
             inspectionChanges.Add(new RuntimeStateChange<ActivityExecutionInspectionProjection>(
