@@ -17,7 +17,8 @@ internal sealed class StandaloneTriggerProviderCompositionValidator(StandaloneTr
         foreach (var port in new[] { typeof(IStandaloneTriggerStore), typeof(IRuntimeIngressDeliveryStore),
                      typeof(ITriggerSourceResourceCommitStore), typeof(IRuntimeIngressReservationReader),
                      typeof(IRuntimeIngressWaitTarget), typeof(IStandaloneTriggerTargetDiscovery),
-                     typeof(ITriggerInputMapper), typeof(ITriggerManagementCommitter), typeof(IAuthoredModelQueue) })
+                     typeof(ITriggerInputMapper), typeof(ITriggerManagementCommitter), typeof(IAuthoredModelQueue),
+                     typeof(IStandaloneTriggerIngressFactory), typeof(IRuntimeIngressTransportObserver), typeof(IAuthoredModelAdmission) })
             if (services.Count(descriptor => descriptor.ServiceType == port) > 1)
                 throw new InvalidOperationException($"Standalone trigger replacement '{port.Name}' has multiple registrations.");
         var owners = services.Select(descriptor => descriptor.ImplementationInstance).OfType<StandaloneTriggerProviderRegistration>().ToArray();

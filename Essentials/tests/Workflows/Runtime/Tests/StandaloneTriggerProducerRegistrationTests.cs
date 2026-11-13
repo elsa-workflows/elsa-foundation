@@ -71,6 +71,27 @@ public sealed class StandaloneTriggerProducerRegistrationTests
         await Assert.ThrowsAsync<InvalidOperationException>(() => validator.InitializeAsync());
     }
 
+    [Theory]
+    [InlineData(typeof(IStandaloneTriggerIngressFactory), false)]
+    [InlineData(typeof(IStandaloneTriggerIngressFactory), true)]
+    [InlineData(typeof(IRuntimeIngressTransportObserver), false)]
+    [InlineData(typeof(IRuntimeIngressTransportObserver), true)]
+    [InlineData(typeof(IAuthoredModelAdmission), false)]
+    [InlineData(typeof(IAuthoredModelAdmission), true)]
+    public async Task Completed_composition_checks_factory_observer_and_authored_admission_replacements(Type port, bool beforeRuntime)
+    {
+        var services = new ServiceCollection();
+        ServiceDescriptor Duplicate() => ServiceDescriptor.Scoped(port,
+            _ => throw new InvalidOperationException("The descriptor check must not resolve a replacement."));
+        if (beforeRuntime) { services.Add(Duplicate()); services.Add(Duplicate()); }
+        services.AddWorkflowRuntime();
+        if (!beforeRuntime) services.Add(Duplicate());
+        using var provider = services.BuildServiceProvider();
+        var failure = await Assert.ThrowsAsync<InvalidOperationException>(() => provider
+            .GetRequiredService<StandaloneTriggerProviderCompositionValidator>().InitializeAsync());
+        Assert.Contains(port.Name, failure.Message);
+    }
+
     [Fact]
     public async Task Completed_composition_rejects_an_overwritten_owned_port()
     {
