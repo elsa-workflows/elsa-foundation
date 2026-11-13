@@ -213,7 +213,7 @@ public sealed class DurableTurn
 
     public void Recall(string message)
     {
-        if (!message.StartsWith(Id + "#", StringComparison.Ordinal)) throw new InvalidOperationException($"Message '{message}' was not sent by {Id}.");
+        if (!message.StartsWith(Origin + "#", StringComparison.Ordinal)) throw new InvalidOperationException($"Message '{message}' was not sent by the current creation of {Id}.");
         if (Inbox.Any(m => m.Id == message) || _cancelled.Contains(message)) return;     // given to this turn: consumed with it
         if (_sent.RemoveAll(m => m.Id == message) > 0) return;      // sent by this turn: never written
         _cancelled.Add(message);        // its row goes with this commit, as a cancelled job's ticket does

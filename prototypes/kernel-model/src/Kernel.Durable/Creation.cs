@@ -33,6 +33,7 @@ public static class CreationProtocol
         if (start.Creation is not { } creation) return previous?.Creation > 0 ? "IdentityRequired" : null;
         if (creation.Intent is not { Length: > 0 and <= 128 } || creation.Generation < 1 || creation.Previous < 0)
             return "InvalidCreation";
+        if (start.Parent is null ? start.ParentCreation != 0 : start.ParentCreation <= 0) return "InvalidParentCreation";
         if (previous is { Retired: false })
             return previous.Creation == creation.Generation && previous.StartIntent == Fingerprint(start) ? "ExistingCreation" : "StartConflict";
         var high = previous?.Creation ?? 0;
@@ -70,7 +71,7 @@ public static class CreationProtocol
         if (row.Creation == 0 && (row.Retired || row.StartIntent is not null || row.ParentCreation != 0)) RefuseWrite("legacy row cannot carry a partial creation header");
         if (row.Retired)
         {
-            if (!turn.Delete || previous is not { Creation: > 0, Retired: false } || row != Retire(previous))
+            if (!turn.Delete || previous is not { Creation: > 0, Retired: false } || row.Status == InstanceStatus.Running || row != Retire(previous))
                 RefuseWrite("invalid lifecycle retirement");
             return;
         }
