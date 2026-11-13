@@ -1,0 +1,199 @@
+using System.Text.Json.Nodes;
+using Bpmn.Model.State;
+using Bpmn.Semantics;
+
+namespace Kernel.Bpmn;
+
+/// <summary>
+/// One turn of a BPMN instance. Each inbox message is at most one interpreter call; its evaluation is applied before the
+/// next message is read: the commands in the order returned, then the late reports of the work they stopped.
+/// </summary>
+internal sealed class BpmnTurn(BpmnModel model, ITurn turn)
+{
+    private readonly BpmnState _s = (BpmnState)turn.State;
+    private readonly BpmnProcess _process = model.Registry.Get(turn.Instance.Definition);
+    private readonly Queue<(string Handle, LiveWork Work)> _stopped = new();
+    private BpmnContinuation? _last;
+
+    public void Run()
+    {
+        foreach (var message in turn.Inbox) Accept(message);
+        switch (_last)
+        {
+            case BpmnContinuation.Complete complete:
+                turn.Record($"end:{complete.Outcome}");
+                turn.SetStatus(InstanceStatus.Finished, complete.Outcome, new JsonObject(_s.Variables.Select(v => KeyValuePair.Create(v.Key, v.Value?.DeepClone()))));
+                break;
+            case BpmnContinuation.Fault fault:
+                turn.Record($"fault:{fault.Code}");
+                turn.SetStatus(InstanceStatus.Faulted, fault.Code);
+                break;
+        }
+    }
+
+    // ---- messages in ---------------------------------------------------------------------------------------------------
+
+    private void Accept(Message m)
+    {
+        switch (m.Kind)
+        {
+            case Kinds.Start when !_s.Started:
+                _s.Started = true;
+                foreach (var (name, value) in _process.Variables) _s.Variables[name] = value?.DeepClone();
+                foreach (var (name, value) in Json.Read<BpmnStart>(m.Start?.Input ?? "{}").Variables ?? []) _s.Variables[name] = value?.DeepClone();
+                Apply(BpmnModel.Semantics.Start(new BpmnStartRequest(_process.Graph, _s.Tokens, Snapshot())));
+                break;
+            case BpmnKinds.Timer:
+                Completed(m.Read<TimerDue>().Handle, []);
+                break;
+            case Kinds.Event when Events.Delivered(m) is { } delivered && _s.Live.ContainsKey(delivered.Wait):
+                Merge(m.Payload is { } payload ? JsonNode.Parse(payload) as JsonObject : null);
+                Completed(delivered.Wait, []);
+                break;
+            case Kinds.JobFinished:
+            {
+                var finished = m.Read<JobFinished>();
+                if (!_s.Live.ContainsKey(finished.Key)) break;
+                if (finished.Error is { } error)
+                {
+                    Faulted(finished.Key, error);
+                    break;
+                }
+                var result = finished.Result is null ? new ServiceResult() : Json.Read<ServiceResult>(finished.Result);
+                Merge(result.Variables);
+                Completed(finished.Key, result.Outcomes ?? []);
+                break;
+            }
+            case WorkflowKinds.ChildFinished:
+            {
+                var finished = m.Read<ChildFinished>();
+                if (_s.Live.FirstOrDefault(w => w.Value is { Kind: WorkKinds.Call } && w.Value.Key == finished.Child).Key is not { } handle) break;     // a child it stopped
+                turn.Record($"r:{handle}:{finished.Child}");
+                if (finished.Status == InstanceStatus.Finished) Merge(finished.Output is { } output ? JsonNode.Parse(output) as JsonObject : null);
+                Completed(handle, finished.Status switch
+                {
+                    InstanceStatus.Finished => [],
+                    InstanceStatus.Cancelled => [BpmnInterpreter.CallActivityCancelledOutcomeName],
+                    _ => [BpmnInterpreter.CallActivityFaultedOutcomeName],
+                });
+                break;
+            }
+        }
+    }
+
+    private void Merge(JsonObject? variables)
+    {
+        foreach (var (name, value) in variables ?? []) _s.Variables[name] = value?.DeepClone();
+    }
+
+    /// <summary>A report for work no longer in the ledger (a stale timer, a second delivery) changes nothing.</summary>
+    private void Completed(string handle, IReadOnlyCollection<string> outcomes)
+    {
+        if (!_s.Live.Remove(handle, out var work)) return;
+        turn.Record($"d:{handle}:{work.Element}");
+        Apply(BpmnModel.Semantics.OnWorkCompleted(new BpmnWorkCompletedRequest(_process.Graph, _s.Tokens, Snapshot(), work.Binding, handle, outcomes, work.Iteration) { WorkTokenId = work.Token }));
+    }
+
+    private void Faulted(string handle, string error)
+    {
+        if (!_s.Live.Remove(handle, out var work)) return;
+        turn.Record($"d:{handle}:{work.Element}");
+        Apply(BpmnModel.Semantics.OnWorkFaulted(new BpmnWorkFaultedRequest(_process.Graph, _s.Tokens, Snapshot(), work.Binding, handle, error) { FaultedIterationId = work.Iteration, WorkTokenId = work.Token }));
+    }
+
+    // ---- what the interpreter decided ----------------------------------------------------------------------------------
+
+    private void Apply(BpmnEvaluation evaluation)
+    {
+        var before = _s.Tokens;
+        Journal(before, evaluation.State);
+        // Diagnostics are the interpreter's record of what it decided; the journal keeps them, the row does not (the
+        // interpreter never reads them back: BPMN.md, section 2).
+        _s.Tokens = evaluation.State.Prune() with { Diagnostics = [] };
+        foreach (var command in evaluation.Commands)
+            switch (command)
+            {
+                case BpmnHostCommand.StartWork start: Begin(start); break;
+                case BpmnHostCommand.CancelWorkSubtree cancel: Stop(cancel.Handle); break;
+                case BpmnHostCommand.SignalEnclosingScope signal: turn.Record($"signal:{signal.Code}"); break;     // a root has no enclosing scope here
+            }
+        _last = evaluation.Continuation;
+        // A stopped unit never reports (a cancelled job's result is nobody's, a recalled timer never comes), so the host
+        // reports it at once: the interpreter absorbs the report and the cancelled token's stopped handle is spent.
+        while (_stopped.TryDequeue(out var stopped))
+        {
+            var late = BpmnModel.Semantics.OnWorkCompleted(new BpmnWorkCompletedRequest(_process.Graph, _s.Tokens, Snapshot(), stopped.Work.Binding, stopped.Handle, [], stopped.Work.Iteration) { WorkTokenId = stopped.Work.Token });
+            Apply(late);
+        }
+    }
+
+    private void Begin(BpmnHostCommand.StartWork start)
+    {
+        var handle = "h" + ++_s.Next;
+        var self = turn.Instance.Ref;
+        var (kind, key) = _process.Work[start.BindingRef] switch
+        {
+            JobWork job => (WorkKinds.Job, StartJob(handle, job, start.ElementId)),
+            TimerWork timer => (WorkKinds.Timer, turn.Send(self, BpmnKinds.Timer, new TimerDue(handle), new SendOptions(Delay: TimeSpan.FromMilliseconds(timer.Milliseconds)))),
+            MessageWork message => (WorkKinds.Message, Subscribe(handle, message)),
+            CallWork call => (WorkKinds.Call, turn.Start(BpmnModel.Spec(call.Process, Variables())).Id),
+            var other => throw new InvalidOperationException($"No host work for {other}."),
+        };
+        _s.Live[handle] = new LiveWork(start.BindingRef, start.IterationScope?.IterationId, start.TokenId, start.ElementId, kind, key);
+        turn.Record($"w:{handle}:{start.ElementId}:{kind}:{key}");
+    }
+
+    private string StartJob(string handle, JobWork job, string element)
+    {
+        turn.StartJob(handle, new JobArgs(_process.Id, job.Service, element, Variables()));
+        return handle;
+    }
+
+    private string Subscribe(string handle, MessageWork message)
+    {
+        var key = BpmnModel.MessageKey(message.Name, _s.Variables.GetValueOrDefault(message.Correlation)?.ToString() ?? "");
+        turn.Subscribe(key, handle, keep: true);      // BPMN correlation: a message published before the catch still counts
+        return key;
+    }
+
+    private void Stop(string handle)
+    {
+        if (!_s.Live.Remove(handle, out var work)) return;
+        switch (work.Kind)
+        {
+            case WorkKinds.Job: turn.CancelJob(work.Key); break;
+            case WorkKinds.Timer: turn.Recall(work.Key); break;
+            case WorkKinds.Message: turn.Unsubscribe(work.Key, handle); break;
+            case WorkKinds.Call: turn.Send(new InstanceRef(work.Key), Kinds.Terminate); break;
+        }
+        turn.Record($"x:{handle}:{work.Element}");
+        _stopped.Enqueue((handle, work));
+    }
+
+    private JsonObject Variables() => new(_s.Variables.Select(v => KeyValuePair.Create(v.Key, v.Value?.DeepClone())));
+
+    private BpmnHostSnapshot Snapshot()
+    {
+        var conditions = new Conditions(_s.Variables);
+        return new BpmnHostSnapshot(turn.Instance.Ref.Id, HasEnclosingScope: false,
+            [.. _s.Live.Select(w => new BpmnLiveWork(w.Value.Binding, w.Value.Iteration, w.Key) { WorkTokenId = w.Value.Token })],
+            new Dictionary<string, string>(), conditions, BpmnProcess.Capabilities) { Conditions = conditions };
+    }
+
+    // ---- the journal ---------------------------------------------------------------------------------------------------
+
+    /// <summary>
+    /// What the checks read: each join that fired, with the arrivals it consumed (<c>j:element:merged token:arrivals</c>,
+    /// an arrival as <c>token/flow</c>). The arrivals are the tokens at the join that this evaluation consumed.
+    /// </summary>
+    private void Journal(BpmnExecutionState before, BpmnExecutionState after)
+    {
+        var consumedBefore = before.Tokens.Where(t => t.Status == BpmnTokenStatus.Consumed).Select(t => t.TokenId).ToHashSet(StringComparer.Ordinal);
+        foreach (var joined in after.Diagnostics.Where(d => d.Kind == BpmnDiagnosticKind.Joined))
+        {
+            var arrivals = after.Tokens.Where(t => t.AtElementId == joined.ElementId && t.FlowId is not null && t.Status == BpmnTokenStatus.Consumed
+                && t.TokenId != joined.TokenId && !consumedBefore.Contains(t.TokenId) && t.IterationKey == after.Tokens.FirstOrDefault(m => m.TokenId == joined.TokenId)?.IterationKey);
+            turn.Record($"j:{joined.ElementId}:{joined.TokenId}:{string.Join(",", arrivals.Select(t => $"{t.TokenId}/{t.FlowId}"))}");
+        }
+    }
+}

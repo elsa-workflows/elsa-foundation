@@ -1,0 +1,92 @@
+using System.Text.Json.Nodes;
+using Bpmn.Model.State;
+using Bpmn.Semantics;
+
+namespace Kernel.Bpmn;
+
+public static class BpmnKinds
+{
+    public const string Timer = "bpmn.timer";     // a timer's wait is over
+}
+
+public sealed record TimerDue(string Handle);
+
+/// <summary>The start spec's input: variables over the process's own.</summary>
+public sealed record BpmnStart(JsonObject? Variables = null);
+
+public sealed record JobArgs(string Process, string Service, string Element, JsonObject Variables);
+
+/// <summary>
+/// One unit of host work in flight, keyed by its handle: the interpreter's binding, iteration and token, and the
+/// kernel's side of it (a job key, a timer's message id, a subscription key, a child's id).
+/// </summary>
+public sealed record LiveWork(string Binding, string? Iteration, string Token, string Element, string Kind, string Key);
+
+public static class WorkKinds
+{
+    public const string Job = "job", Timer = "timer", Message = "message", Call = "call";
+}
+
+/// <summary>
+/// The instance's state: the interpreter's token state (stored without its diagnostics, which go to the journal), the
+/// variables, and the host's ledger of work in flight.
+/// </summary>
+public sealed class BpmnState
+{
+    public bool Started { get; set; }
+    public long Next { get; set; }
+    public BpmnExecutionState Tokens { get; set; } = new();
+    public Dictionary<string, JsonNode?> Variables { get; set; } = new(StringComparer.Ordinal);
+    public Dictionary<string, LiveWork> Live { get; set; } = new(StringComparer.Ordinal);
+}
+
+public sealed class BpmnOptions
+{
+    /// <summary>Gates a job before it runs (the simulation decides when it completes).</summary>
+    public Func<IJob, CancellationToken, ValueTask>? Gate { get; init; }
+
+    /// <summary>How long a message published for a catch is kept for a catch that subscribes later.</summary>
+    public TimeSpan MessageWindow { get; init; } = TimeSpan.FromHours(1);
+}
+
+/// <summary>
+/// BPMN as an execution model: the <c>Bpmn.Semantics</c> interpreter, unchanged, behind the kernel's contract. A turn
+/// feeds each message of its inbox to the interpreter as one event; the commands it returns become kernel operations;
+/// its token state is the instance's state.
+/// </summary>
+public sealed class BpmnModel(ProcessRegistry registry, BpmnOptions? options = null) : IExecutionModel
+{
+    public const string ModelKey = "bpmn";
+    private static readonly BpmnInterpreter Interpreter = BpmnInterpreter.CreateDefault();
+
+    public string Key => ModelKey;
+    public Type StateType => typeof(BpmnState);
+    public int StateVersion => 1;
+    public object UpgradeState(string state, int fromVersion) => throw new NotSupportedException($"BPMN state has no version {fromVersion}");
+
+    internal ProcessRegistry Registry => registry;
+    internal BpmnOptions Options { get; } = options ?? new BpmnOptions();
+    internal static BpmnInterpreter Semantics => Interpreter;
+
+    public static StartSpec Spec(string process, JsonObject? variables = null, History history = History.Full) =>
+        new(ModelKey, process, Json.Write(new BpmnStart(variables)), History: history);
+
+    /// <summary>The event key a message catch waits for, and a publisher publishes to.</summary>
+    public static string MessageKey(string name, string correlation) => $"msg:{name}:{correlation}";
+
+    public object CreateState(StartSpec start) => new BpmnState();
+
+    public ValueTask TurnAsync(ITurn turn, CancellationToken cancellationToken)
+    {
+        new BpmnTurn(this, turn).Run();
+        return ValueTask.CompletedTask;
+    }
+
+    /// <summary>A service task's work: the named service over the variables the turn that started it saw.</summary>
+    public async ValueTask<object?> ExecuteJobAsync(IJob job, CancellationToken cancellationToken)
+    {
+        if (Options.Gate is { } gate) await gate(job, cancellationToken);
+        var args = Json.Read<JobArgs>(job.Arguments!);
+        return registry.GetService(args.Service)(args.Variables);
+    }
+}

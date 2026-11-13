@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>Kernel.Bpmn</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- valence-works/bpmn: MIT, no dependencies. Pinned: the model and the simulation depend on its exact semantics. -->
+    <PackageReference Include="Bpmn.Semantics" Version="0.5.0" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/Kernel.Workflows/Kernel.Workflows.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Using Include="Kernel.Runtime" />
+    <Using Include="Kernel.Durable" />
+    <Using Include="Kernel.Workflows" />
+  </ItemGroup>
+</Project>
